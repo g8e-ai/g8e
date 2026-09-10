@@ -113,7 +113,11 @@ class AuthContext:
             or os.environ.get("G8E_CLI_SESSION_ID")
             or ""
         ).strip()
-        web_sid = (os.environ.get("G8E_WEB_SESSION_ID") or "").strip()
+        # Evals are always CLI sessions. G8E_WEB_SESSION_ID is deliberately
+        # NOT read from the environment: the session type must be explicit,
+        # never silently inherited. If it were read, a stray env var would
+        # produce a RequestContext with both web_session_id and cli_session_id,
+        # violating the protocol's mutual exclusivity rule for CLIENT source.
         uid = ((cli_context.user_id if cli_context else "") or os.environ.get("G8E_USER_ID") or "").strip()
         oid = (os.environ.get("G8E_ORGANIZATION_ID") or "").strip()
         fingerprint = (os.environ.get("G8E_SYSTEM_FINGERPRINT") or "").strip()
@@ -180,7 +184,7 @@ class AuthContext:
             client_key=client_key,
             operator_session_id=sid,
             cli_session_id=cli_sid,
-            web_session_id=web_sid,
+            web_session_id="",
             user_id=uid,
             organization_id=oid,
             bound_operators=bound_operators,
@@ -230,7 +234,7 @@ class AuthContext:
             operator_session_id = self.bound_operators[0].operator_session_id
 
         return RequestContext(
-            web_session_id=web_session_id or self.web_session_id or None,
+            web_session_id=web_session_id or None,
             cli_session_id=self.cli_session_id,
             user_id=self.user_id,
             organization_id=self.organization_id,

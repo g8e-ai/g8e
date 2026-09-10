@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pytest
 
-from g8e.constants import PORTS
+from g8e.constants import PORTS, ComponentName
 from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.transport import (
     SESSION_COOKIE_NAME,
@@ -203,7 +203,13 @@ def test_api_path_parity_gateway_sse_push():
     assert GatewayAPIPaths.SSE_PUSH == "/api/v1/sse/push"
 
 
-def test_configurable_contexts_match_when_set(fake_pki):
+def test_source_component_configurable_via_env(fake_pki):
+    """G8E_SOURCE_COMPONENT flows into RequestContext.source_component.
+
+    Evals are CLI sessions: web_session_id must never be inherited from
+    the environment. G8E_WEB_SESSION_ID in the environment must not leak
+    into AuthContext or RequestContext.
+    """
     env = _baseline_env(fake_pki)
     env.update({
         "G8E_WEB_SESSION_ID": "web-parity-001",
@@ -226,8 +232,14 @@ def test_configurable_contexts_match_when_set(fake_pki):
 
     # 2. Body parity (RequestContext)
     rc = ctx.to_request_context()
-    assert rc.web_session_id == "web-parity-001"
     assert rc.source_component == G8EE_COMPONENT
+
+    # 3. Session type explicitness: evals are CLI sessions. G8E_WEB_SESSION_ID
+    #    must NOT leak into AuthContext or RequestContext. The session type
+    #    is always CLI, never silently inherited from the environment.
+    assert ctx.web_session_id == ""
+    assert rc.web_session_id is None
+    assert rc.cli_session_id == env["G8E_CLI_SESSION_ID"]
 
 
 def test_invalid_source_component_raises_error(fake_pki):
@@ -243,3 +255,93 @@ def test_invalid_source_component_raises_error(fake_pki):
     finally:
         os.environ.clear()
         os.environ.update(saved)
+
+
+class TestSessionTypeExplicit:
+    """Evals are always CLI sessions. The session type must be explicit,
+    never silently inherited from the environment via G8E_WEB_SESSION_ID.
+
+    The protocol's RequestContext validator (g8e.models.context.RequestContext)
+    rejects contexts that have both web_session_id and cli_session_id for
+    CLIENT source. If G8E_WEB_SESSION_ID leaked into the auth context, every
+    eval request would fail at the ensemble boundary with "Context cannot
+    have both web_session_id and cli_session_id". This test class is the
+    regression guard for that conflation bug.
+    """
+
+    def test_web_session_id_env_does_not_leak_into_auth_context(self, fake_pki, monkeypatch):
+        """G8E_WEB_SESSION_ID in the environment must not populate AuthContext.web_session_id."""
+        monkeypatch.setenv("G8E_WEB_SESSION_ID", "web-leak-attempt")
+        ctx = AuthContext.from_env(
+            operator_session_id="sess-1",
+            cli_context=CLIAuthContext(
+                operator_session_id="sess-1",
+                cli_session_id="cli-1",
+                user_id="user-1",
+                operator_id="op-1",
+                client_cert=str(fake_pki["cert"]),
+                client_key=str(fake_pki["key"]),
+            ),
+        )
+        assert ctx.web_session_id == ""
+
+    def test_to_request_context_never_inherits_web_session_id(self, fake_pki, monkeypatch):
+        """to_request_context() must produce web_session_id=None when no explicit web_session_id is passed."""
+        monkeypatch.setenv("G8E_WEB_SESSION_ID", "web-leak-attempt")
+        ctx = AuthContext.from_env(
+            operator_session_id="sess-1",
+            cli_context=CLIAuthContext(
+                operator_session_id="sess-1",
+                cli_session_id="cli-1",
+                user_id="user-1",
+                operator_id="op-1",
+                client_cert=str(fake_pki["cert"]),
+                client_key=str(fake_pki["key"]),
+            ),
+        )
+        rc = ctx.to_request_context()
+        assert rc.web_session_id is None
+        assert rc.cli_session_id == "cli-1"
+
+    def test_to_request_context_with_explicit_web_session_id_still_works(self, fake_pki, monkeypatch):
+        """An explicit web_session_id parameter to to_request_context() is respected.
+
+        This covers the case where a caller deliberately routes to a web
+        session (e.g., a future eval command that targets a web-scoped
+        projection). The explicit parameter wins; the environment never does.
+        """
+        monkeypatch.setenv("G8E_WEB_SESSION_ID", "web-env-should-not-leak")
+        ctx = AuthContext.from_env(
+            operator_session_id="sess-1",
+            cli_context=CLIAuthContext(
+                operator_session_id="sess-1",
+                cli_session_id="cli-1",
+                user_id="user-1",
+                operator_id="op-1",
+                client_cert=str(fake_pki["cert"]),
+                client_key=str(fake_pki["key"]),
+            ),
+        )
+        rc = ctx.to_request_context(web_session_id="web-explicit")
+        assert rc.web_session_id == "web-explicit"
+        assert rc.cli_session_id == "cli-1"
+
+    def test_default_source_component_is_client(self, fake_pki, monkeypatch):
+        """The default source_component is CLIENT, which enforces web/cli mutual exclusivity."""
+        monkeypatch.delenv("G8E_SOURCE_COMPONENT", raising=False)
+        monkeypatch.delenv("G8E_WEB_SESSION_ID", raising=False)
+        ctx = AuthContext.from_env(
+            operator_session_id="sess-1",
+            cli_context=CLIAuthContext(
+                operator_session_id="sess-1",
+                cli_session_id="cli-1",
+                user_id="user-1",
+                operator_id="op-1",
+                client_cert=str(fake_pki["cert"]),
+                client_key=str(fake_pki["key"]),
+            ),
+        )
+        rc = ctx.to_request_context()
+        assert rc.source_component == ComponentName.CLIENT.value
+        assert rc.web_session_id is None
+        assert rc.cli_session_id == "cli-1"
