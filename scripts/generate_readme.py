@@ -576,7 +576,7 @@ def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationMan
         receipts_sha256 = _require_str(raw, "receipts_sha256", label)
         stages_path = _require_str(raw, "stages_path", label)
         stages_sha256 = _require_str(raw, "stages_sha256", label)
-        if pub_version in {"2.0.0", STAGE2_PUB_SCHEMA}:
+        if pub_version in {"2.0.0", STAGE2_PUB_SCHEMA, V4_PUB_SCHEMA}:
             tasks_path = _require_str(raw, "tasks_path", label)
             tasks_sha256 = _require_str(raw, "tasks_sha256", label)
             summary_path = _require_str(raw, "summary_path", label)
@@ -615,12 +615,12 @@ def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationMan
                 evidence_index_sha256=evidence_index_sha256,
                 reproduction_manifest_path=reproduction_manifest_path,
                 reproduction_manifest_sha256=reproduction_manifest_sha256,
-                maturity=_require_str(raw, "maturity", label) if pub_version == STAGE2_PUB_SCHEMA else "stage1",
+                maturity=_require_str(raw, "maturity", label) if pub_version in {STAGE2_PUB_SCHEMA, V4_PUB_SCHEMA} else "stage1",
             )
         )
 
     stage2_ref = None
-    if pub_version == STAGE2_PUB_SCHEMA:
+    if pub_version in {STAGE2_PUB_SCHEMA, V4_PUB_SCHEMA}:
         raw_stage2 = _require_field(d, "stage2", "index.json")
         if not isinstance(raw_stage2, dict):
             raise ReadmeError("stage2 in index.json must be an object")

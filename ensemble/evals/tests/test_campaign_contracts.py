@@ -937,7 +937,7 @@ class TestPreregistrationConfigValidation:
 
     def test_rejects_superiority_claim_policy_with_empty_comparison_arms(self):
         from g8e_evals.analysis.canonical import ClaimPolicy
-        with pytest.raises(ValueError, match="SUPERIORITY.*requires at least one comparison arm"):
+        with pytest.raises(ValueError, match=r"SUPERIORITY.*requires at least one comparison arm"):
             PreregistrationConfig(
                 config_id="prereg-single-arm",
                 config_version="1.0.0",

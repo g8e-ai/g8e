@@ -723,7 +723,18 @@ def campaign():
               help="Path to a JSON campaign profile file. When provided with --models, cohorts are derived from the registry and CampaignBinding is populated on every RunManifest.")
 @click.option("--models", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
               help="Path to a JSON model registry file. When provided with --profile, cohorts are derived from the registry and CampaignBinding is populated on every RunManifest.")
-def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, model_tags, profile, models):
+@click.option("--g8ee-url", envvar="G8E_G8EE_URL", default=None,
+              help="URL of the g8ee application endpoint. Required for tier-fitness tracks with ensemble_ungoverned or doctrine arms; not used by the direct track.")
+@click.option("--operator-url", default=f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}",
+              help="URL of the Operator endpoint for governed arms.")
+@click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID", default=None,
+              help="Operator session id override. The default comes from the canonical CLI identity.")
+@click.option("--g8e-cli", default="./g8e", envvar="G8E_CLI_BIN", show_default=True,
+              help="Path to the g8e CLI used to load the canonical authentication context.")
+@click.option("--auth-project-root", type=click.Path(path_type=Path, file_okay=False),
+              envvar="G8E_AUTH_PROJECT_ROOT", default=None,
+              help="Project root containing the canonical CLI runtime identity. Required for tier-fitness tracks with ensemble or doctrine arms.")
+def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, model_tags, profile, models, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root):
     """Run an authoritative multi-arm, multi-cohort campaign.
 
     Creates one campaign identity, one report directory, one assignment
@@ -865,23 +876,51 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     )
 
     # The campaign command uses the suite registry's grader factory and
-    # a direct-provider SUT factory. The SUT factory is injected so the
-    # runner remains testable with fake SUTs. Production wiring that
-    # routes through g8ee for ensemble_ungoverned is part of R7.
+    # a SUT factory that dispatches by arm type. For the direct arm (or
+    # when no campaign profile is provided), the factory creates a
+    # DirectProviderSUT. For ensemble_ungoverned and doctrine arms with a
+    # tier-fitness profile, the factory creates a G8eeChatSUT with tier
+    # replacement logic from the campaign profile's model_tier_assignments
+    # and baseline_tier_mappings.
     if suite_spec.grader_factory is None:
         raise click.UsageError(f"suite '{suite}' has no grader factory; cannot run campaign")
     grader = suite_spec.grader_factory()
 
-    def sut_factory(cohort: ModelCohort, arm):
-        from g8e_evals.harness import LLMRoleConfig, SUTConfig
-        model_id = cohort.role_bindings[0].model_id
-        endpoint = cohort.role_bindings[0].endpoint
-        config = SUTConfig(
-            g8ee_url="",
-            primary=LLMRoleConfig(provider="ollama", model=model_id, endpoint=endpoint),
-            arm=arm,
-        )
-        return DirectProviderSUT(config)
+    # Load the canonical CLI auth context when ensemble or doctrine arms
+    # are in use and a g8ee URL is provided.
+    auth_context = None
+    has_ensemble_track = (
+        campaign_profile is not None
+        and any(a.arm_id != "direct" for a in campaign_profile.track_arm_assignments)
+    )
+    if has_ensemble_track:
+        if not g8ee_url:
+            raise click.UsageError(
+                "--g8ee-url or G8E_G8EE_URL is required for tier-fitness tracks "
+                "with ensemble_ungoverned or doctrine arms."
+            )
+        if auth_project_root is None:
+            raise click.UsageError(
+                "--auth-project-root or G8E_AUTH_PROJECT_ROOT is required for "
+                "tier-fitness tracks with ensemble or doctrine arms."
+            )
+        try:
+            auth_context = load_cli_auth_context(g8e_cli, str(auth_project_root.resolve()))
+        except AuthBridgeError as error:
+            raise click.UsageError(
+                f"Could not load the canonical CLI identity: {error}. "
+                "Run `./g8e auth enroll user` or `./g8e auth refresh`, then retry."
+            ) from error
+
+    from g8e_evals.runner import build_campaign_sut_factory
+    sut_factory = build_campaign_sut_factory(
+        campaign_profile=campaign_profile,
+        cohort_variant_map=cohort_variant_map,
+        g8ee_url=g8ee_url or "",
+        operator_url=operator_url,
+        operator_session_id=operator_session_id or (auth_context.operator_session_id if auth_context else None),
+        auth_context=auth_context,
+    )
 
     runner = CampaignRunner(
         spec=spec,

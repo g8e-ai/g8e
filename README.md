@@ -77,9 +77,8 @@ flowchart LR
     EdgeGW["g8eg Gateway\nedge site"] -- "outbound mTLS\ndial-out, no inbound port" --> CloudGW
     EdgeDev1["g8eo Operator\nedge device 1\nno route to cloud"] -- "outbound mTLS\ndial-out, no inbound port" --> EdgeGW
     EdgeDev2["g8eo Operator\nedge device 2\nno route to cloud"] -- "outbound mTLS\ndial-out, no inbound port" --> EdgeGW
-    EdgeGW2["g8eg Gateway\nedge site"] -- "outbound mTLS\ndial-out, no inbound port" --> CloudGW
-    EdgeDev3["g8eo Operator\nedge device 3\nno route to cloud"] -- "outbound mTLS\ndial-out, no inbound port" --> EdgeGW2
-    EdgeDev4["g8eo Operator\nedge device 4\nno route to cloud"] -- "outbound mTLS\ndial-out, no inbound port" --> EdgeGW2
+    EdgeDev1 --> Data1["Local data, keys,\nand evidence"]
+    EdgeDev2 --> Data2["Local data, keys,\nand evidence"]
 ```
 
 Admitted envelopes flow downstream through the cascade: the cloud gateway admits work, the edge gateway pulls it over its outbound connection, and each edge device pulls its share from the edge gateway over its own outbound connection. Receipts and state evidence flow back the same path, signed and persisted at each owner boundary. No device in the cascade listens on an inbound management port, and no edge device needs a route to the cloud.
@@ -177,8 +176,8 @@ The following section is generated from the checksum-bound public snapshot in `d
 | --- | --- |
 | Evidence cutoff | 2026-09-07T13:03:14.209059Z |
 | Platform version | 2.1.6 |
-| Publication schema | 3.0.0 |
-| README evidence version | 3.0.0 |
+| Publication schema | 4.0.0 |
+| README evidence version | 4.0.0 |
 | Eval schema version | 1.40.0 |
 | Suite version | 5eee4bb14500 |
 | Selected eval runs | 53af9df7-2d37-4d76-9d1d-4a5a6687874a, e4e947da-b48f-49eb-9211-898cbe747018 |
@@ -241,7 +240,1050 @@ The following candidate metrics are absent from the selected evidence and are om
 
 Assigned task definitions: [tasks.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/tasks.jsonl). Population and terminal outcomes: [attempts.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/attempts.jsonl). Observed model-call telemetry: [stages.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/stages.jsonl). Derived orientation summary: [summary.json](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/summary.json). Private-evidence hash metadata: [evidence-index.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/evidence-index.jsonl).
 
+### Model Comparison
 
+Campaign generative-campaign-v1 revision rev-1 under publication schema 4.0.0.
+
+- Evidence cutoff: 2026-09-07T13:03:14.209059Z
+- Hardware class: linux/amd64/cpu
+- Benchmark population: ifeval_subset
+- Task population: 5 tasks
+- Repetitions: 3
+- Claim boundary: descriptive_only
+
+#### Direct Capability by Weight Class
+
+| Variant | Display Name | Weight Class | Parameters | Backend | Quantization | Eligibility |
+| --- | --- | --- | --- | --- | --- | --- |
+| deepseek-r1-distill-qwen-7b | DeepSeek-R1-Distill-Qwen-7B | heavy-slm | 7.6B | ollama | q4_k_m | eligible |
+| gemma-2-9b-it | Gemma-2-9B-it | heavy-slm | 9.2B | ollama | q4_0 | restricted |
+| gemma-3-1b-it | Gemma-3-1B-it | tiny-generative | 1.0B | ollama | q4_k_m | restricted |
+| gemma-3-270m-it | Gemma-3-270M-it | tiny-generative | 0.3B | ollama | q8_0 | restricted |
+| gemma-3-4b-it | Gemma-3-4B-it | small-reasoning | 4.3B | ollama | q4_k_m | restricted |
+| gemma-4-e2b-it | Gemma 4 E2B-it | small-reasoning | 5.1B | ollama | q4_k_m | eligible |
+| gemma-4-e4b-it | Gemma 4 E4B-it | heavy-slm | 8.0B | ollama | q4_k_m | eligible |
+| granite-33-2b-instruct | Granite-3.3-2B-Instruct | small-reasoning | 2.5B | ollama | q4_k_m | eligible |
+| granite-33-8b-instruct | Granite-3.3-8B-Instruct | heavy-slm | 8.2B | ollama | q4_k_m | eligible |
+| hammer21-7b | Hammer2.1-7b | tool-model-baseline | 7.6B | none | none | unavailable |
+| hermes-3-llama-31-8b | Hermes-3-Llama-3.1-8B | heavy-slm | 8.0B | none | none | unavailable |
+| lfm2-26b | LFM2-2.6B | small-reasoning | 2.6B | ollama | q5_k_m | restricted |
+| lfm2-350m | LFM2-350M | tiny-generative | 0.4B | ollama | q8_0 | restricted |
+| lfm2-700m | LFM2-700M | tiny-generative | 0.7B | ollama | q8_0 | restricted |
+| llama-31-8b-instruct | Llama-3.1-8B-Instruct | heavy-slm | 8.0B | none | none | unavailable |
+| llama-31-nemotron-nano-8b-v1 | Llama-3.1-Nemotron-Nano-8B-v1 | heavy-slm | 8.0B | ollama | q4_k_m | restricted |
+| llama-32-1b-instruct | Llama-3.2-1B-Instruct | tiny-generative | 1.2B | none | none | unavailable |
+| llama-32-3b-instruct | Llama-3.2-3B-Instruct | small-reasoning | 3.2B | none | none | unavailable |
+| ministral-3-3b-reasoning-2512 | Ministral-3-3B-Reasoning-2512 | small-reasoning | 4.3B | ollama | q4_k_m | eligible |
+| ministral-3-8b-instruct-2512 | Ministral-3-8B-Instruct-2512 | heavy-slm | 8.9B | ollama | q4_k_m | eligible |
+| mistral-7b-instruct-v03 | Mistral-7B-Instruct-v0.3 | heavy-slm | 7.2B | ollama | q4_k_m | eligible |
+| mistral-nemotron | Mistral-Nemotron | heavy-slm | 0B | none | none | unavailable |
+| nemotron-3-nano-30b-a3b | NVIDIA-Nemotron-3-Nano-30B-A3B-BF16 | heavy-slm | 31.6B | none | none | unavailable |
+| nemotron-3-nano-omni-30b-a3b | Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16 | heavy-slm | 33.0B | none | none | unavailable |
+| nemotron-nano-12b-v2-vl | NVIDIA-Nemotron-Nano-12B-v2-VL-BF16 | heavy-slm | 13.2B | none | none | unavailable |
+| nemotron-nano-2-9b | NVIDIA-Nemotron-Nano-9B-v2 | heavy-slm | 8.9B | none | none | unavailable |
+| phi-4-mini-instruct | Phi-4-mini-instruct | small-reasoning | 3.8B | ollama | q4_k_m | eligible |
+| phi-4-mini-reasoning | Phi-4-mini-reasoning | small-reasoning | 3.8B | ollama | q4_k_m | eligible |
+| qwen25-05b-instruct | Qwen2.5-0.5B-Instruct | tiny-generative | 0.5B | ollama | q4_k_m | eligible |
+| qwen25-3b-instruct | Qwen2.5-3B-Instruct | small-reasoning | 3.1B | ollama | q4_k_m | restricted |
+| qwen25-7b-instruct | Qwen2.5-7B-Instruct | heavy-slm | 7.6B | ollama | q4_k_m | eligible |
+| qwen25-coder-7b-instruct | Qwen2.5-Coder-7B-Instruct | heavy-slm | 7.6B | ollama | q4_k_m | eligible |
+| qwen3-06b | Qwen3-0.6B | tiny-generative | 0.8B | ollama | q4_k_m | eligible |
+| qwen3-17b | Qwen3-1.7B | tiny-generative | 2.0B | ollama | q4_k_m | eligible |
+| qwen3-4b | Qwen3-4B | small-reasoning | 4.0B | ollama | q4_k_m | eligible |
+| qwen3-8b | Qwen3-8B | heavy-slm | 8.2B | ollama | q4_k_m | eligible |
+| smollm2-135m-instruct | SmolLM2-135M-Instruct | tiny-generative | 0.1B | ollama | f16 | eligible |
+| smollm2-17b-instruct | SmolLM2-1.7B-Instruct | tiny-generative | 1.7B | ollama | q8_0 | eligible |
+| smollm2-360m-instruct | SmolLM2-360M-Instruct | tiny-generative | 0.4B | ollama | f16 | eligible |
+| smollm3-3b | SmolLM3-3B | small-reasoning | 3.1B | ollama | q4_k_m | eligible |
+| tinyllama-11b-chat-v10 | TinyLlama-1.1B-Chat-v1.0 | tiny-generative | 1.1B | ollama | q4_0 | eligible |
+| toolace-8b | ToolACE-8B | tool-model-baseline | 8.0B | none | none | unavailable |
+| watt-tool-8b | watt-tool-8B | tool-model-baseline | 8.0B | none | none | unavailable |
+| xlam-2-1b-fc-r | xLAM-2-1b-fc-r | tiny-generative | 1.5B | none | none | unavailable |
+| xlam-2-3b-fc-r | xLAM-2-3b-fc-r | small-reasoning | 3.1B | none | none | unavailable |
+| xlam-2-8b-fc-r | Llama-xLAM-2-8b-fc-r | tool-model-baseline | 8.0B | none | none | unavailable |
+
+#### Measured Results
+
+| Variant | Task | Metric | Rate | Numerator | Denominator | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| deepseek-r1-distill-qwen-7b | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| deepseek-r1-distill-qwen-7b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1072 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-2-9b-it | 1072 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-2-9b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-2-9b-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-1b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-1b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-1b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-1b-it | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-1b-it | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-1b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-1b-it | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-1b-it | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-1b-it | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-1b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-1b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-1b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-1b-it | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-1b-it | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-1b-it | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-270m-it | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-270m-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-270m-it | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-270m-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-270m-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-270m-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-270m-it | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-270m-it | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-270m-it | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-270m-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-270m-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-270m-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-270m-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-270m-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-270m-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-3-4b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-3-4b-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e2b-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| gemma-4-e4b-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| gemma-4-e4b-it | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| granite-33-2b-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| granite-33-2b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-2b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| granite-33-8b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| granite-33-8b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| lfm2-26b | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-26b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| lfm2-350m | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-350m | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| lfm2-700m | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| llama-31-nemotron-nano-8b-v1 | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| ministral-3-3b-reasoning-2512 | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| ministral-3-8b-instruct-2512 | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| mistral-7b-instruct-v03 | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| mistral-7b-instruct-v03 | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| mistral-7b-instruct-v03 | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| mistral-7b-instruct-v03 | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| mistral-7b-instruct-v03 | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| mistral-7b-instruct-v03 | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| mistral-7b-instruct-v03 | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| mistral-7b-instruct-v03 | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| mistral-7b-instruct-v03 | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| mistral-7b-instruct-v03 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| mistral-7b-instruct-v03 | 1072 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| mistral-7b-instruct-v03 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| mistral-7b-instruct-v03 | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| mistral-7b-instruct-v03 | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| mistral-7b-instruct-v03 | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-reasoning | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| phi-4-mini-reasoning | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| phi-4-mini-reasoning | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| phi-4-mini-reasoning | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| phi-4-mini-reasoning | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| phi-4-mini-reasoning | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| phi-4-mini-reasoning | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| phi-4-mini-reasoning | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| phi-4-mini-reasoning | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| phi-4-mini-reasoning | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-reasoning | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-reasoning | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-reasoning | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| phi-4-mini-reasoning | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| phi-4-mini-reasoning | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-05b-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-05b-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-05b-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-05b-instruct | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-05b-instruct | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-05b-instruct | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-05b-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-05b-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-05b-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-05b-instruct | 1072 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-05b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-05b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-05b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-05b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-05b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-3b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-3b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-7b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-coder-7b-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-coder-7b-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-coder-7b-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-coder-7b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-coder-7b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-coder-7b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-coder-7b-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-coder-7b-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-coder-7b-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen25-coder-7b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-coder-7b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-coder-7b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-coder-7b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-coder-7b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen25-coder-7b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-06b | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen3-06b | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen3-06b | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen3-06b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-06b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-06b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-06b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-06b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-06b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-06b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-06b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-06b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-06b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-06b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-06b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-17b | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen3-17b | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-17b | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen3-17b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-17b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-17b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-17b | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| qwen3-17b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-17b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-17b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-17b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-17b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-17b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-17b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-17b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-4b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| qwen3-8b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-135m-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-135m-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-135m-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-135m-instruct | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-135m-instruct | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-135m-instruct | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-135m-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-135m-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-135m-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-135m-instruct | 1072 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-135m-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-135m-instruct | 1072 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-135m-instruct | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-135m-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-135m-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-17b-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-17b-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-17b-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-17b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-17b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-17b-instruct | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-17b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-17b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-17b-instruct | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-17b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-17b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-17b-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-17b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-17b-instruct | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-17b-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-360m-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-360m-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-360m-instruct | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-360m-instruct | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-360m-instruct | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-360m-instruct | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-360m-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-360m-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-360m-instruct | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm2-360m-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-360m-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-360m-instruct | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-360m-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-360m-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm2-360m-instruct | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1001 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1019 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1051 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| smollm3-3b | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| smollm3-3b | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1001 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1019 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1051 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1072 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1072 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1075 | ifeval_subset_verifier | 0.0% | 0 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+| tinyllama-11b-chat-v10 | 1075 | ifeval_subset_verifier | 100.0% | 1 | 1 | verified |
+
+#### Per-Variant Summary
+
+| Variant | Metric | Pass Rate | Passes | Total | Tasks | Repetitions |
+| --- | --- | --- | --- | --- | --- | --- |
+| deepseek-r1-distill-qwen-7b | ifeval_subset_verifier | 73.3% | 11 | 15 | 5 | 3 |
+| gemma-2-9b-it | ifeval_subset_verifier | 86.7% | 13 | 15 | 5 | 3 |
+| gemma-3-1b-it | ifeval_subset_verifier | 46.7% | 7 | 15 | 5 | 3 |
+| gemma-3-270m-it | ifeval_subset_verifier | 73.3% | 11 | 15 | 5 | 3 |
+| gemma-3-4b-it | ifeval_subset_verifier | 93.3% | 14 | 15 | 5 | 3 |
+| gemma-4-e2b-it | ifeval_subset_verifier | 100.0% | 15 | 15 | 5 | 3 |
+| gemma-4-e4b-it | ifeval_subset_verifier | 93.3% | 14 | 15 | 5 | 3 |
+| granite-33-2b-instruct | ifeval_subset_verifier | 86.7% | 13 | 15 | 5 | 3 |
+| granite-33-8b-instruct | ifeval_subset_verifier | 93.3% | 14 | 15 | 5 | 3 |
+| lfm2-26b | ifeval_subset_verifier | 93.3% | 14 | 15 | 5 | 3 |
+| lfm2-350m | ifeval_subset_verifier | 93.3% | 14 | 15 | 5 | 3 |
+| lfm2-700m | ifeval_subset_verifier | 100.0% | 15 | 15 | 5 | 3 |
+| llama-31-nemotron-nano-8b-v1 | ifeval_subset_verifier | 73.3% | 11 | 15 | 5 | 3 |
+| ministral-3-3b-reasoning-2512 | ifeval_subset_verifier | 73.3% | 11 | 15 | 5 | 3 |
+| ministral-3-8b-instruct-2512 | ifeval_subset_verifier | 73.3% | 11 | 15 | 5 | 3 |
+| mistral-7b-instruct-v03 | ifeval_subset_verifier | 73.3% | 11 | 15 | 5 | 3 |
+| phi-4-mini-instruct | ifeval_subset_verifier | 100.0% | 15 | 15 | 5 | 3 |
+| phi-4-mini-reasoning | ifeval_subset_verifier | 33.3% | 5 | 15 | 5 | 3 |
+| qwen25-05b-instruct | ifeval_subset_verifier | 33.3% | 5 | 15 | 5 | 3 |
+| qwen25-3b-instruct | ifeval_subset_verifier | 93.3% | 14 | 15 | 5 | 3 |
+| qwen25-7b-instruct | ifeval_subset_verifier | 100.0% | 15 | 15 | 5 | 3 |
+| qwen25-coder-7b-instruct | ifeval_subset_verifier | 60.0% | 9 | 15 | 5 | 3 |
+| qwen3-06b | ifeval_subset_verifier | 80.0% | 12 | 15 | 5 | 3 |
+| qwen3-17b | ifeval_subset_verifier | 80.0% | 12 | 15 | 5 | 3 |
+| qwen3-4b | ifeval_subset_verifier | 100.0% | 15 | 15 | 5 | 3 |
+| qwen3-8b | ifeval_subset_verifier | 100.0% | 15 | 15 | 5 | 3 |
+| smollm2-135m-instruct | ifeval_subset_verifier | 20.0% | 3 | 15 | 5 | 3 |
+| smollm2-17b-instruct | ifeval_subset_verifier | 73.3% | 11 | 15 | 5 | 3 |
+| smollm2-360m-instruct | ifeval_subset_verifier | 40.0% | 6 | 15 | 5 | 3 |
+| smollm3-3b | ifeval_subset_verifier | 93.3% | 14 | 15 | 5 | 3 |
+| tinyllama-11b-chat-v10 | ifeval_subset_verifier | 26.7% | 4 | 15 | 5 | 3 |
+
+#### Assignment Dispositions
+
+| Assignment | Variant | Task | Disposition | Reason |
+| --- | --- | --- | --- | --- |
+| 00719553910d8916be58c32e849b19107a472381dc62ef846d177fb35cf3480f | tinyllama-11b-chat-v10 | 1019 | effective | — |
+| 014fc4d028169d5223f58df1dbfb47020a046fce3a2621d1fd36bff3bfb84d13 | lfm2-26b | 1019 | effective | — |
+| 017476b371970eae51bd44132b534b52eee4561a53a341b792db70103acfd328 | gemma-4-e2b-it | 1072 | effective | — |
+| 01ce8785a7d00962f9ff9995a4f57c475ae227268ed620b96ff40c490546cb30 | granite-33-8b-instruct | 1001 | effective | — |
+| 0205481e74c80448d9c1d3590377ee144bc1f182d0d442db0c9c9e4791207878 | granite-33-8b-instruct | 1001 | effective | — |
+| 021788635f2cb32a8f3250cb7aa451368241ebcaa6a12313a60d45db7e8eb795 | smollm2-135m-instruct | 1019 | effective | — |
+| 02a9b2bd5872e7b57d88f54f011c72d41352244ff65dc986a8b9146dc8fa5e0f | lfm2-350m | 1019 | effective | — |
+| 02c95870f47291c312502fde7e7752e0d40ff3194937918dbf7f468ea57f0466 | phi-4-mini-instruct | 1075 | effective | — |
+| 02d8a29ece3d88ba7bd1e77633bfc2b1694ceca3a11e37f5173a6ed62804c754 | tinyllama-11b-chat-v10 | 1001 | effective | — |
+| 0304b1a8ced275e8021895e8230968b1da9dfeed83df0682bcd8f9751c529c20 | qwen25-coder-7b-instruct | 1001 | effective | — |
+| 0325baedc1b3beebf0274f6ae673717c35ee2cdcadd07f9e2bc2030891647894 | lfm2-350m | 1019 | effective | — |
+| 03dce443c75f6fe955610322e3887f34e4834c5a569297ca1268798c1b3fa0e8 | qwen25-coder-7b-instruct | 1075 | effective | — |
+| 05a4aef35b57878b1d4c37da1bda81105b274965b5dd01668bc5f735cf056e09 | smollm2-135m-instruct | 1051 | effective | — |
+| 05fdc2c9bfbb4527f152e519d25bd0da95f29d839f4c9abe6418fcf4e15cdf5a | granite-33-8b-instruct | 1019 | effective | — |
+| 068ec550b5caa8503eeb4aaef4a208642f6cc433154a67bd55f995a0cac7dea8 | qwen25-7b-instruct | 1001 | effective | — |
+| 07039ffaa2229f6a5d007d0b7f06b9378f2aa9ee1972e4e28fa0bd1650ef4ee1 | smollm2-360m-instruct | 1075 | effective | — |
+| 077c5c22ef46327f27de2b7dc195e539e616eb56cde1829814dad96cdda428c6 | qwen25-05b-instruct | 1019 | effective | — |
+| 078b8e4868b5e2f075a32990918c7bf956de0bfb0664d1295d83ff7cf69ee501 | qwen3-17b | 1051 | effective | — |
+| 09fdfda5c3f14f8389a9bd71822e5f283b60d80c7fe8c8560c80491b13beefb4 | gemma-4-e4b-it | 1075 | effective | — |
+| 0a4c3f11fe00b5e348d9b5f583cd591a8a50a6c510ba15b19c23c932ff32766a | qwen3-17b | 1072 | effective | — |
+| 0b322c4a9722cdbd68ef9db204eb765be11b76f27e9d97a0360c22db0f25f518 | gemma-2-9b-it | 1075 | effective | — |
+| 0b68cd042dda9c3f92fcf12a51d96cdb69ebb78eb82b9f0340478123aada3121 | lfm2-26b | 1001 | effective | — |
+| 0cdccb2c8ca13ce5aae2874097207296924cf585ca8bd5eccb93597335df3bc0 | ministral-3-8b-instruct-2512 | 1072 | effective | — |
+| 0d01fb6c19890c67ec6c9dc94f16b050492a947452ca26242d7e694a5e19b641 | lfm2-350m | 1072 | effective | — |
+| 0d84305aee7ad217622aa0b53fbae247c3b08bae400e7b9d746962d6bab2f686 | lfm2-350m | 1075 | effective | — |
+| 0e2adc0cd96bde8bbfcdce9b46529b66d9a5cc8d1e5595819e25ee1fd1840d03 | ministral-3-3b-reasoning-2512 | 1001 | effective | — |
+| 0e7c604ab623fb5edb6fa0e5c64712d0abf51d4c530e59a5a647c0d3cbfa30f4 | phi-4-mini-reasoning | 1001 | effective | — |
+| 0f8bca928468fd5fe70b584bc18ac2306a24e686187286f2b872a16e15b133f4 | granite-33-8b-instruct | 1019 | effective | — |
+| 10e0b73b420d4723d17b0889511322a5fa55a34684126de6faa58071ecb925ae | gemma-3-1b-it | 1075 | effective | — |
+| 10f0323275b4838c0384d7ebd3970a6c5ecccadab14f7a45d87a6e98b5f98e9b | gemma-4-e4b-it | 1019 | effective | — |
+| 10f69a15fce8ff261e0ca291e868d34c8d221577b053d30e9d96778922a1353a | smollm3-3b | 1075 | effective | — |
+| 1194e91b49b4134035191ca66bbe62d2cbe8803032ff7c471b292d1a1d59c4df | qwen25-7b-instruct | 1075 | effective | — |
+| 125d374e3f19f844d6efac4f5139fa5b49a6214d4b2423782fbe27e2255f3b35 | qwen25-05b-instruct | 1051 | effective | — |
+| 136c2c3e237694148068b9857915b0a5a78a481375b847c7269bf2976ce2a5e2 | qwen3-8b | 1072 | effective | — |
+| 138097c17265782ab72dc7b75356b92686a2328ce7c27f9e3f9ffca0ed7fccfc | granite-33-2b-instruct | 1019 | effective | — |
+| 13c166bf9cc454fc8db81d1b0f0ba58ec427f4b07b3563bd0679a0d509ae0b82 | smollm2-135m-instruct | 1075 | effective | — |
+| 1547b6058c7075e75d4729ad534a9b851e1cb51d9e6e9217a9a2074b3109a0d2 | smollm2-135m-instruct | 1075 | effective | — |
+| 159b9a6545e29ca74adab70966b8c63a89636841175dd7a059d2e971abebd982 | mistral-7b-instruct-v03 | 1019 | effective | — |
+| 15b3d74f344f22957978ea12719f00b800f8d42b1360b44fc24df77043061784 | ministral-3-3b-reasoning-2512 | 1075 | effective | — |
+| 1701c2bf83b6a4bbbde40043b4accc68290443e150c767f27a566adba2aaa427 | ministral-3-8b-instruct-2512 | 1001 | effective | — |
+| 171f56e12e85d0960c2d88487dbccb37dc515ccd91407a12d27f9b893df4bf23 | qwen25-7b-instruct | 1019 | effective | — |
+| 1740e0947838efdaaf5773f3360167ebd02abaf7cc42f8207f5dc760c1069672 | mistral-7b-instruct-v03 | 1072 | effective | — |
+| 1889ce307540cc33aea62493aa67f763f4d8852eb520231c0f91b0bcdba97c63 | gemma-3-1b-it | 1019 | effective | — |
+| 1a7b2d81b5c7632bd3a57616350617b9d4ac4fda247bc34f604f1d2cef8973c2 | gemma-3-1b-it | 1072 | effective | — |
+| 1a8194c475eb6e2c7c023e58a05bdc46a0b11fd09560efa01116471e2924829e | gemma-2-9b-it | 1001 | effective | — |
+| 1b22cf7b1058191124de3bc5e9baf26de993081d2b10968263ff298fda45d67c | granite-33-8b-instruct | 1019 | effective | — |
+| 1bb3fdd7a0c134a0831d91a49562f3a9633e83ffdfc1a3392f1bb19156489894 | tinyllama-11b-chat-v10 | 1072 | effective | — |
+| 1c895590ecf49aa743cc0d06a82f9de0eafb89fea564589e883138f5c1ca1aa7 | smollm2-17b-instruct | 1072 | effective | — |
+| 1c92000f528b263ea948bce3cd15b21927d44489094d76a6c5637573dd27a60f | gemma-3-4b-it | 1075 | effective | — |
+| 1e598f9e85e647ccdd0091ec910dd00dab813195f5c31687dc64b56c50727405 | phi-4-mini-reasoning | 1001 | effective | — |
+| 1f34f7df80c5bde0085b67a3cb8087b1cceed8a922bd2d893e818db44a6d0faf | lfm2-26b | 1051 | effective | — |
+| 1fcc7fabb7a374a932053505d66495742eedf3a3d247d8afb57b8cdfaf273749 | llama-31-nemotron-nano-8b-v1 | 1019 | effective | — |
+| 20b4d524119b8a202a07bd3f14e2582d1b840661c50e553801c4c4bef32b035b | qwen3-17b | 1019 | effective | — |
+| 20d9c408018f8846b0b4511a75bac93026c7b4e3a4433ca2a1028c4a3cadb382 | gemma-4-e2b-it | 1001 | effective | — |
+| 215349bab006f547c2f2632bef4ef0d03c2200b1935c793e23bcefc446a11217 | qwen25-coder-7b-instruct | 1051 | effective | — |
+| 21b57ae75a6a620ce8c16d10815479e6dd4d268ba917c7a93837d9f3a1371a8a | smollm2-360m-instruct | 1075 | effective | — |
+| 22c5c7ce6a16caf34ff2ddb125b03fd550a03c0830087b9b5f29491bd7c539bc | qwen3-8b | 1001 | effective | — |
+| 236dd92faf960879a809526420740c0a28717e497d0fba3c134296a9612252ff | lfm2-700m | 1051 | effective | — |
+| 2392a2ba7586a4d61508b13e68625bb1934de8cb03c3a1a3276dc97f6576daec | llama-31-nemotron-nano-8b-v1 | 1075 | effective | — |
+| 23e73a2d920bf48debeb6262a99704cd74699104aea251a8af2c53cbbaae200f | mistral-7b-instruct-v03 | 1001 | effective | — |
+| 244142357bed4c951747e983fc12f0a79e19f01fdf211f1dc581fd3697e85b25 | gemma-3-270m-it | 1051 | effective | — |
+| 24a255e187b094f7822e7a829407477fe71080afb2895c53c43a0a068c37071b | qwen25-7b-instruct | 1001 | effective | — |
+| 2520b7f7d05e51e6bc43048bb0a6607b053fec558f1e3cc69feeceea0e84d25c | gemma-3-4b-it | 1075 | effective | — |
+| 25917b28c7518c7e203031d9918e4e3d28815b91ea54e0b4cf03b4f61a935855 | qwen3-4b | 1051 | effective | — |
+| 261b01f4333b9800209eb0ea23dd4c38b8d22f474ee67d295cb85919a3543cf4 | tinyllama-11b-chat-v10 | 1051 | effective | — |
+| 26566733eae322121148121a7376be232970d344b12fa31eb66d9a34547e366a | qwen3-4b | 1075 | effective | — |
+| 26f551e043f0fa251d08d335462d19c1e365986fa761312ed2192606a15daa68 | gemma-2-9b-it | 1075 | effective | — |
+| 27000f24d49e129e41f7cb11d58e937417b59e39071e1402f02d69eae5f0fd99 | gemma-4-e4b-it | 1051 | effective | — |
+| 27098c7c781ef78594d7ced1170bf01c6800046452955a3bd4ea8b5bf0330692 | smollm3-3b | 1001 | effective | — |
+| 285e8584c1d4bce6d9d8ca49cbf7df2052c1b1eb2af04d7295cccebbc2fb0b78 | qwen25-05b-instruct | 1072 | effective | — |
+| 285fc94c0b5e81f3317512a2f98830bb80dc940934f2d26397b58eb9e099ba21 | gemma-4-e4b-it | 1072 | effective | — |
+| 29120c2770d63af59f48ab5f933d8b9996fcc9b3d05e10ef5f48643bb375c6bb | phi-4-mini-reasoning | 1072 | effective | — |
+| 299cd772ee944535f24088c7b472215ac1d412da349ee35445e54756521ff3f4 | gemma-3-4b-it | 1075 | effective | — |
+| 2c263bb8297cd771c0d0c35261d721ff470e97174509919fab8b1fd866ad4a01 | gemma-3-1b-it | 1001 | effective | — |
+| 2c4309eff56915185bc5bc9b4763268849d0c41815022fbcacaf550b9a400387 | gemma-4-e2b-it | 1019 | effective | — |
+| 2c5250becca05cb9f046dfa87f1b44982079c4002bc32e744a4e9798d12ba80c | granite-33-8b-instruct | 1072 | effective | — |
+| 2c7ac8f1a40acfe1ec9c7c7b720187aa25c12528ae10c348501aa1e5ec06f52b | lfm2-700m | 1051 | effective | — |
+| 2c844095c096ad03a50c6d3b7851c47684a3e6efdbb9d5a71e6c98c3e908425f | phi-4-mini-reasoning | 1075 | effective | — |
+| 2cdfda0b4449cbb57a26e3fcd236cdfb9e0aa6b4e328af503913e8d1d271a08e | gemma-2-9b-it | 1019 | effective | — |
+| 2e5bd7d47c267c86cb94acae46f8b780020bfc428e7a0e88df793fee08a9cccc | qwen3-4b | 1001 | effective | — |
+| 2f45023fe865b4f06128fe05ac4f7495f6d6ff5bdb2fda6e10af9837ff126259 | gemma-4-e2b-it | 1072 | effective | — |
+| 2f4d6edf9dcdfd6a659e7e63a05aa800118aefbf24648fc073afe17eb5db77ac | llama-31-nemotron-nano-8b-v1 | 1075 | effective | — |
+| 2feae0ae4248c1a9dab2189abd1207e150e0c5f4c815ad1c211f6112cd4464dd | ministral-3-3b-reasoning-2512 | 1072 | effective | — |
+| 3058dd3adb1ef45c000b19f6f8421649e58dab7c460fe3343fcfb3b3e506c905 | phi-4-mini-instruct | 1072 | effective | — |
+| 3063ced1dedbecb8580baa5631038c7cb1de1ce8d723e6cb2d48a4f8d94099ca | qwen3-06b | 1051 | effective | — |
+| 30b1643b4fb1f2f983863c7ab9c4588de20bcdc972a9ed0f5d30f85d2e3182f4 | granite-33-2b-instruct | 1075 | effective | — |
+| 31472cc91f0fb261d0f796d0186ac179e9d4134d881c70277bfb523e59eabec3 | smollm2-135m-instruct | 1051 | effective | — |
+| 3183420ab77702879c6f58dd804735a8f334ff71d25dca1dab3f672700069cbe | phi-4-mini-instruct | 1019 | effective | — |
+| 31ce56d86b0cdebdf2cda3d7faaca666a49c9918463707ccba5ef4869cad5af1 | qwen25-coder-7b-instruct | 1001 | effective | — |
+| 31e78e49d4596254bd8b8da73003991856eec4fed2896166c7f893fe3754b123 | lfm2-26b | 1072 | effective | — |
+| 327d35e9dacb193d2a037ceac2bfac53d7951d04461d91743ee96940865a786f | qwen25-05b-instruct | 1075 | effective | — |
+| 32c439ce1d092da8889a09efc01bf70373a5397f1baa9266dc208685a3b9e3a9 | gemma-4-e4b-it | 1072 | effective | — |
+| 334564a7c41d342170a77fe75c6bd8aa1aac98b2432e31b91ccd41505fea10a4 | qwen3-06b | 1001 | effective | — |
+| 334b219e0f71ea8fcfde7db4ea1084328b6c4332ecbcc8b37c8cbfeb9281313e | gemma-3-1b-it | 1072 | effective | — |
+| 3361bbf6275cdd6d8c9c9ca8ba1db6d7aa92ffa98179fda9910d5710d2269a36 | deepseek-r1-distill-qwen-7b | 1075 | effective | — |
+| 3372151cd2d5d5eb87555e207872fc0375571b1ff528dd3e7068dba0430cc3d3 | qwen3-06b | 1075 | effective | — |
+| 33e7b0919172ee723b10d1d4eaeedf4b3ab9361f23a18316ccdd0fd1f7634d54 | phi-4-mini-instruct | 1051 | effective | — |
+| 3461a52bef41cfdc65628a3d9f8c4b8fef50e473d2c8d203832f326b08849654 | qwen25-7b-instruct | 1051 | effective | — |
+| 355424449711925ac8a1028c51f04988c69635c7d49cbafc12135558d7a196b5 | llama-31-nemotron-nano-8b-v1 | 1051 | effective | — |
+| 3583246a69dd4c11278a1c9b2eb8903aa78a0b33a83f395ce526b93fefc52a6b | gemma-2-9b-it | 1072 | effective | — |
+| 3591db1a880cf519ba3a0b9216fc05d2077158bbd681a815a3e2fecf626988c9 | gemma-3-1b-it | 1001 | effective | — |
+| 35dc48b95141095ef71ce181897492105c16078a9ce4b00fc21d261b8cae55c6 | granite-33-8b-instruct | 1051 | effective | — |
+| 35e1daf9e6658a769547c95c589a428b1e0f8ef2f10a4f11794d70c83a5e8ef0 | llama-31-nemotron-nano-8b-v1 | 1001 | effective | — |
+| 36bf34174a67747adf66d9a904097b1e177ed6948249592c8fbbf2d72140fc7e | ministral-3-8b-instruct-2512 | 1075 | effective | — |
+| 3883672f3b4cfcb8f3a36948f49068fdefe226b667439fc842932cb43a9bda17 | granite-33-2b-instruct | 1019 | effective | — |
+| 38e5b0e7daba58a6ba063f9d911dbd7fa85521d2f156135664e6aabff91ad6b4 | qwen3-06b | 1019 | effective | — |
+| 3991577b6ecaefb413e1961bd1db48037513e12cf68b2a9bf777e644a10f9812 | gemma-4-e4b-it | 1019 | effective | — |
+| 3a2757d905bd6f519cbe83e592d42a0ba25a7da1030be1b0a8f252952dff632e | smollm2-360m-instruct | 1001 | effective | — |
+| 3a3923f7842c32aa4d4647657318424c237402d5de388b5ed4d23af9e4441a9a | ministral-3-3b-reasoning-2512 | 1001 | effective | — |
+| 3a46a53c4c49c6f785b8dcd6f179f47d03f7c7b8dad009ac466b89fa6da8782b | qwen3-06b | 1019 | effective | — |
+| 3b4a79261cf0ad6b139560351f0237dbb265ca76a5cde5a3c258e99d53225e7f | gemma-2-9b-it | 1051 | effective | — |
+| 3b584cd3f6926a4b5f64443c7930c8154b8f66175981fcf88b448349e520ddec | qwen25-7b-instruct | 1019 | effective | — |
+| 3c73c337a9fc156711be2b6d3b3ab03cb00aadaa34a345c508e15d4bda60d575 | smollm3-3b | 1051 | effective | — |
+| 3ccbf01cb4d334a3360c9a6985c55e87499175d66681376611a13763a38e4758 | ministral-3-3b-reasoning-2512 | 1075 | effective | — |
+| 3cd33f43a2fe22d8fecb8247d79b50506a7a3b6d507064a0f4eba58866f10b12 | granite-33-2b-instruct | 1075 | effective | — |
+| 3eb5a3a6b748b5d2046303019b4743400eb9e33973a30cc69a80eb2651b86696 | phi-4-mini-instruct | 1075 | effective | — |
+| 3edc83721f189bae2e2430093a563095afef0ddcc949363c257c9aff448935fb | ministral-3-8b-instruct-2512 | 1072 | effective | — |
+| 3ef9dafe140463be24c6d77081142fbf177df90bc86bba7746adc54a4c6002de | deepseek-r1-distill-qwen-7b | 1051 | effective | — |
+| 3f0067214e36e538cef7aa6295fa0b7b1b57d5d57a1ef25b82b7c00ce089b408 | smollm2-360m-instruct | 1072 | effective | — |
+| 40317fd192ea2c834932388f9d56c5dc34742c2ea6619fd04e586e967dfa1eda | smollm2-360m-instruct | 1051 | effective | — |
+| 403231ad9aefa6936218fe6ad1d74774276758aae12d20794c8fcc7857b4ed6c | smollm2-360m-instruct | 1075 | effective | — |
+| 403f207b8e25b377b06aef438f95e0a59ff1fc76e100c27ad6edfff44488eaad | gemma-3-4b-it | 1019 | effective | — |
+| 40962559d023ec73f6011fbf800cd1ee5a0cc006c215af8d6179659990ae8ca2 | smollm2-17b-instruct | 1019 | effective | — |
+| 42a33500f909ea45c56a309ab803ea4bb58aea05b438ade18c981091795cef5f | qwen3-06b | 1051 | effective | — |
+| 43709cd62f78994f5720d3bcc9bec09d9b3395b8b173303584beffb454e6e96f | deepseek-r1-distill-qwen-7b | 1051 | effective | — |
+| 44894392ae83753320b36c13f7bb9584b396c3cb3070f632b9380f0a70591621 | gemma-3-270m-it | 1075 | effective | — |
+| 45fd73c1922cbdb27d14dc9dfab28ea59a5b35926b34d285c8a610f004b72a23 | gemma-4-e4b-it | 1075 | effective | — |
+| 46ade3983b3502854c68e4e9f4c35fa9d12251ed03faea2fb4a3b328e0b9b104 | phi-4-mini-reasoning | 1072 | effective | — |
+| 475a99b32ff24527da9e8ef51d1514fa52b456612c76bb29d3a43740f8177246 | smollm3-3b | 1051 | effective | — |
+| 49bef5a952f977f1cc5c9acf94f6d30dea982bac082ff37ee5fa65ad4e42973f | qwen25-7b-instruct | 1072 | effective | — |
+| 4a0c426df702569fa1b5e679ea820ce15b31b0183932c6b2376a3e1a06fdd6f4 | phi-4-mini-reasoning | 1001 | effective | — |
+| 4a18cb676d35c14aa5c6322299e8cc2c151084a2a572a6f0ac6de149a566da12 | lfm2-700m | 1075 | effective | — |
+| 4c12b567b2b712de79b9207e84d830dc501cef20d2a9c7aaf8bcbf5455c6a766 | qwen25-coder-7b-instruct | 1051 | effective | — |
+| 4c6754a8d39f97ad34380ee469946672ff4d3b070e5d3793aad4c78d4ac39379 | gemma-3-270m-it | 1001 | effective | — |
+| 4d8acaa89b9845d9e92acb253893cf1606beab7d3b1a2668aca5a7bb88ce4964 | granite-33-2b-instruct | 1001 | effective | — |
+| 4e686287dd0404594def922dc943727dd0482af9aa3e7b135cc6e3b1ab8fb713 | gemma-3-1b-it | 1075 | effective | — |
+| 4ed649036bda93a3e1908557558e7afbe1fc2ac280c02210238cf19461af8287 | smollm2-135m-instruct | 1072 | effective | — |
+| 4eda958b0de416fb353a6083a95311783b6536ad8615865fe1af657a7835f249 | gemma-4-e2b-it | 1001 | effective | — |
+| 4ee04a37f59afe4f5a0be244c6aa51a9c9b51cf5b715c9a3c902505431e17535 | gemma-3-270m-it | 1019 | effective | — |
+| 4ef7909e8ca539b4b7e02efbc61150e8a832445d1356157e4252b114faf20a32 | smollm2-360m-instruct | 1072 | effective | — |
+| 4f30c0b90446c407c47fb193f219360b6ca7071a02dc06b57bcd3c9493c5bc6c | lfm2-700m | 1072 | effective | — |
+| 4f630c4638c0036f53f3c9d29ab3f95f2e525e0fc248019e28dfa3778573d114 | deepseek-r1-distill-qwen-7b | 1001 | effective | — |
+| 4f88acf7921560cfe57608b4b15e8340bf1f0544fa6aec94c751c8493fc9444e | smollm3-3b | 1019 | effective | — |
+| 4fb7b55b4d7a1f8333908ad454fa55d477cf5c1c89f5480c27b2c06f26c11828 | lfm2-700m | 1019 | effective | — |
+| 4fba42c6d28212ea281a5f0b547bbbbfe7d004dc77a1e68ea183e1e95cd7bba4 | lfm2-26b | 1051 | effective | — |
+| 50955af0cb2736fa5dfc0f127e6c3da61a1f3f321670d78dfd6abd495cfeb6ba | lfm2-350m | 1075 | effective | — |
+| 5123916794fd617180cb86c640ca2cf519520ddad70f6a3e65771ab9b715dac9 | deepseek-r1-distill-qwen-7b | 1019 | effective | — |
+| 514f11b8bd5f8696eb12959e688c5cba6eb18bd44bcd9415025c132a5d1e5377 | smollm2-17b-instruct | 1019 | effective | — |
+| 515fb053da760d743b19922125e1eaabbfcf79336e91dcfd1c4d68bb08c489f1 | smollm2-360m-instruct | 1019 | effective | — |
+| 521f3edc5616383b0a407496c6255c13b8fa76cc435436ec33bb3ed19545bebb | gemma-2-9b-it | 1019 | effective | — |
+| 527018c5960f2779a6dc4c7c823faac7217949c96fcc3c8029238554084a26aa | qwen25-05b-instruct | 1019 | effective | — |
+| 5369c5fc7ff17e00148f26f5c7ca2bf871b46d83e5c945821e7d178008566e39 | phi-4-mini-instruct | 1019 | effective | — |
+| 53dd5c763e1550590acdfc2502e91523fef32e063ab673f69f229a01ec2557cd | lfm2-350m | 1075 | effective | — |
+| 5445749795d1b610b4edf00970db12839f328a5a71d3c08482f5c7fa31dacce4 | lfm2-26b | 1001 | effective | — |
+| 5465c5340a6f8d94a1fe589893a3903f3820c5a62efd31eaef4a73fcc49bd004 | qwen25-3b-instruct | 1075 | effective | — |
+| 5662fe38d771da64449032b1304317a185ed95345401d0e756df2d29bcd541c2 | smollm2-17b-instruct | 1001 | effective | — |
+| 56f93d6828d9cbdba62f4c7928778e5316a0aa3e8acb57f69732c607df030f40 | qwen3-17b | 1001 | effective | — |
+| 579c979e5ab4f9d51585745871f2a388ac0eec982702436cce869d38c6f32b65 | phi-4-mini-instruct | 1072 | effective | — |
+| 5820fcb50f5681c9cacf07897467cfda84415c1fa88575096085f73a9cd4b89b | phi-4-mini-instruct | 1072 | effective | — |
+| 595cc256cdead3966a6c37b979fddd74f1d4dfd40279358d3585d96a99b4f00e | deepseek-r1-distill-qwen-7b | 1019 | effective | — |
+| 598edd738da4198f5ae678d4801592709810c652bf81e912f5bcda62edf41ec0 | tinyllama-11b-chat-v10 | 1019 | effective | — |
+| 59fef11dbf0557efe4c033614476ecbf86ef3b8a170e66bfd5ac681e5023e631 | qwen25-3b-instruct | 1019 | effective | — |
+| 5a05c8a368c1dacdbdb01625d1d5fbb0e7d6f032869390902ab9596f1a97a23b | smollm3-3b | 1072 | effective | — |
+| 5a06d434ab521c3b2979d694d018dccfc21255eb26e927cfd6e7865614220137 | qwen25-coder-7b-instruct | 1051 | effective | — |
+| 5a5ad49590b1c34dc269b1a6c9d7f642e49d53f27d9d4e699e780d026d7c5aec | qwen25-7b-instruct | 1075 | effective | — |
+| 5a8f090a93b6518a0dd43dc86bf1b31f5c46e9eab35d6c7483a8519a60075888 | lfm2-700m | 1001 | effective | — |
+| 5ae0a4915d861dc9fa59348e0e923913360878d9d7404c1d6866522d75bfb508 | qwen25-3b-instruct | 1001 | effective | — |
+| 5b54ac0d753b6305a1360d7b9cdb4762cb8b85a050c72f60d2ee2d19f2f68548 | qwen3-4b | 1072 | effective | — |
+| 5bab2d890bb407863e2fa93b2fa2608ccdf73268b680a1058d908049c794c49d | qwen25-3b-instruct | 1019 | effective | — |
+| 5bd8b9c2d4dcf427fbe57ee41856a2d481d2029ac7804c74eb12b30e19237a88 | ministral-3-3b-reasoning-2512 | 1072 | effective | — |
+| 5cc8665dadd33e9aed6a92198b74b1dd038fd6e9b59cbb01d1ef72915c8886d6 | smollm2-135m-instruct | 1001 | effective | — |
+| 5ce0215ec4b6a044e0ea55f2b24c2b1ea2d895bba386742514a15dcc1b28b723 | granite-33-2b-instruct | 1075 | effective | — |
+| 5edc1751dc89c7f9953ea4c18f2a956cdc6f455fd600e6141484a9d884ec9181 | qwen3-06b | 1001 | effective | — |
+| 5f00e717ca81e14e955cc912ecc903e6f195cbb1aa9c181ecccb29016edd50d3 | gemma-3-4b-it | 1051 | effective | — |
+| 5f188be833021b9f5ad6c7aac9ec0bd30d75af822a4b96b3c78a029f6c22c42f | granite-33-2b-instruct | 1001 | effective | — |
+| 5ff72af4e5f5704d443c06fff9a10675fef87eb13af01ac196ca49d9748c5382 | qwen3-17b | 1001 | effective | — |
+| 6060c6410045870f0d241905ebc5d08c4543bd5b92712176f05d13e89e407d3a | granite-33-2b-instruct | 1051 | effective | — |
+| 607da92d42b945d9dc0fbf82dae94e97bee22a0392a27876ce9aa73ce20e0da9 | qwen3-8b | 1072 | effective | — |
+| 6113781284f4b7e8d3e771572bee9bf1ab341c00e83db5815b40991c3d757221 | lfm2-26b | 1075 | effective | — |
+| 6125438cdf3778a929246ca234ea8b72d5ef0547d6d9ac2b33c7f42fa6bbe689 | smollm2-360m-instruct | 1019 | effective | — |
+| 6196e4abbbcc1b2c07d22b910ddde6b45c956e5d25baf66c94f29b9cf2427b4b | qwen25-05b-instruct | 1075 | effective | — |
+| 61d51c166fe18ae7c30ab4fc0ecf56a7bce1e87002a19a80316337b002713f94 | qwen25-05b-instruct | 1001 | effective | — |
+| 62dad3e836075cf5bb4e3f953631b7c1d58eeafec88a8f73e34b9e50a39a2b47 | gemma-3-270m-it | 1001 | effective | — |
+| 63c98f3fd2e41dd33f30222b767c4d849a075f38f9ae4d056495b255053eab5b | qwen3-4b | 1019 | effective | — |
+| 64078f2751868b81c25c0c5b9b6a9f511d39c3cd622884038a2be1964d975a75 | llama-31-nemotron-nano-8b-v1 | 1001 | effective | — |
+| 640d67e41262b57014b644ea679dc2a46188a59e3570243363588ef0e908bbd2 | gemma-3-270m-it | 1075 | effective | — |
+| 6495b06688687689ac7cb151875ccde8988a5b9241bc3ac5a7ae193d20e6b258 | gemma-3-270m-it | 1072 | effective | — |
+| 64c5cf907423f6b3950859f67e314ed02675c74b805d55ba28357af32f861fde | qwen3-17b | 1072 | effective | — |
+| 64d90c2bb05fc97c5784129711d27ba7fa29b329f0a0dfac07f029a48e73b932 | gemma-2-9b-it | 1072 | effective | — |
+| 6527f7352d985a9d752c872af5a91ebca4d458e28e8feb01176e621c2db102c1 | phi-4-mini-instruct | 1051 | effective | — |
+| 65ce362ab7cf971a3f8ef2259c60d03af5d4cc90b43cbe0f076b9bc08722c481 | phi-4-mini-reasoning | 1075 | effective | — |
+| 65d887677a4d8868c084c45ab3d8080afa965b2eb9f1bcfbd620cc9a657bffc9 | ministral-3-3b-reasoning-2512 | 1019 | effective | — |
+| 66637f96e84cefc45f6d74ff1f8a8e5324cc85b956516d5732be5536f3d85f23 | deepseek-r1-distill-qwen-7b | 1019 | effective | — |
+| 6725ae29d191ecea24aef485aec9abc8c4ffcb9c27ef1253c541fcc20769dde5 | smollm2-17b-instruct | 1019 | effective | — |
+| 678b3743a8a4a4a9c3a52e278653133e5d34191b2bc6dc981b7c4e4ae6712147 | smollm3-3b | 1001 | effective | — |
+| 683092aebda8a0bb633db199d4aaae4b704e9c6f7e1f81bb5ad9b2221f8093e3 | granite-33-8b-instruct | 1051 | effective | — |
+| 6896f7907eac32eb0db671e89829334a6ddae161cec4754b0076bc18224b660f | qwen3-8b | 1075 | effective | — |
+| 6ad503341da002faa0faf393ace889fbc40ea1c1533c9b79abf4acf7bacbc099 | qwen3-06b | 1019 | effective | — |
+| 6ba4535103a7ce358786a7babce2df33a1a769858ad956a70d3a305bc982f22d | granite-33-8b-instruct | 1051 | effective | — |
+| 6bfaf3f7fe97b1eefeef7a8da1717ed8ed8f019be5f6df3c1c4a4c4c4ac4b633 | qwen25-3b-instruct | 1072 | effective | — |
+| 6c58832a08a83e20c0e967313754abff4ac3dfbb688968686fbcad68181ec044 | qwen3-8b | 1001 | effective | — |
+| 6cba6e0eb00d889ed4726e73a1d66c7077808376a54b45334e8ac89ffa7cb7c9 | lfm2-350m | 1072 | effective | — |
+| 6d54a2a254164d3230ff7f3405268f4627bf5b4f6773e73eb772eef85b0501c0 | qwen3-06b | 1051 | effective | — |
+| 6ed96b6b11c2ac2173351f3df5881020c524fa29676b66762d7ff1e595a66371 | smollm2-17b-instruct | 1075 | effective | — |
+| 6faeb29f29c1a0efbd0cd536d41a61449aa465732115fa2b231745718cdf967b | gemma-3-1b-it | 1051 | effective | — |
+| 6ff6423f443d2dbc1faf7242cbf33234b7efe297828950235d1780bf268c6418 | gemma-4-e2b-it | 1051 | effective | — |
+| 707e21a88c64671850d7e3a87436c4ab3be4c604f519454b425a59cd89d22575 | ministral-3-8b-instruct-2512 | 1051 | effective | — |
+| 70d1beda993bed5c4ddf5114578d50328be6d5ef44dd1ab09209548fd6ae1624 | phi-4-mini-instruct | 1001 | effective | — |
+| 70de2e0b9b66bd37e0822467abb508f14bd99f52d42060d7e6cc8787a8759c83 | lfm2-26b | 1072 | effective | — |
+| 71ec335ab8a8164721c84c618a775a3bf3fb9cb564c9a47e4058349e7b248f98 | qwen25-coder-7b-instruct | 1075 | effective | — |
+| 725ee2da817ce7a23408825f0eb30a151fd5889abf68d8a62d99e7d5fcc63867 | lfm2-700m | 1072 | effective | — |
+| 7270754cc54b2cd0f6eeae11e57240eb9c5a5863b6adebce0ece79fe2823e507 | phi-4-mini-reasoning | 1072 | effective | — |
+| 72ea8182518259ab080cfdc0eb67033eafb15f207477a878d57c2715d834f691 | gemma-3-270m-it | 1019 | effective | — |
+| 73475af1507e4f93ccdc08959a636d3215a1f707a8aa7445484906fe7c26739a | tinyllama-11b-chat-v10 | 1072 | effective | — |
+| 7347d30ff9bb644d45f7d8edd630f2e461624723a73aa2632fc625bfd3b953e3 | qwen3-4b | 1075 | effective | — |
+| 7348db2c59a6fa251f7fd67fd622a6779a8d4bf976d53fd99d8abf75c08e0060 | qwen3-4b | 1019 | effective | — |
+| 74636694d3c114744f2febdf380d7e05c82412862cbb8c7ec0eca6536dbde9fd | qwen25-05b-instruct | 1072 | effective | — |
+| 74ca884bc93c8c463be6a68a3466b3ea9c04066eaf08aa0ed2e4d29e1b6d23a7 | qwen25-7b-instruct | 1051 | effective | — |
+| 750509f87dd4e752142e69a578fd4d9fd61ffcb46c459523f39489f25be18b89 | qwen3-8b | 1075 | effective | — |
+| 7515e4593c1faf5257fb0dda4da16b1f7c1789efcf863173007bf39d587c2aa5 | qwen3-17b | 1001 | effective | — |
+| 777852e7eea29ab38719520de61710e03a98ea0fe25d9f53f0216ed57652db33 | gemma-3-4b-it | 1051 | effective | — |
+| 7797aeb5fb3bdc3ff23e0c44f9bfcae9e4de37ada72a7ab7f97f279393b96f06 | smollm2-360m-instruct | 1001 | effective | — |
+| 79161716e6380a7e16dbe3647722a9b976efa6ba8c05e41c901277c77906344b | qwen3-17b | 1019 | effective | — |
+| 79c8981028d9dfbfcdd69022c051a90986d8fbb953f0d94fe7611505ba55ad92 | lfm2-700m | 1075 | effective | — |
+| 7a879788cd2853ea2df0062efdc1fc0512433a274334254b443416d977109f98 | mistral-7b-instruct-v03 | 1001 | effective | — |
+| 7a9ddbc98635a06efaf272321da980f71fc9f65f1e53c6635c9974d8bc1a43f5 | qwen3-17b | 1075 | effective | — |
+| 7abe7f547ad63a87da15a8adb1728ee93dd9e1cb52fa48dba0a003aef2ade686 | mistral-7b-instruct-v03 | 1019 | effective | — |
+| 7bd5ff6330222e47d18f8215d67d3fd6d1dc1178cc30bcddc0270d6693a26096 | gemma-4-e2b-it | 1019 | effective | — |
+| 7c1a278ac26406faea359ba91500bcda19c34c47514a016f2191693471d4609e | qwen25-coder-7b-instruct | 1019 | effective | — |
+| 7cc6163b7047afc70efa2c113326f6ae0173db4cc0c24dc4195b77de74c9f911 | phi-4-mini-reasoning | 1019 | effective | — |
+| 7d1399a1d6874faf443e0d9924d80a6fb937d13ddc0f6f057a9e3142fa08da6f | qwen25-05b-instruct | 1001 | effective | — |
+| 7d32c3224e51faa187776ec049d86d2d01b3fb1030a2ce3809683ce273029701 | smollm2-17b-instruct | 1072 | effective | — |
+| 7dc85f30dbd8db6b2213d7ce7b90a0bfc8a8524f7de922f634868e6cbc0728e1 | llama-31-nemotron-nano-8b-v1 | 1051 | effective | — |
+| 7e325a0b5749ddd9a70144c3fc1db6150563fd5754591d37d19b47397ae83cdd | smollm2-360m-instruct | 1019 | effective | — |
+| 7e7390f11d6108f8732d20e779f6e7539abb0ecaa51fbd6d487be8a926240733 | gemma-4-e4b-it | 1075 | effective | — |
+| 7e9bcb4d850d307afc457031e110f3797b3090ed8087b87816722a3f1cf4c1b5 | phi-4-mini-reasoning | 1051 | effective | — |
+| 7f3a09f3dd527d6ad266da6cebd26006c0efbc8f7c011821f8e722f0cae13289 | gemma-3-1b-it | 1051 | effective | — |
+| 7f4c6113a0198397288b0ae159113874b86e0554a13da6a8c065f9c77c41b31a | qwen25-7b-instruct | 1072 | effective | — |
+| 7fb5fe10ba5eef9740f903af6b1724d34165c15bce2dc1a5ae4a0cfd370e5339 | mistral-7b-instruct-v03 | 1072 | effective | — |
+| 7fd6a67aba8c79d30140e845fdb5314eb5aa2e012c290660093e3df99bd29ccf | lfm2-350m | 1051 | effective | — |
+| 7fdcf3a97558f2883b3d3a9fc09404fd1c3437f78bc94c5969bc560f6985938d | lfm2-350m | 1001 | effective | — |
+| 8002e581c376556fb603beec2060502916161ac680eac181bdfcf3e21cf29e67 | gemma-3-270m-it | 1051 | effective | — |
+| 80354ee08b5a701d349438fe950aa2ebaa238a7b64824e299c14cf856cfd6146 | qwen3-4b | 1075 | effective | — |
+| 8115a4ee73d0f3e3ee7594da81f156dd5e9f3f45e20ae2aadbb20b20d06c2bf6 | lfm2-26b | 1075 | effective | — |
+| 8130dc99b4222d413d6efeb820f62cf4a0b326666282df2f66bdd9d42bb5e7bd | qwen3-8b | 1072 | effective | — |
+| 833d0675e3254a5d7857f22723cdfae9a383a87e2bcec5920e8ee5ac61b5668f | phi-4-mini-instruct | 1051 | effective | — |
+| 840218ce9aec81b61402b5da4b3dc22f4c2fab13fdb20313a4d01a5069b72b2d | granite-33-8b-instruct | 1075 | effective | — |
+| 84673b4254520002e04a5a2f6ec27b6b895c355dcf9013be2514b32960e18d38 | lfm2-350m | 1001 | effective | — |
+| 84d5dcbcae45f95929dc3866d0e6c3fe7c80425f86665030386030fb07cbe16b | llama-31-nemotron-nano-8b-v1 | 1072 | effective | — |
+| 84ecf7d9a2eb1ea628e7bfd99824cb99c04937188b9a0bd59c9bb72f0ebe47c1 | ministral-3-8b-instruct-2512 | 1001 | effective | — |
+| 8599d4f8cb99c4a24d7c91c0c8be4b23c8b5a2af0dd4408852b6828e07289dd6 | granite-33-2b-instruct | 1001 | effective | — |
+| 85cfc880f39e1e8eb852644271fef1904050b82e9fdc2add93205a8b3002b189 | qwen3-8b | 1051 | effective | — |
+| 86e83f6c58151cb8d0e1ffcf7b2acd30ccc8491dedce44f3b530fc8b944162a1 | gemma-4-e4b-it | 1001 | effective | — |
+| 875d9aa83cbc693c7a0aa67d2acf109554f1071a12aebc55d973cc71a61c5fef | qwen25-3b-instruct | 1019 | effective | — |
+| 88385e3f4dcb7e8ce9fedaadce8414e5774f8e7f23d77f2c7455dc4b348b477f | qwen3-8b | 1019 | effective | — |
+| 888232a118102767abf1128c98db9efdb04a0b32d7b0a5f414c96fe9bb4f9a60 | qwen25-05b-instruct | 1051 | effective | — |
+| 88c7973161e06c0729940b709784ef687600fae8e77867c69e13f614ec73ca55 | mistral-7b-instruct-v03 | 1051 | effective | — |
+| 88d224cb6d05f7c9b9bdbb8b5b641267add7ca750cb86d26357566ce6cb9b683 | qwen3-17b | 1019 | effective | — |
+| 8b357747f1f9cd1f9b9f4c05234cf80831f48c2740564898fcd298431f54b709 | gemma-3-1b-it | 1075 | effective | — |
+| 8b4c30a5e23318022ee0211c1ad5e6d913fef65dd615ed6bb12ec89a6e3edcb9 | qwen25-3b-instruct | 1051 | effective | — |
+| 8b6ec9a0dfddf43c597aad1051fd430bb0822e4a77461abb8efcc55161c8ba3d | gemma-3-270m-it | 1072 | effective | — |
+| 8c3769151b88b233da5a35fcfeea531672f945805b391035b83bdb9c1f339203 | lfm2-26b | 1075 | effective | — |
+| 8d0ebd70aeac829350f9bd36db57842f2661c3c8fdc2e0a20fffe93e22f8a47f | qwen3-4b | 1051 | effective | — |
+| 8df28a6af77f20577427f725e6597033b3382cbe91fbd59949caed88552b8ecd | qwen3-06b | 1072 | effective | — |
+| 8f759398fbd5edcc01c76996de0904e90be34d4d494a8f222f26fa3ddda6c149 | gemma-4-e4b-it | 1051 | effective | — |
+| 8f87bd52a3ca375f2eef62f514df745d0e6928d3aba365b85ced4e5db6b5532f | deepseek-r1-distill-qwen-7b | 1075 | effective | — |
+| 8fee935f85014c67096ce3646104d2cdc1d59d103ea5370b9e96b1d53eae51e8 | ministral-3-8b-instruct-2512 | 1072 | effective | — |
+| 9244bb67ab96c929912447007966325e1ccf3473994b520c3187e35a3de05d8c | qwen3-17b | 1075 | effective | — |
+| 92ed22c01177061024397ba92b56e615109689650b53e1729eab87c44fb29268 | phi-4-mini-reasoning | 1019 | effective | — |
+| 9399d16165b69cf47e45d8ec9240954a526693ebdc9861c5e4c0f93329e0064d | gemma-4-e2b-it | 1075 | effective | — |
+| 9544135ce8fbc43f61c313169accabc5a2807ab48bb08d896b8fb1913e43ce2e | llama-31-nemotron-nano-8b-v1 | 1019 | effective | — |
+| 95b1bd3d22daebb56e4c916f22b98bb4354fa9a33fb956d99e858da2dd66a847 | smollm2-17b-instruct | 1051 | effective | — |
+| 967d7eb90ccdc03b3f7d2769f0ce6c1e5dccc4ebc0b373c206e4bab8cd8d29a6 | smollm2-17b-instruct | 1075 | effective | — |
+| 96c1e30102a638126d564530d2e174b3fcae5326eec1de934e82a2a14b669dca | lfm2-350m | 1019 | effective | — |
+| 96d0e172bf602739485311d5eec2a6e84e83c6dbb581c48df9f321507f62b2de | qwen25-7b-instruct | 1072 | effective | — |
+| 974c9483be31dcbd0d391200eede1bda4999fec55ad00d841ae4d22014b65b57 | lfm2-26b | 1001 | effective | — |
+| 9814ed1e83d20431daab7dd4408c0326b94d1194871b6250f8c6dc32af992739 | qwen3-4b | 1072 | effective | — |
+| 985db2e0bc5d67ff487f29cefe87ffb20ab226799fe80eef5af38fe3e8a5f485 | granite-33-2b-instruct | 1051 | effective | — |
+| 990ca1849a093f354c06f2e0b4a75c35a012e82669c86593335759e5bdeda848 | smollm3-3b | 1072 | effective | — |
+| 99e421168e777976a8b94b75aa4fc73a4e59505923ae6cbaf63057f176620cfb | smollm2-135m-instruct | 1019 | effective | — |
+| 9ad1a0f0d2b7a1a3702d29b0628f32211b7de119558a94e576b0e6aaa3fe178d | llama-31-nemotron-nano-8b-v1 | 1051 | effective | — |
+| 9b01c53d9ef8c77ca4fe0f3972619cacca759f9c5dcbd6eced9d5bc45bd4f13a | gemma-2-9b-it | 1001 | effective | — |
+| 9b9b465dbf066b7134dc6491ebf721c530e0c253023c5e09b4ef7349891bf823 | llama-31-nemotron-nano-8b-v1 | 1072 | effective | — |
+| 9b9d7fa3bb82904192259a87dda1aba2d6005e43f1369a91c206a754439c1981 | gemma-3-4b-it | 1072 | effective | — |
+| 9d4f49a116ce64b4e15f9b3a86b11c9c341cd0db31c876c7f36a17574e87ea87 | ministral-3-3b-reasoning-2512 | 1001 | effective | — |
+| 9dc4c275701d6212fff580fa42c61b01cdcb9b28bceda28df806df7e6f0da1d8 | gemma-4-e4b-it | 1001 | effective | — |
+| 9e4029d1ae7f96c4a6ecb7e1c59cfd41fe7d73214c6f58daf43586d54c520e1c | qwen3-4b | 1001 | effective | — |
+| 9e91394fde3a0e1d38433ecae115e52447570579ceefc91d57eda6d8ea0a1903 | mistral-7b-instruct-v03 | 1051 | effective | — |
+| 9f449749a6591f2a7d471ff9e3e34ed69022f7d52cdc11ca503f7c4b93e3bb3d | gemma-2-9b-it | 1051 | effective | — |
+| a158702f3c6946b4541d175de737b83f82b962cb34400efff6d7d03f32fae7a7 | gemma-2-9b-it | 1019 | effective | — |
+| a16fd82e70ec9813ca6b8f810ac3a0ca31ca47cd04a5a6d2269924c5466e45cf | qwen3-4b | 1019 | effective | — |
+| a1ad1290af253f58750abd43d440508bb1620e914c148a99c4e9110c7dca7e56 | qwen3-4b | 1072 | effective | — |
+| a35133588aa358269ecabb189719d26aac8ce39c45d568648a643ac1c633ac77 | qwen3-4b | 1001 | effective | — |
+| a492cac316a798d1556b66674c50dbf0f8d01118878c61be84c9d7479d9517b9 | granite-33-2b-instruct | 1019 | effective | — |
+| a4f79ef7b33a35bd5f30d0ac9c64726259012781b8c1035ab1b4327f4b6357cc | smollm2-17b-instruct | 1075 | effective | — |
+| a51cd3a363e90dd1a0970a0d161e7c27e5dc4d55f21786d2e31569d3637f1adb | gemma-4-e2b-it | 1075 | effective | — |
+| a53aed247222759e1568b3a69b31a11f0993c617df52b8a07e9d119c9671693c | deepseek-r1-distill-qwen-7b | 1072 | effective | — |
+| a59960a7be22bc0503d3998ea2c715ed3797c2c7eca947fca2262391e2482ca8 | mistral-7b-instruct-v03 | 1075 | effective | — |
+| a68635d17f8f76a6f21bbcdaa14a929fb5603b8832cbb6578cc7e6aacfdbb9cd | ministral-3-8b-instruct-2512 | 1019 | effective | — |
+| a69d4076e1154c32f51e69eda74d751d55e59d4eb4983aa6fbcc94b9a756bf09 | tinyllama-11b-chat-v10 | 1001 | effective | — |
+| a70cca93f65d3917f87c8561902150c52cb9805bf6a6c1aeee3f49d799ecb299 | qwen3-4b | 1051 | effective | — |
+| a82bd3544da81fc9f0cbe5bb22e7fb84d699049048ff6176caeadc3d630fb321 | lfm2-350m | 1072 | effective | — |
+| a99f3d21e5bc228ddc20ae8437a00c662c77d8f57ce6075c432c2038094a984a | ministral-3-3b-reasoning-2512 | 1051 | effective | — |
+| a9a3edd1f92088f371e97b05f077e29bf176dbb1c11b08a45ff22a06e442c379 | llama-31-nemotron-nano-8b-v1 | 1072 | effective | — |
+| a9ad5576614df3aa065cdc8a7ba96814bb9b0e00956ba29e6fc6f6f08b21b6aa | ministral-3-8b-instruct-2512 | 1075 | effective | — |
+| ad5232babd2fab1009bb5a5ad604008af7cead07adbb9792c39d7e11b5493849 | smollm3-3b | 1075 | effective | — |
+| ad676a594a122c1c0203f975304f039665ae6f18c7840e53579c02983ca9a7b3 | smollm3-3b | 1019 | effective | — |
+| adddde0c5138212db24cccccd12f55b9d18263e0aaa82179b9aa94c69c6a695e | granite-33-2b-instruct | 1072 | effective | — |
+| aed37eaa12333969e15ece1c685909ff4482b79909f8c5f4bf9ebfd9b3fd804f | ministral-3-8b-instruct-2512 | 1001 | effective | — |
+| af047e9bae5ff45530b85846929d32a50d779c9259346506888e6d22bda40b5a | smollm3-3b | 1019 | effective | — |
+| b043815ef55e0f50767d71fded254f810db6f6d983fc19c7d67bf475b88ef803 | gemma-3-1b-it | 1019 | effective | — |
+| b11d755edb8aded8caca5495106141929ba2a5786c06934e1f99199c06320154 | qwen3-8b | 1001 | effective | — |
+| b12daebbc286fe296f0e12237f9027cec2df9d2495bdd6a90f7b43d09bb58a0d | gemma-3-4b-it | 1001 | effective | — |
+| b14373e1165eb90b1e2ba5e4060edab4a64bc237a44dcc16af834dd3ee7c3d4e | smollm2-17b-instruct | 1001 | effective | — |
+| b24cf5eef9f9f440d05ad03d1e9b3746a80d5ace1125008952c43c1b74443d13 | qwen3-06b | 1075 | effective | — |
+| b42ba6d4f4d7f2f80b249331c07735dd3195851404e3c025ce4fa866217e9346 | qwen3-06b | 1072 | effective | — |
+| b5b98fbdc1cabaaaa45b56f61752f39c60d5de48a45399bb4cef3b96cc9a2737 | smollm3-3b | 1001 | effective | — |
+| b5cd5a212d0519ac96063d2f0cec295a780222d04f31417a5dc43f4458caf8bd | gemma-2-9b-it | 1051 | effective | — |
+| b5d1ee820e577cf2d4bf74e0936a8b0a7320c195d6b851eac2f24de113456aab | qwen3-8b | 1051 | effective | — |
+| b6c8cffe126bf759cda14889a15605ffd4377b9f5f21b55226f26a6951fcced5 | mistral-7b-instruct-v03 | 1019 | effective | — |
+| b741bbc7ef1b7558b46d99a91fc2d8054f2b1c6e03a1c67e94d66711f910d74b | gemma-4-e2b-it | 1072 | effective | — |
+| b8c257ccc0eb51ef2c425bd6ae47bdb511f2b5b1b9e6cc57beaa76a282a60f28 | qwen3-17b | 1072 | effective | — |
+| b8ee5752acf7b531a67f983e9b4544739d520ddc92fa09732d8bf4766a06781c | lfm2-700m | 1001 | effective | — |
+| b924e7835edd56a1fceb70c962c03812d07d5d9c355370d7e3f9a920785a1753 | smollm2-17b-instruct | 1001 | effective | — |
+| b925bf35c2405f2ea6b34450445b0024c0760b9712631f8e39005b0112094f1c | gemma-3-4b-it | 1051 | effective | — |
+| b9964b1209d8e5940aa7c7245485fff051b5dc7aff3083797f7b36fe6e17a21c | tinyllama-11b-chat-v10 | 1019 | effective | — |
+| bab7d8558ab5ae698f4ab92806530d7b0dbb9aa5bab3e1a1a34964f549c1c6bd | smollm2-17b-instruct | 1051 | effective | — |
+| bad32eebf93c5493e740cec4696db6965d0c83cad00dcea402f8eec234fe91dc | smollm2-17b-instruct | 1051 | effective | — |
+| bb6c003d64cb092e26c21654ce53d058ac35553f3ab6730f14de1242e87c1b67 | gemma-3-4b-it | 1001 | effective | — |
+| bbc610a4d7415d8af365fb0546af33c310150ab5b290f1f5fe3de7d6987e9ac1 | qwen25-7b-instruct | 1051 | effective | — |
+| bc2af9c4c4bcd4e6df16a117b69ec77cacfdeeafdaf14c8cbc5a3ad8bc05aa26 | qwen3-8b | 1075 | effective | — |
+| bc651ea00f009312567f992a2c789be7d956758d37a8221cbe52faa5d2df908c | qwen3-17b | 1075 | effective | — |
+| bdc1451ff94708a4cb9029fd1304c1f63600a037d8b69b4f40b21067b626768d | gemma-3-4b-it | 1072 | effective | — |
+| bdccb83a6bb0d8de5e889b3e6ecdea1f4fa91cb0af07df6e69f287cc9ccea7f1 | tinyllama-11b-chat-v10 | 1075 | effective | — |
+| be7e2d977f8e6a58aed48b89b1d75839c7a84d172df0c12cc8f78033aec84242 | gemma-4-e2b-it | 1019 | effective | — |
+| be88acebcfcb9e1e823293b45490caf3891b17bbc417dcb65597c296c7c24ea8 | qwen25-7b-instruct | 1075 | effective | — |
+| bf021f28e1e861beb568e69241bb258a51c0ec5e4588aea7edc47e72e77e52b9 | qwen25-coder-7b-instruct | 1019 | effective | — |
+| bf8408c58b93d6fc0904da49bcee36f7a961f0908bbd6eb9fc59badbc9e31fb7 | qwen25-05b-instruct | 1001 | effective | — |
+| bffdc6196c7f9820128a1f7f82dca0386ae99dfeb32a1addca115dcce29b94cb | mistral-7b-instruct-v03 | 1051 | effective | — |
+| c07abda8e4786185ce0d871d83bcd590a4692bc67b28b74ca907fd5854b075c9 | tinyllama-11b-chat-v10 | 1051 | effective | — |
+| c0fcfed32403c5828b7333fc4f16931ee2b7dc39419a4027d6a4f41cfdb6a186 | smollm2-135m-instruct | 1072 | effective | — |
+| c14ae47ae85dd99500070bfe029f5076ce3bc78a591170d1b2bfcdeae77b1449 | granite-33-8b-instruct | 1001 | effective | — |
+| c1749077c850c3b2e0f8dc84c4ae71a139c729b690cc0e3a9baa9357600560a1 | qwen25-7b-instruct | 1001 | effective | — |
+| c1e3c72cdaccb09095b2df2f3e0a3c3251ad550c988380673c7ccf5f44c04feb | qwen25-3b-instruct | 1075 | effective | — |
+| c241262e98a182c4975031af1bad2cf8e4f6fda5b4ed201dbe281b4d4b31e05a | gemma-3-270m-it | 1001 | effective | — |
+| c26c31140ed22b3370bfd47613c5b242010fd5e33724b97f55d9e971708245d1 | qwen3-8b | 1051 | effective | — |
+| c2cce55e1951fbe618b0924f62c95d99a49687ddd32795c91620c2b1d23fab3b | llama-31-nemotron-nano-8b-v1 | 1001 | effective | — |
+| c329c49a88824a4c3c966febc26c59258a6e75abc0f99316b4583221ad68cdfc | ministral-3-8b-instruct-2512 | 1051 | effective | — |
+| c36e0b168450a3a4dd662da46b1ee6e520fddfdcf7f45d99c34ba463775e363b | qwen25-coder-7b-instruct | 1072 | effective | — |
+| c3770769afe364ad9978335f00acaa8cd22ac3a7d07e8ef1cb6924c241696767 | tinyllama-11b-chat-v10 | 1075 | effective | — |
+| c3b85e44ab4e40276db1c8718d3fe2febfe3bf73a7737c2a2f0ac5e75e0feab0 | lfm2-700m | 1051 | effective | — |
+| c3cea90242e9832e1ae2a7f9895bbb82405c768b34b1fb449066bcb716af6cc2 | lfm2-26b | 1051 | effective | — |
+| c3de3fabf9a5c095e2b9e35e74fc48b539182fb2ae151c032114ac7a91d8307e | granite-33-8b-instruct | 1075 | effective | — |
+| c4d8fd200b232b38d049cf46ca9df3624c414c9c8cd98a6fd526a3aef5ab5863 | phi-4-mini-instruct | 1001 | effective | — |
+| c4f4d740852210e16e9cda4b5e1d677ea15d9b2d3e81e0f2590e0db025986ffd | lfm2-26b | 1019 | effective | — |
+| c560766d40b19cd33f2cc3b991dbeda051c55bb82e1e01f1aea24c710708faf3 | ministral-3-8b-instruct-2512 | 1019 | effective | — |
+| c57f2143f880a60e079c610aaf650a77b4438e7a24666974526e2b5ab2708c35 | ministral-3-8b-instruct-2512 | 1019 | effective | — |
+| c5e28e8e8bffaea919aee698927edde56e6081921999bf45f8712fd8c7ebc5fd | phi-4-mini-reasoning | 1051 | effective | — |
+| c5f3cb51068c02bcc235a1ed7fb86ca2632fa2cf61c41d6fc4ccf300bdb1af69 | lfm2-350m | 1051 | effective | — |
+| c679020c8b2238ab6e42bfb0a6b7466c8e4e297ae3571d10615d48e3b5257abe | qwen3-17b | 1051 | effective | — |
+| c833695fe2f85605bfa7a463859bea45f1ec5423559ab971d60c46ee08b29862 | qwen25-coder-7b-instruct | 1072 | effective | — |
+| c88006999989803d0c54b3e40c36b9dfae66ae9a7d9a47832ac3370fb0138a60 | qwen25-coder-7b-instruct | 1001 | effective | — |
+| c8aefef8ce1207927d639e4a3837537e26c4d8eb4a8a4e74a4ab097ebae7e157 | gemma-3-1b-it | 1001 | effective | — |
+| c9e5531703620de85d228fcaa091990a93da16ebec8292ad7f9fc4c01b970891 | smollm2-360m-instruct | 1051 | effective | — |
+| cb4982e44581de91fd55c0f730a5797b73a262c81628574735301dc3d83c7575 | gemma-4-e4b-it | 1051 | effective | — |
+| cc214a7ed746d882ae936d498a21d9d5fccac86bcde186f57d1ae79886a79b9c | gemma-2-9b-it | 1001 | effective | — |
+| ccbebc7502f71107025ebc6e949c22d820789514cd05e827562d82bb3acdabeb | lfm2-350m | 1001 | effective | — |
+| cd1ba6f0cfdd05ca10029d8b43e435764fa6093b17fb7bcc0c33b3282f7b242b | ministral-3-8b-instruct-2512 | 1075 | effective | — |
+| cd3986b555136aa267dc28b93c84c1714a79e31ce05a5cd1dcb44784185283ad | qwen3-06b | 1001 | effective | — |
+| cdd11be9e1671421935816cebdbf3b7702795bd5d772116e981d4915111cc99e | lfm2-700m | 1001 | effective | — |
+| cdd2c0ef7ec79a6da5894a4c6a9d46b43912247dd0c190bd617e0d4bf757f88e | smollm2-360m-instruct | 1072 | effective | — |
+| ce9c92ffa9fa54e00635f9553b47e08162d19141f612972802e8c635e971c327 | mistral-7b-instruct-v03 | 1075 | effective | — |
+| cf2c64f39cac83973b37c5c74507c7c7ac88aa24e15a330b84ebd7b691380259 | smollm2-135m-instruct | 1001 | effective | — |
+| cf939811d1bd8eb473f022cef2a698c9963fbdb2e68b0d44c73eb7397e9b7b0b | gemma-3-270m-it | 1019 | effective | — |
+| cfab6da1787cf36970fb6446a4eb511448eaceacae9f0f81f9a6872d52c3aedc | deepseek-r1-distill-qwen-7b | 1001 | effective | — |
+| d043d9ae4c9cb37fcc3f13813a4e46218fc8a128a438b16351aa0da6da451f25 | qwen25-05b-instruct | 1051 | effective | — |
+| d24f8efd7d7b03a35636cba151d5b5870b9b4b178988b39b42216ab3b3721091 | smollm2-135m-instruct | 1051 | effective | — |
+| d300fcecccf223db60b58268896d8090198c7c0802142c7fe1288bee65bbedfe | qwen25-05b-instruct | 1075 | effective | — |
+| d305901b5726f2f69c9527de3f4d40415a31389cc774db9f85c0f38b7687fb51 | ministral-3-3b-reasoning-2512 | 1072 | effective | — |
+| d3fb2e3193879dc5730655cb30cb4f2a779ee67a5233def4837e91a745b781a8 | llama-31-nemotron-nano-8b-v1 | 1075 | effective | — |
+| d4c7a5423870995302038ee4b187a986024e4fe35b3f78a8a65b4b056f9c3bf7 | qwen25-3b-instruct | 1001 | effective | — |
+| d4f633f3fb65a8adca05e1dc23040f76ef84022eafd056d103fedc8bd8dca20d | ministral-3-8b-instruct-2512 | 1051 | effective | — |
+| d51aa70e11c36fb84f999e48747a302889e59387e4cc32e77243aeb3aa95816b | smollm3-3b | 1075 | effective | — |
+| d581ee450e8af0bf09e48b3721f78933644fed318878c12011813fd71ef83a3d | gemma-3-1b-it | 1019 | effective | — |
+| d5d112eee839b3cbfc6c7a85fa131a52540938dcdf5f6cb72a11d3584af530bc | qwen25-05b-instruct | 1072 | effective | — |
+| d69554f5fd10c82cf800004ea79da14bb06dcf83f9f920e8f216de2208986c14 | smollm2-360m-instruct | 1001 | effective | — |
+| d71f3302dc263b3ccfd3338082fa0c87759eed47634c4d7d2c8b8a70ca0214a6 | qwen3-06b | 1075 | effective | — |
+| d894a2f21bca27668cea8b8915b576ae191f1564251ad514b5ae6b48c73f70a4 | gemma-3-270m-it | 1051 | effective | — |
+| d8a427bd687c9e9f4c7bf7bf788f9cffbef80a368075acbf265f7dc25d299d62 | tinyllama-11b-chat-v10 | 1051 | effective | — |
+| d98f5ade3cea2984ec384440b82eb10bf0d66fdf950e3e5681920304b002eae1 | gemma-3-4b-it | 1019 | effective | — |
+| d9c7d54f53b97a1777c0d60d62aba94228391233a9d46cec83c0e1a0595b164b | smollm2-360m-instruct | 1051 | effective | — |
+| d9e879dbc5498ac1b290238db251406f915ea70a684f5f2657cd2fe37d40af4a | phi-4-mini-instruct | 1075 | effective | — |
+| d9fce25a51129bd406b11271a92504d592906049f1ddac882a3e5f3822f04798 | gemma-4-e4b-it | 1072 | effective | — |
+| db171e479f53992b2126f7485502e7cafdf58fd7e71a4bd1dd714f4b72abc036 | gemma-3-4b-it | 1019 | effective | — |
+| dba790c3dd0fca7767113883ce74ffd72f192970bcc1ba6c20a4cb3405857d58 | llama-31-nemotron-nano-8b-v1 | 1019 | effective | — |
+| dc52799673a130bd4524cc6ab7ec8b9100d0a978bd2c88ea959ecc0f0aca46fe | lfm2-26b | 1019 | effective | — |
+| dd3804c05bf9fdb5c0c8e727559f22884240564612eaf86c2d80a5438da2e5c2 | deepseek-r1-distill-qwen-7b | 1072 | effective | — |
+| de511b18663aa8f4467ea3c1090ec21a6005ec5c72720456f6fe93e87e71a835 | phi-4-mini-reasoning | 1019 | effective | — |
+| e0249a4463eb4451204d5bbb050fcb7ee456826e78893ea6e42290529fbd6564 | gemma-3-270m-it | 1075 | effective | — |
+| e1b5695c8c72d2613f98d12d16761160d4f89aec55b77f69e34f148bb2b4f455 | gemma-3-1b-it | 1072 | effective | — |
+| e1d4d111d884879c7a037f8afa5f09e3904199f3f442eef6017451398c9570da | tinyllama-11b-chat-v10 | 1075 | effective | — |
+| e21a5b5028d8aa638e37eeb91b6d960e73dc7f5b70fe8173607204f5d6ce1214 | qwen25-3b-instruct | 1001 | effective | — |
+| e25a700e67e1da463c28d14268d8d688849d4e1b740a964ee60b12cff0552bc9 | qwen25-3b-instruct | 1051 | effective | — |
+| e279172e87fa28c9fa69475107b37cedeb97a9c9d0f3176360296aef2168ac97 | smollm2-17b-instruct | 1072 | effective | — |
+| e28fdb67f05bc75bc6918a93f32f77de7018911cc5915a272d232f0d9f48e07e | ministral-3-3b-reasoning-2512 | 1051 | effective | — |
+| e2db023267b59492410e8a95ac95e8c8bd75ca4c86ea03638b92c678a9ea45b6 | granite-33-2b-instruct | 1072 | effective | — |
+| e319943f63d0c97b98b3c64cc26a3e51fca0ca63e85c0d3b441ed451d52cb2a4 | granite-33-2b-instruct | 1072 | effective | — |
+| e33ada8e9b487b8c8463853c315be9a3e2535e16460827ebbfad5994a8c73e53 | mistral-7b-instruct-v03 | 1075 | effective | — |
+| e363f873700525126b1bcfe53c00115699ccd88392d03dcc95016785c692b512 | qwen3-8b | 1019 | effective | — |
+| e3733692f0ac7fe180b2c2b856e7aeb6f4e53874dd62ef5392c077cf6b706650 | deepseek-r1-distill-qwen-7b | 1001 | effective | — |
+| e4c1512e707798c2d1b938089d2841a9f4c7a00b869211b76036fda4e526c3df | smollm2-135m-instruct | 1019 | effective | — |
+| e5488162e0e87896e36af804cbf050a916b78f12fdd79ae5d41810f991623770 | gemma-3-1b-it | 1051 | effective | — |
+| e58b4f2f7ebbf5b44b6890ae2c1ca83b64494587285052d66b177cdd1544eda2 | lfm2-700m | 1019 | effective | — |
+| e6d2d1bca5ff03fd4d8f5218b9dcb9a2f72154338c4f8ba4ba5c7e1cdc8a0909 | phi-4-mini-reasoning | 1075 | effective | — |
+| e797ce27f22820f10d05bd8e87b766db3708fac1f5a669fb13bd3a0dd6c252dc | ministral-3-3b-reasoning-2512 | 1019 | effective | — |
+| e888ebec8d0290e6e7b89391d091ba63adb1c36179ad7e533d7646c029a572f6 | tinyllama-11b-chat-v10 | 1001 | effective | — |
+| e9a27cbc63806608eafb06a7c871ed105a826175d6beaa9be112fb144798aecd | gemma-4-e2b-it | 1001 | effective | — |
+| ea9967af7f2517bf00e49ddf25826a7473ad29b7286352f4a148c984afd36fe1 | qwen25-3b-instruct | 1051 | effective | — |
+| eabf991e0bba0774904627bf2a48609fd94bc10c904af472face951dde3fd530 | gemma-3-270m-it | 1072 | effective | — |
+| eb528d1e480352429610e6af678d0ec46a4524627dfbf677c6bdba5544820a1e | mistral-7b-instruct-v03 | 1072 | effective | — |
+| eb774f5dd74f8523ce5607c4eab9b7e5214e06308bae590dcee6db380d530d8f | qwen25-3b-instruct | 1072 | effective | — |
+| ec4a3d042f2edd8fb5705ac32751ecf64370dc1cc910840752df334d8f7d1b0b | smollm3-3b | 1072 | effective | — |
+| ecace193e4040b772197d85475d5cf9974e54e1b409fb0264f46df2ecca1e6ab | phi-4-mini-instruct | 1019 | effective | — |
+| ecd141295f294e8244e48977ce19c7c049047557b178727cff4bf1e90f598378 | deepseek-r1-distill-qwen-7b | 1051 | effective | — |
+| ed73602ddff428a32c346a28848566b3751e0b9851cc6f9cba7e0f4da7e44571 | gemma-4-e2b-it | 1075 | effective | — |
+| ed83399566498510cbac97dc1d3ef0ffae2338e27dc1d1ef7151c2e85a46ce24 | ministral-3-3b-reasoning-2512 | 1051 | effective | — |
+| eee80ba16b186653471f1e5da861ddcf5d6cdc9aea44a4ec0c0939c0434883fd | phi-4-mini-instruct | 1001 | effective | — |
+| eeef8621bb12ef45c91a3d0092553ba53a4a4b0502c33d68171e067c6928c856 | gemma-4-e4b-it | 1019 | effective | — |
+| efc69a2dcff6b6909493f024a29b136385d339c0d441e2cbe800e004f43986a5 | deepseek-r1-distill-qwen-7b | 1075 | effective | — |
+| efdefb69f1bda88dda35f41823c3bfc8ba6a6e427bcb63f61eb8ea079bcdaf88 | lfm2-26b | 1072 | effective | — |
+| eff6af0807d108d13cbe550e2ab752d5d5381ac82fbe3ea72c51e2385a3eeb59 | qwen25-7b-instruct | 1019 | effective | — |
+| f0175b8d9638ee5840bd48536a77b555816533296f8ba7485ca0f6e1dafd19df | granite-33-8b-instruct | 1072 | effective | — |
+| f17df172334946d6bd7a5ba3c010e1f286db5859c4f1f380b482a63e26ed0836 | mistral-7b-instruct-v03 | 1001 | effective | — |
+| f180dcb05448855d3946bb325fbdbc238fd2c0145d8a5fafdd940f50b0095352 | smollm2-135m-instruct | 1075 | effective | — |
+| f1b4b5b1bbc52d8091d49f8aff1393e1fd87d7ed513d3cc261d015f07bf7d7e5 | gemma-4-e2b-it | 1051 | effective | — |
+| f1fdd0d574d0280b8d4f77f8babe0179cd39f411bf90612205a4d9386c5bd34c | gemma-4-e2b-it | 1051 | effective | — |
+| f2989c3609cc7af92c6d9f3ef279f579793d6235f5ae9bece7cd5b5921c2c974 | lfm2-700m | 1072 | effective | — |
+| f3786cf5b93af0796b2dbd103f59fd3adba62a801dc11021f9b9bf1e129c0850 | smollm2-135m-instruct | 1072 | effective | — |
+| f3ce56911a72996a1c09a3abdf9b0ac99ad0713f8e45af0d3cb0f0ba43f0df9d | granite-33-8b-instruct | 1075 | effective | — |
+| f4fc49a924b59132653ceb1c9b6a48ebde03adef6be47e818996980f52e1b0de | qwen3-06b | 1072 | effective | — |
+| f5386141e667495cb649479a37c8448017bda6a824a24298c85274fb6b48d223 | gemma-2-9b-it | 1072 | effective | — |
+| f57ca560b43db8464fa67e70d9785976d5cd043ae5afeca1aced6600f8f1eb8e | gemma-3-4b-it | 1001 | effective | — |
+| f58d696416bb33a237b6646b233d31fc0cc3e8bd7a2a8eaedf578b3ce2c5d925 | qwen25-coder-7b-instruct | 1019 | effective | — |
+| f615eaeb57ae01ebe617be4a5d6349e12ab1d6736d82f7532015ce7d5383c080 | smollm3-3b | 1051 | effective | — |
+| f63f48b83b89936f9c0f4418301032069bcc85f5b2d631180637dbbeeeb4f407 | granite-33-8b-instruct | 1072 | effective | — |
+| f6a6f2d6dc660c9214881b08252b1f16bc86ff0d201277112f7eea2e03a4f719 | gemma-4-e4b-it | 1001 | effective | — |
+| f6c28b4be18909841ba4291d6f474c6e6a535f0568be06c0468bbb642cb8e510 | deepseek-r1-distill-qwen-7b | 1072 | effective | — |
+| f6cd86ab30cf4ba70e5d869340232c6a2b562f84e4eec457722f6ce4184a8f1f | qwen25-coder-7b-instruct | 1075 | effective | — |
+| f6ce85a8962a146171df0fcd4ff5dbbae6b325debf8d04e4e9bda0d308e4eb72 | tinyllama-11b-chat-v10 | 1072 | effective | — |
+| f6f4b614695c87bf632f9249f3d71183b696746469c2163c5c314bb613b57b60 | qwen25-coder-7b-instruct | 1072 | effective | — |
+| f7b6a2bc1a60950883f1ca83132718ee8424bcb9dcaa2c644a72148f9534f16f | lfm2-700m | 1019 | effective | — |
+| f7d0f27d06644f2d302a0b9153b5fb5d9a68a55ec1a4d765b6631ab46df38ac7 | phi-4-mini-reasoning | 1051 | effective | — |
+| f9d95219f6968a2f80d6d1674a6eb3ca35944e1204512ff0c646b21e691df725 | qwen25-3b-instruct | 1075 | effective | — |
+| fab08df2836897981a729114cc4059e129d731a4621e2bfd072094680238efb6 | qwen3-17b | 1051 | effective | — |
+| fadf845c2e42a03580aaafc2c6d9c582bf987a0b17fbfd70ebb34650993136f0 | lfm2-700m | 1075 | effective | — |
+| fafe4cb65072385ecc3ca8cd4ed9b339023949738cb37415e07726f736f2dcf2 | qwen25-05b-instruct | 1019 | effective | — |
+| fb099c01f380929e676fc8385dbd6cdd5549621bb1a39c4df08abdeb18d6c4f4 | lfm2-350m | 1051 | effective | — |
+| fb1d4c67e3ee5c6b89e31660471c75431f4373c27f3918ddccf8aef506c58270 | smollm2-135m-instruct | 1001 | effective | — |
+| fb9be7054078affa02e2680b529e0f13e1a0d4bb861fcabb652841cd75aec615 | ministral-3-3b-reasoning-2512 | 1075 | effective | — |
+| fbfac886dce9815a9426c8cedc26e6c68684533a6c4eb88cf5786c8b20455d03 | ministral-3-3b-reasoning-2512 | 1019 | effective | — |
+| fc558beb2920fc2fd6fc01d0153ea7eb92f926c7b203cdd16de6d1f22560fd3b | granite-33-2b-instruct | 1051 | effective | — |
+| fd38369c54b38db1627b3d0510810d10c8b0b5c133fec0cebecf2a9899827ac0 | qwen3-8b | 1019 | effective | — |
+| fe4df836d43044e6a5eb94823763d8e5d3c53f096f4c67d089315b9e30b7f709 | gemma-3-4b-it | 1072 | effective | — |
+| fef028a5f2bc80623b0aa27613bf620e4e65ba3a2d0f3cba266bac5c7c204eea | gemma-2-9b-it | 1075 | effective | — |
+| ff06b8f3cf060fa67b609e0e574e429f437e695e3fd62c030d84c02a4c479580 | qwen25-3b-instruct | 1072 | effective | — |
+
+**Campaign caveats**
+- descriptive_only
+- single_hardware_class
+- single_environment
+- curated_benchmark_subset
+- no_inferential_claims
 
 ### Receipt Verification
 

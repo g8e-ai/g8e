@@ -96,7 +96,7 @@ from g8e_evals.constants import (
     REPORT_CHECKSUM_JSON,
     TASKS_JSONL,
 )
-from g8e_evals.harness import Response, Task
+from g8e_evals.harness import Response, SUTConfig, Task
 from g8e_evals.index import (
     AssignmentDisposition,
     AssignmentDispositionEntry,
@@ -514,6 +514,137 @@ def derive_cohorts_from_registry(
         cohort_variant_map[cohort_id] = variant_id
 
     return cohorts, cohort_variant_map
+
+
+_ALL_TIER_NAMES = ("primary", "assistant", "lite")
+
+
+def build_tier_fitness_sut_config(
+    cohort: ModelCohort,
+    arm: Arm,
+    campaign_profile: CampaignProfile,
+    cohort_variant_map: dict[str, str],
+    g8ee_url: str,
+    operator_url: str | None = None,
+    operator_session_id: str | None = None,
+    auth_context: object | None = None,
+) -> SUTConfig:
+    """Build a ``SUTConfig`` for a tier-fitness assignment.
+
+    The candidate model (from the cohort's primary role binding) replaces
+    the target tier declared in the campaign profile's
+    ``model_tier_assignments``. Non-target tiers are filled from
+    ``baseline_tier_mappings``.
+
+    Raises ``ValueError`` when the cohort's variant is not found in
+    ``cohort_variant_map``, when no ``model_tier_assignment`` exists for
+    the variant, or when a ``baseline_tier_mapping`` is missing for a
+    non-target tier.
+    """
+    from g8e_evals.harness import LLMRoleConfig
+
+    variant_id = cohort_variant_map.get(cohort.cohort_id)
+    if variant_id is None:
+        raise ValueError(
+            f"cohort {cohort.cohort_id!r} not found in cohort_variant_map"
+        )
+
+    tier_assignment = None
+    for assignment in campaign_profile.model_tier_assignments:
+        if assignment.variant_id == variant_id:
+            tier_assignment = assignment
+            break
+    if tier_assignment is None:
+        raise ValueError(
+            f"no model_tier_assignment found for variant {variant_id!r}"
+        )
+
+    target_tier = tier_assignment.target_tier
+    candidate_model = cohort.role_bindings[0].model_id
+    candidate_endpoint = cohort.role_bindings[0].endpoint
+    candidate_provider = cohort.role_bindings[0].provider
+
+    role_configs: dict[str, LLMRoleConfig] = {}
+    for tier_name in _ALL_TIER_NAMES:
+        if tier_name == target_tier:
+            role_configs[tier_name] = LLMRoleConfig(
+                provider=candidate_provider,
+                model=candidate_model,
+                endpoint=candidate_endpoint,
+            )
+        else:
+            baseline_tag = campaign_profile.baseline_tier_mappings.get(tier_name)
+            if baseline_tag is None:
+                raise ValueError(
+                    f"missing baseline_tier_mapping for {tier_name}"
+                )
+            role_configs[tier_name] = LLMRoleConfig(
+                provider="ollama",
+                model=baseline_tag,
+                endpoint=candidate_endpoint,
+            )
+
+    return SUTConfig(
+        g8ee_url=g8ee_url,
+        primary=role_configs["primary"],
+        assistant=role_configs["assistant"],
+        lite=role_configs["lite"],
+        arm=arm,
+        operator_url=operator_url or "https://localhost:8444",
+        operator_session_id=operator_session_id,
+        auth_context=auth_context,  # type: ignore[arg-type]
+    )
+
+
+def build_campaign_sut_factory(
+    campaign_profile: CampaignProfile | None,
+    cohort_variant_map: dict[str, str] | None,
+    g8ee_url: str = "",
+    operator_url: str | None = None,
+    operator_session_id: str | None = None,
+    auth_context: object | None = None,
+) -> SUTFactory:
+    """Build a ``SUTFactory`` that dispatches by arm type.
+
+    For the ``direct`` arm, creates a ``DirectProviderSUT`` using the
+    cohort's primary model. For ``ensemble_ungoverned`` and ``doctrine``
+    arms, creates a ``G8eeChatSUT`` with tier replacement logic from the
+    campaign profile's ``model_tier_assignments`` and
+    ``baseline_tier_mappings``.
+
+    When ``campaign_profile`` is ``None`` (no profile provided), the
+    factory always creates ``DirectProviderSUT`` regardless of arm,
+    preserving the existing behavior for direct-track-only campaigns.
+    """
+    from g8e_evals.harness import LLMRoleConfig
+    from g8e_evals.sut.direct_provider import DirectProviderSUT
+
+    def factory(cohort: ModelCohort, arm: Arm) -> SUTProtocol:
+        if arm == Arm.DIRECT or campaign_profile is None or cohort_variant_map is None:
+            model_id = cohort.role_bindings[0].model_id
+            endpoint = cohort.role_bindings[0].endpoint
+            config = SUTConfig(
+                g8ee_url="",
+                primary=LLMRoleConfig(provider="ollama", model=model_id, endpoint=endpoint),
+                arm=arm,
+            )
+            return DirectProviderSUT(config)
+
+        from g8e_evals.sut.g8ee_chat import G8eeChatSUT
+
+        config = build_tier_fitness_sut_config(
+            cohort=cohort,
+            arm=arm,
+            campaign_profile=campaign_profile,
+            cohort_variant_map=cohort_variant_map,
+            g8ee_url=g8ee_url,
+            operator_url=operator_url,
+            operator_session_id=operator_session_id,
+            auth_context=auth_context,
+        )
+        return G8eeChatSUT(config)
+
+    return factory
 
 
 @dataclass
@@ -1399,6 +1530,8 @@ __all__ = [
     "SUTProtocol",
     "build_campaign_manifest",
     "build_campaign_state",
+    "build_campaign_sut_factory",
+    "build_tier_fitness_sut_config",
     "check_disk_space",
     "derive_cohorts_from_registry",
 ]

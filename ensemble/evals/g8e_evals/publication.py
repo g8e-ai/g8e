@@ -393,7 +393,7 @@ def compute_model_campaign_hash(
     dispositions: list[CampaignDispositionRow],
     comparison_rows: list[CampaignComparisonRow],
     efficiency_observations: list[CampaignEfficiencyObservation],
-    variant_summaries: list[CampaignVariantSummaryRow] = (),
+    variant_summaries: list[CampaignVariantSummaryRow] | None = None,
     statistical_analysis: CampaignStatisticalAnalysisRef,
     provenance: CampaignProvenanceRef,
     caveats: list[CampaignCaveat] | list[str],
@@ -434,7 +434,7 @@ def compute_model_campaign_hash(
             ],
             "variant_summaries": [
                 json.loads(s.model_dump_json())
-                for s in sorted(variant_summaries, key=lambda s: (s.variant_id, s.metric_id))
+                for s in sorted(variant_summaries or [], key=lambda s: (s.variant_id, s.metric_id))
             ],
             "statistical_analysis": json.loads(statistical_analysis.model_dump_json()),
             "provenance": json.loads(provenance.model_dump_json()),
