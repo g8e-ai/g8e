@@ -254,6 +254,39 @@ func (s *DocumentStoreService) DocMerge(collection, id string, fields json.RawMe
 	return err
 }
 
+// DocList returns all documents in a collection, ordered by id ascending.
+func (s *DocumentStoreService) DocList(collection string) ([]*models.Document, error) {
+	type docRow struct {
+		docID        string
+		dataJSON     string
+		createdAtStr string
+		updatedAtStr string
+	}
+	rows, err := sqliteutil.MaterializeRows(s.db,
+		"SELECT id, data, created_at, updated_at FROM documents WHERE collection = ? ORDER BY id ASC",
+		[]interface{}{collection},
+		func(r *sql.Rows) (docRow, error) {
+			var row docRow
+			if err := r.Scan(&row.docID, &row.dataJSON, &row.createdAtStr, &row.updatedAtStr); err != nil {
+				return docRow{}, fmt.Errorf("gateway: document store: list: scan: %w", err)
+			}
+			return row, nil
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: document store: list: %w", err)
+	}
+	results := make([]*models.Document, 0, len(rows))
+	for _, row := range rows {
+		doc, err := scanDocument(collection, row.docID, row.dataJSON, row.createdAtStr, row.updatedAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("gateway: document store: list: %w", err)
+		}
+		results = append(results, doc)
+	}
+	return results, nil
+}
+
 // DocDelete removes a document, returning only an error. It satisfies the
 // governance.TransactionAuditStore and governance.GovernedDocumentStore
 // interfaces. A not-found result is not an error — the document is simply

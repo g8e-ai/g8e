@@ -80,6 +80,22 @@ from .governance import (
     CommandIntent,
     compute_transaction_hash,
 )
+from .public_feed import (
+    PublicFeedRecord,
+    PublicFeedBatch,
+    PublicFeedSnapshot,
+    PublicProofCatalogSummary,
+    PublicFeedBootstrap,
+    PublicFeedCursorPage,
+    PublicIngestRequest,
+    PublicIngestResponse,
+    PublicKeyRevocationRecord,
+    PublicProofCatalogEntry,
+    PublicProofManifest,
+    PublicProofCatalog,
+    PublicExportConfig,
+    PublicOutboxEntry,
+)
 
 __all__ = [
     "G8eBaseModel",
@@ -139,4 +155,18 @@ __all__ = [
     "GovernanceL3Proof",
     "CommandIntent",
     "compute_transaction_hash",
+    "PublicFeedRecord",
+    "PublicFeedBatch",
+    "PublicFeedSnapshot",
+    "PublicProofCatalogSummary",
+    "PublicFeedBootstrap",
+    "PublicFeedCursorPage",
+    "PublicIngestRequest",
+    "PublicIngestResponse",
+    "PublicKeyRevocationRecord",
+    "PublicProofCatalogEntry",
+    "PublicProofManifest",
+    "PublicProofCatalog",
+    "PublicExportConfig",
+    "PublicOutboxEntry",
 ]

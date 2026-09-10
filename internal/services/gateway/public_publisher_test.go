@@ -21,7 +21,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -92,7 +91,7 @@ func makeProjectionRecord(t *testing.T, seq int64, proj map[string]any) models.P
 // to the mirror. The batch must carry a valid Ed25519 signature over the
 // content hash.
 func TestExportBatch_SignsAndWritesOutbox(t *testing.T) {
-	publisher, docStore, priv, pubKeyHex := newPublicPublisherTestEnv(t)
+	publisher, docStore, _, pubKeyHex := newPublicPublisherTestEnv(t)
 
 	// Set up a test mirror that accepts the batch.
 	var receivedBatch models.PublicFeedBatch
@@ -171,7 +170,7 @@ func TestExportBatch_HashChainLinksBatches(t *testing.T) {
 
 	// The second batch's previous_batch_hash must equal the first batch's content_hash.
 	assert.Equal(t, firstBatch.ContentHash, secondBatch.PreviousBatchHash)
-	assert.Equal(t, int64(1), secondBatch.FirstSequence)
+	assert.Equal(t, int64(2), secondBatch.FirstSequence)
 	assert.Equal(t, int64(2), secondBatch.LastSequence)
 }
 
