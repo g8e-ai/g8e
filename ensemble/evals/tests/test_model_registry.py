@@ -410,6 +410,7 @@ class TestModelRegistry:
     def test_runnable_variants_excludes_qualified_outcomes(self):
         runnable = _make_variant(variant_id="runnable-1")
         blocked = _make_variant(variant_id="blocked-1")
+        blocked = blocked.model_copy(update={"quantization": "fp16"})
         qual = _make_qualification_record(variant_id="blocked-1", outcome=QualificationOutcome.LICENSE_BLOCKED)
         ch = compute_model_registry_hash("reg-1", "1", [runnable, blocked], [qual])
         registry = ModelRegistry(

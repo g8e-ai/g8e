@@ -79,6 +79,7 @@ from g8e_evals.constants import (
     ATTEMPTS_JSONL,
     CAMPAIGN_ASSIGNMENTS_JSONL,
     CAMPAIGN_COHORTS_JSONL,
+    CAMPAIGN_INDEX_JSONL,
     CAMPAIGN_MANIFEST_JSON,
     CAMPAIGN_RETRY_POLICY_JSON,
     CAMPAIGN_SCHEDULE_JSON,
@@ -88,6 +89,13 @@ from g8e_evals.constants import (
     TASKS_JSONL,
 )
 from g8e_evals.harness import Response, Task
+from g8e_evals.index import (
+    AssignmentDisposition,
+    AssignmentDispositionEntry,
+    IndexCreationReason,
+    IndexGeneration,
+    compute_index_generation_hash,
+)
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
 from g8e_evals.schema import (
     ArmManifestEntry,
@@ -499,6 +507,98 @@ class CampaignRunner:
         """Return the set of assignment IDs that have a terminal attempt."""
         return {a.assignment_id for a in attempts if a.assignment_id}
 
+    def _load_existing_generations(self) -> list[IndexGeneration]:
+        """Load existing index generations from the report directory (for resume)."""
+        path = self.report_dir / CAMPAIGN_INDEX_JSONL
+        if not path.exists():
+            return []
+        records: list[IndexGeneration] = []
+        for line in path.read_text().splitlines():
+            if line.strip():
+                records.append(IndexGeneration.model_validate_json(line))
+        return records
+
+    def _compute_assignment_dispositions(
+        self,
+        assignments: list[CampaignAssignment],
+        attempts: list[AttemptRecord],
+    ) -> list[AssignmentDispositionEntry]:
+        """Compute assignment dispositions from terminal attempts.
+
+        An assignment with a terminal ``COMPLETED`` attempt is ``EFFECTIVE``.
+        An assignment with a terminal ``INFRASTRUCTURE_FAILED`` attempt is
+        ``SUPERSEDED`` (eligible for replacement). Any other terminal
+        failure is ``QUALIFICATION``. An assignment with no terminal
+        attempt is ``UNAVAILABLE``.
+        """
+        terminal_by_assignment: dict[str, AttemptRecord] = {}
+        for attempt in attempts:
+            if not attempt.assignment_id:
+                continue
+            terminal_by_assignment[attempt.assignment_id] = attempt
+
+        dispositions: list[AssignmentDispositionEntry] = []
+        for assignment in assignments:
+            terminal = terminal_by_assignment.get(assignment.assignment_id)
+            if terminal is None:
+                disposition = AssignmentDisposition.UNAVAILABLE
+            elif terminal.terminal_status == TerminalStatus.COMPLETED:
+                disposition = AssignmentDisposition.EFFECTIVE
+            elif terminal.terminal_status == TerminalStatus.INFRASTRUCTURE_FAILED:
+                disposition = AssignmentDisposition.SUPERSEDED
+            else:
+                disposition = AssignmentDisposition.QUALIFICATION
+            dispositions.append(AssignmentDispositionEntry(
+                assignment_id=assignment.assignment_id,
+                disposition=disposition,
+            ))
+        return dispositions
+
+    def _compute_report_checksums(self, attempts: list[AttemptRecord]) -> list[str]:
+        """Compute SHA-256 checksums of complete reports (attempts and metrics)."""
+        attempts_hash = hashlib.sha256(
+            json.dumps(
+                [json.loads(a.model_dump_json()) for a in attempts],
+                allow_nan=False,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode(),
+        ).hexdigest()
+        return [attempts_hash]
+
+    def _write_index_generation(
+        self,
+        generation_number: int,
+        parent_generation_hash: str,
+        creation_reason: IndexCreationReason,
+        report_checksums: list[str],
+        assignment_dispositions: list[AssignmentDispositionEntry],
+    ) -> IndexGeneration:
+        """Append a new index generation to the campaign index file."""
+        content_hash = compute_index_generation_hash(
+            generation_number=generation_number,
+            parent_generation_hash=parent_generation_hash,
+            creation_reason=creation_reason,
+            report_checksums=report_checksums,
+            assignment_dispositions=[
+                {"assignment_id": d.assignment_id, "disposition": d.disposition.value}
+                for d in assignment_dispositions
+            ],
+        )
+        generation = IndexGeneration(
+            generation_number=generation_number,
+            parent_generation_hash=parent_generation_hash,
+            creation_reason=creation_reason,
+            report_checksums=report_checksums,
+            assignment_dispositions=assignment_dispositions,
+            content_hash=content_hash,
+        )
+        path = self.report_dir / CAMPAIGN_INDEX_JSONL
+        with open(path, "a") as f:
+            f.write(generation.model_dump_json() + "\n")
+        return generation
+
     def _build_task_definitions(self) -> list[TaskDefinition]:
         """Build TaskDefinition records for the report directory."""
         task_defs = []
@@ -783,6 +883,31 @@ class CampaignRunner:
         # 5. Set campaign status to running
         self._write_campaign_status(CampaignStatus.RUNNING)
 
+        # 5b. Write index generations
+        existing_generations = self._load_existing_generations()
+        if existing_generations:
+            # Resume: create a new index generation with the RESUME reason
+            last_gen = existing_generations[-1]
+            existing_attempts = self._load_existing_attempts()
+            dispositions = self._compute_assignment_dispositions(assignments, existing_attempts)
+            checksums = self._compute_report_checksums(existing_attempts)
+            self._write_index_generation(
+                generation_number=last_gen.generation_number + 1,
+                parent_generation_hash=last_gen.content_hash,
+                creation_reason=IndexCreationReason.RESUME,
+                report_checksums=checksums,
+                assignment_dispositions=dispositions,
+            )
+        else:
+            # Fresh start: write the initial index generation
+            self._write_index_generation(
+                generation_number=0,
+                parent_generation_hash="0" * 64,
+                creation_reason=IndexCreationReason.INITIAL,
+                report_checksums=[],
+                assignment_dispositions=[],
+            )
+
         # 6. Load existing attempts (for resume)
         existing_attempts = self._load_existing_attempts()
         completed_ids = self._completed_assignment_ids(existing_attempts)
@@ -877,6 +1002,19 @@ class CampaignRunner:
         _write_atomic(self.report_dir / ANALYSIS_MD, render_markdown(analysis))
         _write_atomic(self.report_dir / ANALYSIS_HTML, render_html(analysis))
         _write_atomic(self.report_dir / ANALYSIS_TXT, render_cli(analysis))
+
+        # 10b. Write finalization index generation
+        all_generations = self._load_existing_generations()
+        last_gen = all_generations[-1]
+        final_dispositions = self._compute_assignment_dispositions(assignments, all_attempts)
+        final_checksums = self._compute_report_checksums(all_attempts)
+        self._write_index_generation(
+            generation_number=last_gen.generation_number + 1,
+            parent_generation_hash=last_gen.content_hash,
+            creation_reason=IndexCreationReason.FINALIZATION,
+            report_checksums=final_checksums,
+            assignment_dispositions=final_dispositions,
+        )
 
         # 11. Update campaign status
         self._write_campaign_status(final_status, stop_reason)

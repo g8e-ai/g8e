@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 from enum import StrEnum
 from typing import TYPE_CHECKING, Self
 
@@ -40,6 +41,9 @@ from g8e_evals.schema import CampaignTrack
 
 
 CAMPAIGN_PROFILE_VERSION = "1.0.0"
+
+_VALID_TIER_NAMES = frozenset({"primary", "assistant", "lite"})
+_VALID_ARM_IDS = frozenset({"direct", "ensemble_ungoverned", "doctrine"})
 
 
 def _sha256(data: str) -> str:
@@ -224,17 +228,66 @@ class CampaignProfile(BaseModel):
                 seen.add(vid)
             raise ValueError(f"duplicate generative_variant_id: {sorted(set(dupes))}")
 
+        if len(self.benchmark_ids) != len(set(self.benchmark_ids)):
+            seen_b: set[str] = set()
+            dupes_b: list[str] = []
+            for bid in self.benchmark_ids:
+                if bid in seen_b:
+                    dupes_b.append(bid)
+                seen_b.add(bid)
+            raise ValueError(f"duplicate benchmark_id: {sorted(set(dupes_b))}")
+
+        if len(self.dataset_hashes) != len(set(self.dataset_hashes)):
+            seen_d: set[str] = set()
+            dupes_d: list[str] = []
+            for dh in self.dataset_hashes:
+                if dh in seen_d:
+                    dupes_d.append(dh)
+                seen_d.add(dh)
+            raise ValueError(f"duplicate dataset_hash: {sorted(set(dupes_d))}")
+
+        if len(self.grader_hashes) != len(set(self.grader_hashes)):
+            seen_g: set[str] = set()
+            dupes_g: list[str] = []
+            for gh in self.grader_hashes:
+                if gh in seen_g:
+                    dupes_g.append(gh)
+                seen_g.add(gh)
+            raise ValueError(f"duplicate grader_hash: {sorted(set(dupes_g))}")
+
+        if len(self.task_ids) != len(set(self.task_ids)):
+            seen_t: set[str] = set()
+            dupes_t: list[str] = []
+            for tid in self.task_ids:
+                if tid in seen_t:
+                    dupes_t.append(tid)
+                seen_t.add(tid)
+            raise ValueError(f"duplicate task_id: {sorted(set(dupes_t))}")
+
         track_keys = [a.track for a in self.track_arm_assignments]
         if len(track_keys) != len(set(track_keys)):
             raise ValueError(
                 f"duplicate track in track_arm_assignments: {track_keys}"
             )
 
+        for assignment in self.track_arm_assignments:
+            if assignment.arm_id not in _VALID_ARM_IDS:
+                raise ValueError(
+                    f"unknown arm_id in track_arm_assignments: {assignment.arm_id!r}"
+                )
+
         tier_variant_ids = [a.variant_id for a in self.model_tier_assignments]
         if len(tier_variant_ids) != len(set(tier_variant_ids)):
             raise ValueError(
                 f"duplicate variant_id in model_tier_assignments: {tier_variant_ids}"
             )
+
+        for assignment in self.model_tier_assignments:
+            if assignment.target_tier not in _VALID_TIER_NAMES:
+                raise ValueError(
+                    f"target_tier must be one of {sorted(_VALID_TIER_NAMES)}: "
+                    f"got {assignment.target_tier!r}"
+                )
 
         expected = compute_campaign_profile_hash(
             self.campaign_id,
@@ -285,6 +338,11 @@ class CampaignProfile(BaseModel):
                     f"model_tier_assignment variant_id {assignment.variant_id!r} "
                     f"not found in registry"
                 )
+            if assignment.variant_id not in set(self.generative_variant_ids):
+                raise ValueError(
+                    f"model_tier_assignment variant_id {assignment.variant_id!r} "
+                    f"not in generative_variant_ids"
+                )
 
 
 def compute_campaign_profile_hash(
@@ -331,6 +389,53 @@ def compute_campaign_profile_hash(
     return _sha256(payload)
 
 
+def compute_profile_schedule(
+    profile: CampaignProfile,
+    measured_variant_ids: list[str],
+) -> list[str]:
+    """Compute the deterministic Fisher-Yates schedule from the profile's seed.
+
+    Builds the Cartesian product of (variant, task, arm, repetition),
+    shuffles the canonical slot order with a Fisher-Yates shuffle seeded
+    by ``profile.seed``, and returns the ordered assignment IDs. The same
+    seed always produces the same order; a different seed produces a
+    different order.
+
+    Each assignment ID is a deterministic SHA-256 over canonical JSON of
+    (campaign_id, variant_id, task_id, arm_id, repetition).
+    """
+    canonical_slots: list[tuple[str, str, str, int]] = []
+    for variant_id in sorted(measured_variant_ids):
+        for task_id in profile.task_ids:
+            for assignment in profile.track_arm_assignments:
+                for rep in range(1, profile.repetitions + 1):
+                    canonical_slots.append((variant_id, task_id, assignment.arm_id, rep))
+
+    rng = random.Random(profile.seed)
+    indices = list(range(len(canonical_slots)))
+    rng.shuffle(indices)
+
+    ordered_ids: list[str] = []
+    for idx in indices:
+        variant_id, task_id, arm_id, rep = canonical_slots[idx]
+        payload = json.dumps(
+            {
+                "campaign_id": profile.campaign_id,
+                "variant_id": variant_id,
+                "task_id": task_id,
+                "arm_id": arm_id,
+                "repetition": rep,
+            },
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        ordered_ids.append(_sha256(payload))
+
+    return ordered_ids
+
+
 __all__ = [
     "CAMPAIGN_PROFILE_VERSION",
     "CampaignLifecycleStatus",
@@ -339,4 +444,5 @@ __all__ = [
     "ModelTierAssignment",
     "TrackArmAssignment",
     "compute_campaign_profile_hash",
+    "compute_profile_schedule",
 ]

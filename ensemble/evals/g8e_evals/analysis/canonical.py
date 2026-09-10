@@ -775,6 +775,41 @@ class BridgeRunComparison(BaseModel):
     reason: str = Field(min_length=1)
 
 
+class StatisticalAnalysisRecord(BaseModel):
+    """Frozen statistical analysis record for a campaign comparison.
+
+    Records the statistical method, independent unit, population size,
+    correction family, point estimates, confidence intervals, practical
+    thresholds, and claim status. Built only from the preregistered
+    paired analysis with multiplicity control. Descriptive-only
+    campaigns produce a record with ``claim_status`` set to
+    ``DESCRIPTIVE_ONLY`` and no inferential estimates.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    method: str = Field(min_length=1, description="Statistical method (e.g. paired_t, wilcoxon, mcnemar, bootstrap).")
+    independent_unit: str = Field(min_length=1, description="Primary independent sampling unit (e.g. task).")
+    population: int = Field(ge=0, description="Number of independent units in the population.")
+    correction_family: str = Field(
+        min_length=1,
+        description="Multiple-comparison correction family (e.g. holm-bonferroni, none).",
+    )
+    claim_status: ClaimPolicy = Field(description="Claim boundary: descriptive_only or confirmatory.")
+    estimates: list[float] = Field(
+        default_factory=list,
+        description="Point estimates for each comparison, sorted by comparison key.",
+    )
+    intervals: list[tuple[float, float]] = Field(
+        default_factory=list,
+        description="Confidence intervals as (lower, upper) pairs, sorted by comparison key.",
+    )
+    practical_thresholds: list[float] = Field(
+        default_factory=list,
+        description="Practical thresholds or non-inferiority margins, sorted by comparison key.",
+    )
+
+
 class CanonicalEvalAnalysis(BaseModel):
     """Versioned canonical machine-readable eval analysis.
 
@@ -851,6 +886,11 @@ class CanonicalEvalAnalysis(BaseModel):
         description="Preregistration configuration that authorized the paired comparisons. None when no comparisons were declared.",
     )
 
+    statistical_analysis: StatisticalAnalysisRecord | None = Field(
+        default=None,
+        description="Frozen statistical analysis record with method, independent unit, population, correction family, estimates, intervals, practical thresholds, and claim status. None when no inferential analysis was performed.",
+    )
+
     def canonical_json(self) -> str:
         """Return canonical JSON with sorted keys and no extra whitespace.
 
@@ -884,5 +924,6 @@ __all__ = [
     "ReceiptCoverageAnalysis",
     "ReplicateAggregationPolicy",
     "SecondaryFamily",
+    "StatisticalAnalysisRecord",
     "canonical_model_json",
 ]

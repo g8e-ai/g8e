@@ -933,7 +933,7 @@ def campaign_plan(profile: Path, models: Path):
     network operations. The plan is deterministic: the same inputs
     always produce the same output.
     """
-    from g8e_evals.profile import CampaignProfile
+    from g8e_evals.profile import CampaignProfile, compute_profile_schedule
     from g8e_evals.registry import ModelRegistry
 
     try:
@@ -980,6 +980,9 @@ def campaign_plan(profile: Path, models: Path):
         if vid in {v.variant_id for v in registry.variants}
     )
 
+    # Compute the deterministic Fisher-Yates schedule from the frozen seed.
+    run_order = compute_profile_schedule(campaign_profile, measured_variants)
+
     console = Console()
     console.print(f"[cyan]Campaign plan[/cyan] {campaign_profile.campaign_id}")
     console.print(f"  [green]revision[/green] {campaign_profile.campaign_revision}")
@@ -997,6 +1000,10 @@ def campaign_plan(profile: Path, models: Path):
     console.print(f"  [green]max_retries[/green] {campaign_profile.max_retries}")
     console.print(f"  [green]claim_boundary[/green] {campaign_profile.claim_boundary.value}")
     console.print(f"  [green]hardware[/green] {campaign_profile.hardware_identity}")
+    console.print(f"  [green]schedule_seed[/green] {campaign_profile.seed}")
+    console.print("  [green]run_order[/green]")
+    for position, aid in enumerate(run_order):
+        console.print(f"    [{position}] {aid}")
     console.print("  [green]status[/green] planned")
 
 

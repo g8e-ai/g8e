@@ -209,6 +209,21 @@ class ModelRegistry(BaseModel):
                 seen.add(vid)
             raise ValueError(f"duplicate variant_id in registry: {sorted(set(dupes))}")
 
+        artifact_keys = [
+            (v.hf_repo, v.hf_sha, v.quantization) for v in self.variants
+        ]
+        if len(artifact_keys) != len(set(artifact_keys)):
+            seen_a: set[tuple[str, str, str]] = set()
+            dupes_a: list[tuple[str, str, str]] = []
+            for key in artifact_keys:
+                if key in seen_a:
+                    dupes_a.append(key)
+                seen_a.add(key)
+            raise ValueError(
+                f"duplicate artifact (hf_repo, hf_sha, quantization) in registry: "
+                f"{sorted(set(dupes_a))}"
+            )
+
         variant_id_set = set(variant_ids)
         for qual in self.qualification_records:
             if qual.variant_id not in variant_id_set:
