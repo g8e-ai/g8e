@@ -39,6 +39,7 @@ from g8e_evals.bundle.canonical import (
     compute_manifest_hash,
 )
 from g8e_evals.bundle.manifest import (
+    BundleArtifactEntry,
     BundleManifest,
     ChecksumRoot,
     PrivacyClass,
@@ -59,12 +60,18 @@ from g8e_evals.bundle.validation import (
 
 VERIFICATION_REPORT_SCHEMA_VERSION = "1.0.0"
 
-# Limits for the rooted-inventory layer. These are conservative bounds
-# that catch accidental or malicious over-production without rejecting
-# legitimate eval bundles. P2-04 may tighten or parameterize these.
+# Limits for the rooted-inventory and verification layers. These are
+# conservative bounds that catch accidental or malicious over-production
+# without rejecting legitimate eval bundles.
 MAX_BUNDLE_FILE_COUNT = 10_000
 MAX_BUNDLE_PER_FILE_BYTES = 500 * 1024 * 1024  # 500 MiB
 MAX_BUNDLE_TOTAL_BYTES = 5 * 1024 * 1024 * 1024  # 5 GiB
+MAX_BUNDLE_NESTING_DEPTH = 16  # max directory depth beneath bundle root
+MAX_BUNDLE_JSON_DEPTH = 100  # max JSON nesting depth for metadata files
+MAX_BUNDLE_RECORD_COUNT = 100_000  # max records per JSONL file
+MAX_BUNDLE_STRING_LENGTH = 10_000  # max path string length in manifest
+MAX_BUNDLE_EXTERNAL_REF_COUNT = 1_000  # max external references in manifest
+MAX_BUNDLE_VERIFICATION_WORK = 1_000_000  # max total records across all JSONL files
 
 # Bundle metadata files that are not listed as data artifacts in the
 # manifest. They are the verification contract, not the data being verified.
@@ -73,6 +80,45 @@ _BUNDLE_METADATA_FILES = frozenset({
     evals_constants.CHECKSUM_ROOT_JSON,
     evals_constants.BUNDLE_SIGNATURE_JSON,
 })
+
+# Mapping from JSONL source filenames to AnalysisInputRecord field names.
+# The cross-check in layer 9 compares the JSONL records against the
+# corresponding records in analysis-input.json. Only files that exist in
+# the bundle are checked; absent files are expected to have empty lists.
+_SOURCE_RECORD_MAP: list[tuple[str, str]] = [
+    (evals_constants.TASKS_JSONL, "tasks"),
+    (evals_constants.ATTEMPTS_JSONL, "attempts"),
+    (evals_constants.METRICS_JSONL, "metric_observations"),
+    (evals_constants.RECEIPTS_JSONL, "receipts"),
+    (evals_constants.STAGES_JSONL, "stages"),
+    (evals_constants.FINAL_STATE_OBSERVATIONS_JSONL, "final_state_observations"),
+    (evals_constants.STATE_OBSERVATIONS_JSONL, "state_observations"),
+    (evals_constants.REHYDRATION_OBSERVATIONS_JSONL, "rehydration_observations"),
+    (evals_constants.SECRET_DETECTION_OBSERVATIONS_JSONL, "secret_detection_observations"),
+    (evals_constants.UNAUTHORIZED_MUTATION_OBSERVATIONS_JSONL, "unauthorized_mutation_observations"),
+    (evals_constants.TOKEN_STORE_PERSISTENCE_OBSERVATIONS_JSONL, "token_store_persistence_observations"),
+    (evals_constants.TOKEN_TTL_EXPIRY_OBSERVATIONS_JSONL, "token_ttl_expiry_observations"),
+    (evals_constants.TOKEN_PERSISTENCE_FAILURE_OBSERVATIONS_JSONL, "token_persistence_failure_observations"),
+    (evals_constants.EXFILTRATION_ATTEMPT_OBSERVATIONS_JSONL, "exfiltration_attempt_observations"),
+    (evals_constants.ARTIFACT_LEAKAGE_OBSERVATIONS_JSONL, "artifact_leakage_observations"),
+    (evals_constants.REPLAY_ATTEMPT_OBSERVATIONS_JSONL, "replay_attempt_observations"),
+    (evals_constants.SIGNED_FIELD_TAMPERING_OBSERVATIONS_JSONL, "signed_field_tampering_observations"),
+    (evals_constants.PAYLOAD_TAMPERING_OBSERVATIONS_JSONL, "payload_tampering_observations"),
+    (evals_constants.STALE_STATE_ROOT_OBSERVATIONS_JSONL, "stale_state_root_observations"),
+    (evals_constants.IDENTITY_MISMATCH_OBSERVATIONS_JSONL, "identity_mismatch_observations"),
+    (evals_constants.NONCE_EXPIRATION_OBSERVATIONS_JSONL, "nonce_expiration_observations"),
+    (evals_constants.SIGNER_DEFECT_OBSERVATIONS_JSONL, "signer_defect_observations"),
+    (evals_constants.L3_PROOF_TRANSPLANT_OBSERVATIONS_JSONL, "l3_proof_transplant_observations"),
+    (evals_constants.REVOKED_CREDENTIAL_OBSERVATIONS_JSONL, "revoked_credential_observations"),
+    (evals_constants.EVIDENCE_PRESERVATION_OBSERVATIONS_JSONL, "evidence_preservation_observations"),
+    (evals_constants.POLICY_ATTACK_OBSERVATIONS_JSONL, "policy_attack_observations"),
+    (evals_constants.TOOL_SEQUENCE_OBSERVATIONS_JSONL, "tool_sequence_observations"),
+    (evals_constants.FACTUAL_QA_OBSERVATIONS_JSONL, "factual_qa_observations"),
+    (evals_constants.CITATION_BACKED_OBSERVATIONS_JSONL, "citation_backed_observations"),
+    (evals_constants.PARTIAL_MILESTONE_OBSERVATIONS_JSONL, "partial_milestone_observations"),
+    (evals_constants.RELIABILITY_OBSERVATIONS_JSONL, "reliability_observations"),
+    (evals_constants.ECONOMICS_PERFORMANCE_OBSERVATIONS_JSONL, "economics_performance_observations"),
+]
 
 
 class VerificationLayer(IntEnum):
@@ -104,6 +150,10 @@ class VerificationFailureCode(StrEnum):
     FILE_COUNT_LIMIT = "file_count_limit"
     PER_FILE_BYTE_LIMIT = "per_file_byte_limit"
     TOTAL_BYTE_LIMIT = "total_byte_limit"
+    NESTING_LIMIT = "nesting_limit"
+    STRING_LENGTH_LIMIT = "string_length_limit"
+    EXTERNAL_REF_COUNT_LIMIT = "external_ref_count_limit"
+    VERIFICATION_WORK_LIMIT = "verification_work_limit"
 
     # Layer 2: Schemas and canonical bytes
     MANIFEST_SCHEMA_INVALID = "manifest_schema_invalid"
@@ -112,6 +162,7 @@ class VerificationFailureCode(StrEnum):
     MANIFEST_SELF_HASH_MISMATCH = "manifest_self_hash_mismatch"
     CHECKSUM_SELF_HASH_MISMATCH = "checksum_self_hash_mismatch"
     CHECKSUM_MANIFEST_MISMATCH = "checksum_manifest_mismatch"
+    JSON_DEPTH_LIMIT = "json_depth_limit"
 
     # Layer 3: File hashes and references
     FILE_HASH_MISMATCH = "file_hash_mismatch"
@@ -136,6 +187,7 @@ class VerificationFailureCode(StrEnum):
     CROSS_RUN_RECORD = "cross_run_record"
     WRONG_TASK_BINDING = "wrong_task_binding"
     DUPLICATE_IDENTITY = "duplicate_identity"
+    RECORD_COUNT_LIMIT = "record_count_limit"
 
     # Layer 6: Envelope/receipt correlation
     RECEIPT_UNKNOWN_ATTEMPT = "receipt_unknown_attempt"
@@ -146,18 +198,18 @@ class VerificationFailureCode(StrEnum):
     STAGE_UNKNOWN_ATTEMPT = "stage_unknown_attempt"
     STAGE_RUN_MISMATCH = "stage_run_mismatch"
     STAGE_TASK_MISMATCH = "stage_task_mismatch"
-    PERSISTENCE_ATTESTATION_INVALID = "persistence_attestation_invalid"
-    COMMITMENT_ATTESTATION_INVALID = "commitment_attestation_invalid"
-    AUDIT_LINK_INVALID = "audit_link_invalid"
 
     # Layer 8: Metric producers
     METRIC_OBSERVATION_INVALID = "metric_observation_invalid"
     METRIC_UNREGISTERED = "metric_unregistered"
+    METRIC_DUPLICATE_IDENTITY = "metric_duplicate_identity"
+    METRIC_UNKNOWN_ATTEMPT = "metric_unknown_attempt"
 
     # Layer 9: Analysis reproduction
     ANALYSIS_INPUT_SCHEMA_INVALID = "analysis_input_schema_invalid"
     ANALYSIS_REPRODUCTION_FAILED = "analysis_reproduction_failed"
     ANALYSIS_REPRODUCTION_MISMATCH = "analysis_reproduction_mismatch"
+    SOURCE_RECORD_MISMATCH = "source_record_mismatch"
 
     # Layer 10: Renderer equality
     RENDERER_BYTE_MISMATCH = "renderer_byte_mismatch"
@@ -242,6 +294,26 @@ def _check_cancel(cancel_event: threading.Event | None) -> None:
         raise VerificationCancelled("verification cancelled before next layer")
 
 
+def _json_depth(obj: object) -> int:
+    """Compute the maximum nesting depth of a JSON-deserialized object."""
+    if isinstance(obj, dict):
+        if not obj:
+            return 1
+        return 1 + max(_json_depth(v) for v in obj.values())
+    if isinstance(obj, list):
+        if not obj:
+            return 1
+        return 1 + max(_json_depth(v) for v in obj)
+    return 0
+
+
+def _count_jsonl_records(path: Path) -> int:
+    """Count non-empty lines in a JSONL file."""
+    if not path.exists():
+        return 0
+    return sum(1 for line in path.read_text().splitlines() if line.strip())
+
+
 # ---------------------------------------------------------------------------
 # Layer 1: Rooted inventory and limits
 # ---------------------------------------------------------------------------
@@ -256,8 +328,11 @@ def _verify_rooted_inventory(
     if manifest is None:
         return failures
 
-    # Validate manifest paths and check for duplicates.
+    # Validate manifest paths and check for duplicates. Build a list of
+    # valid (entry, normalized) pairs for use in subsequent loops so that
+    # invalid paths are reported once here and skipped everywhere else.
     seen_paths: set[str] = set()
+    valid_entries: list[tuple[BundleArtifactEntry, str]] = []
     for entry in manifest.artifacts:
         try:
             normalized = validate_bundle_path(entry.path)
@@ -278,6 +353,7 @@ def _verify_rooted_inventory(
                 message=f"duplicate normalized path: {normalized}",
             ))
         seen_paths.add(normalized)
+        valid_entries.append((entry, normalized))
 
     # Check for orphan files (files not in manifest, excluding metadata).
     listed = seen_paths
@@ -303,9 +379,9 @@ def _verify_rooted_inventory(
                 message=f"orphan file not listed in manifest: {rel}",
             ))
 
-    # Check for missing files (manifest entries that don't exist).
-    for entry in manifest.artifacts:
-        normalized = validate_bundle_path(entry.path)
+    # Check for missing files (manifest entries that don't exist). Only
+    # valid entries are checked; invalid paths were already reported above.
+    for _entry, normalized in valid_entries:
         file_path = bundle_root / normalized
         if not file_path.exists():
             failures.append(VerificationFailure(
@@ -332,9 +408,61 @@ def _verify_rooted_inventory(
             message=f"file count {len(all_files)} exceeds limit {MAX_BUNDLE_FILE_COUNT}",
         ))
 
-    total_bytes = 0
+    # Check path string length.
     for entry in manifest.artifacts:
-        normalized = validate_bundle_path(entry.path)
+        if len(entry.path) > MAX_BUNDLE_STRING_LENGTH:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.ROOTED_INVENTORY,
+                code=VerificationFailureCode.STRING_LENGTH_LIMIT,
+                record_id=entry.path,
+                message=f"path length {len(entry.path)} exceeds limit {MAX_BUNDLE_STRING_LENGTH}",
+            ))
+
+    # Check external reference count.
+    if len(manifest.external_references) > MAX_BUNDLE_EXTERNAL_REF_COUNT:
+        failures.append(VerificationFailure(
+            layer=VerificationLayer.ROOTED_INVENTORY,
+            code=VerificationFailureCode.EXTERNAL_REF_COUNT_LIMIT,
+            record_id="",
+            message=f"external reference count {len(manifest.external_references)} exceeds limit {MAX_BUNDLE_EXTERNAL_REF_COUNT}",
+        ))
+
+    # Check directory nesting depth.
+    for file_path in all_files:
+        try:
+            rel = file_path.relative_to(bundle_root)
+        except ValueError:
+            continue
+        depth = len(rel.parts)
+        if depth > MAX_BUNDLE_NESTING_DEPTH:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.ROOTED_INVENTORY,
+                code=VerificationFailureCode.NESTING_LIMIT,
+                record_id=rel.as_posix(),
+                message=f"nesting depth {depth} exceeds limit {MAX_BUNDLE_NESTING_DEPTH}",
+            ))
+
+    # Check total verification work across all JSONL files. Only valid
+    # entries are counted; invalid paths were already reported above.
+    total_records = 0
+    for entry, normalized in valid_entries:
+        if not entry.path.endswith(".jsonl"):
+            continue
+        file_path = bundle_root / normalized
+        if file_path.exists() and file_path.is_file():
+            total_records += _count_jsonl_records(file_path)
+    if total_records > MAX_BUNDLE_VERIFICATION_WORK:
+        failures.append(VerificationFailure(
+            layer=VerificationLayer.ROOTED_INVENTORY,
+            code=VerificationFailureCode.VERIFICATION_WORK_LIMIT,
+            record_id="",
+            message=f"total JSONL records {total_records} exceeds limit {MAX_BUNDLE_VERIFICATION_WORK}",
+        ))
+
+    # Check per-file and total byte limits. Only valid entries are
+    # checked; invalid paths were already reported above.
+    total_bytes = 0
+    for _entry, normalized in valid_entries:
         file_path = bundle_root / normalized
         if file_path.exists() and file_path.is_file():
             size = file_path.stat().st_size
@@ -401,6 +529,34 @@ def _verify_schemas_canonical(
             message=str(exc),
         ))
 
+    # Check JSON depth of manifest and checksum root.
+    if manifest_raw is not None:
+        try:
+            manifest_obj = json.loads(manifest_raw)
+            depth = _json_depth(manifest_obj)
+            if depth > MAX_BUNDLE_JSON_DEPTH:
+                failures.append(VerificationFailure(
+                    layer=VerificationLayer.SCHEMAS_CANONICAL,
+                    code=VerificationFailureCode.JSON_DEPTH_LIMIT,
+                    record_id=evals_constants.BUNDLE_MANIFEST_JSON,
+                    message=f"manifest JSON depth {depth} exceeds limit {MAX_BUNDLE_JSON_DEPTH}",
+                ))
+        except (json.JSONDecodeError, ValueError):
+            pass  # Already reported as schema invalid.
+    if checksum_raw is not None:
+        try:
+            checksum_obj = json.loads(checksum_raw)
+            depth = _json_depth(checksum_obj)
+            if depth > MAX_BUNDLE_JSON_DEPTH:
+                failures.append(VerificationFailure(
+                    layer=VerificationLayer.SCHEMAS_CANONICAL,
+                    code=VerificationFailureCode.JSON_DEPTH_LIMIT,
+                    record_id=evals_constants.CHECKSUM_ROOT_JSON,
+                    message=f"checksum root JSON depth {depth} exceeds limit {MAX_BUNDLE_JSON_DEPTH}",
+                ))
+        except (json.JSONDecodeError, ValueError):
+            pass  # Already reported as schema invalid.
+
     # Verify manifest self-hash.
     if manifest.manifest_content_sha256:
         expected = compute_manifest_hash(manifest)
@@ -440,9 +596,20 @@ def _verify_schemas_canonical(
                 message=f"checksum root self-hash mismatch: stored={checksum_root.checksum_root_sha256} computed={expected}",
             ))
 
-    # Verify checksum root entries match manifest entries.
-    manifest_map = {validate_bundle_path(e.path): e.sha256 for e in manifest.artifacts}
-    checksum_map = {validate_bundle_path(e.path): e.sha256 for e in checksum_root.entries}
+    # Verify checksum root entries match manifest entries. Skip entries
+    # with invalid paths; they are already reported in layer 1.
+    manifest_map: dict[str, str] = {}
+    for e in manifest.artifacts:
+        try:
+            manifest_map[validate_bundle_path(e.path)] = e.sha256
+        except BundlePathError:
+            continue
+    checksum_map: dict[str, str] = {}
+    for e in checksum_root.entries:
+        try:
+            checksum_map[validate_bundle_path(e.path)] = e.sha256
+        except BundlePathError:
+            continue
 
     if set(manifest_map.keys()) != set(checksum_map.keys()):
         failures.append(VerificationFailure(
@@ -479,7 +646,10 @@ def _verify_file_hashes(
         return failures
 
     for entry in manifest.artifacts:
-        normalized = validate_bundle_path(entry.path)
+        try:
+            normalized = validate_bundle_path(entry.path)
+        except BundlePathError:
+            continue  # Invalid paths are reported in layer 1.
         file_path = bundle_root / normalized
         if not file_path.exists() or not file_path.is_file():
             continue  # Missing files are reported in layer 1.
@@ -651,6 +821,19 @@ def _verify_record_bindings(
     from g8e_evals.schema import AttemptRecord, TaskDefinition
     tasks = _read_jsonl(bundle_root, evals_constants.TASKS_JSONL, TaskDefinition)
     attempts = _read_jsonl(bundle_root, evals_constants.ATTEMPTS_JSONL, AttemptRecord)
+
+    # Check per-file record count limits.
+    for filename, records in [
+        (evals_constants.TASKS_JSONL, tasks),
+        (evals_constants.ATTEMPTS_JSONL, attempts),
+    ]:
+        if len(records) > MAX_BUNDLE_RECORD_COUNT:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.RECORD_BINDINGS,
+                code=VerificationFailureCode.RECORD_COUNT_LIMIT,
+                record_id=filename,
+                message=f"record count {len(records)} exceeds limit {MAX_BUNDLE_RECORD_COUNT}",
+            ))
 
     task_ids = [t.task_id for t in tasks]
     if len(task_ids) != len(set(task_ids)):
@@ -825,10 +1008,31 @@ def _verify_metric_producers(
         return failures
 
     from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
-    from g8e_evals.schema import MetricObservation
+    from g8e_evals.schema import AttemptRecord, MetricObservation
     metrics = _read_jsonl(bundle_root, evals_constants.METRICS_JSONL, MetricObservation)
+    attempts = _read_jsonl(bundle_root, evals_constants.ATTEMPTS_JSONL, AttemptRecord)
+    attempt_ids = {a.attempt_id for a in attempts}
 
+    seen_keys: set[tuple[str, str, str]] = set()
     for metric in metrics:
+        key = (metric.metric_id, metric.metric_version, metric.attempt_id)
+        if key in seen_keys:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.METRIC_PRODUCERS,
+                code=VerificationFailureCode.METRIC_DUPLICATE_IDENTITY,
+                record_id=f"{metric.metric_id}:{metric.attempt_id}",
+                message=f"duplicate metric observation: {metric.metric_id}:{metric.metric_version}:{metric.attempt_id}",
+            ))
+        seen_keys.add(key)
+
+        if metric.attempt_id not in attempt_ids:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.METRIC_PRODUCERS,
+                code=VerificationFailureCode.METRIC_UNKNOWN_ATTEMPT,
+                record_id=f"{metric.metric_id}:{metric.attempt_id}",
+                message=f"metric {metric.metric_id} references unknown attempt {metric.attempt_id}",
+            ))
+
         try:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         except Exception as exc:
@@ -854,6 +1058,9 @@ def _verify_analysis_reproduction(
     """Reproduce canonical analysis from analysis-input.json and compare.
 
     Returns the failures and the reproduced analysis (or None on failure).
+    Also cross-checks JSONL source files against analysis-input.json records
+    so that a mutation in one but not the other is detected as a semantic
+    mismatch rather than only a stale checksum.
     """
     failures: list[VerificationFailure] = []
 
@@ -913,7 +1120,66 @@ def _verify_analysis_reproduction(
             message="reproduced analysis does not match stored analysis.json",
         ))
 
+    # Cross-check JSONL source files against analysis-input.json records.
+    failures.extend(_verify_source_record_cross_check(bundle_root, analysis_input))
+
     return failures, reproduced
+
+
+def _verify_source_record_cross_check(
+    bundle_root: Path,
+    analysis_input: AnalysisInputRecord,
+) -> list[VerificationFailure]:
+    """Cross-check JSONL source files against analysis-input.json records.
+
+    For each JSONL file that exists in the bundle, compares its records
+    (as canonical JSON) against the corresponding field in
+    analysis-input.json. A mismatch means the JSONL source file and the
+    analysis input disagree, which is a semantic error detected without
+    relying on a stale checksum.
+    """
+    failures: list[VerificationFailure] = []
+
+    # Parse analysis-input.json as raw dict for field-by-field comparison.
+    analysis_input_path = bundle_root / evals_constants.ANALYSIS_INPUT_JSON
+    try:
+        ai_raw = json.loads(analysis_input_path.read_text())
+    except (json.JSONDecodeError, ValueError):
+        return failures  # Already reported as schema invalid.
+
+    for filename, field_name in _SOURCE_RECORD_MAP:
+        jsonl_path = bundle_root / filename
+        if not jsonl_path.exists():
+            continue
+
+        # Read JSONL records as canonical JSON strings.
+        jsonl_records: list[str] = []
+        for line in jsonl_path.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                jsonl_records.append(json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
+            except (json.JSONDecodeError, ValueError):
+                continue
+
+        # Read analysis-input.json field records as canonical JSON strings.
+        ai_field = ai_raw.get(field_name, [])
+        ai_records: list[str] = []
+        for record in ai_field:
+            ai_records.append(json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
+
+        # Compare as sets (order-independent).
+        if set(jsonl_records) != set(ai_records):
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.ANALYSIS_REPRODUCTION,
+                code=VerificationFailureCode.SOURCE_RECORD_MISMATCH,
+                record_id=filename,
+                message=f"source records in {filename} do not match analysis-input.json field {field_name}",
+            ))
+
+    return failures
 
 
 # ---------------------------------------------------------------------------
