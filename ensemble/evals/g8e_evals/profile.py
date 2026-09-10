@@ -1,0 +1,342 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+"""Typed campaign profile for the 46-model comparison campaign.
+
+The campaign profile records the campaign ID, revision, schema version,
+purpose, creation time, lifecycle status, exact generative model-variant
+IDs, benchmark IDs, dataset hashes, grader hashes, prompt serialization
+hash, task IDs, repetitions, track-to-arm assignments, model-to-tier
+assignments, fixed baseline mappings and routing policy, fully effective
+sampling/context/timeout/retry settings, warm-up and concurrency
+policies, hardware identity, environment stratum, primary metrics, unit
+of analysis, claim boundary, and the frozen model registry hash.
+
+The profile is frozen and hashed before the first measured run. Any
+material change creates a new campaign revision; it does not mutate
+completed evidence.
+
+Every model is frozen with ``extra="forbid"``. Content hashes are
+SHA-256 over canonical JSON (sorted keys, no extra whitespace).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from enum import StrEnum
+from typing import TYPE_CHECKING, Self
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+if TYPE_CHECKING:
+    from g8e_evals.registry import ModelRegistry
+
+from g8e_evals.schema import CampaignTrack
+
+
+CAMPAIGN_PROFILE_VERSION = "1.0.0"
+
+
+def _sha256(data: str) -> str:
+    return hashlib.sha256(data.encode()).hexdigest()
+
+
+class CampaignLifecycleStatus(StrEnum):
+    """Lifecycle status of a campaign profile.
+
+    ``DRAFT``: The profile is being authored and may change.
+    ``FROZEN``: The profile is frozen and hashed; no further changes
+    are permitted without creating a new revision.
+    ``ACTIVE``: The campaign is executing under this profile.
+    ``COMPLETED``: The campaign has finished execution.
+    ``SUPERSEDED``: A newer revision has replaced this profile.
+    """
+
+    DRAFT = "draft"
+    FROZEN = "frozen"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    SUPERSEDED = "superseded"
+
+
+class ClaimBoundary(StrEnum):
+    """Statistical claim boundary for the campaign.
+
+    ``DESCRIPTIVE_ONLY``: The benchmark population is too small or
+    incomplete for confirmatory inference. Results are descriptive
+    measurements without superiority claims.
+    ``CONFIRMATORY``: The preregistered paired analysis with multiplicity
+    control supports confirmatory pairwise or winner claims.
+    """
+
+    DESCRIPTIVE_ONLY = "descriptive_only"
+    CONFIRMATORY = "confirmatory"
+
+
+class TrackArmAssignment(BaseModel):
+    """One track-to-arm assignment in the campaign profile.
+
+    Binds a campaign track (direct, tier_fitness, governed) to the arm
+    ID that executes that track. Each track appears at most once.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    track: CampaignTrack = Field(description="Campaign track: direct, tier_fitness, or governed.")
+    arm_id: str = Field(min_length=1, description="Arm ID that executes this track (e.g. direct, ensemble_ungoverned, doctrine).")
+
+
+class ModelTierAssignment(BaseModel):
+    """One model-to-tier assignment for the tier-fitness track.
+
+    Binds a model variant to the g8ee model tier it replaces in the
+    tier-fitness track. Each variant appears at most once.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    variant_id: str = Field(min_length=1, description="Model variant ID from the registry.")
+    target_tier: str = Field(min_length=1, description="Target g8ee tier (primary, assistant, or lite).")
+
+
+class CampaignProfile(BaseModel):
+    """Frozen typed campaign profile.
+
+    Binds the campaign identity, revision, schema version, purpose,
+    lifecycle status, generative variant IDs, benchmark and dataset
+    identities, task population, repetitions, track-to-arm and
+    model-to-tier assignments, baseline mappings, routing policy,
+    effective sampling/context/timeout/retry settings, warm-up and
+    concurrency policies, hardware identity, environment stratum,
+    primary metrics, unit of analysis, claim boundary, and model
+    registry hash.
+
+    The ``content_hash`` is SHA-256 over canonical JSON of the profile.
+    Changing any field changes the hash and invalidates downstream
+    campaign manifest hashes.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    campaign_id: str = Field(min_length=1, description="Campaign identity.")
+    campaign_revision: str = Field(min_length=1, description="Campaign revision identifier.")
+    schema_version: str = Field(min_length=1, description="Profile schema version.")
+    purpose: str = Field(min_length=1, description="Human-readable campaign purpose.")
+    created_at: str = Field(min_length=1, description="ISO 8601 creation timestamp.")
+    lifecycle_status: CampaignLifecycleStatus = Field(description="Lifecycle status of the profile.")
+
+    generative_variant_ids: list[str] = Field(
+        min_length=1,
+        description="Exact generative model-variant IDs from the registry.",
+    )
+    benchmark_ids: list[str] = Field(
+        min_length=1,
+        description="Benchmark suite IDs (e.g. ifeval_subset).",
+    )
+    dataset_hashes: list[str] = Field(
+        min_length=1,
+        description="SHA-256 hashes of the benchmark datasets.",
+    )
+    grader_hashes: list[str] = Field(
+        min_length=1,
+        description="SHA-256 hashes of the grader implementations.",
+    )
+    prompt_serialization_hash: str = Field(
+        min_length=64, max_length=64,
+        description="SHA-256 of the prompt serialization format.",
+    )
+    task_ids: list[str] = Field(
+        min_length=1,
+        description="Exact task IDs in the campaign population.",
+    )
+    repetitions: int = Field(ge=1, description="Number of repetitions per assignment.")
+
+    track_arm_assignments: list[TrackArmAssignment] = Field(
+        min_length=1,
+        description="Track-to-arm assignments. Each track appears at most once.",
+    )
+    model_tier_assignments: list[ModelTierAssignment] = Field(
+        default_factory=list,
+        description="Model-to-tier assignments for the tier-fitness track. Each variant appears at most once.",
+    )
+    baseline_tier_mappings: dict[str, str] = Field(
+        default_factory=dict,
+        description="Fixed baseline model mappings for non-target tiers (tier -> model tag).",
+    )
+    routing_policy: str = Field(
+        default="default",
+        description="Routing policy label for non-target tier mappings.",
+    )
+
+    temperature: float = Field(ge=0.0, le=2.0, description="Sampling temperature.")
+    top_p: float = Field(ge=0.0, le=1.0, description="Nucleus sampling threshold.")
+    max_tokens: int = Field(ge=1, description="Maximum output tokens.")
+    seed: int = Field(ge=0, description="Deterministic sampling seed.")
+    context_limit: int = Field(ge=1, description="Maximum context length in tokens.")
+    timeout_seconds: float = Field(gt=0.0, description="Request timeout in seconds.")
+    max_retries: int = Field(ge=0, description="Maximum infrastructure retries per assignment.")
+
+    warmup_excluded: bool = Field(default=True, description="Whether warm-up requests are excluded from measured cells.")
+    concurrency: int = Field(default=1, ge=1, description="Concurrency level for campaign execution.")
+
+    hardware_identity: str = Field(
+        min_length=1,
+        description="Hardware/environment identity (e.g. linux/amd64/rtx-4090).",
+    )
+    environment_stratum: str = Field(
+        min_length=1,
+        description="Environment stratum label (e.g. single-machine, multi-machine).",
+    )
+
+    primary_metrics: list[str] = Field(
+        min_length=1,
+        description="Primary metric IDs for the campaign.",
+    )
+    unit_of_analysis: str = Field(
+        min_length=1,
+        description="Primary independent sampling unit (e.g. task).",
+    )
+    claim_boundary: ClaimBoundary = Field(description="Statistical claim boundary.")
+
+    model_registry_hash: str = Field(
+        min_length=64, max_length=64,
+        description="SHA-256 of the frozen model registry.",
+    )
+
+    content_hash: str = Field(
+        min_length=64, max_length=64,
+        description="SHA-256 over canonical JSON of the profile.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_profile(self) -> Self:
+        if len(self.generative_variant_ids) != len(set(self.generative_variant_ids)):
+            seen: set[str] = set()
+            dupes: list[str] = []
+            for vid in self.generative_variant_ids:
+                if vid in seen:
+                    dupes.append(vid)
+                seen.add(vid)
+            raise ValueError(f"duplicate generative_variant_id: {sorted(set(dupes))}")
+
+        track_keys = [a.track for a in self.track_arm_assignments]
+        if len(track_keys) != len(set(track_keys)):
+            raise ValueError(
+                f"duplicate track in track_arm_assignments: {track_keys}"
+            )
+
+        tier_variant_ids = [a.variant_id for a in self.model_tier_assignments]
+        if len(tier_variant_ids) != len(set(tier_variant_ids)):
+            raise ValueError(
+                f"duplicate variant_id in model_tier_assignments: {tier_variant_ids}"
+            )
+
+        expected = compute_campaign_profile_hash(
+            self.campaign_id,
+            self.campaign_revision,
+            self.schema_version,
+            self.purpose,
+            self.generative_variant_ids,
+            self.benchmark_ids,
+            self.dataset_hashes,
+            self.grader_hashes,
+            self.track_arm_assignments,
+            self.model_tier_assignments,
+            self.repetitions,
+            self.model_registry_hash,
+        )
+        if self.content_hash != expected:
+            raise ValueError(
+                f"campaign profile content_hash mismatch: declared {self.content_hash!r}, "
+                f"computed {expected!r}"
+            )
+        return self
+
+    def validate_against_registry(self, registry: ModelRegistry) -> None:
+        """Validate that this profile is consistent with the given registry.
+
+        Checks that the model registry hash matches, every generative
+        variant ID exists in the registry, and every model-to-tier
+        assignment references a variant in the registry. Raises
+        ``ValueError`` on any inconsistency.
+        """
+        if self.model_registry_hash != registry.content_hash:
+            raise ValueError(
+                f"model_registry_hash mismatch: profile declares {self.model_registry_hash!r}, "
+                f"registry has {registry.content_hash!r}"
+            )
+
+        registry_variant_ids = {v.variant_id for v in registry.variants}
+
+        for vid in self.generative_variant_ids:
+            if vid not in registry_variant_ids:
+                raise ValueError(
+                    f"generative_variant_id {vid!r} not found in registry"
+                )
+
+        for assignment in self.model_tier_assignments:
+            if assignment.variant_id not in registry_variant_ids:
+                raise ValueError(
+                    f"model_tier_assignment variant_id {assignment.variant_id!r} "
+                    f"not found in registry"
+                )
+
+
+def compute_campaign_profile_hash(
+    campaign_id: str,
+    campaign_revision: str,
+    schema_version: str,
+    purpose: str,
+    generative_variant_ids: list[str],
+    benchmark_ids: list[str],
+    dataset_hashes: list[str],
+    grader_hashes: list[str],
+    track_arm_assignments: list[TrackArmAssignment],
+    model_tier_assignments: list[ModelTierAssignment],
+    repetitions: int,
+    model_registry_hash: str,
+) -> str:
+    """Compute the content hash for a campaign profile without constructing the full model."""
+    payload = json.dumps(
+        {
+            "campaign_id": campaign_id,
+            "campaign_revision": campaign_revision,
+            "schema_version": schema_version,
+            "purpose": purpose,
+            "generative_variant_ids": sorted(generative_variant_ids),
+            "benchmark_ids": sorted(benchmark_ids),
+            "dataset_hashes": sorted(dataset_hashes),
+            "grader_hashes": sorted(grader_hashes),
+            "track_arm_assignments": [
+                json.loads(a.model_dump_json())
+                for a in sorted(track_arm_assignments, key=lambda a: a.track.value)
+            ],
+            "model_tier_assignments": [
+                json.loads(a.model_dump_json())
+                for a in sorted(model_tier_assignments, key=lambda a: a.variant_id)
+            ],
+            "repetitions": repetitions,
+            "model_registry_hash": model_registry_hash,
+        },
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return _sha256(payload)
+
+
+__all__ = [
+    "CAMPAIGN_PROFILE_VERSION",
+    "CampaignLifecycleStatus",
+    "CampaignProfile",
+    "ClaimBoundary",
+    "ModelTierAssignment",
+    "TrackArmAssignment",
+    "compute_campaign_profile_hash",
+]

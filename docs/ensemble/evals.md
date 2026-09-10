@@ -154,6 +154,28 @@ From the repository root, run:
 
 Live stack and provider evaluations are Tier 3 and are not part of the offline test targets.
 
+## Model registry and campaign profile
+
+The 46-model comparison campaign requires a typed, versioned private model registry and a frozen campaign profile. These contracts extend the existing `CampaignSpec`/`CampaignManifest`/`ModelCohort` contracts in `campaign.py` rather than replacing them.
+
+### Model registry
+
+`g8e_evals/registry.py` defines the typed model registry. Each `ModelVariant` records its stable campaign model-variant ID, corrected canonical display name, source-list alias, upstream Hugging Face repository and immutable revision SHA, retrieval date, SPDX license identifier, license-text hash, gated status, publication eligibility, parameter count and architecture, backend and artifact identity (backend name/version, served model tag, artifact digest, artifact bytes, quantization, tensor format), tokenizer and chat-template identity, reasoning mode, hidden reasoning tokens, and weight class. A changed checkpoint revision, quantization, chat template, reasoning mode, or backend becomes a distinct variant; results from distinct variants are never silently merged.
+
+`QualificationRecord` records unavailable, license-blocked, incompatible, out-of-memory, or backend-unsupported outcomes with an evidence-backed reason. A variant with a non-runnable qualification outcome remains in the registry but is excluded from measured campaign cells.
+
+`ModelRegistry` binds all variants and qualification records with a content-addressed hash. It rejects duplicate variant IDs, qualification records that reference unknown variant IDs, and content-hash mismatches. The `runnable_variant_ids()` method returns sorted variant IDs that have no non-runnable qualification record.
+
+### Campaign profile
+
+`g8e_evals/profile.py` defines the frozen campaign profile. `CampaignProfile` binds the campaign ID, revision, schema version, purpose, lifecycle status, generative variant IDs, benchmark and dataset identities, task population, repetitions, track-to-arm assignments (`TrackArmAssignment`), model-to-tier assignments (`ModelTierAssignment`), baseline tier mappings, routing policy, effective sampling/context/timeout/retry settings, warm-up and concurrency policies, hardware identity, environment stratum, primary metrics, unit of analysis, claim boundary (`ClaimBoundary`: descriptive-only or confirmatory), and model registry hash. The profile is frozen and hashed before the first measured run; any material change creates a new campaign revision.
+
+`validate_against_registry()` checks that the model registry hash matches, every generative variant ID exists in the registry, and every model-to-tier assignment references a variant in the registry.
+
+### Campaign subcommands
+
+The `g8e-evals campaign` command is a Click group with `run`, `validate`, and `plan` subcommands. `run` executes a campaign with a frozen specification (the existing v2.1.8 pipeline-integrity campaign). `validate` performs side-effect-free validation of a campaign profile against a model registry: it loads both, checks variant ID consistency and hash matching, and reports the result without making provider calls, writing files, or starting network operations. `plan` produces a deterministic dry-run output showing exact run, task, warm-up, measured-call, disk, and declared remote-cost ceilings without making provider calls.
+
 ## Browser Publication and Observe Projections
 
 The observe frontend exposes eval summaries, eval details, and downloads through the browser-scoped observe read API. The eval publication path and the `g8e-evals verify <bundle>` command are implemented in the current working tree. The `verify` command performs twelve-layer offline verification with external assessed trust; the existing `verify-receipts` command remains a receipt-signature diagnostic primitive and must not be presented as complete eval verification. The publication path is campaign-aware: `build_publication_request` derives `campaign_id`, `arm_ids`, `model_cohort_ids`, and `assignment_count` from the canonical analysis and campaign records, and the observe projection carries these campaign dimensions. Single-arm diagnostic runs (no campaign manifest) produce `campaign_id=""`, `arm_ids=[single]`, `model_cohort_ids=[]`, `assignment_count=0`.

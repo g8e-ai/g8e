@@ -686,7 +686,20 @@ def _derive_model_tag(cohort_id: str, model_tag_map: dict[str, str]) -> str:
     return f"{family}:{size}" if sep else stripped
 
 
-@main.command(name="campaign")
+@main.group(name="campaign")
+def campaign():
+    """Campaign subcommands for multi-arm, multi-cohort evaluation.
+
+    The campaign group provides ``run``, ``validate``, and ``plan``
+    subcommands. ``run`` executes a campaign with a frozen specification.
+    ``validate`` performs side-effect-free validation of a campaign
+    profile against a model registry. ``plan`` produces a deterministic
+    dry-run output showing exact run, task, warm-up, measured-call, and
+    disk ceilings without making provider calls.
+    """
+
+
+@campaign.command(name="run")
 @click.option("--suite", type=click.Choice(_MODEL_COMPARISON_SUITE_CHOICES), required=True)
 @click.option("--preregistration", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
               help="Path to a JSON preregistration config file that declares the campaign arms, cohorts, replicates, and metrics.")
@@ -706,7 +719,7 @@ def _derive_model_tag(cohort_id: str, model_tag_map: dict[str, str]) -> str:
               help="Maximum total provider spending in USD before the campaign stops.")
 @click.option("--model-tags", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
               help="Path to a JSON file mapping cohort IDs to provider model tags (e.g. {\"cohort-granite-3.3-8b\": \"granite3.3:8b\"}). When omitted, the model tag is derived from the cohort ID by removing the 'cohort-' prefix and replacing the last hyphen with a colon.")
-def campaign(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, model_tags):
+def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, model_tags):
     """Run an authoritative multi-arm, multi-cohort campaign.
 
     Creates one campaign identity, one report directory, one assignment
@@ -856,6 +869,135 @@ def campaign(suite, preregistration, campaign_id, release_version, seed, output_
     console.print(f"  [green]assignments[/green] {result.assignment_count}")
     console.print(f"  [green]attempts[/green] {result.terminal_attempt_count}")
     console.print(f"  [green]report[/green] {result.report_dir}")
+
+
+@campaign.command(name="validate")
+@click.option("--profile", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
+              help="Path to a JSON campaign profile file.")
+@click.option("--models", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
+              help="Path to a JSON model registry file.")
+def campaign_validate(profile: Path, models: Path):
+    """Validate a campaign profile against a model registry.
+
+    Performs side-effect-free validation: loads the profile and registry,
+    checks that every generative variant ID exists in the registry, every
+    model-to-tier assignment references a variant in the registry, and
+    the profile's model registry hash matches the registry's content
+    hash. Makes no provider calls, writes no files, and starts no
+    network operations.
+    """
+    from g8e_evals.profile import CampaignProfile
+    from g8e_evals.registry import ModelRegistry
+
+    try:
+        registry = ModelRegistry.model_validate_json(models.read_text())
+    except ValidationError as e:
+        raise click.UsageError(f"could not parse model registry {models}: {e}") from e
+    except OSError as e:
+        raise click.UsageError(f"could not read model registry {models}: {e}") from e
+
+    try:
+        campaign_profile = CampaignProfile.model_validate_json(profile.read_text())
+    except ValidationError as e:
+        raise click.UsageError(f"could not parse campaign profile {profile}: {e}") from e
+    except OSError as e:
+        raise click.UsageError(f"could not read campaign profile {profile}: {e}") from e
+
+    try:
+        campaign_profile.validate_against_registry(registry)
+    except ValueError as e:
+        raise click.UsageError(f"profile validation failed: {e}") from e
+
+    console = Console()
+    console.print(f"[cyan]Campaign profile[/cyan] {campaign_profile.campaign_id}")
+    console.print(f"  [green]revision[/green] {campaign_profile.campaign_revision}")
+    console.print(f"  [green]variants[/green] {len(campaign_profile.generative_variant_ids)}")
+    console.print(f"  [green]benchmarks[/green] {len(campaign_profile.benchmark_ids)}")
+    console.print(f"  [green]tasks[/green] {len(campaign_profile.task_ids)}")
+    console.print(f"  [green]repetitions[/green] {campaign_profile.repetitions}")
+    console.print(f"  [green]tracks[/green] {len(campaign_profile.track_arm_assignments)}")
+    console.print(f"  [green]registry[/green] {registry.registry_id} (v{registry.registry_version})")
+    console.print("  [green]status[/green] valid")
+
+
+@campaign.command(name="plan")
+@click.option("--profile", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
+              help="Path to a JSON campaign profile file.")
+@click.option("--models", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
+              help="Path to a JSON model registry file.")
+def campaign_plan(profile: Path, models: Path):
+    """Produce a deterministic dry-run plan for a campaign.
+
+    Shows exact run, task, warm-up, measured-call, and disk ceilings
+    without making provider calls, downloading models, or starting
+    network operations. The plan is deterministic: the same inputs
+    always produce the same output.
+    """
+    from g8e_evals.profile import CampaignProfile
+    from g8e_evals.registry import ModelRegistry
+
+    try:
+        registry = ModelRegistry.model_validate_json(models.read_text())
+    except ValidationError as e:
+        raise click.UsageError(f"could not parse model registry {models}: {e}") from e
+    except OSError as e:
+        raise click.UsageError(f"could not read model registry {models}: {e}") from e
+
+    try:
+        campaign_profile = CampaignProfile.model_validate_json(profile.read_text())
+    except ValidationError as e:
+        raise click.UsageError(f"could not parse campaign profile {profile}: {e}") from e
+    except OSError as e:
+        raise click.UsageError(f"could not read campaign profile {profile}: {e}") from e
+
+    try:
+        campaign_profile.validate_against_registry(registry)
+    except ValueError as e:
+        raise click.UsageError(f"profile validation failed: {e}") from e
+
+    # Compute deterministic plan dimensions from the frozen profile.
+    runnable_variants = registry.runnable_variant_ids()
+    # Only variants in the profile's generative_variant_ids that are
+    # also runnable contribute measured cells.
+    measured_variants = [
+        v for v in campaign_profile.generative_variant_ids
+        if v in runnable_variants
+    ]
+    num_variants = len(measured_variants)
+    num_tasks = len(campaign_profile.task_ids)
+    num_tracks = len(campaign_profile.track_arm_assignments)
+    num_repetitions = campaign_profile.repetitions
+    total_assignments = num_variants * num_tasks * num_tracks * num_repetitions
+    # One excluded warm-up per variant per track.
+    warmup_calls = num_variants * num_tracks if campaign_profile.warmup_excluded else 0
+    measured_calls = total_assignments
+    total_provider_calls = warmup_calls + measured_calls
+
+    # Estimate disk usage from artifact bytes.
+    total_artifact_bytes = sum(
+        registry.get_variant(vid).artifact_bytes
+        for vid in measured_variants
+        if vid in {v.variant_id for v in registry.variants}
+    )
+
+    console = Console()
+    console.print(f"[cyan]Campaign plan[/cyan] {campaign_profile.campaign_id}")
+    console.print(f"  [green]revision[/green] {campaign_profile.campaign_revision}")
+    console.print(f"  [green]variants[/green] {num_variants} measured, {len(campaign_profile.generative_variant_ids)} total")
+    console.print(f"  [green]tasks[/green] {num_tasks}")
+    console.print(f"  [green]tracks[/green] {num_tracks}")
+    console.print(f"  [green]repetitions[/green] {num_repetitions}")
+    console.print(f"  [green]assignments[/green] {total_assignments}")
+    console.print(f"  [green]warmup_calls[/green] {warmup_calls}")
+    console.print(f"  [green]measured_calls[/green] {measured_calls}")
+    console.print(f"  [green]total_provider_calls[/green] {total_provider_calls}")
+    console.print(f"  [green]concurrency[/green] {campaign_profile.concurrency}")
+    console.print(f"  [green]artifact_bytes[/green] {total_artifact_bytes}")
+    console.print(f"  [green]timeout_seconds[/green] {campaign_profile.timeout_seconds}")
+    console.print(f"  [green]max_retries[/green] {campaign_profile.max_retries}")
+    console.print(f"  [green]claim_boundary[/green] {campaign_profile.claim_boundary.value}")
+    console.print(f"  [green]hardware[/green] {campaign_profile.hardware_identity}")
+    console.print("  [green]status[/green] planned")
 
 
 async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None, effective_sampling: SamplingSettings | None = None, seed_support: str = "unknown"):
