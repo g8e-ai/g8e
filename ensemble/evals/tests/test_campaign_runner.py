@@ -93,18 +93,25 @@ class FakeSUT:
     the third fails, etc. This models a transient infrastructure
     failure that retries can recover from, with one failure per
     assignment when the runner retries once.
+
+    When ``provider_prefix`` is True, the response model string is
+    prefixed with ``"ollama:"`` (e.g. ``"ollama:qwen3:8b"``) to
+    simulate the real ``DirectProviderSUT`` which reports model as
+    ``provider:model_tag`` format.
     """
 
     model_id: str
     answer: str = "This is a test answer with no commas."
     fail_alternating: bool = False
+    provider_prefix: bool = False
     _call_count: int = field(default=0)
 
     async def get_answer(self, task: Task) -> Response:
         self._call_count += 1
         if self.fail_alternating and self._call_count % 2 == 1:
             raise RuntimeError("simulated infrastructure failure")
-        return Response(answer=self.answer, model=self.model_id, arm=Arm.DIRECT)
+        model = f"ollama:{self.model_id}" if self.provider_prefix else self.model_id
+        return Response(answer=self.answer, model=model, arm=Arm.DIRECT)
 
 
 @dataclass
@@ -158,6 +165,7 @@ def _make_fake_sut_factory(
     answer: str = "This is a test answer with no commas.",
     fail_alternating: bool = False,
     drift_model_id: str | None = None,
+    provider_prefix: bool = False,
 ):
     """Create a SUT factory that returns deterministic fake SUTs."""
     def factory(cohort: ModelCohort, arm: Arm):
@@ -168,6 +176,7 @@ def _make_fake_sut_factory(
             model_id=model_id,
             answer=answer,
             fail_alternating=fail_alternating,
+            provider_prefix=provider_prefix,
         )
     return factory
 
@@ -642,6 +651,33 @@ class TestCohortDrift:
         # Drifted attempts should be MODEL_FAILED
         model_failed = [a for a in attempts if a["terminal_status"] == TerminalStatus.MODEL_FAILED.value]
         assert len(model_failed) > 0
+
+    def test_provider_prefix_model_not_false_drift(self, tmp_path: Path):
+        """Regression: DirectProviderSUT reports model as 'ollama:qwen3:8b'
+        (provider:model_tag format) while the cohort declares 'qwen3:8b'.
+        The old exact-string comparison marked every completed attempt as
+        model_failed with cohort drift. The _model_matches helper accepts
+        the provider:model prefix, so the campaign completes successfully.
+        """
+        spec = _make_spec()
+        runner = CampaignRunner(
+            spec=spec,
+            sut_factory=_make_fake_sut_factory(provider_prefix=True),
+            tasks=_make_tasks(),
+            grader=FakeGrader(),
+            output_dir=tmp_path,
+        )
+        result = asyncio.run(runner.run())
+
+        attempts_text = (result.report_dir / ATTEMPTS_JSONL).read_text().strip().splitlines()
+        attempts = [json.loads(line) for line in attempts_text]
+        model_failed = [a for a in attempts if a["terminal_status"] == TerminalStatus.MODEL_FAILED.value]
+        assert len(model_failed) == 0, (
+            f"Provider-prefixed model strings were marked as cohort drift: "
+            f"{len(model_failed)} model_failed attempts"
+        )
+        completed = [a for a in attempts if a["terminal_status"] == TerminalStatus.COMPLETED.value]
+        assert len(completed) > 0, "No attempts completed successfully"
 
 
 # ---------------------------------------------------------------------------

@@ -112,6 +112,7 @@ from g8e_evals.sut.direct_provider import DirectProviderSUT
 from g8e_evals.sut.g8ee_chat import ChatEvaluationReceipt, G8eeChatSUT, AuthenticationError
 from g8e_evals.posture import observe_gateway_posture
 from g8e_evals.transport import AuthContext
+from g8e_evals.tls import RuntimeIdentity
 from g8e_evals.agent_trail_renderer import TurnRenderer
 from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
 from g8e_evals.benchmarks.ifeval.provenance import load_provenance
@@ -608,6 +609,25 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         raise click.ClickException(str(error)) from error
 
 
+def _derive_model_tag(cohort_id: str, model_tag_map: dict[str, str]) -> str:
+    """Derive the provider model tag for a cohort ID.
+
+    When the cohort ID appears in the explicit ``model_tag_map`` (supplied
+    via ``--model-tags``), that mapping wins. Otherwise the tag is
+    derived from the cohort ID by stripping the ``cohort-`` prefix and
+    replacing the last hyphen with a colon (e.g. ``cohort-qwen3-8b`` →
+    ``qwen3:8b``). Multi-hyphen IDs such as ``cohort-granite-3.3-8b``
+    derive to ``granite-3.3:8b``; the operator must supply an explicit
+    ``--model-tags`` mapping when the derived tag does not match the
+    backend's served tag (e.g. ``granite3.3:8b``).
+    """
+    if cohort_id in model_tag_map:
+        return model_tag_map[cohort_id]
+    stripped = cohort_id.replace("cohort-", "")
+    family, sep, size = stripped.rpartition("-")
+    return f"{family}:{size}" if sep else stripped
+
+
 @main.command(name="campaign")
 @click.option("--suite", type=click.Choice(["ifeval_subset"]), required=True)
 @click.option("--preregistration", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
@@ -626,7 +646,9 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
               help="Maximum total provider requests before the campaign stops with a typed budget-exhausted outcome.")
 @click.option("--max-usd", type=float, default=None,
               help="Maximum total provider spending in USD before the campaign stops.")
-def campaign(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd):
+@click.option("--model-tags", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
+              help="Path to a JSON file mapping cohort IDs to provider model tags (e.g. {\"cohort-granite-3.3-8b\": \"granite3.3:8b\"}). When omitted, the model tag is derived from the cohort ID by removing the 'cohort-' prefix and replacing the last hyphen with a colon.")
+def campaign(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, model_tags):
     """Run an authoritative multi-arm, multi-cohort campaign.
 
     Creates one campaign identity, one report directory, one assignment
@@ -666,14 +688,21 @@ def campaign(suite, preregistration, campaign_id, release_version, seed, output_
     # cohort role bindings are content-addressed; the caller is
     # responsible for supplying a preregistration whose cohort IDs
     # match the frozen R0 campaign spec.
+    model_tag_map: dict[str, str] = {}
+    if model_tags is not None:
+        try:
+            model_tag_map = json.loads(model_tags.read_text())
+        except (OSError, json.JSONDecodeError) as e:
+            raise click.UsageError(f"could not read --model-tags file {model_tags}: {e}") from e
     cohorts: list[ModelCohort] = []
     for cohort_id in prereg_config.model_cohort_ids:
         # Default single-role binding for the direct arm. The
         # ensemble_ungoverned arm would add assistant/lite roles; that
         # wiring is part of R7 (live topology restoration).
+        model_id = _derive_model_tag(cohort_id, model_tag_map)
         bindings = [RoleModelBinding(
             role="primary",
-            model_id=cohort_id.replace("cohort-", "").replace("-", ":"),
+            model_id=model_id,
             provider="ollama",
             endpoint="http://192.168.1.2:11434",
             sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=seed),
@@ -5289,6 +5318,7 @@ def publish_cmd(
     auth_context = AuthContext.from_env(
         g8ee_url=gateway_url,
         cli_context=cli_context,
+        runtime_identity=RuntimeIdentity.GATEWAY,
     )
 
     trust_store_obj: EvalTrustStore | None = None

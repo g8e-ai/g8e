@@ -395,6 +395,22 @@ def _model_id_for_cohort(cohort: ModelCohort) -> str:
     return cohort.role_bindings[0].model_id
 
 
+def _model_matches(observed: str, expected: str) -> bool:
+    """Check whether an observed model string matches the expected model tag.
+
+    The DirectProviderSUT reports ``model`` as ``"provider:model_tag"``
+    (e.g. ``"ollama:qwen3:8b"``) while the cohort declares only the model
+    tag (e.g. ``"qwen3:8b"``). Accept either an exact match or a match
+    where the observed string is ``"<provider>:<expected>"``.
+    """
+    if observed == expected:
+        return True
+    if ":" in observed:
+        _, _, tail = observed.partition(":")
+        return tail == expected
+    return False
+
+
 @dataclass
 class CampaignRunner:
     """Authoritative campaign runner.
@@ -608,7 +624,7 @@ class CampaignRunner:
                 terminal_status = TerminalStatus.MODEL_FAILED
             elif not response.answer:
                 terminal_status = TerminalStatus.MODEL_FAILED
-            elif response.model and response.model != expected_model:
+            elif response.model and not _model_matches(response.model, expected_model):
                 # Cohort drift: the SUT returned a different model than
                 # the cohort declares. This invalidates the campaign.
                 terminal_status = TerminalStatus.MODEL_FAILED

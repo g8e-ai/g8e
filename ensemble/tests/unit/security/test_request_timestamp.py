@@ -412,3 +412,56 @@ class TestResultModels:
             is_valid=False, error="replay", error_code=NonceErrorCode.REPLAY_DETECTED
         )
         assert result.error_code == NonceErrorCode.REPLAY_DETECTED
+
+
+class TestNoCircularImport:
+    """Regression tests for the circular import chain.
+
+    The module-level import of ``CacheAsideService`` from
+    ``app.services.cache.cache_aside`` triggered a circular import:
+    ``app.security.__init__`` → ``request_timestamp`` →
+    ``app.services.cache.cache_aside`` → ``app.services.__init__`` →
+    ``app.services.ai.agent`` → ``app.services.operator.execution_service``
+    → ``app.security.operator_command_validator`` (still loading).  The
+    fix moved the import under ``TYPE_CHECKING`` with
+    ``from __future__ import annotations``.
+    """
+
+    def test_cache_aside_service_not_eagerly_imported(self):
+        """CacheAsideService must not be a runtime attribute of the module."""
+        import app.security.request_timestamp as rt
+
+        assert not hasattr(rt, "CacheAsideService"), (
+            "CacheAsideService is eagerly imported at module level, which "
+            "causes a circular import when app.security is loaded before "
+            "app.services"
+        )
+
+    def test_importing_app_security_does_not_load_cache_aside(self):
+        """Importing app.security in a fresh interpreter must not eagerly
+        import app.services.cache.cache_aside."""
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        ensemble_root = Path(__file__).resolve().parents[3]
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import sys; import app.security; "
+                "print('app.services.cache.cache_aside' in sys.modules)",
+            ],
+            cwd=ensemble_root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"Importing app.security failed:\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert result.stdout.strip() == "False", (
+            "app.security eagerly imported app.services.cache.cache_aside, "
+            "which causes a circular import"
+        )
