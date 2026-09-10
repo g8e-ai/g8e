@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -19,12 +20,23 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/response"
 )
 
+// DownloadStreamer streams download artifact bytes for the observe read API.
+// The producer service implements this interface; the observe controller
+// depends on the narrow interface rather than the full producer service so
+// the read-only browser surface stays decoupled from the mTLS mutation
+// surface. When nil (e.g. unit tests that do not exercise streaming),
+// handleGetDownload returns metadata only.
+type DownloadStreamer interface {
+	StreamDownload(ctx context.Context, userID, artifactID string, w http.ResponseWriter) error
+}
+
 // ObserveControllerDeps groups all dependencies for ObserveController.
 type ObserveControllerDeps struct {
-	Cfg        *config.Config
-	Logger     *slog.Logger
-	ObserveSvc *ObserveService
-	Responder  *response.Writer
+	Cfg              *config.Config
+	Logger           *slog.Logger
+	ObserveSvc       *ObserveService
+	DownloadStreamer DownloadStreamer
+	Responder        *response.Writer
 }
 
 // ObserveController handles the passkey-scoped, read-only observability API.
@@ -32,18 +44,20 @@ type ObserveControllerDeps struct {
 // the web session cookie validation) and applies ownership scoping through
 // the ObserveService. No caller-supplied identity is trusted.
 type ObserveController struct {
-	cfg        *config.Config
-	logger     *slog.Logger
-	observeSvc *ObserveService
-	responder  *response.Writer
+	cfg              *config.Config
+	logger           *slog.Logger
+	observeSvc       *ObserveService
+	downloadStreamer DownloadStreamer
+	responder        *response.Writer
 }
 
 func newObserveController(deps ObserveControllerDeps) *ObserveController {
 	return &ObserveController{
-		cfg:        deps.Cfg,
-		logger:     deps.Logger,
-		observeSvc: deps.ObserveSvc,
-		responder:  deps.Responder,
+		cfg:              deps.Cfg,
+		logger:           deps.Logger,
+		observeSvc:       deps.ObserveSvc,
+		downloadStreamer: deps.DownloadStreamer,
+		responder:        deps.Responder,
 	}
 }
 
@@ -333,15 +347,19 @@ func (c *ObserveController) handleListDownloads(w http.ResponseWriter, r *http.R
 }
 
 // handleGetDownload returns a single allowlisted download artifact owned by
-// the authenticated user. The actual byte streaming will be implemented in
-// Phase 4 when download artifacts exist; for now it returns the artifact
-// metadata.
+// the authenticated user. When the ?download=1 query parameter is present
+// and a DownloadStreamer is wired, the handler streams the artifact bytes
+// with verified ownership, on-disk hash and size checks, and the cataloged
+// Content-Type, Content-Length, and Content-Disposition headers. Without the
+// query parameter (or when no streamer is wired), it returns the artifact
+// metadata as JSON.
 //
 // @Summary		Get observe download artifact
-// @Description	Returns a single allowlisted download artifact owned by the authenticated user.
+// @Description	Returns a single allowlisted download artifact owned by the authenticated user. Use ?download=1 to stream the artifact bytes.
 // @Tags			observe
 // @Produce		json
 // @Param			artifact_id	path		string	true	"Artifact ID"
+// @Param			download	query		int		false	"Set to 1 to stream the artifact bytes instead of returning metadata"
 // @Success		200			{object}	models.DownloadArtifact
 // @Failure		401			{string}	string	"Unauthorized"
 // @Failure		404			{string}	string	"Download not found"
@@ -360,6 +378,12 @@ func (c *ObserveController) handleGetDownload(w http.ResponseWriter, r *http.Req
 		c.responder.Error(w, http.StatusNotFound, constants.ErrObserveDownloadNotFound.Error())
 		return
 	}
+	if r.URL.Query().Get("download") == "1" && c.downloadStreamer != nil {
+		if err := c.downloadStreamer.StreamDownload(r.Context(), userID, artifactID, w); err != nil {
+			c.mapDownloadStreamError(w, err, userID, artifactID)
+		}
+		return
+	}
 	artifact, err := c.observeSvc.GetDownload(r.Context(), userID, artifactID)
 	if err != nil {
 		if errors.Is(err, constants.ErrObserveDownloadNotFound) {
@@ -371,4 +395,25 @@ func (c *ObserveController) handleGetDownload(w http.ResponseWriter, r *http.Req
 		return
 	}
 	c.responder.JSON(w, http.StatusOK, artifact)
+}
+
+// mapDownloadStreamError maps a download streaming error to the correct HTTP
+// status code. Not-found and cross-user ownership violations are 404 with the
+// same non-disclosing response so the HTTP boundary does not reveal record
+// existence. Restricted artifacts, symlinks, oversized files, and hash/size
+// mismatches are 404 (the artifact is not safely downloadable). Other errors
+// are 500.
+func (c *ObserveController) mapDownloadStreamError(w http.ResponseWriter, err error, userID, artifactID string) {
+	switch {
+	case errors.Is(err, constants.ErrObserveDownloadNotFound),
+		errors.Is(err, constants.ErrObservePublicationRestrictedArtifact),
+		errors.Is(err, constants.ErrObserveDownloadSymlinkRejected),
+		errors.Is(err, constants.ErrObserveDownloadOversized),
+		errors.Is(err, constants.ErrObserveDownloadSizeMismatch),
+		errors.Is(err, constants.ErrObserveDownloadHashMismatch):
+		c.responder.Error(w, http.StatusNotFound, constants.ErrObserveDownloadNotFound.Error())
+	default:
+		c.logger.Error("observe: stream download failed", "error", err, "user_id", userID, "artifact_id", artifactID)
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
+	}
 }

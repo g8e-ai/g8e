@@ -740,10 +740,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Responder: ls.responder,
 		},
 		ObserveControllerDeps: ObserveControllerDeps{
-			Cfg:        cfg,
-			Logger:     logger,
-			ObserveSvc: NewObserveService(ls.docStore, logger),
-			Responder:  ls.responder,
+			Cfg:              cfg,
+			Logger:           logger,
+			ObserveSvc:       NewObserveService(ls.docStore, logger),
+			DownloadStreamer: ls.GetObserveProducerService(),
+			Responder:        ls.responder,
 		},
 		ObserveProducerControllerDeps: ObserveProducerControllerDeps{
 			Cfg:          cfg,

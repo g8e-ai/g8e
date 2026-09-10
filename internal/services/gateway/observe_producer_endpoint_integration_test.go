@@ -15,9 +15,12 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"math/big"
 	"net/http"
@@ -184,10 +187,11 @@ func setupObserveProducerEndpointEnv(t *testing.T) *observeProducerEndpointEnv {
 		PubSubControllerDeps:  PubSubControllerDeps{Handler: infra.Pubsub},
 		PasskeyControllerDeps: PasskeyControllerDeps{Handler: infra.Passkey},
 		ObserveControllerDeps: ObserveControllerDeps{
-			Cfg:        infra.Cfg,
-			Logger:     infra.Logger,
-			ObserveSvc: observeSvc,
-			Responder:  infra.Responder,
+			Cfg:              infra.Cfg,
+			Logger:           infra.Logger,
+			ObserveSvc:       observeSvc,
+			DownloadStreamer: producerSvc,
+			Responder:        infra.Responder,
 		},
 		ObserveProducerControllerDeps: ObserveProducerControllerDeps{
 			Cfg:          infra.Cfg,
@@ -1106,4 +1110,430 @@ func TestObserveProducerEndpoint_FailedPersistence_RunState_HTTP500NoSSERow(t *t
 
 	assert.Equal(t, http.StatusInternalServerError, updateW.Code)
 	assert.NotContains(t, updateW.Body.String(), "accepted")
+}
+
+// postEvalPublication posts an eval publication request through the real HTTP
+// router with the given mTLS cert and request body.
+func postEvalPublication(t *testing.T, h http.Handler, cert *x509.Certificate, body []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerEvalPublication, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if cert != nil {
+		req.TLS = &tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{cert},
+		}
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	return rr
+}
+
+// validEvalPublicationBodyHTTP returns a JSON body for a valid eval publication
+// request routed via a web session, with real base64 content whose SHA-256
+// and size match the declared values.
+func validEvalPublicationBodyHTTP(t *testing.T, runID, webSessionID string) []byte {
+	t.Helper()
+	content := []byte(`{"analysis":"ok"}`)
+	contentHash := sha256.Sum256(content)
+	contentHashHex := hex.EncodeToString(contentHash[:])
+	contentB64 := base64.StdEncoding.EncodeToString(content)
+	body, err := json.Marshal(models.ObserveProducerEvalPublicationRequest{
+		SchemaVersion:    constants.ObservePublicationSchemaVersion,
+		BundleID:         "bundle-" + runID,
+		RunID:            runID,
+		ReleaseVersion:   "2.1.8",
+		SuiteID:          "suite-" + runID,
+		SuiteVersion:     "1.0.0",
+		ArmID:            "arm-" + runID,
+		ReceiptCount:     10,
+		AssignedTasks:    5,
+		TerminalAttempts: 5,
+		Metrics: []models.EvalMetricSummary{
+			{
+				SchemaVersion:      constants.ObserveEventPayloadSchemaVersion,
+				MetricID:           "metric-" + runID,
+				MetricVersion:      "1.0.0",
+				Unit:               "count",
+				Eligible:           5,
+				Denominator:        5,
+				VerificationStatus: models.EvalVerificationVerified,
+			},
+		},
+		VerificationReport: models.VerificationReportWire{
+			SchemaVersion:  constants.VerificationReportSchemaVersion,
+			BundleID:       "bundle-" + runID,
+			RunID:          runID,
+			ReleaseVersion: "2.1.8",
+			VerifiedAt:     time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC),
+			OK:             true,
+			Layers: []models.LayerResultWire{
+				{Layer: 1, Passed: true, FailureCount: 0},
+			},
+		},
+		BundleManifest: models.BundleManifestWire{
+			SchemaVersion: constants.BundleManifestSchemaVersion,
+			BundleID:      "bundle-" + runID,
+			RunID:         runID,
+			Artifacts: []models.BundleArtifactEntryWire{
+				{
+					Path:         "analysis/analysis.json",
+					MediaType:    "application/json",
+					PrivacyClass: "public",
+					SHA256:       contentHashHex,
+					ByteLength:   int64(len(content)),
+					ArtifactType: "analysis",
+				},
+			},
+		},
+		Downloads: []models.ObserveProducerDownloadArtifactInput{
+			{
+				ArtifactID:            "artifact-" + runID,
+				Filename:              "analysis.json",
+				MediaType:             "application/json",
+				ByteSize:              int64(len(content)),
+				SHA256:                contentHashHex,
+				PrivacyClassification: models.DownloadPrivacyPublicSafe,
+				SourceRunID:           runID,
+				Content:               contentB64,
+			},
+		},
+		WebSessionID: webSessionID,
+	})
+	require.NoError(t, err)
+	return body
+}
+
+// getObserveDownloadStream streams a download artifact through the real HTTP
+// router with the given web session cookie and ?download=1 query param.
+func getObserveDownloadStream(t *testing.T, h http.Handler, cookie *http.Cookie, artifactID string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveDownloadsByID+artifactID+"?download=1", nil)
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	return rr
+}
+
+// getObserveEvals reads the browser-scoped observe evals list through the
+// real HTTP router with the given web session cookie.
+func getObserveEvals(t *testing.T, h http.Handler, cookie *http.Cookie) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveEvals, nil)
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	return rr
+}
+
+// getObserveEvalDetail reads the browser-scoped observe eval detail through
+// the real HTTP router with the given web session cookie.
+func getObserveEvalDetail(t *testing.T, h http.Handler, cookie *http.Cookie, runID string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveEvalsByID+runID, nil)
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	return rr
+}
+
+// getObserveDownloads reads the browser-scoped observe downloads list through
+// the real HTTP router with the given web session cookie.
+func getObserveDownloads(t *testing.T, h http.Handler, cookie *http.Cookie) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveDownloads, nil)
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	return rr
+}
+
+// TestObserveProducerEndpoint_EvalPublicationPostAndBrowserRead verifies the
+// full HTTP round-trip: POST an eval publication through the mTLS producer
+// endpoint, then read the browser-scoped observe evals list and detail and
+// assert the projection appears with no ownership field in the wire response.
+func TestObserveProducerEndpoint_EvalPublicationPostAndBrowserRead(t *testing.T) {
+	env := setupObserveProducerEndpointEnv(t)
+
+	userID := "user-eval-pub"
+	seedActiveUser(t, env.infra, userID)
+	seedAppPolicy(t, env.infra, protocol.EnsembleAppID)
+	webSessionID := seedWebSession(t, env.infra, userID)
+	cert := appUserMTLSCert(t, userID)
+
+	runID := "run-eval-pub-1"
+	rr := postEvalPublication(t, env.handler, cert, validEvalPublicationBodyHTTP(t, runID, webSessionID))
+	require.Equal(t, http.StatusOK, rr.Code, "eval publication POST body: %s", rr.Body.String())
+
+	var resp models.ObserveProducerResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.True(t, resp.Accepted)
+	assert.NotContains(t, rr.Body.String(), "user_id")
+
+	// Read the browser-scoped evals list.
+	listRR := getObserveEvals(t, env.handler, webSessionCookie(webSessionID))
+	require.Equal(t, http.StatusOK, listRR.Code, "evals list body: %s", listRR.Body.String())
+	var page models.ObservePage
+	require.NoError(t, json.Unmarshal(listRR.Body.Bytes(), &page))
+	var evals []models.EvalSummary
+	require.NoError(t, json.Unmarshal(page.Items, &evals))
+	found := false
+	for _, eval := range evals {
+		if eval.RunID == runID {
+			found = true
+			assert.Equal(t, models.EvalVerificationVerified, eval.VerificationStatus)
+		}
+	}
+	assert.True(t, found, "eval projection must appear in evals list")
+
+	// Read the browser-scoped eval detail.
+	detailRR := getObserveEvalDetail(t, env.handler, webSessionCookie(webSessionID), runID)
+	require.Equal(t, http.StatusOK, detailRR.Code, "eval detail body: %s", detailRR.Body.String())
+	var detail models.EvalDetail
+	require.NoError(t, json.Unmarshal(detailRR.Body.Bytes(), &detail))
+	assert.Equal(t, runID, detail.RunID)
+	assert.Equal(t, models.EvalVerificationVerified, detail.VerificationStatus)
+	assert.NotEmpty(t, detail.PublishedProjectionSHA256)
+	assert.NotContains(t, detailRR.Body.String(), "user_id")
+}
+
+// TestObserveProducerEndpoint_EvalPublicationSSEStorageContainsNestedEnvelope
+// verifies that after POSTing an eval publication, the real SSE event store
+// contains durable nested ai.eval.run.completed and ai.eval.metric.recorded
+// envelopes with the typed payload.
+func TestObserveProducerEndpoint_EvalPublicationSSEStorageContainsNestedEnvelope(t *testing.T) {
+	env := setupObserveProducerEndpointEnv(t)
+
+	userID := "user-eval-sse"
+	seedActiveUser(t, env.infra, userID)
+	seedAppPolicy(t, env.infra, protocol.EnsembleAppID)
+	webSessionID := seedWebSession(t, env.infra, userID)
+	cert := appUserMTLSCert(t, userID)
+
+	runID := "run-eval-sse-1"
+	rr := postEvalPublication(t, env.handler, cert, validEvalPublicationBodyHTTP(t, runID, webSessionID))
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	route := SSERoute{UserID: userID, WebSessionID: webSessionID}
+	rows, err := env.infra.SSEStore.SSEEventsListSince(route, 0, 100)
+	require.NoError(t, err)
+	require.Len(t, rows, 2, "one run-completed + one metric-recorded")
+
+	assert.Equal(t, string(constants.EventAiEvalRunCompleted), rows[0].EventType)
+	var runPush models.SSEPushPayload
+	require.NoError(t, json.Unmarshal([]byte(rows[0].Payload), &runPush))
+	var runEnv sseEventEnvelope
+	require.NoError(t, json.Unmarshal(runPush.Event, &runEnv))
+	assert.Equal(t, string(constants.EventAiEvalRunCompleted), runEnv.Type)
+	var runCompleted models.EvalRunCompletedPayload
+	require.NoError(t, json.Unmarshal(runEnv.Data, &runCompleted))
+	assert.Equal(t, runID, runCompleted.RunID)
+	assert.Equal(t, models.EvalVerificationVerified, runCompleted.VerificationStatus)
+
+	assert.Equal(t, string(constants.EventAiEvalMetricRecorded), rows[1].EventType)
+	var metricPush models.SSEPushPayload
+	require.NoError(t, json.Unmarshal([]byte(rows[1].Payload), &metricPush))
+	var metricEnv sseEventEnvelope
+	require.NoError(t, json.Unmarshal(metricPush.Event, &metricEnv))
+	assert.Equal(t, string(constants.EventAiEvalMetricRecorded), metricEnv.Type)
+	var metricRecorded models.EvalMetricRecordedPayload
+	require.NoError(t, json.Unmarshal(metricEnv.Data, &metricRecorded))
+	assert.Equal(t, runID, metricRecorded.RunID)
+
+	// Neither nested payload contains user_id.
+	assert.NotContains(t, string(runEnv.Data), "user_id")
+	assert.NotContains(t, string(metricEnv.Data), "user_id")
+}
+
+// TestObserveProducerEndpoint_EvalPublicationDownloadStream verifies that
+// after publishing an eval, the download artifact can be streamed through
+// the browser read API with ?download=1 and the bytes match the published
+// content.
+func TestObserveProducerEndpoint_EvalPublicationDownloadStream(t *testing.T) {
+	env := setupObserveProducerEndpointEnv(t)
+
+	userID := "user-eval-dl"
+	seedActiveUser(t, env.infra, userID)
+	seedAppPolicy(t, env.infra, protocol.EnsembleAppID)
+	webSessionID := seedWebSession(t, env.infra, userID)
+	cert := appUserMTLSCert(t, userID)
+
+	runID := "run-eval-dl-1"
+	pubRR := postEvalPublication(t, env.handler, cert, validEvalPublicationBodyHTTP(t, runID, webSessionID))
+	require.Equal(t, http.StatusOK, pubRR.Code)
+
+	// The download list contains the artifact.
+	listRR := getObserveDownloads(t, env.handler, webSessionCookie(webSessionID))
+	require.Equal(t, http.StatusOK, listRR.Code)
+	var dlPage models.ObservePage
+	require.NoError(t, json.Unmarshal(listRR.Body.Bytes(), &dlPage))
+	var downloads []models.DownloadArtifact
+	require.NoError(t, json.Unmarshal(dlPage.Items, &downloads))
+	found := false
+	for _, dl := range downloads {
+		if dl.ArtifactID == "artifact-"+runID {
+			found = true
+			assert.Equal(t, models.DownloadPrivacyPublicSafe, dl.PrivacyClassification)
+		}
+	}
+	assert.True(t, found, "download artifact must appear in downloads list")
+
+	// Stream the artifact bytes.
+	streamRR := getObserveDownloadStream(t, env.handler, webSessionCookie(webSessionID), "artifact-"+runID)
+	require.Equal(t, http.StatusOK, streamRR.Code, "stream body: %s", streamRR.Body.String())
+	assert.Equal(t, "application/json", streamRR.Header().Get("Content-Type"))
+	assert.Equal(t, `attachment; filename="analysis.json"`, streamRR.Header().Get("Content-Disposition"))
+	assert.Equal(t, `{"analysis":"ok"}`, streamRR.Body.String())
+}
+
+// TestObserveProducerEndpoint_EvalPublicationCrossUserIsolation verifies that
+// user A's eval publication cannot be read or downloaded by user B.
+func TestObserveProducerEndpoint_EvalPublicationCrossUserIsolation(t *testing.T) {
+	env := setupObserveProducerEndpointEnv(t)
+
+	userA := "user-eval-iso-a"
+	userB := "user-eval-iso-b"
+	seedActiveUser(t, env.infra, userA)
+	seedActiveUser(t, env.infra, userB)
+	seedAppPolicy(t, env.infra, protocol.EnsembleAppID)
+	webSessionA := seedWebSession(t, env.infra, userA)
+	webSessionB := seedWebSession(t, env.infra, userB)
+	certA := appUserMTLSCert(t, userA)
+
+	runID := "run-eval-iso-1"
+	pubRR := postEvalPublication(t, env.handler, certA, validEvalPublicationBodyHTTP(t, runID, webSessionA))
+	require.Equal(t, http.StatusOK, pubRR.Code)
+
+	// User B's evals list must not contain user A's eval.
+	listB := getObserveEvals(t, env.handler, webSessionCookie(webSessionB))
+	require.Equal(t, http.StatusOK, listB.Code)
+	var pageB models.ObservePage
+	require.NoError(t, json.Unmarshal(listB.Body.Bytes(), &pageB))
+	var evalsB []models.EvalSummary
+	require.NoError(t, json.Unmarshal(pageB.Items, &evalsB))
+	for _, eval := range evalsB {
+		assert.NotEqual(t, runID, eval.RunID, "user B must not see user A's eval")
+	}
+
+	// User B's eval detail request returns 404.
+	detailB := getObserveEvalDetail(t, env.handler, webSessionCookie(webSessionB), runID)
+	assert.Equal(t, http.StatusNotFound, detailB.Code)
+
+	// User B's download stream returns 404.
+	streamB := getObserveDownloadStream(t, env.handler, webSessionCookie(webSessionB), "artifact-"+runID)
+	assert.Equal(t, http.StatusNotFound, streamB.Code)
+}
+
+// TestObserveProducerEndpoint_EvalPublicationUnverifiedRejected verifies that
+// a publication with ok=false is rejected with 400 and no projection is
+// persisted.
+func TestObserveProducerEndpoint_EvalPublicationUnverifiedRejected(t *testing.T) {
+	env := setupObserveProducerEndpointEnv(t)
+
+	userID := "user-eval-unverified"
+	seedActiveUser(t, env.infra, userID)
+	seedAppPolicy(t, env.infra, protocol.EnsembleAppID)
+	webSessionID := seedWebSession(t, env.infra, userID)
+	cert := appUserMTLSCert(t, userID)
+
+	body := validEvalPublicationBodyHTTP(t, "run-eval-unverified", webSessionID)
+	// Patch OK to false.
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(body, &raw))
+	raw["verification_report"] = []byte(`{"schema_version":"1.0.0","bundle_id":"bundle-run-eval-unverified","run_id":"run-eval-unverified","release_version":"2.1.8","verified_at":"2026-09-09T12:00:00Z","ok":false,"layers":[],"failures":[]}`)
+	patched, err := json.Marshal(raw)
+	require.NoError(t, err)
+
+	rr := postEvalPublication(t, env.handler, cert, patched)
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), constants.ErrObservePublicationNotVerified.Error())
+
+	// No SSE event emitted.
+	route := SSERoute{UserID: userID, WebSessionID: webSessionID}
+	rows, err := env.infra.SSEStore.SSEEventsListSince(route, 0, 100)
+	require.NoError(t, err)
+	assert.Empty(t, rows, "no SSE event for rejected publication")
+}
+
+// TestObserveProducerEndpoint_EvalPublicationFailedPersistence verifies that
+// a persistence failure through the HTTP path returns 500 and no SSE event
+// is emitted. Uses the controller-level test env with a closed DB.
+func TestObserveProducerEndpoint_EvalPublicationFailedPersistence(t *testing.T) {
+	controller := newProducerControllerTestEnv(t)
+
+	runID := "run-eval-fail-persist"
+	body := validEvalPublicationBody(t, runID)
+
+	// Close the DB to force a persistence failure. sql.DB.Close is idempotent
+	// so the t.Cleanup registered by newProducerControllerTestEnv is a no-op.
+	require.NoError(t, controller.producerSvc.docStore.db.Close())
+
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerEvalPublication, strings.NewReader(body))
+	req = withAppAuthCtx(req, "app-workload", "user-fail-eval")
+	w := httptest.NewRecorder()
+	controller.handleEvalPublication(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NotContains(t, w.Body.String(), "accepted")
+}
+
+// TestObserveProducerEndpoint_EvalPublicationNonAppMTLSRejected verifies
+// that a CLI mTLS cert is rejected by the auth middleware before reaching
+// the eval publication controller.
+func TestObserveProducerEndpoint_EvalPublicationNonAppMTLSRejected(t *testing.T) {
+	env := setupObserveProducerEndpointEnv(t)
+
+	userID := "user-eval-cli"
+	seedActiveUser(t, env.infra, userID)
+	seedAppPolicy(t, env.infra, protocol.EnsembleAppID)
+	cert := cliMTLSCert(t, userID, "cli-session-eval")
+
+	body := validEvalPublicationBodyHTTP(t, "run-eval-cli", "web-1")
+	rr := postEvalPublication(t, env.handler, cert, body)
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+// TestObserveProducerEndpoint_EvalPublicationUnauthenticatedRejected verifies
+// that a request with no mTLS cert is rejected by the auth middleware.
+func TestObserveProducerEndpoint_EvalPublicationUnauthenticatedRejected(t *testing.T) {
+	env := setupObserveProducerEndpointEnv(t)
+
+	body := validEvalPublicationBodyHTTP(t, "run-eval-no-tls", "web-1")
+	rr := postEvalPublication(t, env.handler, nil, body)
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+// TestObserveProducerEndpoint_DownloadStreamWithoutQueryParamReturnsMetadata
+// verifies that without ?download=1, the download endpoint returns JSON
+// metadata, not bytes.
+func TestObserveProducerEndpoint_DownloadStreamWithoutQueryParamReturnsMetadata(t *testing.T) {
+	env := setupObserveProducerEndpointEnv(t)
+
+	userID := "user-eval-meta"
+	seedActiveUser(t, env.infra, userID)
+	seedAppPolicy(t, env.infra, protocol.EnsembleAppID)
+	webSessionID := seedWebSession(t, env.infra, userID)
+	cert := appUserMTLSCert(t, userID)
+
+	runID := "run-eval-meta-1"
+	pubRR := postEvalPublication(t, env.handler, cert, validEvalPublicationBodyHTTP(t, runID, webSessionID))
+	require.Equal(t, http.StatusOK, pubRR.Code)
+
+	// Without ?download=1, the endpoint returns JSON metadata.
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveDownloadsByID+"artifact-"+runID, nil)
+	req.AddCookie(webSessionCookie(webSessionID))
+	rr := httptest.NewRecorder()
+	env.handler.ServeHTTP(rr, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+	var dl models.DownloadArtifact
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &dl))
+	assert.Equal(t, "artifact-"+runID, dl.ArtifactID)
 }

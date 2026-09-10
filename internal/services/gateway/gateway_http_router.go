@@ -235,6 +235,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// the producer prefix does not shadow any by-id read path.
 	mux.HandleFunc(constants.APIPaths.ObserveProducerAgentState, h.observeProducerController.handleAgentState)
 	mux.HandleFunc(constants.APIPaths.ObserveProducerRunState, h.observeProducerController.handleRunState)
+	mux.HandleFunc(constants.APIPaths.ObserveProducerEvalPublication, h.observeProducerController.handleEvalPublication)
 
 	var handler http.Handler = mux
 	if h.authMiddleware != nil {

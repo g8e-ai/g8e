@@ -329,15 +329,17 @@ func TestRouteAuthRegistry_ObservePrefixFailClosedForUnknownSubPaths(t *testing.
 	assert.Equal(t, RouteAuthMTLS, registry.AuthMode("/api/v1/observer-lookalike"))
 }
 
-// TestRouteAuthRegistry_ObserveProducerRoutesClassifiedMTLS asserts the two
-// mTLS producer endpoints classify as RouteAuthMTLS so only app workloads
-// (the g8ee ensemble) can push state projections.
+// TestRouteAuthRegistry_ObserveProducerRoutesClassifiedMTLS asserts the
+// mTLS producer endpoints (agent, run, eval publication) classify as
+// RouteAuthMTLS so only app workloads (the g8ee ensemble) can push state
+// projections or publish verified eval bundles.
 func TestRouteAuthRegistry_ObserveProducerRoutesClassifiedMTLS(t *testing.T) {
 	registry := NewRouteAuthRegistry(false)
 
 	producerPaths := []string{
 		constants.APIPaths.ObserveProducerAgentState,
 		constants.APIPaths.ObserveProducerRunState,
+		constants.APIPaths.ObserveProducerEvalPublication,
 	}
 	for _, path := range producerPaths {
 		assert.Equal(t, RouteAuthMTLS, registry.AuthMode(path),
@@ -366,6 +368,7 @@ func TestRouteAuthRegistry_ObserveProducerRoutesDoNotLeakWebSession(t *testing.T
 	producerPaths := []string{
 		constants.APIPaths.ObserveProducerAgentState,
 		constants.APIPaths.ObserveProducerRunState,
+		constants.APIPaths.ObserveProducerEvalPublication,
 		constants.APIPaths.ObserveProducerPrefix + "other",
 	}
 	for _, path := range producerPaths {

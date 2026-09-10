@@ -434,21 +434,21 @@ func (s *ObserveProducerService) PublishEval(ctx context.Context, userID string,
 	proj := evalProjection{
 		UserID: userID,
 		EvalDetail: models.EvalDetail{
-			SchemaVersion:             constants.ObserveAPIReadModelSchemaVersion,
-			RunID:                     req.RunID,
-			SuiteID:                   req.SuiteID,
-			SuiteVersion:              req.SuiteVersion,
-			ArmID:                     req.ArmID,
-			ModelID:                   req.ModelID,
-			ModelProvider:             req.ModelProvider,
-			Status:                    models.RunLifecycleStatusCompleted,
-			VerificationStatus:        models.EvalVerificationVerified,
-			ReceiptCount:              req.ReceiptCount,
-			AssignedTasks:             req.AssignedTasks,
-			TerminalAttempts:          req.TerminalAttempts,
-			Metrics:                   req.Metrics,
-			CompletedAt:               &completedAt,
-			ObservedAt:                now,
+			SchemaVersion:      constants.ObserveAPIReadModelSchemaVersion,
+			RunID:              req.RunID,
+			SuiteID:            req.SuiteID,
+			SuiteVersion:       req.SuiteVersion,
+			ArmID:              req.ArmID,
+			ModelID:            req.ModelID,
+			ModelProvider:      req.ModelProvider,
+			Status:             models.RunLifecycleStatusCompleted,
+			VerificationStatus: models.EvalVerificationVerified,
+			ReceiptCount:       req.ReceiptCount,
+			AssignedTasks:      req.AssignedTasks,
+			TerminalAttempts:   req.TerminalAttempts,
+			Metrics:            req.Metrics,
+			CompletedAt:        &completedAt,
+			ObservedAt:         now,
 		},
 	}
 
@@ -477,6 +477,11 @@ func (s *ObserveProducerService) PublishEval(ctx context.Context, userID string,
 	// download projection.
 	downloadCollection := marshaler.CollectionName(constants.CollectionObserveDownloads)
 	for _, dl := range req.Downloads {
+		// Reject oversized artifacts before decoding content so a huge
+		// declared byte_size does not force decoding a huge base64 payload.
+		if dl.ByteSize > constants.ObserveDownloadArtifactMaxBytes {
+			return fmt.Errorf("observe producer: publish eval: artifact %q: %w: %d > %d", dl.ArtifactID, constants.ErrObservePublicationArtifactOversized, dl.ByteSize, constants.ObserveDownloadArtifactMaxBytes)
+		}
 		contentBytes, err := base64.StdEncoding.DecodeString(dl.Content)
 		if err != nil {
 			return fmt.Errorf("observe producer: publish eval: decode artifact %q: %w", dl.ArtifactID, err)
@@ -490,10 +495,6 @@ func (s *ObserveProducerService) PublishEval(ctx context.Context, userID string,
 		// Verify content size matches the declared byte_size.
 		if int64(len(contentBytes)) != dl.ByteSize {
 			return fmt.Errorf("observe producer: publish eval: artifact %q: %w: declared=%d actual=%d", dl.ArtifactID, constants.ErrObservePublicationContentSizeMismatch, dl.ByteSize, len(contentBytes))
-		}
-		// Reject oversized artifacts.
-		if dl.ByteSize > constants.ObserveDownloadArtifactMaxBytes {
-			return fmt.Errorf("observe producer: publish eval: artifact %q: %w: %d > %d", dl.ArtifactID, constants.ErrObservePublicationArtifactOversized, dl.ByteSize, constants.ObserveDownloadArtifactMaxBytes)
 		}
 		// Write bytes to the runtime downloads directory.
 		relPath := filepath.Join(constants.ObserveDownloadsDirname, dl.ArtifactID)
@@ -554,7 +555,7 @@ func (s *ObserveProducerService) PublishEval(ctx context.Context, userID string,
 		SuiteID:                   req.SuiteID,
 		SuiteVersion:              req.SuiteVersion,
 		ArmID:                     req.ArmID,
-		TerminalAttempts:           req.TerminalAttempts,
+		TerminalAttempts:          req.TerminalAttempts,
 		AssignedTasks:             req.AssignedTasks,
 		ReceiptCount:              req.ReceiptCount,
 		VerificationStatus:        models.EvalVerificationVerified,
@@ -626,21 +627,26 @@ func (s *ObserveProducerService) StreamDownload(ctx context.Context, userID, art
 	// directory. The artifact ID is a document key, not a filesystem path;
 	// fileSvc.Resolve enforces runtime-dir containment.
 	relPath := filepath.Join(constants.ObserveDownloadsDirname, artifactID)
-	info, err := s.fileSvc.Stat(ctx, relPath)
+	absPath := s.fileSvc.Resolve(relPath)
+	// Use Lstat to detect symlinks without following them. fileSvc.Stat uses
+	// os.Stat which follows symlinks, so a symlink pointing outside the
+	// downloads directory would evade the symlink check. Lstat returns the
+	// symlink's own mode, not the target's.
+	linfo, err := os.Lstat(absPath)
 	if err != nil {
 		return fmt.Errorf("observe producer: stream download: stat artifact %q: %w", artifactID, err)
 	}
 	// Reject symlinks (regular files only).
-	if info.Mode()&os.ModeSymlink != 0 {
+	if linfo.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("observe producer: stream download: %w: %q", constants.ErrObserveDownloadSymlinkRejected, artifactID)
 	}
 	// Reject oversized files.
-	if info.Size() > constants.ObserveDownloadArtifactMaxBytes {
-		return fmt.Errorf("observe producer: stream download: %w: %d > %d", constants.ErrObserveDownloadOversized, info.Size(), constants.ObserveDownloadArtifactMaxBytes)
+	if linfo.Size() > constants.ObserveDownloadArtifactMaxBytes {
+		return fmt.Errorf("observe producer: stream download: %w: %d > %d", constants.ErrObserveDownloadOversized, linfo.Size(), constants.ObserveDownloadArtifactMaxBytes)
 	}
 	// Verify on-disk file size matches the catalog size.
-	if info.Size() != proj.ByteSize {
-		return fmt.Errorf("observe producer: stream download: %w: catalog=%d disk=%d", constants.ErrObserveDownloadSizeMismatch, proj.ByteSize, info.Size())
+	if linfo.Size() != proj.ByteSize {
+		return fmt.Errorf("observe producer: stream download: %w: catalog=%d disk=%d", constants.ErrObserveDownloadSizeMismatch, proj.ByteSize, linfo.Size())
 	}
 
 	// Read the file bytes and verify the hash.
