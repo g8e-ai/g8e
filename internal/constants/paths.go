@@ -838,3 +838,13 @@ const DemoVersion = "1.0.0"
 const (
 	DemoConfigDirname = "config"
 )
+
+// Supervisor runtime path constants (O1-supervisor: continuous campaign
+// supervisor with hash-linked cycle ledger and persisted spec).
+const (
+	SupervisorDirname             = "supervisor"
+	SupervisorSpecFilename        = "spec.json"
+	SupervisorLedgerFilename      = "cycle-ledger.jsonl"
+	SupervisorLockFilename        = "supervisor.lock"
+	SupervisorStateFilename       = "state.json"
+)

@@ -1346,4 +1346,27 @@ var (
 	ErrObserveRoleCombinationIDRequired = errors.New("observe: role_combination_id is required")
 	ErrObserveVariantIDRequired         = errors.New("observe: variant_id is required")
 	ErrObserveDuplicateEventID          = errors.New("observe: duplicate event_id suppressed")
+
+	// Supervisor errors (O1-supervisor: continuous campaign supervisor with
+	// explicit start/status/stop/resume, hash-linked cycle ledger, and typed
+	// safety stops).
+	ErrSupervisorAlreadyRunning      = errors.New("supervisor: already running")
+	ErrSupervisorNotRunning          = errors.New("supervisor: not running")
+	ErrSupervisorNotFound            = errors.New("supervisor: not found")
+	ErrSupervisorSpecRequired        = errors.New("supervisor: spec is required")
+	ErrSupervisorIDRequired          = errors.New("supervisor: supervisor_id is required")
+	ErrSupervisorCampaignIDRequired  = errors.New("supervisor: campaign_id is required")
+	ErrSupervisorNoRoleCombinations  = errors.New("supervisor: role_combinations is empty")
+	ErrSupervisorCycleBudgetInvalid  = errors.New("supervisor: cycle_budget must be positive")
+	ErrSupervisorLedgerCorrupt       = errors.New("supervisor: cycle ledger is corrupt")
+	ErrSupervisorLedgerHashMismatch  = errors.New("supervisor: cycle ledger hash mismatch")
+	ErrSupervisorAlreadyOwned        = errors.New("supervisor: owned by another owner")
+	ErrSupervisorCycleFailed         = errors.New("supervisor: cycle failed")
+	ErrSupervisorVerificationFailed  = errors.New("supervisor: verification failed")
+	ErrSupervisorPublicationFailed   = errors.New("supervisor: publication failed")
+	ErrSupervisorSafetyStop          = errors.New("supervisor: safety stop triggered")
+	ErrSupervisorBudgetExceeded      = errors.New("supervisor: provider budget exceeded")
+	ErrSupervisorDiskReserveViolated = errors.New("supervisor: disk reserve violated")
+	ErrSupervisorInvalidSpec         = errors.New("supervisor: invalid spec")
+	ErrSupervisorResumeFailed        = errors.New("supervisor: resume failed")
 )
