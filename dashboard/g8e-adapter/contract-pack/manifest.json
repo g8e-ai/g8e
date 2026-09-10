@@ -54,11 +54,11 @@
     },
     {
       "path": "models.ts",
-      "sha256": "a63e16d96d45fba3497dadaf00236b06dcf752082bffde849be32fef7932a453"
+      "sha256": "b61e18129c470aa09908b179cf657b34a0acd515a2083be29e180f2f4c6371e3"
     },
     {
       "path": "observe.openapi.json",
-      "sha256": "654dd32167d70a79f75bdec1dd0f71b423f18d5775a21e193db7ec2c2ba6ea06"
+      "sha256": "33858566ddd7bf705daa70f1504e05ac0c9fb646ddc4227694d023cfba241d4c"
     },
     {
       "path": "README.md",

@@ -44,6 +44,10 @@ import {
   MODEL_ROLES,
   PUBLICATION_STATUSES,
   MEASUREMENT_SCOPES,
+  PUBLIC_FEED_RECORD_TYPES,
+  PUBLIC_FEED_OUTBOX_STATUSES,
+  PUBLIC_FEED_INGEST_REJECTION_REASONS,
+  PUBLIC_FEED_PROOF_CLASSIFICATIONS,
 } from '../dist/types/enums.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -111,6 +115,10 @@ const ENUMS = [
   { name: 'ModelRole', constName: 'MODEL_ROLES', values: MODEL_ROLES },
   { name: 'PublicationStatus', constName: 'PUBLICATION_STATUSES', values: PUBLICATION_STATUSES },
   { name: 'MeasurementScope', constName: 'MEASUREMENT_SCOPES', values: MEASUREMENT_SCOPES },
+  { name: 'PublicFeedRecordType', constName: 'PUBLIC_FEED_RECORD_TYPES', values: PUBLIC_FEED_RECORD_TYPES },
+  { name: 'PublicFeedOutboxStatus', constName: 'PUBLIC_FEED_OUTBOX_STATUSES', values: PUBLIC_FEED_OUTBOX_STATUSES },
+  { name: 'PublicFeedIngestRejectionReason', constName: 'PUBLIC_FEED_INGEST_REJECTION_REASONS', values: PUBLIC_FEED_INGEST_REJECTION_REASONS },
+  { name: 'PublicFeedProofClassification', constName: 'PUBLIC_FEED_PROOF_CLASSIFICATIONS', values: PUBLIC_FEED_PROOF_CLASSIFICATIONS },
 ];
 
 function findEnumByValues(values) {
@@ -132,6 +140,7 @@ function pascalCase(name) {
 
 const observeApi = await readJson(join(PROTOCOL_MODELS, 'observe_api.json'));
 const eventPayloads = await readJson(join(PROTOCOL_MODELS, 'observe_event_payloads.json'));
+const publicFeedModels = await readJson(join(PROTOCOL_MODELS, 'public_feed.json'));
 const classification = await readJson(join(PROTOCOL_CONSTANTS, 'event_dashboard_classification.json'));
 
 const BROWSER_MODELS = [
@@ -155,6 +164,21 @@ const BROWSER_MODELS = [
   'verification_progress_projection',
   'publication_progress_projection',
   'source_freshness_projection',
+  // Public feed models (O3-public-feed). Browser-facing public spectator
+  // read models from protocol/models/public_feed.json. Owner-only and
+  // server-to-server models (public_ingest_request, public_export_config,
+  // public_outbox_entry) are excluded from the builder contract.
+  'public_feed_record',
+  'public_feed_batch',
+  'public_feed_snapshot',
+  'public_feed_bootstrap',
+  'public_feed_cursor_page',
+  'public_ingest_response',
+  'public_key_revocation_record',
+  'public_proof_manifest',
+  'public_proof_catalog_entry',
+  'public_proof_catalog',
+  'public_proof_catalog_summary',
 ];
 
 const EVENT_PAYLOAD_MODELS = [
@@ -179,13 +203,21 @@ const EXCLUDED_MODELS = new Set([
   'observe_producer_agent_state_request',
   'observe_producer_run_state_request',
   'observe_producer_response',
+  // Public feed owner-only and server-to-server models. These never appear
+  // in the builder contract pack: ingest requests are Gateway-to-mirror,
+  // export config is owner-only, outbox entries are internal state, and
+  // the protocol version is a wrapper not a wire model.
+  'public_ingest_request',
+  'public_export_config',
+  'public_outbox_entry',
+  'public_feed_protocol_version',
 ]);
 
 // Inline object models discovered during type resolution (e.g. success_rate).
 const inlineModels = new Map();
 
 function modelFields(modelName) {
-  const def = observeApi[modelName] ?? eventPayloads[modelName];
+  const def = observeApi[modelName] ?? eventPayloads[modelName] ?? publicFeedModels[modelName];
   if (!def) throw new Error(`unknown model: ${modelName}`);
   const fields = {};
   for (const key of Object.keys(def)) {
@@ -595,7 +627,7 @@ function generateOpenApi() {
     servers: [{ url: '/api/v1', description: 'Gateway base URL from runtime config' }],
     paths,
     components,
-    'x-models': { ...observeApi, ...eventPayloads },
+    'x-models': { ...observeApi, ...eventPayloads, ...publicFeedModels },
   };
   return stableSerialize(doc);
 }

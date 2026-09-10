@@ -5,6 +5,10 @@ import {
   DOWNLOAD_PRIVACY_CLASSIFICATIONS,
   EVAL_VERIFICATION_STATUSES,
   MEASUREMENT_STATUSES,
+  PUBLIC_FEED_INGEST_REJECTION_REASONS,
+  PUBLIC_FEED_OUTBOX_STATUSES,
+  PUBLIC_FEED_PROOF_CLASSIFICATIONS,
+  PUBLIC_FEED_RECORD_TYPES,
   RUN_KINDS,
   RUN_LIFECYCLE_STATUSES,
   SNAPSHOT_FRESHNESS_VALUES,
@@ -12,6 +16,10 @@ import {
   isDownloadPrivacyClassification,
   isEvalVerificationStatus,
   isMeasurementStatus,
+  isPublicFeedIngestRejectionReason,
+  isPublicFeedOutboxStatus,
+  isPublicFeedProofClassification,
+  isPublicFeedRecordType,
   isRunKind,
   isRunLifecycleStatus,
   isSnapshotFreshness,
@@ -125,6 +133,67 @@ describe('enums', () => {
       }
       expect(isDownloadPrivacyClassification('public')).toBe(false);
       expect(isDownloadPrivacyClassification('private')).toBe(false);
+    });
+  });
+
+  describe('PublicFeedRecordType', () => {
+    it('contains the four Go enum values in order', () => {
+      expect([...PUBLIC_FEED_RECORD_TYPES]).toEqual([
+        'projection', 'event', 'proof_manifest', 'key_revocation',
+      ]);
+    });
+
+    it('recognizes every member and rejects unknown strings', () => {
+      for (const t of PUBLIC_FEED_RECORD_TYPES) {
+        expect(isPublicFeedRecordType(t)).toBe(true);
+      }
+      expect(isPublicFeedRecordType('heartbeat')).toBe(false);
+      expect(isPublicFeedRecordType('')).toBe(false);
+    });
+  });
+
+  describe('PublicFeedOutboxStatus', () => {
+    it('contains the four Go enum values in order', () => {
+      expect([...PUBLIC_FEED_OUTBOX_STATUSES]).toEqual([
+        'pending', 'sent', 'acknowledged', 'failed',
+      ]);
+    });
+
+    it('recognizes every member and rejects unknown strings', () => {
+      for (const s of PUBLIC_FEED_OUTBOX_STATUSES) {
+        expect(isPublicFeedOutboxStatus(s)).toBe(true);
+      }
+      expect(isPublicFeedOutboxStatus('delivered')).toBe(false);
+    });
+  });
+
+  describe('PublicFeedIngestRejectionReason', () => {
+    it('contains the seven Go enum values in order', () => {
+      expect([...PUBLIC_FEED_INGEST_REJECTION_REASONS]).toEqual([
+        'signature_invalid', 'sequence_out_of_order', 'hash_chain_mismatch',
+        'duplicate_sequence', 'oversized_batch', 'revoked_key', 'unknown_key',
+      ]);
+    });
+
+    it('recognizes every member and rejects unknown strings', () => {
+      for (const r of PUBLIC_FEED_INGEST_REJECTION_REASONS) {
+        expect(isPublicFeedIngestRejectionReason(r)).toBe(true);
+      }
+      expect(isPublicFeedIngestRejectionReason('forbidden')).toBe(false);
+    });
+  });
+
+  describe('PublicFeedProofClassification', () => {
+    it('contains the single Go enum value', () => {
+      expect([...PUBLIC_FEED_PROOF_CLASSIFICATIONS]).toEqual(['public_safe']);
+    });
+
+    it('recognizes the member and rejects unknown strings', () => {
+      for (const c of PUBLIC_FEED_PROOF_CLASSIFICATIONS) {
+        expect(isPublicFeedProofClassification(c)).toBe(true);
+      }
+      expect(isPublicFeedProofClassification('restricted')).toBe(false);
+      expect(isPublicFeedProofClassification('public')).toBe(false);
     });
   });
 });

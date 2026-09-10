@@ -164,6 +164,50 @@ export const MEASUREMENT_SCOPES: readonly MeasurementScope[] = [
   'process', 'system', 'accelerator',
 ] as const;
 
+// Public feed enums (O3-public-feed). Values match the Go wire shapes in
+// internal/models/public_feed.go and the protocol JSON in
+// protocol/models/public_feed.json.
+
+export type PublicFeedRecordType =
+  | 'projection'
+  | 'event'
+  | 'proof_manifest'
+  | 'key_revocation';
+
+export const PUBLIC_FEED_RECORD_TYPES: readonly PublicFeedRecordType[] = [
+  'projection', 'event', 'proof_manifest', 'key_revocation',
+] as const;
+
+export type PublicFeedOutboxStatus =
+  | 'pending'
+  | 'sent'
+  | 'acknowledged'
+  | 'failed';
+
+export const PUBLIC_FEED_OUTBOX_STATUSES: readonly PublicFeedOutboxStatus[] = [
+  'pending', 'sent', 'acknowledged', 'failed',
+] as const;
+
+export type PublicFeedIngestRejectionReason =
+  | 'signature_invalid'
+  | 'sequence_out_of_order'
+  | 'hash_chain_mismatch'
+  | 'duplicate_sequence'
+  | 'oversized_batch'
+  | 'revoked_key'
+  | 'unknown_key';
+
+export const PUBLIC_FEED_INGEST_REJECTION_REASONS: readonly PublicFeedIngestRejectionReason[] = [
+  'signature_invalid', 'sequence_out_of_order', 'hash_chain_mismatch',
+  'duplicate_sequence', 'oversized_batch', 'revoked_key', 'unknown_key',
+] as const;
+
+export type PublicFeedProofClassification = 'public_safe';
+
+export const PUBLIC_FEED_PROOF_CLASSIFICATIONS: readonly PublicFeedProofClassification[] = [
+  'public_safe',
+] as const;
+
 export function isAgentLifecycleStatus(value: unknown): value is AgentLifecycleStatus {
   return typeof value === 'string' && (AGENT_LIFECYCLE_STATUSES as readonly string[]).includes(value);
 }
@@ -230,4 +274,20 @@ export function isPublicationStatus(value: unknown): value is PublicationStatus 
 
 export function isMeasurementScope(value: unknown): value is MeasurementScope {
   return typeof value === 'string' && (MEASUREMENT_SCOPES as readonly string[]).includes(value);
+}
+
+export function isPublicFeedRecordType(value: unknown): value is PublicFeedRecordType {
+  return typeof value === 'string' && (PUBLIC_FEED_RECORD_TYPES as readonly string[]).includes(value);
+}
+
+export function isPublicFeedOutboxStatus(value: unknown): value is PublicFeedOutboxStatus {
+  return typeof value === 'string' && (PUBLIC_FEED_OUTBOX_STATUSES as readonly string[]).includes(value);
+}
+
+export function isPublicFeedIngestRejectionReason(value: unknown): value is PublicFeedIngestRejectionReason {
+  return typeof value === 'string' && (PUBLIC_FEED_INGEST_REJECTION_REASONS as readonly string[]).includes(value);
+}
+
+export function isPublicFeedProofClassification(value: unknown): value is PublicFeedProofClassification {
+  return typeof value === 'string' && (PUBLIC_FEED_PROOF_CLASSIFICATIONS as readonly string[]).includes(value);
 }
