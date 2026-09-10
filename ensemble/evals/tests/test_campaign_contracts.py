@@ -913,6 +913,49 @@ class TestPreregistrationConfigValidation:
                 significance_level=0.05,
             )
 
+    def test_accepts_empty_comparison_arms_for_single_arm_campaign(self):
+        from g8e_evals.analysis.canonical import ClaimPolicy
+        prereg = PreregistrationConfig(
+            config_id="prereg-single-arm",
+            config_version="1.0.0",
+            baseline_arm_id="direct",
+            comparison_arm_ids=[],
+            model_cohort_ids=_COHORT_IDS,
+            task_assignment_id="task-assignment-v1",
+            initial_state_assignment_id=_INITIAL_STATE_ID,
+            required_replicate_ids=_REPLICATE_IDS,
+            required_replicate_count=2,
+            primary_metric_ids=["ifeval_subset_verifier"],
+            bootstrap_count=1000,
+            bootstrap_confidence=0.95,
+            bootstrap_seed=42,
+            significance_level=0.05,
+            claim_policy=ClaimPolicy.DESCRIPTIVE_ONLY,
+        )
+        assert prereg.comparison_arm_ids == []
+        assert prereg.baseline_arm_id == "direct"
+
+    def test_rejects_superiority_claim_policy_with_empty_comparison_arms(self):
+        from g8e_evals.analysis.canonical import ClaimPolicy
+        with pytest.raises(ValueError, match="SUPERIORITY.*requires at least one comparison arm"):
+            PreregistrationConfig(
+                config_id="prereg-single-arm",
+                config_version="1.0.0",
+                baseline_arm_id="direct",
+                comparison_arm_ids=[],
+                model_cohort_ids=_COHORT_IDS,
+                task_assignment_id="task-assignment-v1",
+                initial_state_assignment_id=_INITIAL_STATE_ID,
+                required_replicate_ids=_REPLICATE_IDS,
+                required_replicate_count=2,
+                primary_metric_ids=["ifeval_subset_verifier"],
+                bootstrap_count=1000,
+                bootstrap_confidence=0.95,
+                bootstrap_seed=42,
+                significance_level=0.05,
+                claim_policy=ClaimPolicy.SUPERIORITY,
+            )
+
 
 # ---------------------------------------------------------------------------
 # CampaignAssignment determinism tests

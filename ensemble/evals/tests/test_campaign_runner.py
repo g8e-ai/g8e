@@ -364,6 +364,14 @@ class TestScheduleGeneration:
         positions = sorted(a.schedule_position for a in assignments)
         assert positions == list(range(len(assignments)))
 
+    def test_single_arm_campaign_produces_only_baseline_arm_assignments(self):
+        spec = _make_spec(arm_ids=["direct"])
+        assignments, schedule = build_campaign_state(spec)
+        expected_count = len(_TASK_IDS) * len(_COHORT_IDS) * 1 * len(_REPLICATE_IDS)
+        assert len(assignments) == expected_count
+        assert all(a.arm_id == "direct" for a in assignments)
+        assert len(schedule.ordered_assignment_ids) == expected_count
+
 
 # ---------------------------------------------------------------------------
 # Full execution tests

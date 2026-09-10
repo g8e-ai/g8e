@@ -32,9 +32,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import random
 import shutil
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -85,6 +87,7 @@ from g8e_evals.constants import (
     CAMPAIGN_COHORTS_JSONL,
     CAMPAIGN_INDEX_JSONL,
     CAMPAIGN_MANIFEST_JSON,
+    CAMPAIGN_PROGRESS_JSON,
     CAMPAIGN_RETRY_POLICY_JSON,
     CAMPAIGN_SCHEDULE_JSON,
     CAMPAIGN_STATUS_JSON,
@@ -127,6 +130,8 @@ from g8e_evals.schema import (
     TokenizerTemplateIdentity,
     VerificationStatus,
 )
+
+logger = logging.getLogger(__name__)
 
 SCHEDULE_ALGORITHM_ID = "fisher_yates_shuffle"
 SCHEDULE_ALGORITHM_VERSION = "1.0.0"
@@ -408,6 +413,15 @@ def _write_jsonl(path: Path, records: Sequence[BaseModel]) -> None:
     _write_atomic(path, "\n".join(lines) + ("\n" if lines else ""))
 
 
+def _append_jsonl(path: Path, records: Sequence[BaseModel]) -> None:
+    """Append records to a JSONL file (incremental persistence)."""
+    if not records:
+        return
+    with open(path, "a", encoding="utf-8") as f:
+        for r in records:
+            f.write(r.model_dump_json() + "\n")
+
+
 def _read_jsonl(path: Path, model_cls: type[BaseModel]) -> list[BaseModel]:
     """Read a JSONL file into a list of Pydantic models."""
     if not path.exists():
@@ -571,6 +585,32 @@ class CampaignRunner:
             "updated_at": datetime.now(UTC).isoformat(),
         }
         _write_atomic(self.report_dir / CAMPAIGN_STATUS_JSON, json.dumps(record, indent=2))
+
+    def _write_progress(
+        self,
+        total: int,
+        completed: int,
+        current_assignment: CampaignAssignment | None,
+        terminal_status: str | None,
+        elapsed: float,
+        status_counts: dict[str, int],
+    ) -> None:
+        """Write a pollable progress JSON file for live observation."""
+        record = {
+            "campaign_id": self.spec.campaign_id,
+            "run_id": self._run_id,
+            "total_assignments": total,
+            "completed_assignments": completed,
+            "remaining_assignments": total - completed,
+            "current_cohort": current_assignment.model_cohort_id if current_assignment else None,
+            "current_task": current_assignment.task_id if current_assignment else None,
+            "current_arm": current_assignment.arm_id if current_assignment else None,
+            "current_status": terminal_status,
+            "elapsed_seconds": round(elapsed, 2),
+            "status_counts": status_counts,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+        _write_atomic(self.report_dir / CAMPAIGN_PROGRESS_JSON, json.dumps(record, indent=2))
 
     def _read_campaign_status(self) -> dict[str, Any] | None:
         """Read the persisted campaign status, or None if not yet written."""
@@ -765,8 +805,14 @@ class CampaignRunner:
                 )
             )
         role_to_model = RoleToModelMapping()
-        for cohort in self.spec.cohorts:
-            for rb in cohort.role_bindings:
+        # Use the first cohort's role bindings for the run manifest's
+        # role_to_model mapping. The campaign_binding also resolves
+        # from the first cohort, so they must agree. In a multi-cohort
+        # campaign each cohort has its own model; the run manifest
+        # represents the campaign-level identity, not per-cohort state.
+        first_cohort = self.spec.cohorts[0] if self.spec.cohorts else None
+        if first_cohort is not None:
+            for rb in first_cohort.role_bindings:
                 identity = ModelIdentity(
                     role=rb.role,
                     provider=rb.provider,
@@ -1139,6 +1185,27 @@ class CampaignRunner:
         request_count = 0
         max_requests = self.spec.provider_budget.max_requests if self.spec.provider_budget else None
 
+        total_assignments = len(schedule.ordered_assignment_ids)
+        completed_count = len(completed_ids)
+        status_counts: dict[str, int] = {}
+        campaign_start = time.monotonic()
+        attempts_path = self.report_dir / ATTEMPTS_JSONL
+        metrics_path = self.report_dir / METRICS_JSONL
+
+        # On resume, truncate the JSONL files to the existing attempts/metrics
+        # so incremental appends produce a consistent file.
+        if existing_attempts:
+            _write_jsonl(attempts_path, existing_attempts)
+            _write_jsonl(metrics_path, existing_metrics)
+
+        logger.info(
+            "campaign %s starting: %d total assignments, %d already completed, %d remaining",
+            self.spec.campaign_id,
+            total_assignments,
+            completed_count,
+            total_assignments - completed_count,
+        )
+
         for assignment_id in schedule.ordered_assignment_ids:
             if assignment_id in completed_ids:
                 continue
@@ -1167,6 +1234,16 @@ class CampaignRunner:
                 break
 
             request_count += 1
+            assignment_start = time.monotonic()
+
+            logger.info(
+                "assignment %d/%d: cohort=%s task=%s arm=%s — dispatching",
+                completed_count + 1,
+                total_assignments,
+                assignment.model_cohort_id,
+                assignment.task_id,
+                assignment.arm_id,
+            )
 
             new_attempts, metrics = await self._execute_assignment(
                 assignment, cohort, arm_def, task, all_attempts
@@ -1174,18 +1251,66 @@ class CampaignRunner:
             all_attempts.extend(new_attempts)
             all_metrics.extend(metrics)
             completed_ids.add(assignment_id)
+            completed_count += 1
+
+            # Incremental persistence: append new attempts and metrics
+            # immediately so the report directory reflects live state.
+            _append_jsonl(attempts_path, new_attempts)
+            _append_jsonl(metrics_path, metrics)
+
+            # Track status counts
+            terminal_attempt = new_attempts[-1]
+            status_key = terminal_attempt.terminal_status.value
+            status_counts[status_key] = status_counts.get(status_key, 0) + 1
+
+            elapsed = time.monotonic() - assignment_start
+            total_elapsed = time.monotonic() - campaign_start
+
+            logger.info(
+                "assignment %d/%d: cohort=%s task=%s arm=%s status=%s elapsed=%.1fs total=%.1fs",
+                completed_count,
+                total_assignments,
+                assignment.model_cohort_id,
+                assignment.task_id,
+                assignment.arm_id,
+                status_key,
+                elapsed,
+                total_elapsed,
+            )
+
+            # Write pollable progress file
+            self._write_progress(
+                total=total_assignments,
+                completed=completed_count,
+                current_assignment=assignment,
+                terminal_status=status_key,
+                elapsed=total_elapsed,
+                status_counts=dict(status_counts),
+            )
 
             # Cohort drift check
-            terminal_attempt = new_attempts[-1]
             if terminal_attempt.terminal_status == TerminalStatus.MODEL_FAILED:
                 # The drift is detected inside _execute_assignment via the
                 # response model check. If the terminal status is
                 # MODEL_FAILED due to drift, stop the campaign.
                 if terminal_attempt.missingness_or_failure and "drift" in terminal_attempt.missingness_or_failure:
+                    logger.warning(
+                        "campaign stopping: cohort drift detected on %s",
+                        assignment.model_cohort_id,
+                    )
                     stop_reason = CampaignStopReason.COHORT_DRIFT
                     break
 
-        # 8. Write attempts and metrics
+        logger.info(
+            "campaign %s finished: %d/%d assignments completed, %d attempts, elapsed=%.1fs",
+            self.spec.campaign_id,
+            completed_count,
+            total_assignments,
+            len(all_attempts),
+            time.monotonic() - campaign_start,
+        )
+
+        # 8. Write attempts and metrics (full authoritative write)
         _write_jsonl(self.report_dir / ATTEMPTS_JSONL, all_attempts)
         _write_jsonl(self.report_dir / METRICS_JSONL, all_metrics)
 

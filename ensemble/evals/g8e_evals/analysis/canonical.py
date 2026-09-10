@@ -469,8 +469,13 @@ class PreregistrationConfig(BaseModel):
 
     baseline_arm_id: str = Field(min_length=1)
     comparison_arm_ids: list[str] = Field(
-        min_length=1,
-        description="Allowed comparison arms. Each is paired against the baseline arm.",
+        default_factory=list,
+        description=(
+            "Allowed comparison arms. Each is paired against the baseline arm. "
+            "May be empty for a single-arm descriptive-only campaign that compares "
+            "models rather than arms; SUPERIORITY claim policy requires at least one "
+            "comparison arm."
+        ),
     )
 
     model_cohort_ids: list[str] = Field(
@@ -512,6 +517,11 @@ class PreregistrationConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_preregistration(self) -> Self:
+        if not self.comparison_arm_ids and self.claim_policy == ClaimPolicy.SUPERIORITY:
+            raise ValueError(
+                "SUPERIORITY claim policy requires at least one comparison arm; "
+                "use DESCRIPTIVE_ONLY for single-arm campaigns"
+            )
         if self.baseline_arm_id in self.comparison_arm_ids:
             raise ValueError(
                 f"baseline arm {self.baseline_arm_id!r} cannot also be a comparison arm"
