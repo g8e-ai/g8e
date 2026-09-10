@@ -26,6 +26,8 @@ volumes:
     driver: local
   g8e-dashboard-data:
     driver: local
+  g8e-gateway-secondary-data:
+    driver: local
   g8e-shared-tmp:
     driver: local
 
@@ -92,6 +94,46 @@ services:
       - g8e-net
     volumes:
       - g8e-operator-data:/root/.g8e
+      - g8e-shared-tmp:/tmp
+    depends_on:
+      g8e-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["operator", "start", "-e", "g8e.local"]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  g8e-gateway-secondary:
+    # Cross-enrollment secondary gateway: runs the same image in operator mode
+    # (-e g8e.local) so its in-process operator substrate enrolls against the
+    # primary gateway. This exercises the gateway-as-operator path: a gateway
+    # binary enrolling as an operator of another gateway. Activated via the
+    # `cross-enrollment` profile — use
+    # `docker compose --profile bootstrapped --profile cross-enrollment up -d`.
+    # The container opens no inbound ports (operator mode is outbound-only
+    # mTLS to the primary gateway), so no port mapping is needed.
+    profiles: [cross-enrollment]
+    image: g8e-gateway
+    container_name: ${G8E_PREFIX:-g8e}-gateway-secondary
+    working_dir: /root
+    networks:
+      g8e-net:
+        aliases:
+          - g8e-secondary
+    volumes:
+      - g8e-gateway-secondary-data:/root/.g8e
       - g8e-shared-tmp:/tmp
     depends_on:
       g8e-gateway:

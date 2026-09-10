@@ -59,6 +59,15 @@ from .observe_api import (
     ObserveProducerAgentStateRequest,
     ObserveProducerRunStateRequest,
     ObserveProducerResponse,
+    EvidenceEncryptionWire,
+    BundleArtifactEntryWire,
+    ExternalReferenceWire,
+    BundleManifestWire,
+    LayerResultWire,
+    VerificationFailureWire,
+    VerificationReportWire,
+    ObserveProducerDownloadArtifactInput,
+    ObserveProducerEvalPublicationRequest,
 )
 from .governance import (
     GovernanceEnvelope,

@@ -220,5 +220,110 @@
   "observe_producer_response": {
     "_description": "Typed response body for the mTLS producer endpoints. Carries a single accepted flag indicating the gateway accepted and persisted the projection. Contains no record identifiers, ownership fields, or echo of the request payload.",
     "accepted": {"type": "boolean", "required": true, "description": "Whether the gateway accepted and persisted the projection"}
+  },
+
+  "evidence_encryption_wire": {
+    "_description": "Wire type mirroring the Python EvidenceEncryption model. Restricted artifacts carry encryption metadata; public artifacts do not.",
+    "algorithm": {"type": "string", "required": true, "enum": ["aes-256-gcm"]},
+    "key_id": {"type": "string", "required": true},
+    "aad_sha256": {"type": "string", "required": true, "description": "SHA-256 of the additional authenticated data"},
+    "ciphertext_sha256": {"type": "string", "required": true, "description": "SHA-256 of the ciphertext"},
+    "ciphertext_byte_length": {"type": "integer", "required": true, "description": "Byte length of the ciphertext"}
+  },
+
+  "bundle_artifact_entry_wire": {
+    "_description": "Wire type mirroring the Python BundleArtifactEntry model. Each entry enumerates a single file beneath the bundle root with its media type, privacy class, canonical SHA-256 hash, byte length, semantic record identity, record count, and optional encryption metadata for restricted artifacts.",
+    "path": {"type": "string", "required": true, "description": "Rooted relative path beneath the bundle root"},
+    "media_type": {"type": "string", "required": true, "description": "IANA media type of the artifact content"},
+    "privacy_class": {"type": "string", "required": true, "enum": ["public", "internal", "restricted"]},
+    "sha256": {"type": "string", "required": true, "description": "SHA-256 of the artifact content (64-char hex)"},
+    "byte_length": {"type": "integer", "required": true, "description": "Byte length of the artifact content"},
+    "artifact_type": {"type": "string", "required": true, "description": "Semantic record identity"},
+    "record_count": {"type": "integer", "required": true, "description": "Number of records for JSONL files"},
+    "encryption": {"type": "object", "model": "evidence_encryption_wire", "required": false, "description": "Encryption metadata for restricted artifacts"}
+  },
+
+  "external_reference_wire": {
+    "_description": "Wire type mirroring the Python ExternalReference model. A content-addressed reference to an artifact outside the bundle.",
+    "reference_id": {"type": "string", "required": true},
+    "content_sha256": {"type": "string", "required": true, "description": "SHA-256 of the external content (64-char hex)"},
+    "byte_length": {"type": "integer", "required": true},
+    "media_type": {"type": "string", "required": true},
+    "description": {"type": "string", "required": true, "description": "Human-readable description"},
+    "source_uri": {"type": "string", "required": true, "description": "Optional source URI"}
+  },
+
+  "bundle_manifest_wire": {
+    "_description": "Wire type mirroring the Python BundleManifest model. The immutable, versioned bundle manifest enumerating every included artifact. The publication path reads this as a typed input from the verified bundle; it does not recompute canonical analysis.",
+    "schema_version": {"type": "string", "required": true},
+    "bundle_id": {"type": "string", "required": true, "description": "Unique bundle identity"},
+    "run_id": {"type": "string", "required": true, "description": "Run identity from the run manifest"},
+    "release_version": {"type": "string", "required": true},
+    "created_at": {"type": "string", "format": "iso8601", "required": true, "description": "Bundle creation timestamp"},
+    "artifacts": {"type": "array", "items": "bundle_artifact_entry_wire", "required": true, "description": "Every included artifact, sorted by path in canonical form"},
+    "external_references": {"type": "array", "items": "external_reference_wire", "required": true, "description": "Content-addressed references to artifacts outside the bundle"},
+    "manifest_content_sha256": {"type": "string", "required": true, "description": "SHA-256 over canonical manifest bytes with this field empty"},
+    "checksum_root_sha256": {"type": "string", "required": true, "description": "SHA-256 over the canonical checksum root bytes"}
+  },
+
+  "layer_result_wire": {
+    "_description": "Wire type mirroring the Python LayerResult model. The result of one verification layer.",
+    "layer": {"type": "integer", "required": true, "description": "Verification layer number"},
+    "passed": {"type": "boolean", "required": true, "description": "True when the layer produced zero failures"},
+    "failure_count": {"type": "integer", "required": true, "description": "Number of failures produced by this layer"}
+  },
+
+  "verification_failure_wire": {
+    "_description": "Wire type mirroring the Python VerificationFailure model. One typed verification failure with stable code, layer, and record identity.",
+    "layer": {"type": "integer", "required": true, "description": "Verification layer that produced the failure"},
+    "code": {"type": "string", "required": true, "description": "Centralized stable failure code"},
+    "record_id": {"type": "string", "required": true, "description": "Protected-record identity, empty if not record-specific"},
+    "message": {"type": "string", "required": true, "description": "Human-readable detail. Not for parsing; the code is the stable contract."}
+  },
+
+  "verification_report_wire": {
+    "_description": "Wire type mirroring the Python VerificationReport model. The typed deterministic verification report. ok is true only when every layer passed with zero failures. The publication path requires ok=true to publish with the verified status; a receipt-only or partial verification cannot produce it.",
+    "schema_version": {"type": "string", "required": true},
+    "bundle_id": {"type": "string", "required": true, "description": "Bundle identity from the manifest, empty if unreadable"},
+    "run_id": {"type": "string", "required": true, "description": "Run identity from the manifest, empty if unreadable"},
+    "release_version": {"type": "string", "required": true, "description": "Release version from the manifest, empty if unreadable"},
+    "verified_at": {"type": "string", "format": "iso8601", "required": true, "description": "Verification timestamp"},
+    "ok": {"type": "boolean", "required": true, "description": "True only when every layer passed with zero failures"},
+    "layers": {"type": "array", "items": "layer_result_wire", "required": true, "description": "Per-layer results in verification order"},
+    "failures": {"type": "array", "items": "verification_failure_wire", "required": true, "description": "All failures sorted by layer, record ID, and code"}
+  },
+
+  "observe_producer_download_artifact_input": {
+    "_description": "One entry in the publication request's download catalog. Carries the artifact metadata and base64 content for a single public-safe artifact. Restricted artifacts are never transmitted; only public_safe artifacts appear in the download catalog.",
+    "artifact_id": {"type": "string", "required": true, "description": "Stable artifact identifier used as the document key and download path"},
+    "filename": {"type": "string", "required": true, "description": "Human-readable filename for the download disposition header"},
+    "media_type": {"type": "string", "required": true, "description": "IANA media type of the artifact content"},
+    "byte_size": {"type": "integer", "required": true, "description": "Byte length of the artifact content"},
+    "sha256": {"type": "string", "required": true, "description": "SHA-256 of the artifact content (64-char hex)"},
+    "privacy_classification": {"type": "string", "required": true, "enum": ["public_safe", "restricted"], "description": "Disclosure classification. Only public_safe artifacts appear in the download catalog."},
+    "source_run_id": {"type": "string", "required": true, "description": "Source eval run ID"},
+    "content": {"type": "string", "required": true, "description": "Base64-encoded artifact content bytes"}
+  },
+
+  "observe_producer_eval_publication_request": {
+    "_description": "Typed request body for the mTLS publication endpoint POST /api/v1/observe/producer/eval-publication. Carries the verified bundle manifest, the verification report, the eval projection fields extracted from the canonical analysis by the publisher, and the download catalog with base64 content for public-safe artifacts. The gateway derives user_id from the mTLS peer certificate, never from the request body. The request carries no user_id field; unknown identity fields are rejected.",
+    "schema_version": {"type": "string", "required": true},
+    "bundle_id": {"type": "string", "required": true, "description": "Unique bundle identity from the manifest"},
+    "run_id": {"type": "string", "required": true, "description": "Source eval run identity"},
+    "release_version": {"type": "string", "required": true, "description": "Release version from the manifest"},
+    "suite_id": {"type": "string", "required": true, "description": "Eval suite identity from the canonical analysis"},
+    "suite_version": {"type": "string", "required": true, "description": "Eval suite version from the canonical analysis"},
+    "arm_id": {"type": "string", "required": true, "description": "Eval arm identity from the canonical analysis"},
+    "model_id": {"type": "string", "required": false, "description": "Model identifier from the canonical analysis, absent if unresolved"},
+    "model_provider": {"type": "string", "required": false, "description": "Model provider from the canonical analysis, absent if unresolved"},
+    "receipt_count": {"type": "integer", "required": true, "description": "Number of receipts in the verified bundle"},
+    "assigned_tasks": {"type": "integer", "required": true, "description": "Number of assigned tasks in the eval run"},
+    "terminal_attempts": {"type": "integer", "required": true, "description": "Number of terminal attempts in the eval run"},
+    "metrics": {"type": "array", "items": "eval_metric_summary", "required": true, "description": "Registered metric rows from the canonical analysis"},
+    "verification_report": {"type": "object", "model": "verification_report_wire", "required": true, "description": "Typed verification report from verify_bundle. ok must be true to publish with the verified status."},
+    "bundle_manifest": {"type": "object", "model": "bundle_manifest_wire", "required": true, "description": "Typed bundle manifest from the verified bundle"},
+    "downloads": {"type": "array", "items": "observe_producer_download_artifact_input", "required": true, "description": "Download catalog with base64 content for public-safe artifacts"},
+    "web_session_id": {"type": "string", "required": false, "description": "SSE routing target for browser sessions. Exactly one of web_session_id or cli_session_id is required."},
+    "cli_session_id": {"type": "string", "required": false, "description": "SSE routing target for CLI sessions. Exactly one of web_session_id or cli_session_id is required."}
   }
 }

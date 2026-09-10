@@ -44,7 +44,7 @@ func newObserveProducerTestEnv(t *testing.T) (*ObserveProducerService, *SSEEvent
 	docStore := NewDocumentStoreService(db, logger)
 	sseStore := NewSSEEventService(db, logger)
 	pubsub := NewGatewayWebSocketHandler(logger)
-	producer := NewObserveProducerService(docStore, sseStore, pubsub, logger)
+	producer := NewObserveProducerService(docStore, sseStore, pubsub, newTestFileSvc(t), logger)
 	return producer, sseStore, docStore
 }
 

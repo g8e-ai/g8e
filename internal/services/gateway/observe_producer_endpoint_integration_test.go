@@ -72,7 +72,7 @@ func setupObserveProducerEndpointEnv(t *testing.T) *observeProducerEndpointEnv {
 	require.NoError(t, err, "failed to create MCP gateway")
 
 	observeSvc := NewObserveService(infra.DocStore, infra.Logger)
-	producerSvc := NewObserveProducerService(infra.DocStore, infra.SSEStore, infra.Pubsub, infra.Logger)
+	producerSvc := NewObserveProducerService(infra.DocStore, infra.SSEStore, infra.Pubsub, newTestFileSvc(t), infra.Logger)
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:    infra.Cfg,

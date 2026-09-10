@@ -12,6 +12,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -105,6 +107,137 @@ func validateRunProducerRequest(req models.ObserveProducerRunStateRequest) error
 		return fmt.Errorf("observe producer: validate run request: %w: started=%s ended=%s", constants.ErrObserveEndBeforeStart, req.StartedAt.Format(time.RFC3339Nano), req.EndedAt.Format(time.RFC3339Nano))
 	}
 	return nil
+}
+
+// supportedPublicationSchemaVersion is the single schema version accepted at
+// the eval publication boundary.
+const supportedPublicationSchemaVersion = constants.ObservePublicationSchemaVersion
+
+// bundlePrivacyClassPublic is the privacy class value in the bundle manifest
+// that marks an artifact as publicly disclosable. It mirrors the Python
+// PrivacyClass.PUBLIC = "public" value from
+// ensemble/evals/g8e_evals/bundle/manifest.py.
+const bundlePrivacyClassPublic = "public"
+
+// validateEvalPublicationRequest validates the eval publication payload
+// fields at the Gateway boundary. It checks the supported schema version,
+// non-empty bundle_id and run_id, a verified verification report (ok=true),
+// at least one public artifact in the bundle manifest, rooted relative
+// artifact paths, non-empty media types, 64-char hex SHA-256 hashes,
+// non-negative byte sizes, no duplicate download artifact IDs, and no
+// restricted artifacts in the download catalog. Content hash and size
+// verification against the base64-encoded bytes is performed by the producer
+// service when persisting the artifact.
+func validateEvalPublicationRequest(req models.ObserveProducerEvalPublicationRequest) error {
+	if req.SchemaVersion != supportedPublicationSchemaVersion {
+		return fmt.Errorf("observe producer: validate eval publication: %w: got %q", constants.ErrObserveUnsupportedSchemaVersion, req.SchemaVersion)
+	}
+	if req.BundleID == "" {
+		return fmt.Errorf("observe producer: validate eval publication: %w", constants.ErrObservePublicationBundleIDRequired)
+	}
+	if req.RunID == "" {
+		return fmt.Errorf("observe producer: validate eval publication: %w", constants.ErrObservePublicationRunIDRequired)
+	}
+	if !req.VerificationReport.OK {
+		return fmt.Errorf("observe producer: validate eval publication: %w", constants.ErrObservePublicationNotVerified)
+	}
+	if err := validateBundleManifestWire(req.BundleManifest); err != nil {
+		return err
+	}
+	if err := validateDownloadCatalog(req.Downloads); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateBundleManifestWire validates the bundle manifest fields: at least
+// one public artifact exists and all artifact paths are rooted relative (no
+// absolute paths, no ".." segments, no backslashes).
+func validateBundleManifestWire(manifest models.BundleManifestWire) error {
+	hasPublic := false
+	for _, art := range manifest.Artifacts {
+		if art.PrivacyClass == bundlePrivacyClassPublic {
+			hasPublic = true
+		}
+		if err := validateRootedRelativePath(art.Path); err != nil {
+			return fmt.Errorf("observe producer: validate eval publication: artifact path %q: %w", art.Path, err)
+		}
+	}
+	if !hasPublic {
+		return fmt.Errorf("observe producer: validate eval publication: %w", constants.ErrObservePublicationNoPublicArtifacts)
+	}
+	return nil
+}
+
+// validateDownloadCatalog validates the download artifact entries: each has a
+// non-empty artifact_id and filename, non-empty media_type, 64-char hex
+// sha256, non-negative byte_size, no restricted artifacts, and no duplicate
+// artifact IDs.
+func validateDownloadCatalog(downloads []models.ObserveProducerDownloadArtifactInput) error {
+	seen := make(map[string]struct{}, len(downloads))
+	for _, dl := range downloads {
+		if dl.ArtifactID == "" {
+			return fmt.Errorf("observe producer: validate eval publication: %w", constants.ErrObservePublicationArtifactIDRequired)
+		}
+		if dl.Filename == "" {
+			return fmt.Errorf("observe producer: validate eval publication: %w", constants.ErrObservePublicationFilenameRequired)
+		}
+		if dl.MediaType == "" {
+			return fmt.Errorf("observe producer: validate eval publication: %w", constants.ErrObservePublicationMediaTypeRequired)
+		}
+		if !isValidSHA256Hex(dl.SHA256) {
+			return fmt.Errorf("observe producer: validate eval publication: %w: %q", constants.ErrObservePublicationSHA256Invalid, dl.SHA256)
+		}
+		if dl.ByteSize < 0 {
+			return fmt.Errorf("observe producer: validate eval publication: %w: %d", constants.ErrObservePublicationByteSizeNegative, dl.ByteSize)
+		}
+		if dl.PrivacyClassification != models.DownloadPrivacyPublicSafe {
+			return fmt.Errorf("observe producer: validate eval publication: %w: %q", constants.ErrObservePublicationRestrictedArtifact, dl.PrivacyClassification)
+		}
+		if err := validateRootedRelativePath(dl.ArtifactID); err != nil {
+			return fmt.Errorf("observe producer: validate eval publication: artifact_id %q: %w", dl.ArtifactID, err)
+		}
+		if _, dup := seen[dl.ArtifactID]; dup {
+			return fmt.Errorf("observe producer: validate eval publication: %w: %q", constants.ErrObservePublicationDuplicateArtifactID, dl.ArtifactID)
+		}
+		seen[dl.ArtifactID] = struct{}{}
+	}
+	return nil
+}
+
+// validateRootedRelativePath returns an error if the path is empty, absolute,
+// contains a ".." segment, or contains a backslash. A valid rooted relative
+// path stays within the bundle root.
+func validateRootedRelativePath(path string) error {
+	if path == "" {
+		return fmt.Errorf("empty path: %w", constants.ErrInvalidJSONBody)
+	}
+	if strings.Contains(path, "\\") {
+		return fmt.Errorf("backslash in path: %w", constants.ErrInvalidJSONBody)
+	}
+	if filepath.IsAbs(path) {
+		return fmt.Errorf("absolute path: %w", constants.ErrInvalidJSONBody)
+	}
+	for _, seg := range strings.Split(path, "/") {
+		if seg == ".." {
+			return fmt.Errorf("traversal segment: %w", constants.ErrInvalidJSONBody)
+		}
+	}
+	return nil
+}
+
+// isValidSHA256Hex returns true if s is a 64-character lowercase hexadecimal
+// string.
+func isValidSHA256Hex(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
 
 // decodeProducerRequest decodes a producer request body with strict JSON

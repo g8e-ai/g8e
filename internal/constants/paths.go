@@ -725,6 +725,11 @@ const (
 	ObserveEventPayloadSchemaVersion              = "1.0.0"
 	ObserveMeasurementSchemaVersion               = "1.0.0"
 	ObserveAPIReadModelSchemaVersion              = "1.0.0"
+	ObservePublicationSchemaVersion               = "1.0.0"
+	ObserveDownloadsDirname                       = "observe-downloads"
+	ObserveDownloadArtifactMaxBytes               = 64 << 20
+	BundleManifestSchemaVersion                   = "1.0.0"
+	VerificationReportSchemaVersion                = "1.0.0"
 	EvidenceGraphVerifierID                       = "g8e-evidence-graph-verifier"
 	EvidenceGraphVerifierVersion                  = "1.0.0"
 	EvidenceGraphMaxBytes                         = 64 << 20

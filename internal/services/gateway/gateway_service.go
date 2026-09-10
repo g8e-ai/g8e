@@ -448,7 +448,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		platformEnrollmentSvc: platformEnrollmentSvc,
 		consensusSvc:          consensusSvc,
 		dispatchSvc:           NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture)),
-		observeProducer:       NewObserveProducerService(docStore, sseStore, wsHandler, logger),
+		observeProducer:       NewObserveProducerService(docStore, sseStore, wsHandler, b.fileSvc, logger),
 		responder:             res,
 	}
 

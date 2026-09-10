@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -375,4 +376,63 @@ func (c *E2EClient) dispatchFsRead(t *testing.T, ctx context.Context) dispatchRe
 		"dispatch did not succeed within 90s; last response: %+v", resp)
 
 	return resp
+}
+
+// DiscoverPendingOperatorByHostname polls GetPendingEnrollments and returns
+// the first pending operator request whose Hostname or InstanceID contains
+// the given substring. It is used by cross-enrollment tests to find the
+// secondary gateway's pending operator request without duplicating the
+// filter loop across tests. The caller owns the context; this helper uses
+// require.Eventually for polling so it must be called from a test goroutine.
+func (c *E2EClient) DiscoverPendingOperatorByHostname(t *testing.T, ctx context.Context, hostnameSubstring string) models.PlatformEnrollmentPendingRequest {
+	t.Helper()
+	var found models.PlatformEnrollmentPendingRequest
+	require.Eventually(t, func() bool {
+		pending, err := c.GetPendingEnrollments(ctx)
+		if err != nil {
+			t.Logf("pending list attempt error: %v", err)
+			return false
+		}
+		for _, r := range pending.Requests {
+			if r.ComponentKind != models.PlatformComponentOperator {
+				continue
+			}
+			if strings.Contains(r.Hostname, hostnameSubstring) || strings.Contains(r.InstanceID, hostnameSubstring) {
+				found = r
+				return true
+			}
+		}
+		return false
+	}, 120*time.Second, 3*time.Second,
+		"no pending operator request matching %q found within 120s", hostnameSubstring)
+	return found
+}
+
+// DiscoverActiveOperatorByName polls ListOperators and returns the first
+// active operator whose Name contains the given substring. It is used by
+// cross-enrollment tests to find the secondary gateway's operator after
+// approval. The caller owns the context; this helper uses require.Eventually
+// for polling so it must be called from a test goroutine.
+func (c *E2EClient) DiscoverActiveOperatorByName(t *testing.T, ctx context.Context, nameSubstring string) models.OperatorDocumentGo {
+	t.Helper()
+	var found models.OperatorDocumentGo
+	require.Eventually(t, func() bool {
+		operators, err := c.ListOperators(ctx)
+		if err != nil {
+			t.Logf("operator list attempt error: %v", err)
+			return false
+		}
+		for i := range operators.Operators {
+			if operators.Operators[i].Status != constants.OperatorStatusActive {
+				continue
+			}
+			if strings.Contains(operators.Operators[i].Name, nameSubstring) {
+				found = operators.Operators[i]
+				return true
+			}
+		}
+		return false
+	}, 180*time.Second, 3*time.Second,
+		"no active operator matching %q found within 180s", nameSubstring)
+	return found
 }

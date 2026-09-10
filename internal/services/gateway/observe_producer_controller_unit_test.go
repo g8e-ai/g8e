@@ -23,9 +23,22 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
+
+// newProducerFileSvc creates a RuntimeFileService backed by a temp directory
+// with the full .g8e runtime tree created. This is the Tier 1 (non-integration)
+// equivalent of newTestFileSvc from test_setup_test.go.
+func newProducerFileSvc(t *testing.T) fs.RuntimeFileService {
+	t.Helper()
+	baseDir := testutil.TempDir(t)
+	svc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, svc.CreateRuntimeTree(context.Background()))
+	return svc
+}
 
 // newProducerControllerTestEnv builds a real in-memory SQLite-backed
 // ObserveProducerController (DocumentStoreService + SSEEventService +
@@ -46,7 +59,7 @@ func newProducerControllerTestEnv(t *testing.T) *ObserveProducerController {
 	docStore := NewDocumentStoreService(db, logger)
 	sseStore := NewSSEEventService(db, logger)
 	pubsub := NewGatewayWebSocketHandler(logger)
-	producer := NewObserveProducerService(docStore, sseStore, pubsub, logger)
+	producer := NewObserveProducerService(docStore, sseStore, pubsub, newProducerFileSvc(t), logger)
 	responder := response.NewWriter(logger)
 	return newObserveProducerController(ObserveProducerControllerDeps{
 		Cfg:          nil,
@@ -324,7 +337,7 @@ func TestObserveProducerController_HandleAgentState_OversizedBodyRejected(t *tes
 	docStore := NewDocumentStoreService(db, logger)
 	sseStore := NewSSEEventService(db, logger)
 	pubsub := NewGatewayWebSocketHandler(logger)
-	producer := NewObserveProducerService(docStore, sseStore, pubsub, logger)
+	producer := NewObserveProducerService(docStore, sseStore, pubsub, newProducerFileSvc(t), logger)
 	responder := response.NewWriter(logger)
 	// Tiny max body to force oversize rejection.
 	controller := newObserveProducerController(ObserveProducerControllerDeps{

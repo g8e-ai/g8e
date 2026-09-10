@@ -9,14 +9,21 @@ package gateway
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 // observeProducerID is the producer_id stamped into SSE event rows emitted by
@@ -174,16 +181,20 @@ type ObserveProducerService struct {
 	docStore *DocumentStoreService
 	sseStore *SSEEventService
 	pubsub   *GatewayWebSocketHandler
+	fileSvc  fs.RuntimeFileService
 	logger   *slog.Logger
 }
 
 // NewObserveProducerService creates a new ObserveProducerService backed by the
-// given document store, SSE event store, and pubsub handler.
-func NewObserveProducerService(docStore *DocumentStoreService, sseStore *SSEEventService, pubsub *GatewayWebSocketHandler, logger *slog.Logger) *ObserveProducerService {
+// given document store, SSE event store, pubsub handler, and runtime file
+// service. The file service is used to persist download artifact bytes under
+// the runtime downloads directory.
+func NewObserveProducerService(docStore *DocumentStoreService, sseStore *SSEEventService, pubsub *GatewayWebSocketHandler, fileSvc fs.RuntimeFileService, logger *slog.Logger) *ObserveProducerService {
 	return &ObserveProducerService{
 		docStore: docStore,
 		sseStore: sseStore,
 		pubsub:   pubsub,
+		fileSvc:  fileSvc,
 		logger:   logger,
 	}
 }
@@ -395,6 +406,261 @@ func (s *ObserveProducerService) emitSSEEvent(route SSERoute, eventType string, 
 			return fmt.Errorf("marshal published event: %w", err)
 		}
 		s.pubsub.Publish(channel, envelopeJSON)
+	}
+	return nil
+}
+
+// PublishEval publishes a verified eval bundle into disclosure-safe browser
+// projections and authenticated downloads. It builds the eval projection from
+// the verified request fields, canonically serializes it, computes the
+// projection SHA-256, persists the eval projection and download catalog to the
+// document store, writes download artifact bytes to the runtime downloads
+// directory, updates or creates the run projection with run_kind="eval", and
+// emits ai.eval.run.completed and one ai.eval.metric.recorded SSE event per
+// eligible metric — all after successful persistence (persist-before-publish).
+// If any persistence step fails, no SSE event is emitted.
+func (s *ObserveProducerService) PublishEval(ctx context.Context, userID string, route SSERoute, req models.ObserveProducerEvalPublicationRequest) error {
+	if err := route.validate(); err != nil {
+		return fmt.Errorf("observe producer: publish eval: %w", err)
+	}
+	if !req.VerificationReport.OK {
+		return fmt.Errorf("observe producer: publish eval: %w", constants.ErrObservePublicationNotVerified)
+	}
+
+	now := time.Now().UTC()
+	completedAt := now
+
+	// Build the eval projection from the verified request fields.
+	proj := evalProjection{
+		UserID: userID,
+		EvalDetail: models.EvalDetail{
+			SchemaVersion:             constants.ObserveAPIReadModelSchemaVersion,
+			RunID:                     req.RunID,
+			SuiteID:                   req.SuiteID,
+			SuiteVersion:              req.SuiteVersion,
+			ArmID:                     req.ArmID,
+			ModelID:                   req.ModelID,
+			ModelProvider:             req.ModelProvider,
+			Status:                    models.RunLifecycleStatusCompleted,
+			VerificationStatus:        models.EvalVerificationVerified,
+			ReceiptCount:              req.ReceiptCount,
+			AssignedTasks:             req.AssignedTasks,
+			TerminalAttempts:          req.TerminalAttempts,
+			Metrics:                   req.Metrics,
+			CompletedAt:               &completedAt,
+			ObservedAt:                now,
+		},
+	}
+
+	// Canonically serialize the projection and compute SHA-256.
+	projBytes, err := json.Marshal(proj)
+	if err != nil {
+		return fmt.Errorf("observe producer: publish eval: marshal projection: %w", err)
+	}
+	projHash := sha256.Sum256(projBytes)
+	proj.PublishedProjectionSHA256 = hex.EncodeToString(projHash[:])
+
+	// Re-marshal with the hash populated.
+	projBytes, err = json.Marshal(proj)
+	if err != nil {
+		return fmt.Errorf("observe producer: publish eval: marshal projection with hash: %w", err)
+	}
+
+	// Persist the eval projection.
+	evalCollection := marshaler.CollectionName(constants.CollectionObserveEvals)
+	if err := s.docStore.DocSet(evalCollection, req.RunID, projBytes); err != nil {
+		return fmt.Errorf("observe producer: publish eval: persist eval projection: %w", err)
+	}
+
+	// Persist download artifacts: decode base64 content, verify hash and size,
+	// write bytes to the runtime downloads directory, and persist the
+	// download projection.
+	downloadCollection := marshaler.CollectionName(constants.CollectionObserveDownloads)
+	for _, dl := range req.Downloads {
+		contentBytes, err := base64.StdEncoding.DecodeString(dl.Content)
+		if err != nil {
+			return fmt.Errorf("observe producer: publish eval: decode artifact %q: %w", dl.ArtifactID, err)
+		}
+		// Verify content hash matches the declared SHA-256.
+		contentHash := sha256.Sum256(contentBytes)
+		contentHashHex := hex.EncodeToString(contentHash[:])
+		if contentHashHex != dl.SHA256 {
+			return fmt.Errorf("observe producer: publish eval: artifact %q: %w: declared=%s actual=%s", dl.ArtifactID, constants.ErrObservePublicationContentHashMismatch, dl.SHA256, contentHashHex)
+		}
+		// Verify content size matches the declared byte_size.
+		if int64(len(contentBytes)) != dl.ByteSize {
+			return fmt.Errorf("observe producer: publish eval: artifact %q: %w: declared=%d actual=%d", dl.ArtifactID, constants.ErrObservePublicationContentSizeMismatch, dl.ByteSize, len(contentBytes))
+		}
+		// Reject oversized artifacts.
+		if dl.ByteSize > constants.ObserveDownloadArtifactMaxBytes {
+			return fmt.Errorf("observe producer: publish eval: artifact %q: %w: %d > %d", dl.ArtifactID, constants.ErrObservePublicationArtifactOversized, dl.ByteSize, constants.ObserveDownloadArtifactMaxBytes)
+		}
+		// Write bytes to the runtime downloads directory.
+		relPath := filepath.Join(constants.ObserveDownloadsDirname, dl.ArtifactID)
+		if err := s.fileSvc.WriteFile(ctx, relPath, contentBytes, constants.PermFilePrivate); err != nil {
+			return fmt.Errorf("observe producer: publish eval: write artifact %q: %w", dl.ArtifactID, err)
+		}
+		// Persist the download projection.
+		dlProj := downloadProjection{
+			UserID: userID,
+			DownloadArtifact: models.DownloadArtifact{
+				SchemaVersion:         constants.ObserveAPIReadModelSchemaVersion,
+				ArtifactID:            dl.ArtifactID,
+				Filename:              dl.Filename,
+				MediaType:             dl.MediaType,
+				ByteSize:              dl.ByteSize,
+				SHA256:                dl.SHA256,
+				PrivacyClassification: dl.PrivacyClassification,
+				SourceRunID:           dl.SourceRunID,
+				DownloadURL:           constants.APIPaths.ObserveDownloadsByID + dl.ArtifactID,
+				GeneratedAt:           now,
+			},
+		}
+		dlProjBytes, err := json.Marshal(dlProj)
+		if err != nil {
+			return fmt.Errorf("observe producer: publish eval: marshal download projection %q: %w", dl.ArtifactID, err)
+		}
+		if err := s.docStore.DocSet(downloadCollection, dl.ArtifactID, dlProjBytes); err != nil {
+			return fmt.Errorf("observe producer: publish eval: persist download projection %q: %w", dl.ArtifactID, err)
+		}
+	}
+
+	// Update or create the run projection with run_kind="eval" and
+	// status="completed".
+	runCollection := marshaler.CollectionName(constants.CollectionObserveRuns)
+	runProj := runProjection{
+		UserID:        userID,
+		SchemaVersion: constants.ObserveAPIReadModelSchemaVersion,
+		RunID:         req.RunID,
+		RunKind:       models.RunKindEval,
+		DisplayName:   fmt.Sprintf("Eval %s", req.SuiteID),
+		Status:        models.RunLifecycleStatusCompleted,
+		ObservedAt:    now,
+	}
+	runProjBytes, err := json.Marshal(runProj)
+	if err != nil {
+		return fmt.Errorf("observe producer: publish eval: marshal run projection: %w", err)
+	}
+	if err := s.docStore.DocSet(runCollection, req.RunID, runProjBytes); err != nil {
+		return fmt.Errorf("observe producer: publish eval: persist run projection: %w", err)
+	}
+
+	// All persistence succeeded. Emit SSE events (persist-before-publish).
+
+	// Emit ai.eval.run.completed.
+	runCompletedPayload := models.EvalRunCompletedPayload{
+		SchemaVersion:             constants.ObserveEventPayloadSchemaVersion,
+		RunID:                     req.RunID,
+		SuiteID:                   req.SuiteID,
+		SuiteVersion:              req.SuiteVersion,
+		ArmID:                     req.ArmID,
+		TerminalAttempts:           req.TerminalAttempts,
+		AssignedTasks:             req.AssignedTasks,
+		ReceiptCount:              req.ReceiptCount,
+		VerificationStatus:        models.EvalVerificationVerified,
+		PublishedProjectionSHA256: proj.PublishedProjectionSHA256,
+		CompletedAt:               completedAt,
+	}
+	if err := s.emitSSEEvent(route, string(constants.EventAiEvalRunCompleted), runCompletedPayload); err != nil {
+		s.logger.Error("observe producer: publish eval: emit run completed sse failed", "error", err, "run_id", req.RunID)
+		return fmt.Errorf("observe producer: publish eval: emit run completed sse: %w", err)
+	}
+
+	// Emit one ai.eval.metric.recorded per eligible metric.
+	for _, metric := range req.Metrics {
+		metricPayload := models.EvalMetricRecordedPayload{
+			SchemaVersion:      constants.ObserveEventPayloadSchemaVersion,
+			RunID:              req.RunID,
+			MetricID:           metric.MetricID,
+			MetricVersion:      metric.MetricVersion,
+			Value:              metric.Value,
+			Unit:               metric.Unit,
+			Eligible:           metric.Eligible,
+			Denominator:        metric.Denominator,
+			VerificationStatus: models.EvalVerificationVerified,
+			RecordedAt:         now,
+		}
+		if err := s.emitSSEEvent(route, string(constants.EventAiEvalMetricRecorded), metricPayload); err != nil {
+			s.logger.Error("observe producer: publish eval: emit metric recorded sse failed", "error", err, "run_id", req.RunID, "metric_id", metric.MetricID)
+			return fmt.Errorf("observe producer: publish eval: emit metric recorded sse: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// StreamDownload streams the bytes of a download artifact to the given
+// ResponseWriter. It verifies ownership, checks the on-disk file hash and size
+// against the catalog, rejects symlinks and oversized files, and sets the
+// correct Content-Type, Content-Length, and Content-Disposition headers before
+// streaming the artifact bytes.
+func (s *ObserveProducerService) StreamDownload(ctx context.Context, userID, artifactID string, w http.ResponseWriter) error {
+	if artifactID == "" {
+		return fmt.Errorf("observe producer: stream download: %w", constants.ErrObserveDownloadNotFound)
+	}
+
+	// Look up the download projection and verify ownership.
+	downloadCollection := marshaler.CollectionName(constants.CollectionObserveDownloads)
+	doc, err := s.docStore.DocGet(downloadCollection, artifactID)
+	if err != nil {
+		return fmt.Errorf("observe producer: stream download: read projection: %w", err)
+	}
+	if doc == nil {
+		return fmt.Errorf("observe producer: stream download: %w: %s", constants.ErrObserveDownloadNotFound, artifactID)
+	}
+	var proj downloadProjection
+	if err := unmarshalDocData(doc, &proj); err != nil {
+		return fmt.Errorf("observe producer: stream download: unmarshal projection: %w", err)
+	}
+	if proj.UserID != userID {
+		return fmt.Errorf("observe producer: stream download: %w: artifact %s owned by different user", constants.ErrObserveDownloadNotFound, artifactID)
+	}
+
+	// Reject restricted artifacts (the catalog should only contain public_safe,
+	// but fail closed if a restricted artifact somehow appears).
+	if proj.PrivacyClassification != models.DownloadPrivacyPublicSafe {
+		return fmt.Errorf("observe producer: stream download: %w: %q", constants.ErrObservePublicationRestrictedArtifact, artifactID)
+	}
+
+	// Resolve the on-disk file path and verify it stays within the downloads
+	// directory. The artifact ID is a document key, not a filesystem path;
+	// fileSvc.Resolve enforces runtime-dir containment.
+	relPath := filepath.Join(constants.ObserveDownloadsDirname, artifactID)
+	info, err := s.fileSvc.Stat(ctx, relPath)
+	if err != nil {
+		return fmt.Errorf("observe producer: stream download: stat artifact %q: %w", artifactID, err)
+	}
+	// Reject symlinks (regular files only).
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("observe producer: stream download: %w: %q", constants.ErrObserveDownloadSymlinkRejected, artifactID)
+	}
+	// Reject oversized files.
+	if info.Size() > constants.ObserveDownloadArtifactMaxBytes {
+		return fmt.Errorf("observe producer: stream download: %w: %d > %d", constants.ErrObserveDownloadOversized, info.Size(), constants.ObserveDownloadArtifactMaxBytes)
+	}
+	// Verify on-disk file size matches the catalog size.
+	if info.Size() != proj.ByteSize {
+		return fmt.Errorf("observe producer: stream download: %w: catalog=%d disk=%d", constants.ErrObserveDownloadSizeMismatch, proj.ByteSize, info.Size())
+	}
+
+	// Read the file bytes and verify the hash.
+	contentBytes, err := s.fileSvc.ReadFile(ctx, relPath)
+	if err != nil {
+		return fmt.Errorf("observe producer: stream download: read artifact %q: %w", artifactID, err)
+	}
+	contentHash := sha256.Sum256(contentBytes)
+	contentHashHex := hex.EncodeToString(contentHash[:])
+	if contentHashHex != proj.SHA256 {
+		return fmt.Errorf("observe producer: stream download: %w: catalog=%s disk=%s", constants.ErrObserveDownloadHashMismatch, proj.SHA256, contentHashHex)
+	}
+
+	// Set headers and stream bytes.
+	w.Header().Set("Content-Type", proj.MediaType)
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(contentBytes)))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, proj.Filename))
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(contentBytes); err != nil {
+		return fmt.Errorf("observe producer: stream download: write bytes: %w", err)
 	}
 	return nil
 }
