@@ -78,6 +78,26 @@ func (c *ObserveProducerController) requireAppUserID(w http.ResponseWriter, r *h
 	return userID, true
 }
 
+// requireCLIUserID extracts the authenticated user ID from the request
+// context and verifies the caller is a CLI session. The unified auth
+// middleware stamps ContextKeyUserID and ContextKeyCLISessionID during
+// handleCLIAuth. Returns the user ID and true on success. On failure it
+// writes a 401 (missing user_id) or 403 (not a CLI session) response and
+// returns false.
+func (c *ObserveProducerController) requireCLIUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	cliSessionID, _ := r.Context().Value(constants.ContextKeyCLISessionID).(string)
+	if cliSessionID == "" {
+		c.responder.Error(w, http.StatusForbidden, constants.ErrForbidden.Error())
+		return "", false
+	}
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
+	if !ok || userID == "" {
+		c.responder.Error(w, http.StatusUnauthorized, constants.ErrNotAuthenticated.Error())
+		return "", false
+	}
+	return userID, true
+}
+
 // buildProducerRoute constructs an SSERoute from the derived user_id and
 // the request body's session routing fields. Exactly one of web_session_id
 // or cli_session_id must be set; the caller rejects dual routing before
@@ -247,16 +267,18 @@ func (c *ObserveProducerController) handleRunState(w http.ResponseWriter, r *htt
 	c.responder.JSON(w, http.StatusOK, models.ObserveProducerResponse{Accepted: true})
 }
 
-// handleEvalPublication accepts a typed eval publication request from the
-// ensemble, derives user_id from the mTLS peer certificate, and delegates to
-// the observe producer service which persists the eval projection and
-// download catalog, writes artifact bytes to the runtime downloads
-// directory, updates the run projection, and emits ai.eval.run.completed
-// and ai.eval.metric.recorded SSE events after successful persistence
-// (persist-before-publish).
+// handleEvalPublication accepts a typed eval publication request from
+// either an mTLS-authenticated app workload (the g8ee ensemble) or an
+// mTLS-authenticated CLI session (the g8e-evals publish command). The
+// gateway derives user_id from the mTLS peer certificate, never from the
+// request body, and delegates to the observe producer service which
+// persists the eval projection and download catalog, writes artifact
+// bytes to the runtime downloads directory, updates the run projection,
+// and emits ai.eval.run.completed and ai.eval.metric.recorded SSE events
+// after successful persistence (persist-before-publish).
 //
 // @Summary		Publish verified eval bundle
-// @Description	Accepts a typed eval publication request from an mTLS-authenticated app workload (the g8ee ensemble). The gateway derives user_id from the peer certificate, verifies the bundle, persists the eval projection and download catalog, writes artifact bytes, and emits ai.eval.run.completed and ai.eval.metric.recorded SSE events after successful persistence.
+// @Description	Accepts a typed eval publication request from an mTLS-authenticated app workload (the g8ee ensemble) or CLI session (the g8e-evals publish command). The gateway derives user_id from the peer certificate, verifies the bundle, persists the eval projection and download catalog, writes artifact bytes, and emits ai.eval.run.completed and ai.eval.metric.recorded SSE events after successful persistence.
 // @Tags			observe
 // @Accept			json
 // @Produce		json
@@ -264,7 +286,7 @@ func (c *ObserveProducerController) handleRunState(w http.ResponseWriter, r *htt
 // @Success		200		{string}	string										"accepted"
 // @Failure		400		{string}	string										"Invalid request, unverified bundle, or invalid download catalog"
 // @Failure		401		{string}	string										"Unauthorized — mTLS user identity required"
-// @Failure		403		{string}	string										"Forbidden — not an app workload"
+// @Failure		403		{string}	string										"Forbidden — not an app workload or CLI session"
 // @Failure		500		{string}	string										"Persistence failure"
 // @Router			/api/v1/observe/producer/eval-publication [post]
 func (c *ObserveProducerController) handleEvalPublication(w http.ResponseWriter, r *http.Request) {
@@ -272,7 +294,20 @@ func (c *ObserveProducerController) handleEvalPublication(w http.ResponseWriter,
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
-	userID, ok := c.requireAppUserID(w, r)
+	// The eval publication endpoint accepts two distinct mTLS auth
+	// domains: app workloads (the ensemble's InternalHttpClient, stamped
+	// by handleAppAuth) and CLI sessions (the g8e-evals publish command,
+	// stamped by handleCLIAuth). Both derive user_id from the peer
+	// certificate, never from the request body. Dispatch to the focused
+	// validator for whichever identity the middleware stamped.
+	appID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
+	var userID string
+	var ok bool
+	if appID != "" {
+		userID, ok = c.requireAppUserID(w, r)
+	} else {
+		userID, ok = c.requireCLIUserID(w, r)
+	}
 	if !ok {
 		return
 	}

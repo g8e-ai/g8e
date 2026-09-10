@@ -446,6 +446,15 @@ class ObserveProducerEvalPublicationRequest(G8eBaseModel):
     bundle_id: str
     run_id: str
     release_version: str
+    suite_id: str
+    suite_version: str
+    arm_id: str
+    model_id: str | None = None
+    model_provider: str | None = None
+    receipt_count: int
+    assigned_tasks: int
+    terminal_attempts: int
+    metrics: list[EvalMetricSummary]
     verification_report: VerificationReportWire
     bundle_manifest: BundleManifestWire
     downloads: list[ObserveProducerDownloadArtifactInput]

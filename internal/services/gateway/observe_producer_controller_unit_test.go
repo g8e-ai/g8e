@@ -83,6 +83,16 @@ func withAppAuthCtx(r *http.Request, appID, userID string) *http.Request {
 	return r.WithContext(ctx)
 }
 
+// withCLIAuthCtx stamps the mTLS-derived CLI session identity and user
+// identity into the request context, mirroring handleCLIAuth. The eval
+// publication endpoint accepts CLI auth in addition to app auth so the
+// g8e-evals publish command can publish through the governed CLI ingress.
+func withCLIAuthCtx(r *http.Request, cliSessionID, userID string) *http.Request {
+	ctx := context.WithValue(r.Context(), constants.ContextKeyCLISessionID, cliSessionID)
+	ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
+	return r.WithContext(ctx)
+}
+
 // validAgentBody returns a JSON body for a valid agent producer request
 // routed via a web session.
 func validAgentBody(t *testing.T, agentID string, status models.AgentLifecycleStatus) string {
@@ -939,7 +949,7 @@ func TestObserveProducerController_HandleEvalPublication_MethodRejected(t *testi
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 }
 
-func TestObserveProducerController_HandleEvalPublication_MissingAppIDRejected(t *testing.T) {
+func TestObserveProducerController_HandleEvalPublication_MissingIdentityRejected(t *testing.T) {
 	controller := newProducerControllerTestEnv(t)
 
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerEvalPublication, strings.NewReader(validEvalPublicationBody(t, "eval-noapp")))
@@ -951,6 +961,33 @@ func TestObserveProducerController_HandleEvalPublication_MissingAppIDRejected(t 
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
 	assert.Contains(t, decodeErrorResponse(t, w), constants.ErrForbidden.Error())
+}
+
+func TestObserveProducerController_HandleEvalPublication_CLIAuthAccepted(t *testing.T) {
+	controller := newProducerControllerTestEnv(t)
+
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerEvalPublication, strings.NewReader(validEvalPublicationBody(t, "eval-cli")))
+	req = withCLIAuthCtx(req, "cli-session-1", "user-cli")
+	w := httptest.NewRecorder()
+
+	controller.handleEvalPublication(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+	resp := decodeAcceptedResponse(t, w)
+	assert.True(t, resp.Accepted)
+}
+
+func TestObserveProducerController_HandleEvalPublication_CLISessionMissingUserIDRejected(t *testing.T) {
+	controller := newProducerControllerTestEnv(t)
+
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerEvalPublication, strings.NewReader(validEvalPublicationBody(t, "eval-cli-nouser")))
+	ctx := context.WithValue(req.Context(), constants.ContextKeyCLISessionID, "cli-session-1")
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	controller.handleEvalPublication(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestObserveProducerController_HandleEvalPublication_MissingUserIDRejected(t *testing.T) {

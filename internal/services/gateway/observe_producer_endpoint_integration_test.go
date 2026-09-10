@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -355,12 +356,46 @@ func postAgentState(t *testing.T, h http.Handler, cert *x509.Certificate, body [
 	return rr
 }
 
+// postAgentStateWithHeader posts an agent state update with an additional
+// header alongside the mTLS cert.
+func postAgentStateWithHeader(t *testing.T, h http.Handler, cert *x509.Certificate, headerName, headerValue string, body []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerAgentState, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerName, headerValue)
+	if cert != nil {
+		req.TLS = &tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{cert},
+		}
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	return rr
+}
+
 // postRunState posts a run state update through the real HTTP router with
 // the given mTLS cert and request body.
 func postRunState(t *testing.T, h http.Handler, cert *x509.Certificate, body []byte) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerRunState, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	if cert != nil {
+		req.TLS = &tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{cert},
+		}
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	return rr
+}
+
+// postRunStateWithHeader posts a run state update with an additional header
+// alongside the mTLS cert.
+func postRunStateWithHeader(t *testing.T, h http.Handler, cert *x509.Certificate, headerName, headerValue string, body []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerRunState, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerName, headerValue)
 	if cert != nil {
 		req.TLS = &tls.ConnectionState{
 			PeerCertificates: []*x509.Certificate{cert},
@@ -721,6 +756,52 @@ func TestObserveProducerEndpoint_NonAppMTLSCallerRejected(t *testing.T) {
 	rr := postAgentState(t, env.handler, cert, body)
 	// CLI cert without CLI session header: auth middleware rejects with 401.
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+// TestObserveProducerEndpoint_AgentStateCLISessionRejected verifies that a
+// valid CLI session mTLS cert is rejected by the agent state producer
+// endpoint. Agent and run producer endpoints remain app-only; only the eval
+// publication endpoint accepts CLI session auth.
+func TestObserveProducerEndpoint_AgentStateCLISessionRejected(t *testing.T) {
+	env := setupObserveProducerEndpointEnv(t)
+
+	userID := "user-agent-cli-reject"
+	seedActiveUser(t, env.infra, userID)
+	cliSessionID, cert := seedCLISessionForEval(t, env.infra, userID)
+
+	body := validAgentStateBody(t, "agent-cli-session", models.AgentLifecycleStatusRunning, "")
+	// Patch the body to route via cli_session_id instead of web_session_id.
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(body, &raw))
+	raw["web_session_id"] = []byte("null")
+	raw["cli_session_id"] = []byte(fmt.Sprintf("%q", cliSessionID))
+	patched, err := json.Marshal(raw)
+	require.NoError(t, err)
+
+	rr := postAgentStateWithHeader(t, env.handler, cert, constants.HeaderCLISessionID, cliSessionID, patched)
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+}
+
+// TestObserveProducerEndpoint_RunStateCLISessionRejected verifies that a
+// valid CLI session mTLS cert is rejected by the run state producer
+// endpoint. Run producer endpoints remain app-only.
+func TestObserveProducerEndpoint_RunStateCLISessionRejected(t *testing.T) {
+	env := setupObserveProducerEndpointEnv(t)
+
+	userID := "user-run-cli-reject"
+	seedActiveUser(t, env.infra, userID)
+	cliSessionID, cert := seedCLISessionForEval(t, env.infra, userID)
+
+	body := validRunStateBody(t, "run-cli-session", models.RunLifecycleStatusRunning, "")
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(body, &raw))
+	raw["web_session_id"] = []byte("null")
+	raw["cli_session_id"] = []byte(fmt.Sprintf("%q", cliSessionID))
+	patched, err := json.Marshal(raw)
+	require.NoError(t, err)
+
+	rr := postRunStateWithHeader(t, env.handler, cert, constants.HeaderCLISessionID, cliSessionID, patched)
+	assert.Equal(t, http.StatusForbidden, rr.Code)
 }
 
 // TestObserveProducerEndpoint_UnauthenticatedCallerRejected verifies that a
@@ -1484,20 +1565,83 @@ func TestObserveProducerEndpoint_EvalPublicationFailedPersistence(t *testing.T) 
 	assert.NotContains(t, w.Body.String(), "accepted")
 }
 
-// TestObserveProducerEndpoint_EvalPublicationNonAppMTLSRejected verifies
-// that a CLI mTLS cert is rejected by the auth middleware before reaching
-// the eval publication controller.
-func TestObserveProducerEndpoint_EvalPublicationNonAppMTLSRejected(t *testing.T) {
+// seedCLISessionForEval registers a CLI session document for the given user
+// so the auth middleware's handleCLIAuth path admits the mTLS CLI cert.
+// Returns the CLI session ID and a self-signed cert with a matching CLI
+// SPIFFE URI SAN.
+func seedCLISessionForEval(t *testing.T, infra *TestInfrastructure, userID string) (cliSessionID string, cert *x509.Certificate) {
+	t.Helper()
+	cliSessionID = "cli-session-eval"
+
+	cliDoc := &models.CLISession{
+		ID:        cliSessionID,
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(1 * time.Hour),
+	}
+	cliBytes, err := json.Marshal(cliDoc)
+	require.NoError(t, err)
+	require.NoError(t, infra.DocStore.DocSet(
+		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
+
+	wid := protocol.NewWorkloadIdentity()
+	cliURI, err := wid.CLISPIFFEURL(userID, cliSessionID)
+	require.NoError(t, err)
+
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	tmpl := x509.Certificate{
+		SerialNumber: big.NewInt(44),
+		Subject:      pkix.Name{CommonName: "test-cli-eval-publish"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(time.Hour),
+		URIs:         []*url.URL{cliURI},
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
+	require.NoError(t, err)
+	cert, err = x509.ParseCertificate(certDER)
+	require.NoError(t, err)
+	return cliSessionID, cert
+}
+
+// TestObserveProducerEndpoint_EvalPublicationCLISessionAccepted verifies
+// that a CLI mTLS cert with a valid CLI session is accepted by the eval
+// publication endpoint. The endpoint accepts both app-workload and CLI
+// session auth; agent/run producer endpoints remain app-only.
+func TestObserveProducerEndpoint_EvalPublicationCLISessionAccepted(t *testing.T) {
 	env := setupObserveProducerEndpointEnv(t)
 
 	userID := "user-eval-cli"
 	seedActiveUser(t, env.infra, userID)
-	seedAppPolicy(t, env.infra, protocol.EnsembleAppID)
-	cert := cliMTLSCert(t, userID, "cli-session-eval")
+	cliSessionID, cert := seedCLISessionForEval(t, env.infra, userID)
 
-	body := validEvalPublicationBodyHTTP(t, "run-eval-cli", "web-1")
-	rr := postEvalPublication(t, env.handler, cert, body)
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	body := validEvalPublicationBodyHTTP(t, "run-eval-cli", "")
+	// Patch the body to route via cli_session_id instead of web_session_id.
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(body, &raw))
+	raw["web_session_id"] = []byte("null")
+	raw["cli_session_id"] = []byte(fmt.Sprintf("%q", cliSessionID))
+	patched, err := json.Marshal(raw)
+	require.NoError(t, err)
+
+	rr := postEvalPublicationWithHeader(t, env.handler, cert, constants.HeaderCLISessionID, cliSessionID, patched)
+	assert.Equal(t, http.StatusOK, rr.Code, "body: %s", rr.Body.String())
+}
+
+// postEvalPublicationWithHeader posts an eval publication request with an
+// additional header (e.g. the CLI session ID header) alongside the mTLS cert.
+func postEvalPublicationWithHeader(t *testing.T, h http.Handler, cert *x509.Certificate, headerName, headerValue string, body []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerEvalPublication, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerName, headerValue)
+	if cert != nil {
+		req.TLS = &tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{cert},
+		}
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	return rr
 }
 
 // TestObserveProducerEndpoint_EvalPublicationUnauthenticatedRejected verifies
