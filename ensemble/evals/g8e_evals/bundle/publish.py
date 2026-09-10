@@ -21,12 +21,9 @@ analysis and run manifest that the bundle verifier already validated.
 from __future__ import annotations
 
 import base64
-import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-import httpx
 
 from g8e.constants import API_PATHS, CLI_SESSION_ID_HEADER
 from g8e.models.observe_api import (
@@ -46,6 +43,7 @@ from g8e.models.observe_api import (
 from g8e_evals import constants as evals_constants
 from g8e_evals.analysis import CanonicalEvalAnalysis, canonical_model_json
 from g8e_evals.bundle.manifest import BundleManifest, PrivacyClass
+from g8e_evals.bundle.signing import EvalTrustStore
 from g8e_evals.bundle.verify import VerificationReport, verify_bundle
 from g8e_evals.schema import RunManifest, VerificationStatus
 
@@ -265,16 +263,19 @@ def build_publication_request(
     manifest: BundleManifest,
     analysis: CanonicalEvalAnalysis,
     run_manifest: RunManifest,
+    report: VerificationReport,
     web_session_id: str | None,
     cli_session_id: str | None,
 ) -> ObserveProducerEvalPublicationRequest:
     """Build a typed publication request from verified bundle fields.
 
-    Reads the typed bundle manifest, canonical analysis, and run manifest
-    to populate the eval projection fields. Reads only ``PUBLIC``
-    artifacts from the bundle directory and base64-encodes their content
-    for the download catalog. Restricted and internal artifacts are
-    never included. Does not recompute the canonical analysis.
+    Accepts the already-run verification report so the caller controls
+    when verification runs. Reads the typed bundle manifest, canonical
+    analysis, and run manifest to populate the eval projection fields.
+    Reads only ``PUBLIC`` artifacts from the bundle directory and
+    base64-encodes their content for the download catalog. Restricted
+    and internal artifacts are never included. Does not recompute the
+    canonical analysis.
     """
     bundle_dir = Path(bundle_dir)
     arm_id = _resolve_arm_id(analysis)
@@ -295,9 +296,7 @@ def build_publication_request(
         assigned_tasks=analysis.input_summary.task_count,
         terminal_attempts=analysis.input_summary.attempt_count,
         metrics=metrics,
-        verification_report=_build_verification_report_wire(
-            _verify_report_cache(bundle_dir, manifest),
-        ),
+        verification_report=_build_verification_report_wire(report),
         bundle_manifest=_build_manifest_wire(manifest),
         downloads=downloads,
         web_session_id=web_session_id,
@@ -323,24 +322,13 @@ def _read_bundle_manifest(bundle_dir: Path) -> BundleManifest:
     return BundleManifest.model_validate_json(manifest_path.read_text())
 
 
-def _verify_report_cache(bundle_dir: Path, manifest: BundleManifest) -> VerificationReport:
-    """Read the verification report cached during publish_bundle.
-
-    This is a placeholder; the actual report is passed through
-    publish_bundle. This function exists only to satisfy the type
-    checker for build_publication_request callers who do not have a
-    report. In practice, publish_bundle passes the report directly.
-    """
-    raise NotImplementedError("Use publish_bundle to run verification and build the request.")
-
-
 async def publish_bundle(
     bundle_dir: Path,
     gateway_url: str,
     auth_context: AuthContext,
     web_session_id: str | None,
     cli_session_id: str | None,
-    trust_store: object | None = None,
+    trust_store: EvalTrustStore | None = None,
 ) -> ObserveProducerResponse:
     """Verify and publish a bundle to the Gateway observe projections.
 
@@ -370,7 +358,7 @@ async def publish_bundle(
     run_manifest = _read_run_manifest(bundle_dir)
 
     # Build the publication request with the verified report.
-    request = _build_publication_request_with_report(
+    request = build_publication_request(
         bundle_dir, manifest, analysis, run_manifest, report, web_session_id, cli_session_id,
     )
 
@@ -389,47 +377,6 @@ async def publish_bundle(
             f"Gateway rejected publication: HTTP {resp.status_code}: {resp.text}"
         )
     return ObserveProducerResponse.model_validate_json(resp.text)
-
-
-def _build_publication_request_with_report(
-    bundle_dir: Path,
-    manifest: BundleManifest,
-    analysis: CanonicalEvalAnalysis,
-    run_manifest: RunManifest,
-    report: VerificationReport,
-    web_session_id: str | None,
-    cli_session_id: str | None,
-) -> ObserveProducerEvalPublicationRequest:
-    """Build the publication request with the verified report inlined.
-
-    This is the internal builder that accepts the already-run
-    verification report so it does not need to re-run verification.
-    """
-    bundle_dir = Path(bundle_dir)
-    arm_id = _resolve_arm_id(analysis)
-    model_id, model_provider = _resolve_model_identity(run_manifest)
-    metrics = _build_metric_summaries(analysis)
-    downloads = _build_downloads(bundle_dir, manifest, analysis.run_id)
-    return ObserveProducerEvalPublicationRequest(
-        schema_version=_OBSERVE_PUBLICATION_SCHEMA_VERSION,
-        bundle_id=manifest.bundle_id,
-        run_id=manifest.run_id,
-        release_version=manifest.release_version,
-        suite_id=run_manifest.suite_id,
-        suite_version=run_manifest.suite_version,
-        arm_id=arm_id,
-        model_id=model_id,
-        model_provider=model_provider,
-        receipt_count=analysis.input_summary.receipt_count,
-        assigned_tasks=analysis.input_summary.task_count,
-        terminal_attempts=analysis.input_summary.attempt_count,
-        metrics=metrics,
-        verification_report=_build_verification_report_wire(report),
-        bundle_manifest=_build_manifest_wire(manifest),
-        downloads=downloads,
-        web_session_id=web_session_id,
-        cli_session_id=cli_session_id,
-    )
 
 
 __all__ = [

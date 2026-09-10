@@ -26,6 +26,7 @@ from g8e_evals.bundle.manifest import (
     PrivacyClass,
 )
 from g8e_evals.bundle.produce import produce_bundle
+from g8e_evals.bundle.publish import PublicationError, build_publication_request, publish_bundle
 from g8e_evals.bundle.signing import (
     EVAL_SIGNING_ALGORITHM,
     EVAL_TRUST_SCOPE,
@@ -79,17 +80,20 @@ __all__ = [
     "ExternalReference",
     "LayerResult",
     "PrivacyClass",
+    "PublicationError",
     "TrustStatus",
     "VerificationCancelled",
     "VerificationFailure",
     "VerificationFailureCode",
     "VerificationLayer",
     "VerificationReport",
+    "build_publication_request",
     "canonical_checksum_root_bytes",
     "canonical_manifest_bytes",
     "compute_checksum_root_hash",
     "compute_manifest_hash",
     "produce_bundle",
+    "publish_bundle",
     "sign_bundle",
     "validate_bundle_manifest",
     "validate_bundle_path",

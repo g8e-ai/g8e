@@ -185,7 +185,9 @@ from g8e_evals.analysis import (
 from g8e_evals.bundle import (
     EvalSigningKey,
     EvalTrustStore,
+    PublicationError,
     produce_bundle,
+    publish_bundle,
     verify_bundle,
 )
 from g8e_evals.models import ScoreDetails, TaskMetadata
@@ -5021,6 +5023,89 @@ def verify_cmd(
 
     if not report.ok:
         sys.exit(1)
+
+
+@main.command(name="publish")
+@click.argument("bundle_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--gateway-url", envvar="G8E_G8EE_URL", required=True,
+              help="Base URL of the g8e Gateway (g8ee) endpoint.")
+@click.option("--g8e-cli", default="./g8e", envvar="G8E_CLI_BIN", show_default=True,
+              help="Path to the g8e CLI used to load the canonical authentication context.")
+@click.option("--auth-project-root", type=click.Path(path_type=Path, file_okay=False),
+              envvar="G8E_AUTH_PROJECT_ROOT", required=True,
+              help="Project root containing the canonical CLI runtime identity.")
+@click.option("--web-session-id", default=None,
+              help="Web session ID for browser-scoped projection routing. Mutually exclusive with --cli-session-id.")
+@click.option("--cli-session-id", default=None,
+              help="CLI session ID for CLI-scoped projection routing. Mutually exclusive with --web-session-id.")
+@click.option("--trust-store", type=click.Path(exists=True, path_type=Path),
+              help="Path to a JSON EvalTrustStore file (required for signature verification).")
+@click.option("--json", "json_output", is_flag=True, help="Emit machine-readable publication result JSON")
+def publish_cmd(
+    bundle_dir: Path,
+    gateway_url: str,
+    g8e_cli: str,
+    auth_project_root: Path,
+    web_session_id: str | None,
+    cli_session_id: str | None,
+    trust_store: Path | None,
+    json_output: bool,
+):
+    """Publish a verified eval bundle to the Gateway observe projections.
+
+    Runs the complete fail-closed bundle verifier first. If verification
+    fails, publication is rejected. On success, reads the typed bundle
+    manifest, canonical analysis, and run manifest, builds a typed
+    publication request, and transmits only public-safe artifacts to the
+    Gateway's mTLS producer endpoint. Restricted and internal artifacts
+    are never transmitted.
+
+    The Gateway derives user_id from the mTLS peer certificate, never
+    from the request body. Exactly one of --web-session-id and
+    --cli-session-id must be provided for projection routing.
+    """
+    if web_session_id and cli_session_id:
+        raise click.UsageError("Provide at most one of --web-session-id and --cli-session-id.")
+    if not web_session_id and not cli_session_id:
+        raise click.UsageError("Exactly one of --web-session-id or --cli-session-id is required for projection routing.")
+
+    try:
+        cli_context = load_cli_auth_context(g8e_cli, str(auth_project_root.resolve()))
+    except AuthBridgeError as error:
+        raise click.UsageError(
+            f"Could not load the canonical CLI identity: {error}. "
+            "Run `./g8e auth enroll user` or `./g8e auth refresh`, then retry."
+        ) from error
+
+    auth_context = AuthContext.from_env(
+        g8ee_url=gateway_url,
+        cli_context=cli_context,
+    )
+
+    trust_store_obj: EvalTrustStore | None = None
+    if trust_store is not None:
+        try:
+            trust_store_obj = EvalTrustStore.model_validate_json(trust_store.read_text())
+        except ValueError as exc:
+            raise click.ClickException(f"invalid trust store: {exc}") from exc
+
+    try:
+        response = asyncio.run(publish_bundle(
+            bundle_dir=bundle_dir,
+            gateway_url=gateway_url,
+            auth_context=auth_context,
+            web_session_id=web_session_id,
+            cli_session_id=cli_session_id,
+            trust_store=trust_store_obj,
+        ))
+    except PublicationError as error:
+        raise click.ClickException(str(error)) from error
+
+    if json_output:
+        click.echo(canonical_model_json(response))
+    else:
+        console.print(f"[bold green]Bundle published to {gateway_url}[/bold green]")
+        console.print(f"  Accepted: {response.accepted}")
 
 
 if __name__ == "__main__":
