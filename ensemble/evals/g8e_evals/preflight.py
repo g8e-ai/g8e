@@ -122,6 +122,7 @@ class PreflightRequest:
     stack_environment: StackEnvironment
     source_build_provenance: SourceBuildProvenance | None
     provider_budget: ProviderBudget | None
+    is_production_posture: bool = True
     seed_support: str = "unknown"
 
 
@@ -339,11 +340,14 @@ def _check_provider_budget(request: PreflightRequest) -> None:
 def _check_source_build_provenance(request: PreflightRequest) -> None:
     """Fail closed when source/build provenance is required but unavailable.
 
-    Source/build provenance is required for release-facing runs. The
+    Source/build provenance is required for production-posture runs. The
     runner never runs ad hoc Git commands; the values come from
     environment variables set by the trusted build system or CI
     pipeline. When ``source_build_provenance`` is None, preflight reads
-    the environment variables directly.
+    the environment variables directly. Non-production runs (e.g. the
+    synthetic suite) may omit provenance entirely; the check skips the
+    env-var fallback when ``is_production_posture`` is False and no
+    provenance is supplied on the request.
     """
     provenance = request.source_build_provenance
     if provenance is not None:
@@ -366,7 +370,11 @@ def _check_source_build_provenance(request: PreflightRequest) -> None:
             )
         return
 
-    # Fall back to environment variables.
+    # Non-production runs may omit provenance entirely.
+    if not request.is_production_posture:
+        return
+
+    # Fall back to environment variables for production-posture runs.
     source_revision = os.environ.get(ENV_SOURCE_REVISION, "").strip()
     if not source_revision:
         raise PreflightError(

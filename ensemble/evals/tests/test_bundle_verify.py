@@ -606,10 +606,10 @@ class TestVerificationReportOverall:
         report = verify_bundle(bundle_dir)
         assert not report.ok
 
-    def test_all_eleven_layers_present(self, tmp_path: Path) -> None:
+    def test_all_twelve_layers_present(self, tmp_path: Path) -> None:
         bundle_dir = _produce_valid_bundle(tmp_path)
         report = verify_bundle(bundle_dir)
-        assert len(report.layers) == 11
+        assert len(report.layers) == 12
         layer_values = [lr.layer for lr in report.layers]
         assert layer_values == list(VerificationLayer)
 

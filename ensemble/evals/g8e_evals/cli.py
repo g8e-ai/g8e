@@ -3081,6 +3081,7 @@ async def _run_synthetic_suite(
         stack_environment=stack_env,
         source_build_provenance=source_build_provenance,
         provider_budget=provider_budget,
+        is_production_posture=False,
     )
     try:
         _run_preflight(preflight_request)

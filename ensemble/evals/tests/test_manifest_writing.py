@@ -214,6 +214,17 @@ def _patch_provenance(monkeypatch) -> None:
     monkeypatch.setattr(cli, "load_provenance", lambda _path: provenance)
 
 
+def _patch_source_build_provenance_env(monkeypatch) -> None:
+    """Set source/build provenance env vars required by preflight (P2-05).
+
+    The production ``_run_suite`` path fails closed when these env vars
+    are absent. Tests that exercise ``_run_suite`` must set them via
+    ``monkeypatch.setenv`` so preflight passes.
+    """
+    monkeypatch.setenv("G8E_EVALS_SOURCE_REVISION", "test-rev")
+    monkeypatch.setenv("G8E_EVALS_SOURCE_TREE_STATE_HASH", "a" * 64)
+
+
 def _patch_sut(monkeypatch, *, settings=None, answer_response=None) -> MagicMock:
     sut = MagicMock()
     sut.check_settings = AsyncMock(return_value=settings)
@@ -267,6 +278,7 @@ async def test_manifest_written_before_execution(tmp_path, monkeypatch):
     """manifest.json must exist in the report directory after a successful run."""
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -372,6 +384,7 @@ async def test_canary_task_emits_verified_scrubbing_metric_and_grade_reference(t
     )
     _patch_loader(monkeypatch, [task])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(
         monkeypatch,
@@ -452,6 +465,7 @@ async def test_secret_detection_task_emits_typed_observations_and_precision_reca
     )
     _patch_loader(monkeypatch, [task])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(
         monkeypatch,
@@ -559,6 +573,7 @@ async def test_rehydration_task_emits_typed_observation_and_exact_local_metric(
     )
     _patch_loader(monkeypatch, [task])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(
         monkeypatch,
@@ -651,6 +666,7 @@ async def test_governed_attempt_resolves_receipt_from_investigation_and_action_c
     )
     _patch_loader(monkeypatch, [task])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(
         monkeypatch,
@@ -746,6 +762,7 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
     )
     _patch_loader(monkeypatch, [task])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(
         monkeypatch,
@@ -901,6 +918,7 @@ async def test_governed_attempt_correlates_declared_and_observed_action_receipts
     )
     _patch_loader(monkeypatch, [task])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(
         monkeypatch,
@@ -971,6 +989,7 @@ async def test_tasks_jsonl_written_with_schema_valid_records(tmp_path, monkeypat
     """tasks.jsonl must contain schema-valid TaskDefinition records."""
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -1010,6 +1029,7 @@ async def test_attempts_jsonl_written_with_schema_valid_records(tmp_path, monkey
     """attempts.jsonl must contain schema-valid AttemptRecord records."""
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -1091,6 +1111,7 @@ async def test_run_suite_attaches_eval_judge_calls_to_attempt_reconciliation(tmp
     )
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch, model_calls=[judge_call])
     _patch_sut(
         monkeypatch,
@@ -1152,6 +1173,7 @@ async def test_run_suite_executes_configured_eval_judge_and_records_identity(
     )
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(
         monkeypatch,
@@ -1241,6 +1263,7 @@ async def test_run_suite_records_failed_eval_judge_without_fabricating_grade(
     )
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(
         monkeypatch,
@@ -1295,6 +1318,7 @@ async def test_direct_arm_refuses_without_primary_model_identity(tmp_path, monke
     """The direct arm must refuse to run when the primary model identity is unavailable."""
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
 
     config = SUTConfig(
         g8ee_url="http://g8ee:8000",
@@ -1315,6 +1339,7 @@ async def test_manifest_records_arm_and_posture(tmp_path, monkeypatch):
     """The manifest must record the correct arm and requested posture."""
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -1349,6 +1374,7 @@ async def test_attempt_records_posture_observation(tmp_path, monkeypatch):
     """Each attempt record must capture requested and observed effective posture."""
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -1385,6 +1411,7 @@ async def test_attempt_records_posture_observation(tmp_path, monkeypatch):
 async def test_keyless_fake_provider_passes_preflight(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     sut = _patch_sut(
         monkeypatch,

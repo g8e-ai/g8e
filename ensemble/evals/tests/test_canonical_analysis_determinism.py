@@ -126,6 +126,17 @@ def _patch_provenance(monkeypatch) -> None:
     monkeypatch.setattr(cli, "load_provenance", lambda _path: provenance)
 
 
+def _patch_source_build_provenance_env(monkeypatch) -> None:
+    """Set source/build provenance env vars required by preflight (P2-05).
+
+    The production ``_run_suite`` path fails closed when these env vars
+    are absent. Tests that exercise ``_run_suite`` must set them via
+    ``monkeypatch.setenv`` so preflight passes.
+    """
+    monkeypatch.setenv("G8E_EVALS_SOURCE_REVISION", "test-rev")
+    monkeypatch.setenv("G8E_EVALS_SOURCE_TREE_STATE_HASH", "a" * 64)
+
+
 def _patch_sut(monkeypatch, *, settings=None, answer_response=None) -> MagicMock:
     sut = MagicMock()
     sut.check_settings = AsyncMock(return_value=settings)
@@ -207,6 +218,7 @@ def _setup_and_run(monkeypatch, tmp_path) -> None:
     """
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(
         monkeypatch,

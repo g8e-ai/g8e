@@ -520,6 +520,47 @@ class TestSourceBuildProvenance:
 
 
 # ---------------------------------------------------------------------------
+# Production-posture gating of source/build provenance
+# ---------------------------------------------------------------------------
+
+
+class TestSourceBuildProvenanceProductionPostureGating:
+    """Production-posture runs require provenance; non-production runs skip the env fallback.
+
+    The synthetic suite is a non-production path. When
+    ``is_production_posture`` is False and no provenance is supplied
+    (neither on the request nor via environment variables), preflight
+    must not fail on the provenance check. Production-posture runs
+    (the default) still fail closed when provenance is absent.
+    """
+
+    def test_production_posture_without_provenance_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv(ENV_SOURCE_REVISION, raising=False)
+        monkeypatch.delenv(ENV_SOURCE_TREE_STATE_HASH, raising=False)
+        request = _valid_request(source_build_provenance=None, is_production_posture=True)
+        with pytest.raises(PreflightError) as exc_info:
+            run_preflight(request)
+        assert exc_info.value.code == PreflightFailureCode.SOURCE_REVISION_MISSING
+
+    def test_non_production_posture_without_provenance_passes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv(ENV_SOURCE_REVISION, raising=False)
+        monkeypatch.delenv(ENV_SOURCE_TREE_STATE_HASH, raising=False)
+        request = _valid_request(source_build_provenance=None, is_production_posture=False)
+        run_preflight(request)
+
+    def test_non_production_posture_with_provenance_still_validates(self) -> None:
+        provenance = _valid_provenance().model_copy(update={"source_revision": ""})
+        request = _valid_request(source_build_provenance=provenance, is_production_posture=False)
+        with pytest.raises(PreflightError) as exc_info:
+            run_preflight(request)
+        assert exc_info.value.code == PreflightFailureCode.SOURCE_REVISION_MISSING
+
+    def test_default_is_production_posture(self) -> None:
+        request = _valid_request(source_build_provenance=None)
+        assert request.is_production_posture is True
+
+
+# ---------------------------------------------------------------------------
 # Source/build provenance from environment variables
 # ---------------------------------------------------------------------------
 

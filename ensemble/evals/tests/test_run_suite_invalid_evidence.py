@@ -143,6 +143,17 @@ def _patch_provenance(monkeypatch) -> None:
     monkeypatch.setattr(cli, "load_provenance", lambda _path: provenance)
 
 
+def _patch_source_build_provenance_env(monkeypatch) -> None:
+    """Set source/build provenance env vars required by preflight (P2-05).
+
+    The production ``_run_suite`` path fails closed when these env vars
+    are absent. Tests that exercise ``_run_suite`` must set them via
+    ``monkeypatch.setenv`` so preflight passes.
+    """
+    monkeypatch.setenv("G8E_EVALS_SOURCE_REVISION", "test-rev")
+    monkeypatch.setenv("G8E_EVALS_SOURCE_TREE_STATE_HASH", "a" * 64)
+
+
 def _patch_verifier(monkeypatch, passed: bool = True) -> MagicMock:
     verifier = MagicMock()
     verifier.verify.return_value = _score(passed)
@@ -198,6 +209,7 @@ def _patch_posture(monkeypatch, posture: GovernancePosture | None = GovernancePo
 async def test_run_suite_settings_401_raises_and_writes_no_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings_error=AuthenticationError("g8ee settings returned HTTP 401"))
     _patch_collector(monkeypatch)
@@ -215,6 +227,7 @@ async def test_run_suite_settings_401_raises_and_writes_no_report(tmp_path, monk
 async def test_run_suite_settings_403_raises_and_writes_no_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings_error=AuthenticationError("g8ee settings returned HTTP 403"))
     _patch_collector(monkeypatch)
@@ -234,6 +247,7 @@ async def test_run_suite_settings_403_raises_and_writes_no_report(tmp_path, monk
 async def test_run_suite_chat_401_retains_diagnostic_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -253,6 +267,7 @@ async def test_run_suite_chat_401_retains_diagnostic_report(tmp_path, monkeypatc
 async def test_run_suite_chat_403_retains_diagnostic_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -272,6 +287,7 @@ async def test_run_suite_chat_403_retains_diagnostic_report(tmp_path, monkeypatc
 async def test_run_suite_missing_terminal_event_retains_diagnostic_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -291,6 +307,7 @@ async def test_run_suite_missing_terminal_event_retains_diagnostic_report(tmp_pa
 async def test_run_suite_failure_terminal_event_retains_diagnostic_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -311,6 +328,7 @@ async def test_run_suite_failure_terminal_event_retains_diagnostic_report(tmp_pa
 async def test_run_suite_empty_answer_retains_diagnostic_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -335,6 +353,7 @@ async def test_run_suite_empty_answer_retains_diagnostic_report(tmp_path, monkey
 async def test_run_suite_valid_response_writes_report_and_does_not_raise(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch, passed=True)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -362,6 +381,7 @@ async def test_run_suite_governance_rejection_classifies_as_governance_rejected(
     GOVERNANCE_REJECTED, not MODEL_FAILED or INFRASTRUCTURE_FAILED."""
     _patch_loader(monkeypatch, [_task()])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch, passed=False)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -397,6 +417,7 @@ async def test_run_suite_signed_l1_rejection_emits_verified_policy_grade(tmp_pat
     )
     _patch_loader(monkeypatch, [task])
     _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
     _patch_verifier(monkeypatch, passed=False)
     _patch_sut(
         monkeypatch,

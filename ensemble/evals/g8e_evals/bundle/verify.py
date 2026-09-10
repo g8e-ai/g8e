@@ -9,7 +9,7 @@
 
 The verifier reads a bundle directory and an externally supplied trust
 store. It requires no originating service, runtime directory, network
-access, or in-bundle trust policy. Verification proceeds through eleven
+access, or in-bundle trust policy. Verification proceeds through twelve
 ordered layers, each producing typed failures with centralized stable
 failure codes, protected-record identity, and a deterministic sorted
 order. A cancelled verification raises ``VerificationCancelled`` and does

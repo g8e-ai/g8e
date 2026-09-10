@@ -1668,23 +1668,23 @@ class TestTrustRecordMutations:
 
 
 class TestValidBundlePasses:
-    """A valid signed bundle passes all eleven layers."""
+    """A valid signed bundle passes all twelve layers."""
 
     def test_valid_bundle_ok(self, tmp_path: Path) -> None:
         signing_key = EvalSigningKey.from_seed(_SEED)
         bundle_dir = _produce_valid_bundle(tmp_path, signing_key=signing_key)
         report = verify_bundle(bundle_dir, trust_store=_trust_store(signing_key))
         assert report.ok, f"Valid bundle should be ok: {[(f.layer.name, f.code.value, f.message) for f in report.failures]}"
-        assert len(report.layers) == 11
+        assert len(report.layers) == 12
         for layer_result in report.layers:
             assert layer_result.passed, f"Layer {layer_result.layer.name} should pass"
 
     def test_valid_rich_bundle_ok(self, tmp_path: Path) -> None:
-        """A valid signed bundle with all protected record classes passes all eleven layers."""
+        """A valid signed bundle with all protected record classes passes all twelve layers."""
         signing_key = EvalSigningKey.from_seed(_SEED)
         bundle_dir = _produce_valid_rich_bundle(tmp_path, signing_key=signing_key)
         report = verify_bundle(bundle_dir, trust_store=_trust_store(signing_key))
         assert report.ok, f"Valid rich bundle should be ok: {[(f.layer.name, f.code.value, f.message) for f in report.failures]}"
-        assert len(report.layers) == 11
+        assert len(report.layers) == 12
         for layer_result in report.layers:
             assert layer_result.passed, f"Layer {layer_result.layer.name} should pass"
