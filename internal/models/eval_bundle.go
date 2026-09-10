@@ -132,8 +132,8 @@ type ObserveProducerEvalPublicationRequest struct {
 	SuiteID            string                                 `json:"suite_id"`
 	SuiteVersion       string                                 `json:"suite_version"`
 	CampaignID         string                                 `json:"campaign_id"`
-	ArmIDs             []string                                `json:"arm_ids"`
-	ModelCohortIDs     []string                                `json:"model_cohort_ids"`
+	ArmIDs             []string                               `json:"arm_ids"`
+	ModelCohortIDs     []string                               `json:"model_cohort_ids"`
 	AssignmentCount    int                                    `json:"assignment_count"`
 	ReceiptCount       int                                    `json:"receipt_count"`
 	AssignedTasks      int                                    `json:"assigned_tasks"`

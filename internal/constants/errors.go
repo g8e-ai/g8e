@@ -1325,9 +1325,9 @@ var (
 	ErrObservePublicationContentSizeMismatch = errors.New("observe: download content size does not match byte_size")
 	ErrObservePublicationArtifactOversized   = errors.New("observe: download artifact exceeds max bytes")
 	ErrObservePublicationArmIDsRequired      = errors.New("observe: arm_ids is required and must be non-empty")
-	ErrObservePublicationCampaignIDRequired   = errors.New("observe: campaign_id is required")
-	ErrObservePublicationMetricCohortMissing  = errors.New("observe: metric is missing model_cohort_id or arm_id")
-	ErrObservePublicationMetricCohortUnknown  = errors.New("observe: metric model_cohort_id or arm_id not in declared sets")
+	ErrObservePublicationCampaignIDRequired  = errors.New("observe: campaign_id is required")
+	ErrObservePublicationMetricCohortMissing = errors.New("observe: metric is missing model_cohort_id or arm_id")
+	ErrObservePublicationMetricCohortUnknown = errors.New("observe: metric model_cohort_id or arm_id not in declared sets")
 
 	// Observe download streaming errors (Phase 4: authenticated byte
 	// streaming with hash and size verification).
@@ -1335,4 +1335,15 @@ var (
 	ErrObserveDownloadSizeMismatch    = errors.New("observe: download size mismatch")
 	ErrObserveDownloadOversized       = errors.New("observe: download exceeds max bytes")
 	ErrObserveDownloadSymlinkRejected = errors.New("observe: download symlink rejected")
+
+	// Live campaign producer errors (O2-live: typed live projections with
+	// persist-before-event, monotonic sequence, and duplicate suppression).
+	ErrObserveCampaignIDRequired        = errors.New("observe: campaign_id is required")
+	ErrObserveCycleIDRequired           = errors.New("observe: cycle_id is required")
+	ErrObserveAssignmentIDRequired      = errors.New("observe: assignment_id is required")
+	ErrObserveSupervisorIDRequired      = errors.New("observe: supervisor_id is required")
+	ErrObserveSourceIDRequired          = errors.New("observe: source_id is required")
+	ErrObserveRoleCombinationIDRequired = errors.New("observe: role_combination_id is required")
+	ErrObserveVariantIDRequired         = errors.New("observe: variant_id is required")
+	ErrObserveDuplicateEventID          = errors.New("observe: duplicate event_id suppressed")
 )

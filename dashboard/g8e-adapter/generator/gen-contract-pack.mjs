@@ -34,6 +34,16 @@ import {
   MEASUREMENT_STATUSES,
   SNAPSHOT_FRESHNESS_VALUES,
   DOWNLOAD_PRIVACY_CLASSIFICATIONS,
+  CAMPAIGN_FRESHNESS_VALUES,
+  CAMPAIGN_CYCLE_STATUSES,
+  ASSIGNMENT_PROGRESS_STATUSES,
+  TERMINAL_OUTCOME_STATUSES,
+  SUPERVISOR_STATUSES,
+  STOP_REASONS,
+  STOP_SCOPES,
+  MODEL_ROLES,
+  PUBLICATION_STATUSES,
+  MEASUREMENT_SCOPES,
 } from '../dist/types/enums.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -91,6 +101,16 @@ const ENUMS = [
   { name: 'MeasurementStatus', constName: 'MEASUREMENT_STATUSES', values: MEASUREMENT_STATUSES },
   { name: 'SnapshotFreshness', constName: 'SNAPSHOT_FRESHNESS_VALUES', values: SNAPSHOT_FRESHNESS_VALUES },
   { name: 'DownloadPrivacyClassification', constName: 'DOWNLOAD_PRIVACY_CLASSIFICATIONS', values: DOWNLOAD_PRIVACY_CLASSIFICATIONS },
+  { name: 'CampaignFreshness', constName: 'CAMPAIGN_FRESHNESS_VALUES', values: CAMPAIGN_FRESHNESS_VALUES },
+  { name: 'CampaignCycleStatus', constName: 'CAMPAIGN_CYCLE_STATUSES', values: CAMPAIGN_CYCLE_STATUSES },
+  { name: 'AssignmentProgressStatus', constName: 'ASSIGNMENT_PROGRESS_STATUSES', values: ASSIGNMENT_PROGRESS_STATUSES },
+  { name: 'TerminalOutcomeStatus', constName: 'TERMINAL_OUTCOME_STATUSES', values: TERMINAL_OUTCOME_STATUSES },
+  { name: 'SupervisorStatus', constName: 'SUPERVISOR_STATUSES', values: SUPERVISOR_STATUSES },
+  { name: 'StopReason', constName: 'STOP_REASONS', values: STOP_REASONS },
+  { name: 'StopScope', constName: 'STOP_SCOPES', values: STOP_SCOPES },
+  { name: 'ModelRole', constName: 'MODEL_ROLES', values: MODEL_ROLES },
+  { name: 'PublicationStatus', constName: 'PUBLICATION_STATUSES', values: PUBLICATION_STATUSES },
+  { name: 'MeasurementScope', constName: 'MEASUREMENT_SCOPES', values: MEASUREMENT_SCOPES },
 ];
 
 function findEnumByValues(values) {
@@ -128,6 +148,13 @@ const BROWSER_MODELS = [
   'eval_detail',
   'download_artifact',
   'observe_bootstrap_snapshot',
+  'supervisor_state_projection',
+  'cycle_state_projection',
+  'assignment_progress_projection',
+  'role_combination_projection',
+  'verification_progress_projection',
+  'publication_progress_projection',
+  'source_freshness_projection',
 ];
 
 const EVENT_PAYLOAD_MODELS = [
@@ -135,6 +162,17 @@ const EVENT_PAYLOAD_MODELS = [
   'run_status_updated_payload',
   'eval_run_completed_payload',
   'eval_metric_recorded_payload',
+  'eval_cycle_started_payload',
+  'eval_cycle_completed_payload',
+  'eval_assignment_started_payload',
+  'eval_assignment_completed_payload',
+  'eval_model_role_invoked_payload',
+  'eval_metric_available_payload',
+  'eval_verifier_completed_payload',
+  'eval_proof_available_payload',
+  'eval_publication_completed_payload',
+  'eval_heartbeat_payload',
+  'eval_stop_requested_payload',
 ];
 
 const EXCLUDED_MODELS = new Set([

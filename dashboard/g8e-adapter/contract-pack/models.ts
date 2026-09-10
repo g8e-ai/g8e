@@ -62,6 +62,86 @@ export function isDownloadPrivacyClassification(value: unknown): value is Downlo
   return typeof value === 'string' && (DOWNLOAD_PRIVACY_CLASSIFICATIONS as readonly string[]).includes(value);
 }
 
+export type CampaignFreshness = 'active' | 'delayed' | 'stale' | 'intentionally_stopped' | 'safety_stopped' | 'source_offline';
+export const CAMPAIGN_FRESHNESS_VALUES: readonly CampaignFreshness[] = [
+  'active', 'delayed', 'stale', 'intentionally_stopped', 'safety_stopped', 'source_offline',
+] as const;
+export function isCampaignFreshness(value: unknown): value is CampaignFreshness {
+  return typeof value === 'string' && (CAMPAIGN_FRESHNESS_VALUES as readonly string[]).includes(value);
+}
+
+export type CampaignCycleStatus = 'queued' | 'running' | 'completed' | 'failed' | 'superseded';
+export const CAMPAIGN_CYCLE_STATUSES: readonly CampaignCycleStatus[] = [
+  'queued', 'running', 'completed', 'failed', 'superseded',
+] as const;
+export function isCampaignCycleStatus(value: unknown): value is CampaignCycleStatus {
+  return typeof value === 'string' && (CAMPAIGN_CYCLE_STATUSES as readonly string[]).includes(value);
+}
+
+export type AssignmentProgressStatus = 'queued' | 'running' | 'completed' | 'failed' | 'superseded' | 'unavailable';
+export const ASSIGNMENT_PROGRESS_STATUSES: readonly AssignmentProgressStatus[] = [
+  'queued', 'running', 'completed', 'failed', 'superseded', 'unavailable',
+] as const;
+export function isAssignmentProgressStatus(value: unknown): value is AssignmentProgressStatus {
+  return typeof value === 'string' && (ASSIGNMENT_PROGRESS_STATUSES as readonly string[]).includes(value);
+}
+
+export type TerminalOutcomeStatus = 'completed' | 'failed' | 'superseded' | 'unavailable' | 'qualification';
+export const TERMINAL_OUTCOME_STATUSES: readonly TerminalOutcomeStatus[] = [
+  'completed', 'failed', 'superseded', 'unavailable', 'qualification',
+] as const;
+export function isTerminalOutcomeStatus(value: unknown): value is TerminalOutcomeStatus {
+  return typeof value === 'string' && (TERMINAL_OUTCOME_STATUSES as readonly string[]).includes(value);
+}
+
+export type SupervisorStatus = 'idle' | 'running' | 'stopped' | 'safety_stopped';
+export const SUPERVISOR_STATUSES: readonly SupervisorStatus[] = [
+  'idle', 'running', 'stopped', 'safety_stopped',
+] as const;
+export function isSupervisorStatus(value: unknown): value is SupervisorStatus {
+  return typeof value === 'string' && (SUPERVISOR_STATUSES as readonly string[]).includes(value);
+}
+
+export type StopReason = 'graceful' | 'safety_budget' | 'safety_disk' | 'safety_hardware_drift' | 'safety_credential' | 'safety_verifier' | 'safety_disclosure' | 'safety_publication';
+export const STOP_REASONS: readonly StopReason[] = [
+  'graceful', 'safety_budget', 'safety_disk', 'safety_hardware_drift', 'safety_credential', 'safety_verifier', 'safety_disclosure', 'safety_publication',
+] as const;
+export function isStopReason(value: unknown): value is StopReason {
+  return typeof value === 'string' && (STOP_REASONS as readonly string[]).includes(value);
+}
+
+export type StopScope = 'cycle' | 'supervisor';
+export const STOP_SCOPES: readonly StopScope[] = [
+  'cycle', 'supervisor',
+] as const;
+export function isStopScope(value: unknown): value is StopScope {
+  return typeof value === 'string' && (STOP_SCOPES as readonly string[]).includes(value);
+}
+
+export type ModelRole = 'primary' | 'assistant' | 'lite';
+export const MODEL_ROLES: readonly ModelRole[] = [
+  'primary', 'assistant', 'lite',
+] as const;
+export function isModelRole(value: unknown): value is ModelRole {
+  return typeof value === 'string' && (MODEL_ROLES as readonly string[]).includes(value);
+}
+
+export type PublicationStatus = 'pending' | 'published' | 'failed';
+export const PUBLICATION_STATUSES: readonly PublicationStatus[] = [
+  'pending', 'published', 'failed',
+] as const;
+export function isPublicationStatus(value: unknown): value is PublicationStatus {
+  return typeof value === 'string' && (PUBLICATION_STATUSES as readonly string[]).includes(value);
+}
+
+export type MeasurementScope = 'process' | 'system' | 'accelerator';
+export const MEASUREMENT_SCOPES: readonly MeasurementScope[] = [
+  'process', 'system', 'accelerator',
+] as const;
+export function isMeasurementScope(value: unknown): value is MeasurementScope {
+  return typeof value === 'string' && (MEASUREMENT_SCOPES as readonly string[]).includes(value);
+}
+
 export type UTCDatetime = string;
 
 export interface OverviewCountersSuccessRate {
@@ -82,6 +162,9 @@ export interface ObservedMeasurement {
   observed_at: string;
   window_seconds?: number;
   status: MeasurementStatus;
+  scope?: MeasurementScope;
+  collector_version?: string;
+  evidence_hash?: string;
 }
 
 export interface AgentStateProjection {
@@ -212,6 +295,20 @@ export interface EvalDetail {
   assigned_tasks: number;
   terminal_attempts: number;
   metrics: EvalMetricSummary[];
+  role_combination_id?: string;
+  primary_variant_id?: string;
+  assistant_variant_id?: string;
+  lite_variant_id?: string;
+  benchmark_population?: number;
+  repetition_count?: number;
+  superseded_count?: number;
+  qualification_count?: number;
+  unavailable_count?: number;
+  environment_class?: string;
+  backend_name?: string;
+  artifact_digest?: string;
+  quantization?: string;
+  proof_links?: EvidenceSafeLink[];
   published_projection_sha256?: string;
   completed_at?: string;
   observed_at: string;
@@ -240,6 +337,104 @@ export interface ObserveBootstrapSnapshot {
   latest_evals: EvalSummary[];
   downloads: DownloadArtifact[];
   generated_at: string;
+}
+
+export interface SupervisorStateProjection {
+  schema_version: string;
+  supervisor_id: string;
+  campaign_id: string;
+  campaign_revision: string;
+  status: SupervisorStatus;
+  current_cycle_id?: string;
+  last_cycle_id?: string;
+  stop_reason?: StopReason;
+  freshness: CampaignFreshness;
+  observed_at: string;
+}
+
+export interface CycleStateProjection {
+  schema_version: string;
+  cycle_id: string;
+  campaign_id: string;
+  campaign_revision: string;
+  role_combination_id: string;
+  status: CampaignCycleStatus;
+  verification_status?: EvalVerificationStatus;
+  freshness: CampaignFreshness;
+  started_at?: string;
+  completed_at?: string;
+  observed_at: string;
+}
+
+export interface AssignmentProgressProjection {
+  schema_version: string;
+  assignment_id: string;
+  cycle_id: string;
+  campaign_id: string;
+  variant_id: string;
+  role: ModelRole;
+  task_id: string;
+  arm_id: string;
+  repetition: number;
+  status: AssignmentProgressStatus;
+  terminal_status?: TerminalOutcomeStatus;
+  freshness: CampaignFreshness;
+  started_at?: string;
+  completed_at?: string;
+  observed_at: string;
+}
+
+export interface RoleCombinationProjection {
+  schema_version: string;
+  role_combination_id: string;
+  campaign_id: string;
+  primary_variant_id: string;
+  assistant_variant_id?: string;
+  lite_variant_id?: string;
+  primary_model_tag: string;
+  assistant_model_tag?: string;
+  lite_model_tag?: string;
+  primary_backend: string;
+  assistant_backend?: string;
+  lite_backend?: string;
+  primary_quantization?: string;
+  assistant_quantization?: string;
+  lite_quantization?: string;
+  observed_at: string;
+}
+
+export interface VerificationProgressProjection {
+  schema_version: string;
+  cycle_id: string;
+  campaign_id: string;
+  verification_status: EvalVerificationStatus;
+  verified_index_generation_hash?: string;
+  layer_count: number;
+  failure_count: number;
+  freshness: CampaignFreshness;
+  completed_at?: string;
+  observed_at: string;
+}
+
+export interface PublicationProgressProjection {
+  schema_version: string;
+  cycle_id: string;
+  campaign_id: string;
+  publication_status: PublicationStatus;
+  publication_schema_version?: string;
+  published_projection_sha256?: string;
+  freshness: CampaignFreshness;
+  completed_at?: string;
+  observed_at: string;
+}
+
+export interface SourceFreshnessProjection {
+  schema_version: string;
+  source_id: string;
+  campaign_id?: string;
+  freshness: CampaignFreshness;
+  last_heartbeat_at: string;
+  observed_at: string;
 }
 
 export interface AgentStatusUpdatedPayload {
@@ -298,6 +493,163 @@ export interface EvalMetricRecordedPayload {
   recorded_at: string;
 }
 
+export interface EvalCycleStartedPayload {
+  schema_version: string;
+  source_sequence: number;
+  event_id: string;
+  cycle_id: string;
+  campaign_id: string;
+  campaign_revision: string;
+  role_combination_id: string;
+  primary_variant_id: string;
+  assistant_variant_id?: string;
+  lite_variant_id?: string;
+  benchmark_population: number;
+  repetition_count: number;
+  started_at: string;
+  observed_at: string;
+}
+
+export interface EvalCycleCompletedPayload {
+  schema_version: string;
+  source_sequence: number;
+  event_id: string;
+  cycle_id: string;
+  campaign_id: string;
+  campaign_revision: string;
+  role_combination_id: string;
+  verification_status: EvalVerificationStatus;
+  terminal_attempts: number;
+  assigned_tasks: number;
+  completed_at: string;
+  observed_at: string;
+}
+
+export interface EvalAssignmentStartedPayload {
+  schema_version: string;
+  source_sequence: number;
+  event_id: string;
+  cycle_id: string;
+  campaign_id: string;
+  assignment_id: string;
+  variant_id: string;
+  role: ModelRole;
+  task_id: string;
+  arm_id: string;
+  repetition: number;
+  started_at: string;
+  observed_at: string;
+}
+
+export interface EvalAssignmentCompletedPayload {
+  schema_version: string;
+  source_sequence: number;
+  event_id: string;
+  cycle_id: string;
+  campaign_id: string;
+  assignment_id: string;
+  variant_id: string;
+  role: ModelRole;
+  task_id: string;
+  arm_id: string;
+  repetition: number;
+  terminal_status: TerminalOutcomeStatus;
+  completed_at: string;
+  observed_at: string;
+}
+
+export interface EvalModelRoleInvokedPayload {
+  schema_version: string;
+  source_sequence: number;
+  event_id: string;
+  cycle_id: string;
+  campaign_id: string;
+  assignment_id: string;
+  variant_id: string;
+  role: ModelRole;
+  served_model_tag: string;
+  backend_name: string;
+  quantization?: string;
+  invoked_at: string;
+  observed_at: string;
+}
+
+export interface EvalMetricAvailablePayload {
+  schema_version: string;
+  source_sequence: number;
+  event_id: string;
+  cycle_id: string;
+  campaign_id: string;
+  assignment_id: string;
+  variant_id: string;
+  metric_id: string;
+  metric_version: string;
+  numerator: number;
+  denominator: number;
+  rate?: number;
+  unit: string;
+  verification_status: EvalVerificationStatus;
+  available_at: string;
+  observed_at: string;
+}
+
+export interface EvalVerifierCompletedPayload {
+  schema_version: string;
+  source_sequence: number;
+  event_id: string;
+  cycle_id: string;
+  campaign_id: string;
+  verification_status: EvalVerificationStatus;
+  verified_index_generation_hash: string;
+  layer_count: number;
+  failure_count: number;
+  completed_at: string;
+  observed_at: string;
+}
+
+export interface EvalProofAvailablePayload {
+  schema_version: string;
+  source_sequence: number;
+  event_id: string;
+  cycle_id: string;
+  campaign_id: string;
+  proof_root_sha256: string;
+  artifact_count: number;
+  available_at: string;
+  observed_at: string;
+}
+
+export interface EvalPublicationCompletedPayload {
+  schema_version: string;
+  source_sequence: number;
+  event_id: string;
+  cycle_id: string;
+  campaign_id: string;
+  publication_schema_version: string;
+  published_projection_sha256: string;
+  completed_at: string;
+  observed_at: string;
+}
+
+export interface EvalHeartbeatPayload {
+  schema_version: string;
+  source_sequence: number;
+  event_id: string;
+  source_id: string;
+  observed_at: string;
+}
+
+export interface EvalStopRequestedPayload {
+  schema_version: string;
+  source_sequence: number;
+  event_id: string;
+  campaign_id: string;
+  stop_reason: StopReason;
+  stop_scope: StopScope;
+  requested_at: string;
+  observed_at: string;
+}
+
 export interface ObservePage<T> {
   schema_version: string;
   items: T[];
@@ -329,6 +681,9 @@ export function isObservedMeasurement(value: unknown): value is ObservedMeasurem
   if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
   if (v.window_seconds !== undefined && !(typeof v.window_seconds === 'number')) return false; /* window_seconds */
   if (!(typeof v.status === 'string' && (MEASUREMENT_STATUSES as readonly string[]).includes(v.status))) return false; /* status */
+  if (v.scope !== undefined && !(typeof v.scope === 'string' && (MEASUREMENT_SCOPES as readonly string[]).includes(v.scope))) return false; /* scope */
+  if (v.collector_version !== undefined && !(typeof v.collector_version === 'string')) return false; /* collector_version */
+  if (v.evidence_hash !== undefined && !(typeof v.evidence_hash === 'string')) return false; /* evidence_hash */
   return true;
 }
 
@@ -489,6 +844,20 @@ export function isEvalDetail(value: unknown): value is EvalDetail {
   if (!(typeof v.assigned_tasks === 'number' && Number.isInteger(v.assigned_tasks))) return false; /* assigned_tasks */
   if (!(typeof v.terminal_attempts === 'number' && Number.isInteger(v.terminal_attempts))) return false; /* terminal_attempts */
   if (!(Array.isArray(v.metrics) && v.metrics.every((x) => isEvalMetricSummary(x)))) return false; /* metrics */
+  if (v.role_combination_id !== undefined && !(typeof v.role_combination_id === 'string')) return false; /* role_combination_id */
+  if (v.primary_variant_id !== undefined && !(typeof v.primary_variant_id === 'string')) return false; /* primary_variant_id */
+  if (v.assistant_variant_id !== undefined && !(typeof v.assistant_variant_id === 'string')) return false; /* assistant_variant_id */
+  if (v.lite_variant_id !== undefined && !(typeof v.lite_variant_id === 'string')) return false; /* lite_variant_id */
+  if (v.benchmark_population !== undefined && !(typeof v.benchmark_population === 'number' && Number.isInteger(v.benchmark_population))) return false; /* benchmark_population */
+  if (v.repetition_count !== undefined && !(typeof v.repetition_count === 'number' && Number.isInteger(v.repetition_count))) return false; /* repetition_count */
+  if (v.superseded_count !== undefined && !(typeof v.superseded_count === 'number' && Number.isInteger(v.superseded_count))) return false; /* superseded_count */
+  if (v.qualification_count !== undefined && !(typeof v.qualification_count === 'number' && Number.isInteger(v.qualification_count))) return false; /* qualification_count */
+  if (v.unavailable_count !== undefined && !(typeof v.unavailable_count === 'number' && Number.isInteger(v.unavailable_count))) return false; /* unavailable_count */
+  if (v.environment_class !== undefined && !(typeof v.environment_class === 'string')) return false; /* environment_class */
+  if (v.backend_name !== undefined && !(typeof v.backend_name === 'string')) return false; /* backend_name */
+  if (v.artifact_digest !== undefined && !(typeof v.artifact_digest === 'string')) return false; /* artifact_digest */
+  if (v.quantization !== undefined && !(typeof v.quantization === 'string')) return false; /* quantization */
+  if (v.proof_links !== undefined && !(Array.isArray(v.proof_links) && v.proof_links.every((x) => isEvidenceSafeLink(x)))) return false; /* proof_links */
   if (v.published_projection_sha256 !== undefined && !(typeof v.published_projection_sha256 === 'string')) return false; /* published_projection_sha256 */
   if (v.completed_at !== undefined && !(typeof v.completed_at === 'string')) return false; /* completed_at */
   if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
@@ -523,6 +892,125 @@ export function isObserveBootstrapSnapshot(value: unknown): value is ObserveBoot
   if (!(Array.isArray(v.latest_evals) && v.latest_evals.every((x) => isEvalSummary(x)))) return false; /* latest_evals */
   if (!(Array.isArray(v.downloads) && v.downloads.every((x) => isDownloadArtifact(x)))) return false; /* downloads */
   if (!(typeof v.generated_at === 'string')) return false; /* generated_at */
+  return true;
+}
+
+export function isSupervisorStateProjection(value: unknown): value is SupervisorStateProjection {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.supervisor_id === 'string')) return false; /* supervisor_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.campaign_revision === 'string')) return false; /* campaign_revision */
+  if (!(typeof v.status === 'string' && (SUPERVISOR_STATUSES as readonly string[]).includes(v.status))) return false; /* status */
+  if (v.current_cycle_id !== undefined && !(typeof v.current_cycle_id === 'string')) return false; /* current_cycle_id */
+  if (v.last_cycle_id !== undefined && !(typeof v.last_cycle_id === 'string')) return false; /* last_cycle_id */
+  if (v.stop_reason !== undefined && !(typeof v.stop_reason === 'string' && (STOP_REASONS as readonly string[]).includes(v.stop_reason))) return false; /* stop_reason */
+  if (!(typeof v.freshness === 'string' && (CAMPAIGN_FRESHNESS_VALUES as readonly string[]).includes(v.freshness))) return false; /* freshness */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isCycleStateProjection(value: unknown): value is CycleStateProjection {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.campaign_revision === 'string')) return false; /* campaign_revision */
+  if (!(typeof v.role_combination_id === 'string')) return false; /* role_combination_id */
+  if (!(typeof v.status === 'string' && (CAMPAIGN_CYCLE_STATUSES as readonly string[]).includes(v.status))) return false; /* status */
+  if (v.verification_status !== undefined && !(typeof v.verification_status === 'string' && (EVAL_VERIFICATION_STATUSES as readonly string[]).includes(v.verification_status))) return false; /* verification_status */
+  if (!(typeof v.freshness === 'string' && (CAMPAIGN_FRESHNESS_VALUES as readonly string[]).includes(v.freshness))) return false; /* freshness */
+  if (v.started_at !== undefined && !(typeof v.started_at === 'string')) return false; /* started_at */
+  if (v.completed_at !== undefined && !(typeof v.completed_at === 'string')) return false; /* completed_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isAssignmentProgressProjection(value: unknown): value is AssignmentProgressProjection {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.assignment_id === 'string')) return false; /* assignment_id */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.variant_id === 'string')) return false; /* variant_id */
+  if (!(typeof v.role === 'string' && (MODEL_ROLES as readonly string[]).includes(v.role))) return false; /* role */
+  if (!(typeof v.task_id === 'string')) return false; /* task_id */
+  if (!(typeof v.arm_id === 'string')) return false; /* arm_id */
+  if (!(typeof v.repetition === 'number' && Number.isInteger(v.repetition))) return false; /* repetition */
+  if (!(typeof v.status === 'string' && (ASSIGNMENT_PROGRESS_STATUSES as readonly string[]).includes(v.status))) return false; /* status */
+  if (v.terminal_status !== undefined && !(typeof v.terminal_status === 'string' && (TERMINAL_OUTCOME_STATUSES as readonly string[]).includes(v.terminal_status))) return false; /* terminal_status */
+  if (!(typeof v.freshness === 'string' && (CAMPAIGN_FRESHNESS_VALUES as readonly string[]).includes(v.freshness))) return false; /* freshness */
+  if (v.started_at !== undefined && !(typeof v.started_at === 'string')) return false; /* started_at */
+  if (v.completed_at !== undefined && !(typeof v.completed_at === 'string')) return false; /* completed_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isRoleCombinationProjection(value: unknown): value is RoleCombinationProjection {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.role_combination_id === 'string')) return false; /* role_combination_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.primary_variant_id === 'string')) return false; /* primary_variant_id */
+  if (v.assistant_variant_id !== undefined && !(typeof v.assistant_variant_id === 'string')) return false; /* assistant_variant_id */
+  if (v.lite_variant_id !== undefined && !(typeof v.lite_variant_id === 'string')) return false; /* lite_variant_id */
+  if (!(typeof v.primary_model_tag === 'string')) return false; /* primary_model_tag */
+  if (v.assistant_model_tag !== undefined && !(typeof v.assistant_model_tag === 'string')) return false; /* assistant_model_tag */
+  if (v.lite_model_tag !== undefined && !(typeof v.lite_model_tag === 'string')) return false; /* lite_model_tag */
+  if (!(typeof v.primary_backend === 'string')) return false; /* primary_backend */
+  if (v.assistant_backend !== undefined && !(typeof v.assistant_backend === 'string')) return false; /* assistant_backend */
+  if (v.lite_backend !== undefined && !(typeof v.lite_backend === 'string')) return false; /* lite_backend */
+  if (v.primary_quantization !== undefined && !(typeof v.primary_quantization === 'string')) return false; /* primary_quantization */
+  if (v.assistant_quantization !== undefined && !(typeof v.assistant_quantization === 'string')) return false; /* assistant_quantization */
+  if (v.lite_quantization !== undefined && !(typeof v.lite_quantization === 'string')) return false; /* lite_quantization */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isVerificationProgressProjection(value: unknown): value is VerificationProgressProjection {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.verification_status === 'string' && (EVAL_VERIFICATION_STATUSES as readonly string[]).includes(v.verification_status))) return false; /* verification_status */
+  if (v.verified_index_generation_hash !== undefined && !(typeof v.verified_index_generation_hash === 'string')) return false; /* verified_index_generation_hash */
+  if (!(typeof v.layer_count === 'number' && Number.isInteger(v.layer_count))) return false; /* layer_count */
+  if (!(typeof v.failure_count === 'number' && Number.isInteger(v.failure_count))) return false; /* failure_count */
+  if (!(typeof v.freshness === 'string' && (CAMPAIGN_FRESHNESS_VALUES as readonly string[]).includes(v.freshness))) return false; /* freshness */
+  if (v.completed_at !== undefined && !(typeof v.completed_at === 'string')) return false; /* completed_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isPublicationProgressProjection(value: unknown): value is PublicationProgressProjection {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.publication_status === 'string' && (PUBLICATION_STATUSES as readonly string[]).includes(v.publication_status))) return false; /* publication_status */
+  if (v.publication_schema_version !== undefined && !(typeof v.publication_schema_version === 'string')) return false; /* publication_schema_version */
+  if (v.published_projection_sha256 !== undefined && !(typeof v.published_projection_sha256 === 'string')) return false; /* published_projection_sha256 */
+  if (!(typeof v.freshness === 'string' && (CAMPAIGN_FRESHNESS_VALUES as readonly string[]).includes(v.freshness))) return false; /* freshness */
+  if (v.completed_at !== undefined && !(typeof v.completed_at === 'string')) return false; /* completed_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isSourceFreshnessProjection(value: unknown): value is SourceFreshnessProjection {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.source_id === 'string')) return false; /* source_id */
+  if (v.campaign_id !== undefined && !(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.freshness === 'string' && (CAMPAIGN_FRESHNESS_VALUES as readonly string[]).includes(v.freshness))) return false; /* freshness */
+  if (!(typeof v.last_heartbeat_at === 'string')) return false; /* last_heartbeat_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
   return true;
 }
 
@@ -591,5 +1079,195 @@ export function isEvalMetricRecordedPayload(value: unknown): value is EvalMetric
   if (!(typeof v.denominator === 'number' && Number.isInteger(v.denominator))) return false; /* denominator */
   if (!(typeof v.verification_status === 'string' && (EVAL_VERIFICATION_STATUSES as readonly string[]).includes(v.verification_status))) return false; /* verification_status */
   if (!(typeof v.recorded_at === 'string')) return false; /* recorded_at */
+  return true;
+}
+
+export function isEvalCycleStartedPayload(value: unknown): value is EvalCycleStartedPayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.source_sequence === 'number' && Number.isInteger(v.source_sequence))) return false; /* source_sequence */
+  if (!(typeof v.event_id === 'string')) return false; /* event_id */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.campaign_revision === 'string')) return false; /* campaign_revision */
+  if (!(typeof v.role_combination_id === 'string')) return false; /* role_combination_id */
+  if (!(typeof v.primary_variant_id === 'string')) return false; /* primary_variant_id */
+  if (v.assistant_variant_id !== undefined && !(typeof v.assistant_variant_id === 'string')) return false; /* assistant_variant_id */
+  if (v.lite_variant_id !== undefined && !(typeof v.lite_variant_id === 'string')) return false; /* lite_variant_id */
+  if (!(typeof v.benchmark_population === 'number' && Number.isInteger(v.benchmark_population))) return false; /* benchmark_population */
+  if (!(typeof v.repetition_count === 'number' && Number.isInteger(v.repetition_count))) return false; /* repetition_count */
+  if (!(typeof v.started_at === 'string')) return false; /* started_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isEvalCycleCompletedPayload(value: unknown): value is EvalCycleCompletedPayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.source_sequence === 'number' && Number.isInteger(v.source_sequence))) return false; /* source_sequence */
+  if (!(typeof v.event_id === 'string')) return false; /* event_id */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.campaign_revision === 'string')) return false; /* campaign_revision */
+  if (!(typeof v.role_combination_id === 'string')) return false; /* role_combination_id */
+  if (!(typeof v.verification_status === 'string' && (EVAL_VERIFICATION_STATUSES as readonly string[]).includes(v.verification_status))) return false; /* verification_status */
+  if (!(typeof v.terminal_attempts === 'number' && Number.isInteger(v.terminal_attempts))) return false; /* terminal_attempts */
+  if (!(typeof v.assigned_tasks === 'number' && Number.isInteger(v.assigned_tasks))) return false; /* assigned_tasks */
+  if (!(typeof v.completed_at === 'string')) return false; /* completed_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isEvalAssignmentStartedPayload(value: unknown): value is EvalAssignmentStartedPayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.source_sequence === 'number' && Number.isInteger(v.source_sequence))) return false; /* source_sequence */
+  if (!(typeof v.event_id === 'string')) return false; /* event_id */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.assignment_id === 'string')) return false; /* assignment_id */
+  if (!(typeof v.variant_id === 'string')) return false; /* variant_id */
+  if (!(typeof v.role === 'string' && (MODEL_ROLES as readonly string[]).includes(v.role))) return false; /* role */
+  if (!(typeof v.task_id === 'string')) return false; /* task_id */
+  if (!(typeof v.arm_id === 'string')) return false; /* arm_id */
+  if (!(typeof v.repetition === 'number' && Number.isInteger(v.repetition))) return false; /* repetition */
+  if (!(typeof v.started_at === 'string')) return false; /* started_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isEvalAssignmentCompletedPayload(value: unknown): value is EvalAssignmentCompletedPayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.source_sequence === 'number' && Number.isInteger(v.source_sequence))) return false; /* source_sequence */
+  if (!(typeof v.event_id === 'string')) return false; /* event_id */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.assignment_id === 'string')) return false; /* assignment_id */
+  if (!(typeof v.variant_id === 'string')) return false; /* variant_id */
+  if (!(typeof v.role === 'string' && (MODEL_ROLES as readonly string[]).includes(v.role))) return false; /* role */
+  if (!(typeof v.task_id === 'string')) return false; /* task_id */
+  if (!(typeof v.arm_id === 'string')) return false; /* arm_id */
+  if (!(typeof v.repetition === 'number' && Number.isInteger(v.repetition))) return false; /* repetition */
+  if (!(typeof v.terminal_status === 'string' && (TERMINAL_OUTCOME_STATUSES as readonly string[]).includes(v.terminal_status))) return false; /* terminal_status */
+  if (!(typeof v.completed_at === 'string')) return false; /* completed_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isEvalModelRoleInvokedPayload(value: unknown): value is EvalModelRoleInvokedPayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.source_sequence === 'number' && Number.isInteger(v.source_sequence))) return false; /* source_sequence */
+  if (!(typeof v.event_id === 'string')) return false; /* event_id */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.assignment_id === 'string')) return false; /* assignment_id */
+  if (!(typeof v.variant_id === 'string')) return false; /* variant_id */
+  if (!(typeof v.role === 'string' && (MODEL_ROLES as readonly string[]).includes(v.role))) return false; /* role */
+  if (!(typeof v.served_model_tag === 'string')) return false; /* served_model_tag */
+  if (!(typeof v.backend_name === 'string')) return false; /* backend_name */
+  if (v.quantization !== undefined && !(typeof v.quantization === 'string')) return false; /* quantization */
+  if (!(typeof v.invoked_at === 'string')) return false; /* invoked_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isEvalMetricAvailablePayload(value: unknown): value is EvalMetricAvailablePayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.source_sequence === 'number' && Number.isInteger(v.source_sequence))) return false; /* source_sequence */
+  if (!(typeof v.event_id === 'string')) return false; /* event_id */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.assignment_id === 'string')) return false; /* assignment_id */
+  if (!(typeof v.variant_id === 'string')) return false; /* variant_id */
+  if (!(typeof v.metric_id === 'string')) return false; /* metric_id */
+  if (!(typeof v.metric_version === 'string')) return false; /* metric_version */
+  if (!(typeof v.numerator === 'number' && Number.isInteger(v.numerator))) return false; /* numerator */
+  if (!(typeof v.denominator === 'number' && Number.isInteger(v.denominator))) return false; /* denominator */
+  if (v.rate !== undefined && !(typeof v.rate === 'number')) return false; /* rate */
+  if (!(typeof v.unit === 'string')) return false; /* unit */
+  if (!(typeof v.verification_status === 'string' && (EVAL_VERIFICATION_STATUSES as readonly string[]).includes(v.verification_status))) return false; /* verification_status */
+  if (!(typeof v.available_at === 'string')) return false; /* available_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isEvalVerifierCompletedPayload(value: unknown): value is EvalVerifierCompletedPayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.source_sequence === 'number' && Number.isInteger(v.source_sequence))) return false; /* source_sequence */
+  if (!(typeof v.event_id === 'string')) return false; /* event_id */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.verification_status === 'string' && (EVAL_VERIFICATION_STATUSES as readonly string[]).includes(v.verification_status))) return false; /* verification_status */
+  if (!(typeof v.verified_index_generation_hash === 'string')) return false; /* verified_index_generation_hash */
+  if (!(typeof v.layer_count === 'number' && Number.isInteger(v.layer_count))) return false; /* layer_count */
+  if (!(typeof v.failure_count === 'number' && Number.isInteger(v.failure_count))) return false; /* failure_count */
+  if (!(typeof v.completed_at === 'string')) return false; /* completed_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isEvalProofAvailablePayload(value: unknown): value is EvalProofAvailablePayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.source_sequence === 'number' && Number.isInteger(v.source_sequence))) return false; /* source_sequence */
+  if (!(typeof v.event_id === 'string')) return false; /* event_id */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.proof_root_sha256 === 'string')) return false; /* proof_root_sha256 */
+  if (!(typeof v.artifact_count === 'number' && Number.isInteger(v.artifact_count))) return false; /* artifact_count */
+  if (!(typeof v.available_at === 'string')) return false; /* available_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isEvalPublicationCompletedPayload(value: unknown): value is EvalPublicationCompletedPayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.source_sequence === 'number' && Number.isInteger(v.source_sequence))) return false; /* source_sequence */
+  if (!(typeof v.event_id === 'string')) return false; /* event_id */
+  if (!(typeof v.cycle_id === 'string')) return false; /* cycle_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.publication_schema_version === 'string')) return false; /* publication_schema_version */
+  if (!(typeof v.published_projection_sha256 === 'string')) return false; /* published_projection_sha256 */
+  if (!(typeof v.completed_at === 'string')) return false; /* completed_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isEvalHeartbeatPayload(value: unknown): value is EvalHeartbeatPayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.source_sequence === 'number' && Number.isInteger(v.source_sequence))) return false; /* source_sequence */
+  if (!(typeof v.event_id === 'string')) return false; /* event_id */
+  if (!(typeof v.source_id === 'string')) return false; /* source_id */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
+  return true;
+}
+
+export function isEvalStopRequestedPayload(value: unknown): value is EvalStopRequestedPayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
+  if (!(typeof v.source_sequence === 'number' && Number.isInteger(v.source_sequence))) return false; /* source_sequence */
+  if (!(typeof v.event_id === 'string')) return false; /* event_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(typeof v.stop_reason === 'string' && (STOP_REASONS as readonly string[]).includes(v.stop_reason))) return false; /* stop_reason */
+  if (!(typeof v.stop_scope === 'string' && (STOP_SCOPES as readonly string[]).includes(v.stop_scope))) return false; /* stop_scope */
+  if (!(typeof v.requested_at === 'string')) return false; /* requested_at */
+  if (!(typeof v.observed_at === 'string')) return false; /* observed_at */
   return true;
 }

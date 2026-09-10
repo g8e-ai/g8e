@@ -338,6 +338,23 @@ const EventAppRunStatusUpdated EventType = "g8e.v1.app.run.status.updated"
 const EventAiEvalRunCompleted EventType = "g8e.v1.ai.eval.run.completed"
 const EventAiEvalMetricRecorded EventType = "g8e.v1.ai.eval.metric.recorded"
 
+// Live campaign observability events. These carry protocol-owned typed
+// payloads (see protocol/models/observe_event_payloads.json) with monotonic
+// source_sequence and event_id for ordering, replay, and duplicate
+// suppression. Producers persist the corresponding projection before
+// emitting the SSE event (persist-before-event).
+const EventAiEvalCycleStarted EventType = "g8e.v1.ai.eval.cycle.started"
+const EventAiEvalCycleCompleted EventType = "g8e.v1.ai.eval.cycle.completed"
+const EventAiEvalAssignmentStarted EventType = "g8e.v1.ai.eval.assignment.started"
+const EventAiEvalAssignmentCompleted EventType = "g8e.v1.ai.eval.assignment.completed"
+const EventAiEvalModelRoleInvoked EventType = "g8e.v1.ai.eval.model_role.invoked"
+const EventAiEvalMetricAvailable EventType = "g8e.v1.ai.eval.metric.available"
+const EventAiEvalVerifierCompleted EventType = "g8e.v1.ai.eval.verifier.completed"
+const EventAiEvalProofAvailable EventType = "g8e.v1.ai.eval.proof.available"
+const EventAiEvalPublicationCompleted EventType = "g8e.v1.ai.eval.publication.completed"
+const EventAiEvalHeartbeat EventType = "g8e.v1.ai.eval.heartbeat"
+const EventAiEvalStopRequested EventType = "g8e.v1.ai.eval.stop.requested"
+
 // Canonical governed-document request events. These are the deterministic
 // EventType values that MapActionTypeToEventType returns for the
 // DOCUMENT_UPDATE and DOCUMENT_DELETE action types. The app-level

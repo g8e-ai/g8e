@@ -45,8 +45,15 @@ const (
 	// state projections; Phase 4 writes eval projections and download
 	// artifacts. The observe read services query these collections with
 	// user_id ownership scoping.
-	CollectionObserveAgentStates CollectionName = "observe_agent_states"
-	CollectionObserveRuns        CollectionName = "observe_runs"
-	CollectionObserveEvals       CollectionName = "observe_evals"
-	CollectionObserveDownloads   CollectionName = "observe_downloads"
+	CollectionObserveAgentStates          CollectionName = "observe_agent_states"
+	CollectionObserveRuns                 CollectionName = "observe_runs"
+	CollectionObserveEvals                CollectionName = "observe_evals"
+	CollectionObserveDownloads            CollectionName = "observe_downloads"
+	CollectionObserveSupervisorStates     CollectionName = "observe_supervisor_states"
+	CollectionObserveCycleStates          CollectionName = "observe_cycle_states"
+	CollectionObserveAssignmentProgress   CollectionName = "observe_assignment_progress"
+	CollectionObserveRoleCombinations     CollectionName = "observe_role_combinations"
+	CollectionObserveVerificationProgress CollectionName = "observe_verification_progress"
+	CollectionObservePublicationProgress  CollectionName = "observe_publication_progress"
+	CollectionObserveSourceFreshness      CollectionName = "observe_source_freshness"
 )

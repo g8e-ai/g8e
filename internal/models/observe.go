@@ -77,6 +77,119 @@ const (
 	MeasurementStatusUnsupported MeasurementStatus = "unsupported"
 )
 
+// MeasurementScope is the typed scope for an ObservedMeasurement from the S6
+// typed observer. Process scope measures the eval process, system scope
+// measures the whole host, and accelerator scope measures the GPU/NPU.
+type MeasurementScope string
+
+const (
+	MeasurementScopeProcess     MeasurementScope = "process"
+	MeasurementScopeSystem      MeasurementScope = "system"
+	MeasurementScopeAccelerator MeasurementScope = "accelerator"
+)
+
+// CampaignFreshness is the freshness status for campaign source projections.
+// It uses a closed vocabulary that distinguishes active, delayed, stale,
+// intentionally stopped, safety stopped, and source offline states.
+type CampaignFreshness string
+
+const (
+	CampaignFreshnessActive               CampaignFreshness = "active"
+	CampaignFreshnessDelayed              CampaignFreshness = "delayed"
+	CampaignFreshnessStale                CampaignFreshness = "stale"
+	CampaignFreshnessIntentionallyStopped CampaignFreshness = "intentionally_stopped"
+	CampaignFreshnessSafetyStopped        CampaignFreshness = "safety_stopped"
+	CampaignFreshnessSourceOffline        CampaignFreshness = "source_offline"
+)
+
+// CampaignCycleStatus is the lifecycle state of a single campaign cycle.
+type CampaignCycleStatus string
+
+const (
+	CampaignCycleStatusQueued     CampaignCycleStatus = "queued"
+	CampaignCycleStatusRunning    CampaignCycleStatus = "running"
+	CampaignCycleStatusCompleted  CampaignCycleStatus = "completed"
+	CampaignCycleStatusFailed     CampaignCycleStatus = "failed"
+	CampaignCycleStatusSuperseded CampaignCycleStatus = "superseded"
+)
+
+// AssignmentProgressStatus is the lifecycle state of a single campaign
+// assignment.
+type AssignmentProgressStatus string
+
+const (
+	AssignmentProgressStatusQueued      AssignmentProgressStatus = "queued"
+	AssignmentProgressStatusRunning     AssignmentProgressStatus = "running"
+	AssignmentProgressStatusCompleted   AssignmentProgressStatus = "completed"
+	AssignmentProgressStatusFailed      AssignmentProgressStatus = "failed"
+	AssignmentProgressStatusSuperseded  AssignmentProgressStatus = "superseded"
+	AssignmentProgressStatusUnavailable AssignmentProgressStatus = "unavailable"
+)
+
+// TerminalOutcomeStatus is the terminal outcome of a campaign assignment.
+type TerminalOutcomeStatus string
+
+const (
+	TerminalOutcomeStatusCompleted     TerminalOutcomeStatus = "completed"
+	TerminalOutcomeStatusFailed        TerminalOutcomeStatus = "failed"
+	TerminalOutcomeStatusSuperseded    TerminalOutcomeStatus = "superseded"
+	TerminalOutcomeStatusUnavailable   TerminalOutcomeStatus = "unavailable"
+	TerminalOutcomeStatusQualification TerminalOutcomeStatus = "qualification"
+)
+
+// SupervisorStatus is the lifecycle state of the continuous campaign
+// supervisor.
+type SupervisorStatus string
+
+const (
+	SupervisorStatusIdle          SupervisorStatus = "idle"
+	SupervisorStatusRunning       SupervisorStatus = "running"
+	SupervisorStatusStopped       SupervisorStatus = "stopped"
+	SupervisorStatusSafetyStopped SupervisorStatus = "safety_stopped"
+)
+
+// StopReason is the typed stop reason from a closed vocabulary distinguishing
+// graceful owner stops from safety stops.
+type StopReason string
+
+const (
+	StopReasonGraceful            StopReason = "graceful"
+	StopReasonSafetyBudget        StopReason = "safety_budget"
+	StopReasonSafetyDisk          StopReason = "safety_disk"
+	StopReasonSafetyHardwareDrift StopReason = "safety_hardware_drift"
+	StopReasonSafetyCredential    StopReason = "safety_credential"
+	StopReasonSafetyVerifier      StopReason = "safety_verifier"
+	StopReasonSafetyDisclosure    StopReason = "safety_disclosure"
+	StopReasonSafetyPublication   StopReason = "safety_publication"
+)
+
+// StopScope is the scope of a stop request: cycle or supervisor.
+type StopScope string
+
+const (
+	StopScopeCycle      StopScope = "cycle"
+	StopScopeSupervisor StopScope = "supervisor"
+)
+
+// ModelRole is the model role exercised in a campaign assignment.
+type ModelRole string
+
+const (
+	ModelRolePrimary   ModelRole = "primary"
+	ModelRoleAssistant ModelRole = "assistant"
+	ModelRoleLite      ModelRole = "lite"
+)
+
+// PublicationStatus is the lifecycle state of the publication path for a
+// single cycle.
+type PublicationStatus string
+
+const (
+	PublicationStatusPending   PublicationStatus = "pending"
+	PublicationStatusPublished PublicationStatus = "published"
+	PublicationStatusFailed    PublicationStatus = "failed"
+)
+
 // AgentStatusUpdatedPayload is the payload for app.agent.status.updated events.
 // It reports the current lifecycle state of a single agent persona. It is
 // distinct from app.agent.activity.recorded, which is a governed document
@@ -153,14 +266,17 @@ type EvalMetricRecordedPayload struct {
 // value with source and observation time. Resource and throughput cards
 // remain unavailable until real instrumentation exists.
 type ObservedMeasurement struct {
-	SchemaVersion   string            `json:"schema_version"`
-	MetricID        string            `json:"metric_id"`
-	Value           float64           `json:"value"`
-	Unit            string            `json:"unit"`
-	SourceComponent string            `json:"source_component"`
-	ObservedAt      time.Time         `json:"observed_at"`
-	WindowSeconds   *float64          `json:"window_seconds,omitempty"`
-	Status          MeasurementStatus `json:"status"`
+	SchemaVersion    string            `json:"schema_version"`
+	MetricID         string            `json:"metric_id"`
+	Value            float64           `json:"value"`
+	Unit             string            `json:"unit"`
+	SourceComponent  string            `json:"source_component"`
+	ObservedAt       time.Time         `json:"observed_at"`
+	WindowSeconds    *float64          `json:"window_seconds,omitempty"`
+	Status           MeasurementStatus `json:"status"`
+	Scope            MeasurementScope  `json:"scope,omitempty"`
+	CollectorVersion string            `json:"collector_version,omitempty"`
+	EvidenceHash     string            `json:"evidence_hash,omitempty"`
 }
 
 // ObserveEventPayloadForType returns the schema version constant for the given
@@ -171,7 +287,18 @@ func ObserveEventPayloadSchemaVersion(eventType constants.EventType) string {
 	case constants.EventAppAgentStatusUpdated,
 		constants.EventAppRunStatusUpdated,
 		constants.EventAiEvalRunCompleted,
-		constants.EventAiEvalMetricRecorded:
+		constants.EventAiEvalMetricRecorded,
+		constants.EventAiEvalCycleStarted,
+		constants.EventAiEvalCycleCompleted,
+		constants.EventAiEvalAssignmentStarted,
+		constants.EventAiEvalAssignmentCompleted,
+		constants.EventAiEvalModelRoleInvoked,
+		constants.EventAiEvalMetricAvailable,
+		constants.EventAiEvalVerifierCompleted,
+		constants.EventAiEvalProofAvailable,
+		constants.EventAiEvalPublicationCompleted,
+		constants.EventAiEvalHeartbeat,
+		constants.EventAiEvalStopRequested:
 		return constants.ObserveEventPayloadSchemaVersion
 	default:
 		return ""
@@ -363,6 +490,20 @@ type EvalDetail struct {
 	AssignedTasks             int                    `json:"assigned_tasks"`
 	TerminalAttempts          int                    `json:"terminal_attempts"`
 	Metrics                   []EvalMetricSummary    `json:"metrics"`
+	RoleCombinationID         string                 `json:"role_combination_id,omitempty"`
+	PrimaryVariantID          string                 `json:"primary_variant_id,omitempty"`
+	AssistantVariantID        string                 `json:"assistant_variant_id,omitempty"`
+	LiteVariantID             string                 `json:"lite_variant_id,omitempty"`
+	BenchmarkPopulation       int                    `json:"benchmark_population,omitempty"`
+	RepetitionCount           int                    `json:"repetition_count,omitempty"`
+	SupersededCount           int                    `json:"superseded_count,omitempty"`
+	QualificationCount        int                    `json:"qualification_count,omitempty"`
+	UnavailableCount          int                    `json:"unavailable_count,omitempty"`
+	EnvironmentClass          string                 `json:"environment_class,omitempty"`
+	BackendName               string                 `json:"backend_name,omitempty"`
+	ArtifactDigest            string                 `json:"artifact_digest,omitempty"`
+	Quantization              string                 `json:"quantization,omitempty"`
+	ProofLinks                []EvidenceSafeLink     `json:"proof_links,omitempty"`
 	PublishedProjectionSHA256 string                 `json:"published_projection_sha256,omitempty"`
 	CompletedAt               *time.Time             `json:"completed_at,omitempty"`
 	ObservedAt                time.Time              `json:"observed_at"`
@@ -457,4 +598,313 @@ type ObserveProducerRunStateRequest struct {
 // identifiers, ownership fields, or echo of the request payload.
 type ObserveProducerResponse struct {
 	Accepted bool `json:"accepted"`
+}
+
+// ---------------------------------------------------------------------------
+// Live campaign event payloads (g8e.v1.ai.eval.* family)
+//
+// These payloads carry source_sequence (monotonic ordering), event_id
+// (duplicate suppression), and observed_at on every event. Producers persist
+// the corresponding projection before emitting the SSE event. See
+// protocol/models/observe_event_payloads.json for the canonical wire shapes.
+// ---------------------------------------------------------------------------
+
+// EvalCycleStartedPayload is the payload for ai.eval.cycle.started events.
+type EvalCycleStartedPayload struct {
+	SchemaVersion       string    `json:"schema_version"`
+	SourceSequence      int64     `json:"source_sequence"`
+	EventID             string    `json:"event_id"`
+	CycleID             string    `json:"cycle_id"`
+	CampaignID          string    `json:"campaign_id"`
+	CampaignRevision    string    `json:"campaign_revision"`
+	RoleCombinationID   string    `json:"role_combination_id"`
+	PrimaryVariantID    string    `json:"primary_variant_id"`
+	AssistantVariantID  string    `json:"assistant_variant_id,omitempty"`
+	LiteVariantID       string    `json:"lite_variant_id,omitempty"`
+	BenchmarkPopulation int       `json:"benchmark_population"`
+	RepetitionCount     int       `json:"repetition_count"`
+	StartedAt           time.Time `json:"started_at"`
+	ObservedAt          time.Time `json:"observed_at"`
+}
+
+// EvalCycleCompletedPayload is the payload for ai.eval.cycle.completed events.
+type EvalCycleCompletedPayload struct {
+	SchemaVersion      string                 `json:"schema_version"`
+	SourceSequence     int64                  `json:"source_sequence"`
+	EventID            string                 `json:"event_id"`
+	CycleID            string                 `json:"cycle_id"`
+	CampaignID         string                 `json:"campaign_id"`
+	CampaignRevision   string                 `json:"campaign_revision"`
+	RoleCombinationID  string                 `json:"role_combination_id"`
+	VerificationStatus EvalVerificationStatus `json:"verification_status"`
+	TerminalAttempts   int                    `json:"terminal_attempts"`
+	AssignedTasks      int                    `json:"assigned_tasks"`
+	CompletedAt        time.Time              `json:"completed_at"`
+	ObservedAt         time.Time              `json:"observed_at"`
+}
+
+// EvalAssignmentStartedPayload is the payload for
+// ai.eval.assignment.started events.
+type EvalAssignmentStartedPayload struct {
+	SchemaVersion  string    `json:"schema_version"`
+	SourceSequence int64     `json:"source_sequence"`
+	EventID        string    `json:"event_id"`
+	CycleID        string    `json:"cycle_id"`
+	CampaignID     string    `json:"campaign_id"`
+	AssignmentID   string    `json:"assignment_id"`
+	VariantID      string    `json:"variant_id"`
+	Role           ModelRole `json:"role"`
+	TaskID         string    `json:"task_id"`
+	ArmID          string    `json:"arm_id"`
+	Repetition     int       `json:"repetition"`
+	StartedAt      time.Time `json:"started_at"`
+	ObservedAt     time.Time `json:"observed_at"`
+}
+
+// EvalAssignmentCompletedPayload is the payload for
+// ai.eval.assignment.completed events.
+type EvalAssignmentCompletedPayload struct {
+	SchemaVersion  string                `json:"schema_version"`
+	SourceSequence int64                 `json:"source_sequence"`
+	EventID        string                `json:"event_id"`
+	CycleID        string                `json:"cycle_id"`
+	CampaignID     string                `json:"campaign_id"`
+	AssignmentID   string                `json:"assignment_id"`
+	VariantID      string                `json:"variant_id"`
+	Role           ModelRole             `json:"role"`
+	TaskID         string                `json:"task_id"`
+	ArmID          string                `json:"arm_id"`
+	Repetition     int                   `json:"repetition"`
+	TerminalStatus TerminalOutcomeStatus `json:"terminal_status"`
+	CompletedAt    time.Time             `json:"completed_at"`
+	ObservedAt     time.Time             `json:"observed_at"`
+}
+
+// EvalModelRoleInvokedPayload is the payload for
+// ai.eval.model_role.invoked events.
+type EvalModelRoleInvokedPayload struct {
+	SchemaVersion  string    `json:"schema_version"`
+	SourceSequence int64     `json:"source_sequence"`
+	EventID        string    `json:"event_id"`
+	CycleID        string    `json:"cycle_id"`
+	CampaignID     string    `json:"campaign_id"`
+	AssignmentID   string    `json:"assignment_id"`
+	VariantID      string    `json:"variant_id"`
+	Role           ModelRole `json:"role"`
+	ServedModelTag string    `json:"served_model_tag"`
+	BackendName    string    `json:"backend_name"`
+	Quantization   string    `json:"quantization,omitempty"`
+	InvokedAt      time.Time `json:"invoked_at"`
+	ObservedAt     time.Time `json:"observed_at"`
+}
+
+// EvalMetricAvailablePayload is the payload for ai.eval.metric.available
+// events.
+type EvalMetricAvailablePayload struct {
+	SchemaVersion      string                 `json:"schema_version"`
+	SourceSequence     int64                  `json:"source_sequence"`
+	EventID            string                 `json:"event_id"`
+	CycleID            string                 `json:"cycle_id"`
+	CampaignID         string                 `json:"campaign_id"`
+	AssignmentID       string                 `json:"assignment_id"`
+	VariantID          string                 `json:"variant_id"`
+	MetricID           string                 `json:"metric_id"`
+	MetricVersion      string                 `json:"metric_version"`
+	Numerator          int                    `json:"numerator"`
+	Denominator        int                    `json:"denominator"`
+	Rate               *float64               `json:"rate,omitempty"`
+	Unit               string                 `json:"unit"`
+	VerificationStatus EvalVerificationStatus `json:"verification_status"`
+	AvailableAt        time.Time              `json:"available_at"`
+	ObservedAt         time.Time              `json:"observed_at"`
+}
+
+// EvalVerifierCompletedPayload is the payload for
+// ai.eval.verifier.completed events.
+type EvalVerifierCompletedPayload struct {
+	SchemaVersion               string                 `json:"schema_version"`
+	SourceSequence              int64                  `json:"source_sequence"`
+	EventID                     string                 `json:"event_id"`
+	CycleID                     string                 `json:"cycle_id"`
+	CampaignID                  string                 `json:"campaign_id"`
+	VerificationStatus          EvalVerificationStatus `json:"verification_status"`
+	VerifiedIndexGenerationHash string                 `json:"verified_index_generation_hash"`
+	LayerCount                  int                    `json:"layer_count"`
+	FailureCount                int                    `json:"failure_count"`
+	CompletedAt                 time.Time              `json:"completed_at"`
+	ObservedAt                  time.Time              `json:"observed_at"`
+}
+
+// EvalProofAvailablePayload is the payload for ai.eval.proof.available events.
+type EvalProofAvailablePayload struct {
+	SchemaVersion   string    `json:"schema_version"`
+	SourceSequence  int64     `json:"source_sequence"`
+	EventID         string    `json:"event_id"`
+	CycleID         string    `json:"cycle_id"`
+	CampaignID      string    `json:"campaign_id"`
+	ProofRootSHA256 string    `json:"proof_root_sha256"`
+	ArtifactCount   int       `json:"artifact_count"`
+	AvailableAt     time.Time `json:"available_at"`
+	ObservedAt      time.Time `json:"observed_at"`
+}
+
+// EvalPublicationCompletedPayload is the payload for
+// ai.eval.publication.completed events.
+type EvalPublicationCompletedPayload struct {
+	SchemaVersion             string    `json:"schema_version"`
+	SourceSequence            int64     `json:"source_sequence"`
+	EventID                   string    `json:"event_id"`
+	CycleID                   string    `json:"cycle_id"`
+	CampaignID                string    `json:"campaign_id"`
+	PublicationSchemaVersion  string    `json:"publication_schema_version"`
+	PublishedProjectionSHA256 string    `json:"published_projection_sha256"`
+	CompletedAt               time.Time `json:"completed_at"`
+	ObservedAt                time.Time `json:"observed_at"`
+}
+
+// EvalHeartbeatPayload is the payload for ai.eval.heartbeat events. A
+// heartbeat proves source liveness only, not that any specific work is
+// progressing.
+type EvalHeartbeatPayload struct {
+	SchemaVersion  string    `json:"schema_version"`
+	SourceSequence int64     `json:"source_sequence"`
+	EventID        string    `json:"event_id"`
+	SourceID       string    `json:"source_id"`
+	ObservedAt     time.Time `json:"observed_at"`
+}
+
+// EvalStopRequestedPayload is the payload for ai.eval.stop.requested events.
+type EvalStopRequestedPayload struct {
+	SchemaVersion  string     `json:"schema_version"`
+	SourceSequence int64      `json:"source_sequence"`
+	EventID        string     `json:"event_id"`
+	CampaignID     string     `json:"campaign_id"`
+	StopReason     StopReason `json:"stop_reason"`
+	StopScope      StopScope  `json:"stop_scope"`
+	RequestedAt    time.Time  `json:"requested_at"`
+	ObservedAt     time.Time  `json:"observed_at"`
+}
+
+// ---------------------------------------------------------------------------
+// Live campaign projections (observe_api.json)
+//
+// These projections carry a freshness field using the closed vocabulary
+// active, delayed, stale, intentionally_stopped, safety_stopped,
+// source_offline. See protocol/models/observe_api.json for the canonical
+// wire shapes.
+// ---------------------------------------------------------------------------
+
+// SupervisorStateProjection is the current lifecycle state of the continuous
+// campaign supervisor. One supervisor per campaign.
+type SupervisorStateProjection struct {
+	SchemaVersion    string            `json:"schema_version"`
+	SupervisorID     string            `json:"supervisor_id"`
+	CampaignID       string            `json:"campaign_id"`
+	CampaignRevision string            `json:"campaign_revision"`
+	Status           SupervisorStatus  `json:"status"`
+	CurrentCycleID   string            `json:"current_cycle_id,omitempty"`
+	LastCycleID      string            `json:"last_cycle_id,omitempty"`
+	StopReason       StopReason        `json:"stop_reason,omitempty"`
+	Freshness        CampaignFreshness `json:"freshness"`
+	ObservedAt       time.Time         `json:"observed_at"`
+}
+
+// CycleStateProjection is the current lifecycle state of a single campaign
+// cycle. One cycle at a time per supervisor.
+type CycleStateProjection struct {
+	SchemaVersion      string                 `json:"schema_version"`
+	CycleID            string                 `json:"cycle_id"`
+	CampaignID         string                 `json:"campaign_id"`
+	CampaignRevision   string                 `json:"campaign_revision"`
+	RoleCombinationID  string                 `json:"role_combination_id"`
+	Status             CampaignCycleStatus    `json:"status"`
+	VerificationStatus EvalVerificationStatus `json:"verification_status,omitempty"`
+	Freshness          CampaignFreshness      `json:"freshness"`
+	StartedAt          *time.Time             `json:"started_at,omitempty"`
+	CompletedAt        *time.Time             `json:"completed_at,omitempty"`
+	ObservedAt         time.Time              `json:"observed_at"`
+}
+
+// AssignmentProgressProjection is the current progress of a single campaign
+// assignment.
+type AssignmentProgressProjection struct {
+	SchemaVersion  string                   `json:"schema_version"`
+	AssignmentID   string                   `json:"assignment_id"`
+	CycleID        string                   `json:"cycle_id"`
+	CampaignID     string                   `json:"campaign_id"`
+	VariantID      string                   `json:"variant_id"`
+	Role           ModelRole                `json:"role"`
+	TaskID         string                   `json:"task_id"`
+	ArmID          string                   `json:"arm_id"`
+	Repetition     int                      `json:"repetition"`
+	Status         AssignmentProgressStatus `json:"status"`
+	TerminalStatus TerminalOutcomeStatus    `json:"terminal_status,omitempty"`
+	Freshness      CampaignFreshness        `json:"freshness"`
+	StartedAt      *time.Time               `json:"started_at,omitempty"`
+	CompletedAt    *time.Time               `json:"completed_at,omitempty"`
+	ObservedAt     time.Time                `json:"observed_at"`
+}
+
+// RoleCombinationProjection is the exact Primary/Assistant/Lite
+// role-combination identity. Binds all three exact ModelVariant identities
+// with served model tags, backends, and quantization from the provider
+// boundary.
+type RoleCombinationProjection struct {
+	SchemaVersion         string    `json:"schema_version"`
+	RoleCombinationID     string    `json:"role_combination_id"`
+	CampaignID            string    `json:"campaign_id"`
+	PrimaryVariantID      string    `json:"primary_variant_id"`
+	AssistantVariantID    string    `json:"assistant_variant_id,omitempty"`
+	LiteVariantID         string    `json:"lite_variant_id,omitempty"`
+	PrimaryModelTag       string    `json:"primary_model_tag"`
+	AssistantModelTag     string    `json:"assistant_model_tag,omitempty"`
+	LiteModelTag          string    `json:"lite_model_tag,omitempty"`
+	PrimaryBackend        string    `json:"primary_backend"`
+	AssistantBackend      string    `json:"assistant_backend,omitempty"`
+	LiteBackend           string    `json:"lite_backend,omitempty"`
+	PrimaryQuantization   string    `json:"primary_quantization,omitempty"`
+	AssistantQuantization string    `json:"assistant_quantization,omitempty"`
+	LiteQuantization      string    `json:"lite_quantization,omitempty"`
+	ObservedAt            time.Time `json:"observed_at"`
+}
+
+// VerificationProgressProjection is the current progress of the campaign
+// verifier for a single cycle.
+type VerificationProgressProjection struct {
+	SchemaVersion               string                 `json:"schema_version"`
+	CycleID                     string                 `json:"cycle_id"`
+	CampaignID                  string                 `json:"campaign_id"`
+	VerificationStatus          EvalVerificationStatus `json:"verification_status"`
+	VerifiedIndexGenerationHash string                 `json:"verified_index_generation_hash,omitempty"`
+	LayerCount                  int                    `json:"layer_count"`
+	FailureCount                int                    `json:"failure_count"`
+	Freshness                   CampaignFreshness      `json:"freshness"`
+	CompletedAt                 *time.Time             `json:"completed_at,omitempty"`
+	ObservedAt                  time.Time              `json:"observed_at"`
+}
+
+// PublicationProgressProjection is the current progress of the publication
+// path for a single cycle.
+type PublicationProgressProjection struct {
+	SchemaVersion             string            `json:"schema_version"`
+	CycleID                   string            `json:"cycle_id"`
+	CampaignID                string            `json:"campaign_id"`
+	PublicationStatus         PublicationStatus `json:"publication_status"`
+	PublicationSchemaVersion  string            `json:"publication_schema_version,omitempty"`
+	PublishedProjectionSHA256 string            `json:"published_projection_sha256,omitempty"`
+	Freshness                 CampaignFreshness `json:"freshness"`
+	CompletedAt               *time.Time        `json:"completed_at,omitempty"`
+	ObservedAt                time.Time         `json:"observed_at"`
+}
+
+// SourceFreshnessProjection is the current freshness state of the campaign
+// source. A heartbeat proves source liveness only, not that any specific
+// work is progressing.
+type SourceFreshnessProjection struct {
+	SchemaVersion   string            `json:"schema_version"`
+	SourceID        string            `json:"source_id"`
+	CampaignID      string            `json:"campaign_id,omitempty"`
+	Freshness       CampaignFreshness `json:"freshness"`
+	LastHeartbeatAt time.Time         `json:"last_heartbeat_at"`
+	ObservedAt      time.Time         `json:"observed_at"`
 }

@@ -1062,15 +1062,15 @@ func TestObserveProducerController_HandleEvalPublication_MissingRouteRejected(t 
 	contentHashHex := hex.EncodeToString(contentHash[:])
 	contentB64 := base64.StdEncoding.EncodeToString(content)
 	body, err := json.Marshal(models.ObserveProducerEvalPublicationRequest{
-		SchemaVersion:  constants.ObservePublicationSchemaVersion,
-		BundleID:       "bundle-no-route",
-		RunID:          "eval-no-route",
-		ReleaseVersion: "2.1.8",
-		SuiteID:        "suite-no-route",
-		SuiteVersion:   "1.0.0",
-		CampaignID:     "campaign-no-route",
-		ArmIDs:         []string{"arm-no-route"},
-		ModelCohortIDs: []string{"cohort-no-route"},
+		SchemaVersion:   constants.ObservePublicationSchemaVersion,
+		BundleID:        "bundle-no-route",
+		RunID:           "eval-no-route",
+		ReleaseVersion:  "2.1.8",
+		SuiteID:         "suite-no-route",
+		SuiteVersion:    "1.0.0",
+		CampaignID:      "campaign-no-route",
+		ArmIDs:          []string{"arm-no-route"},
+		ModelCohortIDs:  []string{"cohort-no-route"},
 		AssignmentCount: 1,
 		VerificationReport: models.VerificationReportWire{
 			SchemaVersion: constants.VerificationReportSchemaVersion,

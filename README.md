@@ -240,6 +240,8 @@ The following candidate metrics are absent from the selected evidence and are om
 
 Assigned task definitions: [tasks.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/tasks.jsonl). Population and terminal outcomes: [attempts.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/attempts.jsonl). Observed model-call telemetry: [stages.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/stages.jsonl). Derived orientation summary: [summary.json](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/summary.json). Private-evidence hash metadata: [evidence-index.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/evidence-index.jsonl).
 
+
+
 ### Receipt Verification
 
 **Receipt evidence is unavailable for this Stage 2 comparison.** The answer-only tasks produced zero receipts, so this evidence supports no receipt-signature, mutation, persistence, or state claim.

@@ -219,7 +219,8 @@ class ObservedMeasurement(G8eBaseModel):
 
     Every displayed measurement uses a typed value with source and observation
     time. Resource and throughput cards remain unavailable until real
-    instrumentation exists.
+    instrumentation exists. Extended with scope, collector_version, and
+    evidence_hash from the S6 typed observer.
     """
 
     schema_version: str
@@ -230,3 +231,173 @@ class ObservedMeasurement(G8eBaseModel):
     observed_at: UTCDatetime
     window_seconds: float | None = None
     status: str
+    scope: str | None = None
+    collector_version: str | None = None
+    evidence_hash: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Live campaign event payloads (g8e.v1.ai.eval.* family)
+#
+# These payloads carry source_sequence (monotonic ordering), event_id
+# (duplicate suppression), and observed_at on every event. Producers persist
+# the corresponding projection before emitting the SSE event. See
+# protocol/models/observe_event_payloads.json for the canonical wire shapes.
+# ---------------------------------------------------------------------------
+
+
+class EvalCycleStartedPayload(G8eBaseModel):
+    schema_version: str
+    source_sequence: int
+    event_id: str
+    cycle_id: str
+    campaign_id: str
+    campaign_revision: str
+    role_combination_id: str
+    primary_variant_id: str
+    assistant_variant_id: str | None = None
+    lite_variant_id: str | None = None
+    benchmark_population: int
+    repetition_count: int
+    started_at: UTCDatetime
+    observed_at: UTCDatetime
+
+
+class EvalCycleCompletedPayload(G8eBaseModel):
+    schema_version: str
+    source_sequence: int
+    event_id: str
+    cycle_id: str
+    campaign_id: str
+    campaign_revision: str
+    role_combination_id: str
+    verification_status: str
+    terminal_attempts: int
+    assigned_tasks: int
+    completed_at: UTCDatetime
+    observed_at: UTCDatetime
+
+
+class EvalAssignmentStartedPayload(G8eBaseModel):
+    schema_version: str
+    source_sequence: int
+    event_id: str
+    cycle_id: str
+    campaign_id: str
+    assignment_id: str
+    variant_id: str
+    role: str
+    task_id: str
+    arm_id: str
+    repetition: int
+    started_at: UTCDatetime
+    observed_at: UTCDatetime
+
+
+class EvalAssignmentCompletedPayload(G8eBaseModel):
+    schema_version: str
+    source_sequence: int
+    event_id: str
+    cycle_id: str
+    campaign_id: str
+    assignment_id: str
+    variant_id: str
+    role: str
+    task_id: str
+    arm_id: str
+    repetition: int
+    terminal_status: str
+    completed_at: UTCDatetime
+    observed_at: UTCDatetime
+
+
+class EvalModelRoleInvokedPayload(G8eBaseModel):
+    schema_version: str
+    source_sequence: int
+    event_id: str
+    cycle_id: str
+    campaign_id: str
+    assignment_id: str
+    variant_id: str
+    role: str
+    served_model_tag: str
+    backend_name: str
+    quantization: str | None = None
+    invoked_at: UTCDatetime
+    observed_at: UTCDatetime
+
+
+class EvalMetricAvailablePayload(G8eBaseModel):
+    schema_version: str
+    source_sequence: int
+    event_id: str
+    cycle_id: str
+    campaign_id: str
+    assignment_id: str
+    variant_id: str
+    metric_id: str
+    metric_version: str
+    numerator: int
+    denominator: int
+    rate: float | None = None
+    unit: str
+    verification_status: str
+    available_at: UTCDatetime
+    observed_at: UTCDatetime
+
+
+class EvalVerifierCompletedPayload(G8eBaseModel):
+    schema_version: str
+    source_sequence: int
+    event_id: str
+    cycle_id: str
+    campaign_id: str
+    verification_status: str
+    verified_index_generation_hash: str
+    layer_count: int
+    failure_count: int
+    completed_at: UTCDatetime
+    observed_at: UTCDatetime
+
+
+class EvalProofAvailablePayload(G8eBaseModel):
+    schema_version: str
+    source_sequence: int
+    event_id: str
+    cycle_id: str
+    campaign_id: str
+    proof_root_sha256: str
+    artifact_count: int
+    available_at: UTCDatetime
+    observed_at: UTCDatetime
+
+
+class EvalPublicationCompletedPayload(G8eBaseModel):
+    schema_version: str
+    source_sequence: int
+    event_id: str
+    cycle_id: str
+    campaign_id: str
+    publication_schema_version: str
+    published_projection_sha256: str
+    completed_at: UTCDatetime
+    observed_at: UTCDatetime
+
+
+class EvalHeartbeatPayload(G8eBaseModel):
+    schema_version: str
+    source_sequence: int
+    event_id: str
+    source_id: str
+    observed_at: UTCDatetime
+
+
+class EvalStopRequestedPayload(G8eBaseModel):
+    schema_version: str
+    source_sequence: int
+    event_id: str
+    campaign_id: str
+    stop_reason: str
+    stop_scope: str
+    requested_at: UTCDatetime
+    observed_at: UTCDatetime

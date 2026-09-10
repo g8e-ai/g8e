@@ -1215,6 +1215,50 @@
     "AiEvalMetricRecorded": {
       "_go_const": "EventAiEvalMetricRecorded",
       "value": "g8e.v1.ai.eval.metric.recorded"
+    },
+    "AiEvalCycleStarted": {
+      "_go_const": "EventAiEvalCycleStarted",
+      "value": "g8e.v1.ai.eval.cycle.started"
+    },
+    "AiEvalCycleCompleted": {
+      "_go_const": "EventAiEvalCycleCompleted",
+      "value": "g8e.v1.ai.eval.cycle.completed"
+    },
+    "AiEvalAssignmentStarted": {
+      "_go_const": "EventAiEvalAssignmentStarted",
+      "value": "g8e.v1.ai.eval.assignment.started"
+    },
+    "AiEvalAssignmentCompleted": {
+      "_go_const": "EventAiEvalAssignmentCompleted",
+      "value": "g8e.v1.ai.eval.assignment.completed"
+    },
+    "AiEvalModelRoleInvoked": {
+      "_go_const": "EventAiEvalModelRoleInvoked",
+      "value": "g8e.v1.ai.eval.model_role.invoked"
+    },
+    "AiEvalMetricAvailable": {
+      "_go_const": "EventAiEvalMetricAvailable",
+      "value": "g8e.v1.ai.eval.metric.available"
+    },
+    "AiEvalVerifierCompleted": {
+      "_go_const": "EventAiEvalVerifierCompleted",
+      "value": "g8e.v1.ai.eval.verifier.completed"
+    },
+    "AiEvalProofAvailable": {
+      "_go_const": "EventAiEvalProofAvailable",
+      "value": "g8e.v1.ai.eval.proof.available"
+    },
+    "AiEvalPublicationCompleted": {
+      "_go_const": "EventAiEvalPublicationCompleted",
+      "value": "g8e.v1.ai.eval.publication.completed"
+    },
+    "AiEvalHeartbeat": {
+      "_go_const": "EventAiEvalHeartbeat",
+      "value": "g8e.v1.ai.eval.heartbeat"
+    },
+    "AiEvalStopRequested": {
+      "_go_const": "EventAiEvalStopRequested",
+      "value": "g8e.v1.ai.eval.stop.requested"
     }
   }
 }
