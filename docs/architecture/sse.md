@@ -181,5 +181,6 @@ As a result, the current in-tree dashboard browser client does not establish a f
 - [Ensemble SSE](../ensemble/sse.md): First-party event production and application event types.
 - [Dashboard SSE](../dashboard/sse.md): Browser connection lifecycle and current integration constraints.
 - [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md): The audited g8e-adapter and contract pack for generated observe frontends.
+- [Public Spectator Architecture and Threat Model](./public_spectator.md): The separate anonymous public-mirror SSE relay and outbound-only export architecture.
 - [AI Agents and the Governance Boundary](./agents.md): Distinction between event telemetry and governed execution.
 - [Constants Reference](../../protocol/docs/constants.md): Canonical endpoint and event constants.

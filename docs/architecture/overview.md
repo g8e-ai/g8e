@@ -183,6 +183,7 @@ g8e provides platform-specific bootstrap scripts for local development, gateway-
 | [Encryption Architecture](./encryption.md) | Vault lifecycle, three-tier key hierarchy, platform keystore, TLS and mTLS, FIPS 140-3 compliance. |
 | [Storage Architecture](./storage.md) | Audit store, ledger, execution vault, replay store, suspended transaction store, commitment ledger, runtime file I/O. |
 | [SSE Streaming](./sse.md) | SSE push, poll, and stream endpoints for agentic ensembles and platform workflows. |
+| [Public Spectator Architecture and Threat Model](./public_spectator.md) | Public-mirror observation mode, outbound-only export, closed allowlist, threat model, and availability boundaries. |
 | [Protocol Library](./protocol.md) | Go and Python protocol packages, constants registries, JSON model schemas, protobuf code generation, release workflow. |
 | [Scripts](./scripts.md) | Dev bootstrap, smoke test, CI guard, remote deploy, and air-gapped demo scripts. |
 

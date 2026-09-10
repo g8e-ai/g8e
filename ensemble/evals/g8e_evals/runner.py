@@ -34,6 +34,7 @@ import hashlib
 import json
 import os
 import random
+import shutil
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -61,9 +62,12 @@ from g8e_evals.campaign import (
     InitialStateAssignmentManifest,
     ModelCohort,
     RetryPolicy,
+    RoleModelBinding,
+    SamplingSettings,
     TaskAssignmentManifest,
     compute_assignment_id,
     compute_campaign_manifest_hash,
+    compute_model_cohort_hash,
     compute_retry_policy_hash,
     compute_schedule_hash,
     validate_campaign_assignments,
@@ -97,9 +101,13 @@ from g8e_evals.index import (
     compute_index_generation_hash,
 )
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
+from g8e_evals.profile import CampaignProfile
+from g8e_evals.registry import ModelRegistry
 from g8e_evals.schema import (
     ArmManifestEntry,
     AttemptRecord,
+    BackendArtifactIdentity,
+    CampaignBinding,
     ContentHash,
     GraderClass,
     GraderReference,
@@ -113,6 +121,7 @@ from g8e_evals.schema import (
     StackEnvironment,
     TaskDefinition,
     TerminalStatus,
+    TokenizerTemplateIdentity,
     VerificationStatus,
 )
 
@@ -137,6 +146,26 @@ class CampaignStopReason(StrEnum):
 class CampaignRunnerError(Exception):
     """Raised for global preflight defects, corrupted persisted state, or
     an inability to persist authoritative records."""
+
+
+class DiskSpacePreflightError(Exception):
+    """Raised when the available disk space is below the required threshold."""
+
+
+def check_disk_space(path: Path, *, min_bytes: int) -> None:
+    """Check that the filesystem containing ``path`` has at least ``min_bytes`` free.
+
+    Raises ``DiskSpacePreflightError`` when the available space is below
+    the threshold. A zero threshold always passes.
+    """
+    if min_bytes <= 0:
+        return
+    usage = shutil.disk_usage(path)
+    if usage.free < min_bytes:
+        raise DiskSpacePreflightError(
+            f"insufficient disk space at {path}: available {usage.free} bytes, "
+            f"required {min_bytes} bytes"
+        )
 
 
 class SUTProtocol(Protocol):
@@ -419,6 +448,57 @@ def _model_matches(observed: str, expected: str) -> bool:
     return False
 
 
+def derive_cohorts_from_registry(
+    profile: CampaignProfile,
+    registry: ModelRegistry,
+) -> tuple[list[ModelCohort], dict[str, str]]:
+    """Derive campaign cohorts from the model registry.
+
+    Builds one cohort per runnable variant in the profile's
+    ``generative_variant_ids``. Each cohort's primary role binding
+    carries the variant's served model tag and backend name, with
+    sampling settings and timeout from the profile. The cohort ID is
+    ``cohort-{variant_id}``.
+
+    Returns the list of cohorts and a mapping from cohort ID to variant
+    ID for CampaignBinding population.
+    """
+    runnable_ids = set(registry.runnable_variant_ids())
+    measured_ids = [
+        vid for vid in profile.generative_variant_ids
+        if vid in runnable_ids
+    ]
+
+    cohorts: list[ModelCohort] = []
+    cohort_variant_map: dict[str, str] = {}
+    for variant_id in measured_ids:
+        variant = registry.get_variant(variant_id)
+        cohort_id = f"cohort-{variant_id}"
+        bindings = [RoleModelBinding(
+            role="primary",
+            model_id=variant.served_model_tag,
+            provider=variant.backend_name,
+            endpoint="http://192.168.1.2:11434",
+            sampling_settings=SamplingSettings(
+                temperature=profile.temperature,
+                top_p=profile.top_p,
+                max_tokens=profile.max_tokens,
+                seed=profile.seed,
+            ),
+            timeout_seconds=profile.timeout_seconds,
+            seed_capable=True,
+        )]
+        ch = compute_model_cohort_hash(cohort_id, bindings)
+        cohorts.append(ModelCohort(
+            cohort_id=cohort_id,
+            role_bindings=bindings,
+            content_hash=ch,
+        ))
+        cohort_variant_map[cohort_id] = variant_id
+
+    return cohorts, cohort_variant_map
+
+
 @dataclass
 class CampaignRunner:
     """Authoritative campaign runner.
@@ -432,6 +512,13 @@ class CampaignRunner:
     list of ``Task`` objects loaded from the dataset. This makes the
     runner testable with deterministic fake SUTs and graders.
 
+    When ``campaign_profile`` and ``model_registry`` are provided, the
+    runner populates ``CampaignBinding`` on the ``RunManifest`` with
+    the campaign-level identity, frozen profile and registry hashes,
+    and the primary variant's backend artifact and tokenizer template
+    identity from the registry. The ``cohort_variant_map`` maps cohort
+    IDs to registry variant IDs for this lookup.
+
     Resume: if the report directory already contains a persisted campaign
     status and attempts, the runner reads the existing schedule and
     skips assignments that already have a terminal attempt. It does not
@@ -444,6 +531,10 @@ class CampaignRunner:
     grader: GraderProtocol
     output_dir: Path
     evidence_key: object | None = None
+    campaign_profile: CampaignProfile | None = None
+    model_registry: ModelRegistry | None = None
+    cohort_variant_map: dict[str, str] | None = None
+    disk_space_min_bytes: int = 0
     _run_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     _report_dir: Path | None = None
     _suts: dict[tuple[str, str], SUTProtocol] = field(default_factory=dict)
@@ -504,8 +595,15 @@ class CampaignRunner:
         return cast(list[AttemptRecord], records)
 
     def _completed_assignment_ids(self, attempts: list[AttemptRecord]) -> set[str]:
-        """Return the set of assignment IDs that have a terminal attempt."""
-        return {a.assignment_id for a in attempts if a.assignment_id}
+        """Return the set of assignment IDs that have a non-infrastructure-failed terminal attempt.
+
+        Infrastructure-failed assignments are not considered completed;
+        they are eligible for supersession (re-execution) on resume.
+        """
+        return {
+            a.assignment_id for a in attempts
+            if a.assignment_id and a.terminal_status != TerminalStatus.INFRASTRUCTURE_FAILED
+        }
 
     def _load_existing_generations(self) -> list[IndexGeneration]:
         """Load existing index generations from the report directory (for resume)."""
@@ -626,7 +724,14 @@ class CampaignRunner:
         return task_defs
 
     def _build_run_manifest(self, task_defs: list[TaskDefinition]) -> RunManifest:
-        """Build the RunManifest for the report directory."""
+        """Build the RunManifest for the report directory.
+
+        When ``campaign_profile`` and ``model_registry`` are provided,
+        populates ``CampaignBinding`` with the campaign-level identity,
+        frozen profile and registry hashes, and the primary variant's
+        backend artifact and tokenizer template identity from the
+        registry.
+        """
         arms = [self.spec.preregistration.baseline_arm_id, *self.spec.preregistration.comparison_arm_ids]
         arm_entries = []
         for arm_id in arms:
@@ -665,6 +770,8 @@ class CampaignRunner:
             ContentHash(name="grader_bundle", sha256=self.spec.grader_bundle_hash),
         ]
 
+        campaign_binding = self._build_campaign_binding()
+
         return RunManifest(
             run_id=self._run_id,
             suite_id=self.spec.suite_id,
@@ -676,6 +783,73 @@ class CampaignRunner:
             source_build_provenance=self.spec.source_build_provenance,
             provider_budget=self.spec.provider_budget,
             stack_environment=self.spec.stack_environment,
+            campaign_binding=campaign_binding,
+        )
+
+    def _build_campaign_binding(self) -> CampaignBinding | None:
+        """Build CampaignBinding from the campaign profile and model registry.
+
+        Returns None when either ``campaign_profile`` or ``model_registry``
+        is not provided. When both are present, resolves the primary
+        variant from the first cohort via ``cohort_variant_map`` and
+        populates the binding with campaign-level identity, frozen
+        profile and registry hashes, and the variant's backend artifact
+        and tokenizer template identity.
+        """
+        if self.campaign_profile is None or self.model_registry is None:
+            return None
+
+        first_cohort = self.spec.cohorts[0]
+        cohort_id = first_cohort.cohort_id
+        variant_id = self.cohort_variant_map.get(cohort_id, "") if self.cohort_variant_map else ""
+        if not variant_id:
+            return None
+
+        variant = self.model_registry.get_variant(variant_id)
+
+        first_assignment_id = ""
+        if self.spec.cohorts and self.spec.task_assignment.task_ids:
+            from g8e_evals.campaign import compute_assignment_id
+            first_task_id = sorted(self.spec.task_assignment.task_ids)[0]
+            first_arm_id = self.spec.preregistration.baseline_arm_id
+            first_replicate_id = self.spec.preregistration.required_replicate_ids[0] if self.spec.preregistration.required_replicate_ids else "replicate-1"
+            first_assignment_id = compute_assignment_id(
+                self.spec.campaign_id,
+                first_task_id,
+                cohort_id,
+                first_arm_id,
+                self.spec.initial_state.initial_state_assignment_id,
+                first_replicate_id,
+            )
+
+        first_track = self.campaign_profile.track_arm_assignments[0].track if self.campaign_profile.track_arm_assignments else CampaignTrack.DIRECT
+
+        return CampaignBinding(
+            campaign_id=self.campaign_profile.campaign_id,
+            campaign_revision=self.campaign_profile.campaign_revision,
+            assignment_id=first_assignment_id,
+            model_variant_id=variant.variant_id,
+            track=first_track,
+            target_tier=None,
+            repetition=0,
+            campaign_profile_hash=self.campaign_profile.content_hash,
+            model_registry_hash=self.model_registry.content_hash,
+            backend_artifact_identity=BackendArtifactIdentity(
+                backend_name=variant.backend_name,
+                backend_version=variant.backend_version,
+                served_model_tag=variant.served_model_tag,
+                artifact_digest=variant.artifact_digest,
+                artifact_bytes=variant.artifact_bytes,
+                quantization=variant.quantization,
+                tensor_format=variant.tensor_format,
+            ),
+            tokenizer_template_identity=TokenizerTemplateIdentity(
+                tokenizer_digest=variant.tokenizer_digest,
+                chat_template_hash=variant.chat_template_hash,
+                prompt_serialization_version="",
+            ),
+            reasoning_mode=variant.reasoning_mode,
+            constrained_decoding_mode="none",
         )
 
     async def _execute_assignment(
@@ -690,20 +864,33 @@ class CampaignRunner:
 
         Returns all attempts (including retry attempts) and any metric
         observations from the terminal attempt. If the assignment
-        already has a terminal attempt (resume), returns the existing
-        attempts without re-executing.
+        already has a non-infrastructure-failed terminal attempt
+        (resume), returns the existing attempts without re-executing.
+        Infrastructure-failed assignments are re-executed on resume
+        (supersession), with the new attempt_num starting after the
+        existing attempts.
         """
         assignment_attempts = [a for a in existing_attempts if a.assignment_id == assignment.assignment_id]
-        if assignment_attempts:
+        has_non_infra = any(
+            a.terminal_status != TerminalStatus.INFRASTRUCTURE_FAILED
+            for a in assignment_attempts
+        )
+        if assignment_attempts and has_non_infra:
             metrics: list[MetricObservation] = []
             return assignment_attempts, metrics
+
+        # For supersession (infrastructure-failed resume), start
+        # attempt_num after the existing attempts to avoid duplicate
+        # attempt IDs. The parent_attempt_id is None for the first
+        # new attempt because supersession is a fresh execution, not
+        # a retry of the superseded attempt.
+        attempt_num = len(assignment_attempts)
+        parent_attempt_id: str | None = None
 
         sut = self._get_sut(cohort, arm_def.arm_id)
         expected_model = _model_id_for_cohort(cohort)
 
-        attempt_num = 0
-        parent_attempt_id: str | None = None
-        all_attempts: list[AttemptRecord] = []
+        new_attempts: list[AttemptRecord] = []
 
         while True:
             attempt_id = f"{self._run_id}:{assignment.assignment_id}:{attempt_num}"
@@ -773,7 +960,7 @@ class CampaignRunner:
                 missingness_or_failure=None if terminal_status == TerminalStatus.COMPLETED else terminal_status.value,
                 parent_attempt_id=parent_attempt_id,
             )
-            all_attempts.append(attempt)
+            new_attempts.append(attempt)
 
             # Check if retry is allowed
             retryable = set(self.spec.retry_policy.retryable_terminal_statuses)
@@ -788,10 +975,10 @@ class CampaignRunner:
 
             break
 
-        # Validate the retry chain
-        validate_retry_chain(all_attempts, assignment.assignment_id, self.spec.retry_policy)
+        # Validate the retry chain (new attempts only)
+        validate_retry_chain(new_attempts, assignment.assignment_id, self.spec.retry_policy)
 
-        return all_attempts, metrics
+        return new_attempts, metrics
 
     def _materialize_budget_stop(
         self,
@@ -886,15 +1073,25 @@ class CampaignRunner:
         # 5b. Write index generations
         existing_generations = self._load_existing_generations()
         if existing_generations:
-            # Resume: create a new index generation with the RESUME reason
+            # Resume: create a new index generation
             last_gen = existing_generations[-1]
             existing_attempts = self._load_existing_attempts()
             dispositions = self._compute_assignment_dispositions(assignments, existing_attempts)
             checksums = self._compute_report_checksums(existing_attempts)
+            # If any assignment has infrastructure_failed status, create a
+            # SUPERSESSION generation; otherwise create a RESUME generation.
+            has_infra_failures = any(
+                a.terminal_status == TerminalStatus.INFRASTRUCTURE_FAILED
+                for a in existing_attempts if a.assignment_id
+            )
+            creation_reason = (
+                IndexCreationReason.SUPERSESSION if has_infra_failures
+                else IndexCreationReason.RESUME
+            )
             self._write_index_generation(
                 generation_number=last_gen.generation_number + 1,
                 parent_generation_hash=last_gen.content_hash,
-                creation_reason=IndexCreationReason.RESUME,
+                creation_reason=creation_reason,
                 report_checksums=checksums,
                 assignment_dispositions=dispositions,
             )
@@ -925,6 +1122,9 @@ class CampaignRunner:
         for assignment_id in schedule.ordered_assignment_ids:
             if assignment_id in completed_ids:
                 continue
+
+            # Disk-space preflight: check before every block
+            check_disk_space(self.report_dir, min_bytes=self.disk_space_min_bytes)
 
             assignment = next(a for a in assignments if a.assignment_id == assignment_id)
             cohort = cohort_by_id[assignment.model_cohort_id]
@@ -1036,9 +1236,12 @@ __all__ = [
     "CampaignRunnerError",
     "CampaignSpec",
     "CampaignStopReason",
+    "DiskSpacePreflightError",
     "GraderProtocol",
     "SUTFactory",
     "SUTProtocol",
     "build_campaign_manifest",
     "build_campaign_state",
+    "check_disk_space",
+    "derive_cohorts_from_registry",
 ]

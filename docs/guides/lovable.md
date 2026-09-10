@@ -37,7 +37,25 @@ If you decline system trust installation (or your platform is managed), the comm
 After verification succeeds, the CLI prints a prompt. Paste it into Lovable:
 
 ```text
-Connect this app to the g8e Gateway at https://localhost:8443. Make all Gateway requests directly from the browser, not from an edge function or server. Include credentials: "include" on every fetch request and withCredentials: true on every EventSource connection.
+Connect this app to the g8e Gateway. Implement this integration contract exactly.
+
+{
+  "id": "g8e-gateway-client",
+  "baseUrl": "https://localhost:8443",
+  "transport": {
+    "runtime": "browser",
+    "exclude": ["edge-function", "server", "server-proxy"],
+    "requests": {
+      "fetch": { "credentials": "include" },
+      "eventSource": { "withCredentials": true }
+    }
+  }
+}
+
+Rules:
+- All Gateway requests run in the browser. Do not route through edge functions, server endpoints, or server-side proxies.
+- Every fetch() to the Gateway sets credentials: "include".
+- Every EventSource to the Gateway sets withCredentials: true.
 ```
 
 Then open the app in a new browser tab, not inside the Lovable editor preview. The embedded editor iframe can block loopback and WebAuthn permissions; a top-level tab can request them.

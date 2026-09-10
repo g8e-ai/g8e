@@ -97,4 +97,5 @@ Tests cover browser authentication, event handling and reconnection, static-host
 - [Ensemble](./ensemble.md): The first-party ensemble that publishes browser-visible events.
 - [Build a g8e-Compatible Frontend](../guides/build_frontend.md): Browser integration requirements.
 - [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md): The audited g8e-adapter and contract pack for generated observe frontends.
+- [Public Spectator Architecture and Threat Model](./public_spectator.md): The separate anonymous public-mirror observation mode and outbound-only export architecture.
 - [Unified Docker Stack](../guides/unified_stack.md): Full-stack deployment including g8ed.

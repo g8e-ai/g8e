@@ -719,7 +719,11 @@ def campaign():
               help="Maximum total provider spending in USD before the campaign stops.")
 @click.option("--model-tags", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
               help="Path to a JSON file mapping cohort IDs to provider model tags (e.g. {\"cohort-granite-3.3-8b\": \"granite3.3:8b\"}). When omitted, the model tag is derived from the cohort ID by removing the 'cohort-' prefix and replacing the last hyphen with a colon.")
-def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, model_tags):
+@click.option("--profile", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
+              help="Path to a JSON campaign profile file. When provided with --models, cohorts are derived from the registry and CampaignBinding is populated on every RunManifest.")
+@click.option("--models", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
+              help="Path to a JSON model registry file. When provided with --profile, cohorts are derived from the registry and CampaignBinding is populated on every RunManifest.")
+def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, model_tags, profile, models):
     """Run an authoritative multi-arm, multi-cohort campaign.
 
     Creates one campaign identity, one report directory, one assignment
@@ -727,7 +731,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     Resume reads the persisted schedule and existing attempts; it does
     not rerandomize or discard failures.
     """
-    from g8e_evals.runner import CampaignRunner, CampaignSpec, CampaignRunnerError
+    from g8e_evals.runner import CampaignRunner, CampaignSpec, CampaignRunnerError, derive_cohorts_from_registry
     from g8e_evals.campaign import (
         InitialStateAssignmentManifest,
         ModelCohort,
@@ -753,33 +757,63 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     suite_version = provenance.output.sha256[:12]
     dataset_hash = provenance.output.sha256
 
-    # Build cohorts from the preregistration's model cohort IDs. The
-    # cohort role bindings are content-addressed; the caller is
-    # responsible for supplying a preregistration whose cohort IDs
-    # match the frozen R0 campaign spec.
-    model_tag_map: dict[str, str] = {}
-    if model_tags is not None:
+    # When --profile and --models are provided, derive cohorts from the
+    # registry instead of building them inline from the preregistration's
+    # cohort IDs. The profile and registry are the source of truth for
+    # model identity and CampaignBinding population.
+    campaign_profile = None
+    model_registry = None
+    cohort_variant_map: dict[str, str] | None = None
+    if profile is not None and models is not None:
+        from g8e_evals.profile import CampaignProfile
+        from g8e_evals.registry import ModelRegistry
         try:
-            model_tag_map = json.loads(model_tags.read_text())
-        except (OSError, json.JSONDecodeError) as e:
-            raise click.UsageError(f"could not read --model-tags file {model_tags}: {e}") from e
-    cohorts: list[ModelCohort] = []
-    for cohort_id in prereg_config.model_cohort_ids:
-        # Default single-role binding for the direct arm. The
-        # ensemble_ungoverned arm would add assistant/lite roles; that
-        # wiring is part of R7 (live topology restoration).
-        model_id = _derive_model_tag(cohort_id, model_tag_map)
-        bindings = [RoleModelBinding(
-            role="primary",
-            model_id=model_id,
-            provider="ollama",
-            endpoint="http://192.168.1.2:11434",
-            sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=seed),
-            timeout_seconds=120.0,
-            seed_capable=True,
-        )]
-        ch = compute_model_cohort_hash(cohort_id, bindings)
-        cohorts.append(ModelCohort(cohort_id=cohort_id, role_bindings=bindings, content_hash=ch))
+            model_registry = ModelRegistry.model_validate_json(models.read_text())
+        except (ValidationError, OSError) as e:
+            raise click.UsageError(f"could not parse model registry {models}: {e}") from e
+        try:
+            campaign_profile = CampaignProfile.model_validate_json(profile.read_text())
+        except (ValidationError, OSError) as e:
+            raise click.UsageError(f"could not parse campaign profile {profile}: {e}") from e
+        try:
+            campaign_profile.validate_against_registry(model_registry)
+        except ValueError as e:
+            raise click.UsageError(f"profile validation failed: {e}") from e
+        cohorts, cohort_variant_map = derive_cohorts_from_registry(campaign_profile, model_registry)
+        if not cohorts:
+            raise click.UsageError("no runnable variants found in the model registry for the profile's generative_variant_ids")
+        # Update the preregistration's model_cohort_ids to match the
+        # derived cohorts so the campaign assignment product is consistent.
+        derived_cohort_ids = [c.cohort_id for c in cohorts]
+        prereg_config = prereg_config.model_copy(update={"model_cohort_ids": derived_cohort_ids})
+    else:
+        # Build cohorts from the preregistration's model cohort IDs. The
+        # cohort role bindings are content-addressed; the caller is
+        # responsible for supplying a preregistration whose cohort IDs
+        # match the frozen R0 campaign spec.
+        model_tag_map: dict[str, str] = {}
+        if model_tags is not None:
+            try:
+                model_tag_map = json.loads(model_tags.read_text())
+            except (OSError, json.JSONDecodeError) as e:
+                raise click.UsageError(f"could not read --model-tags file {model_tags}: {e}") from e
+        cohorts: list[ModelCohort] = []
+        for cohort_id in prereg_config.model_cohort_ids:
+            # Default single-role binding for the direct arm. The
+            # ensemble_ungoverned arm would add assistant/lite roles; that
+            # wiring is part of R7 (live topology restoration).
+            model_id = _derive_model_tag(cohort_id, model_tag_map)
+            bindings = [RoleModelBinding(
+                role="primary",
+                model_id=model_id,
+                provider="ollama",
+                endpoint="http://192.168.1.2:11434",
+                sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=seed),
+                timeout_seconds=120.0,
+                seed_capable=True,
+            )]
+            ch = compute_model_cohort_hash(cohort_id, bindings)
+            cohorts.append(ModelCohort(cohort_id=cohort_id, role_bindings=bindings, content_hash=ch))
 
     task_ids = [t.id for t in tasks]
     task_assignment = TaskAssignmentManifest(
@@ -855,6 +889,9 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         tasks=tasks,
         grader=grader,
         output_dir=output_dir,
+        campaign_profile=campaign_profile,
+        model_registry=model_registry,
+        cohort_variant_map=cohort_variant_map,
     )
 
     try:

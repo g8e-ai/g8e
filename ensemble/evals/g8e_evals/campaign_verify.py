@@ -246,6 +246,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     # Layer 9: manifest identity — run manifest content hashes match campaign manifest
     checked_layers.append("manifest_identity")
     run_manifest_path = report_dir / MANIFEST_JSON
+    run_manifest: RunManifest | None = None
     if _check_file_safety(run_manifest_path, failures, MANIFEST_JSON):
         try:
             run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text())
@@ -260,6 +261,26 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                         failures.append("run manifest has no content hashes")
         except (ValidationError, json.JSONDecodeError) as e:
             failures.append(f"run manifest identity check failed: {e}")
+
+    # Layer 10: artifact identity — campaign binding matches provider telemetry
+    checked_layers.append("artifact_identity")
+    if run_manifest is not None and run_manifest.campaign_binding is not None:
+        binding = run_manifest.campaign_binding
+        bai = binding.backend_artifact_identity
+        primary = run_manifest.role_to_model.primary
+        if primary and primary.model:
+            if bai.served_model_tag != primary.model:
+                failures.append(
+                    f"artifact identity mismatch: campaign binding served_model_tag "
+                    f"{bai.served_model_tag!r} does not match role_to_model primary model "
+                    f"{primary.model!r}"
+                )
+            if primary.provider and bai.backend_name != primary.provider:
+                failures.append(
+                    f"artifact identity mismatch: campaign binding backend_name "
+                    f"{bai.backend_name!r} does not match role_to_model primary provider "
+                    f"{primary.provider!r}"
+                )
 
     ok = len(failures) == 0
     return CampaignVerificationReport(

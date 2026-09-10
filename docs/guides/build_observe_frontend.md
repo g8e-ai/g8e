@@ -127,4 +127,5 @@ Real-browser acceptance (exact-origin CORS, WebAuthn authenticator, SSE credenti
 - [Build a g8e-Compatible Frontend](./build_frontend.md) — Full browser integration reference including WebAuthn, SSE, approvals, and passkey management.
 - [Connect a Lovable App](./lovable.md) — Minimal local Lovable setup with `gw connect`.
 - [Architecture: SSE Streaming](../architecture/sse.md) — Gateway SSE push ingestion, persistence, replay, and consumer endpoints.
+- [Architecture: Public Spectator Architecture and Threat Model](../architecture/public_spectator.md) — The separate anonymous public-mirror observation mode, outbound-only export, and threat model.
 - [Contract Pack README](../../dashboard/g8e-adapter/contract-pack/README.md) — Deterministic generation and acceptance commands.
