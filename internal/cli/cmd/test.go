@@ -195,21 +195,30 @@ func testE2EFullCmd() *cobra.Command {
 // and tears down on completion or failure.
 func testE2EFullCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 	var runRegexp string
+	var crossEnrollment bool
 
 	cmd := &cobra.Command{
 		Use:   "e2e-full",
 		Short: "Run full lifecycle Tier 3 E2E tests (start compose, test, tear down)",
 		Long: `Start the unified Docker Compose stack (--profile bootstrapped), wait for
 services to become healthy, run the Tier 3 E2E test suite, and tear down
-(docker compose down -v) on completion or failure.`,
+(docker compose down -v) on completion or failure.
+
+Use --cross-enrollment to additionally activate the cross-enrollment profile,
+which starts a secondary gateway container in operator mode enrolling against
+the primary gateway. This is required for the TestCrossEnrollment_* E2E tests.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Starting unified Docker Compose stack (--profile bootstrapped)...")
-			if err := runDockerCompose([]string{"up", "-d"}, "bootstrapped"); err != nil {
+			profiles := []string{constants.DockerBootstrappedProfile}
+			if crossEnrollment {
+				profiles = append(profiles, constants.DockerCrossEnrollProfile)
+			}
+			fmt.Printf("Starting unified Docker Compose stack (profiles: %s)...\n", strings.Join(profiles, ", "))
+			if err := runDockerCompose([]string{"up", "-d"}, profiles...); err != nil {
 				return fmt.Errorf("%w: docker compose up failed: %w", constants.ErrE2ETestsFailed, err)
 			}
 			defer func() {
 				fmt.Println("Tearing down Docker Compose stack...")
-				_ = runDockerCompose([]string{"down", "-v"}, "")
+				_ = runDockerCompose([]string{"down", "-v"})
 			}()
 
 			fmt.Println("Waiting for platform services to become healthy...")
@@ -243,6 +252,8 @@ services to become healthy, run the Tier 3 E2E test suite, and tear down
 	}
 
 	cmd.Flags().StringVar(&runRegexp, "run", "", "Regular expression selecting which E2E tests to run (passed to go test -run)")
+	cmd.Flags().BoolVar(&crossEnrollment, "cross-enrollment", false,
+		"Activate the cross-enrollment profile (secondary gateway in operator mode) for TestCrossEnrollment_* tests")
 	return cmd
 }
 

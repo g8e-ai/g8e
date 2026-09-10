@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-09-05
-Version: v2.1.4
+Last Updated: 2026-09-09
+Version: v2.1.8
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
@@ -40,6 +40,8 @@ The g8e platform is built on the g8e Protocol. Conforming gateway and Operator i
 - **Governed Operator** (PEP): The binary run in **Standard Mode** (`operator start`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease. Operators automatically serve as MCP servers, exposing tool capabilities through the gateway's unified MCP endpoint. Each remote Governed Operator handles L4-L5 (Warden, Actuator) locally for operations on its own host, re-verifying L1-L3 proofs from the Gateway before execution.
 
 The same five layers run on every conforming host. The gateway applies L1–L3, then either its own in-process Operator or a remote Governed Operator applies L4–L5. Each remote operator re-verifies L1–L3 proofs from the gateway before execution.
+
+A gateway can also enroll as an operator of another gateway. Because the gateway binary runs the same `operator start` path as any standalone operator, it submits an operator CSR through the platform enrollment protocol, the upstream owner approves it through the same pending-list and operator-registry surfaces, and the enrolling gateway receives an operator identity signed by the upstream gateway's Operator intermediate CA. The enrolled gateway-as-operator then dials out over outbound-only mTLS and re-verifies the upstream gateway's L1-L3 proofs before its Actuator executes. This enables cascading outbound-only topologies: a gateway at the absolute edge enrolls outbound-only to an upstream gateway, which may itself enroll outbound-only further in, so every hop is an outbound mTLS connection and no edge device opens an inbound port. See [Network Architecture](./network.md#cross-gateway-enrollment) and [Operator Architecture](./operator.md#cross-gateway-enrollment-cascading-outbound-topologies).
 
 For a detailed view of the Gateway service stack and its relationship to the Operator substrate, see the [Gateway Service Stack Diagram](../diagrams/graph-gateway-services.md).
 

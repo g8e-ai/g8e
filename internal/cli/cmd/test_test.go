@@ -92,6 +92,14 @@ func TestTestE2EFullCmd(t *testing.T) {
 		require.NotNil(t, flag)
 		assert.Equal(t, "", flag.DefValue)
 	})
+
+	t.Run("e2e-full command has cross-enrollment flag", func(t *testing.T) {
+		cmd := testE2EFullCmd()
+		flag := cmd.Flags().Lookup("cross-enrollment")
+		require.NotNil(t, flag)
+		assert.Equal(t, "false", flag.DefValue)
+		assert.Contains(t, flag.Usage, "cross-enrollment")
+	})
 }
 
 func TestTestCoverageCmd(t *testing.T) {

@@ -176,6 +176,7 @@ help:
 	@echo "  test-coverage         Run tests with coverage (enforces $(COVERAGE_THRESHOLD)% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-integration      Run Tier 2 (In-Process Integration) tests - no external dependencies"
 	@echo "  test-docker           Run Tier 3 (Docker E2E) steady-state tests against an approved platform"
+	@echo "  test-cross-enrollment Run Tier 3 cross-enrollment E2E tests (gateway-as-operator). Requires --profile cross-enrollment"
 	@echo ""
 	@echo "Lint & Quality:"
 	@echo "  lint          Run all linting and quality checks"
@@ -569,10 +570,31 @@ test-integration:
 #   ./g8e test e2e --run TestPlatformEnrollment_Denial
 #   ./g8e test e2e --run TestPlatformEnrollment_RestartDuringPending
 #   ./g8e test e2e --run TestPlatformEnrollment_Headless
+#
+# Cross-enrollment scenarios (require --profile cross-enrollment):
+#   docker compose --profile bootstrapped --profile cross-enrollment up -d
+#   ./g8e auth enroll user --headless
+#   ./g8e test e2e --run TestCrossEnrollment_GatewayAsOperator_PendingDiscovery
+#   ./g8e test e2e --run TestCrossEnrollment_GatewayAsOperator_ApproveAndActivate
+#   ./g8e test e2e --run TestCrossEnrollment_GatewayAsOperator_Denial
+#   ./g8e test e2e --run TestCrossEnrollment_GatewayAsOperator_RestartDuringPending
 .PHONY: test-docker
 test-docker:
 	@echo "Running Tier 3 (Docker E2E) steady-state tests..."
 	@./g8e test e2e --run 'TestGateway|TestAuth|TestOperatorRegistry|TestPubSub|TestCommandRoundtrip|TestEnsemble|TestDashboard|TestCompliance|TestApprovedRestart'
+
+# Tier 3: Cross-Enrollment E2E Tests - a gateway enrolling as an operator of
+# another gateway. Requires the cross-enrollment profile, which starts a
+# secondary gateway container in operator mode against the primary gateway.
+# The full lifecycle variant (./g8e test e2e-full --cross-enrollment) manages
+# the compose stack automatically; the manual variant below assumes the user
+# has already started the stack with the cross-enrollment profile and
+# bootstrapped the owner. See the comment block above test-docker for the
+# per-scenario commands.
+.PHONY: test-cross-enrollment
+test-cross-enrollment:
+	@echo "Running Tier 3 cross-enrollment E2E tests..."
+	@./g8e test e2e --run 'TestCrossEnrollment'
 
 
 # Air-Gap Verification: verify vendored build works without network access

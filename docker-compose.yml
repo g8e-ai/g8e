@@ -127,6 +127,7 @@ services:
     profiles: [cross-enrollment]
     image: g8e-gateway
     container_name: ${G8E_PREFIX:-g8e}-gateway-secondary
+    hostname: gateway-secondary
     working_dir: /root
     networks:
       g8e-net:

@@ -71,7 +71,7 @@ Read the [governance architecture](docs/architecture/governance.md) for posture 
 
 - **Data custody stays local.** Raw data, vault keys, execution state, and authoritative audit evidence remain with the Operator host. Models receive scrubbed projections and commitments.
 - **Execution is host-authorized.** The Gateway proposes admitted work; the Operator independently re-verifies it before any side effect.
-- **Operators are outbound-only.** g8eo opens an mTLS connection to g8eg and listens on no inbound management port.
+- **Operators are outbound-only.** g8eo opens an mTLS connection to g8eg and listens on no inbound management port. A gateway can enroll as an operator of another gateway, so cascading outbound-only topologies keep every edge device on a dial-out connection with no inbound port.
 - **Mutations are state-bound and replay-resistant.** Envelopes bind typed intent to identity, target, state root, nonce, expiry, and policy evidence.
 - **Human approval is transaction-bound.** Required L3 approvals use WebAuthn or signed CLI proofs over the transaction hash.
 - **Receipts precede and follow execution.** The Actuator signs and persists execution evidence before dispatch and records the final outcome with durable-persistence evidence.
@@ -115,7 +115,7 @@ The encoder-classifier cohort is separately gated: it requires a labeled dataset
 
 ## Deploy where the data lives
 
-The Gateway can run in the cloud, on-premises, or in a hybrid topology. Operators run beside the systems they govern and support Linux, macOS, and Windows targets on amd64 and arm64. The repository includes Docker deployment, remote Operator enrollment, air-gap workflows, deterministic demonstrations, and the evidence pipeline used for compliance reporting.
+The Gateway can run in the cloud, on-premises, or in a hybrid topology. Operators run beside the systems they govern and support Linux, macOS, and Windows targets on amd64 and arm64. A gateway deployed at the absolute edge can enroll outbound-only as an operator of an upstream gateway, which may itself enroll outbound-only further in, so cascading topologies keep data custody at the edge while every hop is an outbound mTLS connection with no inbound port. The repository includes Docker deployment, remote Operator enrollment, air-gap workflows, deterministic demonstrations, and the evidence pipeline used for compliance reporting.
 
 | Start here | Purpose |
 | --- | --- |

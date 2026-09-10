@@ -235,13 +235,14 @@ const (
 
 // Docker constants for the root unified-stack compose deployment.
 const (
-	DockerComposeFile         = "docker-compose.yml"
-	DockerBootstrappedProfile = "bootstrapped"
-	DockerGatewayContainer    = "g8e-gateway"
-	DockerOperatorContainer   = "g8e-operator"
-	DockerEnsembleContainer   = "ensemble"
-	DockerDashboardContainer  = "dashboard"
-	DockerProjectPrefix       = "g8e"
+	DockerComposeFile          = "docker-compose.yml"
+	DockerBootstrappedProfile  = "bootstrapped"
+	DockerCrossEnrollProfile   = "cross-enrollment"
+	DockerGatewayContainer     = "g8e-gateway"
+	DockerOperatorContainer    = "g8e-operator"
+	DockerEnsembleContainer    = "ensemble"
+	DockerDashboardContainer   = "dashboard"
+	DockerProjectPrefix        = "g8e"
 )
 
 // Demos constants for organization names, doctrine files, and compose config.

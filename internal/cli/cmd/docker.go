@@ -58,9 +58,10 @@ func checkDockerComposeFileExists() error {
 }
 
 // runDockerCompose builds and runs a `docker compose` command against the root
-// compose file, streaming stdout/stderr to the console. The optional profile
-// starts the operator/dashboard/ensemble workloads.
-func runDockerCompose(args []string, profile string) error {
+// compose file, streaming stdout/stderr to the console. The optional profiles
+// activate compose profiles (e.g. bootstrapped, cross-enrollment) so multiple
+// workloads can be started together.
+func runDockerCompose(args []string, profiles ...string) error {
 	composePath, err := dockerComposePath()
 	if err != nil {
 		return err
@@ -69,8 +70,10 @@ func runDockerCompose(args []string, profile string) error {
 		return err
 	}
 	fullArgs := []string{"compose", "-f", toDockerPath(composePath)}
-	if profile != "" {
-		fullArgs = append(fullArgs, "--profile", profile)
+	for _, profile := range profiles {
+		if profile != "" {
+			fullArgs = append(fullArgs, "--profile", profile)
+		}
 	}
 	fullArgs = append(fullArgs, args...)
 
@@ -83,8 +86,9 @@ func runDockerCompose(args []string, profile string) error {
 // runDockerComposeOutput runs a `docker compose` command against the root
 // compose file and returns its combined stdout/stderr output. Unlike
 // runDockerCompose it does not stream to the console, so callers can embed the
-// output in a larger status view (e.g. `g8e gw status`).
-func runDockerComposeOutput(args []string, profile string) (string, error) {
+// output in a larger status view (e.g. `g8e gw status`). The optional profiles
+// activate compose profiles.
+func runDockerComposeOutput(args []string, profiles ...string) (string, error) {
 	composePath, err := dockerComposePath()
 	if err != nil {
 		return "", err
@@ -93,8 +97,10 @@ func runDockerComposeOutput(args []string, profile string) (string, error) {
 		return "", err
 	}
 	fullArgs := []string{"compose", "-f", toDockerPath(composePath)}
-	if profile != "" {
-		fullArgs = append(fullArgs, "--profile", profile)
+	for _, profile := range profiles {
+		if profile != "" {
+			fullArgs = append(fullArgs, "--profile", profile)
+		}
 	}
 	fullArgs = append(fullArgs, args...)
 
