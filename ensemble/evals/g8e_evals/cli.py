@@ -996,6 +996,41 @@ def campaign_validate(profile: Path, models: Path):
     console.print("  [green]status[/green] valid")
 
 
+@campaign.command(name="verify")
+@click.option("--report-dir", type=click.Path(exists=True, file_okay=False, path_type=Path), required=True,
+              help="Path to a completed campaign report directory.")
+def campaign_verify(report_dir: Path):
+    """Verify a completed campaign report directory.
+
+    Runs the offline campaign verifier (13 layers) against the report
+    directory. Checks file safety, standalone report validation, campaign
+    manifest, index chain integrity, duplicate effective assignment
+    detection, cell coverage, terminal attempts, metric binding, manifest
+    identity, artifact identity, finalization, supersession policy, and
+    resource observation. Requires no network access, provider calls, or
+    external services.
+
+    Emits a typed CampaignVerificationReport with verification status,
+    campaign identity, verified index generation hash, checked layers,
+    and typed failures. Exits non-zero on any failure.
+    """
+    from g8e_evals.campaign_verify import verify_campaign
+
+    verification = verify_campaign(report_dir)
+    console = Console()
+    console.print(f"[cyan]Campaign verification[/cyan] {verification.campaign_id}")
+    console.print(f"  [green]revision[/green] {verification.campaign_revision}")
+    console.print(f"  [green]ok[/green] {'true' if verification.ok else 'false'}")
+    console.print(f"  [green]verified_index_generation_hash[/green] {verification.verified_index_generation_hash}")
+    console.print(f"  [green]checked_layers[/green] {', '.join(verification.checked_layers)}")
+    if verification.failures:
+        console.print(f"  [red]failures[/red] {len(verification.failures)}")
+        for f in verification.failures:
+            console.print(f"    [red]-[/red] {f}")
+        raise click.ClickException(f"campaign verification failed: {len(verification.failures)} failure(s)")
+    console.print("  [green]status[/green] verified")
+
+
 @campaign.command(name="plan")
 @click.option("--profile", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
               help="Path to a JSON campaign profile file.")

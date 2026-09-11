@@ -593,6 +593,7 @@ def build_tier_fitness_sut_config(
         operator_url=operator_url or "https://localhost:8444",
         operator_session_id=operator_session_id,
         auth_context=auth_context,  # type: ignore[arg-type]
+        candidate_model=candidate_model,
     )
 
 

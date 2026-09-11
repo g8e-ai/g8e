@@ -311,6 +311,7 @@ class SUTConfig:
     l2_key_id: str | None = None
     arm: Arm = Arm.ENSEMBLE_UNGOVERNED
     headless: bool = False
+    candidate_model: str | None = None
     state_observer: StateObserver | None = None
     rehydration_observer: RehydrationObserver | None = None
     secret_detection_observer: SecretDetectionObserver | None = None

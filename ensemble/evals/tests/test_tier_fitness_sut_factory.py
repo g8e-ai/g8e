@@ -212,6 +212,7 @@ class TestBuildTierFitnessSutConfig:
         assert config.assistant.provider == "ollama"
         assert config.lite.model == "qwen3:0.6b"
         assert config.lite.provider == "ollama"
+        assert config.candidate_model == "qwen3:8b"
 
     def test_candidate_model_replaces_assistant_tier(self):
         from g8e_evals.runner import build_tier_fitness_sut_config
@@ -238,6 +239,7 @@ class TestBuildTierFitnessSutConfig:
         assert config.primary.model == "qwen3:8b"
         assert config.assistant.model == "qwen3:4b"
         assert config.lite.model == "qwen3:0.6b"
+        assert config.candidate_model == "qwen3:4b"
 
     def test_candidate_model_replaces_lite_tier(self):
         from g8e_evals.runner import build_tier_fitness_sut_config
@@ -264,6 +266,7 @@ class TestBuildTierFitnessSutConfig:
         assert config.primary.model == "qwen3:8b"
         assert config.assistant.model == "qwen3:4b"
         assert config.lite.model == "qwen3:0.6b"
+        assert config.candidate_model == "qwen3:0.6b"
 
     def test_g8ee_url_is_set_on_config(self):
         from g8e_evals.runner import build_tier_fitness_sut_config
@@ -456,6 +459,33 @@ class TestBuildCampaignSutFactory:
         sut = factory(cohort, Arm.DIRECT)
         assert isinstance(sut, DirectProviderSUT)
 
+    def test_direct_arm_does_not_set_candidate_model(self):
+        from g8e_evals.runner import build_campaign_sut_factory
+        from g8e_evals.sut.direct_provider import DirectProviderSUT
+
+        v = _make_variant("qwen3-4b", "qwen3:4b")
+        registry = _make_registry([v])
+        profile = _make_tier_fitness_profile(
+            variant_ids=["qwen3-4b"],
+            tier_assignments=[ModelTierAssignment(variant_id="qwen3-4b", target_tier="assistant")],
+            baseline_mappings={"primary": "qwen3:8b", "lite": "qwen3:0.6b"},
+            registry_hash=registry.content_hash,
+        )
+        cohort = _make_cohort("qwen3-4b", "qwen3:4b")
+        cohort_variant_map = {"cohort-qwen3-4b": "qwen3-4b"}
+
+        factory = build_campaign_sut_factory(
+            campaign_profile=profile,
+            cohort_variant_map=cohort_variant_map,
+            g8ee_url="https://localhost:8443",
+        )
+        sut = factory(cohort, Arm.DIRECT)
+        assert isinstance(sut, DirectProviderSUT)
+        # DirectProviderSUT uses primary.model for model_provider, which
+        # is the candidate's served_model_tag. candidate_model is not set
+        # because the direct arm always uses the primary as the candidate.
+        assert sut.model_provider == "ollama:qwen3:4b"
+
     def test_ensemble_arm_creates_g8ee_chat_sut_config(self):
         from unittest.mock import patch, MagicMock
 
@@ -492,3 +522,4 @@ class TestBuildCampaignSutFactory:
         assert captured_config.primary.model == "qwen3:8b"
         assert captured_config.assistant.model == "qwen3:4b"
         assert captured_config.lite.model == "qwen3:0.6b"
+        assert captured_config.candidate_model == "qwen3:8b"

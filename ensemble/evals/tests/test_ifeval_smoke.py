@@ -26,9 +26,9 @@ def test_ifeval_loader_validates_provenance():
     gold_set = base_dir / "gold_sets/ifeval_subset/input_data.jsonl"
     loader = IFEvalLoader(gold_set)
     tasks = list(loader.load())
-    assert len(tasks) == 5
-    assert tasks[0].id == "1001"
-    assert "not allowed to use any commas" in tasks[0].prompt
+    assert len(tasks) == 120
+    assert tasks[0].id == "13"
+    assert "JSON" in tasks[0].prompt
 
 
 @pytest.mark.integration
@@ -307,15 +307,350 @@ def test_ifeval_verifier_forbidden_words():
 
 
 @pytest.mark.unit
-def test_ifeval_verifier_rejects_unsupported_language_instruction():
+def test_ifeval_verifier_language_response_japanese():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "1006",
+        "prompt",
+        "これは日本語のテキストです",
+        ["language:response_language"],
+        [{"language": "ja"}],
+    )
+    assert score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_language_response_english_uncertain_passes():
+    """English text without distinctive diacritics returns None (uncertain)
+    from detect_language, which counts as 'followed' (True) matching upstream
+    langdetect exception behavior."""
     verifier = IFEvalVerifier()
     score = verifier.verify(
         "1006",
         "prompt",
         "This answer is nonempty",
         ["language:response_language"],
-        [{"language": "english"}],
+        [{"language": "en"}],
     )
+    assert score.passed
 
+
+@pytest.mark.unit
+def test_ifeval_verifier_language_response_wrong_language_fails():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "1006",
+        "prompt",
+        "これは日本語のテキストです",
+        ["language:response_language"],
+        [{"language": "en"}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_keywords_frequency():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "apple apple apple",
+        ["keywords:frequency"],
+        [{"keyword": "apple", "frequency": 3, "relation": "at least"}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "apple apple",
+        ["keywords:frequency"],
+        [{"keyword": "apple", "frequency": 3, "relation": "at least"}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_keywords_letter_frequency():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "aaa bb",
+        ["keywords:letter_frequency"],
+        [{"letter": "a", "let_frequency": 3, "let_relation": "at least"}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "aa bb",
+        ["keywords:letter_frequency"],
+        [{"letter": "a", "let_frequency": 3, "let_relation": "at least"}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_number_sentences():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "This is one. This is two.",
+        ["length_constraints:number_sentences"],
+        [{"relation": "at least", "num_sentences": 2}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "Only one sentence",
+        ["length_constraints:number_sentences"],
+        [{"relation": "at least", "num_sentences": 2}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_number_paragraphs():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "Para one\n***\nPara two",
+        ["length_constraints:number_paragraphs"],
+        [{"num_paragraphs": 2}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "Just one paragraph",
+        ["length_constraints:number_paragraphs"],
+        [{"num_paragraphs": 2}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_nth_paragraph_first_word():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "First para\n\nSecond para",
+        ["length_constraints:nth_paragraph_first_word"],
+        [{"num_paragraphs": 2, "nth_paragraph": 2, "first_word": "Second"}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "First para\n\nWrong word",
+        ["length_constraints:nth_paragraph_first_word"],
+        [{"num_paragraphs": 2, "nth_paragraph": 2, "first_word": "Second"}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_capital_word_frequency():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "HELLO world HELLO",
+        ["change_case:capital_word_frequency"],
+        [{"capital_frequency": 2, "capital_relation": "at least"}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "HELLO world",
+        ["change_case:capital_word_frequency"],
+        [{"capital_frequency": 2, "capital_relation": "at least"}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_number_placeholders():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "[one] [two] [three]",
+        ["detectable_content:number_placeholders"],
+        [{"num_placeholders": 3}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "[one] [two]",
+        ["detectable_content:number_placeholders"],
+        [{"num_placeholders": 3}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_postscript():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "Main text\nP.S. extra note",
+        ["detectable_content:postscript"],
+        [{"postscript_marker": "P.S."}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "Just main text",
+        ["detectable_content:postscript"],
+        [{"postscript_marker": "P.S."}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_number_bullet_lists():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "* item one\n* item two",
+        ["detectable_format:number_bullet_lists"],
+        [{"num_bullets": 2}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "* item one",
+        ["detectable_format:number_bullet_lists"],
+        [{"num_bullets": 2}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_constrained_response():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "My answer is yes.",
+        ["detectable_format:constrained_response"],
+        [{}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "I think so",
+        ["detectable_format:constrained_response"],
+        [{}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_number_highlighted_sections():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "*highlight1* and *highlight2*",
+        ["detectable_format:number_highlighted_sections"],
+        [{"num_highlights": 2}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "*highlight1* only",
+        ["detectable_format:number_highlighted_sections"],
+        [{"num_highlights": 2}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_multiple_sections():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "Section 1 content\nSection 2 content",
+        ["detectable_format:multiple_sections"],
+        [{"section_spliter": "Section", "num_sections": 2}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "Only one section",
+        ["detectable_format:multiple_sections"],
+        [{"section_spliter": "Section", "num_sections": 2}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_title():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "<<My Title>>",
+        ["detectable_format:title"],
+        [{}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "No title here",
+        ["detectable_format:title"],
+        [{}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_two_responses():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", "First response\n******\nSecond response",
+        ["combination:two_responses"],
+        [{}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "Only one response",
+        ["combination:two_responses"],
+        [{}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_repeat_prompt():
+    verifier = IFEvalVerifier()
+    prompt_to_repeat = "Repeat this: hello world"
+    score = verifier.verify(
+        "test", "prompt", prompt_to_repeat + " and more",
+        ["combination:repeat_prompt"],
+        [{"prompt_to_repeat": prompt_to_repeat}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "Something completely different",
+        ["combination:repeat_prompt"],
+        [{"prompt_to_repeat": prompt_to_repeat}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_end_checker():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", 'This ends with "bye"',
+        ["startend:end_checker"],
+        [{"end_phrase": "bye"}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "This does not end with the phrase",
+        ["startend:end_checker"],
+        [{"end_phrase": "bye"}],
+    )
+    assert not score.passed
+
+
+@pytest.mark.unit
+def test_ifeval_verifier_quotation():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "test", "prompt", '"quoted text"',
+        ["startend:quotation"],
+        [{}],
+    )
+    assert score.passed
+
+    score = verifier.verify(
+        "test", "prompt", "not quoted",
+        ["startend:quotation"],
+        [{}],
+    )
     assert not score.passed
 

@@ -149,11 +149,14 @@ class G8eeChatSUT:
             cli_context=config.auth_context,
         )
 
-        # Used by the report header / CLI banner.
-        if config.primary.provider and config.primary.model:
-            self.model_provider = f"{config.primary.provider}:{config.primary.model}"
+        # Used by the report header / CLI banner. For tier-fitness campaigns
+        # the candidate model may replace a non-primary tier, so config.candidate_model
+        # takes precedence over config.primary when set.
+        report_model = config.candidate_model or config.primary.model
+        if config.primary.provider and report_model:
+            self.model_provider = f"{config.primary.provider}:{report_model}"
         else:
-            self.model_provider = config.primary.model or "g8ee:server-default"
+            self.model_provider = report_model or "g8ee:server-default"
 
     async def check_settings(self) -> G8eeUserSettings | None:
         """Fetch current user settings from g8ee for pre-flight validation."""
