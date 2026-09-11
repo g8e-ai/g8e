@@ -1844,6 +1844,88 @@ def validate_publication_v5(candidate_dir: Path) -> PublicationValidatorResult:
             except (ValidationError, json.JSONDecodeError) as e:
                 failures.append(f"cold-start-warm-inference-tradeoff.json validation failed: {e}")
 
+    # Layer 15: required event/resource files — when any v5 artifact is
+    # present, the 5 event/resource files must also be present as regular
+    # files. Missing an expected file is not equivalent to zero records.
+    checked_layers.append("required_event_resource_files")
+    v5_artifacts_present = any(
+        (candidate_dir / f).exists()
+        for f in (
+            RADAR_PROFILE_JSON,
+            TOOL_SCORECARD_SUMMARY_JSON,
+            ESCALATION_SUMMARY_JSON,
+            SECURITY_EVENT_SUMMARY_JSON,
+            CORRELATED_ERROR_SUMMARY_JSON,
+            COLD_START_WARM_INFERENCE_TRADEOFF_JSON,
+        )
+    )
+    if v5_artifacts_present:
+        for event_resource_file in _V5_EVENT_RESOURCE_FILES:
+            er_path = candidate_dir / event_resource_file
+            if not er_path.exists():
+                failures.append(f"missing required event/resource file: {event_resource_file}")
+            elif er_path.is_symlink():
+                failures.append(f"symlink rejected: {event_resource_file}")
+            elif not er_path.is_file():
+                failures.append(f"not a regular file: {event_resource_file}")
+
+    # Layer 16: undeclared files — reject any file in the candidate
+    # directory that is not in the v5 declared set. The v5 candidate is a
+    # closed artifact set; unknown files are rejected.
+    checked_layers.append("undeclared_files")
+    for path in candidate_dir.rglob("*"):
+        if path.is_file() and not path.is_symlink():
+            rel = path.relative_to(candidate_dir).as_posix()
+            if rel not in _V5_DECLARED_FILES:
+                failures.append(f"undeclared file in candidate: {rel}")
+
+    # Layer 17: radar profile recompute — independently recompute the radar
+    # profile from the projection rows and reject a tampered radar profile
+    # even when its internal content hash is valid. The projection rows are
+    # the source of truth; the stored radar profile must recompute from them.
+    checked_layers.append("radar_profile_recompute")
+    radar_path = candidate_dir / RADAR_PROFILE_JSON
+    if radar_path.exists() and radar_path.is_file() and not radar_path.is_symlink():
+        try:
+            stored_profile = RadarProfile.model_validate_json(radar_path.read_text())
+        except (ValidationError, json.JSONDecodeError):
+            stored_profile = None  # Already caught by layer 9
+
+        if stored_profile is not None:
+            recomputed_profile: RadarProfile | None = None
+            recompute_error = False
+            try:
+                proj_path = candidate_dir / CAMPAIGN_PROJECTIONS_JSONL
+                recomp_rows: list[CampaignProjectionRow] = []
+                if proj_path.exists() and proj_path.is_file() and not proj_path.is_symlink():
+                    for line in proj_path.read_text().strip().splitlines():
+                        if line.strip():
+                            recomp_rows.append(CampaignProjectionRow.model_validate_json(line))
+                recomp_summaries = _generate_variant_summaries(recomp_rows)
+                mc_path = candidate_dir / MODEL_CAMPAIGN_JSON
+                if mc_path.exists() and mc_path.is_file():
+                    mc_data = json.loads(mc_path.read_text())
+                    recomputed_profile = _build_radar_profile(
+                        campaign_id=mc_data.get("campaign_id", ""),
+                        campaign_revision=mc_data.get("campaign_revision", ""),
+                        variant_summaries=recomp_summaries,
+                    )
+            except (ValidationError, json.JSONDecodeError) as e:
+                failures.append(f"radar profile recompute error: {e}")
+                recompute_error = True
+
+            if not recompute_error:
+                if recomputed_profile is None:
+                    failures.append(
+                        "radar profile recompute mismatch: cannot recompute radar from projection rows"
+                    )
+                elif recomputed_profile.content_hash != stored_profile.content_hash:
+                    failures.append(
+                        f"radar profile recompute mismatch: "
+                        f"stored {stored_profile.content_hash!r}, "
+                        f"recomputed {recomputed_profile.content_hash!r}"
+                    )
+
     ok = len(failures) == 0
     return PublicationValidatorResult(
         ok=ok,

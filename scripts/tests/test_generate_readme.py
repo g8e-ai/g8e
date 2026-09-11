@@ -1287,5 +1287,437 @@ class TestStability(unittest.TestCase):
             self.assertEqual(first, second)
 
 
+class TestV5ScoreFamilies(unittest.TestCase):
+    """Focused tests for v5 schema loading, rendering, and gates."""
+
+    @staticmethod
+    def _v5_hash(payload: dict) -> str:
+        return hashlib.sha256(gr._v5_canonical_json(payload).encode()).hexdigest()
+
+    @staticmethod
+    def _make_radar_profile(campaign_id: str = "camp-1", campaign_revision: str = "1") -> dict:
+        dims = []
+        for name in gr.V5_RADAR_DIMENSION_NAMES:
+            dims.append({
+                "name": name,
+                "value": 0.5,
+                "source_metric_ids": [f"metric-{name}"],
+                "availability": "measured",
+                "weighting_method": "macro",
+            })
+        dims_sorted = sorted(dims, key=lambda d: d["name"])
+        payload = {"campaign_id": campaign_id, "campaign_revision": campaign_revision, "dimensions": dims_sorted}
+        return {
+            "campaign_id": campaign_id,
+            "campaign_revision": campaign_revision,
+            "dimensions": dims_sorted,
+            "content_hash": TestV5ScoreFamilies._v5_hash(payload),
+        }
+
+    @staticmethod
+    def _make_tool_scorecard(campaign_id: str = "camp-1", campaign_revision: str = "1") -> dict:
+        dims = [
+            {"dimension": "argument_validity", "pass_rate": 0.9, "tool_call_count": 10},
+            {"dimension": "schema_conformance", "pass_rate": 0.8, "tool_call_count": 10},
+        ]
+        dims_sorted = sorted(dims, key=lambda d: d["dimension"])
+        payload = {"campaign_id": campaign_id, "campaign_revision": campaign_revision, "total_tool_calls": 10, "dimensions": dims_sorted}
+        return {
+            "campaign_id": campaign_id,
+            "campaign_revision": campaign_revision,
+            "total_tool_calls": 10,
+            "dimensions": dims_sorted,
+            "content_hash": TestV5ScoreFamilies._v5_hash(payload),
+        }
+
+    @staticmethod
+    def _make_escalation(campaign_id: str = "camp-1", campaign_revision: str = "1") -> dict:
+        payload = {
+            "campaign_id": campaign_id, "campaign_revision": campaign_revision,
+            "total_records": 10, "correct_autonomous_count": 6,
+            "correct_escalation_count": 2, "false_escalation_count": 1,
+            "missed_escalation_count": 1, "escalation_efficiency": 0.8,
+        }
+        return {**payload, "content_hash": TestV5ScoreFamilies._v5_hash(payload)}
+
+    @staticmethod
+    def _make_security(campaign_id: str = "camp-1", campaign_revision: str = "1") -> dict:
+        payload = {
+            "campaign_id": campaign_id, "campaign_revision": campaign_revision,
+            "total_records": 10,
+            "sensitive_data_present_rate": 0.5, "sensitive_data_required_rate": 0.4,
+            "sensitive_data_sent_externally_rate": 0.1, "unnecessary_data_sent_externally_rate": 0.05,
+            "policy_prevented_disclosure_rate": 0.9, "model_attempted_unauthorized_access_rate": 0.0,
+            "tool_attempted_unauthorized_operation_rate": 0.0, "authorization_correctly_enforced_rate": 1.0,
+            "audit_record_complete_rate": 1.0, "audit_record_tampered_rate": 0.0,
+            "secret_redaction_successful_rate": 1.0,
+        }
+        return {**payload, "content_hash": TestV5ScoreFamilies._v5_hash(payload)}
+
+    @staticmethod
+    def _make_correlated_error(campaign_id: str = "camp-1", campaign_revision: str = "1") -> dict:
+        payload = {
+            "campaign_id": campaign_id, "campaign_revision": campaign_revision,
+            "total_scenarios": 10, "correlated_failure_rate": 0.2,
+            "failure_independence": 0.8, "same_family_correlated_rate": 0.3,
+            "cross_family_correlated_rate": 0.1,
+        }
+        return {**payload, "content_hash": TestV5ScoreFamilies._v5_hash(payload)}
+
+    @staticmethod
+    def _make_cold_start(campaign_id: str = "camp-1", campaign_revision: str = "1") -> dict:
+        tradeoffs = [
+            {
+                "variant_id": "qwen3-8b-q4_0",
+                "model_load_time_seconds": 12.5,
+                "time_to_first_token_seconds": 0.8,
+                "generation_duration_seconds": 5.2,
+                "whole_task_duration_seconds": 18.5,
+                "unavailability_reason": "",
+            },
+            {
+                "variant_id": "qwen3-8b-q8_0",
+                "model_load_time_seconds": None,
+                "time_to_first_token_seconds": None,
+                "generation_duration_seconds": None,
+                "whole_task_duration_seconds": None,
+                "unavailability_reason": "resource_observations_not_ingested",
+            },
+        ]
+        tradeoffs_sorted = sorted(tradeoffs, key=lambda t: t["variant_id"])
+        payload = {"campaign_id": campaign_id, "campaign_revision": campaign_revision, "tradeoffs": tradeoffs_sorted}
+        return {
+            "campaign_id": campaign_id,
+            "campaign_revision": campaign_revision,
+            "tradeoffs": tradeoffs_sorted,
+            "content_hash": TestV5ScoreFamilies._v5_hash(payload),
+        }
+
+    @staticmethod
+    def _all_v5_artifacts() -> dict:
+        return {
+            "radar_profile": TestV5ScoreFamilies._make_radar_profile(),
+            "tool_scorecard_summary": TestV5ScoreFamilies._make_tool_scorecard(),
+            "escalation_summary": TestV5ScoreFamilies._make_escalation(),
+            "security_event_summary": TestV5ScoreFamilies._make_security(),
+            "correlated_error_summary": TestV5ScoreFamilies._make_correlated_error(),
+            "cold_start_tradeoff": TestV5ScoreFamilies._make_cold_start(),
+        }
+
+    @staticmethod
+    def _write_v5_artifacts(snapshot_dir: Path, artifacts: dict) -> dict:
+        """Write v5 artifact files and return the v5_artifacts index block."""
+        v5_block: dict[str, dict | None] = {}
+        mapping = {
+            "radar_profile": gr.V5_RADAR_PROFILE_JSON,
+            "tool_scorecard_summary": gr.V5_TOOL_SCORECARD_SUMMARY_JSON,
+            "escalation_summary": gr.V5_ESCALATION_SUMMARY_JSON,
+            "security_event_summary": gr.V5_SECURITY_EVENT_SUMMARY_JSON,
+            "correlated_error_summary": gr.V5_CORRELATED_ERROR_SUMMARY_JSON,
+            "cold_start_tradeoff": gr.V5_COLD_START_TRADEOFF_JSON,
+        }
+        for key, filename in mapping.items():
+            artifact = artifacts.get(key)
+            if artifact is None:
+                v5_block[key] = None
+                continue
+            path = snapshot_dir / filename
+            path.write_text(json.dumps(artifact, sort_keys=True, separators=(",", ":")) + "\n")
+            v5_block[key] = {"path": filename, "sha256": gr._sha256_file(path)}
+        return v5_block
+
+    @staticmethod
+    def _make_v5_snapshot(tmp: str, artifacts: dict | None = None) -> Path:
+        """Build a v5 snapshot from the valid fixture with optional v5 artifacts."""
+        snapshot_dir = Path(tmp) / "v5snap"
+        shutil.copytree(VALID, snapshot_dir)
+        index_path = snapshot_dir / "index.json"
+        index = json.loads(index_path.read_text())
+        index["publication_schema_version"] = "5.0.0"
+        if artifacts is not None:
+            v5_block = TestV5ScoreFamilies._write_v5_artifacts(snapshot_dir, artifacts)
+            index["v5_artifacts"] = v5_block
+        else:
+            index["v5_artifacts"] = {key: None for key in (
+                "radar_profile", "tool_scorecard_summary", "escalation_summary",
+                "security_event_summary", "correlated_error_summary", "cold_start_tradeoff",
+            )}
+        index_path.write_text(json.dumps(index))
+        return snapshot_dir
+
+    @staticmethod
+    def _set_v5_artifact_checksum(snapshot_dir: Path, filename: str) -> None:
+        """Update the v5_artifacts index checksum for a v5 artifact file."""
+        index_path = snapshot_dir / "index.json"
+        index = json.loads(index_path.read_text())
+        new_sha = gr._sha256_file(snapshot_dir / filename)
+        for entry in index.get("v5_artifacts", {}).values():
+            if isinstance(entry, dict) and entry.get("path") == filename:
+                entry["sha256"] = new_sha
+                break
+        index_path.write_text(json.dumps(index))
+
+    def test_v5_loads_with_all_artifacts_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            snapshot = gr.load_snapshot(snapshot_dir)
+        self.assertEqual(snapshot.manifest.publication_schema_version, "5.0.0")
+        self.assertIsNotNone(snapshot.v5_artifacts)
+        self.assertIsNotNone(snapshot.v5_artifacts.radar_profile)
+        self.assertIsNotNone(snapshot.v5_artifacts.tool_scorecard_summary)
+        self.assertIsNotNone(snapshot.v5_artifacts.escalation_summary)
+        self.assertIsNotNone(snapshot.v5_artifacts.security_event_summary)
+        self.assertIsNotNone(snapshot.v5_artifacts.correlated_error_summary)
+        self.assertIsNotNone(snapshot.v5_artifacts.cold_start_tradeoff)
+
+    def test_v5_loads_with_all_artifacts_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, artifacts=None)
+            snapshot = gr.load_snapshot(snapshot_dir)
+        self.assertEqual(snapshot.manifest.publication_schema_version, "5.0.0")
+        self.assertIsNone(snapshot.v5_artifacts)
+
+    def test_v5_loads_with_partial_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = {"radar_profile": self._make_radar_profile()}
+            snapshot_dir = self._make_v5_snapshot(tmp, artifacts)
+            snapshot = gr.load_snapshot(snapshot_dir)
+        self.assertIsNotNone(snapshot.v5_artifacts)
+        self.assertIsNotNone(snapshot.v5_artifacts.radar_profile)
+        self.assertIsNone(snapshot.v5_artifacts.tool_scorecard_summary)
+
+    def test_v5_artifact_checksum_mismatch_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            # Corrupt the radar profile file without updating the index checksum.
+            radar_path = snapshot_dir / gr.V5_RADAR_PROFILE_JSON
+            radar = json.loads(radar_path.read_text())
+            radar["dimensions"][0]["value"] = 0.9
+            radar_path.write_text(json.dumps(radar, sort_keys=True, separators=(",", ":")) + "\n")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("checksum mismatch", str(ctx.exception))
+
+    def test_v5_artifact_path_traversal_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            index_path = snapshot_dir / "index.json"
+            index = json.loads(index_path.read_text())
+            index["v5_artifacts"]["radar_profile"]["path"] = "../evil.json"
+            index_path.write_text(json.dumps(index))
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("path traversal", str(ctx.exception))
+
+    def test_v5_undeclared_file_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            (snapshot_dir / "extra-v5.txt").write_text("secret")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("undeclared artifact", str(ctx.exception))
+
+    def test_v5_radar_dimension_hash_tamper_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            radar_path = snapshot_dir / gr.V5_RADAR_PROFILE_JSON
+            radar = json.loads(radar_path.read_text())
+            # Tamper a dimension value without updating the declared content_hash.
+            # The parser must independently recompute the hash and reject the tamper.
+            radar["dimensions"][0]["value"] = 0.99
+            radar_path.write_text(json.dumps(radar, sort_keys=True, separators=(",", ":")) + "\n")
+            self._set_v5_artifact_checksum(snapshot_dir, gr.V5_RADAR_PROFILE_JSON)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("content_hash mismatch", str(ctx.exception))
+
+    def test_v5_radar_unknown_field_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = self._all_v5_artifacts()
+            artifacts["radar_profile"]["extra_field"] = "evil"
+            snapshot_dir = self._make_v5_snapshot(tmp, artifacts)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("unsupported field", str(ctx.exception))
+
+    def test_v5_radar_duplicate_dimension_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = self._all_v5_artifacts()
+            radar = artifacts["radar_profile"]
+            radar["dimensions"][1]["name"] = radar["dimensions"][0]["name"]
+            snapshot_dir = self._make_v5_snapshot(tmp, artifacts)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("duplicate radar dimension", str(ctx.exception))
+
+    def test_v5_radar_missing_dimension_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = self._all_v5_artifacts()
+            artifacts["radar_profile"]["dimensions"].pop()
+            snapshot_dir = self._make_v5_snapshot(tmp, artifacts)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("exactly one dimension per RadarDimensionName", str(ctx.exception))
+
+    def test_v5_radar_non_finite_value_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = self._all_v5_artifacts()
+            artifacts["radar_profile"]["dimensions"][0]["value"] = float("nan")
+            snapshot_dir = self._make_v5_snapshot(tmp, artifacts)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("must be finite", str(ctx.exception))
+
+    def test_v5_cold_start_unavailable_timing_renders_explicitly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            snapshot = gr.load_snapshot(snapshot_dir)
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        self.assertIn("### Score Families (v5)", rendered)
+        self.assertIn("#### Radar Profile", rendered)
+        self.assertIn("#### Cold-Start vs Warm Inference Tradeoff", rendered)
+        self.assertIn("unavailable", rendered)
+        self.assertIn("resource_observations_not_ingested", rendered)
+        self.assertIn("radar-profile.json", rendered)
+        self.assertIn("cold-start-warm-inference-tradeoff.json", rendered)
+
+    def test_v5_no_artifacts_renders_empty_section(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, artifacts=None)
+            snapshot = gr.load_snapshot(snapshot_dir)
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        self.assertNotIn("### Score Families (v5)", rendered)
+
+    def test_v5_public_safe_links_contain_no_restricted_content(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            snapshot = gr.load_snapshot(snapshot_dir)
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        # The rendered v5 section must not embed private keys, credentials,
+        # raw canaries, restricted evidence fields, or private network endpoints.
+        v5_start = rendered.find("### Score Families (v5)")
+        v5_end = rendered.find("### Receipt Verification")
+        v5_section = rendered[v5_start:v5_end]
+        self.assertNotIn("-----BEGIN PRIVATE KEY-----", v5_section)
+        self.assertNotIn("api_key", v5_section.lower())
+        self.assertNotIn("CANARY-", v5_section)
+        self.assertNotIn("192.168.", v5_section)
+        self.assertNotIn('"prompt"', v5_section.lower())
+        self.assertNotIn('"raw_output"', v5_section.lower())
+
+    def test_v5_no_superiority_language_without_d10_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            snapshot = gr.load_snapshot(snapshot_dir)
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        v5_start = rendered.find("### Score Families (v5)")
+        v5_end = rendered.find("### Receipt Verification")
+        v5_section = rendered[v5_start:v5_end].lower()
+        # The section may explain that superiority language is reserved for
+        # D10-authorized comparisons, but must not make actual superiority
+        # claims about any variant.
+        for word in ("outperforms", "best", "winner", "beats", "defeats"):
+            self.assertNotIn(word, v5_section)
+
+    def test_v5_tool_scorecard_hash_tamper_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            path = snapshot_dir / gr.V5_TOOL_SCORECARD_SUMMARY_JSON
+            obj = json.loads(path.read_text())
+            obj["total_tool_calls"] = 999
+            path.write_text(json.dumps(obj, sort_keys=True, separators=(",", ":")) + "\n")
+            self._set_v5_artifact_checksum(snapshot_dir, gr.V5_TOOL_SCORECARD_SUMMARY_JSON)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("content_hash mismatch", str(ctx.exception))
+
+    def test_v5_escalation_hash_tamper_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            path = snapshot_dir / gr.V5_ESCALATION_SUMMARY_JSON
+            obj = json.loads(path.read_text())
+            obj["total_records"] = 999
+            path.write_text(json.dumps(obj, sort_keys=True, separators=(",", ":")) + "\n")
+            self._set_v5_artifact_checksum(snapshot_dir, gr.V5_ESCALATION_SUMMARY_JSON)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("content_hash mismatch", str(ctx.exception))
+
+    def test_v5_security_hash_tamper_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            path = snapshot_dir / gr.V5_SECURITY_EVENT_SUMMARY_JSON
+            obj = json.loads(path.read_text())
+            obj["total_records"] = 999
+            path.write_text(json.dumps(obj, sort_keys=True, separators=(",", ":")) + "\n")
+            self._set_v5_artifact_checksum(snapshot_dir, gr.V5_SECURITY_EVENT_SUMMARY_JSON)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("content_hash mismatch", str(ctx.exception))
+
+    def test_v5_correlated_error_hash_tamper_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            path = snapshot_dir / gr.V5_CORRELATED_ERROR_SUMMARY_JSON
+            obj = json.loads(path.read_text())
+            obj["total_scenarios"] = 999
+            path.write_text(json.dumps(obj, sort_keys=True, separators=(",", ":")) + "\n")
+            self._set_v5_artifact_checksum(snapshot_dir, gr.V5_CORRELATED_ERROR_SUMMARY_JSON)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("content_hash mismatch", str(ctx.exception))
+
+    def test_v5_cold_start_hash_tamper_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            path = snapshot_dir / gr.V5_COLD_START_TRADEOFF_JSON
+            obj = json.loads(path.read_text())
+            obj["tradeoffs"][0]["model_load_time_seconds"] = 999.9
+            path.write_text(json.dumps(obj, sort_keys=True, separators=(",", ":")) + "\n")
+            self._set_v5_artifact_checksum(snapshot_dir, gr.V5_COLD_START_TRADEOFF_JSON)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("content_hash mismatch", str(ctx.exception))
+
+    def test_v5_cold_start_duplicate_variant_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = self._all_v5_artifacts()
+            artifacts["cold_start_tradeoff"]["tradeoffs"][1]["variant_id"] = artifacts["cold_start_tradeoff"]["tradeoffs"][0]["variant_id"]
+            snapshot_dir = self._make_v5_snapshot(tmp, artifacts)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("duplicate variant_id", str(ctx.exception))
+
+    def test_v5_radar_unsorted_source_metric_ids_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = self._all_v5_artifacts()
+            artifacts["radar_profile"]["dimensions"][0]["source_metric_ids"] = ["z-metric", "a-metric"]
+            snapshot_dir = self._make_v5_snapshot(tmp, artifacts)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("must be sorted", str(ctx.exception))
+
+    def test_v5_radar_invalid_availability_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = self._all_v5_artifacts()
+            artifacts["radar_profile"]["dimensions"][0]["availability"] = "unknown_state"
+            snapshot_dir = self._make_v5_snapshot(tmp, artifacts)
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("known state", str(ctx.exception))
+
+    def test_v5_v1_through_v4_snapshots_have_no_v5_artifacts(self) -> None:
+        snapshot = gr.load_snapshot(VALID)
+        self.assertIsNone(snapshot.v5_artifacts)
+
+    def test_v5_rendering_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = self._make_v5_snapshot(tmp, self._all_v5_artifacts())
+            snapshot = gr.load_snapshot(snapshot_dir)
+            first = gr.render_readme(snapshot, TEMPLATE.read_text())
+            second = gr.render_readme(snapshot, TEMPLATE.read_text())
+        self.assertEqual(first, second)
+
+
 if __name__ == "__main__":
     unittest.main()

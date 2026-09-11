@@ -835,6 +835,7 @@ class TestCampaignVerifierSecurityEventsLayer:
         se_path = report_dir / SECURITY_EVENTS_JSONL
         target = report_dir / "real-security-events.jsonl"
         target.write_text(json.dumps(_make_record_dict(**ident)) + "\n")
+        se_path.unlink(missing_ok=True)
         se_path.symlink_to(target)
         result = verify_campaign(report_dir)
         assert not result.ok

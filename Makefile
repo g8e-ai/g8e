@@ -250,6 +250,10 @@ readme-test:
 		tests/test_publication_schema_v4.py \
 		tests/test_campaign_projector_v4.py \
 		tests/test_publication_validator_v4.py
+	@echo "Running publication schema v5, radar profile, and semantic regression tests..."
+	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test pytest -q \
+		tests/test_radar_profile_and_publication_v5.py \
+		tests/test_v5_semantic_regression.py
 
 .PHONY: website-build
 website-build:

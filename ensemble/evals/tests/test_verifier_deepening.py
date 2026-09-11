@@ -43,7 +43,6 @@ from g8e_evals.analysis.canonical import (
 )
 from g8e_evals.arms import Arm
 from g8e_evals.campaign import (
-    CampaignAssignment,
     InitialStateAssignmentManifest,
     ModelCohort,
     RetryPolicy,
@@ -57,7 +56,6 @@ from g8e_evals.campaign import (
 from g8e_evals.campaign_verify import verify_campaign
 from g8e_evals.constants import (
     ATTEMPTS_JSONL,
-    CAMPAIGN_ASSIGNMENTS_JSONL,
     CAMPAIGN_INDEX_JSONL,
     CAMPAIGN_MANIFEST_JSON,
     CAMPAIGN_VERIFICATION_REPORT_JSON,
@@ -66,6 +64,7 @@ from g8e_evals.constants import (
     ESCALATION_RECORDS_JSONL,
     EXPECTED_RECORD_POLICY_JSON,
     METRICS_JSONL,
+    REPORT_CHECKSUM_JSON,
     RESOURCE_OBSERVATIONS_JSONL,
     SECURITY_EVENTS_JSONL,
     STAGES_JSONL,
@@ -82,21 +81,18 @@ from g8e_evals.harness import Response, Score, Task
 from g8e_evals.index import (
     MeasurementAvailability,
     MeasurementScope,
-    ModelRole,
     ResourceObservation,
     UnavailableMeasurement,
 )
 from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.runner import CampaignRunner, CampaignSpec
 from g8e_evals.schema import (
+    EscalationOutcome,
+    EscalationRecord,
     EvidenceIndex,
     EvidenceMediaType,
-    GraderClass,
-    MetricObservation,
     StageKind,
     StageObservation,
-    TerminalStatus,
-    VerificationStatus,
 )
 
 _CAMPAIGN_ID = "v2.1.8-ifeval-pipeline-integrity"
@@ -462,6 +458,33 @@ def _write_evidence_index(report_dir: Path, entries: list[dict]) -> None:
     (report_dir / EVIDENCE_INDEX_JSONL).write_text("\n".join(lines) + "\n")
 
 
+def _make_escalation_dict(**kwargs) -> dict:
+    """Create a valid EscalationRecord dict matching the campaign identity."""
+    ident = kwargs.pop("ident", None)
+    defaults = {
+        "record_id": "er-1",
+        "campaign_id": "campaign-1",
+        "child_id": "campaign-1",
+        "assignment_id": "assignment-1",
+        "attempt_id": "att-1",
+        "inference_id": None,
+        "run_id": "run-1",
+        "task_id": "task-1",
+        "agent_persona": "triage",
+        "model_variant_id": "qwen3:8b",
+        "expected_role": "lite",
+        "ground_truth_complexity": "light",
+        "routed_to_role": "lite",
+        "outcome": EscalationOutcome.CORRECT_AUTONOMOUS,
+        "task_succeeded": True,
+    }
+    if ident:
+        defaults.update(ident)
+    defaults.update(kwargs)
+    er = EscalationRecord(**defaults)
+    return json.loads(er.model_dump_json())
+
+
 # ---------------------------------------------------------------------------
 # Instruction 2: Typed campaign assignment parsing and disposition completeness
 # ---------------------------------------------------------------------------
@@ -634,7 +657,6 @@ class TestOnePerAttemptCardinality:
         report_dir = _run_campaign(tmp_path)
         idents = _all_attempt_identities(report_dir)
         # Write one escalation record per attempt
-        from tests.test_observation_verifier_bindings import _make_escalation_dict
         lines = []
         for ident in idents:
             er = _make_escalation_dict(ident=ident)
@@ -659,7 +681,6 @@ class TestOnePerAttemptCardinality:
         if len(idents) < 2:
             pytest.skip("need at least 2 attempts")
         # Write only one record when there are multiple attempts
-        from tests.test_observation_verifier_bindings import _make_escalation_dict
         er = _make_escalation_dict(ident=idents[0])
         (report_dir / ESCALATION_RECORDS_JSONL).write_text(json.dumps(er) + "\n")
         policy = _make_policy(entries=[
@@ -910,7 +931,6 @@ class TestDerivedMetricRecomputation:
         # Recompute the report checksum so the standalone validator does not
         # fail on checksum mismatch (we want the denominator check to fire)
         from g8e_evals.report.validate import _compute_report_checksum
-        from g8e_evals.constants import REPORT_CHECKSUM_JSON
         new_checksum = _compute_report_checksum(report_dir)
         checksum_path = report_dir / REPORT_CHECKSUM_JSON
         if checksum_path.exists():

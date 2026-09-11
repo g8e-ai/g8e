@@ -1143,7 +1143,17 @@ def _make_provenance_manifest():
 
 def _write_report_dir(report_dir: Path) -> None:
     """Write a minimal campaign report directory with metrics and attempts."""
-    from g8e_evals.constants import ATTEMPTS_JSONL, CAMPAIGN_ASSIGNMENTS_JSONL, CAMPAIGN_INDEX_JSONL, METRICS_JSONL
+    from g8e_evals.constants import (
+        ATTEMPTS_JSONL,
+        CAMPAIGN_ASSIGNMENTS_JSONL,
+        CAMPAIGN_INDEX_JSONL,
+        CORRELATED_ERRORS_JSONL,
+        ESCALATION_RECORDS_JSONL,
+        METRICS_JSONL,
+        RESOURCE_OBSERVATIONS_JSONL,
+        SECURITY_EVENTS_JSONL,
+        TOOL_CALL_SCORECARDS_JSONL,
+    )
     report_dir.mkdir(parents=True, exist_ok=True)
 
     # Write attempts.jsonl
@@ -1192,6 +1202,17 @@ def _write_report_dir(report_dir: Path) -> None:
         ],
     }
     (report_dir / CAMPAIGN_INDEX_JSONL).write_text(json.dumps(index_gen) + "\n")
+
+    # Write the 5 event/resource files (empty) so the v5 projector copies them
+    # to the candidate and the v5 validator's required-event-resource layer passes.
+    for event_resource_file in (
+        RESOURCE_OBSERVATIONS_JSONL,
+        TOOL_CALL_SCORECARDS_JSONL,
+        ESCALATION_RECORDS_JSONL,
+        SECURITY_EVENTS_JSONL,
+        CORRELATED_ERRORS_JSONL,
+    ):
+        (report_dir / event_resource_file).write_text("")
 
 
 class TestProjectCampaignV5:

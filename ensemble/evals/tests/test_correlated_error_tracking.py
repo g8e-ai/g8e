@@ -828,6 +828,7 @@ class TestCampaignVerifierCorrelatedErrorsLayer:
         ce_path = report_dir / CORRELATED_ERRORS_JSONL
         target = report_dir / "real-correlated-errors.jsonl"
         target.write_text(json.dumps(_make_record_dict(**ident)) + "\n")
+        ce_path.unlink(missing_ok=True)
         ce_path.symlink_to(target)
         result = verify_campaign(report_dir)
         assert not result.ok

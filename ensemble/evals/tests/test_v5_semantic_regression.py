@@ -5,14 +5,13 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Failing fixture tests for v5 semantic regression (EF13-TESTS).
+"""Regression tests for v5 semantic defects (EF13-TESTS + EF13-REMEDIATION).
 
-These tests document the known semantic defects in the current v5
-publication projector and validator. Each test asserts the CORRECT
-behavior that Jade's Phase 2 remediation (EF13-REMEDIATION-PROJECTOR)
-should implement. The tests are marked ``xfail`` so they do not break
-the suite; Jade removes the markers as she satisfies each test without
-weakening the assertions.
+These tests document the known semantic defects in the v5 publication
+projector and validator. Each test asserts the CORRECT behavior. Jade's
+Phase 2 remediation (EF13-REMEDIATION-PROJECTOR) and Kestrel's Phase 2
+remediation (EF13-REMEDIATION-README) satisfy each test without
+weakening the assertions. All xfail markers have been removed.
 
 Each test targets a specific defect identified in the senior review:
 
@@ -256,7 +255,17 @@ def _make_provenance_manifest():
 
 def _write_report_dir(report_dir: Path) -> None:
     """Write a minimal campaign report directory with metrics and attempts."""
-    from g8e_evals.constants import ATTEMPTS_JSONL, CAMPAIGN_ASSIGNMENTS_JSONL, CAMPAIGN_INDEX_JSONL, METRICS_JSONL
+    from g8e_evals.constants import (
+        ATTEMPTS_JSONL,
+        CAMPAIGN_ASSIGNMENTS_JSONL,
+        CAMPAIGN_INDEX_JSONL,
+        CORRELATED_ERRORS_JSONL,
+        ESCALATION_RECORDS_JSONL,
+        METRICS_JSONL,
+        RESOURCE_OBSERVATIONS_JSONL,
+        SECURITY_EVENTS_JSONL,
+        TOOL_CALL_SCORECARDS_JSONL,
+    )
     report_dir.mkdir(parents=True, exist_ok=True)
     attempt = {
         "attempt_id": "attempt-1",
@@ -298,6 +307,17 @@ def _write_report_dir(report_dir: Path) -> None:
     }
     (report_dir / CAMPAIGN_INDEX_JSONL).write_text(json.dumps(index_gen) + "\n")
 
+    # Write the 5 event/resource files (empty) so the v5 projector copies them
+    # to the candidate and the v5 validator's required-event-resource layer passes.
+    for event_resource_file in (
+        RESOURCE_OBSERVATIONS_JSONL,
+        TOOL_CALL_SCORECARDS_JSONL,
+        ESCALATION_RECORDS_JSONL,
+        SECURITY_EVENTS_JSONL,
+        CORRELATED_ERRORS_JSONL,
+    ):
+        (report_dir / event_resource_file).write_text("")
+
 
 def _project_v5(tmp_path: Path) -> Path:
     """Project a v5 candidate and return the candidate directory."""
@@ -334,10 +354,6 @@ class TestSingleReportLimitation:
     aggregate-capable entry point.
     """
 
-    @pytest.mark.xfail(
-        reason="project_campaign_v5 accepts a single report_dir, not a typed aggregate",
-        strict=True,
-    )
     def test_project_campaign_v5_accepts_aggregate_inputs(self) -> None:
         from g8e_evals.publication import project_campaign_v5
         import inspect
@@ -349,10 +365,6 @@ class TestSingleReportLimitation:
         assert "campaign_set_index" in params
         assert "aggregate_verification_result" in params
 
-    @pytest.mark.xfail(
-        reason="project_campaign_v5 has no aggregate entry point for multiple child reports",
-        strict=True,
-    )
     def test_project_campaign_v5_has_aggregate_entry_point(self) -> None:
         from g8e_evals.publication import project_campaign_v5
         import inspect
@@ -384,10 +396,6 @@ class TestPerVariantMetricOverwrite:
     only, so multiple roles, stages, or repetitions overwrite each other.
     """
 
-    @pytest.mark.xfail(
-        reason="variant summary grouping key omits role; multiple roles overwrite each other",
-        strict=True,
-    )
     def test_variant_summary_grouping_key_includes_role(self) -> None:
         from g8e_evals.publication import _generate_variant_summaries, CampaignProjectionRow
 
@@ -438,10 +446,6 @@ class TestUnweightedAggregation:
     variant summaries without stating macro vs micro semantics.
     """
 
-    @pytest.mark.xfail(
-        reason="radar profile uses unweighted mean without stating macro vs micro semantics",
-        strict=True,
-    )
     def test_radar_dimension_states_weighting_method(self) -> None:
         from g8e_evals.publication import _build_radar_profile, CampaignVariantSummaryRow
 
@@ -485,10 +489,6 @@ class TestMissingToZeroConversion:
     instead of preserving them as unavailable.
     """
 
-    @pytest.mark.xfail(
-        reason="radar profile converts unavailable inputs to 0.0 instead of preserving unavailable state",
-        strict=True,
-    )
     def test_radar_dimension_preserves_unavailable_state(self) -> None:
         from g8e_evals.publication import _build_radar_profile, CampaignVariantSummaryRow
 
@@ -531,10 +531,6 @@ class TestEmptyTimingSummaries:
     every variant, producing empty timing summaries.
     """
 
-    @pytest.mark.xfail(
-        reason="cold-start tradeoff emits all-None timing values without availability reason",
-        strict=True,
-    )
     def test_cold_start_tradeoff_carries_availability_reason(self) -> None:
         from g8e_evals.publication import (
             _build_cold_start_tradeoff_summary,
@@ -575,12 +571,25 @@ class TestAbsentRequiredEventResourceFiles:
     event/resource files. It only validates files that exist.
     """
 
-    @pytest.mark.xfail(
-        reason="v5 validator does not enforce required event/resource files",
-        strict=True,
-    )
     def test_validator_fails_without_required_event_resource_files(self, tmp_path: Path) -> None:
         candidate_dir = _project_v5(tmp_path)
+        # Remove the event/resource files so the validator must reject
+        # the candidate for missing required files.
+        from g8e_evals.constants import (
+            CORRELATED_ERRORS_JSONL,
+            ESCALATION_RECORDS_JSONL,
+            RESOURCE_OBSERVATIONS_JSONL,
+            SECURITY_EVENTS_JSONL,
+            TOOL_CALL_SCORECARDS_JSONL,
+        )
+        for event_resource_file in (
+            RESOURCE_OBSERVATIONS_JSONL,
+            TOOL_CALL_SCORECARDS_JSONL,
+            ESCALATION_RECORDS_JSONL,
+            SECURITY_EVENTS_JSONL,
+            CORRELATED_ERRORS_JSONL,
+        ):
+            (candidate_dir / event_resource_file).unlink(missing_ok=True)
         result = validate_publication_v5(candidate_dir)
         # The correct behavior: the validator should FAIL when required
         # event/resource files are absent.
@@ -589,19 +598,17 @@ class TestAbsentRequiredEventResourceFiles:
 
 
 # ===========================================================================
-# Defect 7: Unsupported v5 README schema
+# Defect 7 (RESOLVED): v5 README schema support
 # ===========================================================================
 
 
-class TestUnsupportedV5ReadmeSchema:
-    """No v5 README loading path exists. The README generator only
-    supports v1-v4 publication schemas.
+class TestV5ReadmeSchema:
+    """The README generator supports v5 publication schema loading,
+    parsing, and rendering. Kestrel's Phase 2 work (EF13-REMEDIATION-README)
+    added v5 artifact parsing, loading wiring, rendering, template marker,
+    and tests to ``scripts/generate_readme.py``.
     """
 
-    @pytest.mark.xfail(
-        reason="README generator does not support v5 schema loading",
-        strict=True,
-    )
     def test_readme_generator_supports_v5(self) -> None:
         import importlib
 
@@ -624,10 +631,6 @@ class TestUndeclaredFiles:
     directory.
     """
 
-    @pytest.mark.xfail(
-        reason="v5 validator does not reject undeclared files in candidate directory",
-        strict=True,
-    )
     def test_validator_fails_with_undeclared_file(self, tmp_path: Path) -> None:
         candidate_dir = _project_v5(tmp_path)
         (candidate_dir / "secret-data.json").write_text(json.dumps({"secret": "leaked"}))
@@ -647,10 +650,6 @@ class TestDenominatorLoss:
     """The per-variant summary aggregation loses per-task denominators.
     """
 
-    @pytest.mark.xfail(
-        reason="variant summary loses per-task denominators in aggregation",
-        strict=True,
-    )
     def test_variant_summary_preserves_per_task_denominators(self) -> None:
         from g8e_evals.publication import _generate_variant_summaries, CampaignProjectionRow
 
@@ -702,10 +701,6 @@ class TestTamperedAuthorityLinks:
     but does not independently recompute every summary from canonical rows.
     """
 
-    @pytest.mark.xfail(
-        reason="v5 validator does not independently recompute summaries from projection rows",
-        strict=True,
-    )
     def test_validator_recomputes_radar_from_projections(self, tmp_path: Path) -> None:
         candidate_dir = _project_v5(tmp_path)
 
@@ -768,10 +763,6 @@ class TestMissingnessStatesRemainDistinct:
         ]
         assert len(set(states)) == 4
 
-    @pytest.mark.xfail(
-        reason="radar dimension does not carry availability state distinguishing measured zero from unavailable",
-        strict=True,
-    )
     def test_radar_dimension_carries_availability_state(self) -> None:
         dim = RadarDimension(
             name=RadarDimensionName.TASK_ACCURACY,
@@ -783,10 +774,6 @@ class TestMissingnessStatesRemainDistinct:
         # "unavailable."
         assert hasattr(dim, "availability")
 
-    @pytest.mark.xfail(
-        reason="cold-start tradeoff does not carry unavailability reason for None timing values",
-        strict=True,
-    )
     def test_cold_start_tradeoff_carries_unavailability_reason(self) -> None:
         tradeoff = ColdStartWarmInferenceTradeoff(variant_id="v1")
         # The correct behavior: None timing values should carry a typed
@@ -906,10 +893,6 @@ class TestDisclosureAuthorityIntegration:
     """The disclosure authority must be bindable to the v5 publication
     so that promotion consumes only disclosure-approved fields."""
 
-    @pytest.mark.xfail(
-        reason="PublicationSchemaV5 does not carry a disclosure authority reference",
-        strict=True,
-    )
     def test_publication_schema_v5_carries_disclosure_authority(self) -> None:
         from g8e_evals.publication import PublicationSchemaV5
         fields = PublicationSchemaV5.model_fields

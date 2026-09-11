@@ -53,17 +53,16 @@ from g8e_evals.constants import (
     CORRELATED_ERRORS_JSONL,
     EVIDENCE_INDEX_JSONL,
     ESCALATION_RECORDS_JSONL,
-    METRICS_JSONL,
     RESOURCE_OBSERVATIONS_JSONL,
     SECURITY_EVENTS_JSONL,
     STAGES_JSONL,
     TOOL_CALL_SCORECARDS_JSONL,
 )
-from g8e_evals.harness import InferenceObservation, Response, Task
-from g8e_evals.index import MeasurementAvailability, MeasurementScope, ModelRole, ResourceObservation, UnavailableMeasurement, VerificationStatus
+from g8e_evals.harness import InferenceObservation, Response, Score, Task
+from g8e_evals.index import MeasurementAvailability, MeasurementScope, ModelRole
 from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.runner import CampaignRunner, CampaignSpec, CampaignStopReason
-from g8e_evals.schema import ProviderBudget, TerminalStatus
+from g8e_evals.schema import ProviderBudget
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +149,7 @@ class FailingFakeSUT:
     async def get_answer(self, task: Task) -> Response:
         self._call_count += 1
         inference_id = f"inf-{self._call_count}"
-        observation = InferenceObservation(
+        InferenceObservation(
             inference_id=inference_id,
             role=ModelRole.PRIMARY,
             model_variant_id=self.model_id,
@@ -171,9 +170,7 @@ class FakeGrader:
     grader_id: str = "ifeval_subset_verifier"
     grader_version: str = "1.0.0"
 
-    def grade(self, task: Task, response: Response) -> object:
-        from g8e_evals.harness import Score
-
+    def grade(self, task: Task, response: Response) -> Score:
         return Score(task_id=task.id, passed=True, details=ScoreDetails())
 
 

@@ -93,7 +93,7 @@ def _make_resource_observation(
     inference_id: str = "inf-1",
     stage_id: str = "att-1:direct:1",
     role: ModelRole = ModelRole.PRIMARY,
-    model_variant_id: str = "qwen3-8b-q4_0",
+    model_variant_id: str = "qwen3:8b",
     task_id: str = "task-1",
     orchestrator_scope: str = "linux/amd64/cpu",
     provider_scope: str = "linux/amd64/rtx-4090",

@@ -69,7 +69,6 @@ from g8e_evals.index import (
     CampaignVerificationReport,
     IndexCreationReason,
     IndexGeneration,
-    ModelRole,
     ResourceObservation,
     validate_index_chain,
     validate_no_duplicate_effective_assignments,
@@ -88,7 +87,6 @@ from g8e_evals.schema import (
     StageObservation,
     TerminalStatus,
     ToolCallScorecard,
-    VerificationStatus,
     validate_correlated_error_records,
     validate_escalation_records,
     validate_security_event_records,
@@ -372,7 +370,7 @@ def _load_evidence_index(report_dir: Path, failures: list[str]) -> dict[str, Evi
         return {}
     index: dict[str, EvidenceIndex] = {}
     try:
-        for line_num, line in enumerate(evidence_index_path.read_text().splitlines(), 1):
+        for line in evidence_index_path.read_text().splitlines():
             line = line.strip()
             if not line:
                 continue
@@ -384,7 +382,7 @@ def _load_evidence_index(report_dir: Path, failures: list[str]) -> dict[str, Evi
                 continue
             index[entry.artifact_id] = entry
     except (ValidationError, json.JSONDecodeError) as e:
-        failures.append(f"evidence index validation failed at line {line_num}: {e}")
+        failures.append(f"evidence index validation failed: {e}")
     return index
 
 

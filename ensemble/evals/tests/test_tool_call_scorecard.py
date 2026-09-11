@@ -564,6 +564,7 @@ class TestCampaignVerifierToolCallScorecardLayer:
         sc_path = report_dir / TOOL_CALL_SCORECARDS_JSONL
         target = report_dir / "real-scorecards.jsonl"
         target.write_text(json.dumps(_make_scorecard_dict(**ident)) + "\n")
+        sc_path.unlink(missing_ok=True)
         sc_path.symlink_to(target)
         result = verify_campaign(report_dir)
         assert not result.ok

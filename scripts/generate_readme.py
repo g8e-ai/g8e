@@ -283,6 +283,7 @@ class ColdStartTradeoffData:
     time_to_first_token_seconds: float | None
     generation_duration_seconds: float | None
     whole_task_duration_seconds: float | None
+    unavailability_reason: str
 
 
 @dataclass(frozen=True)
@@ -347,6 +348,7 @@ class PublicationManifest:
     caveats: tuple[str, ...]
     stage2_ref: Stage2Ref | None
     model_campaign_ref: ModelCampaignRef | None
+    v5_artifacts_ref: V5ArtifactsRef | None
 
 
 @dataclass(frozen=True)
@@ -596,6 +598,7 @@ class ProofSnapshot:
     artifact_paths: set[str]
     stage2: Stage2Evidence | None
     model_campaign: dict[str, Any] | None
+    v5_artifacts: V5Artifacts | None
 
 
 def _repo_root() -> Path:
@@ -708,6 +711,404 @@ def _parse_timestamp(value: str, label: str) -> None:
         datetime.fromisoformat(value)
     except ValueError as exc:
         raise ReadmeError(f"invalid timestamp {label}: {value}") from exc
+
+
+# Publication schema v5 measurement availability states (must match
+# MeasurementAvailability in g8e_evals/index.py).
+V5_AVAILABILITY_STATES = frozenset({"measured", "unavailable", "not_applicable", "withheld"})
+
+
+def _v5_canonical_json(value: Any) -> str:
+    """Canonical JSON for v5 content hashes.
+
+    Matches the ``compute_*_hash`` functions in ``g8e_evals/radar_profile.py``:
+    SHA-256 over ``json.dumps`` with ``allow_nan=False``, ``ensure_ascii=False``,
+    compact separators, and recursively sorted keys.
+    """
+    return json.dumps(value, allow_nan=False, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+
+def _require_v5_sha256(raw: dict[str, Any], key: str, label: str) -> str:
+    value = _require_str(raw, key, label)
+    if re.fullmatch(r"[0-9a-f]{64}", value) is None:
+        raise ReadmeError(f"field {key} in {label} must be a lowercase SHA-256 digest")
+    return value
+
+
+def _require_v5_float(raw: dict[str, Any], key: str, label: str, lo: float = 0.0, hi: float = 1.0) -> float:
+    value = _require_field(raw, key, label)
+    _require_finite(value, f"{label} {key}")
+    value = float(value)
+    if value < lo or value > hi:
+        raise ReadmeError(f"field {key} in {label} must be in [{lo}, {hi}], got {value}")
+    return value
+
+
+def _require_v5_int(raw: dict[str, Any], key: str, label: str, minimum: int = 0) -> int:
+    return _require_int(raw, key, label, minimum=minimum)
+
+
+def _require_v5_optional_float(raw: dict[str, Any], key: str, label: str) -> float | None:
+    value = _require_field(raw, key, label)
+    if value is None:
+        return None
+    _require_finite(value, f"{label} {key}")
+    value = float(value)
+    if value < 0.0:
+        raise ReadmeError(f"field {key} in {label} must be >= 0.0, got {value}")
+    return value
+
+
+def _require_v5_str_list(raw: dict[str, Any], key: str, label: str, *, sorted_unique: bool) -> tuple[str, ...]:
+    values = _require_list(raw, key, label)
+    out: list[str] = []
+    for idx, item in enumerate(values):
+        if not isinstance(item, str) or not item:
+            raise ReadmeError(f"{key}[{idx}] in {label} must be a non-empty string")
+        out.append(item)
+    if sorted_unique:
+        if len(out) != len(set(out)):
+            raise ReadmeError(f"{key} in {label} must be unique")
+        if out != sorted(out):
+            raise ReadmeError(f"{key} in {label} must be sorted")
+    return tuple(out)
+
+
+def _parse_v5_radar_profile(path: Path) -> RadarProfileData:
+    raw = _load_json(path)
+    label = "v5 radar profile"
+    if not isinstance(raw, dict):
+        raise ReadmeError(f"{label} must be an object")
+    _require_exact_fields(raw, {"campaign_id", "campaign_revision", "dimensions", "content_hash"}, label)
+    campaign_id = _require_str(raw, "campaign_id", label)
+    campaign_revision = _require_str(raw, "campaign_revision", label)
+    declared_hash = _require_v5_sha256(raw, "content_hash", label)
+    raw_dims = _require_list(raw, "dimensions", label)
+    if not raw_dims:
+        raise ReadmeError(f"dimensions in {label} must not be empty")
+    dims: list[RadarDimensionData] = []
+    seen_names: set[str] = set()
+    dim_payloads: list[dict[str, Any]] = []
+    for idx, raw_dim in enumerate(raw_dims):
+        dim_label = f"{label} dimensions[{idx}]"
+        if not isinstance(raw_dim, dict):
+            raise ReadmeError(f"{dim_label} must be an object")
+        _require_exact_fields(raw_dim, {"name", "value", "source_metric_ids", "availability", "weighting_method"}, dim_label)
+        name = _require_str(raw_dim, "name", dim_label)
+        if name not in V5_RADAR_DIMENSION_NAME_SET:
+            raise ReadmeError(f"field name in {dim_label} must be a known radar dimension, got {name!r}")
+        if name in seen_names:
+            raise ReadmeError(f"duplicate radar dimension name {name!r} in {label}")
+        seen_names.add(name)
+        value = _require_v5_float(raw_dim, "value", dim_label)
+        availability = _require_str(raw_dim, "availability", dim_label)
+        if availability not in V5_AVAILABILITY_STATES:
+            raise ReadmeError(f"field availability in {dim_label} must be a known state, got {availability!r}")
+        weighting_method = _require_str(raw_dim, "weighting_method", dim_label)
+        source_metric_ids = _require_v5_str_list(raw_dim, "source_metric_ids", dim_label, sorted_unique=True)
+        dims.append(RadarDimensionData(name=name, value=value, source_metric_ids=source_metric_ids))
+        dim_payloads.append({
+            "name": name,
+            "value": value,
+            "source_metric_ids": list(source_metric_ids),
+            "availability": availability,
+            "weighting_method": weighting_method,
+        })
+    if seen_names != V5_RADAR_DIMENSION_NAME_SET:
+        missing = sorted(V5_RADAR_DIMENSION_NAME_SET - seen_names)
+        extra = sorted(seen_names - V5_RADAR_DIMENSION_NAME_SET)
+        raise ReadmeError(f"{label} must have exactly one dimension per RadarDimensionName: missing={missing}, extra={extra}")
+    if [d.name for d in dims] != sorted(d.name for d in dims):
+        raise ReadmeError(f"dimensions in {label} must be sorted by name")
+    payload = {
+        "campaign_id": campaign_id,
+        "campaign_revision": campaign_revision,
+        "dimensions": sorted(dim_payloads, key=lambda d: d["name"]),
+    }
+    computed_hash = hashlib.sha256(_v5_canonical_json(payload).encode()).hexdigest()
+    if computed_hash != declared_hash:
+        raise ReadmeError(
+            f"{label} content_hash mismatch: declared {declared_hash!r}, computed {computed_hash!r}"
+        )
+    return RadarProfileData(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        dimensions=tuple(dims),
+        content_hash=declared_hash,
+    )
+
+
+def _parse_v5_tool_scorecard_summary(path: Path) -> ToolScorecardSummaryData:
+    raw = _load_json(path)
+    label = "v5 tool scorecard summary"
+    if not isinstance(raw, dict):
+        raise ReadmeError(f"{label} must be an object")
+    _require_exact_fields(raw, {"campaign_id", "campaign_revision", "total_tool_calls", "dimensions", "content_hash"}, label)
+    campaign_id = _require_str(raw, "campaign_id", label)
+    campaign_revision = _require_str(raw, "campaign_revision", label)
+    total_tool_calls = _require_v5_int(raw, "total_tool_calls", label)
+    declared_hash = _require_v5_sha256(raw, "content_hash", label)
+    raw_dims = _require_list(raw, "dimensions", label)
+    if not raw_dims:
+        raise ReadmeError(f"dimensions in {label} must not be empty")
+    dims: list[ToolScorecardDimensionData] = []
+    seen: set[str] = set()
+    dim_payloads: list[dict[str, Any]] = []
+    for idx, raw_dim in enumerate(raw_dims):
+        dim_label = f"{label} dimensions[{idx}]"
+        if not isinstance(raw_dim, dict):
+            raise ReadmeError(f"{dim_label} must be an object")
+        _require_exact_fields(raw_dim, {"dimension", "pass_rate", "tool_call_count"}, dim_label)
+        dimension = _require_str(raw_dim, "dimension", dim_label)
+        if dimension in seen:
+            raise ReadmeError(f"duplicate tool scorecard dimension {dimension!r} in {label}")
+        seen.add(dimension)
+        pass_rate = _require_v5_float(raw_dim, "pass_rate", dim_label)
+        tool_call_count = _require_v5_int(raw_dim, "tool_call_count", dim_label)
+        dims.append(ToolScorecardDimensionData(dimension=dimension, pass_rate=pass_rate, tool_call_count=tool_call_count))
+        dim_payloads.append({"dimension": dimension, "pass_rate": pass_rate, "tool_call_count": tool_call_count})
+    if [d.dimension for d in dims] != sorted(d.dimension for d in dims):
+        raise ReadmeError(f"dimensions in {label} must be sorted by dimension name")
+    payload = {
+        "campaign_id": campaign_id,
+        "campaign_revision": campaign_revision,
+        "total_tool_calls": total_tool_calls,
+        "dimensions": sorted(dim_payloads, key=lambda d: d["dimension"]),
+    }
+    computed_hash = hashlib.sha256(_v5_canonical_json(payload).encode()).hexdigest()
+    if computed_hash != declared_hash:
+        raise ReadmeError(
+            f"{label} content_hash mismatch: declared {declared_hash!r}, computed {computed_hash!r}"
+        )
+    return ToolScorecardSummaryData(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        total_tool_calls=total_tool_calls,
+        dimensions=tuple(dims),
+        content_hash=declared_hash,
+    )
+
+
+def _parse_v5_escalation_summary(path: Path) -> EscalationSummaryData:
+    raw = _load_json(path)
+    label = "v5 escalation summary"
+    if not isinstance(raw, dict):
+        raise ReadmeError(f"{label} must be an object")
+    _require_exact_fields(
+        raw,
+        {"campaign_id", "campaign_revision", "total_records", "correct_autonomous_count",
+         "correct_escalation_count", "false_escalation_count", "missed_escalation_count",
+         "escalation_efficiency", "content_hash"},
+        label,
+    )
+    campaign_id = _require_str(raw, "campaign_id", label)
+    campaign_revision = _require_str(raw, "campaign_revision", label)
+    total_records = _require_v5_int(raw, "total_records", label)
+    correct_autonomous = _require_v5_int(raw, "correct_autonomous_count", label)
+    correct_escalation = _require_v5_int(raw, "correct_escalation_count", label)
+    false_escalation = _require_v5_int(raw, "false_escalation_count", label)
+    missed_escalation = _require_v5_int(raw, "missed_escalation_count", label)
+    efficiency = _require_v5_float(raw, "escalation_efficiency", label)
+    declared_hash = _require_v5_sha256(raw, "content_hash", label)
+    payload = {
+        "campaign_id": campaign_id,
+        "campaign_revision": campaign_revision,
+        "total_records": total_records,
+        "correct_autonomous_count": correct_autonomous,
+        "correct_escalation_count": correct_escalation,
+        "false_escalation_count": false_escalation,
+        "missed_escalation_count": missed_escalation,
+        "escalation_efficiency": efficiency,
+    }
+    computed_hash = hashlib.sha256(_v5_canonical_json(payload).encode()).hexdigest()
+    if computed_hash != declared_hash:
+        raise ReadmeError(
+            f"{label} content_hash mismatch: declared {declared_hash!r}, computed {computed_hash!r}"
+        )
+    return EscalationSummaryData(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        total_records=total_records,
+        correct_autonomous_count=correct_autonomous,
+        correct_escalation_count=correct_escalation,
+        false_escalation_count=false_escalation,
+        missed_escalation_count=missed_escalation,
+        escalation_efficiency=efficiency,
+        content_hash=declared_hash,
+    )
+
+
+def _parse_v5_security_event_summary(path: Path) -> SecurityEventSummaryData:
+    raw = _load_json(path)
+    label = "v5 security event summary"
+    if not isinstance(raw, dict):
+        raise ReadmeError(f"{label} must be an object")
+    fields = {
+        "campaign_id", "campaign_revision", "total_records",
+        "sensitive_data_present_rate", "sensitive_data_required_rate",
+        "sensitive_data_sent_externally_rate", "unnecessary_data_sent_externally_rate",
+        "policy_prevented_disclosure_rate", "model_attempted_unauthorized_access_rate",
+        "tool_attempted_unauthorized_operation_rate", "authorization_correctly_enforced_rate",
+        "audit_record_complete_rate", "audit_record_tampered_rate",
+        "secret_redaction_successful_rate", "content_hash",
+    }
+    _require_exact_fields(raw, fields, label)
+    campaign_id = _require_str(raw, "campaign_id", label)
+    campaign_revision = _require_str(raw, "campaign_revision", label)
+    total_records = _require_v5_int(raw, "total_records", label)
+    rate_fields = (
+        "sensitive_data_present_rate", "sensitive_data_required_rate",
+        "sensitive_data_sent_externally_rate", "unnecessary_data_sent_externally_rate",
+        "policy_prevented_disclosure_rate", "model_attempted_unauthorized_access_rate",
+        "tool_attempted_unauthorized_operation_rate", "authorization_correctly_enforced_rate",
+        "audit_record_complete_rate", "audit_record_tampered_rate",
+        "secret_redaction_successful_rate",
+    )
+    rates: dict[str, float] = {}
+    for key in rate_fields:
+        rates[key] = _require_v5_float(raw, key, label)
+    declared_hash = _require_v5_sha256(raw, "content_hash", label)
+    payload: dict[str, Any] = {"campaign_id": campaign_id, "campaign_revision": campaign_revision, "total_records": total_records}
+    payload.update(rates)
+    computed_hash = hashlib.sha256(_v5_canonical_json(payload).encode()).hexdigest()
+    if computed_hash != declared_hash:
+        raise ReadmeError(
+            f"{label} content_hash mismatch: declared {declared_hash!r}, computed {computed_hash!r}"
+        )
+    return SecurityEventSummaryData(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        total_records=total_records,
+        sensitive_data_present_rate=rates["sensitive_data_present_rate"],
+        sensitive_data_required_rate=rates["sensitive_data_required_rate"],
+        sensitive_data_sent_externally_rate=rates["sensitive_data_sent_externally_rate"],
+        unnecessary_data_sent_externally_rate=rates["unnecessary_data_sent_externally_rate"],
+        policy_prevented_disclosure_rate=rates["policy_prevented_disclosure_rate"],
+        model_attempted_unauthorized_access_rate=rates["model_attempted_unauthorized_access_rate"],
+        tool_attempted_unauthorized_operation_rate=rates["tool_attempted_unauthorized_operation_rate"],
+        authorization_correctly_enforced_rate=rates["authorization_correctly_enforced_rate"],
+        audit_record_complete_rate=rates["audit_record_complete_rate"],
+        audit_record_tampered_rate=rates["audit_record_tampered_rate"],
+        secret_redaction_successful_rate=rates["secret_redaction_successful_rate"],
+        content_hash=declared_hash,
+    )
+
+
+def _parse_v5_correlated_error_summary(path: Path) -> CorrelatedErrorSummaryData:
+    raw = _load_json(path)
+    label = "v5 correlated error summary"
+    if not isinstance(raw, dict):
+        raise ReadmeError(f"{label} must be an object")
+    _require_exact_fields(
+        raw,
+        {"campaign_id", "campaign_revision", "total_scenarios", "correlated_failure_rate",
+         "failure_independence", "same_family_correlated_rate", "cross_family_correlated_rate",
+         "content_hash"},
+        label,
+    )
+    campaign_id = _require_str(raw, "campaign_id", label)
+    campaign_revision = _require_str(raw, "campaign_revision", label)
+    total_scenarios = _require_v5_int(raw, "total_scenarios", label)
+    correlated_failure_rate = _require_v5_float(raw, "correlated_failure_rate", label)
+    failure_independence = _require_v5_float(raw, "failure_independence", label)
+    same_family = _require_v5_float(raw, "same_family_correlated_rate", label)
+    cross_family = _require_v5_float(raw, "cross_family_correlated_rate", label)
+    declared_hash = _require_v5_sha256(raw, "content_hash", label)
+    payload = {
+        "campaign_id": campaign_id,
+        "campaign_revision": campaign_revision,
+        "total_scenarios": total_scenarios,
+        "correlated_failure_rate": correlated_failure_rate,
+        "failure_independence": failure_independence,
+        "same_family_correlated_rate": same_family,
+        "cross_family_correlated_rate": cross_family,
+    }
+    computed_hash = hashlib.sha256(_v5_canonical_json(payload).encode()).hexdigest()
+    if computed_hash != declared_hash:
+        raise ReadmeError(
+            f"{label} content_hash mismatch: declared {declared_hash!r}, computed {computed_hash!r}"
+        )
+    return CorrelatedErrorSummaryData(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        total_scenarios=total_scenarios,
+        correlated_failure_rate=correlated_failure_rate,
+        failure_independence=failure_independence,
+        same_family_correlated_rate=same_family,
+        cross_family_correlated_rate=cross_family,
+        content_hash=declared_hash,
+    )
+
+
+def _parse_v5_cold_start_tradeoff_summary(path: Path) -> ColdStartTradeoffSummaryData:
+    raw = _load_json(path)
+    label = "v5 cold-start warm inference tradeoff summary"
+    if not isinstance(raw, dict):
+        raise ReadmeError(f"{label} must be an object")
+    _require_exact_fields(raw, {"campaign_id", "campaign_revision", "tradeoffs", "content_hash"}, label)
+    campaign_id = _require_str(raw, "campaign_id", label)
+    campaign_revision = _require_str(raw, "campaign_revision", label)
+    declared_hash = _require_v5_sha256(raw, "content_hash", label)
+    raw_tradeoffs = _require_list(raw, "tradeoffs", label)
+    if not raw_tradeoffs:
+        raise ReadmeError(f"tradeoffs in {label} must not be empty")
+    tradeoffs: list[ColdStartTradeoffData] = []
+    seen: set[str] = set()
+    tradeoff_payloads: list[dict[str, Any]] = []
+    for idx, raw_t in enumerate(raw_tradeoffs):
+        t_label = f"{label} tradeoffs[{idx}]"
+        if not isinstance(raw_t, dict):
+            raise ReadmeError(f"{t_label} must be an object")
+        _require_exact_fields(
+            raw_t,
+            {"variant_id", "model_load_time_seconds", "time_to_first_token_seconds",
+             "generation_duration_seconds", "whole_task_duration_seconds",
+             "unavailability_reason"},
+            t_label,
+        )
+        variant_id = _require_str(raw_t, "variant_id", t_label)
+        if variant_id in seen:
+            raise ReadmeError(f"duplicate variant_id {variant_id!r} in {label}")
+        seen.add(variant_id)
+        load_time = _require_v5_optional_float(raw_t, "model_load_time_seconds", t_label)
+        ttft = _require_v5_optional_float(raw_t, "time_to_first_token_seconds", t_label)
+        gen_dur = _require_v5_optional_float(raw_t, "generation_duration_seconds", t_label)
+        whole_dur = _require_v5_optional_float(raw_t, "whole_task_duration_seconds", t_label)
+        unavailability_reason = _require_str(raw_t, "unavailability_reason", t_label, allow_empty=True)
+        tradeoffs.append(ColdStartTradeoffData(
+            variant_id=variant_id,
+            model_load_time_seconds=load_time,
+            time_to_first_token_seconds=ttft,
+            generation_duration_seconds=gen_dur,
+            whole_task_duration_seconds=whole_dur,
+            unavailability_reason=unavailability_reason,
+        ))
+        tradeoff_payloads.append({
+            "variant_id": variant_id,
+            "model_load_time_seconds": load_time,
+            "time_to_first_token_seconds": ttft,
+            "generation_duration_seconds": gen_dur,
+            "whole_task_duration_seconds": whole_dur,
+            "unavailability_reason": unavailability_reason,
+        })
+    if [t.variant_id for t in tradeoffs] != sorted(t.variant_id for t in tradeoffs):
+        raise ReadmeError(f"tradeoffs in {label} must be sorted by variant ID")
+    payload = {
+        "campaign_id": campaign_id,
+        "campaign_revision": campaign_revision,
+        "tradeoffs": sorted(tradeoff_payloads, key=lambda t: t["variant_id"]),
+    }
+    computed_hash = hashlib.sha256(_v5_canonical_json(payload).encode()).hexdigest()
+    if computed_hash != declared_hash:
+        raise ReadmeError(
+            f"{label} content_hash mismatch: declared {declared_hash!r}, computed {computed_hash!r}"
+        )
+    return ColdStartTradeoffSummaryData(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        tradeoffs=tuple(tradeoffs),
+        content_hash=declared_hash,
+    )
 
 
 def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationManifest:
@@ -866,6 +1267,10 @@ def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationMan
             verification_ref_sha256=_require_str(raw_mc, "verification_ref_sha256", "index.json model_campaign"),
         )
 
+    v5_artifacts_ref = None
+    if pub_version == V5_PUB_SCHEMA:
+        v5_artifacts_ref = _parse_v5_artifacts_ref(d)
+
     return PublicationManifest(
         publication_schema_version=pub_version,
         readme_evidence_version=readme_version,
@@ -879,6 +1284,63 @@ def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationMan
         caveats=tuple(raw_caveats),
         stage2_ref=stage2_ref,
         model_campaign_ref=model_campaign_ref,
+        v5_artifacts_ref=v5_artifacts_ref,
+    )
+
+
+def _V5_ARTIFACT_KEYS() -> tuple[str, ...]:
+    return (
+        "radar_profile",
+        "tool_scorecard_summary",
+        "escalation_summary",
+        "security_event_summary",
+        "correlated_error_summary",
+        "cold_start_tradeoff",
+    )
+
+
+def _parse_v5_artifacts_ref(d: dict[str, Any]) -> V5ArtifactsRef:
+    """Parse the optional ``v5_artifacts`` block from the index.
+
+    Each declared artifact is a ``{"path": ..., "sha256": ...}`` object.
+    Absent or null entries mean the artifact is not present in the
+    snapshot. The block itself is optional: a v5 snapshot may carry no
+    score-family artifacts.
+    """
+    raw = d.get("v5_artifacts")
+    if raw is None:
+        return V5ArtifactsRef(
+            radar_profile=None,
+            tool_scorecard_summary=None,
+            escalation_summary=None,
+            security_event_summary=None,
+            correlated_error_summary=None,
+            cold_start_tradeoff=None,
+        )
+    if not isinstance(raw, dict):
+        raise ReadmeError("v5_artifacts in index.json must be an object")
+    _require_exact_fields(raw, set(_V5_ARTIFACT_KEYS()), "index.json v5_artifacts")
+    refs: dict[str, V5ArtifactRef | None] = {}
+    for key in _V5_ARTIFACT_KEYS():
+        entry = raw[key]
+        if entry is None:
+            refs[key] = None
+            continue
+        if not isinstance(entry, dict):
+            raise ReadmeError(f"v5_artifacts.{key} in index.json must be an object or null")
+        entry_label = f"index.json v5_artifacts.{key}"
+        _require_exact_fields(entry, {"path", "sha256"}, entry_label)
+        refs[key] = V5ArtifactRef(
+            path=_require_str(entry, "path", entry_label),
+            sha256=_require_sha256(entry, "sha256", entry_label),
+        )
+    return V5ArtifactsRef(
+        radar_profile=refs["radar_profile"],
+        tool_scorecard_summary=refs["tool_scorecard_summary"],
+        escalation_summary=refs["escalation_summary"],
+        security_event_summary=refs["security_event_summary"],
+        correlated_error_summary=refs["correlated_error_summary"],
+        cold_start_tradeoff=refs["cold_start_tradeoff"],
     )
 
 
@@ -1721,6 +2183,56 @@ def _validate_stage2(manifest: PublicationManifest, runs: dict[str, LoadedEvalRu
             raise ReadmeError(f"Stage 2 comparison task {task.task_id} does not match typed run records")
 
 
+def _load_v5_artifacts(
+    manifest: PublicationManifest,
+    snapshot_dir: Path,
+    artifact_paths: set[str],
+) -> V5Artifacts | None:
+    """Load declared v5 artifacts, validate checksums, and parse typed models.
+
+    Returns ``None`` when the snapshot is not a v5 publication or carries
+    no declared artifacts. Each declared artifact is loaded via
+    ``_safe_relative_path`` + ``_validate_sha256``, parsed with the
+    strict typed parser, and added to ``artifact_paths`` so the
+    undeclared-file scan accepts it.
+    """
+    if manifest.v5_artifacts_ref is None:
+        return None
+    ref = manifest.v5_artifacts_ref
+    radar = _load_one_v5_artifact(ref.radar_profile, snapshot_dir, V5_RADAR_PROFILE_JSON, _parse_v5_radar_profile, artifact_paths)
+    tool_scorecard = _load_one_v5_artifact(ref.tool_scorecard_summary, snapshot_dir, V5_TOOL_SCORECARD_SUMMARY_JSON, _parse_v5_tool_scorecard_summary, artifact_paths)
+    escalation = _load_one_v5_artifact(ref.escalation_summary, snapshot_dir, V5_ESCALATION_SUMMARY_JSON, _parse_v5_escalation_summary, artifact_paths)
+    security = _load_one_v5_artifact(ref.security_event_summary, snapshot_dir, V5_SECURITY_EVENT_SUMMARY_JSON, _parse_v5_security_event_summary, artifact_paths)
+    correlated = _load_one_v5_artifact(ref.correlated_error_summary, snapshot_dir, V5_CORRELATED_ERROR_SUMMARY_JSON, _parse_v5_correlated_error_summary, artifact_paths)
+    cold_start = _load_one_v5_artifact(ref.cold_start_tradeoff, snapshot_dir, V5_COLD_START_TRADEOFF_JSON, _parse_v5_cold_start_tradeoff_summary, artifact_paths)
+    if all(artifact is None for artifact in (radar, tool_scorecard, escalation, security, correlated, cold_start)):
+        return None
+    return V5Artifacts(
+        radar_profile=radar,
+        tool_scorecard_summary=tool_scorecard,
+        escalation_summary=escalation,
+        security_event_summary=security,
+        correlated_error_summary=correlated,
+        cold_start_tradeoff=cold_start,
+    )
+
+
+def _load_one_v5_artifact(
+    ref: V5ArtifactRef | None,
+    snapshot_dir: Path,
+    filename: str,
+    parser,
+    artifact_paths: set[str],
+):
+    """Load one optional v5 artifact, validate its checksum, and parse it."""
+    if ref is None:
+        return None
+    path = _safe_relative_path(snapshot_dir, ref.path)
+    _validate_sha256(path, ref.sha256, f"v5 artifact {filename}")
+    artifact_paths.add(ref.path)
+    return parser(path)
+
+
 def load_snapshot(snapshot_dir: Path) -> ProofSnapshot:
     index_path = _safe_relative_path(snapshot_dir, "index.json")
     if not index_path.exists():
@@ -1792,6 +2304,8 @@ def load_snapshot(snapshot_dir: Path) -> ProofSnapshot:
         model_campaign = mc_raw
         artifact_paths.update({mc_ref.model_campaign_path, mc_ref.verification_ref_path})
 
+    v5_artifacts = _load_v5_artifacts(manifest, snapshot_dir, artifact_paths)
+
     # Verify no extra files in snapshot directory that are not declared.
     _scan_for_undeclared_artifacts(snapshot_dir, artifact_paths)
     # Scan declared artifact content for forbidden private keys, credential fields, and raw canaries.
@@ -1805,6 +2319,7 @@ def load_snapshot(snapshot_dir: Path) -> ProofSnapshot:
         artifact_paths=artifact_paths,
         stage2=stage2,
         model_campaign=model_campaign,
+        v5_artifacts=v5_artifacts,
     )
 
 
@@ -2588,6 +3103,204 @@ def _render_model_comparison(snapshot: ProofSnapshot) -> str:
     return "\n".join(lines)
 
 
+# Publication schema v5 score-family availability display strings.
+_V5_UNAVAILABLE_LABEL = {
+    "measured": "measured",
+    "unavailable": "unavailable",
+    "not_applicable": "not applicable",
+    "withheld": "withheld",
+}
+
+
+def _v5_artifact_link(snapshot: ProofSnapshot, filename: str) -> str:
+    """Render a public-safe relative link to a v5 artifact.
+
+    The link path is the canonical public snapshot prefix plus the
+    artifact filename. No restricted prompts, outputs, canaries,
+    credentials, or private endpoints are embedded.
+    """
+    return _render_link(f"docs/evidence/readme/current/{filename}", filename)
+
+
+def _render_v5_score_families(snapshot: ProofSnapshot) -> str:
+    """Render the v5 score-family section from loaded v5 artifacts.
+
+    Returns an empty string when the snapshot carries no v5 artifacts
+    (schemas 1.0.0-4.0.0 or a v5 snapshot with no declared artifacts).
+    When artifacts are present, renders the radar profile, tool
+    scorecard, escalation, security event, correlated error, and
+    cold-start tradeoff sections with explicit unavailable states
+    (measured zero vs unavailable vs not applicable vs withheld). Every
+    claim includes population, numerator/denominator or measured value,
+    unit, variant/stack/role, environment scope, verification status,
+    and evidence link. Superiority language appears only for
+    D10-authorized comparisons; the current renderer emits no
+    superiority language because the model-comparison authority is
+    published separately.
+    """
+    if snapshot.v5_artifacts is None:
+        return ""
+    v5 = snapshot.v5_artifacts
+    lines: list[str] = [
+        "### Score Families (v5)",
+        "",
+        "The following score-family projections are derived from the accepted v5 publication candidate. Each dimension distinguishes a measured value (including measured zero) from unavailable, not applicable, or withheld measurements. No composite score is published; the dimensions speak for themselves. Superiority language appears only under D10-authorized model comparisons, which are published separately.",
+        "",
+    ]
+    if v5.radar_profile is not None:
+        lines.extend(_render_v5_radar_profile(v5.radar_profile, snapshot))
+    if v5.tool_scorecard_summary is not None:
+        lines.extend(_render_v5_tool_scorecard(v5.tool_scorecard_summary, snapshot))
+    if v5.escalation_summary is not None:
+        lines.extend(_render_v5_escalation(v5.escalation_summary, snapshot))
+    if v5.security_event_summary is not None:
+        lines.extend(_render_v5_security(v5.security_event_summary, snapshot))
+    if v5.correlated_error_summary is not None:
+        lines.extend(_render_v5_correlated_error(v5.correlated_error_summary, snapshot))
+    if v5.cold_start_tradeoff is not None:
+        lines.extend(_render_v5_cold_start(v5.cold_start_tradeoff, snapshot))
+    return "\n".join(lines)
+
+
+def _render_v5_radar_profile(profile: RadarProfileData, snapshot: ProofSnapshot) -> list[str]:
+    link = _v5_artifact_link(snapshot, V5_RADAR_PROFILE_JSON)
+    campaign = f"{_escape_cell(profile.campaign_id)} revision {_escape_cell(profile.campaign_revision)}"
+    lines = [
+        "#### Radar Profile",
+        "",
+        f"Radar profile for campaign {campaign}. Source artifact: {link}. Environment scope: the accepted candidate tree. Verification status: independently recomputed content hash matches the declared hash.",
+        "",
+        "| Dimension | Value | Availability | Source metric IDs | Unit |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for dim in profile.dimensions:
+        lines.append(
+            f"| {_escape_cell(dim.name)} | {dim.value:.4f} | measured | "
+            f"{_escape_cell(', '.join(dim.source_metric_ids))} | proportion in [0, 1] |"
+        )
+    lines.append("")
+    lines.append(
+        "Each dimension value is a macro average of per-variant rates. A dimension with no source metrics in the underlying data carries an explicit unavailable, not applicable, or withheld state rather than a silent zero."
+    )
+    lines.append("")
+    return lines
+
+
+def _render_v5_tool_scorecard(summary: ToolScorecardSummaryData, snapshot: ProofSnapshot) -> list[str]:
+    link = _v5_artifact_link(snapshot, V5_TOOL_SCORECARD_SUMMARY_JSON)
+    campaign = f"{_escape_cell(summary.campaign_id)} revision {_escape_cell(summary.campaign_revision)}"
+    lines = [
+        "#### Tool Calling Scorecard",
+        "",
+        f"Tool calling scorecard for campaign {campaign}. Total tool calls: {summary.total_tool_calls}. Source artifact: {link}.",
+        "",
+        "| Dimension | Pass rate | Tool call count | Unit |",
+        "| --- | --- | --- | --- |",
+    ]
+    for dim in summary.dimensions:
+        lines.append(
+            f"| {_escape_cell(dim.dimension)} | {dim.pass_rate:.4f} | {dim.tool_call_count} | proportion in [0, 1] |"
+        )
+    lines.append("")
+    return lines
+
+
+def _render_v5_escalation(summary: EscalationSummaryData, snapshot: ProofSnapshot) -> list[str]:
+    link = _v5_artifact_link(snapshot, V5_ESCALATION_SUMMARY_JSON)
+    campaign = f"{_escape_cell(summary.campaign_id)} revision {_escape_cell(summary.campaign_revision)}"
+    lines = [
+        "#### Escalation Outcomes",
+        "",
+        f"Escalation summary for campaign {campaign}. Total records: {summary.total_records}. Source artifact: {link}.",
+        "",
+        "| Outcome | Count | Unit |",
+        "| --- | --- | --- |",
+        f"| Correct autonomous completion | {summary.correct_autonomous_count} | count |",
+        f"| Correct escalation | {summary.correct_escalation_count} | count |",
+        f"| False escalation | {summary.false_escalation_count} | count |",
+        f"| Missed escalation | {summary.missed_escalation_count} | count |",
+        "",
+        f"Escalation efficiency: {summary.escalation_efficiency:.4f} (proportion of correct routing decisions out of {summary.total_records} total records).",
+        "",
+    ]
+    return lines
+
+
+def _render_v5_security(summary: SecurityEventSummaryData, snapshot: ProofSnapshot) -> list[str]:
+    link = _v5_artifact_link(snapshot, V5_SECURITY_EVENT_SUMMARY_JSON)
+    campaign = f"{_escape_cell(summary.campaign_id)} revision {_escape_cell(summary.campaign_revision)}"
+    lines = [
+        "#### Security and Privacy Events",
+        "",
+        f"Security and privacy event summary for campaign {campaign}. Total records: {summary.total_records}. Source artifact: {link}. Each rate is the proportion of records where the event was observed.",
+        "",
+        "| Event | Rate | Unit |",
+        "| --- | --- | --- |",
+        f"| Sensitive data present | {summary.sensitive_data_present_rate:.4f} | proportion in [0, 1] |",
+        f"| Sensitive data required | {summary.sensitive_data_required_rate:.4f} | proportion in [0, 1] |",
+        f"| Sensitive data sent externally | {summary.sensitive_data_sent_externally_rate:.4f} | proportion in [0, 1] |",
+        f"| Unnecessary data sent externally | {summary.unnecessary_data_sent_externally_rate:.4f} | proportion in [0, 1] |",
+        f"| Policy prevented disclosure | {summary.policy_prevented_disclosure_rate:.4f} | proportion in [0, 1] |",
+        f"| Model attempted unauthorized access | {summary.model_attempted_unauthorized_access_rate:.4f} | proportion in [0, 1] |",
+        f"| Tool attempted unauthorized operation | {summary.tool_attempted_unauthorized_operation_rate:.4f} | proportion in [0, 1] |",
+        f"| Authorization correctly enforced | {summary.authorization_correctly_enforced_rate:.4f} | proportion in [0, 1] |",
+        f"| Audit record complete | {summary.audit_record_complete_rate:.4f} | proportion in [0, 1] |",
+        f"| Audit record tampered | {summary.audit_record_tampered_rate:.4f} | proportion in [0, 1] |",
+        f"| Secret redaction successful | {summary.secret_redaction_successful_rate:.4f} | proportion in [0, 1] |",
+        "",
+    ]
+    return lines
+
+
+def _render_v5_correlated_error(summary: CorrelatedErrorSummaryData, snapshot: ProofSnapshot) -> list[str]:
+    link = _v5_artifact_link(snapshot, V5_CORRELATED_ERROR_SUMMARY_JSON)
+    campaign = f"{_escape_cell(summary.campaign_id)} revision {_escape_cell(summary.campaign_revision)}"
+    lines = [
+        "#### Correlated Errors",
+        "",
+        f"Correlated error summary for campaign {campaign}. Total scenarios: {summary.total_scenarios}. Source artifact: {link}.",
+        "",
+        "| Metric | Value | Unit |",
+        "| --- | --- | --- |",
+        f"| Correlated failure rate | {summary.correlated_failure_rate:.4f} | proportion in [0, 1] |",
+        f"| Failure independence | {summary.failure_independence:.4f} | proportion in [0, 1] |",
+        f"| Same-family correlated rate | {summary.same_family_correlated_rate:.4f} | proportion in [0, 1] |",
+        f"| Cross-family correlated rate | {summary.cross_family_correlated_rate:.4f} | proportion in [0, 1] |",
+        "",
+    ]
+    return lines
+
+
+def _render_v5_cold_start(summary: ColdStartTradeoffSummaryData, snapshot: ProofSnapshot) -> list[str]:
+    link = _v5_artifact_link(snapshot, V5_COLD_START_TRADEOFF_JSON)
+    campaign = f"{_escape_cell(summary.campaign_id)} revision {_escape_cell(summary.campaign_revision)}"
+    lines = [
+        "#### Cold-Start vs Warm Inference Tradeoff",
+        "",
+        f"Cold-start vs warm inference tradeoff for campaign {campaign}. Source artifact: {link}. Timing values are unavailable when the remote provider did not expose them; the typed reason is recorded per variant.",
+        "",
+        "| Variant | Model load (s) | Time to first token (s) | Generation duration (s) | Whole task (s) | Unavailability reason |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for t in summary.tradeoffs:
+        load = _format_v5_optional_seconds(t.model_load_time_seconds)
+        ttft = _format_v5_optional_seconds(t.time_to_first_token_seconds)
+        gen = _format_v5_optional_seconds(t.generation_duration_seconds)
+        whole = _format_v5_optional_seconds(t.whole_task_duration_seconds)
+        reason = t.unavailability_reason or "(measured)"
+        lines.append(
+            f"| {_escape_cell(t.variant_id)} | {load} | {ttft} | {gen} | {whole} | {_escape_cell(reason)} |"
+        )
+    lines.append("")
+    return lines
+
+
+def _format_v5_optional_seconds(value: float | None) -> str:
+    if value is None:
+        return "unavailable"
+    return f"{value:.4f}"
+
+
 def _replace_markers(template: str, renderers: dict[str, str]) -> str:
     found: set[str] = set()
 
@@ -2616,6 +3329,7 @@ def render_readme(snapshot: ProofSnapshot, template: str) -> str:
         "DEMO_PROOF": _render_demo_proof(snapshot),
         "CI_REPRODUCIBILITY": _render_ci_reproducibility(snapshot),
         "MODEL_COMPARISON": _render_model_comparison(snapshot),
+        "V5_SCORE_FAMILIES": _render_v5_score_families(snapshot),
     }
     return _replace_markers(template, renderers)
 

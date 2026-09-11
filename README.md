@@ -1285,6 +1285,8 @@ Campaign generative-campaign-v1 revision rev-1 under publication schema 4.0.0.
 - curated_benchmark_subset
 - no_inferential_claims
 
+
+
 ### Receipt Verification
 
 **Receipt evidence is unavailable for this Stage 2 comparison.** The answer-only tasks produced zero receipts, so this evidence supports no receipt-signature, mutation, persistence, or state claim.

@@ -689,6 +689,7 @@ class TestCampaignVerifierEscalationRecordsLayer:
         er_path = report_dir / ESCALATION_RECORDS_JSONL
         target = report_dir / "real-escalation-records.jsonl"
         target.write_text(json.dumps(_make_record_dict(**ident)) + "\n")
+        er_path.unlink(missing_ok=True)
         er_path.symlink_to(target)
         result = verify_campaign(report_dir)
         assert not result.ok
