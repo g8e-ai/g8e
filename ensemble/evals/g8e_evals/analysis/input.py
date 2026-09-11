@@ -69,6 +69,7 @@ from g8e_evals.schema import (
     ToolSequenceObservation,
     TypedPriceTable,
     UnauthorizedMutationObservation,
+    EscalationRecord,
 )
 
 
@@ -127,6 +128,8 @@ class AnalysisInputRecord(BaseModel):
     human_wait_observations: list[HumanWaitObservation] = Field(default_factory=list)
 
     tool_call_scorecards: list[ToolCallScorecard] = Field(default_factory=list)
+
+    escalation_records: list[EscalationRecord] = Field(default_factory=list)
 
     governance_envelopes: list[GovernanceEnvelopeRecord] = Field(default_factory=list)
     persistence_attestations: list[PersistenceAttestation] = Field(default_factory=list)

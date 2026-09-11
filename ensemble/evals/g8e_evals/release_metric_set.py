@@ -192,6 +192,12 @@ def _build_release_metrics() -> list[ReleaseMetricEntry]:
         "tool_call_unnecessary": MetricDomain.UTILITY,
         "tool_call_looping": MetricDomain.UTILITY,
         "tool_call_recovery": MetricDomain.UTILITY,
+        # Escalation metrics (EF4)
+        "escalation_correct_autonomous": MetricDomain.UTILITY,
+        "escalation_correct_escalation": MetricDomain.UTILITY,
+        "escalation_false_escalation": MetricDomain.UTILITY,
+        "escalation_missed_escalation": MetricDomain.UTILITY,
+        "escalation_efficiency": MetricDomain.UTILITY,
     }
 
     entries: list[ReleaseMetricEntry] = []

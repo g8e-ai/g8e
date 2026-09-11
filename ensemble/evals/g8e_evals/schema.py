@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.41.0"
+SCHEMA_VERSION = "1.42.0"
 
 FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "state_fixture",
@@ -3482,5 +3482,112 @@ def validate_tool_call_scorecards(scorecards: list[ToolCallScorecard]) -> None:
                 f"duplicate tool call scorecard for (run={sc.run_id!r}, "
                 f"attempt={sc.attempt_id!r}, tool={sc.tool_name!r}, "
                 f"call_index={sc.call_index})"
+            )
+        seen.add(key)
+
+
+class EscalationOutcome(StrEnum):
+    """The five escalation outcome classes.
+
+    Each escalation event classifies the Triage agent's routing decision
+    against the ground-truth complexity label for the scenario. A Light
+    model that receives a task either solves it correctly (autonomous
+    completion), recognizes it cannot solve it and escalates (correct
+    escalation), wastes a stronger model by escalating unnecessarily
+    (false escalation), or attempts something beyond its ability and
+    fails (missed escalation).
+
+    ``CORRECT_AUTONOMOUS``: Solved the task correctly without escalating.
+    ``CORRECT_ESCALATION``: Recognized a stronger model was necessary and escalated.
+    ``FALSE_ESCALATION``: Escalated when the task was within the model's ability (wasted a stronger model).
+    ``MISSED_ESCALATION``: Attempted the task without escalating and failed.
+    ``ESCALATION_EFFICIENCY``: Routing minimized compute without hurting accuracy (derived, not a per-event outcome).
+    """
+
+    CORRECT_AUTONOMOUS = "correct_autonomous"
+    CORRECT_ESCALATION = "correct_escalation"
+    FALSE_ESCALATION = "false_escalation"
+    MISSED_ESCALATION = "missed_escalation"
+    ESCALATION_EFFICIENCY = "escalation_efficiency"
+
+
+_ESCALATION_OUTCOMES = frozenset(
+    o.value for o in EscalationOutcome
+    if o != EscalationOutcome.ESCALATION_EFFICIENCY
+)
+
+
+class EscalationRecord(BaseModel):
+    """Per-scenario escalation record bound to model variant, role, and task.
+
+    Each scenario-model pair in a heterogeneous-stack campaign produces
+    one escalation record. The record classifies the Triage agent's
+    routing decision against the ground-truth complexity label declared
+    by the scenario metadata. The record is bound to the agent persona
+    that made the routing decision (typically the ``triage`` persona at
+    the ``lite`` tier), the model variant that produced the decision, the
+    scenario's expected role, and the task so the analysis can decompose
+    escalation quality by model, role, and complexity level.
+
+    The ``ground_truth_complexity`` field carries the scenario's declared
+    complexity (light, assistant, primary) from the ``ScenarioMetadata``.
+    The ``routed_to_role`` field records the role the Triage agent
+    selected. The ``outcome`` field classifies the routing decision
+    against the ground truth.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: str = SCHEMA_VERSION
+    record_id: str = Field(min_length=1, description="Unique escalation record identifier within the run.")
+    attempt_id: str = Field(min_length=1, description="Attempt ID this escalation record belongs to.")
+    run_id: str = Field(min_length=1, description="Run ID this escalation record belongs to.")
+    task_id: str = Field(min_length=1, description="Task ID this escalation record belongs to.")
+
+    agent_persona: str = Field(min_length=1, description="Agent persona that made the routing decision (e.g. triage, sage).")
+    model_variant_id: str = Field(min_length=1, description="Model variant ID that produced the routing decision.")
+    expected_role: str = Field(min_length=1, description="Scenario's expected role (primary, assistant, light) from ScenarioMetadata.")
+    ground_truth_complexity: str = Field(min_length=1, description="Scenario's declared complexity (light, assistant, primary) from ScenarioMetadata.")
+    routed_to_role: str = Field(min_length=1, description="Role the Triage agent routed the task to (primary, assistant, light).")
+
+    outcome: EscalationOutcome = Field(description="Classification of the routing decision against the ground truth.")
+
+    task_succeeded: bool = Field(description="Whether the task was ultimately solved correctly, regardless of escalation.")
+
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> EscalationRecord:
+        if len(self.source_evidence_refs) != len(set(self.source_evidence_refs)):
+            raise ValueError("escalation record source evidence references must be unique")
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified escalation record requires source evidence")
+        return self
+
+
+def validate_escalation_records(records: list[EscalationRecord]) -> None:
+    """Validate a list of escalation records.
+
+    Rejects duplicate (run_id, attempt_id, task_id) tuples. Each record
+    must be a valid ``EscalationRecord`` with all required bindings. The
+    ``ESCALATION_EFFICIENCY`` outcome is a derived aggregate, not a
+    per-event outcome, and is rejected at the per-record level.
+    """
+    seen: set[tuple[str, str, str]] = set()
+    for rec in records:
+        if rec.outcome == EscalationOutcome.ESCALATION_EFFICIENCY:
+            raise ValueError(
+                f"escalation record {rec.record_id} has derived outcome "
+                f"escalation_efficiency, which is not a valid per-event outcome"
+            )
+        key = (rec.run_id, rec.attempt_id, rec.task_id)
+        if key in seen:
+            raise ValueError(
+                f"duplicate escalation record for (run={rec.run_id!r}, "
+                f"attempt={rec.attempt_id!r}, task={rec.task_id!r})"
             )
         seen.add(key)

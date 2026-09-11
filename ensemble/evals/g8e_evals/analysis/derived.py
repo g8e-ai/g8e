@@ -7,7 +7,7 @@
 
 """Derived analysis metric producers.
 
-Produces canonical ``MetricObservation`` records for all 17
+Produces canonical ``MetricObservation`` records for all 32
 ``GraderClass.ANALYSIS`` metrics from verified immutable source records.
 Each producer validates source content fail-closed: wrong bindings,
 missing signatures, broken chains, and mismatched hashes raise
@@ -15,7 +15,7 @@ missing signatures, broken chains, and mismatched hashes raise
 an attempt) is preserved as missing evidence: no observation is produced
 and the attempt remains in the denominator as missing.
 
-All 17 derived metrics are registered in a typed producer registry keyed
+All 32 derived metrics are registered in a typed producer registry keyed
 by ``(metric_id, metric_version)``. The registry asserts exactly one
 producer for each registered ``GraderClass.ANALYSIS`` metric at import
 time. The canonical analysis engine calls ``run_all_derived_producers``
@@ -59,6 +59,8 @@ from g8e_evals.schema import (
     StateObservation,
     TaskDefinition,
     ToolCallScorecard,
+    EscalationRecord,
+    EscalationOutcome,
     VerificationStatus,
 )
 
@@ -1349,6 +1351,163 @@ def produce_tool_call_recovery_observations(
 
 
 # ---------------------------------------------------------------------------
+# Group F: Escalation metric producers (EF4)
+# ---------------------------------------------------------------------------
+
+
+def _produce_escalation_outcome_observations(
+    record: AnalysisInputRecord,
+    metric_id: str,
+    outcome: EscalationOutcome,
+) -> list[MetricObservation]:
+    """Produce one escalation outcome metric from EscalationRecord records.
+
+    Each EscalationRecord produces one MetricObservation per attempt,
+    aggregating the boolean outcome match across all escalation records
+    for that attempt. The value is the proportion of escalation records
+    where the outcome matches the target. The denominator contribution
+    is the number of escalation records for that attempt.
+    """
+    definition = DEFAULT_METRIC_REGISTRY.get(metric_id, _GRADER_VERSION)
+    attempt_map = _attempt_lookup(record)
+
+    records_by_attempt: dict[str, list[EscalationRecord]] = defaultdict(list)
+    for er in record.escalation_records:
+        records_by_attempt[er.attempt_id].append(er)
+
+    results: list[MetricObservation] = []
+    for attempt_id in sorted(records_by_attempt.keys()):
+        attempt = attempt_map.get(attempt_id)
+        if attempt is None:
+            continue
+
+        attempt_records = records_by_attempt[attempt_id]
+        if not attempt_records:
+            continue
+
+        matched = sum(1 for er in attempt_records if er.outcome == outcome)
+        total = len(attempt_records)
+        proportion = round(matched / total, 10) if total > 0 else 0.0
+
+        evidence_refs = [er.record_id for er in attempt_records]
+        verification = VerificationStatus.VERIFIED if all(
+            er.verification_status == VerificationStatus.VERIFIED
+            for er in attempt_records
+        ) else VerificationStatus.PENDING
+
+        results.append(MetricObservation(
+            metric_id=metric_id,
+            metric_version=_GRADER_VERSION,
+            attempt_id=attempt_id,
+            run_id=record.run_id,
+            arm_id=attempt.arm_id,
+            task_id=attempt.task_id,
+            value=proportion,
+            unit=definition.unit,
+            eligible=True,
+            denominator_contribution=total,
+            verification_status=verification,
+            grader_class=SchemaGraderClass.ANALYSIS,
+            evidence_refs=evidence_refs,
+        ))
+    return results
+
+
+def produce_escalation_correct_autonomous_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``escalation_correct_autonomous`` metric observations from EscalationRecord records."""
+    return _produce_escalation_outcome_observations(
+        record, "escalation_correct_autonomous", EscalationOutcome.CORRECT_AUTONOMOUS,
+    )
+
+
+def produce_escalation_correct_escalation_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``escalation_correct_escalation`` metric observations from EscalationRecord records."""
+    return _produce_escalation_outcome_observations(
+        record, "escalation_correct_escalation", EscalationOutcome.CORRECT_ESCALATION,
+    )
+
+
+def produce_escalation_false_escalation_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``escalation_false_escalation`` metric observations from EscalationRecord records."""
+    return _produce_escalation_outcome_observations(
+        record, "escalation_false_escalation", EscalationOutcome.FALSE_ESCALATION,
+    )
+
+
+def produce_escalation_missed_escalation_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``escalation_missed_escalation`` metric observations from EscalationRecord records."""
+    return _produce_escalation_outcome_observations(
+        record, "escalation_missed_escalation", EscalationOutcome.MISSED_ESCALATION,
+    )
+
+
+def produce_escalation_efficiency_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``escalation_efficiency`` metric observations from EscalationRecord records.
+
+    Escalation efficiency is the proportion of scenarios where routing
+    minimized compute without hurting accuracy: (correct_autonomous +
+    correct_escalation) / total. This is the derived aggregate, not a
+    per-event outcome match.
+    """
+    definition = DEFAULT_METRIC_REGISTRY.get("escalation_efficiency", _GRADER_VERSION)
+    attempt_map = _attempt_lookup(record)
+
+    records_by_attempt: dict[str, list[EscalationRecord]] = defaultdict(list)
+    for er in record.escalation_records:
+        records_by_attempt[er.attempt_id].append(er)
+
+    results: list[MetricObservation] = []
+    for attempt_id in sorted(records_by_attempt.keys()):
+        attempt = attempt_map.get(attempt_id)
+        if attempt is None:
+            continue
+
+        attempt_records = records_by_attempt[attempt_id]
+        if not attempt_records:
+            continue
+
+        efficient = sum(
+            1 for er in attempt_records
+            if er.outcome in (EscalationOutcome.CORRECT_AUTONOMOUS, EscalationOutcome.CORRECT_ESCALATION)
+        )
+        total = len(attempt_records)
+        proportion = round(efficient / total, 10) if total > 0 else 0.0
+
+        evidence_refs = [er.record_id for er in attempt_records]
+        verification = VerificationStatus.VERIFIED if all(
+            er.verification_status == VerificationStatus.VERIFIED
+            for er in attempt_records
+        ) else VerificationStatus.PENDING
+
+        results.append(MetricObservation(
+            metric_id="escalation_efficiency",
+            metric_version=_GRADER_VERSION,
+            attempt_id=attempt_id,
+            run_id=record.run_id,
+            arm_id=attempt.arm_id,
+            task_id=attempt.task_id,
+            value=proportion,
+            unit=definition.unit,
+            eligible=True,
+            denominator_contribution=total,
+            verification_status=verification,
+            grader_class=SchemaGraderClass.ANALYSIS,
+            evidence_refs=evidence_refs,
+        ))
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Registry construction and runner
 # ---------------------------------------------------------------------------
 
@@ -1390,6 +1549,11 @@ def _build_default_derived_registry() -> DerivedProducerRegistry:
     registry.register("tool_call_unnecessary", _GRADER_VERSION, produce_tool_call_unnecessary_observations)
     registry.register("tool_call_looping", _GRADER_VERSION, produce_tool_call_looping_observations)
     registry.register("tool_call_recovery", _GRADER_VERSION, produce_tool_call_recovery_observations)
+    registry.register("escalation_correct_autonomous", _GRADER_VERSION, produce_escalation_correct_autonomous_observations)
+    registry.register("escalation_correct_escalation", _GRADER_VERSION, produce_escalation_correct_escalation_observations)
+    registry.register("escalation_false_escalation", _GRADER_VERSION, produce_escalation_false_escalation_observations)
+    registry.register("escalation_missed_escalation", _GRADER_VERSION, produce_escalation_missed_escalation_observations)
+    registry.register("escalation_efficiency", _GRADER_VERSION, produce_escalation_efficiency_observations)
     registry.assert_complete()
     return registry
 
@@ -1439,6 +1603,11 @@ __all__ = [
     "produce_balanced_accuracy_observations",
     "produce_commitment_linkage_observations",
     "produce_envelope_linkage_observations",
+    "produce_escalation_correct_autonomous_observations",
+    "produce_escalation_correct_escalation_observations",
+    "produce_escalation_efficiency_observations",
+    "produce_escalation_false_escalation_observations",
+    "produce_escalation_missed_escalation_observations",
     "produce_evidence_validity_observations",
     "produce_expected_layer_detection_observations",
     "produce_harm_weighted_loss_observations",

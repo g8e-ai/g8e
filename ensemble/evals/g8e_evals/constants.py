@@ -88,6 +88,9 @@ RESOURCE_OBSERVATIONS_JSONL = "resource-observations.jsonl"
 # Tool call scorecards (per-tool-call 10-dimension scorecard records)
 TOOL_CALL_SCORECARDS_JSONL = "tool-call-scorecards.jsonl"
 
+# Escalation records (per-scenario routing-decision classification records)
+ESCALATION_RECORDS_JSONL = "escalation-records.jsonl"
+
 # Report checksum (optional per-report checksum file for standalone validation)
 REPORT_CHECKSUM_JSON = "report-checksum.json"
 

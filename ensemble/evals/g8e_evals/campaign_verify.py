@@ -44,6 +44,7 @@ from g8e_evals.constants import (
     CAMPAIGN_RETRY_POLICY_JSON,
     CAMPAIGN_SCHEDULE_JSON,
     CAMPAIGN_STATUS_JSON,
+    ESCALATION_RECORDS_JSONL,
     EVIDENCE_INDEX_JSONL,
     MANIFEST_JSON,
     METRICS_JSONL,
@@ -65,10 +66,12 @@ from g8e_evals.index import (
 from g8e_evals.report.validate import validate_standalone_report
 from g8e_evals.schema import (
     AttemptRecord,
+    EscalationRecord,
     MetricObservation,
     RunManifest,
     TerminalStatus,
     ToolCallScorecard,
+    validate_escalation_records,
     validate_tool_call_scorecards,
 )
 
@@ -369,6 +372,29 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                         )
             except (ValidationError, ValueError, json.JSONDecodeError) as e:
                 failures.append(f"tool call scorecard validation failed: {e}")
+
+    # Layer 15: escalation records — validate if present
+    checked_layers.append("escalation_records")
+    escalation_path = report_dir / ESCALATION_RECORDS_JSONL
+    if escalation_path.exists():
+        if escalation_path.is_symlink():
+            failures.append(f"symlink rejected for escalation records: {escalation_path.name}")
+        elif not escalation_path.is_file():
+            failures.append(f"escalation records is not a regular file: {escalation_path.name}")
+        else:
+            try:
+                er_records = _read_jsonl_dicts(escalation_path)
+                escalation_records = [EscalationRecord.model_validate(r) for r in er_records]
+                validate_escalation_records(escalation_records)
+                # Validate binding: every record's attempt_id references a real attempt
+                attempt_ids = {a.attempt_id for a in attempts}
+                for er in escalation_records:
+                    if er.attempt_id not in attempt_ids:
+                        failures.append(
+                            f"escalation record {er.record_id} references unknown attempt: {er.attempt_id}"
+                        )
+            except (ValidationError, ValueError, json.JSONDecodeError) as e:
+                failures.append(f"escalation record validation failed: {e}")
 
     ok = len(failures) == 0
     return CampaignVerificationReport(
