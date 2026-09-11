@@ -77,6 +77,8 @@ from g8e_evals.benchmarks.privacy.observers import (
 from g8e_evals.benchmarks.privacy.provenance import load_provenance as load_synthetic_provenance
 from g8e_evals.benchmarks.reliability.loader import ReliabilityLoader
 from g8e_evals.benchmarks.reliability.observers import ReliabilityObserverImpl
+from g8e_evals.benchmarks.scenarios.grader import ScenarioGrader
+from g8e_evals.benchmarks.scenarios.loader import make_scenario_loader_factory
 from g8e_evals.benchmarks.utility.citation_backed_loader import CitationBackedLoader
 from g8e_evals.benchmarks.utility.factual_qa_loader import FactualQALoader
 from g8e_evals.benchmarks.utility.final_state_loader import FinalStateLoader
@@ -270,6 +272,96 @@ register_suite(SuiteSpec(
     grader_factory=IFEvalVerifier,
     required_observers=(),
 ))
+
+# Real system benchmark suites: the live g8ee/g8e path receives the task
+# and the configured model-tier calls are observed. These suites exercise
+# the g8ee ensemble (Sage, Dash, Tribunal, Warden, Auditor) through the
+# G8eeChatSUT, not just raw model inference through DirectProviderSUT.
+# Each suite uses the shared ScenarioGrader and ScenarioLoader with a
+# suite-specific grader_id and loader factory binding.
+
+
+def _make_scenario_grader_factory(grader_id: str):
+    """Return a grader factory that creates a ScenarioGrader bound to ``grader_id``."""
+
+    def factory() -> ScenarioGrader:
+        return ScenarioGrader(grader_id=grader_id)
+
+    factory.__name__ = f"ScenarioGrader_{grader_id}"
+    return factory
+
+
+_SCENARIO_SUITES: list[tuple[str, str, list[str]]] = [
+    (
+        "tool_selection",
+        "Tool selection scenarios (4 tasks, deterministic grader). The model "
+        "must select the correct tool from a tool catalog for each task. "
+        "Exercises the g8ee ensemble through G8eeChatSUT.",
+        ["tool_selection"],
+    ),
+    (
+        "tool_arguments",
+        "Tool arguments scenarios (3 tasks, deterministic grader). The model "
+        "must produce correct structured arguments for tool calls. Exercises "
+        "the g8ee ensemble through G8eeChatSUT.",
+        ["tool_arguments"],
+    ),
+    (
+        "technical_analysis",
+        "Technical analysis scenarios (4 tasks, deterministic grader). The "
+        "model analyzes logs, network output, errors, and configuration. "
+        "Exercises the g8ee ensemble through G8eeChatSUT.",
+        ["technical_analysis"],
+    ),
+    (
+        "routing_delegation",
+        "Routing and delegation scenarios (3 tasks, deterministic grader). "
+        "The model routes tasks between Primary, Assistant, and Light roles. "
+        "Exercises the g8ee ensemble through G8eeChatSUT.",
+        ["routing_delegation"],
+    ),
+    (
+        "verification",
+        "Verification scenarios (2 tasks, deterministic grader). The model "
+        "verifies whether another agent's response is supported by tool "
+        "evidence. Exercises the g8ee ensemble through G8eeChatSUT.",
+        ["verification"],
+    ),
+    (
+        "security_policy",
+        "Security and policy scenarios (2 tasks, deterministic grader). The "
+        "model must refuse or disallow prohibited operations and protect "
+        "sensitive data. Exercises the g8ee ensemble through G8eeChatSUT.",
+        ["security", "policy"],
+    ),
+    (
+        "recovery",
+        "Recovery scenarios (2 tasks, deterministic grader). The model must "
+        "recover from tool failures, malformed responses, and unavailable "
+        "resources. Exercises the g8ee ensemble through G8eeChatSUT.",
+        ["recovery"],
+    ),
+    (
+        "final_response",
+        "Final response scenarios (1 task, deterministic grader). The model "
+        "must communicate the result of an investigation clearly to the "
+        "customer. Exercises the g8ee ensemble through G8eeChatSUT.",
+        ["final_response"],
+    ),
+]
+
+for _suite_id, _description, _strata in _SCENARIO_SUITES:
+    register_suite(SuiteSpec(
+        suite_id=_suite_id,
+        description=_description,
+        execution_class=SuiteExecutionClass.REAL_SYSTEM,
+        compatible_arms=frozenset(ALL_ARMS),
+        default_gold_set=_GOLD_SETS / _suite_id / "input_data.jsonl",
+        loader_factory=make_scenario_loader_factory(_suite_id),
+        provenance_loader=load_synthetic_provenance,
+        grader_factory=_make_scenario_grader_factory(_suite_id),
+        required_observers=(),
+    ))
 
 # Deterministic simulation suites: a local simulator produces observations
 # without calling the candidate model. Excluded from model rankings.

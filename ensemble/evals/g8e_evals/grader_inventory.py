@@ -215,6 +215,446 @@ _INVENTORY: list[GraderInventoryEntry] = [
         ],
     ),
     GraderInventoryEntry(
+        grader_id="tool_selection",
+        grader_version=_GRADER_VERSION,
+        grader_class=_DET,
+        assertion_field=None,
+        observation_field=None,
+        metric_ids=["tool_selection"],
+        evidence_requirements=["normalized_attempt_evidence", "scenario_grader_score"],
+        denominator="Total number of attempted tool_selection tasks.",
+        cli_constant="_TOOL_SELECTION_GRADER_ID",
+        producer_path=ProducerPath.PARTIAL_EXTERNAL,
+        producer_suite_ids=["tool_selection"],
+        conformance_exclusions=[
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="tool_selection is a partial external grader with separate dispatch via ScenarioGrader; action-class binding is covered by the tool_selection suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_BOUNDARY_BINDING,
+                reason="tool_selection is a partial external grader with separate dispatch via ScenarioGrader; boundary binding is covered by the tool_selection suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_SOURCE_BINDING,
+                reason="tool_selection is a partial external grader with separate dispatch via ScenarioGrader; source binding is covered by the tool_selection suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.NOT_APPLICABLE,
+                reason="tool_selection is binary pass/fail; not-applicable is not a valid outcome",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DENOMINATOR_BEHAVIOR,
+                reason="tool_selection is binary pass/fail with denominator_contribution=1; no variable denominator",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DUPLICATE_EVIDENCE,
+                reason="tool_selection is a partial external grader with separate dispatch via ScenarioGrader; duplicate-evidence handling is covered by the tool_selection suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.MALFORMED_EVIDENCE,
+                reason="tool_selection is a partial external grader with separate dispatch via ScenarioGrader; malformed-evidence handling is covered by the tool_selection suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_RUN_BINDING,
+                reason="tool_selection is a partial external grader with separate dispatch via ScenarioGrader; run-binding handling is covered by the tool_selection suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ATTEMPT_BINDING,
+                reason="tool_selection is a partial external grader with separate dispatch via ScenarioGrader; attempt-binding handling is covered by the tool_selection suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_TASK_BINDING,
+                reason="tool_selection is a partial external grader with separate dispatch via ScenarioGrader; task-binding handling is covered by the tool_selection suite's own conformance tests",
+            ),
+        ],
+    ),
+    GraderInventoryEntry(
+        grader_id="tool_arguments",
+        grader_version=_GRADER_VERSION,
+        grader_class=_DET,
+        assertion_field=None,
+        observation_field=None,
+        metric_ids=["tool_arguments"],
+        evidence_requirements=["normalized_attempt_evidence", "scenario_grader_score"],
+        denominator="Total number of attempted tool_arguments tasks.",
+        cli_constant="_TOOL_ARGUMENTS_GRADER_ID",
+        producer_path=ProducerPath.PARTIAL_EXTERNAL,
+        producer_suite_ids=["tool_arguments"],
+        conformance_exclusions=[
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="tool_arguments is a partial external grader with separate dispatch via ScenarioGrader; action-class binding is covered by the tool_arguments suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_BOUNDARY_BINDING,
+                reason="tool_arguments is a partial external grader with separate dispatch via ScenarioGrader; boundary binding is covered by the tool_arguments suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_SOURCE_BINDING,
+                reason="tool_arguments is a partial external grader with separate dispatch via ScenarioGrader; source binding is covered by the tool_arguments suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.NOT_APPLICABLE,
+                reason="tool_arguments is binary pass/fail; not-applicable is not a valid outcome",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DENOMINATOR_BEHAVIOR,
+                reason="tool_arguments is binary pass/fail with denominator_contribution=1; no variable denominator",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DUPLICATE_EVIDENCE,
+                reason="tool_arguments is a partial external grader with separate dispatch via ScenarioGrader; duplicate-evidence handling is covered by the tool_arguments suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.MALFORMED_EVIDENCE,
+                reason="tool_arguments is a partial external grader with separate dispatch via ScenarioGrader; malformed-evidence handling is covered by the tool_arguments suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_RUN_BINDING,
+                reason="tool_arguments is a partial external grader with separate dispatch via ScenarioGrader; run-binding handling is covered by the tool_arguments suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ATTEMPT_BINDING,
+                reason="tool_arguments is a partial external grader with separate dispatch via ScenarioGrader; attempt-binding handling is covered by the tool_arguments suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_TASK_BINDING,
+                reason="tool_arguments is a partial external grader with separate dispatch via ScenarioGrader; task-binding handling is covered by the tool_arguments suite's own conformance tests",
+            ),
+        ],
+    ),
+    GraderInventoryEntry(
+        grader_id="technical_analysis",
+        grader_version=_GRADER_VERSION,
+        grader_class=_DET,
+        assertion_field=None,
+        observation_field=None,
+        metric_ids=["technical_analysis"],
+        evidence_requirements=["normalized_attempt_evidence", "scenario_grader_score"],
+        denominator="Total number of attempted technical_analysis tasks.",
+        cli_constant="_TECHNICAL_ANALYSIS_GRADER_ID",
+        producer_path=ProducerPath.PARTIAL_EXTERNAL,
+        producer_suite_ids=["technical_analysis"],
+        conformance_exclusions=[
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="technical_analysis is a partial external grader with separate dispatch via ScenarioGrader; action-class binding is covered by the technical_analysis suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_BOUNDARY_BINDING,
+                reason="technical_analysis is a partial external grader with separate dispatch via ScenarioGrader; boundary binding is covered by the technical_analysis suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_SOURCE_BINDING,
+                reason="technical_analysis is a partial external grader with separate dispatch via ScenarioGrader; source binding is covered by the technical_analysis suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.NOT_APPLICABLE,
+                reason="technical_analysis is binary pass/fail; not-applicable is not a valid outcome",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DENOMINATOR_BEHAVIOR,
+                reason="technical_analysis is binary pass/fail with denominator_contribution=1; no variable denominator",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DUPLICATE_EVIDENCE,
+                reason="technical_analysis is a partial external grader with separate dispatch via ScenarioGrader; duplicate-evidence handling is covered by the technical_analysis suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.MALFORMED_EVIDENCE,
+                reason="technical_analysis is a partial external grader with separate dispatch via ScenarioGrader; malformed-evidence handling is covered by the technical_analysis suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_RUN_BINDING,
+                reason="technical_analysis is a partial external grader with separate dispatch via ScenarioGrader; run-binding handling is covered by the technical_analysis suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ATTEMPT_BINDING,
+                reason="technical_analysis is a partial external grader with separate dispatch via ScenarioGrader; attempt-binding handling is covered by the technical_analysis suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_TASK_BINDING,
+                reason="technical_analysis is a partial external grader with separate dispatch via ScenarioGrader; task-binding handling is covered by the technical_analysis suite's own conformance tests",
+            ),
+        ],
+    ),
+    GraderInventoryEntry(
+        grader_id="routing_delegation",
+        grader_version=_GRADER_VERSION,
+        grader_class=_DET,
+        assertion_field=None,
+        observation_field=None,
+        metric_ids=["routing_delegation"],
+        evidence_requirements=["normalized_attempt_evidence", "scenario_grader_score"],
+        denominator="Total number of attempted routing_delegation tasks.",
+        cli_constant="_ROUTING_DELEGATION_GRADER_ID",
+        producer_path=ProducerPath.PARTIAL_EXTERNAL,
+        producer_suite_ids=["routing_delegation"],
+        conformance_exclusions=[
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="routing_delegation is a partial external grader with separate dispatch via ScenarioGrader; action-class binding is covered by the routing_delegation suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_BOUNDARY_BINDING,
+                reason="routing_delegation is a partial external grader with separate dispatch via ScenarioGrader; boundary binding is covered by the routing_delegation suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_SOURCE_BINDING,
+                reason="routing_delegation is a partial external grader with separate dispatch via ScenarioGrader; source binding is covered by the routing_delegation suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.NOT_APPLICABLE,
+                reason="routing_delegation is binary pass/fail; not-applicable is not a valid outcome",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DENOMINATOR_BEHAVIOR,
+                reason="routing_delegation is binary pass/fail with denominator_contribution=1; no variable denominator",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DUPLICATE_EVIDENCE,
+                reason="routing_delegation is a partial external grader with separate dispatch via ScenarioGrader; duplicate-evidence handling is covered by the routing_delegation suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.MALFORMED_EVIDENCE,
+                reason="routing_delegation is a partial external grader with separate dispatch via ScenarioGrader; malformed-evidence handling is covered by the routing_delegation suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_RUN_BINDING,
+                reason="routing_delegation is a partial external grader with separate dispatch via ScenarioGrader; run-binding handling is covered by the routing_delegation suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ATTEMPT_BINDING,
+                reason="routing_delegation is a partial external grader with separate dispatch via ScenarioGrader; attempt-binding handling is covered by the routing_delegation suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_TASK_BINDING,
+                reason="routing_delegation is a partial external grader with separate dispatch via ScenarioGrader; task-binding handling is covered by the routing_delegation suite's own conformance tests",
+            ),
+        ],
+    ),
+    GraderInventoryEntry(
+        grader_id="verification",
+        grader_version=_GRADER_VERSION,
+        grader_class=_DET,
+        assertion_field=None,
+        observation_field=None,
+        metric_ids=["verification"],
+        evidence_requirements=["normalized_attempt_evidence", "scenario_grader_score"],
+        denominator="Total number of attempted verification tasks.",
+        cli_constant="_VERIFICATION_GRADER_ID",
+        producer_path=ProducerPath.PARTIAL_EXTERNAL,
+        producer_suite_ids=["verification"],
+        conformance_exclusions=[
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="verification is a partial external grader with separate dispatch via ScenarioGrader; action-class binding is covered by the verification suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_BOUNDARY_BINDING,
+                reason="verification is a partial external grader with separate dispatch via ScenarioGrader; boundary binding is covered by the verification suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_SOURCE_BINDING,
+                reason="verification is a partial external grader with separate dispatch via ScenarioGrader; source binding is covered by the verification suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.NOT_APPLICABLE,
+                reason="verification is binary pass/fail; not-applicable is not a valid outcome",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DENOMINATOR_BEHAVIOR,
+                reason="verification is binary pass/fail with denominator_contribution=1; no variable denominator",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DUPLICATE_EVIDENCE,
+                reason="verification is a partial external grader with separate dispatch via ScenarioGrader; duplicate-evidence handling is covered by the verification suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.MALFORMED_EVIDENCE,
+                reason="verification is a partial external grader with separate dispatch via ScenarioGrader; malformed-evidence handling is covered by the verification suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_RUN_BINDING,
+                reason="verification is a partial external grader with separate dispatch via ScenarioGrader; run-binding handling is covered by the verification suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ATTEMPT_BINDING,
+                reason="verification is a partial external grader with separate dispatch via ScenarioGrader; attempt-binding handling is covered by the verification suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_TASK_BINDING,
+                reason="verification is a partial external grader with separate dispatch via ScenarioGrader; task-binding handling is covered by the verification suite's own conformance tests",
+            ),
+        ],
+    ),
+    GraderInventoryEntry(
+        grader_id="security_policy",
+        grader_version=_GRADER_VERSION,
+        grader_class=_DET,
+        assertion_field=None,
+        observation_field=None,
+        metric_ids=["security_policy"],
+        evidence_requirements=["normalized_attempt_evidence", "scenario_grader_score"],
+        denominator="Total number of attempted security_policy tasks.",
+        cli_constant="_SECURITY_POLICY_GRADER_ID",
+        producer_path=ProducerPath.PARTIAL_EXTERNAL,
+        producer_suite_ids=["security_policy"],
+        conformance_exclusions=[
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="security_policy is a partial external grader with separate dispatch via ScenarioGrader; action-class binding is covered by the security_policy suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_BOUNDARY_BINDING,
+                reason="security_policy is a partial external grader with separate dispatch via ScenarioGrader; boundary binding is covered by the security_policy suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_SOURCE_BINDING,
+                reason="security_policy is a partial external grader with separate dispatch via ScenarioGrader; source binding is covered by the security_policy suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.NOT_APPLICABLE,
+                reason="security_policy is binary pass/fail; not-applicable is not a valid outcome",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DENOMINATOR_BEHAVIOR,
+                reason="security_policy is binary pass/fail with denominator_contribution=1; no variable denominator",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DUPLICATE_EVIDENCE,
+                reason="security_policy is a partial external grader with separate dispatch via ScenarioGrader; duplicate-evidence handling is covered by the security_policy suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.MALFORMED_EVIDENCE,
+                reason="security_policy is a partial external grader with separate dispatch via ScenarioGrader; malformed-evidence handling is covered by the security_policy suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_RUN_BINDING,
+                reason="security_policy is a partial external grader with separate dispatch via ScenarioGrader; run-binding handling is covered by the security_policy suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ATTEMPT_BINDING,
+                reason="security_policy is a partial external grader with separate dispatch via ScenarioGrader; attempt-binding handling is covered by the security_policy suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_TASK_BINDING,
+                reason="security_policy is a partial external grader with separate dispatch via ScenarioGrader; task-binding handling is covered by the security_policy suite's own conformance tests",
+            ),
+        ],
+    ),
+    GraderInventoryEntry(
+        grader_id="recovery",
+        grader_version=_GRADER_VERSION,
+        grader_class=_DET,
+        assertion_field=None,
+        observation_field=None,
+        metric_ids=["recovery"],
+        evidence_requirements=["normalized_attempt_evidence", "scenario_grader_score"],
+        denominator="Total number of attempted recovery tasks.",
+        cli_constant="_RECOVERY_GRADER_ID",
+        producer_path=ProducerPath.PARTIAL_EXTERNAL,
+        producer_suite_ids=["recovery"],
+        conformance_exclusions=[
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="recovery is a partial external grader with separate dispatch via ScenarioGrader; action-class binding is covered by the recovery suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_BOUNDARY_BINDING,
+                reason="recovery is a partial external grader with separate dispatch via ScenarioGrader; boundary binding is covered by the recovery suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_SOURCE_BINDING,
+                reason="recovery is a partial external grader with separate dispatch via ScenarioGrader; source binding is covered by the recovery suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.NOT_APPLICABLE,
+                reason="recovery is binary pass/fail; not-applicable is not a valid outcome",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DENOMINATOR_BEHAVIOR,
+                reason="recovery is binary pass/fail with denominator_contribution=1; no variable denominator",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DUPLICATE_EVIDENCE,
+                reason="recovery is a partial external grader with separate dispatch via ScenarioGrader; duplicate-evidence handling is covered by the recovery suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.MALFORMED_EVIDENCE,
+                reason="recovery is a partial external grader with separate dispatch via ScenarioGrader; malformed-evidence handling is covered by the recovery suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_RUN_BINDING,
+                reason="recovery is a partial external grader with separate dispatch via ScenarioGrader; run-binding handling is covered by the recovery suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ATTEMPT_BINDING,
+                reason="recovery is a partial external grader with separate dispatch via ScenarioGrader; attempt-binding handling is covered by the recovery suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_TASK_BINDING,
+                reason="recovery is a partial external grader with separate dispatch via ScenarioGrader; task-binding handling is covered by the recovery suite's own conformance tests",
+            ),
+        ],
+    ),
+    GraderInventoryEntry(
+        grader_id="final_response",
+        grader_version=_GRADER_VERSION,
+        grader_class=_DET,
+        assertion_field=None,
+        observation_field=None,
+        metric_ids=["final_response"],
+        evidence_requirements=["normalized_attempt_evidence", "scenario_grader_score"],
+        denominator="Total number of attempted final_response tasks.",
+        cli_constant="_FINAL_RESPONSE_GRADER_ID",
+        producer_path=ProducerPath.PARTIAL_EXTERNAL,
+        producer_suite_ids=["final_response"],
+        conformance_exclusions=[
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="final_response is a partial external grader with separate dispatch via ScenarioGrader; action-class binding is covered by the final_response suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_BOUNDARY_BINDING,
+                reason="final_response is a partial external grader with separate dispatch via ScenarioGrader; boundary binding is covered by the final_response suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_SOURCE_BINDING,
+                reason="final_response is a partial external grader with separate dispatch via ScenarioGrader; source binding is covered by the final_response suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.NOT_APPLICABLE,
+                reason="final_response is binary pass/fail; not-applicable is not a valid outcome",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DENOMINATOR_BEHAVIOR,
+                reason="final_response is binary pass/fail with denominator_contribution=1; no variable denominator",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.DUPLICATE_EVIDENCE,
+                reason="final_response is a partial external grader with separate dispatch via ScenarioGrader; duplicate-evidence handling is covered by the final_response suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.MALFORMED_EVIDENCE,
+                reason="final_response is a partial external grader with separate dispatch via ScenarioGrader; malformed-evidence handling is covered by the final_response suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_RUN_BINDING,
+                reason="final_response is a partial external grader with separate dispatch via ScenarioGrader; run-binding handling is covered by the final_response suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ATTEMPT_BINDING,
+                reason="final_response is a partial external grader with separate dispatch via ScenarioGrader; attempt-binding handling is covered by the final_response suite's own conformance tests",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_TASK_BINDING,
+                reason="final_response is a partial external grader with separate dispatch via ScenarioGrader; task-binding handling is covered by the final_response suite's own conformance tests",
+            ),
+        ],
+    ),
+    GraderInventoryEntry(
         grader_id="receipt_integrity",
         grader_version=_GRADER_VERSION,
         grader_class=_DET,

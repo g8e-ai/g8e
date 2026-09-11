@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "benchmark": "tool_selection",
+  "source": {
+    "repository": "https://github.com/lateralus-labs/g8e",
+    "revision": "draft/v2.1.8",
+    "license_spdx": "Apache-2.0",
+    "code_path": "g8e_evals/benchmarks/scenarios/loader.py",
+    "code_sha256": "e0f1c8c2dedf01cd17bafd37d2d13897d0eed3952531dff79c37623147ff6e8c"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 4,
+    "sha256": "3fb7466d8215209f90f21fc474ffbdda9365b85a5f8da413b1310a7fb62fe4eb"
+  },
+  "partition": "development",
+  "domain_strata": [
+    "tool_selection"
+  ]
+}

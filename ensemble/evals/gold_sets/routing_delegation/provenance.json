@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "benchmark": "routing_delegation",
+  "source": {
+    "repository": "https://github.com/lateralus-labs/g8e",
+    "revision": "draft/v2.1.8",
+    "license_spdx": "Apache-2.0",
+    "code_path": "g8e_evals/benchmarks/scenarios/loader.py",
+    "code_sha256": "e0f1c8c2dedf01cd17bafd37d2d13897d0eed3952531dff79c37623147ff6e8c"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 3,
+    "sha256": "567844017b7654daac70c4be2ed7a6c3efd1443d5d0d2b028f9b31598673a3d7"
+  },
+  "partition": "development",
+  "domain_strata": [
+    "routing_delegation"
+  ]
+}
