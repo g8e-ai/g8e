@@ -110,3 +110,12 @@ CAMPAIGN_PROJECTIONS_JSONL = "campaign-projections.jsonl"
 CAMPAIGN_STATISTICAL_ANALYSIS_JSON = "campaign-statistical-analysis.json"
 CAMPAIGN_PROVENANCE_JSON = "campaign-provenance.json"
 CAMPAIGN_VERIFICATION_REF_JSON = "campaign-verification-ref.json"
+
+# Publication schema v5 artifacts (radar profile + score family summaries)
+PUBLICATION_SCHEMA_V5 = "5.0.0"
+RADAR_PROFILE_JSON = "radar-profile.json"
+TOOL_SCORECARD_SUMMARY_JSON = "tool-scorecard-summary.json"
+ESCALATION_SUMMARY_JSON = "escalation-summary.json"
+SECURITY_EVENT_SUMMARY_JSON = "security-event-summary.json"
+CORRELATED_ERROR_SUMMARY_JSON = "correlated-error-summary.json"
+COLD_START_WARM_INFERENCE_TRADEOFF_JSON = "cold-start-warm-inference-tradeoff.json"

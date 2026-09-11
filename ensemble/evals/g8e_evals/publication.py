@@ -40,9 +40,16 @@ from g8e_evals.constants import (
     CAMPAIGN_PROVENANCE_JSON,
     CAMPAIGN_STATISTICAL_ANALYSIS_JSON,
     CAMPAIGN_VERIFICATION_REF_JSON,
+    COLD_START_WARM_INFERENCE_TRADEOFF_JSON,
+    CORRELATED_ERROR_SUMMARY_JSON,
+    ESCALATION_SUMMARY_JSON,
     METRICS_JSONL,
     MODEL_CAMPAIGN_JSON,
     PUBLICATION_SCHEMA_V4,
+    PUBLICATION_SCHEMA_V5,
+    RADAR_PROFILE_JSON,
+    SECURITY_EVENT_SUMMARY_JSON,
+    TOOL_SCORECARD_SUMMARY_JSON,
 )
 from g8e_evals.index import (
     AssignmentDisposition,
@@ -50,6 +57,24 @@ from g8e_evals.index import (
 )
 from g8e_evals.profile import CampaignProfile
 from g8e_evals.provenance import SourceInclusionManifest
+from g8e_evals.radar_profile import (
+    ColdStartWarmInferenceTradeoff,
+    ColdStartWarmInferenceTradeoffSummary,
+    CorrelatedErrorSummary,
+    EscalationSummary,
+    RadarDimension,
+    RadarDimensionName,
+    RadarProfile,
+    SecurityEventSummary,
+    ToolScorecardDimensionSummary,
+    ToolScorecardSummary,
+    compute_cold_start_warm_inference_tradeoff_summary_hash,
+    compute_correlated_error_summary_hash,
+    compute_escalation_summary_hash,
+    compute_radar_profile_hash,
+    compute_security_event_summary_hash,
+    compute_tool_scorecard_summary_hash,
+)
 from g8e_evals.registry import ModelRegistry
 
 
@@ -1034,8 +1059,694 @@ def validate_publication_v4(candidate_dir: Path) -> PublicationValidatorResult:
     )
 
 
+# ---------------------------------------------------------------------------
+# Publication schema v5: radar profile + score family summaries
+# ---------------------------------------------------------------------------
+
+PUBLICATION_V5_VERSION = "5.0.0"
+
+# Mapping from radar dimension to the metric IDs that feed it. The metric
+# IDs are sorted so the radar dimension is reproducible from the underlying
+# metric observations. These mappings are the single source of truth for
+# which metrics feed which radar dimension.
+_RADAR_SOURCE_METRIC_IDS: dict[RadarDimensionName, list[str]] = {
+    RadarDimensionName.TASK_ACCURACY: [
+        "ifeval_subset_verifier",
+        "tool_selection",
+        "tool_arguments",
+        "technical_analysis",
+        "routing_delegation",
+        "verification",
+        "final_response",
+    ],
+    RadarDimensionName.TOOL_RELIABILITY: [
+        "tool_call_follow_up",
+        "tool_call_interpretation",
+        "tool_call_looping",
+        "tool_call_permission",
+        "tool_call_recognition",
+        "tool_call_recovery",
+        "tool_call_schema",
+        "tool_call_selection",
+        "tool_call_semantics",
+        "tool_call_unnecessary",
+    ],
+    RadarDimensionName.INSTRUCTION_FIDELITY: [
+        "ifeval_subset_verifier",
+        "instruction_adherence",
+    ],
+    RadarDimensionName.SECURITY: [
+        "security_audit_record_complete",
+        "security_audit_record_tampered",
+        "security_authorization_correctly_enforced",
+        "security_model_attempted_unauthorized_access",
+        "security_policy",
+        "security_policy_prevented_disclosure",
+        "security_tool_attempted_unauthorized_operation",
+    ],
+    RadarDimensionName.PRIVACY: [
+        "security_secret_redaction_successful",
+        "security_sensitive_data_present",
+        "security_sensitive_data_required",
+        "security_sensitive_data_sent_externally",
+        "security_unnecessary_data_sent_externally",
+    ],
+    RadarDimensionName.ESCALATION_QUALITY: [
+        "escalation_correct_autonomous",
+        "escalation_correct_escalation",
+        "escalation_efficiency",
+        "escalation_false_escalation",
+        "escalation_missed_escalation",
+    ],
+    RadarDimensionName.RECOVERY: [
+        "recovery",
+        "tool_call_recovery",
+    ],
+    RadarDimensionName.REPEATABILITY: [
+        "repeatability",
+    ],
+    RadarDimensionName.TOKEN_EFFICIENCY: [
+        "token_efficiency",
+    ],
+    RadarDimensionName.LATENCY_EFFICIENCY: [
+        "latency_efficiency",
+    ],
+}
+
+
+class PublicationSchemaV5(BaseModel):
+    """Composed README snapshot for publication schema v5.
+
+    Extends v4 with the radar profile and score family summaries. The
+    v5 schema carries forward all v4 artifacts (evidence cutoff,
+    platform version, model campaign reference) and adds the radar
+    profile, tool scorecard summary, escalation summary, security event
+    summary, correlated error summary, and cold-start vs warm inference
+    tradeoff. The v5 artifacts are optional so a v4 candidate can be
+    upgraded to v5 without re-running the campaign; the projector
+    populates them from the campaign report directory when the
+    underlying records exist.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    publication_schema_version: str = Field(
+        min_length=1, description="Publication schema version. Must be 5.0.0.",
+    )
+    evidence_cutoff: str = Field(min_length=1, description="ISO 8601 evidence cutoff timestamp.")
+    platform_version: str = Field(min_length=1, description="Platform version label.")
+    model_campaign: ModelCampaignRef = Field(description="Verified campaign reference.")
+    radar_profile: RadarProfile | None = Field(
+        default=None,
+        description="Radar profile with one dimension per score family. None when not computed.",
+    )
+    tool_scorecard_summary: ToolScorecardSummary | None = Field(
+        default=None,
+        description="Tool calling scorecard summary. None when not computed.",
+    )
+    escalation_summary: EscalationSummary | None = Field(
+        default=None,
+        description="Escalation metrics summary. None when not computed.",
+    )
+    security_event_summary: SecurityEventSummary | None = Field(
+        default=None,
+        description="Security and privacy event summary. None when not computed.",
+    )
+    correlated_error_summary: CorrelatedErrorSummary | None = Field(
+        default=None,
+        description="Correlated error summary. None when not computed.",
+    )
+    cold_start_warm_inference_tradeoff: ColdStartWarmInferenceTradeoffSummary | None = Field(
+        default=None,
+        description="Cold-start vs warm inference tradeoff summary. None when not computed.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_version(self) -> Self:
+        if self.publication_schema_version != PUBLICATION_SCHEMA_V5:
+            raise ValueError(
+                f"publication_schema_version must be {PUBLICATION_SCHEMA_V5!r}: "
+                f"got {self.publication_schema_version!r}"
+            )
+        return self
+
+
+def _build_radar_profile(
+    *,
+    campaign_id: str,
+    campaign_revision: str,
+    variant_summaries: list[CampaignVariantSummaryRow],
+) -> RadarProfile | None:
+    """Build a radar profile from per-variant summary rows.
+
+    Each radar dimension's value is the mean rate of its source metric
+    IDs across all variant summaries that contain those metrics. When no
+    source metrics are present in the summaries, the dimension value is
+    0.0. Returns None when there are no variant summaries.
+    """
+    if not variant_summaries:
+        return None
+
+    summary_by_metric: dict[str, list[float]] = {}
+    for s in variant_summaries:
+        summary_by_metric.setdefault(s.metric_id, []).append(s.rate)
+
+    dimensions: list[RadarDimension] = []
+    for name in sorted(RadarDimensionName, key=lambda n: n.value):
+        source_ids = _RADAR_SOURCE_METRIC_IDS[name]
+        rates: list[float] = []
+        for mid in source_ids:
+            rates.extend(summary_by_metric.get(mid, []))
+        value = sum(rates) / len(rates) if rates else 0.0
+        value = round(value, 10)
+        dimensions.append(RadarDimension(
+            name=name,
+            value=value,
+            source_metric_ids=source_ids,
+        ))
+    content_hash = compute_radar_profile_hash(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        dimensions=dimensions,
+    )
+    return RadarProfile(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        dimensions=dimensions,
+        content_hash=content_hash,
+    )
+
+
+def _build_tool_scorecard_summary(
+    *,
+    campaign_id: str,
+    campaign_revision: str,
+    variant_summaries: list[CampaignVariantSummaryRow],
+) -> ToolScorecardSummary | None:
+    """Build a tool scorecard summary from per-variant summary rows.
+
+    Each dimension's pass rate is the mean rate of the corresponding
+    tool_call metric across all variant summaries that contain it. The
+    total tool calls is the sum of denominators across all tool_call
+    metrics. Returns None when no tool_call metrics are present.
+    """
+    tool_call_metric_prefix = "tool_call_"
+    summary_by_metric: dict[str, CampaignVariantSummaryRow] = {}
+    total_tool_calls = 0
+    for s in variant_summaries:
+        if s.metric_id.startswith(tool_call_metric_prefix):
+            summary_by_metric[s.metric_id] = s
+            total_tool_calls += s.denominator
+
+    if not summary_by_metric:
+        return None
+
+    dimension_names = sorted(summary_by_metric.keys())
+    dimensions: list[ToolScorecardDimensionSummary] = []
+    for dim_name in dimension_names:
+        s = summary_by_metric[dim_name]
+        dimensions.append(ToolScorecardDimensionSummary(
+            dimension=dim_name,
+            pass_rate=round(s.rate, 10),
+            tool_call_count=s.denominator,
+        ))
+    content_hash = compute_tool_scorecard_summary_hash(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        total_tool_calls=total_tool_calls,
+        dimensions=dimensions,
+    )
+    return ToolScorecardSummary(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        total_tool_calls=total_tool_calls,
+        dimensions=dimensions,
+        content_hash=content_hash,
+    )
+
+
+def _build_escalation_summary(
+    *,
+    campaign_id: str,
+    campaign_revision: str,
+    variant_summaries: list[CampaignVariantSummaryRow],
+) -> EscalationSummary | None:
+    """Build an escalation summary from per-variant summary rows.
+
+    Counts are derived from the escalation metric numerators and
+    denominators. The escalation_efficiency is the proportion of
+    correct routing decisions (autonomous + correct escalation) out of
+    total records. Returns None when no escalation metrics are present.
+    """
+    escalation_metric_prefix = "escalation_"
+    summary_by_metric: dict[str, CampaignVariantSummaryRow] = {}
+    for s in variant_summaries:
+        if s.metric_id.startswith(escalation_metric_prefix):
+            summary_by_metric[s.metric_id] = s
+
+    if not summary_by_metric:
+        return None
+
+    def _count(metric_id: str) -> int:
+        s = summary_by_metric.get(metric_id)
+        return s.numerator if s is not None else 0
+
+    correct_autonomous = _count("escalation_correct_autonomous")
+    correct_escalation = _count("escalation_correct_escalation")
+    false_escalation = _count("escalation_false_escalation")
+    missed_escalation = _count("escalation_missed_escalation")
+    total_records = correct_autonomous + correct_escalation + false_escalation + missed_escalation
+    efficiency = (correct_autonomous + correct_escalation) / total_records if total_records > 0 else 0.0
+    content_hash = compute_escalation_summary_hash(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        total_records=total_records,
+        correct_autonomous_count=correct_autonomous,
+        correct_escalation_count=correct_escalation,
+        false_escalation_count=false_escalation,
+        missed_escalation_count=missed_escalation,
+        escalation_efficiency=round(efficiency, 10),
+    )
+    return EscalationSummary(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        total_records=total_records,
+        correct_autonomous_count=correct_autonomous,
+        correct_escalation_count=correct_escalation,
+        false_escalation_count=false_escalation,
+        missed_escalation_count=missed_escalation,
+        escalation_efficiency=round(efficiency, 10),
+        content_hash=content_hash,
+    )
+
+
+def _build_security_event_summary(
+    *,
+    campaign_id: str,
+    campaign_revision: str,
+    variant_summaries: list[CampaignVariantSummaryRow],
+) -> SecurityEventSummary | None:
+    """Build a security event summary from per-variant summary rows.
+
+    Each event rate is the mean rate of the corresponding security metric
+    across all variant summaries that contain it. Returns None when no
+    security metrics are present.
+    """
+    security_metric_prefix = "security_"
+    summary_by_metric: dict[str, list[float]] = {}
+    total_records = 0
+    for s in variant_summaries:
+        if s.metric_id.startswith(security_metric_prefix):
+            summary_by_metric.setdefault(s.metric_id, []).append(s.rate)
+            total_records += s.denominator
+
+    if not summary_by_metric:
+        return None
+
+    def _rate(metric_id: str) -> float:
+        rates = summary_by_metric.get(metric_id, [])
+        return round(sum(rates) / len(rates), 10) if rates else 0.0
+
+    content_hash = compute_security_event_summary_hash(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        total_records=total_records,
+        sensitive_data_present_rate=_rate("security_sensitive_data_present"),
+        sensitive_data_required_rate=_rate("security_sensitive_data_required"),
+        sensitive_data_sent_externally_rate=_rate("security_sensitive_data_sent_externally"),
+        unnecessary_data_sent_externally_rate=_rate("security_unnecessary_data_sent_externally"),
+        policy_prevented_disclosure_rate=_rate("security_policy_prevented_disclosure"),
+        model_attempted_unauthorized_access_rate=_rate("security_model_attempted_unauthorized_access"),
+        tool_attempted_unauthorized_operation_rate=_rate("security_tool_attempted_unauthorized_operation"),
+        authorization_correctly_enforced_rate=_rate("security_authorization_correctly_enforced"),
+        audit_record_complete_rate=_rate("security_audit_record_complete"),
+        audit_record_tampered_rate=_rate("security_audit_record_tampered"),
+        secret_redaction_successful_rate=_rate("security_secret_redaction_successful"),
+    )
+    return SecurityEventSummary(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        total_records=total_records,
+        sensitive_data_present_rate=_rate("security_sensitive_data_present"),
+        sensitive_data_required_rate=_rate("security_sensitive_data_required"),
+        sensitive_data_sent_externally_rate=_rate("security_sensitive_data_sent_externally"),
+        unnecessary_data_sent_externally_rate=_rate("security_unnecessary_data_sent_externally"),
+        policy_prevented_disclosure_rate=_rate("security_policy_prevented_disclosure"),
+        model_attempted_unauthorized_access_rate=_rate("security_model_attempted_unauthorized_access"),
+        tool_attempted_unauthorized_operation_rate=_rate("security_tool_attempted_unauthorized_operation"),
+        authorization_correctly_enforced_rate=_rate("security_authorization_correctly_enforced"),
+        audit_record_complete_rate=_rate("security_audit_record_complete"),
+        audit_record_tampered_rate=_rate("security_audit_record_tampered"),
+        secret_redaction_successful_rate=_rate("security_secret_redaction_successful"),
+        content_hash=content_hash,
+    )
+
+
+def _build_correlated_error_summary(
+    *,
+    campaign_id: str,
+    campaign_revision: str,
+    variant_summaries: list[CampaignVariantSummaryRow],
+) -> CorrelatedErrorSummary | None:
+    """Build a correlated error summary from per-variant summary rows.
+
+    Rates are derived from the correlated-error metric rates. Returns
+    None when no correlated-error metrics are present.
+    """
+    correlated_metrics = {
+        "correlated_failure_rate",
+        "failure_independence",
+        "same_family_correlated_rate",
+        "cross_family_correlated_rate",
+    }
+    summary_by_metric: dict[str, list[float]] = {}
+    total_scenarios = 0
+    for s in variant_summaries:
+        if s.metric_id in correlated_metrics:
+            summary_by_metric.setdefault(s.metric_id, []).append(s.rate)
+            total_scenarios += s.denominator
+
+    if not summary_by_metric:
+        return None
+
+    def _rate(metric_id: str) -> float:
+        rates = summary_by_metric.get(metric_id, [])
+        return round(sum(rates) / len(rates), 10) if rates else 0.0
+
+    content_hash = compute_correlated_error_summary_hash(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        total_scenarios=total_scenarios,
+        correlated_failure_rate=_rate("correlated_failure_rate"),
+        failure_independence=_rate("failure_independence"),
+        same_family_correlated_rate=_rate("same_family_correlated_rate"),
+        cross_family_correlated_rate=_rate("cross_family_correlated_rate"),
+    )
+    return CorrelatedErrorSummary(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        total_scenarios=total_scenarios,
+        correlated_failure_rate=_rate("correlated_failure_rate"),
+        failure_independence=_rate("failure_independence"),
+        same_family_correlated_rate=_rate("same_family_correlated_rate"),
+        cross_family_correlated_rate=_rate("cross_family_correlated_rate"),
+        content_hash=content_hash,
+    )
+
+
+def _build_cold_start_tradeoff_summary(
+    *,
+    campaign_id: str,
+    campaign_revision: str,
+    model_variants: list[SafeModelVariantProjection],
+) -> ColdStartWarmInferenceTradeoffSummary | None:
+    """Build a cold-start vs warm inference tradeoff summary.
+
+    The summary carries one tradeoff per variant. Timing values are
+    None because the v5 projector does not read per-inference resource
+    observations from the report directory (that requires the full
+    resource observation pipeline). The summary structure is ready for
+    when the resource observations are available. Returns None when
+    there are no model variants.
+    """
+    if not model_variants:
+        return None
+
+    tradeoffs: list[ColdStartWarmInferenceTradeoff] = []
+    for v in sorted(model_variants, key=lambda v: v.variant_id):
+        tradeoffs.append(ColdStartWarmInferenceTradeoff(variant_id=v.variant_id))
+    content_hash = compute_cold_start_warm_inference_tradeoff_summary_hash(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        tradeoffs=tradeoffs,
+    )
+    return ColdStartWarmInferenceTradeoffSummary(
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        tradeoffs=tradeoffs,
+        content_hash=content_hash,
+    )
+
+
+def project_campaign_v5(
+    *,
+    report_dir: Path,
+    verification: CampaignVerificationReport,
+    candidate_dir: Path,
+    campaign_profile: CampaignProfile,
+    model_registry: ModelRegistry,
+    provenance_manifest: SourceInclusionManifest,
+    caveats: list[str],
+    evidence_cutoff: str,
+    platform_version: str,
+) -> Path:
+    """Project a verified campaign report directory into a v5 candidate directory.
+
+    Extends v4 with the radar profile and score family summaries. The
+    v5 projector first projects the v4 artifacts (via the v4 projector
+    logic) and then builds the v5 artifacts from the variant summaries.
+    The v5 artifacts are optional: when the underlying records are not
+    present in the report directory, the corresponding v5 field is
+    None. Refuses to overwrite an existing candidate directory.
+
+    Returns the candidate directory path.
+    """
+    if not verification.ok:
+        raise ValueError(
+            f"campaign verification failed: {verification.failures}"
+        )
+
+    if candidate_dir.exists():
+        raise ValueError(f"candidate directory already exists: {candidate_dir}")
+
+    # Generate the v4 artifacts first (projection rows, dispositions, etc.).
+    projection_rows = _generate_projections(
+        report_dir=report_dir,
+        campaign_id=campaign_profile.campaign_id,
+        campaign_revision=campaign_profile.campaign_revision,
+    )
+    disposition_rows = _generate_dispositions(
+        report_dir=report_dir,
+        verified_index_generation_hash=verification.verified_index_generation_hash,
+    )
+    stat_ref = _generate_statistical_analysis(
+        report_dir=report_dir,
+        campaign_profile=campaign_profile,
+    )
+    variant_summaries = _generate_variant_summaries(projection_rows)
+    profile_projection = _project_profile(campaign_profile)
+    variant_projections = [_project_variant(v) for v in model_registry.variants]
+    provenance_ref = _project_provenance(provenance_manifest)
+
+    content_hash = compute_model_campaign_hash(
+        campaign_id=campaign_profile.campaign_id,
+        campaign_revision=campaign_profile.campaign_revision,
+        publication_schema_version=PUBLICATION_SCHEMA_V5,
+        campaign_profile=profile_projection,
+        model_variants=variant_projections,
+        model_registry_hash=model_registry.content_hash,
+        verification_ok=verification.ok,
+        verified_index_generation_hash=verification.verified_index_generation_hash,
+        checked_layers=verification.checked_layers,
+        projections=projection_rows,
+        dispositions=disposition_rows,
+        comparison_rows=[],
+        efficiency_observations=[],
+        variant_summaries=variant_summaries,
+        statistical_analysis=stat_ref,
+        provenance=provenance_ref,
+        caveats=caveats,
+    )
+
+    ref = ModelCampaignRef(
+        campaign_id=campaign_profile.campaign_id,
+        campaign_revision=campaign_profile.campaign_revision,
+        publication_schema_version=PUBLICATION_SCHEMA_V5,
+        campaign_profile=profile_projection,
+        model_variants=variant_projections,
+        model_registry_hash=model_registry.content_hash,
+        verification_ok=verification.ok,
+        verified_index_generation_hash=verification.verified_index_generation_hash,
+        checked_layers=verification.checked_layers,
+        projections=projection_rows,
+        dispositions=disposition_rows,
+        comparison_rows=[],
+        efficiency_observations=[],
+        variant_summaries=variant_summaries,
+        statistical_analysis=stat_ref,
+        provenance=provenance_ref,
+        caveats=[CampaignCaveat(c) for c in caveats],
+        content_hash=content_hash,
+    )
+
+    # Build the v5 artifacts from the variant summaries.
+    radar_profile = _build_radar_profile(
+        campaign_id=campaign_profile.campaign_id,
+        campaign_revision=campaign_profile.campaign_revision,
+        variant_summaries=variant_summaries,
+    )
+    tool_scorecard_summary = _build_tool_scorecard_summary(
+        campaign_id=campaign_profile.campaign_id,
+        campaign_revision=campaign_profile.campaign_revision,
+        variant_summaries=variant_summaries,
+    )
+    escalation_summary = _build_escalation_summary(
+        campaign_id=campaign_profile.campaign_id,
+        campaign_revision=campaign_profile.campaign_revision,
+        variant_summaries=variant_summaries,
+    )
+    security_event_summary = _build_security_event_summary(
+        campaign_id=campaign_profile.campaign_id,
+        campaign_revision=campaign_profile.campaign_revision,
+        variant_summaries=variant_summaries,
+    )
+    correlated_error_summary = _build_correlated_error_summary(
+        campaign_id=campaign_profile.campaign_id,
+        campaign_revision=campaign_profile.campaign_revision,
+        variant_summaries=variant_summaries,
+    )
+    cold_start_tradeoff = _build_cold_start_tradeoff_summary(
+        campaign_id=campaign_profile.campaign_id,
+        campaign_revision=campaign_profile.campaign_revision,
+        model_variants=variant_projections,
+    )
+
+    # Write all artifacts to the candidate directory.
+    candidate_dir.mkdir(parents=True)
+    _write_json(candidate_dir / MODEL_CAMPAIGN_JSON, ref.model_dump_json())
+    _write_jsonl(candidate_dir / CAMPAIGN_PROJECTIONS_JSONL, projection_rows)
+    _write_json(candidate_dir / CAMPAIGN_STATISTICAL_ANALYSIS_JSON, stat_ref.model_dump_json())
+    _write_json(candidate_dir / CAMPAIGN_PROVENANCE_JSON, provenance_ref.model_dump_json())
+    _write_json(candidate_dir / CAMPAIGN_VERIFICATION_REF_JSON, verification.model_dump_json())
+    if radar_profile is not None:
+        _write_json(candidate_dir / RADAR_PROFILE_JSON, radar_profile.model_dump_json())
+    if tool_scorecard_summary is not None:
+        _write_json(candidate_dir / TOOL_SCORECARD_SUMMARY_JSON, tool_scorecard_summary.model_dump_json())
+    if escalation_summary is not None:
+        _write_json(candidate_dir / ESCALATION_SUMMARY_JSON, escalation_summary.model_dump_json())
+    if security_event_summary is not None:
+        _write_json(candidate_dir / SECURITY_EVENT_SUMMARY_JSON, security_event_summary.model_dump_json())
+    if correlated_error_summary is not None:
+        _write_json(candidate_dir / CORRELATED_ERROR_SUMMARY_JSON, correlated_error_summary.model_dump_json())
+    if cold_start_tradeoff is not None:
+        _write_json(candidate_dir / COLD_START_WARM_INFERENCE_TRADEOFF_JSON, cold_start_tradeoff.model_dump_json())
+
+    return candidate_dir
+
+
+def validate_publication_v5(candidate_dir: Path) -> PublicationValidatorResult:
+    """Strictly validate a v5 publication candidate directory.
+
+    Extends the v4 validation with the v5 artifacts (radar profile and
+    score family summaries). The v5 artifacts are optional: when absent,
+    the corresponding layer passes. When present, each artifact is
+    parsed and its content hash is verified. Returns a typed
+    ``PublicationValidatorResult`` with ``ok=True`` only when every layer
+    passes.
+    """
+    failures: list[str] = []
+    checked_layers: list[str] = []
+
+    # Reuse the v4 validation for the core artifacts.
+    v4_result = validate_publication_v4(candidate_dir)
+    checked_layers.extend(v4_result.checked_layers)
+    failures.extend(v4_result.failures)
+
+    # Layer 9: radar profile validation
+    checked_layers.append("radar_profile")
+    radar_path = candidate_dir / RADAR_PROFILE_JSON
+    if radar_path.exists():
+        if radar_path.is_symlink():
+            failures.append(f"symlink rejected: {RADAR_PROFILE_JSON}")
+        elif not radar_path.is_file():
+            failures.append(f"not a regular file: {RADAR_PROFILE_JSON}")
+        else:
+            try:
+                RadarProfile.model_validate_json(radar_path.read_text())
+            except (ValidationError, json.JSONDecodeError) as e:
+                failures.append(f"radar-profile.json validation failed: {e}")
+
+    # Layer 10: tool scorecard summary validation
+    checked_layers.append("tool_scorecard_summary")
+    ts_path = candidate_dir / TOOL_SCORECARD_SUMMARY_JSON
+    if ts_path.exists():
+        if ts_path.is_symlink():
+            failures.append(f"symlink rejected: {TOOL_SCORECARD_SUMMARY_JSON}")
+        elif not ts_path.is_file():
+            failures.append(f"not a regular file: {TOOL_SCORECARD_SUMMARY_JSON}")
+        else:
+            try:
+                ToolScorecardSummary.model_validate_json(ts_path.read_text())
+            except (ValidationError, json.JSONDecodeError) as e:
+                failures.append(f"tool-scorecard-summary.json validation failed: {e}")
+
+    # Layer 11: escalation summary validation
+    checked_layers.append("escalation_summary")
+    es_path = candidate_dir / ESCALATION_SUMMARY_JSON
+    if es_path.exists():
+        if es_path.is_symlink():
+            failures.append(f"symlink rejected: {ESCALATION_SUMMARY_JSON}")
+        elif not es_path.is_file():
+            failures.append(f"not a regular file: {ESCALATION_SUMMARY_JSON}")
+        else:
+            try:
+                EscalationSummary.model_validate_json(es_path.read_text())
+            except (ValidationError, json.JSONDecodeError) as e:
+                failures.append(f"escalation-summary.json validation failed: {e}")
+
+    # Layer 12: security event summary validation
+    checked_layers.append("security_event_summary")
+    se_path = candidate_dir / SECURITY_EVENT_SUMMARY_JSON
+    if se_path.exists():
+        if se_path.is_symlink():
+            failures.append(f"symlink rejected: {SECURITY_EVENT_SUMMARY_JSON}")
+        elif not se_path.is_file():
+            failures.append(f"not a regular file: {SECURITY_EVENT_SUMMARY_JSON}")
+        else:
+            try:
+                SecurityEventSummary.model_validate_json(se_path.read_text())
+            except (ValidationError, json.JSONDecodeError) as e:
+                failures.append(f"security-event-summary.json validation failed: {e}")
+
+    # Layer 13: correlated error summary validation
+    checked_layers.append("correlated_error_summary")
+    ce_path = candidate_dir / CORRELATED_ERROR_SUMMARY_JSON
+    if ce_path.exists():
+        if ce_path.is_symlink():
+            failures.append(f"symlink rejected: {CORRELATED_ERROR_SUMMARY_JSON}")
+        elif not ce_path.is_file():
+            failures.append(f"not a regular file: {CORRELATED_ERROR_SUMMARY_JSON}")
+        else:
+            try:
+                CorrelatedErrorSummary.model_validate_json(ce_path.read_text())
+            except (ValidationError, json.JSONDecodeError) as e:
+                failures.append(f"correlated-error-summary.json validation failed: {e}")
+
+    # Layer 14: cold-start warm inference tradeoff validation
+    checked_layers.append("cold_start_warm_inference_tradeoff")
+    cs_path = candidate_dir / COLD_START_WARM_INFERENCE_TRADEOFF_JSON
+    if cs_path.exists():
+        if cs_path.is_symlink():
+            failures.append(f"symlink rejected: {COLD_START_WARM_INFERENCE_TRADEOFF_JSON}")
+        elif not cs_path.is_file():
+            failures.append(f"not a regular file: {COLD_START_WARM_INFERENCE_TRADEOFF_JSON}")
+        else:
+            try:
+                ColdStartWarmInferenceTradeoffSummary.model_validate_json(cs_path.read_text())
+            except (ValidationError, json.JSONDecodeError) as e:
+                failures.append(f"cold-start-warm-inference-tradeoff.json validation failed: {e}")
+
+    ok = len(failures) == 0
+    return PublicationValidatorResult(
+        ok=ok,
+        checked_layers=sorted(set(checked_layers)),
+        failures=sorted(failures),
+    )
+
+
 __all__ = [
     "PUBLICATION_V4_VERSION",
+    "PUBLICATION_V5_VERSION",
     "CampaignCaveat",
     "CampaignComparisonRow",
     "CampaignDispositionRow",
@@ -1046,10 +1757,13 @@ __all__ = [
     "CampaignVariantSummaryRow",
     "ModelCampaignRef",
     "PublicationSchemaV4",
+    "PublicationSchemaV5",
     "PublicationValidatorResult",
     "SafeCampaignProfileProjection",
     "SafeModelVariantProjection",
     "compute_model_campaign_hash",
     "project_campaign_v4",
+    "project_campaign_v5",
     "validate_publication_v4",
+    "validate_publication_v5",
 ]
