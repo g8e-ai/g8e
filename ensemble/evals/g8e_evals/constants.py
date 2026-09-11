@@ -129,3 +129,12 @@ EXPECTED_RECORD_POLICY_JSON = "expected-record-policy.json"
 CAMPAIGN_SET_PLAN_JSON = "campaign-set-plan.json"
 CAMPAIGN_SET_INDEX_JSON = "campaign-set-index.json"
 CAMPAIGN_SET_VERIFICATION_REPORT_JSON = "campaign-set-verification-report.json"
+
+# Disclosure authority (D12 frozen typed policy for public data formats,
+# field classification, proof indexing, and deterministic output inventory)
+DISCLOSURE_AUTHORITY_JSON = "disclosure-authority.json"
+DISCLOSURE_PUBLIC_JSONL = "disclosure-public.jsonl"
+DISCLOSURE_DERIVED_CSV = "disclosure-derived.csv"
+DISCLOSURE_TOMBSTONES_JSONL = "disclosure-tombstones.jsonl"
+DISCLOSURE_PROOF_INDEX_JSON = "disclosure-proof-index.json"
+DISCLOSURE_OUTPUT_INVENTORY_JSON = "disclosure-output-inventory.json"

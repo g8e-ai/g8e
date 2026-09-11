@@ -629,7 +629,6 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
         a.assignment_id for a in attempts if a.assignment_id
     }
     run_ids_from_attempts: set[str] = {a.run_id for a in attempts if a.run_id}
-    task_ids_from_attempts: set[str] = {a.task_id for a in attempts if a.task_id}
     if run_manifest is not None:
         run_ids_from_attempts.add(run_manifest.run_id)
     if manifest is not None:

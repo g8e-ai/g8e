@@ -339,14 +339,14 @@ class TestNoVramInference:
         """When accelerator memory is not measured, it is None with a typed explanation."""
         obs = _make_fully_unavailable_observation()
         assert obs.peak_accelerator_memory_bytes is None
-        um = [u for u in obs.unavailable_measurements if u.field_name == "peak_accelerator_memory_bytes"][0]
+        um = next(u for u in obs.unavailable_measurements if u.field_name == "peak_accelerator_memory_bytes")
         assert um.availability == MeasurementAvailability.UNAVAILABLE
 
     def test_energy_none_when_no_calibrated_source(self):
         """When no calibrated energy source exists, measured_energy_joules is None with explanation."""
         obs = _make_fully_unavailable_observation()
         assert obs.measured_energy_joules is None
-        um = [u for u in obs.unavailable_measurements if u.field_name == "measured_energy_joules"][0]
+        um = next(u for u in obs.unavailable_measurements if u.field_name == "measured_energy_joules")
         assert um.availability == MeasurementAvailability.UNAVAILABLE
 
 

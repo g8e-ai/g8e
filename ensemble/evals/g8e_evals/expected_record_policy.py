@@ -116,23 +116,21 @@ class ExpectedRecordEntry(BaseModel):
                 raise ValueError(
                     f"expected_count must be set when cardinality_rule is EXACT for {self.file_name!r}"
                 )
-        else:
-            if self.expected_count is not None:
-                raise ValueError(
-                    f"expected_count must be None when cardinality_rule is {self.cardinality_rule.value!r} "
-                    f"for {self.file_name!r}"
-                )
+        elif self.expected_count is not None:
+            raise ValueError(
+                f"expected_count must be None when cardinality_rule is {self.cardinality_rule.value!r} "
+                f"for {self.file_name!r}"
+            )
         if self.cardinality_rule == CardinalityRule.DERIVED:
             if not self.derivation_rule:
                 raise ValueError(
                     f"derivation_rule must be non-empty when cardinality_rule is DERIVED for {self.file_name!r}"
                 )
-        else:
-            if self.derivation_rule:
-                raise ValueError(
-                    f"derivation_rule must be empty when cardinality_rule is {self.cardinality_rule.value!r} "
-                    f"for {self.file_name!r}"
-                )
+        elif self.derivation_rule:
+            raise ValueError(
+                f"derivation_rule must be empty when cardinality_rule is {self.cardinality_rule.value!r} "
+                f"for {self.file_name!r}"
+            )
         if self.applicability == RecordApplicability.NOT_APPLICABLE:
             if self.cardinality_rule != CardinalityRule.EXACT or self.expected_count != 0:
                 raise ValueError(

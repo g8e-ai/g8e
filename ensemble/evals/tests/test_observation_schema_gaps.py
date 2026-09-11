@@ -211,7 +211,7 @@ class TestUnavailableMeasurementRepresentation:
         """When model load time is unavailable, it is None with a typed explanation, not 0.0."""
         obs = _make_observation()
         assert obs.model_load_time_seconds is None
-        um = [u for u in obs.unavailable_measurements if u.field_name == "model_load_time_seconds"][0]
+        um = next(u for u in obs.unavailable_measurements if u.field_name == "model_load_time_seconds")
         assert um.availability == MeasurementAvailability.UNAVAILABLE
 
     def test_measured_zero_is_not_unavailable(self):
@@ -235,21 +235,21 @@ class TestUnavailableMeasurementRepresentation:
         assert obs.gpu_power_draw_watts is None
         assert obs.gpu_clock_mhz is None
         for field in ("gpu_utilization_percent", "gpu_temperature_celsius", "gpu_power_draw_watts", "gpu_clock_mhz"):
-            um = [u for u in obs.unavailable_measurements if u.field_name == field][0]
+            um = next(u for u in obs.unavailable_measurements if u.field_name == field)
             assert um.availability == MeasurementAvailability.UNAVAILABLE
 
     def test_remote_resident_memory_unavailable_not_zero(self):
         """Remote peak_resident_memory_bytes is None with UNAVAILABLE, not 0."""
         obs = _make_observation()
         assert obs.peak_resident_memory_bytes is None
-        um = [u for u in obs.unavailable_measurements if u.field_name == "peak_resident_memory_bytes"][0]
+        um = next(u for u in obs.unavailable_measurements if u.field_name == "peak_resident_memory_bytes")
         assert um.availability == MeasurementAvailability.UNAVAILABLE
 
     def test_remote_artifact_bytes_unavailable_not_zero(self):
         """Remote artifact_bytes is None with UNAVAILABLE, not 0."""
         obs = _make_observation()
         assert obs.artifact_bytes is None
-        um = [u for u in obs.unavailable_measurements if u.field_name == "artifact_bytes"][0]
+        um = next(u for u in obs.unavailable_measurements if u.field_name == "artifact_bytes")
         assert um.availability == MeasurementAvailability.UNAVAILABLE
 
     def test_not_applicable_availability(self):

@@ -444,8 +444,8 @@ class TestEscalationDerivedProducers:
         ])
         results = produce_escalation_correct_autonomous_observations(record)
         assert len(results) == 2
-        att1_result = [r for r in results if r.attempt_id == "att-1"][0]
-        att2_result = [r for r in results if r.attempt_id == "att-2"][0]
+        att1_result = next(r for r in results if r.attempt_id == "att-1")
+        att2_result = next(r for r in results if r.attempt_id == "att-2")
         assert att1_result.value == 1.0
         assert att2_result.value == 0.0
 
