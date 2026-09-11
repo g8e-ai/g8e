@@ -45,7 +45,7 @@ from app.models.model_telemetry import ModelBoundaryPrivacyAttestation
 from app.models.settings import LLMSettings
 
 from g8e_evals.arms import Arm
-from g8e_evals.harness import BindingType, Response, SUTConfig, Task
+from g8e_evals.harness import BindingType, InferenceObservation, Response, SUTConfig, Task
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +119,10 @@ class DirectProviderSUT:
         No g8ee chat request, no SSE drain, no receipt collection, no
         governance events. The prompt goes to the provider as a single
         user turn with no system instructions and no tools.
+
+        Emits one ``InferenceObservation`` per provider call bound to the
+        primary role and the candidate model variant. The runner converts
+        this into a typed ``ResourceObservation``.
         """
         contents = [Content(role="user", parts=[Part.from_text(task.prompt)])]
         primary_settings = PrimaryLLMSettings(
@@ -153,6 +157,17 @@ class DirectProviderSUT:
                 model_boundary_privacy=recorded_model_boundary_privacy(self._provider),
                 error=str(e),
             )
+            inference_obs = InferenceObservation(
+                inference_id=f"inf-{task.id}-{start}",
+                role="primary",
+                model_variant_id=self._model,
+                provider=self._provider_str,
+                model=self._model,
+                monotonic_start=start,
+                monotonic_end=end,
+                input_artifact_hash=input_artifact_hash,
+                error=str(e),
+            )
             return Response(
                 answer="",
                 model=self.model_provider,
@@ -160,6 +175,7 @@ class DirectProviderSUT:
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"direct provider call failed: {e}",
                 chat_evidence=_DirectEvidenceWrapper(evidence),
+                inference_observations=[inference_obs],
             )
 
         input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
@@ -184,6 +200,33 @@ class DirectProviderSUT:
             model_boundary_privacy=recorded_model_boundary_privacy(self._provider),
         )
 
+        elapsed = end - start
+        throughput = (
+            usage.candidates_token_count / elapsed
+            if usage.candidates_token_count and elapsed > 0
+            else None
+        )
+        inference_obs = InferenceObservation(
+            inference_id=f"inf-{task.id}-{start}",
+            role="primary",
+            model_variant_id=self._model,
+            provider=self._provider_str,
+            model=self._model,
+            provider_call_latency_seconds=elapsed if elapsed > 0 else None,
+            output_throughput_tokens_per_second=throughput,
+            prompt_token_count=usage.prompt_token_count if usage.prompt_token_count else None,
+            candidates_token_count=usage.candidates_token_count if usage.candidates_token_count else None,
+            total_token_count=usage.total_token_count if usage.total_token_count else None,
+            thinking_token_count=usage.thinking_token_count if usage.thinking_token_count else None,
+            cache_token_count=usage.cache_token_count if usage.cache_token_count else None,
+            usage_reported=usage.usage_reported,
+            finish_reason=response.candidates[0].finish_reason if response.candidates else None,
+            input_artifact_hash=input_artifact_hash,
+            output_artifact_hash=model_boundary_hash(answer_text),
+            monotonic_start=start,
+            monotonic_end=end,
+        )
+
         return Response(
             answer=answer_text,
             model=self.model_provider,
@@ -191,6 +234,7 @@ class DirectProviderSUT:
             binding=BindingType.UNBOUND,
             unbound_reason="direct arm (no governance, no receipt binding)",
             chat_evidence=_DirectEvidenceWrapper(evidence),
+            inference_observations=[inference_obs],
         )
 
     async def close(self) -> None:

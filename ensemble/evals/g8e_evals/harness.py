@@ -358,6 +358,46 @@ class ReceiptEvidence:
 
 
 @dataclass
+class InferenceObservation:
+    """Per-inference metadata exposed by the SUT response boundary.
+
+    One ``InferenceObservation`` per actual provider inference. Direct
+    inference emits one per provider call. g8ee inference emits one per
+    observed role-model provider call. The runner converts these into
+    typed ``ResourceObservation`` records bound to the exact attempt,
+    inference, stage, role, and task.
+
+    Only facts available from direct provider metadata, timestamps,
+    typed SSE events, and stage telemetry are carried here. Remote GPU
+    values are never inferred; they remain ``None`` with typed
+    unavailable explanations on the resulting ``ResourceObservation``.
+    """
+
+    inference_id: str
+    role: str
+    model_variant_id: str
+    provider: str = ""
+    model: str = ""
+    provider_call_latency_seconds: float | None = None
+    time_to_first_token_seconds: float | None = None
+    generation_duration_seconds: float | None = None
+    output_throughput_tokens_per_second: float | None = None
+    hidden_reasoning_throughput_tokens_per_second: float | None = None
+    prompt_token_count: int | None = None
+    candidates_token_count: int | None = None
+    total_token_count: int | None = None
+    thinking_token_count: int | None = None
+    cache_token_count: int | None = None
+    usage_reported: bool = False
+    finish_reason: str | None = None
+    input_artifact_hash: str | None = None
+    output_artifact_hash: str | None = None
+    monotonic_start: float = 0.0
+    monotonic_end: float = 0.0
+    error: str | None = None
+
+
+@dataclass
 class Response:
     answer: str
     model: str
@@ -369,6 +409,7 @@ class Response:
     primary_transaction_id: str | None = None
     binding: BindingType = BindingType.UNBOUND
     unbound_reason: str | None = None
+    inference_observations: list[InferenceObservation] = field(default_factory=list)
 
     @property
     def receipts_verified(self) -> bool:

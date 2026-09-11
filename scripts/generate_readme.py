@@ -33,10 +33,11 @@ from pathlib import Path
 from typing import Any
 
 
-SUPPORTED_PUB_SCHEMAS = {"1.0.0", "2.0.0", "3.0.0", "4.0.0"}
+SUPPORTED_PUB_SCHEMAS = {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0"}
 SUPPORTED_EVAL_SCHEMAS = {"1.33.0", "1.40.0"}
 STAGE2_PUB_SCHEMA = "3.0.0"
 V4_PUB_SCHEMA = "4.0.0"
+V5_PUB_SCHEMA = "5.0.0"
 STAGE2_PROFILE_SCHEMA = "1.0.0"
 STAGE2_PROFILE_ID = "readme-stage2-v2.1.6"
 STAGE1_EVAL_SCHEMA = "1.40.0"
@@ -55,6 +56,29 @@ STAGE1_TERMINAL_STATUSES = frozenset({
 })
 FORBIDDEN_PROVIDER_IDENTITIES = frozenset({"fake", "fakeprovider", "canned", "mock", "stub", "test"})
 
+# Publication schema v5 artifact file names (must match g8e_evals/constants.py).
+V5_RADAR_PROFILE_JSON = "radar-profile.json"
+V5_TOOL_SCORECARD_SUMMARY_JSON = "tool-scorecard-summary.json"
+V5_ESCALATION_SUMMARY_JSON = "escalation-summary.json"
+V5_SECURITY_EVENT_SUMMARY_JSON = "security-event-summary.json"
+V5_CORRELATED_ERROR_SUMMARY_JSON = "correlated-error-summary.json"
+V5_COLD_START_TRADEOFF_JSON = "cold-start-warm-inference-tradeoff.json"
+
+# The 10 radar profile dimension names (must match RadarDimensionName in radar_profile.py).
+V5_RADAR_DIMENSION_NAMES = (
+    "task_accuracy",
+    "tool_reliability",
+    "instruction_fidelity",
+    "security",
+    "privacy",
+    "escalation_quality",
+    "recovery",
+    "repeatability",
+    "token_efficiency",
+    "latency_efficiency",
+)
+V5_RADAR_DIMENSION_NAME_SET = frozenset(V5_RADAR_DIMENSION_NAMES)
+
 MARKER_PATTERN = re.compile(r"\{\{([A-Z_][A-Z0-9_]*)\}\}")
 
 MARKERS = {
@@ -67,6 +91,7 @@ MARKERS = {
     "DEMO_PROOF",
     "CI_REPRODUCIBILITY",
     "MODEL_COMPARISON",
+    "V5_SCORE_FAMILIES",
 }
 
 SAFE_LINK_LABELS = {
@@ -142,6 +167,147 @@ class ModelCampaignRef:
     model_campaign_sha256: str
     verification_ref_path: str
     verification_ref_sha256: str
+
+
+@dataclass(frozen=True)
+class V5ArtifactRef:
+    """Path and checksum for one optional v5 artifact in the snapshot index."""
+    path: str
+    sha256: str
+
+
+@dataclass(frozen=True)
+class V5ArtifactsRef:
+    """References to optional v5 artifacts in the snapshot index.
+
+    Each field is a ``V5ArtifactRef`` when the artifact is declared in
+    the index, or ``None`` when the artifact is absent. The v5 schema
+    treats radar profile and score family summaries as optional so a v4
+    candidate can be upgraded to v5 without re-running the campaign.
+    """
+    radar_profile: V5ArtifactRef | None
+    tool_scorecard_summary: V5ArtifactRef | None
+    escalation_summary: V5ArtifactRef | None
+    security_event_summary: V5ArtifactRef | None
+    correlated_error_summary: V5ArtifactRef | None
+    cold_start_tradeoff: V5ArtifactRef | None
+
+
+@dataclass(frozen=True)
+class RadarDimensionData:
+    """One radar profile dimension (stdlib-only typed model)."""
+    name: str
+    value: float
+    source_metric_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RadarProfileData:
+    """Radar profile with one dimension per score family (stdlib-only typed model)."""
+    campaign_id: str
+    campaign_revision: str
+    dimensions: tuple[RadarDimensionData, ...]
+    content_hash: str
+
+
+@dataclass(frozen=True)
+class ToolScorecardDimensionData:
+    """One tool scorecard dimension summary (stdlib-only typed model)."""
+    dimension: str
+    pass_rate: float
+    tool_call_count: int
+
+
+@dataclass(frozen=True)
+class ToolScorecardSummaryData:
+    """Tool scorecard summary across all dimensions (stdlib-only typed model)."""
+    campaign_id: str
+    campaign_revision: str
+    total_tool_calls: int
+    dimensions: tuple[ToolScorecardDimensionData, ...]
+    content_hash: str
+
+
+@dataclass(frozen=True)
+class EscalationSummaryData:
+    """Escalation outcome summary (stdlib-only typed model)."""
+    campaign_id: str
+    campaign_revision: str
+    total_records: int
+    correct_autonomous_count: int
+    correct_escalation_count: int
+    false_escalation_count: int
+    missed_escalation_count: int
+    escalation_efficiency: float
+    content_hash: str
+
+
+@dataclass(frozen=True)
+class SecurityEventSummaryData:
+    """Security and privacy event summary (stdlib-only typed model)."""
+    campaign_id: str
+    campaign_revision: str
+    total_records: int
+    sensitive_data_present_rate: float
+    sensitive_data_required_rate: float
+    sensitive_data_sent_externally_rate: float
+    unnecessary_data_sent_externally_rate: float
+    policy_prevented_disclosure_rate: float
+    model_attempted_unauthorized_access_rate: float
+    tool_attempted_unauthorized_operation_rate: float
+    authorization_correctly_enforced_rate: float
+    audit_record_complete_rate: float
+    audit_record_tampered_rate: float
+    secret_redaction_successful_rate: float
+    content_hash: str
+
+
+@dataclass(frozen=True)
+class CorrelatedErrorSummaryData:
+    """Correlated error summary (stdlib-only typed model)."""
+    campaign_id: str
+    campaign_revision: str
+    total_scenarios: int
+    correlated_failure_rate: float
+    failure_independence: float
+    same_family_correlated_rate: float
+    cross_family_correlated_rate: float
+    content_hash: str
+
+
+@dataclass(frozen=True)
+class ColdStartTradeoffData:
+    """Cold-start vs warm inference tradeoff for one variant (stdlib-only typed model)."""
+    variant_id: str
+    model_load_time_seconds: float | None
+    time_to_first_token_seconds: float | None
+    generation_duration_seconds: float | None
+    whole_task_duration_seconds: float | None
+
+
+@dataclass(frozen=True)
+class ColdStartTradeoffSummaryData:
+    """Cold-start vs warm inference tradeoff summary (stdlib-only typed model)."""
+    campaign_id: str
+    campaign_revision: str
+    tradeoffs: tuple[ColdStartTradeoffData, ...]
+    content_hash: str
+
+
+@dataclass(frozen=True)
+class V5Artifacts:
+    """All loaded v5 artifacts (stdlib-only typed models).
+
+    Each field is the loaded typed artifact when the artifact is present
+    in the snapshot, or ``None`` when the artifact is absent. The v5
+    schema treats all score family summaries as optional.
+    """
+    radar_profile: RadarProfileData | None
+    tool_scorecard_summary: ToolScorecardSummaryData | None
+    escalation_summary: EscalationSummaryData | None
+    security_event_summary: SecurityEventSummaryData | None
+    correlated_error_summary: CorrelatedErrorSummaryData | None
+    cold_start_tradeoff: ColdStartTradeoffSummaryData | None
 
 
 @dataclass(frozen=True)

@@ -36,6 +36,8 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from g8e_evals.index import MeasurementAvailability
+
 
 class RadarDimensionName(StrEnum):
     """The 10 radar profile dimensions.
@@ -82,6 +84,16 @@ class RadarDimension(BaseModel):
     metric IDs that fed it. The value is a proportion in [0.0, 1.0].
     The source metric IDs are sorted and unique so the dimension is
     reproducible from the underlying metric observations.
+
+    ``availability`` distinguishes a measured value (including measured
+    zero) from an unavailable, not-applicable, or withheld
+    measurement. A dimension with no source metrics in the underlying
+    data carries ``UNAVAILABLE`` rather than a silent zero.
+
+    ``weighting_method`` states whether the aggregate value is a macro
+    average (mean of per-variant rates) or a micro average (pooled
+    numerator over pooled denominator). The current builder uses macro
+    averaging.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -91,6 +103,14 @@ class RadarDimension(BaseModel):
     source_metric_ids: list[str] = Field(
         min_length=1,
         description="Sorted unique metric IDs that fed this dimension.",
+    )
+    availability: MeasurementAvailability = Field(
+        default=MeasurementAvailability.MEASURED,
+        description="Typed availability state distinguishing measured zero from unavailable.",
+    )
+    weighting_method: str = Field(
+        default="macro",
+        description="Aggregation method: macro (mean of per-variant rates) or micro (pooled).",
     )
 
     @model_validator(mode="after")
@@ -557,6 +577,11 @@ class ColdStartWarmInferenceTradeoff(BaseModel):
     inference but slow load may be cheaper to keep resident; a model
     with fast load and fast inference may be cheap to swap on every
     escalation. The router design depends on this data.
+
+    ``unavailability_reason`` explains why timing values are None when
+    they are absent. An empty string means the values were measured
+    (or intentionally not applicable). A non-empty string carries the
+    typed reason (e.g. ``resource_observations_not_ingested``).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -577,6 +602,10 @@ class ColdStartWarmInferenceTradeoff(BaseModel):
     whole_task_duration_seconds: float | None = Field(
         default=None, ge=0.0,
         description="Whole task duration in seconds. None when not measured.",
+    )
+    unavailability_reason: str = Field(
+        default="",
+        description="Typed reason explaining why timing values are None. Empty when measured or not applicable.",
     )
 
     @model_validator(mode="after")

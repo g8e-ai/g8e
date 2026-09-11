@@ -32,7 +32,9 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from g8e_evals.campaign import (
+    CampaignAssignment,
     CampaignManifest,
+    ModelCohort,
 )
 from g8e_evals.constants import (
     ANALYSIS_JSON,
@@ -53,6 +55,7 @@ from g8e_evals.constants import (
     METRICS_JSONL,
     RESOURCE_OBSERVATIONS_JSONL,
     SECURITY_EVENTS_JSONL,
+    STAGES_JSONL,
     TASKS_JSONL,
     TOOL_CALL_SCORECARDS_JSONL,
 )
@@ -66,6 +69,7 @@ from g8e_evals.index import (
     CampaignVerificationReport,
     IndexCreationReason,
     IndexGeneration,
+    ModelRole,
     ResourceObservation,
     validate_index_chain,
     validate_no_duplicate_effective_assignments,
@@ -76,11 +80,15 @@ from g8e_evals.schema import (
     AttemptRecord,
     CorrelatedErrorRecord,
     EscalationRecord,
+    EvidenceIndex,
     MetricObservation,
     RunManifest,
     SecurityEventRecord,
+    StageKind,
+    StageObservation,
     TerminalStatus,
     ToolCallScorecard,
+    VerificationStatus,
     validate_correlated_error_records,
     validate_escalation_records,
     validate_security_event_records,
@@ -108,6 +116,7 @@ _OPTIONAL_ARTIFACTS = (
     CAMPAIGN_SCHEDULE_JSON,
     CAMPAIGN_RETRY_POLICY_JSON,
     CAMPAIGN_STATUS_JSON,
+    STAGES_JSONL,
 )
 
 
@@ -350,6 +359,299 @@ def _check_evidence_binding(
             )
 
 
+def _load_evidence_index(report_dir: Path, failures: list[str]) -> dict[str, EvidenceIndex]:
+    """Load evidence-index.jsonl and return a dict keyed by artifact_id.
+
+    Returns an empty dict when the file does not exist. Validation
+    errors are recorded as failures.
+    """
+    evidence_index_path = report_dir / EVIDENCE_INDEX_JSONL
+    if not evidence_index_path.exists():
+        return {}
+    if not _check_optional_file_safety(evidence_index_path, "evidence index", failures):
+        return {}
+    index: dict[str, EvidenceIndex] = {}
+    try:
+        for line_num, line in enumerate(evidence_index_path.read_text().splitlines(), 1):
+            line = line.strip()
+            if not line:
+                continue
+            entry = EvidenceIndex.model_validate_json(line)
+            if entry.artifact_id in index:
+                failures.append(
+                    f"evidence index duplicate artifact_id: {entry.artifact_id!r}"
+                )
+                continue
+            index[entry.artifact_id] = entry
+    except (ValidationError, json.JSONDecodeError) as e:
+        failures.append(f"evidence index validation failed at line {line_num}: {e}")
+    return index
+
+
+def _check_evidence_index_resolution(
+    verification_status: object,
+    source_evidence_refs: list[str],
+    source_evidence_sha256: str | None,
+    record_id: str,
+    label: str,
+    evidence_index: dict[str, EvidenceIndex],
+    failures: list[str],
+) -> None:
+    """Cross-check that a VERIFIED record's source evidence references
+    resolve to indexed evidence entries with matching SHA-256.
+
+    A VERIFIED record whose source_evidence_refs do not resolve to
+    evidence-index.jsonl entries is rejected. A SHA-256 mismatch
+    between the record and the indexed entry is rejected.
+    """
+    status_str = getattr(verification_status, "value", str(verification_status))
+    if status_str != "verified":
+        return
+    if not evidence_index:
+        return
+    for ref in source_evidence_refs:
+        entry = evidence_index.get(ref)
+        if entry is None:
+            failures.append(
+                f"verified {label} {record_id} source_evidence_ref {ref!r} "
+                f"not found in evidence index"
+            )
+            continue
+        if source_evidence_sha256 is not None and entry.sha256 != source_evidence_sha256:
+            failures.append(
+                f"verified {label} {record_id} source_evidence_ref {ref!r} "
+                f"sha256 mismatch: record has {source_evidence_sha256!r}, "
+                f"index has {entry.sha256!r}"
+            )
+
+
+def _load_stages(report_dir: Path, failures: list[str]) -> list[StageObservation]:
+    """Load stages.jsonl and return a list of StageObservation models.
+
+    Returns an empty list when the file does not exist. Validation
+    errors are recorded as failures.
+    """
+    stages_path = report_dir / STAGES_JSONL
+    if not stages_path.exists():
+        return []
+    if not _check_optional_file_safety(stages_path, "stage observations", failures):
+        return []
+    stages: list[StageObservation] = []
+    try:
+        for line in stages_path.read_text().splitlines():
+            line = line.strip()
+            if line:
+                stages.append(StageObservation.model_validate_json(line))
+    except (ValidationError, json.JSONDecodeError) as e:
+        failures.append(f"stage observation validation failed: {e}")
+    return stages
+
+
+def _load_cohorts(report_dir: Path, failures: list[str]) -> dict[str, ModelCohort]:
+    """Load campaign-cohorts.jsonl and return a dict keyed by cohort_id.
+
+    Returns an empty dict when the file does not exist. Validation
+    errors are recorded as failures.
+    """
+    cohorts_path = report_dir / CAMPAIGN_COHORTS_JSONL
+    if not cohorts_path.exists():
+        return {}
+    if not _check_optional_file_safety(cohorts_path, "campaign cohorts", failures):
+        return {}
+    cohorts: dict[str, ModelCohort] = {}
+    try:
+        for line in cohorts_path.read_text().splitlines():
+            line = line.strip()
+            if line:
+                cohort = ModelCohort.model_validate_json(line)
+                cohorts[cohort.cohort_id] = cohort
+    except (ValidationError, json.JSONDecodeError) as e:
+        failures.append(f"campaign cohort validation failed: {e}")
+    return cohorts
+
+
+def _cross_check_observation_model_binding(
+    obs: ResourceObservation,
+    assignment_by_id: dict[str, CampaignAssignment],
+    cohort_by_id: dict[str, ModelCohort],
+    stage_ids: set[str],
+    failures: list[str],
+) -> None:
+    """Cross-check a resource observation's model_variant_id, role, and
+    stage_id against the assignment's cohort and the stage trail.
+
+    The model_variant_id must match one of the cohort's role-binding
+    model IDs. The role must match one of the cohort's role-binding
+    roles. The stage_id must exist in the stage observation trail when
+    the trail is present.
+    """
+    assignment = assignment_by_id.get(obs.assignment_id)
+    if assignment is not None:
+        cohort = cohort_by_id.get(assignment.model_cohort_id)
+        if cohort is not None:
+            cohort_model_ids = {rb.model_id for rb in cohort.role_bindings}
+            cohort_roles = {rb.role for rb in cohort.role_bindings}
+            if obs.model_variant_id not in cohort_model_ids:
+                failures.append(
+                    f"resource observation {obs.inference_id} model_variant_id mismatch: "
+                    f"got {obs.model_variant_id!r}, cohort {assignment.model_cohort_id!r} "
+                    f"has {sorted(cohort_model_ids)}"
+                )
+            obs_role = obs.role.value if hasattr(obs.role, "value") else str(obs.role)
+            if obs_role not in cohort_roles:
+                failures.append(
+                    f"resource observation {obs.inference_id} role mismatch: "
+                    f"got {obs_role!r}, cohort {assignment.model_cohort_id!r} "
+                    f"has {sorted(cohort_roles)}"
+                )
+    if stage_ids and obs.stage_id not in stage_ids:
+        failures.append(
+            f"resource observation {obs.inference_id} stage_id {obs.stage_id!r} "
+            f"not found in stage observation trail"
+        )
+
+
+def _enforce_one_per_inference_cardinality(
+    path: Path,
+    file_name: str,
+    policy: ExpectedRecordPolicy | None,
+    observations: list[ResourceObservation],
+    stages: list[StageObservation],
+    failures: list[str],
+) -> None:
+    """Enforce ONE_PER_INFERENCE cardinality for a record file.
+
+    When stages.jsonl is present, the record count must match the
+    number of model_inference stages. When stages.jsonl is absent,
+    the record count must match the number of resource observations
+    (one per inference as a fallback). For optional files, cardinality
+    is only enforced when the file exists and contains records; an
+    empty optional file is acceptable.
+    """
+    if policy is None:
+        return
+    entry = policy.get_entry(file_name)
+    if entry is None or entry.cardinality_rule != CardinalityRule.ONE_PER_INFERENCE:
+        return
+    if not path.exists():
+        if entry.applicability == RecordApplicability.REQUIRED:
+            failures.append(f"required record file missing: {file_name}")
+        return
+    try:
+        record_count = sum(1 for line in path.read_text().splitlines() if line.strip())
+    except OSError as e:
+        failures.append(f"failed to read {file_name}: {e}")
+        return
+    if record_count == 0 and entry.applicability == RecordApplicability.OPTIONAL:
+        return
+    if stages:
+        inference_stages = [s for s in stages if s.kind == StageKind.MODEL_INFERENCE]
+        expected_count = len(inference_stages)
+    else:
+        expected_count = len(observations)
+    if record_count != expected_count:
+        failures.append(
+            f"one_per_inference cardinality mismatch for {file_name}: "
+            f"expected {expected_count} (inference trail), got {record_count}"
+        )
+
+
+def _enforce_one_per_attempt_cardinality(
+    path: Path,
+    file_name: str,
+    policy: ExpectedRecordPolicy | None,
+    completed_attempt_count: int,
+    failures: list[str],
+) -> None:
+    """Enforce ONE_PER_ATTEMPT cardinality for a record file.
+
+    The record count must match the number of completed attempts. For
+    optional files, cardinality is only enforced when the file exists
+    and contains records; an empty optional file is acceptable.
+    """
+    if policy is None:
+        return
+    entry = policy.get_entry(file_name)
+    if entry is None or entry.cardinality_rule != CardinalityRule.ONE_PER_ATTEMPT:
+        return
+    if not path.exists():
+        if entry.applicability == RecordApplicability.REQUIRED:
+            failures.append(f"required record file missing: {file_name}")
+        return
+    try:
+        record_count = sum(1 for line in path.read_text().splitlines() if line.strip())
+    except OSError as e:
+        failures.append(f"failed to read {file_name}: {e}")
+        return
+    if record_count == 0 and entry.applicability == RecordApplicability.OPTIONAL:
+        return
+    if record_count != completed_attempt_count:
+        failures.append(
+            f"one_per_attempt cardinality mismatch for {file_name}: "
+            f"expected {completed_attempt_count} (completed attempts), got {record_count}"
+        )
+
+
+def _verify_inference_trail_count(
+    observations: list[ResourceObservation],
+    stages: list[StageObservation],
+    attempts: list[AttemptRecord],
+    failures: list[str],
+) -> None:
+    """Verify that resource observations match the inference trail exactly.
+
+    When stages.jsonl is present, each completed attempt must have
+    exactly one resource observation per model_inference stage. An
+    attempt with fewer observations than inferences is a missing
+    observation; an attempt with more is an extra observation.
+    """
+    if not stages:
+        return
+    inference_stages_by_attempt: dict[str, list[StageObservation]] = {}
+    for stage in stages:
+        if stage.kind == StageKind.MODEL_INFERENCE:
+            inference_stages_by_attempt.setdefault(stage.attempt_id, []).append(stage)
+    obs_by_attempt: dict[str, list[ResourceObservation]] = {}
+    for obs in observations:
+        obs_by_attempt.setdefault(obs.attempt_id, []).append(obs)
+    for attempt in attempts:
+        if attempt.terminal_status != TerminalStatus.COMPLETED:
+            continue
+        expected = len(inference_stages_by_attempt.get(attempt.attempt_id, []))
+        actual = len(obs_by_attempt.get(attempt.attempt_id, []))
+        if actual == 0 and expected == 0:
+            continue
+        if actual != expected:
+            failures.append(
+                f"inference count mismatch for attempt {attempt.attempt_id}: "
+                f"expected {expected} observations (inference trail), got {actual}"
+            )
+
+
+def _verify_metric_denominator_consistency(
+    metrics: list[MetricObservation],
+    attempts: list[AttemptRecord],
+    failures: list[str],
+) -> None:
+    """Verify that metric denominator_contribution values are consistent.
+
+    A completed attempt's metric should have denominator_contribution=1.
+    A non-completed attempt's metric should have denominator_contribution=0.
+    Mismatches indicate a tampered or miscalculated derived metric.
+    """
+    completed_attempt_ids = {
+        a.attempt_id for a in attempts if a.terminal_status == TerminalStatus.COMPLETED
+    }
+    for m in metrics:
+        expected = 1 if m.attempt_id in completed_attempt_ids else 0
+        if m.denominator_contribution != expected:
+            failures.append(
+                f"metric {m.metric_id} for attempt {m.attempt_id} "
+                f"denominator_contribution mismatch: got {m.denominator_contribution}, "
+                f"expected {expected}"
+            )
+
+
 def _verify_resource_observation_count(
     observations: list[ResourceObservation],
     attempts: list[AttemptRecord],
@@ -402,10 +704,20 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     3. **campaign_manifest**: campaign-manifest.json is a valid CampaignManifest.
     4. **index_chain**: index generations form a valid append-only parent-hash chain.
     5. **duplicate_effective**: no duplicate effective assignments in any generation.
-    6. **cell_coverage**: every campaign assignment has a disposition in the final generation.
+    6. **cell_coverage**: campaign assignments are parsed as typed CampaignAssignment models and every assignment has a disposition in the final generation (no missing or extra assignment IDs).
     7. **terminal_attempts**: every effective attempt is terminal.
-    8. **metric_binding**: every completed attempt has at least one bound metric.
+    8. **metric_binding**: every completed attempt has at least one bound metric and denominator_contribution values are recomputed and verified.
     9. **manifest_identity**: run manifest content hashes match campaign manifest.
+    10. **artifact_identity**: campaign binding authority hashes are present and valid.
+    11. **finalization**: the last index generation is FINALIZATION.
+    12. **supersession_policy**: SUPERSESSION generations are policy-valid.
+    13. **expected_record_policy**: the frozen expected record policy is loaded and validated.
+    14. **resource_observation**: resource observations are validated, cross-bound to campaign/assignment/attempt/stage identities, and their model_variant_id and role are cross-checked against the assignment's cohort. VERIFIED observations' source evidence references are resolved against the evidence index.
+    15. **tool_call_scorecard**: tool call scorecards are validated, cross-bound, and their cardinality is enforced (ONE_PER_INFERENCE when stages.jsonl is present).
+    16. **escalation_records**: escalation records are validated, cross-bound, and their cardinality is enforced (ONE_PER_ATTEMPT).
+    17. **security_events**: security event records are validated, cross-bound, and their cardinality is enforced (ONE_PER_ATTEMPT).
+    18. **correlated_errors**: correlated error records are validated, cross-bound, and their cardinality is enforced (ONE_PER_INFERENCE when stages.jsonl is present).
+    19. **resource_observation_count**: resource observation counts are verified against the exact inference trail from stages.jsonl (not just "at least one per attempt").
 
     Returns a ``CampaignVerificationReport`` with ``ok=True`` only when all
     layers pass. The report carries the campaign identity, verified index
@@ -464,15 +776,19 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
         except ValueError as e:
             failures.append(f"duplicate effective assignment in generation {gen.generation_number}: {e}")
 
-    # Layer 6: cell coverage — every assignment has a disposition in the final generation
+    # Layer 6: cell coverage — typed assignment parsing and disposition completeness
     checked_layers.append("cell_coverage")
     assignments_path = report_dir / CAMPAIGN_ASSIGNMENTS_JSONL
+    assignment_by_id: dict[str, CampaignAssignment] = {}
     if _check_file_safety(assignments_path, failures, CAMPAIGN_ASSIGNMENTS_JSONL):
         try:
             assignment_records = _read_jsonl_dicts(assignments_path)
-            assignment_ids: set[str] = {
-                a["assignment_id"] for a in assignment_records if a.get("assignment_id")
-            }
+            assignments: list[CampaignAssignment] = []
+            for r in assignment_records:
+                a = CampaignAssignment.model_validate(r)
+                assignments.append(a)
+                assignment_by_id[a.assignment_id] = a
+            assignment_ids: set[str] = set(assignment_by_id.keys())
 
             if generations:
                 final_gen = generations[-1]
@@ -480,9 +796,12 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                 missing = assignment_ids - dispositioned_ids
                 for aid in sorted(missing):
                     failures.append(f"assignment {aid} missing from final index generation dispositions")
+                extra = dispositioned_ids - assignment_ids
+                for aid in sorted(extra):
+                    failures.append(f"extra assignment {aid} in final index generation dispositions not in campaign assignments")
             elif assignment_ids:
                 failures.append("assignments exist but no index generations to check coverage")
-        except (json.JSONDecodeError, ValueError) as e:
+        except (ValidationError, json.JSONDecodeError, ValueError) as e:
             failures.append(f"assignment coverage check failed: {e}")
 
     # Layer 7: terminal attempts — every attempt parses with a valid terminal status
@@ -499,6 +818,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     # Layer 8: metric binding — every completed attempt has at least one bound metric
     checked_layers.append("metric_binding")
     metrics_path = report_dir / METRICS_JSONL
+    metrics: list[MetricObservation] = []
     if _check_file_safety(metrics_path, failures, METRICS_JSONL):
         try:
             metric_records = _read_jsonl_dicts(metrics_path)
@@ -513,6 +833,8 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                         failures.append(
                             f"completed attempt {attempt.attempt_id} has no bound metric"
                         )
+            # Derived metric recomputation: verify denominator consistency
+            _verify_metric_denominator_consistency(metrics, attempts, failures)
         except (ValidationError, json.JSONDecodeError) as e:
             failures.append(f"metric binding check failed: {e}")
 
@@ -636,12 +958,25 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     else:
         campaign_id_from_manifest = campaign_id
 
+    # Load supporting typed artifacts for cross-binding and cardinality checks.
+    stages = _load_stages(report_dir, failures)
+    stage_ids: set[str] = {s.stage_id for s in stages}
+    cohort_by_id = _load_cohorts(report_dir, failures)
+    evidence_index = _load_evidence_index(report_dir, failures)
+    completed_attempt_count = sum(
+        1 for a in attempts if a.terminal_status == TerminalStatus.COMPLETED
+    )
+
     # Layer 14: resource observations — enforce policy, validate, cross-bind
     checked_layers.append("resource_observation")
     resource_obs_path = report_dir / RESOURCE_OBSERVATIONS_JSONL
     resource_observations: list[ResourceObservation] = []
     _enforce_record_file_policy(
         resource_obs_path, RESOURCE_OBSERVATIONS_JSONL, policy, failures,
+    )
+    _enforce_one_per_inference_cardinality(
+        resource_obs_path, RESOURCE_OBSERVATIONS_JSONL, policy,
+        [], stages, failures,
     )
     if _check_optional_file_safety(resource_obs_path, "resource observations", failures):
         try:
@@ -655,10 +990,18 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                     assignment_ids_from_attempts, attempt_ids, attempt_by_id,
                     failures,
                 )
+                _cross_check_observation_model_binding(
+                    obs, assignment_by_id, cohort_by_id, stage_ids, failures,
+                )
                 _check_evidence_binding(
                     obs.verification_status, obs.source_evidence_refs,
                     obs.source_evidence_sha256, obs.inference_id,
                     "resource observation", failures,
+                )
+                _check_evidence_index_resolution(
+                    obs.verification_status, obs.source_evidence_refs,
+                    obs.source_evidence_sha256, obs.inference_id,
+                    "resource observation", evidence_index, failures,
                 )
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             failures.append(f"resource observation validation failed: {e}")
@@ -668,6 +1011,10 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     scorecard_path = report_dir / TOOL_CALL_SCORECARDS_JSONL
     _enforce_record_file_policy(
         scorecard_path, TOOL_CALL_SCORECARDS_JSONL, policy, failures,
+    )
+    _enforce_one_per_inference_cardinality(
+        scorecard_path, TOOL_CALL_SCORECARDS_JSONL, policy,
+        resource_observations, stages, failures,
     )
     if _check_optional_file_safety(scorecard_path, "tool call scorecards", failures):
         try:
@@ -687,6 +1034,11 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                     sc.source_evidence_sha256, sc.scorecard_id,
                     "tool call scorecard", failures,
                 )
+                _check_evidence_index_resolution(
+                    sc.verification_status, sc.source_evidence_refs,
+                    sc.source_evidence_sha256, sc.scorecard_id,
+                    "tool call scorecard", evidence_index, failures,
+                )
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             failures.append(f"tool call scorecard validation failed: {e}")
 
@@ -695,6 +1047,10 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     escalation_path = report_dir / ESCALATION_RECORDS_JSONL
     _enforce_record_file_policy(
         escalation_path, ESCALATION_RECORDS_JSONL, policy, failures,
+    )
+    _enforce_one_per_attempt_cardinality(
+        escalation_path, ESCALATION_RECORDS_JSONL, policy,
+        completed_attempt_count, failures,
     )
     if _check_optional_file_safety(escalation_path, "escalation records", failures):
         try:
@@ -714,6 +1070,11 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                     er.source_evidence_sha256, er.record_id,
                     "escalation record", failures,
                 )
+                _check_evidence_index_resolution(
+                    er.verification_status, er.source_evidence_refs,
+                    er.source_evidence_sha256, er.record_id,
+                    "escalation record", evidence_index, failures,
+                )
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             failures.append(f"escalation record validation failed: {e}")
 
@@ -722,6 +1083,10 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     security_path = report_dir / SECURITY_EVENTS_JSONL
     _enforce_record_file_policy(
         security_path, SECURITY_EVENTS_JSONL, policy, failures,
+    )
+    _enforce_one_per_attempt_cardinality(
+        security_path, SECURITY_EVENTS_JSONL, policy,
+        completed_attempt_count, failures,
     )
     if _check_optional_file_safety(security_path, "security event records", failures):
         try:
@@ -741,6 +1106,11 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                     se.source_evidence_sha256, se.record_id,
                     "security event record", failures,
                 )
+                _check_evidence_index_resolution(
+                    se.verification_status, se.source_evidence_refs,
+                    se.source_evidence_sha256, se.record_id,
+                    "security event record", evidence_index, failures,
+                )
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             failures.append(f"security event record validation failed: {e}")
 
@@ -749,6 +1119,10 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     correlated_path = report_dir / CORRELATED_ERRORS_JSONL
     _enforce_record_file_policy(
         correlated_path, CORRELATED_ERRORS_JSONL, policy, failures,
+    )
+    _enforce_one_per_inference_cardinality(
+        correlated_path, CORRELATED_ERRORS_JSONL, policy,
+        resource_observations, stages, failures,
     )
     if _check_optional_file_safety(correlated_path, "correlated error records", failures):
         try:
@@ -768,12 +1142,20 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                     ce.source_evidence_sha256, ce.record_id,
                     "correlated error record", failures,
                 )
+                _check_evidence_index_resolution(
+                    ce.verification_status, ce.source_evidence_refs,
+                    ce.source_evidence_sha256, ce.record_id,
+                    "correlated error record", evidence_index, failures,
+                )
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             failures.append(f"correlated error record validation failed: {e}")
 
-    # Layer 19: resource observation count — verify one per actual provider inference
+    # Layer 19: resource observation count — verify exact inference trail count
     checked_layers.append("resource_observation_count")
-    if resource_observations:
+    if resource_observations or stages:
+        _verify_inference_trail_count(
+            resource_observations, stages, attempts, failures,
+        )
         _verify_resource_observation_count(
             resource_observations, attempts, failures,
         )

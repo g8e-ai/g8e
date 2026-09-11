@@ -138,3 +138,10 @@ DISCLOSURE_DERIVED_CSV = "disclosure-derived.csv"
 DISCLOSURE_TOMBSTONES_JSONL = "disclosure-tombstones.jsonl"
 DISCLOSURE_PROOF_INDEX_JSON = "disclosure-proof-index.json"
 DISCLOSURE_OUTPUT_INVENTORY_JSON = "disclosure-output-inventory.json"
+
+# Continuous controller artifacts (frozen cycle manifest, controller state,
+# durable outbox for publication retries)
+CYCLE_MANIFEST_JSON = "cycle-manifest.json"
+CONTROLLER_STATE_JSON = "controller-state.json"
+OUTBOX_INDEX_JSONL = "outbox-index.jsonl"
+OUTBOX_ENTRIES_DIR = "outbox-entries"

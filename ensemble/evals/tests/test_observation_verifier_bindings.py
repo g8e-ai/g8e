@@ -314,7 +314,7 @@ def _make_observation_dict(**kwargs) -> dict:
         "inference_id": "inf-1",
         "stage_id": "att-1:direct:1",
         "role": "primary",
-        "model_variant_id": "qwen3-8b-q4_0",
+        "model_variant_id": "qwen3:8b",
         "task_id": "task-1",
         "orchestrator_scope": "linux/amd64/cpu",
         "provider_scope": "linux/amd64/rtx-4090",
@@ -348,7 +348,7 @@ def _make_scorecard_dict(**kwargs) -> dict:
         "task_id": "task-1",
         "role": "primary",
         "agent_persona": "sage",
-        "model_variant_id": "qwen3-8b-q4_0",
+        "model_variant_id": "qwen3:8b",
         "tool_name": "http_status",
         "call_index": 0,
         "recognition": True,
@@ -408,7 +408,7 @@ def _make_security_event_dict(**kwargs) -> dict:
         "task_id": "task-1",
         "role": "primary",
         "agent_persona": "warden",
-        "model_variant_id": "qwen3-8b-q4_0",
+        "model_variant_id": "qwen3:8b",
         "governance_layer": "policy",
         "sensitive_data_present": True,
         "sensitive_data_required": False,
@@ -441,7 +441,7 @@ def _make_correlated_error_dict(**kwargs) -> dict:
         "run_id": "run-1",
         "task_id": "task-1",
         "agent_persona": "sage",
-        "model_variant_id": "qwen3-8b-q4_0",
+        "model_variant_id": "qwen3:8b",
         "stage_role": ModelRole.PRIMARY,
         "error_class": ErrorClassLabel.UNSUPPORTED_CAUSAL_CLAIM,
         "stack_id": "stack-1",
@@ -528,6 +528,8 @@ class TestExpectedRecordPolicyEnforcement:
 
     def test_required_file_missing_fails(self, tmp_path: Path):
         report_dir = _run_campaign(tmp_path)
+        # Delete the file to make it actually missing
+        (report_dir / RESOURCE_OBSERVATIONS_JSONL).unlink()
         policy = _make_policy(entries=[
             {"file_name": RESOURCE_OBSERVATIONS_JSONL, "applicability": "required", "cardinality_rule": "exact", "expected_count": 0},
             {"file_name": TOOL_CALL_SCORECARDS_JSONL, "applicability": "optional", "cardinality_rule": "one_per_inference"},

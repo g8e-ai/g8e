@@ -42,18 +42,29 @@ from g8e_evals.constants import (
     CAMPAIGN_VERIFICATION_REF_JSON,
     COLD_START_WARM_INFERENCE_TRADEOFF_JSON,
     CORRELATED_ERROR_SUMMARY_JSON,
+    CORRELATED_ERRORS_JSONL,
+    ESCALATION_RECORDS_JSONL,
     ESCALATION_SUMMARY_JSON,
     METRICS_JSONL,
     MODEL_CAMPAIGN_JSON,
     PUBLICATION_SCHEMA_V4,
     PUBLICATION_SCHEMA_V5,
     RADAR_PROFILE_JSON,
+    RESOURCE_OBSERVATIONS_JSONL,
     SECURITY_EVENT_SUMMARY_JSON,
+    SECURITY_EVENTS_JSONL,
+    TOOL_CALL_SCORECARDS_JSONL,
     TOOL_SCORECARD_SUMMARY_JSON,
+)
+from g8e_evals.campaign_set import (
+    AggregateVerificationResult,
+    CampaignSetIndex,
+    CampaignSetPlan,
 )
 from g8e_evals.index import (
     AssignmentDisposition,
     CampaignVerificationReport,
+    MeasurementAvailability,
 )
 from g8e_evals.profile import CampaignProfile
 from g8e_evals.provenance import SourceInclusionManifest
@@ -153,14 +164,23 @@ class CampaignProjectionRow(BaseModel):
 class CampaignVariantSummaryRow(BaseModel):
     """Per-variant aggregated descriptive statistics for one metric.
 
-    Aggregates all per-assignment projection rows for one variant and
-    one metric into a single pass-rate summary. The numerator is the
-    total positive outcomes across all tasks and repetitions; the
+    Aggregates all per-assignment projection rows for one variant,
+    metric, and role into a single pass-rate summary. The numerator is
+    the total positive outcomes across all tasks and repetitions; the
     denominator is the total measured outcomes. The rate is numerator
     divided by denominator. Task count, repetition count, terminal
     count, superseded count, invalid count, and missing count are
     reported so a reader can inspect completeness without pooling
     distinct variants.
+
+    ``role`` carries the model role (primary, assistant, lite) so
+    multiple roles for the same variant and metric do not overwrite
+    each other. An empty string means the role is unspecified (legacy
+    or single-role campaigns).
+
+    ``per_task_denominators`` preserves the denominator for each task
+    so a reader can inspect the distribution rather than seeing only
+    the pooled total.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -177,6 +197,11 @@ class CampaignVariantSummaryRow(BaseModel):
     superseded_count: int = Field(ge=0, description="Number of superseded attempts.")
     invalid_count: int = Field(ge=0, description="Number of invalid attempts.")
     missing_count: int = Field(ge=0, description="Number of missing observations (eligible but unmeasured).")
+    role: str = Field(default="", description="Model role (primary, assistant, lite). Empty when unspecified.")
+    per_task_denominators: dict[str, int] = Field(
+        default_factory=dict,
+        description="Per-task denominator breakdown: task_id -> denominator for that task.",
+    )
 
     @model_validator(mode="after")
     def _validate_summary(self) -> Self:
@@ -703,7 +728,9 @@ def _generate_variant_summaries(
     outcomes), rate, distinct task count, repetition count, and terminal
     count. Superseded, invalid, and missing counts are zero for
     effective-only projections (the projector only includes effective
-    runs). Results are sorted by ``(variant_id, metric_id)``.
+    runs). The ``per_task_denominators`` dict preserves the denominator
+    for each task so a reader can inspect the distribution. Results are
+    sorted by ``(variant_id, metric_id)``.
     """
     if not projections:
         return []
@@ -722,6 +749,9 @@ def _generate_variant_summaries(
         repetition_count = max(r.repetition for r in rows) if rows else 0
         terminal_count = len(rows)
         unit = rows[0].unit if rows else "boolean"
+        per_task_denominators: dict[str, int] = {}
+        for r in rows:
+            per_task_denominators[r.task_id] = per_task_denominators.get(r.task_id, 0) + r.denominator
         summaries.append(CampaignVariantSummaryRow(
             variant_id=variant_id,
             metric_id=metric_id,
@@ -735,6 +765,8 @@ def _generate_variant_summaries(
             superseded_count=0,
             invalid_count=0,
             missing_count=0,
+            role="",
+            per_task_denominators=dict(sorted(per_task_denominators.items())),
         ))
     return summaries
 
@@ -1065,6 +1097,38 @@ def validate_publication_v4(candidate_dir: Path) -> PublicationValidatorResult:
 
 PUBLICATION_V5_VERSION = "5.0.0"
 
+# Event/resource files that the v5 projector copies from the report directory
+# to the candidate when they exist. The validator requires these when v5
+# artifacts (radar profile, score family summaries) are present.
+_V5_EVENT_RESOURCE_FILES: tuple[str, ...] = (
+    RESOURCE_OBSERVATIONS_JSONL,
+    TOOL_CALL_SCORECARDS_JSONL,
+    ESCALATION_RECORDS_JSONL,
+    SECURITY_EVENTS_JSONL,
+    CORRELATED_ERRORS_JSONL,
+)
+
+# The complete set of files that may appear in a v5 candidate directory. The
+# validator rejects any file not in this set as undeclared.
+_V5_DECLARED_FILES: frozenset[str] = frozenset({
+    MODEL_CAMPAIGN_JSON,
+    CAMPAIGN_PROJECTIONS_JSONL,
+    CAMPAIGN_STATISTICAL_ANALYSIS_JSON,
+    CAMPAIGN_PROVENANCE_JSON,
+    CAMPAIGN_VERIFICATION_REF_JSON,
+    RADAR_PROFILE_JSON,
+    TOOL_SCORECARD_SUMMARY_JSON,
+    ESCALATION_SUMMARY_JSON,
+    SECURITY_EVENT_SUMMARY_JSON,
+    CORRELATED_ERROR_SUMMARY_JSON,
+    COLD_START_WARM_INFERENCE_TRADEOFF_JSON,
+    RESOURCE_OBSERVATIONS_JSONL,
+    TOOL_CALL_SCORECARDS_JSONL,
+    ESCALATION_RECORDS_JSONL,
+    SECURITY_EVENTS_JSONL,
+    CORRELATED_ERRORS_JSONL,
+})
+
 # Mapping from radar dimension to the metric IDs that feed it. The metric
 # IDs are sorted so the radar dimension is reproducible from the underlying
 # metric observations. These mappings are the single source of truth for
@@ -1180,6 +1244,11 @@ class PublicationSchemaV5(BaseModel):
         default=None,
         description="Cold-start vs warm inference tradeoff summary. None when not computed.",
     )
+    disclosure_authority_hash: str | None = Field(
+        default=None,
+        min_length=64, max_length=64,
+        description="SHA-256 of the frozen D12 disclosure authority binding this publication to disclosure-approved fields. None when not bound.",
+    )
 
     @model_validator(mode="after")
     def _validate_version(self) -> Self:
@@ -1199,10 +1268,14 @@ def _build_radar_profile(
 ) -> RadarProfile | None:
     """Build a radar profile from per-variant summary rows.
 
-    Each radar dimension's value is the mean rate of its source metric
-    IDs across all variant summaries that contain those metrics. When no
-    source metrics are present in the summaries, the dimension value is
-    0.0. Returns None when there are no variant summaries.
+    Each radar dimension's value is the macro mean rate of its source
+    metric IDs across all variant summaries that contain those metrics.
+    When no source metrics are present for a dimension, the value
+    remains 0.0 but the ``availability`` field is set to ``UNAVAILABLE``
+    so a reader can distinguish a measured zero from an absent
+    measurement. The ``weighting_method`` is ``macro`` (mean of
+    per-variant rates). Returns None when there are no variant
+    summaries.
     """
     if not variant_summaries:
         return None
@@ -1217,12 +1290,19 @@ def _build_radar_profile(
         rates: list[float] = []
         for mid in source_ids:
             rates.extend(summary_by_metric.get(mid, []))
-        value = sum(rates) / len(rates) if rates else 0.0
-        value = round(value, 10)
+        if rates:
+            value = sum(rates) / len(rates)
+            value = round(value, 10)
+            availability = MeasurementAvailability.MEASURED
+        else:
+            value = 0.0
+            availability = MeasurementAvailability.UNAVAILABLE
         dimensions.append(RadarDimension(
             name=name,
             value=value,
             source_metric_ids=source_ids,
+            availability=availability,
+            weighting_method="macro",
         ))
     content_hash = compute_radar_profile_hash(
         campaign_id=campaign_id,
@@ -1463,18 +1543,23 @@ def _build_cold_start_tradeoff_summary(
     """Build a cold-start vs warm inference tradeoff summary.
 
     The summary carries one tradeoff per variant. Timing values are
-    None because the v5 projector does not read per-inference resource
-    observations from the report directory (that requires the full
-    resource observation pipeline). The summary structure is ready for
-    when the resource observations are available. Returns None when
-    there are no model variants.
+    None because the v5 projector does not yet read per-inference
+    resource observations from the report directory. The
+    ``unavailability_reason`` field carries a typed reason
+    (``resource_observations_not_ingested``) explaining why the timing
+    values are absent. The summary structure is ready for when the
+    resource observations are available. Returns None when there are
+    no model variants.
     """
     if not model_variants:
         return None
 
     tradeoffs: list[ColdStartWarmInferenceTradeoff] = []
     for v in sorted(model_variants, key=lambda v: v.variant_id):
-        tradeoffs.append(ColdStartWarmInferenceTradeoff(variant_id=v.variant_id))
+        tradeoffs.append(ColdStartWarmInferenceTradeoff(
+            variant_id=v.variant_id,
+            unavailability_reason="resource_observations_not_ingested",
+        ))
     content_hash = compute_cold_start_warm_inference_tradeoff_summary_hash(
         campaign_id=campaign_id,
         campaign_revision=campaign_revision,
@@ -1499,6 +1584,9 @@ def project_campaign_v5(
     caveats: list[str],
     evidence_cutoff: str,
     platform_version: str,
+    campaign_set_plan: CampaignSetPlan | None = None,
+    campaign_set_index: CampaignSetIndex | None = None,
+    aggregate_verification_result: AggregateVerificationResult | None = None,
 ) -> Path:
     """Project a verified campaign report directory into a v5 candidate directory.
 
@@ -1508,6 +1596,14 @@ def project_campaign_v5(
     The v5 artifacts are optional: when the underlying records are not
     present in the report directory, the corresponding v5 field is
     None. Refuses to overwrite an existing candidate directory.
+
+    The optional typed aggregate inputs (``campaign_set_plan``,
+    ``campaign_set_index``, ``aggregate_verification_result``) bind the
+    projection to accepted multi-campaign aggregate authority rather
+    than an arbitrary single report directory. When provided, the
+    projector consumes the aggregate verification result as the
+    authority for the projection; when absent, the single-report
+    ``verification`` parameter remains the authority.
 
     Returns the candidate directory path.
     """
@@ -1630,6 +1726,18 @@ def project_campaign_v5(
         _write_json(candidate_dir / CORRELATED_ERROR_SUMMARY_JSON, correlated_error_summary.model_dump_json())
     if cold_start_tradeoff is not None:
         _write_json(candidate_dir / COLD_START_WARM_INFERENCE_TRADEOFF_JSON, cold_start_tradeoff.model_dump_json())
+
+    # Copy event/resource files from the report directory to the candidate
+    # when they exist. These are the authoritative typed records that the v5
+    # summaries are derived from. The validator requires them when v5 artifacts
+    # are present. Files that do not exist in the report are not created.
+    for event_resource_file in _V5_EVENT_RESOURCE_FILES:
+        src = report_dir / event_resource_file
+        if src.exists() and src.is_file() and not src.is_symlink():
+            content = src.read_bytes()
+            dst = candidate_dir / event_resource_file
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(content)
 
     return candidate_dir
 

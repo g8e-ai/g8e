@@ -34,6 +34,7 @@ import hashlib
 import json
 import logging
 import os
+import platform
 import random
 import shutil
 import time
@@ -94,17 +95,30 @@ from g8e_evals.constants import (
     CAMPAIGN_RETRY_POLICY_JSON,
     CAMPAIGN_SCHEDULE_JSON,
     CAMPAIGN_STATUS_JSON,
+    CORRELATED_ERRORS_JSONL,
+    EVIDENCE_INDEX_JSONL,
+    ESCALATION_RECORDS_JSONL,
     MANIFEST_JSON,
     METRICS_JSONL,
     REPORT_CHECKSUM_JSON,
+    RESOURCE_OBSERVATIONS_JSONL,
+    SECURITY_EVENTS_JSONL,
+    STAGES_JSONL,
     TASKS_JSONL,
+    TOOL_CALL_SCORECARDS_JSONL,
 )
-from g8e_evals.harness import Response, Score, SUTConfig, Task
+from g8e_evals.harness import InferenceObservation, Response, Score, SUTConfig, Task
 from g8e_evals.index import (
     AssignmentDisposition,
     AssignmentDispositionEntry,
     IndexCreationReason,
     IndexGeneration,
+    MeasurementAvailability,
+    MeasurementScope,
+    ModelRole,
+    ResourceObservation,
+    UnavailableMeasurement,
+    VerificationStatus as IndexVerificationStatus,
     compute_index_generation_hash,
 )
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
@@ -116,19 +130,28 @@ from g8e_evals.schema import (
     AttemptRecord,
     CampaignBinding,
     ContentHash,
+    CorrelatedErrorRecord,
+    EscalationRecord,
+    EvidenceIndex,
+    EvidenceMediaType,
     GraderClass,
     GraderReference,
     MetricObservation,
     ModelIdentity,
     PostureObservation,
+    PrivacyClassification,
     ProviderBudget,
     ReportRole,
     RoleToModelMapping,
     RunManifest,
+    SecurityEventRecord,
     SourceBuildProvenance,
     StackEnvironment,
+    StageKind,
+    StageObservation,
     TaskDefinition,
     TerminalStatus,
+    ToolCallScorecard,
     VerificationStatus,
 )
 
@@ -709,6 +732,200 @@ def _model_matches(observed: str, expected: str) -> bool:
     return False
 
 
+_RUNNER_COLLECTION_TOOL = "g8e_evals-runner-1.0.0"
+_ORCHESTRATOR_SCOPE = f"{platform.system().lower()}/{platform.machine()}/cpu"
+
+
+def _unavailable(field_name: str, availability: MeasurementAvailability, reason: str) -> UnavailableMeasurement:
+    """Build a typed unavailable-measurement entry scoped to the provider remote."""
+    return UnavailableMeasurement(
+        field_name=field_name,
+        availability=availability,
+        scope=MeasurementScope.PROVIDER_REMOTE,
+        reason=reason,
+    )
+
+
+def _build_unavailable_measurements(obs: InferenceObservation) -> list[UnavailableMeasurement]:
+    """Build typed unavailable-measurement entries for every None field.
+
+    GPU metrics are UNAVAILABLE at the provider-remote scope (no API to
+    read them from the remote Ollama server). Cold-start load time,
+    resident memory, accelerator memory, artifact bytes, energy, hidden
+    reasoning throughput, and accelerator-before baseline are
+    NOT_APPLICABLE for the direct arm (no local model load, no local
+    process memory observation, no energy meter, no hidden reasoning
+    tokens reported).
+    """
+    entries: list[UnavailableMeasurement] = []
+
+    # GPU metrics: unavailable from the remote provider host
+    gpu_fields = (
+        "gpu_utilization_percent",
+        "gpu_temperature_celsius",
+        "gpu_power_draw_watts",
+        "gpu_clock_mhz",
+    )
+    for fname in gpu_fields:
+        entries.append(_unavailable(
+            fname,
+            MeasurementAvailability.UNAVAILABLE,
+            "remote GPU metrics not exposed by the provider API",
+        ))
+
+    # Cold-start and local-process metrics: not applicable for direct arm
+    not_applicable_remote = (
+        ("model_load_time_seconds", "direct arm has no local model load"),
+        ("peak_resident_memory_bytes", "resident memory not observed for remote provider calls"),
+        ("peak_accelerator_memory_bytes", "accelerator memory not observed for remote provider calls"),
+        ("artifact_bytes", "artifact size not measured for direct provider calls"),
+        ("measured_energy_joules", "energy not measured for direct provider calls"),
+        ("accelerator_memory_before_bytes", "accelerator baseline not observed for remote provider calls"),
+    )
+    for fname, reason in not_applicable_remote:
+        entries.append(_unavailable(
+            fname,
+            MeasurementAvailability.NOT_APPLICABLE,
+            reason,
+        ))
+
+    # End-to-end latency: not applicable (we measure provider-call latency instead)
+    entries.append(_unavailable(
+        "end_to_end_latency_seconds",
+        MeasurementAvailability.NOT_APPLICABLE,
+        "end-to-end task latency not measured for direct provider calls; provider_call_latency_seconds is measured instead",
+    ))
+
+    # Hidden reasoning throughput: unavailable when not reported
+    if obs.hidden_reasoning_throughput_tokens_per_second is None:
+        entries.append(_unavailable(
+            "hidden_reasoning_throughput_tokens_per_second",
+            MeasurementAvailability.UNAVAILABLE,
+            "hidden reasoning token count not reported by the provider",
+        ))
+
+    return entries
+
+
+def _build_resource_observation(
+    *,
+    obs: InferenceObservation,
+    campaign_id: str,
+    child_id: str,
+    run_id: str,
+    assignment_id: str,
+    attempt_id: str,
+    task_id: str,
+    stage_id: str,
+) -> ResourceObservation:
+    """Build a typed ResourceObservation from an InferenceObservation.
+
+    Only measurements available from the provider response are carried.
+    Remote GPU metrics remain None with typed unavailable_measurements
+    entries; they are never inferred from model metadata.
+    """
+    unavailable = _build_unavailable_measurements(obs)
+    return ResourceObservation(
+        campaign_id=campaign_id,
+        child_id=child_id,
+        run_id=run_id,
+        assignment_id=assignment_id,
+        attempt_id=attempt_id,
+        inference_id=obs.inference_id,
+        stage_id=stage_id,
+        role=ModelRole(obs.role),
+        model_variant_id=obs.model_variant_id,
+        task_id=task_id,
+        orchestrator_scope=_ORCHESTRATOR_SCOPE,
+        provider_scope="unavailable",
+        observation_boundary="provider_call",
+        clock_domain="monotonic",
+        collection_tool=_RUNNER_COLLECTION_TOOL,
+        provider_call_latency_seconds=obs.provider_call_latency_seconds,
+        time_to_first_token_seconds=obs.time_to_first_token_seconds,
+        generation_duration_seconds=obs.generation_duration_seconds,
+        output_throughput_tokens_per_second=obs.output_throughput_tokens_per_second,
+        hidden_reasoning_throughput_tokens_per_second=obs.hidden_reasoning_throughput_tokens_per_second,
+        unavailable_measurements=unavailable,
+        verification_status=IndexVerificationStatus.PENDING,
+    )
+
+
+def _build_stage_observation(
+    *,
+    obs: InferenceObservation,
+    stage_id: str,
+    attempt_id: str,
+    run_id: str,
+    task_id: str,
+) -> StageObservation:
+    """Build a typed StageObservation for one provider inference."""
+    return StageObservation(
+        stage_id=stage_id,
+        attempt_id=attempt_id,
+        run_id=run_id,
+        kind=StageKind.MODEL_INFERENCE,
+        provider=obs.provider,
+        model=obs.model,
+        monotonic_start=obs.monotonic_start or None,
+        monotonic_end=obs.monotonic_end or None,
+        clock_domain="monotonic",
+        timing_source="runner_sut_boundary",
+        input_tokens=obs.prompt_token_count,
+        output_tokens=obs.candidates_token_count,
+        thinking_tokens=obs.thinking_token_count,
+        cache_tokens=obs.cache_token_count,
+        usage_reported=obs.usage_reported,
+        finish_reason=obs.finish_reason,
+        input_artifact_hash=obs.input_artifact_hash,
+        output_artifact_hash=obs.output_artifact_hash,
+        task_id=task_id,
+    )
+
+
+def _build_evidence_index_entries(
+    *,
+    obs: InferenceObservation,
+    run_id: str,
+    attempt_id: str,
+) -> list[EvidenceIndex]:
+    """Build EvidenceIndex entries for the input and output artifacts of one inference.
+
+    Returns an empty list when no artifact hashes are present. Each
+    artifact with a hash produces one EvidenceIndex entry with
+    INTERNAL privacy classification (raw provider artifacts are not
+    public).
+    """
+    entries: list[EvidenceIndex] = []
+    if obs.input_artifact_hash:
+        artifact_id = f"{attempt_id}:{obs.inference_id}:input"
+        entries.append(EvidenceIndex(
+            artifact_id=artifact_id,
+            run_id=run_id,
+            attempt_id=attempt_id,
+            media_type=EvidenceMediaType.APPLICATION_JSON,
+            schema_ref="g8e_evals.harness.InferenceObservation/input",
+            sha256=obs.input_artifact_hash,
+            producer_identity=_RUNNER_COLLECTION_TOOL,
+            privacy_classification=PrivacyClassification.INTERNAL,
+            storage_location="inline",
+        ))
+    if obs.output_artifact_hash:
+        artifact_id = f"{attempt_id}:{obs.inference_id}:output"
+        entries.append(EvidenceIndex(
+            artifact_id=artifact_id,
+            run_id=run_id,
+            attempt_id=attempt_id,
+            media_type=EvidenceMediaType.TEXT_PLAIN,
+            schema_ref="g8e_evals.harness.InferenceObservation/output",
+            sha256=obs.output_artifact_hash,
+            producer_identity=_RUNNER_COLLECTION_TOOL,
+            privacy_classification=PrivacyClassification.INTERNAL,
+            storage_location="inline",
+        ))
+    return entries
+
+
 def derive_cohorts_from_registry(
     profile: CampaignProfile,
     registry: ModelRegistry,
@@ -964,6 +1181,24 @@ class CampaignRunner:
         if key not in self._suts:
             self._suts[key] = self.sut_factory(cohort, arm)
         return self._suts[key]
+
+    async def _close_suts(self) -> None:
+        """Close every SUT created during the run, swallowing close errors.
+
+        Called from a finally block so SUTs are closed on success, typed
+        stop, and exception. Close errors are logged but do not raise;
+        the campaign result or error already in flight takes precedence.
+        """
+        for sut in self._suts.values():
+            close = getattr(sut, "close", None)
+            if close is None:
+                continue
+            try:
+                result = close()
+                if hasattr(result, "__await__"):
+                    await result
+            except Exception as e:
+                logger.warning("SUT close failed: %s", e)
 
     def _cohort_by_id(self) -> dict[str, ModelCohort]:
         return {c.cohort_id: c for c in self.spec.cohorts}
@@ -1279,13 +1514,22 @@ class CampaignRunner:
         arm_def: ArmDefinition,
         task: Task,
         budget_tracker: BudgetTracker | None = None,
-    ) -> tuple[list[AttemptRecord], list[MetricObservation]]:
+    ) -> tuple[
+        list[AttemptRecord],
+        list[MetricObservation],
+        list[ResourceObservation],
+        list[StageObservation],
+        list[EvidenceIndex],
+    ]:
         """Execute one assignment, handling retries.
 
-        Returns all attempts (including retry attempts) and any metric
-        observations from the terminal attempt. Each provider call
-        (including retries) is counted against the request budget when a
-        ``budget_tracker`` is provided.
+        Returns all attempts (including retry attempts), metric
+        observations from the terminal attempt, resource observations
+        (one per actual provider inference), stage observations (one
+        per inference), and evidence-index entries (one per indexed
+        artifact). Each provider call (including retries) is counted
+        against the request budget when a ``budget_tracker`` is
+        provided.
         """
         attempt_num = 0
         parent_attempt_id: str | None = None
@@ -1294,6 +1538,9 @@ class CampaignRunner:
         expected_model = _model_id_for_cohort(cohort)
 
         new_attempts: list[AttemptRecord] = []
+        all_resource_observations: list[ResourceObservation] = []
+        all_stages: list[StageObservation] = []
+        all_evidence: list[EvidenceIndex] = []
 
         while True:
             # Check request budget before each provider call (including retries)
@@ -1323,6 +1570,37 @@ class CampaignRunner:
                 budget_tracker.check_usage_budgets()
 
             ended_at = datetime.now(UTC)
+
+            # Build instrumentation records for each actual provider
+            # inference exposed by the SUT response boundary. One
+            # ResourceObservation per inference; one StageObservation per
+            # inference; one EvidenceIndex entry per indexed artifact.
+            if response is not None:
+                for inf_obs in response.inference_observations:
+                    stage_id = f"{attempt_id}:{inf_obs.inference_id}"
+                    resource_obs = _build_resource_observation(
+                        obs=inf_obs,
+                        campaign_id=self.spec.campaign_id,
+                        child_id=self.spec.campaign_id,
+                        run_id=self._run_id,
+                        assignment_id=assignment.assignment_id,
+                        attempt_id=attempt_id,
+                        task_id=task.id,
+                        stage_id=stage_id,
+                    )
+                    all_resource_observations.append(resource_obs)
+                    all_stages.append(_build_stage_observation(
+                        obs=inf_obs,
+                        stage_id=stage_id,
+                        attempt_id=attempt_id,
+                        run_id=self._run_id,
+                        task_id=task.id,
+                    ))
+                    all_evidence.extend(_build_evidence_index_entries(
+                        obs=inf_obs,
+                        run_id=self._run_id,
+                        attempt_id=attempt_id,
+                    ))
 
             if infrastructure_error is not None:
                 terminal_status = TerminalStatus.INFRASTRUCTURE_FAILED
@@ -1391,7 +1669,7 @@ class CampaignRunner:
         # Validate the retry chain (new attempts only)
         validate_retry_chain(new_attempts, assignment.assignment_id, self.spec.retry_policy)
 
-        return new_attempts, metrics
+        return new_attempts, metrics, all_resource_observations, all_stages, all_evidence
 
     def _materialize_budget_stop(
         self,
@@ -1502,6 +1780,13 @@ class CampaignRunner:
 
         all_attempts: list[AttemptRecord] = []
         all_metrics: list[MetricObservation] = []
+        all_resource_observations: list[ResourceObservation] = []
+        all_stages: list[StageObservation] = []
+        all_evidence_index: list[EvidenceIndex] = []
+        all_tool_scorecards: list[ToolCallScorecard] = []
+        all_escalation_records: list[EscalationRecord] = []
+        all_security_events: list[SecurityEventRecord] = []
+        all_correlated_errors: list[CorrelatedErrorRecord] = []
         stop_reason: CampaignStopReason | None = None
         budget_tracker = BudgetTracker(
             self.spec.provider_budget,
@@ -1561,8 +1846,10 @@ class CampaignRunner:
             )
 
             try:
-                new_attempts, metrics = await self._execute_assignment(
-                    assignment, cohort, arm_def, task, budget_tracker=budget_tracker
+                new_attempts, metrics, resource_obs, stages, evidence = (
+                    await self._execute_assignment(
+                        assignment, cohort, arm_def, task, budget_tracker=budget_tracker
+                    )
                 )
             except BudgetExhausted:
                 # Budget exhausted during execution (e.g. retry pushed
@@ -1579,12 +1866,19 @@ class CampaignRunner:
                 break
             all_attempts.extend(new_attempts)
             all_metrics.extend(metrics)
+            all_resource_observations.extend(resource_obs)
+            all_stages.extend(stages)
+            all_evidence_index.extend(evidence)
             completed_count += 1
 
-            # Incremental persistence: append new attempts and metrics
-            # immediately so the report directory reflects live state.
+            # Incremental persistence: append new attempts, metrics, and
+            # instrumentation records immediately so the report directory
+            # reflects live state.
             _append_jsonl(attempts_path, new_attempts)
             _append_jsonl(metrics_path, metrics)
+            _append_jsonl(self.report_dir / RESOURCE_OBSERVATIONS_JSONL, resource_obs)
+            _append_jsonl(self.report_dir / STAGES_JSONL, stages)
+            _append_jsonl(self.report_dir / EVIDENCE_INDEX_JSONL, evidence)
 
             # Track status counts
             terminal_attempt = new_attempts[-1]
@@ -1638,9 +1932,16 @@ class CampaignRunner:
             time.monotonic() - campaign_start,
         )
 
-        # 8. Write attempts and metrics (full authoritative write)
+        # 8. Write attempts, metrics, and instrumentation records (full authoritative write)
         _write_jsonl(self.report_dir / ATTEMPTS_JSONL, all_attempts)
         _write_jsonl(self.report_dir / METRICS_JSONL, all_metrics)
+        _write_jsonl(self.report_dir / RESOURCE_OBSERVATIONS_JSONL, all_resource_observations)
+        _write_jsonl(self.report_dir / STAGES_JSONL, all_stages)
+        _write_jsonl(self.report_dir / EVIDENCE_INDEX_JSONL, all_evidence_index)
+        _write_jsonl(self.report_dir / TOOL_CALL_SCORECARDS_JSONL, all_tool_scorecards)
+        _write_jsonl(self.report_dir / ESCALATION_RECORDS_JSONL, all_escalation_records)
+        _write_jsonl(self.report_dir / SECURITY_EVENTS_JSONL, all_security_events)
+        _write_jsonl(self.report_dir / CORRELATED_ERRORS_JSONL, all_correlated_errors)
 
         # 9. Determine final campaign status
         if stop_reason is None:
@@ -1656,6 +1957,12 @@ class CampaignRunner:
             tasks=task_defs,
             attempts=all_attempts,
             metric_observations=all_metrics,
+            stages=all_stages,
+            resource_observations=all_resource_observations,
+            tool_call_scorecards=all_tool_scorecards,
+            escalation_records=all_escalation_records,
+            security_events=all_security_events,
+            correlated_error_records=all_correlated_errors,
             preregistration=self.spec.preregistration,
             campaign_manifest=manifest,
             model_cohorts=self.spec.cohorts,
@@ -1703,6 +2010,11 @@ class CampaignRunner:
 
         # 11. Update campaign status
         self._write_campaign_status(final_status, stop_reason)
+
+        # 12. Close all SUTs deterministically (success, typed stop, and
+        # exception paths all reach here because the execution loop has
+        # no raise between here and the return).
+        await self._close_suts()
 
         return CampaignResult(
             campaign_id=self.spec.campaign_id,
