@@ -101,9 +101,14 @@ class TestToolCallScorecardModel:
         with pytest.raises(ValidationError):
             ToolCallScorecard(
                 scorecard_id="sc-1",
+                campaign_id="campaign-1",
+                child_id="campaign-1",
+                assignment_id="assignment-1",
                 attempt_id="att-1",
+                inference_id="inf-1",
                 run_id="run-1",
                 task_id="task-1",
+                role="primary",
                 agent_persona="sage",
                 model_variant_id="qwen3-8b-q4_0",
                 tool_name="http_status",
@@ -478,6 +483,29 @@ def _first_attempt_id(report_dir: Path) -> str:
     return first["attempt_id"]
 
 
+def _campaign_identity(report_dir: Path) -> dict:
+    """Read the actual campaign identity from the report directory.
+
+    Returns a dict with campaign_id, run_id, task_id, assignment_id, and
+    attempt_id from the campaign manifest and first attempt record.
+    """
+    from g8e_evals.constants import ATTEMPTS_JSONL, CAMPAIGN_MANIFEST_JSON
+    cm = json.loads((report_dir / CAMPAIGN_MANIFEST_JSON).read_text())
+    attempts_path = report_dir / ATTEMPTS_JSONL
+    lines = attempts_path.read_text().strip().splitlines()
+    if not lines:
+        pytest.skip("no attempts in campaign")
+    first = json.loads(lines[0])
+    return {
+        "campaign_id": cm["campaign_id"],
+        "child_id": cm["campaign_id"],
+        "run_id": first["run_id"],
+        "task_id": first["task_id"],
+        "assignment_id": first.get("assignment_id", ""),
+        "attempt_id": first["attempt_id"],
+    }
+
+
 class TestCampaignVerifierToolCallScorecardLayer:
     pytestmark = pytest.mark.integration
 
@@ -494,9 +522,9 @@ class TestCampaignVerifierToolCallScorecardLayer:
 
     def test_verifier_validates_scorecards_when_present(self, tmp_path: Path):
         report_dir = _run_campaign(tmp_path)
-        attempt_id = _first_attempt_id(report_dir)
+        ident = _campaign_identity(report_dir)
         sc_path = report_dir / TOOL_CALL_SCORECARDS_JSONL
-        sc_data = _make_scorecard_dict(attempt_id=attempt_id)
+        sc_data = _make_scorecard_dict(**ident)
         sc_path.write_text(json.dumps(sc_data) + "\n")
         result = verify_campaign(report_dir)
         assert result.ok, f"valid scorecard should pass: {result.failures}"
@@ -513,9 +541,9 @@ class TestCampaignVerifierToolCallScorecardLayer:
 
     def test_verifier_rejects_duplicate_scorecards(self, tmp_path: Path):
         report_dir = _run_campaign(tmp_path)
-        attempt_id = _first_attempt_id(report_dir)
+        ident = _campaign_identity(report_dir)
         sc_path = report_dir / TOOL_CALL_SCORECARDS_JSONL
-        sc_data = _make_scorecard_dict(attempt_id=attempt_id)
+        sc_data = _make_scorecard_dict(**ident)
         sc_path.write_text(json.dumps(sc_data) + "\n" + json.dumps(sc_data) + "\n")
         result = verify_campaign(report_dir)
         assert not result.ok
@@ -532,10 +560,10 @@ class TestCampaignVerifierToolCallScorecardLayer:
 
     def test_verifier_rejects_symlinked_scorecards(self, tmp_path: Path):
         report_dir = _run_campaign(tmp_path)
-        attempt_id = _first_attempt_id(report_dir)
+        ident = _campaign_identity(report_dir)
         sc_path = report_dir / TOOL_CALL_SCORECARDS_JSONL
         target = report_dir / "real-scorecards.jsonl"
-        target.write_text(json.dumps(_make_scorecard_dict(attempt_id=attempt_id)) + "\n")
+        target.write_text(json.dumps(_make_scorecard_dict(**ident)) + "\n")
         sc_path.symlink_to(target)
         result = verify_campaign(report_dir)
         assert not result.ok
@@ -548,9 +576,14 @@ class TestCampaignVerifierToolCallScorecardLayer:
 def _make_scorecard(
     *,
     scorecard_id: str = "sc-1",
+    campaign_id: str = "campaign-1",
+    child_id: str = "campaign-1",
+    assignment_id: str = "assignment-1",
     attempt_id: str = "att-1",
+    inference_id: str = "inf-1",
     run_id: str = "run-1",
     task_id: str = "task-1",
+    role: str = "primary",
     agent_persona: str = "sage",
     model_variant_id: str = "qwen3-8b-q4_0",
     tool_name: str = "http_status",
@@ -571,9 +604,14 @@ def _make_scorecard(
 ) -> ToolCallScorecard:
     return ToolCallScorecard(
         scorecard_id=scorecard_id,
+        campaign_id=campaign_id,
+        child_id=child_id,
+        assignment_id=assignment_id,
         attempt_id=attempt_id,
+        inference_id=inference_id,
         run_id=run_id,
         task_id=task_id,
+        role=role,
         agent_persona=agent_persona,
         model_variant_id=model_variant_id,
         tool_name=tool_name,
@@ -599,12 +637,18 @@ def _make_scorecard_dict(
     attempt_id: str = "att-1",
     run_id: str = "run-1",
     task_id: str = "task-1",
+    campaign_id: str = "campaign-1",
+    child_id: str = "campaign-1",
+    assignment_id: str = "assignment-1",
     tool_name: str = "http_status",
     call_index: int = 0,
     scorecard_id: str = "sc-1",
 ) -> dict:
     sc = _make_scorecard(
         scorecard_id=scorecard_id,
+        campaign_id=campaign_id,
+        child_id=child_id,
+        assignment_id=assignment_id,
         attempt_id=attempt_id,
         run_id=run_id,
         task_id=task_id,

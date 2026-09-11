@@ -13,8 +13,9 @@ IDs, benchmark IDs, dataset hashes, grader hashes, prompt serialization
 hash, task IDs, repetitions, track-to-arm assignments, model-to-tier
 assignments, fixed baseline mappings and routing policy, fully effective
 sampling/context/timeout/retry settings, warm-up and concurrency
-policies, hardware identity, environment stratum, primary metrics, unit
-of analysis, claim boundary, and the frozen model registry hash.
+policies, both orchestrator-host and provider-host environment scopes,
+primary metrics, unit of analysis, claim boundary, the frozen model
+registry hash, and the frozen expected-record policy hash.
 
 The profile is frozen and hashed before the first measured run. Any
 material change creates a new campaign revision; it does not mutate
@@ -116,9 +117,9 @@ class CampaignProfile(BaseModel):
     identities, task population, repetitions, track-to-arm and
     model-to-tier assignments, baseline mappings, routing policy,
     effective sampling/context/timeout/retry settings, warm-up and
-    concurrency policies, hardware identity, environment stratum,
-    primary metrics, unit of analysis, claim boundary, and model
-    registry hash.
+    concurrency policies, orchestrator-host and provider-host
+    environment scopes, primary metrics, unit of analysis, claim
+    boundary, model registry hash, and expected-record policy hash.
 
     The ``content_hash`` is SHA-256 over canonical JSON of the profile.
     Changing any field changes the hash and invalidates downstream
@@ -190,11 +191,19 @@ class CampaignProfile(BaseModel):
 
     hardware_identity: str = Field(
         min_length=1,
-        description="Hardware/environment identity (e.g. linux/amd64/rtx-4090).",
+        description="Orchestrator-host hardware identity (e.g. linux/amd64/rtx-4090). This describes the local machine running the campaign runner, not the remote provider hardware.",
     )
     environment_stratum: str = Field(
         min_length=1,
-        description="Environment stratum label (e.g. single-machine, multi-machine).",
+        description="Orchestrator-host environment stratum label (e.g. single-machine, multi-machine).",
+    )
+    provider_hardware_identity: str = Field(
+        default="unavailable",
+        description="Provider-host hardware identity. Attested when the remote provider exposes hardware metadata; 'unavailable' when the remote boundary does not expose it. Never copied from the orchestrator-host identity.",
+    )
+    provider_environment_stratum: str = Field(
+        default="unavailable",
+        description="Provider-host environment stratum label. Attested when the remote provider exposes environment metadata; 'unavailable' when the remote boundary does not expose it.",
     )
 
     primary_metrics: list[str] = Field(
@@ -210,6 +219,11 @@ class CampaignProfile(BaseModel):
     model_registry_hash: str = Field(
         min_length=64, max_length=64,
         description="SHA-256 of the frozen model registry.",
+    )
+    required_record_policy_hash: str = Field(
+        default="34b598bec81e407060fdcf3e3d9fc35c3ba6634487481fc53cf11cae20b031f6",
+        min_length=64, max_length=64,
+        description="SHA-256 of the frozen expected-record policy that declares applicability and exact cardinality or derivation rules by suite/scenario/attempt/inference. The default is the hash of 'no_required_record_policy_v1' for Phase 1; Beacon's Phase 2 ExpectedRecordPolicy replaces it.",
     )
 
     content_hash: str = Field(

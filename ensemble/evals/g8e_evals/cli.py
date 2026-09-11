@@ -51,6 +51,7 @@ from g8e_evals.graders import (
 from g8e_evals.evidence import EvidenceEncryptionKey, encrypt_evidence_artifact, load_evidence_encryption_key
 from g8e_evals.harness import BindingType, LLMRoleConfig, ReceiptEvidence, RowResult, SUTConfig, Score
 from g8e_evals.stages import EvidenceArtifact, normalize_attempt_evidence
+from g8e_evals.profile import CampaignProfile
 from g8e_evals.schema import (
     ArmManifestEntry,
     ArtifactLeakageObservation,
@@ -99,6 +100,7 @@ from g8e_evals.schema import (
     TokenTTLExpiryObservation,
     TokenPersistenceFailureObservation,
     VerificationStatus,
+    SourceBuildProvenance,
 )
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
 from g8e_evals.preflight import (
@@ -695,6 +697,62 @@ def _derive_model_tag(cohort_id: str, model_tag_map: dict[str, str]) -> str:
     return f"{family}:{size}" if sep else stripped
 
 
+def validate_campaign_identity(
+    *,
+    campaign_id: str,
+    campaign_profile: CampaignProfile,
+    gold_set_task_ids: list[str],
+    task_slice_in_use: bool,
+) -> None:
+    """Reject identity mismatches before report-directory creation.
+
+    Checks that ``--campaign-id`` matches ``campaign_profile.campaign_id``
+    and, when no task slice is in use, that the profile's ``task_ids``
+    match the loaded gold-set task IDs exactly (same set, same order).
+    A task slice (``--task-offset``/``--task-limit``) intentionally
+    selects a subset, so the task_id check is skipped when a slice is in
+    use.
+
+    Raises ``ValueError`` on any mismatch.
+    """
+    if campaign_id != campaign_profile.campaign_id:
+        raise ValueError(
+            f"campaign_id mismatch: --campaign-id '{campaign_id}' does not "
+            f"match campaign_profile.campaign_id '{campaign_profile.campaign_id}'"
+        )
+    if not task_slice_in_use:
+        profile_task_ids = list(campaign_profile.task_ids)
+        if gold_set_task_ids != profile_task_ids:
+            raise ValueError(
+                f"task_id mismatch: the profile's task_ids {profile_task_ids} "
+                f"do not match the loaded gold-set task IDs {gold_set_task_ids}. "
+                "Use --task-offset/--task-limit to select a subset, or update "
+                "the profile to match the gold set."
+            )
+
+
+def load_source_build_provenance_or_reject(
+    *,
+    is_production_posture: bool,
+) -> SourceBuildProvenance | None:
+    """Load source/build provenance from environment variables.
+
+    Production-posture runs (the ``campaign run`` path) require source/build
+    provenance and fail before execution when it is unavailable. Non-production
+    runs may omit provenance entirely; this function returns ``None`` when
+    ``is_production_posture`` is False and no provenance is supplied.
+
+    Raises ``PreflightError`` when production-posture provenance is missing
+    or malformed.
+    """
+    if not is_production_posture:
+        source_revision = os.environ.get("G8E_EVALS_SOURCE_REVISION", "").strip()
+        if not source_revision:
+            return None
+        return _load_source_build_provenance_from_env()
+    return _load_source_build_provenance_from_env()
+
+
 @main.group(name="campaign")
 def campaign():
     """Campaign subcommands for multi-arm, multi-cohort evaluation.
@@ -729,7 +787,7 @@ def campaign():
 @click.option("--model-tags", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
               help="Path to a JSON file mapping cohort IDs to provider model tags (e.g. {\"cohort-granite-3.3-8b\": \"granite3.3:8b\"}). When omitted, the model tag is derived from the cohort ID by removing the 'cohort-' prefix and replacing the last hyphen with a colon.")
 @click.option("--profile", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
-              help="Path to a JSON campaign profile file. When provided with --models, cohorts are derived from the registry and CampaignBinding is populated on every RunManifest.")
+              help="Path to a JSON campaign profile file. When provided with --models, cohorts are derived from the registry and the report-level CampaignBinding is populated on the RunManifest.")
 @click.option("--models", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
               help="Path to a JSON model registry file. When provided with --profile, cohorts are derived from the registry and CampaignBinding is populated on every RunManifest.")
 @click.option("--g8ee-url", envvar="G8E_G8EE_URL", default=None,
@@ -809,6 +867,18 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
             campaign_profile.validate_against_registry(model_registry)
         except ValueError as e:
             raise click.UsageError(f"profile validation failed: {e}") from e
+        # Reject identity mismatches before report-directory creation.
+        # The campaign run command is production-posture by definition.
+        task_slice_in_use = task_offset > 0 or task_limit is not None
+        try:
+            validate_campaign_identity(
+                campaign_id=campaign_id,
+                campaign_profile=campaign_profile,
+                gold_set_task_ids=[t.id for t in tasks],
+                task_slice_in_use=task_slice_in_use,
+            )
+        except ValueError as e:
+            raise click.UsageError(f"identity validation failed: {e}") from e
         cohorts, cohort_variant_map = derive_cohorts_from_registry(campaign_profile, model_registry)
         if not cohorts:
             raise click.UsageError("no runnable variants found in the model registry for the profile's generative_variant_ids")
@@ -880,6 +950,17 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         raise click.UsageError(f"suite '{suite}' has no grader factory; cannot run campaign")
     grader = suite_spec.grader_factory()
 
+    # The campaign run command is production-posture by definition: it
+    # calls live providers. Load source/build provenance from environment
+    # variables set by the trusted build system or CI pipeline. Reject
+    # before execution when provenance is absent or malformed.
+    try:
+        source_build_provenance = load_source_build_provenance_or_reject(
+            is_production_posture=True,
+        )
+    except _PreflightError as e:
+        raise click.UsageError(f"source/build provenance required for campaign run: {e}") from e
+
     spec = CampaignSpec(
         campaign_id=campaign_id,
         release_version=release_version,
@@ -896,6 +977,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         retry_policy=retry_policy,
         randomization_seed=seed,
         provider_budget=provider_budget,
+        source_build_provenance=source_build_provenance,
     )
 
     # The campaign command uses the suite registry's grader factory and
@@ -1207,6 +1289,176 @@ def campaign_plan(profile: Path, models: Path):
     for position, aid in enumerate(run_order):
         console.print(f"    [{position}] {aid}")
     console.print("  [green]status[/green] planned")
+
+
+@main.group(name="campaign-set")
+def campaign_set():
+    """Campaign-set subcommands for the expanded IFEval four-child campaign.
+
+    The campaign-set group provides ``plan``, ``validate``, and ``verify``
+    subcommands. ``plan`` produces a deterministic dry-run output showing
+    exact per-child and total assignment counts. ``validate`` validates a
+    campaign-set plan and index against each other. ``verify`` runs the
+    aggregate verifier across four child report directories.
+    """
+
+
+@campaign_set.command(name="plan")
+@click.option("--plan", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
+              help="Path to a JSON campaign-set plan file.")
+def campaign_set_plan(plan: Path):
+    """Produce a deterministic dry-run plan for a campaign set.
+
+    Shows exact per-child assignment counts and the total assignment
+    count without making provider calls or reading report directories.
+    The plan is deterministic: the same plan file always produces the
+    same output.
+    """
+    from g8e_evals.campaign_set import compute_dry_run_plan, load_campaign_set_plan
+
+    try:
+        set_plan = load_campaign_set_plan(plan)
+    except ValidationError as e:
+        raise click.UsageError(f"could not parse campaign-set plan {plan}: {e}") from e
+    except OSError as e:
+        raise click.UsageError(f"could not read campaign-set plan {plan}: {e}") from e
+
+    dry = compute_dry_run_plan(set_plan)
+    console = Console()
+    console.print(f"[cyan]Campaign-set plan[/cyan] {dry['set_id']}")
+    console.print(f"  [green]version[/green] {dry['set_version']}")
+    console.print(f"  [green]parent_campaign_id[/green] {dry['parent_campaign_id']}")
+    console.print(f"  [green]parent_campaign_revision[/green] {dry['parent_campaign_revision']}")
+    console.print(f"  [green]child_count[/green] {dry['child_count']}")
+    console.print(f"  [green]total_tasks[/green] {dry['total_tasks']}")
+    console.print(f"  [green]repetition_count[/green] {dry['repetition_count']}")
+    console.print(f"  [green]expected_child_assignment_count[/green] {dry['expected_child_assignment_count']}")
+    console.print(f"  [green]expected_total_assignment_count[/green] {dry['expected_total_assignment_count']}")
+    console.print("  [green]children[/green]")
+    for child in dry["children"]:
+        console.print(f"    [cyan]child[/cyan] {child['child_id']}")
+        console.print(f"      [green]revision[/green] {child['child_revision']}")
+        console.print(f"      [green]partition_index[/green] {child['partition_index']}")
+        console.print(f"      [green]tasks_per_child[/green] {child['tasks_per_child']}")
+        console.print(f"      [green]expected_assignment_count[/green] {child['expected_assignment_count']}")
+    console.print(f"  [green]content_hash[/green] {dry['content_hash']}")
+    console.print("  [green]status[/green] planned")
+
+
+@campaign_set.command(name="validate")
+@click.option("--plan", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
+              help="Path to a JSON campaign-set plan file.")
+@click.option("--index", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
+              help="Path to a JSON campaign-set index file. If omitted, only the plan is validated.")
+def campaign_set_validate(plan: Path, index: Path | None):
+    """Validate a campaign-set plan and optionally its index.
+
+    Validates the plan against all D9 invariants (exactly four disjoint
+    30-task partitions, child IDs derived under the frozen identity rule,
+    expected assignment counts). When an index is provided, validates
+    that the index corresponds to the plan (set_id, set_plan_hash, child
+    IDs match).
+    """
+    from g8e_evals.campaign_set import load_campaign_set_index, load_campaign_set_plan, validate_campaign_set_index, validate_campaign_set_plan
+
+    try:
+        set_plan = load_campaign_set_plan(plan)
+    except ValidationError as e:
+        raise click.UsageError(f"could not parse campaign-set plan {plan}: {e}") from e
+    except OSError as e:
+        raise click.UsageError(f"could not read campaign-set plan {plan}: {e}") from e
+
+    try:
+        validate_campaign_set_plan(set_plan)
+    except ValueError as e:
+        raise click.ClickException(f"campaign-set plan validation failed: {e}") from e
+
+    console = Console()
+    console.print(f"[cyan]Campaign-set plan validation[/cyan] {set_plan.set_id}")
+    console.print("  [green]ok[/green] true")
+    console.print(f"  [green]child_count[/green] {len(set_plan.child_plans)}")
+    console.print(f"  [green]total_tasks[/green] {len(set_plan.population_task_ids)}")
+    console.print(f"  [green]expected_total_assignment_count[/green] {set_plan.expected_total_assignment_count}")
+
+    if index is not None:
+        try:
+            set_index = load_campaign_set_index(index)
+        except ValidationError as e:
+            raise click.UsageError(f"could not parse campaign-set index {index}: {e}") from e
+        except OSError as e:
+            raise click.UsageError(f"could not read campaign-set index {index}: {e}") from e
+
+        try:
+            validate_campaign_set_index(set_index, set_plan)
+        except ValueError as e:
+            raise click.ClickException(f"campaign-set index validation failed: {e}") from e
+
+        console.print(f"[cyan]Campaign-set index validation[/cyan] {set_index.set_id}")
+        console.print("  [green]ok[/green] true")
+        console.print(f"  [green]child_entries[/green] {len(set_index.child_index_entries)}")
+        console.print(f"  [green]total_assignment_count[/green] {set_index.total_assignment_count}")
+
+    console.print("  [green]status[/green] validated")
+
+
+@campaign_set.command(name="verify")
+@click.option("--plan", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
+              help="Path to a JSON campaign-set plan file.")
+@click.option("--index", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
+              help="Path to a JSON campaign-set index file.")
+@click.option("--child-dir", "child_dirs", type=(str, click.Path(exists=True, file_okay=False, path_type=Path)),
+              multiple=True, required=True,
+              help="Child ID and report directory path pair. Repeat for each child.")
+def campaign_set_verify(plan: Path, index: Path, child_dirs: list[tuple[str, Path]]):
+    """Verify a complete campaign set: each child, then aggregate coverage.
+
+    Runs the offline campaign verifier on each child report directory,
+    then proves assignment uniqueness and complete coverage across all
+    children. Emits a typed AggregateVerificationResult. Exits non-zero
+    on any failure.
+    """
+    from g8e_evals.campaign_set import load_campaign_set_index, load_campaign_set_plan, verify_campaign_set_aggregate
+
+    try:
+        set_plan = load_campaign_set_plan(plan)
+    except ValidationError as e:
+        raise click.UsageError(f"could not parse campaign-set plan {plan}: {e}") from e
+    except OSError as e:
+        raise click.UsageError(f"could not read campaign-set plan {plan}: {e}") from e
+
+    try:
+        set_index = load_campaign_set_index(index)
+    except ValidationError as e:
+        raise click.UsageError(f"could not parse campaign-set index {index}: {e}") from e
+    except OSError as e:
+        raise click.UsageError(f"could not read campaign-set index {index}: {e}") from e
+
+    child_report_dirs: dict[str, Path] = {}
+    for child_id, report_dir in child_dirs:
+        child_report_dirs[child_id] = report_dir
+
+    result = verify_campaign_set_aggregate(set_plan, set_index, child_report_dirs)
+
+    console = Console()
+    console.print(f"[cyan]Campaign-set verification[/cyan] {result.set_id}")
+    console.print(f"  [green]ok[/green] {'true' if result.ok else 'false'}")
+    console.print(f"  [green]set_plan_hash[/green] {result.set_plan_hash}")
+    console.print(f"  [green]total_assignments_verified[/green] {result.total_assignments_verified}")
+    console.print(f"  [green]assignment_uniqueness_ok[/green] {'true' if result.assignment_uniqueness_ok else 'false'}")
+    console.print(f"  [green]coverage_ok[/green] {'true' if result.coverage_ok else 'false'}")
+    console.print("  [green]child_results[/green]")
+    for cr in result.child_results:
+        status = "ok" if cr.ok else "FAILED"
+        console.print(f"    [{status}] {cr.child_id}: {cr.assignment_count} assignments")
+        if cr.failures:
+            for f in cr.failures:
+                console.print(f"      [red]-[/red] {f}")
+    if result.failures:
+        console.print(f"  [red]aggregate_failures[/red] {len(result.failures)}")
+        for f in result.failures:
+            console.print(f"    [red]-[/red] {f}")
+        raise click.ClickException(f"campaign-set verification failed: {len(result.failures)} failure(s)")
+    console.print("  [green]status[/green] verified")
 
 
 async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None, effective_sampling: SamplingSettings | None = None, seed_support: str = "unknown"):

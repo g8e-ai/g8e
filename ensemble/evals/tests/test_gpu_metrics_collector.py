@@ -31,6 +31,7 @@ import pytest
 from pydantic import ValidationError
 
 from g8e_evals.gpu import GpuMetricsCollector, GpuSnapshot
+from g8e_evals.index import MeasurementAvailability, MeasurementScope, UnavailableMeasurement
 
 
 pytestmark = pytest.mark.unit
@@ -313,10 +314,19 @@ class TestGpuMetricsCollectorIntegrationWithObservation:
         snap = collector.snapshot()
 
         obs = ResourceObservation(
+            campaign_id="campaign-1",
+            child_id="campaign-1",
             run_id="run-1",
+            assignment_id="assignment-1",
+            attempt_id="att-1",
+            inference_id="inf-1",
+            role="primary",
             model_variant_id="v1",
-            task_block="task-1",
-            hardware_identity="linux/amd64/rtx-4090",
+            task_id="task-1",
+            orchestrator_scope="linux/amd64/cpu",
+            provider_scope="linux/amd64/rtx-4090",
+            observation_boundary="provider_call",
+            clock_domain="monotonic",
             collection_tool=f"psutil-5.9+{collector.collection_tool()}",
             source_evidence_hash="a" * 64,
             model_load_time_seconds=10.0,
@@ -329,6 +339,44 @@ class TestGpuMetricsCollectorIntegrationWithObservation:
             gpu_temperature_celsius=snap.gpu_temperature_celsius,
             gpu_power_draw_watts=snap.gpu_power_draw_watts,
             gpu_clock_mhz=snap.gpu_clock_mhz,
+            unavailable_measurements=[
+                UnavailableMeasurement(
+                    field_name="peak_accelerator_memory_bytes",
+                    availability=MeasurementAvailability.UNAVAILABLE,
+                    scope=MeasurementScope.PROVIDER_REMOTE,
+                    reason="not measured",
+                ),
+                UnavailableMeasurement(
+                    field_name="measured_energy_joules",
+                    availability=MeasurementAvailability.UNAVAILABLE,
+                    scope=MeasurementScope.PROVIDER_REMOTE,
+                    reason="not measured",
+                ),
+                UnavailableMeasurement(
+                    field_name="output_throughput_tokens_per_second",
+                    availability=MeasurementAvailability.UNAVAILABLE,
+                    scope=MeasurementScope.PROVIDER_REMOTE,
+                    reason="not measured",
+                ),
+                UnavailableMeasurement(
+                    field_name="hidden_reasoning_throughput_tokens_per_second",
+                    availability=MeasurementAvailability.UNAVAILABLE,
+                    scope=MeasurementScope.PROVIDER_REMOTE,
+                    reason="not measured",
+                ),
+                UnavailableMeasurement(
+                    field_name="time_to_first_token_seconds",
+                    availability=MeasurementAvailability.UNAVAILABLE,
+                    scope=MeasurementScope.PROVIDER_REMOTE,
+                    reason="not measured",
+                ),
+                UnavailableMeasurement(
+                    field_name="generation_duration_seconds",
+                    availability=MeasurementAvailability.UNAVAILABLE,
+                    scope=MeasurementScope.PROVIDER_REMOTE,
+                    reason="not measured",
+                ),
+            ],
         )
         assert obs.accelerator_memory_before_bytes == 2_000_000_000
         assert obs.gpu_utilization_percent == 87.0

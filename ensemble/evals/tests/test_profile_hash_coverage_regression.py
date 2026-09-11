@@ -114,6 +114,8 @@ def _make_profile(
     concurrency: int = 1,
     hardware_identity: str = "linux/amd64/rtx-4090",
     environment_stratum: str = "single-machine",
+    provider_hardware_identity: str = "unavailable",
+    provider_environment_stratum: str = "unavailable",
     primary_metrics: list[str] | None = None,
     unit_of_analysis: str = "task",
     claim_boundary: ClaimBoundary = ClaimBoundary.DESCRIPTIVE_ONLY,
@@ -124,9 +126,17 @@ def _make_profile(
     track_arm_assignments: list[TrackArmAssignment] | None = None,
     model_tier_assignments: list[ModelTierAssignment] | None = None,
     model_registry_hash: str = _VALID_HASH,
+    required_record_policy_hash: str = "34b598bec81e407060fdcf3e3d9fc35c3ba6634487481fc53cf11cae20b031f6",
     created_at: str = "2026-09-10T00:00:00Z",
     lifecycle_status: CampaignLifecycleStatus = CampaignLifecycleStatus.DRAFT,
     purpose: str = "46-model generative comparison campaign",
+    campaign_id: str = "generative-campaign-v1",
+    campaign_revision: str = "1",
+    schema_version: str = CAMPAIGN_PROFILE_VERSION,
+    benchmark_ids: list[str] | None = None,
+    dataset_hashes: list[str] | None = None,
+    grader_hashes: list[str] | None = None,
+    repetitions: int = 3,
 ) -> CampaignProfile:
     if generative_variant_ids is None:
         generative_variant_ids = ["qwen3-8b-q4_0"]
@@ -149,20 +159,26 @@ def _make_profile(
             "assistant": "granite3.3:8b",
             "lite": "qwen3:0.6b",
         }
+    if benchmark_ids is None:
+        benchmark_ids = ["ifeval_subset"]
+    if dataset_hashes is None:
+        dataset_hashes = [_VALID_HASH]
+    if grader_hashes is None:
+        grader_hashes = [_VALID_HASH]
     temp = CampaignProfile.model_construct(
-        campaign_id="generative-campaign-v1",
-        campaign_revision="1",
-        schema_version=CAMPAIGN_PROFILE_VERSION,
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        schema_version=schema_version,
         purpose=purpose,
         created_at=created_at,
         lifecycle_status=lifecycle_status,
         generative_variant_ids=generative_variant_ids,
-        benchmark_ids=["ifeval_subset"],
-        dataset_hashes=[_VALID_HASH],
-        grader_hashes=[_VALID_HASH],
+        benchmark_ids=benchmark_ids,
+        dataset_hashes=dataset_hashes,
+        grader_hashes=grader_hashes,
         prompt_serialization_hash=prompt_serialization_hash,
         task_ids=task_ids,
-        repetitions=3,
+        repetitions=repetitions,
         track_arm_assignments=track_arm_assignments,
         model_tier_assignments=model_tier_assignments,
         baseline_tier_mappings=baseline_tier_mappings,
@@ -178,27 +194,30 @@ def _make_profile(
         concurrency=concurrency,
         hardware_identity=hardware_identity,
         environment_stratum=environment_stratum,
+        provider_hardware_identity=provider_hardware_identity,
+        provider_environment_stratum=provider_environment_stratum,
         primary_metrics=primary_metrics,
         unit_of_analysis=unit_of_analysis,
         claim_boundary=claim_boundary,
         model_registry_hash=model_registry_hash,
+        required_record_policy_hash=required_record_policy_hash,
         content_hash="0" * 64,
     )
     ch = compute_campaign_profile_hash(temp)
     return CampaignProfile(
-        campaign_id="generative-campaign-v1",
-        campaign_revision="1",
-        schema_version=CAMPAIGN_PROFILE_VERSION,
+        campaign_id=campaign_id,
+        campaign_revision=campaign_revision,
+        schema_version=schema_version,
         purpose=purpose,
         created_at=created_at,
         lifecycle_status=lifecycle_status,
         generative_variant_ids=generative_variant_ids,
-        benchmark_ids=["ifeval_subset"],
-        dataset_hashes=[_VALID_HASH],
-        grader_hashes=[_VALID_HASH],
+        benchmark_ids=benchmark_ids,
+        dataset_hashes=dataset_hashes,
+        grader_hashes=grader_hashes,
         prompt_serialization_hash=prompt_serialization_hash,
         task_ids=task_ids,
-        repetitions=3,
+        repetitions=repetitions,
         track_arm_assignments=track_arm_assignments,
         model_tier_assignments=model_tier_assignments,
         baseline_tier_mappings=baseline_tier_mappings,
@@ -214,10 +233,13 @@ def _make_profile(
         concurrency=concurrency,
         hardware_identity=hardware_identity,
         environment_stratum=environment_stratum,
+        provider_hardware_identity=provider_hardware_identity,
+        provider_environment_stratum=provider_environment_stratum,
         primary_metrics=primary_metrics,
         unit_of_analysis=unit_of_analysis,
         claim_boundary=claim_boundary,
         model_registry_hash=model_registry_hash,
+        required_record_policy_hash=required_record_policy_hash,
         content_hash=ch,
     )
 
@@ -450,4 +472,199 @@ class TestProfileHashOmitsPurpose:
         profile_b = _make_profile(purpose="31-model IFEval expanded campaign")
         assert profile_a.content_hash != profile_b.content_hash, (
             "purpose must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsCampaignId:
+    """The hash does not cover campaign_id."""
+
+    def test_changing_campaign_id_changes_hash(self):
+        profile_a = _make_profile(campaign_id="generative-campaign-v1")
+        profile_b = _make_profile(campaign_id="generative-campaign-v2")
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "campaign_id must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsCampaignRevision:
+    """The hash does not cover campaign_revision."""
+
+    def test_changing_campaign_revision_changes_hash(self):
+        profile_a = _make_profile(campaign_revision="1")
+        profile_b = _make_profile(campaign_revision="2")
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "campaign_revision must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsSchemaVersion:
+    """The hash does not cover schema_version."""
+
+    def test_changing_schema_version_changes_hash(self):
+        profile_a = _make_profile(schema_version="1.0.0")
+        profile_b = _make_profile(schema_version="1.1.0")
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "schema_version must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsBenchmarkIds:
+    """The hash does not cover benchmark_ids."""
+
+    def test_changing_benchmark_ids_changes_hash(self):
+        profile_a = _make_profile(benchmark_ids=["ifeval_subset"])
+        profile_b = _make_profile(benchmark_ids=["ifeval_subset", "ifeval_expanded"])
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "benchmark_ids must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsDatasetHashes:
+    """The hash does not cover dataset_hashes."""
+
+    def test_changing_dataset_hashes_changes_hash(self):
+        profile_a = _make_profile(dataset_hashes=["a" * 64])
+        profile_b = _make_profile(dataset_hashes=["b" * 64])
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "dataset_hashes must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsGraderHashes:
+    """The hash does not cover grader_hashes."""
+
+    def test_changing_grader_hashes_changes_hash(self):
+        profile_a = _make_profile(grader_hashes=["a" * 64])
+        profile_b = _make_profile(grader_hashes=["b" * 64])
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "grader_hashes must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsGenerativeVariantIds:
+    """The hash does not cover generative_variant_ids."""
+
+    def test_changing_generative_variant_ids_changes_hash(self):
+        profile_a = _make_profile(generative_variant_ids=["qwen3-8b-q4_0"])
+        profile_b = _make_profile(generative_variant_ids=["qwen3-8b-q4_0", "granite-33-8b-instruct"])
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "generative_variant_ids must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsRepetitions:
+    """The hash does not cover repetitions."""
+
+    def test_changing_repetitions_changes_hash(self):
+        profile_a = _make_profile(repetitions=3)
+        profile_b = _make_profile(repetitions=5)
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "repetitions must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsTrackArmAssignments:
+    """The hash does not cover track_arm_assignments."""
+
+    def test_changing_track_arm_assignments_changes_hash(self):
+        profile_a = _make_profile(
+            track_arm_assignments=[
+                TrackArmAssignment(track=CampaignTrack.DIRECT, arm_id="direct"),
+                TrackArmAssignment(track=CampaignTrack.TIER_FITNESS, arm_id="ensemble_ungoverned"),
+            ]
+        )
+        profile_b = _make_profile(
+            track_arm_assignments=[
+                TrackArmAssignment(track=CampaignTrack.DIRECT, arm_id="direct"),
+                TrackArmAssignment(track=CampaignTrack.TIER_FITNESS, arm_id="doctrine"),
+            ]
+        )
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "track_arm_assignments must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsModelTierAssignments:
+    """The hash does not cover model_tier_assignments."""
+
+    def test_changing_model_tier_assignments_changes_hash(self):
+        profile_a = _make_profile(
+            model_tier_assignments=[
+                ModelTierAssignment(variant_id="qwen3-8b-q4_0", target_tier="primary"),
+            ]
+        )
+        profile_b = _make_profile(
+            model_tier_assignments=[
+                ModelTierAssignment(variant_id="qwen3-8b-q4_0", target_tier="assistant"),
+            ]
+        )
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "model_tier_assignments must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsModelRegistryHash:
+    """The hash does not cover model_registry_hash."""
+
+    def test_changing_model_registry_hash_changes_hash(self):
+        profile_a = _make_profile(model_registry_hash="a" * 64)
+        profile_b = _make_profile(model_registry_hash="b" * 64)
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "model_registry_hash must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsProviderHardwareIdentity:
+    """The hash does not cover provider_hardware_identity."""
+
+    def test_changing_provider_hardware_identity_changes_hash(self):
+        profile_a = _make_profile(provider_hardware_identity="unavailable")
+        profile_b = _make_profile(provider_hardware_identity="linux/amd64/a100")
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "provider_hardware_identity must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsProviderEnvironmentStratum:
+    """The hash does not cover provider_environment_stratum."""
+
+    def test_changing_provider_environment_stratum_changes_hash(self):
+        profile_a = _make_profile(provider_environment_stratum="unavailable")
+        profile_b = _make_profile(provider_environment_stratum="single-gpu")
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "provider_environment_stratum must participate in the profile hash"
+        )
+
+
+class TestProfileHashOmitsRequiredRecordPolicyHash:
+    """The hash does not cover required_record_policy_hash."""
+
+    def test_changing_required_record_policy_hash_changes_hash(self):
+        profile_a = _make_profile(required_record_policy_hash="34b598bec81e407060fdcf3e3d9fc35c3ba6634487481fc53cf11cae20b031f6")
+        profile_b = _make_profile(required_record_policy_hash="1" * 64)
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "required_record_policy_hash must participate in the profile hash"
+        )
+
+
+class TestProfileHashDistinctFromOrchestratorScope:
+    """Provider and orchestrator hardware identities are distinct scopes.
+
+    The provider hardware identity is never copied from the orchestrator
+    identity. A profile that sets both to the same value must produce a
+    different hash from one where the provider identity is 'unavailable',
+    proving the two fields are independently bound.
+    """
+
+    def test_provider_identity_same_as_orchestrator_differs_from_unavailable(self):
+        profile_a = _make_profile(
+            hardware_identity="linux/amd64/rtx-4090",
+            provider_hardware_identity="unavailable",
+        )
+        profile_b = _make_profile(
+            hardware_identity="linux/amd64/rtx-4090",
+            provider_hardware_identity="linux/amd64/rtx-4090",
+        )
+        assert profile_a.content_hash != profile_b.content_hash, (
+            "provider_hardware_identity must be independently bound, not copied from hardware_identity"
         )

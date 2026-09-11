@@ -160,7 +160,11 @@ class TestCorrelatedErrorRecordModel:
         with pytest.raises(ValidationError):
             CorrelatedErrorRecord(
                 record_id="ce-1",
+                campaign_id="campaign-1",
+                child_id="campaign-1",
+                assignment_id="assignment-1",
                 attempt_id="att-1",
+                inference_id="inf-1",
                 run_id="run-1",
                 task_id="task-1",
                 agent_persona="sage",
@@ -747,6 +751,25 @@ def _first_attempt_id(report_dir: Path) -> str:
     return first["attempt_id"]
 
 
+def _campaign_identity(report_dir: Path) -> dict:
+    """Read the actual campaign identity from the report directory."""
+    from g8e_evals.constants import ATTEMPTS_JSONL, CAMPAIGN_MANIFEST_JSON
+    cm = json.loads((report_dir / CAMPAIGN_MANIFEST_JSON).read_text())
+    attempts_path = report_dir / ATTEMPTS_JSONL
+    lines = attempts_path.read_text().strip().splitlines()
+    if not lines:
+        pytest.skip("no attempts in campaign")
+    first = json.loads(lines[0])
+    return {
+        "campaign_id": cm["campaign_id"],
+        "child_id": cm["campaign_id"],
+        "run_id": first["run_id"],
+        "task_id": first["task_id"],
+        "assignment_id": first.get("assignment_id", ""),
+        "attempt_id": first["attempt_id"],
+    }
+
+
 class TestCampaignVerifierCorrelatedErrorsLayer:
     pytestmark = pytest.mark.integration
 
@@ -763,9 +786,9 @@ class TestCampaignVerifierCorrelatedErrorsLayer:
 
     def test_verifier_validates_correlated_errors_when_present(self, tmp_path: Path):
         report_dir = _run_campaign(tmp_path)
-        attempt_id = _first_attempt_id(report_dir)
+        ident = _campaign_identity(report_dir)
         ce_path = report_dir / CORRELATED_ERRORS_JSONL
-        ce_data = _make_record_dict(attempt_id=attempt_id)
+        ce_data = _make_record_dict(**ident)
         ce_path.write_text(json.dumps(ce_data) + "\n")
         result = verify_campaign(report_dir)
         assert result.ok, f"valid correlated error record should pass: {result.failures}"
@@ -782,9 +805,9 @@ class TestCampaignVerifierCorrelatedErrorsLayer:
 
     def test_verifier_rejects_duplicate_correlated_errors(self, tmp_path: Path):
         report_dir = _run_campaign(tmp_path)
-        attempt_id = _first_attempt_id(report_dir)
+        ident = _campaign_identity(report_dir)
         ce_path = report_dir / CORRELATED_ERRORS_JSONL
-        ce_data = _make_record_dict(attempt_id=attempt_id)
+        ce_data = _make_record_dict(**ident)
         ce_path.write_text(json.dumps(ce_data) + "\n" + json.dumps(ce_data) + "\n")
         result = verify_campaign(report_dir)
         assert not result.ok
@@ -801,10 +824,10 @@ class TestCampaignVerifierCorrelatedErrorsLayer:
 
     def test_verifier_rejects_symlinked_correlated_errors(self, tmp_path: Path):
         report_dir = _run_campaign(tmp_path)
-        attempt_id = _first_attempt_id(report_dir)
+        ident = _campaign_identity(report_dir)
         ce_path = report_dir / CORRELATED_ERRORS_JSONL
         target = report_dir / "real-correlated-errors.jsonl"
-        target.write_text(json.dumps(_make_record_dict(attempt_id=attempt_id)) + "\n")
+        target.write_text(json.dumps(_make_record_dict(**ident)) + "\n")
         ce_path.symlink_to(target)
         result = verify_campaign(report_dir)
         assert not result.ok
@@ -817,7 +840,11 @@ class TestCampaignVerifierCorrelatedErrorsLayer:
 def _make_record(
     *,
     record_id: str = "ce-1",
+    campaign_id: str = "campaign-1",
+    child_id: str = "campaign-1",
+    assignment_id: str = "assignment-1",
     attempt_id: str = "att-1",
+    inference_id: str = "inf-1",
     run_id: str = "run-1",
     task_id: str = "task-1",
     agent_persona: str = "sage",
@@ -832,7 +859,11 @@ def _make_record(
 ) -> CorrelatedErrorRecord:
     return CorrelatedErrorRecord(
         record_id=record_id,
+        campaign_id=campaign_id,
+        child_id=child_id,
+        assignment_id=assignment_id,
         attempt_id=attempt_id,
+        inference_id=inference_id,
         run_id=run_id,
         task_id=task_id,
         agent_persona=agent_persona,
@@ -852,10 +883,16 @@ def _make_record_dict(
     attempt_id: str = "att-1",
     run_id: str = "run-1",
     task_id: str = "task-1",
+    campaign_id: str = "campaign-1",
+    child_id: str = "campaign-1",
+    assignment_id: str = "assignment-1",
     record_id: str = "ce-1",
 ) -> dict:
     ce = _make_record(
         record_id=record_id,
+        campaign_id=campaign_id,
+        child_id=child_id,
+        assignment_id=assignment_id,
         attempt_id=attempt_id,
         run_id=run_id,
         task_id=task_id,

@@ -5,15 +5,16 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Tier 2 integration tests for CampaignBinding population from
-CampaignProfile and ModelRegistry.
+"""Tier 2 integration tests for report-level CampaignBinding population
+from CampaignProfile and ModelRegistry.
 
 Verifies that the CampaignRunner populates RunManifest.campaign_binding
-with correct backend artifact identity, tokenizer template identity,
-and campaign-level hashes when a CampaignProfile and ModelRegistry are
-provided. Also verifies that the campaign verifier rejects
-artifact-identity mismatches where the provider telemetry model string
-matches but the immutable artifact or settings identity does not.
+with the parent/child campaign identity, frozen profile and registry
+hashes, expected-record policy hash, both environment scopes, and
+report role when a CampaignProfile and ModelRegistry are provided.
+Also verifies that the campaign verifier rejects authority-hash
+mismatches on the report-level binding. Per-assignment, per-model, and
+per-inference identity are not carried on the report-level binding.
 """
 
 from __future__ import annotations
@@ -69,6 +70,7 @@ from g8e_evals.registry import (
 from g8e_evals.runner import CampaignRunner, CampaignSpec
 from g8e_evals.schema import (
     CampaignTrack,
+    ReportRole,
     RunManifest,
 )
 
@@ -396,59 +398,91 @@ class TestCampaignBindingPopulation:
         registry = _make_registry()
         assert manifest.campaign_binding.model_registry_hash == registry.content_hash
 
-    def test_campaign_binding_has_correct_variant_id(self, tmp_path: Path):
-        """CampaignBinding carries the model variant ID from the cohort-variant mapping."""
+    def test_campaign_binding_has_required_record_policy_hash(self, tmp_path: Path):
+        """CampaignBinding carries the frozen expected-record policy hash from the profile."""
         report_dir = _run_campaign_with_binding(tmp_path)
         manifest = RunManifest.model_validate_json(
             (report_dir / MANIFEST_JSON).read_text()
         )
         assert manifest.campaign_binding is not None
-        assert manifest.campaign_binding.model_variant_id == _VARIANT_ID
+        registry = _make_registry()
+        profile = _make_profile(registry.content_hash)
+        assert manifest.campaign_binding.required_record_policy_hash == profile.required_record_policy_hash
 
-    def test_campaign_binding_has_backend_artifact_identity(self, tmp_path: Path):
-        """CampaignBinding carries BackendArtifactIdentity from the registry variant."""
+    def test_campaign_binding_has_single_report_role(self, tmp_path: Path):
+        """CampaignBinding for a standalone campaign has report_role SINGLE."""
         report_dir = _run_campaign_with_binding(tmp_path)
         manifest = RunManifest.model_validate_json(
             (report_dir / MANIFEST_JSON).read_text()
         )
         assert manifest.campaign_binding is not None
-        bai = manifest.campaign_binding.backend_artifact_identity
-        assert bai.backend_name == "ollama"
-        assert bai.backend_version == "0.1.48"
-        assert bai.served_model_tag == "qwen3:8b"
-        assert bai.artifact_digest == _BACKEND_ARTIFACT_DIGEST
-        assert bai.artifact_bytes == 8_000_000_000
-        assert bai.quantization == "q4_0"
-        assert bai.tensor_format == "gguf"
+        assert manifest.campaign_binding.report_role == ReportRole.SINGLE
 
-    def test_campaign_binding_has_tokenizer_template_identity(self, tmp_path: Path):
-        """CampaignBinding carries TokenizerTemplateIdentity from the registry variant."""
+    def test_campaign_binding_has_no_child_campaign_id_for_single(self, tmp_path: Path):
+        """CampaignBinding for a single campaign has no child_campaign_id."""
         report_dir = _run_campaign_with_binding(tmp_path)
         manifest = RunManifest.model_validate_json(
             (report_dir / MANIFEST_JSON).read_text()
         )
         assert manifest.campaign_binding is not None
-        tti = manifest.campaign_binding.tokenizer_template_identity
-        assert tti.tokenizer_digest == _TOKENIZER_DIGEST
-        assert tti.chat_template_hash == _CHAT_TEMPLATE_HASH
+        assert manifest.campaign_binding.child_campaign_id is None
+        assert manifest.campaign_binding.child_campaign_revision is None
 
-    def test_campaign_binding_has_correct_track(self, tmp_path: Path):
-        """CampaignBinding carries the direct track from the profile."""
+    def test_campaign_binding_has_orchestrator_hardware_identity(self, tmp_path: Path):
+        """CampaignBinding carries the orchestrator-host hardware identity from the profile."""
         report_dir = _run_campaign_with_binding(tmp_path)
         manifest = RunManifest.model_validate_json(
             (report_dir / MANIFEST_JSON).read_text()
         )
         assert manifest.campaign_binding is not None
-        assert manifest.campaign_binding.track == CampaignTrack.DIRECT
+        assert manifest.campaign_binding.orchestrator_hardware_identity == "linux/amd64/rtx-4090"
 
-    def test_campaign_binding_has_correct_reasoning_mode(self, tmp_path: Path):
-        """CampaignBinding carries the reasoning mode from the registry variant."""
+    def test_campaign_binding_has_orchestrator_environment_stratum(self, tmp_path: Path):
+        """CampaignBinding carries the orchestrator-host environment stratum from the profile."""
         report_dir = _run_campaign_with_binding(tmp_path)
         manifest = RunManifest.model_validate_json(
             (report_dir / MANIFEST_JSON).read_text()
         )
         assert manifest.campaign_binding is not None
-        assert manifest.campaign_binding.reasoning_mode == "non-reasoning"
+        assert manifest.campaign_binding.orchestrator_environment_stratum == "single-machine"
+
+    def test_campaign_binding_has_provider_hardware_identity(self, tmp_path: Path):
+        """CampaignBinding carries the provider-host hardware identity from the profile."""
+        report_dir = _run_campaign_with_binding(tmp_path)
+        manifest = RunManifest.model_validate_json(
+            (report_dir / MANIFEST_JSON).read_text()
+        )
+        assert manifest.campaign_binding is not None
+        assert manifest.campaign_binding.provider_hardware_identity == "unavailable"
+
+    def test_campaign_binding_has_provider_environment_stratum(self, tmp_path: Path):
+        """CampaignBinding carries the provider-host environment stratum from the profile."""
+        report_dir = _run_campaign_with_binding(tmp_path)
+        manifest = RunManifest.model_validate_json(
+            (report_dir / MANIFEST_JSON).read_text()
+        )
+        assert manifest.campaign_binding is not None
+        assert manifest.campaign_binding.provider_environment_stratum == "unavailable"
+
+    def test_campaign_binding_does_not_carry_assignment_identity(self, tmp_path: Path):
+        """The report-level CampaignBinding does not carry per-assignment identity fields.
+
+        Assignment, model, repetition, role, and inference identities
+        remain on their own records, not on the report-level binding.
+        """
+        report_dir = _run_campaign_with_binding(tmp_path)
+        manifest = RunManifest.model_validate_json(
+            (report_dir / MANIFEST_JSON).read_text()
+        )
+        assert manifest.campaign_binding is not None
+        binding_data = json.loads((report_dir / MANIFEST_JSON).read_text())["campaign_binding"]
+        assert "assignment_id" not in binding_data
+        assert "model_variant_id" not in binding_data
+        assert "track" not in binding_data
+        assert "repetition" not in binding_data
+        assert "backend_artifact_identity" not in binding_data
+        assert "tokenizer_template_identity" not in binding_data
+        assert "reasoning_mode" not in binding_data
 
     def test_run_without_profile_has_no_campaign_binding(self, tmp_path: Path):
         """RunManifest has no CampaignBinding when profile+registry are not provided."""
@@ -467,7 +501,7 @@ class TestCampaignBindingPopulation:
         assert manifest.campaign_binding is None
 
 
-class TestCampaignVerifierArtifactIdentity:
+class TestCampaignVerifierAuthorityHashCheck:
     def test_valid_binding_passes_verification(self, tmp_path: Path):
         """A campaign with a valid CampaignBinding passes verification."""
         report_dir = _run_campaign_with_binding(tmp_path)
@@ -476,64 +510,41 @@ class TestCampaignVerifierArtifactIdentity:
         assert result.ok
         assert len(result.failures) == 0
 
-    def test_artifact_digest_mismatch_fails(self, tmp_path: Path):
-        """A campaign binding with a mismatched served model tag fails verification.
-
-        The verifier checks that the campaign binding's served_model_tag
-        matches the role_to_model mapping in the run manifest. A
-        mismatched model tag indicates the provider telemetry model
-        string does not match the declared artifact identity.
-        """
+    def test_profile_hash_mismatch_fails(self, tmp_path: Path):
+        """A campaign binding with an invalid campaign_profile_hash fails verification."""
         report_dir = _run_campaign_with_binding(tmp_path)
         manifest_path = report_dir / MANIFEST_JSON
         manifest_data = json.loads(manifest_path.read_text())
-        manifest_data["campaign_binding"]["backend_artifact_identity"]["served_model_tag"] = "wrong:tag"
+        manifest_data["campaign_binding"]["campaign_profile_hash"] = "0" * 64
         manifest_path.write_text(json.dumps(manifest_data))
         result = verify_campaign(report_dir)
         assert not result.ok
-        assert any("artifact" in f.lower() or "identity" in f.lower() or "mismatch" in f.lower() for f in result.failures)
+        assert any("campaign_profile_hash" in f.lower() for f in result.failures)
 
-    def test_served_model_tag_mismatch_fails(self, tmp_path: Path):
-        """A campaign binding with a mismatched served model tag fails verification."""
+    def test_registry_hash_mismatch_fails(self, tmp_path: Path):
+        """A campaign binding with an invalid model_registry_hash fails verification."""
         report_dir = _run_campaign_with_binding(tmp_path)
         manifest_path = report_dir / MANIFEST_JSON
         manifest_data = json.loads(manifest_path.read_text())
-        manifest_data["campaign_binding"]["backend_artifact_identity"]["served_model_tag"] = "wrong:tag"
+        manifest_data["campaign_binding"]["model_registry_hash"] = "0" * 64
         manifest_path.write_text(json.dumps(manifest_data))
         result = verify_campaign(report_dir)
         assert not result.ok
-        assert any("artifact" in f.lower() or "identity" in f.lower() or "mismatch" in f.lower() for f in result.failures)
+        assert any("model_registry_hash" in f.lower() for f in result.failures)
 
-    def test_backend_name_mismatch_fails(self, tmp_path: Path):
-        """A campaign binding with a mismatched backend name fails verification."""
+    def test_required_record_policy_hash_mismatch_fails(self, tmp_path: Path):
+        """A campaign binding with an invalid required_record_policy_hash fails verification."""
         report_dir = _run_campaign_with_binding(tmp_path)
         manifest_path = report_dir / MANIFEST_JSON
         manifest_data = json.loads(manifest_path.read_text())
-        manifest_data["campaign_binding"]["backend_artifact_identity"]["backend_name"] = "wrong-backend"
+        manifest_data["campaign_binding"]["required_record_policy_hash"] = "0" * 64
         manifest_path.write_text(json.dumps(manifest_data))
         result = verify_campaign(report_dir)
         assert not result.ok
-        assert any("artifact" in f.lower() or "identity" in f.lower() or "mismatch" in f.lower() for f in result.failures)
+        assert any("required_record_policy_hash" in f.lower() for f in result.failures)
 
-    def test_chat_template_hash_mismatch_fails(self, tmp_path: Path):
-        """A campaign binding with a mismatched backend name fails verification.
-
-        The verifier checks that the campaign binding's backend_name
-        matches the provider in the role_to_model mapping. A mismatched
-        backend name indicates the immutable artifact identity does not
-        match the provider telemetry.
-        """
-        report_dir = _run_campaign_with_binding(tmp_path)
-        manifest_path = report_dir / MANIFEST_JSON
-        manifest_data = json.loads(manifest_path.read_text())
-        manifest_data["campaign_binding"]["backend_artifact_identity"]["backend_name"] = "wrong-backend"
-        manifest_path.write_text(json.dumps(manifest_data))
-        result = verify_campaign(report_dir)
-        assert not result.ok
-        assert any("artifact" in f.lower() or "identity" in f.lower() or "mismatch" in f.lower() for f in result.failures)
-
-    def test_no_binding_does_not_fail_artifact_check(self, tmp_path: Path):
-        """A campaign without a CampaignBinding does not fail the artifact-identity check."""
+    def test_no_binding_does_not_fail_authority_check(self, tmp_path: Path):
+        """A campaign without a CampaignBinding does not fail the authority-hash check."""
         spec = _make_spec()
         runner = CampaignRunner(
             spec=spec,

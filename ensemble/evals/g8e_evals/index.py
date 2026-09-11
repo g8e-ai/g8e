@@ -43,6 +43,66 @@ _VALID_ARM_IDS = frozenset({"direct", "ensemble_ungoverned", "doctrine"})
 _RETRYABLE_STATUSES = frozenset({"infrastructure_failed"})
 
 
+class ModelRole(StrEnum):
+    """Typed model role within a heterogeneous stack.
+
+    ``PRIMARY``: The primary reasoning model (largest tier).
+    ``ASSISTANT``: The assistant model (middle tier).
+    ``LITE``: The lite model (smallest tier, e.g. triage).
+    """
+
+    PRIMARY = "primary"
+    ASSISTANT = "assistant"
+    LITE = "lite"
+
+
+class MeasurementAvailability(StrEnum):
+    """Typed availability state for a measurement field.
+
+    ``MEASURED``: The value was measured and is present.
+    ``UNAVAILABLE``: The measurement is unavailable at the observation
+    boundary (e.g. remote GPU metrics without an API).
+    ``NOT_APPLICABLE``: The measurement does not apply to this
+    configuration (e.g. GPU metrics on a CPU-only host).
+    ``WITHHELD``: The measurement was withheld for disclosure reasons.
+    """
+
+    MEASURED = "measured"
+    UNAVAILABLE = "unavailable"
+    NOT_APPLICABLE = "not_applicable"
+    WITHHELD = "withheld"
+
+
+class MeasurementScope(StrEnum):
+    """Typed scope identifying where a measurement was taken.
+
+    ``ORCHESTRATOR_LOCAL``: Measured on the orchestrator host (the host
+    running the eval CLI).
+    ``PROVIDER_REMOTE``: Measured on the remote provider host (e.g. the
+    remote Ollama server).
+    """
+
+    ORCHESTRATOR_LOCAL = "orchestrator_local"
+    PROVIDER_REMOTE = "provider_remote"
+
+
+class UnavailableMeasurement(BaseModel):
+    """Typed explanation for an unavailable measurement field.
+
+    Pairs a field name with its availability state, scope, and reason.
+    Every ``None`` measurement field on a ``ResourceObservation`` must
+    have a matching entry in ``unavailable_measurements``. A measured
+    field (non-``None``) must not have an entry.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    field_name: str = Field(min_length=1, description="Name of the unavailable measurement field.")
+    availability: MeasurementAvailability = Field(description="Typed availability state.")
+    scope: MeasurementScope = Field(description="Where the measurement would have been taken.")
+    reason: str = Field(min_length=1, description="Why the measurement is unavailable.")
+
+
 def _sha256(data: str) -> str:
     return hashlib.sha256(data.encode()).hexdigest()
 
@@ -422,63 +482,140 @@ def aggregate_metrics_by_variant(metrics: list[dict]) -> list[VariantMetricAggre
     return results
 
 
-class ResourceObservation(BaseModel):
-    """Typed resource observation bound to run, variant, task, and hardware.
+_RESOURCE_MEASUREMENT_FIELDS: tuple[str, ...] = (
+    "model_load_time_seconds",
+    "peak_resident_memory_bytes",
+    "peak_accelerator_memory_bytes",
+    "artifact_bytes",
+    "measured_energy_joules",
+    "end_to_end_latency_seconds",
+    "provider_call_latency_seconds",
+    "output_throughput_tokens_per_second",
+    "hidden_reasoning_throughput_tokens_per_second",
+    "time_to_first_token_seconds",
+    "generation_duration_seconds",
+    "accelerator_memory_before_bytes",
+    "gpu_utilization_percent",
+    "gpu_temperature_celsius",
+    "gpu_power_draw_watts",
+    "gpu_clock_mhz",
+)
 
-    Records model load time, peak resident memory, peak accelerator
-    memory, artifact bytes, measured energy, end-to-end latency,
-    provider-call latency, output throughput, and hidden reasoning
-    throughput. Every observation is bound to run ID, model variant ID,
-    task block, hardware identity, collection tool/version, and source
-    evidence hash.
+
+class ResourceObservation(BaseModel):
+    """Typed resource observation bound to campaign, report, assignment, attempt, inference, role, and task.
+
+    One resource observation per actual provider inference. A g8ee
+    scenario that invokes several role models emits several records
+    for one assignment attempt. Direct inference emits one record per
+    provider call.
+
+    Every observation binds campaign ID, child/report ID, assignment ID,
+    attempt ID, inference ID, role, model variant ID, canonical task ID,
+    orchestrator scope, provider scope, observation boundary, clock
+    domain, collection tool, and source evidence hash. The orchestrator
+    and provider environment scopes are separate identities; remote
+    provider hardware may be attested or unavailable, never copied
+    from the local CPU identity.
+
+    All numeric measurement fields are optional. ``None`` means
+    unavailable. Zero (``0`` or ``0.0``) is always a measured zero.
+    The ``unavailable_measurements`` list provides typed availability,
+    scope, and reason for every ``None`` field. Every ``None`` field
+    must have a matching ``unavailable_measurements`` entry; every
+    entry must reference a ``None`` field.
 
     Accelerator memory is a measured value, never inferred from parameter
-    count or quantization labels. When no calibrated energy source
-    exists, ``measured_energy_joules`` is ``None``.
-
-    Output throughput is reported visible output tokens divided by
-    eligible provider-call duration. Hidden reasoning throughput is
-    reported separately when the model exposes it; it is ``None`` when
-    not available.
-
-    Cold-start (model load) is separated from warm inference
-    (``time_to_first_token_seconds`` and ``generation_duration_seconds``)
-    so the load-vs-inference tradeoff is visible. GPU metrics
-    (utilization, temperature, power draw, clock) are captured via
-    ``pynvml`` when an NVIDIA GPU is present and are ``None`` otherwise.
-    ``accelerator_memory_before_bytes`` records the VRAM baseline before
-    inference so the inference-attributable delta can be computed against
-    ``peak_accelerator_memory_bytes``. All per-inference extension fields
-    default to ``None`` for backward compatibility with existing
-    observations.
+    count or quantization labels. Cold-start (model load) is separated
+    from warm inference (``time_to_first_token_seconds`` and
+    ``generation_duration_seconds``) so the load-vs-inference tradeoff
+    is visible. GPU metrics (utilization, temperature, power draw,
+    clock) are captured via ``pynvml`` when an NVIDIA GPU is present and
+    are ``None`` otherwise.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    run_id: str = Field(min_length=1, description="Run ID.")
+    # Identity bindings
+    campaign_id: str = Field(min_length=1, description="Parent campaign ID.")
+    child_id: str = Field(min_length=1, description="Child campaign ID (for campaign sets; equals campaign_id for single campaigns).")
+    run_id: str = Field(min_length=1, description="Report/run ID.")
+    assignment_id: str = Field(min_length=1, description="Campaign assignment ID.")
+    attempt_id: str = Field(min_length=1, description="Attempt ID within the assignment.")
+    inference_id: str = Field(min_length=1, description="Unique inference ID within the attempt. One observation per inference.")
+    role: ModelRole = Field(description="Model role: primary, assistant, or lite.")
     model_variant_id: str = Field(min_length=1, description="Model variant ID.")
-    task_block: str = Field(min_length=1, description="Task block identifier.")
-    hardware_identity: str = Field(min_length=1, description="Hardware identity (e.g. linux/amd64/rtx-4090).")
+    task_id: str = Field(min_length=1, description="Canonical task ID from the assignment.")
+
+    # Environment scopes (separate orchestrator and provider)
+    orchestrator_scope: str = Field(min_length=1, description="Orchestrator hardware scope (e.g. linux/amd64/cpu).")
+    provider_scope: str = Field(min_length=1, description="Provider hardware scope (e.g. linux/amd64/rtx-4090 or unavailable).")
+    observation_boundary: str = Field(min_length=1, description="What the observation covers (e.g. provider_call, model_load, task_execution).")
+    clock_domain: str = Field(min_length=1, description="Clock domain (e.g. monotonic, wall_clock).")
+
+    # Collection metadata
     collection_tool: str = Field(min_length=1, description="Collection tool and version (e.g. psutil-5.9).")
     source_evidence_hash: str = Field(min_length=64, max_length=64, description="SHA-256 of the source evidence.")
 
-    model_load_time_seconds: float = Field(ge=0.0, description="Model load time in seconds (cold start).")
-    peak_resident_memory_bytes: int = Field(ge=0, description="Peak resident memory in bytes.")
-    peak_accelerator_memory_bytes: int | None = Field(default=None, ge=0, description="Peak accelerator memory in bytes. None when not measured.")
-    artifact_bytes: int = Field(ge=0, description="Artifact file size in bytes.")
-    measured_energy_joules: float | None = Field(default=None, ge=0.0, description="Measured energy in joules. None when no calibrated source exists.")
-    end_to_end_latency_seconds: float = Field(gt=0.0, description="End-to-end task latency in seconds.")
-    provider_call_latency_seconds: float = Field(gt=0.0, description="Provider-call latency in seconds.")
-    output_throughput_tokens_per_second: float | None = Field(default=None, ge=0.0, description="Output throughput in tokens per second. None when not measured.")
-    hidden_reasoning_throughput_tokens_per_second: float | None = Field(default=None, ge=0.0, description="Hidden reasoning throughput in tokens per second. None when not available.")
+    # Measurements (all optional — None means unavailable, zero is measured)
+    model_load_time_seconds: float | None = Field(default=None, ge=0.0, description="Model load time in seconds (cold start). None when unavailable.")
+    peak_resident_memory_bytes: int | None = Field(default=None, ge=0, description="Peak resident memory in bytes. None when unavailable.")
+    peak_accelerator_memory_bytes: int | None = Field(default=None, ge=0, description="Peak accelerator memory in bytes. None when unavailable.")
+    artifact_bytes: int | None = Field(default=None, ge=0, description="Artifact file size in bytes. None when unavailable.")
+    measured_energy_joules: float | None = Field(default=None, ge=0.0, description="Measured energy in joules. None when unavailable.")
+    end_to_end_latency_seconds: float | None = Field(default=None, gt=0.0, description="End-to-end task latency in seconds. None when unavailable.")
+    provider_call_latency_seconds: float | None = Field(default=None, gt=0.0, description="Provider-call latency in seconds. None when unavailable.")
+    output_throughput_tokens_per_second: float | None = Field(default=None, ge=0.0, description="Output throughput in tokens per second. None when unavailable.")
+    hidden_reasoning_throughput_tokens_per_second: float | None = Field(default=None, ge=0.0, description="Hidden reasoning throughput in tokens per second. None when unavailable.")
+    time_to_first_token_seconds: float | None = Field(default=None, ge=0.0, description="Time to first token in seconds (warm inference start). None when unavailable.")
+    generation_duration_seconds: float | None = Field(default=None, ge=0.0, description="Generation duration in seconds (warm inference duration). None when unavailable.")
+    accelerator_memory_before_bytes: int | None = Field(default=None, ge=0, description="Accelerator memory baseline before inference in bytes. None when unavailable.")
+    gpu_utilization_percent: float | None = Field(default=None, ge=0.0, description="GPU utilization in percent. None when unavailable.")
+    gpu_temperature_celsius: float | None = Field(default=None, description="GPU temperature in degrees Celsius. None when unavailable.")
+    gpu_power_draw_watts: float | None = Field(default=None, ge=0.0, description="GPU power draw in watts. None when unavailable.")
+    gpu_clock_mhz: float | None = Field(default=None, ge=0.0, description="GPU clock in MHz. None when unavailable.")
 
-    time_to_first_token_seconds: float | None = Field(default=None, ge=0.0, description="Time to first token in seconds (warm inference start). None when not measured.")
-    generation_duration_seconds: float | None = Field(default=None, ge=0.0, description="Generation duration in seconds (warm inference duration). None when not measured.")
-    accelerator_memory_before_bytes: int | None = Field(default=None, ge=0, description="Accelerator memory baseline before inference in bytes. None when not measured.")
-    gpu_utilization_percent: float | None = Field(default=None, ge=0.0, description="GPU utilization in percent. None when not on GPU or not measured.")
-    gpu_temperature_celsius: float | None = Field(default=None, description="GPU temperature in degrees Celsius. None when not on GPU or not measured.")
-    gpu_power_draw_watts: float | None = Field(default=None, ge=0.0, description="GPU power draw in watts. None when not on GPU or not measured.")
-    gpu_clock_mhz: float | None = Field(default=None, ge=0.0, description="GPU clock in MHz. None when not on GPU or not measured.")
+    # Typed availability for unavailable measurements
+    unavailable_measurements: list[UnavailableMeasurement] = Field(
+        default_factory=list,
+        description="Typed availability, scope, and reason for every None measurement field.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_unavailable_consistency(self) -> Self:
+        unavailable_fields: set[str] = set()
+        for um in self.unavailable_measurements:
+            if um.field_name not in _RESOURCE_MEASUREMENT_FIELDS:
+                raise ValueError(
+                    f"unavailable_measurements references unknown field {um.field_name!r}; "
+                    f"valid fields: {sorted(_RESOURCE_MEASUREMENT_FIELDS)}"
+                )
+            if um.field_name in unavailable_fields:
+                raise ValueError(
+                    f"duplicate unavailable_measurement entry for field {um.field_name!r}"
+                )
+            unavailable_fields.add(um.field_name)
+
+        none_fields: set[str] = set()
+        for field_name in _RESOURCE_MEASUREMENT_FIELDS:
+            value = getattr(self, field_name)
+            if value is None:
+                none_fields.add(field_name)
+
+        missing_explanations = none_fields - unavailable_fields
+        if missing_explanations:
+            raise ValueError(
+                f"None measurement fields without unavailable_measurements entries: "
+                f"{sorted(missing_explanations)}"
+            )
+
+        extra_explanations = unavailable_fields - none_fields
+        if extra_explanations:
+            raise ValueError(
+                f"unavailable_measurements entries for non-None fields: "
+                f"{sorted(extra_explanations)}"
+            )
+        return self
 
 
 class ResourceObserverContract(BaseModel):
@@ -530,18 +667,23 @@ def validate_resource_observations(
 ) -> None:
     """Validate a list of resource observations.
 
-    Rejects duplicate (run_id, task_block, model_variant_id) tuples.
-    Each observation must be a valid ``ResourceObservation`` with all
-    required bindings. When a ``contract`` is provided, the observations
-    are validated against the contract's scope and policy.
+    Rejects duplicate ``(campaign_id, child_id, run_id, assignment_id,
+    attempt_id, inference_id)`` tuples. One observation per inference is
+    allowed; multiple observations per attempt are allowed when they
+    represent distinct inferences. Each observation must be a valid
+    ``ResourceObservation`` with all required bindings. When a
+    ``contract`` is provided, the observations are validated against
+    the contract's scope and policy.
     """
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str, str]] = set()
     for obs in observations:
-        key = (obs.run_id, obs.task_block, obs.model_variant_id)
+        key = (obs.campaign_id, obs.child_id, obs.run_id, obs.assignment_id, obs.attempt_id, obs.inference_id)
         if key in seen:
             raise ValueError(
-                f"duplicate resource observation for (run={obs.run_id!r}, "
-                f"task={obs.task_block!r}, variant={obs.model_variant_id!r})"
+                f"duplicate resource observation for (campaign={obs.campaign_id!r}, "
+                f"child={obs.child_id!r}, run={obs.run_id!r}, "
+                f"assignment={obs.assignment_id!r}, attempt={obs.attempt_id!r}, "
+                f"inference={obs.inference_id!r})"
             )
         seen.add(key)
 
@@ -582,10 +724,14 @@ __all__ = [
     "CampaignVerificationReport",
     "IndexCreationReason",
     "IndexGeneration",
+    "MeasurementAvailability",
+    "MeasurementScope",
+    "ModelRole",
     "ResourceObservation",
     "ResourceObserverContract",
     "SupersessionPolicy",
     "TierObservationRecord",
+    "UnavailableMeasurement",
     "VariantMetricAggregate",
     "aggregate_metrics_by_variant",
     "compute_index_generation_hash",

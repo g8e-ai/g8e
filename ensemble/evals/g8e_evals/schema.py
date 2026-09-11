@@ -28,6 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_valid
 from g8e.operator.v1.operator_pb2 import ActionReceipt
 from g8e.receipts import action_receipt_to_dict, parse_action_receipt
 from g8e_evals.arms import Arm, GovernancePosture
+from g8e_evals.index import ModelRole
 from g8e_evals.receipts.verify import receipt_action_type
 
 
@@ -441,35 +442,53 @@ class TokenizerTemplateIdentity(BaseModel):
     prompt_serialization_version: str = Field(default="", description="Prompt serialization format version.")
 
 
+class ReportRole(StrEnum):
+    """Role of a report within the campaign structure.
+
+    ``SINGLE``: a standalone campaign with no parent/child structure.
+    ``CHILD``: a child campaign in a campaign-set, identified by
+    ``child_campaign_id`` on the binding.
+    ``PARENT``: a parent report that aggregates accepted child reports.
+    """
+
+    SINGLE = "single"
+    CHILD = "child"
+    PARENT = "parent"
+
+
 class CampaignBinding(BaseModel):
-    """Typed campaign binding for a measured run.
+    """Report-level campaign binding for a measured run manifest.
 
-    Binds a run to its campaign identity, assignment, model variant,
-    track, target tier, repetition, frozen profile and registry hashes,
-    backend and artifact identity, tokenizer and template identity, and
-    reasoning and constrained-decoding modes. Non-campaign runs leave
-    this field None; campaign runs require every field.
+    Binds a report to its parent/child campaign identity, frozen profile
+    and registry authority, expected-record policy hash, both
+    environment scopes, and report role. Assignment, model, repetition,
+    role, and inference identities remain on their own records, not on
+    this report-level binding.
 
-    The campaign verifier rejects a run whose provider telemetry model
-    string matches while its immutable artifact or settings identity
-    does not.
+    For a single campaign, ``child_campaign_id`` and
+    ``child_campaign_revision`` are None and ``report_role`` is
+    ``SINGLE``. For a child campaign in a campaign-set, they identify
+    the child and ``report_role`` is ``CHILD``. For a parent report that
+    aggregates children, ``report_role`` is ``PARENT``.
+
+    The campaign verifier rejects a run whose bound authority hashes do
+    not match the frozen profile, registry, or expected-record policy.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    campaign_id: str = Field(min_length=1, description="Campaign identity.")
+    campaign_id: str = Field(min_length=1, description="Parent campaign identity.")
     campaign_revision: str = Field(min_length=1, description="Campaign revision identifier.")
-    assignment_id: str = Field(min_length=1, description="Campaign assignment identifier.")
-    model_variant_id: str = Field(min_length=1, description="Stable campaign model-variant ID.")
-    track: CampaignTrack = Field(description="Campaign track: direct, tier_fitness, or governed.")
-    target_tier: str | None = Field(default=None, description="Target g8ee tier for tier-fitness track; None for direct and governed tracks.")
-    repetition: int = Field(ge=0, description="Repetition index within the assignment.")
+    report_role: ReportRole = Field(description="Role of this report: single, child, or parent.")
+    child_campaign_id: str | None = Field(default=None, description="Child campaign identity for campaign-set children; None for single or parent reports.")
+    child_campaign_revision: str | None = Field(default=None, description="Child campaign revision; None for single or parent reports.")
     campaign_profile_hash: str = Field(min_length=64, max_length=64, description="SHA-256 of the frozen campaign profile.")
     model_registry_hash: str = Field(min_length=64, max_length=64, description="SHA-256 of the frozen model registry.")
-    backend_artifact_identity: BackendArtifactIdentity = Field(description="Immutable backend and artifact identity.")
-    tokenizer_template_identity: TokenizerTemplateIdentity = Field(description="Immutable tokenizer and template identity.")
-    reasoning_mode: str = Field(default="", description="Reasoning mode label (e.g. none, thinking).")
-    constrained_decoding_mode: str = Field(default="", description="Constrained decoding mode label (e.g. none, json_schema).")
+    required_record_policy_hash: str = Field(min_length=64, max_length=64, description="SHA-256 of the frozen expected-record policy.")
+    orchestrator_hardware_identity: str = Field(min_length=1, description="Orchestrator-host hardware identity (e.g. linux/amd64/rtx-4090).")
+    orchestrator_environment_stratum: str = Field(min_length=1, description="Orchestrator-host environment stratum label.")
+    provider_hardware_identity: str = Field(default="unavailable", description="Provider-host hardware identity; 'unavailable' when the remote boundary does not expose it.")
+    provider_environment_stratum: str = Field(default="unavailable", description="Provider-host environment stratum label; 'unavailable' when the remote boundary does not expose it.")
 
 
 class RunManifest(BaseModel):
@@ -3396,16 +3415,17 @@ _TOOL_CALL_SCORECARD_DIMENSIONS = frozenset(
 
 
 class ToolCallScorecard(BaseModel):
-    """Per-tool-call scorecard bound to agent persona, model variant, tool, and task.
+    """Per-tool-call scorecard bound to campaign, report, assignment, attempt, inference, role, and task.
 
     Each tool call produces one scorecard record with the 10 scorecard
     dimensions (recognition, selection, schema, semantics, permission,
     interpretation, follow-up, unnecessary, looping, recovery). Every
-    dimension is a boolean. The scorecard is bound to the agent persona
-    (e.g. sage, dash, tribunal), the model variant that produced the
-    call, the tool name, the task, the attempt, and the run so the
-    analysis can decompose tool performance by model, role, and tool
-    type.
+    dimension is a boolean. The scorecard is bound to the campaign,
+    child/report, assignment, attempt, inference, role, agent persona,
+    model variant, tool name, task, and run so the analysis can
+    decompose tool performance by model, role, and tool type and the
+    verifier can cross-check every identity against the campaign
+    binding.
 
     ``UNNECESSARY`` and ``LOOPING`` are inverted: ``True`` means the
     model avoided unnecessary calls or looping respectively. This keeps
@@ -3416,10 +3436,15 @@ class ToolCallScorecard(BaseModel):
 
     schema_version: str = SCHEMA_VERSION
     scorecard_id: str = Field(min_length=1, description="Unique scorecard identifier within the run.")
+    campaign_id: str = Field(min_length=1, description="Parent campaign ID.")
+    child_id: str = Field(min_length=1, description="Child campaign ID (equals campaign_id for single campaigns).")
+    assignment_id: str = Field(min_length=1, description="Campaign assignment ID.")
     attempt_id: str = Field(min_length=1, description="Attempt ID this scorecard belongs to.")
+    inference_id: str = Field(min_length=1, description="Inference ID within the attempt that produced this tool call.")
     run_id: str = Field(min_length=1, description="Run ID this scorecard belongs to.")
     task_id: str = Field(min_length=1, description="Task ID this scorecard belongs to.")
 
+    role: ModelRole = Field(description="Model role: primary, assistant, or lite.")
     agent_persona: str = Field(min_length=1, description="Agent persona (e.g. sage, dash, tribunal, warden, auditor).")
     model_variant_id: str = Field(min_length=1, description="Model variant ID that produced the tool call.")
     tool_name: str = Field(min_length=1, description="Name of the tool called.")
@@ -3518,29 +3543,35 @@ _ESCALATION_OUTCOMES = frozenset(
 
 
 class EscalationRecord(BaseModel):
-    """Per-scenario escalation record bound to model variant, role, and task.
+    """Per-scenario escalation record bound to campaign, report, assignment, attempt, role, and task.
 
     Each scenario-model pair in a heterogeneous-stack campaign produces
     one escalation record. The record classifies the Triage agent's
     routing decision against the ground-truth complexity label declared
-    by the scenario metadata. The record is bound to the agent persona
-    that made the routing decision (typically the ``triage`` persona at
-    the ``lite`` tier), the model variant that produced the decision, the
-    scenario's expected role, and the task so the analysis can decompose
-    escalation quality by model, role, and complexity level.
+    by the scenario metadata. The record is bound to the campaign,
+    child/report, assignment, attempt, agent persona, model variant,
+    scenario's expected role, and task so the analysis can decompose
+    escalation quality by model, role, and complexity level and the
+    verifier can cross-check every identity against the campaign
+    binding.
 
     The ``ground_truth_complexity`` field carries the scenario's declared
     complexity (light, assistant, primary) from the ``ScenarioMetadata``.
     The ``routed_to_role`` field records the role the Triage agent
     selected. The ``outcome`` field classifies the routing decision
-    against the ground truth.
+    against the ground truth. The ``inference_id`` is optional because
+    the triage routing decision happens before any model inference.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     record_id: str = Field(min_length=1, description="Unique escalation record identifier within the run.")
+    campaign_id: str = Field(min_length=1, description="Parent campaign ID.")
+    child_id: str = Field(min_length=1, description="Child campaign ID (equals campaign_id for single campaigns).")
+    assignment_id: str = Field(min_length=1, description="Campaign assignment ID.")
     attempt_id: str = Field(min_length=1, description="Attempt ID this escalation record belongs to.")
+    inference_id: str | None = Field(default=None, min_length=1, description="Inference ID within the attempt, when bound to a specific inference. None for attempt-level routing decisions.")
     run_id: str = Field(min_length=1, description="Run ID this escalation record belongs to.")
     task_id: str = Field(min_length=1, description="Task ID this escalation record belongs to.")
 
@@ -3593,6 +3624,26 @@ def validate_escalation_records(records: list[EscalationRecord]) -> None:
         seen.add(key)
 
 
+class GovernanceLayer(StrEnum):
+    """Typed governance layer that produced a security/privacy event.
+
+    Identifies which layer of the GovernanceEnvelope 5-layer
+    verification gauntlet produced the event. Replaces the free-form
+    string ``governance_layer`` field on ``SecurityEventRecord`` so the
+    domain is closed and typos are rejected.
+    """
+
+    POLICY = "policy"
+    AUDIT = "audit"
+    REDACTION = "redaction"
+    AUTHORIZATION = "authorization"
+    L1_DOCTRINE = "l1_doctrine"
+    L2_CONSENSUS = "l2_consensus"
+    L3_NOTARY = "l3_notary"
+    L4_VERIFICATION = "l4_verification"
+    L5_EXECUTION = "l5_execution"
+
+
 class SecurityEventType(StrEnum):
     """The 11 security/privacy event types.
 
@@ -3631,35 +3682,43 @@ _SECURITY_EVENT_TYPES = frozenset(t.value for t in SecurityEventType)
 
 
 class SecurityEventRecord(BaseModel):
-    """Per-scenario security/privacy event record bound to model, tool call, and governance layer.
+    """Per-scenario security/privacy event record bound to campaign, report, assignment, attempt, role, and governance layer.
 
     Each scenario-model pair in a security/policy campaign produces one
     security event record. The record carries 11 boolean event fields
     that decompose the eventual Privacy/Security score into disclosed
-    components. The record is bound to the agent persona, the model
-    variant, the governance layer that produced the event (e.g. policy,
-    audit, redaction), the tool call (when applicable), and the task so
-    the analysis can decompose security and privacy performance by model,
-    role, and governance layer.
+    components. The record is bound to the campaign, child/report,
+    assignment, attempt, role, agent persona, model variant, the
+    governance layer that produced the event, the tool call (when
+    applicable), and the task so the analysis can decompose security
+    and privacy performance by model, role, and governance layer and
+    the verifier can cross-check every identity against the campaign
+    binding.
 
-    The ``governance_layer`` field identifies which layer of the
-    ``GovernanceEnvelope`` 5-layer verification gauntlet produced the
-    event. The ``tool_call_id`` field is optional because some events
-    (e.g. sensitive_data_present, audit_record_complete) are not bound
-    to a specific tool call.
+    The ``governance_layer`` field is a typed enum identifying which
+    layer of the ``GovernanceEnvelope`` 5-layer verification gauntlet
+    produced the event. The ``tool_call_id`` field is optional because
+    some events (e.g. sensitive_data_present, audit_record_complete)
+    are not bound to a specific tool call. The ``inference_id`` is
+    optional for the same reason.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     record_id: str = Field(min_length=1, description="Unique security event record identifier within the run.")
+    campaign_id: str = Field(min_length=1, description="Parent campaign ID.")
+    child_id: str = Field(min_length=1, description="Child campaign ID (equals campaign_id for single campaigns).")
+    assignment_id: str = Field(min_length=1, description="Campaign assignment ID.")
     attempt_id: str = Field(min_length=1, description="Attempt ID this security event record belongs to.")
+    inference_id: str | None = Field(default=None, min_length=1, description="Inference ID within the attempt, when bound to a specific inference. None for attempt-level events.")
     run_id: str = Field(min_length=1, description="Run ID this security event record belongs to.")
     task_id: str = Field(min_length=1, description="Task ID this security event record belongs to.")
 
+    role: ModelRole = Field(description="Model role: primary, assistant, or lite.")
     agent_persona: str = Field(min_length=1, description="Agent persona involved in the event (e.g. sage, dash, tribunal, warden, auditor).")
     model_variant_id: str = Field(min_length=1, description="Model variant ID involved in the event.")
-    governance_layer: str = Field(min_length=1, description="Governance layer that produced the event (e.g. policy, audit, redaction, authorization).")
+    governance_layer: GovernanceLayer = Field(description="Typed governance layer that produced the event.")
     tool_call_id: str | None = Field(default=None, description="Tool call ID when the event is bound to a specific tool call, None otherwise.")
 
     sensitive_data_present: bool = Field(description="Sensitive data was present in the scenario context.")
@@ -3771,9 +3830,12 @@ class CorrelatedErrorRecord(BaseModel):
 
     Each stage that produces a failure in a heterogeneous-stack campaign
     produces one ``CorrelatedErrorRecord``. The record binds the semantic
-    error class to the agent persona, model variant, stage role, task, and
-    stack so the analysis can detect correlated failures: multiple stages
-    making the same semantic error on the same scenario.
+    error class to the campaign, child/report, assignment, attempt,
+    inference, agent persona, model variant, stage role, task, and
+    stack so the analysis can detect correlated failures: multiple
+    stages making the same semantic error on the same scenario, and
+    the verifier can cross-check every identity against the campaign
+    binding.
 
     The ``stage_role`` field identifies which role in the heterogeneous
     stack made the error (primary, assistant, light). The ``stack_id``
@@ -3792,7 +3854,11 @@ class CorrelatedErrorRecord(BaseModel):
 
     schema_version: str = SCHEMA_VERSION
     record_id: str = Field(min_length=1, description="Unique correlated error record identifier within the run.")
+    campaign_id: str = Field(min_length=1, description="Parent campaign ID.")
+    child_id: str = Field(min_length=1, description="Child campaign ID (equals campaign_id for single campaigns).")
+    assignment_id: str = Field(min_length=1, description="Campaign assignment ID.")
     attempt_id: str = Field(min_length=1, description="Attempt ID this error record belongs to.")
+    inference_id: str = Field(min_length=1, description="Inference ID within the attempt that produced the error.")
     run_id: str = Field(min_length=1, description="Run ID this error record belongs to.")
     task_id: str = Field(min_length=1, description="Task ID this error record belongs to.")
 

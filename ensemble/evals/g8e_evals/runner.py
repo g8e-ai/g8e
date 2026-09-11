@@ -14,13 +14,13 @@ infrastructure retries, enforces provider budget, detects cohort drift,
 and produces one campaign identity, one report directory, one assignment
 manifest, one schedule, and one final canonical analysis.
 
-Resume reads the persisted schedule and existing immutable attempts; it
-does not rerandomize or selectively discard failures. Assignment-scoped
-failures (model, governance, timeout, invalid evidence) are persisted as
-typed terminal outcomes and the campaign continues unless the stop policy
-fires. Global preflight defects, corrupted persisted state, unsafe path
-handling, or an inability to persist authoritative records raise
-immediately.
+Each ``run`` starts a fresh report directory; the runner does not reload a
+prior campaign. Explicit batching via ``--task-offset`` and ``--task-limit``
+replaces the historical resume behavior. Assignment-scoped failures
+(model, governance, timeout, invalid evidence) are persisted as typed
+terminal outcomes and the campaign continues unless the stop policy fires.
+Global preflight defects, corrupted persisted state, unsafe path handling,
+or an inability to persist authoritative records raise immediately.
 
 Files are written atomically through a staging directory that is renamed
 to the final report directory only after the campaign manifest, schedule,
@@ -111,9 +111,7 @@ from g8e_evals.report.validate import validate_standalone_report
 from g8e_evals.schema import (
     ArmManifestEntry,
     AttemptRecord,
-    BackendArtifactIdentity,
     CampaignBinding,
-    CampaignTrack,
     ContentHash,
     GraderClass,
     GraderReference,
@@ -121,13 +119,13 @@ from g8e_evals.schema import (
     ModelIdentity,
     PostureObservation,
     ProviderBudget,
+    ReportRole,
     RoleToModelMapping,
     RunManifest,
     SourceBuildProvenance,
     StackEnvironment,
     TaskDefinition,
     TerminalStatus,
-    TokenizerTemplateIdentity,
     VerificationStatus,
 )
 
@@ -149,6 +147,208 @@ class CampaignStopReason(StrEnum):
     COHORT_DRIFT = "cohort_drift"
     NON_RETRYABLE_FAILURE = "non_retryable_failure"
     INVALID_EVIDENCE = "invalid_evidence"
+
+
+class BudgetExhausted(Exception):
+    """Raised inside _execute_assignment when a budget ceiling is reached.
+
+    The main loop catches this to materialize budget-stop outcomes for
+    remaining assignments.
+    """
+
+
+class BudgetCeiling(StrEnum):
+    """Named budget ceilings for the observability policy."""
+
+    MAX_REQUESTS = "max_requests"
+    MAX_TOKENS = "max_tokens"
+    MAX_USD = "max_usd"
+
+
+class BudgetObservabilityPolicy(BaseModel):
+    """Frozen policy declaring which budget ceilings are observable and enforceable.
+
+    The request ceiling (``max_requests``) is always observable because the
+    runner counts every provider call internally. Token and USD ceilings are
+    observable only when the SUT reports usage (tokens) or a pricing authority
+    supplies per-model cost (USD). A ceiling declared in ``ProviderBudget``
+    that is not observable and not explicitly excluded via
+    ``excluded_ceilings`` fails preflight — the campaign authority refuses to
+    start a run that declares a ceiling it cannot enforce.
+
+    The default policy excludes ``MAX_TOKENS`` and ``MAX_USD`` because no
+    pricing authority is wired yet and g8ee arms do not report token usage.
+    A campaign that wants to enforce token budgets sets
+    ``tokens_observable=True`` and removes ``MAX_TOKENS`` from
+    ``excluded_ceilings``; the SUT must then report usage for every
+    inference or the runner raises at runtime.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    tokens_observable: bool = Field(
+        default=False,
+        description="Whether token usage is observable from SUT responses.",
+    )
+    usd_observable: bool = Field(
+        default=False,
+        description="Whether USD usage is observable from SUT responses or a pricing authority.",
+    )
+    excluded_ceilings: frozenset[BudgetCeiling] = Field(
+        default=frozenset({BudgetCeiling.MAX_TOKENS, BudgetCeiling.MAX_USD}),
+        description="Ceilings explicitly excluded from enforcement even when declared in the budget.",
+    )
+
+    @property
+    def requests_observable(self) -> bool:
+        """Requests are always observable; the runner counts every call."""
+        return True
+
+    def is_ceiling_enforced(self, ceiling: BudgetCeiling) -> bool:
+        """Return True when the ceiling is observable and not excluded."""
+        if ceiling in self.excluded_ceilings:
+            return False
+        if ceiling == BudgetCeiling.MAX_REQUESTS:
+            return self.requests_observable
+        if ceiling == BudgetCeiling.MAX_TOKENS:
+            return self.tokens_observable
+        if ceiling == BudgetCeiling.MAX_USD:
+            return self.usd_observable
+        return False
+
+    def validate_budget(self, budget: ProviderBudget | None) -> None:
+        """Reject a budget whose declared ceiling is unobservable and not excluded.
+
+        Raises ``CampaignRunnerError`` when a non-None ceiling is not
+        observable and not in ``excluded_ceilings``. ``max_usd`` is always
+        present on ``ProviderBudget`` (required field); it passes only when
+        ``usd_observable`` is True or ``MAX_USD`` is excluded.
+        """
+        if budget is None:
+            return
+        if budget.max_requests is not None and not self.requests_observable:
+            if BudgetCeiling.MAX_REQUESTS not in self.excluded_ceilings:
+                raise CampaignRunnerError(
+                    "max_requests ceiling is declared but not observable and not excluded"
+                )
+        if budget.max_tokens is not None and not self.tokens_observable:
+            if BudgetCeiling.MAX_TOKENS not in self.excluded_ceilings:
+                raise CampaignRunnerError(
+                    "max_tokens ceiling is declared but not observable and not excluded; "
+                    "set tokens_observable=True or add MAX_TOKENS to excluded_ceilings"
+                )
+        if not self.usd_observable:
+            if BudgetCeiling.MAX_USD not in self.excluded_ceilings:
+                raise CampaignRunnerError(
+                    "max_usd ceiling is declared but not observable and not excluded; "
+                    "set usd_observable=True or add MAX_USD to excluded_ceilings"
+                )
+
+
+DEFAULT_BUDGET_OBSERVABILITY_POLICY = BudgetObservabilityPolicy()
+
+
+def compute_budget_observability_policy_hash(policy: BudgetObservabilityPolicy) -> str:
+    """Compute a content-addressed hash over the budget observability policy."""
+    return _compute_simple_hash(
+        f"budget_observability:"
+        f"tokens_observable={policy.tokens_observable}:"
+        f"usd_observable={policy.usd_observable}:"
+        f"excluded={sorted(c.value for c in policy.excluded_ceilings)}"
+    )
+
+
+class BudgetTracker:
+    """Tracks provider request, token, and USD usage against budget ceilings.
+
+    Every provider call (including retries) counts against ``max_requests``.
+    Observed token and USD usage from SUT responses counts against
+    ``max_tokens`` and ``max_usd`` when those ceilings are declared,
+    observable per the ``BudgetObservabilityPolicy``, and not excluded. A
+    ceiling that is declared but not observable or explicitly excluded is
+    not enforced from observed usage; the request ceiling remains the
+    primary enforcement mechanism for unobservable ceilings.
+    """
+
+    def __init__(
+        self,
+        budget: ProviderBudget | None,
+        policy: BudgetObservabilityPolicy | None = None,
+    ) -> None:
+        self.budget = budget
+        self.policy = policy or DEFAULT_BUDGET_OBSERVABILITY_POLICY
+        self.request_count = 0
+        self.total_tokens = 0
+        self.total_usd = 0.0
+
+    @property
+    def max_requests(self) -> int | None:
+        return self.budget.max_requests if self.budget else None
+
+    @property
+    def max_tokens(self) -> int | None:
+        return self.budget.max_tokens if self.budget else None
+
+    @property
+    def max_usd(self) -> float | None:
+        return self.budget.max_usd if self.budget else None
+
+    def check_request_budget(self) -> None:
+        """Raise BudgetExhausted if the request ceiling is reached."""
+        if self.max_requests is not None and self.request_count >= self.max_requests:
+            raise BudgetExhausted("request ceiling reached")
+
+    def record_provider_call(self) -> None:
+        """Record one provider call (including retries) against the request budget."""
+        self.request_count += 1
+
+    def record_usage(self, tokens: int | None, usd: float | None) -> None:
+        """Record observed token and USD usage from a SUT response.
+
+        Only records non-None values; unobserved usage does not count
+        against the ceiling.
+        """
+        if tokens is not None and tokens > 0:
+            self.total_tokens += tokens
+        if usd is not None and usd > 0:
+            self.total_usd += usd
+
+    def check_usage_budgets(self) -> None:
+        """Raise BudgetExhausted if an observable, non-excluded ceiling is reached."""
+        if (
+            self.max_tokens is not None
+            and self.policy.is_ceiling_enforced(BudgetCeiling.MAX_TOKENS)
+            and self.total_tokens >= self.max_tokens
+        ):
+            raise BudgetExhausted(f"token ceiling reached: {self.total_tokens} >= {self.max_tokens}")
+        if (
+            self.max_usd is not None
+            and self.policy.is_ceiling_enforced(BudgetCeiling.MAX_USD)
+            and self.total_usd >= self.max_usd
+        ):
+            raise BudgetExhausted(f"usd ceiling reached: {self.total_usd} >= {self.max_usd}")
+
+
+def _extract_usage_from_response(response: Response) -> tuple[int | None, float | None]:
+    """Extract observed token and USD usage from a SUT response.
+
+    Reads ``chat_evidence.model_dump()`` and checks for
+    ``total_token_count`` and ``usage_reported`` keys (the
+    ``DirectCallEvidence`` schema). Returns ``(None, None)`` when the
+    response carries no evidence, the evidence does not report usage, or
+    ``usage_reported`` is False. USD is not available from SUT responses
+    without a pricing authority; the USD component is always None until a
+    pricing authority is wired.
+    """
+    if response.chat_evidence is None:
+        return None, None
+    dump = response.chat_evidence.model_dump()
+    if not dump.get("usage_reported", False):
+        return None, None
+    tokens = dump.get("total_token_count")
+    if isinstance(tokens, int) and tokens > 0:
+        return tokens, None
+    return None, None
 
 
 class CampaignRunnerError(Exception):
@@ -236,6 +436,9 @@ class CampaignSpec(BaseModel):
     retry_policy: RetryPolicy
     randomization_seed: int = Field(ge=0)
     provider_budget: ProviderBudget | None = None
+    budget_observability_policy: BudgetObservabilityPolicy = Field(
+        default_factory=BudgetObservabilityPolicy,
+    )
     source_build_provenance: SourceBuildProvenance | None = None
     stack_environment: StackEnvironment = Field(default_factory=StackEnvironment)
 
@@ -459,6 +662,23 @@ def _compute_simple_hash(data: str) -> str:
     return hashlib.sha256(data.encode()).hexdigest()
 
 
+def compute_provider_budget_hash(budget: ProviderBudget | None) -> str:
+    """Compute a content-addressed hash over the provider budget.
+
+    Covers all three ceilings: ``max_usd``, ``max_tokens``, and
+    ``max_requests``. ``None`` (no budget) and a budget with zero
+    ceilings produce distinct hashes. ``None`` ceilings are distinct
+    from zero ceilings.
+    """
+    if budget is None:
+        return _compute_simple_hash("no_budget")
+    max_tokens_str = str(budget.max_tokens) if budget.max_tokens is not None else "none"
+    max_requests_str = str(budget.max_requests) if budget.max_requests is not None else "none"
+    return _compute_simple_hash(
+        f"budget:max_usd={budget.max_usd}:max_tokens={max_tokens_str}:max_requests={max_requests_str}"
+    )
+
+
 def _model_id_for_cohort(cohort: ModelCohort) -> str:
     """Extract the primary model ID from a cohort's role bindings."""
     for rb in cohort.role_bindings:
@@ -496,7 +716,7 @@ def derive_cohorts_from_registry(
     ``cohort-{variant_id}``.
 
     Returns the list of cohorts and a mapping from cohort ID to variant
-    ID for CampaignBinding population.
+    ID for SUT factory wiring.
     """
     runnable_ids = set(registry.runnable_variant_ids())
     measured_ids = [
@@ -680,16 +900,18 @@ class CampaignRunner:
     runner testable with deterministic fake SUTs and graders.
 
     When ``campaign_profile`` and ``model_registry`` are provided, the
-    runner populates ``CampaignBinding`` on the ``RunManifest`` with
-    the campaign-level identity, frozen profile and registry hashes,
-    and the primary variant's backend artifact and tokenizer template
-    identity from the registry. The ``cohort_variant_map`` maps cohort
-    IDs to registry variant IDs for this lookup.
+    runner populates the report-level ``CampaignBinding`` on the
+    ``RunManifest`` with the campaign identity, frozen profile and
+    registry hashes, expected-record policy hash, both environment
+    scopes, and report role. Assignment, model, repetition, role, and
+    inference identities remain on their own records. The
+    ``cohort_variant_map`` maps cohort IDs to registry variant IDs for
+    SUT factory wiring.
 
-    Resume: if the report directory already contains a persisted campaign
-    status and attempts, the runner reads the existing schedule and
-    skips assignments that already have a terminal attempt. It does not
-    rerandomize or discard failures.
+    Each ``run`` starts a fresh report directory. The runner does not
+    reload a prior campaign during ``run``; explicit batching via
+    ``--task-offset`` and ``--task-limit`` replaces the historical resume
+    behavior.
     """
 
     spec: CampaignSpec
@@ -924,10 +1146,9 @@ class CampaignRunner:
         """Build the RunManifest for the report directory.
 
         When ``campaign_profile`` and ``model_registry`` are provided,
-        populates ``CampaignBinding`` with the campaign-level identity,
-        frozen profile and registry hashes, and the primary variant's
-        backend artifact and tokenizer template identity from the
-        registry.
+        populates the report-level ``CampaignBinding`` with the campaign
+        identity, frozen profile and registry hashes, expected-record
+        policy hash, both environment scopes, and report role.
         """
         arms = [self.spec.preregistration.baseline_arm_id, *self.spec.preregistration.comparison_arm_ids]
         arm_entries = []
@@ -945,8 +1166,9 @@ class CampaignRunner:
             )
         role_to_model = RoleToModelMapping()
         # Use the first cohort's role bindings for the run manifest's
-        # role_to_model mapping. The campaign_binding also resolves
-        # from the first cohort, so they must agree. In a multi-cohort
+        # role_to_model mapping. The report-level CampaignBinding carries
+        # campaign-level authority hashes and environment scopes, not
+        # per-cohort or per-assignment identity. In a multi-cohort
         # campaign each cohort has its own model; the run manifest
         # represents the campaign-level identity, not per-cohort state.
         first_cohort = self.spec.cohorts[0] if self.spec.cohorts else None
@@ -990,69 +1212,32 @@ class CampaignRunner:
         )
 
     def _build_campaign_binding(self) -> CampaignBinding | None:
-        """Build CampaignBinding from the campaign profile and model registry.
+        """Build report-level CampaignBinding from the campaign profile and model registry.
 
         Returns None when either ``campaign_profile`` or ``model_registry``
-        is not provided. When both are present, resolves the primary
-        variant from the first cohort via ``cohort_variant_map`` and
-        populates the binding with campaign-level identity, frozen
-        profile and registry hashes, and the variant's backend artifact
-        and tokenizer template identity.
+        is not provided. When both are present, populates the binding
+        with parent/child campaign identity, frozen profile and registry
+        hashes, expected-record policy hash, both environment scopes, and
+        report role. Assignment, model, repetition, role, and inference
+        identities remain on their own records, not on this report-level
+        binding.
         """
         if self.campaign_profile is None or self.model_registry is None:
             return None
 
-        first_cohort = self.spec.cohorts[0]
-        cohort_id = first_cohort.cohort_id
-        variant_id = self.cohort_variant_map.get(cohort_id, "") if self.cohort_variant_map else ""
-        if not variant_id:
-            return None
-
-        variant = self.model_registry.get_variant(variant_id)
-
-        first_assignment_id = ""
-        if self.spec.cohorts and self.spec.task_assignment.task_ids:
-            from g8e_evals.campaign import compute_assignment_id
-            first_task_id = sorted(self.spec.task_assignment.task_ids)[0]
-            first_arm_id = self.spec.preregistration.baseline_arm_id
-            first_replicate_id = self.spec.preregistration.required_replicate_ids[0] if self.spec.preregistration.required_replicate_ids else "replicate-1"
-            first_assignment_id = compute_assignment_id(
-                self.spec.campaign_id,
-                first_task_id,
-                cohort_id,
-                first_arm_id,
-                self.spec.initial_state.initial_state_assignment_id,
-                first_replicate_id,
-            )
-
-        first_track = self.campaign_profile.track_arm_assignments[0].track if self.campaign_profile.track_arm_assignments else CampaignTrack.DIRECT
-
         return CampaignBinding(
             campaign_id=self.campaign_profile.campaign_id,
             campaign_revision=self.campaign_profile.campaign_revision,
-            assignment_id=first_assignment_id,
-            model_variant_id=variant.variant_id,
-            track=first_track,
-            target_tier=None,
-            repetition=0,
+            report_role=ReportRole.SINGLE,
+            child_campaign_id=None,
+            child_campaign_revision=None,
             campaign_profile_hash=self.campaign_profile.content_hash,
             model_registry_hash=self.model_registry.content_hash,
-            backend_artifact_identity=BackendArtifactIdentity(
-                backend_name=variant.backend_name,
-                backend_version=variant.backend_version,
-                served_model_tag=variant.served_model_tag,
-                artifact_digest=variant.artifact_digest,
-                artifact_bytes=variant.artifact_bytes,
-                quantization=variant.quantization,
-                tensor_format=variant.tensor_format,
-            ),
-            tokenizer_template_identity=TokenizerTemplateIdentity(
-                tokenizer_digest=variant.tokenizer_digest,
-                chat_template_hash=variant.chat_template_hash,
-                prompt_serialization_version="",
-            ),
-            reasoning_mode=variant.reasoning_mode,
-            constrained_decoding_mode="none",
+            required_record_policy_hash=self.campaign_profile.required_record_policy_hash,
+            orchestrator_hardware_identity=self.campaign_profile.hardware_identity,
+            orchestrator_environment_stratum=self.campaign_profile.environment_stratum,
+            provider_hardware_identity=self.campaign_profile.provider_hardware_identity,
+            provider_environment_stratum=self.campaign_profile.provider_environment_stratum,
         )
 
     async def _execute_assignment(
@@ -1061,11 +1246,14 @@ class CampaignRunner:
         cohort: ModelCohort,
         arm_def: ArmDefinition,
         task: Task,
+        budget_tracker: BudgetTracker | None = None,
     ) -> tuple[list[AttemptRecord], list[MetricObservation]]:
         """Execute one assignment, handling retries.
 
         Returns all attempts (including retry attempts) and any metric
-        observations from the terminal attempt.
+        observations from the terminal attempt. Each provider call
+        (including retries) is counted against the request budget when a
+        ``budget_tracker`` is provided.
         """
         attempt_num = 0
         parent_attempt_id: str | None = None
@@ -1076,6 +1264,10 @@ class CampaignRunner:
         new_attempts: list[AttemptRecord] = []
 
         while True:
+            # Check request budget before each provider call (including retries)
+            if budget_tracker is not None:
+                budget_tracker.check_request_budget()
+
             attempt_id = f"{self._run_id}:{assignment.assignment_id}:{attempt_num}"
             started_at = datetime.now(UTC)
 
@@ -1085,6 +1277,18 @@ class CampaignRunner:
                 response = await sut.get_answer(task)
             except Exception as exc:
                 infrastructure_error = exc
+
+            # Record this provider call against the request budget
+            if budget_tracker is not None:
+                budget_tracker.record_provider_call()
+
+            # Record observed token/USD usage from the SUT response and
+            # check token/USD ceilings when the policy declares them
+            # observable and not excluded.
+            if budget_tracker is not None and response is not None:
+                tokens, usd = _extract_usage_from_response(response)
+                budget_tracker.record_usage(tokens, usd)
+                budget_tracker.check_usage_budgets()
 
             ended_at = datetime.now(UTC)
 
@@ -1188,9 +1392,16 @@ class CampaignRunner:
 
         Creates one campaign identity, one report directory, one
         assignment manifest, one schedule, and one final canonical
-        analysis. Resume reads the persisted schedule and existing
-        attempts.
+        analysis. Each ``run`` starts a fresh report directory; the
+        runner does not reload a prior campaign. Explicit batching via
+        ``--task-offset`` and ``--task-limit`` replaces the historical
+        resume behavior.
         """
+        # 0. Validate budget observability before any work begins. A
+        # declared ceiling that is not observable and not explicitly
+        # excluded fails before the report directory is created.
+        self.spec.budget_observability_policy.validate_budget(self.spec.provider_budget)
+
         # 1. Build assignments and schedule
         assignments, schedule = build_campaign_state(self.spec)
 
@@ -1204,9 +1415,7 @@ class CampaignRunner:
         release_metric_set_hash = _compute_simple_hash("release_metric_set_v1")
         threshold_authority_hash = _compute_simple_hash("descriptive_only_no_threshold")
         missingness_authority_hash = _compute_simple_hash("assignment_level_missingness")
-        provider_budget_hash = _compute_simple_hash(
-            f"budget:{self.spec.provider_budget.max_usd}" if self.spec.provider_budget else "no_budget"
-        )
+        provider_budget_hash = compute_provider_budget_hash(self.spec.provider_budget)
         source_build_provenance_hash = _compute_simple_hash(
             self.spec.source_build_provenance.source_tree_state_hash
             if self.spec.source_build_provenance
@@ -1258,8 +1467,10 @@ class CampaignRunner:
         all_attempts: list[AttemptRecord] = []
         all_metrics: list[MetricObservation] = []
         stop_reason: CampaignStopReason | None = None
-        request_count = 0
-        max_requests = self.spec.provider_budget.max_requests if self.spec.provider_budget else None
+        budget_tracker = BudgetTracker(
+            self.spec.provider_budget,
+            policy=self.spec.budget_observability_policy,
+        )
 
         total_assignments = len(schedule.ordered_assignment_ids)
         completed_count = 0
@@ -1284,8 +1495,12 @@ class CampaignRunner:
             arm_def = get_arm_definition(Arm(assignment.arm_id))
             task = task_by_id[assignment.task_id]
 
-            # Budget enforcement: check before dispatch
-            if max_requests is not None and request_count >= max_requests:
+            # Budget enforcement: check request ceiling before dispatch.
+            # Each provider call (including retries) is counted inside
+            # _execute_assignment via the budget_tracker.
+            try:
+                budget_tracker.check_request_budget()
+            except BudgetExhausted:
                 # Materialize terminal outcomes for remaining assignments
                 remaining = [
                     a for a in assignments
@@ -1298,7 +1513,6 @@ class CampaignRunner:
                 stop_reason = CampaignStopReason.BUDGET_EXHAUSTED
                 break
 
-            request_count += 1
             assignment_start = time.monotonic()
 
             logger.info(
@@ -1310,9 +1524,23 @@ class CampaignRunner:
                 assignment.arm_id,
             )
 
-            new_attempts, metrics = await self._execute_assignment(
-                assignment, cohort, arm_def, task
-            )
+            try:
+                new_attempts, metrics = await self._execute_assignment(
+                    assignment, cohort, arm_def, task, budget_tracker=budget_tracker
+                )
+            except BudgetExhausted:
+                # Budget exhausted during execution (e.g. retry pushed
+                # request count over the ceiling). Materialize remaining.
+                remaining = [
+                    a for a in assignments
+                    if schedule.ordered_assignment_ids.index(a.assignment_id) > schedule.ordered_assignment_ids.index(assignment_id)
+                ]
+                for rem in remaining:
+                    rem_arm_def = get_arm_definition(Arm(rem.arm_id))
+                    stop_attempt = self._materialize_budget_stop(rem, rem_arm_def)
+                    all_attempts.append(stop_attempt)
+                stop_reason = CampaignStopReason.BUDGET_EXHAUSTED
+                break
             all_attempts.extend(new_attempts)
             all_metrics.extend(metrics)
             completed_count += 1
@@ -1452,6 +1680,11 @@ class CampaignRunner:
 
 
 __all__ = [
+    "DEFAULT_BUDGET_OBSERVABILITY_POLICY",
+    "BudgetCeiling",
+    "BudgetExhausted",
+    "BudgetObservabilityPolicy",
+    "BudgetTracker",
     "CampaignResult",
     "CampaignRunner",
     "CampaignRunnerError",
@@ -1466,5 +1699,7 @@ __all__ = [
     "build_campaign_sut_factory",
     "build_tier_fitness_sut_config",
     "check_disk_space",
+    "compute_budget_observability_policy_hash",
+    "compute_provider_budget_hash",
     "derive_cohorts_from_registry",
 ]

@@ -119,9 +119,13 @@ class TestSecurityEventRecordModel:
         with pytest.raises(ValidationError):
             SecurityEventRecord(
                 record_id="se-1",
+                campaign_id="campaign-1",
+                child_id="campaign-1",
+                assignment_id="assignment-1",
                 attempt_id="att-1",
                 run_id="run-1",
                 task_id="task-1",
+                role="primary",
                 agent_persona="warden",
                 model_variant_id="qwen3-8b-q4_0",
                 governance_layer="policy",
@@ -754,6 +758,25 @@ def _first_attempt_id(report_dir: Path) -> str:
     return first["attempt_id"]
 
 
+def _campaign_identity(report_dir: Path) -> dict:
+    """Read the actual campaign identity from the report directory."""
+    from g8e_evals.constants import ATTEMPTS_JSONL, CAMPAIGN_MANIFEST_JSON
+    cm = json.loads((report_dir / CAMPAIGN_MANIFEST_JSON).read_text())
+    attempts_path = report_dir / ATTEMPTS_JSONL
+    lines = attempts_path.read_text().strip().splitlines()
+    if not lines:
+        pytest.skip("no attempts in campaign")
+    first = json.loads(lines[0])
+    return {
+        "campaign_id": cm["campaign_id"],
+        "child_id": cm["campaign_id"],
+        "run_id": first["run_id"],
+        "task_id": first["task_id"],
+        "assignment_id": first.get("assignment_id", ""),
+        "attempt_id": first["attempt_id"],
+    }
+
+
 class TestCampaignVerifierSecurityEventsLayer:
     pytestmark = pytest.mark.integration
 
@@ -770,9 +793,9 @@ class TestCampaignVerifierSecurityEventsLayer:
 
     def test_verifier_validates_security_events_when_present(self, tmp_path: Path):
         report_dir = _run_campaign(tmp_path)
-        attempt_id = _first_attempt_id(report_dir)
+        ident = _campaign_identity(report_dir)
         se_path = report_dir / SECURITY_EVENTS_JSONL
-        se_data = _make_record_dict(attempt_id=attempt_id)
+        se_data = _make_record_dict(**ident)
         se_path.write_text(json.dumps(se_data) + "\n")
         result = verify_campaign(report_dir)
         assert result.ok, f"valid security event record should pass: {result.failures}"
@@ -789,9 +812,9 @@ class TestCampaignVerifierSecurityEventsLayer:
 
     def test_verifier_rejects_duplicate_security_events(self, tmp_path: Path):
         report_dir = _run_campaign(tmp_path)
-        attempt_id = _first_attempt_id(report_dir)
+        ident = _campaign_identity(report_dir)
         se_path = report_dir / SECURITY_EVENTS_JSONL
-        se_data = _make_record_dict(attempt_id=attempt_id)
+        se_data = _make_record_dict(**ident)
         se_path.write_text(json.dumps(se_data) + "\n" + json.dumps(se_data) + "\n")
         result = verify_campaign(report_dir)
         assert not result.ok
@@ -808,10 +831,10 @@ class TestCampaignVerifierSecurityEventsLayer:
 
     def test_verifier_rejects_symlinked_security_events(self, tmp_path: Path):
         report_dir = _run_campaign(tmp_path)
-        attempt_id = _first_attempt_id(report_dir)
+        ident = _campaign_identity(report_dir)
         se_path = report_dir / SECURITY_EVENTS_JSONL
         target = report_dir / "real-security-events.jsonl"
-        target.write_text(json.dumps(_make_record_dict(attempt_id=attempt_id)) + "\n")
+        target.write_text(json.dumps(_make_record_dict(**ident)) + "\n")
         se_path.symlink_to(target)
         result = verify_campaign(report_dir)
         assert not result.ok
@@ -824,9 +847,14 @@ class TestCampaignVerifierSecurityEventsLayer:
 def _make_record(
     *,
     record_id: str = "se-1",
+    campaign_id: str = "campaign-1",
+    child_id: str = "campaign-1",
+    assignment_id: str = "assignment-1",
     attempt_id: str = "att-1",
+    inference_id: str | None = None,
     run_id: str = "run-1",
     task_id: str = "task-1",
+    role: str = "primary",
     agent_persona: str = "warden",
     model_variant_id: str = "qwen3-8b-q4_0",
     governance_layer: str = "policy",
@@ -848,9 +876,14 @@ def _make_record(
 ) -> SecurityEventRecord:
     return SecurityEventRecord(
         record_id=record_id,
+        campaign_id=campaign_id,
+        child_id=child_id,
+        assignment_id=assignment_id,
         attempt_id=attempt_id,
+        inference_id=inference_id,
         run_id=run_id,
         task_id=task_id,
+        role=role,
         agent_persona=agent_persona,
         model_variant_id=model_variant_id,
         governance_layer=governance_layer,
@@ -877,10 +910,16 @@ def _make_record_dict(
     attempt_id: str = "att-1",
     run_id: str = "run-1",
     task_id: str = "task-1",
+    campaign_id: str = "campaign-1",
+    child_id: str = "campaign-1",
+    assignment_id: str = "assignment-1",
     record_id: str = "se-1",
 ) -> dict:
     se = _make_record(
         record_id=record_id,
+        campaign_id=campaign_id,
+        child_id=child_id,
+        assignment_id=assignment_id,
         attempt_id=attempt_id,
         run_id=run_id,
         task_id=task_id,

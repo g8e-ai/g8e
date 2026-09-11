@@ -329,7 +329,7 @@ def rank_variants_for_role(
     scores: list[VariantRoleScore],
     finalist_count: int = FINALIST_COUNT_PER_ROLE,
 ) -> list[VariantRoleScore]:
-    """Rank variants for one role and return the top finalists.
+    """Rank variants for one role and return the leading finalists.
 
     Disqualified variants are excluded from ranking. Eligible variants
     are ranked by macro-average descending, then by the D11 tie-breaker

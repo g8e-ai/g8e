@@ -119,3 +119,13 @@ ESCALATION_SUMMARY_JSON = "escalation-summary.json"
 SECURITY_EVENT_SUMMARY_JSON = "security-event-summary.json"
 CORRELATED_ERROR_SUMMARY_JSON = "correlated-error-summary.json"
 COLD_START_WARM_INFERENCE_TRADEOFF_JSON = "cold-start-warm-inference-tradeoff.json"
+
+# Expected record policy (frozen typed policy declaring which observation/event
+# files are required, not applicable, or optional, with cardinality rules)
+EXPECTED_RECORD_POLICY_JSON = "expected-record-policy.json"
+
+# Campaign-set artifacts (typed four-child campaign-set plan, post-execution index,
+# and aggregate verification report for the expanded IFEval campaign)
+CAMPAIGN_SET_PLAN_JSON = "campaign-set-plan.json"
+CAMPAIGN_SET_INDEX_JSON = "campaign-set-index.json"
+CAMPAIGN_SET_VERIFICATION_REPORT_JSON = "campaign-set-verification-report.json"

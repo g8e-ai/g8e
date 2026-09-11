@@ -32,6 +32,7 @@ from g8e_evals.schema import (
     CampaignTrack,
     BackendArtifactIdentity,
     TokenizerTemplateIdentity,
+    ReportRole,
     RunManifest,
 )
 
@@ -64,23 +65,23 @@ def _tokenizer_template_identity() -> TokenizerTemplateIdentity:
 
 def _campaign_binding(
     *,
-    track: CampaignTrack = CampaignTrack.DIRECT,
-    target_tier: str | None = None,
+    report_role: ReportRole = ReportRole.SINGLE,
+    child_campaign_id: str | None = None,
+    child_campaign_revision: str | None = None,
 ) -> CampaignBinding:
     return CampaignBinding(
         campaign_id="v2.1.8-ifeval-pipeline-integrity",
         campaign_revision="1",
-        assignment_id="assign-001",
-        model_variant_id="qwen3-8b-q4_0",
-        track=track,
-        target_tier=target_tier,
-        repetition=0,
+        report_role=report_role,
+        child_campaign_id=child_campaign_id,
+        child_campaign_revision=child_campaign_revision,
         campaign_profile_hash=_VALID_HASH,
         model_registry_hash=_VALID_HASH,
-        backend_artifact_identity=_backend_artifact_identity(),
-        tokenizer_template_identity=_tokenizer_template_identity(),
-        reasoning_mode="none",
-        constrained_decoding_mode="none",
+        required_record_policy_hash=_VALID_HASH,
+        orchestrator_hardware_identity="linux/amd64/rtx-4090",
+        orchestrator_environment_stratum="single-machine",
+        provider_hardware_identity="unavailable",
+        provider_environment_stratum="unavailable",
     )
 
 
@@ -198,14 +199,12 @@ class TestCampaignBinding:
             CampaignBinding(
                 campaign_id="c1",
                 campaign_revision="1",
-                assignment_id="a1",
-                model_variant_id="v1",
-                track=CampaignTrack.DIRECT,
-                repetition=0,
+                report_role=ReportRole.SINGLE,
                 campaign_profile_hash=_VALID_HASH,
                 model_registry_hash=_VALID_HASH,
-                backend_artifact_identity=_backend_artifact_identity(),
-                tokenizer_template_identity=_tokenizer_template_identity(),
+                required_record_policy_hash=_VALID_HASH,
+                orchestrator_hardware_identity="linux/amd64/rtx-4090",
+                orchestrator_environment_stratum="single-machine",
                 extra_field="bad",
             )
 
@@ -213,56 +212,36 @@ class TestCampaignBinding:
         with pytest.raises(ValidationError):
             CampaignBinding(
                 campaign_revision="1",
-                assignment_id="a1",
-                model_variant_id="v1",
-                track=CampaignTrack.DIRECT,
-                repetition=0,
+                report_role=ReportRole.SINGLE,
                 campaign_profile_hash=_VALID_HASH,
                 model_registry_hash=_VALID_HASH,
-                backend_artifact_identity=_backend_artifact_identity(),
-                tokenizer_template_identity=_tokenizer_template_identity(),
+                required_record_policy_hash=_VALID_HASH,
+                orchestrator_hardware_identity="linux/amd64/rtx-4090",
+                orchestrator_environment_stratum="single-machine",
             )
 
-    def test_requires_assignment_id(self):
+    def test_requires_campaign_revision(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                report_role=ReportRole.SINGLE,
+                campaign_profile_hash=_VALID_HASH,
+                model_registry_hash=_VALID_HASH,
+                required_record_policy_hash=_VALID_HASH,
+                orchestrator_hardware_identity="linux/amd64/rtx-4090",
+                orchestrator_environment_stratum="single-machine",
+            )
+
+    def test_requires_report_role(self):
         with pytest.raises(ValidationError):
             CampaignBinding(
                 campaign_id="c1",
                 campaign_revision="1",
-                model_variant_id="v1",
-                track=CampaignTrack.DIRECT,
-                repetition=0,
                 campaign_profile_hash=_VALID_HASH,
                 model_registry_hash=_VALID_HASH,
-                backend_artifact_identity=_backend_artifact_identity(),
-                tokenizer_template_identity=_tokenizer_template_identity(),
-            )
-
-    def test_requires_model_variant_id(self):
-        with pytest.raises(ValidationError):
-            CampaignBinding(
-                campaign_id="c1",
-                campaign_revision="1",
-                assignment_id="a1",
-                track=CampaignTrack.DIRECT,
-                repetition=0,
-                campaign_profile_hash=_VALID_HASH,
-                model_registry_hash=_VALID_HASH,
-                backend_artifact_identity=_backend_artifact_identity(),
-                tokenizer_template_identity=_tokenizer_template_identity(),
-            )
-
-    def test_requires_track(self):
-        with pytest.raises(ValidationError):
-            CampaignBinding(
-                campaign_id="c1",
-                campaign_revision="1",
-                assignment_id="a1",
-                model_variant_id="v1",
-                repetition=0,
-                campaign_profile_hash=_VALID_HASH,
-                model_registry_hash=_VALID_HASH,
-                backend_artifact_identity=_backend_artifact_identity(),
-                tokenizer_template_identity=_tokenizer_template_identity(),
+                required_record_policy_hash=_VALID_HASH,
+                orchestrator_hardware_identity="linux/amd64/rtx-4090",
+                orchestrator_environment_stratum="single-machine",
             )
 
     def test_requires_campaign_profile_hash(self):
@@ -270,13 +249,11 @@ class TestCampaignBinding:
             CampaignBinding(
                 campaign_id="c1",
                 campaign_revision="1",
-                assignment_id="a1",
-                model_variant_id="v1",
-                track=CampaignTrack.DIRECT,
-                repetition=0,
+                report_role=ReportRole.SINGLE,
                 model_registry_hash=_VALID_HASH,
-                backend_artifact_identity=_backend_artifact_identity(),
-                tokenizer_template_identity=_tokenizer_template_identity(),
+                required_record_policy_hash=_VALID_HASH,
+                orchestrator_hardware_identity="linux/amd64/rtx-4090",
+                orchestrator_environment_stratum="single-machine",
             )
 
     def test_requires_model_registry_hash(self):
@@ -284,79 +261,81 @@ class TestCampaignBinding:
             CampaignBinding(
                 campaign_id="c1",
                 campaign_revision="1",
-                assignment_id="a1",
-                model_variant_id="v1",
-                track=CampaignTrack.DIRECT,
-                repetition=0,
+                report_role=ReportRole.SINGLE,
                 campaign_profile_hash=_VALID_HASH,
-                backend_artifact_identity=_backend_artifact_identity(),
-                tokenizer_template_identity=_tokenizer_template_identity(),
+                required_record_policy_hash=_VALID_HASH,
+                orchestrator_hardware_identity="linux/amd64/rtx-4090",
+                orchestrator_environment_stratum="single-machine",
             )
 
-    def test_requires_backend_artifact_identity(self):
+    def test_requires_required_record_policy_hash(self):
         with pytest.raises(ValidationError):
             CampaignBinding(
                 campaign_id="c1",
                 campaign_revision="1",
-                assignment_id="a1",
-                model_variant_id="v1",
-                track=CampaignTrack.DIRECT,
-                repetition=0,
+                report_role=ReportRole.SINGLE,
                 campaign_profile_hash=_VALID_HASH,
                 model_registry_hash=_VALID_HASH,
-                tokenizer_template_identity=_tokenizer_template_identity(),
+                orchestrator_hardware_identity="linux/amd64/rtx-4090",
+                orchestrator_environment_stratum="single-machine",
             )
 
-    def test_requires_tokenizer_template_identity(self):
+    def test_requires_orchestrator_hardware_identity(self):
         with pytest.raises(ValidationError):
             CampaignBinding(
                 campaign_id="c1",
                 campaign_revision="1",
-                assignment_id="a1",
-                model_variant_id="v1",
-                track=CampaignTrack.DIRECT,
-                repetition=0,
+                report_role=ReportRole.SINGLE,
                 campaign_profile_hash=_VALID_HASH,
                 model_registry_hash=_VALID_HASH,
-                backend_artifact_identity=_backend_artifact_identity(),
+                required_record_policy_hash=_VALID_HASH,
+                orchestrator_environment_stratum="single-machine",
             )
 
-    def test_rejects_negative_repetition(self):
+    def test_requires_orchestrator_environment_stratum(self):
         with pytest.raises(ValidationError):
             CampaignBinding(
                 campaign_id="c1",
                 campaign_revision="1",
-                assignment_id="a1",
-                model_variant_id="v1",
-                track=CampaignTrack.DIRECT,
-                repetition=-1,
+                report_role=ReportRole.SINGLE,
                 campaign_profile_hash=_VALID_HASH,
                 model_registry_hash=_VALID_HASH,
-                backend_artifact_identity=_backend_artifact_identity(),
-                tokenizer_template_identity=_tokenizer_template_identity(),
+                required_record_policy_hash=_VALID_HASH,
+                orchestrator_hardware_identity="linux/amd64/rtx-4090",
             )
 
-    def test_target_tier_optional_for_direct_track(self):
-        binding = _campaign_binding(track=CampaignTrack.DIRECT, target_tier=None)
-        assert binding.target_tier is None
+    def test_child_role_carries_child_campaign_identity(self):
+        binding = _campaign_binding(
+            report_role=ReportRole.CHILD,
+            child_campaign_id="child-campaign-1",
+            child_campaign_revision="1",
+        )
+        assert binding.report_role == ReportRole.CHILD
+        assert binding.child_campaign_id == "child-campaign-1"
+        assert binding.child_campaign_revision == "1"
 
-    def test_target_tier_set_for_tier_fitness_track(self):
-        binding = _campaign_binding(track=CampaignTrack.TIER_FITNESS, target_tier="primary")
-        assert binding.target_tier == "primary"
+    def test_single_role_has_null_child_campaign_identity(self):
+        binding = _campaign_binding(report_role=ReportRole.SINGLE)
+        assert binding.report_role == ReportRole.SINGLE
+        assert binding.child_campaign_id is None
+        assert binding.child_campaign_revision is None
+
+    def test_provider_hardware_identity_defaults_to_unavailable(self):
+        binding = _campaign_binding()
+        assert binding.provider_hardware_identity == "unavailable"
+        assert binding.provider_environment_stratum == "unavailable"
 
     def test_rejects_short_profile_hash(self):
         with pytest.raises(ValidationError):
             CampaignBinding(
                 campaign_id="c1",
                 campaign_revision="1",
-                assignment_id="a1",
-                model_variant_id="v1",
-                track=CampaignTrack.DIRECT,
-                repetition=0,
+                report_role=ReportRole.SINGLE,
                 campaign_profile_hash="short",
                 model_registry_hash=_VALID_HASH,
-                backend_artifact_identity=_backend_artifact_identity(),
-                tokenizer_template_identity=_tokenizer_template_identity(),
+                required_record_policy_hash=_VALID_HASH,
+                orchestrator_hardware_identity="linux/amd64/rtx-4090",
+                orchestrator_environment_stratum="single-machine",
             )
 
     def test_rejects_short_registry_hash(self):
@@ -364,14 +343,12 @@ class TestCampaignBinding:
             CampaignBinding(
                 campaign_id="c1",
                 campaign_revision="1",
-                assignment_id="a1",
-                model_variant_id="v1",
-                track=CampaignTrack.DIRECT,
-                repetition=0,
+                report_role=ReportRole.SINGLE,
                 campaign_profile_hash=_VALID_HASH,
                 model_registry_hash="short",
-                backend_artifact_identity=_backend_artifact_identity(),
-                tokenizer_template_identity=_tokenizer_template_identity(),
+                required_record_policy_hash=_VALID_HASH,
+                orchestrator_hardware_identity="linux/amd64/rtx-4090",
+                orchestrator_environment_stratum="single-machine",
             )
 
 
@@ -403,10 +380,12 @@ class TestRunManifestCampaignBinding:
         restored = RunManifest.model_validate_json(json_str)
         assert restored.campaign_binding is not None
         assert restored.campaign_binding.campaign_id == "v2.1.8-ifeval-pipeline-integrity"
-        assert restored.campaign_binding.track == CampaignTrack.DIRECT
-        assert restored.campaign_binding.model_variant_id == "qwen3-8b-q4_0"
-        assert restored.campaign_binding.backend_artifact_identity.backend_name == "ollama"
-        assert restored.campaign_binding.tokenizer_template_identity.tokenizer_digest == _VALID_HASH
+        assert restored.campaign_binding.report_role == ReportRole.SINGLE
+        assert restored.campaign_binding.campaign_profile_hash == _VALID_HASH
+        assert restored.campaign_binding.model_registry_hash == _VALID_HASH
+        assert restored.campaign_binding.required_record_policy_hash == _VALID_HASH
+        assert restored.campaign_binding.orchestrator_hardware_identity == "linux/amd64/rtx-4090"
+        assert restored.campaign_binding.orchestrator_environment_stratum == "single-machine"
 
     def test_manifest_campaign_binding_appears_in_json(self):
         manifest = RunManifest(
@@ -419,7 +398,7 @@ class TestRunManifestCampaignBinding:
         data = json.loads(json_str)
         assert "campaign_binding" in data
         assert data["campaign_binding"]["campaign_id"] == "v2.1.8-ifeval-pipeline-integrity"
-        assert data["campaign_binding"]["track"] == "direct"
+        assert data["campaign_binding"]["report_role"] == "single"
 
     def test_manifest_without_campaign_binding_has_null_in_json(self):
         manifest = RunManifest(
@@ -440,14 +419,12 @@ class TestRunManifestCampaignBinding:
                 campaign_binding=CampaignBinding(
                     campaign_id="c1",
                     campaign_revision="1",
-                    assignment_id="a1",
-                    model_variant_id="v1",
-                    track=CampaignTrack.DIRECT,
-                    repetition=0,
+                    report_role=ReportRole.SINGLE,
                     campaign_profile_hash=_VALID_HASH,
                     model_registry_hash=_VALID_HASH,
-                    backend_artifact_identity=_backend_artifact_identity(),
-                    tokenizer_template_identity=_tokenizer_template_identity(),
+                    required_record_policy_hash=_VALID_HASH,
+                    orchestrator_hardware_identity="linux/amd64/rtx-4090",
+                    orchestrator_environment_stratum="single-machine",
                 ),
                 extra_field="bad",
             )

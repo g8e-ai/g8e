@@ -17,6 +17,13 @@ calling, privacy, throughput, lineage-diverse accuracy, and
 lineage-diverse efficiency. A homogeneous baseline is added only
 under D20.
 
+Each selector binds to a typed ``SelectionCriterion`` (the exact
+metric used to rank variants) and ``SelectionDirection`` (maximize or
+minimize). No selector description uses an unspecified ``best``,
+``top``, ``approximately``, or manual override. The lineage metadata
+source and deduplication rule are frozen in the policy so identical
+accepted evidence produces byte-identical ordered outputs.
+
 D20 homogeneous family fallback: prefer Qwen, then Granite, then
 lexicographically ordered family ID among remaining families
 eligible in all roles.
@@ -49,20 +56,22 @@ class StackSelectorId(StrEnum):
     selects model variants for the primary, assistant, and lite roles
     based on a specific criterion.
 
-    ``ACCURACY``: Select the best accuracy variant for each role.
-    ``EFFICIENCY``: Select the best efficiency (latency/throughput)
-    variant for each role.
-    ``SMALLEST``: Select the smallest (lowest parameter count) variant
+    ``ACCURACY``: Select the variant with the highest macro_average
     for each role.
-    ``TOOL_CALLING``: Select the best tool-calling variant for each
-    role.
-    ``PRIVACY``: Select the best privacy-preserving variant for each
-    role.
-    ``THROUGHPUT``: Select the best throughput variant for each role.
+    ``EFFICIENCY``: Select the variant with the lowest
+    median_warm_latency_ms for each role.
+    ``SMALLEST``: Select the variant with the lowest parameter_count
+    for each role.
+    ``TOOL_CALLING``: Select the variant with the highest
+    tool_calling_category_score for each role.
+    ``PRIVACY``: Select the variant with the highest
+    privacy_category_score for each role.
+    ``THROUGHPUT``: Select the variant with the highest
+    throughput_tokens_per_second for each role.
     ``LINEAGE_DIVERSE_ACCURACY``: Select a lineage-diverse stack
-    optimized for accuracy.
+    maximizing macro_average across roles.
     ``LINEAGE_DIVERSE_EFFICIENCY``: Select a lineage-diverse stack
-    optimized for efficiency.
+    minimizing median_warm_latency_ms across roles.
     """
 
     ACCURACY = "accuracy"
@@ -89,6 +98,72 @@ class FamilyPreference(StrEnum):
     LEXICOGRAPHIC = "lexicographic"
 
 
+class SelectionCriterion(StrEnum):
+    """The exact metric each D14 selector uses to rank variants.
+
+    Each criterion names a specific, observable measurement. No
+    selector uses an unspecified ``best`` or ``top``; the criterion
+    and direction fully define the ranking input.
+
+    ``MACRO_AVERAGE``: The D8 category macro-average score from the
+    Phase B selection policy (``VariantRoleScore.macro_average``).
+    ``MEDIAN_WARM_LATENCY_MS``: Median warm latency in milliseconds
+    (``VariantRoleScore.median_warm_latency_ms``).
+    ``PARAMETER_COUNT``: The model parameter count from the frozen
+    model registry.
+    ``TOOL_CALLING_CATEGORY_SCORE``: The macro-average of the
+    ``tool_selection`` and ``tool_arguments`` category scores.
+    ``PRIVACY_CATEGORY_SCORE``: The ``security_policy`` category
+    score from the Phase B selection policy.
+    ``THROUGHPUT_TOKENS_PER_SECOND``: Observed throughput in tokens
+    per second from resource observations.
+    """
+
+    MACRO_AVERAGE = "macro_average"
+    MEDIAN_WARM_LATENCY_MS = "median_warm_latency_ms"
+    PARAMETER_COUNT = "parameter_count"
+    TOOL_CALLING_CATEGORY_SCORE = "tool_calling_category_score"
+    PRIVACY_CATEGORY_SCORE = "privacy_category_score"
+    THROUGHPUT_TOKENS_PER_SECOND = "throughput_tokens_per_second"
+
+
+class SelectionDirection(StrEnum):
+    """Whether a selector maximizes or minimizes its criterion.
+
+    ``MAXIMIZE``: Higher criterion values rank higher (accuracy,
+    tool calling, privacy, throughput).
+    ``MINIMIZE``: Lower criterion values rank higher (efficiency,
+    smallest).
+    """
+
+    MAXIMIZE = "maximize"
+    MINIMIZE = "minimize"
+
+
+class LineageMetadataSource(StrEnum):
+    """The frozen source of family/lineage metadata for diversity checks.
+
+    ``MODEL_REGISTRY_FAMILY_ID``: The ``family_id`` field from the
+    frozen model registry entry for each variant. This is the
+    canonical lineage identifier used by lineage-diverse selectors
+    and the D20 homogeneous family rule.
+    """
+
+    MODEL_REGISTRY_FAMILY_ID = "model_registry_family_id"
+
+
+class DeduplicationRule(StrEnum):
+    """How identical role combinations across selectors are handled.
+
+    ``KEEP_SELECTOR_LABEL``: When two selectors produce the same
+    role-variant combination, both entries are retained with their
+    distinct selector labels. The combination is not collapsed;
+    each selector's result remains independently traceable.
+    """
+
+    KEEP_SELECTOR_LABEL = "keep_selector_label"
+
+
 class StackTieBreakerKey(StrEnum):
     """Ordered tie-breaker keys for D14 stack selection.
 
@@ -106,14 +181,24 @@ class StackTieBreakerKey(StrEnum):
 class StackSelectorDefinition(BaseModel):
     """Frozen definition for one D14 stack selector.
 
-    Binds the selector ID, description, primary criterion, tie-breaker
-    order, and whether the selector requires lineage diversity.
+    Binds the selector ID, description, selection criterion (the exact
+    metric used to rank variants), selection direction (maximize or
+    minimize), whether the selector requires lineage diversity, and
+    the ordered tie-breaker keys. No description uses an unspecified
+    ``best`` or ``top``; the criterion and direction fully define the
+    ranking input.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     selector_id: StackSelectorId = Field(description="Stack selector identifier.")
     description: str = Field(min_length=1, description="Human-readable selector description.")
+    selection_criterion: SelectionCriterion = Field(
+        description="The exact metric this selector uses to rank variants.",
+    )
+    selection_direction: SelectionDirection = Field(
+        description="Whether to maximize or minimize the selection criterion.",
+    )
     requires_lineage_diversity: bool = Field(
         description="Whether this selector requires lineage diversity across roles.",
     )
@@ -147,10 +232,10 @@ class HomogeneousFamilyRule(BaseModel):
 class StackPolicy(BaseModel):
     """Frozen D14/D20 Phase D stack selector policy.
 
-    Binds the policy version, selector definitions, homogeneous
-    family rule, and content hash. The policy is frozen before Phase
-    B ranking and is the policy authority; applying it waits for
-    accepted EF8-2 results.
+    Binds the policy version, selector definitions, lineage metadata
+    source, deduplication rule, homogeneous family rule, and content
+    hash. The policy is frozen before Phase B ranking and is the
+    policy authority; applying it waits for accepted EF8-2 results.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -160,6 +245,12 @@ class StackPolicy(BaseModel):
     selectors: list[StackSelectorDefinition] = Field(
         min_length=1,
         description="Frozen D14 stack selector definitions.",
+    )
+    lineage_metadata_source: LineageMetadataSource = Field(
+        description="Frozen source of family/lineage metadata for diversity checks.",
+    )
+    deduplication_rule: DeduplicationRule = Field(
+        description="How identical role combinations across selectors are handled.",
     )
     homogeneous_family_rule: HomogeneousFamilyRule = Field(
         description="D20 homogeneous family fallback rule.",
@@ -185,6 +276,8 @@ class StackPolicy(BaseModel):
             policy_id=self.policy_id,
             policy_version=self.policy_version,
             selectors=self.selectors,
+            lineage_metadata_source=self.lineage_metadata_source,
+            deduplication_rule=self.deduplication_rule,
             homogeneous_family_rule=self.homogeneous_family_rule,
         )
         if self.content_hash != expected:
@@ -200,6 +293,8 @@ def compute_stack_policy_hash(
     policy_id: str,
     policy_version: str,
     selectors: list[StackSelectorDefinition],
+    lineage_metadata_source: LineageMetadataSource,
+    deduplication_rule: DeduplicationRule,
     homogeneous_family_rule: HomogeneousFamilyRule,
 ) -> str:
     """Compute the content hash for a D14/D20 stack policy."""
@@ -211,6 +306,8 @@ def compute_stack_policy_hash(
                 json.loads(s.model_dump_json())
                 for s in sorted(selectors, key=lambda s: s.selector_id.value)
             ],
+            "lineage_metadata_source": lineage_metadata_source.value,
+            "deduplication_rule": deduplication_rule.value,
             "homogeneous_family_rule": json.loads(
                 homogeneous_family_rule.model_dump_json()
             ),
@@ -232,10 +329,13 @@ def _build_selector_definitions() -> list[StackSelectorDefinition]:
             StackSelectorId.LINEAGE_DIVERSE_ACCURACY,
             StackSelectorId.LINEAGE_DIVERSE_EFFICIENCY,
         )
+        criterion, direction = _SELECTOR_CRITERIA[selector]
         defs.append(
             StackSelectorDefinition(
                 selector_id=selector,
                 description=_SELECTOR_DESCRIPTIONS[selector],
+                selection_criterion=criterion,
+                selection_direction=direction,
                 requires_lineage_diversity=requires_diversity,
                 tie_breaker_order=tie_breakers,
             )
@@ -244,14 +344,25 @@ def _build_selector_definitions() -> list[StackSelectorDefinition]:
 
 
 _SELECTOR_DESCRIPTIONS: dict[StackSelectorId, str] = {
-    StackSelectorId.ACCURACY: "Select the best accuracy variant for each role.",
-    StackSelectorId.EFFICIENCY: "Select the best efficiency variant for each role.",
-    StackSelectorId.SMALLEST: "Select the smallest variant for each role.",
-    StackSelectorId.TOOL_CALLING: "Select the best tool-calling variant for each role.",
-    StackSelectorId.PRIVACY: "Select the best privacy-preserving variant for each role.",
-    StackSelectorId.THROUGHPUT: "Select the best throughput variant for each role.",
-    StackSelectorId.LINEAGE_DIVERSE_ACCURACY: "Select a lineage-diverse stack optimized for accuracy.",
-    StackSelectorId.LINEAGE_DIVERSE_EFFICIENCY: "Select a lineage-diverse stack optimized for efficiency.",
+    StackSelectorId.ACCURACY: "Select the variant with the highest macro_average for each role.",
+    StackSelectorId.EFFICIENCY: "Select the variant with the lowest median_warm_latency_ms for each role.",
+    StackSelectorId.SMALLEST: "Select the variant with the lowest parameter_count for each role.",
+    StackSelectorId.TOOL_CALLING: "Select the variant with the highest tool_calling_category_score for each role.",
+    StackSelectorId.PRIVACY: "Select the variant with the highest privacy_category_score for each role.",
+    StackSelectorId.THROUGHPUT: "Select the variant with the highest throughput_tokens_per_second for each role.",
+    StackSelectorId.LINEAGE_DIVERSE_ACCURACY: "Select a lineage-diverse stack maximizing macro_average across roles.",
+    StackSelectorId.LINEAGE_DIVERSE_EFFICIENCY: "Select a lineage-diverse stack minimizing median_warm_latency_ms across roles.",
+}
+
+_SELECTOR_CRITERIA: dict[StackSelectorId, tuple[SelectionCriterion, SelectionDirection]] = {
+    StackSelectorId.ACCURACY: (SelectionCriterion.MACRO_AVERAGE, SelectionDirection.MAXIMIZE),
+    StackSelectorId.EFFICIENCY: (SelectionCriterion.MEDIAN_WARM_LATENCY_MS, SelectionDirection.MINIMIZE),
+    StackSelectorId.SMALLEST: (SelectionCriterion.PARAMETER_COUNT, SelectionDirection.MINIMIZE),
+    StackSelectorId.TOOL_CALLING: (SelectionCriterion.TOOL_CALLING_CATEGORY_SCORE, SelectionDirection.MAXIMIZE),
+    StackSelectorId.PRIVACY: (SelectionCriterion.PRIVACY_CATEGORY_SCORE, SelectionDirection.MAXIMIZE),
+    StackSelectorId.THROUGHPUT: (SelectionCriterion.THROUGHPUT_TOKENS_PER_SECOND, SelectionDirection.MAXIMIZE),
+    StackSelectorId.LINEAGE_DIVERSE_ACCURACY: (SelectionCriterion.MACRO_AVERAGE, SelectionDirection.MAXIMIZE),
+    StackSelectorId.LINEAGE_DIVERSE_EFFICIENCY: (SelectionCriterion.MEDIAN_WARM_LATENCY_MS, SelectionDirection.MINIMIZE),
 }
 
 
@@ -264,9 +375,12 @@ def build_stack_policy(
     The policy is frozen with:
     - D14: eight selectors (accuracy, efficiency, smallest, tool
       calling, privacy, throughput, lineage-diverse accuracy,
-      lineage-diverse efficiency).
+      lineage-diverse efficiency), each bound to a typed
+      ``SelectionCriterion`` and ``SelectionDirection``.
     - D20: homogeneous family fallback preferring Qwen, then Granite,
       then lexicographic family ID.
+    - Lineage metadata source: ``model_registry_family_id``.
+    - Deduplication rule: ``keep_selector_label``.
     """
     selectors = _build_selector_definitions()
     homogeneous_rule = HomogeneousFamilyRule(
@@ -281,12 +395,16 @@ def build_stack_policy(
         policy_id=policy_id,
         policy_version=STACK_POLICY_VERSION,
         selectors=selectors,
+        lineage_metadata_source=LineageMetadataSource.MODEL_REGISTRY_FAMILY_ID,
+        deduplication_rule=DeduplicationRule.KEEP_SELECTOR_LABEL,
         homogeneous_family_rule=homogeneous_rule,
     )
     return StackPolicy(
         policy_id=policy_id,
         policy_version=STACK_POLICY_VERSION,
         selectors=selectors,
+        lineage_metadata_source=LineageMetadataSource.MODEL_REGISTRY_FAMILY_ID,
+        deduplication_rule=DeduplicationRule.KEEP_SELECTOR_LABEL,
         homogeneous_family_rule=homogeneous_rule,
         content_hash=content_hash,
     )
@@ -294,8 +412,12 @@ def build_stack_policy(
 
 __all__ = [
     "STACK_POLICY_VERSION",
+    "DeduplicationRule",
     "FamilyPreference",
     "HomogeneousFamilyRule",
+    "LineageMetadataSource",
+    "SelectionCriterion",
+    "SelectionDirection",
     "StackPolicy",
     "StackSelectorDefinition",
     "StackSelectorId",

@@ -207,19 +207,28 @@ def _run_campaign(tmp_path: Path) -> Path:
 
 def _make_resource_observation(
     *,
+    campaign_id: str = "v2.1.8-ifeval-pipeline-integrity",
+    child_id: str = "v2.1.8-ifeval-pipeline-integrity",
     run_id: str = "run-1",
+    assignment_id: str = "assignment-1",
+    attempt_id: str = "att-1",
+    inference_id: str = "inf-1",
+    role: str = "primary",
     model_variant_id: str = "qwen3-8b-q4_0",
-    task_block: str = "task-1",
-    hardware_identity: str = "linux/amd64/rtx-4090",
+    task_id: str = "task-1",
+    orchestrator_scope: str = "linux/amd64/cpu",
+    provider_scope: str = "linux/amd64/rtx-4090",
+    observation_boundary: str = "provider_call",
+    clock_domain: str = "monotonic",
     collection_tool: str = "psutil-5.9",
     source_evidence_hash: str = _VALID_HASH,
-    model_load_time_seconds: float = 12.5,
-    peak_resident_memory_bytes: int = 4_000_000_000,
+    model_load_time_seconds: float | None = 12.5,
+    peak_resident_memory_bytes: int | None = 4_000_000_000,
     peak_accelerator_memory_bytes: int | None = 8_000_000_000,
-    artifact_bytes: int = 4_800_000_000,
+    artifact_bytes: int | None = 4_800_000_000,
     measured_energy_joules: float | None = None,
-    end_to_end_latency_seconds: float = 1.5,
-    provider_call_latency_seconds: float = 1.2,
+    end_to_end_latency_seconds: float | None = 1.5,
+    provider_call_latency_seconds: float | None = 1.2,
     output_throughput_tokens_per_second: float | None = None,
     hidden_reasoning_throughput_tokens_per_second: float | None = None,
     time_to_first_token_seconds: float | None = None,
@@ -231,13 +240,7 @@ def _make_resource_observation(
     gpu_clock_mhz: float | None = None,
 ) -> dict:
     """Build a valid resource observation dict for testing."""
-    return {
-        "run_id": run_id,
-        "model_variant_id": model_variant_id,
-        "task_block": task_block,
-        "hardware_identity": hardware_identity,
-        "collection_tool": collection_tool,
-        "source_evidence_hash": source_evidence_hash,
+    measurement_values = {
         "model_load_time_seconds": model_load_time_seconds,
         "peak_resident_memory_bytes": peak_resident_memory_bytes,
         "peak_accelerator_memory_bytes": peak_accelerator_memory_bytes,
@@ -255,44 +258,53 @@ def _make_resource_observation(
         "gpu_power_draw_watts": gpu_power_draw_watts,
         "gpu_clock_mhz": gpu_clock_mhz,
     }
+    unavailable_measurements = [
+        {
+            "field_name": field_name,
+            "availability": "unavailable",
+            "scope": "provider_remote",
+            "reason": f"{field_name} not available at remote provider boundary",
+        }
+        for field_name, value in measurement_values.items()
+        if value is None
+    ]
+    return {
+        "campaign_id": campaign_id,
+        "child_id": child_id,
+        "run_id": run_id,
+        "assignment_id": assignment_id,
+        "attempt_id": attempt_id,
+        "inference_id": inference_id,
+        "role": role,
+        "model_variant_id": model_variant_id,
+        "task_id": task_id,
+        "orchestrator_scope": orchestrator_scope,
+        "provider_scope": provider_scope,
+        "observation_boundary": observation_boundary,
+        "clock_domain": clock_domain,
+        "collection_tool": collection_tool,
+        "source_evidence_hash": source_evidence_hash,
+        "unavailable_measurements": unavailable_measurements,
+        **measurement_values,
+    }
 
 
 class TestResourceObserverContract:
     def test_resource_observation_has_hidden_reasoning_throughput(self):
         """ResourceObservation has a hidden_reasoning_throughput field separate from output_throughput."""
-        obs = ResourceObservation(
-            run_id="run-1",
-            model_variant_id="v1",
-            task_block="task-1",
-            hardware_identity="linux/amd64/rtx-4090",
-            collection_tool="psutil-5.9",
-            source_evidence_hash=_VALID_HASH,
-            model_load_time_seconds=10.0,
-            peak_resident_memory_bytes=4_000_000_000,
-            peak_accelerator_memory_bytes=8_000_000_000,
-            artifact_bytes=4_800_000_000,
-            end_to_end_latency_seconds=1.5,
-            provider_call_latency_seconds=1.2,
-            output_throughput_tokens_per_second=50.0,
-            hidden_reasoning_throughput_tokens_per_second=200.0,
+        obs = ResourceObservation.model_validate(
+            _make_resource_observation(
+                output_throughput_tokens_per_second=50.0,
+                hidden_reasoning_throughput_tokens_per_second=200.0,
+            )
         )
         assert obs.hidden_reasoning_throughput_tokens_per_second == 200.0
         assert obs.output_throughput_tokens_per_second == 50.0
 
     def test_hidden_reasoning_throughput_none_when_unmeasured(self):
         """Hidden reasoning throughput is None when not available."""
-        obs = ResourceObservation(
-            run_id="run-1",
-            model_variant_id="v1",
-            task_block="task-1",
-            hardware_identity="linux/amd64/rtx-4090",
-            collection_tool="psutil-5.9",
-            source_evidence_hash=_VALID_HASH,
-            model_load_time_seconds=10.0,
-            peak_resident_memory_bytes=4_000_000_000,
-            artifact_bytes=4_800_000_000,
-            end_to_end_latency_seconds=1.5,
-            provider_call_latency_seconds=1.2,
+        obs = ResourceObservation.model_validate(
+            _make_resource_observation()
         )
         assert obs.hidden_reasoning_throughput_tokens_per_second is None
 
@@ -339,36 +351,19 @@ class TestResourceObserverContract:
             multi_tenant_exclusion_rule="exclusive_access",
             unsupported_platform_behavior="skip_observation",
         )
-        obs = ResourceObservation(
-            run_id="run-1",
-            model_variant_id="v1",
-            task_block="task-1",
-            hardware_identity="linux/amd64/rtx-4090",
-            collection_tool="psutil-5.9",
-            source_evidence_hash=_VALID_HASH,
-            model_load_time_seconds=10.0,
-            peak_resident_memory_bytes=4_000_000_000,
-            artifact_bytes=4_800_000_000,
-            end_to_end_latency_seconds=1.5,
-            provider_call_latency_seconds=1.2,
+        obs = ResourceObservation.model_validate(
+            _make_resource_observation()
         )
         validate_resource_observations([obs], contract=contract)
 
     def test_output_throughput_is_visible_tokens(self):
         """Output throughput is reported visible output tokens divided by eligible provider-call duration."""
-        obs = ResourceObservation(
-            run_id="run-1",
-            model_variant_id="v1",
-            task_block="task-1",
-            hardware_identity="linux/amd64/rtx-4090",
-            collection_tool="psutil-5.9",
-            source_evidence_hash=_VALID_HASH,
-            model_load_time_seconds=10.0,
-            peak_resident_memory_bytes=4_000_000_000,
-            artifact_bytes=4_800_000_000,
-            end_to_end_latency_seconds=2.0,
-            provider_call_latency_seconds=1.0,
-            output_throughput_tokens_per_second=100.0,
+        obs = ResourceObservation.model_validate(
+            _make_resource_observation(
+                end_to_end_latency_seconds=2.0,
+                provider_call_latency_seconds=1.0,
+                output_throughput_tokens_per_second=100.0,
+            )
         )
         # 100 tokens / 1.0 second provider call = 100 tokens/second
         assert obs.output_throughput_tokens_per_second == 100.0
@@ -478,7 +473,7 @@ class TestCampaignVerifierResourceObservationLayer:
         # Write valid resource observations
         obs_data = _make_resource_observation(
             run_id="test-run-id",
-            task_block="task-1001",
+            task_id="task-1001",
         )
         obs_path = report_dir / RESOURCE_OBSERVATIONS_JSONL
         obs_path.write_text(json.dumps(obs_data) + "\n")
@@ -508,11 +503,12 @@ class TestCampaignVerifierResourceObservationLayer:
 
         report_dir = _run_campaign(tmp_path)
 
-        # Write duplicate resource observations
+        # Write duplicate resource observations (same inference identity)
         obs_data = _make_resource_observation(
             run_id="run-1",
-            task_block="task-1",
+            task_id="task-1",
             model_variant_id="v1",
+            inference_id="inf-1",
         )
         obs_path = report_dir / RESOURCE_OBSERVATIONS_JSONL
         obs_path.write_text(json.dumps(obs_data) + "\n" + json.dumps(obs_data) + "\n")
@@ -530,7 +526,7 @@ class TestCampaignVerifierResourceObservationLayer:
 
         obs_data = _make_resource_observation(
             run_id="test-run-id",
-            task_block="task-1001",
+            task_id="task-1001",
             time_to_first_token_seconds=0.45,
             generation_duration_seconds=1.1,
             accelerator_memory_before_bytes=2_000_000_000,

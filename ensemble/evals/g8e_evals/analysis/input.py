@@ -28,6 +28,7 @@ from g8e_evals.campaign import (
     ModelCohort,
     RetryPolicy,
 )
+from g8e_evals.index import ResourceObservation
 from g8e_evals.schema import (
     AttemptRecord,
     ArtifactLeakageObservation,
@@ -128,6 +129,8 @@ class AnalysisInputRecord(BaseModel):
 
     local_resource_observations: list[LocalResourceObservation] = Field(default_factory=list)
     human_wait_observations: list[HumanWaitObservation] = Field(default_factory=list)
+
+    resource_observations: list[ResourceObservation] = Field(default_factory=list)
 
     tool_call_scorecards: list[ToolCallScorecard] = Field(default_factory=list)
 
