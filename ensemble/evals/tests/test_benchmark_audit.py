@@ -281,3 +281,29 @@ class TestGenerateAuditReport:
             if e.execution_class == AuditExecutionClass.REAL_MODEL
         ]
         assert len(real_model_entries) >= 1
+
+    def test_audit_classifies_scenario_suites_as_real_system(self):
+        """The audit classifies the eight REAL_SYSTEM scenario suites correctly."""
+        report = generate_audit_report(
+            audit_id="audit-1",
+            audit_version="1.0.0",
+            created_at="2026-09-10T00:00:00Z",
+        )
+        real_system_entries = [
+            e for e in report.entries
+            if e.execution_class == AuditExecutionClass.REAL_SYSTEM
+        ]
+        assert len(real_system_entries) == 8
+        for entry in real_system_entries:
+            assert entry.measures_live_system is True
+            assert entry.eligible_for_model_comparison is True
+            assert entry.is_deterministic_simulation is False
+
+    def test_audit_model_comparison_count_includes_scenario_suites(self):
+        """The model-comparison count includes ifeval_subset and the 8 REAL_SYSTEM suites."""
+        report = generate_audit_report(
+            audit_id="audit-1",
+            audit_version="1.0.0",
+            created_at="2026-09-10T00:00:00Z",
+        )
+        assert report.model_comparison_suite_count == 9

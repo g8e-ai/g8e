@@ -158,7 +158,11 @@ def _patch_source_build_provenance_env(monkeypatch) -> None:
 
 def _patch_verifier(monkeypatch, passed: bool = True) -> MagicMock:
     verifier = MagicMock()
-    verifier.verify.return_value = _score(passed)
+    verifier.grader_id = "ifeval_subset_verifier"
+    verifier.grader_version = "1.0.0"
+    score = _score(passed)
+    verifier.verify.return_value = score
+    verifier.grade.return_value = score
     monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], grader_factory=lambda: verifier))
     return verifier
 

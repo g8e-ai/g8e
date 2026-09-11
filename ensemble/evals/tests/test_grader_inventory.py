@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import pytest
 
+from g8e_evals.benchmarks.scenarios.loader import ScenarioLoader
 from g8e_evals.grader_inventory import (
     GRADER_INVENTORY,
     ConformanceCaseCategory,
@@ -53,8 +54,8 @@ def test_inventory_non_partial_external_graders_are_in_grader_registry():
             )
 
 
-def test_inventory_has_34_entries():
-    assert len(GRADER_INVENTORY) == 34
+def test_inventory_has_42_entries():
+    assert len(GRADER_INVENTORY) == 42
 
 
 def test_inventory_entries_are_deterministic_class():
@@ -235,6 +236,14 @@ def test_inventory_producer_suite_ids_reference_real_suites():
         LedgerConsistencyLoader.SUITE_ID: LedgerConsistencyLoader,
         ToolSequenceLoader.SUITE_ID: ToolSequenceLoader,
         PartialMilestoneLoader.SUITE_ID: PartialMilestoneLoader,
+        "tool_selection": ScenarioLoader,
+        "tool_arguments": ScenarioLoader,
+        "technical_analysis": ScenarioLoader,
+        "routing_delegation": ScenarioLoader,
+        "verification": ScenarioLoader,
+        "security_policy": ScenarioLoader,
+        "recovery": ScenarioLoader,
+        "final_response": ScenarioLoader,
     }
 
     for entry in GRADER_INVENTORY.values():

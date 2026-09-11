@@ -5,7 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Phase 1 release-metric audit: enumerate all 59 release metrics.
+"""Phase 1 release-metric audit: enumerate all 67 release metrics.
 
 For each metric in the v2.1.8 release set, this test records typed
 eligibility, denominator, missing-denominator disposition, arm
@@ -87,15 +87,15 @@ def _producer_name(metric_id: str, grader_class: GraderClass) -> str:
 class TestPhase1ReleaseMetricAudit:
     """Every release metric has a complete typed audit trail."""
 
-    def test_release_metric_set_has_exactly_59_metrics(self) -> None:
-        assert len(RELEASE_METRIC_SET.metrics) == 59, (
-            f"Expected 59 release metrics, got {len(RELEASE_METRIC_SET.metrics)}"
+    def test_release_metric_set_has_exactly_67_metrics(self) -> None:
+        assert len(RELEASE_METRIC_SET.metrics) == 67, (
+            f"Expected 67 release metrics, got {len(RELEASE_METRIC_SET.metrics)}"
         )
 
-    def test_registry_has_exactly_59_definitions(self) -> None:
+    def test_registry_has_exactly_67_definitions(self) -> None:
         definitions = DEFAULT_METRIC_REGISTRY.all_definitions()
-        assert len(definitions) == 59, (
-            f"Expected 59 registered definitions, got {len(definitions)}"
+        assert len(definitions) == 67, (
+            f"Expected 67 registered definitions, got {len(definitions)}"
         )
 
     def test_release_set_matches_registry(self) -> None:

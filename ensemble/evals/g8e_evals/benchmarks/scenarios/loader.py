@@ -50,8 +50,6 @@ class ScenarioLoader:
         self.gold_set_path = gold_set_path
         self._suite_id = suite_id
 
-    SUITE_ID = "scenario_suite"
-
     def load(self) -> Iterable[Task]:
         if not self.gold_set_path.exists():
             raise FileNotFoundError(

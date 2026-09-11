@@ -48,6 +48,13 @@ def _make_resource_observation(
     end_to_end_latency_seconds: float = 1.5,
     provider_call_latency_seconds: float = 1.2,
     output_throughput_tokens_per_second: float | None = None,
+    time_to_first_token_seconds: float | None = None,
+    generation_duration_seconds: float | None = None,
+    accelerator_memory_before_bytes: int | None = None,
+    gpu_utilization_percent: float | None = None,
+    gpu_temperature_celsius: float | None = None,
+    gpu_power_draw_watts: float | None = None,
+    gpu_clock_mhz: float | None = None,
 ) -> ResourceObservation:
     return ResourceObservation(
         run_id=run_id,
@@ -64,6 +71,13 @@ def _make_resource_observation(
         end_to_end_latency_seconds=end_to_end_latency_seconds,
         provider_call_latency_seconds=provider_call_latency_seconds,
         output_throughput_tokens_per_second=output_throughput_tokens_per_second,
+        time_to_first_token_seconds=time_to_first_token_seconds,
+        generation_duration_seconds=generation_duration_seconds,
+        accelerator_memory_before_bytes=accelerator_memory_before_bytes,
+        gpu_utilization_percent=gpu_utilization_percent,
+        gpu_temperature_celsius=gpu_temperature_celsius,
+        gpu_power_draw_watts=gpu_power_draw_watts,
+        gpu_clock_mhz=gpu_clock_mhz,
     )
 
 
@@ -183,3 +197,123 @@ class TestNoVramInference:
         """When no calibrated energy source exists, measured_energy_joules is None."""
         obs = _make_resource_observation(measured_energy_joules=None)
         assert obs.measured_energy_joules is None
+
+
+class TestPerInferenceFields:
+    """Verify the per-inference extension fields separate cold-start from warm
+    inference and capture GPU metrics, all defaulting to None for backward
+    compatibility."""
+
+    def test_new_fields_default_to_none(self):
+        """All per-inference extension fields default to None when omitted."""
+        obs = _make_resource_observation()
+        assert obs.time_to_first_token_seconds is None
+        assert obs.generation_duration_seconds is None
+        assert obs.accelerator_memory_before_bytes is None
+        assert obs.gpu_utilization_percent is None
+        assert obs.gpu_temperature_celsius is None
+        assert obs.gpu_power_draw_watts is None
+        assert obs.gpu_clock_mhz is None
+
+    def test_round_trip_preserves_per_inference_fields(self):
+        """Round-trip serialization preserves all per-inference fields."""
+        obs = _make_resource_observation(
+            time_to_first_token_seconds=0.45,
+            generation_duration_seconds=1.1,
+            accelerator_memory_before_bytes=2_000_000_000,
+            gpu_utilization_percent=87.5,
+            gpu_temperature_celsius=71.0,
+            gpu_power_draw_watts=280.0,
+            gpu_clock_mhz=2520.0,
+        )
+        restored = ResourceObservation.model_validate_json(obs.model_dump_json())
+        assert restored == obs
+        assert restored.time_to_first_token_seconds == 0.45
+        assert restored.generation_duration_seconds == 1.1
+        assert restored.accelerator_memory_before_bytes == 2_000_000_000
+        assert restored.gpu_utilization_percent == 87.5
+        assert restored.gpu_temperature_celsius == 71.0
+        assert restored.gpu_power_draw_watts == 280.0
+        assert restored.gpu_clock_mhz == 2520.0
+
+    def test_rejects_negative_time_to_first_token(self):
+        data = _make_resource_observation().model_dump()
+        data["time_to_first_token_seconds"] = -0.1
+        with pytest.raises(ValidationError):
+            ResourceObservation(**data)
+
+    def test_rejects_negative_generation_duration(self):
+        data = _make_resource_observation().model_dump()
+        data["generation_duration_seconds"] = -1.0
+        with pytest.raises(ValidationError):
+            ResourceObservation(**data)
+
+    def test_rejects_negative_accelerator_memory_before(self):
+        data = _make_resource_observation().model_dump()
+        data["accelerator_memory_before_bytes"] = -1
+        with pytest.raises(ValidationError):
+            ResourceObservation(**data)
+
+    def test_rejects_negative_gpu_utilization(self):
+        data = _make_resource_observation().model_dump()
+        data["gpu_utilization_percent"] = -1.0
+        with pytest.raises(ValidationError):
+            ResourceObservation(**data)
+
+    def test_rejects_negative_gpu_power_draw(self):
+        data = _make_resource_observation().model_dump()
+        data["gpu_power_draw_watts"] = -1.0
+        with pytest.raises(ValidationError):
+            ResourceObservation(**data)
+
+    def test_rejects_negative_gpu_clock(self):
+        data = _make_resource_observation().model_dump()
+        data["gpu_clock_mhz"] = -1.0
+        with pytest.raises(ValidationError):
+            ResourceObservation(**data)
+
+    def test_allows_negative_gpu_temperature(self):
+        """GPU temperature can be negative (sub-ambient cooling)."""
+        obs = _make_resource_observation(gpu_temperature_celsius=-5.0)
+        assert obs.gpu_temperature_celsius == -5.0
+
+
+class TestBackwardCompatibility:
+    """Existing observations without the new per-inference fields still validate."""
+
+    def test_observation_without_new_fields_validates(self):
+        """An observation constructed with only the original fields validates."""
+        obs = ResourceObservation(
+            run_id="run-1",
+            model_variant_id="v1",
+            task_block="task-1",
+            hardware_identity="linux/amd64/rtx-4090",
+            collection_tool="psutil-5.9",
+            source_evidence_hash=_VALID_HASH,
+            model_load_time_seconds=10.0,
+            peak_resident_memory_bytes=4_000_000_000,
+            artifact_bytes=4_800_000_000,
+            end_to_end_latency_seconds=1.5,
+            provider_call_latency_seconds=1.2,
+        )
+        assert obs.time_to_first_token_seconds is None
+        assert obs.gpu_utilization_percent is None
+
+    def test_legacy_json_round_trip_preserves_absence(self):
+        """JSON without the new fields round-trips with None for the new fields."""
+        legacy_json = (
+            '{"run_id":"run-1","model_variant_id":"v1","task_block":"task-1",'
+            '"hardware_identity":"linux/amd64/rtx-4090","collection_tool":"psutil-5.9",'
+            '"source_evidence_hash":"' + _VALID_HASH + '",'
+            '"model_load_time_seconds":10.0,"peak_resident_memory_bytes":4000000000,'
+            '"artifact_bytes":4800000000,"end_to_end_latency_seconds":1.5,'
+            '"provider_call_latency_seconds":1.2}'
+        )
+        obs = ResourceObservation.model_validate_json(legacy_json)
+        assert obs.time_to_first_token_seconds is None
+        assert obs.generation_duration_seconds is None
+        assert obs.accelerator_memory_before_bytes is None
+        assert obs.gpu_utilization_percent is None
+        assert obs.gpu_temperature_celsius is None
+        assert obs.gpu_power_draw_watts is None
+        assert obs.gpu_clock_mhz is None

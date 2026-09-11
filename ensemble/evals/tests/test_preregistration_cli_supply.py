@@ -148,9 +148,13 @@ def _patch_verifier(monkeypatch) -> MagicMock:
     from g8e_evals.models import ScoreDetails
 
     verifier = MagicMock()
-    verifier.verify.return_value = Score(
+    verifier.grader_id = "ifeval_subset_verifier"
+    verifier.grader_version = "1.0.0"
+    score = Score(
         task_id="1001", passed=True, details=ScoreDetails(), model_calls=[],
     )
+    verifier.verify.return_value = score
+    verifier.grade.return_value = score
     monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], grader_factory=lambda: verifier))
     return verifier
 

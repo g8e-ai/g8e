@@ -34,6 +34,14 @@ pytestmark = pytest.mark.unit
 
 _EXPECTED_SUITE_IDS = frozenset({
     "ifeval_subset",
+    "tool_selection",
+    "tool_arguments",
+    "technical_analysis",
+    "routing_delegation",
+    "verification",
+    "security_policy",
+    "recovery",
+    "final_response",
     "privacy_token_lifecycle",
     "privacy_boundary_leakage",
     "governance_adversarial",
@@ -49,7 +57,28 @@ _EXPECTED_SUITE_IDS = frozenset({
     "economics_performance",
 })
 
-_EXPECTED_MODEL_COMPARISON = frozenset({"ifeval_subset"})
+_EXPECTED_MODEL_COMPARISON = frozenset({
+    "ifeval_subset",
+    "tool_selection",
+    "tool_arguments",
+    "technical_analysis",
+    "routing_delegation",
+    "verification",
+    "security_policy",
+    "recovery",
+    "final_response",
+})
+
+_EXPECTED_REAL_SYSTEM = frozenset({
+    "tool_selection",
+    "tool_arguments",
+    "technical_analysis",
+    "routing_delegation",
+    "verification",
+    "security_policy",
+    "recovery",
+    "final_response",
+})
 
 _EXPECTED_SIMULATION = frozenset({
     "privacy_token_lifecycle",
@@ -154,6 +183,20 @@ class TestExecutionClassClassification:
         spec = get_suite("ifeval_subset")
         assert spec.is_model_comparison
 
+    def test_scenario_suites_are_real_system(self):
+        for suite_id in _EXPECTED_REAL_SYSTEM:
+            spec = get_suite(suite_id)
+            assert spec.execution_class is SuiteExecutionClass.REAL_SYSTEM, (
+                f"suite '{suite_id}' should be REAL_SYSTEM"
+            )
+
+    def test_scenario_suites_are_model_comparison(self):
+        for suite_id in _EXPECTED_REAL_SYSTEM:
+            spec = get_suite(suite_id)
+            assert spec.is_model_comparison, (
+                f"suite '{suite_id}' should be model comparison"
+            )
+
     def test_synthetic_suites_are_not_model_comparison(self):
         for spec in get_simulation_suites():
             assert not spec.is_model_comparison, (
@@ -206,6 +249,15 @@ class TestDuplicateRegistrationRejected:
             register_suite(spec)
 
 
+class TestModelComparisonSuiteHasGrader:
+    def test_every_model_comparison_suite_has_nonnull_grader_factory(self):
+        """The suite registry rejects model-comparison suites with no applicable grader."""
+        for spec in get_model_comparison_suites():
+            assert spec.grader_factory is not None, (
+                f"suite '{spec.suite_id}': model-comparison suite must have a grader_factory"
+            )
+
+
 class TestCliSuiteChoicesMatchRegistry:
     def test_run_command_suite_choices_match_model_comparison(self):
         from g8e_evals.cli import _MODEL_COMPARISON_SUITE_CHOICES
@@ -249,12 +301,26 @@ class TestGraderFactoryContract:
         assert grader is not None
         assert hasattr(grader, "verify")
 
+    def test_scenario_suite_grader_factory_returns_scenario_grader(self):
+        from g8e_evals.benchmarks.scenarios.grader import ScenarioGrader
+
+        for suite_id in _EXPECTED_REAL_SYSTEM:
+            spec = get_suite(suite_id)
+            assert spec.grader_factory is not None
+            grader = spec.grader_factory()
+            assert isinstance(grader, ScenarioGrader), (
+                f"suite '{suite_id}': grader factory must return a ScenarioGrader"
+            )
+            assert grader.grader_id == suite_id, (
+                f"suite '{suite_id}': grader_id is '{grader.grader_id}'"
+            )
+
 
 class TestRequiredObserversContract:
     def test_real_model_suite_has_no_required_observers(self):
         for spec in get_model_comparison_suites():
             assert spec.required_observers == (), (
-                f"suite '{spec.suite_id}': real-model suite should not require observers"
+                f"suite '{spec.suite_id}': real-model/real-system suite should not require observers"
             )
 
     def test_simulation_suites_have_observer_or_cross_cutting(self):
@@ -271,6 +337,13 @@ class TestCompatibleArmsContract:
     def test_ifeval_subset_supports_all_arms(self):
         spec = get_suite("ifeval_subset")
         assert set(spec.compatible_arms) == set(ALL_ARMS)
+
+    def test_scenario_suites_support_all_arms(self):
+        for suite_id in _EXPECTED_REAL_SYSTEM:
+            spec = get_suite(suite_id)
+            assert set(spec.compatible_arms) == set(ALL_ARMS), (
+                f"suite '{suite_id}': compatible_arms mismatch"
+            )
 
     def test_simulation_suites_support_direct_and_governed(self):
         expected = frozenset({Arm.DIRECT, *GOVERNED_ARMS})

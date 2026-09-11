@@ -222,6 +222,13 @@ def _make_resource_observation(
     provider_call_latency_seconds: float = 1.2,
     output_throughput_tokens_per_second: float | None = None,
     hidden_reasoning_throughput_tokens_per_second: float | None = None,
+    time_to_first_token_seconds: float | None = None,
+    generation_duration_seconds: float | None = None,
+    accelerator_memory_before_bytes: int | None = None,
+    gpu_utilization_percent: float | None = None,
+    gpu_temperature_celsius: float | None = None,
+    gpu_power_draw_watts: float | None = None,
+    gpu_clock_mhz: float | None = None,
 ) -> dict:
     """Build a valid resource observation dict for testing."""
     return {
@@ -240,6 +247,13 @@ def _make_resource_observation(
         "provider_call_latency_seconds": provider_call_latency_seconds,
         "output_throughput_tokens_per_second": output_throughput_tokens_per_second,
         "hidden_reasoning_throughput_tokens_per_second": hidden_reasoning_throughput_tokens_per_second,
+        "time_to_first_token_seconds": time_to_first_token_seconds,
+        "generation_duration_seconds": generation_duration_seconds,
+        "accelerator_memory_before_bytes": accelerator_memory_before_bytes,
+        "gpu_utilization_percent": gpu_utilization_percent,
+        "gpu_temperature_celsius": gpu_temperature_celsius,
+        "gpu_power_draw_watts": gpu_power_draw_watts,
+        "gpu_clock_mhz": gpu_clock_mhz,
     }
 
 
@@ -506,3 +520,43 @@ class TestCampaignVerifierResourceObservationLayer:
         result = verify_campaign(report_dir)
         assert not result.ok
         assert any("resource" in f.lower() and "duplicate" in f.lower() for f in result.failures)
+
+    def test_verifier_validates_extended_per_inference_records(self, tmp_path: Path):
+        """The verifier validates resource observations with the per-inference
+        extension fields (cold-start vs warm inference separation and GPU metrics)."""
+        from g8e_evals.constants import RESOURCE_OBSERVATIONS_JSONL
+
+        report_dir = _run_campaign(tmp_path)
+
+        obs_data = _make_resource_observation(
+            run_id="test-run-id",
+            task_block="task-1001",
+            time_to_first_token_seconds=0.45,
+            generation_duration_seconds=1.1,
+            accelerator_memory_before_bytes=2_000_000_000,
+            gpu_utilization_percent=87.5,
+            gpu_temperature_celsius=71.0,
+            gpu_power_draw_watts=280.0,
+            gpu_clock_mhz=2520.0,
+            collection_tool="psutil-5.9+pynvml-12.0.0",
+        )
+        obs_path = report_dir / RESOURCE_OBSERVATIONS_JSONL
+        obs_path.write_text(json.dumps(obs_data) + "\n")
+
+        result = verify_campaign(report_dir)
+        assert result.ok, f"extended per-inference record should pass: {result.failures}"
+        assert "resource_observation" in result.checked_layers
+
+    def test_verifier_rejects_negative_time_to_first_token(self, tmp_path: Path):
+        """The verifier rejects resource observations with negative time_to_first_token."""
+        from g8e_evals.constants import RESOURCE_OBSERVATIONS_JSONL
+
+        report_dir = _run_campaign(tmp_path)
+
+        bad_obs = _make_resource_observation(time_to_first_token_seconds=-0.1)
+        obs_path = report_dir / RESOURCE_OBSERVATIONS_JSONL
+        obs_path.write_text(json.dumps(bad_obs) + "\n")
+
+        result = verify_campaign(report_dir)
+        assert not result.ok
+        assert any("resource" in f.lower() for f in result.failures)

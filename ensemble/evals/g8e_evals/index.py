@@ -440,6 +440,17 @@ class ResourceObservation(BaseModel):
     eligible provider-call duration. Hidden reasoning throughput is
     reported separately when the model exposes it; it is ``None`` when
     not available.
+
+    Cold-start (model load) is separated from warm inference
+    (``time_to_first_token_seconds`` and ``generation_duration_seconds``)
+    so the load-vs-inference tradeoff is visible. GPU metrics
+    (utilization, temperature, power draw, clock) are captured via
+    ``pynvml`` when an NVIDIA GPU is present and are ``None`` otherwise.
+    ``accelerator_memory_before_bytes`` records the VRAM baseline before
+    inference so the inference-attributable delta can be computed against
+    ``peak_accelerator_memory_bytes``. All per-inference extension fields
+    default to ``None`` for backward compatibility with existing
+    observations.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -451,7 +462,7 @@ class ResourceObservation(BaseModel):
     collection_tool: str = Field(min_length=1, description="Collection tool and version (e.g. psutil-5.9).")
     source_evidence_hash: str = Field(min_length=64, max_length=64, description="SHA-256 of the source evidence.")
 
-    model_load_time_seconds: float = Field(ge=0.0, description="Model load time in seconds.")
+    model_load_time_seconds: float = Field(ge=0.0, description="Model load time in seconds (cold start).")
     peak_resident_memory_bytes: int = Field(ge=0, description="Peak resident memory in bytes.")
     peak_accelerator_memory_bytes: int | None = Field(default=None, ge=0, description="Peak accelerator memory in bytes. None when not measured.")
     artifact_bytes: int = Field(ge=0, description="Artifact file size in bytes.")
@@ -460,6 +471,14 @@ class ResourceObservation(BaseModel):
     provider_call_latency_seconds: float = Field(gt=0.0, description="Provider-call latency in seconds.")
     output_throughput_tokens_per_second: float | None = Field(default=None, ge=0.0, description="Output throughput in tokens per second. None when not measured.")
     hidden_reasoning_throughput_tokens_per_second: float | None = Field(default=None, ge=0.0, description="Hidden reasoning throughput in tokens per second. None when not available.")
+
+    time_to_first_token_seconds: float | None = Field(default=None, ge=0.0, description="Time to first token in seconds (warm inference start). None when not measured.")
+    generation_duration_seconds: float | None = Field(default=None, ge=0.0, description="Generation duration in seconds (warm inference duration). None when not measured.")
+    accelerator_memory_before_bytes: int | None = Field(default=None, ge=0, description="Accelerator memory baseline before inference in bytes. None when not measured.")
+    gpu_utilization_percent: float | None = Field(default=None, ge=0.0, description="GPU utilization in percent. None when not on GPU or not measured.")
+    gpu_temperature_celsius: float | None = Field(default=None, description="GPU temperature in degrees Celsius. None when not on GPU or not measured.")
+    gpu_power_draw_watts: float | None = Field(default=None, ge=0.0, description="GPU power draw in watts. None when not on GPU or not measured.")
+    gpu_clock_mhz: float | None = Field(default=None, ge=0.0, description="GPU clock in MHz. None when not on GPU or not measured.")
 
 
 class ResourceObserverContract(BaseModel):

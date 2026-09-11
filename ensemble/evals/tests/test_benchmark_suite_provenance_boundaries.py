@@ -56,6 +56,8 @@ from g8e_evals.benchmarks.privacy.observers import (
 )
 from g8e_evals.benchmarks.reliability.loader import ReliabilityLoader
 from g8e_evals.benchmarks.reliability.observers import ReliabilityObserverImpl
+from g8e_evals.benchmarks.scenarios.grader import ScenarioGrader
+from g8e_evals.benchmarks.scenarios.loader import ScenarioLoader
 from g8e_evals.benchmarks.utility.citation_backed_loader import CitationBackedLoader
 from g8e_evals.benchmarks.utility.citation_backed_simulator import LocalCitationBackedSimulator
 from g8e_evals.benchmarks.utility.factual_qa_loader import FactualQALoader
@@ -218,6 +220,54 @@ _ALL_SUITE_SPECS: list[SuiteSpec] = [
         observers=[IFEvalVerifier],
         is_partial_external=True,
     ),
+    SuiteSpec(
+        "tool_selection",
+        ScenarioLoader,
+        observers=[ScenarioGrader],
+        is_partial_external=True,
+    ),
+    SuiteSpec(
+        "tool_arguments",
+        ScenarioLoader,
+        observers=[ScenarioGrader],
+        is_partial_external=True,
+    ),
+    SuiteSpec(
+        "technical_analysis",
+        ScenarioLoader,
+        observers=[ScenarioGrader],
+        is_partial_external=True,
+    ),
+    SuiteSpec(
+        "routing_delegation",
+        ScenarioLoader,
+        observers=[ScenarioGrader],
+        is_partial_external=True,
+    ),
+    SuiteSpec(
+        "verification",
+        ScenarioLoader,
+        observers=[ScenarioGrader],
+        is_partial_external=True,
+    ),
+    SuiteSpec(
+        "security_policy",
+        ScenarioLoader,
+        observers=[ScenarioGrader],
+        is_partial_external=True,
+    ),
+    SuiteSpec(
+        "recovery",
+        ScenarioLoader,
+        observers=[ScenarioGrader],
+        is_partial_external=True,
+    ),
+    SuiteSpec(
+        "final_response",
+        ScenarioLoader,
+        observers=[ScenarioGrader],
+        is_partial_external=True,
+    ),
 ]
 
 _SUITE_SPECS_BY_ID: dict[str, SuiteSpec] = {
@@ -240,7 +290,16 @@ def test_every_synthetic_suite_choice_has_a_suite_spec():
 
 @pytest.mark.integration
 def test_every_suite_spec_has_a_loader_with_matching_suite_id():
+    from g8e_evals.suites import SUITE_REGISTRY
+
     for spec in _ALL_SUITE_SPECS:
+        if spec.loader_class is ScenarioLoader:
+            registry_spec = SUITE_REGISTRY[spec.suite_id]
+            loader = registry_spec.loader_factory(spec.data_path)
+            assert loader._suite_id == spec.suite_id, (
+                f"suite '{spec.suite_id}': ScenarioLoader instance _suite_id is '{loader._suite_id}'"
+            )
+            continue
         assert hasattr(spec.loader_class, "SUITE_ID"), (
             f"suite '{spec.suite_id}': loader {spec.loader_class.__name__} has no SUITE_ID"
         )

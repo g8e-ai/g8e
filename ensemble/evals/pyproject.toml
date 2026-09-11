@@ -32,6 +32,9 @@ test = [
     "pytest-asyncio>=1.4.0",
     "ruff==0.16.5",
 ]
+gpu = [
+    "pynvml>=12.0.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
