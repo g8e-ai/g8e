@@ -41,6 +41,7 @@ from g8e_evals.campaign import (
 )
 from g8e_evals.campaign_set import (
     CHILD_COUNT,
+    AggregateVerificationResult,
     CampaignChildIndexEntry,
     CampaignChildPlan,
     CampaignSetIndex,
@@ -52,7 +53,6 @@ from g8e_evals.campaign_set import (
 )
 from g8e_evals.campaign_verify import verify_campaign
 from g8e_evals.constants import (
-    ATTEMPTS_JSONL,
     CAMPAIGN_ASSIGNMENTS_JSONL,
 )
 from g8e_evals.harness import Response, Score, Task
@@ -382,7 +382,7 @@ class AggregateFixture:
 
     plan: CampaignSetPlan
     index: CampaignSetIndex
-    aggregate_result: object
+    aggregate_result: AggregateVerificationResult
     child_report_dirs: dict[str, Path]
 
 

@@ -62,7 +62,7 @@ from g8e_evals.publication import (
     validate_publication_v5,
 )
 
-from tests._aggregate_fixture import build_aggregate_fixture
+from _aggregate_fixture import build_aggregate_fixture
 
 _HASH = "a" * 64
 

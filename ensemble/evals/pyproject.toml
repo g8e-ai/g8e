@@ -58,6 +58,6 @@ markers = [
 
 [tool.pyright]
 include = ["g8e_evals", "tests"]
-extraPaths = [".."]
+extraPaths = ["..", "."]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"

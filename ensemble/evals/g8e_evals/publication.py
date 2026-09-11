@@ -1686,9 +1686,9 @@ def project_campaign_v5(
         campaign_revision=campaign_profile.campaign_revision,
         ok=aggregate_verification_result.ok,
         verified_index_generation_hash=aggregate_verification_hash,
-        checked_layers=sorted(set(
-            ["file_safety", "index_chain", "finalization", "aggregate_verification"]
-        )),
+        checked_layers=sorted({
+            "file_safety", "index_chain", "finalization", "aggregate_verification"
+        }),
         failures=[],
     )
 
@@ -2044,27 +2044,31 @@ def validate_publication_v5(candidate_dir: Path) -> PublicationValidatorResult:
     # aggregate verification hash. These fields bind the v5 publication
     # to the accepted multi-child aggregate authority. A v5 candidate
     # without these fields is a single-report fallback, which is
-    # rejected.
-    checked_layers.append("aggregate_authority_binding")
+    # rejected. This layer applies only to v5 publications; v4
+    # candidates retain the single-report projector and do not carry
+    # aggregate authority hashes.
     mc_path = candidate_dir / MODEL_CAMPAIGN_JSON
     if mc_path.exists() and mc_path.is_file() and not mc_path.is_symlink():
         try:
             mc_data = json.loads(mc_path.read_text())
-            agg_plan_hash = mc_data.get("campaign_set_plan_hash")
-            agg_index_hash = mc_data.get("campaign_set_index_hash")
-            agg_ver_hash = mc_data.get("aggregate_verification_hash")
-            if not agg_plan_hash or len(agg_plan_hash) != 64:
-                failures.append(
-                    "aggregate authority binding missing: campaign_set_plan_hash"
-                )
-            if not agg_index_hash or len(agg_index_hash) != 64:
-                failures.append(
-                    "aggregate authority binding missing: campaign_set_index_hash"
-                )
-            if not agg_ver_hash or len(agg_ver_hash) != 64:
-                failures.append(
-                    "aggregate authority binding missing: aggregate_verification_hash"
-                )
+            schema_version = mc_data.get("publication_schema_version", "")
+            if schema_version == PUBLICATION_SCHEMA_V5:
+                checked_layers.append("aggregate_authority_binding")
+                agg_plan_hash = mc_data.get("campaign_set_plan_hash")
+                agg_index_hash = mc_data.get("campaign_set_index_hash")
+                agg_ver_hash = mc_data.get("aggregate_verification_hash")
+                if not agg_plan_hash or len(agg_plan_hash) != 64:
+                    failures.append(
+                        "aggregate authority binding missing: campaign_set_plan_hash"
+                    )
+                if not agg_index_hash or len(agg_index_hash) != 64:
+                    failures.append(
+                        "aggregate authority binding missing: campaign_set_index_hash"
+                    )
+                if not agg_ver_hash or len(agg_ver_hash) != 64:
+                    failures.append(
+                        "aggregate authority binding missing: aggregate_verification_hash"
+                    )
         except json.JSONDecodeError as e:
             failures.append(f"aggregate authority binding error: {e}")
 

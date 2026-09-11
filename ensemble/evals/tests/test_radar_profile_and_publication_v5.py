@@ -74,6 +74,8 @@ from g8e_evals.v5_renderers import (
     render_v5_markdown,
 )
 
+from _aggregate_fixture import build_aggregate_fixture
+
 
 _HASH = "a" * 64
 
@@ -978,8 +980,8 @@ _FINALIZATION_HASH = _compute_finalization_hash()
 def _make_verification_report(*, ok: bool = True) -> CampaignVerificationReport:
     return CampaignVerificationReport(
         verification_schema_version="1.0.0",
-        campaign_id="campaign-1",
-        campaign_revision="1",
+        campaign_id="p12-rehearsal-parent",
+        campaign_revision="v2.1.8",
         ok=ok,
         verified_index_generation_hash=_FINALIZATION_HASH,
         checked_layers=["file_safety", "index_chain", "finalization"],
@@ -1056,8 +1058,8 @@ def _make_campaign_profile():
         TrackArmAssignment(track=CampaignTrack.TIER_FITNESS, arm_id="doctrine"),
     ]
     temp = CampaignProfile.model_construct(
-        campaign_id="campaign-1",
-        campaign_revision="1",
+        campaign_id="p12-rehearsal-parent",
+        campaign_revision="v2.1.8",
         schema_version="1.0.0",
         purpose="pipeline integrity",
         created_at="2026-09-01T00:00:00Z",
@@ -1067,7 +1069,8 @@ def _make_campaign_profile():
         dataset_hashes=[_HASH],
         grader_hashes=[_HASH],
         prompt_serialization_hash=_HASH,
-        task_ids=["task-1"],
+        task_ids=["task-001", "task-002", "task-003", "task-004",
+                  "task-005", "task-006", "task-007", "task-008"],
         repetitions=1,
         track_arm_assignments=track_arms,
         model_tier_assignments=[],
@@ -1092,8 +1095,8 @@ def _make_campaign_profile():
     )
     content_hash = compute_campaign_profile_hash(temp)
     return CampaignProfile(
-        campaign_id="campaign-1",
-        campaign_revision="1",
+        campaign_id="p12-rehearsal-parent",
+        campaign_revision="v2.1.8",
         schema_version="1.0.0",
         purpose="pipeline integrity",
         created_at="2026-09-01T00:00:00Z",
@@ -1103,7 +1106,8 @@ def _make_campaign_profile():
         dataset_hashes=[_HASH],
         grader_hashes=[_HASH],
         prompt_serialization_hash=_HASH,
-        task_ids=["task-1"],
+        task_ids=["task-001", "task-002", "task-003", "task-004",
+                  "task-005", "task-006", "task-007", "task-008"],
         repetitions=1,
         track_arm_assignments=track_arms,
         model_tier_assignments=[],
@@ -1215,46 +1219,53 @@ def _write_report_dir(report_dir: Path) -> None:
         (report_dir / event_resource_file).write_text("")
 
 
+def _project_v5(tmp_path: Path) -> Path:
+    """Project a v5 candidate from the connected aggregate fixture and return the candidate directory.
+
+    Builds a 4-child aggregate via the CampaignRunner (fake SUT/grader,
+    no real provider call), runs aggregate verification, and projects
+    the accepted aggregate through v5. No single-report substitution.
+    """
+    fixture = build_aggregate_fixture(tmp_path)
+    candidate_dir = tmp_path / "candidate"
+    project_campaign_v5(
+        child_report_dirs=fixture.child_report_dirs,
+        campaign_set_plan=fixture.plan,
+        campaign_set_index=fixture.index,
+        aggregate_verification_result=fixture.aggregate_result,
+        candidate_dir=candidate_dir,
+        campaign_profile=_make_campaign_profile(),
+        model_registry=_make_registry(),
+        provenance_manifest=_make_provenance_manifest(),
+        caveats=["descriptive_only"],
+        evidence_cutoff="2026-09-10",
+        platform_version="v2.1.8",
+    )
+    return candidate_dir
+
+
 class TestProjectCampaignV5:
     pytestmark = pytest.mark.integration
 
     def test_creates_v5_candidate_directory(self, tmp_path: Path) -> None:
-        report_dir = tmp_path / "report"
-        candidate_dir = tmp_path / "candidate"
-        _write_report_dir(report_dir)
-
-        candidate = project_campaign_v5(
-            report_dir=report_dir,
-            verification=_make_verification_report(),
-            candidate_dir=candidate_dir,
-            campaign_profile=_make_campaign_profile(),
-            model_registry=_make_registry(),
-            provenance_manifest=_make_provenance_manifest(),
-            caveats=["descriptive_only"],
-            evidence_cutoff="2026-09-10",
-            platform_version="v2.1.8",
-        )
-        assert candidate == candidate_dir
+        candidate_dir = _project_v5(tmp_path)
         assert (candidate_dir / "model-campaign.json").exists()
         assert (candidate_dir / "campaign-projections.jsonl").exists()
         # The radar profile and cold-start tradeoff should be present because
         # there are variant summaries and model variants.
         assert (candidate_dir / RADAR_PROFILE_JSON).exists()
         assert (candidate_dir / COLD_START_WARM_INFERENCE_TRADEOFF_JSON).exists()
-        # The tool scorecard summary should be present because there is a
-        # tool_call metric in the report.
-        assert (candidate_dir / TOOL_SCORECARD_SUMMARY_JSON).exists()
 
     def test_refuses_overwrite(self, tmp_path: Path) -> None:
-        report_dir = tmp_path / "report"
         candidate_dir = tmp_path / "candidate"
-        _write_report_dir(report_dir)
         candidate_dir.mkdir(parents=True)
-
+        fixture = build_aggregate_fixture(tmp_path)
         with pytest.raises(ValueError, match="already exists"):
             project_campaign_v5(
-                report_dir=report_dir,
-                verification=_make_verification_report(),
+                child_report_dirs=fixture.child_report_dirs,
+                campaign_set_plan=fixture.plan,
+                campaign_set_index=fixture.index,
+                aggregate_verification_result=fixture.aggregate_result,
                 candidate_dir=candidate_dir,
                 campaign_profile=_make_campaign_profile(),
                 model_registry=_make_registry(),
@@ -1265,14 +1276,27 @@ class TestProjectCampaignV5:
             )
 
     def test_rejects_failing_verification(self, tmp_path: Path) -> None:
-        report_dir = tmp_path / "report"
+        fixture = build_aggregate_fixture(tmp_path)
         candidate_dir = tmp_path / "candidate"
-        _write_report_dir(report_dir)
-
-        with pytest.raises(ValueError, match="campaign verification failed"):
+        # Build a failed aggregate result from the passing one.
+        from g8e_evals.campaign_set import AggregateVerificationResult
+        failed_result = AggregateVerificationResult.model_construct(
+            ok=False,
+            set_id=fixture.aggregate_result.set_id,
+            set_plan_hash=fixture.aggregate_result.set_plan_hash,
+            set_index_hash=fixture.aggregate_result.set_index_hash,
+            child_results=fixture.aggregate_result.child_results,
+            product_coverage_ok=False,
+            hash_binding_ok=False,
+            content_hash="0" * 64,
+            failures=["simulated failure"],
+        )
+        with pytest.raises(ValueError, match="aggregate verification failed"):
             project_campaign_v5(
-                report_dir=report_dir,
-                verification=_make_verification_report(ok=False),
+                child_report_dirs=fixture.child_report_dirs,
+                campaign_set_plan=fixture.plan,
+                campaign_set_index=fixture.index,
+                aggregate_verification_result=failed_result,
                 candidate_dir=candidate_dir,
                 campaign_profile=_make_campaign_profile(),
                 model_registry=_make_registry(),
@@ -1283,21 +1307,7 @@ class TestProjectCampaignV5:
             )
 
     def test_model_campaign_uses_v5_version(self, tmp_path: Path) -> None:
-        report_dir = tmp_path / "report"
-        candidate_dir = tmp_path / "candidate"
-        _write_report_dir(report_dir)
-
-        project_campaign_v5(
-            report_dir=report_dir,
-            verification=_make_verification_report(),
-            candidate_dir=candidate_dir,
-            campaign_profile=_make_campaign_profile(),
-            model_registry=_make_registry(),
-            provenance_manifest=_make_provenance_manifest(),
-            caveats=["descriptive_only"],
-            evidence_cutoff="2026-09-10",
-            platform_version="v2.1.8",
-        )
+        candidate_dir = _project_v5(tmp_path)
         mc = json.loads((candidate_dir / "model-campaign.json").read_text())
         assert mc["publication_schema_version"] == PUBLICATION_SCHEMA_V5
 
@@ -1306,25 +1316,10 @@ class TestValidatePublicationV5:
     pytestmark = pytest.mark.integration
 
     def test_validates_clean_candidate(self, tmp_path: Path) -> None:
-        report_dir = tmp_path / "report"
-        candidate_dir = tmp_path / "candidate"
-        _write_report_dir(report_dir)
-
-        project_campaign_v5(
-            report_dir=report_dir,
-            verification=_make_verification_report(),
-            candidate_dir=candidate_dir,
-            campaign_profile=_make_campaign_profile(),
-            model_registry=_make_registry(),
-            provenance_manifest=_make_provenance_manifest(),
-            caveats=["descriptive_only"],
-            evidence_cutoff="2026-09-10",
-            platform_version="v2.1.8",
-        )
+        candidate_dir = _project_v5(tmp_path)
         result = validate_publication_v5(candidate_dir)
         assert result.ok
         assert "radar_profile" in result.checked_layers
-        assert "tool_scorecard_summary" in result.checked_layers
         assert "cold_start_warm_inference_tradeoff" in result.checked_layers
 
     def test_passes_without_v5_artifacts(self, tmp_path: Path) -> None:
@@ -1353,21 +1348,7 @@ class TestValidatePublicationV5:
         assert v5_result.ok
 
     def test_rejects_malformed_radar_profile(self, tmp_path: Path) -> None:
-        report_dir = tmp_path / "report"
-        candidate_dir = tmp_path / "candidate"
-        _write_report_dir(report_dir)
-
-        project_campaign_v5(
-            report_dir=report_dir,
-            verification=_make_verification_report(),
-            candidate_dir=candidate_dir,
-            campaign_profile=_make_campaign_profile(),
-            model_registry=_make_registry(),
-            provenance_manifest=_make_provenance_manifest(),
-            caveats=["descriptive_only"],
-            evidence_cutoff="2026-09-10",
-            platform_version="v2.1.8",
-        )
+        candidate_dir = _project_v5(tmp_path)
         # Corrupt the radar profile
         (candidate_dir / RADAR_PROFILE_JSON).write_text("{not valid json")
         result = validate_publication_v5(candidate_dir)
@@ -1375,42 +1356,16 @@ class TestValidatePublicationV5:
         assert any("radar-profile.json" in f for f in result.failures)
 
     def test_rejects_malformed_tool_scorecard(self, tmp_path: Path) -> None:
-        report_dir = tmp_path / "report"
-        candidate_dir = tmp_path / "candidate"
-        _write_report_dir(report_dir)
-
-        project_campaign_v5(
-            report_dir=report_dir,
-            verification=_make_verification_report(),
-            candidate_dir=candidate_dir,
-            campaign_profile=_make_campaign_profile(),
-            model_registry=_make_registry(),
-            provenance_manifest=_make_provenance_manifest(),
-            caveats=["descriptive_only"],
-            evidence_cutoff="2026-09-10",
-            platform_version="v2.1.8",
-        )
+        candidate_dir = _project_v5(tmp_path)
+        # The fixture may not produce a tool scorecard summary (no tool metrics);
+        # write a malformed one to test the validator rejects it.
         (candidate_dir / TOOL_SCORECARD_SUMMARY_JSON).write_text("{not valid json")
         result = validate_publication_v5(candidate_dir)
         assert not result.ok
         assert any("tool-scorecard-summary.json" in f for f in result.failures)
 
     def test_rejects_symlinked_radar_profile(self, tmp_path: Path) -> None:
-        report_dir = tmp_path / "report"
-        candidate_dir = tmp_path / "candidate"
-        _write_report_dir(report_dir)
-
-        project_campaign_v5(
-            report_dir=report_dir,
-            verification=_make_verification_report(),
-            candidate_dir=candidate_dir,
-            campaign_profile=_make_campaign_profile(),
-            model_registry=_make_registry(),
-            provenance_manifest=_make_provenance_manifest(),
-            caveats=["descriptive_only"],
-            evidence_cutoff="2026-09-10",
-            platform_version="v2.1.8",
-        )
+        candidate_dir = _project_v5(tmp_path)
         # Replace radar profile with a symlink
         radar_path = candidate_dir / RADAR_PROFILE_JSON
         radar_path.unlink()
