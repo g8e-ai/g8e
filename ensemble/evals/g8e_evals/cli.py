@@ -857,6 +857,10 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     prompt_bundle = "\n".join(t.prompt for t in tasks).encode()
     prompt_bundle_hash = hashlib.sha256(prompt_bundle).hexdigest()
 
+    if suite_spec.grader_factory is None:
+        raise click.UsageError(f"suite '{suite}' has no grader factory; cannot run campaign")
+    grader = suite_spec.grader_factory()
+
     spec = CampaignSpec(
         campaign_id=campaign_id,
         release_version=release_version,
@@ -865,7 +869,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         suite_version=suite_version,
         dataset_hash=dataset_hash,
         prompt_bundle_hash=prompt_bundle_hash,
-        grader_bundle_hash=hashlib.sha256(b"ifeval_subset_verifier:1.0.0").hexdigest(),
+        grader_bundle_hash=hashlib.sha256(f"{grader.grader_id}:{grader.grader_version}".encode()).hexdigest(),
         preregistration=prereg_config,
         cohorts=cohorts,
         task_assignment=task_assignment,
@@ -882,9 +886,6 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     # tier-fitness profile, the factory creates a G8eeChatSUT with tier
     # replacement logic from the campaign profile's model_tier_assignments
     # and baseline_tier_mappings.
-    if suite_spec.grader_factory is None:
-        raise click.UsageError(f"suite '{suite}' has no grader factory; cannot run campaign")
-    grader = suite_spec.grader_factory()
 
     # Load the canonical CLI auth context when ensemble or doctrine arms
     # are in use and a g8ee URL is provided.
@@ -1338,9 +1339,11 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     prompt_bundle_content = "\n".join(t.prompt for t in tasks).encode()
     prompt_bundle_hash = hashlib.sha256(prompt_bundle_content).hexdigest()
 
+    _primary_grader_id = verifier.grader_id if verifier is not None else _IFEVAL_GRADER_ID
+    _primary_grader_version = verifier.grader_version if verifier is not None else _GRADER_VERSION
     grader_bundle_content = (
         f"{suite}:{suite_version}:"
-        f"{_IFEVAL_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_primary_grader_id}@{_primary_grader_version}:"
         f"{_RECEIPT_INTEGRITY_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_PROTOCOL_CHAIN_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_CANARY_SCRUBBING_GRADER_ID}@{_GRADER_VERSION}:"
@@ -1538,8 +1541,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             unsupported_exclusions=t.metadata.unsupported_exclusions,
             graders=[
                 GraderReference(
-                    grader_id=_IFEVAL_GRADER_ID,
-                    grader_version=_GRADER_VERSION,
+                    grader_id=verifier.grader_id if verifier is not None else _IFEVAL_GRADER_ID,
+                    grader_version=verifier.grader_version if verifier is not None else _GRADER_VERSION,
                     grader_class=GraderClass.DETERMINISTIC,
                 ),
                 *([
@@ -1870,13 +1873,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
         # Score
         if verifier is not None:
-            score = verifier.verify(
-                task.id,
-                task.prompt,
-                response.answer,
-                task.metadata.instruction_id_list,
-                task.metadata.kwargs
-            )
+            score = verifier.grade(task, response)
         else:
             score = Score(task_id=task.id, passed=False)
 
@@ -2255,7 +2252,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         })
         grade_metrics = [
             MetricObservation(
-                metric_id=_IFEVAL_GRADER_ID,
+                metric_id=verifier.grader_id if verifier is not None else _IFEVAL_GRADER_ID,
                 attempt_id=attempt_id,
                 run_id=run_id,
                 arm_id=arm_def.arm_id,

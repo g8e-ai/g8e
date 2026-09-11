@@ -44,13 +44,13 @@ from g8e_evals.campaign import (
 from g8e_evals.constants import (
     CAMPAIGN_INDEX_JSONL,
 )
-from g8e_evals.harness import Response, Task
+from g8e_evals.harness import Response, Score, Task
 from g8e_evals.index import (
     IndexCreationReason,
     validate_index_chain,
     validate_no_duplicate_effective_assignments,
 )
-from g8e_evals.models import TaskMetadata
+from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.runner import (
     CampaignRunner,
     CampaignSpec,
@@ -79,10 +79,11 @@ class _FakeSUT:
 
 @dataclass
 class _FakeGrader:
-    def verify(self, task_id, prompt, answer, instructions, kwargs):
-        from g8e_evals.harness import Score
-        from g8e_evals.models import ScoreDetails
-        return Score(task_id=task_id, passed=True, details=ScoreDetails())
+    grader_id: str = "ifeval_subset_verifier"
+    grader_version: str = "1.0.0"
+
+    def grade(self, task: Task, response: Response) -> Score:
+        return Score(task_id=task.id, passed=True, details=ScoreDetails())
 
 
 def _make_spec() -> CampaignSpec:

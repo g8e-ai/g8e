@@ -183,7 +183,7 @@ _LATIN_MARKERS: dict[str, set[str]] = {
 }
 
 
-def detect_language(text: str) -> Optional[str]:
+def detect_language(text: str) -> str | None:
     """Detect the language of a text using script-based heuristics.
 
     Returns the ISO 639-1 code of the detected language, or ``None``
@@ -215,7 +215,7 @@ def detect_language(text: str) -> Optional[str]:
     if script_counts:
         # Return the script with the most characters.
         # For Cyrillic, distinguish ru/uk/bg by diacritical markers.
-        best_script = max(script_counts, key=script_counts.get)
+        best_script = max(script_counts, key=lambda k: script_counts[k])
         if best_script in ("ru", "uk", "bg"):
             # All use Cyrillic; try to distinguish by unique letters.
             # Ukrainian has distinctive characters (U+0456, U+0457, U+0454, U+0491);

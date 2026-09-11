@@ -14,7 +14,7 @@ from g8e_evals.benchmarks.ifeval.instructions_util import (
     count_words,
     detect_language,
 )
-from g8e_evals.harness import Score
+from g8e_evals.harness import Response, Score, Task
 from g8e_evals.models import InstructionResult, ScoreDetails
 
 # Relational operations for comparison (upstream uses only these two).
@@ -22,6 +22,23 @@ _COMPARISON_RELATION = ("less than", "at least")
 
 
 class IFEvalVerifier:
+    grader_id = "ifeval_subset_verifier"
+    grader_version = "1.0.0"
+
+    def grade(self, task: Task, response: Response) -> Score:
+        """Grade a completed task against its instruction-following constraints.
+
+        Extracts the instruction ID list and kwargs from the task metadata
+        and delegates to ``verify`` for the per-instruction checking logic.
+        """
+        return self.verify(
+            task.id,
+            task.prompt,
+            response.answer,
+            task.metadata.instruction_id_list,
+            task.metadata.kwargs,
+        )
+
     def verify(
         self,
         task_id: str,

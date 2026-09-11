@@ -96,7 +96,7 @@ from g8e_evals.constants import (
     REPORT_CHECKSUM_JSON,
     TASKS_JSONL,
 )
-from g8e_evals.harness import Response, SUTConfig, Task
+from g8e_evals.harness import Response, Score, SUTConfig, Task
 from g8e_evals.index import (
     AssignmentDisposition,
     AssignmentDispositionEntry,
@@ -189,16 +189,24 @@ class SUTFactory(Protocol):
 
 
 class GraderProtocol(Protocol):
-    """Minimal grader interface the runner consumes."""
+    """Minimal grader interface the runner consumes.
 
-    def verify(
-        self,
-        task_id: str,
-        prompt: str,
-        answer: str,
-        instructions: list[str],
-        kwargs: list[dict[str, Any]],
-    ) -> object: ...
+    The runner calls ``grade(task, response)`` for every completed
+    assignment. Each grader extracts the suite-specific metadata it needs
+    from the ``Task`` (prompt, metadata) and the ``Response`` (answer,
+    chat evidence) and returns a ``Score``. Suite-specific entry points
+    such as the IFEval ``verify`` method remain available for direct
+    unit testing of instruction-checking logic.
+
+    The ``grader_id`` and ``grader_version`` attributes identify the
+    grader in metric observations and task definitions, replacing the
+    previous hardcoded IFEval-only constants.
+    """
+
+    grader_id: str
+    grader_version: str
+
+    def grade(self, task: Task, response: Response) -> Score: ...
 
 
 class CampaignSpec(BaseModel):
@@ -903,8 +911,8 @@ class CampaignRunner:
                     prompt_length=len(t.prompt),
                     graders=[
                         GraderReference(
-                            grader_id=_IFEVAL_GRADER_ID,
-                            grader_version=_GRADER_VERSION,
+                            grader_id=self.grader.grader_id,
+                            grader_version=self.grader.grader_version,
                             grader_class=GraderClass.DETERMINISTIC,
                         ),
                     ],
@@ -1117,16 +1125,10 @@ class CampaignRunner:
             # Build metric observation
             metrics: list[MetricObservation] = []
             if terminal_status == TerminalStatus.COMPLETED and response is not None:
-                score = self.grader.verify(
-                    task.id,
-                    task.prompt,
-                    response.answer,
-                    task.metadata.instruction_id_list,
-                    task.metadata.kwargs,
-                )
+                score = self.grader.grade(task, response)
                 passed = bool(getattr(score, "passed", False))
                 metric = MetricObservation(
-                    metric_id=_IFEVAL_GRADER_ID,
+                    metric_id=self.grader.grader_id,
                     attempt_id=attempt_id,
                     run_id=self._run_id,
                     arm_id=arm_def.arm_id,

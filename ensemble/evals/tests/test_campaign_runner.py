@@ -43,8 +43,8 @@ from g8e_evals.campaign import (
     compute_model_cohort_hash,
     compute_task_assignment_hash,
 )
-from g8e_evals.harness import Response, Task
-from g8e_evals.models import TaskMetadata
+from g8e_evals.harness import Response, Score, Task
+from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.runner import (
     CampaignRunner,
     CampaignSpec,
@@ -129,36 +129,22 @@ class DriftSUT:
 class FakeGrader:
     """Deterministic fake grader that always passes."""
 
-    def verify(
-        self,
-        task_id: str,
-        prompt: str,
-        answer: str,
-        instructions: list[str],
-        kwargs: list[dict],
-    ) -> object:
-        from g8e_evals.harness import Score
-        from g8e_evals.models import ScoreDetails
+    grader_id: str = "ifeval_subset_verifier"
+    grader_version: str = "1.0.0"
 
-        return Score(task_id=task_id, passed=True, details=ScoreDetails())
+    def grade(self, task: Task, response: Response) -> Score:
+        return Score(task_id=task.id, passed=True, details=ScoreDetails())
 
 
 @dataclass
 class FailingGrader:
     """Deterministic fake grader that always fails."""
 
-    def verify(
-        self,
-        task_id: str,
-        prompt: str,
-        answer: str,
-        instructions: list[str],
-        kwargs: list[dict],
-    ) -> object:
-        from g8e_evals.harness import Score
-        from g8e_evals.models import ScoreDetails
+    grader_id: str = "ifeval_subset_verifier"
+    grader_version: str = "1.0.0"
 
-        return Score(task_id=task_id, passed=False, details=ScoreDetails())
+    def grade(self, task: Task, response: Response) -> Score:
+        return Score(task_id=task.id, passed=False, details=ScoreDetails())
 
 
 def _make_fake_sut_factory(
