@@ -5,7 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Phase 1 release-metric audit: enumerate all 82 release metrics.
+"""Phase 1 release-metric audit: enumerate all 93 release metrics.
 
 For each metric in the v2.1.8 release set, this test records typed
 eligibility, denominator, missing-denominator disposition, arm
@@ -74,6 +74,17 @@ _DERIVED_METRIC_IDS = {
     "escalation_false_escalation",
     "escalation_missed_escalation",
     "escalation_efficiency",
+    "security_sensitive_data_present",
+    "security_sensitive_data_required",
+    "security_sensitive_data_sent_externally",
+    "security_unnecessary_data_sent_externally",
+    "security_policy_prevented_disclosure",
+    "security_model_attempted_unauthorized_access",
+    "security_tool_attempted_unauthorized_operation",
+    "security_authorization_correctly_enforced",
+    "security_audit_record_complete",
+    "security_audit_record_tampered",
+    "security_secret_redaction_successful",
 }
 
 _TELEMETRY_METRIC_IDS = {
@@ -102,15 +113,15 @@ def _producer_name(metric_id: str, grader_class: GraderClass) -> str:
 class TestPhase1ReleaseMetricAudit:
     """Every release metric has a complete typed audit trail."""
 
-    def test_release_metric_set_has_exactly_82_metrics(self) -> None:
-        assert len(RELEASE_METRIC_SET.metrics) == 82, (
-            f"Expected 82 release metrics, got {len(RELEASE_METRIC_SET.metrics)}"
+    def test_release_metric_set_has_exactly_93_metrics(self) -> None:
+        assert len(RELEASE_METRIC_SET.metrics) == 93, (
+            f"Expected 93 release metrics, got {len(RELEASE_METRIC_SET.metrics)}"
         )
 
-    def test_registry_has_exactly_82_definitions(self) -> None:
+    def test_registry_has_exactly_93_definitions(self) -> None:
         definitions = DEFAULT_METRIC_REGISTRY.all_definitions()
-        assert len(definitions) == 82, (
-            f"Expected 82 registered definitions, got {len(definitions)}"
+        assert len(definitions) == 93, (
+            f"Expected 93 registered definitions, got {len(definitions)}"
         )
 
     def test_release_set_matches_registry(self) -> None:
@@ -213,8 +224,8 @@ class TestPhase1ReleaseMetricAudit:
             d for d in DEFAULT_METRIC_REGISTRY.all_definitions()
             if d.grader_class == GraderClass.ANALYSIS
         ]
-        assert len(analysis_metrics) == 32, (
-            f"Expected 32 analysis metrics, got {len(analysis_metrics)}"
+        assert len(analysis_metrics) == 43, (
+            f"Expected 43 analysis metrics, got {len(analysis_metrics)}"
         )
         for definition in analysis_metrics:
             assert DEFAULT_DERIVED_REGISTRY.get(definition.metric_id, definition.metric_version) is not None, (

@@ -49,6 +49,7 @@ from g8e_evals.constants import (
     MANIFEST_JSON,
     METRICS_JSONL,
     RESOURCE_OBSERVATIONS_JSONL,
+    SECURITY_EVENTS_JSONL,
     TASKS_JSONL,
     TOOL_CALL_SCORECARDS_JSONL,
 )
@@ -69,9 +70,11 @@ from g8e_evals.schema import (
     EscalationRecord,
     MetricObservation,
     RunManifest,
+    SecurityEventRecord,
     TerminalStatus,
     ToolCallScorecard,
     validate_escalation_records,
+    validate_security_event_records,
     validate_tool_call_scorecards,
 )
 
@@ -395,6 +398,29 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                         )
             except (ValidationError, ValueError, json.JSONDecodeError) as e:
                 failures.append(f"escalation record validation failed: {e}")
+
+    # Layer 16: security event records — validate if present
+    checked_layers.append("security_events")
+    security_path = report_dir / SECURITY_EVENTS_JSONL
+    if security_path.exists():
+        if security_path.is_symlink():
+            failures.append(f"symlink rejected for security event records: {security_path.name}")
+        elif not security_path.is_file():
+            failures.append(f"security event records is not a regular file: {security_path.name}")
+        else:
+            try:
+                se_records = _read_jsonl_dicts(security_path)
+                security_records = [SecurityEventRecord.model_validate(r) for r in se_records]
+                validate_security_event_records(security_records)
+                # Validate binding: every record's attempt_id references a real attempt
+                attempt_ids = {a.attempt_id for a in attempts}
+                for se in security_records:
+                    if se.attempt_id not in attempt_ids:
+                        failures.append(
+                            f"security event record {se.record_id} references unknown attempt: {se.attempt_id}"
+                        )
+            except (ValidationError, ValueError, json.JSONDecodeError) as e:
+                failures.append(f"security event record validation failed: {e}")
 
     ok = len(failures) == 0
     return CampaignVerificationReport(

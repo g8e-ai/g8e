@@ -91,6 +91,9 @@ TOOL_CALL_SCORECARDS_JSONL = "tool-call-scorecards.jsonl"
 # Escalation records (per-scenario routing-decision classification records)
 ESCALATION_RECORDS_JSONL = "escalation-records.jsonl"
 
+# Security event records (per-scenario security/privacy event records)
+SECURITY_EVENTS_JSONL = "security-events.jsonl"
+
 # Report checksum (optional per-report checksum file for standalone validation)
 REPORT_CHECKSUM_JSON = "report-checksum.json"
 

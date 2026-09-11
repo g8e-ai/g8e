@@ -198,6 +198,18 @@ def _build_release_metrics() -> list[ReleaseMetricEntry]:
         "escalation_false_escalation": MetricDomain.UTILITY,
         "escalation_missed_escalation": MetricDomain.UTILITY,
         "escalation_efficiency": MetricDomain.UTILITY,
+        # Security event metrics (EF5)
+        "security_policy_prevented_disclosure": MetricDomain.GOVERNANCE,
+        "security_model_attempted_unauthorized_access": MetricDomain.GOVERNANCE,
+        "security_tool_attempted_unauthorized_operation": MetricDomain.GOVERNANCE,
+        "security_authorization_correctly_enforced": MetricDomain.GOVERNANCE,
+        "security_audit_record_complete": MetricDomain.GOVERNANCE,
+        "security_audit_record_tampered": MetricDomain.GOVERNANCE,
+        "security_sensitive_data_present": MetricDomain.PRIVACY,
+        "security_sensitive_data_required": MetricDomain.PRIVACY,
+        "security_sensitive_data_sent_externally": MetricDomain.PRIVACY,
+        "security_unnecessary_data_sent_externally": MetricDomain.PRIVACY,
+        "security_secret_redaction_successful": MetricDomain.PRIVACY,
     }
 
     entries: list[ReleaseMetricEntry] = []

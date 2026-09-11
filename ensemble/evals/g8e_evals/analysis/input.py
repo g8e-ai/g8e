@@ -70,6 +70,7 @@ from g8e_evals.schema import (
     TypedPriceTable,
     UnauthorizedMutationObservation,
     EscalationRecord,
+    SecurityEventRecord,
 )
 
 
@@ -130,6 +131,8 @@ class AnalysisInputRecord(BaseModel):
     tool_call_scorecards: list[ToolCallScorecard] = Field(default_factory=list)
 
     escalation_records: list[EscalationRecord] = Field(default_factory=list)
+
+    security_events: list[SecurityEventRecord] = Field(default_factory=list)
 
     governance_envelopes: list[GovernanceEnvelopeRecord] = Field(default_factory=list)
     persistence_attestations: list[PersistenceAttestation] = Field(default_factory=list)
