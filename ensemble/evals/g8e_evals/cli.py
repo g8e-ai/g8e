@@ -22,6 +22,7 @@ from typing import Protocol
 import click
 from pydantic import ValidationError
 from rich.console import Console
+from rich.table import Table
 
 from app.constants import LLMProvider
 from app.llm.factory import get_llm_provider
@@ -742,13 +743,15 @@ def campaign():
 @click.option("--auth-project-root", type=click.Path(path_type=Path, file_okay=False),
               envvar="G8E_AUTH_PROJECT_ROOT", default=None,
               help="Project root containing the canonical CLI runtime identity. Required for tier-fitness tracks with ensemble or doctrine arms.")
-def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, model_tags, profile, models, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root):
+@click.option("--task-offset", type=int, default=0,
+              help="Zero-based offset into the gold-set task list. Combined with --task-limit, enables explicit batched runs without implicit resume. Tasks are sliced in loader order before schedule randomization.")
+@click.option("--task-limit", type=int, default=None,
+              help="Maximum number of tasks to load from the gold set (after --task-offset). When omitted, all tasks are loaded. Each batch is a separate campaign with its own report directory.")
+def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, model_tags, profile, models, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, task_offset, task_limit):
     """Run an authoritative multi-arm, multi-cohort campaign.
 
     Creates one campaign identity, one report directory, one assignment
     manifest, one randomized schedule, and one final canonical analysis.
-    Resume reads the persisted schedule and existing attempts; it does
-    not rerandomize or discard failures.
     """
     from g8e_evals.runner import CampaignRunner, CampaignSpec, CampaignRunnerError, derive_cohorts_from_registry
     from g8e_evals.campaign import (
@@ -771,6 +774,14 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         raise click.UsageError(f"--gold-set is required for {suite}")
     loader = suite_spec.loader_factory(gold_set)
     tasks = list(loader.load())
+    if task_offset < 0:
+        raise click.UsageError("--task-offset must be non-negative")
+    if task_offset > 0 and task_offset >= len(tasks):
+        raise click.UsageError(f"--task-offset {task_offset} exceeds task count {len(tasks)}")
+    if task_offset > 0 or task_limit is not None:
+        end = task_offset + task_limit if task_limit is not None else len(tasks)
+        tasks = tasks[task_offset:end]
+        click.echo(f"Task slice: offset={task_offset} limit={task_limit} selected={len(tasks)}")
     provenance = suite_spec.provenance_loader(gold_set.with_name("provenance.json"))
     suite_id = provenance.benchmark
     suite_version = provenance.output.sha256[:12]
@@ -1003,6 +1014,77 @@ def campaign_validate(profile: Path, models: Path):
     console.print(f"  [green]tracks[/green] {len(campaign_profile.track_arm_assignments)}")
     console.print(f"  [green]registry[/green] {registry.registry_id} (v{registry.registry_version})")
     console.print("  [green]status[/green] valid")
+
+
+@campaign.command(name="status")
+@click.option("--output-dir", type=click.Path(exists=True, file_okay=False, path_type=Path), required=True,
+              help="Path to a campaign output directory (parent of report directories).")
+@click.option("--suite", type=str, default=None,
+              help="Filter to a specific suite prefix.")
+def campaign_status(output_dir: Path, suite: str | None):
+    """Show live campaign progress for all report directories.
+
+    Reads campaign-status.json and campaign-progress.json from each
+    report directory under --output-dir and prints a summary table.
+    Works on running and finalized campaigns alike.
+    """
+    from g8e_evals.constants import CAMPAIGN_PROGRESS_JSON, CAMPAIGN_STATUS_JSON
+
+    prefix = f"{suite}-campaign-" if suite else "-campaign-"
+    dirs = sorted(
+        (p for p in output_dir.iterdir() if p.is_dir() and (suite is None or p.name.startswith(prefix))),
+        key=lambda p: p.name,
+    )
+    if not dirs:
+        console = Console()
+        console.print("[yellow]No campaign report directories found.[/yellow]")
+        return
+
+    console = Console()
+    table = Table(title="Campaign Status", show_header=True, header_style="cyan")
+    table.add_column("Suite")
+    table.add_column("Report Dir", overflow="fold")
+    table.add_column("Status")
+    table.add_column("Progress")
+    table.add_column("Elapsed")
+    table.add_column("Current")
+
+    for d in dirs:
+        status_path = d / CAMPAIGN_STATUS_JSON
+        progress_path = d / CAMPAIGN_PROGRESS_JSON
+        status_val = "?"
+        suite_name = d.name.split("-campaign-")[0] if "-campaign-" in d.name else d.name
+        progress_str = "-"
+        elapsed_str = "-"
+        current_str = "-"
+
+        if status_path.is_file():
+            try:
+                status_record = json.loads(status_path.read_text())
+                status_val = status_record.get("status", "?")
+            except (OSError, json.JSONDecodeError):
+                pass
+
+        if progress_path.is_file():
+            try:
+                progress = json.loads(progress_path.read_text())
+                completed = progress.get("completed_assignments", 0)
+                total = progress.get("total_assignments", 0)
+                remaining = progress.get("remaining_assignments", 0)
+                progress_str = f"{completed}/{total}" + (f" ({remaining} left)" if remaining else "")
+                elapsed_str = f"{progress.get('elapsed_seconds', 0):.0f}s"
+                cohort = progress.get("current_cohort") or ""
+                task = progress.get("current_task") or ""
+                st = progress.get("current_status") or ""
+                if cohort or task:
+                    current_str = f"{cohort} {task} {st}".strip()
+            except (OSError, json.JSONDecodeError):
+                pass
+
+        style = "green" if status_val == "finalized" else ("yellow" if status_val == "running" else "red")
+        table.add_row(suite_name, d.name, f"[{style}]{status_val}[/{style}]", progress_str, elapsed_str, current_str)
+
+    console.print(table)
 
 
 @campaign.command(name="verify")

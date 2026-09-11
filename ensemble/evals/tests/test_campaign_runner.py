@@ -432,68 +432,6 @@ class TestFullExecution:
 
 
 # ---------------------------------------------------------------------------
-# Resume tests
-# ---------------------------------------------------------------------------
-
-
-class TestResume:
-    def test_resume_skips_completed_assignments(self, tmp_path: Path):
-        spec = _make_spec()
-        runner = CampaignRunner(
-            spec=spec,
-            sut_factory=_make_fake_sut_factory(),
-            tasks=_make_tasks(),
-            grader=FakeGrader(),
-            output_dir=tmp_path,
-        )
-        result1 = asyncio.run(runner.run())
-        assert result1.status == CampaignStatus.FINALIZED
-
-        # Second run on the same report dir should reuse the schedule and
-        # not re-execute any assignments.
-        runner2 = CampaignRunner(
-            spec=spec,
-            sut_factory=_make_fake_sut_factory(),
-            tasks=_make_tasks(),
-            grader=FakeGrader(),
-            output_dir=tmp_path,
-        )
-        # Force the same report directory
-        runner2._report_dir = result1.report_dir
-        result2 = asyncio.run(runner2.run())
-
-        assert result2.status == CampaignStatus.FINALIZED
-        assert result2.report_dir == result1.report_dir
-        # Same number of attempts (no re-execution)
-        assert result2.terminal_attempt_count == result1.terminal_attempt_count
-
-    def test_resume_reuses_persisted_schedule(self, tmp_path: Path):
-        spec = _make_spec(randomization_seed=42)
-        runner = CampaignRunner(
-            spec=spec,
-            sut_factory=_make_fake_sut_factory(),
-            tasks=_make_tasks(),
-            grader=FakeGrader(),
-            output_dir=tmp_path,
-        )
-        result1 = asyncio.run(runner.run())
-
-        schedule1_text = (result1.report_dir / CAMPAIGN_SCHEDULE_JSON).read_text()
-
-        runner2 = CampaignRunner(
-            spec=spec,
-            sut_factory=_make_fake_sut_factory(),
-            tasks=_make_tasks(),
-            grader=FakeGrader(),
-            output_dir=tmp_path,
-        )
-        runner2._report_dir = result1.report_dir
-        asyncio.run(runner2.run())
-
-        schedule2_text = (result1.report_dir / CAMPAIGN_SCHEDULE_JSON).read_text()
-        assert schedule1_text == schedule2_text
-
-
 # ---------------------------------------------------------------------------
 # Retry tests
 # ---------------------------------------------------------------------------

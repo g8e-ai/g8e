@@ -267,33 +267,3 @@ class TestCampaignIndexing:
         from g8e_evals.index import IndexGeneration
         last_gen = IndexGeneration.model_validate_json(lines[-1])
         validate_no_duplicate_effective_assignments(last_gen)
-
-    def test_resume_creates_new_index_generation(self, tmp_path: Path):
-        """Resume creates a new index generation rather than mutating the existing one."""
-        spec = _make_spec()
-        runner = CampaignRunner(
-            spec=spec,
-            sut_factory=_fake_sut_factory,
-            tasks=_make_tasks(),
-            grader=_FakeGrader(),
-            output_dir=tmp_path,
-        )
-        result1 = asyncio.run(runner.run())
-
-        index_path = result1.report_dir / CAMPAIGN_INDEX_JSONL
-        lines1 = index_path.read_text().strip().splitlines()
-
-        # Resume
-        runner2 = CampaignRunner(
-            spec=spec,
-            sut_factory=_fake_sut_factory,
-            tasks=_make_tasks(),
-            grader=_FakeGrader(),
-            output_dir=tmp_path,
-        )
-        runner2._report_dir = result1.report_dir
-        asyncio.run(runner2.run())
-
-        lines2 = index_path.read_text().strip().splitlines()
-        # Resume should have added at least one new generation
-        assert len(lines2) > len(lines1)

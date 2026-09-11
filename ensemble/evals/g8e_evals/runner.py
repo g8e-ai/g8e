@@ -43,7 +43,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from collections.abc import Sequence
-from typing import Any, Protocol, cast
+from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -431,13 +431,23 @@ def _append_jsonl(path: Path, records: Sequence[BaseModel]) -> None:
 
 
 def _read_jsonl(path: Path, model_cls: type[BaseModel]) -> list[BaseModel]:
-    """Read a JSONL file into a list of Pydantic models."""
+    """Read a JSONL file into a list of Pydantic models.
+
+    Handles trailing null-byte padding that can result from a process
+    kill mid-write (the OS may have allocated a full block that was
+    only partially filled with valid JSON lines).
+    """
     if not path.exists():
         return []
+    raw = path.read_bytes()
+    # Strip trailing null-byte padding from process-kill corruption
+    raw = raw.rstrip(b"\x00")
     records: list[BaseModel] = []
-    for line in path.read_text().splitlines():
-        if line.strip():
-            records.append(model_cls.model_validate_json(line))
+    for line in raw.decode("utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        records.append(model_cls.model_validate_json(line))
     return records
 
 
@@ -699,9 +709,26 @@ class CampaignRunner:
     @property
     def report_dir(self) -> Path:
         if self._report_dir is None:
-            ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-            self._report_dir = self.output_dir / f"{self.spec.suite}-campaign-{ts}"
+            self._report_dir = self._allocate_fresh_report_dir()
         return self._report_dir
+
+    def _allocate_fresh_report_dir(self) -> Path:
+        """Allocate a new unique report directory under output_dir.
+
+        Uses a timestamp prefix and appends a numeric suffix when a
+        directory with the same timestamp already exists.
+        """
+        ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        base = self.output_dir / f"{self.spec.suite}-campaign-{ts}"
+        if not base.exists():
+            return base
+        # Collision: append a numeric suffix to avoid overwriting
+        for i in range(2, 1000):
+            candidate = self.output_dir / f"{self.spec.suite}-campaign-{ts}-{i:03d}"
+            if not candidate.exists():
+                return candidate
+        # Extremely unlikely: 999 dirs in the same second
+        return self.output_dir / f"{self.spec.suite}-campaign-{ts}-{uuid.uuid4().hex[:8]}"
 
     def _get_sut(self, cohort: ModelCohort, arm: Arm) -> SUTProtocol:
         key = (cohort.cohort_id, arm.value)
@@ -752,13 +779,6 @@ class CampaignRunner:
         }
         _write_atomic(self.report_dir / CAMPAIGN_PROGRESS_JSON, json.dumps(record, indent=2))
 
-    def _read_campaign_status(self) -> dict[str, Any] | None:
-        """Read the persisted campaign status, or None if not yet written."""
-        path = self.report_dir / CAMPAIGN_STATUS_JSON
-        if not path.exists():
-            return None
-        return json.loads(path.read_text())
-
     def _persist_campaign_state(
         self,
         assignments: list[CampaignAssignment],
@@ -772,29 +792,8 @@ class CampaignRunner:
         _write_atomic(self.report_dir / CAMPAIGN_SCHEDULE_JSON, schedule.model_dump_json(indent=2))
         _write_atomic(self.report_dir / CAMPAIGN_RETRY_POLICY_JSON, self.spec.retry_policy.model_dump_json(indent=2))
 
-    def _load_existing_attempts(self) -> list[AttemptRecord]:
-        """Load existing attempts from the report directory (for resume)."""
-        records = _read_jsonl(self.report_dir / ATTEMPTS_JSONL, AttemptRecord)
-        return cast(list[AttemptRecord], records)
-
-    def _load_existing_metrics(self) -> list[MetricObservation]:
-        """Load existing metrics from the report directory (for resume)."""
-        records = _read_jsonl(self.report_dir / METRICS_JSONL, MetricObservation)
-        return cast(list[MetricObservation], records)
-
-    def _completed_assignment_ids(self, attempts: list[AttemptRecord]) -> set[str]:
-        """Return the set of assignment IDs that have a non-infrastructure-failed terminal attempt.
-
-        Infrastructure-failed assignments are not considered completed;
-        they are eligible for supersession (re-execution) on resume.
-        """
-        return {
-            a.assignment_id for a in attempts
-            if a.assignment_id and a.terminal_status != TerminalStatus.INFRASTRUCTURE_FAILED
-        }
-
     def _load_existing_generations(self) -> list[IndexGeneration]:
-        """Load existing index generations from the report directory (for resume)."""
+        """Load existing index generations from the report directory."""
         path = self.report_dir / CAMPAIGN_INDEX_JSONL
         if not path.exists():
             return []
@@ -1062,33 +1061,13 @@ class CampaignRunner:
         cohort: ModelCohort,
         arm_def: ArmDefinition,
         task: Task,
-        existing_attempts: list[AttemptRecord],
     ) -> tuple[list[AttemptRecord], list[MetricObservation]]:
         """Execute one assignment, handling retries.
 
         Returns all attempts (including retry attempts) and any metric
-        observations from the terminal attempt. If the assignment
-        already has a non-infrastructure-failed terminal attempt
-        (resume), returns the existing attempts without re-executing.
-        Infrastructure-failed assignments are re-executed on resume
-        (supersession), with the new attempt_num starting after the
-        existing attempts.
+        observations from the terminal attempt.
         """
-        assignment_attempts = [a for a in existing_attempts if a.assignment_id == assignment.assignment_id]
-        has_non_infra = any(
-            a.terminal_status != TerminalStatus.INFRASTRUCTURE_FAILED
-            for a in assignment_attempts
-        )
-        if assignment_attempts and has_non_infra:
-            metrics: list[MetricObservation] = []
-            return assignment_attempts, metrics
-
-        # For supersession (infrastructure-failed resume), start
-        # attempt_num after the existing attempts to avoid duplicate
-        # attempt IDs. The parent_attempt_id is None for the first
-        # new attempt because supersession is a fresh execution, not
-        # a retry of the superseded attempt.
-        attempt_num = len(assignment_attempts)
+        attempt_num = 0
         parent_attempt_id: str | None = None
 
         sut = self._get_sut(cohort, arm_def.arm_id)
@@ -1252,11 +1231,6 @@ class CampaignRunner:
         # 3. Create report directory and persist campaign state
         self.report_dir.mkdir(parents=True, exist_ok=True)
 
-        # Check for resume: if campaign status exists, reuse the run_id
-        existing_status = self._read_campaign_status()
-        if existing_status is not None:
-            self._run_id = existing_status["run_id"]
-
         self._persist_campaign_state(assignments, schedule, manifest)
 
         # 4. Write run manifest and task definitions
@@ -1268,82 +1242,40 @@ class CampaignRunner:
         # 5. Set campaign status to running
         self._write_campaign_status(CampaignStatus.RUNNING)
 
-        # 5b. Write index generations
-        existing_generations = self._load_existing_generations()
-        if existing_generations:
-            # Resume: create a new index generation
-            last_gen = existing_generations[-1]
-            existing_attempts = self._load_existing_attempts()
-            existing_metrics = self._load_existing_metrics()
-            dispositions = self._compute_assignment_dispositions(assignments, existing_attempts)
-            checksums = self._compute_report_checksums(existing_attempts, existing_metrics)
-            # If any assignment has infrastructure_failed status, create a
-            # SUPERSESSION generation; otherwise create a RESUME generation.
-            has_infra_failures = any(
-                a.terminal_status == TerminalStatus.INFRASTRUCTURE_FAILED
-                for a in existing_attempts if a.assignment_id
-            )
-            creation_reason = (
-                IndexCreationReason.SUPERSESSION if has_infra_failures
-                else IndexCreationReason.RESUME
-            )
-            self._write_index_generation(
-                generation_number=last_gen.generation_number + 1,
-                parent_generation_hash=last_gen.content_hash,
-                creation_reason=creation_reason,
-                report_checksums=checksums,
-                assignment_dispositions=dispositions,
-            )
-        else:
-            # Fresh start: write the initial index generation
-            self._write_index_generation(
-                generation_number=0,
-                parent_generation_hash="0" * 64,
-                creation_reason=IndexCreationReason.INITIAL,
-                report_checksums=[],
-                assignment_dispositions=[],
-            )
+        # 5b. Write the initial index generation
+        self._write_index_generation(
+            generation_number=0,
+            parent_generation_hash="0" * 64,
+            creation_reason=IndexCreationReason.INITIAL,
+            report_checksums=[],
+            assignment_dispositions=[],
+        )
 
-        # 6. Load existing attempts and metrics (for resume)
-        existing_attempts = self._load_existing_attempts()
-        existing_metrics = self._load_existing_metrics()
-        completed_ids = self._completed_assignment_ids(existing_attempts)
-
-        # 7. Execute assignments in schedule order
+        # 6. Execute assignments in schedule order
         cohort_by_id = self._cohort_by_id()
         task_by_id = self._task_by_id()
 
-        all_attempts: list[AttemptRecord] = list(existing_attempts)
-        all_metrics: list[MetricObservation] = list(existing_metrics)
+        all_attempts: list[AttemptRecord] = []
+        all_metrics: list[MetricObservation] = []
         stop_reason: CampaignStopReason | None = None
         request_count = 0
         max_requests = self.spec.provider_budget.max_requests if self.spec.provider_budget else None
 
         total_assignments = len(schedule.ordered_assignment_ids)
-        completed_count = len(completed_ids)
+        completed_count = 0
         status_counts: dict[str, int] = {}
         campaign_start = time.monotonic()
         attempts_path = self.report_dir / ATTEMPTS_JSONL
         metrics_path = self.report_dir / METRICS_JSONL
 
-        # On resume, truncate the JSONL files to the existing attempts/metrics
-        # so incremental appends produce a consistent file.
-        if existing_attempts:
-            _write_jsonl(attempts_path, existing_attempts)
-            _write_jsonl(metrics_path, existing_metrics)
-
         logger.info(
-            "campaign %s starting: %d total assignments, %d already completed, %d remaining",
+            "campaign %s starting: %d total assignments, %d remaining",
             self.spec.campaign_id,
             total_assignments,
-            completed_count,
-            total_assignments - completed_count,
+            total_assignments,
         )
 
         for assignment_id in schedule.ordered_assignment_ids:
-            if assignment_id in completed_ids:
-                continue
-
             # Disk-space preflight: check before every block
             check_disk_space(self.report_dir, min_bytes=self.disk_space_min_bytes)
 
@@ -1357,8 +1289,7 @@ class CampaignRunner:
                 # Materialize terminal outcomes for remaining assignments
                 remaining = [
                     a for a in assignments
-                    if a.assignment_id not in completed_ids
-                    and schedule.ordered_assignment_ids.index(a.assignment_id) >= schedule.ordered_assignment_ids.index(assignment_id)
+                    if schedule.ordered_assignment_ids.index(a.assignment_id) >= schedule.ordered_assignment_ids.index(assignment_id)
                 ]
                 for rem in remaining:
                     rem_arm_def = get_arm_definition(Arm(rem.arm_id))
@@ -1380,11 +1311,10 @@ class CampaignRunner:
             )
 
             new_attempts, metrics = await self._execute_assignment(
-                assignment, cohort, arm_def, task, all_attempts
+                assignment, cohort, arm_def, task
             )
             all_attempts.extend(new_attempts)
             all_metrics.extend(metrics)
-            completed_ids.add(assignment_id)
             completed_count += 1
 
             # Incremental persistence: append new attempts and metrics

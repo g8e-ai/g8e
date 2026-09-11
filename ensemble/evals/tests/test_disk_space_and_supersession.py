@@ -15,9 +15,7 @@ infrastructure-invalid assignments.
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
@@ -46,7 +44,6 @@ from g8e_evals.campaign import (
 from g8e_evals.harness import Response, Score, Task
 from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.runner import (
-    CampaignRunner,
     CampaignSpec,
     DiskSpacePreflightError,
     check_disk_space,
@@ -196,106 +193,3 @@ class TestDiskSpacePreflight:
     def test_check_disk_space_zero_threshold_always_passes(self, tmp_path: Path):
         """check_disk_space with a zero threshold always passes."""
         check_disk_space(tmp_path, min_bytes=0)
-
-
-class TestSupersessionGeneration:
-    def test_runner_re_executes_infrastructure_failed_assignments_on_resume(self, tmp_path: Path):
-        """The runner re-executes infrastructure_failed assignments on resume.
-
-        Runs a campaign where the SUT fails with infrastructure error on the
-        first call, then succeeds on resume. The resumed campaign should
-        re-execute the failed assignment and produce a completed attempt.
-        """
-        from g8e_evals.constants import ATTEMPTS_JSONL
-
-        # Run a campaign with a failing SUT
-        call_count = 0
-
-        @dataclass
-        class _FailingSUT:
-            model_id: str
-
-            async def get_answer(self, task: Task) -> Response:
-                nonlocal call_count
-                call_count += 1
-                raise RuntimeError("infrastructure failure")
-
-        def failing_sut_factory(cohort: ModelCohort, arm: Arm):
-            return _FailingSUT(model_id=cohort.role_bindings[0].model_id)
-
-        spec = _make_spec()
-        runner = CampaignRunner(
-            spec=spec,
-            sut_factory=failing_sut_factory,
-            tasks=_make_tasks(),
-            grader=_FakeGrader(),
-            output_dir=tmp_path,
-        )
-        result = asyncio.run(runner.run())
-        assert result.status.value == "finalized"
-
-        # Verify the attempts show infrastructure_failed
-        attempts_path = result.report_dir / ATTEMPTS_JSONL
-        attempts = [json.loads(line) for line in attempts_path.read_text().splitlines() if line.strip()]
-        assert any(a["terminal_status"] == "infrastructure_failed" for a in attempts)
-
-        # Now resume with a succeeding SUT
-        @dataclass
-        class _SucceedingSUT:
-            model_id: str
-            answer: str = "This is a test answer with no commas."
-
-            async def get_answer(self, task: Task) -> Response:
-                return Response(answer=self.answer, model=self.model_id, arm=Arm.DIRECT)
-
-        def succeeding_sut_factory(cohort: ModelCohort, arm: Arm):
-            return _SucceedingSUT(model_id=cohort.role_bindings[0].model_id)
-
-        runner2 = CampaignRunner(
-            spec=spec,
-            sut_factory=succeeding_sut_factory,
-            tasks=_make_tasks(),
-            grader=_FakeGrader(),
-            output_dir=tmp_path,
-        )
-        result2 = asyncio.run(runner2.run())
-
-        # The resumed campaign should have re-executed the failed assignments
-        attempts2_path = result2.report_dir / ATTEMPTS_JSONL
-        attempts2 = [json.loads(line) for line in attempts2_path.read_text().splitlines() if line.strip()]
-        assert any(a["terminal_status"] == "completed" for a in attempts2)
-
-    def test_runner_does_not_re_execute_completed_assignments_on_resume(self, tmp_path: Path):
-        """The runner does not re-execute completed assignments on resume."""
-        from g8e_evals.constants import ATTEMPTS_JSONL
-
-        spec = _make_spec()
-        runner = CampaignRunner(
-            spec=spec,
-            sut_factory=_fake_sut_factory,
-            tasks=_make_tasks(),
-            grader=_FakeGrader(),
-            output_dir=tmp_path,
-        )
-        result = asyncio.run(runner.run())
-
-        # Count attempts from the first run
-        attempts_path = result.report_dir / ATTEMPTS_JSONL
-        first_attempts = [line for line in attempts_path.read_text().splitlines() if line.strip()]
-        first_count = len(first_attempts)
-
-        # Resume with the same SUT
-        runner2 = CampaignRunner(
-            spec=spec,
-            sut_factory=_fake_sut_factory,
-            tasks=_make_tasks(),
-            grader=_FakeGrader(),
-            output_dir=tmp_path,
-        )
-        result2 = asyncio.run(runner2.run())
-
-        # The resumed campaign should not add new completed attempts
-        attempts2_path = result2.report_dir / ATTEMPTS_JSONL
-        second_attempts = [line for line in attempts2_path.read_text().splitlines() if line.strip()]
-        second_count = len(second_attempts)
-        assert second_count == first_count
