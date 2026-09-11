@@ -25,6 +25,8 @@ from g8e_evals.selection_policy import (
     VALID_ROLES,
     CategoryScore,
     DisqualificationReason,
+    FinalistShortfallPolicy,
+    MissingnessPolicy,
     PhaseBSelectionPolicy,
     SelectionCategory,
     TieBreakerKey,
@@ -42,9 +44,13 @@ def _make_category_score(
     category: SelectionCategory = SelectionCategory.INSTRUCTION_ADHERENCE,
     score: float = 0.8,
     task_count: int = 10,
-    numerator: int = 8,
-    denominator: int = 10,
+    numerator: int | None = None,
+    denominator: int | None = None,
 ) -> CategoryScore:
+    if denominator is None:
+        denominator = task_count
+    if numerator is None:
+        numerator = round(score * denominator)
     return CategoryScore(
         category=category,
         score=score,
@@ -99,6 +105,13 @@ class TestPhaseBSelectionPolicy:
         assert policy.tie_breaker_order[1] == TieBreakerKey.MEDIAN_WARM_LATENCY
         assert policy.tie_breaker_order[2] == TieBreakerKey.PEAK_MEMORY
         assert policy.tie_breaker_order[3] == TieBreakerKey.VARIANT_ID
+        assert policy.require_complete_terminal_coverage is True
+        assert policy.missingness_policy == MissingnessPolicy.DISQUALIFY
+        assert policy.finalist_shortfall_policy == FinalistShortfallPolicy.FAIL_CLOSED
+        assert len(policy.role_formulas) == len(VALID_ROLES)
+        for formula in policy.role_formulas:
+            assert {weight.category for weight in formula.category_weights} == set(SelectionCategory)
+            assert sum(weight.weight for weight in formula.category_weights) == pytest.approx(1.0)
 
     def test_policy_is_deterministic(self):
         policy_a = build_phase_b_selection_policy()
@@ -159,6 +172,16 @@ class TestPhaseBSelectionPolicy:
                 content_hash=policy.content_hash,
                 unknown_field="bad",
             )
+
+
+class TestCategoryScore:
+    def test_rejects_score_not_derived_from_counts(self):
+        with pytest.raises(ValidationError, match="score"):
+            _make_category_score(score=0.7, numerator=8, denominator=10)
+
+    def test_rejects_task_count_denominator_mismatch(self):
+        with pytest.raises(ValidationError, match="task_count"):
+            _make_category_score(task_count=9, numerator=8, denominator=10)
 
 
 class TestMacroAverage:
@@ -236,7 +259,7 @@ class TestRankVariants:
                 disqualification_reason=DisqualificationReason.INFRASTRUCTURE_FAILURE,
             ),
         ]
-        ranked = rank_variants_for_role(scores, finalist_count=5)
+        ranked = rank_variants_for_role(scores, finalist_count=1)
         assert len(ranked) == 1
         assert ranked[0].variant_id == "good"
 
@@ -248,13 +271,13 @@ class TestRankVariants:
         ranked = rank_variants_for_role(scores, finalist_count=FINALIST_COUNT_PER_ROLE)
         assert len(ranked) == FINALIST_COUNT_PER_ROLE
 
-    def test_returns_fewer_when_insufficient(self):
+    def test_rejects_insufficient_eligible_finalists(self):
         scores = [
             _make_variant_score("a", macro_average=0.9),
             _make_variant_score("b", macro_average=0.8),
         ]
-        ranked = rank_variants_for_role(scores, finalist_count=5)
-        assert len(ranked) == 2
+        with pytest.raises(ValueError, match="exactly 5 eligible finalists"):
+            rank_variants_for_role(scores, finalist_count=5)
 
 
 class TestVariantRoleScore:
@@ -289,6 +312,24 @@ class TestVariantRoleScore:
                 disqualified=False,
                 disqualification_reason=DisqualificationReason.INFRASTRUCTURE_FAILURE,
             )
+
+    def test_rejects_incomplete_category_coverage(self):
+        with pytest.raises(ValidationError, match="all selection categories"):
+            VariantRoleScore(
+                variant_id="test",
+                role="primary",
+                category_scores=[_make_category_score()],
+                macro_average=0.5,
+                missed_escalations=0,
+                median_warm_latency_ms=100.0,
+                peak_memory_mb=4096.0,
+            )
+
+    def test_rejects_macro_average_not_derived_from_categories(self):
+        data = _make_variant_score(macro_average=0.8).model_dump()
+        data["macro_average"] = 0.7
+        with pytest.raises(ValidationError, match="macro_average"):
+            VariantRoleScore.model_validate(data)
 
     def test_rejects_duplicate_categories(self):
         with pytest.raises(ValidationError, match="duplicate category"):

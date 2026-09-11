@@ -49,6 +49,7 @@ class TestRepeatabilityPolicy:
         assert RepeatabilityStatistic.ALL_FIVE_AGREE in policy.secondary_statistics
         assert RepeatabilityStatistic.ACCURACY in policy.secondary_statistics
         assert RepeatabilityStatistic.TASK_BOOTSTRAP_CI in policy.secondary_statistics
+        assert policy.bootstrap_confidence == 0.95
 
     def test_policy_is_deterministic(self):
         policy_a = build_repeatability_policy()

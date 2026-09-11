@@ -5,6 +5,8 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+from __future__ import annotations
+
 import asyncio
 import binascii
 import hashlib
@@ -17,7 +19,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import click
 from pydantic import ValidationError
@@ -187,6 +189,9 @@ from g8e_evals.suites import (
     assert_simulation_eligible,
     get_suite_ids_by_class,
 )
+
+if TYPE_CHECKING:
+    from g8e_evals.campaign_set import CampaignChildPlan, CampaignSetPlan
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -695,6 +700,121 @@ def _derive_model_tag(cohort_id: str, model_tag_map: dict[str, str]) -> str:
     stripped = cohort_id.replace("cohort-", "")
     family, sep, size = stripped.rpartition("-")
     return f"{family}:{size}" if sep else stripped
+
+
+def validate_campaign_set_child_preflight(
+    *,
+    campaign_id: str,
+    campaign_profile_hash: str,
+    model_registry_hash: str,
+    expected_record_policy_hash: str,
+    retry_policy_hash: str,
+    budget_authority_hash: str,
+    instrumentation_policy_hash: str,
+    seed: int,
+    orchestrator_environment_scope: str,
+    provider_environment_scope: str,
+    campaign_set_plan: CampaignSetPlan,
+    task_ids: list[str],
+) -> None:
+    """Reject campaign-set child authority mismatches before report-directory creation.
+
+    Validates that the child campaign ID matches a child in the frozen
+    ``CampaignSetPlan`` and that the profile hash, registry hash,
+    expected-record policy hash, retry policy hash, budget authority hash,
+    instrumentation policy hash, seed, orchestrator and provider
+    environment scopes, and task partition all match the plan's declared
+    values for that child.
+
+    Raises ``ValueError`` on any mismatch.
+    """
+    child_plan: CampaignChildPlan | None = None
+    for cp in campaign_set_plan.child_plans:
+        if cp.child_id == campaign_id:
+            child_plan = cp
+            break
+    if child_plan is None:
+        raise ValueError(
+            f"campaign_id {campaign_id!r} does not match any child in "
+            f"campaign-set plan {campaign_set_plan.set_id!r}"
+        )
+
+    if campaign_profile_hash != campaign_set_plan.campaign_profile_hash:
+        raise ValueError(
+            f"campaign_profile_hash {campaign_profile_hash!r} does not match "
+            f"campaign-set plan {campaign_set_plan.campaign_profile_hash!r}"
+        )
+    if model_registry_hash != campaign_set_plan.model_registry_hash:
+        raise ValueError(
+            f"model_registry_hash {model_registry_hash!r} does not match "
+            f"campaign-set plan {campaign_set_plan.model_registry_hash!r}"
+        )
+    if expected_record_policy_hash != campaign_set_plan.expected_record_policy_hash:
+        raise ValueError(
+            f"expected_record_policy_hash {expected_record_policy_hash!r} does not match "
+            f"campaign-set plan {campaign_set_plan.expected_record_policy_hash!r}"
+        )
+    if retry_policy_hash != campaign_set_plan.retry_policy_hash:
+        raise ValueError(
+            f"retry_policy_hash {retry_policy_hash!r} does not match "
+            f"campaign-set plan {campaign_set_plan.retry_policy_hash!r}"
+        )
+    if budget_authority_hash != campaign_set_plan.budget_authority_hash:
+        raise ValueError(
+            f"budget_authority_hash {budget_authority_hash!r} does not match "
+            f"campaign-set plan {campaign_set_plan.budget_authority_hash!r}"
+        )
+    if instrumentation_policy_hash != campaign_set_plan.instrumentation_policy_hash:
+        raise ValueError(
+            f"instrumentation_policy_hash {instrumentation_policy_hash!r} does not match "
+            f"campaign-set plan {campaign_set_plan.instrumentation_policy_hash!r}"
+        )
+    if seed != campaign_set_plan.seed:
+        raise ValueError(
+            f"seed {seed} does not match campaign-set plan seed {campaign_set_plan.seed}"
+        )
+    if orchestrator_environment_scope != campaign_set_plan.orchestrator_environment_scope:
+        raise ValueError(
+            f"orchestrator_environment_scope {orchestrator_environment_scope!r} does not match "
+            f"campaign-set plan {campaign_set_plan.orchestrator_environment_scope!r}"
+        )
+    if provider_environment_scope != campaign_set_plan.provider_environment_scope:
+        raise ValueError(
+            f"provider_environment_scope {provider_environment_scope!r} does not match "
+            f"campaign-set plan {campaign_set_plan.provider_environment_scope!r}"
+        )
+    if sorted(task_ids) != sorted(child_plan.partition_task_ids):
+        raise ValueError(
+            f"task_ids {sorted(task_ids)} do not match child partition "
+            f"{sorted(child_plan.partition_task_ids)} for child {child_plan.child_id!r}"
+        )
+
+
+def validate_profile_cli_cross_check(
+    *,
+    cli_seed: int,
+    cli_max_retries: int,
+    profile_seed: int,
+    profile_max_retries: int,
+) -> None:
+    """Cross-check CLI inputs against the frozen campaign profile.
+
+    The CLI ``--seed`` and ``--max-retries`` must match the frozen
+    campaign profile's ``seed`` and ``max_retries`` fields. A mismatch
+    means the CLI command does not match the frozen authority and is
+    rejected before report-directory creation.
+
+    Raises ``ValueError`` on any mismatch.
+    """
+    if cli_seed != profile_seed:
+        raise ValueError(
+            f"CLI --seed {cli_seed} does not match campaign profile seed {profile_seed}"
+        )
+    if cli_max_retries != profile_max_retries:
+        raise ValueError(
+            f"CLI --max-retries {cli_max_retries} does not match campaign profile "
+            f"max_retries {profile_max_retries}"
+        )
 
 
 def validate_campaign_identity(

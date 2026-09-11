@@ -388,8 +388,9 @@ class CampaignManifest(BaseModel):
     The manifest binds preregistration, cohort definitions, task
     assignment, initial-state assignment, schedule, metric registry,
     release metric set, threshold/non-inferiority authority, missingness
-    authority, provider budget, source/build provenance requirements,
-    and claim exclusions by typed content hash.
+    authority, provider budget, budget observability policy,
+    source/build provenance requirements, and claim exclusions by
+    typed content hash.
 
     Changing any bound authority changes the manifest content hash and
     invalidates downstream analysis input hashes.
@@ -415,6 +416,10 @@ class CampaignManifest(BaseModel):
     threshold_authority_hash: str = Field(min_length=64, max_length=64)
     missingness_authority_hash: str = Field(min_length=64, max_length=64)
     provider_budget_hash: str = Field(min_length=64, max_length=64)
+    budget_observability_policy_hash: str = Field(
+        min_length=64, max_length=64,
+        description="SHA-256 of the frozen budget observability policy.",
+    )
     source_build_provenance_hash: str = Field(min_length=64, max_length=64)
     claim_exclusion_hash: str = Field(min_length=64, max_length=64)
 
@@ -452,6 +457,7 @@ class CampaignManifest(BaseModel):
                 "threshold_authority_hash": self.threshold_authority_hash,
                 "missingness_authority_hash": self.missingness_authority_hash,
                 "provider_budget_hash": self.provider_budget_hash,
+                "budget_observability_policy_hash": self.budget_observability_policy_hash,
                 "source_build_provenance_hash": self.source_build_provenance_hash,
                 "claim_exclusion_hash": self.claim_exclusion_hash,
             },
@@ -584,6 +590,7 @@ def compute_campaign_manifest_hash(
     provider_budget_hash: str,
     source_build_provenance_hash: str,
     claim_exclusion_hash: str,
+    budget_observability_policy_hash: str,
 ) -> str:
     """Compute the content hash for a campaign manifest."""
     payload = json.dumps(
@@ -602,6 +609,7 @@ def compute_campaign_manifest_hash(
             "threshold_authority_hash": threshold_authority_hash,
             "missingness_authority_hash": missingness_authority_hash,
             "provider_budget_hash": provider_budget_hash,
+            "budget_observability_policy_hash": budget_observability_policy_hash,
             "source_build_provenance_hash": source_build_provenance_hash,
             "claim_exclusion_hash": claim_exclusion_hash,
         },

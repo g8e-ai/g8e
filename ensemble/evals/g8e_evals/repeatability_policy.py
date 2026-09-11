@@ -220,6 +220,12 @@ class RepeatabilityPolicy(BaseModel):
         ge=0,
         description="Deterministic seed for bootstrap resampling.",
     )
+    bootstrap_confidence: float = Field(
+        default=0.95,
+        gt=0.0,
+        lt=1.0,
+        description="Confidence level for task-bootstrap intervals.",
+    )
     content_hash: str = Field(
         min_length=64, max_length=64,
         description="SHA-256 over canonical JSON of the policy.",
@@ -250,6 +256,7 @@ class RepeatabilityPolicy(BaseModel):
             secondary_statistics=self.secondary_statistics,
             bootstrap_iterations=self.bootstrap_iterations,
             bootstrap_seed=self.bootstrap_seed,
+            bootstrap_confidence=self.bootstrap_confidence,
         )
         if self.content_hash != expected:
             raise ValueError(
@@ -268,6 +275,7 @@ def compute_repeatability_policy_hash(
     secondary_statistics: list[RepeatabilityStatistic],
     bootstrap_iterations: int,
     bootstrap_seed: int,
+    bootstrap_confidence: float = 0.95,
 ) -> str:
     """Compute the content hash for a D15 repeatability policy."""
     payload = json.dumps(
@@ -279,6 +287,7 @@ def compute_repeatability_policy_hash(
             "secondary_statistics": sorted(s.value for s in secondary_statistics),
             "bootstrap_iterations": bootstrap_iterations,
             "bootstrap_seed": bootstrap_seed,
+            "bootstrap_confidence": bootstrap_confidence,
         },
         allow_nan=False,
         ensure_ascii=False,

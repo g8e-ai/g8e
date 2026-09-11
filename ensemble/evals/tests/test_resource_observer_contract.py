@@ -289,6 +289,40 @@ def _make_resource_observation(
     }
 
 
+def _campaign_identity_all_attempts(report_dir: Path) -> list[dict]:
+    """Read the actual campaign identity and all completed attempts from the
+    report directory.
+
+    Returns a list of identity dicts (one per completed attempt) with
+    campaign_id, child_id, run_id, task_id, assignment_id, attempt_id, and
+    a generated inference_id — suitable for constructing resource observations
+    that pass the verifier's identity cross-check and count layer.
+    """
+    from g8e_evals.constants import ATTEMPTS_JSONL, CAMPAIGN_MANIFEST_JSON
+
+    cm = json.loads((report_dir / CAMPAIGN_MANIFEST_JSON).read_text())
+    campaign_id = cm["campaign_id"]
+    attempts_path = report_dir / ATTEMPTS_JSONL
+    lines = attempts_path.read_text().strip().splitlines()
+    if not lines:
+        pytest.skip("no attempts in campaign")
+    identities: list[dict] = []
+    for i, line in enumerate(lines):
+        attempt = json.loads(line)
+        if attempt.get("terminal_status") != "completed":
+            continue
+        identities.append({
+            "campaign_id": campaign_id,
+            "child_id": campaign_id,
+            "run_id": attempt["run_id"],
+            "task_id": attempt["task_id"],
+            "assignment_id": attempt.get("assignment_id", ""),
+            "attempt_id": attempt["attempt_id"],
+            "inference_id": f"inf-{i}",
+        })
+    return identities
+
+
 class TestResourceObserverContract:
     def test_resource_observation_has_hidden_reasoning_throughput(self):
         """ResourceObservation has a hidden_reasoning_throughput field separate from output_throughput."""
@@ -470,13 +504,15 @@ class TestCampaignVerifierResourceObservationLayer:
 
         report_dir = _run_campaign(tmp_path)
 
-        # Write valid resource observations
-        obs_data = _make_resource_observation(
-            run_id="test-run-id",
-            task_id="task-1001",
-        )
+        # Write one valid resource observation per completed attempt so the
+        # count layer is satisfied and all identity cross-checks pass.
+        identities = _campaign_identity_all_attempts(report_dir)
+        lines: list[str] = []
+        for ident in identities:
+            obs_data = _make_resource_observation(**ident)
+            lines.append(json.dumps(obs_data))
         obs_path = report_dir / RESOURCE_OBSERVATIONS_JSONL
-        obs_path.write_text(json.dumps(obs_data) + "\n")
+        obs_path.write_text("\n".join(lines) + "\n")
 
         result = verify_campaign(report_dir)
         assert result.ok, f"valid resource observations should pass: {result.failures}"
@@ -524,20 +560,25 @@ class TestCampaignVerifierResourceObservationLayer:
 
         report_dir = _run_campaign(tmp_path)
 
-        obs_data = _make_resource_observation(
-            run_id="test-run-id",
-            task_id="task-1001",
-            time_to_first_token_seconds=0.45,
-            generation_duration_seconds=1.1,
-            accelerator_memory_before_bytes=2_000_000_000,
-            gpu_utilization_percent=87.5,
-            gpu_temperature_celsius=71.0,
-            gpu_power_draw_watts=280.0,
-            gpu_clock_mhz=2520.0,
-            collection_tool="psutil-5.9+pynvml-12.0.0",
-        )
+        # Write one observation per completed attempt; the first carries the
+        # extended per-inference fields so the verifier validates them.
+        identities = _campaign_identity_all_attempts(report_dir)
+        lines: list[str] = []
+        for i, ident in enumerate(identities):
+            obs_data = _make_resource_observation(
+                **ident,
+                time_to_first_token_seconds=0.45,
+                generation_duration_seconds=1.1,
+                accelerator_memory_before_bytes=2_000_000_000,
+                gpu_utilization_percent=87.5,
+                gpu_temperature_celsius=71.0,
+                gpu_power_draw_watts=280.0,
+                gpu_clock_mhz=2520.0,
+                collection_tool="psutil-5.9+pynvml-12.0.0",
+            ) if i == 0 else _make_resource_observation(**ident)
+            lines.append(json.dumps(obs_data))
         obs_path = report_dir / RESOURCE_OBSERVATIONS_JSONL
-        obs_path.write_text(json.dumps(obs_data) + "\n")
+        obs_path.write_text("\n".join(lines) + "\n")
 
         result = verify_campaign(report_dir)
         assert result.ok, f"extended per-inference record should pass: {result.failures}"

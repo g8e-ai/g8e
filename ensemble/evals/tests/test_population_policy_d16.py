@@ -22,12 +22,15 @@ from pydantic import ValidationError
 
 from g8e_evals.population_policy import (
     D16_POPULATION_POLICY_VERSION,
+    D16_POPULATION_SELECTION_HASH,
+    D16_SELECTED_IFEVAL_TASK_IDS,
     D16_SELECTED_TASK_COUNT,
     D16PopulationSelection,
     D16SelectionRule,
     FRAMEWORK_SCENARIO_COUNT,
     FRAMEWORK_SUITE_IDS,
     build_d16_population_selection,
+    build_published_d16_population_selection,
     compute_d16_selection_hash,
     select_d16_ifeval_tasks,
 )
@@ -111,6 +114,13 @@ class TestD16SelectionAlgorithm:
             "adding tasks should not change the first four selected tasks "
             "because round-robin selects from sorted families"
         )
+
+
+class TestPublishedD16PopulationAuthority:
+    def test_published_selection_matches_frozen_population(self):
+        selection = build_published_d16_population_selection()
+        assert selection.selected_ifeval_task_ids == list(D16_SELECTED_IFEVAL_TASK_IDS)
+        assert selection.content_hash == D16_POPULATION_SELECTION_HASH
 
 
 class TestD16PopulationSelection:

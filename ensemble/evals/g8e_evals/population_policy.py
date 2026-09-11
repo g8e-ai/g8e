@@ -41,6 +41,10 @@ D16_POPULATION_POLICY_VERSION = "1.0.0"
 
 D16_SELECTED_TASK_COUNT = 4
 
+D16_IFEVAL_POPULATION_HASH = "f36969621730abbc9da4bc2ad3a670a3317f36d567dbdd2479fe90ed16cc215f"
+D16_SELECTED_IFEVAL_TASK_IDS = ("1019", "136", "16", "32")
+D16_POPULATION_SELECTION_HASH = "f7d51ea660543eacf136e25bef24f8cf0aa32dd442f497ec2b6f774bc2f9ac7d"
+
 FRAMEWORK_SCENARIO_COUNT = 21
 
 FRAMEWORK_SUITE_IDS: tuple[str, ...] = (
@@ -315,14 +319,32 @@ def build_d16_population_selection(
     )
 
 
+def build_published_d16_population_selection() -> D16PopulationSelection:
+    return D16PopulationSelection(
+        selection_id="d16-population-selection",
+        selection_version=D16_POPULATION_POLICY_VERSION,
+        rule=D16SelectionRule.HASH_STRATIFIED_ROUND_ROBIN,
+        selected_ifeval_task_ids=list(D16_SELECTED_IFEVAL_TASK_IDS),
+        ifeval_population_hash=D16_IFEVAL_POPULATION_HASH,
+        framework_scenario_count=FRAMEWORK_SCENARIO_COUNT,
+        framework_suite_ids=list(FRAMEWORK_SUITE_IDS),
+        total_population=FRAMEWORK_SCENARIO_COUNT + D16_SELECTED_TASK_COUNT,
+        content_hash=D16_POPULATION_SELECTION_HASH,
+    )
+
+
 __all__ = [
+    "D16_IFEVAL_POPULATION_HASH",
     "D16_POPULATION_POLICY_VERSION",
+    "D16_POPULATION_SELECTION_HASH",
+    "D16_SELECTED_IFEVAL_TASK_IDS",
     "D16_SELECTED_TASK_COUNT",
     "FRAMEWORK_SCENARIO_COUNT",
     "FRAMEWORK_SUITE_IDS",
     "D16PopulationSelection",
     "D16SelectionRule",
     "build_d16_population_selection",
+    "build_published_d16_population_selection",
     "compute_d16_selection_hash",
     "select_d16_ifeval_tasks",
 ]

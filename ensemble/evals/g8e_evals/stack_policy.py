@@ -127,6 +127,14 @@ class SelectionCriterion(StrEnum):
     THROUGHPUT_TOKENS_PER_SECOND = "throughput_tokens_per_second"
 
 
+class SelectorEligibilityRule(StrEnum):
+    PHASE_B_FINALIST = "phase_b_finalist"
+
+
+class HomogeneousFamilyEligibilityRule(StrEnum):
+    ELIGIBLE_IN_ALL_ROLES = "eligible_in_all_roles"
+
+
 class SelectionDirection(StrEnum):
     """Whether a selector maximizes or minimizes its criterion.
 
@@ -202,6 +210,10 @@ class StackSelectorDefinition(BaseModel):
     requires_lineage_diversity: bool = Field(
         description="Whether this selector requires lineage diversity across roles.",
     )
+    eligibility_rule: SelectorEligibilityRule = Field(
+        default=SelectorEligibilityRule.PHASE_B_FINALIST,
+        description="Frozen eligibility threshold requiring accepted Phase B finalist status.",
+    )
     tie_breaker_order: list[StackTieBreakerKey] = Field(
         min_length=1,
         description="Ordered tie-breaker keys for this selector.",
@@ -223,9 +235,8 @@ class HomogeneousFamilyRule(BaseModel):
         min_length=1,
         description="Ordered family preference (Qwen, Granite, lexicographic).",
     )
-    condition: str = Field(
-        min_length=1,
-        description="Condition for adding the homogeneous stack (at least one family eligible in all roles).",
+    eligibility_rule: HomogeneousFamilyEligibilityRule = Field(
+        description="Typed condition for adding the homogeneous stack.",
     )
 
 
@@ -389,7 +400,7 @@ def build_stack_policy(
             FamilyPreference.GRANITE,
             FamilyPreference.LEXICOGRAPHIC,
         ],
-        condition="at least one family has candidates eligible in all three roles",
+        eligibility_rule=HomogeneousFamilyEligibilityRule.ELIGIBLE_IN_ALL_ROLES,
     )
     content_hash = compute_stack_policy_hash(
         policy_id=policy_id,
@@ -414,10 +425,12 @@ __all__ = [
     "STACK_POLICY_VERSION",
     "DeduplicationRule",
     "FamilyPreference",
+    "HomogeneousFamilyEligibilityRule",
     "HomogeneousFamilyRule",
     "LineageMetadataSource",
     "SelectionCriterion",
     "SelectionDirection",
+    "SelectorEligibilityRule",
     "StackPolicy",
     "StackSelectorDefinition",
     "StackSelectorId",

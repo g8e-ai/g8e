@@ -569,6 +569,7 @@ def build_campaign_manifest(
     provider_budget_hash: str,
     source_build_provenance_hash: str,
     claim_exclusion_hash: str,
+    budget_observability_policy_hash: str,
 ) -> CampaignManifest:
     """Build the immutable campaign manifest binding every authority by hash."""
     cohort_hashes = sorted(c.content_hash for c in spec.cohorts)
@@ -589,6 +590,7 @@ def build_campaign_manifest(
         provider_budget_hash,
         source_build_provenance_hash,
         claim_exclusion_hash,
+        budget_observability_policy_hash,
     )
     return CampaignManifest(
         campaign_id=spec.campaign_id,
@@ -605,6 +607,7 @@ def build_campaign_manifest(
         threshold_authority_hash=threshold_authority_hash,
         missingness_authority_hash=missingness_authority_hash,
         provider_budget_hash=provider_budget_hash,
+        budget_observability_policy_hash=budget_observability_policy_hash,
         source_build_provenance_hash=source_build_provenance_hash,
         claim_exclusion_hash=claim_exclusion_hash,
         content_hash=content_hash,
@@ -1416,6 +1419,9 @@ class CampaignRunner:
         threshold_authority_hash = _compute_simple_hash("descriptive_only_no_threshold")
         missingness_authority_hash = _compute_simple_hash("assignment_level_missingness")
         provider_budget_hash = compute_provider_budget_hash(self.spec.provider_budget)
+        budget_observability_policy_hash = compute_budget_observability_policy_hash(
+            self.spec.budget_observability_policy
+        )
         source_build_provenance_hash = _compute_simple_hash(
             self.spec.source_build_provenance.source_tree_state_hash
             if self.spec.source_build_provenance
@@ -1435,6 +1441,7 @@ class CampaignRunner:
             provider_budget_hash,
             source_build_provenance_hash,
             claim_exclusion_hash,
+            budget_observability_policy_hash,
         )
 
         # 3. Create report directory and persist campaign state

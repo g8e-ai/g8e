@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from enum import StrEnum
 from typing import Self
 
@@ -88,6 +89,41 @@ class DisqualificationReason(StrEnum):
     INCOMPLETE_TERMINAL_COVERAGE = "incomplete_terminal_coverage"
 
 
+class MissingnessPolicy(StrEnum):
+    DISQUALIFY = "disqualify"
+
+
+class FinalistShortfallPolicy(StrEnum):
+    FAIL_CLOSED = "fail_closed"
+
+
+class CategoryWeight(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    category: SelectionCategory
+    weight: float = Field(gt=0.0, le=1.0)
+
+
+class RoleSelectionFormula(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    role: str = Field(min_length=1)
+    category_weights: list[CategoryWeight] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_formula(self) -> Self:
+        if self.role not in VALID_ROLES:
+            raise ValueError(f"role must be one of {sorted(VALID_ROLES)}: got {self.role!r}")
+        categories = [weight.category for weight in self.category_weights]
+        if len(categories) != len(set(categories)):
+            raise ValueError(f"duplicate category in role formula: {categories}")
+        if set(categories) != set(SelectionCategory):
+            raise ValueError("role formula must include all selection categories")
+        if not math.isclose(sum(weight.weight for weight in self.category_weights), 1.0):
+            raise ValueError("role formula category weights must sum to 1")
+        return self
+
+
 class TieBreakerKey(StrEnum):
     """Ordered tie-breaker keys for D11 Phase B ranking.
 
@@ -118,7 +154,18 @@ class CategoryScore(BaseModel):
     score: float = Field(ge=0.0, le=1.0, description="Macro-average score for this category.")
     task_count: int = Field(ge=0, description="Number of tasks with terminal outcomes in this category.")
     numerator: int = Field(ge=0, description="Number of passing tasks in this category.")
-    denominator: int = Field(ge=0, description="Number of terminal tasks in this category (the denominator).")
+    denominator: int = Field(ge=1, description="Number of terminal tasks in this category (the denominator).")
+
+    @model_validator(mode="after")
+    def _validate_counts(self) -> Self:
+        if self.task_count != self.denominator:
+            raise ValueError("task_count must equal denominator")
+        if self.numerator > self.denominator:
+            raise ValueError("numerator must not exceed denominator")
+        expected_score = self.numerator / self.denominator
+        if not math.isclose(self.score, expected_score):
+            raise ValueError(f"score must equal numerator / denominator: {expected_score}")
+        return self
 
 
 class VariantRoleScore(BaseModel):
@@ -182,7 +229,28 @@ class VariantRoleScore(BaseModel):
             raise ValueError(
                 f"duplicate category in category_scores: {categories}"
             )
+        if set(categories) != set(SelectionCategory):
+            raise ValueError("category_scores must include all selection categories")
+        expected_macro_average = compute_macro_average(self.category_scores)
+        if not math.isclose(self.macro_average, expected_macro_average):
+            raise ValueError(
+                f"macro_average must equal the category macro-average: {expected_macro_average}"
+            )
         return self
+
+
+def _default_role_formulas() -> list[RoleSelectionFormula]:
+    category_weight = 1.0 / len(SelectionCategory)
+    return [
+        RoleSelectionFormula(
+            role=role,
+            category_weights=[
+                CategoryWeight(category=category, weight=category_weight)
+                for category in SelectionCategory
+            ],
+        )
+        for role in VALID_ROLES
+    ]
 
 
 class PhaseBSelectionPolicy(BaseModel):
@@ -214,6 +282,10 @@ class PhaseBSelectionPolicy(BaseModel):
         min_length=1,
         description="Ordered tie-breaker keys for D11 ranking.",
     )
+    require_complete_terminal_coverage: bool = True
+    missingness_policy: MissingnessPolicy = MissingnessPolicy.DISQUALIFY
+    finalist_shortfall_policy: FinalistShortfallPolicy = FinalistShortfallPolicy.FAIL_CLOSED
+    role_formulas: list[RoleSelectionFormula] = Field(default_factory=_default_role_formulas)
     content_hash: str = Field(
         min_length=64, max_length=64,
         description="SHA-256 over canonical JSON of the policy.",
@@ -238,6 +310,11 @@ class PhaseBSelectionPolicy(BaseModel):
             raise ValueError(
                 f"duplicate tie-breaker in tie_breaker_order: {self.tie_breaker_order}"
             )
+        if not self.require_complete_terminal_coverage:
+            raise ValueError("complete terminal coverage is required")
+        formula_roles = [formula.role for formula in self.role_formulas]
+        if formula_roles != list(VALID_ROLES):
+            raise ValueError(f"role_formulas must be ordered as {list(VALID_ROLES)}")
         expected = compute_selection_policy_hash(
             policy_id=self.policy_id,
             policy_version=self.policy_version,
@@ -245,6 +322,10 @@ class PhaseBSelectionPolicy(BaseModel):
             valid_roles=self.valid_roles,
             categories=self.categories,
             tie_breaker_order=self.tie_breaker_order,
+            require_complete_terminal_coverage=self.require_complete_terminal_coverage,
+            missingness_policy=self.missingness_policy,
+            finalist_shortfall_policy=self.finalist_shortfall_policy,
+            role_formulas=self.role_formulas,
         )
         if self.content_hash != expected:
             raise ValueError(
@@ -262,8 +343,14 @@ def compute_selection_policy_hash(
     valid_roles: list[str],
     categories: list[SelectionCategory],
     tie_breaker_order: list[TieBreakerKey],
+    require_complete_terminal_coverage: bool = True,
+    missingness_policy: MissingnessPolicy = MissingnessPolicy.DISQUALIFY,
+    finalist_shortfall_policy: FinalistShortfallPolicy = FinalistShortfallPolicy.FAIL_CLOSED,
+    role_formulas: list[RoleSelectionFormula] | None = None,
 ) -> str:
     """Compute the content hash for a Phase B selection policy."""
+    if role_formulas is None:
+        role_formulas = _default_role_formulas()
     payload = json.dumps(
         {
             "policy_id": policy_id,
@@ -272,6 +359,13 @@ def compute_selection_policy_hash(
             "valid_roles": sorted(valid_roles),
             "categories": sorted(c.value for c in categories),
             "tie_breaker_order": [t.value for t in tie_breaker_order],
+            "require_complete_terminal_coverage": require_complete_terminal_coverage,
+            "missingness_policy": missingness_policy.value,
+            "finalist_shortfall_policy": finalist_shortfall_policy.value,
+            "role_formulas": [
+                formula.model_dump(mode="json")
+                for formula in role_formulas
+            ],
         },
         allow_nan=False,
         ensure_ascii=False,
@@ -336,8 +430,8 @@ def rank_variants_for_role(
     order: missed escalations ascending, median warm latency ascending,
     peak memory ascending, variant ID lexicographic ascending.
 
-    Returns exactly ``finalist_count`` variants or fewer if fewer
-    eligible variants exist.
+    Returns exactly ``finalist_count`` variants and fails closed when
+    fewer eligible variants exist.
     """
     eligible = [s for s in scores if not s.disqualified]
     eligible.sort(
@@ -349,6 +443,10 @@ def rank_variants_for_role(
             s.variant_id,
         )
     )
+    if len(eligible) < finalist_count:
+        raise ValueError(
+            f"exactly {finalist_count} eligible finalists are required: got {len(eligible)}"
+        )
     return eligible[:finalist_count]
 
 
@@ -357,8 +455,12 @@ __all__ = [
     "PHASE_B_SELECTION_POLICY_VERSION",
     "VALID_ROLES",
     "CategoryScore",
+    "CategoryWeight",
     "DisqualificationReason",
+    "FinalistShortfallPolicy",
+    "MissingnessPolicy",
     "PhaseBSelectionPolicy",
+    "RoleSelectionFormula",
     "SelectionCategory",
     "TieBreakerKey",
     "VariantRoleScore",

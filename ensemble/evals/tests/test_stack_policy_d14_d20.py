@@ -24,8 +24,10 @@ from g8e_evals.stack_policy import (
     STACK_POLICY_VERSION,
     DeduplicationRule,
     FamilyPreference,
+    HomogeneousFamilyEligibilityRule,
     HomogeneousFamilyRule,
     LineageMetadataSource,
+    SelectorEligibilityRule,
     SelectionCriterion,
     SelectionDirection,
     StackPolicy,
@@ -154,6 +156,11 @@ class TestStackPolicy:
         for selector in policy.selectors:
             assert isinstance(selector.selection_criterion, SelectionCriterion)
             assert isinstance(selector.selection_direction, SelectionDirection)
+            assert selector.eligibility_rule == SelectorEligibilityRule.PHASE_B_FINALIST
+
+    def test_homogeneous_family_condition_is_typed(self):
+        policy = build_stack_policy()
+        assert policy.homogeneous_family_rule.eligibility_rule == HomogeneousFamilyEligibilityRule.ELIGIBLE_IN_ALL_ROLES
 
     def test_accuracy_selector_maximizes_macro_average(self):
         policy = build_stack_policy()
@@ -229,7 +236,7 @@ class TestStackPolicy:
                 deduplication_rule=DeduplicationRule.KEEP_SELECTOR_LABEL,
                 homogeneous_family_rule=HomogeneousFamilyRule(
                     preference_order=[FamilyPreference.QWEN],
-                    condition="test",
+                    eligibility_rule=HomogeneousFamilyEligibilityRule.ELIGIBLE_IN_ALL_ROLES,
                 ),
                 content_hash="0" * 64,
             )
@@ -253,7 +260,7 @@ class TestStackPolicy:
                 deduplication_rule=DeduplicationRule.KEEP_SELECTOR_LABEL,
                 homogeneous_family_rule=HomogeneousFamilyRule(
                     preference_order=[FamilyPreference.QWEN],
-                    condition="test",
+                    eligibility_rule=HomogeneousFamilyEligibilityRule.ELIGIBLE_IN_ALL_ROLES,
                 ),
                 content_hash="0" * 64,
             )
@@ -294,7 +301,7 @@ class TestHomogeneousFamilyRule:
                 FamilyPreference.GRANITE,
                 FamilyPreference.LEXICOGRAPHIC,
             ],
-            condition="at least one family eligible in all roles",
+            eligibility_rule=HomogeneousFamilyEligibilityRule.ELIGIBLE_IN_ALL_ROLES,
         )
         assert len(rule.preference_order) == 3
 
@@ -302,7 +309,7 @@ class TestHomogeneousFamilyRule:
         with pytest.raises(ValidationError):
             HomogeneousFamilyRule(
                 preference_order=[FamilyPreference.QWEN],
-                condition="test",
+                eligibility_rule=HomogeneousFamilyEligibilityRule.ELIGIBLE_IN_ALL_ROLES,
                 unknown_field="bad",
             )
 
@@ -310,5 +317,5 @@ class TestHomogeneousFamilyRule:
         with pytest.raises(ValidationError):
             HomogeneousFamilyRule(
                 preference_order=[],
-                condition="test",
+                eligibility_rule=HomogeneousFamilyEligibilityRule.ELIGIBLE_IN_ALL_ROLES,
             )
