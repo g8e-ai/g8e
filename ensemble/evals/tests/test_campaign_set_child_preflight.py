@@ -25,8 +25,12 @@ Covers the Senior Integrator re-audit gaps for Atlas:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import pytest
+
+if TYPE_CHECKING:
+    from g8e_evals.runner import CampaignRunner
 
 pytestmark = pytest.mark.unit
 
@@ -481,7 +485,7 @@ class TestBuildCampaignBindingReportRole:
         *,
         campaign_id: str,
         campaign_set_plan: CampaignSetPlan | None = None,
-    ) -> object:
+    ) -> CampaignRunner:
         """Build a minimal CampaignRunner with profile+registry and an
         optional campaign_set_plan. Uses model_construct to bypass
         validation for test brevity."""
@@ -500,7 +504,7 @@ class TestBuildCampaignBindingReportRole:
             compute_task_assignment_hash,
         )
         from g8e_evals.schema import CampaignTrack
-        from g8e_evals.analysis.canonical import PreregistrationConfig
+        from g8e_evals.analysis.canonical import ContinuousTestPolicy, ClaimPolicy, PreregistrationConfig
 
         variant = ModelVariant(
             variant_id="qwen3-8b-q4_0",
@@ -673,12 +677,12 @@ class TestBuildCampaignBindingReportRole:
                 required_replicate_ids=["rep-1"],
                 required_replicate_count=1,
                 primary_metric_ids=["ifeval_subset_verifier"],
-                continuous_test_policy="paired_t",
+                continuous_test_policy=ContinuousTestPolicy.PAIRED_T,
                 bootstrap_count=10000,
                 bootstrap_confidence=0.95,
                 bootstrap_seed=0,
                 significance_level=0.05,
-                claim_policy="descriptive_only",
+                claim_policy=ClaimPolicy.DESCRIPTIVE_ONLY,
             ),
             cohorts=[cohort],
             task_assignment=task_assignment,
@@ -686,11 +690,12 @@ class TestBuildCampaignBindingReportRole:
             retry_policy=RetryPolicy(max_retries=1, retryable_terminal_statuses=["infrastructure_failed"]),
             randomization_seed=42,
         )
+        from g8e_evals.runner import SUTFactory, GraderProtocol
         return CampaignRunner(
             spec=spec,
-            sut_factory=lambda c, a: None,
+            sut_factory=cast(SUTFactory, lambda c, a: None),
             tasks=[],
-            grader=None,
+            grader=cast(GraderProtocol, None),
             output_dir=Path("/tmp"),
             campaign_profile=profile,
             model_registry=registry,

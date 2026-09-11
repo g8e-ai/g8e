@@ -24,12 +24,12 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from g8e_evals.benchmark_contract import (
     BENCHMARK_POPULATION_VERSION,
     BenchmarkPopulation,
     BenchmarkPopulationKind,
-    compute_population_hash,
 )
 from g8e_evals.benchmarks.scenarios.populations import (
     build_all_populations,
@@ -116,7 +116,7 @@ class TestBuildPopulation:
     def test_population_is_frozen(self, suite_expectation):
         suite_id, _, _ = suite_expectation
         pop = build_population(suite_id)
-        with pytest.raises(Exception):
+        with pytest.raises((AttributeError, TypeError, ValidationError)):
             pop.suite_id = "modified"
 
     def test_population_population_id_uses_suite_id(self, suite_expectation):

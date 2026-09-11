@@ -86,7 +86,8 @@ class TestD16SelectionAlgorithm:
         families: set[str] = set()
         for row in rows:
             if str(row["key"]) in selected:
-                iids = list(row.get("instruction_id_list", []))
+                raw_iids = row.get("instruction_id_list", [])
+                iids = list(raw_iids) if isinstance(raw_iids, list) else []
                 if iids:
                     families.add(sorted(iids)[0].split(":")[0])
         assert len(families) >= 2, (
@@ -253,5 +254,5 @@ class TestD16PopulationSelection:
                     framework_suite_ids=list(FRAMEWORK_SUITE_IDS),
                     total_population=FRAMEWORK_SCENARIO_COUNT + 4,
                 ),
-                unknown_field="bad",
+                unknown_field="bad",  # type: ignore
             )

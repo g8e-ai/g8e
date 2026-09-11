@@ -30,7 +30,7 @@ import pytest
 from pydantic import ValidationError
 
 from g8e_evals.gpu import GpuMetricsCollector, GpuSnapshot
-from g8e_evals.index import MeasurementAvailability, MeasurementScope, UnavailableMeasurement
+from g8e_evals.index import MeasurementAvailability, MeasurementScope, ModelRole, UnavailableMeasurement, VerificationStatus
 
 
 pytestmark = pytest.mark.unit
@@ -320,7 +320,7 @@ class TestGpuMetricsCollectorIntegrationWithObservation:
             attempt_id="att-1",
             inference_id="inf-1",
             stage_id="att-1:direct:1",
-            role="primary",
+            role=ModelRole.PRIMARY,
             model_variant_id="v1",
             task_id="task-1",
             orchestrator_scope="linux/amd64/cpu",
@@ -330,7 +330,7 @@ class TestGpuMetricsCollectorIntegrationWithObservation:
             collection_tool=f"psutil-5.9+{collector.collection_tool()}",
             source_evidence_refs=["evidence/test.json"],
             source_evidence_sha256="a" * 64,
-            verification_status="verified",
+            verification_status=VerificationStatus.VERIFIED,
             model_load_time_seconds=10.0,
             peak_resident_memory_bytes=4_000_000_000,
             artifact_bytes=4_800_000_000,

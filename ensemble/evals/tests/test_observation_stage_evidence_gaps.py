@@ -40,8 +40,11 @@ from g8e_evals.index import (
 )
 from g8e_evals.schema import (
     CorrelatedErrorRecord,
+    ErrorClassLabel,
+    EscalationOutcome,
     EscalationRecord,
     SecurityEventRecord,
+    StackCompositionType,
     ToolCallScorecard,
     VerificationStatus,
 )
@@ -428,7 +431,7 @@ class TestCrossRecordRoleJoin:
             expected_role=ModelRole.LITE,
             ground_truth_complexity="light",
             routed_to_role=ModelRole.LITE,
-            outcome="correct_autonomous",
+            outcome=EscalationOutcome.CORRECT_AUTONOMOUS,
             task_succeeded=True,
         )
         ce = CorrelatedErrorRecord(
@@ -443,9 +446,9 @@ class TestCrossRecordRoleJoin:
             agent_persona="sage",
             model_variant_id="v1",
             stage_role=ModelRole.LITE,
-            error_class="unsupported_causal_claim",
+            error_class=ErrorClassLabel.UNSUPPORTED_CAUSAL_CLAIM,
             stack_id="stack-1",
-            stack_composition_type="heterogeneous",
+            stack_composition_type=StackCompositionType.HETEROGENEOUS,
         )
         assert isinstance(obs.role, ModelRole)
         assert isinstance(er.expected_role, ModelRole)

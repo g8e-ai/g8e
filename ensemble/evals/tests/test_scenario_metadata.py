@@ -76,7 +76,7 @@ class TestGraderCriterion:
             GraderCriterion(
                 kind="keyword_present",
                 value="error",
-                unknown_field="rejected",
+                unknown_field="rejected",  # type: ignore
             )
 
     def test_criterion_kind_must_be_nonempty(self):
@@ -103,7 +103,7 @@ class TestScenarioMetadata:
                 complexity=ScenarioComplexity.LIGHT,
                 expected_role=ExpectedRole.LIGHT,
                 criteria=[self._make_valid_criterion()],
-                unknown_field="rejected",
+                unknown_field="rejected",  # type: ignore
             )
 
     def test_metadata_requires_at_least_one_criterion(self):
@@ -146,7 +146,7 @@ class TestScenarioMetadata:
         assert meta.expected_role == ExpectedRole.PRIMARY
 
     def test_light_complexity_rejects_assistant_role(self):
-        with pytest.raises(ValidationError, match="expected_role.*does not match.*complexity"):
+        with pytest.raises(ValidationError, match=r"expected_role.*does not match.*complexity"):
             ScenarioMetadata(
                 category=ScenarioCategory.TOOL_SELECTION,
                 complexity=ScenarioComplexity.LIGHT,
@@ -155,7 +155,7 @@ class TestScenarioMetadata:
             )
 
     def test_primary_complexity_rejects_light_role(self):
-        with pytest.raises(ValidationError, match="expected_role.*does not match.*complexity"):
+        with pytest.raises(ValidationError, match=r"expected_role.*does not match.*complexity"):
             ScenarioMetadata(
                 category=ScenarioCategory.ROUTING_DELEGATION,
                 complexity=ScenarioComplexity.PRIMARY,

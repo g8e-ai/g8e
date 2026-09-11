@@ -518,7 +518,7 @@ class TestMissingToZeroConversion:
             # The correct behavior: a dimension with no source metrics
             # should carry a typed unavailable state, not 0.0.
             assert hasattr(dim, "availability")
-            assert dim.availability != "measured"
+            assert getattr(dim, "availability", "measured") != "measured"
 
 
 # ===========================================================================

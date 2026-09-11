@@ -23,7 +23,7 @@ Verifies that:
   with correct grader class, direction, and release domain.
 """
 
-# pyright: reportCallIssue=false
+# pyright: reportCallIssue=false, reportArgumentType=false
 # This file intentionally constructs models with extra fields and
 # invalid evidence to verify pydantic validation rejects them.
 

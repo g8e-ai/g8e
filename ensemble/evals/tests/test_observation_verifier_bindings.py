@@ -75,6 +75,7 @@ from g8e_evals.harness import Response, Score, Task
 from g8e_evals.index import (
     MeasurementAvailability,
     MeasurementScope,
+    ModelRole,
     ResourceObservation,
     UnavailableMeasurement,
 )
@@ -82,9 +83,11 @@ from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.runner import CampaignRunner, CampaignSpec
 from g8e_evals.schema import (
     CorrelatedErrorRecord,
+    ErrorClassLabel,
     EscalationOutcome,
     EscalationRecord,
     SecurityEventRecord,
+    StackCompositionType,
     ToolCallScorecard,
     VerificationStatus,
 )
@@ -439,10 +442,10 @@ def _make_correlated_error_dict(**kwargs) -> dict:
         "task_id": "task-1",
         "agent_persona": "sage",
         "model_variant_id": "qwen3-8b-q4_0",
-        "stage_role": "primary",
-        "error_class": "unsupported_causal_claim",
+        "stage_role": ModelRole.PRIMARY,
+        "error_class": ErrorClassLabel.UNSUPPORTED_CAUSAL_CLAIM,
         "stack_id": "stack-1",
-        "stack_composition_type": "heterogeneous",
+        "stack_composition_type": StackCompositionType.HETEROGENEOUS,
     }
     if ident:
         defaults.update(ident)

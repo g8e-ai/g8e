@@ -241,7 +241,8 @@ def select_d16_ifeval_tasks(
     strata: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for row in ifeval_rows:
         key = str(row["key"])
-        iid_list = list(row.get("instruction_id_list", []))
+        raw_iid = row.get("instruction_id_list", [])
+        iid_list: list[str] = list(raw_iid) if isinstance(raw_iid, list) else []
         fam = _primary_family(iid_list)
         h = _task_selection_hash(key, iid_list)
         strata[fam].append((key, h))

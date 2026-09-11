@@ -164,7 +164,8 @@ class GpuMetricsCollector:
         )
 
     def _read_utilization(self) -> float | None:
-        assert self._pynvml is not None and self._handle is not None
+        assert self._pynvml is not None
+        assert self._handle is not None
         try:
             rates = self._pynvml.nvmlDeviceGetUtilizationRates(self._handle)
             return float(rates.gpu)
@@ -172,14 +173,16 @@ class GpuMetricsCollector:
             return None
 
     def _read_temperature(self) -> float | None:
-        assert self._pynvml is not None and self._handle is not None
+        assert self._pynvml is not None
+        assert self._handle is not None
         try:
             return float(self._pynvml.nvmlDeviceGetTemperature(self._handle, self._pynvml.NVML_TEMPERATURE_GPU))
         except Exception:
             return None
 
     def _read_power(self) -> float | None:
-        assert self._pynvml is not None and self._handle is not None
+        assert self._pynvml is not None
+        assert self._handle is not None
         try:
             power_mw = self._pynvml.nvmlDeviceGetPowerUsage(self._handle)
             return float(power_mw) / 1000.0
@@ -187,7 +190,8 @@ class GpuMetricsCollector:
             return None
 
     def _read_clock(self) -> float | None:
-        assert self._pynvml is not None and self._handle is not None
+        assert self._pynvml is not None
+        assert self._handle is not None
         try:
             clock_info = self._pynvml.nvmlDeviceGetClockInfo(self._handle, self._pynvml.NVML_CLOCK_SM)
             return float(clock_info)

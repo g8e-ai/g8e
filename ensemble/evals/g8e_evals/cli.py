@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 import click
 from pydantic import ValidationError
@@ -1016,6 +1016,15 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
             )
         except ValueError as e:
             raise click.UsageError(f"profile cross-check failed: {e}") from e
+        # Construct the provider budget from CLI ceilings before the
+        # campaign-set preflight needs it for the budget-authority hash.
+        provider_budget = None
+        if max_usd is not None or max_requests is not None or max_tokens is not None:
+            provider_budget = ProviderBudget(
+                max_usd=max_usd if max_usd is not None else 0.0,
+                max_tokens=max_tokens,
+                max_requests=max_requests,
+            )
         # When --campaign-set-plan is provided, validate the child
         # campaign against the frozen CampaignSetPlan before
         # report-directory creation.
@@ -1109,14 +1118,6 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         max_retries=max_retries,
         retryable_terminal_statuses=["infrastructure_failed"],
     )
-
-    provider_budget = None
-    if max_usd is not None or max_requests is not None or max_tokens is not None:
-        provider_budget = ProviderBudget(
-            max_usd=max_usd if max_usd is not None else 0.0,
-            max_tokens=max_tokens,
-            max_requests=max_requests,
-        )
 
     prompt_bundle = "\n".join(t.prompt for t in tasks).encode()
     prompt_bundle_hash = hashlib.sha256(prompt_bundle).hexdigest()
@@ -1511,7 +1512,8 @@ def campaign_set_plan(plan: Path):
     console.print(f"  [green]expected_child_assignment_count[/green] {dry['expected_child_assignment_count']}")
     console.print(f"  [green]expected_total_assignment_count[/green] {dry['expected_total_assignment_count']}")
     console.print("  [green]children[/green]")
-    for child in dry["children"]:
+    children = cast(list[dict[str, object]], dry["children"])
+    for child in children:
         console.print(f"    [cyan]child[/cyan] {child['child_id']}")
         console.print(f"      [green]revision[/green] {child['child_revision']}")
         console.print(f"      [green]partition_index[/green] {child['partition_index']}")

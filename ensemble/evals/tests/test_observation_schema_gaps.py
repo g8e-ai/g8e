@@ -43,12 +43,16 @@ from g8e_evals.index import (
     ModelRole,
     ResourceObservation,
     UnavailableMeasurement,
+    VerificationStatus,
 )
 from g8e_evals.schema import (
     CorrelatedErrorRecord,
+    EscalationOutcome,
     EscalationRecord,
+    ErrorClassLabel,
     GovernanceLayer,
     SecurityEventRecord,
+    StackCompositionType,
     ToolCallScorecard,
 )
 
@@ -110,7 +114,7 @@ def _make_observation(**kwargs) -> ResourceObservation:
         "collection_tool": "psutil-5.9",
         "source_evidence_refs": ["evidence/test.json"],
         "source_evidence_sha256": _VALID_HASH,
-        "verification_status": "verified",
+        "verification_status": VerificationStatus.VERIFIED,
         "unavailable_measurements": _all_unavailable(),
     }
     for f in _MEASUREMENT_FIELDS:
@@ -290,7 +294,7 @@ class TestUnavailableMeasurementRepresentation:
 
 def _security_event_defaults(**kwargs) -> dict:
     """Return kwargs for a valid SecurityEventRecord, overridden by kwargs."""
-    defaults = {
+    defaults: dict[str, object] = {
         "record_id": "se-1",
         "campaign_id": "campaign-1",
         "child_id": "campaign-1",
@@ -298,10 +302,10 @@ def _security_event_defaults(**kwargs) -> dict:
         "attempt_id": "att-1",
         "run_id": "run-1",
         "task_id": "task-1",
-        "role": "primary",
+        "role": ModelRole.PRIMARY,
         "agent_persona": "warden",
         "model_variant_id": "v1",
-        "governance_layer": "policy",
+        "governance_layer": GovernanceLayer.POLICY,
         "sensitive_data_present": True,
         "sensitive_data_required": False,
         "sensitive_data_sent_externally": False,
@@ -331,7 +335,7 @@ class TestEventRecordIdentityGaps:
             inference_id="inf-1",
             run_id="run-1",
             task_id="task-1",
-            role="primary",
+            role=ModelRole.PRIMARY,
             agent_persona="sage",
             model_variant_id="v1",
             tool_name="http_status",
@@ -402,10 +406,10 @@ class TestEventRecordIdentityGaps:
             task_id="task-1",
             agent_persona="triage",
             model_variant_id="v1",
-            expected_role="lite",
+            expected_role=ModelRole.LITE,
             ground_truth_complexity="light",
-            routed_to_role="lite",
-            outcome="correct_autonomous",
+            routed_to_role=ModelRole.LITE,
+            outcome=EscalationOutcome.CORRECT_AUTONOMOUS,
             task_succeeded=True,
         )
         assert er.campaign_id == "campaign-1"
@@ -425,10 +429,10 @@ class TestEventRecordIdentityGaps:
             task_id="task-1",
             agent_persona="sage",
             model_variant_id="v1",
-            stage_role="primary",
-            error_class="unsupported_causal_claim",
+            stage_role=ModelRole.PRIMARY,
+            error_class=ErrorClassLabel.UNSUPPORTED_CAUSAL_CLAIM,
             stack_id="stack-1",
-            stack_composition_type="heterogeneous",
+            stack_composition_type=StackCompositionType.HETEROGENEOUS,
         )
         assert ce.campaign_id == "campaign-1"
         assert ce.child_id == "campaign-1"
@@ -448,7 +452,7 @@ class TestGovernanceLayerEnum:
         assert "authorization" in values
 
     def test_security_event_rejects_unknown_governance_layer(self):
-        data = {
+        data: dict[str, object] = {
             "record_id": "se-1",
             "campaign_id": "campaign-1",
             "child_id": "campaign-1",
@@ -456,13 +460,13 @@ class TestGovernanceLayerEnum:
             "attempt_id": "att-1",
             "run_id": "run-1",
             "task_id": "task-1",
-            "role": "primary",
+            "role": ModelRole.PRIMARY,
             "agent_persona": "warden",
             "model_variant_id": "v1",
             "governance_layer": "unknown_layer",
         }
         with pytest.raises(ValidationError):
-            SecurityEventRecord(**data)
+            SecurityEventRecord(**data)  # type: ignore[arg-type]
 
     def test_security_event_accepts_typed_governance_layer(self):
         se = SecurityEventRecord(

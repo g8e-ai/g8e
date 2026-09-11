@@ -294,58 +294,58 @@ def _make_scenario_grader_factory(grader_id: str):
 _SCENARIO_SUITES: list[tuple[str, str, list[str]]] = [
     (
         "tool_selection",
-        "Tool selection scenarios (4 tasks, deterministic grader). The model "
-        "must select the correct tool from a tool catalog for each task. "
-        "Exercises the g8ee ensemble through G8eeChatSUT.",
+        ("Tool selection scenarios (4 tasks, deterministic grader). The model "
+         "must select the correct tool from a tool catalog for each task. "
+         "Exercises the g8ee ensemble through G8eeChatSUT."),
         ["tool_selection"],
     ),
     (
         "tool_arguments",
-        "Tool arguments scenarios (3 tasks, deterministic grader). The model "
-        "must produce correct structured arguments for tool calls. Exercises "
-        "the g8ee ensemble through G8eeChatSUT.",
+        ("Tool arguments scenarios (3 tasks, deterministic grader). The model "
+         "must produce correct structured arguments for tool calls. Exercises "
+         "the g8ee ensemble through G8eeChatSUT."),
         ["tool_arguments"],
     ),
     (
         "technical_analysis",
-        "Technical analysis scenarios (4 tasks, deterministic grader). The "
-        "model analyzes logs, network output, errors, and configuration. "
-        "Exercises the g8ee ensemble through G8eeChatSUT.",
+        ("Technical analysis scenarios (4 tasks, deterministic grader). The "
+         "model analyzes logs, network output, errors, and configuration. "
+         "Exercises the g8ee ensemble through G8eeChatSUT."),
         ["technical_analysis"],
     ),
     (
         "routing_delegation",
-        "Routing and delegation scenarios (3 tasks, deterministic grader). "
-        "The model routes tasks between Primary, Assistant, and Light roles. "
-        "Exercises the g8ee ensemble through G8eeChatSUT.",
+        ("Routing and delegation scenarios (3 tasks, deterministic grader). "
+         "The model routes tasks between Primary, Assistant, and Light roles. "
+         "Exercises the g8ee ensemble through G8eeChatSUT."),
         ["routing_delegation"],
     ),
     (
         "verification",
-        "Verification scenarios (2 tasks, deterministic grader). The model "
-        "verifies whether another agent's response is supported by tool "
-        "evidence. Exercises the g8ee ensemble through G8eeChatSUT.",
+        ("Verification scenarios (2 tasks, deterministic grader). The model "
+         "verifies whether another agent's response is supported by tool "
+         "evidence. Exercises the g8ee ensemble through G8eeChatSUT."),
         ["verification"],
     ),
     (
         "security_policy",
-        "Security and policy scenarios (2 tasks, deterministic grader). The "
-        "model must refuse or disallow prohibited operations and protect "
-        "sensitive data. Exercises the g8ee ensemble through G8eeChatSUT.",
+        ("Security and policy scenarios (2 tasks, deterministic grader). The "
+         "model must refuse or disallow prohibited operations and protect "
+         "sensitive data. Exercises the g8ee ensemble through G8eeChatSUT."),
         ["security", "policy"],
     ),
     (
         "recovery",
-        "Recovery scenarios (2 tasks, deterministic grader). The model must "
-        "recover from tool failures, malformed responses, and unavailable "
-        "resources. Exercises the g8ee ensemble through G8eeChatSUT.",
+        ("Recovery scenarios (2 tasks, deterministic grader). The model must "
+         "recover from tool failures, malformed responses, and unavailable "
+         "resources. Exercises the g8ee ensemble through G8eeChatSUT."),
         ["recovery"],
     ),
     (
         "final_response",
-        "Final response scenarios (1 task, deterministic grader). The model "
-        "must communicate the result of an investigation clearly to the "
-        "customer. Exercises the g8ee ensemble through G8eeChatSUT.",
+        ("Final response scenarios (1 task, deterministic grader). The model "
+         "must communicate the result of an investigation clearly to the "
+         "customer. Exercises the g8ee ensemble through G8eeChatSUT."),
         ["final_response"],
     ),
 ]

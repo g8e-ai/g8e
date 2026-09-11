@@ -32,6 +32,7 @@ entire stack.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from g8e_evals.analysis_contract import (
@@ -297,7 +298,7 @@ def build_heterogeneous_stack_profile(
     )
 
 
-def _validate_role_keys(mapping: dict[str, object], name: str) -> None:
+def _validate_role_keys(mapping: Mapping[str, object], name: str) -> None:
     expected = set(_VALID_ROLES)
     actual = set(mapping.keys())
     if actual != expected:

@@ -223,5 +223,5 @@ class TestRepeatabilitySummary:
                 consistently_wrong_count=1,
                 inconsistent_count=3,
                 insufficient_count=1,
-                unknown_field="bad",
+                unknown_field="bad",  # type: ignore
             )

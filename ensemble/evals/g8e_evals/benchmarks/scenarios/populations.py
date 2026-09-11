@@ -110,7 +110,6 @@ def build_population(suite_id: str, *, gold_sets_dir: Path | None = None) -> Ben
         raise KeyError(f"no population kind defined for suite: {suite_id}")
 
     base_dir = gold_sets_dir or _GOLD_SETS_DIR
-    spec = SUITE_REGISTRY[suite_id]
     gold_set_path = base_dir / suite_id / "input_data.jsonl"
     provenance_path = base_dir / suite_id / "provenance.json"
 

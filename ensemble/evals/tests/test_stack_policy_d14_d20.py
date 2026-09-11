@@ -289,7 +289,7 @@ class TestStackPolicy:
                 deduplication_rule=policy.deduplication_rule,
                 homogeneous_family_rule=policy.homogeneous_family_rule,
                 content_hash=policy.content_hash,
-                unknown_field="bad",
+                unknown_field="bad",  # type: ignore
             )
 
 
@@ -310,7 +310,7 @@ class TestHomogeneousFamilyRule:
             HomogeneousFamilyRule(
                 preference_order=[FamilyPreference.QWEN],
                 eligibility_rule=HomogeneousFamilyEligibilityRule.ELIGIBLE_IN_ALL_ROLES,
-                unknown_field="bad",
+                unknown_field="bad",  # type: ignore
             )
 
     def test_rejects_empty_preference_order(self):

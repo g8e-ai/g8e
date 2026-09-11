@@ -26,6 +26,7 @@ validation and the pure validation functions.
 from __future__ import annotations
 
 import json
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -654,7 +655,7 @@ class TestDryRunPlan:
     def test_each_child_has_2790_assignments(self):
         plan = _make_plan()
         dry = compute_dry_run_plan(plan)
-        for child in dry["children"]:
+        for child in cast(list[dict[str, object]], dry["children"]):
             assert child["expected_assignment_count"] == EXPECTED_CHILD_ASSIGNMENT_COUNT
             assert child["tasks_per_child"] == TASKS_PER_CHILD
             assert child["repetition_count"] == REPETITION_COUNT
@@ -663,7 +664,7 @@ class TestDryRunPlan:
         plan = _make_plan()
         dry = compute_dry_run_plan(plan)
         assert dry["expected_total_assignment_count"] == EXPECTED_TOTAL_ASSIGNMENT_COUNT
-        child_total = sum(c["expected_assignment_count"] for c in dry["children"])
+        child_total = sum(c["expected_assignment_count"] for c in cast(list[dict[str, object]], dry["children"]))  # type: ignore[arg-type]
         assert child_total == EXPECTED_TOTAL_ASSIGNMENT_COUNT
 
     def test_is_deterministic(self):
@@ -675,7 +676,7 @@ class TestDryRunPlan:
     def test_child_ids_match_plan(self):
         plan = _make_plan()
         dry = compute_dry_run_plan(plan)
-        for i, child in enumerate(dry["children"]):
+        for i, child in enumerate(cast(list[dict[str, object]], dry["children"])):
             assert child["child_id"] == plan.child_plans[i].child_id
 
     def test_is_json_serializable(self):
@@ -724,7 +725,7 @@ class TestAggregateVerificationResultModel:
                 hash_binding_ok=True,
                 failures=[],
                 content_hash=_VALID_HASH,
-                unknown_field="bad",
+                unknown_field="bad",  # type: ignore
             )
 
     def test_content_hash_mismatch_fails(self):
@@ -783,7 +784,7 @@ class TestChildVerificationResultModel:
                 product_ok=False,
                 child_verification_report_hash=_VALID_HASH,
                 report_checksum=_VALID_HASH,
-                unknown_field="bad",
+                unknown_field="bad",  # type: ignore
             )
 
 
@@ -796,7 +797,7 @@ class TestCampaignChildPlanModel:
                 partition_index=0,
                 partition_task_ids=[f"t{i}" for i in range(TASKS_PER_CHILD)],
                 expected_assignment_count=EXPECTED_CHILD_ASSIGNMENT_COUNT,
-                unknown_field="bad",
+                unknown_field="bad",  # type: ignore
             )
 
     def test_rejects_partition_index_out_of_range(self):

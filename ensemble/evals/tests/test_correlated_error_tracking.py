@@ -28,7 +28,7 @@ Verifies that:
   cross-family split and the failure-independence inversion.
 """
 
-# pyright: reportCallIssue=false
+# pyright: reportCallIssue=false, reportArgumentType=false
 # This file intentionally constructs models with extra fields and
 # invalid evidence to verify pydantic validation rejects them.
 

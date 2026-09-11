@@ -170,7 +170,7 @@ class TestPhaseBSelectionPolicy:
                 categories=policy.categories,
                 tie_breaker_order=policy.tie_breaker_order,
                 content_hash=policy.content_hash,
-                unknown_field="bad",
+                unknown_field="bad",  # type: ignore
             )
 
 
