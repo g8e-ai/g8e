@@ -210,6 +210,11 @@ def _build_release_metrics() -> list[ReleaseMetricEntry]:
         "security_sensitive_data_sent_externally": MetricDomain.PRIVACY,
         "security_unnecessary_data_sent_externally": MetricDomain.PRIVACY,
         "security_secret_redaction_successful": MetricDomain.PRIVACY,
+        # Correlated error metrics (EF12)
+        "correlated_failure_rate": MetricDomain.RELIABILITY,
+        "failure_independence": MetricDomain.RELIABILITY,
+        "same_family_correlated_rate": MetricDomain.RELIABILITY,
+        "cross_family_correlated_rate": MetricDomain.RELIABILITY,
     }
 
     entries: list[ReleaseMetricEntry] = []

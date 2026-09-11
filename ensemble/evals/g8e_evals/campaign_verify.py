@@ -44,6 +44,7 @@ from g8e_evals.constants import (
     CAMPAIGN_RETRY_POLICY_JSON,
     CAMPAIGN_SCHEDULE_JSON,
     CAMPAIGN_STATUS_JSON,
+    CORRELATED_ERRORS_JSONL,
     ESCALATION_RECORDS_JSONL,
     EVIDENCE_INDEX_JSONL,
     MANIFEST_JSON,
@@ -67,12 +68,14 @@ from g8e_evals.index import (
 from g8e_evals.report.validate import validate_standalone_report
 from g8e_evals.schema import (
     AttemptRecord,
+    CorrelatedErrorRecord,
     EscalationRecord,
     MetricObservation,
     RunManifest,
     SecurityEventRecord,
     TerminalStatus,
     ToolCallScorecard,
+    validate_correlated_error_records,
     validate_escalation_records,
     validate_security_event_records,
     validate_tool_call_scorecards,
@@ -421,6 +424,29 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                         )
             except (ValidationError, ValueError, json.JSONDecodeError) as e:
                 failures.append(f"security event record validation failed: {e}")
+
+    # Layer 17: correlated error records — validate if present
+    checked_layers.append("correlated_errors")
+    correlated_path = report_dir / CORRELATED_ERRORS_JSONL
+    if correlated_path.exists():
+        if correlated_path.is_symlink():
+            failures.append(f"symlink rejected for correlated error records: {correlated_path.name}")
+        elif not correlated_path.is_file():
+            failures.append(f"correlated error records is not a regular file: {correlated_path.name}")
+        else:
+            try:
+                ce_records = _read_jsonl_dicts(correlated_path)
+                correlated_records = [CorrelatedErrorRecord.model_validate(r) for r in ce_records]
+                validate_correlated_error_records(correlated_records)
+                # Validate binding: every record's attempt_id references a real attempt
+                attempt_ids = {a.attempt_id for a in attempts}
+                for ce in correlated_records:
+                    if ce.attempt_id not in attempt_ids:
+                        failures.append(
+                            f"correlated error record {ce.record_id} references unknown attempt: {ce.attempt_id}"
+                        )
+            except (ValidationError, ValueError, json.JSONDecodeError) as e:
+                failures.append(f"correlated error record validation failed: {e}")
 
     ok = len(failures) == 0
     return CampaignVerificationReport(

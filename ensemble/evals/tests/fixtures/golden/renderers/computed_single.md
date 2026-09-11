@@ -12,7 +12,7 @@
 - Receipts: 0
 - Stages: 0
 - Metric observations: 1
-- Input content hash: `178f030c37a86f0bd5c0aa20a1c8c1025c8e413893b93ebe3f7719067d62c3f9`
+- Input content hash: `b44ceca1baff5d2d1250c5d3c6d8f190dede4b6833e706391fbc24e99955e08b`
 
 ## Missingness Breakdown
 

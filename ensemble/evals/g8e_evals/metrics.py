@@ -588,6 +588,22 @@ _METRIC_APPLICABILITY: dict[str, MetricApplicabilityContract] = {
         eligibility=EligibilityKind.DERIVED,
         denominator=DenominatorKind.DERIVED,
     ),
+    "correlated_failure_rate": MetricApplicabilityContract(
+        eligibility=EligibilityKind.DERIVED,
+        denominator=DenominatorKind.DERIVED,
+    ),
+    "failure_independence": MetricApplicabilityContract(
+        eligibility=EligibilityKind.DERIVED,
+        denominator=DenominatorKind.DERIVED,
+    ),
+    "same_family_correlated_rate": MetricApplicabilityContract(
+        eligibility=EligibilityKind.DERIVED,
+        denominator=DenominatorKind.DERIVED,
+    ),
+    "cross_family_correlated_rate": MetricApplicabilityContract(
+        eligibility=EligibilityKind.DERIVED,
+        denominator=DenominatorKind.DERIVED,
+    ),
 }
 
 _DERIVED_METRIC_IDS = {
@@ -768,6 +784,13 @@ for _mid in (
     "security_secret_redaction_successful",
 ):
     _NON_INFERIORITY_MARGINS[_mid] = _UTILITY_NI_MARGIN
+for _mid in (
+    "correlated_failure_rate",
+    "same_family_correlated_rate",
+    "cross_family_correlated_rate",
+):
+    _NON_INFERIORITY_MARGINS[_mid] = _BLOCKER_NI_MARGIN
+_NON_INFERIORITY_MARGINS["failure_independence"] = _UTILITY_NI_MARGIN
 
 
 def _metric_definition(
@@ -2297,6 +2320,70 @@ _DEFAULT_DEFINITIONS: list[MetricDefinition] = [
         aggregation=AggregationMethod.PROPORTION,
         uncertainty_method="Task-cluster bootstrap interval over per-scenario secret-redaction-successful outcomes.",
         evidence_requirements=["security_event_record"],
+        threshold_rendering=None,
+    ),
+    _metric_definition(
+        metric_id="correlated_failure_rate",
+        metric_version=_GRADER_VERSION,
+        definition="Fraction of failed scenarios where multiple stages made the same semantic error, computed from CorrelatedErrorRecord error_class comparison across stages within the same scenario.",
+        unit="proportion",
+        direction=MetricDirection.LOWER_IS_BETTER,
+        grader_class=_ANALYSIS,
+        grader_ref=None,
+        eligible_population="All scenarios with at least one CorrelatedErrorRecord (at least one stage failed).",
+        denominator="Total number of scenarios with at least one failure.",
+        missing_value_policy=MissingValuePolicy.EXCLUDE,
+        aggregation=AggregationMethod.PROPORTION,
+        uncertainty_method="Task-cluster bootstrap interval over per-scenario correlated-failure outcomes.",
+        evidence_requirements=["correlated_error_record"],
+        threshold_rendering=None,
+    ),
+    _metric_definition(
+        metric_id="failure_independence",
+        metric_version=_GRADER_VERSION,
+        definition="1 minus the correlated failure rate: the fraction of failed scenarios where stages made independent (different) semantic errors, computed as 1 - correlated_failure_rate.",
+        unit="proportion",
+        direction=MetricDirection.HIGHER_IS_BETTER,
+        grader_class=_ANALYSIS,
+        grader_ref=None,
+        eligible_population="All scenarios with at least one CorrelatedErrorRecord (at least one stage failed).",
+        denominator="Total number of scenarios with at least one failure.",
+        missing_value_policy=MissingValuePolicy.EXCLUDE,
+        aggregation=AggregationMethod.PROPORTION,
+        uncertainty_method="Task-cluster bootstrap interval over per-scenario failure-independence outcomes.",
+        evidence_requirements=["correlated_error_record"],
+        threshold_rendering=None,
+    ),
+    _metric_definition(
+        metric_id="same_family_correlated_rate",
+        metric_version=_GRADER_VERSION,
+        definition="Correlated failure rate within homogeneous stacks, computed from CorrelatedErrorRecord error_class comparison across stages within the same scenario for stacks classified as homogeneous.",
+        unit="proportion",
+        direction=MetricDirection.LOWER_IS_BETTER,
+        grader_class=_ANALYSIS,
+        grader_ref=None,
+        eligible_population="All scenarios with at least one CorrelatedErrorRecord in a homogeneous stack.",
+        denominator="Total number of scenarios with at least one failure in a homogeneous stack.",
+        missing_value_policy=MissingValuePolicy.EXCLUDE,
+        aggregation=AggregationMethod.PROPORTION,
+        uncertainty_method="Task-cluster bootstrap interval over per-scenario same-family correlated-failure outcomes.",
+        evidence_requirements=["correlated_error_record"],
+        threshold_rendering=None,
+    ),
+    _metric_definition(
+        metric_id="cross_family_correlated_rate",
+        metric_version=_GRADER_VERSION,
+        definition="Correlated failure rate within heterogeneous stacks, computed from CorrelatedErrorRecord error_class comparison across stages within the same scenario for stacks classified as heterogeneous.",
+        unit="proportion",
+        direction=MetricDirection.LOWER_IS_BETTER,
+        grader_class=_ANALYSIS,
+        grader_ref=None,
+        eligible_population="All scenarios with at least one CorrelatedErrorRecord in a heterogeneous stack.",
+        denominator="Total number of scenarios with at least one failure in a heterogeneous stack.",
+        missing_value_policy=MissingValuePolicy.EXCLUDE,
+        aggregation=AggregationMethod.PROPORTION,
+        uncertainty_method="Task-cluster bootstrap interval over per-scenario cross-family correlated-failure outcomes.",
+        evidence_requirements=["correlated_error_record"],
         threshold_rendering=None,
     ),
 ]

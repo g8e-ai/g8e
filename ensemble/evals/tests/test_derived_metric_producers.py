@@ -7,7 +7,7 @@
 
 """Tier 1 unit tests for derived analysis metric producers.
 
-Verifies that all 43 ``GraderClass.ANALYSIS`` metrics have exactly one
+Verifies that all 47 ``GraderClass.ANALYSIS`` metrics have exactly one
 authoritative producer registered in ``DEFAULT_DERIVED_REGISTRY``, that
 each producer emits canonical ``MetricObservation`` records from
 verified immutable source records, and that malformed supplied records
@@ -400,7 +400,7 @@ class TestDerivedProducerRegistry:
             d for d in DEFAULT_METRIC_REGISTRY.all_definitions()
             if d.grader_class == GraderClass.ANALYSIS
         ]
-        assert len(derived_metrics) == 43
+        assert len(derived_metrics) == 47
         DEFAULT_DERIVED_REGISTRY.assert_complete()
 
     def test_registry_rejects_duplicate_registration(self) -> None:

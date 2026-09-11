@@ -55,7 +55,7 @@ def _make_valid_report(report_dir: Path) -> None:
     """Create a complete valid report directory."""
     report_dir.mkdir(parents=True, exist_ok=True)
     _write_json(report_dir / MANIFEST_JSON, {
-        "schema_version": "1.43.0",
+        "schema_version": "1.44.0",
         "run_id": "run-1",
         "suite_id": "ifeval_subset",
         "suite_version": "1.0.0",
@@ -69,12 +69,12 @@ def _make_valid_report(report_dir: Path) -> None:
          "metadata": {"instruction_id_list": ["punctuation:no_comma"]}},
     ])
     _write_jsonl(report_dir / ATTEMPTS_JSONL, [
-        {"schema_version": "1.43.0", "attempt_id": "att-1", "run_id": "run-1",
+        {"schema_version": "1.44.0", "attempt_id": "att-1", "run_id": "run-1",
          "task_id": "task-1001", "arm_id": "direct", "terminal_status": "completed",
          "assignment_id": "assign-1"},
     ])
     _write_jsonl(report_dir / METRICS_JSONL, [
-        {"schema_version": "1.43.0", "metric_id": "ifeval_subset_verifier",
+        {"schema_version": "1.44.0", "metric_id": "ifeval_subset_verifier",
          "metric_version": "1.0.0", "attempt_id": "att-1", "run_id": "run-1",
          "arm_id": "direct", "task_id": "task-1001", "value": 1.0, "unit": "boolean",
          "eligible": True, "denominator_contribution": 1,
@@ -148,7 +148,7 @@ class TestStandaloneReportValidationFail:
         report_dir = tmp_path / "report-non-terminal"
         _make_valid_report(report_dir)
         _write_jsonl(report_dir / ATTEMPTS_JSONL, [
-            {"schema_version": "1.43.0", "attempt_id": "att-1", "run_id": "run-1",
+            {"schema_version": "1.44.0", "attempt_id": "att-1", "run_id": "run-1",
              "task_id": "task-1001", "arm_id": "direct", "terminal_status": "running",
              "assignment_id": "assign-1"},
         ])

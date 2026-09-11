@@ -205,7 +205,7 @@ def _make_provenance_manifest(tmp_path: Path) -> SourceInclusionManifest:
 def _make_metric_records() -> list[dict]:
     return [
         {
-            "schema_version": "1.43.0",
+            "schema_version": "1.44.0",
             "metric_id": "ifeval_subset_verifier",
             "metric_version": "1.0.0",
             "attempt_id": "run-1:assignment-1:0",
@@ -226,7 +226,7 @@ def _make_metric_records() -> list[dict]:
 def _make_attempt_records() -> list[dict]:
     return [
         {
-            "schema_version": "1.43.0",
+            "schema_version": "1.44.0",
             "attempt_id": "run-1:assignment-1:0",
             "run_id": "run-1",
             "task_id": "task-1",

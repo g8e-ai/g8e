@@ -34,6 +34,7 @@ from g8e_evals.schema import (
     AuditLinkRecord,
     CitationBackedObservation,
     CommitmentAttestation,
+    CorrelatedErrorRecord,
     EconomicsPerformanceObservation,
     EvidencePreservationObservation,
     ExfiltrationAttemptObservation,
@@ -133,6 +134,8 @@ class AnalysisInputRecord(BaseModel):
     escalation_records: list[EscalationRecord] = Field(default_factory=list)
 
     security_events: list[SecurityEventRecord] = Field(default_factory=list)
+
+    correlated_error_records: list[CorrelatedErrorRecord] = Field(default_factory=list)
 
     governance_envelopes: list[GovernanceEnvelopeRecord] = Field(default_factory=list)
     persistence_attestations: list[PersistenceAttestation] = Field(default_factory=list)

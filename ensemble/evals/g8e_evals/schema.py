@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.43.0"
+SCHEMA_VERSION = "1.44.0"
 
 FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "state_fixture",
@@ -3719,5 +3719,121 @@ def validate_security_event_records(records: list[SecurityEventRecord]) -> None:
             raise ValueError(
                 f"duplicate security event record for (run={rec.run_id!r}, "
                 f"attempt={rec.attempt_id!r}, task={rec.task_id!r})"
+            )
+        seen.add(key)
+
+
+class ErrorClassLabel(StrEnum):
+    """Semantic error class labels for correlated-error tracking.
+
+    When a failure occurs at a stage, the campaign records the semantic
+    error class so the analysis can detect correlated failures across
+    stages within the same scenario. Two stages making the same semantic
+    error on the same task is a correlated failure; the heterogeneous
+    hypothesis is that different model families are less likely to share
+    identical failure modes.
+
+    The labels are deliberately coarse: the goal is to detect whether
+    multiple stages made the same *kind* of error, not to taxonomize every
+    possible mistake. New labels are added when a failure mode does not
+    fit any existing label.
+    """
+
+    UNSUPPORTED_CAUSAL_CLAIM = "unsupported_causal_claim"
+    WRONG_TOOL_SELECTED = "wrong_tool_selected"
+    SCHEMA_VIOLATION = "schema_violation"
+    ARGUMENT_SEMANTICS_ERROR = "argument_semantics_error"
+    MISINTERPRETED_RESULT = "misinterpreted_result"
+    INCOMPLETE_ANALYSIS = "incomplete_analysis"
+    HALLUCINATED_EVIDENCE = "hallucinated_evidence"
+    WRONG_CLASSIFICATION = "wrong_classification"
+    PROTOCOL_VIOLATION = "protocol_violation"
+    UNSUPPORTED_CONCLUSION = "unsupported_conclusion"
+    MISSED_ESCALATION = "missed_escalation"
+    OTHER = "other"
+
+
+class StackCompositionType(StrEnum):
+    """Classification of a stack as homogeneous or heterogeneous.
+
+    Homogeneous stacks use a single model family at all three tiers
+    (e.g. all-Qwen, all-Granite). Heterogeneous stacks mix model families
+    across tiers. The classification drives the same-family vs cross-family
+    correlated failure rate comparison.
+    """
+
+    HOMOGENEOUS = "homogeneous"
+    HETEROGENEOUS = "heterogeneous"
+
+
+class CorrelatedErrorRecord(BaseModel):
+    """Per-scenario per-stage error record for correlated-error tracking.
+
+    Each stage that produces a failure in a heterogeneous-stack campaign
+    produces one ``CorrelatedErrorRecord``. The record binds the semantic
+    error class to the agent persona, model variant, stage role, task, and
+    stack so the analysis can detect correlated failures: multiple stages
+    making the same semantic error on the same scenario.
+
+    The ``stage_role`` field identifies which role in the heterogeneous
+    stack made the error (primary, assistant, light). The ``stack_id``
+    field identifies the specific stack composition. The
+    ``stack_composition_type`` field classifies the stack as homogeneous
+    or heterogeneous for the same-family vs cross-family comparison.
+
+    A scenario with no failures produces no records. A scenario where
+    only one stage fails produces one record but is not a correlated
+    failure (correlation requires at least two stages with the same
+    error class). The analysis computes the correlated failure rate from
+    the set of records per scenario.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: str = SCHEMA_VERSION
+    record_id: str = Field(min_length=1, description="Unique correlated error record identifier within the run.")
+    attempt_id: str = Field(min_length=1, description="Attempt ID this error record belongs to.")
+    run_id: str = Field(min_length=1, description="Run ID this error record belongs to.")
+    task_id: str = Field(min_length=1, description="Task ID this error record belongs to.")
+
+    agent_persona: str = Field(min_length=1, description="Agent persona that produced the error (e.g. sage, dash, tribunal, warden, auditor).")
+    model_variant_id: str = Field(min_length=1, description="Model variant ID that produced the error.")
+    stage_role: str = Field(min_length=1, description="Role of the stage that produced the error (primary, assistant, light).")
+    error_class: ErrorClassLabel = Field(description="Semantic error class label for the failure.")
+
+    stack_id: str = Field(min_length=1, description="Stack identifier this error record belongs to.")
+    stack_composition_type: StackCompositionType = Field(description="Classification of the stack as homogeneous or heterogeneous.")
+
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> CorrelatedErrorRecord:
+        if len(self.source_evidence_refs) != len(set(self.source_evidence_refs)):
+            raise ValueError("correlated error record source evidence references must be unique")
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified correlated error record requires source evidence")
+        return self
+
+
+def validate_correlated_error_records(records: list[CorrelatedErrorRecord]) -> None:
+    """Validate a list of correlated error records.
+
+    Rejects duplicate (run_id, attempt_id, task_id, stage_role) tuples:
+    each stage produces at most one error record per scenario per attempt.
+    Each record must be a valid ``CorrelatedErrorRecord`` with all
+    required bindings.
+    """
+    seen: set[tuple[str, str, str, str]] = set()
+    for rec in records:
+        key = (rec.run_id, rec.attempt_id, rec.task_id, rec.stage_role)
+        if key in seen:
+            raise ValueError(
+                f"duplicate correlated error record for (run={rec.run_id!r}, "
+                f"attempt={rec.attempt_id!r}, task={rec.task_id!r}, "
+                f"stage_role={rec.stage_role!r})"
             )
         seen.add(key)
