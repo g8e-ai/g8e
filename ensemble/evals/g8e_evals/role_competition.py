@@ -239,20 +239,42 @@ def build_role_competition_profile(
         ),
     ]
 
-    profile_hash = compute_campaign_profile_hash(
+    temp_profile = CampaignProfile.model_construct(
         campaign_id=campaign_id,
         campaign_revision=campaign_revision,
         schema_version=CAMPAIGN_PROFILE_VERSION,
         purpose=purpose,
+        created_at=created_at,
+        lifecycle_status=CampaignLifecycleStatus.FROZEN,
         generative_variant_ids=generative_variant_ids,
         benchmark_ids=benchmark_ids,
         dataset_hashes=dataset_hashes,
         grader_hashes=grader_hashes,
+        prompt_serialization_hash=prompt_serialization_hash,
+        task_ids=task_ids,
+        repetitions=repetitions,
         track_arm_assignments=track_arm_assignments,
         model_tier_assignments=model_tier_assignments,
-        repetitions=repetitions,
+        baseline_tier_mappings=baseline_tier_mappings,
+        routing_policy=routing_policy,
+        temperature=temperature,
+        top_p=top_p,
+        max_tokens=max_tokens,
+        seed=seed,
+        context_limit=context_limit,
+        timeout_seconds=timeout_seconds,
+        max_retries=max_retries,
+        warmup_excluded=warmup_excluded,
+        concurrency=concurrency,
+        hardware_identity=hardware_identity,
+        environment_stratum=environment_stratum,
+        primary_metrics=primary_metrics,
+        unit_of_analysis=unit_of_analysis,
+        claim_boundary=claim_boundary,
         model_registry_hash=registry.content_hash,
+        content_hash="0" * 64,
     )
+    profile_hash = compute_campaign_profile_hash(temp_profile)
 
     campaign_profile = CampaignProfile(
         campaign_id=campaign_id,

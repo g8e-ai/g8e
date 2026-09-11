@@ -125,20 +125,46 @@ def _write_profile(
     tier_assignments = [
         ModelTierAssignment(variant_id=generative_variant_ids[0], target_tier="primary"),
     ]
-    ch = compute_campaign_profile_hash(
+    temp = CampaignProfile.model_construct(
         campaign_id="generative-campaign-v1",
         campaign_revision="1",
         schema_version=CAMPAIGN_PROFILE_VERSION,
         purpose="46-model generative comparison campaign",
+        created_at="2026-09-10T00:00:00Z",
+        lifecycle_status=CampaignLifecycleStatus.FROZEN,
         generative_variant_ids=generative_variant_ids,
         benchmark_ids=["ifeval_subset"],
         dataset_hashes=[_VALID_HASH],
         grader_hashes=[_VALID_HASH],
+        prompt_serialization_hash=_VALID_HASH,
+        task_ids=["task-1", "task-2", "task-3"],
+        repetitions=3,
         track_arm_assignments=track_assignments,
         model_tier_assignments=tier_assignments,
-        repetitions=3,
+        baseline_tier_mappings={
+            "primary": "qwen3:8b",
+            "assistant": "granite3.3:8b",
+            "lite": "qwen3:0.6b",
+        },
+        routing_policy="default",
+        temperature=0.0,
+        top_p=1.0,
+        max_tokens=4096,
+        seed=42,
+        context_limit=32768,
+        timeout_seconds=120.0,
+        max_retries=1,
+        warmup_excluded=True,
+        concurrency=1,
+        hardware_identity="linux/amd64/rtx-4090",
+        environment_stratum="single-machine",
+        primary_metrics=["ifeval_subset_verifier"],
+        unit_of_analysis="task",
+        claim_boundary=ClaimBoundary.DESCRIPTIVE_ONLY,
         model_registry_hash=registry_hash,
+        content_hash="0" * 64,
     )
+    ch = compute_campaign_profile_hash(temp)
     profile = CampaignProfile(
         campaign_id="generative-campaign-v1",
         campaign_revision="1",

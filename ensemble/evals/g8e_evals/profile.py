@@ -289,20 +289,7 @@ class CampaignProfile(BaseModel):
                     f"got {assignment.target_tier!r}"
                 )
 
-        expected = compute_campaign_profile_hash(
-            self.campaign_id,
-            self.campaign_revision,
-            self.schema_version,
-            self.purpose,
-            self.generative_variant_ids,
-            self.benchmark_ids,
-            self.dataset_hashes,
-            self.grader_hashes,
-            self.track_arm_assignments,
-            self.model_tier_assignments,
-            self.repetitions,
-            self.model_registry_hash,
-        )
+        expected = compute_campaign_profile_hash(self)
         if self.content_hash != expected:
             raise ValueError(
                 f"campaign profile content_hash mismatch: declared {self.content_hash!r}, "
@@ -345,42 +332,24 @@ class CampaignProfile(BaseModel):
                 )
 
 
-def compute_campaign_profile_hash(
-    campaign_id: str,
-    campaign_revision: str,
-    schema_version: str,
-    purpose: str,
-    generative_variant_ids: list[str],
-    benchmark_ids: list[str],
-    dataset_hashes: list[str],
-    grader_hashes: list[str],
-    track_arm_assignments: list[TrackArmAssignment],
-    model_tier_assignments: list[ModelTierAssignment],
-    repetitions: int,
-    model_registry_hash: str,
-) -> str:
-    """Compute the content hash for a campaign profile without constructing the full model."""
+def compute_campaign_profile_hash(profile: CampaignProfile) -> str:
+    """Compute the content hash for a campaign profile from all material fields.
+
+    Serializes every material field of the profile (excluding
+    ``content_hash`` itself) into canonical JSON and returns SHA-256.
+    The same function is used by the model validator (validation) and
+    by profile builders (construction), so a field added to
+    ``CampaignProfile`` is automatically included in the hash without
+    a separate update site.
+
+    The profile instance may be constructed via ``model_construct()``
+    with a placeholder ``content_hash``; this function ignores that
+    field during serialization.
+    """
+    data = profile.model_dump(mode="json", by_alias=True)
+    data.pop("content_hash", None)
     payload = json.dumps(
-        {
-            "campaign_id": campaign_id,
-            "campaign_revision": campaign_revision,
-            "schema_version": schema_version,
-            "purpose": purpose,
-            "generative_variant_ids": sorted(generative_variant_ids),
-            "benchmark_ids": sorted(benchmark_ids),
-            "dataset_hashes": sorted(dataset_hashes),
-            "grader_hashes": sorted(grader_hashes),
-            "track_arm_assignments": [
-                json.loads(a.model_dump_json())
-                for a in sorted(track_arm_assignments, key=lambda a: a.track.value)
-            ],
-            "model_tier_assignments": [
-                json.loads(a.model_dump_json())
-                for a in sorted(model_tier_assignments, key=lambda a: a.variant_id)
-            ],
-            "repetitions": repetitions,
-            "model_registry_hash": model_registry_hash,
-        },
+        data,
         allow_nan=False,
         ensure_ascii=False,
         separators=(",", ":"),
