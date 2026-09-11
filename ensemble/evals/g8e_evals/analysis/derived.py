@@ -58,6 +58,7 @@ from g8e_evals.schema import (
     StageObservation,
     StateObservation,
     TaskDefinition,
+    ToolCallScorecard,
     VerificationStatus,
 )
 
@@ -1215,6 +1216,139 @@ def produce_evidence_validity_observations(
 
 
 # ---------------------------------------------------------------------------
+# Group E: Tool call scorecard producers (EF3)
+# ---------------------------------------------------------------------------
+
+
+def _produce_tool_call_dimension_observations(
+    record: AnalysisInputRecord,
+    metric_id: str,
+    dimension_attr: str,
+) -> list[MetricObservation]:
+    """Produce one tool call scorecard dimension metric from ToolCallScorecard records.
+
+    Each ToolCallScorecard produces one MetricObservation per attempt,
+    aggregating the boolean dimension across all tool calls in that
+    attempt. The value is the proportion of tool calls where the
+    dimension passed (True). The denominator contribution is the number
+    of tool calls for that attempt.
+    """
+    definition = DEFAULT_METRIC_REGISTRY.get(metric_id, _GRADER_VERSION)
+    attempt_map = _attempt_lookup(record)
+
+    scorecards_by_attempt: dict[str, list[ToolCallScorecard]] = defaultdict(list)
+    for sc in record.tool_call_scorecards:
+        scorecards_by_attempt[sc.attempt_id].append(sc)
+
+    results: list[MetricObservation] = []
+    for attempt_id in sorted(scorecards_by_attempt.keys()):
+        attempt = attempt_map.get(attempt_id)
+        if attempt is None:
+            continue
+
+        attempt_scorecards = scorecards_by_attempt[attempt_id]
+        if not attempt_scorecards:
+            continue
+
+        passed = sum(1 for sc in attempt_scorecards if getattr(sc, dimension_attr))
+        total = len(attempt_scorecards)
+        proportion = round(passed / total, 10) if total > 0 else 0.0
+
+        evidence_refs = [sc.scorecard_id for sc in attempt_scorecards]
+        verification = VerificationStatus.VERIFIED if all(
+            sc.verification_status == VerificationStatus.VERIFIED
+            for sc in attempt_scorecards
+        ) else VerificationStatus.PENDING
+
+        results.append(MetricObservation(
+            metric_id=metric_id,
+            metric_version=_GRADER_VERSION,
+            attempt_id=attempt_id,
+            run_id=record.run_id,
+            arm_id=attempt.arm_id,
+            task_id=attempt.task_id,
+            value=proportion,
+            unit=definition.unit,
+            eligible=True,
+            denominator_contribution=total,
+            verification_status=verification,
+            grader_class=SchemaGraderClass.ANALYSIS,
+            evidence_refs=evidence_refs,
+        ))
+    return results
+
+
+def produce_tool_call_recognition_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``tool_call_recognition`` metric observations from ToolCallScorecard records."""
+    return _produce_tool_call_dimension_observations(record, "tool_call_recognition", "recognition")
+
+
+def produce_tool_call_selection_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``tool_call_selection`` metric observations from ToolCallScorecard records."""
+    return _produce_tool_call_dimension_observations(record, "tool_call_selection", "selection")
+
+
+def produce_tool_call_schema_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``tool_call_schema`` metric observations from ToolCallScorecard records."""
+    return _produce_tool_call_dimension_observations(record, "tool_call_schema", "schema_valid")
+
+
+def produce_tool_call_semantics_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``tool_call_semantics`` metric observations from ToolCallScorecard records."""
+    return _produce_tool_call_dimension_observations(record, "tool_call_semantics", "semantics")
+
+
+def produce_tool_call_permission_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``tool_call_permission`` metric observations from ToolCallScorecard records."""
+    return _produce_tool_call_dimension_observations(record, "tool_call_permission", "permission")
+
+
+def produce_tool_call_interpretation_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``tool_call_interpretation`` metric observations from ToolCallScorecard records."""
+    return _produce_tool_call_dimension_observations(record, "tool_call_interpretation", "interpretation")
+
+
+def produce_tool_call_follow_up_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``tool_call_follow_up`` metric observations from ToolCallScorecard records."""
+    return _produce_tool_call_dimension_observations(record, "tool_call_follow_up", "follow_up")
+
+
+def produce_tool_call_unnecessary_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``tool_call_unnecessary`` metric observations from ToolCallScorecard records."""
+    return _produce_tool_call_dimension_observations(record, "tool_call_unnecessary", "unnecessary")
+
+
+def produce_tool_call_looping_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``tool_call_looping`` metric observations from ToolCallScorecard records."""
+    return _produce_tool_call_dimension_observations(record, "tool_call_looping", "looping")
+
+
+def produce_tool_call_recovery_observations(
+    record: AnalysisInputRecord,
+) -> list[MetricObservation]:
+    """Produce ``tool_call_recovery`` metric observations from ToolCallScorecard records."""
+    return _produce_tool_call_dimension_observations(record, "tool_call_recovery", "recovery")
+
+
+# ---------------------------------------------------------------------------
 # Registry construction and runner
 # ---------------------------------------------------------------------------
 
@@ -1246,6 +1380,16 @@ def _build_default_derived_registry() -> DerivedProducerRegistry:
     registry.register("commitment_linkage", _GRADER_VERSION, produce_commitment_linkage_observations)
     registry.register("audit_linkage", _GRADER_VERSION, produce_audit_linkage_observations)
     registry.register("evidence_validity", _GRADER_VERSION, produce_evidence_validity_observations)
+    registry.register("tool_call_recognition", _GRADER_VERSION, produce_tool_call_recognition_observations)
+    registry.register("tool_call_selection", _GRADER_VERSION, produce_tool_call_selection_observations)
+    registry.register("tool_call_schema", _GRADER_VERSION, produce_tool_call_schema_observations)
+    registry.register("tool_call_semantics", _GRADER_VERSION, produce_tool_call_semantics_observations)
+    registry.register("tool_call_permission", _GRADER_VERSION, produce_tool_call_permission_observations)
+    registry.register("tool_call_interpretation", _GRADER_VERSION, produce_tool_call_interpretation_observations)
+    registry.register("tool_call_follow_up", _GRADER_VERSION, produce_tool_call_follow_up_observations)
+    registry.register("tool_call_unnecessary", _GRADER_VERSION, produce_tool_call_unnecessary_observations)
+    registry.register("tool_call_looping", _GRADER_VERSION, produce_tool_call_looping_observations)
+    registry.register("tool_call_recovery", _GRADER_VERSION, produce_tool_call_recovery_observations)
     registry.assert_complete()
     return registry
 
@@ -1306,5 +1450,15 @@ __all__ = [
     "produce_persistence_linkage_observations",
     "produce_receipt_linkage_observations",
     "produce_state_linkage_observations",
+    "produce_tool_call_follow_up_observations",
+    "produce_tool_call_interpretation_observations",
+    "produce_tool_call_looping_observations",
+    "produce_tool_call_permission_observations",
+    "produce_tool_call_recognition_observations",
+    "produce_tool_call_recovery_observations",
+    "produce_tool_call_schema_observations",
+    "produce_tool_call_selection_observations",
+    "produce_tool_call_semantics_observations",
+    "produce_tool_call_unnecessary_observations",
     "run_all_derived_producers",
 ]

@@ -49,6 +49,7 @@ from g8e_evals.constants import (
     METRICS_JSONL,
     RESOURCE_OBSERVATIONS_JSONL,
     TASKS_JSONL,
+    TOOL_CALL_SCORECARDS_JSONL,
 )
 from g8e_evals.index import (
     AssignmentDisposition,
@@ -67,6 +68,8 @@ from g8e_evals.schema import (
     MetricObservation,
     RunManifest,
     TerminalStatus,
+    ToolCallScorecard,
+    validate_tool_call_scorecards,
 )
 
 
@@ -343,6 +346,29 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                 validate_resource_observations(observations)
             except (ValidationError, ValueError, json.JSONDecodeError) as e:
                 failures.append(f"resource observation validation failed: {e}")
+
+    # Layer 14: tool call scorecards — validate if present
+    checked_layers.append("tool_call_scorecard")
+    scorecard_path = report_dir / TOOL_CALL_SCORECARDS_JSONL
+    if scorecard_path.exists():
+        if scorecard_path.is_symlink():
+            failures.append(f"symlink rejected for tool call scorecards: {scorecard_path.name}")
+        elif not scorecard_path.is_file():
+            failures.append(f"tool call scorecards is not a regular file: {scorecard_path.name}")
+        else:
+            try:
+                sc_records = _read_jsonl_dicts(scorecard_path)
+                scorecards = [ToolCallScorecard.model_validate(r) for r in sc_records]
+                validate_tool_call_scorecards(scorecards)
+                # Validate binding: every scorecard's attempt_id references a real attempt
+                attempt_ids = {a.attempt_id for a in attempts}
+                for sc in scorecards:
+                    if sc.attempt_id not in attempt_ids:
+                        failures.append(
+                            f"tool call scorecard {sc.scorecard_id} references unknown attempt: {sc.attempt_id}"
+                        )
+            except (ValidationError, ValueError, json.JSONDecodeError) as e:
+                failures.append(f"tool call scorecard validation failed: {e}")
 
     ok = len(failures) == 0
     return CampaignVerificationReport(

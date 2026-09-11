@@ -3355,3 +3355,132 @@ class EvidenceIndex(BaseModel):
     access_control: EvidenceAccessControl | None = None
 
     parent_evidence_refs: list[str] = Field(default_factory=list)
+
+
+class ToolCallScorecardDimension(StrEnum):
+    """The 10 per-tool-call scorecard dimensions.
+
+    Each dimension is a boolean (pass/fail) evaluated independently for
+    every tool call. The dimensions decompose tool-calling performance
+    so the analysis can reveal why one model beats another on a specific
+    workflow rather than collapsing to a single "tool call succeeded"
+    boolean.
+
+    ``RECOGNITION``: Realized a tool was necessary.
+    ``SELECTION``: Selected the correct tool for the task.
+    ``SCHEMA``: Produced valid JSON/schema for the tool arguments.
+    ``SEMANTICS``: Produced correct interface, file, or query arguments.
+    ``PERMISSION``: Did not call something outside authorization.
+    ``INTERPRETATION``: Understood what the tool returned.
+    ``FOLLOW_UP``: Took the correct next step after the tool returned.
+    ``UNNECESSARY``: Avoided wasted tool calls (pass = no unnecessary calls).
+    ``LOOPING``: Avoided repeated identical or unproductive calls (pass = no looping).
+    ``RECOVERY``: Correctly handled tool failure when it occurred.
+    """
+
+    RECOGNITION = "recognition"
+    SELECTION = "selection"
+    SCHEMA = "schema"
+    SEMANTICS = "semantics"
+    PERMISSION = "permission"
+    INTERPRETATION = "interpretation"
+    FOLLOW_UP = "follow_up"
+    UNNECESSARY = "unnecessary"
+    LOOPING = "looping"
+    RECOVERY = "recovery"
+
+
+_TOOL_CALL_SCORECARD_DIMENSIONS = frozenset(
+    d.value for d in ToolCallScorecardDimension
+)
+
+
+class ToolCallScorecard(BaseModel):
+    """Per-tool-call scorecard bound to agent persona, model variant, tool, and task.
+
+    Each tool call produces one scorecard record with the 10 scorecard
+    dimensions (recognition, selection, schema, semantics, permission,
+    interpretation, follow-up, unnecessary, looping, recovery). Every
+    dimension is a boolean. The scorecard is bound to the agent persona
+    (e.g. sage, dash, tribunal), the model variant that produced the
+    call, the tool name, the task, the attempt, and the run so the
+    analysis can decompose tool performance by model, role, and tool
+    type.
+
+    ``UNNECESSARY`` and ``LOOPING`` are inverted: ``True`` means the
+    model avoided unnecessary calls or looping respectively. This keeps
+    every dimension "higher is better" for aggregation.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: str = SCHEMA_VERSION
+    scorecard_id: str = Field(min_length=1, description="Unique scorecard identifier within the run.")
+    attempt_id: str = Field(min_length=1, description="Attempt ID this scorecard belongs to.")
+    run_id: str = Field(min_length=1, description="Run ID this scorecard belongs to.")
+    task_id: str = Field(min_length=1, description="Task ID this scorecard belongs to.")
+
+    agent_persona: str = Field(min_length=1, description="Agent persona (e.g. sage, dash, tribunal, warden, auditor).")
+    model_variant_id: str = Field(min_length=1, description="Model variant ID that produced the tool call.")
+    tool_name: str = Field(min_length=1, description="Name of the tool called.")
+    call_index: int = Field(ge=0, description="Zero-indexed position of this call within the attempt's tool-call sequence.")
+
+    recognition: bool = Field(description="Realized a tool was necessary.")
+    selection: bool = Field(description="Selected the correct tool for the task.")
+    schema_valid: bool = Field(description="Produced valid JSON/schema for the tool arguments.")
+    semantics: bool = Field(description="Produced correct interface, file, or query arguments.")
+    permission: bool = Field(description="Did not call something outside authorization.")
+    interpretation: bool = Field(description="Understood what the tool returned.")
+    follow_up: bool = Field(description="Took the correct next step after the tool returned.")
+    unnecessary: bool = Field(description="Avoided unnecessary tool calls (True = no unnecessary calls).")
+    looping: bool = Field(description="Avoided repeated identical or unproductive calls (True = no looping).")
+    recovery: bool = Field(description="Correctly handled tool failure when it occurred.")
+
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> ToolCallScorecard:
+        if len(self.source_evidence_refs) != len(set(self.source_evidence_refs)):
+            raise ValueError("tool call scorecard source evidence references must be unique")
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified tool call scorecard requires source evidence")
+        return self
+
+    @property
+    def dimensions(self) -> dict[str, bool]:
+        """Return the 10 scorecard dimensions as a dict keyed by dimension name."""
+        return {
+            ToolCallScorecardDimension.RECOGNITION.value: self.recognition,
+            ToolCallScorecardDimension.SELECTION.value: self.selection,
+            ToolCallScorecardDimension.SCHEMA.value: self.schema_valid,
+            ToolCallScorecardDimension.SEMANTICS.value: self.semantics,
+            ToolCallScorecardDimension.PERMISSION.value: self.permission,
+            ToolCallScorecardDimension.INTERPRETATION.value: self.interpretation,
+            ToolCallScorecardDimension.FOLLOW_UP.value: self.follow_up,
+            ToolCallScorecardDimension.UNNECESSARY.value: self.unnecessary,
+            ToolCallScorecardDimension.LOOPING.value: self.looping,
+            ToolCallScorecardDimension.RECOVERY.value: self.recovery,
+        }
+
+
+def validate_tool_call_scorecards(scorecards: list[ToolCallScorecard]) -> None:
+    """Validate a list of tool call scorecards.
+
+    Rejects duplicate (run_id, attempt_id, call_index) tuples within
+    the same tool name. Each scorecard must be a valid
+    ``ToolCallScorecard`` with all required bindings.
+    """
+    seen: set[tuple[str, str, str, int]] = set()
+    for sc in scorecards:
+        key = (sc.run_id, sc.attempt_id, sc.tool_name, sc.call_index)
+        if key in seen:
+            raise ValueError(
+                f"duplicate tool call scorecard for (run={sc.run_id!r}, "
+                f"attempt={sc.attempt_id!r}, tool={sc.tool_name!r}, "
+                f"call_index={sc.call_index})"
+            )
+        seen.add(key)

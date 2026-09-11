@@ -400,7 +400,7 @@ class TestDerivedProducerRegistry:
             d for d in DEFAULT_METRIC_REGISTRY.all_definitions()
             if d.grader_class == GraderClass.ANALYSIS
         ]
-        assert len(derived_metrics) == 17
+        assert len(derived_metrics) == 27
         DEFAULT_DERIVED_REGISTRY.assert_complete()
 
     def test_registry_rejects_duplicate_registration(self) -> None:

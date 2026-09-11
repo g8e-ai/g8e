@@ -468,6 +468,6 @@ def test_grader_class_analysis_is_distinct_from_others():
 
 @pytest.mark.unit
 def test_total_registered_metric_count_includes_new_metrics():
-    """The registry should now have 36 original + 17 derived + 6 telemetry + 8 scenario = 67 metrics."""
+    """The registry should now have 36 original + 17 derived + 6 telemetry + 8 scenario + 10 tool scorecard = 77 metrics."""
     all_defs = DEFAULT_METRIC_REGISTRY.all_definitions()
-    assert len(all_defs) == 67, f"expected 67 metrics, got {len(all_defs)}"
+    assert len(all_defs) == 77, f"expected 77 metrics, got {len(all_defs)}"

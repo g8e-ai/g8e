@@ -85,6 +85,9 @@ CAMPAIGN_VERIFICATION_REPORT_JSON = "campaign-verification-report.json"
 # Resource observations (typed external resource observer output)
 RESOURCE_OBSERVATIONS_JSONL = "resource-observations.jsonl"
 
+# Tool call scorecards (per-tool-call 10-dimension scorecard records)
+TOOL_CALL_SCORECARDS_JSONL = "tool-call-scorecards.jsonl"
+
 # Report checksum (optional per-report checksum file for standalone validation)
 REPORT_CHECKSUM_JSON = "report-checksum.json"
 

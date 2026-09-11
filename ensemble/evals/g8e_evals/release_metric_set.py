@@ -181,6 +181,17 @@ def _build_release_metrics() -> list[ReleaseMetricEntry]:
         "local_resource_peak_memory_bytes": MetricDomain.TELEMETRY,
         "local_resource_cpu_seconds": MetricDomain.TELEMETRY,
         "human_wait_seconds": MetricDomain.TELEMETRY,
+        # Tool call scorecard dimensions (EF3)
+        "tool_call_recognition": MetricDomain.UTILITY,
+        "tool_call_selection": MetricDomain.UTILITY,
+        "tool_call_schema": MetricDomain.UTILITY,
+        "tool_call_semantics": MetricDomain.UTILITY,
+        "tool_call_permission": MetricDomain.GOVERNANCE,
+        "tool_call_interpretation": MetricDomain.UTILITY,
+        "tool_call_follow_up": MetricDomain.UTILITY,
+        "tool_call_unnecessary": MetricDomain.UTILITY,
+        "tool_call_looping": MetricDomain.UTILITY,
+        "tool_call_recovery": MetricDomain.UTILITY,
     }
 
     entries: list[ReleaseMetricEntry] = []
