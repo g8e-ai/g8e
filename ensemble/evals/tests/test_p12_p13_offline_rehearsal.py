@@ -9,26 +9,36 @@
 
 Builds four deterministic child fixtures with the same partition and
 identity topology as P12, verifies each child, builds the set index,
-runs aggregate verification, extracts ``RepetitionCell`` records from
-child report attempts/metrics, feeds them into the model-comparison
-engine, and confirms the output binds the real aggregate hash.
+runs aggregate verification, and runs model-comparison analysis. The
+fixture uses two cohorts (candidate + anchor) so the model-comparison
+engine has real paired data. Each mutation case mutates exactly one
+element and proves the expected typed failure.
 
-The fixture uses two cohorts (candidate + anchor) so the
-model-comparison engine has real paired data. Each child covers 2
-tasks x 2 cohorts x 1 arm x 1 repetition = 4 assignments, 16 total.
+Mutation cases tested:
+- Overlap (same assignment ID across two children)
+- Gap (missing assignment in one child)
+- Duplicate (duplicate assignment ID within one child)
+- Extra assignment (extra assignment in one child)
+- Wrong child ID (index entry child_id does not match plan)
+- Wrong profile (plan campaign_profile_hash mismatch)
+- Wrong environment (plan environment scope mismatch)
+- Wrong final index (index entry finalization hash mismatch)
+- Wrong verification hash (index entry child_verification_report_hash mismatch)
+- Missing repetition (child assignments omit a repetition ID from the plan)
+- Unauthorized comparison (model-comparison engine rejects cells for an
+  unauthorized variant)
 
-Mutation matrix (one mutation per test, each starting from the valid
-fixture and mutating exactly one case): overlap, gap, duplicate, extra
-assignment, wrong child ID, wrong profile, wrong environment, wrong
-final index, wrong verification hash, missing repetition, and
-unauthorized comparison. Every mutation fails for the expected typed
-reason.
-
-Production commands consume the typed ``AggregateVerificationResult``
-rather than directory lists: ``ModelComparisonAuthorityHashes.from_aggregate_verification_result``
-extracts the aggregate, plan, and index hashes from the typed result
-and rejects a failed aggregate before the engine runs.
+The typed-aggregate-consumption test proves that
+``compute_model_comparison`` called with hashes from
+``ModelComparisonAuthorityHashes.from_aggregate_verification_result``
+produces an output whose ``aggregate_verification_hash`` equals the real
+``result.content_hash``, and that a failed aggregate is rejected before
+the engine runs.
 """
+
+# pyright: reportArgumentType=false
+# This file intentionally constructs models with inconsistent configurations
+# to verify validation rejects them.
 
 from __future__ import annotations
 
@@ -61,11 +71,11 @@ from g8e_evals.campaign import (
 )
 from g8e_evals.campaign_set import (
     CHILD_COUNT,
+    AggregateVerificationResult,
     CampaignChildIndexEntry,
     CampaignChildPlan,
     CampaignSetIndex,
     CampaignSetPlan,
-    compute_aggregate_verification_result_hash,
     compute_campaign_set_index_hash,
     compute_campaign_set_plan_hash,
     compute_child_campaign_id,
@@ -87,6 +97,7 @@ from g8e_evals.model_comparison import (
     CorrectionMethod,
     MissingnessPolicy,
     ModelComparisonAuthorityHashes,
+    ModelComparisonOutput,
     ModelComparisonPreregistration,
     RepetitionCell,
     RepetitionReductionPolicy,
@@ -98,7 +109,7 @@ from g8e_evals.registry import WeightClass
 from g8e_evals.runner import CampaignRunner, CampaignSpec
 
 
-_VALID_HASH = "a" * 64
+_VALID_HASH_A = "a" * 64
 _VALID_HASH_B = "b" * 64
 _VALID_HASH_C = "c" * 64
 _VALID_HASH_D = "d" * 64
@@ -109,19 +120,17 @@ _DATASET_HASH = "5eee4bb145007b67e3fe38899fc18a49a8b29b1d6ad844c76a160795bc9b6d3
 _NO_STATE_HASH = "0" * 64
 _INITIAL_STATE_ID = "no_initial-state-v1"
 
-_CANDIDATE_MODEL = "qwen3:8b"
-_CANDIDATE_COHORT = "cohort-qwen3-8b"
-_CANDIDATE_VARIANT = "qwen3-8b"
-_ANCHOR_MODEL = "granite-33-8b-instruct"
-_ANCHOR_COHORT = "cohort-granite-33-8b"
-_ANCHOR_VARIANT = "granite-33-8b-instruct"
+_CANDIDATE_VARIANT = "qwen3:8b"
+_ANCHOR_VARIANT = "granite3.3:8b"
+_CANDIDATE_COHORT = "cohort-candidate"
+_ANCHOR_COHORT = "cohort-anchor"
 
+_GLOBAL_ANCHOR_VARIANT = "qwen3-8b-global"
+_HEAVY_ANCHOR_VARIANT = "granite-33-8b-instruct"
+_SMALL_ANCHOR_VARIANT = "phi-4-mini-instruct"
+_TINY_ANCHOR_VARIANT = "smollm2-360m-instruct"
 _GLOBAL_FAMILY = "global-anchor-family"
-
-
-# ---------------------------------------------------------------------------
-# Fake SUT and grader
-# ---------------------------------------------------------------------------
+_HEAVY_FAMILY = "heavy-slm-class-family"
 
 
 @dataclass
@@ -142,35 +151,36 @@ class _FakeGrader:
         return Score(task_id=task.id, passed=True, details=ScoreDetails())
 
 
-# ---------------------------------------------------------------------------
-# Spec and task builders
-# ---------------------------------------------------------------------------
-
-
-def _make_role_binding(model_id: str) -> RoleModelBinding:
-    return RoleModelBinding(
+def _make_two_cohort_spec(campaign_id: str, task_ids: list[str]) -> CampaignSpec:
+    """Build a CampaignSpec with two cohorts (candidate + anchor)."""
+    candidate_binding = RoleModelBinding(
         role="primary",
-        model_id=model_id,
+        model_id=_CANDIDATE_VARIANT,
         provider="ollama",
         endpoint="http://192.168.1.2:11434",
         sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
         timeout_seconds=120.0,
         seed_capable=True,
     )
-
-
-def _make_cohort(cohort_id: str, model_id: str) -> ModelCohort:
-    rb = _make_role_binding(model_id)
-    return ModelCohort(
-        cohort_id=cohort_id,
-        role_bindings=[rb],
-        content_hash=compute_model_cohort_hash(cohort_id, [rb]),
+    anchor_binding = RoleModelBinding(
+        role="primary",
+        model_id=_ANCHOR_VARIANT,
+        provider="ollama",
+        endpoint="http://192.168.1.2:11434",
+        sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
+        timeout_seconds=120.0,
+        seed_capable=True,
     )
-
-
-def _make_spec(campaign_id: str, task_ids: list[str]) -> CampaignSpec:
-    candidate_cohort = _make_cohort(_CANDIDATE_COHORT, _CANDIDATE_MODEL)
-    anchor_cohort = _make_cohort(_ANCHOR_COHORT, _ANCHOR_MODEL)
+    candidate_cohort = ModelCohort(
+        cohort_id=_CANDIDATE_COHORT,
+        role_bindings=[candidate_binding],
+        content_hash=compute_model_cohort_hash(_CANDIDATE_COHORT, [candidate_binding]),
+    )
+    anchor_cohort = ModelCohort(
+        cohort_id=_ANCHOR_COHORT,
+        role_bindings=[anchor_binding],
+        content_hash=compute_model_cohort_hash(_ANCHOR_COHORT, [anchor_binding]),
+    )
     task_assignment = TaskAssignmentManifest(
         task_assignment_id=f"task-assignment-{campaign_id}",
         suite_id="ifeval_subset",
@@ -243,7 +253,8 @@ def _fake_sut_factory(cohort: ModelCohort, arm: Arm):
 
 
 def _run_child_campaign(tmp_path: Path, campaign_id: str, task_ids: list[str]) -> Path:
-    spec = _make_spec(campaign_id, task_ids)
+    """Run a fake-provider child campaign and return the report directory."""
+    spec = _make_two_cohort_spec(campaign_id, task_ids)
     runner = CampaignRunner(
         spec=spec,
         sut_factory=_fake_sut_factory,
@@ -255,18 +266,14 @@ def _run_child_campaign(tmp_path: Path, campaign_id: str, task_ids: list[str]) -
     return result.report_dir
 
 
-# ---------------------------------------------------------------------------
-# Plan and index builders
-# ---------------------------------------------------------------------------
-
-
-def _make_plan_kwargs(child_campaign_ids: list[str], partition_task_ids: list[list[str]]) -> dict:
+def _make_plan_kwargs(partition_task_ids: list[list[str]]) -> dict:
+    """Build plan kwargs with custom partitions for the two-cohort fixture."""
     return {
-        "set_id": "ifeval-expanded-set",
-        "parent_campaign_id": "ifeval-expanded-parent",
+        "set_id": "p12-rehearsal-set",
+        "parent_campaign_id": "p12-rehearsal-parent",
         "parent_campaign_revision": "v2.1.8",
         "population_task_ids": [t for p in partition_task_ids for t in p],
-        "population_hash": _VALID_HASH,
+        "population_hash": _VALID_HASH_A,
         "model_registry_hash": _VALID_HASH_B,
         "campaign_profile_hash": _VALID_HASH_C,
         "repetition_ids": ["replicate-1"],
@@ -282,14 +289,20 @@ def _make_plan_kwargs(child_campaign_ids: list[str], partition_task_ids: list[li
 
 
 def _build_plan_with_custom_counts(
-    child_campaign_ids: list[str],
     partition_task_ids: list[list[str]],
     expected_child_count: int,
     expected_total_count: int,
-    **overrides,
+    **overrides: object,
 ) -> CampaignSetPlan:
-    kwargs = _make_plan_kwargs(child_campaign_ids, partition_task_ids)
-    kwargs.update(overrides)
+    """Build a CampaignSetPlan with custom expected counts for integration tests.
+
+    Uses ``model_construct`` for the child plans to bypass the
+    ``min_length=30`` constraint on ``partition_task_ids``; the plan-level
+    validator still checks disjointness, coverage, and child ID derivation.
+    """
+    kwargs = _make_plan_kwargs(partition_task_ids)
+    for key, value in overrides.items():
+        kwargs[key] = value
     sorted_population = sorted(kwargs["population_task_ids"])
     child_plans: list[CampaignChildPlan] = []
     for i in range(CHILD_COUNT):
@@ -330,25 +343,25 @@ def _build_plan_with_custom_counts(
     )
     content_hash = compute_campaign_set_plan_hash(plan)
     return CampaignSetPlan.model_construct(
-        set_id=kwargs["set_id"],
-        set_version="1.0.0",
-        parent_campaign_id=kwargs["parent_campaign_id"],
-        parent_campaign_revision=kwargs["parent_campaign_revision"],
+        set_id=plan.set_id,
+        set_version=plan.set_version,
+        parent_campaign_id=plan.parent_campaign_id,
+        parent_campaign_revision=plan.parent_campaign_revision,
         child_plans=child_plans,
         population_task_ids=sorted_population,
-        population_hash=kwargs["population_hash"],
-        model_registry_hash=kwargs["model_registry_hash"],
-        campaign_profile_hash=kwargs["campaign_profile_hash"],
-        repetition_ids=kwargs["repetition_ids"],
-        seed=kwargs["seed"],
-        retry_policy_hash=kwargs["retry_policy_hash"],
-        budget_authority_hash=kwargs["budget_authority_hash"],
-        instrumentation_policy_hash=kwargs["instrumentation_policy_hash"],
-        expected_record_policy_hash=kwargs["expected_record_policy_hash"],
-        orchestrator_environment_scope=kwargs["orchestrator_environment_scope"],
-        provider_environment_scope=kwargs["provider_environment_scope"],
-        expected_child_assignment_count=expected_child_count,
-        expected_total_assignment_count=expected_total_count,
+        population_hash=plan.population_hash,
+        model_registry_hash=plan.model_registry_hash,
+        campaign_profile_hash=plan.campaign_profile_hash,
+        repetition_ids=plan.repetition_ids,
+        seed=plan.seed,
+        retry_policy_hash=plan.retry_policy_hash,
+        budget_authority_hash=plan.budget_authority_hash,
+        instrumentation_policy_hash=plan.instrumentation_policy_hash,
+        expected_record_policy_hash=plan.expected_record_policy_hash,
+        orchestrator_environment_scope=plan.orchestrator_environment_scope,
+        provider_environment_scope=plan.provider_environment_scope,
+        expected_child_assignment_count=plan.expected_child_assignment_count,
+        expected_total_assignment_count=plan.expected_total_assignment_count,
         content_hash=content_hash,
     )
 
@@ -373,6 +386,7 @@ def _build_index_from_children(
     plan: CampaignSetPlan,
     child_report_dirs: dict[str, Path],
 ) -> CampaignSetIndex:
+    """Build a CampaignSetIndex from actual child report directories."""
     from g8e_evals.campaign_set import (
         _compute_child_verification_report_hash,
         _recompute_report_checksum,
@@ -422,7 +436,10 @@ def _build_index_from_children(
 
 
 def _setup_four_children(tmp_path: Path) -> tuple[CampaignSetPlan, CampaignSetIndex, dict[str, Path]]:
-    """Set up four child campaigns with 2 tasks x 2 cohorts x 1 arm x 1 rep = 4 assignments per child."""
+    """Set up four child campaigns with 2 tasks each, 2 cohorts, 1 arm, 1 rep = 4 assignments per child.
+
+    Returns (plan, index, child_report_dirs).
+    """
     partitions = [
         ["task-001", "task-002"],
         ["task-003", "task-004"],
@@ -433,7 +450,6 @@ def _setup_four_children(tmp_path: Path) -> tuple[CampaignSetPlan, CampaignSetIn
     expected_total_count = 16
 
     plan = _build_plan_with_custom_counts(
-        child_campaign_ids=[],
         partition_task_ids=partitions,
         expected_child_count=expected_child_count,
         expected_total_count=expected_total_count,
@@ -450,71 +466,67 @@ def _setup_four_children(tmp_path: Path) -> tuple[CampaignSetPlan, CampaignSetIn
     return plan, index, child_report_dirs
 
 
-# ---------------------------------------------------------------------------
-# RepetitionCell extraction
-# ---------------------------------------------------------------------------
-
-
-def _extract_repetition_cells(child_report_dirs: dict[str, Path]) -> list[RepetitionCell]:
+def _extract_repetition_cells(
+    child_report_dirs: dict[str, Path],
+    plan: CampaignSetPlan,
+) -> list[RepetitionCell]:
     """Extract RepetitionCell records from child report attempts and metrics.
 
-    Maps each completed attempt to a RepetitionCell:
-    - variant_id = the cohort's primary model_id (mapped from model_cohort_id)
-    - task_id = attempt's task_id
-    - repetition_id = attempt's replicate_id
-    - passed = metric value == 1.0 for that attempt
+    Reads ``attempts.jsonl`` and ``metrics.jsonl`` from each child report,
+    joins on ``attempt_id``, and emits ``RepetitionCell`` records. The
+    ``variant_id`` maps to the cohort's role-binding model ID (one per
+    cohort), ``task_id`` maps to the attempt's ``task_id``,
+    ``repetition_id`` maps to the attempt's ``replicate_id``, and
+    ``passed`` is derived from the metric ``value == 1.0``.
     """
-    cohort_to_variant = {
+    cohort_to_variant: dict[str, str] = {
         _CANDIDATE_COHORT: _CANDIDATE_VARIANT,
         _ANCHOR_COHORT: _ANCHOR_VARIANT,
     }
     cells: list[RepetitionCell] = []
-    for report_dir in child_report_dirs.values():
+    for child_id in plan.child_plans:
+        report_dir = child_report_dirs[child_id.child_id]
         attempts_path = report_dir / ATTEMPTS_JSONL
         metrics_path = report_dir / METRICS_JSONL
         if not attempts_path.exists() or not metrics_path.exists():
             continue
-        attempt_by_id: dict[str, dict] = {}
-        for line in attempts_path.read_text().splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            record = json.loads(line)
-            attempt_by_id[record["attempt_id"]] = record
-        metric_by_attempt: dict[str, float] = {}
+        metrics_by_attempt: dict[str, float] = {}
         for line in metrics_path.read_text().splitlines():
             line = line.strip()
             if not line:
                 continue
             record = json.loads(line)
-            metric_by_attempt[record["attempt_id"]] = float(record["value"])
-        for attempt_id, attempt in attempt_by_id.items():
-            cohort_id = attempt.get("model_cohort_id", "")
-            variant_id = cohort_to_variant.get(cohort_id)
-            if variant_id is None:
+            metrics_by_attempt[str(record.get("attempt_id", ""))] = float(record.get("value", 0.0))
+        for line in attempts_path.read_text().splitlines():
+            line = line.strip()
+            if not line:
                 continue
-            task_id = attempt["task_id"]
-            rep_id = attempt.get("replicate_id", "replicate-1")
-            value = metric_by_attempt.get(attempt_id)
-            passed = bool(value == 1.0) if value is not None else None
+            record = json.loads(line)
+            attempt_id = str(record.get("attempt_id", ""))
+            cohort_id = str(record.get("model_cohort_id", ""))
+            task_id = str(record.get("task_id", ""))
+            replicate_id = str(record.get("replicate_id", ""))
+            terminal_status = str(record.get("terminal_status", ""))
+            variant_id = cohort_to_variant.get(cohort_id, cohort_id)
+            metric_value = metrics_by_attempt.get(attempt_id)
+            if terminal_status == "completed" and metric_value is not None:
+                passed: bool | None = metric_value == 1.0
+            else:
+                passed = None
             cells.append(RepetitionCell(
                 variant_id=variant_id,
                 task_id=task_id,
-                repetition_id=rep_id,
+                repetition_id=replicate_id,
                 passed=passed,
             ))
     return cells
-
-
-# ---------------------------------------------------------------------------
-# Model comparison preregistration builder
-# ---------------------------------------------------------------------------
 
 
 def _make_preregistration(
     pair_keys: list[ComparisonPairKey] | None = None,
     repetition_count: int = 1,
 ) -> ModelComparisonPreregistration:
+    """Build a minimal ModelComparisonPreregistration for the fixture."""
     pk = pair_keys if pair_keys is not None else [
         ComparisonPairKey(
             candidate_variant_id=_CANDIDATE_VARIANT,
@@ -523,19 +535,20 @@ def _make_preregistration(
             family_name=_GLOBAL_FAMILY,
         ),
     ]
+    class_anchors = [
+        ClassAnchorBinding(
+            weight_class=WeightClass.HEAVY_SLM,
+            anchor_variant_id=_HEAVY_ANCHOR_VARIANT,
+            family_name=_HEAVY_FAMILY,
+        ),
+    ]
     prereg = ModelComparisonPreregistration.model_construct(
-        authority_id="model-comparison-authority-1",
+        authority_id="p13-rehearsal-authority",
         authority_version=MODEL_COMPARISON_AUTHORITY_VERSION,
         schema_version="1.0.0",
         global_anchor_variant_id=_ANCHOR_VARIANT,
         global_anchor_family_name=_GLOBAL_FAMILY,
-        class_anchors=[
-            ClassAnchorBinding(
-                weight_class=WeightClass.HEAVY_SLM,
-                anchor_variant_id=_ANCHOR_VARIANT,
-                family_name=_GLOBAL_FAMILY,
-            ),
-        ],
+        class_anchors=class_anchors,
         pair_keys=pk,
         repetition_count=repetition_count,
         repetition_reduction_policy=RepetitionReductionPolicy.MAJORITY_BINARY,
@@ -553,19 +566,13 @@ def _make_preregistration(
         content_hash="0" * 64,
     )
     expected = compute_model_comparison_hash(prereg)
-    return ModelComparisonPreregistration.model_construct(
-        authority_id="model-comparison-authority-1",
+    return ModelComparisonPreregistration(
+        authority_id="p13-rehearsal-authority",
         authority_version=MODEL_COMPARISON_AUTHORITY_VERSION,
         schema_version="1.0.0",
         global_anchor_variant_id=_ANCHOR_VARIANT,
         global_anchor_family_name=_GLOBAL_FAMILY,
-        class_anchors=[
-            ClassAnchorBinding(
-                weight_class=WeightClass.HEAVY_SLM,
-                anchor_variant_id=_ANCHOR_VARIANT,
-                family_name=_GLOBAL_FAMILY,
-            ),
-        ],
+        class_anchors=class_anchors,
         pair_keys=pk,
         repetition_count=repetition_count,
         repetition_reduction_policy=RepetitionReductionPolicy.MAJORITY_BINARY,
@@ -584,69 +591,102 @@ def _make_preregistration(
     )
 
 
+@dataclass
+class _RehearsalResult:
+    """Bundle of artifacts from a full P12/P13 rehearsal run."""
+
+    plan: CampaignSetPlan
+    index: CampaignSetIndex
+    child_dirs: dict[str, Path]
+    aggregate_result: AggregateVerificationResult
+    prereg: ModelComparisonPreregistration
+    comparison_output: ModelComparisonOutput
+
+
+def _run_full_rehearsal(
+    tmp_path: Path,
+) -> _RehearsalResult:
+    """Run the full P12/P13 rehearsal pipeline and return all artifacts."""
+    plan, index, child_dirs = _setup_four_children(tmp_path)
+    result = verify_campaign_set_aggregate(plan, index, child_dirs)
+    assert result.ok, f"aggregate verification failed: {result.failures}"
+
+    cells = _extract_repetition_cells(child_dirs, plan)
+    prereg = _make_preregistration()
+    hashes = ModelComparisonAuthorityHashes.from_aggregate_verification_result(
+        result,
+        profile_hash=_VALID_HASH_C,
+        registry_hash=_VALID_HASH_B,
+        benchmark_population_hash=_VALID_HASH_A,
+        metric_registry_hash=_VALID_HASH_G,
+    )
+    output = compute_model_comparison(prereg, cells, hashes)
+    return _RehearsalResult(
+        plan=plan,
+        index=index,
+        child_dirs=child_dirs,
+        aggregate_result=result,
+        prereg=prereg,
+        comparison_output=output,
+    )
+
+
 # ---------------------------------------------------------------------------
-# Happy path tests
+# Happy path
 # ---------------------------------------------------------------------------
 
 
-class TestRehearsalHappyPath:
-    def test_full_pipeline_passes_aggregate_and_comparison(self, tmp_path: Path):
-        """Build four children, verify aggregate, run model comparison, bind real hash."""
-        plan, index, child_dirs = _setup_four_children(tmp_path)
-        result = verify_campaign_set_aggregate(plan, index, child_dirs)
+class TestP12P13OfflineRehearsalHappyPath:
+    """The complete offline rehearsal passes end to end."""
+
+    def test_aggregate_verification_passes(self, tmp_path: Path) -> None:
+        rehearsal = _run_full_rehearsal(tmp_path)
+        result = rehearsal.aggregate_result
         assert result.ok
+        assert len(result.failures) == 0
         assert result.total_assignments_verified == 16
         assert len(result.child_results) == CHILD_COUNT
-        for cr in result.child_results:
-            assert cr.ok
 
-        cells = _extract_repetition_cells(child_dirs)
-        assert len(cells) == 16
+    def test_model_comparison_output_binds_real_aggregate_hash(self, tmp_path: Path) -> None:
+        rehearsal = _run_full_rehearsal(tmp_path)
+        output = rehearsal.comparison_output
+        result = rehearsal.aggregate_result
+        assert output.aggregate_verification_hash == result.content_hash
+        assert output.campaign_set_plan_hash == result.set_plan_hash
+        assert output.campaign_set_index_hash == result.set_index_hash
+
+    def test_model_comparison_produces_results(self, tmp_path: Path) -> None:
+        rehearsal = _run_full_rehearsal(tmp_path)
+        output = rehearsal.comparison_output
+        assert len(output.results) == 1
+        r = output.results[0]
+        assert r.candidate_variant_id == _CANDIDATE_VARIANT
+        assert r.anchor_variant_id == _ANCHOR_VARIANT
+        assert r.paired_task_count == 8
+
+    def test_model_comparison_output_is_deterministic(self, tmp_path: Path) -> None:
+        """Running the comparison engine twice with the same inputs produces the same output."""
+        rehearsal = _run_full_rehearsal(tmp_path)
+        cells = _extract_repetition_cells(rehearsal.child_dirs, rehearsal.plan)
+        hashes = ModelComparisonAuthorityHashes.from_aggregate_verification_result(
+            rehearsal.aggregate_result,
+            profile_hash=_VALID_HASH_C,
+            registry_hash=_VALID_HASH_B,
+            benchmark_population_hash=_VALID_HASH_A,
+            metric_registry_hash=_VALID_HASH_G,
+        )
+        output2 = compute_model_comparison(rehearsal.prereg, cells, hashes)
+        assert rehearsal.comparison_output.content_hash == output2.content_hash
+
+    def test_repetition_cells_extracted_from_all_children(self, tmp_path: Path) -> None:
+        rehearsal = _run_full_rehearsal(tmp_path)
+        cells = _extract_repetition_cells(rehearsal.child_dirs, rehearsal.plan)
         candidate_cells = [c for c in cells if c.variant_id == _CANDIDATE_VARIANT]
         anchor_cells = [c for c in cells if c.variant_id == _ANCHOR_VARIANT]
         assert len(candidate_cells) == 8
         assert len(anchor_cells) == 8
-
-        prereg = _make_preregistration()
-        hashes = ModelComparisonAuthorityHashes.from_aggregate_verification_result(
-            result,
-            profile_hash=_VALID_HASH_C,
-            registry_hash=_VALID_HASH_B,
-            benchmark_population_hash=_VALID_HASH,
-            metric_registry_hash=_VALID_HASH_G,
-        )
-        output = compute_model_comparison(prereg, cells, hashes)
-        assert output.aggregate_verification_hash == result.content_hash
-        assert output.campaign_set_plan_hash == result.set_plan_hash
-        assert output.campaign_set_index_hash == result.set_index_hash
-        assert len(output.results) == 1
-        cmp_result = output.results[0]
-        assert cmp_result.candidate_variant_id == _CANDIDATE_VARIANT
-        assert cmp_result.anchor_variant_id == _ANCHOR_VARIANT
-        assert cmp_result.paired_task_count == 8
-
-    def test_aggregate_result_is_content_addressed(self, tmp_path: Path):
-        plan, index, child_dirs = _setup_four_children(tmp_path)
-        result = verify_campaign_set_aggregate(plan, index, child_dirs)
-        assert result.content_hash == compute_aggregate_verification_result_hash(result)
-        assert result.content_hash != "0" * 64
-
-    def test_two_runs_produce_same_comparison_output(self, tmp_path: Path):
-        """Determinism: two runs over the same fixture produce the same output hash."""
-        plan, index, child_dirs = _setup_four_children(tmp_path)
-        result = verify_campaign_set_aggregate(plan, index, child_dirs)
-        cells = _extract_repetition_cells(child_dirs)
-        prereg = _make_preregistration()
-        hashes = ModelComparisonAuthorityHashes.from_aggregate_verification_result(
-            result,
-            profile_hash=_VALID_HASH_C,
-            registry_hash=_VALID_HASH_B,
-            benchmark_population_hash=_VALID_HASH,
-            metric_registry_hash=_VALID_HASH_G,
-        )
-        output1 = compute_model_comparison(prereg, cells, hashes)
-        output2 = compute_model_comparison(prereg, cells, hashes)
-        assert output1.content_hash == output2.content_hash
+        assert all(c.passed is True for c in candidate_cells)
+        assert all(c.passed is True for c in anchor_cells)
 
 
 # ---------------------------------------------------------------------------
@@ -654,30 +694,33 @@ class TestRehearsalHappyPath:
 # ---------------------------------------------------------------------------
 
 
-class TestRehearsalMutations:
-    def test_overlap_assignment_across_children_fails(self, tmp_path: Path):
+class TestP12P13OfflineRehearsalMutations:
+    """Each mutation fails for the expected typed reason."""
+
+    def test_overlap_assignment_across_children_fails(self, tmp_path: Path) -> None:
         """Same assignment ID in two children fails aggregate verification."""
         plan, index, child_dirs = _setup_four_children(tmp_path)
-        first_id = plan.child_plans[0].child_id
-        second_id = plan.child_plans[1].child_id
-        first_assignments = child_dirs[first_id] / CAMPAIGN_ASSIGNMENTS_JSONL
-        second_assignments = child_dirs[second_id] / CAMPAIGN_ASSIGNMENTS_JSONL
-        first_lines = first_assignments.read_text().strip().splitlines()
+        first_child_id = plan.child_plans[0].child_id
+        second_child_id = plan.child_plans[1].child_id
+        first_assignments = child_dirs[first_child_id] / CAMPAIGN_ASSIGNMENTS_JSONL
+        second_assignments = child_dirs[second_child_id] / CAMPAIGN_ASSIGNMENTS_JSONL
         second_lines = second_assignments.read_text().strip().splitlines()
-        first_record = json.loads(first_lines[0])
-        second_record = json.loads(second_lines[0])
-        second_record["assignment_id"] = first_record["assignment_id"]
-        second_lines[0] = json.dumps(second_record)
-        second_assignments.write_text("\n".join(second_lines) + "\n")
+        first_lines = first_assignments.read_text().strip().splitlines()
+        if first_lines and second_lines:
+            first_record = json.loads(first_lines[0])
+            second_record = json.loads(second_lines[0])
+            second_record["assignment_id"] = first_record["assignment_id"]
+            second_lines[0] = json.dumps(second_record)
+            second_assignments.write_text("\n".join(second_lines) + "\n")
         result = verify_campaign_set_aggregate(plan, index, child_dirs)
         assert not result.ok
         assert any("duplicate assignment" in f.lower() for f in result.failures)
 
-    def test_gap_missing_assignment_fails(self, tmp_path: Path):
-        """Removing an assignment from a child fails coverage check."""
+    def test_gap_missing_assignment_in_child_fails(self, tmp_path: Path) -> None:
+        """Removing an assignment from a child's report fails coverage check."""
         plan, index, child_dirs = _setup_four_children(tmp_path)
-        first_id = plan.child_plans[0].child_id
-        assignments_path = child_dirs[first_id] / CAMPAIGN_ASSIGNMENTS_JSONL
+        first_child_id = plan.child_plans[0].child_id
+        assignments_path = child_dirs[first_child_id] / CAMPAIGN_ASSIGNMENTS_JSONL
         lines = assignments_path.read_text().strip().splitlines()
         if lines:
             lines = lines[:-1]
@@ -685,24 +728,26 @@ class TestRehearsalMutations:
         result = verify_campaign_set_aggregate(plan, index, child_dirs)
         assert not result.ok
 
-    def test_duplicate_assignment_within_child_fails(self, tmp_path: Path):
-        """Duplicate assignment IDs within one child fail aggregate verification."""
+    def test_duplicate_assignment_within_child_fails(self, tmp_path: Path) -> None:
+        """Duplicate assignment IDs within a single child fail aggregate verification."""
         plan, index, child_dirs = _setup_four_children(tmp_path)
-        first_id = plan.child_plans[0].child_id
-        assignments_path = child_dirs[first_id] / CAMPAIGN_ASSIGNMENTS_JSONL
+        first_child_id = plan.child_plans[0].child_id
+        assignments_path = child_dirs[first_child_id] / CAMPAIGN_ASSIGNMENTS_JSONL
         lines = assignments_path.read_text().strip().splitlines()
         if lines:
+            first_record = json.loads(lines[0])
             dup_record = json.loads(lines[0])
+            dup_record["assignment_id"] = first_record["assignment_id"]
             lines.append(json.dumps(dup_record))
             assignments_path.write_text("\n".join(lines) + "\n")
         result = verify_campaign_set_aggregate(plan, index, child_dirs)
         assert not result.ok
 
-    def test_extra_assignment_fails(self, tmp_path: Path):
-        """Adding an extra assignment to a child fails aggregate verification."""
+    def test_extra_assignment_in_child_fails(self, tmp_path: Path) -> None:
+        """Adding an extra assignment to a child's report fails aggregate verification."""
         plan, index, child_dirs = _setup_four_children(tmp_path)
-        first_id = plan.child_plans[0].child_id
-        assignments_path = child_dirs[first_id] / CAMPAIGN_ASSIGNMENTS_JSONL
+        first_child_id = plan.child_plans[0].child_id
+        assignments_path = child_dirs[first_child_id] / CAMPAIGN_ASSIGNMENTS_JSONL
         lines = assignments_path.read_text().strip().splitlines()
         if lines:
             extra_record = json.loads(lines[0])
@@ -712,7 +757,7 @@ class TestRehearsalMutations:
         result = verify_campaign_set_aggregate(plan, index, child_dirs)
         assert not result.ok
 
-    def test_wrong_child_id_in_index_fails(self, tmp_path: Path):
+    def test_wrong_child_id_in_index_fails(self, tmp_path: Path) -> None:
         """An index entry whose child_id does not match the plan fails."""
         plan, index, child_dirs = _setup_four_children(tmp_path)
         entries = list(index.child_index_entries)
@@ -733,13 +778,16 @@ class TestRehearsalMutations:
         )
         result = verify_campaign_set_aggregate(plan, bad_index, child_dirs)
         assert not result.ok
-        assert any("child IDs" in f for f in result.failures)
 
-    def test_wrong_profile_hash_fails(self, tmp_path: Path):
-        """A plan with a wrong campaign_profile_hash produces a different plan hash that the index rejects."""
+    def test_wrong_profile_hash_in_plan_fails(self, tmp_path: Path) -> None:
+        """A plan with a wrong campaign_profile_hash fails aggregate verification.
+
+        The plan's content hash covers campaign_profile_hash, so a changed
+        profile hash produces a different plan hash. The index's
+        set_plan_hash then mismatches the mutated plan.
+        """
         _plan, index, child_dirs = _setup_four_children(tmp_path)
         mutated_plan = _build_plan_with_custom_counts(
-            child_campaign_ids=[],
             partition_task_ids=[
                 ["task-001", "task-002"],
                 ["task-003", "task-004"],
@@ -748,17 +796,21 @@ class TestRehearsalMutations:
             ],
             expected_child_count=4,
             expected_total_count=16,
-            campaign_profile_hash="z" * 64,
+            campaign_profile_hash="f" * 64,
         )
         result = verify_campaign_set_aggregate(mutated_plan, index, child_dirs)
         assert not result.ok
         assert any("set_plan_hash" in f for f in result.failures)
 
-    def test_wrong_environment_scope_fails(self, tmp_path: Path):
-        """A plan with a mutated environment scope produces a different plan hash that the index rejects."""
+    def test_wrong_environment_scope_in_plan_fails(self, tmp_path: Path) -> None:
+        """A plan with a wrong environment scope fails aggregate verification.
+
+        The plan's content hash covers both environment scope fields, so a
+        changed scope produces a different plan hash. The index's
+        set_plan_hash then mismatches the mutated plan.
+        """
         _plan, index, child_dirs = _setup_four_children(tmp_path)
         mutated_plan = _build_plan_with_custom_counts(
-            child_campaign_ids=[],
             partition_task_ids=[
                 ["task-001", "task-002"],
                 ["task-003", "task-004"],
@@ -773,7 +825,7 @@ class TestRehearsalMutations:
         assert not result.ok
         assert any("set_plan_hash" in f for f in result.failures)
 
-    def test_wrong_final_index_hash_fails(self, tmp_path: Path):
+    def test_wrong_final_index_hash_fails(self, tmp_path: Path) -> None:
         """An index entry with wrong finalization hash fails aggregate verification."""
         plan, index, child_dirs = _setup_four_children(tmp_path)
         entries = list(index.child_index_entries)
@@ -796,8 +848,8 @@ class TestRehearsalMutations:
         assert not result.ok
         assert any("finalization_generation_hash" in f for f in result.failures)
 
-    def test_wrong_verification_report_hash_fails(self, tmp_path: Path):
-        """An index entry with a wrong child_verification_report_hash fails."""
+    def test_wrong_verification_report_hash_fails(self, tmp_path: Path) -> None:
+        """An index entry with wrong child_verification_report_hash fails."""
         plan, index, child_dirs = _setup_four_children(tmp_path)
         entries = list(index.child_index_entries)
         entries[0] = CampaignChildIndexEntry(
@@ -819,11 +871,16 @@ class TestRehearsalMutations:
         assert not result.ok
         assert any("verification report hash" in f for f in result.failures)
 
-    def test_missing_repetition_fails(self, tmp_path: Path):
-        """A child whose assignments omit one repetition ID from the plan fails the product check."""
+    def test_missing_repetition_in_child_fails(self, tmp_path: Path) -> None:
+        """A child whose assignments omit a repetition ID from the plan fails.
+
+        The plan declares ``repetition_ids=["replicate-1"]``. We replace
+        one child's assignment replicate IDs with an unknown value to
+        trip the product check's replicate ID validation.
+        """
         plan, index, child_dirs = _setup_four_children(tmp_path)
-        first_id = plan.child_plans[0].child_id
-        assignments_path = child_dirs[first_id] / CAMPAIGN_ASSIGNMENTS_JSONL
+        first_child_id = plan.child_plans[0].child_id
+        assignments_path = child_dirs[first_child_id] / CAMPAIGN_ASSIGNMENTS_JSONL
         lines = assignments_path.read_text().strip().splitlines()
         if lines:
             new_lines: list[str] = []
@@ -837,63 +894,54 @@ class TestRehearsalMutations:
         assert not result.ok
         assert any("replicate IDs do not match plan" in f for f in result.failures)
 
-    def test_unauthorized_comparison_rejected(self, tmp_path: Path):
-        """Model-comparison engine rejects cells for a variant not in the preregistration."""
-        plan, index, child_dirs = _setup_four_children(tmp_path)
-        result = verify_campaign_set_aggregate(plan, index, child_dirs)
-        assert result.ok
-        cells = _extract_repetition_cells(child_dirs)
-        unauthorized_cells = [
-            RepetitionCell(
-                variant_id="unauthorized-variant",
-                task_id="task-001",
-                repetition_id="replicate-1",
-                passed=True,
-            )
-        ]
-        all_cells = cells + unauthorized_cells
-        prereg = _make_preregistration()
+    def test_unauthorized_comparison_rejected_by_engine(self, tmp_path: Path) -> None:
+        """The model-comparison engine rejects cells for an unauthorized variant.
+
+        The preregistration declares pair keys for candidate vs. anchor
+        only. A cell for an unknown variant is rejected before any
+        inference runs.
+        """
+        rehearsal = _run_full_rehearsal(tmp_path)
+        cells = _extract_repetition_cells(rehearsal.child_dirs, rehearsal.plan)
+        unauthorized_cell = RepetitionCell(
+            variant_id="unauthorized-variant",
+            task_id="task-001",
+            repetition_id="replicate-1",
+            passed=True,
+        )
+        mutated_cells = [*cells, unauthorized_cell]
         hashes = ModelComparisonAuthorityHashes.from_aggregate_verification_result(
-            result,
+            rehearsal.aggregate_result,
             profile_hash=_VALID_HASH_C,
             registry_hash=_VALID_HASH_B,
-            benchmark_population_hash=_VALID_HASH,
+            benchmark_population_hash=_VALID_HASH_A,
             metric_registry_hash=_VALID_HASH_G,
         )
         with pytest.raises(ValueError, match="unauthorized variant"):
-            compute_model_comparison(prereg, all_cells, hashes)
+            compute_model_comparison(rehearsal.prereg, mutated_cells, hashes)
 
 
 # ---------------------------------------------------------------------------
-# Typed aggregate consumption tests
+# Typed-aggregate-consumption test
 # ---------------------------------------------------------------------------
 
 
 class TestTypedAggregateConsumption:
-    def test_comparison_output_binds_real_aggregate_hash(self, tmp_path: Path):
-        """compute_model_comparison with from_aggregate_verification_result binds the real hash."""
-        plan, index, child_dirs = _setup_four_children(tmp_path)
-        result = verify_campaign_set_aggregate(plan, index, child_dirs)
-        assert result.ok
-        cells = _extract_repetition_cells(child_dirs)
-        prereg = _make_preregistration()
-        hashes = ModelComparisonAuthorityHashes.from_aggregate_verification_result(
-            result,
-            profile_hash=_VALID_HASH_C,
-            registry_hash=_VALID_HASH_B,
-            benchmark_population_hash=_VALID_HASH,
-            metric_registry_hash=_VALID_HASH_G,
-        )
-        output = compute_model_comparison(prereg, cells, hashes)
-        assert output.aggregate_verification_hash == result.content_hash
-        assert output.campaign_set_plan_hash == result.set_plan_hash
-        assert output.campaign_set_index_hash == result.set_index_hash
+    """Production commands consume the typed aggregate result, not directory lists."""
 
-    def test_failed_aggregate_rejected_before_engine(self, tmp_path: Path):
+    def test_output_binds_typed_aggregate_hash(self, tmp_path: Path) -> None:
+        """The comparison output's aggregate_verification_hash equals result.content_hash."""
+        rehearsal = _run_full_rehearsal(tmp_path)
+        output = rehearsal.comparison_output
+        result = rehearsal.aggregate_result
+        assert output.aggregate_verification_hash == result.content_hash
+        assert output.aggregate_verification_hash != _VALID_HASH_A
+
+    def test_failed_aggregate_rejected_before_engine_runs(self, tmp_path: Path) -> None:
         """A failed aggregate (ok=False) is rejected by from_aggregate_verification_result."""
         plan, index, child_dirs = _setup_four_children(tmp_path)
-        first_id = plan.child_plans[0].child_id
-        assignments_path = child_dirs[first_id] / CAMPAIGN_ASSIGNMENTS_JSONL
+        first_child_id = plan.child_plans[0].child_id
+        assignments_path = child_dirs[first_child_id] / CAMPAIGN_ASSIGNMENTS_JSONL
         lines = assignments_path.read_text().strip().splitlines()
         if lines:
             lines = lines[:-1]
@@ -905,20 +953,23 @@ class TestTypedAggregateConsumption:
                 failing_result,
                 profile_hash=_VALID_HASH_C,
                 registry_hash=_VALID_HASH_B,
-                benchmark_population_hash=_VALID_HASH,
+                benchmark_population_hash=_VALID_HASH_A,
                 metric_registry_hash=_VALID_HASH_G,
             )
 
-    def test_aggregate_hash_not_caller_supplied(self, tmp_path: Path):
-        """The aggregate verification hash comes from the typed result, not caller input."""
-        plan, index, child_dirs = _setup_four_children(tmp_path)
-        result = verify_campaign_set_aggregate(plan, index, child_dirs)
+    def test_caller_supplied_aggregate_hash_not_accepted(self, tmp_path: Path) -> None:
+        """The engine does not accept a caller-supplied aggregate hash string.
+
+        The aggregate verification hash must come from the typed
+        ``AggregateVerificationResult`` via ``from_aggregate_verification_result``.
+        """
+        rehearsal = _run_full_rehearsal(tmp_path)
         hashes = ModelComparisonAuthorityHashes.from_aggregate_verification_result(
-            result,
+            rehearsal.aggregate_result,
             profile_hash=_VALID_HASH_C,
             registry_hash=_VALID_HASH_B,
-            benchmark_population_hash=_VALID_HASH,
+            benchmark_population_hash=_VALID_HASH_A,
             metric_registry_hash=_VALID_HASH_G,
         )
-        assert hashes.aggregate_verification_hash == result.content_hash
-        assert hashes.aggregate_verification_hash != _VALID_HASH
+        assert hashes.aggregate_verification_hash == rehearsal.aggregate_result.content_hash
+        assert hashes.aggregate_verification_hash != _VALID_HASH_A

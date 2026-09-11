@@ -58,6 +58,7 @@ from g8e_evals.constants import (
     CAMPAIGN_MANIFEST_JSON,
     CAMPAIGN_VERIFICATION_REPORT_JSON,
     CORRELATED_ERRORS_JSONL,
+    EVIDENCE_INDEX_JSONL,
     ESCALATION_RECORDS_JSONL,
     EXPECTED_RECORD_POLICY_JSON,
     RESOURCE_OBSERVATIONS_JSONL,
@@ -86,6 +87,8 @@ from g8e_evals.schema import (
     ErrorClassLabel,
     EscalationOutcome,
     EscalationRecord,
+    EvidenceIndex,
+    EvidenceMediaType,
     SecurityEventRecord,
     StackCompositionType,
     ToolCallScorecard,
@@ -293,13 +296,26 @@ def _all_unavailable() -> list[UnavailableMeasurement]:
 
 
 def _write_observations_for_all_attempts(report_dir: Path) -> None:
-    """Write one valid resource observation per completed attempt."""
+    """Write one valid resource observation per completed attempt.
+
+    Also writes a matching evidence-index.jsonl entry so VERIFIED
+    observations pass the strict evidence index resolution check.
+    """
     idents = _all_attempt_identities(report_dir)
     lines = []
     for i, ident in enumerate(idents):
         obs = _make_observation_dict(ident={**ident, "inference_id": f"inf-{i}"})
         lines.append(json.dumps(obs))
     (report_dir / RESOURCE_OBSERVATIONS_JSONL).write_text("\n".join(lines) + "\n")
+    if idents:
+        entry = EvidenceIndex(
+            artifact_id="evidence/test.json",
+            run_id=idents[0]["run_id"],
+            attempt_id=None,
+            media_type=EvidenceMediaType.APPLICATION_JSON,
+            sha256=_VALID_HASH,
+        )
+        (report_dir / EVIDENCE_INDEX_JSONL).write_text(entry.model_dump_json() + "\n")
 
 
 def _make_observation_dict(**kwargs) -> dict:
@@ -709,6 +725,16 @@ class TestToolCallScorecardIdentityBinding:
             source_evidence_sha256=_VALID_HASH,
         )
         (report_dir / TOOL_CALL_SCORECARDS_JSONL).write_text(json.dumps(sc) + "\n")
+        # Write a matching evidence index entry so the VERIFIED scorecard
+        # passes the strict evidence index resolution check.
+        entry = EvidenceIndex(
+            artifact_id="evidence-1",
+            run_id=ident["run_id"],
+            attempt_id=None,
+            media_type=EvidenceMediaType.APPLICATION_JSON,
+            sha256=_VALID_HASH,
+        )
+        (report_dir / EVIDENCE_INDEX_JSONL).write_text(entry.model_dump_json() + "\n")
         result = verify_campaign(report_dir)
         assert result.ok, f"verified scorecard with evidence should pass: {result.failures}"
 

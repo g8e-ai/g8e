@@ -37,6 +37,7 @@ import os
 import platform
 import random
 import shutil
+import sys
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -180,6 +181,44 @@ class BudgetExhausted(Exception):
 
     The main loop catches this to materialize budget-stop outcomes for
     remaining assignments.
+    """
+
+
+class BudgetExhaustedDuringExecution(BudgetExhausted):
+    """Raised when a usage budget ceiling is reached after a provider call
+    succeeds but before ``_execute_assignment`` returns.
+
+    Carries the current attempt's materialized records (attempts, metrics,
+    resource observations, stages, evidence) so the caller can persist them
+    before propagating the stop. The current assignment's provider call
+    completed, so its attempt is ``COMPLETED``; the budget stop applies to
+    remaining assignments only.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        attempts: list[AttemptRecord],
+        metrics: list[MetricObservation],
+        resource_observations: list[ResourceObservation],
+        stages: list[StageObservation],
+        evidence: list[EvidenceIndex],
+    ) -> None:
+        super().__init__(message)
+        self.attempts = attempts
+        self.metrics = metrics
+        self.resource_observations = resource_observations
+        self.stages = stages
+        self.evidence = evidence
+
+
+class CleanupError(Exception):
+    """Raised when one or more SUTs fail to close during cleanup.
+
+    The primary exception (if any) takes precedence over cleanup errors.
+    When no primary exception is in flight, cleanup errors propagate so
+    resource leaks are never silently swallowed.
     """
 
 
@@ -358,14 +397,29 @@ class BudgetTracker:
 def _extract_usage_from_response(response: Response) -> tuple[int | None, float | None]:
     """Extract observed token and USD usage from a SUT response.
 
-    Reads ``chat_evidence.model_dump()`` and checks for
-    ``total_token_count`` and ``usage_reported`` keys (the
-    ``DirectCallEvidence`` schema). Returns ``(None, None)`` when the
-    response carries no evidence, the evidence does not report usage, or
-    ``usage_reported`` is False. USD is not available from SUT responses
-    without a pricing authority; the USD component is always None until a
-    pricing authority is wired.
+    Reads from ``inference_observations`` first (the typed SUT response
+    boundary carrying ``InferenceObservation`` records with
+    ``total_token_count`` and ``usage_reported``), then falls back to
+    ``chat_evidence.model_dump()`` (the ``DirectCallEvidence`` schema)
+    for legacy SUTs that do not emit ``InferenceObservation`` records.
+    Returns ``(None, None)`` when the response carries no usage, the
+    evidence does not report usage, or ``usage_reported`` is False. USD
+    is not available from SUT responses without a pricing authority; the
+    USD component is always None until a pricing authority is wired.
     """
+    # Primary path: typed InferenceObservation records on the SUT
+    # response boundary. Sum token counts across all observations.
+    if response.inference_observations:
+        total_tokens = 0
+        any_reported = False
+        for obs in response.inference_observations:
+            if obs.usage_reported and obs.total_token_count is not None:
+                total_tokens += obs.total_token_count
+                any_reported = True
+        if any_reported and total_tokens > 0:
+            return total_tokens, None
+
+    # Fallback: legacy chat_evidence path
     if response.chat_evidence is None:
         return None, None
     dump = response.chat_evidence.model_dump()
@@ -1183,12 +1237,16 @@ class CampaignRunner:
         return self._suts[key]
 
     async def _close_suts(self) -> None:
-        """Close every SUT created during the run, swallowing close errors.
+        """Close every SUT created during the run.
 
-        Called from a finally block so SUTs are closed on success, typed
-        stop, and exception. Close errors are logged but do not raise;
-        the campaign result or error already in flight takes precedence.
+        Called from the ``finally`` block in ``run()`` so SUTs are closed
+        on success, typed stop, and exception. Close errors are collected
+        and raised as a ``CleanupError`` when no primary exception is in
+        flight; when a primary exception is already propagating, cleanup
+        errors are logged with context so the primary exception is
+        preserved.
         """
+        cleanup_errors: list[Exception] = []
         for sut in self._suts.values():
             close = getattr(sut, "close", None)
             if close is None:
@@ -1198,7 +1256,14 @@ class CampaignRunner:
                 if hasattr(result, "__await__"):
                     await result
             except Exception as e:
-                logger.warning("SUT close failed: %s", e)
+                cleanup_errors.append(e)
+
+        if cleanup_errors:
+            detail = "; ".join(f"{type(e).__name__}: {e}" for e in cleanup_errors)
+            if sys.exc_info()[0] is not None:
+                logger.error("SUT cleanup failed after primary exception: %s", detail)
+            else:
+                raise CleanupError(f"SUT cleanup failed ({len(cleanup_errors)} error(s): {detail})") from cleanup_errors[0]
 
     def _cohort_by_id(self) -> dict[str, ModelCohort]:
         return {c.cohort_id: c for c in self.spec.cohorts}
@@ -1563,11 +1628,18 @@ class CampaignRunner:
 
             # Record observed token/USD usage from the SUT response and
             # check token/USD ceilings when the policy declares them
-            # observable and not excluded.
+            # observable and not excluded. When the ceiling is reached
+            # after a successful provider call, the current attempt's
+            # records must still be materialized before the stop
+            # propagates (transactional budget stop).
+            usage_budget_exhausted = False
             if budget_tracker is not None and response is not None:
                 tokens, usd = _extract_usage_from_response(response)
                 budget_tracker.record_usage(tokens, usd)
-                budget_tracker.check_usage_budgets()
+                try:
+                    budget_tracker.check_usage_budgets()
+                except BudgetExhausted:
+                    usage_budget_exhausted = True
 
             ended_at = datetime.now(UTC)
 
@@ -1653,6 +1725,21 @@ class CampaignRunner:
             )
             new_attempts.append(attempt)
 
+            # If the usage budget was exhausted after this provider call
+            # succeeded, the current attempt is COMPLETED and its records
+            # are materialized. Raise a transactional stop carrying the
+            # records so the caller persists them before propagating
+            # the stop to remaining assignments. Do not retry.
+            if usage_budget_exhausted:
+                raise BudgetExhaustedDuringExecution(
+                    f"usage budget exhausted after provider call for {attempt_id}",
+                    attempts=new_attempts,
+                    metrics=metrics,
+                    resource_observations=all_resource_observations,
+                    stages=all_stages,
+                    evidence=all_evidence,
+                )
+
             # Check if retry is allowed
             retryable = set(self.spec.retry_policy.retryable_terminal_statuses)
             max_attempts = self.spec.retry_policy.max_retries + 1
@@ -1706,6 +1793,22 @@ class CampaignRunner:
         runner does not reload a prior campaign. Explicit batching via
         ``--task-offset`` and ``--task-limit`` replaces the historical
         resume behavior.
+
+        SUTs are closed in a ``finally`` block so cleanup runs on
+        success, typed stop, and every exception path. Cleanup errors
+        propagate when no primary exception is in flight; otherwise
+        they are logged with context so the primary exception is
+        preserved.
+        """
+        try:
+            return await self._run_body()
+        finally:
+            await self._close_suts()
+
+    async def _run_body(self) -> CampaignResult:
+        """Implementation of ``run()`` without the cleanup lifecycle.
+
+        All SUT cleanup is handled by the ``finally`` block in ``run()``.
         """
         # 0. Validate budget observability before any work begins. A
         # declared ceiling that is not observable and not explicitly
@@ -1851,6 +1954,37 @@ class CampaignRunner:
                         assignment, cohort, arm_def, task, budget_tracker=budget_tracker
                     )
                 )
+            except BudgetExhaustedDuringExecution as exc:
+                # The current assignment's provider call completed but a
+                # usage ceiling (tokens/USD) was reached. The current
+                # attempt is COMPLETED and its records are materialized.
+                # Persist them before propagating the stop to remaining
+                # assignments (transactional budget stop).
+                all_attempts.extend(exc.attempts)
+                all_metrics.extend(exc.metrics)
+                all_resource_observations.extend(exc.resource_observations)
+                all_stages.extend(exc.stages)
+                all_evidence_index.extend(exc.evidence)
+
+                _append_jsonl(attempts_path, exc.attempts)
+                _append_jsonl(metrics_path, exc.metrics)
+                _append_jsonl(self.report_dir / RESOURCE_OBSERVATIONS_JSONL, exc.resource_observations)
+                _append_jsonl(self.report_dir / STAGES_JSONL, exc.stages)
+                _append_jsonl(self.report_dir / EVIDENCE_INDEX_JSONL, exc.evidence)
+
+                completed_count += 1
+
+                # Materialize terminal outcomes for remaining assignments
+                remaining = [
+                    a for a in assignments
+                    if schedule.ordered_assignment_ids.index(a.assignment_id) > schedule.ordered_assignment_ids.index(assignment_id)
+                ]
+                for rem in remaining:
+                    rem_arm_def = get_arm_definition(Arm(rem.arm_id))
+                    stop_attempt = self._materialize_budget_stop(rem, rem_arm_def)
+                    all_attempts.append(stop_attempt)
+                stop_reason = CampaignStopReason.BUDGET_EXHAUSTED
+                break
             except BudgetExhausted:
                 # Budget exhausted during execution (e.g. retry pushed
                 # request count over the ceiling). Materialize remaining.
@@ -2011,11 +2145,6 @@ class CampaignRunner:
         # 11. Update campaign status
         self._write_campaign_status(final_status, stop_reason)
 
-        # 12. Close all SUTs deterministically (success, typed stop, and
-        # exception paths all reach here because the execution loop has
-        # no raise between here and the return).
-        await self._close_suts()
-
         return CampaignResult(
             campaign_id=self.spec.campaign_id,
             run_id=self._run_id,
@@ -2031,6 +2160,7 @@ __all__ = [
     "DEFAULT_BUDGET_OBSERVABILITY_POLICY",
     "BudgetCeiling",
     "BudgetExhausted",
+    "BudgetExhaustedDuringExecution",
     "BudgetObservabilityPolicy",
     "BudgetTracker",
     "CampaignResult",
@@ -2038,6 +2168,7 @@ __all__ = [
     "CampaignRunnerError",
     "CampaignSpec",
     "CampaignStopReason",
+    "CleanupError",
     "DiskSpacePreflightError",
     "GraderProtocol",
     "SUTFactory",

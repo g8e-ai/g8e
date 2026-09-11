@@ -57,7 +57,10 @@ from app.models.internal_api import (
 )
 from app.models.settings import G8eeUserSettings
 from app.constants.api_paths import API_PATHS, GatewayAPIPaths, InternalAPIPaths
-from g8e_evals.harness import BindingType, Response, SUTConfig, Task
+from g8e.models import (
+    ChatResponseCompletePayload,
+)
+from g8e_evals.harness import BindingType, InferenceObservation, Response, SUTConfig, Task
 from g8e_evals.sut.wire import SSEWireEnvelope
 from g8e_evals.transport import AuthContext, AuthenticationError
 
@@ -261,6 +264,14 @@ class G8eeChatSUT:
             terminal_event=terminal_event,
         )
 
+        # Extract one InferenceObservation per observed role-model provider
+        # call from the typed SSE trail. Failed turns (no text.completed
+        # event) produce no observations; the runner records the failure as
+        # a typed terminal status on the attempt.
+        inference_observations = self._extract_inference_observations(
+            trail, terminal_event
+        )
+
         # Real Gateway transaction IDs exist only when governed mutations produce
         # signed ActionReceipts. Preserve every distinct transaction hash emitted
         # during a multi-action turn before claiming RECEIPT_BOUND.
@@ -275,6 +286,7 @@ class G8eeChatSUT:
                 transaction_ids=gateway_transaction_ids,
                 governed_action_types=governed_action_types,
                 chat_evidence=receipt,
+                inference_observations=inference_observations,
                 binding=BindingType.UNBOUND,
                 unbound_reason=sse_error,
             )
@@ -287,6 +299,7 @@ class G8eeChatSUT:
                 transaction_ids=gateway_transaction_ids,
                 governed_action_types=governed_action_types,
                 chat_evidence=receipt,
+                inference_observations=inference_observations,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"{self.config.arm.value} arm (binding disabled)",
             )
@@ -299,6 +312,7 @@ class G8eeChatSUT:
                 transaction_ids=gateway_transaction_ids,
                 governed_action_types=governed_action_types,
                 chat_evidence=receipt,
+                inference_observations=inference_observations,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"chat terminated with {terminal_event}",
             )
@@ -312,6 +326,7 @@ class G8eeChatSUT:
                 transaction_ids=gateway_transaction_ids,
                 governed_action_types=governed_action_types,
                 chat_evidence=receipt,
+                inference_observations=inference_observations,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"idle timeout after {self.idle_timeout_s}s without terminal event",
             )
@@ -324,6 +339,7 @@ class G8eeChatSUT:
                 transaction_ids=gateway_transaction_ids,
                 governed_action_types=governed_action_types,
                 chat_evidence=receipt,
+                inference_observations=inference_observations,
                 binding=BindingType.RECEIPT_BOUND,
             )
 
@@ -334,6 +350,7 @@ class G8eeChatSUT:
             transaction_ids=gateway_transaction_ids,
             governed_action_types=governed_action_types,
             chat_evidence=receipt,
+            inference_observations=inference_observations,
             binding=BindingType.UNBOUND,
             unbound_reason="answer-only turn (no Warden-signed ActionReceipt emitted)",
         )
@@ -565,6 +582,106 @@ class G8eeChatSUT:
             event_counts_by_type=event_counts,
             agent_trail=trail,
         )
+
+    def _extract_inference_observations(
+        self,
+        trail: list[AgentTrailEvent],
+        terminal_event: str | None,
+    ) -> list[InferenceObservation]:
+        """Extract one ``InferenceObservation`` per observed role-model
+        provider call from the typed SSE trail.
+
+        The g8ee pipeline emits ``ChatResponseCompletePayload`` on the
+        ``text.completed`` terminal event, carrying a ``model_calls``
+        list of ``ModelCallTelemetry`` dicts — one per role-model
+        provider call, including failed calls and retries. Each entry
+        binds ``agent_role``, ``provider``, ``model``, timing, token
+        counts, ``usage_reported``, ``finish_reason``, ``succeeded``, and
+        ``error_type``.
+
+        For failed turns (no ``text.completed`` event), no
+        ``InferenceObservation`` records are emitted because the
+        ``model_calls`` list is not serialized on failure events. The
+        runner records the failure as a typed terminal status on the
+        attempt.
+
+        Remote GPU values are never synthesized; they remain ``None``
+        with typed unavailable explanations on the resulting
+        ``ResourceObservation``. Restricted plaintext (prompt content,
+        model output) is not retained; only artifact hashes are carried.
+        """
+        observations: list[InferenceObservation] = []
+
+        # Find the text.completed event carrying ChatResponseCompletePayload
+        complete_payload: ChatResponseCompletePayload | None = None
+        for evt in trail:
+            if evt.event_type != "g8e.v1.ai.llm.chat.iteration.text.completed":
+                continue
+            envelope = SSEWireEnvelope.parse(evt.payload)
+            if envelope is None or envelope.event is None:
+                continue
+            try:
+                complete_payload = ChatResponseCompletePayload.model_validate(
+                    envelope.event.data
+                )
+                break
+            except ValueError:
+                continue
+
+        if complete_payload is None:
+            return observations
+
+        for idx, call in enumerate(complete_payload.model_calls):
+            role = call.get("agent_role", "primary")
+            model_name = call.get("model", "")
+            provider_name = call.get("provider", "")
+            monotonic_start = call.get("monotonic_start", 0.0)
+            monotonic_end = call.get("monotonic_end", 0.0)
+            latency = None
+            if monotonic_start and monotonic_end and monotonic_end > monotonic_start:
+                latency = monotonic_end - monotonic_start
+
+            output_tokens = call.get("output_tokens", 0)
+            thinking_tokens = call.get("thinking_tokens", 0)
+            throughput = None
+            if latency and output_tokens and output_tokens > 0:
+                throughput = output_tokens / latency
+            hidden_throughput = None
+            if latency and thinking_tokens and thinking_tokens > 0:
+                hidden_throughput = thinking_tokens / latency
+
+            succeeded = call.get("succeeded", True)
+            error_type = call.get("error_type")
+
+            input_hash = call.get("input_artifact_hash", "")
+            output_hash = call.get("output_artifact_hash", "")
+
+            observations.append(InferenceObservation(
+                inference_id=f"inf-{idx}",
+                role=role,
+                model_variant_id=model_name,
+                provider=provider_name,
+                model=model_name,
+                provider_call_latency_seconds=latency,
+                time_to_first_token_seconds=None,
+                generation_duration_seconds=None,
+                output_throughput_tokens_per_second=throughput,
+                hidden_reasoning_throughput_tokens_per_second=hidden_throughput,
+                prompt_token_count=call.get("input_tokens") or None,
+                candidates_token_count=output_tokens or None,
+                total_token_count=call.get("total_tokens") or None,
+                thinking_token_count=thinking_tokens or None,
+                cache_token_count=call.get("cache_tokens") or None,
+                usage_reported=call.get("usage_reported", False),
+                finish_reason=call.get("finish_reason"),
+                input_artifact_hash=input_hash if input_hash else None,
+                output_artifact_hash=output_hash if output_hash else None,
+                monotonic_start=monotonic_start,
+                monotonic_end=monotonic_end,
+                error=error_type if not succeeded else None,
+            ))
+
+        return observations
 
 
 

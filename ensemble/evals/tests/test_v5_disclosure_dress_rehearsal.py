@@ -58,10 +58,11 @@ from g8e_evals.disclosure_publisher import (
     build_restricted_disclosure_authority,
     validate_disclosure_outputs,
 )
-from g8e_evals.index import CampaignVerificationReport
 from g8e_evals.publication import (
     validate_publication_v5,
 )
+
+from tests._aggregate_fixture import build_aggregate_fixture
 
 _HASH = "a" * 64
 
@@ -69,34 +70,6 @@ _HASH = "a" * 64
 # ---------------------------------------------------------------------------
 # Helpers (reused from test_v5_semantic_regression.py and test_generate_readme.py)
 # ---------------------------------------------------------------------------
-
-
-def _compute_finalization_hash() -> str:
-    from g8e_evals.index import compute_index_generation_hash
-    return compute_index_generation_hash(
-        generation_number=1,
-        parent_generation_hash=_HASH,
-        creation_reason="finalization",
-        report_checksums=[_HASH],
-        assignment_dispositions=[
-            {"assignment_id": "assignment-1", "disposition": "effective"},
-        ],
-    )
-
-
-_FINALIZATION_HASH = _compute_finalization_hash()
-
-
-def _make_verification_report(*, ok: bool = True) -> CampaignVerificationReport:
-    return CampaignVerificationReport(
-        verification_schema_version="1.0.0",
-        campaign_id="campaign-1",
-        campaign_revision="1",
-        ok=ok,
-        verified_index_generation_hash=_FINALIZATION_HASH,
-        checked_layers=["file_safety", "index_chain", "finalization"],
-        failures=[] if ok else ["file_safety: missing manifest.json"],
-    )
 
 
 def _make_registry():
@@ -168,8 +141,8 @@ def _make_campaign_profile():
         TrackArmAssignment(track=CampaignTrack.TIER_FITNESS, arm_id="doctrine"),
     ]
     temp = CampaignProfile.model_construct(
-        campaign_id="campaign-1",
-        campaign_revision="1",
+        campaign_id="p12-rehearsal-parent",
+        campaign_revision="v2.1.8",
         schema_version="1.0.0",
         purpose="pipeline integrity",
         created_at="2026-09-01T00:00:00Z",
@@ -179,7 +152,8 @@ def _make_campaign_profile():
         dataset_hashes=[_HASH],
         grader_hashes=[_HASH],
         prompt_serialization_hash=_HASH,
-        task_ids=["task-1"],
+        task_ids=["task-001", "task-002", "task-003", "task-004",
+                  "task-005", "task-006", "task-007", "task-008"],
         repetitions=1,
         track_arm_assignments=track_arms,
         model_tier_assignments=[],
@@ -204,8 +178,8 @@ def _make_campaign_profile():
     )
     content_hash = compute_campaign_profile_hash(temp)
     return CampaignProfile(
-        campaign_id="campaign-1",
-        campaign_revision="1",
+        campaign_id="p12-rehearsal-parent",
+        campaign_revision="v2.1.8",
         schema_version="1.0.0",
         purpose="pipeline integrity",
         created_at="2026-09-01T00:00:00Z",
@@ -215,7 +189,8 @@ def _make_campaign_profile():
         dataset_hashes=[_HASH],
         grader_hashes=[_HASH],
         prompt_serialization_hash=_HASH,
-        task_ids=["task-1"],
+        task_ids=["task-001", "task-002", "task-003", "task-004",
+                  "task-005", "task-006", "task-007", "task-008"],
         repetitions=1,
         track_arm_assignments=track_arms,
         model_tier_assignments=[],
@@ -253,76 +228,21 @@ def _make_provenance_manifest():
     )
 
 
-def _write_report_dir(report_dir: Path) -> None:
-    """Write a minimal campaign report directory with metrics and attempts."""
-    from g8e_evals.constants import (
-        ATTEMPTS_JSONL,
-        CAMPAIGN_ASSIGNMENTS_JSONL,
-        CAMPAIGN_INDEX_JSONL,
-        METRICS_JSONL,
-    )
-    report_dir.mkdir(parents=True, exist_ok=True)
-    attempt = {
-        "attempt_id": "attempt-1",
-        "schema_version": "1.44.0",
-        "run_id": "run-1",
-        "assignment_id": "assignment-1",
-        "task_id": "task-1",
-        "model_cohort_id": "cohort-qwen3-8b-q4_0",
-        "replicate_id": "replicate-1",
-        "terminal_status": "completed",
-        "answer": "test answer",
-        "verification_status": "verified",
-    }
-    (report_dir / ATTEMPTS_JSONL).write_text(json.dumps(attempt) + "\n")
-    metric = {
-        "attempt_id": "attempt-1",
-        "task_id": "task-1",
-        "metric_id": "ifeval_subset_verifier",
-        "metric_version": "1.0.0",
-        "value": 1.0,
-        "unit": "boolean",
-        "denominator_contribution": 1,
-        "verification_status": "verified",
-    }
-    (report_dir / METRICS_JSONL).write_text(json.dumps(metric) + "\n")
-    assignment = {
-        "assignment_id": "assignment-1",
-        "model_cohort_id": "cohort-qwen3-8b-q4_0",
-        "task_id": "task-1",
-    }
-    (report_dir / CAMPAIGN_ASSIGNMENTS_JSONL).write_text(json.dumps(assignment) + "\n")
-    index_gen = {
-        "generation_number": 1,
-        "content_hash": _FINALIZATION_HASH,
-        "creation_reason": "finalization",
-        "assignment_dispositions": [
-            {"assignment_id": "assignment-1", "disposition": "effective"},
-        ],
-    }
-    (report_dir / CAMPAIGN_INDEX_JSONL).write_text(json.dumps(index_gen) + "\n")
-
-    # Write the 5 event/resource files (empty) so the v5 projector copies them
-    # to the candidate and the v5 validator's required-event-resource layer passes.
-    for event_resource_file in (
-        RESOURCE_OBSERVATIONS_JSONL,
-        TOOL_CALL_SCORECARDS_JSONL,
-        ESCALATION_RECORDS_JSONL,
-        SECURITY_EVENTS_JSONL,
-        CORRELATED_ERRORS_JSONL,
-    ):
-        (report_dir / event_resource_file).write_text("")
-
-
 def _project_v5(tmp_path: Path) -> Path:
-    """Project a v5 candidate and return the candidate directory."""
+    """Project a v5 candidate from the connected aggregate fixture and return the candidate directory.
+
+    Builds a 4-child aggregate via the CampaignRunner (fake SUT/grader,
+    no real provider call), runs aggregate verification, and projects
+    the accepted aggregate through v5. No single-report substitution.
+    """
     from g8e_evals.publication import project_campaign_v5
-    report_dir = tmp_path / "report"
+    fixture = build_aggregate_fixture(tmp_path)
     candidate_dir = tmp_path / "candidate"
-    _write_report_dir(report_dir)
     project_campaign_v5(
-        report_dir=report_dir,
-        verification=_make_verification_report(),
+        child_report_dirs=fixture.child_report_dirs,
+        campaign_set_plan=fixture.plan,
+        campaign_set_index=fixture.index,
+        aggregate_verification_result=fixture.aggregate_result,
         candidate_dir=candidate_dir,
         campaign_profile=_make_campaign_profile(),
         model_registry=_make_registry(),

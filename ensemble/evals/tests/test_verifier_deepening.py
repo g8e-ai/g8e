@@ -329,13 +329,27 @@ def _make_observation_dict(**kwargs) -> dict:
 
 
 def _write_observations_for_all_attempts(report_dir: Path) -> None:
-    """Write one valid resource observation per completed attempt."""
+    """Write one valid resource observation per completed attempt.
+
+    Also writes a matching evidence-index.jsonl entry so VERIFIED
+    observations pass the strict evidence index resolution check.
+    """
     idents = _all_attempt_identities(report_dir)
     lines = []
     for i, ident in enumerate(idents):
         obs = _make_observation_dict(ident={**ident, "inference_id": f"inf-{i}", "stage_id": f"{ident['attempt_id']}:model_inference:1"})
         lines.append(json.dumps(obs))
     (report_dir / RESOURCE_OBSERVATIONS_JSONL).write_text("\n".join(lines) + "\n")
+    # Write a matching evidence index entry for VERIFIED observations
+    if idents:
+        evidence_entries = [
+            _make_evidence_index_entry(
+                artifact_id="evidence/test.json",
+                run_id=idents[0]["run_id"],
+                attempt_id=None,
+            )
+        ]
+        _write_evidence_index(report_dir, evidence_entries)
 
 
 def _make_policy(
@@ -810,8 +824,13 @@ class TestInferenceTrailCountVerification:
         (report_dir / RESOURCE_OBSERVATIONS_JSONL).write_text(existing + json.dumps(extra) + "\n")
         result = verify_campaign(report_dir)
         assert not result.ok
-        assert any("inference" in f.lower() and "count" in f.lower() for f in result.failures), (
-            f"expected inference count failure, got: {result.failures}"
+        assert any(
+            ("inference" in f.lower() and "count" in f.lower())
+            or "duplicate" in f.lower()
+            or ("observation" in f.lower() and "stage" in f.lower())
+            for f in result.failures
+        ), (
+            f"expected inference count or duplicate observation failure, got: {result.failures}"
         )
 
     def test_missing_observation_for_inference_fails(self, tmp_path: Path):

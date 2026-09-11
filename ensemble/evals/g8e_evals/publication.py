@@ -397,6 +397,21 @@ class ModelCampaignRef(BaseModel):
     caveats: list[CampaignCaveat] = Field(
         min_length=1, description="Explicit caveats from the closed vocabulary.",
     )
+    campaign_set_plan_hash: str | None = Field(
+        default=None,
+        min_length=64, max_length=64,
+        description="SHA-256 of the frozen CampaignSetPlan. Required for v5 aggregate publication; None for v4 single-report.",
+    )
+    campaign_set_index_hash: str | None = Field(
+        default=None,
+        min_length=64, max_length=64,
+        description="SHA-256 of the CampaignSetIndex. Required for v5 aggregate publication; None for v4 single-report.",
+    )
+    aggregate_verification_hash: str | None = Field(
+        default=None,
+        min_length=64, max_length=64,
+        description="SHA-256 of the accepted AggregateVerificationResult. Required for v5 aggregate publication; None for v4 single-report.",
+    )
     content_hash: str = Field(min_length=64, max_length=64, description="SHA-256 over canonical JSON of the reference.")
 
     @model_validator(mode="after")
@@ -419,6 +434,9 @@ class ModelCampaignRef(BaseModel):
             statistical_analysis=self.statistical_analysis,
             provenance=self.provenance,
             caveats=self.caveats,
+            campaign_set_plan_hash=self.campaign_set_plan_hash,
+            campaign_set_index_hash=self.campaign_set_index_hash,
+            aggregate_verification_hash=self.aggregate_verification_hash,
         )
         if self.content_hash != expected:
             raise ValueError(
@@ -447,55 +465,68 @@ def compute_model_campaign_hash(
     statistical_analysis: CampaignStatisticalAnalysisRef,
     provenance: CampaignProvenanceRef,
     caveats: list[CampaignCaveat] | list[str],
+    campaign_set_plan_hash: str | None = None,
+    campaign_set_index_hash: str | None = None,
+    aggregate_verification_hash: str | None = None,
 ) -> str:
     """Compute the content hash for a model campaign reference without constructing the full model."""
     caveats_values = sorted(
         c.value if isinstance(c, CampaignCaveat) else c for c in caveats
     )
-    payload = json.dumps(
-        {
-            "campaign_id": campaign_id,
-            "campaign_revision": campaign_revision,
-            "publication_schema_version": publication_schema_version,
-            "campaign_profile": json.loads(campaign_profile.model_dump_json()),
-            "model_variants": [
-                json.loads(v.model_dump_json())
-                for v in sorted(model_variants, key=lambda v: v.variant_id)
-            ],
-            "model_registry_hash": model_registry_hash,
-            "verification_ok": verification_ok,
-            "verified_index_generation_hash": verified_index_generation_hash,
-            "checked_layers": sorted(checked_layers),
-            "projections": [
-                json.loads(p.model_dump_json())
-                for p in sorted(projections, key=lambda p: (p.variant_id, p.task_id, p.metric_id, p.repetition))
-            ],
-            "dispositions": [
-                json.loads(d.model_dump_json())
-                for d in sorted(dispositions, key=lambda d: d.assignment_id)
-            ],
-            "comparison_rows": [
-                json.loads(c.model_dump_json())
-                for c in sorted(comparison_rows, key=lambda c: (c.task_id, c.combination_id, c.metric_id, c.repetition))
-            ],
-            "efficiency_observations": [
-                json.loads(e.model_dump_json())
-                for e in sorted(efficiency_observations, key=lambda e: e.variant_id)
-            ],
-            "variant_summaries": [
-                json.loads(s.model_dump_json())
-                for s in sorted(variant_summaries or [], key=lambda s: (s.variant_id, s.metric_id))
-            ],
-            "statistical_analysis": json.loads(statistical_analysis.model_dump_json()),
-            "provenance": json.loads(provenance.model_dump_json()),
-            "caveats": caveats_values,
-        },
+    payload: dict[str, Any] = {
+        "campaign_id": campaign_id,
+        "campaign_revision": campaign_revision,
+        "publication_schema_version": publication_schema_version,
+        "campaign_profile": json.loads(campaign_profile.model_dump_json()),
+        "model_variants": [
+            json.loads(v.model_dump_json())
+            for v in sorted(model_variants, key=lambda v: v.variant_id)
+        ],
+        "model_registry_hash": model_registry_hash,
+        "verification_ok": verification_ok,
+        "verified_index_generation_hash": verified_index_generation_hash,
+        "checked_layers": sorted(checked_layers),
+        "projections": [
+            json.loads(p.model_dump_json())
+            for p in sorted(projections, key=lambda p: (p.variant_id, p.task_id, p.metric_id, p.repetition))
+        ],
+        "dispositions": [
+            json.loads(d.model_dump_json())
+            for d in sorted(dispositions, key=lambda d: d.assignment_id)
+        ],
+        "comparison_rows": [
+            json.loads(c.model_dump_json())
+            for c in sorted(comparison_rows, key=lambda c: (c.task_id, c.combination_id, c.metric_id, c.repetition))
+        ],
+        "efficiency_observations": [
+            json.loads(e.model_dump_json())
+            for e in sorted(efficiency_observations, key=lambda e: e.variant_id)
+        ],
+        "variant_summaries": [
+            json.loads(s.model_dump_json())
+            for s in sorted(variant_summaries or [], key=lambda s: (s.variant_id, s.metric_id))
+        ],
+        "statistical_analysis": json.loads(statistical_analysis.model_dump_json()),
+        "provenance": json.loads(provenance.model_dump_json()),
+        "caveats": caveats_values,
+    }
+    # Include aggregate authority hashes in the content hash only when
+    # present (v5 aggregate publication). v4 single-report candidates
+    # do not carry these fields, so their hashes are unchanged.
+    if campaign_set_plan_hash is not None:
+        payload["campaign_set_plan_hash"] = campaign_set_plan_hash
+    if campaign_set_index_hash is not None:
+        payload["campaign_set_index_hash"] = campaign_set_index_hash
+    if aggregate_verification_hash is not None:
+        payload["aggregate_verification_hash"] = aggregate_verification_hash
+    payload_json = json.dumps(
+        payload,
         allow_nan=False,
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,
     )
-    return _sha256(payload)
+    return _sha256(payload_json)
 
 
 class PublicationSchemaV4(BaseModel):
@@ -1575,8 +1606,10 @@ def _build_cold_start_tradeoff_summary(
 
 def project_campaign_v5(
     *,
-    report_dir: Path,
-    verification: CampaignVerificationReport,
+    child_report_dirs: dict[str, Path],
+    campaign_set_plan: CampaignSetPlan,
+    campaign_set_index: CampaignSetIndex,
+    aggregate_verification_result: AggregateVerificationResult,
     candidate_dir: Path,
     campaign_profile: CampaignProfile,
     model_registry: ModelRegistry,
@@ -1584,49 +1617,116 @@ def project_campaign_v5(
     caveats: list[str],
     evidence_cutoff: str,
     platform_version: str,
-    campaign_set_plan: CampaignSetPlan | None = None,
-    campaign_set_index: CampaignSetIndex | None = None,
-    aggregate_verification_result: AggregateVerificationResult | None = None,
 ) -> Path:
-    """Project a verified campaign report directory into a v5 candidate directory.
+    """Project a verified campaign-set aggregate into a v5 candidate directory.
 
-    Extends v4 with the radar profile and score family summaries. The
-    v5 projector first projects the v4 artifacts (via the v4 projector
-    logic) and then builds the v5 artifacts from the variant summaries.
-    The v5 artifacts are optional: when the underlying records are not
-    present in the report directory, the corresponding v5 field is
-    None. Refuses to overwrite an existing candidate directory.
-
-    The optional typed aggregate inputs (``campaign_set_plan``,
-    ``campaign_set_index``, ``aggregate_verification_result``) bind the
-    projection to accepted multi-campaign aggregate authority rather
-    than an arbitrary single report directory. When provided, the
-    projector consumes the aggregate verification result as the
-    authority for the projection; when absent, the single-report
-    ``verification`` parameter remains the authority.
+    Consumes only the accepted typed aggregate authority: a passing
+    ``AggregateVerificationResult`` bound to a frozen
+    ``CampaignSetPlan`` and ``CampaignSetIndex``, plus the exact
+    child-ID-to-directory mapping for every accepted child report. The
+    projector validates the full authority chain (plan hash, index
+    hash, aggregate hash), reads projection rows, disposition rows, and
+    event/resource records from every accepted child directory, builds
+    v5 artifacts from the aggregate data, and binds the publication
+    model to the aggregate authority hashes. Refuses to overwrite an
+    existing candidate directory. No single-report fallback exists for
+    v5; v4 retains the single-report projector for legacy loading.
 
     Returns the candidate directory path.
     """
-    if not verification.ok:
+    # Validate the aggregate authority chain.
+    if not aggregate_verification_result.ok:
         raise ValueError(
-            f"campaign verification failed: {verification.failures}"
+            f"aggregate verification failed: {aggregate_verification_result.failures}"
+        )
+
+    if campaign_set_plan.content_hash != campaign_set_index.set_plan_hash:
+        raise ValueError(
+            f"campaign set plan hash mismatch: plan {campaign_set_plan.content_hash!r}, "
+            f"index set_plan_hash {campaign_set_index.set_plan_hash!r}"
+        )
+
+    if campaign_set_index.content_hash != aggregate_verification_result.set_index_hash:
+        raise ValueError(
+            f"campaign set index hash mismatch: index {campaign_set_index.content_hash!r}, "
+            f"aggregate set_index_hash {aggregate_verification_result.set_index_hash!r}"
+        )
+
+    if campaign_set_plan.content_hash != aggregate_verification_result.set_plan_hash:
+        raise ValueError(
+            f"campaign set plan hash mismatch with aggregate: "
+            f"plan {campaign_set_plan.content_hash!r}, "
+            f"aggregate set_plan_hash {aggregate_verification_result.set_plan_hash!r}"
+        )
+
+    # Validate the child-ID-to-directory mapping against the plan.
+    plan_child_ids = {cp.child_id for cp in campaign_set_plan.child_plans}
+    provided_child_ids = set(child_report_dirs.keys())
+    if provided_child_ids != plan_child_ids:
+        missing = plan_child_ids - provided_child_ids
+        extra = provided_child_ids - plan_child_ids
+        raise ValueError(
+            f"child report directory mapping does not match plan: "
+            f"missing={sorted(missing)}, extra={sorted(extra)}"
         )
 
     if candidate_dir.exists():
         raise ValueError(f"candidate directory already exists: {candidate_dir}")
 
-    # Generate the v4 artifacts first (projection rows, dispositions, etc.).
-    projection_rows = _generate_projections(
-        report_dir=report_dir,
+    # Build a synthetic CampaignVerificationReport from the aggregate
+    # verification result. The v4 validator's verification_ref layer
+    # reads this file and checks ok, verified_index_generation_hash,
+    # and campaign_id. For v5, the verified_index_generation_hash
+    # binds to the aggregate verification hash, which transitively
+    # binds to the plan and index.
+    aggregate_verification_hash = aggregate_verification_result.content_hash
+    verification = CampaignVerificationReport(
+        verification_schema_version=aggregate_verification_result.verification_schema_version,
         campaign_id=campaign_profile.campaign_id,
         campaign_revision=campaign_profile.campaign_revision,
+        ok=aggregate_verification_result.ok,
+        verified_index_generation_hash=aggregate_verification_hash,
+        checked_layers=sorted(set(
+            ["file_safety", "index_chain", "finalization", "aggregate_verification"]
+        )),
+        failures=[],
     )
-    disposition_rows = _generate_dispositions(
-        report_dir=report_dir,
-        verified_index_generation_hash=verification.verified_index_generation_hash,
-    )
+
+    # Read projection rows from every accepted child directory.
+    projection_rows: list[CampaignProjectionRow] = []
+    for cp in campaign_set_plan.child_plans:
+        child_dir = child_report_dirs[cp.child_id]
+        projection_rows.extend(_generate_projections(
+            report_dir=child_dir,
+            campaign_id=campaign_profile.campaign_id,
+            campaign_revision=campaign_profile.campaign_revision,
+        ))
+
+    # Read disposition rows from every accepted child directory using
+    # each child's verified index generation hash from the aggregate
+    # verification result.
+    child_result_by_id = {
+        cr.child_id: cr for cr in aggregate_verification_result.child_results
+    }
+    disposition_rows: list[CampaignDispositionRow] = []
+    for cp in campaign_set_plan.child_plans:
+        child_dir = child_report_dirs[cp.child_id]
+        child_result = child_result_by_id.get(cp.child_id)
+        if child_result is None:
+            raise ValueError(
+                f"aggregate verification result missing child result for {cp.child_id!r}"
+            )
+        disposition_rows.extend(_generate_dispositions(
+            report_dir=child_dir,
+            verified_index_generation_hash=child_result.verified_index_generation_hash,
+        ))
+
+    # Generate the statistical analysis reference from the first child
+    # directory (the statistical analysis is campaign-level, not
+    # per-child; the first child carries the campaign-level file).
+    first_child_dir = child_report_dirs[campaign_set_plan.child_plans[0].child_id]
     stat_ref = _generate_statistical_analysis(
-        report_dir=report_dir,
+        report_dir=first_child_dir,
         campaign_profile=campaign_profile,
     )
     variant_summaries = _generate_variant_summaries(projection_rows)
@@ -1652,6 +1752,9 @@ def project_campaign_v5(
         statistical_analysis=stat_ref,
         provenance=provenance_ref,
         caveats=caveats,
+        campaign_set_plan_hash=campaign_set_plan.content_hash,
+        campaign_set_index_hash=campaign_set_index.content_hash,
+        aggregate_verification_hash=aggregate_verification_hash,
     )
 
     ref = ModelCampaignRef(
@@ -1672,6 +1775,9 @@ def project_campaign_v5(
         statistical_analysis=stat_ref,
         provenance=provenance_ref,
         caveats=[CampaignCaveat(c) for c in caveats],
+        campaign_set_plan_hash=campaign_set_plan.content_hash,
+        campaign_set_index_hash=campaign_set_index.content_hash,
+        aggregate_verification_hash=aggregate_verification_hash,
         content_hash=content_hash,
     )
 
@@ -1727,17 +1833,24 @@ def project_campaign_v5(
     if cold_start_tradeoff is not None:
         _write_json(candidate_dir / COLD_START_WARM_INFERENCE_TRADEOFF_JSON, cold_start_tradeoff.model_dump_json())
 
-    # Copy event/resource files from the report directory to the candidate
-    # when they exist. These are the authoritative typed records that the v5
-    # summaries are derived from. The validator requires them when v5 artifacts
-    # are present. Files that do not exist in the report are not created.
+    # Copy event/resource files from every accepted child directory to
+    # the candidate, concatenating records from all children. These are
+    # the authoritative typed records that the v5 summaries are derived
+    # from. The validator requires them when v5 artifacts are present.
     for event_resource_file in _V5_EVENT_RESOURCE_FILES:
-        src = report_dir / event_resource_file
-        if src.exists() and src.is_file() and not src.is_symlink():
-            content = src.read_bytes()
-            dst = candidate_dir / event_resource_file
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_bytes(content)
+        concatenated_lines: list[bytes] = []
+        for cp in campaign_set_plan.child_plans:
+            child_dir = child_report_dirs[cp.child_id]
+            src = child_dir / event_resource_file
+            if src.exists() and src.is_file() and not src.is_symlink():
+                content = src.read_bytes()
+                if content:
+                    concatenated_lines.append(content)
+                    if not content.endswith(b"\n"):
+                        concatenated_lines.append(b"\n")
+        dst = candidate_dir / event_resource_file
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(b"".join(concatenated_lines))
 
     return candidate_dir
 
@@ -1925,6 +2038,35 @@ def validate_publication_v5(candidate_dir: Path) -> PublicationValidatorResult:
                         f"stored {stored_profile.content_hash!r}, "
                         f"recomputed {recomputed_profile.content_hash!r}"
                     )
+
+    # Layer 18: aggregate authority binding — the model-campaign.json
+    # must carry the campaign-set plan hash, campaign-set index hash, and
+    # aggregate verification hash. These fields bind the v5 publication
+    # to the accepted multi-child aggregate authority. A v5 candidate
+    # without these fields is a single-report fallback, which is
+    # rejected.
+    checked_layers.append("aggregate_authority_binding")
+    mc_path = candidate_dir / MODEL_CAMPAIGN_JSON
+    if mc_path.exists() and mc_path.is_file() and not mc_path.is_symlink():
+        try:
+            mc_data = json.loads(mc_path.read_text())
+            agg_plan_hash = mc_data.get("campaign_set_plan_hash")
+            agg_index_hash = mc_data.get("campaign_set_index_hash")
+            agg_ver_hash = mc_data.get("aggregate_verification_hash")
+            if not agg_plan_hash or len(agg_plan_hash) != 64:
+                failures.append(
+                    "aggregate authority binding missing: campaign_set_plan_hash"
+                )
+            if not agg_index_hash or len(agg_index_hash) != 64:
+                failures.append(
+                    "aggregate authority binding missing: campaign_set_index_hash"
+                )
+            if not agg_ver_hash or len(agg_ver_hash) != 64:
+                failures.append(
+                    "aggregate authority binding missing: aggregate_verification_hash"
+                )
+        except json.JSONDecodeError as e:
+            failures.append(f"aggregate authority binding error: {e}")
 
     ok = len(failures) == 0
     return PublicationValidatorResult(

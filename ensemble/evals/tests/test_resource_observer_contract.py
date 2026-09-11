@@ -57,6 +57,7 @@ from g8e_evals.campaign import (
 )
 from g8e_evals.constants import (
     CAMPAIGN_INDEX_JSONL,
+    EVIDENCE_INDEX_JSONL,
 )
 from g8e_evals.campaign_verify import verify_campaign
 from g8e_evals.harness import Response, Score, Task
@@ -65,6 +66,7 @@ from g8e_evals.index import (
     compute_index_generation_hash,
 )
 from g8e_evals.models import ScoreDetails, TaskMetadata
+from g8e_evals.schema import EvidenceIndex, EvidenceMediaType
 from g8e_evals.runner import (
     CampaignRunner,
     CampaignSpec,
@@ -522,6 +524,17 @@ class TestCampaignVerifierResourceObservationLayer:
             lines.append(json.dumps(obs_data))
         obs_path = report_dir / RESOURCE_OBSERVATIONS_JSONL
         obs_path.write_text("\n".join(lines) + "\n")
+        # Write a matching evidence index entry so VERIFIED observations
+        # pass the strict evidence index resolution check.
+        if identities:
+            entry = EvidenceIndex(
+                artifact_id="evidence/test.json",
+                run_id=identities[0]["run_id"],
+                attempt_id=None,
+                media_type=EvidenceMediaType.APPLICATION_JSON,
+                sha256=_VALID_HASH,
+            )
+            (report_dir / EVIDENCE_INDEX_JSONL).write_text(entry.model_dump_json() + "\n")
 
         result = verify_campaign(report_dir)
         assert result.ok, f"valid resource observations should pass: {result.failures}"
@@ -588,6 +601,17 @@ class TestCampaignVerifierResourceObservationLayer:
             lines.append(json.dumps(obs_data))
         obs_path = report_dir / RESOURCE_OBSERVATIONS_JSONL
         obs_path.write_text("\n".join(lines) + "\n")
+        # Write a matching evidence index entry so VERIFIED observations
+        # pass the strict evidence index resolution check.
+        if identities:
+            entry = EvidenceIndex(
+                artifact_id="evidence/test.json",
+                run_id=identities[0]["run_id"],
+                attempt_id=None,
+                media_type=EvidenceMediaType.APPLICATION_JSON,
+                sha256=_VALID_HASH,
+            )
+            (report_dir / EVIDENCE_INDEX_JSONL).write_text(entry.model_dump_json() + "\n")
 
         result = verify_campaign(report_dir)
         assert result.ok, f"extended per-inference record should pass: {result.failures}"

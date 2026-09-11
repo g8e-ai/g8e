@@ -531,3 +531,441 @@ async def test_drain_events_headless_approves_correlated_governed_request(
     assert approval_call.args[0] is client
     assert approval_call.args[1].event.type == approval_event_type
     assert approval_call.args[2] == "inv-123"
+
+
+# ---------------------------------------------------------------------------
+# _extract_inference_observations multi-role tests
+#
+# The g8ee pipeline emits ChatResponseCompletePayload on the text.completed
+# terminal event, carrying a model_calls list of ModelCallTelemetry dicts —
+# one per role-model provider call. The SUT must emit one InferenceObservation
+# per entry, binding role, model_variant_id, timing, token counts, and error
+# state exactly. Failed turns (no text.completed event) produce no
+# observations. Remote GPU values are never synthesized.
+# ---------------------------------------------------------------------------
+
+
+def _make_config() -> MagicMock:
+    config = MagicMock()
+    config.operator_session_id = "session-123"
+    config.operator_url = "http://operator"
+    config.g8ee_url = "http://g8ee"
+    config.primary.provider = "ollama"
+    config.primary.model = "qwen3:8b"
+    config.assistant.provider = "ollama"
+    config.assistant.model = "granite3.3:8b"
+    config.lite.provider = "ollama"
+    config.lite.model = "smollm2:360m"
+    config.candidate_model = None
+    config.arm.value = "ensemble_ungoverned"
+    config.arm_definition.receipt_binding = True
+    return config
+
+
+def _make_completed_trail(model_calls: list[dict]) -> list[AgentTrailEvent]:
+    """Build a minimal trail with a text.completed event carrying model_calls."""
+    return [
+        AgentTrailEvent(
+            id=1,
+            event_type="g8e.v1.ai.llm.chat.iteration.text.chunk.received",
+            payload={
+                "event": {
+                    "type": "g8e.v1.ai.llm.chat.iteration.text.chunk.received",
+                    "data": {"content": "Hello", "investigation_id": "inv-1"},
+                },
+            },
+        ),
+        AgentTrailEvent(
+            id=2,
+            event_type="g8e.v1.ai.llm.chat.iteration.text.completed",
+            payload={
+                "event": {
+                    "type": "g8e.v1.ai.llm.chat.iteration.text.completed",
+                    "data": {
+                        "content": "Hello world",
+                        "finish_reason": "stop",
+                        "has_citations": False,
+                        "grounding_metadata": {},
+                        "token_usage": {},
+                        "agent_mode": "sage",
+                        "model_calls": model_calls,
+                    },
+                },
+            },
+        ),
+    ]
+
+
+def _make_sut(config: MagicMock | None = None) -> G8eeChatSUT:
+    cfg = config or _make_config()
+    mock_env = MagicMock()
+    mock_env.g8ee_url = "http://g8ee"
+    mock_env.operator_url = "http://operator"
+    mock_env.auth_headers.return_value = {"Authorization": "Bearer token"}
+    mock_env.to_request_context.return_value = MagicMock()
+    mock_env.make_async_client.return_value = AsyncMock(spec=httpx.AsyncClient)
+    # Patch AuthContext.from_env before constructing the SUT
+    import g8e_evals.sut.g8ee_chat as mod
+    orig = mod.AuthContext.from_env
+    mod.AuthContext.from_env = lambda **kw: mock_env  # type: ignore[assignment]
+    sut = G8eeChatSUT(config=cfg)
+    mod.AuthContext.from_env = orig  # type: ignore[assignment]
+    return sut
+
+
+def test_extract_inference_observations_multi_role_emits_one_per_role_model_call():
+    """A text.completed event with three model_calls (primary, assistant, lite)
+    produces exactly three InferenceObservation records, one per role-model
+    provider call, with exact role, model_variant_id, and identity mapping."""
+    sut = _make_sut()
+    model_calls = [
+        {
+            "agent_role": "primary",
+            "provider": "OllamaProvider",
+            "model": "qwen3:8b",
+            "monotonic_start": 10.0,
+            "monotonic_end": 12.5,
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "thinking_tokens": 20,
+            "total_tokens": 170,
+            "cache_tokens": 5,
+            "usage_reported": True,
+            "finish_reason": "stop",
+            "succeeded": True,
+            "input_artifact_hash": "a" * 64,
+            "output_artifact_hash": "b" * 64,
+        },
+        {
+            "agent_role": "assistant",
+            "provider": "OllamaProvider",
+            "model": "granite3.3:8b",
+            "monotonic_start": 13.0,
+            "monotonic_end": 14.0,
+            "input_tokens": 80,
+            "output_tokens": 30,
+            "thinking_tokens": 0,
+            "total_tokens": 110,
+            "cache_tokens": 0,
+            "usage_reported": True,
+            "finish_reason": "stop",
+            "succeeded": True,
+            "input_artifact_hash": "c" * 64,
+            "output_artifact_hash": "d" * 64,
+        },
+        {
+            "agent_role": "lite",
+            "provider": "OllamaProvider",
+            "model": "smollm2:360m",
+            "monotonic_start": 14.5,
+            "monotonic_end": 15.0,
+            "input_tokens": 40,
+            "output_tokens": 10,
+            "thinking_tokens": 0,
+            "total_tokens": 50,
+            "cache_tokens": 0,
+            "usage_reported": True,
+            "finish_reason": "stop",
+            "succeeded": True,
+            "input_artifact_hash": "e" * 64,
+            "output_artifact_hash": "f" * 64,
+        },
+    ]
+    trail = _make_completed_trail(model_calls)
+    obs = sut._extract_inference_observations(trail, "g8e.v1.ai.llm.chat.iteration.text.completed")
+
+    assert len(obs) == 3
+    # Primary role
+    assert obs[0].inference_id == "inf-0"
+    assert obs[0].role == "primary"
+    assert obs[0].model_variant_id == "qwen3:8b"
+    assert obs[0].provider == "OllamaProvider"
+    assert obs[0].model == "qwen3:8b"
+    assert obs[0].provider_call_latency_seconds == 2.5
+    assert obs[0].output_throughput_tokens_per_second == 20.0  # 50 / 2.5
+    assert obs[0].hidden_reasoning_throughput_tokens_per_second == 8.0  # 20 / 2.5
+    assert obs[0].prompt_token_count == 100
+    assert obs[0].candidates_token_count == 50
+    assert obs[0].total_token_count == 170
+    assert obs[0].thinking_token_count == 20
+    assert obs[0].cache_token_count == 5
+    assert obs[0].usage_reported is True
+    assert obs[0].finish_reason == "stop"
+    assert obs[0].input_artifact_hash == "a" * 64
+    assert obs[0].output_artifact_hash == "b" * 64
+    assert obs[0].error is None
+    assert obs[0].monotonic_start == 10.0
+    assert obs[0].monotonic_end == 12.5
+    # Assistant role
+    assert obs[1].inference_id == "inf-1"
+    assert obs[1].role == "assistant"
+    assert obs[1].model_variant_id == "granite3.3:8b"
+    assert obs[1].provider_call_latency_seconds == 1.0
+    assert obs[1].output_throughput_tokens_per_second == 30.0  # 30 / 1.0
+    assert obs[1].hidden_reasoning_throughput_tokens_per_second is None  # 0 thinking tokens
+    assert obs[1].prompt_token_count == 80
+    assert obs[1].candidates_token_count == 30
+    assert obs[1].total_token_count == 110
+    assert obs[1].thinking_token_count is None  # 0 → None
+    assert obs[1].cache_token_count is None  # 0 → None
+    assert obs[1].usage_reported is True
+    assert obs[1].input_artifact_hash == "c" * 64
+    assert obs[1].output_artifact_hash == "d" * 64
+    assert obs[1].error is None
+    # Lite role
+    assert obs[2].inference_id == "inf-2"
+    assert obs[2].role == "lite"
+    assert obs[2].model_variant_id == "smollm2:360m"
+    assert obs[2].provider_call_latency_seconds == 0.5
+    assert obs[2].output_throughput_tokens_per_second == 20.0  # 10 / 0.5
+    assert obs[2].prompt_token_count == 40
+    assert obs[2].candidates_token_count == 10
+    assert obs[2].total_token_count == 50
+    assert obs[2].input_artifact_hash == "e" * 64
+    assert obs[2].output_artifact_hash == "f" * 64
+    assert obs[2].error is None
+
+
+def test_extract_inference_observations_single_role_emits_one_observation():
+    """A text.completed event with one model_call produces exactly one
+    InferenceObservation."""
+    sut = _make_sut()
+    model_calls = [
+        {
+            "agent_role": "primary",
+            "provider": "OllamaProvider",
+            "model": "qwen3:8b",
+            "monotonic_start": 5.0,
+            "monotonic_end": 6.0,
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "total_tokens": 15,
+            "usage_reported": True,
+            "finish_reason": "stop",
+            "succeeded": True,
+        },
+    ]
+    trail = _make_completed_trail(model_calls)
+    obs = sut._extract_inference_observations(trail, "g8e.v1.ai.llm.chat.iteration.text.completed")
+
+    assert len(obs) == 1
+    assert obs[0].inference_id == "inf-0"
+    assert obs[0].role == "primary"
+    assert obs[0].model_variant_id == "qwen3:8b"
+    assert obs[0].provider_call_latency_seconds == 1.0
+    assert obs[0].output_throughput_tokens_per_second == 5.0  # 5 / 1.0
+    assert obs[0].prompt_token_count == 10
+    assert obs[0].candidates_token_count == 5
+    assert obs[0].total_token_count == 15
+    assert obs[0].usage_reported is True
+    assert obs[0].error is None
+
+
+def test_extract_inference_observations_failed_turn_no_text_completed_emits_none():
+    """A failed turn (no text.completed event) produces no InferenceObservation
+    records. The runner records the failure as a typed terminal status on the
+    attempt."""
+    sut = _make_sut()
+    trail = [
+        AgentTrailEvent(
+            id=1,
+            event_type="g8e.v1.ai.llm.chat.iteration.text.chunk.received",
+            payload={
+                "event": {
+                    "type": "g8e.v1.ai.llm.chat.iteration.text.chunk.received",
+                    "data": {"content": "partial", "investigation_id": "inv-1"},
+                },
+            },
+        ),
+        AgentTrailEvent(
+            id=2,
+            event_type="g8e.v1.ai.llm.chat.iteration.failed",
+            payload={
+                "event": {
+                    "type": "g8e.v1.ai.llm.chat.iteration.failed",
+                    "data": {"error": "provider_timeout", "investigation_id": "inv-1"},
+                },
+            },
+        ),
+    ]
+    obs = sut._extract_inference_observations(trail, "g8e.v1.ai.llm.chat.iteration.failed")
+
+    assert obs == []
+
+
+def test_extract_inference_observations_failed_call_carries_error_not_silently_dropped():
+    """A model_calls entry with succeeded=False carries the error_type on the
+    InferenceObservation.error field. Failed calls are not silently dropped."""
+    sut = _make_sut()
+    model_calls = [
+        {
+            "agent_role": "primary",
+            "provider": "OllamaProvider",
+            "model": "qwen3:8b",
+            "monotonic_start": 10.0,
+            "monotonic_end": 10.5,
+            "input_tokens": 100,
+            "output_tokens": 0,
+            "total_tokens": 100,
+            "usage_reported": True,
+            "finish_reason": "error",
+            "succeeded": False,
+            "error_type": "OllamaEmptyResponseError",
+            "input_artifact_hash": "a" * 64,
+        },
+    ]
+    trail = _make_completed_trail(model_calls)
+    obs = sut._extract_inference_observations(trail, "g8e.v1.ai.llm.chat.iteration.text.completed")
+
+    assert len(obs) == 1
+    assert obs[0].role == "primary"
+    assert obs[0].model_variant_id == "qwen3:8b"
+    assert obs[0].error == "OllamaEmptyResponseError"
+    assert obs[0].finish_reason == "error"
+    assert obs[0].output_throughput_tokens_per_second is None  # 0 output tokens
+    assert obs[0].candidates_token_count is None  # 0 → None
+
+
+def test_extract_inference_observations_does_not_synthesize_remote_gpu_values():
+    """Remote GPU values are never inferred from model metadata. The
+    InferenceObservation carries no GPU fields; the resulting
+    ResourceObservation marks them as UNAVAILABLE with a typed reason."""
+    sut = _make_sut()
+    model_calls = [
+        {
+            "agent_role": "primary",
+            "provider": "OllamaProvider",
+            "model": "qwen3:8b",
+            "monotonic_start": 10.0,
+            "monotonic_end": 12.0,
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "usage_reported": True,
+            "finish_reason": "stop",
+            "succeeded": True,
+        },
+    ]
+    trail = _make_completed_trail(model_calls)
+    obs = sut._extract_inference_observations(trail, "g8e.v1.ai.llm.chat.iteration.text.completed")
+
+    assert len(obs) == 1
+    # InferenceObservation has no GPU fields — they remain absent
+    assert not hasattr(obs[0], "gpu_memory_bytes")
+    assert not hasattr(obs[0], "gpu_utilization_pct")
+    assert not hasattr(obs[0], "gpu_power_watts")
+    # Timing and token fields are present (measured from telemetry)
+    assert obs[0].provider_call_latency_seconds == 2.0
+    assert obs[0].prompt_token_count == 100
+
+
+def test_extract_inference_observations_distinct_inference_ids_across_roles():
+    """Each model_calls entry gets a distinct inference_id (inf-0, inf-1, ...)
+    so the runner can build distinct ResourceObservation and StageObservation
+    records per role-model provider call."""
+    sut = _make_sut()
+    model_calls = [
+        {
+            "agent_role": "primary",
+            "provider": "OllamaProvider",
+            "model": "qwen3:8b",
+            "monotonic_start": 10.0,
+            "monotonic_end": 11.0,
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "total_tokens": 15,
+            "usage_reported": True,
+            "finish_reason": "stop",
+            "succeeded": True,
+        },
+        {
+            "agent_role": "assistant",
+            "provider": "OllamaProvider",
+            "model": "granite3.3:8b",
+            "monotonic_start": 11.5,
+            "monotonic_end": 12.0,
+            "input_tokens": 8,
+            "output_tokens": 3,
+            "total_tokens": 11,
+            "usage_reported": True,
+            "finish_reason": "stop",
+            "succeeded": True,
+        },
+    ]
+    trail = _make_completed_trail(model_calls)
+    obs = sut._extract_inference_observations(trail, "g8e.v1.ai.llm.chat.iteration.text.completed")
+
+    assert len(obs) == 2
+    ids = [o.inference_id for o in obs]
+    assert ids == ["inf-0", "inf-1"]
+    assert len(set(ids)) == 2  # all distinct
+
+
+def test_extract_inference_observations_empty_model_calls_emits_none():
+    """A text.completed event with an empty model_calls list produces no
+    InferenceObservation records."""
+    sut = _make_sut()
+    trail = _make_completed_trail([])
+    obs = sut._extract_inference_observations(trail, "g8e.v1.ai.llm.chat.iteration.text.completed")
+
+    assert obs == []
+
+
+def test_extract_inference_observations_malformed_text_completed_skips_silently():
+    """A text.completed event with a malformed payload (fails
+    ChatResponseCompletePayload validation) is skipped silently rather than
+    crashing the extraction. No observations are emitted from that event."""
+    sut = _make_sut()
+    trail = [
+        AgentTrailEvent(
+            id=1,
+            event_type="g8e.v1.ai.llm.chat.iteration.text.completed",
+            payload={
+                "event": {
+                    "type": "g8e.v1.ai.llm.chat.iteration.text.completed",
+                    "data": {"not_a_valid_field": True},  # missing required fields
+                },
+            },
+        ),
+    ]
+    obs = sut._extract_inference_observations(trail, "g8e.v1.ai.llm.chat.iteration.text.completed")
+
+    assert obs == []
+
+
+def test_extract_inference_observations_does_not_retain_restricted_plaintext():
+    """The InferenceObservation carries only artifact hashes, not raw prompt
+    content or model output. Restricted plaintext is not retained on the
+    public path."""
+    sut = _make_sut()
+    model_calls = [
+        {
+            "agent_role": "primary",
+            "provider": "OllamaProvider",
+            "model": "qwen3:8b",
+            "monotonic_start": 10.0,
+            "monotonic_end": 11.0,
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "total_tokens": 15,
+            "usage_reported": True,
+            "finish_reason": "stop",
+            "succeeded": True,
+            "input_artifact_hash": "a" * 64,
+            "output_artifact_hash": "b" * 64,
+            # Simulate a field that could carry plaintext if retained
+            "input_text": "SECRET PROMPT CONTENT",
+            "output_text": "SECRET MODEL OUTPUT",
+        },
+    ]
+    trail = _make_completed_trail(model_calls)
+    obs = sut._extract_inference_observations(trail, "g8e.v1.ai.llm.chat.iteration.text.completed")
+
+    assert len(obs) == 1
+    assert obs[0].input_artifact_hash == "a" * 64
+    assert obs[0].output_artifact_hash == "b" * 64
+    # No plaintext fields exist on InferenceObservation
+    assert not hasattr(obs[0], "input_text")
+    assert not hasattr(obs[0], "output_text")
+    assert not hasattr(obs[0], "prompt_text")
+    assert not hasattr(obs[0], "output_content")

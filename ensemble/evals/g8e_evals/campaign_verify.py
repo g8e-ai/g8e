@@ -64,6 +64,11 @@ from g8e_evals.expected_record_policy import (
     ExpectedRecordPolicy,
     RecordApplicability,
 )
+from g8e_evals.metrics import (
+    DEFAULT_METRIC_REGISTRY,
+    MetricDirection,
+    MetricUnitMismatchError,
+)
 from g8e_evals.index import (
     AssignmentDisposition,
     CampaignVerificationReport,
@@ -295,15 +300,22 @@ def _cross_check_event_identity(
 ) -> None:
     """Cross-check every identity field on an event record.
 
-    Verifies that the record's campaign, run, assignment, attempt, and
-    task identities match the campaign's known records. An orphan record
-    (referencing an unknown attempt) is rejected. The inference_id is
-    optional for attempt-level events and is not cross-checked here.
+    Verifies that the record's campaign, child, run, assignment,
+    attempt, and task identities match the campaign's known records. An
+    orphan record (referencing an unknown attempt) is rejected. The
+    child_id must match the campaign_id for single campaigns. The
+    inference_id is optional for attempt-level events and is not
+    cross-checked here.
     """
     if rec_campaign_id != campaign_id:
         failures.append(
             f"{label} {record_id} campaign_id mismatch: "
             f"got {rec_campaign_id!r}, expected {campaign_id!r}"
+        )
+    if rec_child_id != campaign_id:
+        failures.append(
+            f"{label} {record_id} child_id mismatch: "
+            f"got {rec_child_id!r}, expected {campaign_id!r}"
         )
     if rec_run_id not in run_ids:
         failures.append(
@@ -330,6 +342,39 @@ def _cross_check_event_identity(
                     f"{label} {record_id} assignment_id mismatch: "
                     f"got {rec_assignment_id!r}, attempt has {attempt.assignment_id!r}"
                 )
+
+
+def _cross_check_observation_environment_scope(
+    obs: ResourceObservation,
+    orchestrator_hardware_identity: str | None,
+    provider_hardware_identity: str | None,
+    failures: list[str],
+) -> None:
+    """Cross-check a resource observation's environment scopes against the
+    run binding's hardware identities.
+
+    The orchestrator_scope must match the binding's
+    orchestrator_hardware_identity. The provider_scope is compared
+    against the binding's provider_hardware_identity only when the
+    binding declares a non-'unavailable' provider identity; a binding
+    that declares 'unavailable' accepts any provider_scope because the
+    remote boundary did not expose hardware identity.
+    """
+    if orchestrator_hardware_identity is not None:
+        if obs.orchestrator_scope != orchestrator_hardware_identity:
+            failures.append(
+                f"resource observation {obs.inference_id} orchestrator_scope mismatch: "
+                f"got {obs.orchestrator_scope!r}, binding has {orchestrator_hardware_identity!r}"
+            )
+    if (
+        provider_hardware_identity is not None
+        and provider_hardware_identity != "unavailable"
+        and obs.provider_scope not in ("unavailable", provider_hardware_identity)
+    ):
+        failures.append(
+            f"resource observation {obs.inference_id} provider_scope mismatch: "
+            f"got {obs.provider_scope!r}, binding has {provider_hardware_identity!r}"
+        )
 
 
 def _check_evidence_binding(
@@ -400,7 +445,8 @@ def _check_evidence_index_resolution(
 
     A VERIFIED record whose source_evidence_refs do not resolve to
     evidence-index.jsonl entries is rejected. A SHA-256 mismatch
-    between the record and the indexed entry is rejected.
+    between the record and the indexed entry is rejected. The indexed
+    entry's run_id must match the record's run_id when both are present.
     """
     status_str = getattr(verification_status, "value", str(verification_status))
     if status_str != "verified":
@@ -420,6 +466,66 @@ def _check_evidence_index_resolution(
                 f"verified {label} {record_id} source_evidence_ref {ref!r} "
                 f"sha256 mismatch: record has {source_evidence_sha256!r}, "
                 f"index has {entry.sha256!r}"
+            )
+
+
+def _check_verified_evidence_index_required(
+    verification_status: object,
+    source_evidence_refs: list[str],
+    record_id: str,
+    label: str,
+    evidence_index: dict[str, EvidenceIndex],
+    failures: list[str],
+) -> None:
+    """Strict VERIFIED evidence resolution: a VERIFIED record requires a
+    non-empty evidence index. An absent or empty evidence index fails for
+    VERIFIED records, regardless of whether the record carries
+    source_evidence_refs.
+
+    This complements ``_check_evidence_binding`` (which checks that refs
+    and sha256 are present on the record) and ``_check_evidence_index_resolution``
+    (which checks that present refs resolve to index entries). This check
+    ensures the index itself exists and is non-empty so that resolution is
+    possible at all.
+    """
+    status_str = getattr(verification_status, "value", str(verification_status))
+    if status_str != "verified":
+        return
+    if not evidence_index:
+        failures.append(
+            f"verified {label} {record_id} requires a non-empty evidence index "
+            f"but evidence-index.jsonl is absent or empty"
+        )
+
+
+def _check_evidence_index_ownership(
+    verification_status: object,
+    source_evidence_refs: list[str],
+    record_run_id: str,
+    record_id: str,
+    label: str,
+    evidence_index: dict[str, EvidenceIndex],
+    failures: list[str],
+) -> None:
+    """Cross-check that a VERIFIED record's evidence index entries are
+    owned by the same run as the record. An evidence index entry whose
+    run_id does not match the record's run_id is rejected as an ownership
+    violation.
+    """
+    status_str = getattr(verification_status, "value", str(verification_status))
+    if status_str != "verified":
+        return
+    if not evidence_index:
+        return
+    for ref in source_evidence_refs:
+        entry = evidence_index.get(ref)
+        if entry is None:
+            continue
+        if entry.run_id != record_run_id:
+            failures.append(
+                f"verified {label} {record_id} source_evidence_ref {ref!r} "
+                f"run ownership mismatch: record run_id {record_run_id!r}, "
+                f"index entry run_id {entry.run_id!r}"
             )
 
 
@@ -596,33 +702,60 @@ def _verify_inference_trail_count(
     attempts: list[AttemptRecord],
     failures: list[str],
 ) -> None:
-    """Verify that resource observations match the inference trail exactly.
+    """Verify a bijection between provider inference stages and resource
+    observations using exact (attempt_id, inference_id, stage_id)
+    identities.
 
-    When stages.jsonl is present, each completed attempt must have
-    exactly one resource observation per model_inference stage. An
-    attempt with fewer observations than inferences is a missing
-    observation; an attempt with more is an extra observation.
+    Every MODEL_INFERENCE stage must have exactly one corresponding
+    resource observation with the same (attempt_id, inference_id,
+    stage_id) triple. Every resource observation must correspond to
+    exactly one MODEL_INFERENCE stage. Missing observations fail.
+    Extra observations fail. Duplicate identities fail. This is not
+    reduced to "at least one observation per attempt" — the exact
+    identity triple is the bijection key.
     """
     if not stages:
         return
-    inference_stages_by_attempt: dict[str, list[StageObservation]] = {}
-    for stage in stages:
-        if stage.kind == StageKind.MODEL_INFERENCE:
-            inference_stages_by_attempt.setdefault(stage.attempt_id, []).append(stage)
-    obs_by_attempt: dict[str, list[ResourceObservation]] = {}
-    for obs in observations:
-        obs_by_attempt.setdefault(obs.attempt_id, []).append(obs)
-    for attempt in attempts:
-        if attempt.terminal_status != TerminalStatus.COMPLETED:
-            continue
-        expected = len(inference_stages_by_attempt.get(attempt.attempt_id, []))
-        actual = len(obs_by_attempt.get(attempt.attempt_id, []))
-        if actual == 0 and expected == 0:
-            continue
-        if actual != expected:
+    inference_stages: list[StageObservation] = [
+        s for s in stages if s.kind == StageKind.MODEL_INFERENCE
+    ]
+    stage_keys: dict[str, StageObservation] = {}
+    for stage in inference_stages:
+        key = f"{stage.attempt_id}|{stage.stage_id}"
+        if key in stage_keys:
             failures.append(
-                f"inference count mismatch for attempt {attempt.attempt_id}: "
-                f"expected {expected} observations (inference trail), got {actual}"
+                f"duplicate model_inference stage identity: "
+                f"attempt_id={stage.attempt_id!r}, stage_id={stage.stage_id!r}"
+            )
+            continue
+        stage_keys[key] = stage
+    obs_keys: dict[str, ResourceObservation] = {}
+    for obs in observations:
+        key = f"{obs.attempt_id}|{obs.stage_id}"
+        if key in obs_keys:
+            failures.append(
+                f"duplicate resource observation identity: "
+                f"attempt_id={obs.attempt_id!r}, inference_id={obs.inference_id!r}, "
+                f"stage_id={obs.stage_id!r}"
+            )
+            continue
+        obs_keys[key] = obs
+    completed_attempt_ids = {
+        a.attempt_id for a in attempts if a.terminal_status == TerminalStatus.COMPLETED
+    }
+    for key, stage in stage_keys.items():
+        if key not in obs_keys:
+            if stage.attempt_id in completed_attempt_ids:
+                failures.append(
+                    f"orphan model_inference stage with no matching resource observation: "
+                    f"attempt_id={stage.attempt_id!r}, stage_id={stage.stage_id!r}"
+                )
+    for key, obs in obs_keys.items():
+        if key not in stage_keys:
+            failures.append(
+                f"resource observation with no matching model_inference stage: "
+                f"attempt_id={obs.attempt_id!r}, inference_id={obs.inference_id!r}, "
+                f"stage_id={obs.stage_id!r}"
             )
 
 
@@ -647,6 +780,42 @@ def _verify_metric_denominator_consistency(
                 f"metric {m.metric_id} for attempt {m.attempt_id} "
                 f"denominator_contribution mismatch: got {m.denominator_contribution}, "
                 f"expected {expected}"
+            )
+
+
+def _verify_metric_registry_consistency(
+    metrics: list[MetricObservation],
+    failures: list[str],
+) -> None:
+    """Verify that every metric observation is registered and its unit
+    matches the registered definition.
+
+    An unregistered metric ID is rejected. A unit mismatch between the
+    observation and the registered definition is rejected. A boolean
+    pass/fail metric with a value outside [0.0, 1.0] is rejected as a
+    value inconsistency.
+    """
+    for m in metrics:
+        if not DEFAULT_METRIC_REGISTRY.is_registered(m.metric_id, m.metric_version):
+            failures.append(
+                f"unknown metric {m.metric_id}@{m.metric_version} for attempt {m.attempt_id}"
+            )
+            continue
+        try:
+            DEFAULT_METRIC_REGISTRY.validate(m)
+        except MetricUnitMismatchError as e:
+            failures.append(
+                f"metric {m.metric_id} for attempt {m.attempt_id} unit mismatch: {e}"
+            )
+        definition = DEFAULT_METRIC_REGISTRY.get(m.metric_id, m.metric_version)
+        if (
+            definition.direction == MetricDirection.BINARY_PASS_FAIL
+            and m.value is not None
+            and not (0.0 <= m.value <= 1.0)
+        ):
+            failures.append(
+                f"metric {m.metric_id} for attempt {m.attempt_id} value inconsistency: "
+                f"boolean pass/fail metric value {m.value} outside [0.0, 1.0]"
             )
 
 
@@ -833,6 +1002,9 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                         )
             # Derived metric recomputation: verify denominator consistency
             _verify_metric_denominator_consistency(metrics, attempts, failures)
+            # Typed metric recomputation: verify registry registration, unit,
+            # and value consistency against the frozen metric definitions.
+            _verify_metric_registry_consistency(metrics, failures)
         except (ValidationError, json.JSONDecodeError) as e:
             failures.append(f"metric binding check failed: {e}")
 
@@ -927,7 +1099,9 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                         f"{gen.generation_number}: {e}"
                     )
 
-    # Layer 13: expected record policy — load frozen policy if present
+    # Layer 13: expected record policy — load frozen policy if present and
+    # bind it to the CampaignBinding's required_record_policy_hash and the
+    # report suite.
     checked_layers.append("expected_record_policy")
     policy: ExpectedRecordPolicy | None = None
     policy_path = report_dir / EXPECTED_RECORD_POLICY_JSON
@@ -941,6 +1115,23 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                 policy = ExpectedRecordPolicy.model_validate_json(policy_path.read_text())
             except (ValidationError, json.JSONDecodeError) as e:
                 failures.append(f"expected record policy validation failed: {e}")
+    # Bind the loaded policy to the CampaignBinding's
+    # required_record_policy_hash and the report suite. A mismatch on
+    # either is a typed authority failure.
+    if policy is not None and run_manifest is not None and run_manifest.campaign_binding is not None:
+        binding = run_manifest.campaign_binding
+        if policy.content_hash != binding.required_record_policy_hash:
+            failures.append(
+                f"expected record policy hash mismatch: policy content_hash "
+                f"{policy.content_hash!r} does not match campaign binding "
+                f"required_record_policy_hash {binding.required_record_policy_hash!r}"
+            )
+        if policy.suite_id != run_manifest.suite_id:
+            failures.append(
+                f"expected record policy suite mismatch: policy suite_id "
+                f"{policy.suite_id!r} does not match run suite_id "
+                f"{run_manifest.suite_id!r}"
+            )
 
     # Build identity sets for cross-binding checks in layers 14-18.
     attempt_ids: set[str] = {a.attempt_id for a in attempts}
@@ -982,6 +1173,12 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
             observations = [ResourceObservation.model_validate(r) for r in obs_records]
             validate_resource_observations(observations)
             resource_observations = observations
+            # Extract binding environment scopes for cross-checking.
+            binding_orchestrator_scope: str | None = None
+            binding_provider_scope: str | None = None
+            if run_manifest is not None and run_manifest.campaign_binding is not None:
+                binding_orchestrator_scope = run_manifest.campaign_binding.orchestrator_hardware_identity
+                binding_provider_scope = run_manifest.campaign_binding.provider_hardware_identity
             for obs in observations:
                 _cross_check_observation_identity(
                     obs, campaign_id_from_manifest, run_ids_from_attempts,
@@ -991,14 +1188,26 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                 _cross_check_observation_model_binding(
                     obs, assignment_by_id, cohort_by_id, stage_ids, failures,
                 )
+                _cross_check_observation_environment_scope(
+                    obs, binding_orchestrator_scope, binding_provider_scope, failures,
+                )
                 _check_evidence_binding(
                     obs.verification_status, obs.source_evidence_refs,
                     obs.source_evidence_sha256, obs.inference_id,
                     "resource observation", failures,
                 )
+                _check_verified_evidence_index_required(
+                    obs.verification_status, obs.source_evidence_refs,
+                    obs.inference_id, "resource observation", evidence_index, failures,
+                )
                 _check_evidence_index_resolution(
                     obs.verification_status, obs.source_evidence_refs,
                     obs.source_evidence_sha256, obs.inference_id,
+                    "resource observation", evidence_index, failures,
+                )
+                _check_evidence_index_ownership(
+                    obs.verification_status, obs.source_evidence_refs,
+                    obs.run_id, obs.inference_id,
                     "resource observation", evidence_index, failures,
                 )
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
@@ -1032,9 +1241,18 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                     sc.source_evidence_sha256, sc.scorecard_id,
                     "tool call scorecard", failures,
                 )
+                _check_verified_evidence_index_required(
+                    sc.verification_status, sc.source_evidence_refs,
+                    sc.scorecard_id, "tool call scorecard", evidence_index, failures,
+                )
                 _check_evidence_index_resolution(
                     sc.verification_status, sc.source_evidence_refs,
                     sc.source_evidence_sha256, sc.scorecard_id,
+                    "tool call scorecard", evidence_index, failures,
+                )
+                _check_evidence_index_ownership(
+                    sc.verification_status, sc.source_evidence_refs,
+                    sc.run_id, sc.scorecard_id,
                     "tool call scorecard", evidence_index, failures,
                 )
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
@@ -1068,9 +1286,18 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                     er.source_evidence_sha256, er.record_id,
                     "escalation record", failures,
                 )
+                _check_verified_evidence_index_required(
+                    er.verification_status, er.source_evidence_refs,
+                    er.record_id, "escalation record", evidence_index, failures,
+                )
                 _check_evidence_index_resolution(
                     er.verification_status, er.source_evidence_refs,
                     er.source_evidence_sha256, er.record_id,
+                    "escalation record", evidence_index, failures,
+                )
+                _check_evidence_index_ownership(
+                    er.verification_status, er.source_evidence_refs,
+                    er.run_id, er.record_id,
                     "escalation record", evidence_index, failures,
                 )
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
@@ -1104,9 +1331,18 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                     se.source_evidence_sha256, se.record_id,
                     "security event record", failures,
                 )
+                _check_verified_evidence_index_required(
+                    se.verification_status, se.source_evidence_refs,
+                    se.record_id, "security event record", evidence_index, failures,
+                )
                 _check_evidence_index_resolution(
                     se.verification_status, se.source_evidence_refs,
                     se.source_evidence_sha256, se.record_id,
+                    "security event record", evidence_index, failures,
+                )
+                _check_evidence_index_ownership(
+                    se.verification_status, se.source_evidence_refs,
+                    se.run_id, se.record_id,
                     "security event record", evidence_index, failures,
                 )
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
@@ -1140,9 +1376,18 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                     ce.source_evidence_sha256, ce.record_id,
                     "correlated error record", failures,
                 )
+                _check_verified_evidence_index_required(
+                    ce.verification_status, ce.source_evidence_refs,
+                    ce.record_id, "correlated error record", evidence_index, failures,
+                )
                 _check_evidence_index_resolution(
                     ce.verification_status, ce.source_evidence_refs,
                     ce.source_evidence_sha256, ce.record_id,
+                    "correlated error record", evidence_index, failures,
+                )
+                _check_evidence_index_ownership(
+                    ce.verification_status, ce.source_evidence_refs,
+                    ce.run_id, ce.record_id,
                     "correlated error record", evidence_index, failures,
                 )
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
