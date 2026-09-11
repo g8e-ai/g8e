@@ -43,9 +43,12 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from collections.abc import Sequence
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from g8e_evals.campaign_set import CampaignSetPlan
 
 from g8e_evals.analysis.canonical import (
     CanonicalEvalAnalysis,
@@ -926,6 +929,7 @@ class CampaignRunner:
     campaign_profile: CampaignProfile | None = None
     model_registry: ModelRegistry | None = None
     cohort_variant_map: dict[str, str] | None = None
+    campaign_set_plan: CampaignSetPlan | None = None
     disk_space_min_bytes: int = 0
     _run_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     _report_dir: Path | None = None
@@ -1224,16 +1228,41 @@ class CampaignRunner:
         report role. Assignment, model, repetition, role, and inference
         identities remain on their own records, not on this report-level
         binding.
+
+        When ``campaign_set_plan`` is provided, the binding identifies
+        this report as a child campaign (``ReportRole.CHILD``) and
+        populates ``child_campaign_id``/``child_campaign_revision`` from
+        the matching child plan. Otherwise the report is a standalone
+        campaign (``ReportRole.SINGLE``).
         """
         if self.campaign_profile is None or self.model_registry is None:
             return None
 
+        child_campaign_id: str | None = None
+        child_campaign_revision: str | None = None
+        report_role = ReportRole.SINGLE
+
+        if self.campaign_set_plan is not None:
+            child_plan = next(
+                (cp for cp in self.campaign_set_plan.child_plans
+                 if cp.child_id == self.spec.campaign_id),
+                None,
+            )
+            if child_plan is None:
+                raise CampaignRunnerError(
+                    f"campaign_id {self.spec.campaign_id!r} does not match any "
+                    f"child in campaign-set plan {self.campaign_set_plan.set_id!r}"
+                )
+            child_campaign_id = child_plan.child_id
+            child_campaign_revision = child_plan.child_revision
+            report_role = ReportRole.CHILD
+
         return CampaignBinding(
             campaign_id=self.campaign_profile.campaign_id,
             campaign_revision=self.campaign_profile.campaign_revision,
-            report_role=ReportRole.SINGLE,
-            child_campaign_id=None,
-            child_campaign_revision=None,
+            report_role=report_role,
+            child_campaign_id=child_campaign_id,
+            child_campaign_revision=child_campaign_revision,
             campaign_profile_hash=self.campaign_profile.content_hash,
             model_registry_hash=self.model_registry.content_hash,
             required_record_policy_hash=self.campaign_profile.required_record_policy_hash,

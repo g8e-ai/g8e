@@ -309,6 +309,7 @@ def _make_observation_dict(**kwargs) -> dict:
         "assignment_id": "assignment-1",
         "attempt_id": "att-1",
         "inference_id": "inf-1",
+        "stage_id": "att-1:direct:1",
         "role": "primary",
         "model_variant_id": "qwen3-8b-q4_0",
         "task_id": "task-1",
@@ -317,7 +318,9 @@ def _make_observation_dict(**kwargs) -> dict:
         "observation_boundary": "provider_call",
         "clock_domain": "monotonic",
         "collection_tool": "psutil-5.9",
-        "source_evidence_hash": _VALID_HASH,
+        "source_evidence_refs": ["evidence/test.json"],
+        "source_evidence_sha256": _VALID_HASH,
+        "verification_status": "verified",
         "unavailable_measurements": [u.model_dump() for u in _all_unavailable()],
     }
     for f in _MEASUREMENT_FIELDS:
@@ -376,9 +379,9 @@ def _make_escalation_dict(**kwargs) -> dict:
         "task_id": "task-1",
         "agent_persona": "triage",
         "model_variant_id": "smollm2-360m-q4_0",
-        "expected_role": "light",
+        "expected_role": "lite",
         "ground_truth_complexity": "light",
-        "routed_to_role": "light",
+        "routed_to_role": "lite",
         "outcome": EscalationOutcome.CORRECT_AUTONOMOUS,
         "task_succeeded": True,
     }

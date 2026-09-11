@@ -99,6 +99,7 @@ def _make_observation(**kwargs) -> ResourceObservation:
         "assignment_id": "assignment-1",
         "attempt_id": "att-1",
         "inference_id": "inf-1",
+        "stage_id": "att-1:direct:1",
         "role": ModelRole.PRIMARY,
         "model_variant_id": "qwen3-8b-q4_0",
         "task_id": "task-1",
@@ -107,7 +108,9 @@ def _make_observation(**kwargs) -> ResourceObservation:
         "observation_boundary": "provider_call",
         "clock_domain": "monotonic",
         "collection_tool": "psutil-5.9",
-        "source_evidence_hash": _VALID_HASH,
+        "source_evidence_refs": ["evidence/test.json"],
+        "source_evidence_sha256": _VALID_HASH,
+        "verification_status": "verified",
         "unavailable_measurements": _all_unavailable(),
     }
     for f in _MEASUREMENT_FIELDS:
@@ -399,9 +402,9 @@ class TestEventRecordIdentityGaps:
             task_id="task-1",
             agent_persona="triage",
             model_variant_id="v1",
-            expected_role="light",
+            expected_role="lite",
             ground_truth_complexity="light",
-            routed_to_role="light",
+            routed_to_role="lite",
             outcome="correct_autonomous",
             task_succeeded=True,
         )

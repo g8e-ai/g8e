@@ -201,6 +201,7 @@ def _make_campaign_manifest() -> CampaignManifest:
         provider_budget_hash="p" * 64,
         source_build_provenance_hash="s" * 64,
         claim_exclusion_hash="c" * 64,
+        budget_observability_policy_hash="b" * 64,
     )
     return CampaignManifest(
         campaign_id=_CAMPAIGN_ID,
@@ -219,6 +220,7 @@ def _make_campaign_manifest() -> CampaignManifest:
         provider_budget_hash="p" * 64,
         source_build_provenance_hash="s" * 64,
         claim_exclusion_hash="c" * 64,
+        budget_observability_policy_hash="b" * 64,
         content_hash=ch,
     )
 

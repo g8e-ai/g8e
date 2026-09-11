@@ -89,6 +89,34 @@ class OutputFormat(StrEnum):
     PROHIBITED_SQLITE = "prohibited_sqlite"
 
 
+class OutputRole(StrEnum):
+    """The mandated purpose of a disclosure output artifact.
+
+    D12 mandates that the disclosure authority carry outputs for each
+    of these roles. The authority validator rejects an authority that
+    omits a required role or marks a prohibited role as required.
+
+    ``PUBLIC_JSONL``: The primary canonical public JSONL surface.
+    ``DERIVED_CSV``: The flat CSV projection of public fields.
+    ``TOMBSTONES``: Tombstone records (hash and length) for restricted
+    fields, emitted when the authority classifies any field as
+    RESTRICTED.
+    ``PROOF_INDEX``: The proof index mapping public records to their
+    source evidence.
+    ``OUTPUT_INVENTORY``: The deterministic output inventory listing
+    all produced files.
+    ``PROHIBITED_SQLITE``: SQLite is explicitly prohibited in the first
+    release. An output with this role must not be required.
+    """
+
+    PUBLIC_JSONL = "public_jsonl"
+    DERIVED_CSV = "derived_csv"
+    TOMBSTONES = "tombstones"
+    PROOF_INDEX = "proof_index"
+    OUTPUT_INVENTORY = "output_inventory"
+    PROHIBITED_SQLITE = "prohibited_sqlite"
+
+
 class DisclosureFieldEntry(BaseModel):
     """One field in the disclosure authority with its classification.
 
@@ -134,15 +162,17 @@ class DisclosureFieldEntry(BaseModel):
 class DisclosureOutputEntry(BaseModel):
     """One output artifact in the disclosure output inventory.
 
-    Binds an output file name to its format, whether it is required,
-    and a description. The output inventory is deterministic: the same
-    authority always produces the same set of output files.
+    Binds an output file name to its format, mandated role, whether it
+    is required, and a description. The output inventory is
+    deterministic: the same authority always produces the same set of
+    output files.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     file_name: str = Field(min_length=1, description="Output file name.")
     output_format: OutputFormat = Field(description="Format of the output file.")
+    output_role: OutputRole = Field(description="Mandated purpose of the output file.")
     required: bool = Field(description="Whether the file must be present in a disclosure-compliant candidate.")
     description: str = Field(min_length=1, description="What the output file contains.")
 
@@ -151,6 +181,24 @@ class DisclosureOutputEntry(BaseModel):
         if self.output_format == OutputFormat.PROHIBITED_SQLITE and self.required:
             raise ValueError(
                 f"PROHIBITED_SQLITE output {self.file_name!r} must not be required"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_format_role_consistency(self) -> Self:
+        """Enforce that each output role pairs with its expected format."""
+        expected_format: OutputFormat
+        if self.output_role == OutputRole.PROHIBITED_SQLITE:
+            expected_format = OutputFormat.PROHIBITED_SQLITE
+        elif self.output_role == OutputRole.DERIVED_CSV:
+            expected_format = OutputFormat.DERIVED_CSV
+        else:
+            expected_format = OutputFormat.CANONICAL_JSONL
+        if self.output_format != expected_format:
+            raise ValueError(
+                f"output_role {self.output_role.value!r} requires output_format "
+                f"{expected_format.value!r} but got {self.output_format.value!r} "
+                f"for {self.file_name!r}"
             )
         return self
 
@@ -228,6 +276,7 @@ class DisclosureAuthority(BaseModel):
                 {
                     "file_name": e.file_name,
                     "output_format": e.output_format.value,
+                    "output_role": e.output_role.value,
                     "required": e.required,
                     "description": e.description,
                 }
@@ -240,6 +289,71 @@ class DisclosureAuthority(BaseModel):
                 f"disclosure authority content_hash mismatch: declared {self.content_hash!r}, "
                 f"computed {expected!r}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_d12_mandate(self) -> Self:
+        """Enforce that the authority mandates all D12-required outputs.
+
+        D12 mandates canonical JSONL, derived CSV, proof index,
+        deterministic output inventory, tombstones for restricted
+        fields, and explicit prohibition of SQLite. The authority
+        rejects an authority that omits a required role or marks a
+        prohibited role as required.
+        """
+        roles_present: set[OutputRole] = set()
+        for entry in self.outputs:
+            roles_present.add(entry.output_role)
+
+        required_roles = (
+            OutputRole.PUBLIC_JSONL,
+            OutputRole.DERIVED_CSV,
+            OutputRole.PROOF_INDEX,
+            OutputRole.OUTPUT_INVENTORY,
+        )
+        for role in required_roles:
+            if role not in roles_present:
+                raise ValueError(
+                    f"D12 mandate: authority must include an output with role "
+                    f"{role.value!r}"
+                )
+            matching = [e for e in self.outputs if e.output_role == role]
+            if not any(e.required for e in matching):
+                raise ValueError(
+                    f"D12 mandate: output with role {role.value!r} must be required"
+                )
+
+        has_restricted = any(
+            e.classification == FieldClassification.RESTRICTED for e in self.fields
+        )
+        if has_restricted and OutputRole.TOMBSTONES not in roles_present:
+            raise ValueError(
+                "D12 mandate: authority with RESTRICTED fields must include a "
+                "required TOMBSTONES output"
+            )
+        if has_restricted:
+            tombstone_entries = [
+                e for e in self.outputs if e.output_role == OutputRole.TOMBSTONES
+            ]
+            if not any(e.required for e in tombstone_entries):
+                raise ValueError(
+                    "D12 mandate: TOMBSTONES output must be required when "
+                    "RESTRICTED fields exist"
+                )
+
+        if OutputRole.PROHIBITED_SQLITE not in roles_present:
+            raise ValueError(
+                "D12 mandate: authority must explicitly include a "
+                "PROHIBITED_SQLITE output to declare the prohibition"
+            )
+        sqlite_entries = [
+            e for e in self.outputs if e.output_role == OutputRole.PROHIBITED_SQLITE
+        ]
+        if any(e.required for e in sqlite_entries):
+            raise ValueError(
+                "D12 mandate: PROHIBITED_SQLITE output must not be required"
+            )
+
         return self
 
     def public_fields(self) -> list[DisclosureFieldEntry]:
@@ -326,5 +440,6 @@ __all__ = [
     "DisclosureOutputEntry",
     "FieldClassification",
     "OutputFormat",
+    "OutputRole",
     "compute_disclosure_authority_hash",
 ]

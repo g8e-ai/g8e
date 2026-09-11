@@ -235,7 +235,7 @@ def _make_plan_kwargs(child_campaign_ids: list[str], partition_task_ids: list[li
         "population_hash": _VALID_HASH,
         "model_registry_hash": _VALID_HASH_B,
         "campaign_profile_hash": _VALID_HASH_C,
-        "repetition_ids": ["rep-1"],
+        "repetition_ids": ["replicate-1"],
         "seed": 42,
         "retry_policy_hash": _VALID_HASH_D,
         "budget_authority_hash": _VALID_HASH_E,
@@ -335,9 +335,16 @@ def _build_index_from_children(
 
     Reads each child's campaign-assignments.jsonl to count assignments
     and uses the child campaign ID as the report campaign identity.
-    The finalization generation hash and verification report hash are
-    derived from the child's index and verification output.
+    The finalization generation hash is derived from the child's
+    verification report. The child verification report hash is computed
+    from the persisted ``campaign-verification-report.json`` bytes. The
+    report checksum is recomputed from ``attempts.jsonl`` and
+    ``metrics.jsonl`` to match the aggregate verifier's recomputation.
     """
+    from g8e_evals.campaign_set import (
+        _compute_child_verification_report_hash,
+        _recompute_report_checksum,
+    )
     from g8e_evals.campaign_verify import verify_campaign
 
     entries: list[CampaignChildIndexEntry] = []
@@ -349,12 +356,12 @@ def _build_index_from_children(
         total += count
 
         verification = verify_campaign(report_dir)
-        report_checksum = hashlib.sha256(
-            json.dumps({"campaign_id": verification.campaign_id}, sort_keys=True).encode()
-        ).hexdigest()
-        child_verification_hash = hashlib.sha256(
-            verification.model_dump_json().encode()
-        ).hexdigest()
+        child_verification_hash = _compute_child_verification_report_hash(report_dir)
+        if child_verification_hash is None:
+            child_verification_hash = "0" * 64
+        report_checksum = _recompute_report_checksum(report_dir)
+        if report_checksum is None:
+            report_checksum = "0" * 64
 
         entries.append(CampaignChildIndexEntry(
             child_id=cp.child_id,
@@ -649,3 +656,183 @@ class TestAggregateVerifierMutations:
             assignments_path.write_text("\n".join(lines) + "\n")
         result = verify_campaign_set_aggregate(plan, index, child_dirs)
         assert not result.ok
+
+    def test_tampered_child_verification_report_hash_fails(self, tmp_path: Path):
+        """An index entry with a wrong child_verification_report_hash fails.
+
+        The verifier recomputes the hash from the persisted
+        campaign-verification-report.json bytes and compares against the
+        index entry. A tampered index hash is rejected.
+        """
+        plan, index, child_dirs = _setup_four_children(tmp_path)
+        entries = list(index.child_index_entries)
+        entries[0] = CampaignChildIndexEntry(
+            child_id=entries[0].child_id,
+            report_campaign_id=entries[0].report_campaign_id,
+            finalization_generation_hash=entries[0].finalization_generation_hash,
+            child_verification_report_hash="f" * 64,
+            report_checksum=entries[0].report_checksum,
+            assignment_count=entries[0].assignment_count,
+        )
+        bad_index = CampaignSetIndex.model_construct(
+            set_id=index.set_id,
+            set_plan_hash=index.set_plan_hash,
+            child_index_entries=entries,
+            total_assignment_count=index.total_assignment_count,
+            content_hash=index.content_hash,
+        )
+        result = verify_campaign_set_aggregate(plan, bad_index, child_dirs)
+        assert not result.ok
+        assert any("verification report hash" in f for f in result.failures)
+
+    def test_tampered_report_checksum_in_index_fails(self, tmp_path: Path):
+        """An index entry with a wrong report_checksum fails.
+
+        The verifier recomputes the checksum from attempts.jsonl and
+        metrics.jsonl and compares against the index entry. A tampered
+        index checksum is rejected.
+        """
+        plan, index, child_dirs = _setup_four_children(tmp_path)
+        entries = list(index.child_index_entries)
+        entries[0] = CampaignChildIndexEntry(
+            child_id=entries[0].child_id,
+            report_campaign_id=entries[0].report_campaign_id,
+            finalization_generation_hash=entries[0].finalization_generation_hash,
+            child_verification_report_hash=entries[0].child_verification_report_hash,
+            report_checksum="e" * 64,
+            assignment_count=entries[0].assignment_count,
+        )
+        bad_index = CampaignSetIndex.model_construct(
+            set_id=index.set_id,
+            set_plan_hash=index.set_plan_hash,
+            child_index_entries=entries,
+            total_assignment_count=index.total_assignment_count,
+            content_hash=index.content_hash,
+        )
+        result = verify_campaign_set_aggregate(plan, bad_index, child_dirs)
+        assert not result.ok
+        assert any("report checksum" in f.lower() for f in result.failures)
+
+    def test_tampered_attempts_fail_report_checksum(self, tmp_path: Path):
+        """Tampering with attempts.jsonl makes the recomputed checksum mismatch.
+
+        The verifier recomputes the checksum from the actual attempts
+        and metrics files. A tampered attempts file produces a different
+        checksum than the index entry declares.
+        """
+        from g8e_evals.constants import ATTEMPTS_JSONL
+
+        plan, index, child_dirs = _setup_four_children(tmp_path)
+        first_child_id = plan.child_plans[0].child_id
+        attempts_path = child_dirs[first_child_id] / ATTEMPTS_JSONL
+        if attempts_path.exists():
+            lines = attempts_path.read_text().strip().splitlines()
+            if lines:
+                record = json.loads(lines[0])
+                record["terminal_status"] = "tampered"
+                lines[0] = json.dumps(record)
+                attempts_path.write_text("\n".join(lines) + "\n")
+        result = verify_campaign_set_aggregate(plan, index, child_dirs)
+        assert not result.ok
+        assert any("report checksum" in f.lower() for f in result.failures)
+
+    def test_alter_assignment_product_preserving_count_fails(self, tmp_path: Path):
+        """Altering assignment task IDs while preserving count fails product check.
+
+        Replace a child's assignments with records whose task IDs do not
+        match the partition but keep the same count. The unique-assignment
+        coverage check passes (count is preserved), but the product check
+        rejects the wrong task set.
+        """
+        plan, index, child_dirs = _setup_four_children(tmp_path)
+        first_child_id = plan.child_plans[0].child_id
+        assignments_path = child_dirs[first_child_id] / CAMPAIGN_ASSIGNMENTS_JSONL
+        lines = assignments_path.read_text().strip().splitlines()
+        if lines:
+            new_lines: list[str] = []
+            for line in lines:
+                record = json.loads(line)
+                record["task_id"] = "task-999"
+                record["assignment_id"] = record["assignment_id"] + "-tampered"
+                new_lines.append(json.dumps(record))
+            assignments_path.write_text("\n".join(new_lines) + "\n")
+        result = verify_campaign_set_aggregate(plan, index, child_dirs)
+        assert not result.ok
+        assert any("task IDs do not match partition" in f for f in result.failures)
+
+    def test_alter_assignment_repetition_preserving_count_fails(self, tmp_path: Path):
+        """Altering assignment replicate IDs while preserving count fails product check.
+
+        Replace a child's assignments with records whose replicate IDs do
+        not match the plan's repetition IDs but keep the same count.
+        """
+        plan, index, child_dirs = _setup_four_children(tmp_path)
+        first_child_id = plan.child_plans[0].child_id
+        assignments_path = child_dirs[first_child_id] / CAMPAIGN_ASSIGNMENTS_JSONL
+        lines = assignments_path.read_text().strip().splitlines()
+        if lines:
+            new_lines: list[str] = []
+            for line in lines:
+                record = json.loads(line)
+                record["replicate_id"] = "rep-999"
+                record["assignment_id"] = record["assignment_id"] + "-tampered"
+                new_lines.append(json.dumps(record))
+            assignments_path.write_text("\n".join(new_lines) + "\n")
+        result = verify_campaign_set_aggregate(plan, index, child_dirs)
+        assert not result.ok
+        assert any("replicate IDs do not match plan" in f for f in result.failures)
+
+    def test_index_total_assignment_count_mismatch_fails(self, tmp_path: Path):
+        """An index with a total_assignment_count not matching the plan fails.
+
+        validate_campaign_set_index now enforces that the index's
+        total_assignment_count equals the plan's expected_total_assignment_count.
+        """
+        plan, index, child_dirs = _setup_four_children(tmp_path)
+        bad_index = CampaignSetIndex.model_construct(
+            set_id=index.set_id,
+            set_plan_hash=index.set_plan_hash,
+            child_index_entries=index.child_index_entries,
+            total_assignment_count=999,
+            content_hash=index.content_hash,
+        )
+        result = verify_campaign_set_aggregate(plan, bad_index, child_dirs)
+        assert not result.ok
+        assert any("total_assignment_count" in f for f in result.failures)
+
+    def test_aggregate_result_is_content_addressed(self, tmp_path: Path):
+        """The AggregateVerificationResult carries a content_hash that recomputes.
+
+        A valid set produces a result whose content_hash matches
+        compute_aggregate_verification_result_hash. Two valid runs over
+        the same inputs produce the same content_hash.
+        """
+        from g8e_evals.campaign_set import compute_aggregate_verification_result_hash
+
+        plan, index, child_dirs = _setup_four_children(tmp_path)
+        result = verify_campaign_set_aggregate(plan, index, child_dirs)
+        assert result.content_hash == compute_aggregate_verification_result_hash(result)
+        assert result.content_hash != "0" * 64
+
+    def test_aggregate_result_content_hash_changes_on_failure(self, tmp_path: Path):
+        """A failing aggregate result has a different content_hash than a passing one.
+
+        The content_hash covers the ok flag, failures, and all child
+        results, so a failing verification produces a different hash.
+        """
+        plan, index, child_dirs = _setup_four_children(tmp_path)
+        passing_result = verify_campaign_set_aggregate(plan, index, child_dirs)
+        first_child_id = plan.child_plans[0].child_id
+        assignments_path = child_dirs[first_child_id] / CAMPAIGN_ASSIGNMENTS_JSONL
+        lines = assignments_path.read_text().strip().splitlines()
+        if lines:
+            lines = lines[:-1]
+            assignments_path.write_text("\n".join(lines) + "\n")
+        failing_result = verify_campaign_set_aggregate(plan, index, child_dirs)
+        assert passing_result.content_hash != failing_result.content_hash
+
+    def test_aggregate_result_binds_set_index_hash(self, tmp_path: Path):
+        """The AggregateVerificationResult binds the set_index_hash."""
+        plan, index, child_dirs = _setup_four_children(tmp_path)
+        result = verify_campaign_set_aggregate(plan, index, child_dirs)
+        assert result.set_index_hash == index.content_hash

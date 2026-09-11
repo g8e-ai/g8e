@@ -655,6 +655,11 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                     assignment_ids_from_attempts, attempt_ids, attempt_by_id,
                     failures,
                 )
+                _check_evidence_binding(
+                    obs.verification_status, obs.source_evidence_refs,
+                    obs.source_evidence_sha256, obs.inference_id,
+                    "resource observation", failures,
+                )
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             failures.append(f"resource observation validation failed: {e}")
 

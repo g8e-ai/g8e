@@ -56,6 +56,24 @@ class ModelRole(StrEnum):
     LITE = "lite"
 
 
+class VerificationStatus(StrEnum):
+    """Typed verification status for a record or observation.
+
+    ``PENDING``: Verification has not yet been performed.
+    ``VERIFIED``: The record has been independently verified against
+    indexed source evidence. A VERIFIED record without source evidence
+    references or a source evidence hash is not independently verifiable
+    and is rejected.
+    ``FAILED``: Verification was attempted and failed.
+    ``NOT_APPLICABLE``: Verification does not apply to this record.
+    """
+
+    PENDING = "pending"
+    VERIFIED = "verified"
+    FAILED = "failed"
+    NOT_APPLICABLE = "not_applicable"
+
+
 class MeasurementAvailability(StrEnum):
     """Typed availability state for a measurement field.
 
@@ -503,7 +521,7 @@ _RESOURCE_MEASUREMENT_FIELDS: tuple[str, ...] = (
 
 
 class ResourceObservation(BaseModel):
-    """Typed resource observation bound to campaign, report, assignment, attempt, inference, role, and task.
+    """Typed resource observation bound to campaign, report, assignment, attempt, inference, stage, role, and task.
 
     One resource observation per actual provider inference. A g8ee
     scenario that invokes several role models emits several records
@@ -511,12 +529,23 @@ class ResourceObservation(BaseModel):
     provider call.
 
     Every observation binds campaign ID, child/report ID, assignment ID,
-    attempt ID, inference ID, role, model variant ID, canonical task ID,
-    orchestrator scope, provider scope, observation boundary, clock
-    domain, collection tool, and source evidence hash. The orchestrator
-    and provider environment scopes are separate identities; remote
-    provider hardware may be attested or unavailable, never copied
+    attempt ID, inference ID, stage ID, role, model variant ID, canonical
+    task ID, orchestrator scope, provider scope, observation boundary,
+    clock domain, collection tool, and indexed source evidence. The
+    orchestrator and provider environment scopes are separate identities;
+    remote provider hardware may be attested or unavailable, never copied
     from the local CPU identity.
+
+    The ``stage_id`` field binds the observation to the specific
+    ``StageObservation`` that produced the inference, enabling exact
+    inference-trail count verification and stage-level joining.
+
+    Source evidence is indexed: ``source_evidence_refs`` lists the
+    evidence artifact IDs, ``source_evidence_sha256`` is the SHA-256 of
+    the source evidence, and ``verification_status`` tracks whether the
+    observation has been independently verified. A VERIFIED observation
+    without source evidence references or a source evidence hash is not
+    independently verifiable and is rejected.
 
     All numeric measurement fields are optional. ``None`` means
     unavailable. Zero (``0`` or ``0.0``) is always a measured zero.
@@ -543,6 +572,7 @@ class ResourceObservation(BaseModel):
     assignment_id: str = Field(min_length=1, description="Campaign assignment ID.")
     attempt_id: str = Field(min_length=1, description="Attempt ID within the assignment.")
     inference_id: str = Field(min_length=1, description="Unique inference ID within the attempt. One observation per inference.")
+    stage_id: str = Field(min_length=1, description="Stage ID from StageObservation that produced this inference. Binds the observation to the specific stage for inference-trail verification.")
     role: ModelRole = Field(description="Model role: primary, assistant, or lite.")
     model_variant_id: str = Field(min_length=1, description="Model variant ID.")
     task_id: str = Field(min_length=1, description="Canonical task ID from the assignment.")
@@ -555,7 +585,11 @@ class ResourceObservation(BaseModel):
 
     # Collection metadata
     collection_tool: str = Field(min_length=1, description="Collection tool and version (e.g. psutil-5.9).")
-    source_evidence_hash: str = Field(min_length=64, max_length=64, description="SHA-256 of the source evidence.")
+
+    # Indexed source evidence
+    source_evidence_refs: list[str] = Field(default_factory=list, description="Indexed source evidence artifact IDs for independent verification.")
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$", description="SHA-256 of the source evidence. Required when verification_status is VERIFIED.")
+    verification_status: VerificationStatus = Field(default=VerificationStatus.PENDING, description="Verification status of this observation.")
 
     # Measurements (all optional — None means unavailable, zero is measured)
     model_load_time_seconds: float | None = Field(default=None, ge=0.0, description="Model load time in seconds (cold start). None when unavailable.")
@@ -614,6 +648,20 @@ class ResourceObservation(BaseModel):
             raise ValueError(
                 f"unavailable_measurements entries for non-None fields: "
                 f"{sorted(extra_explanations)}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_source_evidence_binding(self) -> Self:
+        if len(self.source_evidence_refs) != len(set(self.source_evidence_refs)):
+            raise ValueError(
+                "resource observation source evidence references must be unique"
+            )
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError(
+                "verified resource observation requires source evidence references and hash"
             )
         return self
 
@@ -733,6 +781,7 @@ __all__ = [
     "TierObservationRecord",
     "UnavailableMeasurement",
     "VariantMetricAggregate",
+    "VerificationStatus",
     "aggregate_metrics_by_variant",
     "compute_index_generation_hash",
     "validate_index_chain",

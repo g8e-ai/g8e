@@ -306,7 +306,7 @@ class TestValidateCorrelatedErrorRecords:
     def test_same_task_same_attempt_different_stage_role_passes(self):
         ce1 = _make_record(record_id="ce-1", task_id="task-1", stage_role="primary")
         ce2 = _make_record(record_id="ce-2", task_id="task-1", stage_role="assistant")
-        ce3 = _make_record(record_id="ce-3", task_id="task-1", stage_role="light")
+        ce3 = _make_record(record_id="ce-3", task_id="task-1", stage_role="lite")
         validate_correlated_error_records([ce1, ce2, ce3])
 
     def test_same_task_different_attempt_passes(self):
@@ -454,7 +454,7 @@ class TestCorrelatedErrorDerivedProducers:
         record = _make_analysis_record([
             _make_record(record_id="ce-1", stage_role="primary", error_class=ErrorClassLabel.SCHEMA_VIOLATION),
             _make_record(record_id="ce-2", stage_role="assistant", error_class=ErrorClassLabel.SCHEMA_VIOLATION),
-            _make_record(record_id="ce-3", stage_role="light", error_class=ErrorClassLabel.OTHER),
+            _make_record(record_id="ce-3", stage_role="lite", error_class=ErrorClassLabel.OTHER),
         ])
         results = produce_correlated_failure_rate_observations(record)
         assert len(results) == 1

@@ -904,6 +904,8 @@ def campaign():
               help="Maximum total provider requests before the campaign stops with a typed budget-exhausted outcome.")
 @click.option("--max-usd", type=float, default=None,
               help="Maximum total provider spending in USD before the campaign stops.")
+@click.option("--max-tokens", type=int, default=None,
+              help="Maximum total provider tokens before the campaign stops. Only enforced when the budget observability policy declares tokens observable.")
 @click.option("--model-tags", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
               help="Path to a JSON file mapping cohort IDs to provider model tags (e.g. {\"cohort-granite-3.3-8b\": \"granite3.3:8b\"}). When omitted, the model tag is derived from the cohort ID by removing the 'cohort-' prefix and replacing the last hyphen with a colon.")
 @click.option("--profile", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
@@ -925,7 +927,9 @@ def campaign():
               help="Zero-based offset into the gold-set task list. Combined with --task-limit, enables explicit batched runs without implicit resume. Tasks are sliced in loader order before schedule randomization.")
 @click.option("--task-limit", type=int, default=None,
               help="Maximum number of tasks to load from the gold set (after --task-offset). When omitted, all tasks are loaded. Each batch is a separate campaign with its own report directory.")
-def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, model_tags, profile, models, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, task_offset, task_limit):
+@click.option("--campaign-set-plan", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
+              help="Path to a JSON CampaignSetPlan file. When provided, the campaign is validated as a child of the frozen campaign-set before report-directory creation, and the report-level CampaignBinding is marked as ReportRole.CHILD.")
+def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, max_tokens, model_tags, profile, models, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, task_offset, task_limit, campaign_set_plan):
     """Run an authoritative multi-arm, multi-cohort campaign.
 
     Creates one campaign identity, one report directory, one assignment
@@ -941,6 +945,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         TaskAssignmentManifest,
         compute_initial_state_hash,
         compute_model_cohort_hash,
+        compute_retry_policy_hash,
         compute_task_assignment_hash,
     )
     from g8e_evals.schema import ProviderBudget
@@ -972,6 +977,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     campaign_profile = None
     model_registry = None
     cohort_variant_map: dict[str, str] | None = None
+    loaded_campaign_set_plan = None
     if profile is not None and models is not None:
         from g8e_evals.profile import CampaignProfile
         from g8e_evals.registry import ModelRegistry
@@ -999,6 +1005,54 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
             )
         except ValueError as e:
             raise click.UsageError(f"identity validation failed: {e}") from e
+        # Cross-check CLI --seed and --max-retries against the frozen
+        # campaign profile before report-directory creation.
+        try:
+            validate_profile_cli_cross_check(
+                cli_seed=seed,
+                cli_max_retries=max_retries,
+                profile_seed=campaign_profile.seed,
+                profile_max_retries=campaign_profile.max_retries,
+            )
+        except ValueError as e:
+            raise click.UsageError(f"profile cross-check failed: {e}") from e
+        # When --campaign-set-plan is provided, validate the child
+        # campaign against the frozen CampaignSetPlan before
+        # report-directory creation.
+        if campaign_set_plan is not None:
+            from g8e_evals.campaign_set import CampaignSetPlan as _CSP
+            from g8e_evals.runner import compute_provider_budget_hash as _cpbh
+            try:
+                loaded_campaign_set_plan = _CSP.model_validate_json(
+                    campaign_set_plan.read_text()
+                )
+            except (ValidationError, OSError) as e:
+                raise click.UsageError(
+                    f"could not parse campaign-set plan {campaign_set_plan}: {e}"
+                ) from e
+            retry_policy_hash = compute_retry_policy_hash(
+                max_retries, ["infrastructure_failed"],
+            )
+            budget_authority_hash = _cpbh(provider_budget)
+            try:
+                validate_campaign_set_child_preflight(
+                    campaign_id=campaign_id,
+                    campaign_profile_hash=campaign_profile.content_hash,
+                    model_registry_hash=model_registry.content_hash,
+                    expected_record_policy_hash=campaign_profile.required_record_policy_hash,
+                    retry_policy_hash=retry_policy_hash,
+                    budget_authority_hash=budget_authority_hash,
+                    instrumentation_policy_hash=campaign_profile.instrumentation_policy_hash,
+                    seed=seed,
+                    orchestrator_environment_scope=campaign_profile.hardware_identity,
+                    provider_environment_scope=campaign_profile.provider_hardware_identity,
+                    campaign_set_plan=loaded_campaign_set_plan,
+                    task_ids=[t.id for t in tasks],
+                )
+            except ValueError as e:
+                raise click.UsageError(
+                    f"campaign-set child preflight failed: {e}"
+                ) from e
         cohorts, cohort_variant_map = derive_cohorts_from_registry(campaign_profile, model_registry)
         if not cohorts:
             raise click.UsageError("no runnable variants found in the model registry for the profile's generative_variant_ids")
@@ -1057,9 +1111,10 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     )
 
     provider_budget = None
-    if max_usd is not None or max_requests is not None:
+    if max_usd is not None or max_requests is not None or max_tokens is not None:
         provider_budget = ProviderBudget(
             max_usd=max_usd if max_usd is not None else 0.0,
+            max_tokens=max_tokens,
             max_requests=max_requests,
         )
 
@@ -1153,6 +1208,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         campaign_profile=campaign_profile,
         model_registry=model_registry,
         cohort_variant_map=cohort_variant_map,
+        campaign_set_plan=loaded_campaign_set_plan,
     )
 
     try:

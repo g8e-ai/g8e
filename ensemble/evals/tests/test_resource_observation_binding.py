@@ -35,6 +35,7 @@ from g8e_evals.index import (
     ModelRole,
     ResourceObservation,
     UnavailableMeasurement,
+    VerificationStatus,
     validate_resource_observations,
 )
 
@@ -90,6 +91,7 @@ def _make_resource_observation(
     assignment_id: str = "assignment-1",
     attempt_id: str = "att-1",
     inference_id: str = "inf-1",
+    stage_id: str = "att-1:direct:1",
     role: ModelRole = ModelRole.PRIMARY,
     model_variant_id: str = "qwen3-8b-q4_0",
     task_id: str = "task-1",
@@ -98,7 +100,9 @@ def _make_resource_observation(
     observation_boundary: str = "provider_call",
     clock_domain: str = "monotonic",
     collection_tool: str = "psutil-5.9",
-    source_evidence_hash: str = _VALID_HASH,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = _VALID_HASH,
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
     model_load_time_seconds: float | None = 12.5,
     peak_resident_memory_bytes: int | None = 4_000_000_000,
     peak_accelerator_memory_bytes: int | None = 8_000_000_000,
@@ -142,6 +146,7 @@ def _make_resource_observation(
         assignment_id=assignment_id,
         attempt_id=attempt_id,
         inference_id=inference_id,
+        stage_id=stage_id,
         role=role,
         model_variant_id=model_variant_id,
         task_id=task_id,
@@ -150,7 +155,9 @@ def _make_resource_observation(
         observation_boundary=observation_boundary,
         clock_domain=clock_domain,
         collection_tool=collection_tool,
-        source_evidence_hash=source_evidence_hash,
+        source_evidence_refs=source_evidence_refs or ["evidence/test.json"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
         unavailable_measurements=unavailable_measurements,
         **measurement_values,
     )
@@ -279,10 +286,16 @@ class TestResourceObservationModel:
         with pytest.raises(ValidationError):
             ResourceObservation(**data)
 
-    def test_requires_source_evidence_hash(self):
+    def test_verified_requires_source_evidence_refs(self):
         data = _make_fully_unavailable_observation().model_dump()
-        del data["source_evidence_hash"]
-        with pytest.raises(ValidationError):
+        data["source_evidence_refs"] = []
+        with pytest.raises(ValidationError, match="source evidence"):
+            ResourceObservation(**data)
+
+    def test_verified_requires_source_evidence_sha256(self):
+        data = _make_fully_unavailable_observation().model_dump()
+        data["source_evidence_sha256"] = None
+        with pytest.raises(ValidationError, match="source evidence"):
             ResourceObservation(**data)
 
 

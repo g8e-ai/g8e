@@ -32,6 +32,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from g8e_evals.campaign_set import AggregateVerificationResult
 from g8e_evals.model_comparison import (
     MODEL_COMPARISON_AUTHORITY_VERSION,
     MODEL_COMPARISON_ENGINE_VERSION,
@@ -1283,3 +1284,219 @@ class TestAuthorityHashes:
                 benchmark_population_hash=_HASH_F,
                 metric_registry_hash=_HASH_G,
             )
+
+
+class TestSuperiorityEffectDirection:
+    """Regression: a superiority claim requires a positive candidate effect.
+
+    A superiority gate must not PASS when the candidate is worse than
+    the anchor (negative paired risk difference), even if the McNemar
+    p-value is significant. The effect direction matters: a significant
+    p-value with a negative risk difference means the candidate is
+    significantly *worse*, not superior.
+    """
+
+    def test_superiority_fails_when_candidate_worse_than_anchor(self) -> None:
+        single_pk = [ComparisonPairKey(
+            candidate_variant_id="candidate-a",
+            anchor_variant_id=_GLOBAL_ANCHOR,
+            family_kind=ComparisonFamilyKind.GLOBAL_ANCHOR,
+            family_name=_GLOBAL_FAMILY,
+        )]
+        prereg = _make_preregistration(
+            pair_keys=single_pk,
+            claim_gate=ClaimGate.SUPERIORITY,
+            minimum_population=5,
+        )
+        task_ids = ["t1", "t2", "t3", "t4", "t5", "t6"]
+        rep_ids = ["r1", "r2", "r3"]
+        candidate_cells = _make_cells_for_variant(
+            "candidate-a", task_ids,
+            {tid: [False, False, False] for tid in task_ids},
+            rep_ids,
+        )
+        anchor_cells = _make_cells_for_variant(
+            _GLOBAL_ANCHOR, task_ids,
+            {tid: [True, True, True] for tid in task_ids},
+            rep_ids,
+        )
+        cells = candidate_cells + anchor_cells
+        output = compute_model_comparison(prereg, cells, _make_authority_hashes())
+        result = next(r for r in output.results if r.candidate_variant_id == "candidate-a")
+        assert result.paired_risk_difference is not None
+        assert result.paired_risk_difference < 0.0
+        assert result.mcnemar_p_value is not None
+        assert result.claim_gate_status == ClaimGateStatus.FAIL
+        assert "negative" in result.claim_gate_reason.lower() or "direction" in result.claim_gate_reason.lower() or "risk difference" in result.claim_gate_reason.lower()
+
+    def test_superiority_fails_when_risk_difference_zero_with_discordant_pairs(self) -> None:
+        single_pk = [ComparisonPairKey(
+            candidate_variant_id="candidate-a",
+            anchor_variant_id=_GLOBAL_ANCHOR,
+            family_kind=ComparisonFamilyKind.GLOBAL_ANCHOR,
+            family_name=_GLOBAL_FAMILY,
+        )]
+        prereg = _make_preregistration(
+            pair_keys=single_pk,
+            claim_gate=ClaimGate.SUPERIORITY,
+            minimum_population=5,
+        )
+        task_ids = ["t1", "t2", "t3", "t4", "t5", "t6"]
+        rep_ids = ["r1", "r2", "r3"]
+        candidate_cells = _make_cells_for_variant(
+            "candidate-a", task_ids,
+            {
+                "t1": [True, True, True],
+                "t2": [True, True, True],
+                "t3": [True, True, True],
+                "t4": [False, False, False],
+                "t5": [False, False, False],
+                "t6": [False, False, False],
+            },
+            rep_ids,
+        )
+        anchor_cells = _make_cells_for_variant(
+            _GLOBAL_ANCHOR, task_ids,
+            {
+                "t1": [False, False, False],
+                "t2": [False, False, False],
+                "t3": [False, False, False],
+                "t4": [True, True, True],
+                "t5": [True, True, True],
+                "t6": [True, True, True],
+            },
+            rep_ids,
+        )
+        cells = candidate_cells + anchor_cells
+        output = compute_model_comparison(prereg, cells, _make_authority_hashes())
+        result = next(r for r in output.results if r.candidate_variant_id == "candidate-a")
+        assert result.paired_risk_difference == 0.0
+        assert result.mcnemar_p_value is not None
+        assert result.claim_gate_status == ClaimGateStatus.FAIL
+
+    def test_superiority_passes_only_with_positive_risk_difference(self) -> None:
+        single_pk = [ComparisonPairKey(
+            candidate_variant_id="candidate-a",
+            anchor_variant_id=_GLOBAL_ANCHOR,
+            family_kind=ComparisonFamilyKind.GLOBAL_ANCHOR,
+            family_name=_GLOBAL_FAMILY,
+        )]
+        prereg = _make_preregistration(
+            pair_keys=single_pk,
+            claim_gate=ClaimGate.SUPERIORITY,
+            minimum_population=5,
+        )
+        task_ids = ["t1", "t2", "t3", "t4", "t5", "t6"]
+        rep_ids = ["r1", "r2", "r3"]
+        candidate_cells = _make_cells_for_variant(
+            "candidate-a", task_ids,
+            {tid: [True, True, True] for tid in task_ids},
+            rep_ids,
+        )
+        anchor_cells = _make_cells_for_variant(
+            _GLOBAL_ANCHOR, task_ids,
+            {tid: [False, False, False] for tid in task_ids},
+            rep_ids,
+        )
+        cells = candidate_cells + anchor_cells
+        output = compute_model_comparison(prereg, cells, _make_authority_hashes())
+        result = next(r for r in output.results if r.candidate_variant_id == "candidate-a")
+        assert result.paired_risk_difference is not None
+        assert result.paired_risk_difference > 0.0
+        assert result.claim_gate_status == ClaimGateStatus.PASS
+
+
+class TestTypedAggregateInputBinding:
+    """Regression: engine inputs bind to the typed accepted aggregate.
+
+    The aggregate verification hash, campaign-set plan hash, and
+    campaign-set index hash must come from the typed
+    ``AggregateVerificationResult`` rather than caller-supplied
+    arbitrary strings. A failed aggregate (``ok=False``) is rejected.
+    """
+
+    @staticmethod
+    def _make_aggregate_result(
+        ok: bool = True,
+        content_hash: str | None = None,
+        set_plan_hash: str = _HASH_B,
+        set_index_hash: str = _HASH_C,
+    ) -> AggregateVerificationResult:
+        from g8e_evals.campaign_set import compute_aggregate_verification_result_hash
+
+        result = AggregateVerificationResult.model_construct(
+            verification_schema_version="1.0.0",
+            set_id="test-set-id",
+            set_plan_hash=set_plan_hash,
+            set_index_hash=set_index_hash,
+            ok=ok,
+            child_results=[],
+            total_assignments_verified=0,
+            assignment_uniqueness_ok=ok,
+            coverage_ok=ok,
+            product_coverage_ok=ok,
+            hash_binding_ok=ok,
+            failures=[] if ok else ["fake failure"],
+            content_hash=content_hash or "0" * 64,
+        )
+        if content_hash is None:
+            expected = compute_aggregate_verification_result_hash(result)
+            return AggregateVerificationResult.model_validate(
+                result.model_dump() | {"content_hash": expected},
+            )
+        return result
+
+    def test_from_aggregate_extracts_hashes_from_typed_result(self) -> None:
+        result = self._make_aggregate_result()
+        hashes = ModelComparisonAuthorityHashes.from_aggregate_verification_result(
+            result,
+            profile_hash=_HASH_D,
+            registry_hash=_HASH_E,
+            benchmark_population_hash=_HASH_F,
+            metric_registry_hash=_HASH_G,
+        )
+        assert hashes.aggregate_verification_hash == result.content_hash
+        assert hashes.campaign_set_plan_hash == result.set_plan_hash
+        assert hashes.campaign_set_index_hash == result.set_index_hash
+        assert hashes.profile_hash == _HASH_D
+        assert hashes.registry_hash == _HASH_E
+        assert hashes.benchmark_population_hash == _HASH_F
+        assert hashes.metric_registry_hash == _HASH_G
+
+    def test_from_aggregate_rejects_failed_aggregate(self) -> None:
+        result = self._make_aggregate_result(ok=False)
+        with pytest.raises(ValueError, match="failed aggregate"):
+            ModelComparisonAuthorityHashes.from_aggregate_verification_result(
+                result,
+                profile_hash=_HASH_D,
+                registry_hash=_HASH_E,
+                benchmark_population_hash=_HASH_F,
+                metric_registry_hash=_HASH_G,
+            )
+
+    def test_from_aggregate_does_not_accept_caller_supplied_aggregate_hash(self) -> None:
+        result = self._make_aggregate_result()
+        hashes = ModelComparisonAuthorityHashes.from_aggregate_verification_result(
+            result,
+            profile_hash=_HASH_D,
+            registry_hash=_HASH_E,
+            benchmark_population_hash=_HASH_F,
+            metric_registry_hash=_HASH_G,
+        )
+        assert hashes.aggregate_verification_hash == result.content_hash
+        assert hashes.aggregate_verification_hash != _HASH_A
+
+    def test_engine_output_binds_typed_aggregate_hash(self) -> None:
+        result = self._make_aggregate_result()
+        hashes = ModelComparisonAuthorityHashes.from_aggregate_verification_result(
+            result,
+            profile_hash=_HASH_D,
+            registry_hash=_HASH_E,
+            benchmark_population_hash=_HASH_F,
+            metric_registry_hash=_HASH_G,
+        )
+        prereg = _make_preregistration()
+        output = compute_model_comparison(prereg, [], hashes)
+        assert output.aggregate_verification_hash == result.content_hash
+        assert output.campaign_set_plan_hash == result.set_plan_hash
+        assert output.campaign_set_index_hash == result.set_index_hash

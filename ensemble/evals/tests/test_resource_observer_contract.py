@@ -213,6 +213,7 @@ def _make_resource_observation(
     assignment_id: str = "assignment-1",
     attempt_id: str = "att-1",
     inference_id: str = "inf-1",
+    stage_id: str = "att-1:direct:1",
     role: str = "primary",
     model_variant_id: str = "qwen3-8b-q4_0",
     task_id: str = "task-1",
@@ -221,7 +222,9 @@ def _make_resource_observation(
     observation_boundary: str = "provider_call",
     clock_domain: str = "monotonic",
     collection_tool: str = "psutil-5.9",
-    source_evidence_hash: str = _VALID_HASH,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = _VALID_HASH,
+    verification_status: str = "verified",
     model_load_time_seconds: float | None = 12.5,
     peak_resident_memory_bytes: int | None = 4_000_000_000,
     peak_accelerator_memory_bytes: int | None = 8_000_000_000,
@@ -275,6 +278,7 @@ def _make_resource_observation(
         "assignment_id": assignment_id,
         "attempt_id": attempt_id,
         "inference_id": inference_id,
+        "stage_id": stage_id,
         "role": role,
         "model_variant_id": model_variant_id,
         "task_id": task_id,
@@ -283,7 +287,9 @@ def _make_resource_observation(
         "observation_boundary": observation_boundary,
         "clock_domain": clock_domain,
         "collection_tool": collection_tool,
-        "source_evidence_hash": source_evidence_hash,
+        "source_evidence_refs": source_evidence_refs or ["evidence/test.json"],
+        "source_evidence_sha256": source_evidence_sha256,
+        "verification_status": verification_status,
         "unavailable_measurements": unavailable_measurements,
         **measurement_values,
     }
@@ -319,6 +325,7 @@ def _campaign_identity_all_attempts(report_dir: Path) -> list[dict]:
             "assignment_id": attempt.get("assignment_id", ""),
             "attempt_id": attempt["attempt_id"],
             "inference_id": f"inf-{i}",
+            "stage_id": f"{attempt['attempt_id']}:direct:1",
         })
     return identities
 
@@ -402,6 +409,8 @@ class TestResourceObserverContract:
         # 100 tokens / 1.0 second provider call = 100 tokens/second
         assert obs.output_throughput_tokens_per_second == 100.0
         # end-to-end latency (2.0) > provider call latency (1.0)
+        assert obs.end_to_end_latency_seconds is not None
+        assert obs.provider_call_latency_seconds is not None
         assert obs.end_to_end_latency_seconds > obs.provider_call_latency_seconds
 
 

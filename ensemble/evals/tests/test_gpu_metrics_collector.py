@@ -25,7 +25,6 @@ fields.
 from __future__ import annotations
 
 import sys
-import types
 
 import pytest
 from pydantic import ValidationError
@@ -320,6 +319,7 @@ class TestGpuMetricsCollectorIntegrationWithObservation:
             assignment_id="assignment-1",
             attempt_id="att-1",
             inference_id="inf-1",
+            stage_id="att-1:direct:1",
             role="primary",
             model_variant_id="v1",
             task_id="task-1",
@@ -328,7 +328,9 @@ class TestGpuMetricsCollectorIntegrationWithObservation:
             observation_boundary="provider_call",
             clock_domain="monotonic",
             collection_tool=f"psutil-5.9+{collector.collection_tool()}",
-            source_evidence_hash="a" * 64,
+            source_evidence_refs=["evidence/test.json"],
+            source_evidence_sha256="a" * 64,
+            verification_status="verified",
             model_load_time_seconds=10.0,
             peak_resident_memory_bytes=4_000_000_000,
             artifact_bytes=4_800_000_000,

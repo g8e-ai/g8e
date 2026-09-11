@@ -121,9 +121,9 @@ class TestEscalationRecordModel:
                 task_id="task-1",
                 agent_persona="triage",
                 model_variant_id="smollm2-360m-q4_0",
-                expected_role="light",
+                expected_role="lite",
                 ground_truth_complexity="light",
-                routed_to_role="light",
+                routed_to_role="lite",
                 outcome=EscalationOutcome.CORRECT_AUTONOMOUS,
                 task_succeeded=True,
                 extra_field="bad",
@@ -137,9 +137,9 @@ class TestEscalationRecordModel:
         assert er.task_id == "task-1"
         assert er.agent_persona == "triage"
         assert er.model_variant_id == "smollm2-360m-q4_0"
-        assert er.expected_role == "light"
+        assert er.expected_role == "lite"
         assert er.ground_truth_complexity == "light"
-        assert er.routed_to_role == "light"
+        assert er.routed_to_role == "lite"
         assert er.outcome == EscalationOutcome.CORRECT_AUTONOMOUS
         assert er.task_succeeded is True
 
@@ -710,9 +710,9 @@ def _make_record(
     task_id: str = "task-1",
     agent_persona: str = "triage",
     model_variant_id: str = "smollm2-360m-q4_0",
-    expected_role: str = "light",
+    expected_role: str = "lite",
     ground_truth_complexity: str = "light",
-    routed_to_role: str = "light",
+    routed_to_role: str = "lite",
     outcome: EscalationOutcome = EscalationOutcome.CORRECT_AUTONOMOUS,
     task_succeeded: bool = True,
     source_evidence_refs: list[str] | None = None,

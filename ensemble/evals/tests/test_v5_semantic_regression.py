@@ -936,8 +936,37 @@ class TestDisclosureAuthorityIntegration:
             {
                 "file_name": "disclosure-public.jsonl",
                 "output_format": "canonical_jsonl",
+                "output_role": "public_jsonl",
                 "required": True,
                 "description": "test",
+            },
+            {
+                "file_name": "disclosure-derived.csv",
+                "output_format": "derived_csv",
+                "output_role": "derived_csv",
+                "required": True,
+                "description": "test",
+            },
+            {
+                "file_name": "disclosure-proof-index.json",
+                "output_format": "canonical_jsonl",
+                "output_role": "proof_index",
+                "required": True,
+                "description": "test",
+            },
+            {
+                "file_name": "disclosure-output-inventory.json",
+                "output_format": "canonical_jsonl",
+                "output_role": "output_inventory",
+                "required": True,
+                "description": "test",
+            },
+            {
+                "file_name": "evidence.sqlite",
+                "output_format": "prohibited_sqlite",
+                "output_role": "prohibited_sqlite",
+                "required": False,
+                "description": "prohibited",
             },
         ]
         h = compute_disclosure_authority_hash(

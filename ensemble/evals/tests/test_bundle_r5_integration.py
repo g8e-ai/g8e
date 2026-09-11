@@ -276,6 +276,7 @@ def _make_campaign_manifest(
     provider_budget_hash = hashlib.sha256(b"no_budget").hexdigest()
     source_build_provenance_hash = hashlib.sha256(b"no_provenance").hexdigest()
     claim_exclusion_hash = hashlib.sha256(b"descriptive_only_claim_exclusion").hexdigest()
+    budget_observability_policy_hash = hashlib.sha256(b"no_budget_observability").hexdigest()
     ch = compute_campaign_manifest_hash(
         _CAMPAIGN_ID,
         "1.0.0",
@@ -293,6 +294,7 @@ def _make_campaign_manifest(
         provider_budget_hash,
         source_build_provenance_hash,
         claim_exclusion_hash,
+        budget_observability_policy_hash,
     )
     return CampaignManifest(
         campaign_id=_CAMPAIGN_ID,
@@ -311,6 +313,7 @@ def _make_campaign_manifest(
         provider_budget_hash=provider_budget_hash,
         source_build_provenance_hash=source_build_provenance_hash,
         claim_exclusion_hash=claim_exclusion_hash,
+        budget_observability_policy_hash=budget_observability_policy_hash,
         content_hash=ch,
     )
 

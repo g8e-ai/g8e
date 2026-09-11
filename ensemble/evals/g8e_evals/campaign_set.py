@@ -49,7 +49,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from g8e_evals.campaign_verify import verify_campaign
 from g8e_evals.constants import (
+    ATTEMPTS_JSONL,
     CAMPAIGN_ASSIGNMENTS_JSONL,
+    CAMPAIGN_VERIFICATION_REPORT_JSON,
+    METRICS_JSONL,
+    REPORT_CHECKSUM_JSON,
 )
 from g8e_evals.index import CampaignVerificationReport
 
@@ -314,7 +318,8 @@ class ChildVerificationResult(BaseModel):
 
     Carries the child campaign ID, the child verification report (from
     ``verify_campaign``), the assignment IDs found in the child's
-    report, and the assignment count.
+    report, the assignment count, and the task/repetition/variant
+    product verification fields.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -335,20 +340,51 @@ class ChildVerificationResult(BaseModel):
         default_factory=list,
         description="Sorted failure messages from the child verification.",
     )
+    task_ids: list[str] = Field(
+        default_factory=list,
+        description="Sorted task IDs found in the child's assignments.",
+    )
+    replicate_ids: list[str] = Field(
+        default_factory=list,
+        description="Sorted replicate IDs found in the child's assignments.",
+    )
+    variant_count: int = Field(
+        ge=0,
+        description="Number of distinct (model_cohort_id, arm_id) pairs in the child's assignments.",
+    )
+    product_ok: bool = Field(
+        description="True when the child's assignments form the exact task x repetition x variant product.",
+    )
+    child_verification_report_hash: str = Field(
+        min_length=64, max_length=64,
+        description="SHA-256 of the persisted child verification report bytes.",
+    )
+    report_checksum: str = Field(
+        min_length=64, max_length=64,
+        description="Recomputed SHA-256 report checksum from attempts and metrics.",
+    )
 
 
 class AggregateVerificationResult(BaseModel):
     """Typed aggregate verification result for the campaign set.
 
     The aggregate verifier validates each child first, then proves
-    assignment uniqueness and complete coverage. This result is used
-    directly by analysis and projection; a caller cannot pass four
-    arbitrary directories.
+    assignment uniqueness, complete coverage, the exact task x
+    repetition x variant product, and hash binding to the persisted
+    child verification reports and report checksums. This result is
+    used directly by analysis and projection; a caller cannot pass
+    four arbitrary directories.
 
     The ``ok`` field is ``True`` only when every child passes its own
     verification, all child identities match the plan and index, all
-    assignment IDs are unique across children, and the total assignment
-    count equals the expected total.
+    assignment IDs are unique across children, the total assignment
+    count equals the expected total, the exact authority product is
+    proven for every child, and every declared hash recomputes from
+    the report directory.
+
+    The ``content_hash`` is SHA-256 over canonical JSON of the result,
+    so Delta can consume a recomputed aggregate verification hash
+    directly from ``result.content_hash``.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -358,6 +394,10 @@ class AggregateVerificationResult(BaseModel):
     set_plan_hash: str = Field(
         min_length=64, max_length=64,
         description="SHA-256 of the CampaignSetPlan used for verification.",
+    )
+    set_index_hash: str = Field(
+        min_length=64, max_length=64,
+        description="SHA-256 of the CampaignSetIndex used for verification.",
     )
     ok: bool = Field(description="True when all aggregate checks pass.")
     child_results: list[ChildVerificationResult] = Field(
@@ -374,10 +414,30 @@ class AggregateVerificationResult(BaseModel):
     coverage_ok: bool = Field(
         description="True when the total assignment count equals the expected total.",
     )
+    product_coverage_ok: bool = Field(
+        description="True when every child's assignments form the exact task x repetition x variant product.",
+    )
+    hash_binding_ok: bool = Field(
+        description="True when every child verification report hash and report checksum recomputes from the report directory.",
+    )
     failures: list[str] = Field(
         default_factory=list,
         description="Sorted aggregate failure messages.",
     )
+    content_hash: str = Field(
+        min_length=64, max_length=64,
+        description="SHA-256 over canonical JSON of the aggregate verification result.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_result(self) -> Self:
+        expected = compute_aggregate_verification_result_hash(self)
+        if self.content_hash != expected:
+            raise ValueError(
+                f"aggregate verification result content_hash mismatch: "
+                f"declared {self.content_hash!r}, computed {expected!r}"
+            )
+        return self
 
 
 def compute_child_campaign_id(
@@ -432,6 +492,26 @@ def compute_campaign_set_index_hash(index: CampaignSetIndex) -> str:
     into canonical JSON and returns SHA-256.
     """
     data = index.model_dump(mode="json", by_alias=True)
+    data.pop("content_hash", None)
+    payload = json.dumps(
+        data,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return _sha256(payload)
+
+
+def compute_aggregate_verification_result_hash(result: AggregateVerificationResult) -> str:
+    """Compute the content hash for an aggregate verification result.
+
+    Serializes every material field (excluding ``content_hash`` itself)
+    into canonical JSON and returns SHA-256. The same function is used
+    by the model validator and by callers that need to recompute the
+    hash from a constructed result.
+    """
+    data = result.model_dump(mode="json", by_alias=True)
     data.pop("content_hash", None)
     payload = json.dumps(
         data,
@@ -626,6 +706,12 @@ def validate_campaign_set_index(
             f"duplicate child_id in index entries: {index_child_id_list}"
         )
 
+    if index.total_assignment_count != plan.expected_total_assignment_count:
+        raise ValueError(
+            f"index total_assignment_count {index.total_assignment_count} != "
+            f"plan expected_total_assignment_count {plan.expected_total_assignment_count}"
+        )
+
 
 def _read_assignment_ids(report_dir: Path) -> list[str]:
     """Read assignment IDs from a child report directory's campaign-assignments.jsonl."""
@@ -644,6 +730,86 @@ def _read_assignment_ids(report_dir: Path) -> list[str]:
     return sorted(assignment_ids)
 
 
+def _read_assignment_records(report_dir: Path) -> list[dict[str, object]]:
+    """Read full assignment records from a child report's campaign-assignments.jsonl.
+
+    Returns a list of parsed dicts, each carrying ``assignment_id``,
+    ``task_id``, ``model_cohort_id``, ``arm_id``, and ``replicate_id``.
+    """
+    assignments_path = report_dir / CAMPAIGN_ASSIGNMENTS_JSONL
+    if not assignments_path.exists():
+        return []
+    records: list[dict[str, object]] = []
+    for line in assignments_path.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        records.append(json.loads(line))
+    return records
+
+
+def _compute_child_verification_report_hash(report_dir: Path) -> str | None:
+    """Compute SHA-256 of the persisted child verification report bytes.
+
+    Reads ``campaign-verification-report.json`` from the report directory
+    and returns SHA-256 of its raw file bytes. Returns ``None`` when the
+    file does not exist.
+    """
+    report_path = report_dir / CAMPAIGN_VERIFICATION_REPORT_JSON
+    if not report_path.exists():
+        return None
+    return _sha256(report_path.read_text())
+
+
+def _recompute_report_checksum(report_dir: Path) -> str | None:
+    """Recompute the report checksum from attempts.jsonl and metrics.jsonl.
+
+    Matches the standalone report validator's computation: SHA-256 over
+    canonical JSON of ``{"attempts": [...], "metrics": [...]}``. Returns
+    ``None`` when neither file exists.
+    """
+    attempts_path = report_dir / ATTEMPTS_JSONL
+    metrics_path = report_dir / METRICS_JSONL
+
+    attempts_data: list[dict[str, object]] = []
+    if attempts_path.exists():
+        for line in attempts_path.read_text().splitlines():
+            line = line.strip()
+            if line:
+                attempts_data.append(json.loads(line))
+
+    metrics_data: list[dict[str, object]] = []
+    if metrics_path.exists():
+        for line in metrics_path.read_text().splitlines():
+            line = line.strip()
+            if line:
+                metrics_data.append(json.loads(line))
+
+    if not attempts_path.exists() and not metrics_path.exists():
+        return None
+
+    payload = json.dumps(
+        {"attempts": attempts_data, "metrics": metrics_data},
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return _sha256(payload)
+
+
+def _read_stored_report_checksum(report_dir: Path) -> str | None:
+    """Read the declared checksum from report-checksum.json.
+
+    Returns ``None`` when the file does not exist.
+    """
+    checksum_path = report_dir / REPORT_CHECKSUM_JSON
+    if not checksum_path.exists():
+        return None
+    data = json.loads(checksum_path.read_text())
+    return data.get("checksum")
+
+
 def verify_campaign_set_aggregate(
     plan: CampaignSetPlan,
     index: CampaignSetIndex,
@@ -652,21 +818,36 @@ def verify_campaign_set_aggregate(
     """Verify a complete campaign set: each child, then aggregate coverage.
 
     The verifier:
-    1. Validates the index against the plan (set_id, set_plan_hash, child IDs).
+    1. Validates the index against the plan (set_id, set_plan_hash,
+       child IDs, total assignment count).
     2. For each child in plan order, runs ``verify_campaign`` on the
-       corresponding report directory and collects assignment IDs.
+       corresponding report directory and collects assignment records.
     3. Proves no assignment ID appears in more than one child (uniqueness).
     4. Proves the total unique assignment count equals the expected total
        (complete 11,160-assignment coverage).
     5. Cross-checks each child's verification report campaign ID and
        verified index generation hash against the index entry.
+    6. Recomputes each child's verification report hash from the persisted
+       ``campaign-verification-report.json`` bytes and compares against
+       the index entry's ``child_verification_report_hash``.
+    7. Recomputes each child's report checksum from ``attempts.jsonl`` and
+       ``metrics.jsonl`` and compares against both the stored
+       ``report-checksum.json`` and the index entry's ``report_checksum``.
+    8. Proves the exact task x repetition x variant authority product for
+       each child: the set of ``(task_id, replicate_id,
+       model_cohort_id, arm_id)`` tuples forms a complete Cartesian
+       product of the partition's task IDs, the plan's repetition IDs,
+       and the distinct variant pairs, with no duplicates or missing
+       combinations.
 
     A caller cannot pass four arbitrary directories; the child_report_dirs
     mapping must contain exactly the child IDs from the plan, and each
     directory is verified against the typed index entry.
 
-    Returns an ``AggregateVerificationResult`` with ``ok=True`` only when
-    all checks pass.
+    Returns a content-addressed ``AggregateVerificationResult`` with
+    ``ok=True`` only when all checks pass. The ``content_hash`` allows
+    downstream consumers (e.g. the model-comparison engine) to bind
+    directly to the accepted aggregate verification hash.
     """
     failures: list[str] = []
 
@@ -693,6 +874,8 @@ def verify_campaign_set_aggregate(
     all_assignment_ids: list[str] = []
     seen_assignment_ids: set[str] = set()
     duplicate_assignment_ids: set[str] = set()
+    product_failures: list[str] = []
+    hash_failures: list[str] = []
 
     for cp in plan.child_plans:
         child_id = cp.child_id
@@ -707,13 +890,22 @@ def verify_campaign_set_aggregate(
                 assignment_ids=[],
                 assignment_count=0,
                 failures=[f"no report directory provided for child {child_id}"],
+                task_ids=[],
+                replicate_ids=[],
+                variant_count=0,
+                product_ok=False,
+                child_verification_report_hash="0" * 64,
+                report_checksum="0" * 64,
             ))
             failures.append(f"no report directory provided for child {child_id}")
+            product_failures.append(f"child {child_id}: no report directory")
+            hash_failures.append(f"child {child_id}: no report directory")
             continue
 
         child_verification: CampaignVerificationReport = verify_campaign(report_dir)
 
         assignment_ids = _read_assignment_ids(report_dir)
+        assignment_records = _read_assignment_records(report_dir)
 
         for aid in assignment_ids:
             if aid in seen_assignment_ids:
@@ -760,6 +952,127 @@ def verify_campaign_set_aggregate(
                 f"child {child_id}: {f}" for f in child_verification.failures
             )
 
+        # --- Recompute child verification report hash ---
+        recomputed_vr_hash = _compute_child_verification_report_hash(report_dir)
+        vr_hash_for_result: str
+        if recomputed_vr_hash is None:
+            hash_failures.append(
+                f"child {child_id}: campaign-verification-report.json not found"
+            )
+            vr_hash_for_result = "0" * 64
+        else:
+            vr_hash_for_result = recomputed_vr_hash
+            if index_entry is not None and recomputed_vr_hash != index_entry.child_verification_report_hash:
+                hash_failures.append(
+                    f"child {child_id} verification report hash "
+                    f"{recomputed_vr_hash!r} != index "
+                    f"child_verification_report_hash "
+                    f"{index_entry.child_verification_report_hash!r}"
+                )
+
+        # --- Recompute report checksum ---
+        recomputed_checksum = _recompute_report_checksum(report_dir)
+        stored_checksum = _read_stored_report_checksum(report_dir)
+        checksum_for_result: str
+        if recomputed_checksum is None:
+            hash_failures.append(
+                f"child {child_id}: attempts.jsonl and metrics.jsonl not found for checksum"
+            )
+            checksum_for_result = "0" * 64
+        else:
+            checksum_for_result = recomputed_checksum
+            if stored_checksum is not None and recomputed_checksum != stored_checksum:
+                hash_failures.append(
+                    f"child {child_id} recomputed report checksum "
+                    f"{recomputed_checksum!r} != stored checksum "
+                    f"{stored_checksum!r}"
+                )
+            if index_entry is not None and recomputed_checksum != index_entry.report_checksum:
+                hash_failures.append(
+                    f"child {child_id} recomputed report checksum "
+                    f"{recomputed_checksum!r} != index report_checksum "
+                    f"{index_entry.report_checksum!r}"
+                )
+
+        # --- Prove exact task x repetition x variant product ---
+        child_product_ok = True
+        task_ids_found: list[str] = []
+        replicate_ids_found: list[str] = []
+        variant_count = 0
+
+        if not assignment_records:
+            child_product_ok = False
+            product_failures.append(
+                f"child {child_id}: no assignment records to verify product"
+            )
+        else:
+            task_ids_found = sorted({str(r.get("task_id", "")) for r in assignment_records})
+            replicate_ids_found = sorted({str(r.get("replicate_id", "")) for r in assignment_records})
+            variant_pairs: set[tuple[str, str]] = {
+                (str(r.get("model_cohort_id", "")), str(r.get("arm_id", "")))
+                for r in assignment_records
+            }
+            variant_count = len(variant_pairs)
+
+            expected_task_set = set(cp.partition_task_ids)
+            actual_task_set = set(task_ids_found)
+            if actual_task_set != expected_task_set:
+                child_product_ok = False
+                extra_tasks = actual_task_set - expected_task_set
+                missing_tasks = expected_task_set - actual_task_set
+                product_failures.append(
+                    f"child {child_id} task IDs do not match partition: "
+                    f"extra={sorted(extra_tasks)}, missing={sorted(missing_tasks)}"
+                )
+
+            expected_rep_set = set(plan.repetition_ids)
+            actual_rep_set = set(replicate_ids_found)
+            if actual_rep_set != expected_rep_set:
+                child_product_ok = False
+                extra_reps = actual_rep_set - expected_rep_set
+                missing_reps = expected_rep_set - actual_rep_set
+                product_failures.append(
+                    f"child {child_id} replicate IDs do not match plan: "
+                    f"extra={sorted(extra_reps)}, missing={sorted(missing_reps)}"
+                )
+
+            product_tuples: set[tuple[str, str, str, str]] = {
+                (
+                    str(r.get("task_id", "")),
+                    str(r.get("replicate_id", "")),
+                    str(r.get("model_cohort_id", "")),
+                    str(r.get("arm_id", "")),
+                )
+                for r in assignment_records
+            }
+
+            expected_product_size = len(expected_task_set) * len(expected_rep_set) * variant_count
+            if len(product_tuples) != len(assignment_records):
+                child_product_ok = False
+                product_failures.append(
+                    f"child {child_id} duplicate (task, rep, variant) tuples: "
+                    f"unique={len(product_tuples)}, total={len(assignment_records)}"
+                )
+
+            if child_product_ok and len(product_tuples) != expected_product_size:
+                child_product_ok = False
+                product_failures.append(
+                    f"child {child_id} product size {len(product_tuples)} != "
+                    f"expected {expected_product_size} "
+                    f"({len(expected_task_set)} tasks x {len(expected_rep_set)} reps "
+                    f"x {variant_count} variants)"
+                )
+
+            if child_product_ok and expected_product_size != cp.expected_assignment_count:
+                child_product_ok = False
+                product_failures.append(
+                    f"child {child_id} product size {expected_product_size} != "
+                    f"child expected_assignment_count {cp.expected_assignment_count}"
+                )
+
+        if not child_product_ok:
+            failures.extend(product_failures[-1:])
+
         child_results.append(ChildVerificationResult(
             child_id=child_id,
             ok=child_verification.ok,
@@ -768,6 +1081,12 @@ def verify_campaign_set_aggregate(
             assignment_ids=assignment_ids,
             assignment_count=len(assignment_ids),
             failures=sorted(child_verification.failures),
+            task_ids=task_ids_found,
+            replicate_ids=replicate_ids_found,
+            variant_count=variant_count,
+            product_ok=child_product_ok,
+            child_verification_report_hash=vr_hash_for_result,
+            report_checksum=checksum_for_result,
         ))
 
     if duplicate_assignment_ids:
@@ -778,6 +1097,8 @@ def verify_campaign_set_aggregate(
     assignment_uniqueness_ok = len(duplicate_assignment_ids) == 0
     total_unique = len(seen_assignment_ids)
     coverage_ok = total_unique == plan.expected_total_assignment_count
+    product_coverage_ok = len(product_failures) == 0
+    hash_binding_ok = len(hash_failures) == 0
 
     if not coverage_ok:
         failures.append(
@@ -785,19 +1106,34 @@ def verify_campaign_set_aggregate(
             f"{plan.expected_total_assignment_count}"
         )
 
-    ok = len(failures) == 0 and assignment_uniqueness_ok and coverage_ok
+    failures.extend(product_failures)
+    failures.extend(hash_failures)
 
-    return AggregateVerificationResult(
+    ok = (
+        len(failures) == 0
+        and assignment_uniqueness_ok
+        and coverage_ok
+        and product_coverage_ok
+        and hash_binding_ok
+    )
+
+    result = AggregateVerificationResult.model_construct(
         verification_schema_version=CAMPAIGN_SET_SCHEMA_VERSION,
         set_id=plan.set_id,
         set_plan_hash=plan.content_hash,
+        set_index_hash=index.content_hash,
         ok=ok,
         child_results=child_results,
         total_assignments_verified=total_unique,
         assignment_uniqueness_ok=assignment_uniqueness_ok,
         coverage_ok=coverage_ok,
+        product_coverage_ok=product_coverage_ok,
+        hash_binding_ok=hash_binding_ok,
         failures=sorted(failures),
+        content_hash="0" * 64,
     )
+    content_hash = compute_aggregate_verification_result_hash(result)
+    return result.model_copy(update={"content_hash": content_hash})
 
 
 def compute_dry_run_plan(plan: CampaignSetPlan) -> dict[str, object]:
@@ -994,6 +1330,7 @@ __all__ = [
     "CampaignSetStatus",
     "ChildVerificationResult",
     "build_campaign_set_plan",
+    "compute_aggregate_verification_result_hash",
     "compute_campaign_set_index_hash",
     "compute_campaign_set_plan_hash",
     "compute_child_campaign_id",

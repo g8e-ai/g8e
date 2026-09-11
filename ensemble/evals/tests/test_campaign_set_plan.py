@@ -45,6 +45,7 @@ from g8e_evals.campaign_set import (
     CampaignSetPlan,
     ChildVerificationResult,
     build_campaign_set_plan,
+    compute_aggregate_verification_result_hash,
     compute_campaign_set_index_hash,
     compute_child_campaign_id,
     compute_dry_run_plan,
@@ -576,6 +577,21 @@ class TestCampaignSetIndexValidation:
         with pytest.raises(ValidationError):
             CampaignSetIndex(**data)
 
+    def test_rejects_total_assignment_count_mismatch(self):
+        """validate_campaign_set_index rejects an index whose total_assignment_count
+        does not match the plan's expected_total_assignment_count."""
+        plan = _make_plan()
+        index = _make_index(plan)
+        bad_index = CampaignSetIndex.model_construct(
+            set_id=index.set_id,
+            set_plan_hash=index.set_plan_hash,
+            child_index_entries=index.child_index_entries,
+            total_assignment_count=999,
+            content_hash=index.content_hash,
+        )
+        with pytest.raises(ValueError, match="total_assignment_count"):
+            validate_campaign_set_index(bad_index, plan)
+
     def test_index_hash_is_deterministic(self):
         plan = _make_plan()
         index_a = _make_index(plan)
@@ -672,18 +688,25 @@ class TestDryRunPlan:
 
 class TestAggregateVerificationResultModel:
     def test_construction_succeeds(self):
-        result = AggregateVerificationResult(
+        result = AggregateVerificationResult.model_construct(
             verification_schema_version=CAMPAIGN_SET_SCHEMA_VERSION,
             set_id="test-set",
             set_plan_hash=_VALID_HASH,
+            set_index_hash=_VALID_HASH_B,
             ok=True,
             child_results=[],
             total_assignments_verified=0,
             assignment_uniqueness_ok=True,
             coverage_ok=True,
+            product_coverage_ok=True,
+            hash_binding_ok=True,
             failures=[],
+            content_hash="0" * 64,
         )
+        content_hash = compute_aggregate_verification_result_hash(result)
+        result = result.model_copy(update={"content_hash": content_hash})
         assert result.ok is True
+        assert result.content_hash == compute_aggregate_verification_result_hash(result)
 
     def test_rejects_unknown_field(self):
         with pytest.raises(ValidationError):
@@ -691,13 +714,35 @@ class TestAggregateVerificationResultModel:
                 verification_schema_version=CAMPAIGN_SET_SCHEMA_VERSION,
                 set_id="test-set",
                 set_plan_hash=_VALID_HASH,
+                set_index_hash=_VALID_HASH_B,
                 ok=True,
                 child_results=[],
                 total_assignments_verified=0,
                 assignment_uniqueness_ok=True,
                 coverage_ok=True,
+                product_coverage_ok=True,
+                hash_binding_ok=True,
                 failures=[],
+                content_hash=_VALID_HASH,
                 unknown_field="bad",
+            )
+
+    def test_content_hash_mismatch_fails(self):
+        with pytest.raises(ValidationError):
+            AggregateVerificationResult(
+                verification_schema_version=CAMPAIGN_SET_SCHEMA_VERSION,
+                set_id="test-set",
+                set_plan_hash=_VALID_HASH,
+                set_index_hash=_VALID_HASH_B,
+                ok=True,
+                child_results=[],
+                total_assignments_verified=0,
+                assignment_uniqueness_ok=True,
+                coverage_ok=True,
+                product_coverage_ok=True,
+                hash_binding_ok=True,
+                failures=[],
+                content_hash="0" * 64,
             )
 
 
@@ -711,9 +756,16 @@ class TestChildVerificationResultModel:
             assignment_ids=["a1", "a2"],
             assignment_count=2,
             failures=[],
+            task_ids=["t1", "t2"],
+            replicate_ids=["r1"],
+            variant_count=1,
+            product_ok=True,
+            child_verification_report_hash=_VALID_HASH,
+            report_checksum=_VALID_HASH,
         )
         assert result.ok is True
         assert result.assignment_count == 2
+        assert result.product_ok is True
 
     def test_rejects_unknown_field(self):
         with pytest.raises(ValidationError):
@@ -725,6 +777,12 @@ class TestChildVerificationResultModel:
                 assignment_ids=[],
                 assignment_count=0,
                 failures=[],
+                task_ids=[],
+                replicate_ids=[],
+                variant_count=0,
+                product_ok=False,
+                child_verification_report_hash=_VALID_HASH,
+                report_checksum=_VALID_HASH,
                 unknown_field="bad",
             )
 

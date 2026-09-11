@@ -382,10 +382,12 @@ class TestCampaignManifest:
             provider_budget_hash="5" * 64,
             source_build_provenance_hash="6" * 64,
             claim_exclusion_hash="7" * 64,
+            budget_observability_policy_hash="8" * 64,
             content_hash=compute_campaign_manifest_hash(
                 _CAMPAIGN_ID, CAMPAIGN_CONTRACT_VERSION, _RELEASE_VERSION,
                 "b" * 64, [ch_cohort], "c" * 64, "d" * 64, "e" * 64, "f" * 64,
                 "1" * 64, "2" * 64, "3" * 64, "4" * 64, "5" * 64, "6" * 64, "7" * 64,
+                "8" * 64,
             ),
         )
         assert manifest.campaign_id == _CAMPAIGN_ID
@@ -409,6 +411,7 @@ class TestCampaignManifest:
                 provider_budget_hash="5" * 64,
                 source_build_provenance_hash="6" * 64,
                 claim_exclusion_hash="7" * 64,
+                budget_observability_policy_hash="8" * 64,
                 content_hash="0" * 64,
             )
 
@@ -418,6 +421,7 @@ class TestCampaignManifest:
             _CAMPAIGN_ID, CAMPAIGN_CONTRACT_VERSION, _RELEASE_VERSION,
             "b" * 64, [ch, ch], "c" * 64, "d" * 64, "e" * 64, "f" * 64,
             "1" * 64, "2" * 64, "3" * 64, "4" * 64, "5" * 64, "6" * 64, "7" * 64,
+            "8" * 64,
         )
         with pytest.raises(ValueError, match="duplicate cohort hashes"):
             CampaignManifest(
@@ -437,6 +441,7 @@ class TestCampaignManifest:
                 provider_budget_hash="5" * 64,
                 source_build_provenance_hash="6" * 64,
                 claim_exclusion_hash="7" * 64,
+                budget_observability_policy_hash="8" * 64,
                 content_hash=expected_hash,
             )
 

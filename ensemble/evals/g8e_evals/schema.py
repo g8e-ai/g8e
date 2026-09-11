@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_valid
 from g8e.operator.v1.operator_pb2 import ActionReceipt
 from g8e.receipts import action_receipt_to_dict, parse_action_receipt
 from g8e_evals.arms import Arm, GovernancePosture
-from g8e_evals.index import ModelRole
+from g8e_evals.index import ModelRole, VerificationStatus
 from g8e_evals.receipts.verify import receipt_action_type
 
 
@@ -157,13 +157,6 @@ class GraderReference(BaseModel):
     grader_id: str = Field(min_length=1)
     grader_version: str = Field(min_length=1)
     grader_class: GraderClass = GraderClass.DETERMINISTIC
-
-
-class VerificationStatus(StrEnum):
-    PENDING = "pending"
-    VERIFIED = "verified"
-    FAILED = "failed"
-    NOT_APPLICABLE = "not_applicable"
 
 
 class StateAssertionPredicate(StrEnum):
@@ -3577,9 +3570,9 @@ class EscalationRecord(BaseModel):
 
     agent_persona: str = Field(min_length=1, description="Agent persona that made the routing decision (e.g. triage, sage).")
     model_variant_id: str = Field(min_length=1, description="Model variant ID that produced the routing decision.")
-    expected_role: str = Field(min_length=1, description="Scenario's expected role (primary, assistant, light) from ScenarioMetadata.")
-    ground_truth_complexity: str = Field(min_length=1, description="Scenario's declared complexity (light, assistant, primary) from ScenarioMetadata.")
-    routed_to_role: str = Field(min_length=1, description="Role the Triage agent routed the task to (primary, assistant, light).")
+    expected_role: ModelRole = Field(description="Scenario's expected model role (primary, assistant, lite) converted from ScenarioMetadata to the typed ModelRole enum.")
+    ground_truth_complexity: str = Field(min_length=1, description="Scenario's declared complexity label (light, assistant, primary) from ScenarioMetadata. Carries the scenario complexity label, not the model role.")
+    routed_to_role: ModelRole = Field(description="Role the Triage agent routed the task to (primary, assistant, lite).")
 
     outcome: EscalationOutcome = Field(description="Classification of the routing decision against the ground truth.")
 
@@ -3838,7 +3831,7 @@ class CorrelatedErrorRecord(BaseModel):
     binding.
 
     The ``stage_role`` field identifies which role in the heterogeneous
-    stack made the error (primary, assistant, light). The ``stack_id``
+    stack made the error (primary, assistant, lite). The ``stack_id``
     field identifies the specific stack composition. The
     ``stack_composition_type`` field classifies the stack as homogeneous
     or heterogeneous for the same-family vs cross-family comparison.
@@ -3864,7 +3857,7 @@ class CorrelatedErrorRecord(BaseModel):
 
     agent_persona: str = Field(min_length=1, description="Agent persona that produced the error (e.g. sage, dash, tribunal, warden, auditor).")
     model_variant_id: str = Field(min_length=1, description="Model variant ID that produced the error.")
-    stage_role: str = Field(min_length=1, description="Role of the stage that produced the error (primary, assistant, light).")
+    stage_role: ModelRole = Field(description="Role of the stage that produced the error (primary, assistant, lite).")
     error_class: ErrorClassLabel = Field(description="Semantic error class label for the failure.")
 
     stack_id: str = Field(min_length=1, description="Stack identifier this error record belongs to.")

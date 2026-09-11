@@ -56,12 +56,15 @@ import json
 import math
 from collections.abc import Sequence
 from enum import StrEnum
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from g8e_evals.analysis import statistics
 from g8e_evals.registry import WeightClass
+
+if TYPE_CHECKING:
+    from g8e_evals.campaign_set import AggregateVerificationResult
 
 
 MODEL_COMPARISON_AUTHORITY_VERSION = "1.0.0"
@@ -144,8 +147,10 @@ class ClaimGate(StrEnum):
     non-inferiority claim is produced.
 
     ``SUPERIORITY``: A Holm-corrected p-value below the significance
-    level combined with a non-zero paired risk difference can produce
-    a superiority claim.
+    level combined with a positive paired risk difference (candidate
+    better than anchor) can produce a superiority claim. A negative
+    or zero risk difference never passes, even when the p-value is
+    significant.
 
     ``NON_INFERIORITY``: A bootstrap confidence interval within the
     declared non-inferiority margin can produce a non-inferiority
@@ -369,6 +374,10 @@ class ModelComparisonPreregistration(BaseModel):
                         f"!= global anchor family {self.global_anchor_family_name!r}"
                     )
             elif pk.family_kind == ComparisonFamilyKind.CLASS_ANCHOR:
+                if pk.weight_class is None:
+                    raise ValueError(
+                        f"class-anchor pair key requires weight_class: candidate={pk.candidate_variant_id!r}"
+                    )
                 class_anchor_by_class = {ca.weight_class: ca for ca in self.class_anchors}
                 ca = class_anchor_by_class.get(pk.weight_class)
                 if ca is None:
@@ -897,9 +906,9 @@ def _evaluate_claim_gate(
     Returns ``(status, reason)``. The gate is evaluated after Holm
     correction and bootstrap CI computation. A descriptive-only gate
     never produces PASS. A superiority gate requires a corrected
-    p-value below alpha and a non-zero paired risk difference. A
-    non-inferiority gate requires the bootstrap CI to be within the
-    declared margin.
+    p-value below alpha and a positive paired risk difference
+    (candidate better than anchor). A non-inferiority gate requires
+    the bootstrap CI to be within the declared margin.
     """
     if paired_task_count < minimum_population:
         return ClaimGateStatus.INSUFFICIENT_POPULATION, (
@@ -920,9 +929,9 @@ def _evaluate_claim_gate(
             return ClaimGateStatus.FAIL, (
                 f"corrected p-value {corrected_p_value} > significance level {significance_level}"
             )
-        if paired_risk_difference is None or paired_risk_difference == 0.0:
+        if paired_risk_difference is None or paired_risk_difference <= 0.0:
             return ClaimGateStatus.FAIL, (
-                "paired risk difference is zero or undefined"
+                f"superiority requires a positive risk difference; got {paired_risk_difference}"
             )
         return ClaimGateStatus.PASS, (
             f"superiority: corrected p-value {corrected_p_value} <= {significance_level}, "
@@ -953,9 +962,14 @@ class ModelComparisonAuthorityHashes(BaseModel):
     """Frozen bundle of authority content hashes bound to the output.
 
     Every hash binds the output to a frozen authority. A changed
-    authority invalidates the output. The hashes are supplied by
-    the caller from the accepted authorities; the engine does not
-    recompute them.
+    authority invalidates the output. The aggregate verification,
+    campaign-set plan, and campaign-set index hashes must come from
+    the typed accepted ``AggregateVerificationResult`` via
+    ``from_aggregate_verification_result``; the engine does not
+    accept caller-supplied arbitrary strings for those three hashes.
+    The remaining hashes (profile, registry, benchmark population,
+    metric registry) are supplied by the caller from their respective
+    frozen authorities.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -988,6 +1002,42 @@ class ModelComparisonAuthorityHashes(BaseModel):
         min_length=64, max_length=64,
         description="Content hash of the metric registry (bound via code/metric identity).",
     )
+
+    @classmethod
+    def from_aggregate_verification_result(
+        cls,
+        result: AggregateVerificationResult,
+        profile_hash: str,
+        registry_hash: str,
+        benchmark_population_hash: str,
+        metric_registry_hash: str,
+    ) -> ModelComparisonAuthorityHashes:
+        """Construct hashes from the typed accepted aggregate verification result.
+
+        Binds the aggregate verification hash, campaign-set plan hash,
+        and campaign-set index hash directly from the typed
+        ``AggregateVerificationResult`` so the engine cannot accept
+        caller-supplied arbitrary strings for those three hashes. A
+        failed aggregate (``ok=False``) is rejected.
+
+        The remaining hashes (profile, registry, benchmark population,
+        metric registry) are supplied by the caller from their
+        respective frozen authorities.
+        """
+        if not result.ok:
+            raise ValueError(
+                "cannot bind to a failed aggregate verification result; "
+                f"failures: {result.failures}"
+            )
+        return cls(
+            aggregate_verification_hash=result.content_hash,
+            campaign_set_plan_hash=result.set_plan_hash,
+            campaign_set_index_hash=result.set_index_hash,
+            profile_hash=profile_hash,
+            registry_hash=registry_hash,
+            benchmark_population_hash=benchmark_population_hash,
+            metric_registry_hash=metric_registry_hash,
+        )
 
 
 def compute_model_comparison(

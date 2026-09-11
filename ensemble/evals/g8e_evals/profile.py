@@ -225,6 +225,11 @@ class CampaignProfile(BaseModel):
         min_length=64, max_length=64,
         description="SHA-256 of the frozen expected-record policy that declares applicability and exact cardinality or derivation rules by suite/scenario/attempt/inference. The default is the hash of 'no_required_record_policy_v1' for Phase 1; Beacon's Phase 2 ExpectedRecordPolicy replaces it.",
     )
+    instrumentation_policy_hash: str = Field(
+        default="ae002706076404cef6e22ebfbae087ff430436094849bdf4e8e5d074f0bab1dd",
+        min_length=64, max_length=64,
+        description="SHA-256 of the frozen instrumentation policy that declares what the runner and SUT instrument per inference. The default is the hash of 'no_instrumentation_policy_v1' for Phase 1; Helix's Phase 2 instrumentation policy replaces it.",
+    )
 
     content_hash: str = Field(
         min_length=64, max_length=64,
