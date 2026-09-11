@@ -1213,7 +1213,7 @@ def _build_radar_profile(
 
     dimensions: list[RadarDimension] = []
     for name in sorted(RadarDimensionName, key=lambda n: n.value):
-        source_ids = _RADAR_SOURCE_METRIC_IDS[name]
+        source_ids = sorted(_RADAR_SOURCE_METRIC_IDS[name])
         rates: list[float] = []
         for mid in source_ids:
             rates.extend(summary_by_metric.get(mid, []))
