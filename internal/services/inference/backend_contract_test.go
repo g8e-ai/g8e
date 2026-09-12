@@ -25,9 +25,11 @@ type stubBackend struct {
 	statusResp   *models.BackendStatus
 	statusErr    error
 	lastReq      models.GenerateRequest
+	calls        int
 }
 
 func (s *stubBackend) Generate(ctx context.Context, req models.GenerateRequest) (*models.GenerateResponse, error) {
+	s.calls++
 	s.lastReq = req
 	if s.generateErr != nil {
 		return nil, s.generateErr

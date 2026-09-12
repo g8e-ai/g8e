@@ -22,6 +22,13 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
+// ProviderRequestTimeout is the single request deadline authority for calls
+// to the remote inference provider. The gateway's inference dispatch deadline
+// (dispatch.RequestDeadline) is derived from it so the dispatch wait always
+// outlives an in-flight provider call; a dispatch that outlives its deadline
+// reports an unknown remote outcome rather than a clean timeout.
+const ProviderRequestTimeout = 5 * time.Minute
+
 // OllamaBackend implements Backend as an HTTP client to Ollama's /api/chat
 // endpoint. It constructs the Ollama chat request from GenerateRequest,
 // sends it over loopback HTTP to the configured Ollama endpoint, and parses
@@ -40,7 +47,7 @@ func NewOllamaBackend(endpoint string, logger *slog.Logger) *OllamaBackend {
 	return &OllamaBackend{
 		endpoint: strings.TrimRight(endpoint, "/"),
 		client: &http.Client{
-			Timeout: 5 * time.Minute,
+			Timeout: ProviderRequestTimeout,
 		},
 		logger: logger,
 	}

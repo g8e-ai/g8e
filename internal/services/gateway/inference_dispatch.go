@@ -47,6 +47,7 @@ func (a *gatewayDispatcherAdapter) Dispatch(ctx context.Context, req dispatch.Co
 		TaskID:                  req.TaskID,
 		WebSessionID:            req.WebSessionID,
 		CliSessionID:            req.CliSessionID,
+		Timeout:                 req.Timeout,
 	})
 	if err != nil {
 		return nil, err
@@ -112,18 +113,19 @@ func newInferenceDispatchController(d InferenceDispatchControllerDeps) *Inferenc
 // InferenceDispatchRequest is the typed JSON request for POST
 // /api/v1/inference/dispatch.
 type InferenceDispatchRequest struct {
-	Role            int32   `json:"role"`
-	Prompt          string  `json:"prompt"`
-	Model           string  `json:"model,omitempty"`
-	Temperature     float32 `json:"temperature,omitempty"`
-	MaxTokens       int32   `json:"max_tokens,omitempty"`
-	KeepAlive       string  `json:"keep_alive,omitempty"`
-	ActingAppID     string  `json:"acting_app_id,omitempty"`
-	CaseID          string  `json:"case_id,omitempty"`
-	InvestigationID string  `json:"investigation_id,omitempty"`
-	TaskID          string  `json:"task_id,omitempty"`
-	WebSessionID    string  `json:"web_session_id,omitempty"`
-	CliSessionID    string  `json:"cli_session_id,omitempty"`
+	Role                    int32   `json:"role"`
+	Prompt                  string  `json:"prompt"`
+	Model                   string  `json:"model,omitempty"`
+	Temperature             float32 `json:"temperature,omitempty"`
+	MaxTokens               int32   `json:"max_tokens,omitempty"`
+	KeepAlive               string  `json:"keep_alive,omitempty"`
+	TargetOperatorSessionID string  `json:"target_operator_session_id,omitempty"`
+	ActingAppID             string  `json:"acting_app_id,omitempty"`
+	CaseID                  string  `json:"case_id,omitempty"`
+	InvestigationID         string  `json:"investigation_id,omitempty"`
+	TaskID                  string  `json:"task_id,omitempty"`
+	WebSessionID            string  `json:"web_session_id,omitempty"`
+	CliSessionID            string  `json:"cli_session_id,omitempty"`
 }
 
 // Validate returns an error if the request is missing required fields.
@@ -168,19 +170,20 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 	requestorUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
 
 	result, err := c.dispatchSvc.DispatchInference(r.Context(), dispatch.DispatchInferenceRequest{
-		Role:            models.InferenceModelRole(req.Role),
-		Prompt:          req.Prompt,
-		Model:           req.Model,
-		Temperature:     req.Temperature,
-		MaxTokens:       req.MaxTokens,
-		KeepAlive:       req.KeepAlive,
-		RequestorUserID: requestorUserID,
-		ActingAppID:     req.ActingAppID,
-		CaseID:          req.CaseID,
-		InvestigationID: req.InvestigationID,
-		TaskID:          req.TaskID,
-		WebSessionID:    req.WebSessionID,
-		CliSessionID:    req.CliSessionID,
+		Role:                    models.InferenceModelRole(req.Role),
+		Prompt:                  req.Prompt,
+		Model:                   req.Model,
+		Temperature:             req.Temperature,
+		MaxTokens:               req.MaxTokens,
+		KeepAlive:               req.KeepAlive,
+		TargetOperatorSessionID: req.TargetOperatorSessionID,
+		RequestorUserID:         requestorUserID,
+		ActingAppID:             req.ActingAppID,
+		CaseID:                  req.CaseID,
+		InvestigationID:         req.InvestigationID,
+		TaskID:                  req.TaskID,
+		WebSessionID:            req.WebSessionID,
+		CliSessionID:            req.CliSessionID,
 	})
 	if err != nil {
 		c.logger.Error("inference dispatch: dispatch failed", "error", err)

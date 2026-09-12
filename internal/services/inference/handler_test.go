@@ -143,14 +143,40 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_LiteRole(t *testing.T) {
 	assert.Equal(t, "qwen3:1.5b", backend.lastReq.Model, "should use lite model config default")
 }
 
-func TestInferenceHandler_ExecuteVerifiedTransaction_RequestOverridesModel(t *testing.T) {
+func TestInferenceHandler_ExecuteVerifiedTransaction_MatchingModelOverrideAccepted(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	backend := &stubBackend{generateResp: &models.GenerateResponse{
-		Text:         "custom model response",
+		Text:         "primary response",
 		FinishReason: "stop",
-		Model:        "custom-model:latest",
+		Model:        "gemma3:4b",
 	}}
+	cfg := &config.Config{Inference: config.InferenceConfig{
+		Enabled:      true,
+		PrimaryModel: "gemma3:4b",
+		KeepAlive:   "-1",
+	}}
+	scrubbingSvc := mustNewScrubbingSvc(t)
+	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+
+	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
+		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Model:  "gemma3:4b",
+		Prompt: "test",
+	})
+	cmdMsg := &testCommandMessage{payload: payload}
+
+	summary, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, cmdMsg)
+
+	require.NoError(t, err)
+	assert.Equal(t, wantDigest(t, backend.generateResp), summary, "summary must be the canonical result digest binding the complete result")
+	assert.Equal(t, "gemma3:4b", backend.lastReq.Model, "an override naming the configured role model is permitted")
+}
+
+func TestInferenceHandler_ExecuteVerifiedTransaction_UnauthorizedModelOverrideDenied(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	backend := &stubBackend{}
 	cfg := &config.Config{Inference: config.InferenceConfig{
 		Enabled:      true,
 		PrimaryModel: "gemma3:4b",
@@ -166,11 +192,60 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_RequestOverridesModel(t *te
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
-	summary, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, cmdMsg)
+	_, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, cmdMsg)
 
-	require.NoError(t, err)
-	assert.Equal(t, wantDigest(t, backend.generateResp), summary, "summary must be the canonical result digest binding the complete result")
-	assert.Equal(t, "custom-model:latest", backend.lastReq.Model, "request model should override config default")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInferenceModelOverrideDenied)
+	assert.Equal(t, 0, backend.calls, "backend must not be called for an unauthorized override")
+}
+
+func TestInferenceHandler_ExecuteVerifiedTransaction_CrossRoleModelDenied(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	backend := &stubBackend{}
+	cfg := &config.Config{Inference: config.InferenceConfig{
+		Enabled:       true,
+		PrimaryModel:  "gemma3:4b",
+		LiteModel:     "qwen3:1.5b",
+		KeepAlive:     "-1",
+	}}
+	scrubbingSvc := mustNewScrubbingSvc(t)
+	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+
+	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
+		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Model:  "qwen3:1.5b",
+		Prompt: "test",
+	})
+	cmdMsg := &testCommandMessage{payload: payload}
+
+	_, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, cmdMsg)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInferenceModelOverrideDenied,
+		"the configured model for a different role is still an unauthorized override")
+	assert.Equal(t, 0, backend.calls)
+}
+
+func TestInferenceHandler_ExecuteVerifiedTransaction_UnspecifiedRoleRejected(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	backend := &stubBackend{}
+	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "gemma3:4b"}}
+	scrubbingSvc := mustNewScrubbingSvc(t)
+	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
+
+	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
+		Role:   operatorv1.ModelRole_MODEL_ROLE_UNSPECIFIED,
+		Prompt: "test",
+	})
+	cmdMsg := &testCommandMessage{payload: payload}
+
+	_, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, cmdMsg)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInferenceRoleInvalid)
+	assert.Equal(t, 0, backend.calls)
 }
 
 func TestInferenceHandler_ExecuteVerifiedTransaction_EmptyPayloadReturnsErrPubSubEmptyPayload(t *testing.T) {

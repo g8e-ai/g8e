@@ -1428,6 +1428,10 @@ var (
 	ErrInferenceReceiptVerify        = errors.New("inference: receipt verification failed")
 	ErrInferenceResultDigestMismatch = errors.New("inference: result digest mismatch")
 	ErrInferenceResultDigest         = errors.New("inference: result digest computation failed")
+	ErrInferenceOperatorAmbiguous    = errors.New("inference: multiple inference-capable operator sessions; explicit target required")
+	ErrInferenceOperatorNotCapable   = errors.New("inference: target operator session is not inference-capable")
+	ErrInferenceModelOverrideDenied  = errors.New("inference: model override not permitted by role authority")
+	ErrInferenceOutcomeUnknown       = errors.New("inference: dispatch deadline exceeded; remote provider outcome unknown")
 
 	// Dispatch transport errors. Zero delivery and a missing correlated
 	// result are terminal transport outcomes, not log-and-continue events.

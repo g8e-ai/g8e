@@ -95,14 +95,21 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 		infReq.Prompt = h.scrubbing.ScrubText(infReq.Prompt)
 	}
 
-	// Resolve the default model for the role when the request does not
-	// override it. Ollama routes by model name in the API call, so role
-	// routing is a config-and-payload concern.
-	defaultModel := h.defaultModelForRole(infReq.Role)
-	genReq := infReq.ToGenerateRequest(defaultModel)
-	if genReq.Model == "" {
+	// Resolve the approved model for the role. The configured role-to-model
+	// mapping is the active typed authority: a request model is accepted
+	// only when it names the configured model for the requested role; any
+	// other value is an unauthorized override.
+	if infReq.Role == models.InferenceModelRoleUnspecified {
+		return nil, fmt.Errorf("inference handler: %w", constants.ErrInferenceRoleInvalid)
+	}
+	approved := h.defaultModelForRole(infReq.Role)
+	if approved == "" {
 		return nil, fmt.Errorf("inference handler: %w: role %d", constants.ErrInferenceModelRefInvalid, infReq.Role)
 	}
+	if infReq.Model != "" && infReq.Model != approved {
+		return nil, fmt.Errorf("inference handler: %w: role %d", constants.ErrInferenceModelOverrideDenied, infReq.Role)
+	}
+	genReq := infReq.ToGenerateRequest(approved)
 	// Apply config default keep-alive when the request does not override it.
 	if genReq.KeepAlive == "" {
 		genReq.KeepAlive = h.cfg.Inference.KeepAlive

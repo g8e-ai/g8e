@@ -17,14 +17,32 @@ package dispatch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
-	"google.golang.org/protobuf/proto"
 )
+
+// governanceRoundTripMargin covers the governed round trip around a provider
+// call: envelope construction, L1 screening, L2 deliberation where required,
+// pub/sub delivery, L4/L5 verification and receipt signing, and the result
+// publication back to the gateway.
+const governanceRoundTripMargin = 30 * time.Second
+
+// RequestDeadline is the single explicit request deadline for a governed
+// inference dispatch. It derives from the provider request timeout so the
+// dispatch wait always outlives an in-flight provider call. When it expires
+// the remote provider call may still be running; the outcome is classified
+// unknown (constants.ErrInferenceOutcomeUnknown) and is never retried
+// automatically.
+const RequestDeadline = inference.ProviderRequestTimeout + governanceRoundTripMargin
 
 // CommandDispatcher dispatches a governed envelope to a target operator
 // session and correlates the result by transaction ID. Implemented by
@@ -56,6 +74,11 @@ type CommandDispatchRequest struct {
 	TaskID                  string
 	WebSessionID            string
 	CliSessionID            string
+
+	// Timeout is the explicit request deadline for this dispatch. Zero means
+	// the dispatcher's default applies. Inference dispatches always set
+	// RequestDeadline so the wait outlives an in-flight provider call.
+	Timeout time.Duration
 }
 
 // CommandDispatchResult is the gateway-agnostic dispatch result. The
@@ -129,6 +152,12 @@ type DispatchInferenceRequest struct {
 	// means use the config default.
 	KeepAlive string
 
+	// TargetOperatorSessionID pins the dispatch to a specific Inference Node
+	// session. When empty, exactly one inference-capable operator session
+	// must be enrolled for the requestor; zero or multiple matches are
+	// rejected rather than resolved by query order.
+	TargetOperatorSessionID string
+
 	// RequestorUserID is the user who initiated the inference request.
 	// Used to resolve the Inference Node's operator session from the user's
 	// enrolled operators.
@@ -168,12 +197,15 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	if req.RequestorUserID == "" {
 		return nil, fmt.Errorf("inference dispatch: %w", constants.ErrRegistrationUserIDRequired)
 	}
+	if req.Role == models.InferenceModelRoleUnspecified {
+		return nil, fmt.Errorf("inference dispatch: %w", constants.ErrInferenceRoleInvalid)
+	}
 
 	// Resolve the Inference Node's operator session from the requestor's
 	// enrolled operators. The Inference Node stamps
 	// runtime_config.inference_enabled at enrollment time; the dispatch
 	// service filters by this flag.
-	operatorSessionID, err := s.resolveInferenceOperator(req.RequestorUserID)
+	operatorSessionID, err := s.resolveInferenceOperator(req)
 	if err != nil {
 		return nil, fmt.Errorf("inference dispatch: %w", err)
 	}
@@ -195,7 +227,10 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	// Dispatch through the gateway's CommandDispatcher. The dispatcher
 	// constructs the GovernanceEnvelope with the gateway's state root and
 	// posture, publishes to the Inference Node's cmd channel, and
-	// correlates the result by transaction ID.
+	// correlates the result by transaction ID. The timeout is the single
+	// request deadline contract (RequestDeadline): it outlives an in-flight
+	// provider call, and its expiry is an unknown remote outcome, not a
+	// clean timeout.
 	result, err := s.dispatcher.Dispatch(ctx, CommandDispatchRequest{
 		TargetOperatorSessionID: operatorSessionID,
 		ActionType:               string(constants.ActionTypeInference),
@@ -207,8 +242,21 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 		TaskID:                   req.TaskID,
 		WebSessionID:             req.WebSessionID,
 		CliSessionID:             req.CliSessionID,
+		Timeout:                  RequestDeadline,
 	})
 	if err != nil {
+		if errors.Is(err, constants.ErrDispatchResultTimeout) {
+			// The dispatch deadline expired while the provider call may
+			// still be running remotely. Record the unknown outcome and
+			// never retry automatically: retrying could duplicate the
+			// provider call and invalidate request-budget accounting.
+			s.logger.Warn("inference dispatch: deadline exceeded; remote provider outcome unknown",
+				"operator_session_id", operatorSessionID,
+				"role", req.Role,
+				"model", req.Model,
+				"error", err)
+			return nil, fmt.Errorf("inference dispatch: %w", constants.ErrInferenceOutcomeUnknown)
+		}
 		return nil, fmt.Errorf("inference dispatch: %w", err)
 	}
 
@@ -235,19 +283,54 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 }
 
 // resolveInferenceOperator resolves the Inference Node's operator session
-// from the requestor's enrolled operators by filtering for
-// runtime_config.inference_enabled == true. Returns
-// constants.ErrInferenceOperatorNotFound when no inference-capable operator
-// is enrolled.
-func (s *DispatchService) resolveInferenceOperator(userID string) (string, error) {
-	operators, err := s.operatorList.ListUserOperators(userID)
+// from the requestor's enrolled operators. With an explicit
+// TargetOperatorSessionID the target must appear in the requestor's
+// operator list (ownership) and carry inference capability; without one,
+// exactly one inference-capable session must exist. Terminated operators
+// are never selectable. Returns ErrInferenceOperatorNotFound for no match,
+// ErrInferenceOperatorNotCapable for an explicit target that lacks the
+// capability, and ErrInferenceOperatorAmbiguous for multiple matches with
+// no explicit target.
+func (s *DispatchService) resolveInferenceOperator(req DispatchInferenceRequest) (string, error) {
+	operators, err := s.operatorList.ListUserOperators(req.RequestorUserID)
 	if err != nil {
 		return "", err
 	}
-	for _, op := range operators {
-		if op.RuntimeConfig != nil && op.RuntimeConfig.InferenceEnabled && op.OperatorSessionID != "" {
-			return op.OperatorSessionID, nil
+
+	capable := func(op *models.OperatorDocumentGo) bool {
+		return op.RuntimeConfig != nil &&
+			op.RuntimeConfig.InferenceEnabled &&
+			op.OperatorSessionID != "" &&
+			op.Status != constants.OperatorStatusTerminated
+	}
+
+	if req.TargetOperatorSessionID != "" {
+		for i := range operators {
+			if operators[i].OperatorSessionID == req.TargetOperatorSessionID {
+				if !capable(&operators[i]) {
+					return "", constants.ErrInferenceOperatorNotCapable
+				}
+				return operators[i].OperatorSessionID, nil
+			}
+		}
+		// The target is not in the requestor's operator list. Report
+		// not-found rather than a distinct ownership error so the response
+		// does not disclose whether the session exists for another user.
+		return "", constants.ErrInferenceOperatorNotFound
+	}
+
+	var matches []string
+	for i := range operators {
+		if capable(&operators[i]) {
+			matches = append(matches, operators[i].OperatorSessionID)
 		}
 	}
-	return "", constants.ErrInferenceOperatorNotFound
+	switch len(matches) {
+	case 0:
+		return "", constants.ErrInferenceOperatorNotFound
+	case 1:
+		return matches[0], nil
+	default:
+		return "", constants.ErrInferenceOperatorAmbiguous
+	}
 }

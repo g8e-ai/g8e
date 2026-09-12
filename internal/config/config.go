@@ -192,9 +192,6 @@ type InferenceConfig struct {
 	// MaxContextTokens bounds the prompt context window (0 = backend default).
 	MaxContextTokens int
 
-	// MaxConcurrentGenerations sets the number of concurrent inference slots.
-	MaxConcurrentGenerations int
-
 	// KeepAlive is the Ollama keep-alive duration passed to /api/chat per
 	// request. Default "-1" pins all three chat roles in memory on the
 	// remote provider.
@@ -681,11 +678,10 @@ func newInferenceConfig(opts LoadOptions) InferenceConfig {
 		Backend:                  backend,
 		OllamaEndpoint:           endpoint,
 		ModelsDir:                constants.DefaultModelsDir,
-		PrimaryModel:             opts.InferencePrimaryModel,
-		AssistantModel:           opts.InferenceAssistantModel,
-		LiteModel:                opts.InferenceLiteModel,
-		MaxConcurrentGenerations: 1,
-		KeepAlive:                keepAlive,
+		PrimaryModel:   opts.InferencePrimaryModel,
+		AssistantModel: opts.InferenceAssistantModel,
+		LiteModel:      opts.InferenceLiteModel,
+		KeepAlive:      keepAlive,
 	}
 }
 

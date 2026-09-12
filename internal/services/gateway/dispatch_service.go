@@ -185,6 +185,12 @@ type DispatchRequest struct {
 	TaskID                  string
 	WebSessionID            string
 	CliSessionID            string
+
+	// Timeout is the explicit request deadline for this dispatch. Zero
+	// applies DispatchTimeout. Inference dispatches set the provider-aware
+	// RequestDeadline from the inference dispatch package so the wait
+	// outlives an in-flight provider call.
+	Timeout time.Duration
 }
 
 // DispatchResult is the output of a successful command dispatch. For
@@ -370,8 +376,14 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		return nil, fmt.Errorf("dispatch: %w", constants.ErrDispatchNoDelivery)
 	}
 
-	// 8. Wait for the result with a timeout.
-	timeoutCtx, cancel := context.WithTimeout(ctx, DispatchTimeout)
+	// 8. Wait for the result with the request deadline. The caller sets
+	//    Timeout explicitly (inference sets its provider-aware deadline);
+	//    zero applies DispatchTimeout.
+	deadline := req.Timeout
+	if deadline <= 0 {
+		deadline = DispatchTimeout
+	}
+	timeoutCtx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 
 	select {
@@ -387,7 +399,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		if err := ctx.Err(); err != nil {
 			return nil, fmt.Errorf("dispatch: %w", err)
 		}
-		return nil, fmt.Errorf("dispatch: %w after %s", constants.ErrDispatchResultTimeout, DispatchTimeout)
+		return nil, fmt.Errorf("dispatch: %w after %s (transaction %s)", constants.ErrDispatchResultTimeout, deadline, txHash)
 	}
 }
 
