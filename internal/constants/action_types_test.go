@@ -116,6 +116,7 @@ func TestAllActionTypes_ContainsAllConstants(t *testing.T) {
 		ActionTypePortCheck,
 		ActionTypeRestoreFile,
 		ActionTypeShutdown,
+		ActionTypeInference,
 	}
 
 	assert.Len(t, AllActionTypes, len(allConsts))

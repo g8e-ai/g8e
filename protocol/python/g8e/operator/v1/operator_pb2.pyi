@@ -56,6 +56,13 @@ class DeterministicStageOutcome(int, metaclass=_enum_type_wrapper.EnumTypeWrappe
     DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED: _ClassVar[DeterministicStageOutcome]
     DETERMINISTIC_STAGE_OUTCOME_COMPLETED: _ClassVar[DeterministicStageOutcome]
     DETERMINISTIC_STAGE_OUTCOME_FAILED: _ClassVar[DeterministicStageOutcome]
+
+class ModelRole(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    MODEL_ROLE_UNSPECIFIED: _ClassVar[ModelRole]
+    MODEL_ROLE_PRIMARY: _ClassVar[ModelRole]
+    MODEL_ROLE_ASSISTANT: _ClassVar[ModelRole]
+    MODEL_ROLE_LITE: _ClassVar[ModelRole]
 EXECUTION_STATUS_UNSPECIFIED: ExecutionStatus
 EXECUTION_STATUS_EXECUTING: ExecutionStatus
 EXECUTION_STATUS_COMPLETED: ExecutionStatus
@@ -86,6 +93,10 @@ DETERMINISTIC_STAGE_OUTCOME_VERIFIED: DeterministicStageOutcome
 DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED: DeterministicStageOutcome
 DETERMINISTIC_STAGE_OUTCOME_COMPLETED: DeterministicStageOutcome
 DETERMINISTIC_STAGE_OUTCOME_FAILED: DeterministicStageOutcome
+MODEL_ROLE_UNSPECIFIED: ModelRole
+MODEL_ROLE_PRIMARY: ModelRole
+MODEL_ROLE_ASSISTANT: ModelRole
+MODEL_ROLE_LITE: ModelRole
 
 class CommandRequested(_message.Message):
     __slots__ = ("command", "execution_id", "justification", "vault_mode", "timeout_seconds", "intent", "environment", "working_directory")
@@ -1623,3 +1634,35 @@ class RevokePasskeyCredentialResult(_message.Message):
     found: bool
     remaining: int
     def __init__(self, success: _Optional[bool] = ..., error: _Optional[str] = ..., found: _Optional[bool] = ..., remaining: _Optional[int] = ...) -> None: ...
+
+class InferenceRequested(_message.Message):
+    __slots__ = ("role", "model", "prompt", "temperature", "max_tokens", "keep_alive")
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    MODEL_FIELD_NUMBER: _ClassVar[int]
+    PROMPT_FIELD_NUMBER: _ClassVar[int]
+    TEMPERATURE_FIELD_NUMBER: _ClassVar[int]
+    MAX_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    KEEP_ALIVE_FIELD_NUMBER: _ClassVar[int]
+    role: ModelRole
+    model: str
+    prompt: str
+    temperature: float
+    max_tokens: int
+    keep_alive: str
+    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., model: _Optional[str] = ..., prompt: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ...) -> None: ...
+
+class InferenceResult(_message.Message):
+    __slots__ = ("text", "prompt_tokens", "completion_tokens", "total_tokens", "finish_reason", "model")
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    PROMPT_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    COMPLETION_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    FINISH_REASON_FIELD_NUMBER: _ClassVar[int]
+    MODEL_FIELD_NUMBER: _ClassVar[int]
+    text: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    finish_reason: str
+    model: str
+    def __init__(self, text: _Optional[str] = ..., prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., total_tokens: _Optional[int] = ..., finish_reason: _Optional[str] = ..., model: _Optional[str] = ...) -> None: ...

@@ -97,6 +97,12 @@
         "_python_const": "HEARTBEAT",
         "value": "HEARTBEAT"
       },
+      "INFERENCE": {
+        "_go_const": "ActionTypeInference",
+        "_mutation": true,
+        "_python_const": "INFERENCE",
+        "value": "INFERENCE"
+      },
       "DOCUMENT_UPDATE": {
         "_go_const": "ActionTypeDocumentUpdate",
         "_mutation": true,

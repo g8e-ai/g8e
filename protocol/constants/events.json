@@ -720,6 +720,10 @@
       "_go_const": "EventOperatorMcpCallRequested",
       "value": "g8e.v1.operator.mcp.call.requested"
     },
+    "OperatorInferenceRequested": {
+      "_go_const": "EventOperatorInferenceRequested",
+      "value": "g8e.v1.operator.inference.requested"
+    },
     "OperatorNetworkPingCompleted": {
       "_go_const": "EventOperatorNetworkPingCompleted",
       "value": "g8e.v1.operator.network.ping.completed"

@@ -120,6 +120,12 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 		}
 	case constants.ActionTypeCancel:
 		msg = &operatorv1.CommandCancelRequested{ExecutionId: "exec-1"}
+	case constants.ActionTypeInference:
+		msg = &operatorv1.InferenceRequested{
+			Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+			Model:  "test-model",
+			Prompt: "test prompt",
+		}
 	case constants.ActionTypePlatformEnrollmentCreate,
 		constants.ActionTypePlatformEnrollmentDecide,
 		constants.ActionTypePlatformEnrollmentIssue,
