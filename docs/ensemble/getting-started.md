@@ -69,7 +69,6 @@ G8E_GATEWAY_HTTP_URL=http://localhost:8080
 G8E_GATEWAY_URL=https://localhost:8443
 G8E_OPERATOR_URL=https://localhost:8443
 G8E_OPERATOR_PUBSUB_URL=wss://localhost:8443
-G8E_OPERATOR_BLOB_URL=https://localhost:8443
 ```
 
 Configure a model provider and model before using chat. Environment variables provide bootstrap defaults, while stored platform settings and request-specific values take precedence. See [LLM Providers](llm-providers.md) for the supported providers and exact configuration keys.
