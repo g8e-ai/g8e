@@ -7,7 +7,16 @@
 
 package models
 
-import operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+
+	"google.golang.org/protobuf/proto"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+)
 
 // InferenceModelRole is the typed chat-tier role for a governed inference
 // request. It maps directly to the three tiers in ensemble's LLMSettings.
@@ -92,17 +101,6 @@ type InferenceRequestPayload struct {
 	KeepAlive   string
 }
 
-// InferenceResultPayload is the typed result payload returned by the handler
-// for the receipt and audit chain.
-type InferenceResultPayload struct {
-	Text             string `json:"text"`
-	PromptTokens     int32  `json:"prompt_tokens"`
-	CompletionTokens int32  `json:"completion_tokens"`
-	TotalTokens      int32  `json:"total_tokens"`
-	FinishReason     string `json:"finish_reason"`
-	Model            string `json:"model"`
-}
-
 // FromProtoInferenceRequested decodes a protobuf InferenceRequested message
 // into the typed InferenceRequestPayload.
 func FromProtoInferenceRequested(req *operatorv1.InferenceRequested) InferenceRequestPayload {
@@ -134,18 +132,6 @@ func (p InferenceRequestPayload) ToGenerateRequest(defaultModel string) Generate
 	}
 }
 
-// ToInferenceResultPayload converts a GenerateResponse to an InferenceResultPayload.
-func (r GenerateResponse) ToInferenceResultPayload() InferenceResultPayload {
-	return InferenceResultPayload{
-		Text:             r.Text,
-		PromptTokens:     r.PromptTokens,
-		CompletionTokens: r.CompletionTokens,
-		TotalTokens:      r.TotalTokens,
-		FinishReason:     r.FinishReason,
-		Model:            r.Model,
-	}
-}
-
 // ToProtoInferenceResult converts a GenerateResponse to the protobuf
 // InferenceResult message for result envelope publishing.
 func (r GenerateResponse) ToProtoInferenceResult() *operatorv1.InferenceResult {
@@ -157,4 +143,27 @@ func (r GenerateResponse) ToProtoInferenceResult() *operatorv1.InferenceResult {
 		FinishReason:     r.FinishReason,
 		Model:            r.Model,
 	}
+}
+
+// ComputeInferenceResultDigest returns the canonical digest of an
+// InferenceResult: lowercase hex SHA-256 over the deterministic protobuf
+// serialization with result_digest cleared. The Inference Node computes it
+// at execution time and returns it as the receipt summary so the signed
+// ActionReceipt binds the complete result; the User Gateway recomputes it
+// and requires equality before reporting dispatch success.
+func ComputeInferenceResultDigest(result *operatorv1.InferenceResult) (string, error) {
+	if result == nil {
+		return "", fmt.Errorf("models: compute inference result digest: %w", constants.ErrMissingRequiredField)
+	}
+	clone, ok := proto.Clone(result).(*operatorv1.InferenceResult)
+	if !ok {
+		return "", fmt.Errorf("models: compute inference result digest: %w", constants.ErrInferenceResultDigest)
+	}
+	clone.ResultDigest = ""
+	data, err := proto.MarshalOptions{Deterministic: true}.Marshal(clone)
+	if err != nil {
+		return "", fmt.Errorf("models: compute inference result digest: marshal: %w", err)
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
 }

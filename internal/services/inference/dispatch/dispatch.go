@@ -61,10 +61,13 @@ type CommandDispatchRequest struct {
 // CommandDispatchResult is the gateway-agnostic dispatch result. The
 // TransactionID correlates the dispatch with the signed ActionReceipt
 // recorded in the audit chain. The ResultPayload carries the
-// proto-marshaled result message (e.g., InferenceResult).
+// proto-marshaled result message (e.g., InferenceResult). For inference
+// dispatches, Receipt carries the verified final signed ActionReceipt whose
+// result_summary binds the result digest.
 type CommandDispatchResult struct {
 	TransactionID string
 	ResultPayload []byte
+	Receipt       *operatorv1.ActionReceipt
 }
 
 // OperatorLister lists enrolled operators for a user. Implemented by
@@ -145,10 +148,13 @@ type DispatchInferenceRequest struct {
 // DispatchInferenceResult is the output of a successful inference dispatch.
 // The InferenceResult carries the generated text, usage metadata, and
 // finish reason. The TransactionID correlates the dispatch with the signed
-// ActionReceipt recorded in the User Gateway's audit chain.
+// ActionReceipt recorded in the User Gateway's audit chain. Receipt carries
+// the verified final signed ActionReceipt whose result_summary binds the
+// result digest.
 type DispatchInferenceResult struct {
 	TransactionID string
 	Result        *operatorv1.InferenceResult
+	Receipt       *operatorv1.ActionReceipt
 }
 
 // DispatchInference constructs a governed InferenceRequested envelope,
@@ -224,6 +230,7 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	return &DispatchInferenceResult{
 		TransactionID: result.TransactionID,
 		Result:        infResult,
+		Receipt:       result.Receipt,
 	}, nil
 }
 

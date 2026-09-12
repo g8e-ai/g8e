@@ -9,7 +9,6 @@ package inference
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -49,18 +48,19 @@ func NewInferenceExecutionHandler(backend Backend, cfg *config.Config, scrubbing
 
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler. It is
 // called by the L5 actuator after L1–L4 verification passes. It delegates to
-// ExecuteInference and returns the generated text (bounded to
-// ReceiptSummaryMaxBytes) as the receipt summary.
+// ExecuteInference and returns the canonical result digest as the receipt
+// summary so the signed ActionReceipt binds the complete InferenceResult
+// (see operator.proto InferenceResult.result_digest).
 func (h *InferenceExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
 	resp, err := h.ExecuteInference(ctx, cmdMsg)
 	if err != nil {
 		return "", err
 	}
-	summary := resp.Text
-	if len(summary) > constants.ReceiptSummaryMaxBytes {
-		summary = summary[:constants.ReceiptSummaryMaxBytes]
+	digest, err := models.ComputeInferenceResultDigest(resp.ToProtoInferenceResult())
+	if err != nil {
+		return "", err
 	}
-	return summary, nil
+	return digest, nil
 }
 
 // ExecuteInference decodes the protobuf InferenceRequested payload, scrubs the
@@ -119,18 +119,6 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 	}
 
 	return resp, nil
-}
-
-// InferenceResultJSON returns the typed InferenceResult payload as canonical
-// JSON for the audit chain. Called by the dispatch service after the
-// receipt is stamped.
-func (h *InferenceExecutionHandler) InferenceResultJSON(resp *models.GenerateResponse) (string, error) {
-	result := resp.ToInferenceResultPayload()
-	data, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("inference handler: marshal result: %w", err)
-	}
-	return string(data), nil
 }
 
 // defaultModelForRole returns the configured default Ollama model name for

@@ -45,6 +45,15 @@ func mustMarshalInferenceRequested(t *testing.T, req *operatorv1.InferenceReques
 	return data
 }
 
+// wantDigest returns the canonical result digest the handler must return as
+// the receipt summary for the given backend response.
+func wantDigest(t *testing.T, resp *models.GenerateResponse) string {
+	t.Helper()
+	digest, err := models.ComputeInferenceResultDigest(resp.ToProtoInferenceResult())
+	require.NoError(t, err)
+	return digest
+}
+
 func TestInferenceHandler_ExecuteVerifiedTransaction_PrimaryRole(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
@@ -70,7 +79,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_PrimaryRole(t *testing.T) {
 	summary, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, cmdMsg)
 
 	require.NoError(t, err)
-	assert.Equal(t, "primary response", summary)
+	assert.Equal(t, wantDigest(t, backend.generateResp), summary, "summary must be the canonical result digest binding the complete result")
 	assert.Equal(t, "gemma3:4b", backend.lastReq.Model, "should use primary model config default")
 	assert.Equal(t, "What is 2+2?", backend.lastReq.Prompt)
 	assert.Equal(t, "-1", backend.lastReq.KeepAlive)
@@ -101,7 +110,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AssistantRole(t *testing.T)
 	summary, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, cmdMsg)
 
 	require.NoError(t, err)
-	assert.Equal(t, "assistant response", summary)
+	assert.Equal(t, wantDigest(t, backend.generateResp), summary, "summary must be the canonical result digest binding the complete result")
 	assert.Equal(t, "llama3.2:3b", backend.lastReq.Model, "should use assistant model config default")
 }
 
@@ -130,7 +139,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_LiteRole(t *testing.T) {
 	summary, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, cmdMsg)
 
 	require.NoError(t, err)
-	assert.Equal(t, "lite response", summary)
+	assert.Equal(t, wantDigest(t, backend.generateResp), summary, "summary must be the canonical result digest binding the complete result")
 	assert.Equal(t, "qwen3:1.5b", backend.lastReq.Model, "should use lite model config default")
 }
 
@@ -160,7 +169,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_RequestOverridesModel(t *te
 	summary, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, cmdMsg)
 
 	require.NoError(t, err)
-	assert.Equal(t, "custom model response", summary)
+	assert.Equal(t, wantDigest(t, backend.generateResp), summary, "summary must be the canonical result digest binding the complete result")
 	assert.Equal(t, "custom-model:latest", backend.lastReq.Model, "request model should override config default")
 }
 
@@ -284,7 +293,11 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_ScrubsPromptBeforeBackend(t
 	assert.NotContains(t, backend.lastReq.Prompt, "user@example.com")
 }
 
-func TestInferenceHandler_ExecuteVerifiedTransaction_TruncatesLongSummary(t *testing.T) {
+// TestInferenceHandler_ExecuteVerifiedTransaction_LongOutputStillBindsDigest
+// proves that an output larger than ReceiptSummaryMaxBytes still produces a
+// fixed-width canonical digest as the receipt summary — the digest binds the
+// complete result rather than a truncated text prefix.
+func TestInferenceHandler_ExecuteVerifiedTransaction_LongOutputStillBindsDigest(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	longText := make([]byte, constants.ReceiptSummaryMaxBytes+100)
@@ -313,7 +326,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_TruncatesLongSummary(t *tes
 	summary, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, cmdMsg)
 
 	require.NoError(t, err)
-	assert.Len(t, summary, constants.ReceiptSummaryMaxBytes, "summary should be truncated to ReceiptSummaryMaxBytes")
+	assert.Equal(t, wantDigest(t, backend.generateResp), summary, "summary must be the digest of the complete untruncated result")
+	assert.Len(t, summary, 64, "digest summary is a fixed-width lowercase hex SHA-256")
 }
 
 func TestInferenceHandler_ExecuteVerifiedTransaction_AppliesConfigKeepAliveDefault(t *testing.T) {
@@ -372,28 +386,6 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_RequestKeepAliveOverridesCo
 
 	require.NoError(t, err)
 	assert.Equal(t, "5m", backend.lastReq.KeepAlive, "request keep_alive should override config default")
-}
-
-func TestInferenceHandler_InferenceResultJSON_ReturnsCanonicalJSON(t *testing.T) {
-	t.Parallel()
-	logger := testutil.NewTestLogger()
-	handler := NewInferenceExecutionHandler(&stubBackend{}, &config.Config{}, mustNewScrubbingSvc(t), logger)
-
-	resp := &models.GenerateResponse{
-		Text:             "generated text",
-		PromptTokens:     10,
-		CompletionTokens: 5,
-		TotalTokens:      15,
-		FinishReason:     "stop",
-		Model:            "test-model",
-	}
-
-	jsonStr, err := handler.InferenceResultJSON(resp)
-
-	require.NoError(t, err)
-	assert.Contains(t, jsonStr, "generated text")
-	assert.Contains(t, jsonStr, "test-model")
-	assert.Contains(t, jsonStr, `"total_tokens":15`)
 }
 
 func TestInferenceHandler_DefaultModelForRole_UnspecifiedReturnsEmpty(t *testing.T) {

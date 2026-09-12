@@ -1422,4 +1422,15 @@ var (
 	ErrInferenceRoleInvalid        = errors.New("inference: role invalid")
 	ErrInferenceOperatorNotFound   = errors.New("inference: no inference-capable operator session found")
 	ErrInferenceResultDecode       = errors.New("inference: failed to decode result envelope payload")
+	ErrInferenceCompletionNoReceipt  = errors.New("inference: completion missing final receipt")
+	ErrInferenceCompletionNoResult   = errors.New("inference: completed receipt missing result")
+	ErrInferenceReceiptFailed        = errors.New("inference: execution failed on inference node")
+	ErrInferenceReceiptVerify        = errors.New("inference: receipt verification failed")
+	ErrInferenceResultDigestMismatch = errors.New("inference: result digest mismatch")
+	ErrInferenceResultDigest         = errors.New("inference: result digest computation failed")
+
+	// Dispatch transport errors. Zero delivery and a missing correlated
+	// result are terminal transport outcomes, not log-and-continue events.
+	ErrDispatchNoDelivery    = errors.New("dispatch: command delivered to no operator subscribers")
+	ErrDispatchResultTimeout = errors.New("dispatch: timed out waiting for operator result")
 )

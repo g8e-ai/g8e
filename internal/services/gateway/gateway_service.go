@@ -428,7 +428,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	// L2 signatures). Under postures that require L3 proof (ratify, notary),
 	// mutation dispatches are rejected at envelope construction because the
 	// gateway dispatch path cannot mint human proofs.
-	dispatchSvc := NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture), doctrine, l2Deliberator)
+	dispatchSvc := NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture), doctrine, l2Deliberator, signerStore)
 	inferenceDispatchSvc := dispatch.NewDispatchService(
 		&gatewayDispatcherAdapter{svc: dispatchSvc},
 		&gatewayOperatorListerAdapter{svc: reg},

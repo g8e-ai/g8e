@@ -145,57 +145,6 @@ func TestDispatchResult_ToResponse(t *testing.T) {
 	})
 }
 
-// --- dispatchResultTracker tests ---
-
-func TestDispatchResultTracker_RegisterRouteUnregister(t *testing.T) {
-	tracker := newDispatchResultTracker()
-	txID := "tx-001"
-
-	ch := tracker.register(txID)
-	require.NotNil(t, ch)
-
-	env := &commonv1.GovernanceEnvelope{Id: txID}
-	routed := tracker.route(txID, env)
-	assert.True(t, routed)
-
-	select {
-	case got := <-ch:
-		assert.Equal(t, txID, got.Id)
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("expected result on channel")
-	}
-
-	tracker.unregister(txID)
-
-	// After unregister, route returns false.
-	routed = tracker.route(txID, env)
-	assert.False(t, routed)
-}
-
-func TestDispatchResultTracker_RouteUnknownTxID(t *testing.T) {
-	tracker := newDispatchResultTracker()
-	env := &commonv1.GovernanceEnvelope{Id: "unknown"}
-	routed := tracker.route("unknown", env)
-	assert.False(t, routed)
-}
-
-func TestDispatchResultTracker_RouteFullChannel(t *testing.T) {
-	tracker := newDispatchResultTracker()
-	txID := "tx-002"
-	ch := tracker.register(txID)
-
-	// Fill the buffered channel (capacity 1).
-	env := &commonv1.GovernanceEnvelope{Id: txID}
-	require.True(t, tracker.route(txID, env))
-
-	// Second route should return false (channel full, default case).
-	routed := tracker.route(txID, env)
-	assert.False(t, routed)
-
-	// Drain to verify the first one is still there.
-	<-ch
-}
-
 // fsReadPayloadBytes builds a valid proto-marshaled FsReadRequested payload
 // for dispatch tests that need a typed payload the builder can decode.
 func fsReadPayloadBytes(t *testing.T) []byte {
@@ -224,6 +173,7 @@ func newTestDispatchService(t *testing.T, stateRoot string, op *models.OperatorD
 		"doctrine",
 		governance.NewL1Doctrine(),
 		nil, // no L2 deliberator under doctrine posture
+		nil, // no receipt signer store; inference dispatch tests wire their own
 	)
 	return svc, broker
 }
@@ -309,6 +259,7 @@ func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
 		"doctrine",
 		governance.NewL1Doctrine(),
 		nil,
+		nil,
 	)
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
@@ -320,11 +271,30 @@ func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
 	assert.Contains(t, err.Error(), "dispatch: get state root")
 }
 
-func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
+func TestDispatchService_Dispatch_ZeroDeliveryFailsClosed(t *testing.T) {
 	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
 	svc, _ := newTestDispatchService(t, "root-abc", op)
 
-	// No operator handler registered — no result will be published.
+	// No operator handler registered — the publish delivers to zero
+	// subscribers, which is a terminal transport failure.
+	_, err := svc.Dispatch(context.Background(), DispatchRequest{
+		TargetOperatorSessionID: "sess-001",
+		ActionType:              string(constants.ActionTypeFsRead),
+		Payload:                 fsReadPayloadBytes(t),
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrDispatchNoDelivery)
+}
+
+func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
+	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	svc, broker := newTestDispatchService(t, "root-abc", op)
+
+	// Operator handler is registered (so delivery succeeds) but never
+	// publishes a result.
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
+	defer unreg()
+
 	// Use a context with a short timeout so the test doesn't wait 30s.
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -335,7 +305,7 @@ func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
 		Payload:                 fsReadPayloadBytes(t),
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "timed out")
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
 // --- DispatchController.HandleDispatch tests ---

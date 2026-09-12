@@ -46,6 +46,11 @@ type PubSubCommandMessage struct {
 	Payload           json.RawMessage     `json:"payload"`
 	DecodedPayload    proto.Message       `json:"-"`
 	Timestamp         time.Time           `json:"timestamp"`
+
+	// InferenceResult carries the complete inference result produced by
+	// handleInferenceRequestSync so the post-actuation completion
+	// publication can bind it to the final signed receipt.
+	InferenceResult *operatorv1.InferenceResult `json:"-"`
 }
 
 // OperatorPubSubService manages the Operator pub/sub connection and dispatches inbound
@@ -64,8 +69,8 @@ type OperatorPubSubService struct {
 	history   *HistoryService
 
 	// inference is the governed execution handler for local LLM inference
-	// (g8ellama). Nil when cfg.Inference.Enabled is false; the handler is
-	// not registered in the handlers map when nil.
+	// (g8ellama). Nil when cfg.Inference.Enabled is false; the event-type
+	// dispatch still fails closed with ErrInferenceBackendNotRegistered.
 	inference *inference.InferenceExecutionHandler
 
 	ShutdownChan chan string
@@ -117,8 +122,8 @@ type CommandServiceConfig struct {
 	Scrubbing      *scrubbing.ScrubbingService
 
 	// Inference is the governed execution handler for local LLM inference
-	// (g8ellama). Nil when inference is disabled; the handler is not
-	// registered in the handlers map when nil.
+	// (g8ellama). Nil when inference is disabled; the inference event type
+	// remains registered and fails closed at execution.
 	Inference *inference.InferenceExecutionHandler
 
 	// Actuator configuration
@@ -388,16 +393,14 @@ func (rs *OperatorPubSubService) buildHandlers() {
 		},
 	}
 
-	// Register the inference handler when configured. The handler is
-	// dispatched by event type through the same L5 actuator path as every
-	// other governed execution handler. Registered in both outbound and
-	// gateway mode, so a gateway can also run inference locally if Ollama
-	// is co-located.
-	if rs.inference != nil {
-		rs.handlers[constants.Event.Operator.Inference.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleInferenceRequestSync(ctx, msg); err != nil {
-				rs.logger.Error("Inference handler failed", "error", err)
-			}
+	// Register the inference handler unconditionally: INFERENCE is a
+	// recognized platform action, so an unconfigured backend must fail
+	// closed with ErrInferenceBackendNotRegistered inside
+	// handleInferenceRequestSync rather than surfacing as an unknown
+	// action type at the dispatch gate.
+	rs.handlers[constants.Event.Operator.Inference.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
+		if _, err := rs.handleInferenceRequestSync(ctx, msg); err != nil {
+			rs.logger.Error("Inference handler failed", "error", err)
 		}
 	}
 }
@@ -665,6 +668,9 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 		if recordErr != nil {
 			return nil, fmt.Errorf("%w: rejection receipt: %w", err, recordErr)
 		}
+		if envelope.ActionType == string(constants.ActionTypeInference) {
+			rs.publishInferenceCompletion(ctx, envelope, nil, receipt)
+		}
 		return receipt, err
 	}
 
@@ -688,6 +694,9 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 	}
 
 	receipt, execErr := rs.actuator.Execute(ctx, verified, cmdMsg)
+	if envelope.ActionType == string(constants.ActionTypeInference) {
+		rs.publishInferenceCompletion(ctx, envelope, cmdMsg.InferenceResult, receipt)
+	}
 	return receipt, execErr
 }
 
@@ -707,10 +716,14 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 				rs.logBlockedTransaction(env, err)
 				return
 			}
-			if _, recordErr := rs.actuator.RecordRejectedTransaction(rs.ctx, verified, err); recordErr != nil {
+			receipt, recordErr := rs.actuator.RecordRejectedTransaction(rs.ctx, verified, err)
+			if recordErr != nil {
 				rs.logger.Error("Failed to record signed rejected transaction",
 					string(constants.ConnectionStateError), recordErr,
 					"message_id", env.Id)
+			}
+			if env.ActionType == string(constants.ActionTypeInference) {
+				rs.publishInferenceCompletion(rs.ctx, env, nil, receipt)
 			}
 			return
 		}
@@ -748,6 +761,9 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 	// Execute through Actuator (execution boundary)
 	if rs.actuator != nil {
 		receipt, err := rs.actuator.Execute(rs.ctx, verified, cmdMsg)
+		if env.ActionType == string(constants.ActionTypeInference) {
+			rs.publishInferenceCompletion(rs.ctx, env, cmdMsg.InferenceResult, receipt)
+		}
 		if err != nil {
 			rs.logger.Error("Actuator execution failed",
 				string(constants.ConnectionStateError), err,
@@ -1079,10 +1095,11 @@ func (rs *OperatorPubSubService) handleEvalAnswerRequestSync(ctx context.Context
 // handleInferenceRequestSync is the Actuator egress for INFERENCE
 // transactions: it dispatches the governed inference request to the
 // configured inference execution handler (which calls the Ollama backend),
-// publishes the InferenceResult proto to the results channel so the User
-// Gateway's dispatch service can decode it, and returns the generated text
-// as the receipt summary so the Actuator can stamp it into the signed
-// ActionReceipt.
+// stamps the canonical result digest onto the InferenceResult, stores the
+// result on the command message for the post-actuation completion
+// publication, and returns the digest as the receipt summary so the signed
+// ActionReceipt binds the complete result (see operator.proto
+// InferenceResult.result_digest).
 func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.inference == nil {
 		return "", fmt.Errorf("inference handler not configured: %w", constants.ErrInferenceBackendNotRegistered)
@@ -1092,24 +1109,39 @@ func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context,
 		return "", err
 	}
 
-	// Publish the InferenceResult proto to the results channel so the User
-	// Gateway's dispatch service can decode it from the result envelope
-	// payload. Best-effort: the receipt is already stamped by the L5
-	// actuator; a publish failure does not fail the execution.
-	if rs.results != nil {
-		resultProto := resp.ToProtoInferenceResult()
-		if pubErr := rs.results.PublishInferenceResult(ctx, resultProto, msg); pubErr != nil {
-			rs.logger.Warn("Failed to publish inference result to results channel",
-				string(constants.ConnectionStateError), pubErr,
-				"message_id", msg.ID)
-		}
+	result := resp.ToProtoInferenceResult()
+	digest, err := models.ComputeInferenceResultDigest(result)
+	if err != nil {
+		return "", err
 	}
+	result.ResultDigest = digest
+	msg.InferenceResult = result
+	return digest, nil
+}
 
-	summary := resp.Text
-	if len(summary) > constants.ReceiptSummaryMaxBytes {
-		summary = summary[:constants.ReceiptSummaryMaxBytes]
+// publishInferenceCompletion publishes the protocol-owned InferenceCompletion
+// — the final signed ActionReceipt plus the complete InferenceResult — to
+// the operator's results channel after the L5 actuator has finalized and
+// signed the receipt, so the result and its verified receipt are a single
+// correlated outcome. A failed or rejected transaction publishes the FAILED
+// receipt with no result so the waiting Gateway dispatch terminates
+// immediately with a typed failure instead of the generic timeout.
+// Publication is best-effort: the receipt is already persisted locally; a
+// delivery failure is logged and surfaces to the waiting dispatcher as a
+// missing correlated result.
+func (rs *OperatorPubSubService) publishInferenceCompletion(ctx context.Context, env *govpkg.GovernanceEnvelope, result *operatorv1.InferenceResult, receipt *operatorv1.ActionReceipt) {
+	if rs.results == nil || env == nil || receipt == nil {
+		return
 	}
-	return summary, nil
+	completion := &operatorv1.InferenceCompletion{Receipt: receipt}
+	if receipt.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+		completion.Result = result
+	}
+	if err := rs.results.PublishInferenceCompletion(ctx, env, completion); err != nil {
+		rs.logger.Error("Failed to publish inference completion to results channel",
+			string(constants.ConnectionStateError), err,
+			"message_id", env.Id)
+	}
 }
 
 // handleHeartbeatEvent processes a heartbeat event through the heartbeat service for publication.

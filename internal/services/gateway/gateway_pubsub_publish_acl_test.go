@@ -285,6 +285,22 @@ func marshalCommandIntent(t *testing.T, intent *commonv1.CommandIntent) []byte {
 	return wire
 }
 
+// fileEditPayload marshals a valid FileEditRequested for use as a command
+// intent payload. The envelope builder decodes the typed payload for L1
+// doctrine screening, so cmd: relay tests must carry real proto-marshaled
+// payloads rather than opaque byte strings.
+func fileEditPayload(t *testing.T) []byte {
+	t.Helper()
+	payload, err := proto.Marshal(&operatorv1.FileEditRequested{
+		FilePath:    "/etc/hostname",
+		Operation:   "write",
+		Content:     "relay test content",
+		ExecutionId: "exec-1",
+	})
+	require.NoError(t, err)
+	return payload
+}
+
 // newCommandIntent builds a commonv1.CommandIntent with the supplied fields.
 func newCommandIntent(operatorID, operatorSessionID, actionType string, payload []byte) *commonv1.CommandIntent {
 	return &commonv1.CommandIntent{
@@ -353,11 +369,12 @@ func TestHandlePublish_AppCommandIntentTransformedToGovernanceEnvelope(t *testin
 	})
 	defer unregister()
 
+	payload := fileEditPayload(t)
 	intent := &commonv1.CommandIntent{
 		OperatorId:        op.ID,
 		OperatorSessionId: op.OperatorSessionID,
 		ActionType:        string(constants.ActionTypeFileEdit),
-		Payload:           []byte("file-edit-payload"),
+		Payload:           payload,
 		TargetResource:    "/etc/hostname",
 		RequestorUserId:   "user-001",
 		CaseId:            "case-1",
@@ -387,7 +404,7 @@ func TestHandlePublish_AppCommandIntentTransformedToGovernanceEnvelope(t *testin
 	assert.Equal(t, op.OperatorSessionID, env.OperatorSessionId)
 	assert.Equal(t, string(constants.ActionTypeFileEdit), env.ActionType)
 	assert.Equal(t, "/etc/hostname", env.TargetResource)
-	assert.Equal(t, []byte("file-edit-payload"), env.Payload)
+	assert.Equal(t, payload, env.Payload)
 	assert.Equal(t, "user-001", env.RequestorUserId)
 	assert.Equal(t, "spiffe://g8e.local/app/g8ee", env.ActingAppId)
 	assert.Equal(t, "case-1", env.CaseId, "context fields must propagate from CommandIntent")
@@ -584,7 +601,7 @@ func TestHandlePublish_InvalidOperatorSessionDroppedFailClosed(t *testing.T) {
 	})
 	defer unregister()
 
-	intent := newCommandIntent("op-001", "sess-001", string(constants.ActionTypeFileEdit), []byte("payload"))
+	intent := newCommandIntent("op-001", "sess-001", string(constants.ActionTypeFileEdit), fileEditPayload(t))
 	intent.TargetResource = "/etc/hostname"
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
@@ -621,7 +638,7 @@ func TestHandlePublish_StateRootErrorDroppedFailClosed(t *testing.T) {
 	})
 	defer unregister()
 
-	intent := newCommandIntent(op.ID, op.OperatorSessionID, string(constants.ActionTypeFileEdit), []byte("payload"))
+	intent := newCommandIntent(op.ID, op.OperatorSessionID, string(constants.ActionTypeFileEdit), fileEditPayload(t))
 	intent.TargetResource = "/etc/hostname"
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
@@ -652,7 +669,7 @@ func TestHandlePublish_CommandIntentMissingOperatorIDDropped(t *testing.T) {
 	defer unregister()
 
 	// Intent with missing operator_id.
-	intent := newCommandIntent("", "sess-001", string(constants.ActionTypeFileEdit), []byte("payload"))
+	intent := newCommandIntent("", "sess-001", string(constants.ActionTypeFileEdit), fileEditPayload(t))
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
 
@@ -682,7 +699,7 @@ func TestHandlePublish_CommandIntentChannelMismatchDropped(t *testing.T) {
 	})
 	defer unregister()
 
-	intent := newCommandIntent("op-002", "sess-002", string(constants.ActionTypeFileEdit), []byte("payload"))
+	intent := newCommandIntent("op-002", "sess-002", string(constants.ActionTypeFileEdit), fileEditPayload(t))
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
 
@@ -709,7 +726,7 @@ func TestHandlePublish_RelayDisabledWhenDepsNotConfigured(t *testing.T) {
 	})
 	defer unregister()
 
-	intent := newCommandIntent("op-001", "sess-001", string(constants.ActionTypeFileEdit), []byte("payload"))
+	intent := newCommandIntent("op-001", "sess-001", string(constants.ActionTypeFileEdit), fileEditPayload(t))
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
 

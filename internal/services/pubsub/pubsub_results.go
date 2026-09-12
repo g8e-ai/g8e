@@ -107,21 +107,41 @@ func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result 
 	return nil
 }
 
-// PublishInferenceResult publishes an inference result via Operator pub/sub.
-// The result envelope carries the InferenceResult proto as payload and is
-// correlated with the original command by message ID on the results channel.
-// The User Gateway's dispatch service decodes the InferenceResult from this
-// envelope's payload.
-func (rr *PubSubResultsService) PublishInferenceResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
-	eventType := constants.Event.Operator.Inference.Completed
-
-	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("pubsub: publish inference result: %w", err)
+// PublishInferenceCompletion publishes the protocol-owned InferenceCompletion
+// — the final signed ActionReceipt plus, on success, the complete
+// InferenceResult — via Operator pub/sub. The completion envelope is
+// correlated with the original command by transaction ID (the command
+// envelope's Id) on the results channel. A completion whose receipt status
+// is not EXECUTION_STATUS_COMPLETED is published under the inference.failed
+// event type so the waiting Gateway dispatch terminates immediately with a
+// typed failure.
+func (rr *PubSubResultsService) PublishInferenceCompletion(ctx context.Context, env *commonv1.GovernanceEnvelope, completion *operatorv1.InferenceCompletion) error {
+	if env == nil || completion == nil || completion.Receipt == nil {
+		return fmt.Errorf("pubsub: publish inference completion: %w", constants.ErrMissingRequiredField)
 	}
 
-	rr.logger.Info("Inference result transmitted to g8e",
-		"operator_session_id", rr.config.OperatorSessionId,
-		"event_type", eventType)
+	eventType := constants.Event.Operator.Inference.Completed
+	if completion.Receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+		eventType = constants.Event.Operator.Inference.Failed
+	}
+
+	resultEnv, err := BuildUniversalResultEnvelope(rr.config, eventType, completion, env.Id, env.OperatorId, env.CaseId, env.InvestigationId, &env.TaskId, env.WebSessionId, env.CliSessionId)
+	if err != nil {
+		return fmt.Errorf("pubsub: build inference completion envelope: %w", err)
+	}
+	// Route and identify by the command envelope's operator session, not the
+	// service config, so the completion returns on the channel the waiting
+	// dispatcher is subscribed to.
+	resultEnv.OperatorSessionId = env.OperatorSessionId
+
+	if err := rr.publishUniversal(ctx, resultEnv, env.OperatorId, env.OperatorSessionId); err != nil {
+		return fmt.Errorf("pubsub: publish inference completion: %w", err)
+	}
+
+	rr.logger.Info("Inference completion transmitted to g8e",
+		"operator_session_id", env.OperatorSessionId,
+		"event_type", eventType,
+		"transaction_id", completion.Receipt.TransactionId)
 	return nil
 }
 

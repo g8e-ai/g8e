@@ -10,8 +10,11 @@ package gateway
 import (
 	"context"
 	"encoding/json"
-	"net/http"
+	"fmt"
 	"log/slog"
+	"net/http"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -49,12 +52,21 @@ func (a *gatewayDispatcherAdapter) Dispatch(ctx context.Context, req dispatch.Co
 		return nil, err
 	}
 	var payload []byte
-	if result.ResultEnvelope != nil {
+	if result.InferenceResult != nil {
+		// The verified InferenceResult is the result payload for inference
+		// dispatches; the containing envelope payload is the
+		// InferenceCompletion (result plus signed receipt).
+		payload, err = proto.Marshal(result.InferenceResult)
+		if err != nil {
+			return nil, fmt.Errorf("dispatch: marshal inference result: %w", err)
+		}
+	} else if result.ResultEnvelope != nil {
 		payload = result.ResultEnvelope.Payload
 	}
 	return &dispatch.CommandDispatchResult{
 		TransactionID: result.TransactionID,
 		ResultPayload: payload,
+		Receipt:       result.Receipt,
 	}, nil
 }
 

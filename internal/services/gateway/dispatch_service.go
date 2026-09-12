@@ -16,10 +16,10 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // DispatchTimeout is the maximum time to wait for an operator result after
@@ -186,10 +187,16 @@ type DispatchRequest struct {
 	CliSessionID            string
 }
 
-// DispatchResult is the output of a successful command dispatch.
+// DispatchResult is the output of a successful command dispatch. For
+// inference dispatches, Receipt carries the verified final signed
+// ActionReceipt and InferenceResult carries the verified complete result;
+// the digest, receipt signature, and receipt persistence attestation were
+// verified before Dispatch returned.
 type DispatchResult struct {
-	TransactionID  string
-	ResultEnvelope *commonv1.GovernanceEnvelope
+	TransactionID   string
+	ResultEnvelope  *commonv1.GovernanceEnvelope
+	Receipt         *operatorv1.ActionReceipt
+	InferenceResult *operatorv1.InferenceResult
 }
 
 // operatorSessionValidator resolves an operator session ID to the operator
@@ -230,18 +237,22 @@ type DispatchService struct {
 	posture           string
 	doctrine          *governance.L1Doctrine
 	l2Deliberator     L2ConsensusDeliberator
+	signerStore       governance.SignerStore
 }
 
 // NewDispatchService creates a DispatchService wired to the gateway's in-process
-// pub/sub broker, state root provider, auth service, L1 doctrine, and L2
-// consensus deliberator. The posture is the gateway's governance posture,
-// injected into every envelope built by this service so the operator reads it
-// per-transaction at L4 verification time. The doctrine is the L1 validator the
-// builder runs against the decoded typed payload. The l2Deliberator is invoked
-// after envelope construction under postures that require L2 signatures; a nil
-// deliberator skips deliberation (the envelope fails closed at L4 under such
-// postures).
-func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHandler, stateRootProvider governance.StateRootProvider, auth operatorSessionValidator, posture string, doctrine *governance.L1Doctrine, l2Deliberator L2ConsensusDeliberator) *DispatchService {
+// pub/sub broker, state root provider, auth service, L1 doctrine, L2
+// consensus deliberator, and receipt signer store. The posture is the
+// gateway's governance posture, injected into every envelope built by this
+// service so the operator reads it per-transaction at L4 verification time.
+// The doctrine is the L1 validator the builder runs against the decoded
+// typed payload. The l2Deliberator is invoked after envelope construction
+// under postures that require L2 signatures; a nil deliberator skips
+// deliberation (the envelope fails closed at L4 under such postures). The
+// signerStore resolves the operator's actuator public key for inference
+// completion receipt verification; a nil store fails inference dispatch
+// closed.
+func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHandler, stateRootProvider governance.StateRootProvider, auth operatorSessionValidator, posture string, doctrine *governance.L1Doctrine, l2Deliberator L2ConsensusDeliberator, signerStore governance.SignerStore) *DispatchService {
 	return &DispatchService{
 		logger:            logger,
 		pubsub:            pubsubHandler,
@@ -250,6 +261,7 @@ func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHand
 		posture:           posture,
 		doctrine:          doctrine,
 		l2Deliberator:     l2Deliberator,
+		signerStore:       signerStore,
 	}
 }
 
@@ -344,7 +356,9 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	unregister := d.pubsub.RegisterHandler(resultsChannel, handler)
 	defer unregister()
 
-	// 7. Publish the envelope to the operator's cmd channel.
+	// 7. Publish the envelope to the operator's cmd channel. Zero delivery
+	//    is a terminal transport failure: no operator received the command,
+	//    so no result can ever arrive.
 	cmdChannel := pubsub.CmdChannel(operatorID, operatorSessionID)
 	delivered := d.pubsub.Publish(cmdChannel, wire)
 	d.logger.Info("dispatch: published command",
@@ -352,6 +366,9 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		"cmd_channel", cmdChannel,
 		"results_channel", resultsChannel,
 		"delivered", delivered)
+	if delivered == 0 {
+		return nil, fmt.Errorf("dispatch: %w", constants.ErrDispatchNoDelivery)
+	}
 
 	// 8. Wait for the result with a timeout.
 	timeoutCtx, cancel := context.WithTimeout(ctx, DispatchTimeout)
@@ -359,53 +376,82 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 
 	select {
 	case resultEnv := <-resultCh:
+		if req.ActionType == string(constants.ActionTypeInference) {
+			return d.verifyInferenceCompletion(env, resultEnv)
+		}
 		return &DispatchResult{
 			TransactionID:  txHash,
 			ResultEnvelope: resultEnv,
 		}, nil
 	case <-timeoutCtx.Done():
-		return nil, fmt.Errorf("dispatch: timed out waiting for operator result after %s", DispatchTimeout)
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("dispatch: %w", err)
+		}
+		return nil, fmt.Errorf("dispatch: %w after %s", constants.ErrDispatchResultTimeout, DispatchTimeout)
 	}
 }
 
-// dispatchResultTracker is a concurrency-safe tracker for in-flight dispatches.
-// Currently unused but reserved for the production long-lived results listener.
-type dispatchResultTracker struct {
-	mu      sync.Mutex
-	pending map[string]chan *commonv1.GovernanceEnvelope
-}
-
-func newDispatchResultTracker() *dispatchResultTracker {
-	return &dispatchResultTracker{pending: make(map[string]chan *commonv1.GovernanceEnvelope)}
-}
-
-func (t *dispatchResultTracker) register(txID string) chan *commonv1.GovernanceEnvelope {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	ch := make(chan *commonv1.GovernanceEnvelope, 1)
-	t.pending[txID] = ch
-	return ch
-}
-
-func (t *dispatchResultTracker) unregister(txID string) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	delete(t.pending, txID)
-}
-
-func (t *dispatchResultTracker) route(txID string, env *commonv1.GovernanceEnvelope) bool {
-	t.mu.Lock()
-	ch, ok := t.pending[txID]
-	t.mu.Unlock()
-	if !ok {
-		return false
+// verifyInferenceCompletion decodes the protocol-owned InferenceCompletion
+// carried in the result envelope's payload and verifies that the returned
+// result and its final signed receipt are one outcome: the receipt's
+// transaction identity must match the dispatched envelope, its signature
+// and persistence attestation must verify against the operator's actuator
+// key, a FAILED receipt terminates the wait as a typed failure, and the
+// recomputed result digest must equal both the receipt's result_summary and
+// the result's own result_digest. Fail-closed on every check.
+func (d *DispatchService) verifyInferenceCompletion(cmdEnv, resultEnv *commonv1.GovernanceEnvelope) (*DispatchResult, error) {
+	completion := &operatorv1.InferenceCompletion{}
+	if err := proto.Unmarshal(resultEnv.Payload, completion); err != nil {
+		return nil, fmt.Errorf("dispatch: %w: %v", constants.ErrInferenceResultDecode, err)
 	}
-	select {
-	case ch <- env:
-		return true
-	default:
-		return false
+
+	receipt := completion.GetReceipt()
+	if receipt == nil {
+		return nil, fmt.Errorf("dispatch: %w", constants.ErrInferenceCompletionNoReceipt)
 	}
+	if receipt.TransactionId != cmdEnv.Id || receipt.TransactionHash != cmdEnv.TransactionHash {
+		return nil, fmt.Errorf("dispatch: %w: receipt transaction identity does not match dispatched envelope", constants.ErrInferenceReceiptVerify)
+	}
+
+	if d.signerStore == nil {
+		return nil, fmt.Errorf("dispatch: %w: receipt signer store not configured", constants.ErrInferenceReceiptVerify)
+	}
+	pubKey, err := d.signerStore.GetTrustedSigner(receipt.SignerKeyId)
+	if err != nil {
+		return nil, fmt.Errorf("dispatch: %w: %v", constants.ErrInferenceReceiptVerify, err)
+	}
+	if pubKey == nil {
+		return nil, fmt.Errorf("dispatch: %w: unknown signer key id %q", constants.ErrInferenceReceiptVerify, receipt.SignerKeyId)
+	}
+	if err := governance.VerifyActionReceiptSignature(receipt, pubKey); err != nil {
+		return nil, fmt.Errorf("dispatch: %w: %v", constants.ErrInferenceReceiptVerify, err)
+	}
+	if err := governance.VerifyReceiptPersistenceAttestation(receipt, pubKey); err != nil {
+		return nil, fmt.Errorf("dispatch: %w: %v", constants.ErrInferenceReceiptVerify, err)
+	}
+
+	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+		return nil, fmt.Errorf("dispatch: %w: %s", constants.ErrInferenceReceiptFailed, receipt.ResultSummary)
+	}
+
+	result := completion.GetResult()
+	if result == nil {
+		return nil, fmt.Errorf("dispatch: %w", constants.ErrInferenceCompletionNoResult)
+	}
+	digest, err := models.ComputeInferenceResultDigest(result)
+	if err != nil {
+		return nil, fmt.Errorf("dispatch: %w", err)
+	}
+	if result.ResultDigest != digest || receipt.ResultSummary != digest {
+		return nil, fmt.Errorf("dispatch: %w", constants.ErrInferenceResultDigestMismatch)
+	}
+
+	return &DispatchResult{
+		TransactionID:   cmdEnv.Id,
+		ResultEnvelope:  resultEnv,
+		Receipt:         receipt,
+		InferenceResult: result,
+	}, nil
 }
 
 // DispatchResponse is the typed JSON response for POST /api/v1/operators/commands.

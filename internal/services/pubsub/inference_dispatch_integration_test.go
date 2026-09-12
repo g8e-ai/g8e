@@ -13,7 +13,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
+	"fmt"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -66,9 +68,9 @@ func (s *stubInferenceBackend) Status(_ context.Context) (*models.BackendStatus,
 // outbound mode with a real SQLAuditStore (real SQLite, real vault,
 // foreign_keys enforced) and a stub inference backend wired through the
 // governed execution handler. Returns the service, the stub backend, the
-// audit store, and the actuator signing key so the test can build signed
-// L2 votes and assert on persisted receipts.
-func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stubInferenceBackend, *storage.SQLAuditStore, ed25519.PrivateKey) {
+// audit store, and the capturing results publisher so the test can assert
+// on persisted receipts and published InferenceCompletion envelopes.
+func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stubInferenceBackend, *storage.SQLAuditStore, *mockResultsPublisher) {
 	t.Helper()
 
 	cfg := testutil.NewTestConfig(t)
@@ -90,14 +92,14 @@ func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stub
 	testVault := storagetest.CreateTestVault(t, filepath.Join(tempDir, constants.VaultDirname), privKey)
 
 	auditConfig := &storage.AuditStoreConfig{
-		DBPath:          "inference_dispatch_integration.db",
+		DBPath:          constants.DbFilename,
 		MaxDBSizeMB:     100,
 		RetentionDays:   1,
 		EncryptionVault: testVault,
 	}
 	auditStore, err := storage.NewSQLAuditStore(auditConfig, logger, fileSvc)
 	require.NoError(t, err)
-	t.Cleanup(func() { auditStore.Close() })
+	t.Cleanup(func() { require.NoError(t, auditStore.Close()) })
 
 	backend := &stubInferenceBackend{
 		resp: &models.GenerateResponse{
@@ -144,13 +146,18 @@ func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stub
 	})
 	require.NoError(t, err)
 
-	return svc, backend, auditStore, privKey
+	return svc, backend, auditStore, results
 }
 
 // buildInferenceEnvelope constructs a governed GovernanceEnvelope carrying
-// an InferenceRequested payload, signs an L2 vote with the actuator key, and
-// returns the protojson-marshaled wire bytes ready for ProcessEnvelope.
-func buildInferenceEnvelope(t *testing.T, role operatorv1.ModelRole, model, prompt string, privKey ed25519.PrivateKey) []byte {
+// an InferenceRequested payload under the doctrine posture and returns the
+// protojson-marshaled wire bytes ready for ProcessEnvelope. Inference is a
+// mutation, so it cannot traverse postures that require L3 human proofs:
+// the gateway dispatch path cannot mint L3 proofs and rejects such envelopes
+// at construction. Doctrine is the release posture for governed inference.
+var inferenceEnvelopeNonce atomic.Int64
+
+func buildInferenceEnvelope(t *testing.T, role operatorv1.ModelRole, model, prompt string) []byte {
 	t.Helper()
 
 	infReq := &operatorv1.InferenceRequested{
@@ -172,8 +179,8 @@ func buildInferenceEnvelope(t *testing.T, role operatorv1.ModelRole, model, prom
 		TargetResource:    "ollama",
 		Payload:           payloadBytes,
 		StateMerkleRoot:   "test-state-root",
-		Nonce:             "nonce-inference-int-1",
-		Posture:           constants.PostureNotary,
+		Nonce:             fmt.Sprintf("nonce-inference-int-%d", inferenceEnvelopeNonce.Add(1)),
+		Posture:           constants.PostureDoctrine,
 	}
 
 	txHash, err := govpkg.GenerateMessageID(envelope)
@@ -183,15 +190,6 @@ func buildInferenceEnvelope(t *testing.T, role operatorv1.ModelRole, model, prom
 
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
-		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "test-consensus",
-			Votes: []*commonv1.L2Vote{
-				signL2Vote(privKey, "test-key", txHash, true),
-			},
-		},
-		L3: &commonv1.L3Metadata{
-			Proof: &commonv1.L3Proof{Signature: "test-proof"},
-		},
 	}
 
 	wire, err := (protojson.MarshalOptions{}).Marshal(envelope)
@@ -203,14 +201,16 @@ func buildInferenceEnvelope(t *testing.T, role operatorv1.ModelRole, model, prom
 // verifies the full governed inference path: a GovernanceEnvelope carrying an
 // InferenceRequested payload traverses L1–L5 verification, the
 // InferenceExecutionHandler calls the stub backend, the L5 actuator stamps a
-// signed ActionReceipt, and the receipt is persisted in the real SQLAuditStore
-// with the INFERENCE action type. This exercises real SQLite, real vault,
-// foreign_keys enforcement, and the real L4 warden — no mocks for governance
-// internals.
+// signed ActionReceipt whose result_summary is the canonical result digest,
+// the receipt is persisted in the real SQLAuditStore with the INFERENCE
+// action type, and an InferenceCompletion carrying the final receipt plus
+// the complete digest-bound result is published to the results channel.
+// This exercises real SQLite, real vault, foreign_keys enforcement, and the
+// real L4 warden — no mocks for governance internals.
 func TestInferenceDispatch_ProcessEnvelope_PrimaryRole_PersistsReceiptAndAudit(t *testing.T) {
-	svc, backend, auditStore, privKey := newInferenceIntegrationFixture(t)
+	svc, backend, auditStore, results := newInferenceIntegrationFixture(t)
 
-	wire := buildInferenceEnvelope(t, operatorv1.ModelRole_MODEL_ROLE_PRIMARY, "gemma3:4b", "What is 2+2?", privKey)
+	wire := buildInferenceEnvelope(t, operatorv1.ModelRole_MODEL_ROLE_PRIMARY, "gemma3:4b", "What is 2+2?")
 
 	receipt, err := svc.ProcessEnvelope(context.Background(), wire)
 
@@ -218,18 +218,33 @@ func TestInferenceDispatch_ProcessEnvelope_PrimaryRole_PersistsReceiptAndAudit(t
 	require.NotNil(t, receipt, "actuator must return a signed receipt")
 	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, receipt.Status, "receipt status must be COMPLETED")
 	assert.NotEmpty(t, receipt.Signature, "receipt must carry a non-empty actuator signature")
-	assert.Contains(t, receipt.ResultSummary, "governed inference output", "receipt summary must carry the generated text")
 
 	require.True(t, backend.called, "stub backend must be invoked by the inference handler")
 	assert.Equal(t, "gemma3:4b", backend.lastReq.Model, "backend must receive the primary model name")
 	assert.Equal(t, "What is 2+2?", backend.lastReq.Prompt, "backend must receive the prompt text")
+
+	// The signed receipt's result_summary is the canonical digest of the
+	// complete InferenceResult — not the (possibly truncated) text.
+	require.Len(t, results.inferenceCompletions, 1, "exactly one inference completion must be published")
+	completion := results.inferenceCompletions[0]
+	require.NotNil(t, completion.Receipt, "completion must carry the final signed receipt")
+	require.NotNil(t, completion.Result, "completed receipt must carry the full result")
+	assert.Equal(t, "governed inference output", completion.Result.Text)
+	assert.Equal(t, receipt.TransactionId, completion.Receipt.TransactionId, "completion receipt must correlate to the executed transaction")
+	assert.Equal(t, receipt.Signature, completion.Receipt.Signature, "completion receipt must be the signed final receipt")
+
+	wantDigest, err := models.ComputeInferenceResultDigest(completion.Result)
+	require.NoError(t, err)
+	assert.Equal(t, wantDigest, completion.Result.ResultDigest, "result must carry its canonical digest")
+	assert.Equal(t, wantDigest, receipt.ResultSummary, "receipt result_summary must be the result digest")
+	assert.Equal(t, wantDigest, completion.Receipt.ResultSummary, "completion receipt must bind the result digest")
 
 	receipts, err := auditStore.ListActionReceipts("", 10, 0)
 	require.NoError(t, err)
 	require.Len(t, receipts, 1, "exactly one inference receipt must be persisted in the audit store")
 	persisted := receipts[0]
 	assert.Equal(t, constants.ActionTypeInference, persisted.ActionType, "persisted receipt action type must be INFERENCE")
-	assert.Equal(t, "governed inference output", persisted.ResultSummary, "persisted receipt summary must carry the generated text")
+	assert.Equal(t, wantDigest, persisted.ResultSummary, "persisted receipt summary must be the result digest")
 }
 
 // TestInferenceDispatch_ProcessEnvelope_AllThreeRoles_RoutesByConfigDefault
@@ -238,7 +253,7 @@ func TestInferenceDispatch_ProcessEnvelope_PrimaryRole_PersistsReceiptAndAudit(t
 // proving multi-role support through a single handler without per-role
 // backend instances.
 func TestInferenceDispatch_ProcessEnvelope_AllThreeRoles_RoutesByConfigDefault(t *testing.T) {
-	svc, backend, _, privKey := newInferenceIntegrationFixture(t)
+	svc, backend, _, _ := newInferenceIntegrationFixture(t)
 
 	roles := []struct {
 		name      string
@@ -255,7 +270,7 @@ func TestInferenceDispatch_ProcessEnvelope_AllThreeRoles_RoutesByConfigDefault(t
 			backend.called = false
 			backend.lastReq = models.GenerateRequest{}
 
-			wire := buildInferenceEnvelope(t, tc.protoRole, "", "test prompt", privKey)
+			wire := buildInferenceEnvelope(t, tc.protoRole, "", "test prompt")
 			receipt, err := svc.ProcessEnvelope(context.Background(), wire)
 
 			require.NoError(t, err)
@@ -282,14 +297,14 @@ func TestInferenceDispatch_ProcessEnvelope_NilInferenceHandler_FailsClosed(t *te
 	testVault := storagetest.CreateTestVault(t, filepath.Join(tempDir, constants.VaultDirname), privKey)
 
 	auditConfig := &storage.AuditStoreConfig{
-		DBPath:          "inference_nil_handler.db",
+		DBPath:          constants.DbFilename,
 		MaxDBSizeMB:     100,
 		RetentionDays:   1,
 		EncryptionVault: testVault,
 	}
 	auditStore, err := storage.NewSQLAuditStore(auditConfig, logger, fileSvc)
 	require.NoError(t, err)
-	t.Cleanup(func() { auditStore.Close() })
+	t.Cleanup(func() { require.NoError(t, auditStore.Close()) })
 
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -319,11 +334,37 @@ func TestInferenceDispatch_ProcessEnvelope_NilInferenceHandler_FailsClosed(t *te
 	})
 	require.NoError(t, err)
 
-	wire := buildInferenceEnvelope(t, operatorv1.ModelRole_MODEL_ROLE_PRIMARY, "gemma3:4b", "test", privKey)
+	wire := buildInferenceEnvelope(t, operatorv1.ModelRole_MODEL_ROLE_PRIMARY, "gemma3:4b", "test")
 	receipt, err := svc.ProcessEnvelope(context.Background(), wire)
 
 	require.Error(t, err, "nil inference handler must fail closed")
 	require.NotNil(t, receipt, "actuator must return a signed failed receipt")
 	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, receipt.Status, "receipt status must be FAILED")
 	assert.ErrorIs(t, err, constants.ErrInferenceBackendNotRegistered, "error must wrap ErrInferenceBackendNotRegistered")
+}
+
+// TestInferenceDispatch_ProcessEnvelope_BackendFailure_PublishesFailedCompletion
+// verifies that a backend failure produces a FAILED signed receipt and an
+// InferenceCompletion carrying that receipt with no result, so the waiting
+// Gateway dispatch terminates immediately with a typed failure instead of
+// the generic dispatch timeout.
+func TestInferenceDispatch_ProcessEnvelope_BackendFailure_PublishesFailedCompletion(t *testing.T) {
+	svc, backend, _, results := newInferenceIntegrationFixture(t)
+	backend.err = constants.ErrInferenceGenerateFailed
+
+	wire := buildInferenceEnvelope(t, operatorv1.ModelRole_MODEL_ROLE_PRIMARY, "gemma3:4b", "test")
+
+	receipt, err := svc.ProcessEnvelope(context.Background(), wire)
+
+	require.Error(t, err, "backend failure must fail the transaction")
+	assert.ErrorIs(t, err, constants.ErrInferenceGenerateFailed)
+	require.NotNil(t, receipt, "actuator must return a signed failed receipt")
+	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, receipt.Status)
+
+	require.Len(t, results.inferenceCompletions, 1, "a failed execution must still publish a completion")
+	completion := results.inferenceCompletions[0]
+	require.NotNil(t, completion.Receipt, "failed completion must carry the FAILED receipt")
+	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, completion.Receipt.Status)
+	assert.Equal(t, receipt.Signature, completion.Receipt.Signature, "completion must carry the final signed receipt")
+	assert.Nil(t, completion.Result, "failed completion must not carry a result")
 }

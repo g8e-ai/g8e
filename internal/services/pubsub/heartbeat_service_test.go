@@ -48,6 +48,9 @@ func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, e
 type mockResultsPublisher struct {
 	publishHeartbeatCalled bool
 	publishHeartbeatError  error
+
+	inferenceCompletions   []*operatorv1.InferenceCompletion
+	inferenceCompletionErr error
 }
 
 func (m *mockResultsPublisher) PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
@@ -70,8 +73,9 @@ func (m *mockResultsPublisher) PublishFsGrepResult(ctx context.Context, result p
 	return nil
 }
 
-func (m *mockResultsPublisher) PublishInferenceResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
-	return nil
+func (m *mockResultsPublisher) PublishInferenceCompletion(ctx context.Context, env *commonv1.GovernanceEnvelope, completion *operatorv1.InferenceCompletion) error {
+	m.inferenceCompletions = append(m.inferenceCompletions, completion)
+	return m.inferenceCompletionErr
 }
 
 func (m *mockResultsPublisher) PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg *PubSubCommandMessage) error {

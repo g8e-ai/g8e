@@ -243,6 +243,7 @@ func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 				tc.posture,
 				testDoctrine(),
 				deliberator,
+				nil,
 			)
 
 			// Register an operator handler that publishes a result so the
@@ -288,6 +289,7 @@ func TestDispatchService_L2DeliberationFailureFailsClosed(t *testing.T) {
 		constants.PostureConsensus,
 		testDoctrine(),
 		failingL2Deliberator{},
+		nil,
 	)
 
 	published := false
