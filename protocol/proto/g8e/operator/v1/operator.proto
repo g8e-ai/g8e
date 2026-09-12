@@ -1178,4 +1178,86 @@ message InferenceResult {
   // Model that produced the result (echoed from the request or resolved by
   // the backend).
   string model = 6;
+
+  // Canonical digest of the complete result: lowercase hex SHA-256 over the
+  // deterministic protobuf serialization of this message with result_digest
+  // cleared. The Inference Node computes it at execution time; the signed
+  // ActionReceipt's result_summary binds it, and the User Gateway verifies
+  // digest equality before returning success to the caller.
+  string result_digest = 7;
+}
+
+// InferenceCompletion is the protocol-owned completion publication for a
+// governed inference request. The Inference Node publishes it to the
+// results channel only after the L5 Actuator has finalized and signed the
+// ActionReceipt, so the complete result and its verified receipt are a
+// single correlated outcome. A failed execution carries the FAILED receipt
+// and no result, which terminates the Gateway's dispatch wait immediately
+// instead of at the dispatch deadline.
+message InferenceCompletion {
+  // The signed final ActionReceipt for the inference transaction.
+  ActionReceipt receipt = 1;
+
+  // The complete inference result. Absent when the receipt status is not
+  // EXECUTION_STATUS_COMPLETED.
+  InferenceResult result = 2;
+}
+
+// InferenceDispatchRequest is the protocol-owned request body for
+// POST /api/v1/inference/dispatch, the mTLS-protected platform-internal
+// endpoint the ensemble chat pipeline calls to dispatch a governed
+// inference request to the Inference Node.
+message InferenceDispatchRequest {
+  // Chat-tier role for this request (primary, assistant, lite).
+  ModelRole role = 1;
+
+  // Prompt text sent to the Inference Node. The node re-scrubs it through
+  // its own ScrubbingService before crossing the execution boundary.
+  string prompt = 2;
+
+  // Optional model override. Accepted only when it matches the Inference
+  // Node's configured model for the role; any other value is rejected as an
+  // unauthorized override.
+  string model = 3;
+
+  // Generation temperature override (0 = use backend default).
+  float temperature = 4;
+
+  // Maximum tokens to generate (0 = use backend default).
+  int32 max_tokens = 5;
+
+  // Ollama keep-alive duration override (empty = use config default).
+  string keep_alive = 6;
+
+  // Explicit Inference Node target. When empty, the gateway requires exactly
+  // one enrolled inference-capable operator for the requestor; zero or
+  // multiple matches are rejected.
+  string target_operator_session_id = 7;
+
+  // Application that initiated the inference request.
+  string acting_app_id = 8;
+
+  // Application context propagated from the chat turn.
+  string case_id = 9;
+  string investigation_id = 10;
+  string task_id = 11;
+  string web_session_id = 12;
+  string cli_session_id = 13;
+}
+
+// InferenceDispatchResponse is the protocol-owned success response for
+// POST /api/v1/inference/dispatch. The Gateway returns it only after
+// verifying the final receipt signature, persistence attestation,
+// transaction identity, and result digest equality. Failure responses use
+// the gateway's standard typed error envelope with a public-safe code.
+message InferenceDispatchResponse {
+  // Transaction ID correlating the dispatch with the audit chain.
+  string transaction_id = 1;
+
+  // The complete inference result whose result_digest is bound into the
+  // signed receipt.
+  InferenceResult result = 2;
+
+  // The verified final signed ActionReceipt for the transaction.
+  ActionReceipt receipt = 3;
 }

@@ -1012,6 +1012,7 @@ var (
 	ErrTxL3ProofMissing               = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
 	ErrTxL3ProofInvalid               = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
 	ErrTxL3NotaryNotConfigured        = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")
+	ErrTxL3ProofUnmintable            = errors.New("TX_NOTARY_L3_PROOF_UNMINTABLE: posture requires L3 proof but the gateway dispatch path cannot mint human proofs")
 	ErrTxTransactionHashMissing       = errors.New("TX_HASH_MISSING: transaction_hash required")
 	ErrTxTransactionIDMissing         = errors.New("TX_ID_MISSING: id required")
 	ErrTxExpiresAtMissing             = errors.New("TX_EXPIRES_AT_MISSING: expires_at required")

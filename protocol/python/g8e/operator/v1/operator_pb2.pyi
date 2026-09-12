@@ -1652,17 +1652,67 @@ class InferenceRequested(_message.Message):
     def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., model: _Optional[str] = ..., prompt: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ...) -> None: ...
 
 class InferenceResult(_message.Message):
-    __slots__ = ("text", "prompt_tokens", "completion_tokens", "total_tokens", "finish_reason", "model")
+    __slots__ = ("text", "prompt_tokens", "completion_tokens", "total_tokens", "finish_reason", "model", "result_digest")
     TEXT_FIELD_NUMBER: _ClassVar[int]
     PROMPT_TOKENS_FIELD_NUMBER: _ClassVar[int]
     COMPLETION_TOKENS_FIELD_NUMBER: _ClassVar[int]
     TOTAL_TOKENS_FIELD_NUMBER: _ClassVar[int]
     FINISH_REASON_FIELD_NUMBER: _ClassVar[int]
     MODEL_FIELD_NUMBER: _ClassVar[int]
+    RESULT_DIGEST_FIELD_NUMBER: _ClassVar[int]
     text: str
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
     finish_reason: str
     model: str
-    def __init__(self, text: _Optional[str] = ..., prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., total_tokens: _Optional[int] = ..., finish_reason: _Optional[str] = ..., model: _Optional[str] = ...) -> None: ...
+    result_digest: str
+    def __init__(self, text: _Optional[str] = ..., prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., total_tokens: _Optional[int] = ..., finish_reason: _Optional[str] = ..., model: _Optional[str] = ..., result_digest: _Optional[str] = ...) -> None: ...
+
+class InferenceCompletion(_message.Message):
+    __slots__ = ("receipt", "result")
+    RECEIPT_FIELD_NUMBER: _ClassVar[int]
+    RESULT_FIELD_NUMBER: _ClassVar[int]
+    receipt: ActionReceipt
+    result: InferenceResult
+    def __init__(self, receipt: _Optional[_Union[ActionReceipt, _Mapping]] = ..., result: _Optional[_Union[InferenceResult, _Mapping]] = ...) -> None: ...
+
+class InferenceDispatchRequest(_message.Message):
+    __slots__ = ("role", "prompt", "model", "temperature", "max_tokens", "keep_alive", "target_operator_session_id", "acting_app_id", "case_id", "investigation_id", "task_id", "web_session_id", "cli_session_id")
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    PROMPT_FIELD_NUMBER: _ClassVar[int]
+    MODEL_FIELD_NUMBER: _ClassVar[int]
+    TEMPERATURE_FIELD_NUMBER: _ClassVar[int]
+    MAX_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    KEEP_ALIVE_FIELD_NUMBER: _ClassVar[int]
+    TARGET_OPERATOR_SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    ACTING_APP_ID_FIELD_NUMBER: _ClassVar[int]
+    CASE_ID_FIELD_NUMBER: _ClassVar[int]
+    INVESTIGATION_ID_FIELD_NUMBER: _ClassVar[int]
+    TASK_ID_FIELD_NUMBER: _ClassVar[int]
+    WEB_SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    CLI_SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    role: ModelRole
+    prompt: str
+    model: str
+    temperature: float
+    max_tokens: int
+    keep_alive: str
+    target_operator_session_id: str
+    acting_app_id: str
+    case_id: str
+    investigation_id: str
+    task_id: str
+    web_session_id: str
+    cli_session_id: str
+    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., prompt: _Optional[str] = ..., model: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ..., target_operator_session_id: _Optional[str] = ..., acting_app_id: _Optional[str] = ..., case_id: _Optional[str] = ..., investigation_id: _Optional[str] = ..., task_id: _Optional[str] = ..., web_session_id: _Optional[str] = ..., cli_session_id: _Optional[str] = ...) -> None: ...
+
+class InferenceDispatchResponse(_message.Message):
+    __slots__ = ("transaction_id", "result", "receipt")
+    TRANSACTION_ID_FIELD_NUMBER: _ClassVar[int]
+    RESULT_FIELD_NUMBER: _ClassVar[int]
+    RECEIPT_FIELD_NUMBER: _ClassVar[int]
+    transaction_id: str
+    result: InferenceResult
+    receipt: ActionReceipt
+    def __init__(self, transaction_id: _Optional[str] = ..., result: _Optional[_Union[InferenceResult, _Mapping]] = ..., receipt: _Optional[_Union[ActionReceipt, _Mapping]] = ...) -> None: ...

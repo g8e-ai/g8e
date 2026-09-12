@@ -8668,7 +8668,13 @@ type InferenceResult struct {
 	FinishReason string `protobuf:"bytes,5,opt,name=finish_reason,json=finishReason,proto3" json:"finish_reason,omitempty"`
 	// Model that produced the result (echoed from the request or resolved by
 	// the backend).
-	Model         string `protobuf:"bytes,6,opt,name=model,proto3" json:"model,omitempty"`
+	Model string `protobuf:"bytes,6,opt,name=model,proto3" json:"model,omitempty"`
+	// Canonical digest of the complete result: lowercase hex SHA-256 over the
+	// deterministic protobuf serialization of this message with result_digest
+	// cleared. The Inference Node computes it at execution time; the signed
+	// ActionReceipt's result_summary binds it, and the User Gateway verifies
+	// digest equality before returning success to the caller.
+	ResultDigest  string `protobuf:"bytes,7,opt,name=result_digest,json=resultDigest,proto3" json:"result_digest,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -8745,6 +8751,302 @@ func (x *InferenceResult) GetModel() string {
 	return ""
 }
 
+func (x *InferenceResult) GetResultDigest() string {
+	if x != nil {
+		return x.ResultDigest
+	}
+	return ""
+}
+
+// InferenceCompletion is the protocol-owned completion publication for a
+// governed inference request. The Inference Node publishes it to the
+// results channel only after the L5 Actuator has finalized and signed the
+// ActionReceipt, so the complete result and its verified receipt are a
+// single correlated outcome. A failed execution carries the FAILED receipt
+// and no result, which terminates the Gateway's dispatch wait immediately
+// instead of at the dispatch deadline.
+type InferenceCompletion struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The signed final ActionReceipt for the inference transaction.
+	Receipt *ActionReceipt `protobuf:"bytes,1,opt,name=receipt,proto3" json:"receipt,omitempty"`
+	// The complete inference result. Absent when the receipt status is not
+	// EXECUTION_STATUS_COMPLETED.
+	Result        *InferenceResult `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceCompletion) Reset() {
+	*x = InferenceCompletion{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[104]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceCompletion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceCompletion) ProtoMessage() {}
+
+func (x *InferenceCompletion) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[104]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceCompletion.ProtoReflect.Descriptor instead.
+func (*InferenceCompletion) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{104}
+}
+
+func (x *InferenceCompletion) GetReceipt() *ActionReceipt {
+	if x != nil {
+		return x.Receipt
+	}
+	return nil
+}
+
+func (x *InferenceCompletion) GetResult() *InferenceResult {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+// InferenceDispatchRequest is the protocol-owned request body for
+// POST /api/v1/inference/dispatch, the mTLS-protected platform-internal
+// endpoint the ensemble chat pipeline calls to dispatch a governed
+// inference request to the Inference Node.
+type InferenceDispatchRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Chat-tier role for this request (primary, assistant, lite).
+	Role ModelRole `protobuf:"varint,1,opt,name=role,proto3,enum=g8e.operator.v1.ModelRole" json:"role,omitempty"`
+	// Prompt text sent to the Inference Node. The node re-scrubs it through
+	// its own ScrubbingService before crossing the execution boundary.
+	Prompt string `protobuf:"bytes,2,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	// Optional model override. Accepted only when it matches the Inference
+	// Node's configured model for the role; any other value is rejected as an
+	// unauthorized override.
+	Model string `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	// Generation temperature override (0 = use backend default).
+	Temperature float32 `protobuf:"fixed32,4,opt,name=temperature,proto3" json:"temperature,omitempty"`
+	// Maximum tokens to generate (0 = use backend default).
+	MaxTokens int32 `protobuf:"varint,5,opt,name=max_tokens,json=maxTokens,proto3" json:"max_tokens,omitempty"`
+	// Ollama keep-alive duration override (empty = use config default).
+	KeepAlive string `protobuf:"bytes,6,opt,name=keep_alive,json=keepAlive,proto3" json:"keep_alive,omitempty"`
+	// Explicit Inference Node target. When empty, the gateway requires exactly
+	// one enrolled inference-capable operator for the requestor; zero or
+	// multiple matches are rejected.
+	TargetOperatorSessionId string `protobuf:"bytes,7,opt,name=target_operator_session_id,json=targetOperatorSessionId,proto3" json:"target_operator_session_id,omitempty"`
+	// Application that initiated the inference request.
+	ActingAppId string `protobuf:"bytes,8,opt,name=acting_app_id,json=actingAppId,proto3" json:"acting_app_id,omitempty"`
+	// Application context propagated from the chat turn.
+	CaseId          string `protobuf:"bytes,9,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
+	InvestigationId string `protobuf:"bytes,10,opt,name=investigation_id,json=investigationId,proto3" json:"investigation_id,omitempty"`
+	TaskId          string `protobuf:"bytes,11,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	WebSessionId    string `protobuf:"bytes,12,opt,name=web_session_id,json=webSessionId,proto3" json:"web_session_id,omitempty"`
+	CliSessionId    string `protobuf:"bytes,13,opt,name=cli_session_id,json=cliSessionId,proto3" json:"cli_session_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *InferenceDispatchRequest) Reset() {
+	*x = InferenceDispatchRequest{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[105]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceDispatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceDispatchRequest) ProtoMessage() {}
+
+func (x *InferenceDispatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[105]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceDispatchRequest.ProtoReflect.Descriptor instead.
+func (*InferenceDispatchRequest) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{105}
+}
+
+func (x *InferenceDispatchRequest) GetRole() ModelRole {
+	if x != nil {
+		return x.Role
+	}
+	return ModelRole_MODEL_ROLE_UNSPECIFIED
+}
+
+func (x *InferenceDispatchRequest) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetTemperature() float32 {
+	if x != nil {
+		return x.Temperature
+	}
+	return 0
+}
+
+func (x *InferenceDispatchRequest) GetMaxTokens() int32 {
+	if x != nil {
+		return x.MaxTokens
+	}
+	return 0
+}
+
+func (x *InferenceDispatchRequest) GetKeepAlive() string {
+	if x != nil {
+		return x.KeepAlive
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetTargetOperatorSessionId() string {
+	if x != nil {
+		return x.TargetOperatorSessionId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetActingAppId() string {
+	if x != nil {
+		return x.ActingAppId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetCaseId() string {
+	if x != nil {
+		return x.CaseId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetInvestigationId() string {
+	if x != nil {
+		return x.InvestigationId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetWebSessionId() string {
+	if x != nil {
+		return x.WebSessionId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetCliSessionId() string {
+	if x != nil {
+		return x.CliSessionId
+	}
+	return ""
+}
+
+// InferenceDispatchResponse is the protocol-owned success response for
+// POST /api/v1/inference/dispatch. The Gateway returns it only after
+// verifying the final receipt signature, persistence attestation,
+// transaction identity, and result digest equality. Failure responses use
+// the gateway's standard typed error envelope with a public-safe code.
+type InferenceDispatchResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Transaction ID correlating the dispatch with the audit chain.
+	TransactionId string `protobuf:"bytes,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	// The complete inference result whose result_digest is bound into the
+	// signed receipt.
+	Result *InferenceResult `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
+	// The verified final signed ActionReceipt for the transaction.
+	Receipt       *ActionReceipt `protobuf:"bytes,3,opt,name=receipt,proto3" json:"receipt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceDispatchResponse) Reset() {
+	*x = InferenceDispatchResponse{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[106]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceDispatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceDispatchResponse) ProtoMessage() {}
+
+func (x *InferenceDispatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[106]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceDispatchResponse.ProtoReflect.Descriptor instead.
+func (*InferenceDispatchResponse) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{106}
+}
+
+func (x *InferenceDispatchResponse) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchResponse) GetResult() *InferenceResult {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+func (x *InferenceDispatchResponse) GetReceipt() *ActionReceipt {
+	if x != nil {
+		return x.Receipt
+	}
+	return nil
+}
+
 type PasskeyRegisterChallengeResult_RelyingParty struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -8755,7 +9057,7 @@ type PasskeyRegisterChallengeResult_RelyingParty struct {
 
 func (x *PasskeyRegisterChallengeResult_RelyingParty) Reset() {
 	*x = PasskeyRegisterChallengeResult_RelyingParty{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[105]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8767,7 +9069,7 @@ func (x *PasskeyRegisterChallengeResult_RelyingParty) String() string {
 func (*PasskeyRegisterChallengeResult_RelyingParty) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult_RelyingParty) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[105]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8808,7 +9110,7 @@ type PasskeyRegisterChallengeResult_UserInfo struct {
 
 func (x *PasskeyRegisterChallengeResult_UserInfo) Reset() {
 	*x = PasskeyRegisterChallengeResult_UserInfo{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[106]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8820,7 +9122,7 @@ func (x *PasskeyRegisterChallengeResult_UserInfo) String() string {
 func (*PasskeyRegisterChallengeResult_UserInfo) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult_UserInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[106]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8867,7 +9169,7 @@ type PasskeyRegisterChallengeResult_PublicKeyCredentialParameters struct {
 
 func (x *PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) Reset() {
 	*x = PasskeyRegisterChallengeResult_PublicKeyCredentialParameters{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[107]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8879,7 +9181,7 @@ func (x *PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) String() 
 func (*PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[107]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8919,7 +9221,7 @@ type PasskeyRegisterChallengeResult_AuthenticatorSelection struct {
 
 func (x *PasskeyRegisterChallengeResult_AuthenticatorSelection) Reset() {
 	*x = PasskeyRegisterChallengeResult_AuthenticatorSelection{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[108]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8931,7 +9233,7 @@ func (x *PasskeyRegisterChallengeResult_AuthenticatorSelection) String() string 
 func (*PasskeyRegisterChallengeResult_AuthenticatorSelection) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult_AuthenticatorSelection) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[108]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9729,14 +10031,39 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\n" +
 	"max_tokens\x18\x05 \x01(\x05R\tmaxTokens\x12\x1d\n" +
 	"\n" +
-	"keep_alive\x18\x06 \x01(\tR\tkeepAlive\"\xd5\x01\n" +
+	"keep_alive\x18\x06 \x01(\tR\tkeepAlive\"\xfa\x01\n" +
 	"\x0fInferenceResult\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12#\n" +
 	"\rprompt_tokens\x18\x02 \x01(\x05R\fpromptTokens\x12+\n" +
 	"\x11completion_tokens\x18\x03 \x01(\x05R\x10completionTokens\x12!\n" +
 	"\ftotal_tokens\x18\x04 \x01(\x05R\vtotalTokens\x12#\n" +
 	"\rfinish_reason\x18\x05 \x01(\tR\ffinishReason\x12\x14\n" +
-	"\x05model\x18\x06 \x01(\tR\x05model*\xce\x01\n" +
+	"\x05model\x18\x06 \x01(\tR\x05model\x12#\n" +
+	"\rresult_digest\x18\a \x01(\tR\fresultDigest\"\x89\x01\n" +
+	"\x13InferenceCompletion\x128\n" +
+	"\areceipt\x18\x01 \x01(\v2\x1e.g8e.operator.v1.ActionReceiptR\areceipt\x128\n" +
+	"\x06result\x18\x02 \x01(\v2 .g8e.operator.v1.InferenceResultR\x06result\"\xe2\x03\n" +
+	"\x18InferenceDispatchRequest\x12.\n" +
+	"\x04role\x18\x01 \x01(\x0e2\x1a.g8e.operator.v1.ModelRoleR\x04role\x12\x16\n" +
+	"\x06prompt\x18\x02 \x01(\tR\x06prompt\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12 \n" +
+	"\vtemperature\x18\x04 \x01(\x02R\vtemperature\x12\x1d\n" +
+	"\n" +
+	"max_tokens\x18\x05 \x01(\x05R\tmaxTokens\x12\x1d\n" +
+	"\n" +
+	"keep_alive\x18\x06 \x01(\tR\tkeepAlive\x12;\n" +
+	"\x1atarget_operator_session_id\x18\a \x01(\tR\x17targetOperatorSessionId\x12\"\n" +
+	"\racting_app_id\x18\b \x01(\tR\vactingAppId\x12\x17\n" +
+	"\acase_id\x18\t \x01(\tR\x06caseId\x12)\n" +
+	"\x10investigation_id\x18\n" +
+	" \x01(\tR\x0finvestigationId\x12\x17\n" +
+	"\atask_id\x18\v \x01(\tR\x06taskId\x12$\n" +
+	"\x0eweb_session_id\x18\f \x01(\tR\fwebSessionId\x12$\n" +
+	"\x0ecli_session_id\x18\r \x01(\tR\fcliSessionId\"\xb6\x01\n" +
+	"\x19InferenceDispatchResponse\x12%\n" +
+	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x128\n" +
+	"\x06result\x18\x02 \x01(\v2 .g8e.operator.v1.InferenceResultR\x06result\x128\n" +
+	"\areceipt\x18\x03 \x01(\v2\x1e.g8e.operator.v1.ActionReceiptR\areceipt*\xce\x01\n" +
 	"\x0fExecutionStatus\x12 \n" +
 	"\x1cEXECUTION_STATUS_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aEXECUTION_STATUS_EXECUTING\x10\x01\x12\x1e\n" +
@@ -9798,7 +10125,7 @@ func file_g8e_operator_v1_operator_proto_rawDescGZIP() []byte {
 }
 
 var file_g8e_operator_v1_operator_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_g8e_operator_v1_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 109)
+var file_g8e_operator_v1_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 112)
 var file_g8e_operator_v1_operator_proto_goTypes = []any{
 	(ExecutionStatus)(0),                                // 0: g8e.operator.v1.ExecutionStatus
 	(L3Status)(0),                                       // 1: g8e.operator.v1.L3Status
@@ -9911,16 +10238,19 @@ var file_g8e_operator_v1_operator_proto_goTypes = []any{
 	(*RevokePasskeyCredentialResult)(nil),               // 108: g8e.operator.v1.RevokePasskeyCredentialResult
 	(*InferenceRequested)(nil),                          // 109: g8e.operator.v1.InferenceRequested
 	(*InferenceResult)(nil),                             // 110: g8e.operator.v1.InferenceResult
-	nil,                                                 // 111: g8e.operator.v1.CommandRequested.EnvironmentEntry
-	(*PasskeyRegisterChallengeResult_RelyingParty)(nil), // 112: g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
-	(*PasskeyRegisterChallengeResult_UserInfo)(nil),     // 113: g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
-	(*PasskeyRegisterChallengeResult_PublicKeyCredentialParameters)(nil), // 114: g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
-	(*PasskeyRegisterChallengeResult_AuthenticatorSelection)(nil),        // 115: g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
-	(*structpb.Struct)(nil), // 116: google.protobuf.Struct
+	(*InferenceCompletion)(nil),                         // 111: g8e.operator.v1.InferenceCompletion
+	(*InferenceDispatchRequest)(nil),                    // 112: g8e.operator.v1.InferenceDispatchRequest
+	(*InferenceDispatchResponse)(nil),                   // 113: g8e.operator.v1.InferenceDispatchResponse
+	nil,                                                 // 114: g8e.operator.v1.CommandRequested.EnvironmentEntry
+	(*PasskeyRegisterChallengeResult_RelyingParty)(nil), // 115: g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
+	(*PasskeyRegisterChallengeResult_UserInfo)(nil),     // 116: g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
+	(*PasskeyRegisterChallengeResult_PublicKeyCredentialParameters)(nil), // 117: g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
+	(*PasskeyRegisterChallengeResult_AuthenticatorSelection)(nil),        // 118: g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
+	(*structpb.Struct)(nil), // 119: google.protobuf.Struct
 }
 var file_g8e_operator_v1_operator_proto_depIdxs = []int32{
-	111, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
-	116, // 1: g8e.operator.v1.DocumentUpdateRequested.updates:type_name -> google.protobuf.Struct
+	114, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
+	119, // 1: g8e.operator.v1.DocumentUpdateRequested.updates:type_name -> google.protobuf.Struct
 	32,  // 2: g8e.operator.v1.DeviceLinkResult.link:type_name -> g8e.operator.v1.DeviceLink
 	32,  // 3: g8e.operator.v1.ListDeviceLinksResult.links:type_name -> g8e.operator.v1.DeviceLink
 	47,  // 4: g8e.operator.v1.ListOperatorSlotsResult.operators:type_name -> g8e.operator.v1.OperatorDocument
@@ -9960,30 +10290,35 @@ var file_g8e_operator_v1_operator_proto_depIdxs = []int32{
 	84,  // 38: g8e.operator.v1.HeartbeatResult.capability_flags:type_name -> g8e.operator.v1.CapabilityFlags
 	93,  // 39: g8e.operator.v1.HeartbeatResult.fingerprint_details:type_name -> g8e.operator.v1.FingerprintDetails
 	82,  // 40: g8e.operator.v1.NetworkInfo.connectivity_status:type_name -> g8e.operator.v1.NetworkInterface
-	112, // 41: g8e.operator.v1.PasskeyRegisterChallengeResult.rp:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
-	113, // 42: g8e.operator.v1.PasskeyRegisterChallengeResult.user:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
-	114, // 43: g8e.operator.v1.PasskeyRegisterChallengeResult.pub_key_cred_params:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
-	115, // 44: g8e.operator.v1.PasskeyRegisterChallengeResult.authenticator_selection:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
+	115, // 41: g8e.operator.v1.PasskeyRegisterChallengeResult.rp:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
+	116, // 42: g8e.operator.v1.PasskeyRegisterChallengeResult.user:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
+	117, // 43: g8e.operator.v1.PasskeyRegisterChallengeResult.pub_key_cred_params:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
+	118, // 44: g8e.operator.v1.PasskeyRegisterChallengeResult.authenticator_selection:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
 	97,  // 45: g8e.operator.v1.PasskeyRegisterVerifyRequested.attestation_response:type_name -> g8e.operator.v1.AttestationResponse
 	94,  // 46: g8e.operator.v1.PasskeyRegisterVerifyResult.credential:type_name -> g8e.operator.v1.PasskeyCredential
 	102, // 47: g8e.operator.v1.PasskeyAuthVerifyRequested.assertion_response:type_name -> g8e.operator.v1.AssertionResponse
 	94,  // 48: g8e.operator.v1.ListPasskeyCredentialsResult.credentials:type_name -> g8e.operator.v1.PasskeyCredential
 	6,   // 49: g8e.operator.v1.InferenceRequested.role:type_name -> g8e.operator.v1.ModelRole
-	7,   // 50: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
-	8,   // 51: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
-	9,   // 52: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
-	10,  // 53: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
-	11,  // 54: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
-	60,  // 55: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
-	60,  // 56: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
-	60,  // 57: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
-	60,  // 58: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
-	60,  // 59: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
-	55,  // [55:60] is the sub-list for method output_type
-	50,  // [50:55] is the sub-list for method input_type
-	50,  // [50:50] is the sub-list for extension type_name
-	50,  // [50:50] is the sub-list for extension extendee
-	0,   // [0:50] is the sub-list for field type_name
+	58,  // 50: g8e.operator.v1.InferenceCompletion.receipt:type_name -> g8e.operator.v1.ActionReceipt
+	110, // 51: g8e.operator.v1.InferenceCompletion.result:type_name -> g8e.operator.v1.InferenceResult
+	6,   // 52: g8e.operator.v1.InferenceDispatchRequest.role:type_name -> g8e.operator.v1.ModelRole
+	110, // 53: g8e.operator.v1.InferenceDispatchResponse.result:type_name -> g8e.operator.v1.InferenceResult
+	58,  // 54: g8e.operator.v1.InferenceDispatchResponse.receipt:type_name -> g8e.operator.v1.ActionReceipt
+	7,   // 55: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
+	8,   // 56: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
+	9,   // 57: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
+	10,  // 58: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
+	11,  // 59: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
+	60,  // 60: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
+	60,  // 61: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
+	60,  // 62: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
+	60,  // 63: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
+	60,  // 64: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
+	60,  // [60:65] is the sub-list for method output_type
+	55,  // [55:60] is the sub-list for method input_type
+	55,  // [55:55] is the sub-list for extension type_name
+	55,  // [55:55] is the sub-list for extension extendee
+	0,   // [0:55] is the sub-list for field type_name
 }
 
 func init() { file_g8e_operator_v1_operator_proto_init() }
@@ -9997,7 +10332,7 @@ func file_g8e_operator_v1_operator_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_operator_v1_operator_proto_rawDesc), len(file_g8e_operator_v1_operator_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   109,
+			NumMessages:   112,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -99,7 +99,6 @@ type LoadOptions struct {
 	InferenceAssistantModel string
 	InferenceLiteModel      string
 	InferenceKeepAlive      string
-	InferenceNumParallel    int
 }
 
 // GatewayConfig holds configuration for gateway mode.
@@ -159,10 +158,11 @@ type GatewayConfig struct {
 	LockRetryDelay time.Duration // Base delay for lock retry backoff (default: 50ms)
 }
 
-// InferenceConfig holds configuration for the local inference backend
-// (g8ellama). Ollama owns process lifecycle, VRAM management, model
-// eviction, and multi-model residency; the gateway's responsibility is
-// limited to acting as an HTTP client to Ollama's /api/chat endpoint.
+// InferenceConfig holds configuration for the inference backend
+// (g8ellama). The remote Ollama provider owns process lifecycle, VRAM
+// management, model eviction, and multi-model residency; the gateway's
+// responsibility is limited to acting as an HTTP client to Ollama's
+// /api/chat endpoint.
 // The three model fields map directly to the three tiers in ensemble's
 // LLMSettings.
 type InferenceConfig struct {
@@ -172,8 +172,9 @@ type InferenceConfig struct {
 	// "ollama" is supported.
 	Backend string
 
-	// OllamaEndpoint is the loopback HTTP endpoint for the Ollama daemon
-	// (default: http://127.0.0.1:<InferenceOllamaDefaultPort>).
+	// OllamaEndpoint is the HTTP endpoint of the configured Ollama provider
+	// (default: http://127.0.0.1:<InferenceOllamaDefaultPort>). For this
+	// release the provider is remote; nothing here manages a local daemon.
 	OllamaEndpoint string
 
 	// ModelsDir is the relative path to the governed model store directory,
@@ -195,12 +196,9 @@ type InferenceConfig struct {
 	MaxConcurrentGenerations int
 
 	// KeepAlive is the Ollama keep-alive duration passed to /api/chat per
-	// request. Default "-1" pins all three chat roles in memory.
+	// request. Default "-1" pins all three chat roles in memory on the
+	// remote provider.
 	KeepAlive string
-
-	// NumParallel maps to Ollama's OLLAMA_NUM_PARALLEL. Defaults to 1 for
-	// deterministic single-turn chat.
-	NumParallel int
 }
 
 // Config holds all configuration for g8eo
@@ -280,9 +278,9 @@ type Config struct {
 	// Lattice adapter configuration (nil when disabled)
 	Lattice *latticeconfig.LatticeConfig
 
-	// Inference configuration for the local inference backend (g8ellama).
+	// Inference configuration for the inference backend (g8ellama).
 	// Disabled by default; enabled when the operator runs as an Inference
-	// Node with a co-located Ollama daemon.
+	// Node calling the configured remote Ollama provider.
 	Inference InferenceConfig
 }
 
@@ -618,8 +616,8 @@ func Load(opts LoadOptions) (*Config, error) {
 		Lattice: opts.Lattice,
 
 		// Inference backend (g8ellama). Disabled by default; enabled when
-		// the operator runs as an Inference Node with a co-located Ollama
-		// daemon. The model store directory is resolved at the boundary via
+		// the operator runs as an Inference Node calling the configured
+		// remote Ollama provider. The model store directory is resolved at the boundary via
 		// fileSvc.Resolve(constants.DefaultModelsDir), not stored as an
 		// absolute path here.
 		Inference: newInferenceConfig(opts),
@@ -678,10 +676,6 @@ func newInferenceConfig(opts LoadOptions) InferenceConfig {
 	if keepAlive == "" {
 		keepAlive = "-1"
 	}
-	numParallel := opts.InferenceNumParallel
-	if numParallel == 0 {
-		numParallel = 1
-	}
 	return InferenceConfig{
 		Enabled:                  opts.InferenceEnabled,
 		Backend:                  backend,
@@ -692,7 +686,6 @@ func newInferenceConfig(opts LoadOptions) InferenceConfig {
 		LiteModel:                opts.InferenceLiteModel,
 		MaxConcurrentGenerations: 1,
 		KeepAlive:                keepAlive,
-		NumParallel:              numParallel,
 	}
 }
 

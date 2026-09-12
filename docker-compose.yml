@@ -32,10 +32,6 @@ volumes:
     driver: local
   g8e-inference-data:
     driver: local
-  g8e-data-operator-data:
-    driver: local
-  g8e-ollama-models:
-    driver: local
   g8e-shared-tmp:
     driver: local
 
@@ -257,16 +253,19 @@ services:
           memory: 128M
 
   # ===========================================================================
-  # g8ellama — three-node governed local inference topology.
+  # g8ellama — governed inference against the approved remote Ollama provider.
   #
-  # Four services under the `g8ellama` profile: a User Gateway (where the user
-  # or IDE connects), an Inference Node (operator mode with a co-located
-  # Ollama daemon), a Data Operator (operator mode with a mounted data
-  # volume), and the Ollama daemon itself. The Inference Node and Data
-  # Operator enroll as outbound operators of the User Gateway via the
-  # existing cross-enrollment path (`operator start -e <user-gateway>`).
+  # Two services under the `g8ellama` profile: a User Gateway (where the user
+  # or IDE connects) and an Inference Node (operator mode) that enrolls as an
+  # outbound operator of the User Gateway via the existing cross-enrollment
+  # path (`operator start -e <user-gateway>`). No Ollama daemon runs in this
+  # topology: the Inference Node is an HTTP client of the approved remote
+  # Ollama provider at ${G8E_OLLAMA_ENDPOINT}. Remote concurrency, model
+  # inventory, and provider hardware are external deployment authorities and
+  # are not configured or mutated here.
   # Activate with:
-  #   docker compose --profile g8ellama up -d
+  #   G8E_OLLAMA_ENDPOINT=http://<approved-remote>:11434 \
+  #     docker compose --profile g8ellama up -d
   # ===========================================================================
 
   g8e-gateway-user:
@@ -326,12 +325,13 @@ services:
   g8e-inference:
     # Inference Node: gateway binary in operator mode (`operator start -e
     # g8e-user`) so its operator substrate enrolls against the User Gateway.
-    # Runs a co-located Ollama client (the Ollama daemon is the separate
-    # `ollama` service) and executes governed inference requests through the
-    # full L1-L5 gauntlet on-host. Inference is enabled via the
-    # `--inference-enabled` flag; the Ollama endpoint points at the `ollama`
-    # service on the shared network. Operator mode is outbound-only mTLS to
-    # the User Gateway, so no inbound port mapping is needed.
+    # It executes governed inference requests through the L4/L5 verification
+    # and execution boundary on-host and calls the approved remote Ollama
+    # provider at G8E_OLLAMA_ENDPOINT over HTTP. Inference is enabled via the
+    # `--inference-enabled` flag. The remote provider owns process lifecycle,
+    # VRAM, model inventory, and concurrency; this node never pulls, creates,
+    # or deletes remote models. Operator mode is outbound-only mTLS to the
+    # User Gateway, so no inbound port mapping is needed.
     profiles: [g8ellama]
     image: g8e-gateway
     container_name: ${G8E_PREFIX:-g8e}-inference
@@ -347,17 +347,12 @@ services:
     depends_on:
       g8e-gateway-user:
         condition: service_healthy
-      ollama:
-        condition: service_started
     healthcheck:
       test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-    environment:
-      - OLLAMA_KEEP_ALIVE=-1
-      - OLLAMA_NUM_PARALLEL=${G8E_INFERENCE_NUM_PARALLEL:-1}
     command:
       - "operator"
       - "start"
@@ -365,7 +360,7 @@ services:
       - "g8e-user"
       - "--inference-enabled"
       - "--inference-ollama-endpoint"
-      - "http://ollama:11434"
+      - "${G8E_OLLAMA_ENDPOINT:?set G8E_OLLAMA_ENDPOINT to the approved remote Ollama provider}"
       - "--inference-primary-model"
       - "${G8E_INFERENCE_PRIMARY_MODEL:-qwen3:4b}"
       - "--inference-assistant-model"
@@ -374,8 +369,6 @@ services:
       - "${G8E_INFERENCE_LITE_MODEL:-qwen3:0.6b}"
       - "--inference-keep-alive"
       - "${G8E_INFERENCE_KEEP_ALIVE:--1}"
-      - "--inference-num-parallel"
-      - "${G8E_INFERENCE_NUM_PARALLEL:-1}"
     restart: unless-stopped
     deploy:
       resources:
@@ -385,81 +378,3 @@ services:
         reservations:
           cpus: '1'
           memory: 1G
-
-  g8e-data-operator:
-    # Data Operator: standard outbound operator with filesystem access to the
-    # governed data. Enrolls against the User Gateway via `operator start -e
-    # g8e-user`. No new code; deployment configuration only. Operator mode is
-    # outbound-only mTLS to the User Gateway, so no inbound port mapping is
-    # needed.
-    profiles: [g8ellama]
-    image: g8e-gateway
-    container_name: ${G8E_PREFIX:-g8e}-data-operator
-    hostname: data-operator
-    working_dir: /root
-    networks:
-      g8e-net:
-        aliases:
-          - g8e-data-operator
-    volumes:
-      - g8e-data-operator-data:/root/.g8e
-      - ${G8E_DATA_VOLUME:-g8e-shared-tmp}:/data:ro
-      - g8e-shared-tmp:/tmp
-    depends_on:
-      g8e-gateway-user:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    command: ["operator", "start", "-e", "g8e-user"]
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 256M
-
-  ollama:
-    # Ollama inference daemon. Owns process lifecycle, VRAM management, model
-    # eviction, and multi-model residency. The Inference Node's gateway binary
-    # is the sole client over the shared `g8e-net` network. The model store
-    # volume persists pulled/staged models; for air-gapped deployments, models
-    # are pre-staged into this volume and registered offline (see Phase 5).
-    # OLLAMA_KEEP_ALIVE=-1 pins all three chat roles in memory; OLLAMA_NUM_PARALLEL
-    # sets the concurrent inference slot count.
-    profiles: [g8ellama]
-    image: ollama/ollama:0.9
-    container_name: ${G8E_PREFIX:-g8e}-ollama
-    hostname: ollama
-    networks:
-      g8e-net:
-        aliases:
-          - ollama
-    volumes:
-      - g8e-ollama-models:/root/.ollama
-    ports:
-      - "${G8E_OLLAMA_PORT:-11434}:11434"
-    environment:
-      - OLLAMA_KEEP_ALIVE=-1
-      - OLLAMA_NUM_PARALLEL=${G8E_INFERENCE_NUM_PARALLEL:-1}
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '4'
-          memory: 8G
-        reservations:
-          cpus: '1'
-          memory: 2G

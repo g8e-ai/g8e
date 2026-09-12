@@ -198,12 +198,6 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	auth := NewAuthService(docStore, pki, logger, userSvc, personaSvc, res, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
 	userSvc.SetAuthService(auth)
 
-	// Wire the pubsub command relay dependencies: the gateway intercepts
-	// app-published command intent on cmd: channels, validates the target
-	// operator session, fetches the current state root, and constructs the
-	// governed GovernanceEnvelope before fan-out.
-	wsHandler.SetCommandRelayDeps(stateRootSvc, auth, string(cfg.Gateway.Posture))
-
 	// Wire the pubsub receipt relay dependencies: the gateway intercepts
 	// operator-published signed ActionReceipts on receipts: channels,
 	// verifies the receipt signature against the operator's actuator public
@@ -273,6 +267,14 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gateway: load doctrine: %w", err)
 	}
+
+	// Wire the pubsub command relay dependencies: the gateway intercepts
+	// app-published command intent on cmd: channels, validates the target
+	// operator session, fetches the current state root, and constructs the
+	// governed GovernanceEnvelope (with L1 screening) before fan-out. This
+	// runs after the L1 doctrine is loaded so the relay has a doctrine to
+	// screen against.
+	wsHandler.SetCommandRelayDeps(stateRootSvc, auth, string(cfg.Gateway.Posture), doctrine)
 
 	actuatorPriv, actuatorKeyID, err := sm.GetActuatorKey()
 	if err != nil {
@@ -420,8 +422,13 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	// Construct the command dispatch service and the inference dispatch
 	// service. The inference dispatch service wraps the command dispatch
 	// service and the registration service through adapters that implement
-	// the dispatch package's interfaces, breaking the import cycle.
-	dispatchSvc := NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture))
+	// the dispatch package's interfaces, breaking the import cycle. The
+	// dispatch service is wired with the L1 doctrine (for envelope L1
+	// screening) and the L2 consensus deliberator (for postures that require
+	// L2 signatures). Under postures that require L3 proof (ratify, notary),
+	// mutation dispatches are rejected at envelope construction because the
+	// gateway dispatch path cannot mint human proofs.
+	dispatchSvc := NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture), doctrine, l2Deliberator)
 	inferenceDispatchSvc := dispatch.NewDispatchService(
 		&gatewayDispatcherAdapter{svc: dispatchSvc},
 		&gatewayOperatorListerAdapter{svc: reg},

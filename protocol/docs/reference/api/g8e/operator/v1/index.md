@@ -59,6 +59,9 @@
     - [GetRevocationBundleResult](#g8e-operator-v1-GetRevocationBundleResult)
     - [HeartbeatRequested](#g8e-operator-v1-HeartbeatRequested)
     - [HeartbeatResult](#g8e-operator-v1-HeartbeatResult)
+    - [InferenceCompletion](#g8e-operator-v1-InferenceCompletion)
+    - [InferenceDispatchRequest](#g8e-operator-v1-InferenceDispatchRequest)
+    - [InferenceDispatchResponse](#g8e-operator-v1-InferenceDispatchResponse)
     - [InferenceRequested](#g8e-operator-v1-InferenceRequested)
     - [InferenceResult](#g8e-operator-v1-InferenceResult)
     - [ListDeviceLinksRequested](#g8e-operator-v1-ListDeviceLinksRequested)
@@ -1272,6 +1275,79 @@ Empty message - just the event type matters
 
 
 
+<a name="g8e-operator-v1-InferenceCompletion"></a>
+
+### InferenceCompletion
+InferenceCompletion is the protocol-owned completion publication for a
+governed inference request. The Inference Node publishes it to the
+results channel only after the L5 Actuator has finalized and signed the
+ActionReceipt, so the complete result and its verified receipt are a
+single correlated outcome. A failed execution carries the FAILED receipt
+and no result, which terminates the Gateway&#39;s dispatch wait immediately
+instead of at the dispatch deadline.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| receipt | [ActionReceipt](#g8e-operator-v1-ActionReceipt) |  | The signed final ActionReceipt for the inference transaction. |
+| result | [InferenceResult](#g8e-operator-v1-InferenceResult) |  | The complete inference result. Absent when the receipt status is not EXECUTION_STATUS_COMPLETED. |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceDispatchRequest"></a>
+
+### InferenceDispatchRequest
+InferenceDispatchRequest is the protocol-owned request body for
+POST /api/v1/inference/dispatch, the mTLS-protected platform-internal
+endpoint the ensemble chat pipeline calls to dispatch a governed
+inference request to the Inference Node.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| role | [ModelRole](#g8e-operator-v1-ModelRole) |  | Chat-tier role for this request (primary, assistant, lite). |
+| prompt | [string](#string) |  | Prompt text sent to the Inference Node. The node re-scrubs it through its own ScrubbingService before crossing the execution boundary. |
+| model | [string](#string) |  | Optional model override. Accepted only when it matches the Inference Node&#39;s configured model for the role; any other value is rejected as an unauthorized override. |
+| temperature | [float](#float) |  | Generation temperature override (0 = use backend default). |
+| max_tokens | [int32](#int32) |  | Maximum tokens to generate (0 = use backend default). |
+| keep_alive | [string](#string) |  | Ollama keep-alive duration override (empty = use config default). |
+| target_operator_session_id | [string](#string) |  | Explicit Inference Node target. When empty, the gateway requires exactly one enrolled inference-capable operator for the requestor; zero or multiple matches are rejected. |
+| acting_app_id | [string](#string) |  | Application that initiated the inference request. |
+| case_id | [string](#string) |  | Application context propagated from the chat turn. |
+| investigation_id | [string](#string) |  |  |
+| task_id | [string](#string) |  |  |
+| web_session_id | [string](#string) |  |  |
+| cli_session_id | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceDispatchResponse"></a>
+
+### InferenceDispatchResponse
+InferenceDispatchResponse is the protocol-owned success response for
+POST /api/v1/inference/dispatch. The Gateway returns it only after
+verifying the final receipt signature, persistence attestation,
+transaction identity, and result digest equality. Failure responses use
+the gateway&#39;s standard typed error envelope with a public-safe code.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| transaction_id | [string](#string) |  | Transaction ID correlating the dispatch with the audit chain. |
+| result | [InferenceResult](#g8e-operator-v1-InferenceResult) |  | The complete inference result whose result_digest is bound into the signed receipt. |
+| receipt | [ActionReceipt](#g8e-operator-v1-ActionReceipt) |  | The verified final signed ActionReceipt for the transaction. |
+
+
+
+
+
+
 <a name="g8e-operator-v1-InferenceRequested"></a>
 
 ### InferenceRequested
@@ -1311,6 +1387,7 @@ receipt and audit chain.
 | total_tokens | [int32](#int32) |  | Total tokens (prompt &#43; completion). |
 | finish_reason | [string](#string) |  | Finish reason (e.g., &#34;stop&#34;, &#34;length&#34;). |
 | model | [string](#string) |  | Model that produced the result (echoed from the request or resolved by the backend). |
+| result_digest | [string](#string) |  | Canonical digest of the complete result: lowercase hex SHA-256 over the deterministic protobuf serialization of this message with result_digest cleared. The Inference Node computes it at execution time; the signed ActionReceipt&#39;s result_summary binds it, and the User Gateway verifies digest equality before returning success to the caller. |
 
 
 

@@ -222,6 +222,13 @@ def build_governance_envelope(
         intent_data=payload_dict,
         requestor_user_id=requestor_user_id,
         acting_app_id=acting_app_id,
+        operator_id=message.operator_id or "",
+        operator_session_id=message.operator_session_id or "",
+        case_id=message.case_id or "",
+        investigation_id=message.investigation_id or "",
+        task_id=message.task_id or "",
+        web_session_id=message.web_session_id or "",
+        cli_session_id=message.cli_session_id or "",
     )
 
     # L2 Metadata - consensus_set_id only; votes/signatures handled by Gateway

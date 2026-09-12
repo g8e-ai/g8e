@@ -29,7 +29,11 @@ type GovernanceEnvelope = commonv1.GovernanceEnvelope
 
 // GenerateMessageID creates a deterministic hash of the critical envelope fields.
 // Canonicalization rules (from docs/architecture/governance.md):
-// - Field names in proto definition order
+// - Fields appended in the documented spec order: action_type,
+//   target_resource, payload, state_merkle_root, nonce, expires_at,
+//   intent_data, requestor_user_id, acting_app_id, operator_id,
+//   operator_session_id, case_id, investigation_id, task_id,
+//   web_session_id, cli_session_id
 // - Strings as UTF-8
 // - Numbers as decimal integers
 // - Absent optional fields omitted
@@ -100,6 +104,48 @@ func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 	// 9. acting_app_id (string) - the app/tool acting on behalf of the user
 	if env.ActingAppId != "" {
 		canonical.WriteString(env.ActingAppId)
+		canonical.WriteByte('|')
+	}
+
+	// 10. operator_id (string) - the operator identity the transaction targets
+	if env.OperatorId != "" {
+		canonical.WriteString(env.OperatorId)
+		canonical.WriteByte('|')
+	}
+
+	// 11. operator_session_id (string) - the bound operator session
+	if env.OperatorSessionId != "" {
+		canonical.WriteString(env.OperatorSessionId)
+		canonical.WriteByte('|')
+	}
+
+	// 12. case_id (string) - the owning case
+	if env.CaseId != "" {
+		canonical.WriteString(env.CaseId)
+		canonical.WriteByte('|')
+	}
+
+	// 13. investigation_id (string) - the owning investigation
+	if env.InvestigationId != "" {
+		canonical.WriteString(env.InvestigationId)
+		canonical.WriteByte('|')
+	}
+
+	// 14. task_id (string) - the owning task
+	if env.TaskId != "" {
+		canonical.WriteString(env.TaskId)
+		canonical.WriteByte('|')
+	}
+
+	// 15. web_session_id (string) - the bound web session
+	if env.WebSessionId != "" {
+		canonical.WriteString(env.WebSessionId)
+		canonical.WriteByte('|')
+	}
+
+	// 16. cli_session_id (string) - the bound CLI session
+	if env.CliSessionId != "" {
+		canonical.WriteString(env.CliSessionId)
 		canonical.WriteByte('|')
 	}
 

@@ -57,14 +57,13 @@ type ServeOperatorOptions struct {
 	LatticePostureFloor   string
 
 	// Inference (g8ellama). Enabled when the operator runs as an Inference
-	// Node with a co-located Ollama daemon.
+	// Node calling the configured remote Ollama provider.
 	InferenceEnabled       bool
 	InferenceOllamaEndpoint string
 	InferencePrimaryModel   string
 	InferenceAssistantModel string
 	InferenceLiteModel      string
 	InferenceKeepAlive      string
-	InferenceNumParallel    int
 }
 
 // resolveOperatorEndpoint returns the trimmed endpoint if non-empty, otherwise the default endpoint.
@@ -253,7 +252,6 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 		InferenceAssistantModel: opts.InferenceAssistantModel,
 		InferenceLiteModel:      opts.InferenceLiteModel,
 		InferenceKeepAlive:      opts.InferenceKeepAlive,
-		InferenceNumParallel:    opts.InferenceNumParallel,
 	}
 }
 

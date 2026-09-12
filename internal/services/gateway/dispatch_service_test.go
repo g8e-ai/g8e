@@ -20,13 +20,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // --- stubs for Tier 1 unit tests ---
@@ -193,6 +196,15 @@ func TestDispatchResultTracker_RouteFullChannel(t *testing.T) {
 	<-ch
 }
 
+// fsReadPayloadBytes builds a valid proto-marshaled FsReadRequested payload
+// for dispatch tests that need a typed payload the builder can decode.
+func fsReadPayloadBytes(t *testing.T) []byte {
+	t.Helper()
+	b, err := proto.Marshal(&operatorv1.FsReadRequested{Path: "/etc/hostname", ExecutionId: "exec-1"})
+	require.NoError(t, err)
+	return b
+}
+
 // --- DispatchService.Dispatch tests ---
 //
 // These tests use a real GatewayWebSocketHandler (in-process broker, no DB)
@@ -210,6 +222,8 @@ func newTestDispatchService(t *testing.T, stateRoot string, op *models.OperatorD
 		&stubStateRootProvider{root: stateRoot},
 		&stubOperatorSessionValidator{op: op},
 		"doctrine",
+		governance.NewL1Doctrine(),
+		nil, // no L2 deliberator under doctrine posture
 	)
 	return svc, broker
 }
@@ -257,7 +271,7 @@ func TestDispatchService_Dispatch_Success(t *testing.T) {
 	result, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
 		ActionType:              string(constants.ActionTypeFsRead),
-		Payload:                 []byte("read-payload"),
+		Payload:                 fsReadPayloadBytes(t),
 		TargetResource:          "/etc/hostname",
 		RequestorUserID:         "user-001",
 	})
@@ -293,6 +307,8 @@ func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
 		&stubStateRootProvider{err: errors.New("state root unavailable")},
 		&stubOperatorSessionValidator{op: op},
 		"doctrine",
+		governance.NewL1Doctrine(),
+		nil,
 	)
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
@@ -316,7 +332,7 @@ func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
 	_, err := svc.Dispatch(ctx, DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
 		ActionType:              string(constants.ActionTypeFsRead),
-		Payload:                 []byte("payload"),
+		Payload:                 fsReadPayloadBytes(t),
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "timed out")

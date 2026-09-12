@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,6 +48,10 @@ const EnvelopeExpiry = 5 * time.Minute
 // WebSessionID, CliSessionID) are propagated from the command intent on
 // the pubsub path and from the HTTP request on the dispatch path,
 // ensuring uniform context propagation across transports.
+//
+// Doctrine is the L1 validator the builder runs against the decoded typed
+// payload before setting L1.Validated. A nil doctrine fails closed: the
+// builder cannot assert L1.Validated=true without screening.
 type BuildEnvelopeParams struct {
 	OperatorID        string
 	OperatorSessionID string
@@ -62,20 +67,69 @@ type BuildEnvelopeParams struct {
 	WebSessionID      string
 	CliSessionID      string
 	Posture           string
+	Doctrine          *governance.L1Doctrine
 }
 
 // BuildGovernanceEnvelope constructs a canonical GovernanceEnvelope with
-// timestamp, expiry, nonce, L1 doctrine validation marker, and the supplied
+// timestamp, expiry, nonce, L1 doctrine screening, and the supplied
 // identity and state-root fields. It computes the transaction hash via
 // govpkg.GenerateMessageID and sets both Id and TransactionHash to that
 // value. The returned envelope is ready for protojson marshaling and
 // fan-out to an operator's cmd channel. This is the single envelope
 // construction authority for both the HTTP DispatchService and the
 // WebSocket PubSub relay.
+//
+// L1 screening: the builder decodes the typed payload via the shared
+// governance.DecodePayloadForAction, runs Doctrine.ValidatePayload, and
+// sets L1.Validated=true only after a clean pass. It fails closed on nil
+// doctrine (ErrTxDoctrineMissing), decode failure
+// (ErrTxPayloadDecodeFailed), and L1 forbidden-pattern violations
+// (ErrTxL1ValidationFailed). Action types without a typed proto decode
+// case (decoded payload is nil) skip L1 validation, matching the warden's
+// behavior.
+//
+// L3 gating: the gateway dispatch path cannot mint L3 human proofs. When
+// the posture requires L3 proof (ratify, notary) and the action is a
+// mutation, the builder rejects the envelope early with
+// ErrTxL3ProofUnmintable rather than publishing a mutation that cannot
+// satisfy L3 at the operator.
 func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEnvelope, error) {
 	if params.Posture == "" {
 		return nil, fmt.Errorf("gateway: build envelope: %w", constants.ErrEnvelopePostureMissing)
 	}
+	if params.Doctrine == nil {
+		return nil, fmt.Errorf("gateway: build envelope: %w", constants.ErrTxDoctrineMissing)
+	}
+
+	actionType := constants.ActionType(params.ActionType)
+
+	// L3 gate: the gateway dispatch path cannot mint L3 human proofs.
+	// Reject mutation-classified actions under postures that require L3
+	// before constructing an envelope that cannot satisfy L3 at the
+	// operator.
+	posture, err := governance.ParseGovernancePosture(params.Posture)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: build envelope: %w", err)
+	}
+	if posture.RequiresL3Proof() && actionType.IsMutation() {
+		return nil, fmt.Errorf("gateway: build envelope: %w", constants.ErrTxL3ProofUnmintable)
+	}
+
+	// L1 screening: decode the typed payload and run doctrine validation.
+	// A nil decoded payload (action type without a typed proto case) skips
+	// L1 validation, matching the warden's behavior.
+	l1Validated := false
+	decoded, err := governance.DecodePayloadForAction(actionType, params.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: build envelope: %w", constants.ErrTxPayloadDecodeFailed)
+	}
+	if decoded != nil {
+		if violations := params.Doctrine.ValidatePayload(decoded); len(violations) > 0 {
+			return nil, fmt.Errorf("gateway: build envelope: %w: %s", constants.ErrTxL1ValidationFailed, strings.Join(violations, ", "))
+		}
+		l1Validated = true
+	}
+
 	nonce := make([]byte, 16)
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, fmt.Errorf("gateway: build envelope: generate nonce: %w", err)
@@ -103,7 +157,7 @@ func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEn
 		CliSessionId:      params.CliSessionID,
 		Posture:           params.Posture,
 		Governance: &commonv1.GovernanceMetadata{
-			L1: &commonv1.L1Metadata{Validated: true},
+			L1: &commonv1.L1Metadata{Validated: l1Validated},
 		},
 	}
 
@@ -145,6 +199,17 @@ type operatorSessionValidator interface {
 	ValidateOperatorSession(operatorSessionID string) (*models.OperatorDocumentGo, error)
 }
 
+// L2ConsensusDeliberator sends an envelope to an L2 consensus service for
+// deliberation and returns the envelope bytes with L2 votes populated. The
+// gateway dispatch path calls this after envelope construction under
+// postures that require L2 signatures (consensus, notary). When the
+// deliberator is nil or the posture does not require L2, deliberation is
+// skipped and the envelope proceeds without L2 votes (failing closed at L4
+// verification under a posture that requires them).
+type L2ConsensusDeliberator interface {
+	Deliberate(ctx context.Context, envelopeBytes []byte) ([]byte, error)
+}
+
 // DispatchService constructs a GovernanceEnvelope, publishes it to an operator's
 // cmd channel via the in-process WS broker, and correlates the operator's result
 // published on the results channel back to the originating request.
@@ -152,26 +217,39 @@ type operatorSessionValidator interface {
 // The gateway owns the state Merkle root and the governance posture. The
 // dispatch service sets StateMerkleRoot to the gateway's current state root.
 // Under DoctrinePosture (the docker-compose default), no L2 votes or L3 proofs
-// are required for read-only commands.
+// are required for read-only commands. Under postures that require L2
+// signatures (consensus, notary), the dispatch service deliberates the
+// constructed envelope through l2Deliberator before publish. Mutations under
+// postures that require L3 proof (ratify, notary) are rejected at envelope
+// construction because the gateway dispatch path cannot mint human proofs.
 type DispatchService struct {
 	logger            *slog.Logger
 	pubsub            *GatewayWebSocketHandler
 	stateRootProvider governance.StateRootProvider
 	auth              operatorSessionValidator
 	posture           string
+	doctrine          *governance.L1Doctrine
+	l2Deliberator     L2ConsensusDeliberator
 }
 
 // NewDispatchService creates a DispatchService wired to the gateway's in-process
-// pub/sub broker, state root provider, and auth service. The posture is the
-// gateway's governance posture, injected into every envelope built by this
-// service so the operator reads it per-transaction at L4 verification time.
-func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHandler, stateRootProvider governance.StateRootProvider, auth operatorSessionValidator, posture string) *DispatchService {
+// pub/sub broker, state root provider, auth service, L1 doctrine, and L2
+// consensus deliberator. The posture is the gateway's governance posture,
+// injected into every envelope built by this service so the operator reads it
+// per-transaction at L4 verification time. The doctrine is the L1 validator the
+// builder runs against the decoded typed payload. The l2Deliberator is invoked
+// after envelope construction under postures that require L2 signatures; a nil
+// deliberator skips deliberation (the envelope fails closed at L4 under such
+// postures).
+func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHandler, stateRootProvider governance.StateRootProvider, auth operatorSessionValidator, posture string, doctrine *governance.L1Doctrine, l2Deliberator L2ConsensusDeliberator) *DispatchService {
 	return &DispatchService{
 		logger:            logger,
 		pubsub:            pubsubHandler,
 		stateRootProvider: stateRootProvider,
 		auth:              auth,
 		posture:           posture,
+		doctrine:          doctrine,
+		l2Deliberator:     l2Deliberator,
 	}
 }
 
@@ -179,7 +257,7 @@ func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHand
 // The envelope is constructed with the gateway's current state root, a unique
 // nonce, and a near-future expiry. The result is correlated by transaction ID.
 // Returns an error if the operator session is invalid, envelope construction
-// fails, or the result does not arrive within DispatchTimeout.
+// fails, L2 deliberation fails, or the result does not arrive within DispatchTimeout.
 func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*DispatchResult, error) {
 	// 1. Resolve the target operator session.
 	op, err := d.auth.ValidateOperatorSession(req.TargetOperatorSessionID)
@@ -197,6 +275,8 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	}
 
 	// 3. Build the GovernanceEnvelope via the shared construction helper.
+	// BuildGovernanceEnvelope runs L1 screening and rejects mutations under
+	// L3-requiring postures (the gateway dispatch path cannot mint L3 proofs).
 	env, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
 		OperatorID:        operatorID,
 		OperatorSessionID: operatorSessionID,
@@ -212,6 +292,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		WebSessionID:      req.WebSessionID,
 		CliSessionID:      req.CliSessionID,
 		Posture:           d.posture,
+		Doctrine:          d.doctrine,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("dispatch: %w", err)
@@ -224,7 +305,25 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		return nil, fmt.Errorf("dispatch: marshal envelope: %w", err)
 	}
 
-	// 5. Register an in-process handler on the operator's results channel to
+	// 5. Under postures that require L2 signatures (consensus, notary),
+	//    deliberate the envelope through the L2 consensus service before
+	//    publish. The deliberator collects signed votes and returns the
+	//    envelope with L2 metadata populated. A nil deliberator skips
+	//    deliberation; the envelope fails closed at L4 verification under
+	//    such postures. A deliberation error fails closed before publish.
+	posture, perr := governance.ParseGovernancePosture(d.posture)
+	if perr != nil {
+		return nil, fmt.Errorf("dispatch: %w", perr)
+	}
+	if posture.RequiresL2Signature() && d.l2Deliberator != nil {
+		deliberated, derr := d.l2Deliberator.Deliberate(ctx, wire)
+		if derr != nil {
+			return nil, fmt.Errorf("dispatch: l2 deliberation: %w", derr)
+		}
+		wire = deliberated
+	}
+
+	// 6. Register an in-process handler on the operator's results channel to
 	//    correlate the result by transaction ID.
 	resultsChannel := pubsub.ResultsChannel(operatorID, operatorSessionID)
 	resultCh := make(chan *commonv1.GovernanceEnvelope, 1)
@@ -245,7 +344,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	unregister := d.pubsub.RegisterHandler(resultsChannel, handler)
 	defer unregister()
 
-	// 6. Publish the envelope to the operator's cmd channel.
+	// 7. Publish the envelope to the operator's cmd channel.
 	cmdChannel := pubsub.CmdChannel(operatorID, operatorSessionID)
 	delivered := d.pubsub.Publish(cmdChannel, wire)
 	d.logger.Info("dispatch: published command",
@@ -254,7 +353,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		"results_channel", resultsChannel,
 		"delivered", delivered)
 
-	// 7. Wait for the result with a timeout.
+	// 8. Wait for the result with a timeout.
 	timeoutCtx, cancel := context.WithTimeout(ctx, DispatchTimeout)
 	defer cancel()
 
