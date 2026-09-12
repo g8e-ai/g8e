@@ -787,7 +787,88 @@ def _model_matches(observed: str, expected: str) -> bool:
 
 
 _RUNNER_COLLECTION_TOOL = "g8e_evals-runner-1.0.0"
-_ORCHESTRATOR_SCOPE = f"{platform.system().lower()}/{platform.machine()}/cpu"
+
+# Canonical machine-token vocabulary is GOARCH-style (amd64, arm64), the
+# same vocabulary the frozen campaign profiles declare in
+# ``hardware_identity``. ``platform.machine()`` returns ``x86_64`` on
+# Linux and ``AMD64`` on Windows; both canonicalize to ``amd64``.
+_MACHINE_TOKEN_CANONICALIZATION = {
+    "x86_64": "amd64",
+    "amd64": "amd64",
+    "aarch64": "arm64",
+    "arm64": "arm64",
+}
+
+
+def _canonical_machine_token(machine: str) -> str:
+    """Canonicalize a ``platform.machine()`` token to GOARCH vocabulary."""
+    return _MACHINE_TOKEN_CANONICALIZATION.get(machine.lower(), machine.lower())
+
+
+_ORCHESTRATOR_SCOPE = (
+    f"{platform.system().lower()}/{_canonical_machine_token(platform.machine())}/cpu"
+)
+
+
+def _observed_orchestrator_scope_prefix() -> str:
+    """Return the observed ``system/machine`` prefix of the orchestrator scope."""
+    return "/".join(_ORCHESTRATOR_SCOPE.split("/")[:2])
+
+
+def _validate_orchestrator_scope(hardware_identity: str) -> None:
+    """Reject a declared orchestrator hardware identity that the host contradicts.
+
+    The frozen profile's ``hardware_identity`` is the declared authority
+    (e.g. ``linux/amd64/rtx-4090``). The observed orchestrator scope is
+    canonicalized to the same ``system/machine[/accelerator]``
+    vocabulary; the accelerator suffix is not observable via
+    ``platform``, so only the ``system/machine`` prefix is compared. A
+    prefix mismatch means the run is executing on a different
+    orchestrator environment than the frozen authority declares, which
+    invalidates the evidence identity. Raises ``CampaignRunnerError``
+    before the report directory is created.
+    """
+    declared_parts = hardware_identity.split("/")
+    if len(declared_parts) < 2:
+        raise CampaignRunnerError(
+            f"declared orchestrator hardware identity {hardware_identity!r} "
+            "has no system/machine prefix to validate against"
+        )
+    declared_prefix = "/".join(declared_parts[:2])
+    observed_prefix = _observed_orchestrator_scope_prefix()
+    if observed_prefix != declared_prefix:
+        raise CampaignRunnerError(
+            f"orchestrator scope mismatch: observed {observed_prefix!r} "
+            f"does not match declared hardware identity prefix {declared_prefix!r}"
+        )
+
+
+def _validate_arm_coherence(
+    profile: CampaignProfile,
+    preregistration: PreregistrationConfig,
+) -> None:
+    """Reject a preregistration whose arms the bound profile does not declare.
+
+    The runner derives assignment arms solely from the preregistration
+    (``baseline_arm_id`` + ``comparison_arm_ids``), while the bound
+    profile's ``track_arm_assignments`` declares which arms the campaign
+    is authorized to execute. Every preregistration arm must appear in
+    the profile's declared arm IDs — a subset check, so a partially
+    unauthorized arm set cannot slip through. Raises
+    ``CampaignRunnerError`` before the report directory is created.
+    """
+    declared_arms = {a.arm_id for a in profile.track_arm_assignments}
+    prereg_arms = {
+        preregistration.baseline_arm_id,
+        *preregistration.comparison_arm_ids,
+    }
+    unauthorized = sorted(prereg_arms - declared_arms)
+    if unauthorized:
+        raise CampaignRunnerError(
+            f"preregistration declares arms {unauthorized} not present in the "
+            f"profile's track_arm_assignments {sorted(declared_arms)}; "
+            "a profile-bound campaign may only execute declared arms"
+        )
 
 
 def _unavailable(
@@ -914,12 +995,17 @@ def _build_resource_observation(
     attempt_id: str,
     task_id: str,
     stage_id: str,
+    orchestrator_scope: str,
 ) -> ResourceObservation:
     """Build a typed ResourceObservation from an InferenceObservation.
 
     Only measurements available from the provider response are carried.
     Remote GPU metrics remain None with typed unavailable_measurements
     entries; they are never inferred from model metadata.
+
+    ``orchestrator_scope`` is the declared hardware identity from the
+    bound campaign profile when one exists (the frozen declaration is
+    the authority), or the observed canonical scope otherwise.
     """
     unavailable = _build_unavailable_measurements(obs)
     return ResourceObservation(
@@ -933,7 +1019,7 @@ def _build_resource_observation(
         role=ModelRole(obs.role),
         model_variant_id=obs.model_variant_id,
         task_id=task_id,
-        orchestrator_scope=_ORCHESTRATOR_SCOPE,
+        orchestrator_scope=orchestrator_scope,
         provider_scope="unavailable",
         observation_boundary="provider_call",
         clock_domain="monotonic",
@@ -1561,6 +1647,18 @@ class CampaignRunner:
             campaign_binding=campaign_binding,
         )
 
+    def _effective_orchestrator_scope(self) -> str:
+        """Return the orchestrator scope stamped on resource observations.
+
+        When a campaign profile is bound, its ``hardware_identity`` is
+        the frozen declaration and the authority (already preflighted
+        against the observed host prefix in ``_run_body``). Without a
+        bound profile, the observed canonical scope is used.
+        """
+        if self.campaign_profile is not None:
+            return self.campaign_profile.hardware_identity
+        return _ORCHESTRATOR_SCOPE
+
     def _build_campaign_binding(self) -> CampaignBinding | None:
         """Build report-level CampaignBinding from the campaign profile and model registry.
 
@@ -1613,6 +1711,7 @@ class CampaignRunner:
             orchestrator_environment_stratum=self.campaign_profile.environment_stratum,
             provider_hardware_identity=self.campaign_profile.provider_hardware_identity,
             provider_environment_stratum=self.campaign_profile.provider_environment_stratum,
+            track_arm_assignments=list(self.campaign_profile.track_arm_assignments),
         )
 
     async def _execute_assignment(
@@ -1641,6 +1740,7 @@ class CampaignRunner:
         """
         attempt_num = 0
         parent_attempt_id: str | None = None
+        orchestrator_scope = self._effective_orchestrator_scope()
 
         sut = self._get_sut(cohort, arm_def.arm_id)
         expected_model = _model_id_for_cohort(cohort)
@@ -1702,6 +1802,7 @@ class CampaignRunner:
                         attempt_id=attempt_id,
                         task_id=task.id,
                         stage_id=stage_id,
+                        orchestrator_scope=orchestrator_scope,
                     )
                     all_resource_observations.append(resource_obs)
                     all_stages.append(_build_stage_observation(
@@ -1857,6 +1958,16 @@ class CampaignRunner:
         # declared ceiling that is not observable and not explicitly
         # excluded fails before the report directory is created.
         self.spec.budget_observability_policy.validate_budget(self.spec.provider_budget)
+
+        # 0b. Profile-bound preflights. When a frozen campaign profile is
+        # bound, the declared orchestrator hardware identity is the
+        # authority: the observed host prefix must match it, and every
+        # arm the preregistration declares must be an arm the profile
+        # declares. Both checks fail before the report directory is
+        # created.
+        if self.campaign_profile is not None:
+            _validate_orchestrator_scope(self.campaign_profile.hardware_identity)
+            _validate_arm_coherence(self.campaign_profile, self.spec.preregistration)
 
         # 1. Build assignments and schedule
         assignments, schedule = build_campaign_state(self.spec)

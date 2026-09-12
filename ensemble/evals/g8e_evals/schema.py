@@ -402,6 +402,19 @@ class CampaignTrack(StrEnum):
     GOVERNED = "governed"
 
 
+class TrackArmAssignment(BaseModel):
+    """One track-to-arm assignment in the campaign profile.
+
+    Binds a campaign track (direct, tier_fitness, governed) to the arm
+    ID that executes that track. Each track appears at most once.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    track: CampaignTrack = Field(description="Campaign track: direct, tier_fitness, or governed.")
+    arm_id: str = Field(min_length=1, description="Arm ID that executes this track (e.g. direct, ensemble_ungoverned, doctrine).")
+
+
 class BackendArtifactIdentity(BaseModel):
     """Immutable backend and artifact identity for a measured run.
 
@@ -456,9 +469,15 @@ class CampaignBinding(BaseModel):
 
     Binds a report to its parent/child campaign identity, frozen profile
     and registry authority, expected-record policy hash, both
-    environment scopes, and report role. Assignment, model, repetition,
-    role, and inference identities remain on their own records, not on
-    this report-level binding.
+    environment scopes, the profile's declared track-to-arm assignments,
+    and report role. Assignment, model, repetition, role, and inference
+    identities remain on their own records, not on this report-level
+    binding.
+
+    ``track_arm_assignments`` carries the frozen profile's declared
+    track-to-arm mapping so the verifier can prove that every arm the
+    report executed (run manifest arms and attempt arm IDs) was declared
+    by the bound profile.
 
     For a single campaign, ``child_campaign_id`` and
     ``child_campaign_revision`` are None and ``report_role`` is
@@ -484,6 +503,10 @@ class CampaignBinding(BaseModel):
     orchestrator_environment_stratum: str = Field(min_length=1, description="Orchestrator-host environment stratum label.")
     provider_hardware_identity: str = Field(default="unavailable", description="Provider-host hardware identity; 'unavailable' when the remote boundary does not expose it.")
     provider_environment_stratum: str = Field(default="unavailable", description="Provider-host environment stratum label; 'unavailable' when the remote boundary does not expose it.")
+    track_arm_assignments: list[TrackArmAssignment] = Field(
+        min_length=1,
+        description="Declared track-to-arm assignments from the bound campaign profile. Every executed arm must appear here.",
+    )
 
 
 class RunManifest(BaseModel):

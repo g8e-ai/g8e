@@ -876,6 +876,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     8. **metric_binding**: every completed attempt has at least one bound metric and denominator_contribution values are recomputed and verified.
     9. **manifest_identity**: run manifest content hashes match campaign manifest.
     10. **artifact_identity**: campaign binding authority hashes are present and valid.
+    10b. **arm_coherence**: every arm in the run manifest and every attempt's arm_id is declared by the binding's track_arm_assignments.
     11. **finalization**: the last index generation is FINALIZATION.
     12. **supersession_policy**: SUPERSESSION generations are policy-valid.
     13. **expected_record_policy**: the frozen expected record policy is loaded and validated.
@@ -1059,6 +1060,29 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                 f"artifact identity: campaign_binding.campaign_id {binding.campaign_id!r} "
                 f"does not match campaign manifest campaign_id {manifest.campaign_id!r}"
             )
+
+    # Layer 10b: arm coherence — every arm the report executed must be
+    # declared by the bound profile's track_arm_assignments carried on
+    # the campaign binding. A direct-arm run bound to a tier-fitness
+    # profile fails here even when it slipped past the runner preflight.
+    checked_layers.append("arm_coherence")
+    if run_manifest is not None and run_manifest.campaign_binding is not None:
+        binding = run_manifest.campaign_binding
+        declared_arm_ids = {a.arm_id for a in binding.track_arm_assignments}
+        for entry in run_manifest.arms:
+            if entry.arm_id not in declared_arm_ids:
+                failures.append(
+                    f"arm coherence: run manifest arm {entry.arm_id!r} is not "
+                    f"declared by the binding's track_arm_assignments "
+                    f"{sorted(declared_arm_ids)}"
+                )
+        for attempt in attempts:
+            if attempt.arm_id not in declared_arm_ids:
+                failures.append(
+                    f"arm coherence: attempt {attempt.attempt_id} arm_id "
+                    f"{attempt.arm_id!r} is not declared by the binding's "
+                    f"track_arm_assignments {sorted(declared_arm_ids)}"
+                )
 
     # Layer 11: finalization — the last index generation is FINALIZATION
     checked_layers.append("finalization")

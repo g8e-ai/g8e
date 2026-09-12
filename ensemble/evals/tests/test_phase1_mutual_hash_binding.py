@@ -1125,6 +1125,7 @@ class TestCampaignBindingBindsProfileAndRegistry:
             orchestrator_environment_stratum=profile.environment_stratum,
             provider_hardware_identity=profile.provider_hardware_identity,
             provider_environment_stratum=profile.provider_environment_stratum,
+            track_arm_assignments=list(profile.track_arm_assignments),
         )
         assert binding.campaign_profile_hash == profile.content_hash
 
@@ -1141,6 +1142,7 @@ class TestCampaignBindingBindsProfileAndRegistry:
             orchestrator_environment_stratum=profile.environment_stratum,
             provider_hardware_identity=profile.provider_hardware_identity,
             provider_environment_stratum=profile.provider_environment_stratum,
+            track_arm_assignments=list(profile.track_arm_assignments),
         )
         assert binding.model_registry_hash == profile.model_registry_hash
 
@@ -1160,6 +1162,7 @@ class TestCampaignBindingBindsProfileAndRegistry:
             orchestrator_environment_stratum=profile.environment_stratum,
             provider_hardware_identity=profile.provider_hardware_identity,
             provider_environment_stratum=profile.provider_environment_stratum,
+            track_arm_assignments=list(profile.track_arm_assignments),
         )
         assert binding.required_record_policy_hash == policy.content_hash
 
@@ -1750,6 +1753,7 @@ class TestFullBindingChainIntegration:
             orchestrator_environment_stratum=profile.environment_stratum,
             provider_hardware_identity=profile.provider_hardware_identity,
             provider_environment_stratum=profile.provider_environment_stratum,
+            track_arm_assignments=list(profile.track_arm_assignments),
         )
         assert binding.campaign_profile_hash == profile.content_hash
         assert binding.model_registry_hash == profile.model_registry_hash

@@ -38,7 +38,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 if TYPE_CHECKING:
     from g8e_evals.registry import ModelRegistry
 
-from g8e_evals.schema import CampaignTrack
+from g8e_evals.schema import CampaignTrack, TrackArmAssignment
 
 
 CAMPAIGN_PROFILE_VERSION = "1.0.0"
@@ -81,19 +81,6 @@ class ClaimBoundary(StrEnum):
 
     DESCRIPTIVE_ONLY = "descriptive_only"
     CONFIRMATORY = "confirmatory"
-
-
-class TrackArmAssignment(BaseModel):
-    """One track-to-arm assignment in the campaign profile.
-
-    Binds a campaign track (direct, tier_fitness, governed) to the arm
-    ID that executes that track. Each track appears at most once.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    track: CampaignTrack = Field(description="Campaign track: direct, tier_fitness, or governed.")
-    arm_id: str = Field(min_length=1, description="Arm ID that executes this track (e.g. direct, ensemble_ungoverned, doctrine).")
 
 
 class ModelTierAssignment(BaseModel):

@@ -41,7 +41,7 @@ from g8e_evals.index import (
     MeasurementScope,
     ResourceObservation,
 )
-from g8e_evals.runner import _build_resource_observation
+from g8e_evals.runner import _ORCHESTRATOR_SCOPE, _build_resource_observation
 
 
 def _build(obs: InferenceObservation) -> ResourceObservation:
@@ -54,6 +54,7 @@ def _build(obs: InferenceObservation) -> ResourceObservation:
         attempt_id="attempt-1",
         task_id="task-1",
         stage_id="stage-1",
+        orchestrator_scope=_ORCHESTRATOR_SCOPE,
     )
 
 

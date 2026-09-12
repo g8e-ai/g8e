@@ -34,6 +34,7 @@ from g8e_evals.schema import (
     TokenizerTemplateIdentity,
     ReportRole,
     RunManifest,
+    TrackArmAssignment,
 )
 
 
@@ -63,6 +64,10 @@ def _tokenizer_template_identity() -> TokenizerTemplateIdentity:
     )
 
 
+def _track_arm_assignments() -> list[TrackArmAssignment]:
+    return [TrackArmAssignment(track=CampaignTrack.DIRECT, arm_id="direct")]
+
+
 def _campaign_binding(
     *,
     report_role: ReportRole = ReportRole.SINGLE,
@@ -82,6 +87,7 @@ def _campaign_binding(
         orchestrator_environment_stratum="single-machine",
         provider_hardware_identity="unavailable",
         provider_environment_stratum="unavailable",
+        track_arm_assignments=_track_arm_assignments(),
     )
 
 
@@ -218,6 +224,7 @@ class TestCampaignBinding:
                 required_record_policy_hash=_VALID_HASH,
                 orchestrator_hardware_identity="linux/amd64/rtx-4090",
                 orchestrator_environment_stratum="single-machine",
+                track_arm_assignments=_track_arm_assignments(),
             )
 
     def test_requires_campaign_revision(self):
@@ -230,6 +237,7 @@ class TestCampaignBinding:
                 required_record_policy_hash=_VALID_HASH,
                 orchestrator_hardware_identity="linux/amd64/rtx-4090",
                 orchestrator_environment_stratum="single-machine",
+                track_arm_assignments=_track_arm_assignments(),
             )
 
     def test_requires_report_role(self):
@@ -242,6 +250,7 @@ class TestCampaignBinding:
                 required_record_policy_hash=_VALID_HASH,
                 orchestrator_hardware_identity="linux/amd64/rtx-4090",
                 orchestrator_environment_stratum="single-machine",
+                track_arm_assignments=_track_arm_assignments(),
             )
 
     def test_requires_campaign_profile_hash(self):
@@ -254,6 +263,7 @@ class TestCampaignBinding:
                 required_record_policy_hash=_VALID_HASH,
                 orchestrator_hardware_identity="linux/amd64/rtx-4090",
                 orchestrator_environment_stratum="single-machine",
+                track_arm_assignments=_track_arm_assignments(),
             )
 
     def test_requires_model_registry_hash(self):
@@ -266,6 +276,7 @@ class TestCampaignBinding:
                 required_record_policy_hash=_VALID_HASH,
                 orchestrator_hardware_identity="linux/amd64/rtx-4090",
                 orchestrator_environment_stratum="single-machine",
+                track_arm_assignments=_track_arm_assignments(),
             )
 
     def test_requires_required_record_policy_hash(self):
@@ -278,6 +289,7 @@ class TestCampaignBinding:
                 model_registry_hash=_VALID_HASH,
                 orchestrator_hardware_identity="linux/amd64/rtx-4090",
                 orchestrator_environment_stratum="single-machine",
+                track_arm_assignments=_track_arm_assignments(),
             )
 
     def test_requires_orchestrator_hardware_identity(self):
@@ -290,6 +302,7 @@ class TestCampaignBinding:
                 model_registry_hash=_VALID_HASH,
                 required_record_policy_hash=_VALID_HASH,
                 orchestrator_environment_stratum="single-machine",
+                track_arm_assignments=_track_arm_assignments(),
             )
 
     def test_requires_orchestrator_environment_stratum(self):
@@ -302,7 +315,27 @@ class TestCampaignBinding:
                 model_registry_hash=_VALID_HASH,
                 required_record_policy_hash=_VALID_HASH,
                 orchestrator_hardware_identity="linux/amd64/rtx-4090",
+                track_arm_assignments=_track_arm_assignments(),
             )
+
+    def test_requires_track_arm_assignments(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                campaign_revision="1",
+                report_role=ReportRole.SINGLE,
+                campaign_profile_hash=_VALID_HASH,
+                model_registry_hash=_VALID_HASH,
+                required_record_policy_hash=_VALID_HASH,
+                orchestrator_hardware_identity="linux/amd64/rtx-4090",
+                orchestrator_environment_stratum="single-machine",
+            )
+
+    def test_track_arm_assignments_round_trip(self):
+        binding = _campaign_binding()
+        assert binding.track_arm_assignments == _track_arm_assignments()
+        restored = CampaignBinding.model_validate_json(binding.model_dump_json())
+        assert restored.track_arm_assignments == _track_arm_assignments()
 
     def test_child_role_carries_child_campaign_identity(self):
         binding = _campaign_binding(
@@ -336,6 +369,7 @@ class TestCampaignBinding:
                 required_record_policy_hash=_VALID_HASH,
                 orchestrator_hardware_identity="linux/amd64/rtx-4090",
                 orchestrator_environment_stratum="single-machine",
+                track_arm_assignments=_track_arm_assignments(),
             )
 
     def test_rejects_short_registry_hash(self):
@@ -349,6 +383,7 @@ class TestCampaignBinding:
                 required_record_policy_hash=_VALID_HASH,
                 orchestrator_hardware_identity="linux/amd64/rtx-4090",
                 orchestrator_environment_stratum="single-machine",
+                track_arm_assignments=_track_arm_assignments(),
             )
 
 
@@ -425,6 +460,7 @@ class TestRunManifestCampaignBinding:
                     required_record_policy_hash=_VALID_HASH,
                     orchestrator_hardware_identity="linux/amd64/rtx-4090",
                     orchestrator_environment_stratum="single-machine",
+                    track_arm_assignments=_track_arm_assignments(),
                 ),
                 extra_field="bad",
             )
