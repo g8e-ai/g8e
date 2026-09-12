@@ -14,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 )
 
 func TestExecuteWithVersionInfo_HelpFlagPrintsUsageAndExitsZero(t *testing.T) {
@@ -32,7 +34,7 @@ func TestExecuteWithVersionInfo_HelpFlagPrintsUsageAndExitsZero(t *testing.T) {
 	osExit = func(code int) {}
 	t.Cleanup(func() { osExit = originalExit })
 
-	ExecuteWithVersionInfo("test-version", "test-build", "2026-07-10", "linux/amd64")
+	ExecuteWithVersionInfo(serve.VersionInfo{Version: "test-version", BuildID: "test-build", BuildTime: "2026-07-10", Platform: "linux/amd64"})
 
 	w.Close()
 	var buf bytes.Buffer
@@ -59,7 +61,7 @@ func TestExecuteWithVersionInfo_VersionFlagPrintsVersion(t *testing.T) {
 	osExit = func(code int) {}
 	t.Cleanup(func() { osExit = originalExit })
 
-	ExecuteWithVersionInfo("1.2.3-test", "build-abc", "2026-07-10", "linux/amd64")
+	ExecuteWithVersionInfo(serve.VersionInfo{Version: "1.2.3-test", BuildID: "build-abc", BuildTime: "2026-07-10", Platform: "linux/amd64"})
 
 	w.Close()
 	var buf bytes.Buffer
@@ -86,7 +88,7 @@ func TestExecuteWithVersionInfo_InvalidCommandReturnsError(t *testing.T) {
 	osExit = func(code int) { exitCode = code }
 	t.Cleanup(func() { osExit = originalExit })
 
-	ExecuteWithVersionInfo("test-version", "test-build", "2026-07-10", "linux/amd64")
+	ExecuteWithVersionInfo(serve.VersionInfo{Version: "test-version", BuildID: "test-build", BuildTime: "2026-07-10", Platform: "linux/amd64"})
 
 	w.Close()
 	var buf bytes.Buffer

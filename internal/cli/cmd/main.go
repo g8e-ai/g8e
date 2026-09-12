@@ -104,14 +104,8 @@ func versionInfoFromCmd(cmd *cobra.Command) serve.VersionInfo {
 	return serve.VersionInfo{}
 }
 
-func ExecuteWithVersionInfo(version, buildID, buildTime, platform string) {
-	vi := serve.VersionInfo{
-		Version:   version,
-		BuildID:   buildID,
-		BuildTime: buildTime,
-		Platform:  platform,
-	}
-	rootCmd := NewRootCmd(version, vi)
+func ExecuteWithVersionInfo(vi serve.VersionInfo) {
+	rootCmd := NewRootCmd(vi.Version, vi)
 	rootCmd.SetVersionTemplate(`{{with .Version}}{{printf "g8e version %s\n" .}}{{end}}`)
 	rootCmd.SetOut(os.Stdout)
 	rootCmd.SetErr(os.Stderr)

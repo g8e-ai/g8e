@@ -45,6 +45,7 @@ from g8e_evals import __version__ as EVALS_VERSION
 from g8e_evals import constants as evals_constants
 from g8e_evals.arms import ALL_ARMS, GOVERNED_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
+from g8e_evals.provenance_bridge import ProvenanceBridgeError, load_cli_build_provenance
 from g8e_evals.graders import (
     DeterministicGradingContext,
     grade_deterministically,
@@ -678,7 +679,7 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         prereg_config = load_preregistration(preregistration)
 
     try:
-        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout, evidence_key=evidence_key, preregistration=prereg_config, effective_sampling=effective_sampling, seed_support=seed_support))
+        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout, evidence_key=evidence_key, preregistration=prereg_config, effective_sampling=effective_sampling, seed_support=seed_support, g8e_cli=g8e_cli))
     except EvaluationRunError as error:
         raise click.ClickException(str(error)) from error
 
@@ -854,8 +855,16 @@ def validate_campaign_identity(
 def load_source_build_provenance_or_reject(
     *,
     is_production_posture: bool,
+    g8e_cli: str | None = None,
 ) -> SourceBuildProvenance | None:
-    """Load source/build provenance from environment variables.
+    """Load source/build provenance from the environment or the stamped CLI.
+
+    Explicit ``G8E_EVALS_SOURCE_*`` environment provenance wins when set and
+    must fully validate. When neither required variable is set, the stamped
+    g8e CLI binary supplies provenance via ``g8e version --json`` — the
+    platform build owns the stamp, so no hand-set values are needed. A
+    ``g8e_cli`` of ``None`` or an unstamped binary falls through to the env
+    path.
 
     Production-posture runs (the ``campaign run`` path) require source/build
     provenance and fail before execution when it is unavailable. Non-production
@@ -865,11 +874,16 @@ def load_source_build_provenance_or_reject(
     Raises ``PreflightError`` when production-posture provenance is missing
     or malformed.
     """
-    if not is_production_posture:
-        source_revision = os.environ.get("G8E_EVALS_SOURCE_REVISION", "").strip()
-        if not source_revision:
-            return None
+    env_revision = os.environ.get("G8E_EVALS_SOURCE_REVISION", "").strip()
+    env_tree_hash = os.environ.get("G8E_EVALS_SOURCE_TREE_STATE_HASH", "").strip()
+    if env_revision or env_tree_hash:
         return _load_source_build_provenance_from_env()
+    if g8e_cli:
+        provenance = load_cli_build_provenance(g8e_cli)
+        if provenance is not None:
+            return provenance
+    if not is_production_posture:
+        return None
     return _load_source_build_provenance_from_env()
 
 
@@ -1127,14 +1141,16 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     grader = suite_spec.grader_factory()
 
     # The campaign run command is production-posture by definition: it
-    # calls live providers. Load source/build provenance from environment
-    # variables set by the trusted build system or CI pipeline. Reject
-    # before execution when provenance is absent or malformed.
+    # calls live providers. Source/build provenance comes from the stamped
+    # g8e CLI binary or from environment variables set by the trusted build
+    # system or CI pipeline. Reject before execution when provenance is
+    # absent or malformed.
     try:
         source_build_provenance = load_source_build_provenance_or_reject(
             is_production_posture=True,
+            g8e_cli=g8e_cli,
         )
-    except _PreflightError as e:
+    except (_PreflightError, ProvenanceBridgeError) as e:
         raise click.UsageError(f"source/build provenance required for campaign run: {e}") from e
 
     spec = CampaignSpec(
@@ -1639,7 +1655,7 @@ def campaign_set_verify(plan: Path, index: Path, child_dirs: list[tuple[str, Pat
     console.print("  [green]status[/green] verified")
 
 
-async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None, effective_sampling: SamplingSettings | None = None, seed_support: str = "unknown"):
+async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None, effective_sampling: SamplingSettings | None = None, seed_support: str = "unknown", g8e_cli: str | None = None):
     # 1. Load benchmark via the typed suite registry. The registry
     #    rejects deterministic-simulation suites from the model-comparison
     #    set so a simulator-only result can never be represented as model
@@ -1894,14 +1910,17 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         is_production_posture=arm_def.is_production_posture,
     )
 
-    # 5a. Load source/build provenance and provider budget from the
-    #     trusted build environment. Preflight fails before execution
-    #     when a required identity or hash is unavailable. The runner
-    #     never runs ad hoc Git commands; the values come from
-    #     environment variables set by the trusted build system or CI.
+    # 5a. Load source/build provenance and provider budget. Provenance
+    #     comes from the stamped g8e CLI binary when present, otherwise
+    #     from environment variables set by the trusted build system or
+    #     CI. Preflight fails before execution when a required identity or
+    #     hash is unavailable. The runner never runs ad hoc Git commands.
     try:
-        source_build_provenance = _load_source_build_provenance_from_env()
-    except _PreflightError as e:
+        source_build_provenance = load_source_build_provenance_or_reject(
+            is_production_posture=True,
+            g8e_cli=g8e_cli,
+        )
+    except (_PreflightError, ProvenanceBridgeError) as e:
         raise EvaluationRunError(f"preflight failed: {e}") from e
     try:
         provider_budget = _load_provider_budget_from_env()

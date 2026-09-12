@@ -236,3 +236,74 @@ class TestLoadSourceBuildProvenanceOrReject:
         assert provenance.build_system == "github-actions"
         assert provenance.ci_run_id == "run-99"
         assert provenance.ci_url == "https://example.com/run/99"
+
+    def _stamped_provenance(self):
+        from g8e_evals.schema import SourceBuildProvenance
+
+        return SourceBuildProvenance(
+            source_revision="stamped-revision",
+            source_tree_state_hash="c" * 64,
+            build_id="build-7",
+            build_system="g8e-cli",
+        )
+
+    def test_stamped_cli_supplies_provenance_when_env_absent(self, monkeypatch):
+        monkeypatch.delenv("G8E_EVALS_SOURCE_REVISION", raising=False)
+        monkeypatch.delenv("G8E_EVALS_SOURCE_TREE_STATE_HASH", raising=False)
+        stamped = self._stamped_provenance()
+        monkeypatch.setattr("g8e_evals.cli.load_cli_build_provenance", lambda cli: stamped)
+
+        provenance = load_source_build_provenance_or_reject(
+            is_production_posture=True, g8e_cli="./g8e"
+        )
+
+        assert provenance is stamped
+
+    def test_env_provenance_wins_over_stamped_cli(self, monkeypatch):
+        monkeypatch.setenv("G8E_EVALS_SOURCE_REVISION", "env-revision")
+        monkeypatch.setenv("G8E_EVALS_SOURCE_TREE_STATE_HASH", _VALID_HASH)
+
+        def bridge_must_not_run(cli):
+            raise AssertionError("bridge consulted despite explicit env provenance")
+
+        monkeypatch.setattr("g8e_evals.cli.load_cli_build_provenance", bridge_must_not_run)
+
+        provenance = load_source_build_provenance_or_reject(
+            is_production_posture=True, g8e_cli="./g8e"
+        )
+
+        assert provenance is not None
+        assert provenance.source_revision == "env-revision"
+
+    def test_unstamped_cli_falls_back_to_env_error_for_production(self, monkeypatch):
+        monkeypatch.delenv("G8E_EVALS_SOURCE_REVISION", raising=False)
+        monkeypatch.delenv("G8E_EVALS_SOURCE_TREE_STATE_HASH", raising=False)
+        monkeypatch.setattr("g8e_evals.cli.load_cli_build_provenance", lambda cli: None)
+
+        with pytest.raises(PreflightError) as exc_info:
+            load_source_build_provenance_or_reject(
+                is_production_posture=True, g8e_cli="./g8e"
+            )
+        assert exc_info.value.code == PreflightFailureCode.SOURCE_REVISION_MISSING
+
+    def test_stamped_cli_supplies_provenance_for_non_production(self, monkeypatch):
+        monkeypatch.delenv("G8E_EVALS_SOURCE_REVISION", raising=False)
+        monkeypatch.delenv("G8E_EVALS_SOURCE_TREE_STATE_HASH", raising=False)
+        stamped = self._stamped_provenance()
+        monkeypatch.setattr("g8e_evals.cli.load_cli_build_provenance", lambda cli: stamped)
+
+        provenance = load_source_build_provenance_or_reject(
+            is_production_posture=False, g8e_cli="./g8e"
+        )
+
+        assert provenance is stamped
+
+    def test_no_cli_no_env_returns_none_for_non_production(self, monkeypatch):
+        monkeypatch.delenv("G8E_EVALS_SOURCE_REVISION", raising=False)
+        monkeypatch.delenv("G8E_EVALS_SOURCE_TREE_STATE_HASH", raising=False)
+
+        provenance = load_source_build_provenance_or_reject(
+            is_production_posture=False, g8e_cli=None
+        )
+
+        assert provenance is None
