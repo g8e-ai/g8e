@@ -328,6 +328,7 @@ const EventAppMemoryCreated EventType = "g8e.v1.app.memory.created"
 const EventAppMemoryUpdated EventType = "g8e.v1.app.memory.updated"
 const EventOperatorPortCheckRequested EventType = "g8e.v1.operator.port.check.requested"
 const EventOperatorReceiptRecorded EventType = "g8e.v1.operator.receipt.recorded"
+const EventOperatorInferenceRequested EventType = "g8e.v1.operator.inference.requested"
 
 // Observability dashboard events. These carry protocol-owned typed payloads
 // (see protocol/models/observe_event_payloads.json) and are emitted by real
@@ -479,6 +480,9 @@ type _EventOperatorFsRead struct {
 	Requested EventType
 	Started   EventType
 }
+type _EventOperatorInference struct {
+	Requested EventType
+}
 type _EventOperatorMcp struct {
 	CallRequested EventType
 }
@@ -557,6 +561,7 @@ type _EventOperator struct {
 	HeartbeatReceived        EventType
 	HeartbeatRequested       EventType
 	Intent                   _EventOperatorIntent
+	Inference                _EventOperatorInference
 	Mcp                      _EventOperatorMcp
 	NetworkPing              _EventOperatorNetworkPing
 	Notary                   _EventOperatorNotary
@@ -699,6 +704,9 @@ var Event = struct {
 			Requested:         EventOperatorIntentRequested,
 			RevokeRequested:   EventOperatorIntentRevokeRequested,
 			Revoked:           EventOperatorIntentRevoked,
+		},
+		Inference: _EventOperatorInference{
+			Requested: EventOperatorInferenceRequested,
 		},
 		Mcp: _EventOperatorMcp{
 			CallRequested: EventOperatorMcpCallRequested,

@@ -24,4 +24,8 @@ var Ports = struct {
 const (
 	EnsembleDefaultPort  = 8000
 	DashboardDefaultPort = 3000
+
+	// InferenceOllamaDefaultPort is Ollama's default loopback API port. The
+	// Go inference backend connects to this port over loopback HTTP.
+	InferenceOllamaDefaultPort = 11434
 )

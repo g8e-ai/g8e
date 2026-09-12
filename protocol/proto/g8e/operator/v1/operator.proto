@@ -1117,3 +1117,65 @@ message RevokePasskeyCredentialResult {
   bool found = 3;
   int32 remaining = 4;
 }
+
+// ---------------------------------------------------------------------------
+// Inference (g8ellama)
+// ---------------------------------------------------------------------------
+
+// ModelRole identifies the chat-tier role for a governed inference request.
+// Maps directly to the three tiers in ensemble's LLMSettings.
+enum ModelRole {
+  MODEL_ROLE_UNSPECIFIED = 0;
+  MODEL_ROLE_PRIMARY = 1;
+  MODEL_ROLE_ASSISTANT = 2;
+  MODEL_ROLE_LITE = 3;
+}
+
+// Payload for g8e.v1.operator.inference.requested. Carries the scrubbed prompt,
+// the Ollama model name (which encodes the role), and generation parameters.
+// The handler receives only scrubbed, tokenized prompts; it never receives
+// raw vault material.
+message InferenceRequested {
+  // Chat-tier role for this request (primary, assistant, lite).
+  ModelRole role = 1;
+
+  // Ollama model name (e.g., "gemma3:4b"). Encodes the role; Ollama routes by
+  // model name in the API call.
+  string model = 2;
+
+  // Scrubbed prompt text sent to the backend.
+  string prompt = 3;
+
+  // Generation temperature override (0 = use backend default).
+  float temperature = 4;
+
+  // Maximum tokens to generate (0 = use backend default).
+  int32 max_tokens = 5;
+
+  // Ollama keep-alive duration override (empty = use config default).
+  string keep_alive = 6;
+}
+
+// InferenceResult carries the generated text, usage metadata, and finish
+// reason returned by the backend. The governed envelope carries this for the
+// receipt and audit chain.
+message InferenceResult {
+  // Generated text from the model.
+  string text = 1;
+
+  // Number of prompt tokens consumed.
+  int32 prompt_tokens = 2;
+
+  // Number of completion tokens generated.
+  int32 completion_tokens = 3;
+
+  // Total tokens (prompt + completion).
+  int32 total_tokens = 4;
+
+  // Finish reason (e.g., "stop", "length").
+  string finish_reason = 5;
+
+  // Model that produced the result (echoed from the request or resolved by
+  // the backend).
+  string model = 6;
+}

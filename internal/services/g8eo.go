@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
@@ -315,6 +316,24 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("g8eo: failed to initialize scrubbing service: %w", err)
 	}
 
+	// Initialize the inference backend and governed execution handler when
+	// cfg.Inference.Enabled is true. The backend is an HTTP client to the
+	// co-located Ollama daemon; the handler is wired into the
+	// OperatorPubSubService config alongside the existing ExecutionService
+	// and FileEditService. The handler is dispatched by event type, not by
+	// replacing the command service.
+	var inferenceHandler governance.ExecutionHandler
+	if vs.config.Inference.Enabled {
+		ollamaBackend := inference.NewOllamaBackend(vs.config.Inference.OllamaEndpoint, vs.logger)
+		inferenceHandler = inference.NewInferenceExecutionHandler(ollamaBackend, vs.config, scrubbingService, vs.logger)
+		vs.logger.Info("Inference backend initialized",
+			"backend", vs.config.Inference.Backend,
+			"endpoint", vs.config.Inference.OllamaEndpoint,
+			"primary_model", vs.config.Inference.PrimaryModel,
+			"assistant_model", vs.config.Inference.AssistantModel,
+			"lite_model", vs.config.Inference.LiteModel)
+	}
+
 	// OperatorPubSubService Construction
 	psConfig := pubsub.CommandServiceConfig{
 		Config:             vs.config,
@@ -328,6 +347,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		Ledger:             vs.ledger,
 		HistoryHandler:     vs.historyHandler,
 		Scrubbing:          scrubbingService,
+		Inference:          inferenceHandler,
 		ActuatorSigningKey: actuatorPriv,
 		ActuatorKeyID:      actuatorKeyID,
 		AuditorSigningKey:  auditorPriv,

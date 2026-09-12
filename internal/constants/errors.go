@@ -1408,4 +1408,15 @@ var (
 	ErrPublicFeedRecordTypeInvalid  = errors.New("public-feed: invalid record type")
 	ErrPublicFeedBatchSignFailed    = errors.New("public-feed: failed to sign batch")
 	ErrPublicFeedKeyGenFailed       = errors.New("public-feed: failed to generate signing key")
+
+	// Inference backend errors (g8ellama). The Go backend is an HTTP client
+	// to Ollama; it does not load or shut down models, so no load/shutdown
+	// error constants are defined.
+	ErrInferenceBackendUnavailable = errors.New("inference: backend unavailable")
+	ErrInferenceModelNotFound      = errors.New("inference: model not found in backend store")
+	ErrInferenceGenerateFailed     = errors.New("inference: generation failed")
+	ErrInferenceBackendTimeout     = errors.New("inference: backend request timed out")
+	ErrInferenceModelRefInvalid    = errors.New("inference: model reference invalid")
+	ErrInferenceBackendNotRegistered = errors.New("inference: backend not registered")
+	ErrInferenceRoleInvalid        = errors.New("inference: role invalid")
 )

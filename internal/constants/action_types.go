@@ -37,6 +37,7 @@ const (
 	ActionTypeFsList                          ActionType = "FS_LIST"
 	ActionTypeFsRead                          ActionType = "FS_READ"
 	ActionTypeHeartbeat                       ActionType = "HEARTBEAT"
+	ActionTypeInference                       ActionType = "INFERENCE"
 	ActionTypeMcpCall                         ActionType = "MCP_CALL"
 	ActionTypeMcpPromptGet                    ActionType = "MCP_PROMPT_GET"
 	ActionTypeMcpPromptList                   ActionType = "MCP_PROMPT_LIST"
@@ -70,6 +71,7 @@ var AllActionTypes = []ActionType{
 	ActionTypeFsList,
 	ActionTypeFsRead,
 	ActionTypeHeartbeat,
+	ActionTypeInference,
 	ActionTypeMcpCall,
 	ActionTypeMcpPromptGet,
 	ActionTypeMcpPromptList,
@@ -95,6 +97,7 @@ func (a ActionType) IsMutation() bool {
 		ActionTypeDocumentUpdate,
 		ActionTypeExecuteBash,
 		ActionTypeFileEdit,
+		ActionTypeInference,
 		ActionTypeMcpCall,
 		ActionTypePlatformEnrollmentDecide,
 		ActionTypePlatformEnrollmentIssue,

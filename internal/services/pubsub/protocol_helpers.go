@@ -198,6 +198,8 @@ func unmarshalPayload(eventType constants.EventType, payload []byte) (proto.Mess
 		m = &operatorv1.A2ACallRequested{}
 	case constants.Event.Operator.Eval.AnswerRequested:
 		m = &operatorv1.EvalAnswerRequested{}
+	case constants.Event.Operator.Inference.Requested:
+		m = &operatorv1.InferenceRequested{}
 	case constants.EventPlatformEnrollmentCreateRequested,
 		constants.EventPlatformEnrollmentDecideRequested,
 		constants.EventPlatformEnrollmentIssueRequested,

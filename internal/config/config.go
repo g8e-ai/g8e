@@ -90,6 +90,16 @@ type LoadOptions struct {
 
 	// Lattice adapter (nil when disabled)
 	Lattice *latticeconfig.LatticeConfig
+
+	// Inference backend (g8ellama). Disabled when InferenceEnabled is false.
+	InferenceEnabled    bool
+	InferenceBackend    string
+	InferenceOllamaEndpoint string
+	InferencePrimaryModel   string
+	InferenceAssistantModel string
+	InferenceLiteModel      string
+	InferenceKeepAlive      string
+	InferenceNumParallel    int
 }
 
 // GatewayConfig holds configuration for gateway mode.
@@ -147,6 +157,50 @@ type GatewayConfig struct {
 	// Distributed lock retry configuration
 	LockMaxRetries int           // Maximum retry attempts for distributed lock acquisition (default: 30)
 	LockRetryDelay time.Duration // Base delay for lock retry backoff (default: 50ms)
+}
+
+// InferenceConfig holds configuration for the local inference backend
+// (g8ellama). Ollama owns process lifecycle, VRAM management, model
+// eviction, and multi-model residency; the gateway's responsibility is
+// limited to acting as an HTTP client to Ollama's /api/chat endpoint.
+// The three model fields map directly to the three tiers in ensemble's
+// LLMSettings.
+type InferenceConfig struct {
+	Enabled bool
+
+	// Backend selects the inference backend implementation. Currently only
+	// "ollama" is supported.
+	Backend string
+
+	// OllamaEndpoint is the loopback HTTP endpoint for the Ollama daemon
+	// (default: http://127.0.0.1:<InferenceOllamaDefaultPort>).
+	OllamaEndpoint string
+
+	// ModelsDir is the relative path to the governed model store directory,
+	// resolved via fileSvc.Resolve(constants.DefaultModelsDir) at the
+	// boundary. Not stored as an absolute path on the config struct.
+	ModelsDir string
+
+	// PrimaryModel, AssistantModel, LiteModel map each chat-tier role to an
+	// Ollama model name. Ollama routes by model name in the API call, so
+	// role routing is a config-and-payload concern.
+	PrimaryModel   string
+	AssistantModel string
+	LiteModel      string
+
+	// MaxContextTokens bounds the prompt context window (0 = backend default).
+	MaxContextTokens int
+
+	// MaxConcurrentGenerations sets the number of concurrent inference slots.
+	MaxConcurrentGenerations int
+
+	// KeepAlive is the Ollama keep-alive duration passed to /api/chat per
+	// request. Default "-1" pins all three chat roles in memory.
+	KeepAlive string
+
+	// NumParallel maps to Ollama's OLLAMA_NUM_PARALLEL. Defaults to 1 for
+	// deterministic single-turn chat.
+	NumParallel int
 }
 
 // Config holds all configuration for g8eo
@@ -225,6 +279,11 @@ type Config struct {
 
 	// Lattice adapter configuration (nil when disabled)
 	Lattice *latticeconfig.LatticeConfig
+
+	// Inference configuration for the local inference backend (g8ellama).
+	// Disabled by default; enabled when the operator runs as an Inference
+	// Node with a co-located Ollama daemon.
+	Inference InferenceConfig
 }
 
 // FindProjectRoot returns the current working directory.
@@ -557,6 +616,13 @@ func Load(opts LoadOptions) (*Config, error) {
 
 		// Lattice adapter (nil when disabled)
 		Lattice: opts.Lattice,
+
+		// Inference backend (g8ellama). Disabled by default; enabled when
+		// the operator runs as an Inference Node with a co-located Ollama
+		// daemon. The model store directory is resolved at the boundary via
+		// fileSvc.Resolve(constants.DefaultModelsDir), not stored as an
+		// absolute path here.
+		Inference: newInferenceConfig(opts),
 	}
 
 	// Default PKIDir to .g8e/pki if not explicitly set
@@ -592,6 +658,42 @@ func heartbeatIntervalOrDefault(d time.Duration) time.Duration {
 		return d
 	}
 	return 30 * time.Second
+}
+
+// newInferenceConfig builds an InferenceConfig from LoadOptions, applying
+// defaults for unset fields. The Ollama endpoint defaults to loopback on the
+// canonical Ollama port. The model store directory is the relative constant
+// (constants.DefaultModelsDir); callers resolve it to an absolute path via
+// fileSvc.Resolve at the I/O boundary.
+func newInferenceConfig(opts LoadOptions) InferenceConfig {
+	endpoint := opts.InferenceOllamaEndpoint
+	if endpoint == "" {
+		endpoint = fmt.Sprintf("http://127.0.0.1:%d", constants.InferenceOllamaDefaultPort)
+	}
+	backend := opts.InferenceBackend
+	if backend == "" {
+		backend = "ollama"
+	}
+	keepAlive := opts.InferenceKeepAlive
+	if keepAlive == "" {
+		keepAlive = "-1"
+	}
+	numParallel := opts.InferenceNumParallel
+	if numParallel == 0 {
+		numParallel = 1
+	}
+	return InferenceConfig{
+		Enabled:                  opts.InferenceEnabled,
+		Backend:                  backend,
+		OllamaEndpoint:           endpoint,
+		ModelsDir:                constants.DefaultModelsDir,
+		PrimaryModel:             opts.InferencePrimaryModel,
+		AssistantModel:           opts.InferenceAssistantModel,
+		LiteModel:                opts.InferenceLiteModel,
+		MaxConcurrentGenerations: 1,
+		KeepAlive:                keepAlive,
+		NumParallel:              numParallel,
+	}
 }
 
 // buildPubSubURL creates a WebSocket URL using the HTTPS port (WSS runs over TLS).

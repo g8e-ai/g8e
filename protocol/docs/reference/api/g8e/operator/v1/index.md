@@ -59,6 +59,8 @@
     - [GetRevocationBundleResult](#g8e-operator-v1-GetRevocationBundleResult)
     - [HeartbeatRequested](#g8e-operator-v1-HeartbeatRequested)
     - [HeartbeatResult](#g8e-operator-v1-HeartbeatResult)
+    - [InferenceRequested](#g8e-operator-v1-InferenceRequested)
+    - [InferenceResult](#g8e-operator-v1-InferenceResult)
     - [ListDeviceLinksRequested](#g8e-operator-v1-ListDeviceLinksRequested)
     - [ListDeviceLinksResult](#g8e-operator-v1-ListDeviceLinksResult)
     - [ListOperatorSlotsRequested](#g8e-operator-v1-ListOperatorSlotsRequested)
@@ -118,6 +120,7 @@
     - [HeartbeatType](#g8e-operator-v1-HeartbeatType)
     - [L2Status](#g8e-operator-v1-L2Status)
     - [L3Status](#g8e-operator-v1-L3Status)
+    - [ModelRole](#g8e-operator-v1-ModelRole)
   
     - [OperatorService](#g8e-operator-v1-OperatorService)
   
@@ -1269,6 +1272,51 @@ Empty message - just the event type matters
 
 
 
+<a name="g8e-operator-v1-InferenceRequested"></a>
+
+### InferenceRequested
+Payload for g8e.v1.operator.inference.requested. Carries the scrubbed prompt,
+the Ollama model name (which encodes the role), and generation parameters.
+The handler receives only scrubbed, tokenized prompts; it never receives
+raw vault material.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| role | [ModelRole](#g8e-operator-v1-ModelRole) |  | Chat-tier role for this request (primary, assistant, lite). |
+| model | [string](#string) |  | Ollama model name (e.g., &#34;gemma3:4b&#34;). Encodes the role; Ollama routes by model name in the API call. |
+| prompt | [string](#string) |  | Scrubbed prompt text sent to the backend. |
+| temperature | [float](#float) |  | Generation temperature override (0 = use backend default). |
+| max_tokens | [int32](#int32) |  | Maximum tokens to generate (0 = use backend default). |
+| keep_alive | [string](#string) |  | Ollama keep-alive duration override (empty = use config default). |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceResult"></a>
+
+### InferenceResult
+InferenceResult carries the generated text, usage metadata, and finish
+reason returned by the backend. The governed envelope carries this for the
+receipt and audit chain.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| text | [string](#string) |  | Generated text from the model. |
+| prompt_tokens | [int32](#int32) |  | Number of prompt tokens consumed. |
+| completion_tokens | [int32](#int32) |  | Number of completion tokens generated. |
+| total_tokens | [int32](#int32) |  | Total tokens (prompt &#43; completion). |
+| finish_reason | [string](#string) |  | Finish reason (e.g., &#34;stop&#34;, &#34;length&#34;). |
+| model | [string](#string) |  | Model that produced the result (echoed from the request or resolved by the backend). |
+
+
+
+
+
+
 <a name="g8e-operator-v1-ListDeviceLinksRequested"></a>
 
 ### ListDeviceLinksRequested
@@ -2287,6 +2335,21 @@ Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; fo
 | L3_STATUS_NOT_REQUIRED | 1 | L3 proof not required by posture (doctrine/consensus) |
 | L3_STATUS_REQUIRED_VALID | 2 | L3 proof required and valid |
 | L3_STATUS_REQUIRED_FAILED | 3 | L3 proof required but missing or invalid |
+
+
+
+<a name="g8e-operator-v1-ModelRole"></a>
+
+### ModelRole
+ModelRole identifies the chat-tier role for a governed inference request.
+Maps directly to the three tiers in ensemble&#39;s LLMSettings.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| MODEL_ROLE_UNSPECIFIED | 0 |  |
+| MODEL_ROLE_PRIMARY | 1 |  |
+| MODEL_ROLE_ASSISTANT | 2 |  |
+| MODEL_ROLE_LITE | 3 |  |
 
 
  

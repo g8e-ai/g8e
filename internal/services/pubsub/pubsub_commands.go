@@ -62,6 +62,11 @@ type OperatorPubSubService struct {
 	audit     *AuditService
 	history   *HistoryService
 
+	// inference is the governed execution handler for local LLM inference
+	// (g8ellama). Nil when cfg.Inference.Enabled is false; the handler is
+	// not registered in the handlers map when nil.
+	inference governance.ExecutionHandler
+
 	ShutdownChan chan string
 
 	handlers map[constants.EventType]func(context.Context, *PubSubCommandMessage)
@@ -109,6 +114,11 @@ type CommandServiceConfig struct {
 	Ledger         *storage.GitLedgerService
 	HistoryHandler *storage.HistoryHandler
 	Scrubbing      *scrubbing.ScrubbingService
+
+	// Inference is the governed execution handler for local LLM inference
+	// (g8ellama). Nil when inference is disabled; the handler is not
+	// registered in the handlers map when nil.
+	Inference governance.ExecutionHandler
 
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey
@@ -177,6 +187,8 @@ func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCor
 	rs.history.historyHandler = c.HistoryHandler
 	rs.history.SetScrubbingService(c.Scrubbing)
 	rs.history.auditStore = c.AuditStore
+
+	rs.inference = c.Inference
 
 	rs.buildHandlers()
 	if gatewayMode {
@@ -373,6 +385,19 @@ func (rs *OperatorPubSubService) buildHandlers() {
 				rs.logger.Error("Document delete handler failed", "error", err)
 			}
 		},
+	}
+
+	// Register the inference handler when configured. The handler is
+	// dispatched by event type through the same L5 actuator path as every
+	// other governed execution handler. Registered in both outbound and
+	// gateway mode, so a gateway can also run inference locally if Ollama
+	// is co-located.
+	if rs.inference != nil {
+		rs.handlers[constants.Event.Operator.Inference.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
+			if _, err := rs.handleInferenceRequestSync(ctx, msg); err != nil {
+				rs.logger.Error("Inference handler failed", "error", err)
+			}
+		}
 	}
 }
 
@@ -806,6 +831,9 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 	if eventType == constants.Event.Operator.A2a.CallRequested {
 		return rs.handleA2aCallRequestSync(ctx, pubsubMsg)
 	}
+	if eventType == constants.Event.Operator.Inference.Requested {
+		return rs.handleInferenceRequestSync(ctx, pubsubMsg)
+	}
 
 	handler(ctx, pubsubMsg)
 	return "", nil
@@ -1045,6 +1073,18 @@ func (rs *OperatorPubSubService) handleEvalAnswerRequestSync(ctx context.Context
 	}
 
 	return summary, nil
+}
+
+// handleInferenceRequestSync is the Actuator egress for INFERENCE
+// transactions: it dispatches the governed inference request to the
+// configured inference execution handler (which calls the Ollama backend)
+// and returns the generated text as the receipt summary so the Actuator can
+// stamp it into the signed ActionReceipt.
+func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	if rs.inference == nil {
+		return "", fmt.Errorf("inference handler not configured: %w", constants.ErrInferenceBackendNotRegistered)
+	}
+	return rs.inference.ExecuteVerifiedTransaction(ctx, constants.Event.Operator.Inference.Requested, msg)
 }
 
 // handleHeartbeatEvent processes a heartbeat event through the heartbeat service for publication.
