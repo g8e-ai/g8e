@@ -1419,4 +1419,6 @@ var (
 	ErrInferenceModelRefInvalid    = errors.New("inference: model reference invalid")
 	ErrInferenceBackendNotRegistered = errors.New("inference: backend not registered")
 	ErrInferenceRoleInvalid        = errors.New("inference: role invalid")
+	ErrInferenceOperatorNotFound   = errors.New("inference: no inference-capable operator session found")
+	ErrInferenceResultDecode       = errors.New("inference: failed to decode result envelope payload")
 )

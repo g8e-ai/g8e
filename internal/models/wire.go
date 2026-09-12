@@ -26,4 +26,11 @@ type RuntimeConfig struct {
 	LogLevel              string `json:"log_level"`
 
 	HTTPPort int `json:"http_port"`
+
+	// InferenceEnabled is true when the Operator started with
+	// --inference-enabled, marking it as an Inference Node in the g8ellama
+	// topology. The User Gateway's inference dispatch service resolves the
+	// Inference Node's operator session by querying for operators with this
+	// field set.
+	InferenceEnabled bool `json:"inference_enabled"`
 }
