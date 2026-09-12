@@ -15,9 +15,12 @@ instructions, no tools, and no agent loop.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+from app.llm.llm_types import StreamChunkFromModel, UsageMetadata
 
 from g8e_evals.arms import Arm
 from g8e_evals.harness import BindingType, LLMRoleConfig, SUTConfig, Task
@@ -32,6 +35,32 @@ def _config() -> SUTConfig:
         primary=LLMRoleConfig(provider="ollama", model="test-model"),
         arm=Arm.DIRECT,
     )
+
+
+def _stream_chunks(text: str, usage: UsageMetadata | None = None, finish_reason: str = "STOP"):
+    """Return a callable producing an async chunk stream for the SUT."""
+    def _factory(**_kwargs) -> AsyncGenerator[StreamChunkFromModel]:
+        async def _gen():
+            yield StreamChunkFromModel(text=text)
+            yield StreamChunkFromModel(
+                finish_reason=finish_reason,
+                usage_metadata=usage or UsageMetadata(),
+            )
+        return _gen()
+    return _factory
+
+
+def _usage(**overrides) -> UsageMetadata:
+    base = {
+        "prompt_token_count": 10,
+        "candidates_token_count": 5,
+        "total_token_count": 15,
+        "thinking_token_count": 0,
+        "cache_token_count": 2,
+        "usage_reported": True,
+    }
+    base.update(overrides)
+    return UsageMetadata(**base)
 
 
 def test_direct_provider_sut_requires_primary_provider_and_model():
@@ -54,20 +83,10 @@ async def test_direct_provider_sut_bypasses_g8ee_http(monkeypatch):
     """The direct arm must not make any HTTP call to g8ee."""
     sut = DirectProviderSUT(_config())
 
-    mock_response = MagicMock()
-    mock_response.text = "A direct answer."
-    mock_response.candidates = [MagicMock(finish_reason="STOP")]
-    mock_response.usage_metadata = MagicMock(
-        prompt_token_count=10,
-        candidates_token_count=5,
-        total_token_count=15,
-        thinking_token_count=0,
-        cache_token_count=2,
-        usage_reported=True,
-    )
-
     sut._provider = MagicMock()
-    sut._provider.generate_content_primary = AsyncMock(return_value=mock_response)
+    sut._provider.generate_content_stream_primary = MagicMock(
+        side_effect=_stream_chunks("A direct answer.", usage=_usage())
+    )
     sut._provider.force_close = AsyncMock()
 
     task = Task(id="1001", prompt="Write a sentence.")
@@ -86,20 +105,10 @@ async def test_direct_provider_sut_produces_no_sse_trail(monkeypatch):
     """The direct arm must not produce an SSE trail or agent events."""
     sut = DirectProviderSUT(_config())
 
-    mock_response = MagicMock()
-    mock_response.text = "Direct answer."
-    mock_response.candidates = [MagicMock(finish_reason="STOP")]
-    mock_response.usage_metadata = MagicMock(
-        prompt_token_count=10,
-        candidates_token_count=5,
-        total_token_count=15,
-        thinking_token_count=0,
-        cache_token_count=2,
-        usage_reported=True,
-    )
-
     sut._provider = MagicMock()
-    sut._provider.generate_content_primary = AsyncMock(return_value=mock_response)
+    sut._provider.generate_content_stream_primary = MagicMock(
+        side_effect=_stream_chunks("Direct answer.", usage=_usage())
+    )
     sut._provider.force_close = AsyncMock()
 
     task = Task(id="1001", prompt="Write a sentence.")
@@ -116,20 +125,12 @@ async def test_direct_provider_sut_no_receipt_collected(monkeypatch):
     """The direct arm must not collect or verify any ActionReceipt."""
     sut = DirectProviderSUT(_config())
 
-    mock_response = MagicMock()
-    mock_response.text = "Answer."
-    mock_response.candidates = [MagicMock(finish_reason="STOP")]
-    mock_response.usage_metadata = MagicMock(
-        prompt_token_count=5,
-        candidates_token_count=3,
-        total_token_count=8,
-        thinking_token_count=0,
-        cache_token_count=2,
-        usage_reported=True,
-    )
-
     sut._provider = MagicMock()
-    sut._provider.generate_content_primary = AsyncMock(return_value=mock_response)
+    sut._provider.generate_content_stream_primary = MagicMock(
+        side_effect=_stream_chunks("Answer.", usage=_usage(
+            prompt_token_count=5, candidates_token_count=3, total_token_count=8
+        ))
+    )
     sut._provider.force_close = AsyncMock()
 
     task = Task(id="1001", prompt="Write a sentence.")
@@ -147,7 +148,9 @@ async def test_direct_provider_sut_handles_provider_error(monkeypatch):
     sut = DirectProviderSUT(_config())
 
     sut._provider = MagicMock()
-    sut._provider.generate_content_primary = AsyncMock(side_effect=RuntimeError("connection refused"))
+    sut._provider.generate_content_stream_primary = MagicMock(
+        side_effect=RuntimeError("connection refused")
+    )
     sut._provider.force_close = AsyncMock()
 
     task = Task(id="1001", prompt="Write a sentence.")
@@ -175,20 +178,16 @@ async def test_direct_provider_sut_check_settings_is_noop():
 async def test_direct_call_evidence_captures_token_usage():
     sut = DirectProviderSUT(_config())
 
-    mock_response = MagicMock()
-    mock_response.text = "Answer with tokens."
-    mock_response.candidates = [MagicMock(finish_reason="STOP")]
-    mock_response.usage_metadata = MagicMock(
-        prompt_token_count=100,
-        candidates_token_count=50,
-        total_token_count=150,
-        thinking_token_count=10,
-        cache_token_count=20,
-        usage_reported=True,
-    )
-
     sut._provider = MagicMock()
-    sut._provider.generate_content_primary = AsyncMock(return_value=mock_response)
+    sut._provider.generate_content_stream_primary = MagicMock(
+        side_effect=_stream_chunks("Answer with tokens.", usage=_usage(
+            prompt_token_count=100,
+            candidates_token_count=50,
+            total_token_count=150,
+            thinking_token_count=10,
+            cache_token_count=20,
+        ))
+    )
     sut._provider.force_close = AsyncMock()
 
     task = Task(id="1001", prompt="Write a sentence.")
@@ -208,20 +207,13 @@ async def test_direct_call_evidence_captures_token_usage():
 @pytest.mark.asyncio
 async def test_direct_call_evidence_uses_provider_outbound_payload_hash():
     sut = DirectProviderSUT(_config())
-    mock_response = MagicMock()
-    mock_response.text = "Answer."
-    mock_response.candidates = [MagicMock(finish_reason="STOP")]
-    mock_response.usage_metadata = MagicMock(
-        prompt_token_count=5,
-        candidates_token_count=3,
-        total_token_count=8,
-        thinking_token_count=0,
-        cache_token_count=2,
-        usage_reported=True,
-    )
     sut._provider = MagicMock()
     sut._provider.input_artifact_hash = "provider-outbound-payload-hash"
-    sut._provider.generate_content_primary = AsyncMock(return_value=mock_response)
+    sut._provider.generate_content_stream_primary = MagicMock(
+        side_effect=_stream_chunks("Answer.", usage=_usage(
+            prompt_token_count=5, candidates_token_count=3, total_token_count=8
+        ))
+    )
     sut._provider.force_close = AsyncMock()
 
     response = await sut.get_answer(Task(id="1001", prompt="Write a sentence."))
@@ -230,3 +222,86 @@ async def test_direct_call_evidence_uses_provider_outbound_payload_hash():
     assert response.chat_evidence.model_dump()["input_artifact_hash"] == (
         "provider-outbound-payload-hash"
     )
+
+
+@pytest.mark.asyncio
+async def test_direct_provider_sut_observation_carries_native_timing():
+    """The collapsed stream surfaces provider-native durations on the
+    InferenceObservation: TTFT from first-chunk arrival, generation
+    duration from eval_duration, throughput from eval_count/eval_duration."""
+    sut = DirectProviderSUT(_config())
+    usage = _usage(
+        time_to_first_token_seconds=0.4,
+        prompt_eval_duration_seconds=0.01,
+        eval_duration_seconds=0.04,
+        total_duration_seconds=0.052,
+        load_duration_seconds=0.002,
+    )
+    sut._provider = MagicMock()
+    sut._provider.generate_content_stream_primary = MagicMock(
+        side_effect=_stream_chunks("Answer.", usage=usage)
+    )
+    sut._provider.force_close = AsyncMock()
+
+    response = await sut.get_answer(Task(id="1001", prompt="Write a sentence."))
+
+    assert len(response.inference_observations) == 1
+    obs = response.inference_observations[0]
+    assert obs.time_to_first_token_seconds == 0.4
+    assert obs.generation_duration_seconds == 0.04
+    # 5 output tokens / 0.04 s eval duration
+    assert obs.output_throughput_tokens_per_second == 125.0
+    assert obs.provider_call_latency_seconds is not None
+    assert obs.provider_call_latency_seconds > 0.0
+
+    assert response.chat_evidence is not None
+    dump = response.chat_evidence.model_dump()
+    assert dump["time_to_first_token_seconds"] == 0.4
+    assert dump["prompt_eval_duration_seconds"] == 0.01
+    assert dump["eval_duration_seconds"] == 0.04
+    assert dump["total_duration_seconds"] == 0.052
+    assert dump["load_duration_seconds"] == 0.002
+
+
+@pytest.mark.asyncio
+async def test_direct_provider_sut_throughput_falls_back_to_elapsed():
+    """When the provider does not report eval_duration, output throughput
+    derives from the measured monotonic span instead."""
+    sut = DirectProviderSUT(_config())
+    usage = _usage(candidates_token_count=5)
+    sut._provider = MagicMock()
+    sut._provider.generate_content_stream_primary = MagicMock(
+        side_effect=_stream_chunks("Answer.", usage=usage)
+    )
+    sut._provider.force_close = AsyncMock()
+
+    response = await sut.get_answer(Task(id="1001", prompt="Write a sentence."))
+
+    obs = response.inference_observations[0]
+    assert obs.generation_duration_seconds is None
+    assert obs.time_to_first_token_seconds is None
+    assert obs.output_throughput_tokens_per_second is not None
+    assert obs.output_throughput_tokens_per_second > 0.0
+
+
+@pytest.mark.asyncio
+async def test_direct_provider_sut_failed_call_measures_latency_only():
+    """A failed provider call still reports the measured monotonic span;
+    TTFT and generation duration remain unmeasured (None)."""
+    sut = DirectProviderSUT(_config())
+    sut._provider = MagicMock()
+    sut._provider.generate_content_stream_primary = MagicMock(
+        side_effect=RuntimeError("connection refused")
+    )
+    sut._provider.force_close = AsyncMock()
+
+    response = await sut.get_answer(Task(id="1001", prompt="Write a sentence."))
+
+    assert len(response.inference_observations) == 1
+    obs = response.inference_observations[0]
+    assert obs.error == "connection refused"
+    assert obs.provider_call_latency_seconds is not None
+    assert obs.provider_call_latency_seconds >= 0.0
+    assert obs.time_to_first_token_seconds is None
+    assert obs.generation_duration_seconds is None
+    assert obs.output_throughput_tokens_per_second is None

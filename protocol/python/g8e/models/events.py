@@ -126,6 +126,11 @@ class ModelCallTelemetry(G8eBaseModel):
     total_tokens: int = 0
     usage_reported: bool = False
     finish_reason: str | None = None
+    time_to_first_token_seconds: float | None = None
+    generation_duration_seconds: float | None = None
+    prompt_eval_duration_seconds: float | None = None
+    total_duration_seconds: float | None = None
+    load_duration_seconds: float | None = None
     retry_count: int = 0
     succeeded: bool = True
     error_type: str | None = None

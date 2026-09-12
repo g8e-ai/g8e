@@ -790,12 +790,17 @@ _RUNNER_COLLECTION_TOOL = "g8e_evals-runner-1.0.0"
 _ORCHESTRATOR_SCOPE = f"{platform.system().lower()}/{platform.machine()}/cpu"
 
 
-def _unavailable(field_name: str, availability: MeasurementAvailability, reason: str) -> UnavailableMeasurement:
-    """Build a typed unavailable-measurement entry scoped to the provider remote."""
+def _unavailable(
+    field_name: str,
+    availability: MeasurementAvailability,
+    reason: str,
+    scope: MeasurementScope = MeasurementScope.PROVIDER_REMOTE,
+) -> UnavailableMeasurement:
+    """Build a typed unavailable-measurement entry."""
     return UnavailableMeasurement(
         field_name=field_name,
         availability=availability,
-        scope=MeasurementScope.PROVIDER_REMOTE,
+        scope=scope,
         reason=reason,
     )
 
@@ -849,6 +854,44 @@ def _build_unavailable_measurements(obs: InferenceObservation) -> list[Unavailab
         MeasurementAvailability.NOT_APPLICABLE,
         "end-to-end task latency not measured for direct provider calls; provider_call_latency_seconds is measured instead",
     ))
+
+    # Conditional declarations for fields that are None on failed calls,
+    # unreported usage, or boundaries that cannot observe them. Measured
+    # values (including measured zero) never get an entry.
+    conditional_fields: tuple[tuple[str, float | None, MeasurementScope, str], ...] = (
+        (
+            "provider_call_latency_seconds",
+            obs.provider_call_latency_seconds,
+            MeasurementScope.ORCHESTRATOR_LOCAL,
+            "provider call latency not measured at the observation boundary",
+        ),
+        (
+            "time_to_first_token_seconds",
+            obs.time_to_first_token_seconds,
+            MeasurementScope.ORCHESTRATOR_LOCAL,
+            "time to first token not observed at the observation boundary",
+        ),
+        (
+            "generation_duration_seconds",
+            obs.generation_duration_seconds,
+            MeasurementScope.PROVIDER_REMOTE,
+            "generation duration not reported by the provider",
+        ),
+        (
+            "output_throughput_tokens_per_second",
+            obs.output_throughput_tokens_per_second,
+            MeasurementScope.PROVIDER_REMOTE,
+            "output throughput not measurable: token count or duration unavailable",
+        ),
+    )
+    for fname, value, scope, reason in conditional_fields:
+        if value is None:
+            entries.append(_unavailable(
+                fname,
+                MeasurementAvailability.UNAVAILABLE,
+                reason,
+                scope=scope,
+            ))
 
     # Hidden reasoning throughput: unavailable when not reported
     if obs.hidden_reasoning_throughput_tokens_per_second is None:

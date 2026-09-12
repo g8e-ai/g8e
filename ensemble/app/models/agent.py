@@ -296,6 +296,11 @@ class TurnResult(G8eBaseModel):
     thinking_tokens: int = 0
     cache_tokens: int = 0
     usage_reported: bool = False
+    time_to_first_token_seconds: float | None = None
+    prompt_eval_duration_seconds: float | None = None
+    eval_duration_seconds: float | None = None
+    total_duration_seconds: float | None = None
+    load_duration_seconds: float | None = None
 
 
 class ToolCallResponse(G8eBaseModel):

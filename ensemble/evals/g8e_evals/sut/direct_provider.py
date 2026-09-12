@@ -36,10 +36,10 @@ from app.llm.model_evidence import (
 )
 from app.llm.llm_types import (
     Content,
-    GenerateContentResponse,
     Part,
     PrimaryLLMSettings,
     ThinkingConfig,
+    UsageMetadata,
 )
 from app.models.model_telemetry import ModelBoundaryPrivacyAttestation
 from app.models.settings import LLMSettings
@@ -71,6 +71,11 @@ class DirectCallEvidence(BaseModel):
     thinking_token_count: int = 0
     cache_token_count: int = 0
     usage_reported: bool = False
+    time_to_first_token_seconds: float | None = None
+    prompt_eval_duration_seconds: float | None = None
+    eval_duration_seconds: float | None = None
+    total_duration_seconds: float | None = None
+    load_duration_seconds: float | None = None
     monotonic_start: float = 0.0
     monotonic_end: float = 0.0
     input_artifact_hash: str = ""
@@ -82,6 +87,23 @@ class DirectCallEvidence(BaseModel):
     @property
     def elapsed_s(self) -> float:
         return self.monotonic_end - self.monotonic_start
+
+
+def _usage_is_reported(usage: UsageMetadata) -> bool:
+    """Whether a stream chunk's UsageMetadata carries real measurements.
+
+    Interleaved chunks carry a default-constructed UsageMetadata; only a
+    chunk with reported usage or any measured timing field replaces the
+    accumulated usage snapshot.
+    """
+    return (
+        usage.usage_reported
+        or usage.time_to_first_token_seconds is not None
+        or usage.prompt_eval_duration_seconds is not None
+        or usage.eval_duration_seconds is not None
+        or usage.total_duration_seconds is not None
+        or usage.load_duration_seconds is not None
+    )
 
 
 class DirectProviderSUT:
@@ -139,14 +161,26 @@ class DirectProviderSUT:
         })
         start = time.monotonic()
         try:
-            response: GenerateContentResponse = await self._provider.generate_content_primary(
+            stream = self._provider.generate_content_stream_primary(
                 model=self._model,
                 contents=contents,
                 primary_llm_settings=primary_settings,
             )
+            text_parts: list[str] = []
+            finish_reason: str | None = None
+            usage = UsageMetadata()
+            async for chunk in stream:
+                if chunk.text and not chunk.thought:
+                    text_parts.append(chunk.text)
+                if chunk.finish_reason is not None or _usage_is_reported(chunk.usage_metadata):
+                    usage = chunk.usage_metadata
+                if chunk.finish_reason:
+                    finish_reason = chunk.finish_reason
+            answer_text = "".join(text_parts)
         except Exception as e:
             input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
             end = time.monotonic()
+            elapsed = end - start
             logger.warning("Direct provider call failed for task %s: %s", task.id, e)
             evidence = DirectCallEvidence(
                 provider=self._provider_str,
@@ -163,6 +197,7 @@ class DirectProviderSUT:
                 model_variant_id=self._model,
                 provider=self._provider_str,
                 model=self._model,
+                provider_call_latency_seconds=elapsed if elapsed > 0 else None,
                 monotonic_start=start,
                 monotonic_end=end,
                 input_artifact_hash=input_artifact_hash,
@@ -180,32 +215,42 @@ class DirectProviderSUT:
 
         input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
         end = time.monotonic()
-        answer_text = response.text or ""
-        usage = response.usage_metadata
 
+        # An empty completion at the streaming boundary surfaces as an
+        # empty answer rather than OllamaEmptyResponseError; record the
+        # condition explicitly on the evidence and observation.
+        error = None if answer_text else "empty response content from provider"
         evidence = DirectCallEvidence(
             provider=self._provider_str,
             model=self._model,
-            finish_reason=response.candidates[0].finish_reason if response.candidates else None,
+            finish_reason=finish_reason,
             prompt_token_count=usage.prompt_token_count,
             candidates_token_count=usage.candidates_token_count,
             total_token_count=usage.total_token_count,
             thinking_token_count=usage.thinking_token_count,
             cache_token_count=usage.cache_token_count,
             usage_reported=usage.usage_reported,
+            time_to_first_token_seconds=usage.time_to_first_token_seconds,
+            prompt_eval_duration_seconds=usage.prompt_eval_duration_seconds,
+            eval_duration_seconds=usage.eval_duration_seconds,
+            total_duration_seconds=usage.total_duration_seconds,
+            load_duration_seconds=usage.load_duration_seconds,
             monotonic_start=start,
             monotonic_end=end,
             input_artifact_hash=input_artifact_hash,
             output_artifact_hash=model_boundary_hash(answer_text),
             model_boundary_privacy=recorded_model_boundary_privacy(self._provider),
+            error=error,
         )
 
         elapsed = end - start
-        throughput = (
-            usage.candidates_token_count / elapsed
-            if usage.candidates_token_count and elapsed > 0
-            else None
-        )
+        eval_duration = usage.eval_duration_seconds
+        if usage.candidates_token_count and eval_duration and eval_duration > 0:
+            throughput = usage.candidates_token_count / eval_duration
+        elif usage.candidates_token_count and elapsed > 0:
+            throughput = usage.candidates_token_count / elapsed
+        else:
+            throughput = None
         inference_obs = InferenceObservation(
             inference_id=f"inf-{task.id}-{start}",
             role="primary",
@@ -213,6 +258,8 @@ class DirectProviderSUT:
             provider=self._provider_str,
             model=self._model,
             provider_call_latency_seconds=elapsed if elapsed > 0 else None,
+            time_to_first_token_seconds=usage.time_to_first_token_seconds,
+            generation_duration_seconds=eval_duration,
             output_throughput_tokens_per_second=throughput,
             prompt_token_count=usage.prompt_token_count if usage.prompt_token_count else None,
             candidates_token_count=usage.candidates_token_count if usage.candidates_token_count else None,
@@ -220,11 +267,12 @@ class DirectProviderSUT:
             thinking_token_count=usage.thinking_token_count if usage.thinking_token_count else None,
             cache_token_count=usage.cache_token_count if usage.cache_token_count else None,
             usage_reported=usage.usage_reported,
-            finish_reason=response.candidates[0].finish_reason if response.candidates else None,
+            finish_reason=finish_reason,
             input_artifact_hash=input_artifact_hash,
             output_artifact_hash=model_boundary_hash(answer_text),
             monotonic_start=start,
             monotonic_end=end,
+            error=error,
         )
 
         return Response(

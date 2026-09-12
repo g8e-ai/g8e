@@ -164,6 +164,40 @@ class FailingFakeSUT:
 
 
 @dataclass
+class FailedCallFakeSUT:
+    """Fake SUT that returns a Response carrying a failed-call observation.
+
+    Simulates the direct-arm failure path where the provider call fails:
+    the SUT returns a Response (no exception escapes) carrying one
+    InferenceObservation with an error and all timing/usage fields None.
+    """
+
+    model_id: str
+    _call_count: int = field(default=0)
+
+    async def get_answer(self, task: Task) -> Response:
+        self._call_count += 1
+        observation = InferenceObservation(
+            inference_id=f"inf-{self._call_count}",
+            role=ModelRole.PRIMARY,
+            model_variant_id=self.model_id,
+            provider="ollama",
+            model=self.model_id,
+            provider_call_latency_seconds=0.02,
+            error="simulated provider failure",
+        )
+        return Response(
+            answer="",
+            model=f"ollama:{self.model_id}",
+            arm=Arm.DIRECT,
+            inference_observations=[observation],
+        )
+
+    async def close(self) -> None:
+        self._call_count = 0
+
+
+@dataclass
 class FakeGrader:
     """Deterministic fake grader that always passes."""
 
@@ -187,6 +221,14 @@ def _make_failing_sut_factory():
     def factory(cohort: ModelCohort, arm: Arm):
         model_id = cohort.role_bindings[0].model_id
         return FailingFakeSUT(model_id=model_id)
+    return factory
+
+
+def _make_failed_call_sut_factory():
+    """Create a SUT factory that returns FailedCallFakeSUT instances."""
+    def factory(cohort: ModelCohort, arm: Arm):
+        model_id = cohort.role_bindings[0].model_id
+        return FailedCallFakeSUT(model_id=model_id)
     return factory
 
 
@@ -506,6 +548,56 @@ class TestHonestMissingness:
             assert obs["time_to_first_token_seconds"] is not None
             assert obs["generation_duration_seconds"] is not None
             assert obs["output_throughput_tokens_per_second"] is not None
+
+
+class TestFailedCallObservations:
+    """Failed provider calls materialize valid resource observations.
+
+    A failed call carries measured monotonic-span latency but no TTFT,
+    generation duration, or throughput. Every None measurement field on
+    the ResourceObservation must carry a typed unavailable_measurements
+    entry — the smoke-run ValidationError regression.
+    """
+
+    def test_failed_call_observation_has_unavailable_entries_for_none_fields(
+        self, tmp_path: Path
+    ):
+        spec = _make_spec()
+        runner = CampaignRunner(
+            spec=spec,
+            sut_factory=_make_failed_call_sut_factory(),
+            tasks=_make_tasks(),
+            grader=FakeGrader(),
+            output_dir=tmp_path,
+        )
+        result = asyncio.run(runner.run())
+
+        report = result.report_dir
+        observations_text = (report / RESOURCE_OBSERVATIONS_JSONL).read_text().strip()
+        observation_lines = [line for line in observations_text.splitlines() if line.strip()]
+        expected_inferences = len(_TASK_IDS) * len(_COHORT_IDS) * len(_ARM_IDS) * len(_REPLICATE_IDS)
+        assert len(observation_lines) == expected_inferences, (
+            "failed provider calls must still materialize one resource observation each"
+        )
+
+        for line in observation_lines:
+            obs = json.loads(line)
+            # Measured monotonic-span latency is present
+            assert obs["provider_call_latency_seconds"] == 0.02
+            # Unmeasured warm-inference fields are None with typed entries
+            assert obs["time_to_first_token_seconds"] is None
+            assert obs["generation_duration_seconds"] is None
+            assert obs["output_throughput_tokens_per_second"] is None
+            unavailable = {um["field_name"] for um in obs["unavailable_measurements"]}
+            for field_name in (
+                "time_to_first_token_seconds",
+                "generation_duration_seconds",
+                "output_throughput_tokens_per_second",
+                "hidden_reasoning_throughput_tokens_per_second",
+            ):
+                assert field_name in unavailable, (
+                    f"{field_name} is None but has no unavailable_measurements entry"
+                )
 
 
 # ---------------------------------------------------------------------------

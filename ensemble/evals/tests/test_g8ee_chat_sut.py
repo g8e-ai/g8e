@@ -933,6 +933,54 @@ def test_extract_inference_observations_malformed_text_completed_skips_silently(
     assert obs == []
 
 
+def test_extract_inference_observations_maps_native_timing_fields():
+    """Provider-native durations and TTFT on ModelCallTelemetry map onto
+    the InferenceObservation. Absent fields stay None."""
+    sut = _make_sut()
+    model_calls = [
+        {
+            "agent_role": "primary",
+            "provider": "OllamaProvider",
+            "model": "qwen3:8b",
+            "monotonic_start": 10.0,
+            "monotonic_end": 12.5,
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "usage_reported": True,
+            "finish_reason": "stop",
+            "succeeded": True,
+            "time_to_first_token_seconds": 0.4,
+            "generation_duration_seconds": 2.1,
+            "prompt_eval_duration_seconds": 0.3,
+            "total_duration_seconds": 2.5,
+            "load_duration_seconds": 0.05,
+        },
+        {
+            "agent_role": "lite",
+            "provider": "OllamaProvider",
+            "model": "smollm2:360m",
+            "monotonic_start": 13.0,
+            "monotonic_end": 13.5,
+            "input_tokens": 40,
+            "output_tokens": 10,
+            "total_tokens": 50,
+            "usage_reported": True,
+            "finish_reason": "stop",
+            "succeeded": True,
+            # Non-streaming producer: no TTFT or native durations
+        },
+    ]
+    trail = _make_completed_trail(model_calls)
+    obs = sut._extract_inference_observations(trail, "g8e.v1.ai.llm.chat.iteration.text.completed")
+
+    assert len(obs) == 2
+    assert obs[0].time_to_first_token_seconds == 0.4
+    assert obs[0].generation_duration_seconds == 2.1
+    assert obs[1].time_to_first_token_seconds is None
+    assert obs[1].generation_duration_seconds is None
+
+
 def test_extract_inference_observations_does_not_retain_restricted_plaintext():
     """The InferenceObservation carries only artifact hashes, not raw prompt
     content or model output. Restricted plaintext is not retained on the
