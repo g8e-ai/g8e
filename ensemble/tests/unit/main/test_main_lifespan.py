@@ -23,7 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.generated_paths import PathConstants, PortConstants
+from app.constants.generated_paths import PortConstants
 from fastapi import FastAPI
 
 from app.main import lifespan
@@ -131,6 +131,7 @@ def _configure_factory(mocks):
     mock_services.approval_service = MagicMock()
     mock_services.db_service = MagicMock()
     mock_services.db_service.close = AsyncMock()
+    mock_services.internal_http_client = MagicMock()
 
     factory.create_all_services.return_value = mock_services
     factory.bind_to_app_state = MagicMock()

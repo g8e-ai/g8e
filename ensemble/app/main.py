@@ -90,7 +90,7 @@ from .errors import ConfigurationError
 from .services.infra.app_enrollment_service import AppEnrollmentService
 from .services.infra.settings_service import SettingsService
 from .services.service_factory import ServiceFactory
-from .llm.factory import set_settings
+from .llm.factory import set_settings, set_internal_http_client
 from .utils.service_init import initialize_g8e_service
 from .utils.version import get_version
 from .llm import clear_provider_cache
@@ -262,6 +262,14 @@ async def lifespan(app: FastAPI):
         )
         ServiceFactory.bind_to_app_state(app, all_services)
         logger.info("All domain services created and bound to app state")
+
+        # Inject the InternalHttpClient singleton into the LLM provider
+        # factory so the G8E governed-dispatch provider can route inference
+        # through the gateway's /api/v1/inference/dispatch endpoint. The
+        # client is owned by the application lifecycle; the factory does
+        # not own it.
+        set_internal_http_client(all_services.internal_http_client)
+        logger.info("InternalHttpClient injected into LLM provider factory")
 
         # -- Phase 6: Lifecycle start --
         await ServiceFactory.start_services(all_services)

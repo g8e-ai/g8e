@@ -243,6 +243,7 @@ class FakeG8eClient:
         self.revoke_intent = AsyncMock()
         self.push_agent_state = AsyncMock()
         self.push_run_state = AsyncMock()
+        self.dispatch_inference = AsyncMock()
         self.get = AsyncMock()
         self.post = AsyncMock()
         self.put = AsyncMock()

@@ -131,7 +131,6 @@ class G8EProvider(LLMProvider):
     async def _close_resources(self):
         """Clean up provider resources. The HTTP client is owned by the
         application lifecycle, not by this provider, so close is a no-op."""
-        pass
 
     @staticmethod
     def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
