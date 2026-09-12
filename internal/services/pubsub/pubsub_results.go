@@ -107,6 +107,24 @@ func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result 
 	return nil
 }
 
+// PublishInferenceResult publishes an inference result via Operator pub/sub.
+// The result envelope carries the InferenceResult proto as payload and is
+// correlated with the original command by message ID on the results channel.
+// The User Gateway's dispatch service decodes the InferenceResult from this
+// envelope's payload.
+func (rr *PubSubResultsService) PublishInferenceResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
+	eventType := constants.Event.Operator.Inference.Completed
+
+	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
+		return fmt.Errorf("pubsub: publish inference result: %w", err)
+	}
+
+	rr.logger.Info("Inference result transmitted to g8e",
+		"operator_session_id", rr.config.OperatorSessionId,
+		"event_type", eventType)
+	return nil
+}
+
 // PublishExecutionStatus publishes periodic status updates during command execution.
 func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg *PubSubCommandMessage) error {
 	reflectMsg := status.ProtoReflect()

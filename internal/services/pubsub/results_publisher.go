@@ -27,6 +27,7 @@ type ResultsPublisher interface {
 	PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
 	PublishFsListResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
 	PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
+	PublishInferenceResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
 	PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg *PubSubCommandMessage) error
 	PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error
 	PublishActionReceipt(ctx context.Context, env *commonv1.GovernanceEnvelope, receipt *operatorv1.ActionReceipt) error

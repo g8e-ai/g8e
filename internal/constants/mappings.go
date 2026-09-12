@@ -120,6 +120,9 @@ var eventToResultAction = map[EventType]ActionType{
 
 	Event.Operator.FsGrep.Completed: actionResult(ActionTypeFsGrep),
 	Event.Operator.FsGrep.Failed:    actionResult(ActionTypeFsGrep),
+
+	Event.Operator.Inference.Completed: actionResult(ActionTypeInference),
+	Event.Operator.Inference.Failed:    actionResult(ActionTypeInference),
 }
 
 // MapEventTypeToResultActionType maps protobuf event types to GovernanceEnvelope result action types.

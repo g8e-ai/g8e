@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	execution "github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/v2/internal/services/storage"
@@ -65,7 +66,7 @@ type OperatorPubSubService struct {
 	// inference is the governed execution handler for local LLM inference
 	// (g8ellama). Nil when cfg.Inference.Enabled is false; the handler is
 	// not registered in the handlers map when nil.
-	inference governance.ExecutionHandler
+	inference *inference.InferenceExecutionHandler
 
 	ShutdownChan chan string
 
@@ -118,7 +119,7 @@ type CommandServiceConfig struct {
 	// Inference is the governed execution handler for local LLM inference
 	// (g8ellama). Nil when inference is disabled; the handler is not
 	// registered in the handlers map when nil.
-	Inference governance.ExecutionHandler
+	Inference *inference.InferenceExecutionHandler
 
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey
@@ -1077,14 +1078,38 @@ func (rs *OperatorPubSubService) handleEvalAnswerRequestSync(ctx context.Context
 
 // handleInferenceRequestSync is the Actuator egress for INFERENCE
 // transactions: it dispatches the governed inference request to the
-// configured inference execution handler (which calls the Ollama backend)
-// and returns the generated text as the receipt summary so the Actuator can
-// stamp it into the signed ActionReceipt.
+// configured inference execution handler (which calls the Ollama backend),
+// publishes the InferenceResult proto to the results channel so the User
+// Gateway's dispatch service can decode it, and returns the generated text
+// as the receipt summary so the Actuator can stamp it into the signed
+// ActionReceipt.
 func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.inference == nil {
 		return "", fmt.Errorf("inference handler not configured: %w", constants.ErrInferenceBackendNotRegistered)
 	}
-	return rs.inference.ExecuteVerifiedTransaction(ctx, constants.Event.Operator.Inference.Requested, msg)
+	resp, err := rs.inference.ExecuteInference(ctx, msg)
+	if err != nil {
+		return "", err
+	}
+
+	// Publish the InferenceResult proto to the results channel so the User
+	// Gateway's dispatch service can decode it from the result envelope
+	// payload. Best-effort: the receipt is already stamped by the L5
+	// actuator; a publish failure does not fail the execution.
+	if rs.results != nil {
+		resultProto := resp.ToProtoInferenceResult()
+		if pubErr := rs.results.PublishInferenceResult(ctx, resultProto, msg); pubErr != nil {
+			rs.logger.Warn("Failed to publish inference result to results channel",
+				string(constants.ConnectionStateError), pubErr,
+				"message_id", msg.ID)
+		}
+	}
+
+	summary := resp.Text
+	if len(summary) > constants.ReceiptSummaryMaxBytes {
+		summary = summary[:constants.ReceiptSummaryMaxBytes]
+	}
+	return summary, nil
 }
 
 // handleHeartbeatEvent processes a heartbeat event through the heartbeat service for publication.

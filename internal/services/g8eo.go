@@ -322,7 +322,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// OperatorPubSubService config alongside the existing ExecutionService
 	// and FileEditService. The handler is dispatched by event type, not by
 	// replacing the command service.
-	var inferenceHandler governance.ExecutionHandler
+	var inferenceHandler *inference.InferenceExecutionHandler
 	if vs.config.Inference.Enabled {
 		ollamaBackend := inference.NewOllamaBackend(vs.config.Inference.OllamaEndpoint, vs.logger)
 		inferenceHandler = inference.NewInferenceExecutionHandler(ollamaBackend, vs.config, scrubbingService, vs.logger)

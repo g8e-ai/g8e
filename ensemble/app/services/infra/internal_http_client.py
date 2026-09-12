@@ -32,6 +32,8 @@ from app.models.internal_api import (
     ObserveProducerAgentStateRequest,
     ObserveProducerRunStateRequest,
     ObserveProducerResponse,
+    InferenceDispatchRequest,
+    InferenceDispatchResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -465,3 +467,49 @@ class InternalHttpClient:
             )
 
         return ObserveProducerResponse.model_validate(response.json())
+
+    async def dispatch_inference(
+        self,
+        request: InferenceDispatchRequest,
+    ) -> InferenceDispatchResponse:
+        """POST a governed inference request to the gateway dispatch endpoint.
+
+        The gateway resolves the Inference Node's operator session from the
+        requestor's mTLS identity, constructs a governed envelope, dispatches
+        it through the full L1–L5 gauntlet on the Inference Node, and returns
+        the signed receipt and InferenceResult. This is the transport layer
+        underneath the ensemble chat pipeline's ``G8E`` LLM provider.
+        """
+        self._ensure_mtls()
+        try:
+            response = await self._http.post(
+                GatewayAPIPaths.INFERENCE_DISPATCH,
+                json_data=request,
+            )
+        except Exception as e:
+            raise NetworkError(
+                f"[HTTP-CLIENT] Inference dispatch failed: {e}",
+                component=G8EE_COMPONENT,
+                cause=e,
+            ) from e
+
+        if not response.is_success:
+            logger.warning(
+                "[HTTP-CLIENT] Inference dispatch rejected",
+                extra={
+                    "status": response.status_code,
+                    "error": response.text,
+                    "role": request.role,
+                },
+            )
+            raise NetworkError(
+                f"[HTTP-CLIENT] Inference dispatch returned HTTP {response.status_code}",
+                component=G8EE_COMPONENT,
+                details={
+                    "status_code": response.status_code,
+                    "response": response.text,
+                    "role": request.role,
+                },
+            )
+
+        return InferenceDispatchResponse.model_validate(response.json())

@@ -70,6 +70,10 @@ func (m *mockResultsPublisher) PublishFsGrepResult(ctx context.Context, result p
 	return nil
 }
 
+func (m *mockResultsPublisher) PublishInferenceResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
+	return nil
+}
+
 func (m *mockResultsPublisher) PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg *PubSubCommandMessage) error {
 	return nil
 }

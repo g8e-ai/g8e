@@ -48,23 +48,41 @@ func NewInferenceExecutionHandler(backend Backend, cfg *config.Config, scrubbing
 }
 
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler. It is
-// called by the L5 actuator after L1–L4 verification passes. It decodes the
-// protobuf InferenceRequested payload, scrubs the prompt, resolves the
-// default model for the role, calls Backend.Generate, and returns the
-// generated text (bounded to ReceiptSummaryMaxBytes) as the receipt summary.
+// called by the L5 actuator after L1–L4 verification passes. It delegates to
+// ExecuteInference and returns the generated text (bounded to
+// ReceiptSummaryMaxBytes) as the receipt summary.
 func (h *InferenceExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
+	resp, err := h.ExecuteInference(ctx, cmdMsg)
+	if err != nil {
+		return "", err
+	}
+	summary := resp.Text
+	if len(summary) > constants.ReceiptSummaryMaxBytes {
+		summary = summary[:constants.ReceiptSummaryMaxBytes]
+	}
+	return summary, nil
+}
+
+// ExecuteInference decodes the protobuf InferenceRequested payload, scrubs the
+// prompt through the existing scrubbing.ScrubbingService, resolves the
+// default model for the role, calls Backend.Generate, and returns the full
+// GenerateResponse. The caller (handleInferenceRequestSync) constructs and
+// publishes the InferenceResult proto from this response. The handler
+// receives only scrubbed, tokenized prompts; it never receives raw vault
+// material.
+func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg governance.CommandMessage) (*models.GenerateResponse, error) {
 	if h.backend == nil {
-		return "", fmt.Errorf("inference handler: %w", constants.ErrInferenceBackendNotRegistered)
+		return nil, fmt.Errorf("inference handler: %w", constants.ErrInferenceBackendNotRegistered)
 	}
 
 	payloadBytes := cmdMsg.GetPayload()
 	if len(payloadBytes) == 0 {
-		return "", fmt.Errorf("inference handler: empty payload: %w", constants.ErrPubSubEmptyPayload)
+		return nil, fmt.Errorf("inference handler: empty payload: %w", constants.ErrPubSubEmptyPayload)
 	}
 
 	req := &operatorv1.InferenceRequested{}
 	if err := proto.Unmarshal(payloadBytes, req); err != nil {
-		return "", fmt.Errorf("inference handler: unmarshal payload: %w", err)
+		return nil, fmt.Errorf("inference handler: unmarshal payload: %w", err)
 	}
 
 	infReq := models.FromProtoInferenceRequested(req)
@@ -83,7 +101,7 @@ func (h *InferenceExecutionHandler) ExecuteVerifiedTransaction(ctx context.Conte
 	defaultModel := h.defaultModelForRole(infReq.Role)
 	genReq := infReq.ToGenerateRequest(defaultModel)
 	if genReq.Model == "" {
-		return "", fmt.Errorf("inference handler: %w: role %d", constants.ErrInferenceModelRefInvalid, infReq.Role)
+		return nil, fmt.Errorf("inference handler: %w: role %d", constants.ErrInferenceModelRefInvalid, infReq.Role)
 	}
 	// Apply config default keep-alive when the request does not override it.
 	if genReq.KeepAlive == "" {
@@ -97,17 +115,10 @@ func (h *InferenceExecutionHandler) ExecuteVerifiedTransaction(ctx context.Conte
 
 	resp, err := h.backend.Generate(ctx, genReq)
 	if err != nil {
-		return "", fmt.Errorf("inference handler: %w", err)
+		return nil, fmt.Errorf("inference handler: %w", err)
 	}
 
-	// Build the receipt summary from the generated text, bounded to
-	// ReceiptSummaryMaxBytes.
-	summary := resp.Text
-	if len(summary) > constants.ReceiptSummaryMaxBytes {
-		summary = summary[:constants.ReceiptSummaryMaxBytes]
-	}
-
-	return summary, nil
+	return resp, nil
 }
 
 // InferenceResultJSON returns the typed InferenceResult payload as canonical

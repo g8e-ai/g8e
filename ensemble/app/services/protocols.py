@@ -44,6 +44,8 @@ from app.models.memory import InvestigationMemory
 from app.models.sessions import CliSessionDocument
 from app.models.internal_api import (
     DirectCommandRequest,
+    InferenceDispatchRequest,
+    InferenceDispatchResponse,
     IntentOperationResult,
     ObserveProducerAgentStateRequest,
     ObserveProducerRunStateRequest,
@@ -683,6 +685,11 @@ class G8eClientProtocol(Protocol):
     async def push_run_state(
         self, request: ObserveProducerRunStateRequest
     ) -> ObserveProducerResponse:
+        raise NotImplementedError
+
+    async def dispatch_inference(
+        self, request: InferenceDispatchRequest
+    ) -> InferenceDispatchResponse:
         raise NotImplementedError
 
 

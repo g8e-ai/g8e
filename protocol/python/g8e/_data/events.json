@@ -1279,6 +1279,14 @@
     "PublicFeedKeyRotated": {
       "_go_const": "EventPublicFeedKeyRotated",
       "value": "g8e.v1.public.feed.key.rotated"
+    },
+    "OperatorInferenceCompleted": {
+      "_go_const": "EventOperatorInferenceCompleted",
+      "value": "g8e.v1.operator.inference.completed"
+    },
+    "OperatorInferenceFailed": {
+      "_go_const": "EventOperatorInferenceFailed",
+      "value": "g8e.v1.operator.inference.failed"
     }
   }
 }

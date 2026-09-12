@@ -56,6 +56,7 @@ class LLMProvider(StrEnum):
     ANTHROPIC = "anthropic"
     LLAMACPP = "llamacpp"
     FAKE = "fake"
+    G8E = "g8e"
 
 
 class ThinkingLevel(StrEnum):

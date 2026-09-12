@@ -329,6 +329,8 @@ const EventAppMemoryUpdated EventType = "g8e.v1.app.memory.updated"
 const EventOperatorPortCheckRequested EventType = "g8e.v1.operator.port.check.requested"
 const EventOperatorReceiptRecorded EventType = "g8e.v1.operator.receipt.recorded"
 const EventOperatorInferenceRequested EventType = "g8e.v1.operator.inference.requested"
+const EventOperatorInferenceCompleted EventType = "g8e.v1.operator.inference.completed"
+const EventOperatorInferenceFailed EventType = "g8e.v1.operator.inference.failed"
 
 // Observability dashboard events. These carry protocol-owned typed payloads
 // (see protocol/models/observe_event_payloads.json) and are emitted by real
@@ -481,6 +483,8 @@ type _EventOperatorFsRead struct {
 	Started   EventType
 }
 type _EventOperatorInference struct {
+	Completed EventType
+	Failed    EventType
 	Requested EventType
 }
 type _EventOperatorMcp struct {
@@ -706,6 +710,8 @@ var Event = struct {
 			Revoked:           EventOperatorIntentRevoked,
 		},
 		Inference: _EventOperatorInference{
+			Completed: EventOperatorInferenceCompleted,
+			Failed:    EventOperatorInferenceFailed,
 			Requested: EventOperatorInferenceRequested,
 		},
 		Mcp: _EventOperatorMcp{

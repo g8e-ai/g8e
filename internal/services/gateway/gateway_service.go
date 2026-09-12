@@ -38,6 +38,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
@@ -83,6 +84,7 @@ type GatewayModeService struct {
 	platformEnrollmentSvc *PlatformEnrollmentService
 	consensusSvc          *consensus.ConsensusService
 	dispatchSvc           *DispatchService
+	inferenceDispatchSvc   *dispatch.DispatchService
 	observeProducer       *ObserveProducerService
 	responder             *response.Writer
 	server                *http.Server
@@ -415,6 +417,17 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		Orchestrator:       passkeyOrchestrator,
 	})
 
+	// Construct the command dispatch service and the inference dispatch
+	// service. The inference dispatch service wraps the command dispatch
+	// service and the registration service through adapters that implement
+	// the dispatch package's interfaces, breaking the import cycle.
+	dispatchSvc := NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture))
+	inferenceDispatchSvc := dispatch.NewDispatchService(
+		&gatewayDispatcherAdapter{svc: dispatchSvc},
+		&gatewayOperatorListerAdapter{svc: reg},
+		logger,
+	)
+
 	ls := &GatewayModeService{
 		cfg:                   cfg,
 		logger:                logger,
@@ -447,7 +460,8 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		envProc:               cmdSvc,
 		platformEnrollmentSvc: platformEnrollmentSvc,
 		consensusSvc:          consensusSvc,
-		dispatchSvc:           NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture)),
+		dispatchSvc:           dispatchSvc,
+		inferenceDispatchSvc:  inferenceDispatchSvc,
 		observeProducer:       NewObserveProducerService(docStore, sseStore, wsHandler, b.fileSvc, logger),
 		responder:             res,
 	}
@@ -697,6 +711,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Responder:   ls.responder,
 			Logger:      logger,
 		},
+		InferenceDispatchControllerDeps: InferenceDispatchControllerDeps{
+			DispatchSvc: ls.inferenceDispatchSvc,
+			Responder:   ls.responder,
+			Logger:      logger,
+		},
 		SSEControllerDeps: SSEControllerDeps{
 			Cfg:       cfg,
 			Logger:    logger,
@@ -911,6 +930,13 @@ func (ls *GatewayModeService) GetGatewayWebSocketHandler() *GatewayWebSocketHand
 // commands to operators over the WS pub/sub cmd channel.
 func (ls *GatewayModeService) GetDispatchService() *DispatchService {
 	return ls.dispatchSvc
+}
+
+// GetInferenceDispatchService returns the platform-internal inference
+// dispatch service for routing governed inference requests to the Inference
+// Node. Called by the ensemble chat pipeline; not AI-visible.
+func (ls *GatewayModeService) GetInferenceDispatchService() *dispatch.DispatchService {
+	return ls.inferenceDispatchSvc
 }
 
 // GetObserveProducerService returns the observe producer service that

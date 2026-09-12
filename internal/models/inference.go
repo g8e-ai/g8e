@@ -145,3 +145,16 @@ func (r GenerateResponse) ToInferenceResultPayload() InferenceResultPayload {
 		Model:            r.Model,
 	}
 }
+
+// ToProtoInferenceResult converts a GenerateResponse to the protobuf
+// InferenceResult message for result envelope publishing.
+func (r GenerateResponse) ToProtoInferenceResult() *operatorv1.InferenceResult {
+	return &operatorv1.InferenceResult{
+		Text:             r.Text,
+		PromptTokens:     r.PromptTokens,
+		CompletionTokens: r.CompletionTokens,
+		TotalTokens:      r.TotalTokens,
+		FinishReason:     r.FinishReason,
+		Model:            r.Model,
+	}
+}
