@@ -529,6 +529,31 @@ message ReceiptPersistenceAttestation {
   string signature = 6;
 }
 
+// ReceiptFailureCode is the typed classification of a FAILED ActionReceipt.
+// The L5 actuator stamps it at finalization so verifiers can distinguish
+// governance rejections, client faults, and provider failures without
+// string-matching the result_summary. It is bound into the receipt signature.
+enum ReceiptFailureCode {
+  RECEIPT_FAILURE_CODE_UNSPECIFIED = 0;
+  // The transaction failed governance verification before execution
+  // (L1 doctrine, L2 consensus, L3 notary, identity, replay, expiry).
+  RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED = 1;
+  // The request model did not equal the configured role model.
+  RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED = 2;
+  // The request carried an unspecified or unknown model role.
+  RECEIPT_FAILURE_CODE_ROLE_INVALID = 3;
+  // The request carried a malformed model reference.
+  RECEIPT_FAILURE_CODE_MODEL_REF_INVALID = 4;
+  // The inference backend was unreachable or not registered.
+  RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE = 5;
+  // The inference backend request timed out.
+  RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT = 6;
+  // The inference backend failed generation.
+  RECEIPT_FAILURE_CODE_GENERATE_FAILED = 7;
+  // Any other execution failure.
+  RECEIPT_FAILURE_CODE_EXECUTION_FAILED = 8;
+}
+
 // ActionReceipt is the signed proof of an executing, completed, or failed mutation. L5 emits and persists it before execution, then updates and attests it after execution.
 message ActionReceipt {
   // Original GovernanceEnvelope ID
@@ -568,6 +593,10 @@ message ActionReceipt {
 
   repeated DeterministicStageEvidence deterministic_stage_evidence = 13;
   ReceiptPersistenceAttestation final_persistence_attestation = 14;
+
+  // Typed classification of a FAILED receipt. UNSPECIFIED on non-failed
+  // receipts. Bound into the signature via canonicalization.
+  ReceiptFailureCode failure_code = 15;
 }
 
 // CommitmentAttestation is the Auditor's signed record that a verified

@@ -443,7 +443,7 @@ func (d *DispatchService) verifyInferenceCompletion(cmdEnv, resultEnv *commonv1.
 	}
 
 	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
-		return nil, fmt.Errorf("dispatch: %w: %s", constants.ErrInferenceReceiptFailed, receipt.ResultSummary)
+		return nil, fmt.Errorf("dispatch: %w: %s", inferenceReceiptFailureError(receipt), receipt.ResultSummary)
 	}
 
 	result := completion.GetResult()
@@ -464,6 +464,33 @@ func (d *DispatchService) verifyInferenceCompletion(cmdEnv, resultEnv *commonv1.
 		Receipt:         receipt,
 		InferenceResult: result,
 	}, nil
+}
+
+// inferenceReceiptFailureError maps a signed FAILED receipt's typed
+// failure_code back to the corresponding sentinel so callers can classify
+// governance rejections, client faults, and provider failures via errors.Is
+// without parsing the result_summary text. The receipt signature is verified
+// before this runs, so the code is authentic. An unspecified or unknown code
+// falls back to the generic execution-failure sentinel.
+func inferenceReceiptFailureError(receipt *operatorv1.ActionReceipt) error {
+	switch receipt.FailureCode {
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED:
+		return constants.ErrInferenceGovernanceRejected
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED:
+		return constants.ErrInferenceModelOverrideDenied
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_ROLE_INVALID:
+		return constants.ErrInferenceRoleInvalid
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REF_INVALID:
+		return constants.ErrInferenceModelRefInvalid
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE:
+		return constants.ErrInferenceBackendUnavailable
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT:
+		return constants.ErrInferenceBackendTimeout
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATE_FAILED:
+		return constants.ErrInferenceGenerateFailed
+	default:
+		return constants.ErrInferenceReceiptFailed
+	}
 }
 
 // DispatchResponse is the typed JSON response for POST /api/v1/operators/commands.

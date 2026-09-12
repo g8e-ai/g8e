@@ -298,3 +298,62 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		assert.ErrorIs(t, err, constants.ErrInferenceResultDigestMismatch)
 	})
 }
+
+// TestVerifyInferenceCompletion_FailureCodeMapping proves that a signed
+// FAILED receipt's typed failure_code maps back to the corresponding
+// typed sentinel on the gateway side, so the controller can distinguish
+// governance rejections, client faults, and provider failures without
+// string-matching the receipt summary.
+func TestVerifyInferenceCompletion_FailureCodeMapping(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	keyID := "actuator-key-1"
+
+	const txID = "tx-inference-001"
+	const txHash = "hash-inference-001"
+	cmdEnv := &commonv1.GovernanceEnvelope{Id: txID, TransactionHash: txHash}
+
+	failedReceiptWithCode := func(t *testing.T, code operatorv1.ReceiptFailureCode) *operatorv1.ActionReceipt {
+		t.Helper()
+		receipt := &operatorv1.ActionReceipt{
+			TransactionId:    txID,
+			TransactionHash:  txHash,
+			Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
+			ResultSummary:    "rejected upstream",
+			ExecutedAtUnixMs: 1700000000000,
+			FailureCode:      code,
+		}
+		signTestReceipt(t, receipt, priv, keyID)
+		return receipt
+	}
+
+	tests := []struct {
+		name string
+		code operatorv1.ReceiptFailureCode
+		want error
+	}{
+		{name: "governance rejected", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED, want: constants.ErrInferenceGovernanceRejected},
+		{name: "model override denied", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED, want: constants.ErrInferenceModelOverrideDenied},
+		{name: "role invalid", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_ROLE_INVALID, want: constants.ErrInferenceRoleInvalid},
+		{name: "model ref invalid", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REF_INVALID, want: constants.ErrInferenceModelRefInvalid},
+		{name: "backend unavailable", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE, want: constants.ErrInferenceBackendUnavailable},
+		{name: "backend timeout", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT, want: constants.ErrInferenceBackendTimeout},
+		{name: "generate failed", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATE_FAILED, want: constants.ErrInferenceGenerateFailed},
+		{name: "generic execution failure", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED, want: constants.ErrInferenceReceiptFailed},
+		{name: "unspecified code falls back to generic failure", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED, want: constants.ErrInferenceReceiptFailed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := newInferenceDispatchService(t, &stubSignerStore{keys: map[string]ed25519.PublicKey{keyID: pub}})
+			receipt := failedReceiptWithCode(t, tt.code)
+			payload, err := proto.Marshal(&operatorv1.InferenceCompletion{Receipt: receipt})
+			require.NoError(t, err)
+			resultEnv := &commonv1.GovernanceEnvelope{Id: txID, Payload: payload}
+
+			_, err = svc.verifyInferenceCompletion(cmdEnv, resultEnv)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tt.want, "failure_code %v must map to the typed sentinel", tt.code)
+		})
+	}
+}

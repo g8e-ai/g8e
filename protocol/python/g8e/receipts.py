@@ -71,6 +71,8 @@ def canonicalize_action_receipt(receipt: ActionReceipt) -> bytes:
     stage_evidence_hash = _deterministic_stage_evidence_hash(receipt)
     if stage_evidence_hash:
         data["deterministic_stage_evidence_hash"] = stage_evidence_hash
+    if receipt.failure_code:
+        data["failure_code"] = receipt.failure_code
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     payload = (
         payload.replace("<", "\\u003c")

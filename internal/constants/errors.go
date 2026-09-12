@@ -1432,6 +1432,8 @@ var (
 	ErrInferenceOperatorNotCapable   = errors.New("inference: target operator session is not inference-capable")
 	ErrInferenceModelOverrideDenied  = errors.New("inference: model override not permitted by role authority")
 	ErrInferenceOutcomeUnknown       = errors.New("inference: dispatch deadline exceeded; remote provider outcome unknown")
+	ErrInferenceGovernanceRejected   = errors.New("inference: governance rejected the transaction")
+	ErrInferencePromptRequired       = errors.New("inference: prompt required")
 
 	// Dispatch transport errors. Zero delivery and a missing correlated
 	// result are terminal transport outcomes, not log-and-continue events.

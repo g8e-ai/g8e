@@ -124,6 +124,7 @@
     - [L2Status](#g8e-operator-v1-L2Status)
     - [L3Status](#g8e-operator-v1-L3Status)
     - [ModelRole](#g8e-operator-v1-ModelRole)
+    - [ReceiptFailureCode](#g8e-operator-v1-ReceiptFailureCode)
   
     - [OperatorService](#g8e-operator-v1-OperatorService)
   
@@ -177,6 +178,7 @@ ActionReceipt is the signed proof of an executing, completed, or failed mutation
 | l3_status | [L3Status](#g8e-operator-v1-L3Status) |  | Status of L3 (Notary/Human) proof verification. Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; for compliance. |
 | deterministic_stage_evidence | [DeterministicStageEvidence](#g8e-operator-v1-DeterministicStageEvidence) | repeated |  |
 | final_persistence_attestation | [ReceiptPersistenceAttestation](#g8e-operator-v1-ReceiptPersistenceAttestation) |  |  |
+| failure_code | [ReceiptFailureCode](#g8e-operator-v1-ReceiptFailureCode) |  | Typed classification of a FAILED receipt. UNSPECIFIED on non-failed receipts. Bound into the signature via canonicalization. |
 
 
 
@@ -2427,6 +2429,28 @@ Maps directly to the three tiers in ensemble&#39;s LLMSettings.
 | MODEL_ROLE_PRIMARY | 1 |  |
 | MODEL_ROLE_ASSISTANT | 2 |  |
 | MODEL_ROLE_LITE | 3 |  |
+
+
+
+<a name="g8e-operator-v1-ReceiptFailureCode"></a>
+
+### ReceiptFailureCode
+ReceiptFailureCode is the typed classification of a FAILED ActionReceipt.
+The L5 actuator stamps it at finalization so verifiers can distinguish
+governance rejections, client faults, and provider failures without
+string-matching the result_summary. It is bound into the receipt signature.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| RECEIPT_FAILURE_CODE_UNSPECIFIED | 0 |  |
+| RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED | 1 | The transaction failed governance verification before execution (L1 doctrine, L2 consensus, L3 notary, identity, replay, expiry). |
+| RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED | 2 | The request model did not equal the configured role model. |
+| RECEIPT_FAILURE_CODE_ROLE_INVALID | 3 | The request carried an unspecified or unknown model role. |
+| RECEIPT_FAILURE_CODE_MODEL_REF_INVALID | 4 | The request carried a malformed model reference. |
+| RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE | 5 | The inference backend was unreachable or not registered. |
+| RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT | 6 | The inference backend request timed out. |
+| RECEIPT_FAILURE_CODE_GENERATE_FAILED | 7 | The inference backend failed generation. |
+| RECEIPT_FAILURE_CODE_EXECUTION_FAILED | 8 | Any other execution failure. |
 
 
  
