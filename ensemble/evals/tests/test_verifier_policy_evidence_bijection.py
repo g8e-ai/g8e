@@ -810,3 +810,141 @@ class TestTypedMetricRecomputation:
         assert any("value" in f.lower() for f in result.failures), (
             f"expected metric value inconsistency failure, got: {result.failures}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Orion Phase 3 task 3: stages.jsonl and metrics.jsonl policy enforcement
+# ---------------------------------------------------------------------------
+
+
+class TestStageAndMetricPolicyEnforcement:
+    """The frozen ExpectedRecordPolicy's stages.jsonl and metrics.jsonl
+    entries are evaluated by the verifier, not silently ignored.
+
+    stages.jsonl carries REQUIRED + ONE_PER_INFERENCE: the file must exist
+    and every record must be a MODEL_INFERENCE stage (one record per
+    provider inference). metrics.jsonl carries REQUIRED + ONE_PER_ATTEMPT:
+    the file must exist and contain exactly one record per completed
+    attempt.
+    """
+
+    def test_stages_required_missing_file_fails(self, tmp_path: Path):
+        """A REQUIRED stages.jsonl policy entry fails when the file is
+        absent."""
+        report_dir = _run_campaign(tmp_path)
+        stages_path = report_dir / STAGES_JSONL
+        if stages_path.exists():
+            stages_path.unlink()
+        policy = _make_policy(entries=[
+            {"file_name": STAGES_JSONL, "applicability": "required", "cardinality_rule": "one_per_inference"},
+        ])
+        _write_policy(report_dir, policy)
+        _set_campaign_binding(report_dir, policy_hash=policy.content_hash)
+        result = verify_campaign(report_dir)
+        assert not result.ok
+        assert any("required record file missing" in f and STAGES_JSONL in f for f in result.failures), (
+            f"expected required stages.jsonl failure, got: {result.failures}"
+        )
+
+    def test_stages_one_per_inference_count_mismatch_fails(self, tmp_path: Path):
+        """stages.jsonl must contain exactly one MODEL_INFERENCE record per
+        provider inference. A non-inference stage record inflates the count
+        beyond the inference trail."""
+        report_dir = _run_campaign(tmp_path)
+        _write_stages_for_all_attempts(report_dir)
+        idents = _all_attempt_identities(report_dir)
+        extra_stage = _make_stage_dict(
+            attempt_id=idents[0]["attempt_id"],
+            run_id=idents[0]["run_id"],
+            stage_id=f"{idents[0]['attempt_id']}:grading:1",
+            kind="grading",
+        )
+        existing = (report_dir / STAGES_JSONL).read_text()
+        (report_dir / STAGES_JSONL).write_text(existing + json.dumps(extra_stage) + "\n")
+        policy = _make_policy(entries=[
+            {"file_name": STAGES_JSONL, "applicability": "required", "cardinality_rule": "one_per_inference"},
+        ])
+        _write_policy(report_dir, policy)
+        _set_campaign_binding(report_dir, policy_hash=policy.content_hash)
+        result = verify_campaign(report_dir)
+        assert not result.ok
+        assert any("one_per_inference" in f and STAGES_JSONL in f for f in result.failures), (
+            f"expected stages one_per_inference cardinality failure, got: {result.failures}"
+        )
+
+    def test_metrics_required_missing_file_fails(self, tmp_path: Path):
+        """A REQUIRED metrics.jsonl policy entry fails when the file is
+        absent."""
+        report_dir = _run_campaign(tmp_path)
+        (report_dir / METRICS_JSONL).unlink()
+        policy = _make_policy(entries=[
+            {"file_name": METRICS_JSONL, "applicability": "required", "cardinality_rule": "one_per_attempt"},
+        ])
+        _write_policy(report_dir, policy)
+        _set_campaign_binding(report_dir, policy_hash=policy.content_hash)
+        result = verify_campaign(report_dir)
+        assert not result.ok
+        assert any("required record file missing" in f and METRICS_JSONL in f for f in result.failures), (
+            f"expected required metrics.jsonl failure, got: {result.failures}"
+        )
+
+    def test_metrics_one_per_attempt_count_mismatch_fails(self, tmp_path: Path):
+        """metrics.jsonl must contain exactly one record per completed
+        attempt. Removing a metric record breaks the cardinality."""
+        report_dir = _run_campaign(tmp_path)
+        metrics_path = report_dir / METRICS_JSONL
+        lines = metrics_path.read_text().strip().splitlines()
+        metrics_path.write_text("\n".join(lines[1:]) + "\n")
+        _recompute_report_checksum(report_dir)
+        policy = _make_policy(entries=[
+            {"file_name": METRICS_JSONL, "applicability": "required", "cardinality_rule": "one_per_attempt"},
+        ])
+        _write_policy(report_dir, policy)
+        _set_campaign_binding(report_dir, policy_hash=policy.content_hash)
+        result = verify_campaign(report_dir)
+        assert not result.ok
+        assert any("one_per_attempt" in f and METRICS_JSONL in f for f in result.failures), (
+            f"expected metrics one_per_attempt cardinality failure, got: {result.failures}"
+        )
+
+    def test_metrics_extra_record_fails(self, tmp_path: Path):
+        """A duplicated metric record inflates metrics.jsonl beyond one
+        record per completed attempt."""
+        report_dir = _run_campaign(tmp_path)
+        metrics_path = report_dir / METRICS_JSONL
+        lines = metrics_path.read_text().strip().splitlines()
+        metrics_path.write_text("\n".join([*lines, lines[0]]) + "\n")
+        _recompute_report_checksum(report_dir)
+        policy = _make_policy(entries=[
+            {"file_name": METRICS_JSONL, "applicability": "required", "cardinality_rule": "one_per_attempt"},
+        ])
+        _write_policy(report_dir, policy)
+        _set_campaign_binding(report_dir, policy_hash=policy.content_hash)
+        result = verify_campaign(report_dir)
+        assert not result.ok
+        assert any("one_per_attempt" in f and METRICS_JSONL in f for f in result.failures), (
+            f"expected metrics one_per_attempt cardinality failure, got: {result.failures}"
+        )
+
+    def test_full_seven_entry_policy_passes(self, tmp_path: Path):
+        """The frozen 7-entry policy shape (resource observations and stages
+        REQUIRED ONE_PER_INFERENCE, four event files REQUIRED EXACT 0,
+        metrics REQUIRED ONE_PER_ATTEMPT) passes on an unmodified report
+        with matching observation and stage trails."""
+        report_dir = _run_campaign(tmp_path)
+        _write_stages_for_all_attempts(report_dir)
+        _write_observations_for_all_attempts(report_dir)
+        _write_evidence_index_for_observations(report_dir)
+        policy = _make_policy(entries=[
+            {"file_name": RESOURCE_OBSERVATIONS_JSONL, "applicability": "required", "cardinality_rule": "one_per_inference"},
+            {"file_name": STAGES_JSONL, "applicability": "required", "cardinality_rule": "one_per_inference"},
+            {"file_name": TOOL_CALL_SCORECARDS_JSONL, "applicability": "required", "cardinality_rule": "exact", "expected_count": 0},
+            {"file_name": ESCALATION_RECORDS_JSONL, "applicability": "required", "cardinality_rule": "exact", "expected_count": 0},
+            {"file_name": SECURITY_EVENTS_JSONL, "applicability": "required", "cardinality_rule": "exact", "expected_count": 0},
+            {"file_name": CORRELATED_ERRORS_JSONL, "applicability": "required", "cardinality_rule": "exact", "expected_count": 0},
+            {"file_name": METRICS_JSONL, "applicability": "required", "cardinality_rule": "one_per_attempt"},
+        ])
+        _write_policy(report_dir, policy)
+        _set_campaign_binding(report_dir, policy_hash=policy.content_hash)
+        result = verify_campaign(report_dir)
+        assert result.ok, f"full seven-entry policy should pass: {result.failures}"

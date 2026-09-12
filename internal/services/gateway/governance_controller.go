@@ -316,6 +316,7 @@ func classifyEnvelopeError(err error) int {
 		errors.Is(err, constants.ErrTxL2DuplicateSigner),
 		errors.Is(err, constants.ErrTxL3ProofMissing),
 		errors.Is(err, constants.ErrTxL3ProofInvalid),
+		errors.Is(err, constants.ErrTxL3ProofUnmintable),
 		errors.Is(err, constants.ErrTxL3NotaryNotConfigured),
 		errors.Is(err, constants.ErrTxInFlight):
 		return http.StatusForbidden

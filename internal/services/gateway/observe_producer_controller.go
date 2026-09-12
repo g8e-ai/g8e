@@ -58,24 +58,13 @@ func newObserveProducerController(deps ObserveProducerControllerDeps) *ObservePr
 }
 
 // requireAppUserID extracts the authenticated user ID from the request
-// context and verifies the caller is an app workload. The unified auth
-// middleware stamps ContextKeyAppID (for app workloads) and
-// ContextKeyUserID (from the delegated user SAN) during handleAppAuth.
-// Returns the user ID and true on success. On failure it writes a 401
-// (missing user_id) or 403 (not an app workload) response and returns
-// false.
+// context and verifies the caller is an app workload via the shared
+// requireAppIdentity helper. Returns the user ID and true on success. On
+// failure the helper writes a 401 (missing user_id) or 403 (not an app
+// workload) response and this returns false.
 func (c *ObserveProducerController) requireAppUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
-	appID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
-	if appID == "" {
-		c.responder.Error(w, http.StatusForbidden, constants.ErrForbidden.Error())
-		return "", false
-	}
-	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
-	if !ok || userID == "" {
-		c.responder.Error(w, http.StatusUnauthorized, constants.ErrNotAuthenticated.Error())
-		return "", false
-	}
-	return userID, true
+	_, userID, ok := requireAppIdentity(c.responder, w, r)
+	return userID, ok
 }
 
 // requireCLIUserID extracts the authenticated user ID from the request

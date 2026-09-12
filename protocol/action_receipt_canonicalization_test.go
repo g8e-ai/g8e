@@ -44,6 +44,9 @@ var receiptPersistenceCanonicalizationVectorJSON []byte
 //go:embed vectors/action_receipt_stage_evidence_canonicalization.json
 var actionReceiptStageEvidenceCanonicalizationVectorJSON []byte
 
+//go:embed vectors/action_receipt_failure_code_canonicalization.json
+var actionReceiptFailureCodeCanonicalizationVectorJSON []byte
+
 func TestActionReceiptCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
 	var vector actionReceiptCanonicalizationVector
 	require.NoError(t, json.Unmarshal(actionReceiptCanonicalizationVectorJSON, &vector))
@@ -93,6 +96,43 @@ func TestActionReceiptStageEvidenceCanonicalizationMatchesCrossLanguageVector(t 
 		tampered.DeterministicStageEvidence[0].DoctrineBundleHash = "sha256:tampered"
 		payload, canonicalErr := governance.CanonicalizeActionReceipt(tampered)
 		require.NoError(t, canonicalErr)
+		assert.False(t, ed25519.Verify(publicKey, payload, signature))
+	})
+}
+
+func TestActionReceiptFailureCodeCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
+	var vector actionReceiptCanonicalizationVector
+	require.NoError(t, json.Unmarshal(actionReceiptFailureCodeCanonicalizationVectorJSON, &vector))
+	receipt := &operatorv1.ActionReceipt{}
+	require.NoError(t, protojson.Unmarshal(vector.Receipt, receipt))
+	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, receipt.Status)
+	assert.Equal(t, operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED, receipt.FailureCode)
+
+	canonical, err := governance.CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+	assert.Equal(t, vector.CanonicalUTF8, string(canonical))
+	assert.Contains(t, string(canonical), `"failure_code":1`)
+
+	publicKey, err := hex.DecodeString(vector.PublicKeyHex)
+	require.NoError(t, err)
+	signature, err := hex.DecodeString(receipt.Signature)
+	require.NoError(t, err)
+	assert.True(t, ed25519.Verify(publicKey, canonical, signature))
+
+	t.Run("failure code tampering", func(t *testing.T) {
+		tampered := proto.Clone(receipt).(*operatorv1.ActionReceipt)
+		tampered.FailureCode = operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED
+		payload, canonicalErr := governance.CanonicalizeActionReceipt(tampered)
+		require.NoError(t, canonicalErr)
+		assert.False(t, ed25519.Verify(publicKey, payload, signature))
+	})
+
+	t.Run("failure code removal", func(t *testing.T) {
+		tampered := proto.Clone(receipt).(*operatorv1.ActionReceipt)
+		tampered.FailureCode = operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED
+		payload, canonicalErr := governance.CanonicalizeActionReceipt(tampered)
+		require.NoError(t, canonicalErr)
+		assert.NotContains(t, string(payload), "failure_code")
 		assert.False(t, ed25519.Verify(publicKey, payload, signature))
 	})
 }

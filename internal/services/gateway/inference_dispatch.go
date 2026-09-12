@@ -9,11 +9,12 @@ package gateway
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -87,8 +88,12 @@ func (a *gatewayOperatorListerAdapter) ListUserOperators(userID string) ([]model
 // InferenceDispatchController.
 type InferenceDispatchControllerDeps struct {
 	DispatchSvc *dispatch.DispatchService
-	Responder    *response.Writer
-	Logger       *slog.Logger
+	Responder   *response.Writer
+	Logger      *slog.Logger
+
+	// MaxPayload is the bounded request-body limit in bytes, wired from
+	// cfg.Gateway.MaxPayloadBytes.
+	MaxPayload int64
 }
 
 // InferenceDispatchController handles POST /api/v1/inference/dispatch, the
@@ -99,6 +104,7 @@ type InferenceDispatchController struct {
 	dispatchSvc *dispatch.DispatchService
 	responder   *response.Writer
 	logger      *slog.Logger
+	maxPayload  int64
 }
 
 // newInferenceDispatchController creates an InferenceDispatchController from its deps.
@@ -107,93 +113,173 @@ func newInferenceDispatchController(d InferenceDispatchControllerDeps) *Inferenc
 		dispatchSvc: d.DispatchSvc,
 		responder:   d.Responder,
 		logger:      d.Logger,
+		maxPayload:  d.MaxPayload,
 	}
-}
-
-// InferenceDispatchRequest is the typed JSON request for POST
-// /api/v1/inference/dispatch.
-type InferenceDispatchRequest struct {
-	Role                    int32   `json:"role"`
-	Prompt                  string  `json:"prompt"`
-	Model                   string  `json:"model,omitempty"`
-	Temperature             float32 `json:"temperature,omitempty"`
-	MaxTokens               int32   `json:"max_tokens,omitempty"`
-	KeepAlive               string  `json:"keep_alive,omitempty"`
-	TargetOperatorSessionID string  `json:"target_operator_session_id,omitempty"`
-	ActingAppID             string  `json:"acting_app_id,omitempty"`
-	CaseID                  string  `json:"case_id,omitempty"`
-	InvestigationID         string  `json:"investigation_id,omitempty"`
-	TaskID                  string  `json:"task_id,omitempty"`
-	WebSessionID            string  `json:"web_session_id,omitempty"`
-	CliSessionID            string  `json:"cli_session_id,omitempty"`
-}
-
-// Validate returns an error if the request is missing required fields.
-func (r *InferenceDispatchRequest) Validate() error {
-	if r.Prompt == "" {
-		return constants.ErrPubSubEmptyPayload
-	}
-	if r.Role < int32(operatorv1.ModelRole_MODEL_ROLE_PRIMARY) || r.Role > int32(operatorv1.ModelRole_MODEL_ROLE_LITE) {
-		return constants.ErrInferenceRoleInvalid
-	}
-	return nil
-}
-
-// InferenceDispatchResponse is the typed JSON response for POST
-// /api/v1/inference/dispatch.
-type InferenceDispatchResponse struct {
-	Success       bool                       `json:"success"`
-	TransactionID string                     `json:"transaction_id"`
-	Result        *operatorv1.InferenceResult `json:"result,omitempty"`
-	Error         string                     `json:"error,omitempty"`
 }
 
 // HandleDispatch is the HTTP handler for POST /api/v1/inference/dispatch.
+//
+// The request and response are the protocol-owned
+// operatorv1.InferenceDispatchRequest / InferenceDispatchResponse messages
+// serialized as canonical protojson (proto field names). The caller must be
+// an authenticated app workload with a delegated user identity; a body
+// acting_app_id that contradicts the authenticated app identity is
+// rejected. The success response is returned only after the gateway
+// verifies the final receipt signature, persistence attestation,
+// transaction identity, and result digest equality.
+//
+// @Summary		Dispatch a governed inference request
+// @Description	Platform-internal endpoint (mTLS, app workload) that routes an inference request through the L1-L5 governance gauntlet to the Inference Node and returns the verified result plus final signed receipt.
+// @Tags			inference
+// @Accept			json
+// @Produce		json
+// @Param			request	body		operatorv1.InferenceDispatchRequest	true	"Governed inference dispatch request"
+// @Success		200		{object}	operatorv1.InferenceDispatchResponse	"Verified inference result and final signed receipt"
+// @Failure		400		{string}	string								"Bad Request — malformed body, unknown field, empty prompt, invalid role, or acting_app_id identity mismatch"
+// @Failure		401		{string}	string								"Unauthorized — missing delegated user identity"
+// @Failure		403		{string}	string								"Forbidden — not an app workload, model override denied, or governance rejection"
+// @Failure		404		{string}	string								"Not Found — no inference-capable operator session"
+// @Failure		405		{string}	string								"Method Not Allowed"
+// @Failure		409		{string}	string								"Conflict — multiple inference-capable operators; explicit target required"
+// @Failure		413		{string}	string								"Request Entity Too Large — body exceeds the payload limit"
+// @Failure		422		{string}	string								"Unprocessable Entity — target operator session is not inference-capable"
+// @Failure		502		{string}	string								"Bad Gateway — provider or receipt verification failure"
+// @Failure		503		{string}	string								"Service Unavailable — command delivered to no operator subscribers"
+// @Failure		504		{string}	string								"Gateway Timeout — request deadline exceeded; remote provider outcome unknown"
+// @Failure		500		{string}	string								"Internal Error"
+// @Router			/api/v1/inference/dispatch [post]
 func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
-	var req InferenceDispatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+	appID, userID, ok := requireAppIdentity(c.responder, w, r)
+	if !ok {
 		return
 	}
 
-	if err := req.Validate(); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
+	body, err := readRequestBody(r, c.maxPayload)
+	if err != nil {
+		if errors.Is(err, constants.ErrPayloadExceedsLimit) {
+			c.responder.Error(w, http.StatusRequestEntityTooLarge, constants.ErrPayloadExceedsLimit.Error())
+			return
+		}
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 
-	// Extract the requestor's user ID from the mTLS identity context.
-	requestorUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+	req := &operatorv1.InferenceDispatchRequest{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(body, req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+
+	if req.GetPrompt() == "" {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInferencePromptRequired.Error())
+		return
+	}
+	role := models.InferenceModelRoleFromProto(req.GetRole())
+	if role == models.InferenceModelRoleUnspecified {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInferenceRoleInvalid.Error())
+		return
+	}
+	// acting_app_id derives from the authenticated app identity. A body
+	// value that contradicts it is an identity binding violation; an absent
+	// value is populated from the mTLS identity.
+	if bodyAppID := req.GetActingAppId(); bodyAppID != "" && bodyAppID != appID {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrIdentityBindingFailed.Error())
+		return
+	}
 
 	result, err := c.dispatchSvc.DispatchInference(r.Context(), dispatch.DispatchInferenceRequest{
-		Role:                    models.InferenceModelRole(req.Role),
-		Prompt:                  req.Prompt,
-		Model:                   req.Model,
-		Temperature:             req.Temperature,
-		MaxTokens:               req.MaxTokens,
-		KeepAlive:               req.KeepAlive,
-		TargetOperatorSessionID: req.TargetOperatorSessionID,
-		RequestorUserID:         requestorUserID,
-		ActingAppID:             req.ActingAppID,
-		CaseID:                  req.CaseID,
-		InvestigationID:         req.InvestigationID,
-		TaskID:                  req.TaskID,
-		WebSessionID:            req.WebSessionID,
-		CliSessionID:            req.CliSessionID,
+		Role:                    role,
+		Prompt:                  req.GetPrompt(),
+		Model:                   req.GetModel(),
+		Temperature:             req.GetTemperature(),
+		MaxTokens:               req.GetMaxTokens(),
+		KeepAlive:               req.GetKeepAlive(),
+		TargetOperatorSessionID: req.GetTargetOperatorSessionId(),
+		RequestorUserID:         userID,
+		ActingAppID:             appID,
+		CaseID:                  req.GetCaseId(),
+		InvestigationID:         req.GetInvestigationId(),
+		TaskID:                  req.GetTaskId(),
+		WebSessionID:            req.GetWebSessionId(),
+		CliSessionID:            req.GetCliSessionId(),
 	})
 	if err != nil {
-		c.logger.Error("inference dispatch: dispatch failed", "error", err)
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		if errors.Is(err, context.Canceled) {
+			c.logger.Info("inference dispatch: caller canceled", "error", err)
+			return
+		}
+		status, publicErr := classifyInferenceDispatchError(err)
+		c.logger.Error("inference dispatch: dispatch failed", "status", status, "error", err)
+		c.responder.Error(w, status, publicErr.Error())
 		return
 	}
 
-	c.responder.JSON(w, http.StatusOK, InferenceDispatchResponse{
-		Success:       true,
-		TransactionID: result.TransactionID,
+	c.responder.ProtoJSONCanonical(w, http.StatusOK, &operatorv1.InferenceDispatchResponse{
+		TransactionId: result.TransactionID,
 		Result:        result.Result,
+		Receipt:       result.Receipt,
 	})
+}
+
+// classifyInferenceDispatchError maps a dispatch failure to an HTTP status
+// and a public-safe typed error. The returned error is always a centralized
+// sentinel whose text is safe to expose; the internal error chain is logged
+// by the caller, never returned to the client.
+//
+// Routing: missing target -> 404, ambiguous -> 409, not capable -> 422.
+// Client faults: invalid role/model reference -> 400; model override denied
+// and governance rejections (envelope construction failures, signed
+// GOVERNANCE_REJECTED receipts) -> 403. Transport/provider: zero delivery ->
+// 503; provider execution and receipt verification failures -> 502.
+// Deadline/unknown outcome -> 504. Everything else -> 500 with the generic
+// internal error.
+func classifyInferenceDispatchError(err error) (int, error) {
+	sentinels := []struct {
+		sentinel error
+		status   int
+	}{
+		{constants.ErrInferenceOutcomeUnknown, http.StatusGatewayTimeout},
+		{constants.ErrDispatchResultTimeout, http.StatusGatewayTimeout},
+		{constants.ErrInferenceOperatorNotFound, http.StatusNotFound},
+		{constants.ErrInferenceOperatorAmbiguous, http.StatusConflict},
+		{constants.ErrInferenceOperatorNotCapable, http.StatusUnprocessableEntity},
+		{constants.ErrInferenceRoleInvalid, http.StatusBadRequest},
+		{constants.ErrInferencePromptRequired, http.StatusBadRequest},
+		{constants.ErrInferenceModelRefInvalid, http.StatusBadRequest},
+		{constants.ErrInferenceModelOverrideDenied, http.StatusForbidden},
+		{constants.ErrInferenceGovernanceRejected, http.StatusForbidden},
+		{constants.ErrDispatchNoDelivery, http.StatusServiceUnavailable},
+		{constants.ErrInferenceReceiptFailed, http.StatusBadGateway},
+		{constants.ErrInferenceReceiptVerify, http.StatusBadGateway},
+		{constants.ErrInferenceResultDigestMismatch, http.StatusBadGateway},
+		{constants.ErrInferenceResultDigest, http.StatusBadGateway},
+		{constants.ErrInferenceResultDecode, http.StatusBadGateway},
+		{constants.ErrInferenceCompletionNoReceipt, http.StatusBadGateway},
+		{constants.ErrInferenceCompletionNoResult, http.StatusBadGateway},
+		{constants.ErrInferenceBackendUnavailable, http.StatusBadGateway},
+		{constants.ErrInferenceBackendNotRegistered, http.StatusBadGateway},
+		{constants.ErrInferenceBackendTimeout, http.StatusBadGateway},
+		{constants.ErrInferenceGenerateFailed, http.StatusBadGateway},
+		{constants.ErrInferenceModelNotFound, http.StatusBadGateway},
+	}
+	for _, entry := range sentinels {
+		if errors.Is(err, entry.sentinel) {
+			return entry.status, entry.sentinel
+		}
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return http.StatusGatewayTimeout, constants.ErrInferenceOutcomeUnknown
+	}
+	// Governance envelope construction failures (L1 screening, L2/L3 posture
+	// gates, hash/expiry checks) reject before publish; the shared envelope
+	// classifier owns the status mapping for those sentinels.
+	if status := classifyEnvelopeError(err); status != http.StatusInternalServerError {
+		return status, constants.ErrInferenceGovernanceRejected
+	}
+	return http.StatusInternalServerError, constants.ErrInternal
 }

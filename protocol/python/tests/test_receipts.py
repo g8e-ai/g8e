@@ -19,6 +19,9 @@ from g8e.operator.v1.operator_pb2 import (
     DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
     L2_STATUS_REQUIRED_VALID,
     L3_STATUS_REQUIRED_FAILED,
+    RECEIPT_FAILURE_CODE_EXECUTION_FAILED,
+    RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED,
+    RECEIPT_FAILURE_CODE_UNSPECIFIED,
     ActionReceipt,
 )
 from g8e.receipts import (
@@ -37,9 +40,11 @@ VECTORS_DIRECTORY_NAME = "vectors"
 VECTOR_FILENAME = "action_receipt_canonicalization.json"
 PERSISTENCE_VECTOR_FILENAME = "receipt_persistence_attestation_canonicalization.json"
 STAGE_EVIDENCE_VECTOR_FILENAME = "action_receipt_stage_evidence_canonicalization.json"
+FAILURE_CODE_VECTOR_FILENAME = "action_receipt_failure_code_canonicalization.json"
 VECTOR_PATH = Path(__file__).resolve().parents[2] / VECTORS_DIRECTORY_NAME / VECTOR_FILENAME
 PERSISTENCE_VECTOR_PATH = Path(__file__).resolve().parents[2] / VECTORS_DIRECTORY_NAME / PERSISTENCE_VECTOR_FILENAME
 STAGE_EVIDENCE_VECTOR_PATH = Path(__file__).resolve().parents[2] / VECTORS_DIRECTORY_NAME / STAGE_EVIDENCE_VECTOR_FILENAME
+FAILURE_CODE_VECTOR_PATH = Path(__file__).resolve().parents[2] / VECTORS_DIRECTORY_NAME / FAILURE_CODE_VECTOR_FILENAME
 
 
 @pytest.fixture
@@ -119,6 +124,32 @@ def test_action_receipt_verification_rejects_stage_field_tampering(stage_index, 
     vector = json.loads(STAGE_EVIDENCE_VECTOR_PATH.read_text())
     receipt = parse_action_receipt(vector["receipt"])
     setattr(receipt.deterministic_stage_evidence[stage_index], field, value)
+
+    assert not verify_action_receipt_signature(receipt, vector["public_key_hex"])
+
+
+def test_action_receipt_failure_code_matches_cross_language_vector():
+    vector = json.loads(FAILURE_CODE_VECTOR_PATH.read_text())
+    receipt = parse_action_receipt(vector["receipt"])
+
+    assert receipt.failure_code == RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED
+    canonical = canonicalize_action_receipt(receipt)
+    assert canonical.decode() == vector["canonical_utf8"]
+    assert b'"failure_code":1' in canonical
+    assert verify_action_receipt_signature(receipt, vector["public_key_hex"])
+
+
+@pytest.mark.parametrize(
+    "failure_code",
+    [
+        RECEIPT_FAILURE_CODE_EXECUTION_FAILED,
+        RECEIPT_FAILURE_CODE_UNSPECIFIED,
+    ],
+)
+def test_action_receipt_verification_rejects_failure_code_tampering(failure_code):
+    vector = json.loads(FAILURE_CODE_VECTOR_PATH.read_text())
+    receipt = parse_action_receipt(vector["receipt"])
+    receipt.failure_code = failure_code
 
     assert not verify_action_receipt_signature(receipt, vector["public_key_hex"])
 

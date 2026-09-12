@@ -7,6 +7,8 @@
 
 import logging
 
+from google.protobuf import json_format
+
 from app.clients.http_client import CircuitBreakerConfig, RetryConfig, HTTPClient
 from app.models.settings import G8eeAppSettings, TLSConfig
 from app.constants import (
@@ -484,7 +486,10 @@ class InternalHttpClient:
         try:
             response = await self._http.post(
                 GatewayAPIPaths.INFERENCE_DISPATCH,
-                json_data=request,
+                json_data=json_format.MessageToDict(
+                    request,
+                    preserving_proto_field_name=True,
+                ),
             )
         except Exception as e:
             raise NetworkError(
@@ -512,4 +517,6 @@ class InternalHttpClient:
                 },
             )
 
-        return InferenceDispatchResponse.model_validate(response.json())
+        dispatch_response = InferenceDispatchResponse()
+        json_format.ParseDict(response.json(), dispatch_response)
+        return dispatch_response

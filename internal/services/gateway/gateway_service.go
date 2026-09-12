@@ -722,6 +722,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			DispatchSvc: ls.inferenceDispatchSvc,
 			Responder:   ls.responder,
 			Logger:      logger,
+			MaxPayload:  cfg.Gateway.MaxPayloadBytes,
 		},
 		SSEControllerDeps: SSEControllerDeps{
 			Cfg:       cfg,

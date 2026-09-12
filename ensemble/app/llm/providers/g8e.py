@@ -54,13 +54,17 @@ from app.models.internal_api import (
     InferenceDispatchRequest,
     InferenceDispatchResponse,
 )
+from g8e.operator.v1.operator_pb2 import (
+    MODEL_ROLE_ASSISTANT,
+    MODEL_ROLE_LITE,
+    MODEL_ROLE_PRIMARY,
+)
 
 logger = logging.getLogger(__name__)
 
-# ModelRole enum values from protocol/proto/g8e/operator/v1/operator.proto.
-_ROLE_PRIMARY = 1
-_ROLE_ASSISTANT = 2
-_ROLE_LITE = 3
+_ROLE_PRIMARY = MODEL_ROLE_PRIMARY
+_ROLE_ASSISTANT = MODEL_ROLE_ASSISTANT
+_ROLE_LITE = MODEL_ROLE_LITE
 
 
 def _contents_to_prompt(
@@ -88,7 +92,7 @@ def _contents_to_prompt(
 
 def _response_to_usage_metadata(result: InferenceDispatchResponse) -> UsageMetadata:
     """Build UsageMetadata from the dispatch response result."""
-    if result.result is None:
+    if not result.HasField("result"):
         return UsageMetadata()
     return UsageMetadata(
         prompt_token_count=result.result.prompt_tokens,
@@ -102,8 +106,8 @@ def _response_to_generate_content(
     result: InferenceDispatchResponse,
 ) -> GenerateContentResponse:
     """Build a GenerateContentResponse from the dispatch response."""
-    text = result.result.text if result.result else ""
-    finish_reason = result.result.finish_reason if result.result else "stop"
+    text = result.result.text if result.HasField("result") else ""
+    finish_reason = result.result.finish_reason if result.HasField("result") else "stop"
     return GenerateContentResponse(
         candidates=[
             Candidate(
@@ -154,7 +158,7 @@ class G8EProvider(LLMProvider):
         request = InferenceDispatchRequest(
             role=role,
             prompt=prompt,
-            model=model or None,
+            model=model or "",
             max_tokens=max_output_tokens,
         )
         self._record_model_boundary(request)
@@ -173,11 +177,11 @@ class G8EProvider(LLMProvider):
             primary_llm_settings.system_instructions,
             primary_llm_settings.max_output_tokens,
         )
-        text = result.result.text if result.result else ""
+        text = result.result.text if result.HasField("result") else ""
         if text:
             yield StreamChunkFromModel(text=text)
         yield StreamChunkFromModel(
-            finish_reason=result.result.finish_reason if result.result else "stop",
+            finish_reason=result.result.finish_reason if result.HasField("result") else "stop",
             usage_metadata=_response_to_usage_metadata(result),
         )
 
@@ -209,11 +213,11 @@ class G8EProvider(LLMProvider):
             assistant_llm_settings.system_instructions,
             assistant_llm_settings.max_output_tokens,
         )
-        text = result.result.text if result.result else ""
+        text = result.result.text if result.HasField("result") else ""
         if text:
             yield StreamChunkFromModel(text=text)
         yield StreamChunkFromModel(
-            finish_reason=result.result.finish_reason if result.result else "stop",
+            finish_reason=result.result.finish_reason if result.HasField("result") else "stop",
             usage_metadata=_response_to_usage_metadata(result),
         )
 
@@ -245,11 +249,11 @@ class G8EProvider(LLMProvider):
             lite_llm_settings.system_instructions,
             lite_llm_settings.max_output_tokens,
         )
-        text = result.result.text if result.result else ""
+        text = result.result.text if result.HasField("result") else ""
         if text:
             yield StreamChunkFromModel(text=text)
         yield StreamChunkFromModel(
-            finish_reason=result.result.finish_reason if result.result else "stop",
+            finish_reason=result.result.finish_reason if result.HasField("result") else "stop",
             usage_metadata=_response_to_usage_metadata(result),
         )
 

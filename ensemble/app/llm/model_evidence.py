@@ -14,6 +14,8 @@ from dataclasses import asdict, is_dataclass
 from enum import Enum
 from typing import Any
 
+from google.protobuf import json_format
+from google.protobuf.message import Message
 from pydantic import BaseModel
 
 from app.models.model_telemetry import ModelBoundaryPrivacyAttestation
@@ -23,6 +25,8 @@ _MODEL_BOUNDARY_SCANNER_VERSION = "sentinel-regex@1.0.0"
 
 
 def _json_value(value: Any) -> Any:
+    if isinstance(value, Message):
+        return json_format.MessageToDict(value, preserving_proto_field_name=True)
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json")
     if is_dataclass(value) and not isinstance(value, type):

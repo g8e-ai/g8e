@@ -16,6 +16,7 @@ definitions:
     - FS_LIST
     - FS_READ
     - HEARTBEAT
+    - INFERENCE
     - MCP_CALL
     - MCP_PROMPT_GET
     - MCP_PROMPT_LIST
@@ -46,6 +47,7 @@ definitions:
     - ActionTypeFsList
     - ActionTypeFsRead
     - ActionTypeHeartbeat
+    - ActionTypeInference
     - ActionTypeMcpCall
     - ActionTypeMcpPromptGet
     - ActionTypeMcpPromptList
@@ -135,6 +137,49 @@ definitions:
       transaction_id:
         type: string
     type: object
+  models.AgentLifecycleStatus:
+    enum:
+    - idle
+    - queued
+    - running
+    - waiting
+    - completed
+    - failed
+    - offline
+    type: string
+    x-enum-varnames:
+    - AgentLifecycleStatusIdle
+    - AgentLifecycleStatusQueued
+    - AgentLifecycleStatusRunning
+    - AgentLifecycleStatusWaiting
+    - AgentLifecycleStatusCompleted
+    - AgentLifecycleStatusFailed
+    - AgentLifecycleStatusOffline
+  models.AgentStateProjection:
+    properties:
+      agent_id:
+        type: string
+      display_name:
+        type: string
+      freshness:
+        $ref: '#/definitions/models.SnapshotFreshness'
+      model:
+        type: string
+      observed_at:
+        type: string
+      role:
+        type: string
+      run_id:
+        type: string
+      schema_version:
+        type: string
+      status:
+        $ref: '#/definitions/models.AgentLifecycleStatus'
+      task_id:
+        type: string
+      throughput:
+        $ref: '#/definitions/models.ObservedMeasurement'
+    type: object
   models.AuditReceiptsResponse:
     properties:
       receipts:
@@ -155,6 +200,261 @@ definitions:
       sign_count:
         type: integer
     type: object
+  models.BundleArtifactEntryWire:
+    properties:
+      artifact_type:
+        type: string
+      byte_length:
+        type: integer
+      encryption:
+        $ref: '#/definitions/models.EvidenceEncryptionWire'
+      media_type:
+        type: string
+      path:
+        type: string
+      privacy_class:
+        type: string
+      record_count:
+        type: integer
+      sha256:
+        type: string
+    type: object
+  models.BundleManifestWire:
+    properties:
+      artifacts:
+        items:
+          $ref: '#/definitions/models.BundleArtifactEntryWire'
+        type: array
+      bundle_id:
+        type: string
+      checksum_root_sha256:
+        type: string
+      created_at:
+        type: string
+      external_references:
+        items:
+          $ref: '#/definitions/models.ExternalReferenceWire'
+        type: array
+      manifest_content_sha256:
+        type: string
+      release_version:
+        type: string
+      run_id:
+        type: string
+      schema_version:
+        type: string
+    type: object
+  models.DownloadArtifact:
+    properties:
+      artifact_id:
+        type: string
+      byte_size:
+        type: integer
+      download_url:
+        type: string
+      filename:
+        type: string
+      generated_at:
+        type: string
+      media_type:
+        type: string
+      privacy_classification:
+        $ref: '#/definitions/models.DownloadPrivacyClassification'
+      schema_version:
+        type: string
+      sha256:
+        type: string
+      source_run_id:
+        type: string
+    type: object
+  models.DownloadPrivacyClassification:
+    enum:
+    - public_safe
+    - restricted
+    type: string
+    x-enum-varnames:
+    - DownloadPrivacyPublicSafe
+    - DownloadPrivacyRestricted
+  models.EvalDetail:
+    properties:
+      arm_ids:
+        items:
+          type: string
+        type: array
+      artifact_digest:
+        type: string
+      assigned_tasks:
+        type: integer
+      assistant_variant_id:
+        type: string
+      backend_name:
+        type: string
+      benchmark_population:
+        type: integer
+      campaign_id:
+        type: string
+      completed_at:
+        type: string
+      environment_class:
+        type: string
+      lite_variant_id:
+        type: string
+      metrics:
+        items:
+          $ref: '#/definitions/models.EvalMetricSummary'
+        type: array
+      model_cohort_ids:
+        items:
+          type: string
+        type: array
+      observed_at:
+        type: string
+      primary_variant_id:
+        type: string
+      proof_links:
+        items:
+          $ref: '#/definitions/models.EvidenceSafeLink'
+        type: array
+      published_projection_sha256:
+        type: string
+      qualification_count:
+        type: integer
+      quantization:
+        type: string
+      receipt_count:
+        type: integer
+      repetition_count:
+        type: integer
+      role_combination_id:
+        type: string
+      run_id:
+        type: string
+      schema_version:
+        type: string
+      status:
+        $ref: '#/definitions/models.RunLifecycleStatus'
+      suite_id:
+        type: string
+      suite_version:
+        type: string
+      superseded_count:
+        type: integer
+      terminal_attempts:
+        type: integer
+      unavailable_count:
+        type: integer
+      verification_status:
+        $ref: '#/definitions/models.EvalVerificationStatus'
+    type: object
+  models.EvalMetricSummary:
+    properties:
+      arm_id:
+        type: string
+      denominator:
+        type: integer
+      eligible:
+        type: integer
+      metric_id:
+        type: string
+      metric_version:
+        type: string
+      model_cohort_id:
+        type: string
+      recorded_at:
+        type: string
+      schema_version:
+        type: string
+      unit:
+        type: string
+      value:
+        type: number
+      verification_status:
+        $ref: '#/definitions/models.EvalVerificationStatus'
+    type: object
+  models.EvalSummary:
+    properties:
+      arm_ids:
+        items:
+          type: string
+        type: array
+      campaign_id:
+        type: string
+      completed_at:
+        type: string
+      metric_count:
+        type: integer
+      model_cohort_ids:
+        items:
+          type: string
+        type: array
+      observed_at:
+        type: string
+      published_projection_sha256:
+        type: string
+      receipt_count:
+        type: integer
+      run_id:
+        type: string
+      schema_version:
+        type: string
+      status:
+        $ref: '#/definitions/models.RunLifecycleStatus'
+      suite_id:
+        type: string
+      suite_version:
+        type: string
+      verification_status:
+        $ref: '#/definitions/models.EvalVerificationStatus'
+    type: object
+  models.EvalVerificationStatus:
+    enum:
+    - projection_validated
+    - receipt_verification_not_applicable
+    - verified
+    type: string
+    x-enum-varnames:
+    - EvalVerificationProjectionValidated
+    - EvalVerificationReceiptVerificationNotApplicable
+    - EvalVerificationVerified
+  models.EvidenceEncryptionWire:
+    properties:
+      aad_sha256:
+        type: string
+      algorithm:
+        type: string
+      ciphertext_byte_length:
+        type: integer
+      ciphertext_sha256:
+        type: string
+      key_id:
+        type: string
+    type: object
+  models.EvidenceSafeLink:
+    properties:
+      artifact_id:
+        type: string
+      label:
+        type: string
+      media_type:
+        type: string
+      schema_version:
+        type: string
+    type: object
+  models.ExternalReferenceWire:
+    properties:
+      byte_length:
+        type: integer
+      content_sha256:
+        type: string
+      description:
+        type: string
+      media_type:
+        type: string
+      reference_id:
+        type: string
+      source_uri:
+        type: string
+    type: object
   models.HealthResponse:
     properties:
       governance_ready:
@@ -172,6 +472,15 @@ definitions:
       version:
         type: string
     type: object
+  models.LayerResultWire:
+    properties:
+      failure_count:
+        type: integer
+      layer:
+        type: integer
+      passed:
+        type: boolean
+    type: object
   models.LocalOSUser:
     properties:
       domain:
@@ -184,6 +493,219 @@ definitions:
         type: string
       username:
         type: string
+    type: object
+  models.MeasurementScope:
+    enum:
+    - process
+    - system
+    - accelerator
+    type: string
+    x-enum-varnames:
+    - MeasurementScopeProcess
+    - MeasurementScopeSystem
+    - MeasurementScopeAccelerator
+  models.MeasurementStatus:
+    enum:
+    - observed
+    - stale
+    - unavailable
+    - unsupported
+    type: string
+    x-enum-varnames:
+    - MeasurementStatusObserved
+    - MeasurementStatusStale
+    - MeasurementStatusUnavailable
+    - MeasurementStatusUnsupported
+  models.ObserveBootstrapSnapshot:
+    properties:
+      active_run:
+        $ref: '#/definitions/models.RunSummary'
+      agents:
+        items:
+          $ref: '#/definitions/models.AgentStateProjection'
+        type: array
+      downloads:
+        items:
+          $ref: '#/definitions/models.DownloadArtifact'
+        type: array
+      generated_at:
+        type: string
+      latest_evals:
+        items:
+          $ref: '#/definitions/models.EvalSummary'
+        type: array
+      measurements:
+        $ref: '#/definitions/models.OverviewMeasurements'
+      overview:
+        $ref: '#/definitions/models.OverviewCounters'
+      recent_runs:
+        items:
+          $ref: '#/definitions/models.RunSummary'
+        type: array
+      schema_version:
+        type: string
+    type: object
+  models.ObservePage:
+    properties:
+      cursor:
+        type: string
+      has_more:
+        type: boolean
+      items:
+        items:
+          type: integer
+        type: array
+      limit:
+        type: integer
+      schema_version:
+        type: string
+    type: object
+  models.ObserveProducerAgentStateRequest:
+    properties:
+      agent_id:
+        type: string
+      cli_session_id:
+        type: string
+      display_name:
+        type: string
+      model:
+        type: string
+      observed_at:
+        type: string
+      role:
+        type: string
+      run_id:
+        type: string
+      schema_version:
+        type: string
+      status:
+        $ref: '#/definitions/models.AgentLifecycleStatus'
+      task_id:
+        type: string
+      web_session_id:
+        type: string
+    type: object
+  models.ObserveProducerDownloadArtifactInput:
+    properties:
+      artifact_id:
+        type: string
+      byte_size:
+        type: integer
+      content:
+        type: string
+      filename:
+        type: string
+      media_type:
+        type: string
+      privacy_classification:
+        $ref: '#/definitions/models.DownloadPrivacyClassification'
+      sha256:
+        type: string
+      source_run_id:
+        type: string
+    type: object
+  models.ObserveProducerEvalPublicationRequest:
+    properties:
+      arm_ids:
+        items:
+          type: string
+        type: array
+      assigned_tasks:
+        type: integer
+      assignment_count:
+        type: integer
+      bundle_id:
+        type: string
+      bundle_manifest:
+        $ref: '#/definitions/models.BundleManifestWire'
+      campaign_id:
+        type: string
+      cli_session_id:
+        type: string
+      downloads:
+        items:
+          $ref: '#/definitions/models.ObserveProducerDownloadArtifactInput'
+        type: array
+      metrics:
+        items:
+          $ref: '#/definitions/models.EvalMetricSummary'
+        type: array
+      model_cohort_ids:
+        items:
+          type: string
+        type: array
+      receipt_count:
+        type: integer
+      release_version:
+        type: string
+      run_id:
+        type: string
+      schema_version:
+        type: string
+      suite_id:
+        type: string
+      suite_version:
+        type: string
+      terminal_attempts:
+        type: integer
+      verification_report:
+        $ref: '#/definitions/models.VerificationReportWire'
+      web_session_id:
+        type: string
+    type: object
+  models.ObserveProducerRunStateRequest:
+    properties:
+      active_task_id:
+        type: string
+      cli_session_id:
+        type: string
+      completed_tasks:
+        type: integer
+      display_name:
+        type: string
+      ended_at:
+        type: string
+      observed_at:
+        type: string
+      run_id:
+        type: string
+      run_kind:
+        $ref: '#/definitions/models.RunKind'
+      schema_version:
+        type: string
+      started_at:
+        type: string
+      status:
+        $ref: '#/definitions/models.RunLifecycleStatus'
+      total_tasks:
+        type: integer
+      web_session_id:
+        type: string
+    type: object
+  models.ObservedMeasurement:
+    properties:
+      collector_version:
+        type: string
+      evidence_hash:
+        type: string
+      metric_id:
+        type: string
+      observed_at:
+        type: string
+      schema_version:
+        type: string
+      scope:
+        $ref: '#/definitions/models.MeasurementScope'
+      source_component:
+        type: string
+      status:
+        $ref: '#/definitions/models.MeasurementStatus'
+      unit:
+        type: string
+      value:
+        type: number
+      window_seconds:
+        type: number
     type: object
   models.OperatorSessionValidationRequest:
     properties:
@@ -202,6 +724,38 @@ definitions:
         type: string
       valid:
         type: boolean
+    type: object
+  models.OverviewCounters:
+    properties:
+      agents_running:
+        type: integer
+      agents_running_freshness:
+        $ref: '#/definitions/models.SnapshotFreshness'
+      generated_at:
+        type: string
+      schema_version:
+        type: string
+      success_rate:
+        $ref: '#/definitions/models.SuccessRateMeasurement'
+      tasks_in_queue:
+        type: integer
+      tasks_in_queue_freshness:
+        $ref: '#/definitions/models.SnapshotFreshness'
+    type: object
+  models.OverviewMeasurements:
+    properties:
+      cpu:
+        $ref: '#/definitions/models.ObservedMeasurement'
+      disk:
+        $ref: '#/definitions/models.ObservedMeasurement'
+      ram:
+        $ref: '#/definitions/models.ObservedMeasurement'
+      schema_version:
+        type: string
+      total_throughput:
+        $ref: '#/definitions/models.ObservedMeasurement'
+      vram:
+        $ref: '#/definitions/models.ObservedMeasurement'
     type: object
   models.PKICSRSignResponse:
     properties:
@@ -297,6 +851,115 @@ definitions:
       web_session_id:
         type: string
     type: object
+  models.RunDetail:
+    properties:
+      active_task_id:
+        type: string
+      completed_tasks:
+        type: integer
+      display_name:
+        type: string
+      ended_at:
+        type: string
+      evidence_safe_links:
+        items:
+          $ref: '#/definitions/models.EvidenceSafeLink'
+        type: array
+      observed_at:
+        type: string
+      run_id:
+        type: string
+      run_kind:
+        $ref: '#/definitions/models.RunKind'
+      schema_version:
+        type: string
+      started_at:
+        type: string
+      status:
+        $ref: '#/definitions/models.RunLifecycleStatus'
+      tasks:
+        items:
+          $ref: '#/definitions/models.RunTask'
+        type: array
+      total_tasks:
+        type: integer
+    type: object
+  models.RunKind:
+    enum:
+    - investigation
+    - eval
+    - demo
+    - workflow
+    type: string
+    x-enum-varnames:
+    - RunKindInvestigation
+    - RunKindEval
+    - RunKindDemo
+    - RunKindWorkflow
+  models.RunLifecycleStatus:
+    enum:
+    - queued
+    - running
+    - waiting
+    - completed
+    - failed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - RunLifecycleStatusQueued
+    - RunLifecycleStatusRunning
+    - RunLifecycleStatusWaiting
+    - RunLifecycleStatusCompleted
+    - RunLifecycleStatusFailed
+    - RunLifecycleStatusCancelled
+  models.RunSummary:
+    properties:
+      active_task_id:
+        type: string
+      completed_tasks:
+        type: integer
+      display_name:
+        type: string
+      ended_at:
+        type: string
+      evidence_count:
+        type: integer
+      has_receipts:
+        type: boolean
+      observed_at:
+        type: string
+      run_id:
+        type: string
+      run_kind:
+        $ref: '#/definitions/models.RunKind'
+      schema_version:
+        type: string
+      started_at:
+        type: string
+      status:
+        $ref: '#/definitions/models.RunLifecycleStatus'
+      total_tasks:
+        type: integer
+    type: object
+  models.RunTask:
+    properties:
+      display_name:
+        type: string
+      ended_at:
+        type: string
+      model:
+        type: string
+      owning_agent:
+        type: string
+      schema_version:
+        type: string
+      started_at:
+        type: string
+      status:
+        $ref: '#/definitions/models.RunLifecycleStatus'
+      task_id:
+        type: string
+    type: object
   models.SSEEventRow:
     properties:
       cli_session_id:
@@ -343,6 +1006,16 @@ definitions:
       success:
         type: boolean
     type: object
+  models.SnapshotFreshness:
+    enum:
+    - observed
+    - stale
+    - unavailable
+    type: string
+    x-enum-varnames:
+    - SnapshotFreshnessObserved
+    - SnapshotFreshnessStale
+    - SnapshotFreshnessUnavailable
   models.StateResponse:
     properties:
       state_merkle_root:
@@ -352,6 +1025,21 @@ definitions:
     properties:
       status:
         $ref: '#/definitions/constants.GatewayMode'
+    type: object
+  models.SuccessRateMeasurement:
+    properties:
+      denominator:
+        type: integer
+      metric_id:
+        type: string
+      metric_version:
+        type: string
+      unit:
+        type: string
+      value:
+        type: number
+      verification_status:
+        $ref: '#/definitions/models.EvalVerificationStatus'
     type: object
   models.SuspendedTransactionsResponse:
     properties:
@@ -413,6 +1101,40 @@ definitions:
       user:
         $ref: '#/definitions/models.User'
     type: object
+  models.VerificationFailureWire:
+    properties:
+      code:
+        type: string
+      layer:
+        type: integer
+      message:
+        type: string
+      record_id:
+        type: string
+    type: object
+  models.VerificationReportWire:
+    properties:
+      bundle_id:
+        type: string
+      failures:
+        items:
+          $ref: '#/definitions/models.VerificationFailureWire'
+        type: array
+      layers:
+        items:
+          $ref: '#/definitions/models.LayerResultWire'
+        type: array
+      ok:
+        type: boolean
+      release_version:
+        type: string
+      run_id:
+        type: string
+      schema_version:
+        type: string
+      verified_at:
+        type: string
+    type: object
   models.WebAuthnAssertionResponse:
     properties:
       authenticatorData:
@@ -453,6 +1175,12 @@ definitions:
       executed_at_unix_ms:
         description: Timestamp when execution finished
         type: integer
+      failure_code:
+        allOf:
+        - $ref: '#/definitions/operatorv1.ReceiptFailureCode'
+        description: |-
+          Typed classification of a FAILED receipt. UNSPECIFIED on non-failed
+          receipts. Bound into the signature via canonicalization.
       final_persistence_attestation:
         $ref: '#/definitions/operatorv1.ReceiptPersistenceAttestation'
       l2_status:
@@ -608,6 +1336,100 @@ definitions:
     - ExecutionStatus_EXECUTION_STATUS_FAILED
     - ExecutionStatus_EXECUTION_STATUS_CANCELLED
     - ExecutionStatus_EXECUTION_STATUS_TIMEOUT
+  operatorv1.InferenceDispatchRequest:
+    properties:
+      acting_app_id:
+        description: Application that initiated the inference request.
+        type: string
+      case_id:
+        description: Application context propagated from the chat turn.
+        type: string
+      cli_session_id:
+        type: string
+      investigation_id:
+        type: string
+      keep_alive:
+        description: Ollama keep-alive duration override (empty = use config default).
+        type: string
+      max_tokens:
+        description: Maximum tokens to generate (0 = use backend default).
+        type: integer
+      model:
+        description: |-
+          Optional model override. Accepted only when it matches the Inference
+          Node's configured model for the role; any other value is rejected as an
+          unauthorized override.
+        type: string
+      prompt:
+        description: |-
+          Prompt text sent to the Inference Node. The node re-scrubs it through
+          its own ScrubbingService before crossing the execution boundary.
+        type: string
+      role:
+        allOf:
+        - $ref: '#/definitions/operatorv1.ModelRole'
+        description: Chat-tier role for this request (primary, assistant, lite).
+      target_operator_session_id:
+        description: |-
+          Explicit Inference Node target. When empty, the gateway requires exactly
+          one enrolled inference-capable operator for the requestor; zero or
+          multiple matches are rejected.
+        type: string
+      task_id:
+        type: string
+      temperature:
+        description: Generation temperature override (0 = use backend default).
+        type: number
+      web_session_id:
+        type: string
+    type: object
+  operatorv1.InferenceDispatchResponse:
+    properties:
+      receipt:
+        allOf:
+        - $ref: '#/definitions/operatorv1.ActionReceipt'
+        description: The verified final signed ActionReceipt for the transaction.
+      result:
+        allOf:
+        - $ref: '#/definitions/operatorv1.InferenceResult'
+        description: |-
+          The complete inference result whose result_digest is bound into the
+          signed receipt.
+      transaction_id:
+        description: Transaction ID correlating the dispatch with the audit chain.
+        type: string
+    type: object
+  operatorv1.InferenceResult:
+    properties:
+      completion_tokens:
+        description: Number of completion tokens generated.
+        type: integer
+      finish_reason:
+        description: Finish reason (e.g., "stop", "length").
+        type: string
+      model:
+        description: |-
+          Model that produced the result (echoed from the request or resolved by
+          the backend).
+        type: string
+      prompt_tokens:
+        description: Number of prompt tokens consumed.
+        type: integer
+      result_digest:
+        description: |-
+          Canonical digest of the complete result: lowercase hex SHA-256 over the
+          deterministic protobuf serialization of this message with result_digest
+          cleared. The Inference Node computes it at execution time; the signed
+          ActionReceipt's result_summary binds it, and the User Gateway verifies
+          digest equality before returning success to the caller.
+        type: string
+      text:
+        description: Generated text from the model.
+        type: string
+      total_tokens:
+        description: Total tokens (prompt + completion).
+        type: integer
+    type: object
   operatorv1.L2Status:
     enum:
     - 0
@@ -652,6 +1474,42 @@ definitions:
     - L3Status_L3_STATUS_NOT_REQUIRED
     - L3Status_L3_STATUS_REQUIRED_VALID
     - L3Status_L3_STATUS_REQUIRED_FAILED
+  operatorv1.ModelRole:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - ModelRole_MODEL_ROLE_UNSPECIFIED
+    - ModelRole_MODEL_ROLE_PRIMARY
+    - ModelRole_MODEL_ROLE_ASSISTANT
+    - ModelRole_MODEL_ROLE_LITE
+  operatorv1.ReceiptFailureCode:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_ROLE_INVALID
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REF_INVALID
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATE_FAILED
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED
   operatorv1.ReceiptPersistenceAttestation:
     properties:
       audit_record_id:
@@ -1587,6 +2445,406 @@ paths:
       summary: Submit governance envelope
       tags:
       - governance
+  /api/v1/inference/dispatch:
+    post:
+      consumes:
+      - application/json
+      description: Platform-internal endpoint (mTLS, app workload) that routes an
+        inference request through the L1-L5 governance gauntlet to the Inference Node
+        and returns the verified result plus final signed receipt.
+      parameters:
+      - description: Governed inference dispatch request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/operatorv1.InferenceDispatchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Verified inference result and final signed receipt
+          schema:
+            $ref: '#/definitions/operatorv1.InferenceDispatchResponse'
+        "400":
+          description: Bad Request — malformed body, unknown field, empty prompt,
+            invalid role, or acting_app_id identity mismatch
+          schema:
+            type: string
+        "401":
+          description: Unauthorized — missing delegated user identity
+          schema:
+            type: string
+        "403":
+          description: Forbidden — not an app workload, model override denied, or
+            governance rejection
+          schema:
+            type: string
+        "404":
+          description: Not Found — no inference-capable operator session
+          schema:
+            type: string
+        "405":
+          description: Method Not Allowed
+          schema:
+            type: string
+        "409":
+          description: Conflict — multiple inference-capable operators; explicit target
+            required
+          schema:
+            type: string
+        "413":
+          description: Request Entity Too Large — body exceeds the payload limit
+          schema:
+            type: string
+        "422":
+          description: Unprocessable Entity — target operator session is not inference-capable
+          schema:
+            type: string
+        "500":
+          description: Internal Error
+          schema:
+            type: string
+        "502":
+          description: Bad Gateway — provider or receipt verification failure
+          schema:
+            type: string
+        "503":
+          description: Service Unavailable — command delivered to no operator subscribers
+          schema:
+            type: string
+        "504":
+          description: Gateway Timeout — request deadline exceeded; remote provider
+            outcome unknown
+          schema:
+            type: string
+      summary: Dispatch a governed inference request
+      tags:
+      - inference
+  /api/v1/observe/bootstrap:
+    get:
+      description: Returns one bounded initial snapshot for agents, active run, overview
+        counters, recent runs, latest eval summaries, and download metadata.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ObserveBootstrapSnapshot'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      summary: Get observe bootstrap snapshot
+      tags:
+      - observe
+  /api/v1/observe/downloads:
+    get:
+      description: Returns a paginated list of allowlisted download artifacts owned
+        by the authenticated user.
+      parameters:
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: string
+      - description: Page size (1-100, default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ObservePage'
+        "400":
+          description: Invalid cursor or limit
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      summary: List observe downloads
+      tags:
+      - observe
+  /api/v1/observe/downloads/{artifact_id}:
+    get:
+      description: Returns a single allowlisted download artifact owned by the authenticated
+        user. Use ?download=1 to stream the artifact bytes.
+      parameters:
+      - description: Artifact ID
+        in: path
+        name: artifact_id
+        required: true
+        type: string
+      - description: Set to 1 to stream the artifact bytes instead of returning metadata
+        in: query
+        name: download
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DownloadArtifact'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Download not found
+          schema:
+            type: string
+      summary: Get observe download artifact
+      tags:
+      - observe
+  /api/v1/observe/evals:
+    get:
+      description: Returns paginated eval run projections owned by the authenticated
+        user.
+      parameters:
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: string
+      - description: Page size (1-100, default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ObservePage'
+        "400":
+          description: Invalid cursor or limit
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      summary: List observe evals
+      tags:
+      - observe
+  /api/v1/observe/evals/{run_id}:
+    get:
+      description: Returns a typed eval detail projection with manifest-safe identity,
+        arm/model information, aggregate metrics, status, and verification boundary.
+      parameters:
+      - description: Eval run ID
+        in: path
+        name: run_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.EvalDetail'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Eval not found
+          schema:
+            type: string
+      summary: Get observe eval detail
+      tags:
+      - observe
+  /api/v1/observe/producer/agent-state:
+    post:
+      consumes:
+      - application/json
+      description: Accepts a typed agent state update from an mTLS-authenticated app
+        workload (the g8ee ensemble). The gateway derives user_id from the peer certificate,
+        persists the agent state projection, and emits an app.agent.status.updated
+        SSE event after successful persistence.
+      parameters:
+      - description: Agent state update
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/models.ObserveProducerAgentStateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: accepted
+          schema:
+            type: string
+        "400":
+          description: Invalid transition, stale update, or missing fields
+          schema:
+            type: string
+        "401":
+          description: Unauthorized — mTLS user identity required
+          schema:
+            type: string
+        "403":
+          description: Forbidden — not an app workload or cross-user
+          schema:
+            type: string
+        "500":
+          description: Persistence failure
+          schema:
+            type: string
+      summary: Push observe agent state
+      tags:
+      - observe
+  /api/v1/observe/producer/eval-publication:
+    post:
+      consumes:
+      - application/json
+      description: Accepts a typed eval publication request from an mTLS-authenticated
+        app workload (the g8ee ensemble) or CLI session (the g8e-evals publish command).
+        The gateway derives user_id from the peer certificate, verifies the bundle,
+        persists the eval projection and download catalog, writes artifact bytes,
+        and emits ai.eval.run.completed and ai.eval.metric.recorded SSE events after
+        successful persistence.
+      parameters:
+      - description: Eval publication request
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/models.ObserveProducerEvalPublicationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: accepted
+          schema:
+            type: string
+        "400":
+          description: Invalid request, unverified bundle, or invalid download catalog
+          schema:
+            type: string
+        "401":
+          description: Unauthorized — mTLS user identity required
+          schema:
+            type: string
+        "403":
+          description: Forbidden — not an app workload or CLI session
+          schema:
+            type: string
+        "500":
+          description: Persistence failure
+          schema:
+            type: string
+      summary: Publish verified eval bundle
+      tags:
+      - observe
+  /api/v1/observe/producer/run-state:
+    post:
+      consumes:
+      - application/json
+      description: Accepts a typed run state update from an mTLS-authenticated app
+        workload (the g8ee ensemble). The gateway derives user_id from the peer certificate,
+        persists the run state projection, and emits an app.run.status.updated SSE
+        event after successful persistence.
+      parameters:
+      - description: Run state update
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/models.ObserveProducerRunStateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: accepted
+          schema:
+            type: string
+        "400":
+          description: Invalid transition, stale update, or missing fields
+          schema:
+            type: string
+        "401":
+          description: Unauthorized — mTLS user identity required
+          schema:
+            type: string
+        "403":
+          description: Forbidden — not an app workload or cross-user
+          schema:
+            type: string
+        "500":
+          description: Persistence failure
+          schema:
+            type: string
+      summary: Push observe run state
+      tags:
+      - observe
+  /api/v1/observe/runs:
+    get:
+      description: Returns paginated read-only run summaries owned by the authenticated
+        user.
+      parameters:
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: string
+      - description: Page size (1-100, default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ObservePage'
+        "400":
+          description: Invalid cursor or limit
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      summary: List observe runs
+      tags:
+      - observe
+  /api/v1/observe/runs/{run_id}:
+    get:
+      description: Returns a typed run detail projection with tasks and evidence-safe
+        links.
+      parameters:
+      - description: Run ID
+        in: path
+        name: run_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RunDetail'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Run not found
+          schema:
+            type: string
+      summary: Get observe run detail
+      tags:
+      - observe
   /api/v1/operators/validate:
     post:
       consumes:

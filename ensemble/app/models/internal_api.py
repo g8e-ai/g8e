@@ -13,6 +13,10 @@ from g8e.models.observe_api import (
     ObserveProducerRunStateRequest as _G8eObserveProducerRunStateRequest,
     ObserveProducerResponse as _G8eObserveProducerResponse,
 )
+from g8e.operator.v1.operator_pb2 import (
+    InferenceDispatchRequest as _G8eInferenceDispatchRequest,
+    InferenceDispatchResponse as _G8eInferenceDispatchResponse,
+)
 
 from app.models.attachments import AttachmentMetadata
 from app.models.base import ConfigDict, Field, G8eBaseModel
@@ -649,50 +653,10 @@ ObserveProducerResponse = _G8eObserveProducerResponse
 # Inference dispatch (g8ellama). Platform-internal endpoint on the User
 # Gateway that the ensemble chat pipeline calls to dispatch a governed
 # inference request to the Inference Node. Not AI-visible; not an MCP tool.
+# The request/response contract is protocol-owned
+# (g8e.operator.v1.InferenceDispatchRequest / InferenceDispatchResponse) and
+# serializes as canonical protojson with proto field names.
 # ---------------------------------------------------------------------------
 
-
-class InferenceDispatchRequest(G8eBaseModel):
-    """Request body for POST /api/v1/inference/dispatch.
-
-    The Role is the chat-tier role (1=primary, 2=assistant, 3=lite). The
-    Prompt is the scrubbed prompt text. Optional fields override the
-    Inference Node's config defaults when non-zero/non-empty.
-    """
-
-    role: int = Field(..., description="Chat-tier role: 1=primary, 2=assistant, 3=lite")
-    prompt: str = Field(..., description="Scrubbed prompt text")
-    model: str | None = Field(default=None, description="Model override (empty = config default)")
-    temperature: float | None = Field(default=None, description="Temperature override")
-    max_tokens: int | None = Field(default=None, description="Max tokens override")
-    keep_alive: str | None = Field(default=None, description="Ollama keep-alive override")
-    acting_app_id: str | None = Field(default=None)
-    case_id: str | None = Field(default=None)
-    investigation_id: str | None = Field(default=None)
-    task_id: str | None = Field(default=None)
-    web_session_id: str | None = Field(default=None)
-    cli_session_id: str | None = Field(default=None)
-
-
-class InferenceDispatchResult(G8eBaseModel):
-    """The InferenceResult payload returned by the Inference Node.
-
-    Field names match the protobuf JSON tags (snake_case) emitted by the
-    gateway's response encoder.
-    """
-
-    text: str = Field(default="")
-    prompt_tokens: int = Field(default=0)
-    completion_tokens: int = Field(default=0)
-    total_tokens: int = Field(default=0)
-    finish_reason: str = Field(default="")
-    model: str = Field(default="")
-
-
-class InferenceDispatchResponse(G8eBaseModel):
-    """Response body for POST /api/v1/inference/dispatch."""
-
-    success: bool
-    transaction_id: str = Field(default="")
-    result: InferenceDispatchResult | None = Field(default=None)
-    error: str | None = Field(default=None)
+InferenceDispatchRequest = _G8eInferenceDispatchRequest
+InferenceDispatchResponse = _G8eInferenceDispatchResponse

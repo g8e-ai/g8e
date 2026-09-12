@@ -879,12 +879,13 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     11. **finalization**: the last index generation is FINALIZATION.
     12. **supersession_policy**: SUPERSESSION generations are policy-valid.
     13. **expected_record_policy**: the frozen expected record policy is loaded and validated.
-    14. **resource_observation**: resource observations are validated, cross-bound to campaign/assignment/attempt/stage identities, and their model_variant_id and role are cross-checked against the assignment's cohort. VERIFIED observations' source evidence references are resolved against the evidence index.
-    15. **tool_call_scorecard**: tool call scorecards are validated, cross-bound, and their cardinality is enforced (ONE_PER_INFERENCE when stages.jsonl is present).
-    16. **escalation_records**: escalation records are validated, cross-bound, and their cardinality is enforced (ONE_PER_ATTEMPT).
-    17. **security_events**: security event records are validated, cross-bound, and their cardinality is enforced (ONE_PER_ATTEMPT).
-    18. **correlated_errors**: correlated error records are validated, cross-bound, and their cardinality is enforced (ONE_PER_INFERENCE when stages.jsonl is present).
-    19. **resource_observation_count**: resource observation counts are verified against the exact inference trail from stages.jsonl (not just "at least one per attempt").
+    14. **stage_and_metric_policy**: the policy's stages.jsonl and metrics.jsonl entries are enforced (REQUIRED presence, ONE_PER_INFERENCE for stages, ONE_PER_ATTEMPT for metrics).
+    15. **resource_observation**: resource observations are validated, cross-bound to campaign/assignment/attempt/stage identities, and their model_variant_id and role are cross-checked against the assignment's cohort. VERIFIED observations' source evidence references are resolved against the evidence index.
+    16. **tool_call_scorecard**: tool call scorecards are validated, cross-bound, and their cardinality is enforced (ONE_PER_INFERENCE when stages.jsonl is present).
+    17. **escalation_records**: escalation records are validated, cross-bound, and their cardinality is enforced (ONE_PER_ATTEMPT).
+    18. **security_events**: security event records are validated, cross-bound, and their cardinality is enforced (ONE_PER_ATTEMPT).
+    19. **correlated_errors**: correlated error records are validated, cross-bound, and their cardinality is enforced (ONE_PER_INFERENCE when stages.jsonl is present).
+    20. **resource_observation_count**: resource observation counts are verified against the exact inference trail from stages.jsonl (not just "at least one per attempt").
 
     Returns a ``CampaignVerificationReport`` with ``ok=True`` only when all
     layers pass. The report carries the campaign identity, verified index
@@ -1156,7 +1157,28 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
         1 for a in attempts if a.terminal_status == TerminalStatus.COMPLETED
     )
 
-    # Layer 14: resource observations — enforce policy, validate, cross-bind
+    # Layer 14: stage and metric record policy — the frozen policy's
+    # stages.jsonl and metrics.jsonl entries are consulted here. A REQUIRED
+    # stages.jsonl entry demands the file exists and contains exactly one
+    # MODEL_INFERENCE record per provider inference. A REQUIRED
+    # metrics.jsonl entry demands the file exists and contains exactly one
+    # record per completed attempt.
+    checked_layers.append("stage_and_metric_policy")
+    stages_policy_path = report_dir / STAGES_JSONL
+    _enforce_record_file_policy(
+        stages_policy_path, STAGES_JSONL, policy, failures,
+    )
+    _enforce_one_per_inference_cardinality(
+        stages_policy_path, STAGES_JSONL, policy, [], stages, failures,
+    )
+    _enforce_record_file_policy(
+        metrics_path, METRICS_JSONL, policy, failures,
+    )
+    _enforce_one_per_attempt_cardinality(
+        metrics_path, METRICS_JSONL, policy, completed_attempt_count, failures,
+    )
+
+    # Layer 15: resource observations — enforce policy, validate, cross-bind
     checked_layers.append("resource_observation")
     resource_obs_path = report_dir / RESOURCE_OBSERVATIONS_JSONL
     resource_observations: list[ResourceObservation] = []
@@ -1213,7 +1235,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             failures.append(f"resource observation validation failed: {e}")
 
-    # Layer 15: tool call scorecards — enforce policy, validate, cross-bind
+    # Layer 16: tool call scorecards — enforce policy, validate, cross-bind
     checked_layers.append("tool_call_scorecard")
     scorecard_path = report_dir / TOOL_CALL_SCORECARDS_JSONL
     _enforce_record_file_policy(
@@ -1258,7 +1280,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             failures.append(f"tool call scorecard validation failed: {e}")
 
-    # Layer 16: escalation records — enforce policy, validate, cross-bind
+    # Layer 17: escalation records — enforce policy, validate, cross-bind
     checked_layers.append("escalation_records")
     escalation_path = report_dir / ESCALATION_RECORDS_JSONL
     _enforce_record_file_policy(
@@ -1303,7 +1325,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             failures.append(f"escalation record validation failed: {e}")
 
-    # Layer 17: security event records — enforce policy, validate, cross-bind
+    # Layer 18: security event records — enforce policy, validate, cross-bind
     checked_layers.append("security_events")
     security_path = report_dir / SECURITY_EVENTS_JSONL
     _enforce_record_file_policy(
@@ -1348,7 +1370,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             failures.append(f"security event record validation failed: {e}")
 
-    # Layer 18: correlated error records — enforce policy, validate, cross-bind
+    # Layer 19: correlated error records — enforce policy, validate, cross-bind
     checked_layers.append("correlated_errors")
     correlated_path = report_dir / CORRELATED_ERRORS_JSONL
     _enforce_record_file_policy(
@@ -1393,7 +1415,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             failures.append(f"correlated error record validation failed: {e}")
 
-    # Layer 19: resource observation count — verify exact inference trail count
+    # Layer 20: resource observation count — verify exact inference trail count
     checked_layers.append("resource_observation_count")
     if resource_observations or stages:
         _verify_inference_trail_count(

@@ -234,6 +234,25 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	return h, nil
 }
 
+// requireAppIdentity verifies the caller is an authenticated app workload
+// with a delegated user identity. The unified auth middleware stamps
+// ContextKeyAppID (app workloads) and ContextKeyUserID (delegated user SAN)
+// during handleAppAuth. On failure it writes 403 (not an app workload) or
+// 401 (missing user identity) and returns ok=false.
+func requireAppIdentity(responder *response.Writer, w http.ResponseWriter, r *http.Request) (appID, userID string, ok bool) {
+	appID, _ = r.Context().Value(constants.ContextKeyAppID).(string)
+	if appID == "" {
+		responder.Error(w, http.StatusForbidden, constants.ErrForbidden.Error())
+		return "", "", false
+	}
+	userID, _ = r.Context().Value(constants.ContextKeyUserID).(string)
+	if userID == "" {
+		responder.Error(w, http.StatusUnauthorized, constants.ErrNotAuthenticated.Error())
+		return "", "", false
+	}
+	return appID, userID, true
+}
+
 func readRequestBody(r *http.Request, maxPayloadBytes int64) ([]byte, error) {
 	limited := io.LimitReader(r.Body, maxPayloadBytes+1)
 	data, err := io.ReadAll(limited)
