@@ -29,6 +29,12 @@ from g8e_evals.cli import main
 pytestmark = pytest.mark.unit
 
 
+def _stub_g8e_cli_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep CliRunner tests hermetic: resolution otherwise depends on whether
+    a repo-built binary exists on the test host."""
+    monkeypatch.setattr(cli, "resolve_g8e_cli", lambda _requested: "./g8e")
+
+
 def _invoke(runner: CliRunner, args: list[str], env: dict[str, str] | None = None):
     """Invoke the CLI with a controlled environment.
 
@@ -144,6 +150,7 @@ def test_ensemble_arm_defaults_g8ee_url_to_localhost(monkeypatch: pytest.MonkeyP
         calls.append((args, kwargs))
         raise AuthBridgeError("not authenticated")
 
+    _stub_g8e_cli_resolution(monkeypatch)
     monkeypatch.setattr(cli, "load_cli_auth_context", _fail_load)
 
     result = _invoke(
@@ -191,6 +198,7 @@ def test_doctrine_arm_defaults_g8ee_url_to_localhost(monkeypatch: pytest.MonkeyP
         calls.append((args, kwargs))
         raise AuthBridgeError("not authenticated")
 
+    _stub_g8e_cli_resolution(monkeypatch)
     monkeypatch.setattr(cli, "load_cli_auth_context", _fail_load)
 
     result = _invoke(
@@ -238,6 +246,7 @@ def test_ensemble_arm_still_loads_cli_auth_context(monkeypatch: pytest.MonkeyPat
         calls.append((args, kwargs))
         raise AuthBridgeError("not authenticated")
 
+    _stub_g8e_cli_resolution(monkeypatch)
     monkeypatch.setattr(cli, "load_cli_auth_context", _fail_load)
 
     result = _invoke(

@@ -374,6 +374,8 @@ class SourceBuildProvenance(BaseModel):
     build_system: str = Field(default="", description="Build system name (e.g. github-actions, local).")
     ci_run_id: str = Field(default="", description="CI run identifier, empty for local builds.")
     ci_url: str = Field(default="", description="CI run URL, empty for local builds.")
+    binary_sha256: str = Field(default="", pattern=r"^([0-9a-f]{64})?$", description="SHA-256 of the resolved g8e CLI binary file; empty when the artifact could not be hashed.")
+    source_tree_modified: bool | None = Field(default=None, description="Whether the source tree had uncommitted changes at build time; None when the toolchain recorded no VCS state.")
 
 
 class ProviderBudget(BaseModel):

@@ -22,8 +22,11 @@ when no provenance env vars are set.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 import subprocess
+from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -69,6 +72,23 @@ class CLIVersionProvenance(BaseModel):
     fips140: FIPSStatus | None = None
 
 
+def _hash_cli_binary(g8e_cli: str) -> str:
+    """Return the SHA-256 of the resolved g8e CLI binary file, or "" when unavailable.
+
+    ``g8e_cli`` may be a bare name on ``PATH`` or a filesystem path. The
+    digest binds the evidence record to the exact artifact that ran, not
+    merely to the source tree it was built from.
+    """
+    resolved = shutil.which(g8e_cli) or g8e_cli
+    path = Path(resolved)
+    if not path.is_file():
+        return ""
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return ""
+
+
 def load_cli_build_provenance(g8e_cli: str, *, timeout_s: float = 30.0) -> SourceBuildProvenance | None:
     """Load source/build provenance from the stamped g8e CLI binary.
 
@@ -108,6 +128,8 @@ def load_cli_build_provenance(g8e_cli: str, *, timeout_s: float = 30.0) -> Sourc
             source_tree_state_hash=source_tree_state_hash,
             build_id=info.build_id if info.build_id != "unknown" else "",
             build_system="g8e-cli",
+            binary_sha256=_hash_cli_binary(g8e_cli),
+            source_tree_modified=info.source_tree_modified,
         )
     except ValidationError as error:
         raise ProvenanceBridgeError(f"invalid provenance stamp from {g8e_cli}: {error}") from error

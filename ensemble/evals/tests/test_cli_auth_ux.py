@@ -37,6 +37,12 @@ from g8e_evals.tls import RuntimeIdentity
 pytestmark = pytest.mark.unit
 
 
+def _stub_g8e_cli_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep CliRunner tests hermetic: resolution otherwise depends on whether
+    a repo-built binary exists on the test host."""
+    monkeypatch.setattr(cli, "resolve_g8e_cli", lambda _requested: "./g8e")
+
+
 def _invoke(runner: CliRunner, args: list[str], env: dict[str, str] | None = None):
     """Invoke the CLI with a controlled environment.
 
@@ -90,6 +96,7 @@ def test_missing_cli_identity_points_at_enrollment_and_refresh(monkeypatch: pyte
         calls.append((g8e_cli, project_root))
         raise AuthBridgeError("not authenticated")
 
+    _stub_g8e_cli_resolution(monkeypatch)
     monkeypatch.setattr(cli, "load_cli_auth_context", load_auth_context)
     runner = CliRunner()
 
@@ -166,6 +173,7 @@ def test_run_returns_nonzero_when_live_evidence_is_invalid(monkeypatch: pytest.M
             "run produced invalid evidence; diagnostic report retained at /reports/failed"
         )
 
+    _stub_g8e_cli_resolution(monkeypatch)
     monkeypatch.setattr(cli, "load_cli_auth_context", lambda *_: auth_context)
     monkeypatch.setattr(cli, "load_evidence_encryption_key", lambda *_: object())
     monkeypatch.setattr(cli, "_run_suite", fail_run)
@@ -196,6 +204,7 @@ def test_run_requires_explicit_evidence_encryption_key(monkeypatch: pytest.Monke
         client_cert="/runtime/cli.crt",
         client_key="/runtime/cli.key",
     )
+    _stub_g8e_cli_resolution(monkeypatch)
     monkeypatch.setattr(cli, "load_cli_auth_context", lambda *_: auth_context)
 
     result = _invoke(
@@ -221,6 +230,7 @@ def test_run_g8ee_endpoint_defaults_to_localhost(monkeypatch: pytest.MonkeyPatch
     def _fail_load(*args, **kwargs):
         raise AuthBridgeError("not authenticated")
 
+    _stub_g8e_cli_resolution(monkeypatch)
     monkeypatch.setattr(cli, "load_cli_auth_context", _fail_load)
 
     result = _invoke(

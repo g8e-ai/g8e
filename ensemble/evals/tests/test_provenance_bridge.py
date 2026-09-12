@@ -65,6 +65,7 @@ def test_load_cli_build_provenance_reads_stamped_binary(monkeypatch: pytest.Monk
     assert provenance.source_tree_state_hash == _VALID_HASH
     assert provenance.build_id == "4ca29cf0c"
     assert provenance.build_system == "g8e-cli"
+    assert provenance.source_tree_modified is True
     assert calls == [["./g8e", "version", "--json"]]
 
 

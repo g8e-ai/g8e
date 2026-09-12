@@ -13,6 +13,7 @@ The unified stack requires:
 - The g8e repository and `./g8e` binary on the host.
 - Ports 8080, 8443, 8000, and 3000 available when using the defaults.
 - A browser with WebAuthn support for interactive owner enrollment. Headless enrollment is available when no browser is present.
+- `G8E_OLLAMA_ENDPOINT` set in a repository-root `.env` (copy `.env.example`) or exported in the environment. The `g8ellama` profile's Inference Node declares it with fail-fast interpolation, so every `docker compose` command errors when it is unset, even when the `g8ellama` profile is inactive.
 
 Run all commands in this guide from the repository root. The `./g8e docker` commands require `docker-compose.yml` in the current directory.
 

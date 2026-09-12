@@ -61,6 +61,7 @@ class PreflightFailureCode(StrEnum):
     SOURCE_REVISION_MISSING = "source_revision_missing"
     SOURCE_TREE_STATE_HASH_MISSING = "source_tree_state_hash_missing"
     SOURCE_TREE_STATE_HASH_INVALID = "source_tree_state_hash_invalid"
+    BINARY_SHA256_INVALID = "binary_sha256_invalid"
     BUILD_ID_MISSING = "build_id_missing"
 
 
@@ -78,6 +79,7 @@ class PreflightError(Exception):
 # runner never runs ad hoc Git commands.
 ENV_SOURCE_REVISION = "G8E_EVALS_SOURCE_REVISION"
 ENV_SOURCE_TREE_STATE_HASH = "G8E_EVALS_SOURCE_TREE_STATE_HASH"
+ENV_BINARY_SHA256 = "G8E_EVALS_BINARY_SHA256"
 ENV_BUILD_ID = "G8E_EVALS_BUILD_ID"
 ENV_BUILD_SYSTEM = "G8E_EVALS_BUILD_SYSTEM"
 ENV_CI_RUN_ID = "G8E_EVALS_CI_RUN_ID"
@@ -369,6 +371,14 @@ def _check_source_build_provenance(request: PreflightRequest) -> None:
                 PreflightFailureCode.SOURCE_TREE_STATE_HASH_INVALID,
                 "source_build_provenance.source_tree_state_hash is not a 64-char hex string",
             )
+        if provenance.binary_sha256 and (
+            len(provenance.binary_sha256) != 64
+            or not all(c in "0123456789abcdef" for c in provenance.binary_sha256)
+        ):
+            raise PreflightError(
+                PreflightFailureCode.BINARY_SHA256_INVALID,
+                "source_build_provenance.binary_sha256 is not a 64-char hex string",
+            )
         return
 
     # Non-production runs may omit provenance entirely.
@@ -453,6 +463,14 @@ def load_source_build_provenance_from_env() -> SourceBuildProvenance:
             PreflightFailureCode.SOURCE_TREE_STATE_HASH_INVALID,
             f"environment variable {ENV_SOURCE_TREE_STATE_HASH} is not a 64-char hex string",
         )
+    binary_sha256 = os.environ.get(ENV_BINARY_SHA256, "").strip()
+    if binary_sha256 and (
+        len(binary_sha256) != 64 or not all(c in "0123456789abcdef" for c in binary_sha256)
+    ):
+        raise PreflightError(
+            PreflightFailureCode.BINARY_SHA256_INVALID,
+            f"environment variable {ENV_BINARY_SHA256} is not a 64-char hex string",
+        )
     build_id = os.environ.get(ENV_BUILD_ID, "").strip()
     build_system = os.environ.get(ENV_BUILD_SYSTEM, "").strip()
     ci_run_id = os.environ.get(ENV_CI_RUN_ID, "").strip()
@@ -464,6 +482,7 @@ def load_source_build_provenance_from_env() -> SourceBuildProvenance:
         build_system=build_system,
         ci_run_id=ci_run_id,
         ci_url=ci_url,
+        binary_sha256=binary_sha256,
     )
 
 
@@ -559,6 +578,7 @@ def detect_stack_environment() -> StackEnvironment:
 
 
 __all__ = [
+    "ENV_BINARY_SHA256",
     "ENV_BUILD_ID",
     "ENV_BUILD_SYSTEM",
     "ENV_CI_RUN_ID",

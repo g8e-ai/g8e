@@ -45,6 +45,7 @@ from g8e_evals import __version__ as EVALS_VERSION
 from g8e_evals import constants as evals_constants
 from g8e_evals.arms import ALL_ARMS, GOVERNED_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
+from g8e_evals.cli_binary import CLIBinaryError, resolve_g8e_cli
 from g8e_evals.provenance_bridge import ProvenanceBridgeError, load_cli_build_provenance
 from g8e_evals.graders import (
     DeterministicGradingContext,
@@ -532,8 +533,8 @@ def main():
 @click.option("--operator-url", default=f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}")
 @click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID",
               help="Operator session id override. The default comes from the canonical CLI identity.")
-@click.option("--g8e-cli", default="./g8e", envvar="G8E_CLI_BIN", show_default=True,
-              help="Path to the g8e CLI used to load the canonical authentication context.")
+@click.option("--g8e-cli", default=None, envvar="G8E_CLI_BIN",
+              help="Path to the g8e CLI used for the canonical authentication context and build provenance, or 'auto' to fetch the binary served by the running Gateway. Default: repo-root ./g8e, then bin/g8e-<platform>, then PATH.")
 @click.option("--auth-project-root", type=click.Path(path_type=Path, file_okay=False),
               envvar="G8E_AUTH_PROJECT_ROOT",
               help="Project root containing the canonical CLI runtime identity. Required for ensemble and governed arms; not used by the direct arm.")
@@ -590,6 +591,7 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
             "Drop the flag so `./g8e auth context` can load the canonical session."
         )
 
+    g8e_cli = _resolve_g8e_cli_option(g8e_cli)
     selected_arm = Arm(arm)
 
     # The direct arm calls the model provider directly and bypasses g8ee
@@ -606,7 +608,7 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
                 "The direct arm (--arm direct) does not require it."
             )
         try:
-            auth_context = load_cli_auth_context(g8e_cli, str(auth_project_root.resolve()))
+            auth_context = load_cli_auth_context(_require_g8e_cli(g8e_cli), str(auth_project_root.resolve()))
         except AuthBridgeError as error:
             raise click.UsageError(
                 f"Could not load the canonical CLI identity: {error}. "
@@ -847,6 +849,29 @@ def validate_campaign_identity(
             )
 
 
+def _resolve_g8e_cli_option(g8e_cli: str | None) -> str | None:
+    """Resolve the ``--g8e-cli``/``G8E_CLI_BIN`` value.
+
+    Returns ``None`` when no implicit candidate exists — the provenance
+    path then falls back to ``G8E_EVALS_SOURCE_*`` environment variables.
+    Explicit paths and ``auto`` fetches fail with ``UsageError``.
+    """
+    try:
+        return resolve_g8e_cli(g8e_cli)
+    except CLIBinaryError as error:
+        raise click.UsageError(str(error)) from error
+
+
+def _require_g8e_cli(g8e_cli: str | None) -> str:
+    """Return the resolved binary path or fail when a command needs to execute it."""
+    if g8e_cli is None:
+        raise click.UsageError(
+            "no g8e CLI binary found; build it with 'make build', pass --g8e-cli <path>, "
+            "or use --g8e-cli auto to fetch the binary served by the running Gateway"
+        )
+    return g8e_cli
+
+
 def load_source_build_provenance_or_reject(
     *,
     is_production_posture: bool,
@@ -927,8 +952,8 @@ def campaign():
               help="URL of the Operator endpoint for governed arms.")
 @click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID", default=None,
               help="Operator session id override. The default comes from the canonical CLI identity.")
-@click.option("--g8e-cli", default="./g8e", envvar="G8E_CLI_BIN", show_default=True,
-              help="Path to the g8e CLI used to load the canonical authentication context.")
+@click.option("--g8e-cli", default=None, envvar="G8E_CLI_BIN",
+              help="Path to the g8e CLI used for the canonical authentication context and build provenance, or 'auto' to fetch the binary served by the running Gateway. Default: repo-root ./g8e, then bin/g8e-<platform>, then PATH.")
 @click.option("--auth-project-root", type=click.Path(path_type=Path, file_okay=False),
               envvar="G8E_AUTH_PROJECT_ROOT", default=None,
               help="Project root containing the canonical CLI runtime identity. Required for tier-fitness tracks with ensemble or doctrine arms.")
@@ -959,6 +984,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     )
     from g8e_evals.schema import ProviderBudget
 
+    g8e_cli = _resolve_g8e_cli_option(g8e_cli)
     prereg_config = load_preregistration(preregistration)
 
     suite_spec = assert_model_comparison_eligible(suite)
@@ -1189,7 +1215,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
                 "tier-fitness tracks with ensemble or doctrine arms."
             )
         try:
-            auth_context = load_cli_auth_context(g8e_cli, str(auth_project_root.resolve()))
+            auth_context = load_cli_auth_context(_require_g8e_cli(g8e_cli), str(auth_project_root.resolve()))
         except AuthBridgeError as error:
             raise click.UsageError(
                 f"Could not load the canonical CLI identity: {error}. "
@@ -6046,8 +6072,8 @@ def verify_cmd(
 @click.argument("bundle_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.option("--gateway-url", envvar="G8E_G8EE_URL", required=True,
               help="Base URL of the g8e Gateway (g8ee) endpoint.")
-@click.option("--g8e-cli", default="./g8e", envvar="G8E_CLI_BIN", show_default=True,
-              help="Path to the g8e CLI used to load the canonical authentication context.")
+@click.option("--g8e-cli", default=None, envvar="G8E_CLI_BIN",
+              help="Path to the g8e CLI used for the canonical authentication context and build provenance, or 'auto' to fetch the binary served by the running Gateway. Default: repo-root ./g8e, then bin/g8e-<platform>, then PATH.")
 @click.option("--auth-project-root", type=click.Path(path_type=Path, file_okay=False),
               envvar="G8E_AUTH_PROJECT_ROOT", required=True,
               help="Project root containing the canonical CLI runtime identity.")
@@ -6061,7 +6087,7 @@ def verify_cmd(
 def publish_cmd(
     bundle_dir: Path,
     gateway_url: str,
-    g8e_cli: str,
+    g8e_cli: str | None,
     auth_project_root: Path,
     web_session_id: str | None,
     cli_session_id: str | None,
@@ -6087,7 +6113,7 @@ def publish_cmd(
         raise click.UsageError("Exactly one of --web-session-id or --cli-session-id is required for projection routing.")
 
     try:
-        cli_context = load_cli_auth_context(g8e_cli, str(auth_project_root.resolve()))
+        cli_context = load_cli_auth_context(_require_g8e_cli(_resolve_g8e_cli_option(g8e_cli)), str(auth_project_root.resolve()))
     except AuthBridgeError as error:
         raise click.UsageError(
             f"Could not load the canonical CLI identity: {error}. "

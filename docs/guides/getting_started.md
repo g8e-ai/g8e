@@ -32,8 +32,11 @@ Building the gateway container image runs `make build-all` in the builder stage.
 ```bash
 git clone https://github.com/g8e-ai/g8e.git
 cd g8e
+cp .env.example .env  # required: Compose fails fast without G8E_OLLAMA_ENDPOINT
 docker compose up -d --build
 ```
+
+The Compose file declares a `g8ellama` profile whose Inference Node requires `G8E_OLLAMA_ENDPOINT` (the approved remote Ollama provider). Because the variable uses Compose's fail-fast `:?` interpolation, every `docker compose` command — including `ps` and default-profile `up` — errors on a fresh clone until the variable is set in `.env` or exported. The `.env.example` value is `http://localhost:11434`; set it to the approved remote endpoint for your deployment. The `g8ellama` profile itself stays inactive unless explicitly selected.
 
 `docker compose up -d` starts the central Policy Decision Point (`g8e-gateway`) on port 8080 for plain-HTTP bootstrap and PKI discovery and port 8443 for HTTPS/mTLS APIs, MCP, and the Web Console. Platform workloads (`g8e-operator`, `ensemble`, `dashboard`) belong to the `bootstrapped` profile and do not start until Step 4.
 

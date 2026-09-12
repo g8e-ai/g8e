@@ -224,6 +224,7 @@ help:
 	@echo "  test-external   Run the ensemble external test suite (Tier 4: real LLM/API, gated on credentials)"
 	@echo "  ensemble-lint   Run ruff + pyright on the ensemble"
 	@echo "  evals-lint      Run ruff + pyright on the standalone eval package"
+	@echo "  evals-bin       Ensure ./g8e exists and matches the current source tree (rebuilds when stale)"
 	@echo "  build-ensemble  Build the ensemble Docker image"
 	@echo ""
 	@echo "Dashboard (g8ed):"
@@ -696,6 +697,21 @@ evals-test-unit:
 evals-test-integration:
 	@echo "Running standalone eval Tier 2 tests..."
 	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test pytest -q -m integration
+
+# Ensure the repo-root ./g8e exists and was built from the current source
+# tree. The evals consume the binary's stamped provenance via
+# `g8e version --json`; a missing binary or one whose source_tree_state_hash
+# differs from the current tree is rebuilt via `make build`.
+.PHONY: evals-bin
+evals-bin:
+	@STAMPED=$$(./g8e version --json 2>/dev/null | sed -n 's/.*"source_tree_state_hash": *"\([0-9a-f]\{64\}\)".*/\1/p'); \
+	CURRENT="$(SOURCE_TREE_HASH)"; \
+	if [ -x ./g8e ] && [ -n "$$STAMPED" ] && [ "$$STAMPED" = "$$CURRENT" ]; then \
+		echo "evals CLI is current: ./g8e (source_tree_state_hash $$STAMPED)"; \
+	else \
+		echo "evals CLI missing or stale (stamped=$${STAMPED:-none} current=$$CURRENT) — rebuilding via 'make build'"; \
+		$(MAKE) --no-print-directory build; \
+	fi
 
 .PHONY: test-external
 test-external:
