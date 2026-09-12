@@ -43,6 +43,7 @@ from app.llm.providers.gemini import GeminiProvider
 from app.llm.providers.ollama import OllamaProvider
 from app.llm.providers.llama_cpp import LlamaCppProvider
 from app.llm.providers.fake import FakeProvider
+from app.llm.providers.g8e import G8EProvider
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
 from app.models.http_context import G8eHttpContext, RequestContext
@@ -151,6 +152,7 @@ class ChatPipelineService:
             LLMProvider.OLLAMA.value: OllamaProvider,
             LLMProvider.LLAMACPP.value: LlamaCppProvider,
             LLMProvider.FAKE.value: FakeProvider,
+            LLMProvider.G8E.value: G8EProvider,
         }
 
         def check_tier(

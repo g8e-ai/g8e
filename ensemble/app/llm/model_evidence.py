@@ -18,7 +18,10 @@ from google.protobuf import json_format
 from google.protobuf.message import Message
 from pydantic import BaseModel
 
-from app.models.model_telemetry import ModelBoundaryPrivacyAttestation
+from app.models.model_telemetry import (
+    GovernedDispatchEvidence,
+    ModelBoundaryPrivacyAttestation,
+)
 
 
 _MODEL_BOUNDARY_SCANNER_VERSION = "sentinel-regex@1.0.0"
@@ -75,3 +78,10 @@ def recorded_model_boundary_privacy(
 ) -> ModelBoundaryPrivacyAttestation | None:
     attestation = getattr(provider, "model_boundary_privacy", None)
     return attestation if isinstance(attestation, ModelBoundaryPrivacyAttestation) else None
+
+
+def recorded_governed_dispatch_evidence(
+    provider: object,
+) -> GovernedDispatchEvidence | None:
+    evidence = getattr(provider, "governed_dispatch_evidence", None)
+    return evidence if isinstance(evidence, GovernedDispatchEvidence) else None

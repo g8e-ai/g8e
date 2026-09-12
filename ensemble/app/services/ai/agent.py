@@ -40,6 +40,7 @@ from app.constants import (
 )
 from app.llm.model_evidence import (
     model_boundary_hash,
+    recorded_governed_dispatch_evidence,
     recorded_model_boundary_hash,
     recorded_model_boundary_privacy,
 )
@@ -354,6 +355,7 @@ class g8eEnsemble:
                 )
 
                 llm_provider.clear_input_artifact_hash()
+                llm_provider.set_g8e_context(inputs.g8e_context)
                 input_artifact_hash = model_boundary_hash({
                     "model": model_name,
                     "contents": contents,
@@ -377,6 +379,7 @@ class g8eEnsemble:
                     input_artifact_hash = recorded_model_boundary_hash(llm_provider, input_artifact_hash)
                 except Exception as exc:
                     input_artifact_hash = recorded_model_boundary_hash(llm_provider, input_artifact_hash)
+                    governed_evidence = recorded_governed_dispatch_evidence(llm_provider)
                     model_calls.append(ModelCallTelemetry(
                         agent_role=inputs.agent_mode.value,
                         provider=type(llm_provider).__name__,
@@ -388,10 +391,14 @@ class g8eEnsemble:
                         error_type=type(exc).__name__,
                         input_artifact_hash=input_artifact_hash,
                         model_boundary_privacy=recorded_model_boundary_privacy(llm_provider),
+                        governed_transaction_id=governed_evidence.transaction_id if governed_evidence else None,
+                        governed_result_digest=governed_evidence.result_digest if governed_evidence else None,
+                        governed_receipt_status=governed_evidence.receipt_status if governed_evidence else None,
                     ))
                     raise
                 turn_result = gated.turn_result
                 monotonic_end = time.monotonic()
+                governed_evidence = recorded_governed_dispatch_evidence(llm_provider)
                 model_calls.append(ModelCallTelemetry(
                     agent_role=inputs.agent_mode.value,
                     provider=type(llm_provider).__name__,
@@ -409,6 +416,9 @@ class g8eEnsemble:
                     input_artifact_hash=input_artifact_hash,
                     output_artifact_hash=model_boundary_hash(turn_result.model_response_parts),
                     model_boundary_privacy=recorded_model_boundary_privacy(llm_provider),
+                    governed_transaction_id=governed_evidence.transaction_id if governed_evidence else None,
+                    governed_result_digest=governed_evidence.result_digest if governed_evidence else None,
+                    governed_receipt_status=governed_evidence.receipt_status if governed_evidence else None,
                 ))
 
                 total_input_tokens += turn_result.input_tokens

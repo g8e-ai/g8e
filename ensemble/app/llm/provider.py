@@ -11,9 +11,12 @@ Abstract LLM Provider Interface
 All provider implementations must implement this interface.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from contextvars import ContextVar
+from typing import TYPE_CHECKING
 
 from app.llm.llm_types import (
     AssistantLLMSettings,
@@ -25,6 +28,9 @@ from app.llm.llm_types import (
 )
 from app.llm.model_evidence import model_boundary_privacy_attestation
 from app.models.model_telemetry import ModelBoundaryPrivacyAttestation
+
+if TYPE_CHECKING:
+    from app.models.http_context import G8eHttpContext
 
 
 class LLMProvider(ABC):
@@ -50,6 +56,14 @@ class LLMProvider(ABC):
     def clear_input_artifact_hash(self) -> None:
         self._input_artifact_hash.set("")
         self._model_boundary_privacy.set(None)
+
+    def set_g8e_context(self, context: G8eHttpContext | None) -> None:  # noqa: B027
+        """Record the turn's HTTP context for providers that need it.
+
+        No-op on the base class. Providers that propagate application
+        context into their requests (e.g. the governed-dispatch provider)
+        override this to store the context on a request-scoped ContextVar.
+        """
 
     def _record_model_boundary(self, payload: object) -> str:
         attestation = model_boundary_privacy_attestation(payload)

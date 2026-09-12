@@ -593,11 +593,13 @@ class G8eeChatSUT:
 
         The g8ee pipeline emits ``ChatResponseCompletePayload`` on the
         ``text.completed`` terminal event, carrying a ``model_calls``
-        list of ``ModelCallTelemetry`` dicts — one per role-model
+        list of typed ``ModelCallTelemetry`` entries — one per role-model
         provider call, including failed calls and retries. Each entry
         binds ``agent_role``, ``provider``, ``model``, timing, token
-        counts, ``usage_reported``, ``finish_reason``, ``succeeded``, and
-        ``error_type``.
+        counts, ``usage_reported``, ``finish_reason``, ``succeeded``,
+        ``error_type``, and (for governed dispatch) the
+        ``governed_transaction_id`` / ``governed_result_digest`` /
+        ``governed_receipt_status`` evidence fields.
 
         For failed turns (no ``text.completed`` event), no
         ``InferenceObservation`` records are emitted because the
@@ -632,29 +634,23 @@ class G8eeChatSUT:
             return observations
 
         for idx, call in enumerate(complete_payload.model_calls):
-            role = call.get("agent_role", "primary")
-            model_name = call.get("model", "")
-            provider_name = call.get("provider", "")
-            monotonic_start = call.get("monotonic_start", 0.0)
-            monotonic_end = call.get("monotonic_end", 0.0)
+            role = call.agent_role or "primary"
+            model_name = call.model
+            provider_name = call.provider
+            monotonic_start = call.monotonic_start
+            monotonic_end = call.monotonic_end
             latency = None
             if monotonic_start and monotonic_end and monotonic_end > monotonic_start:
                 latency = monotonic_end - monotonic_start
 
-            output_tokens = call.get("output_tokens", 0)
-            thinking_tokens = call.get("thinking_tokens", 0)
+            output_tokens = call.output_tokens
+            thinking_tokens = call.thinking_tokens
             throughput = None
             if latency and output_tokens and output_tokens > 0:
                 throughput = output_tokens / latency
             hidden_throughput = None
             if latency and thinking_tokens and thinking_tokens > 0:
                 hidden_throughput = thinking_tokens / latency
-
-            succeeded = call.get("succeeded", True)
-            error_type = call.get("error_type")
-
-            input_hash = call.get("input_artifact_hash", "")
-            output_hash = call.get("output_artifact_hash", "")
 
             observations.append(InferenceObservation(
                 inference_id=f"inf-{idx}",
@@ -667,18 +663,21 @@ class G8eeChatSUT:
                 generation_duration_seconds=None,
                 output_throughput_tokens_per_second=throughput,
                 hidden_reasoning_throughput_tokens_per_second=hidden_throughput,
-                prompt_token_count=call.get("input_tokens") or None,
+                prompt_token_count=call.input_tokens or None,
                 candidates_token_count=output_tokens or None,
-                total_token_count=call.get("total_tokens") or None,
+                total_token_count=call.total_tokens or None,
                 thinking_token_count=thinking_tokens or None,
-                cache_token_count=call.get("cache_tokens") or None,
-                usage_reported=call.get("usage_reported", False),
-                finish_reason=call.get("finish_reason"),
-                input_artifact_hash=input_hash if input_hash else None,
-                output_artifact_hash=output_hash if output_hash else None,
+                cache_token_count=call.cache_tokens or None,
+                usage_reported=call.usage_reported,
+                finish_reason=call.finish_reason,
+                input_artifact_hash=call.input_artifact_hash or None,
+                output_artifact_hash=call.output_artifact_hash or None,
                 monotonic_start=monotonic_start,
                 monotonic_end=monotonic_end,
-                error=error_type if not succeeded else None,
+                error=call.error_type if not call.succeeded else None,
+                transaction_id=call.governed_transaction_id,
+                result_digest=call.governed_result_digest,
+                receipt_status=call.governed_receipt_status,
             ))
 
         return observations

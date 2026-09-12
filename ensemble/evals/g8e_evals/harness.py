@@ -395,6 +395,9 @@ class InferenceObservation:
     monotonic_start: float = 0.0
     monotonic_end: float = 0.0
     error: str | None = None
+    transaction_id: str | None = None
+    result_digest: str | None = None
+    receipt_status: str | None = None
 
 
 @dataclass
