@@ -318,13 +318,21 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize the inference backend and governed execution handler when
 	// cfg.Inference.Enabled is true. The backend is an HTTP client to the
-	// co-located Ollama daemon; the handler is wired into the
+	// remote Ollama provider; the handler is wired into the
 	// OperatorPubSubService config alongside the existing ExecutionService
 	// and FileEditService. The handler is dispatched by event type, not by
-	// replacing the command service.
+	// replacing the command service. Startup fails closed when the provider
+	// is unreachable, responds with a malformed status, or lacks a
+	// configured role model.
 	var inferenceHandler *inference.InferenceExecutionHandler
 	if vs.config.Inference.Enabled {
-		ollamaBackend := inference.NewOllamaBackend(vs.config.Inference.OllamaEndpoint, vs.logger)
+		ollamaBackend, err := inference.NewOllamaBackend(vs.config.Inference.OllamaEndpoint, vs.logger)
+		if err != nil {
+			return fmt.Errorf("g8eo: inference backend: %w", err)
+		}
+		if err := inference.VerifyProviderReady(ctx, ollamaBackend, vs.config.Inference); err != nil {
+			return fmt.Errorf("g8eo: %w", err)
+		}
 		inferenceHandler = inference.NewInferenceExecutionHandler(ollamaBackend, vs.config, scrubbingService, vs.logger)
 		vs.logger.Info("Inference backend initialized",
 			"backend", vs.config.Inference.Backend,

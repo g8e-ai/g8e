@@ -1498,6 +1498,8 @@ definitions:
     - 6
     - 7
     - 8
+    - 9
+    - 10
     format: int32
     type: integer
     x-enum-varnames:
@@ -1510,6 +1512,8 @@ definitions:
     - ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT
     - ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATE_FAILED
     - ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID
   operatorv1.ReceiptPersistenceAttestation:
     properties:
       audit_record_id:

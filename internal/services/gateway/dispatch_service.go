@@ -488,6 +488,10 @@ func inferenceReceiptFailureError(receipt *operatorv1.ActionReceipt) error {
 		return constants.ErrInferenceBackendTimeout
 	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATE_FAILED:
 		return constants.ErrInferenceGenerateFailed
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND:
+		return constants.ErrInferenceModelNotFound
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID:
+		return constants.ErrInferenceProviderResponseInvalid
 	default:
 		return constants.ErrInferenceReceiptFailed
 	}

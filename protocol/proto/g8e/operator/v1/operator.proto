@@ -552,6 +552,10 @@ enum ReceiptFailureCode {
   RECEIPT_FAILURE_CODE_GENERATE_FAILED = 7;
   // Any other execution failure.
   RECEIPT_FAILURE_CODE_EXECUTION_FAILED = 8;
+  // The requested or configured model is absent from the provider's model store.
+  RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND = 9;
+  // The provider returned a malformed or oversized response.
+  RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID = 10;
 }
 
 // ActionReceipt is the signed proof of an executing, completed, or failed mutation. L5 emits and persists it before execution, then updates and attests it after execution.

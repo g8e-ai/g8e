@@ -14,7 +14,6 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
-	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -64,6 +63,32 @@ func (s *stubInferenceBackend) Status(_ context.Context) (*models.BackendStatus,
 	return &models.BackendStatus{Available: true, Models: []string{"test-model"}}, nil
 }
 
+// newInferenceTestAuditStore builds a real SQLAuditStore (real SQLite, real
+// vault, foreign_keys enforced) rooted in a fresh isolated runtime tree. The
+// vault lives inside the managed .g8e tree via fileSvc.Resolve; the audit DB
+// uses the canonical DbFilename under the data directory.
+func newInferenceTestAuditStore(t *testing.T) *storage.SQLAuditStore {
+	t.Helper()
+	logger := testutil.NewTestLogger()
+
+	fileSvc := storagetest.NewTestFileSvc(t, testutil.TempDir(t))
+
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := storagetest.CreateTestVault(t, fileSvc.Resolve(constants.VaultDirname), privKey)
+
+	auditStore, err := storage.NewSQLAuditStore(&storage.AuditStoreConfig{
+		DBPath:          constants.DbFilename,
+		MaxDBSizeMB:     100,
+		RetentionDays:   1,
+		EncryptionVault: testVault,
+	}, logger, fileSvc)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, auditStore.Close()) })
+
+	return auditStore
+}
+
 // newInferenceIntegrationFixture constructs an OperatorPubSubService in
 // outbound mode with a real SQLAuditStore (real SQLite, real vault,
 // foreign_keys enforced) and a stub inference backend wired through the
@@ -84,22 +109,7 @@ func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stub
 	}
 	logger := testutil.NewTestLogger()
 
-	tempDir := testutil.TempDir(t)
-	fileSvc := storagetest.NewTestFileSvc(t, tempDir)
-
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	testVault := storagetest.CreateTestVault(t, filepath.Join(tempDir, constants.VaultDirname), privKey)
-
-	auditConfig := &storage.AuditStoreConfig{
-		DBPath:          constants.DbFilename,
-		MaxDBSizeMB:     100,
-		RetentionDays:   1,
-		EncryptionVault: testVault,
-	}
-	auditStore, err := storage.NewSQLAuditStore(auditConfig, logger, fileSvc)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, auditStore.Close()) })
+	auditStore := newInferenceTestAuditStore(t)
 
 	backend := &stubInferenceBackend{
 		resp: &models.GenerateResponse{
@@ -289,22 +299,7 @@ func TestInferenceDispatch_ProcessEnvelope_NilInferenceHandler_FailsClosed(t *te
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	tempDir := testutil.TempDir(t)
-	fileSvc := storagetest.NewTestFileSvc(t, tempDir)
-
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	testVault := storagetest.CreateTestVault(t, filepath.Join(tempDir, constants.VaultDirname), privKey)
-
-	auditConfig := &storage.AuditStoreConfig{
-		DBPath:          constants.DbFilename,
-		MaxDBSizeMB:     100,
-		RetentionDays:   1,
-		EncryptionVault: testVault,
-	}
-	auditStore, err := storage.NewSQLAuditStore(auditConfig, logger, fileSvc)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, auditStore.Close()) })
+	auditStore := newInferenceTestAuditStore(t)
 
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)

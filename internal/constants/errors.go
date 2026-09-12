@@ -1434,6 +1434,8 @@ var (
 	ErrInferenceOutcomeUnknown       = errors.New("inference: dispatch deadline exceeded; remote provider outcome unknown")
 	ErrInferenceGovernanceRejected   = errors.New("inference: governance rejected the transaction")
 	ErrInferencePromptRequired       = errors.New("inference: prompt required")
+	ErrInferenceEndpointInvalid      = errors.New("inference: provider endpoint invalid")
+	ErrInferenceProviderResponseInvalid = errors.New("inference: provider response invalid")
 
 	// Dispatch transport errors. Zero delivery and a missing correlated
 	// result are terminal transport outcomes, not log-and-continue events.

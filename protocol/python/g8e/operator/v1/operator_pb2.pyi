@@ -68,6 +68,8 @@ class ReceiptFailureCode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT: _ClassVar[ReceiptFailureCode]
     RECEIPT_FAILURE_CODE_GENERATE_FAILED: _ClassVar[ReceiptFailureCode]
     RECEIPT_FAILURE_CODE_EXECUTION_FAILED: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID: _ClassVar[ReceiptFailureCode]
 
 class ModelRole(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -114,6 +116,8 @@ RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE: ReceiptFailureCode
 RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT: ReceiptFailureCode
 RECEIPT_FAILURE_CODE_GENERATE_FAILED: ReceiptFailureCode
 RECEIPT_FAILURE_CODE_EXECUTION_FAILED: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID: ReceiptFailureCode
 MODEL_ROLE_UNSPECIFIED: ModelRole
 MODEL_ROLE_PRIMARY: ModelRole
 MODEL_ROLE_ASSISTANT: ModelRole

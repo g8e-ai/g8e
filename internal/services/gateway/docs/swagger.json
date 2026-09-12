@@ -3989,7 +3989,9 @@
                 5,
                 6,
                 7,
-                8
+                8,
+                9,
+                10
             ],
             "x-enum-varnames": [
                 "ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED",
@@ -4000,7 +4002,9 @@
                 "ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE",
                 "ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT",
                 "ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATE_FAILED",
-                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED"
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID"
             ]
         },
         "operatorv1.ReceiptPersistenceAttestation": {

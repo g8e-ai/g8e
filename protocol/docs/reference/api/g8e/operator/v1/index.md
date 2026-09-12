@@ -2451,6 +2451,8 @@ string-matching the result_summary. It is bound into the receipt signature.
 | RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT | 6 | The inference backend request timed out. |
 | RECEIPT_FAILURE_CODE_GENERATE_FAILED | 7 | The inference backend failed generation. |
 | RECEIPT_FAILURE_CODE_EXECUTION_FAILED | 8 | Any other execution failure. |
+| RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND | 9 | The requested or configured model is absent from the provider&#39;s model store. |
+| RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID | 10 | The provider returned a malformed or oversized response. |
 
 
  

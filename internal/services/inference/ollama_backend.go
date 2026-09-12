@@ -11,11 +11,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -29,28 +30,59 @@ import (
 // reports an unknown remote outcome rather than a clean timeout.
 const ProviderRequestTimeout = 5 * time.Minute
 
+// ProviderStatusTimeout bounds the read-only startup readiness check against
+// the remote provider. It is deliberately shorter than
+// ProviderRequestTimeout: a /api/tags round trip is cheap, and an
+// unreachable provider must fail operator startup promptly rather than
+// after the generation deadline.
+const ProviderStatusTimeout = 30 * time.Second
+
+// defaultMaxResponseBytes bounds every response body read from the remote
+// provider. A non-streaming chat response contains the full generated text;
+// the bound is generous enough for any configured num_predict while still
+// failing closed on a misbehaving or hostile endpoint.
+const defaultMaxResponseBytes int64 = 32 << 20
+
+// maxErrorBodyBytes bounds the error-body drain on non-OK responses. The
+// body is drained only to allow connection reuse; provider error text is
+// never included in returned errors or logs because it can echo prompt
+// material or carry provider internals.
+const maxErrorBodyBytes int64 = 4 << 10
+
 // OllamaBackend implements Backend as an HTTP client to Ollama's /api/chat
 // endpoint. It constructs the Ollama chat request from GenerateRequest,
-// sends it over loopback HTTP to the configured Ollama endpoint, and parses
+// sends it over HTTP to the configured remote Ollama endpoint, and parses
 // the response. It uses context.Context for cancellation and timeout. No
 // process management, no goroutine supervision, no health-check loop —
-// Ollama is a daemon that the deployment starts and monitors.
+// Ollama is a remote daemon that the deployment owns and monitors.
 type OllamaBackend struct {
-	endpoint string
-	client   *http.Client
-	logger   *slog.Logger
+	base             *url.URL
+	client           *http.Client
+	maxResponseBytes int64
+	logger           *slog.Logger
 }
 
-// NewOllamaBackend constructs an OllamaBackend for the given loopback
-// endpoint. The endpoint is typically http://127.0.0.1:<port>.
-func NewOllamaBackend(endpoint string, logger *slog.Logger) *OllamaBackend {
+// NewOllamaBackend constructs an OllamaBackend for the given provider
+// endpoint. The endpoint is parsed and validated once: it must be an
+// absolute http or https URL with a host. A path prefix is preserved, so
+// endpoints behind a reverse-proxied prefix such as
+// http://host/ollama resolve to http://host/ollama/api/chat.
+func NewOllamaBackend(endpoint string, logger *slog.Logger) (*OllamaBackend, error) {
+	base, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("ollama_backend: endpoint: %w: %w", constants.ErrInferenceEndpointInvalid, err)
+	}
+	if (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" {
+		return nil, fmt.Errorf("ollama_backend: endpoint %q: %w", endpoint, constants.ErrInferenceEndpointInvalid)
+	}
 	return &OllamaBackend{
-		endpoint: strings.TrimRight(endpoint, "/"),
+		base: base,
 		client: &http.Client{
 			Timeout: ProviderRequestTimeout,
 		},
-		logger: logger,
-	}
+		maxResponseBytes: defaultMaxResponseBytes,
+		logger:           logger,
+	}, nil
 }
 
 // ollamaChatRequest is the request body for Ollama's /api/chat endpoint.
@@ -117,8 +149,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		return nil, fmt.Errorf("ollama_backend: marshal request: %w", err)
 	}
 
-	url := b.endpoint + "/api/chat"
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, b.apiURL("api", "chat"), bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("ollama_backend: build request: %w", err)
 	}
@@ -126,24 +157,28 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		if ctx.Err() != nil {
-			return nil, fmt.Errorf("ollama_backend: generate: %w", constants.ErrInferenceBackendTimeout)
-		}
-		return nil, fmt.Errorf("ollama_backend: generate: %w: %v", constants.ErrInferenceBackendUnavailable, err)
+		return nil, transportError("generate", ctx, err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusRequestTimeout {
-		return nil, fmt.Errorf("ollama_backend: generate: %w", constants.ErrInferenceBackendTimeout)
-	}
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("ollama_backend: generate: %w: status %d: %s", constants.ErrInferenceGenerateFailed, resp.StatusCode, string(respBody))
+		// Drain a bounded slice of the error body for connection reuse.
+		// Provider error text is never returned or logged: it can echo
+		// prompt material and provider internals.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBodyBytes))
+		switch resp.StatusCode {
+		case http.StatusRequestTimeout:
+			return nil, fmt.Errorf("ollama_backend: generate: %w", constants.ErrInferenceBackendTimeout)
+		case http.StatusNotFound:
+			return nil, fmt.Errorf("ollama_backend: generate: %w: model %q", constants.ErrInferenceModelNotFound, req.Model)
+		default:
+			return nil, fmt.Errorf("ollama_backend: generate: %w: status %d", constants.ErrInferenceGenerateFailed, resp.StatusCode)
+		}
 	}
 
 	var chatResp ollamaChatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
-		return nil, fmt.Errorf("ollama_backend: decode response: %w", err)
+	if err := b.decodeResponse("generate", resp.Body, &chatResp); err != nil {
+		return nil, err
 	}
 
 	finishReason := chatResp.DoneReason
@@ -164,28 +199,25 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 // Status queries Ollama's /api/tags endpoint to verify the daemon is
 // reachable and lists the models available in its store.
 func (b *OllamaBackend) Status(ctx context.Context) (*models.BackendStatus, error) {
-	url := b.endpoint + "/api/tags"
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, b.apiURL("api", "tags"), nil)
 	if err != nil {
 		return nil, fmt.Errorf("ollama_backend: status: build request: %w", err)
 	}
 
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
-		if ctx.Err() != nil {
-			return nil, fmt.Errorf("ollama_backend: status: %w", constants.ErrInferenceBackendTimeout)
-		}
-		return nil, fmt.Errorf("ollama_backend: status: %w: %v", constants.ErrInferenceBackendUnavailable, err)
+		return nil, transportError("status", ctx, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBodyBytes))
 		return nil, fmt.Errorf("ollama_backend: status: %w: status %d", constants.ErrInferenceBackendUnavailable, resp.StatusCode)
 	}
 
 	var tagsResp ollamaTagsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tagsResp); err != nil {
-		return nil, fmt.Errorf("ollama_backend: status: decode: %w", err)
+	if err := b.decodeResponse("status", resp.Body, &tagsResp); err != nil {
+		return nil, err
 	}
 
 	modelsList := make([]string, 0, len(tagsResp.Models))
@@ -197,4 +229,43 @@ func (b *OllamaBackend) Status(ctx context.Context) (*models.BackendStatus, erro
 		Available: true,
 		Models:    modelsList,
 	}, nil
+}
+
+// apiURL resolves a provider API path against the validated base endpoint.
+func (b *OllamaBackend) apiURL(elem ...string) string {
+	return b.base.JoinPath(elem...).String()
+}
+
+// decodeResponse reads a bounded provider response body and unmarshals it.
+// Oversized or malformed bodies fail closed with
+// ErrInferenceProviderResponseInvalid; the raw body text is never included
+// in the error.
+func (b *OllamaBackend) decodeResponse(op string, body io.Reader, out any) error {
+	data, err := io.ReadAll(io.LimitReader(body, b.maxResponseBytes+1))
+	if err != nil {
+		return fmt.Errorf("ollama_backend: %s: %w: %w", op, constants.ErrInferenceProviderResponseInvalid, err)
+	}
+	if int64(len(data)) > b.maxResponseBytes {
+		return fmt.Errorf("ollama_backend: %s: %w: response exceeds %d bytes", op, constants.ErrInferenceProviderResponseInvalid, b.maxResponseBytes)
+	}
+	if err := json.Unmarshal(data, out); err != nil {
+		return fmt.Errorf("ollama_backend: %s: %w: %w", op, constants.ErrInferenceProviderResponseInvalid, err)
+	}
+	return nil
+}
+
+// transportError classifies a failed provider call. Caller cancellation
+// stays distinguishable as context.Canceled; a context or client deadline
+// is ErrInferenceBackendTimeout; anything else is
+// ErrInferenceBackendUnavailable with the underlying transport cause
+// preserved in the chain.
+func transportError(op string, ctx context.Context, err error) error {
+	switch {
+	case errors.Is(ctx.Err(), context.Canceled):
+		return fmt.Errorf("ollama_backend: %s: %w", op, context.Canceled)
+	case errors.Is(err, context.DeadlineExceeded):
+		return fmt.Errorf("ollama_backend: %s: %w", op, constants.ErrInferenceBackendTimeout)
+	default:
+		return fmt.Errorf("ollama_backend: %s: %w: %w", op, constants.ErrInferenceBackendUnavailable, err)
+	}
 }

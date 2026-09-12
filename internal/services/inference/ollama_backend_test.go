@@ -13,6 +13,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,7 +52,8 @@ func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	backend := NewOllamaBackend(server.URL, logger)
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
 	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
 		Role:        models.InferenceModelRolePrimary,
 		Model:       "gemma3:4b",
@@ -104,7 +107,8 @@ func TestOllamaBackend_GenerateHandlesAllThreeRoles(t *testing.T) {
 		}))
 		defer server.Close()
 
-		backend := NewOllamaBackend(server.URL, logger)
+		backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
 		resp, err := backend.Generate(context.Background(), models.GenerateRequest{
 			Role:  role,
 			Model: modelsList[i],
@@ -118,7 +122,8 @@ func TestOllamaBackend_GenerateHandlesAllThreeRoles(t *testing.T) {
 func TestOllamaBackend_GenerateEmptyModelReturnsErrInferenceModelRefInvalid(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	backend := NewOllamaBackend("http://127.0.0.1:11434", logger)
+	backend, err := NewOllamaBackend("http://127.0.0.1:11434", logger)
+	require.NoError(t, err)
 
 	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
 		Role:  models.InferenceModelRolePrimary,
@@ -134,7 +139,8 @@ func TestOllamaBackend_GenerateUnavailableReturnsErrInferenceBackendUnavailable(
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	// Use a port that's almost certainly not listening
-	backend := NewOllamaBackend("http://127.0.0.1:1", logger)
+	backend, err := NewOllamaBackend("http://127.0.0.1:1", logger)
+	require.NoError(t, err)
 
 	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
 		Role:  models.InferenceModelRolePrimary,
@@ -156,7 +162,8 @@ func TestOllamaBackend_GenerateNonOKStatusReturnsErrInferenceGenerateFailed(t *t
 	}))
 	defer server.Close()
 
-	backend := NewOllamaBackend(server.URL, logger)
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
 	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
 		Role:  models.InferenceModelRolePrimary,
 		Model: "test-model",
@@ -176,7 +183,8 @@ func TestOllamaBackend_GenerateRequestTimeoutReturnsErrInferenceBackendTimeout(t
 	}))
 	defer server.Close()
 
-	backend := NewOllamaBackend(server.URL, logger)
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
 	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
 		Role:  models.InferenceModelRolePrimary,
 		Model: "test-model",
@@ -197,7 +205,8 @@ func TestOllamaBackend_GenerateContextCancelledReturnsErrInferenceBackendTimeout
 	}))
 	defer server.Close()
 
-	backend := NewOllamaBackend(server.URL, logger)
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
@@ -228,7 +237,8 @@ func TestOllamaBackend_GenerateParsesResponseWithoutDoneReason(t *testing.T) {
 	}))
 	defer server.Close()
 
-	backend := NewOllamaBackend(server.URL, logger)
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
 	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
 		Role:  models.InferenceModelRolePrimary,
 		Model: "test-model",
@@ -259,7 +269,8 @@ func TestOllamaBackend_StatusReturnsAvailableAndModels(t *testing.T) {
 	}))
 	defer server.Close()
 
-	backend := NewOllamaBackend(server.URL, logger)
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
 	status, err := backend.Status(context.Background())
 
 	require.NoError(t, err)
@@ -274,7 +285,8 @@ func TestOllamaBackend_StatusReturnsAvailableAndModels(t *testing.T) {
 func TestOllamaBackend_StatusUnavailableReturnsErrInferenceBackendUnavailable(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	backend := NewOllamaBackend("http://127.0.0.1:1", logger)
+	backend, err := NewOllamaBackend("http://127.0.0.1:1", logger)
+	require.NoError(t, err)
 
 	status, err := backend.Status(context.Background())
 
@@ -292,7 +304,8 @@ func TestOllamaBackend_StatusNonOKReturnsErrInferenceBackendUnavailable(t *testi
 	}))
 	defer server.Close()
 
-	backend := NewOllamaBackend(server.URL, logger)
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
 	status, err := backend.Status(context.Background())
 
 	require.Error(t, err)
@@ -309,7 +322,8 @@ func TestOllamaBackend_StatusContextCancelledReturnsErrInferenceBackendTimeout(t
 	}))
 	defer server.Close()
 
-	backend := NewOllamaBackend(server.URL, logger)
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
@@ -333,8 +347,208 @@ func TestOllamaBackend_TrimsTrailingSlashFromEndpoint(t *testing.T) {
 	}))
 	defer server.Close()
 
-	backend := NewOllamaBackend(server.URL+"/", logger)
-	_, err := backend.Status(context.Background())
+	backend, err := NewOllamaBackend(server.URL+"/", logger)
+	require.NoError(t, err)
+	_, err = backend.Status(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "/api/tags", capturedPath, "trailing slash should be trimmed")
+}
+
+func TestOllamaBackend_NewRejectsInvalidEndpoint(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	cases := []struct {
+		name     string
+		endpoint string
+	}{
+		{name: "empty", endpoint: ""},
+		{name: "unparseable", endpoint: "://missing-scheme"},
+		{name: "unsupported scheme", endpoint: "ftp://192.168.1.2:11434"},
+		{name: "missing host", endpoint: "http://"},
+		{name: "scheme-relative", endpoint: "//192.168.1.2:11434"},
+		{name: "bare host", endpoint: "192.168.1.2:11434"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			backend, err := NewOllamaBackend(tc.endpoint, logger)
+			require.Error(t, err)
+			assert.Nil(t, backend)
+			assert.ErrorIs(t, err, constants.ErrInferenceEndpointInvalid)
+		})
+	}
+}
+
+func TestOllamaBackend_GenerateErrorDoesNotLeakProviderResponseBody(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	const providerCanary = "provider-secret-canary-text"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"` + providerCanary + `"}`))
+	}))
+	defer server.Close()
+
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
+	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
+		Role:  models.InferenceModelRolePrimary,
+		Model: "test-model",
+	})
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, constants.ErrInferenceGenerateFailed)
+	assert.NotContains(t, err.Error(), providerCanary, "provider response text must not leak into errors")
+}
+
+func TestOllamaBackend_GenerateCallerCancellationReturnsContextCanceled(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Second)
+	}))
+	defer server.Close()
+
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	resp, err := backend.Generate(ctx, models.GenerateRequest{
+		Role:  models.InferenceModelRolePrimary,
+		Model: "test-model",
+	})
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, context.Canceled, "caller cancellation must stay distinguishable from a deadline")
+	assert.NotErrorIs(t, err, constants.ErrInferenceBackendTimeout)
+}
+
+func TestOllamaBackend_GeneratePreservesUnderlyingTransportCause(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	backend, err := NewOllamaBackend("http://127.0.0.1:1", logger)
+	require.NoError(t, err)
+	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
+		Role:  models.InferenceModelRolePrimary,
+		Model: "test-model",
+	})
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, constants.ErrInferenceBackendUnavailable)
+	var urlErr *url.Error
+	assert.ErrorAs(t, err, &urlErr, "the underlying transport error must stay in the chain")
+}
+
+func TestOllamaBackend_GenerateMalformedResponseReturnsErrInferenceProviderResponseInvalid(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("{not json"))
+	}))
+	defer server.Close()
+
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
+	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
+		Role:  models.InferenceModelRolePrimary,
+		Model: "test-model",
+	})
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, constants.ErrInferenceProviderResponseInvalid)
+}
+
+func TestOllamaBackend_GenerateOversizedResponseReturnsErrInferenceProviderResponseInvalid(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(strings.Repeat("x", 4096)))
+	}))
+	defer server.Close()
+
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
+	backend.maxResponseBytes = 1024
+
+	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
+		Role:  models.InferenceModelRolePrimary,
+		Model: "test-model",
+	})
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, constants.ErrInferenceProviderResponseInvalid)
+}
+
+func TestOllamaBackend_GenerateModelMissingReturnsErrInferenceModelNotFound(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"error":"model 'missing:1b' not found"}`))
+	}))
+	defer server.Close()
+
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
+	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
+		Role:  models.InferenceModelRolePrimary,
+		Model: "missing:1b",
+	})
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, constants.ErrInferenceModelNotFound)
+}
+
+func TestOllamaBackend_StatusMalformedResponseReturnsErrInferenceProviderResponseInvalid(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("{not json"))
+	}))
+	defer server.Close()
+
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
+	status, err := backend.Status(context.Background())
+
+	require.Error(t, err)
+	assert.Nil(t, status)
+	assert.ErrorIs(t, err, constants.ErrInferenceProviderResponseInvalid)
+}
+
+func TestOllamaBackend_EndpointPathPrefixPreserved(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	var capturedPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		resp := ollamaTagsResponse{}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	backend, err := NewOllamaBackend(server.URL+"/ollama", logger)
+	require.NoError(t, err)
+	_, err = backend.Status(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "/ollama/api/tags", capturedPath, "a path-prefixed endpoint must keep its prefix")
 }

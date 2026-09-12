@@ -266,6 +266,7 @@ func classifyInferenceDispatchError(err error) (int, error) {
 		{constants.ErrInferenceBackendTimeout, http.StatusBadGateway},
 		{constants.ErrInferenceGenerateFailed, http.StatusBadGateway},
 		{constants.ErrInferenceModelNotFound, http.StatusBadGateway},
+		{constants.ErrInferenceProviderResponseInvalid, http.StatusBadGateway},
 	}
 	for _, entry := range sentinels {
 		if errors.Is(err, entry.sentinel) {

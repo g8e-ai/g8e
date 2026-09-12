@@ -357,6 +357,8 @@ func TestInferenceDispatchController_ErrorStatusMapping(t *testing.T) {
 		{name: "receipt verification failed", dispatchErr: constants.ErrInferenceReceiptVerify, wantStatus: http.StatusBadGateway},
 		{name: "result digest mismatch", dispatchErr: constants.ErrInferenceResultDigestMismatch, wantStatus: http.StatusBadGateway},
 		{name: "backend timeout", dispatchErr: constants.ErrInferenceBackendTimeout, wantStatus: http.StatusBadGateway},
+		{name: "model not found", dispatchErr: constants.ErrInferenceModelNotFound, wantStatus: http.StatusBadGateway},
+		{name: "provider response invalid", dispatchErr: constants.ErrInferenceProviderResponseInvalid, wantStatus: http.StatusBadGateway},
 		{name: "unknown remote outcome", dispatchErr: constants.ErrInferenceOutcomeUnknown, wantStatus: http.StatusGatewayTimeout},
 		{name: "caller deadline exceeded", dispatchErr: context.DeadlineExceeded, wantStatus: http.StatusGatewayTimeout},
 		{name: "unexpected internal error", dispatchErr: errors.New("sql: connection refused at internal/db/store.go:123"), wantStatus: http.StatusInternalServerError},

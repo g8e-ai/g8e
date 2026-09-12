@@ -517,6 +517,10 @@ func classifyReceiptFailure(execErr error) operatorv1.ReceiptFailureCode {
 		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT
 	case errors.Is(execErr, constants.ErrInferenceGenerateFailed):
 		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATE_FAILED
+	case errors.Is(execErr, constants.ErrInferenceModelNotFound):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND
+	case errors.Is(execErr, constants.ErrInferenceProviderResponseInvalid):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID
 	default:
 		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED
 	}
