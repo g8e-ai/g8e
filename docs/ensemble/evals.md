@@ -80,9 +80,9 @@ Bundle verification layer 12 (`SOURCE_BUILD_PROVENANCE`) binds source/build prov
 2. Start the required local stack and refresh the canonical CLI identity with `./g8e auth refresh` after Operator enrollment.
 3. Set `G8E_APP_TRUST_BUNDLE` and `G8E_GATEWAY_TRUST_BUNDLE` to the canonical `.g8e/pki/trust/g8eg-ca-bundle.pem` when the eval process cannot resolve that runtime-relative path from its working directory.
 4. Enter `ensemble/evals/` and install the locked environment with `uv sync --locked --extra test`.
-5. Run the suite, for example: `uv run --locked g8e-evals run --suite ifeval_subset --arm doctrine --g8ee-url http://localhost:8000 --g8e-cli "$REPO_ROOT/g8e" --auth-project-root "$REPO_ROOT" --evidence-key-file "$EVIDENCE_KEY_FILE"`.
+5. Run the suite, for example: `uv run --locked g8e-evals run --suite ifeval_subset --arm doctrine --g8e-cli "$REPO_ROOT/g8e" --auth-project-root "$REPO_ROOT" --evidence-key-file "$EVIDENCE_KEY_FILE"`.
 
-Every `run` invocation currently requires `--g8ee-url`, `--auth-project-root`, a valid result from `g8e auth context`, and an evidence key, including the `direct` arm. The direct arm bypasses g8ee, the Gateway, and the Operator during task execution, but the current CLI still performs the common authentication setup before selecting that execution path.
+Ensemble and governed arms require `--auth-project-root`, a valid result from `g8e auth context`, and an evidence key. `--g8ee-url`/`G8E_G8EE_URL` is optional: the evals client posts to the g8ee app directly and defaults to `http://localhost:8000`, the port docker-compose publishes and the Dockerfile binds — set it only for a non-local deployment. The `direct` arm bypasses g8ee, the Gateway, and the Operator entirely and needs none of the stack options.
 
 The direct arm requires an explicit primary provider and model. g8ee arms can obtain role settings from the running application or from CLI options and `G8E_TEST_LLM_*` environment variables. OpenAI, Anthropic, and Gemini require applicable credentials; Ollama, llama.cpp, and the deterministic fake provider are keyless. Use `uv run --locked g8e-evals run --help` for role, endpoint, judge, timeout, output, task-limit, and headless approval options.
 

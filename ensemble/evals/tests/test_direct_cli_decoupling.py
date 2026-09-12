@@ -131,12 +131,21 @@ def test_direct_arm_does_not_load_cli_auth_context(monkeypatch: pytest.MonkeyPat
     assert calls == [], "load_cli_auth_context must not be called for the direct arm"
 
 
-def test_ensemble_arm_still_requires_g8ee_url():
-    """Ensemble arms must still require --g8ee-url.
+def test_ensemble_arm_defaults_g8ee_url_to_localhost(monkeypatch: pytest.MonkeyPatch):
+    """Ensemble arms must not require --g8ee-url.
 
-    The ensemble ungoverned arm routes through g8ee HTTP, so it must
-    fail fast when the endpoint is missing.
+    The ensemble app is assumed on localhost (the compose-mapped
+    http://localhost:8000 default in transport.py), so omitting the flag
+    must proceed past endpoint resolution to the auth context load.
     """
+    calls: list[tuple] = []
+
+    def _fail_load(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AuthBridgeError("not authenticated")
+
+    monkeypatch.setattr(cli, "load_cli_auth_context", _fail_load)
+
     result = _invoke(
         CliRunner(),
         [
@@ -148,8 +157,8 @@ def test_ensemble_arm_still_requires_g8ee_url():
     )
 
     assert result.exit_code == 2, result.output
-    assert "--g8ee-url" in result.output
-    assert "required for ensemble and governed arms" in result.output
+    assert len(calls) == 1
+    assert "./g8e auth enroll user" in result.output
 
 
 def test_ensemble_arm_still_requires_auth_project_root():
@@ -174,8 +183,16 @@ def test_ensemble_arm_still_requires_auth_project_root():
     assert "required for ensemble and governed arms" in result.output
 
 
-def test_doctrine_arm_still_requires_g8ee_url():
-    """Governed arms must still require --g8ee-url."""
+def test_doctrine_arm_defaults_g8ee_url_to_localhost(monkeypatch: pytest.MonkeyPatch):
+    """Governed arms must not require --g8ee-url either."""
+    calls: list[tuple] = []
+
+    def _fail_load(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AuthBridgeError("not authenticated")
+
+    monkeypatch.setattr(cli, "load_cli_auth_context", _fail_load)
+
     result = _invoke(
         CliRunner(),
         [
@@ -187,8 +204,8 @@ def test_doctrine_arm_still_requires_g8ee_url():
     )
 
     assert result.exit_code == 2, result.output
-    assert "--g8ee-url" in result.output
-    assert "required for ensemble and governed arms" in result.output
+    assert len(calls) == 1
+    assert "./g8e auth enroll user" in result.output
 
 
 def test_doctrine_arm_still_requires_auth_project_root():

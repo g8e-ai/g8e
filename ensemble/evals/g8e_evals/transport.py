@@ -55,6 +55,14 @@ class AuthenticationError(Exception):
 # The session cookie name g8eo's auth middleware accepts.
 SESSION_COOKIE_NAME = "g8e_session"
 
+# The g8ee ensemble's canonical local endpoint: the app serves plain HTTP
+# on port 8000 (docker-compose publishes ${G8E_ENSEMBLE_PORT:-8000}:8000
+# and the Dockerfile runs uvicorn on 8000). The evals client posts to the
+# app directly — the gateway does not proxy g8ee app routes — so a local
+# stack needs no endpoint configuration. G8E_G8EE_URL / --g8ee-url remain
+# for non-local deployments.
+DEFAULT_G8EE_URL = "http://localhost:8000"
+
 # X-G8E-Source-Component value the shell helpers send.
 SOURCE_COMPONENT_CLIENT = "client"
 
@@ -158,7 +166,7 @@ class AuthContext:
         trust_bundle = resolve_trust_bundle(runtime_identity)
 
         operator_https_port = PORTS["ports"]["OperatorHttps"]["value"]
-        app_url = (g8ee_url or os.environ.get("G8E_G8EE_URL") or "").rstrip("/")
+        app_url = (g8ee_url or os.environ.get("G8E_G8EE_URL") or DEFAULT_G8EE_URL).rstrip("/")
         op_url = (
             operator_url
             or os.environ.get("G8E_OPERATOR_URL")

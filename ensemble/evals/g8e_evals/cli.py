@@ -528,7 +528,7 @@ def main():
 @click.option("--idle-timeout", type=float, default=10.0,
               help="Seconds without an SSE event before declaring a task idle")
 @click.option("--g8ee-url", envvar="G8E_G8EE_URL",
-              help="URL of the g8ee application endpoint. Required for ensemble and governed arms; not used by the direct arm.")
+              help="URL of the g8ee application endpoint. Defaults to http://localhost:8000 (the local compose/native app); not used by the direct arm.")
 @click.option("--operator-url", default=f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}")
 @click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID",
               help="Operator session id override. The default comes from the canonical CLI identity.")
@@ -600,11 +600,6 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
     if selected_arm == Arm.DIRECT:
         auth_context = None
     else:
-        if not g8ee_url:
-            raise click.UsageError(
-                "--g8ee-url or G8E_G8EE_URL is required for ensemble and governed arms. "
-                "The direct arm (--arm direct) does not require it."
-            )
         if auth_project_root is None:
             raise click.UsageError(
                 "--auth-project-root or G8E_AUTH_PROJECT_ROOT is required for ensemble and governed arms. "
@@ -927,7 +922,7 @@ def campaign():
 @click.option("--models", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
               help="Path to a JSON model registry file. When provided with --profile, cohorts are derived from the registry and CampaignBinding is populated on every RunManifest.")
 @click.option("--g8ee-url", envvar="G8E_G8EE_URL", default=None,
-              help="URL of the g8ee application endpoint. Required for tier-fitness tracks with ensemble_ungoverned or doctrine arms; not used by the direct track.")
+              help="URL of the g8ee application endpoint. Defaults to http://localhost:8000 (the local compose/native app); not used by the direct track.")
 @click.option("--operator-url", default=f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}",
               help="URL of the Operator endpoint for governed arms.")
 @click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID", default=None,
@@ -1181,18 +1176,13 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     # and baseline_tier_mappings.
 
     # Load the canonical CLI auth context when ensemble or doctrine arms
-    # are in use and a g8ee URL is provided.
+    # are in use.
     auth_context = None
     has_ensemble_track = (
         campaign_profile is not None
         and any(a.arm_id != "direct" for a in campaign_profile.track_arm_assignments)
     )
     if has_ensemble_track:
-        if not g8ee_url:
-            raise click.UsageError(
-                "--g8ee-url or G8E_G8EE_URL is required for tier-fitness tracks "
-                "with ensemble_ungoverned or doctrine arms."
-            )
         if auth_project_root is None:
             raise click.UsageError(
                 "--auth-project-root or G8E_AUTH_PROJECT_ROOT is required for "

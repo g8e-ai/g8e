@@ -213,7 +213,16 @@ def test_run_requires_explicit_evidence_encryption_key(monkeypatch: pytest.Monke
     assert "--evidence-key-file or G8E_EVIDENCE_KEY_FILE is required" in result.output
 
 
-def test_run_requires_explicit_g8ee_endpoint():
+def test_run_g8ee_endpoint_defaults_to_localhost(monkeypatch: pytest.MonkeyPatch):
+    """``--g8ee-url``/``G8E_G8EE_URL`` is optional: the local app default
+    (http://localhost:8000) applies, so a doctrine-arm invocation without
+    it proceeds past endpoint resolution to the auth context load rather
+    than failing on a missing URL."""
+    def _fail_load(*args, **kwargs):
+        raise AuthBridgeError("not authenticated")
+
+    monkeypatch.setattr(cli, "load_cli_auth_context", _fail_load)
+
     result = _invoke(
         CliRunner(),
         [
@@ -225,8 +234,9 @@ def test_run_requires_explicit_g8ee_endpoint():
     )
 
     assert result.exit_code == 2, result.output
-    assert "--g8ee-url" in result.output
-    assert "required for ensemble and governed arms" in result.output
+    assert "--g8ee-url" not in result.output
+    assert "required for ensemble and governed arms" not in result.output
+    assert "./g8e auth enroll user" in result.output
 
 
 def test_dead_operator_id_flag_is_removed():

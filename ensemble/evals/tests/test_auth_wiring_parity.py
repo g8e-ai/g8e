@@ -33,6 +33,7 @@ import pytest
 from g8e.constants import PORTS, ComponentName
 from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.transport import (
+    DEFAULT_G8EE_URL,
     SESSION_COOKIE_NAME,
     AuthContext,
 )
@@ -174,6 +175,29 @@ def test_typed_cli_context_supplies_identity_and_distinct_service_endpoints(fake
             status="bound",
         )
     ]
+
+
+def test_g8ee_url_defaults_to_localhost_app(fake_pki):
+    """Without --g8ee-url or G8E_G8EE_URL, the endpoint defaults to the
+    compose-mapped local app (http://localhost:8000); the env var still
+    overrides the default."""
+    env = _baseline_env(fake_pki)
+    env.pop("G8E_G8EE_URL")
+
+    saved = dict(os.environ)
+    try:
+        os.environ.clear()
+        os.environ.update(env)
+        default_ctx = AuthContext.from_env()
+        env["G8E_G8EE_URL"] = "http://g8ee:9000/"
+        os.environ["G8E_G8EE_URL"] = env["G8E_G8EE_URL"]
+        override_ctx = AuthContext.from_env()
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)
+
+    assert default_ctx.g8ee_url == DEFAULT_G8EE_URL
+    assert override_ctx.g8ee_url == "http://g8ee:9000"
 
 
 def test_api_path_parity_g8ee_chat(fake_pki):
