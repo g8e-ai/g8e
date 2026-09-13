@@ -31,6 +31,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
@@ -46,16 +47,19 @@ type mirrorTestEnv struct {
 	keyID    string
 	sourceID string
 	client   *http.Client
+	fileSvc  fs.RuntimeFileService
 }
 
 func newMirrorTestEnv(t *testing.T) *mirrorTestEnv {
 	t.Helper()
-	mirror := NewPublicMirrorServer(testutil.NewTestLogger())
+	fileSvc := newProducerFileSvc(t)
+	mirror, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(fileSvc))
+	require.NoError(t, err)
 	pub, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	keyID := "test-key-1"
 	sourceID := "test-source-1"
-	mirror.RegisterSourceKey(sourceID, keyID, pub)
+	require.NoError(t, mirror.RegisterSourceKey(context.Background(), sourceID, keyID, pub))
 
 	server := httptest.NewServer(mirror.Handler())
 	t.Cleanup(server.Close)
@@ -69,6 +73,7 @@ func newMirrorTestEnv(t *testing.T) *mirrorTestEnv {
 		keyID:    keyID,
 		sourceID: sourceID,
 		client:   server.Client(),
+		fileSvc:  fileSvc,
 	}
 }
 
@@ -111,6 +116,47 @@ func (e *mirrorTestEnv) makeRecord(seq int64, proj map[string]any) models.Public
 		RecordType:  models.PublicFeedRecordTypeProjection,
 		RecordHash:  hex.EncodeToString(recordHash[:]),
 		RecordBytes: string(recordBytes),
+	}
+}
+
+func (e *mirrorTestEnv) makeProofIngestRequest(filename string, content []byte) models.PublicProofIngestRequest {
+	e.t.Helper()
+	hash := sha256.Sum256(content)
+	artifactID := hex.EncodeToString(hash[:])
+	generatedAt := time.Now().UTC()
+	entry := models.PublicProofCatalogEntry{
+		ArtifactID:          artifactID,
+		Filename:            filename,
+		MediaType:           "application/json",
+		ByteSize:            int64(len(content)),
+		SHA256:              artifactID,
+		Classification:      models.PublicFeedProofClassificationPublicSafe,
+		CampaignID:          "c1",
+		GeneratedAt:         generatedAt,
+		VerificationCommand: "sha256sum " + filename,
+		ImmutableURL:        "/proofs/" + artifactID,
+	}
+	manifest := models.PublicProofManifest{
+		SchemaVersion:               constants.PublicProofManifestSchemaVersion,
+		CampaignID:                  "c1",
+		CampaignRevision:            "rev1",
+		VerifiedIndexGenerationHash: artifactID,
+		VerificationOK:              true,
+		ArtifactCount:               1,
+		Artifacts:                   []models.PublicProofCatalogEntry{entry},
+		VerifierInstructions:        "verify hashes and signature",
+		GeneratedAt:                 generatedAt,
+		SigningKeyID:                e.keyID,
+	}
+	manifest.ProofRootSHA256 = (&PublicPublisherService{}).computeProofRootHash(manifest)
+	rootBytes, err := hex.DecodeString(manifest.ProofRootSHA256)
+	require.NoError(e.t, err)
+	manifest.Signature = hex.EncodeToString(ed25519.Sign(e.priv, rootBytes))
+	return models.PublicProofIngestRequest{
+		SourceID:  e.sourceID,
+		Manifest:  manifest,
+		Catalog:   models.PublicProofCatalog{SchemaVersion: constants.PublicProofCatalogSchemaVersion, Entries: []models.PublicProofCatalogEntry{entry}, GeneratedAt: generatedAt},
+		Artifacts: []models.PublicProofIngestArtifact{{ArtifactID: artifactID, Content: content}},
 	}
 }
 
@@ -189,6 +235,31 @@ func TestMirror_IngestAuth_AcceptsWithValidToken(t *testing.T) {
 	assert.Equal(t, int64(1), ingestResp.HighWaterSequence)
 }
 
+func TestMirror_AnonymousReadRateLimitRejectsAndResetsPerClientWindow(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	require.NoError(t, env.mirror.SetAnonymousReadRateLimit(2, time.Minute))
+	now := time.Now().UTC()
+	env.mirror.now = func() time.Time { return now }
+
+	for range 2 {
+		response, err := env.client.Get(env.server.URL + "/snapshot?source=" + env.sourceID)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, response.StatusCode)
+		require.NoError(t, response.Body.Close())
+	}
+	response, err := env.client.Get(env.server.URL + "/snapshot?source=" + env.sourceID)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusTooManyRequests, response.StatusCode)
+	assert.Equal(t, "60", response.Header.Get("Retry-After"))
+	require.NoError(t, response.Body.Close())
+
+	now = now.Add(time.Minute)
+	response, err = env.client.Get(env.server.URL + "/snapshot?source=" + env.sourceID)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	require.NoError(t, response.Body.Close())
+}
+
 // ---------------------------------------------------------------------------
 // Signature validation tests
 // ---------------------------------------------------------------------------
@@ -227,7 +298,7 @@ func TestMirror_Signature_RejectsUnknownKey(t *testing.T) {
 // batch signed by a revoked key.
 func TestMirror_Signature_RejectsRevokedKey(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	env.mirror.RevokeSourceKey(env.sourceID, env.keyID)
+	require.NoError(t, env.mirror.RevokeSourceKey(context.Background(), env.sourceID, env.keyID))
 
 	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"campaign_id": "c1"})}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
@@ -280,6 +351,63 @@ func TestMirror_HashChain_AcceptsCorrectChain(t *testing.T) {
 	assert.Equal(t, batch2.ContentHash, resp2.FeedChainHash)
 }
 
+func TestMirror_RestartRecoversAcceptedStateAndContinuesHashChain(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	records1 := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"campaign_id": "c1"})}
+	batch1 := env.buildBatch(records1, constants.PublicFeedZeroHashHex)
+	_, resp1 := env.sendIngest(batch1)
+	require.True(t, resp1.Accepted)
+
+	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	require.NoError(t, err)
+	server2 := httptest.NewServer(mirror2.Handler())
+	t.Cleanup(server2.Close)
+
+	var snapshot models.PublicFeedSnapshot
+	response, err := server2.Client().Get(server2.URL + "/snapshot?source=" + env.sourceID)
+	require.NoError(t, err)
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&snapshot))
+	require.NoError(t, response.Body.Close())
+	assert.Equal(t, int64(1), snapshot.HighWaterSequence)
+	assert.Equal(t, batch1.ContentHash, snapshot.FeedChainHash)
+
+	requestBody, err := json.Marshal(models.PublicIngestRequest{Batch: batch1})
+	require.NoError(t, err)
+	response, err = server2.Client().Post(server2.URL+"/ingest", "application/json", bytes.NewReader(requestBody))
+	require.NoError(t, err)
+	var replayResponse models.PublicIngestResponse
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&replayResponse))
+	require.NoError(t, response.Body.Close())
+	assert.True(t, replayResponse.Accepted)
+	_, _, batchCount, recordCount := mirror2.GetSourceState(env.sourceID)
+	assert.Equal(t, 1, batchCount)
+	assert.Equal(t, 1, recordCount)
+
+	records2 := []models.PublicFeedRecord{env.makeRecord(2, map[string]any{"campaign_id": "c1"})}
+	batch2 := env.buildBatch(records2, batch1.ContentHash)
+	requestBody, err = json.Marshal(models.PublicIngestRequest{Batch: batch2})
+	require.NoError(t, err)
+	response, err = server2.Client().Post(server2.URL+"/ingest", "application/json", bytes.NewReader(requestBody))
+	require.NoError(t, err)
+	var resp2 models.PublicIngestResponse
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&resp2))
+	require.NoError(t, response.Body.Close())
+	assert.True(t, resp2.Accepted)
+	assert.Equal(t, int64(2), resp2.HighWaterSequence)
+}
+
+func TestMirror_RestartRejectsCorruptDurableState(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"campaign_id": "c1"})}, constants.PublicFeedZeroHashHex)
+	_, response := env.sendIngest(batch)
+	require.True(t, response.Accepted)
+	require.NoError(t, env.fileSvc.WriteFile(context.Background(), constants.PublicMirrorStatePath, []byte("{invalid\n"), constants.PermFilePrivate))
+
+	_, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrPublicFeedMirrorStoreCorrupt)
+}
+
 // ---------------------------------------------------------------------------
 // Sequence ordering tests
 // ---------------------------------------------------------------------------
@@ -322,9 +450,9 @@ func TestMirror_Sequence_RejectsFirstBatchNonZeroPrevHash(t *testing.T) {
 // Idempotency tests
 // ---------------------------------------------------------------------------
 
-// TestMirror_Idempotency_DuplicateBatchRejected verifies that re-sending an
-// already-accepted batch is rejected as a duplicate sequence.
-func TestMirror_Idempotency_DuplicateBatchRejected(t *testing.T) {
+// TestMirror_Idempotency_DuplicateBatchAccepted verifies that re-sending an
+// already-accepted identical batch returns the durable high-water state.
+func TestMirror_Idempotency_DuplicateBatchAccepted(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
@@ -334,8 +462,25 @@ func TestMirror_Idempotency_DuplicateBatchRejected(t *testing.T) {
 
 	// Re-send the same batch.
 	_, resp2 := env.sendIngest(batch)
-	assert.False(t, resp2.Accepted)
-	assert.Equal(t, models.PublicFeedIngestRejectionDuplicateSequence, resp2.RejectionReason)
+	assert.True(t, resp2.Accepted)
+	assert.Equal(t, int64(1), resp2.HighWaterSequence)
+	highWater, feedHash, batchCount, recordCount := env.mirror.GetSourceState(env.sourceID)
+	assert.Equal(t, int64(1), highWater)
+	assert.Equal(t, batch.ContentHash, feedHash)
+	assert.Equal(t, 1, batchCount)
+	assert.Equal(t, 1, recordCount)
+}
+
+func TestMirror_Idempotency_DifferentBatchForAcceptedRangeRejectsEquivocation(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	batch1 := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}, constants.PublicFeedZeroHashHex)
+	_, response := env.sendIngest(batch1)
+	require.True(t, response.Accepted)
+
+	batch2 := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "different"})}, constants.PublicFeedZeroHashHex)
+	_, response = env.sendIngest(batch2)
+	assert.False(t, response.Accepted)
+	assert.Equal(t, models.PublicFeedIngestRejectionEquivocation, response.RejectionReason)
 }
 
 // ---------------------------------------------------------------------------
@@ -646,8 +791,7 @@ func TestMirror_SSE_ResumesFromSinceID(t *testing.T) {
 // Stale source tests
 // ---------------------------------------------------------------------------
 
-// TestMirror_StaleSource_ReportsStaleFreshness verifies that the mirror
-// reports the source freshness label set via SetSourceFreshness.
+// TestMirror_StaleSource_ReportsStaleFreshness verifies that elapsed accepted-batch time produces stale freshness.
 func TestMirror_StaleSource_ReportsStaleFreshness(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
@@ -657,8 +801,9 @@ func TestMirror_StaleSource_ReportsStaleFreshness(t *testing.T) {
 	_, resp := env.sendIngest(batch)
 	require.True(t, resp.Accepted)
 
-	// Set freshness to stale.
-	env.mirror.SetSourceFreshness(env.sourceID, models.CampaignFreshnessStale)
+	require.NoError(t, env.mirror.SetFreshnessWindows(time.Second, 2*time.Second, 3*time.Second))
+	acceptedAt := env.mirror.state.Sources[env.sourceID].LastAcceptedAt
+	env.mirror.now = func() time.Time { return acceptedAt.Add(2 * time.Second) }
 
 	var snap models.PublicFeedSnapshot
 	status := env.getJSON("/snapshot?source="+env.sourceID, &snap)
@@ -666,9 +811,37 @@ func TestMirror_StaleSource_ReportsStaleFreshness(t *testing.T) {
 	assert.Equal(t, models.CampaignFreshnessStale, snap.Freshness)
 }
 
-// TestMirror_StaleSource_BootstrapReportsStale verifies that the bootstrap
-// endpoint reports stale freshness.
-func TestMirror_StaleSource_BootstrapReportsStale(t *testing.T) {
+// TestMirror_FreshnessDerivesFromLastAcceptedBatchTime verifies every elapsed-time freshness boundary.
+func TestMirror_FreshnessDerivesFromLastAcceptedBatchTime(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}, constants.PublicFeedZeroHashHex)
+	_, response := env.sendIngest(batch)
+	require.True(t, response.Accepted)
+	require.NoError(t, env.mirror.SetFreshnessWindows(time.Second, 2*time.Second, 3*time.Second))
+	acceptedAt := env.mirror.state.Sources[env.sourceID].LastAcceptedAt
+
+	testCases := []struct {
+		name     string
+		age      time.Duration
+		expected models.CampaignFreshness
+	}{
+		{name: "active before delayed window", age: 500 * time.Millisecond, expected: models.CampaignFreshnessActive},
+		{name: "delayed after delayed window", age: time.Second, expected: models.CampaignFreshnessDelayed},
+		{name: "stale after stale window", age: 2 * time.Second, expected: models.CampaignFreshnessStale},
+		{name: "offline after liveness window", age: 3 * time.Second, expected: models.CampaignFreshnessSourceOffline},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			env.mirror.now = func() time.Time { return acceptedAt.Add(testCase.age) }
+			var snapshot models.PublicFeedSnapshot
+			status := env.getJSON("/snapshot?source="+env.sourceID, &snapshot)
+			assert.Equal(t, http.StatusOK, status)
+			assert.Equal(t, testCase.expected, snapshot.Freshness)
+		})
+	}
+}
+
+func TestMirror_IntentionallyStopped_BootstrapReportsTerminalFreshness(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
 	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}
@@ -676,7 +849,7 @@ func TestMirror_StaleSource_BootstrapReportsStale(t *testing.T) {
 	_, resp := env.sendIngest(batch)
 	require.True(t, resp.Accepted)
 
-	env.mirror.SetSourceFreshness(env.sourceID, models.CampaignFreshnessIntentionallyStopped)
+	require.NoError(t, env.mirror.SetSourceFreshness(context.Background(), env.sourceID, models.CampaignFreshnessIntentionallyStopped))
 
 	var bootstrap models.PublicFeedBootstrap
 	status := env.getJSON("/bootstrap?source="+env.sourceID, &bootstrap)
@@ -704,10 +877,10 @@ func TestMirror_KeyRotation_AcceptsNewKey(t *testing.T) {
 	newPub, newPriv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	newKeyID := "test-key-2"
-	env.mirror.RegisterSourceKey(env.sourceID, newKeyID, newPub)
+	require.NoError(t, env.mirror.RegisterSourceKey(context.Background(), env.sourceID, newKeyID, newPub))
 
 	// Revoke old key.
-	env.mirror.RevokeSourceKey(env.sourceID, env.keyID)
+	require.NoError(t, env.mirror.RevokeSourceKey(context.Background(), env.sourceID, env.keyID))
 
 	// Second batch with new key.
 	records2 := []models.PublicFeedRecord{env.makeRecord(2, map[string]any{"v": "2"})}
@@ -746,8 +919,8 @@ func TestMirror_KeyRotation_OldKeyRejectedAfterRevocation(t *testing.T) {
 	// Register new key and revoke old.
 	newPub, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	env.mirror.RegisterSourceKey(env.sourceID, "new-key", newPub)
-	env.mirror.RevokeSourceKey(env.sourceID, env.keyID)
+	require.NoError(t, env.mirror.RegisterSourceKey(context.Background(), env.sourceID, "new-key", newPub))
+	require.NoError(t, env.mirror.RevokeSourceKey(context.Background(), env.sourceID, env.keyID))
 
 	// Try to send with old key.
 	records2 := []models.PublicFeedRecord{env.makeRecord(2, map[string]any{"v": "2"})}
@@ -771,7 +944,7 @@ func TestMirror_MultiSource_IsolatesSources(t *testing.T) {
 	require.NoError(t, err)
 	source2ID := "test-source-2"
 	key2ID := "test-key-2"
-	env.mirror.RegisterSourceKey(source2ID, key2ID, pub2)
+	require.NoError(t, env.mirror.RegisterSourceKey(context.Background(), source2ID, key2ID, pub2))
 
 	// Ingest to source 1.
 	records1 := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"s": "1"})}
@@ -825,6 +998,86 @@ func TestMirror_MultiSource_IsolatesSources(t *testing.T) {
 // Proof download tests
 // ---------------------------------------------------------------------------
 
+func TestMirror_ProofIngest_AuthenticatesValidatesAndAtomicallyStoresPackage(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	env.mirror.SetIngestAuthToken("proof-token")
+	content := []byte(`{"campaign_id":"c1","verification_status":"verified"}`)
+	request := env.makeProofIngestRequest("proof.json", content)
+	artifactID := request.Artifacts[0].ArtifactID
+	requestBody, err := json.Marshal(request)
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodPost, env.server.URL+"/proof-ingest", bytes.NewReader(requestBody))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer proof-token")
+	req.Header.Set("Content-Type", "application/json")
+	response, err := env.client.Do(req)
+	require.NoError(t, err)
+	var ingestResponse models.PublicProofIngestResponse
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&ingestResponse))
+	require.NoError(t, response.Body.Close())
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	assert.True(t, ingestResponse.Accepted)
+	assert.Equal(t, 1, ingestResponse.ArtifactCount)
+
+	response, err = env.client.Get(env.server.URL + "/proofs/" + artifactID)
+	require.NoError(t, err)
+	stored, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	assert.Equal(t, content, stored)
+}
+
+func TestMirror_ProofIngest_RejectsInvalidPackageWithoutPartialPersistence(t *testing.T) {
+	testCases := []struct {
+		name     string
+		filename string
+		content  []byte
+		auth     bool
+		mutate   func(*models.PublicProofIngestRequest)
+	}{
+		{name: "missing authentication", filename: "proof.json", content: []byte(`{"campaign_id":"c1"}`), auth: false},
+		{name: "path traversal filename", filename: "../proof.json", content: []byte(`{"campaign_id":"c1"}`), auth: true},
+		{name: "nested restricted field", filename: "proof.json", content: []byte(`{"metadata":{"api_key":"restricted"}}`), auth: true},
+		{name: "invalid manifest signature", filename: "proof.json", content: []byte(`{"campaign_id":"c1"}`), auth: true, mutate: func(request *models.PublicProofIngestRequest) {
+			request.Manifest.Signature = constants.PublicFeedZeroHashHex
+		}},
+		{name: "artifact hash substitution", filename: "proof.json", content: []byte(`{"campaign_id":"c1"}`), auth: true, mutate: func(request *models.PublicProofIngestRequest) {
+			request.Artifacts[0].Content = []byte(`{"campaign_id":"substituted"}`)
+		}},
+		{name: "catalog manifest mismatch", filename: "proof.json", content: []byte(`{"campaign_id":"c1"}`), auth: true, mutate: func(request *models.PublicProofIngestRequest) {
+			request.Catalog.Entries[0].Filename = "different.json"
+		}},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			env := newMirrorTestEnv(t)
+			env.mirror.SetIngestAuthToken("proof-token")
+			request := env.makeProofIngestRequest(testCase.filename, testCase.content)
+			if testCase.mutate != nil {
+				testCase.mutate(&request)
+			}
+			requestBody, err := json.Marshal(request)
+			require.NoError(t, err)
+			req, err := http.NewRequest(http.MethodPost, env.server.URL+"/proof-ingest", bytes.NewReader(requestBody))
+			require.NoError(t, err)
+			if testCase.auth {
+				req.Header.Set("Authorization", "Bearer proof-token")
+			}
+			response, err := env.client.Do(req)
+			require.NoError(t, err)
+			require.NoError(t, response.Body.Close())
+			if testCase.auth {
+				assert.Equal(t, http.StatusBadRequest, response.StatusCode)
+			} else {
+				assert.Equal(t, http.StatusUnauthorized, response.StatusCode)
+			}
+			assert.Empty(t, env.mirror.state.ProofArtifacts)
+			assert.Empty(t, env.mirror.state.ProofCatalogs)
+			assert.Empty(t, env.mirror.state.ProofManifests)
+		})
+	}
+}
+
 // TestMirror_ProofDownload_ServesContentAddressedArtifact verifies that the
 // mirror serves proof artifacts under content-addressed URLs with safe
 // headers.
@@ -834,10 +1087,10 @@ func TestMirror_ProofDownload_ServesContentAddressedArtifact(t *testing.T) {
 	content := []byte(`{"proof": "test"}`)
 	h := sha256.Sum256(content)
 	artifactID := hex.EncodeToString(h[:])
-	env.mirror.StoreProofArtifact(artifactID, content)
+	require.NoError(t, env.mirror.StoreProofArtifact(context.Background(), artifactID, content))
 
 	// Store a catalog entry for safe headers.
-	env.mirror.StoreProofCatalog(env.sourceID, models.PublicProofCatalog{
+	require.NoError(t, env.mirror.StoreProofCatalog(context.Background(), env.sourceID, models.PublicProofCatalog{
 		SchemaVersion: constants.PublicProofCatalogSchemaVersion,
 		Entries: []models.PublicProofCatalogEntry{{
 			ArtifactID:     artifactID,
@@ -851,7 +1104,7 @@ func TestMirror_ProofDownload_ServesContentAddressedArtifact(t *testing.T) {
 			ImmutableURL:   "/proofs/" + artifactID,
 		}},
 		GeneratedAt: time.Now().UTC(),
-	})
+	}))
 
 	resp, err := env.client.Get(env.server.URL + "/proofs/" + artifactID)
 	require.NoError(t, err)
@@ -868,6 +1121,53 @@ func TestMirror_ProofDownload_ServesContentAddressedArtifact(t *testing.T) {
 
 // TestMirror_ProofDownload_Returns404ForUnknown verifies that the mirror
 // returns 404 for an unknown proof artifact.
+func TestMirror_RestartRecoversProofCatalogArtifactAndKeyRevocation(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	content := []byte(`{"proof":"durable"}`)
+	hash := sha256.Sum256(content)
+	artifactID := hex.EncodeToString(hash[:])
+	require.NoError(t, env.mirror.StoreProofArtifact(context.Background(), artifactID, content))
+	require.NoError(t, env.mirror.StoreProofCatalog(context.Background(), env.sourceID, models.PublicProofCatalog{
+		SchemaVersion: constants.PublicProofCatalogSchemaVersion,
+		Entries: []models.PublicProofCatalogEntry{{
+			ArtifactID:     artifactID,
+			Filename:       "proof.json",
+			MediaType:      "application/json",
+			ByteSize:       int64(len(content)),
+			SHA256:         artifactID,
+			Classification: models.PublicFeedProofClassificationPublicSafe,
+			CampaignID:     "c1",
+			GeneratedAt:    time.Now().UTC(),
+			ImmutableURL:   "/proofs/" + artifactID,
+		}},
+		GeneratedAt: time.Now().UTC(),
+	}))
+	require.NoError(t, env.mirror.RevokeSourceKey(context.Background(), env.sourceID, env.keyID))
+
+	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	require.NoError(t, err)
+	server2 := httptest.NewServer(mirror2.Handler())
+	t.Cleanup(server2.Close)
+	response, err := server2.Client().Get(server2.URL + "/proofs/" + artifactID)
+	require.NoError(t, err)
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	assert.Equal(t, content, body)
+
+	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}, constants.PublicFeedZeroHashHex)
+	requestBody, err := json.Marshal(models.PublicIngestRequest{Batch: batch})
+	require.NoError(t, err)
+	response, err = server2.Client().Post(server2.URL+"/ingest", "application/json", bytes.NewReader(requestBody))
+	require.NoError(t, err)
+	var ingestResponse models.PublicIngestResponse
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&ingestResponse))
+	require.NoError(t, response.Body.Close())
+	assert.False(t, ingestResponse.Accepted)
+	assert.Equal(t, models.PublicFeedIngestRejectionRevokedKey, ingestResponse.RejectionReason)
+}
+
 func TestMirror_ProofDownload_Returns404ForUnknown(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	resp, err := env.client.Get(env.server.URL + "/proofs/unknown-artifact-id")
@@ -884,8 +1184,8 @@ func TestMirror_ProofCatalog_ReturnsEntries(t *testing.T) {
 	content := []byte(`{"proof": "test"}`)
 	h := sha256.Sum256(content)
 	artifactID := hex.EncodeToString(h[:])
-	env.mirror.StoreProofArtifact(artifactID, content)
-	env.mirror.StoreProofCatalog(env.sourceID, models.PublicProofCatalog{
+	require.NoError(t, env.mirror.StoreProofArtifact(context.Background(), artifactID, content))
+	require.NoError(t, env.mirror.StoreProofCatalog(context.Background(), env.sourceID, models.PublicProofCatalog{
 		SchemaVersion: constants.PublicProofCatalogSchemaVersion,
 		Entries: []models.PublicProofCatalogEntry{{
 			ArtifactID:     artifactID,
@@ -899,7 +1199,7 @@ func TestMirror_ProofCatalog_ReturnsEntries(t *testing.T) {
 			ImmutableURL:   "/proofs/" + artifactID,
 		}},
 		GeneratedAt: time.Now().UTC(),
-	})
+	}))
 
 	var catalog models.PublicProofCatalog
 	status := env.getJSON("/proof-catalog?source="+env.sourceID, &catalog)
@@ -936,7 +1236,7 @@ func TestMirror_ProofManifest_ReturnsManifest(t *testing.T) {
 		SigningKeyID:                env.keyID,
 		Signature:                   "sig",
 	}
-	env.mirror.StoreProofManifest(env.sourceID, manifest)
+	require.NoError(t, env.mirror.StoreProofManifest(context.Background(), env.sourceID, manifest))
 
 	var result models.PublicProofManifest
 	status := env.getJSON("/proof-manifest?source="+env.sourceID, &result)
@@ -1154,8 +1454,8 @@ func TestMirror_Bootstrap_IncludesProofCatalogSummary(t *testing.T) {
 	content := []byte(`{"proof": "test"}`)
 	h := sha256.Sum256(content)
 	artifactID := hex.EncodeToString(h[:])
-	env.mirror.StoreProofArtifact(artifactID, content)
-	env.mirror.StoreProofCatalog(env.sourceID, models.PublicProofCatalog{
+	require.NoError(t, env.mirror.StoreProofArtifact(context.Background(), artifactID, content))
+	require.NoError(t, env.mirror.StoreProofCatalog(context.Background(), env.sourceID, models.PublicProofCatalog{
 		SchemaVersion: constants.PublicProofCatalogSchemaVersion,
 		Entries: []models.PublicProofCatalogEntry{{
 			ArtifactID:     artifactID,
@@ -1169,7 +1469,7 @@ func TestMirror_Bootstrap_IncludesProofCatalogSummary(t *testing.T) {
 			ImmutableURL:   "/proofs/" + artifactID,
 		}},
 		GeneratedAt: time.Now().UTC(),
-	})
+	}))
 
 	var bootstrap models.PublicFeedBootstrap
 	env.getJSON("/bootstrap?source="+env.sourceID, &bootstrap)

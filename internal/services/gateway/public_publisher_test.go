@@ -89,7 +89,7 @@ func makeProjectionRecord(t *testing.T, seq int64, proj map[string]any) models.P
 // to the mirror. The batch must carry a valid Ed25519 signature over the
 // content hash.
 func TestExportBatch_SignsAndWritesOutbox(t *testing.T) {
-	publisher, docStore, _, pubKeyHex := newPublicPublisherTestEnv(t)
+	publisher, _, _, pubKeyHex := newPublicPublisherTestEnv(t)
 
 	// Set up a test mirror that accepts the batch.
 	var receivedBatch models.PublicFeedBatch
@@ -130,10 +130,9 @@ func TestExportBatch_SignsAndWritesOutbox(t *testing.T) {
 	assert.True(t, ed25519.Verify(pubKeyBytes, contentHashBytes, sigBytes), "signature must be valid")
 
 	// The outbox has the entry persisted.
-	collection := marshaler.CollectionName(constants.CollectionPublicFeedOutbox)
-	docs, err := docStore.DocList(collection)
+	entries, err := publisher.outbox.List(context.Background())
 	require.NoError(t, err)
-	require.Len(t, docs, 1, "outbox must have one entry")
+	require.Len(t, entries, 1, "outbox must have one entry")
 }
 
 // TestExportBatch_HashChainLinksBatches verifies that the second batch
@@ -332,13 +331,85 @@ func TestRecoverOutbox_ResumesAfterRestart(t *testing.T) {
 		AckWindowSecs:           constants.PublicFeedAckWindowSeconds,
 	}
 	logger := testutil.NewTestLogger()
-	publisher2 := NewPublicPublisherService(docStore, newProducerFileSvc(t), logger, exportCfg, priv, "test-key-1")
+	publisher2 := NewPublicPublisherService(docStore, publisher1.fileSvc, logger, exportCfg, priv, "test-key-1")
 	publisher2.SetMirrorOrigin(mirror.URL)
 
 	// The snapshot should still be available from the first publisher's state.
 	snap, err := publisher2.GetSnapshot(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), snap.HighWaterSequence)
+}
+
+func TestRecoverOutbox_UsesRuntimeFileStateAfterDatabaseReplacement(t *testing.T) {
+	publisher1, _, priv, _ := newPublicPublisherTestEnv(t)
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req models.PublicIngestRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		resp := models.PublicIngestResponse{Accepted: true, HighWaterSequence: req.Batch.LastSequence, FeedChainHash: req.Batch.ContentHash}
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}))
+	t.Cleanup(mirror.Close)
+	publisher1.SetMirrorOrigin(mirror.URL)
+
+	err := publisher1.ExportBatch(context.Background(), []models.PublicFeedRecord{
+		makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"}),
+	})
+	require.NoError(t, err)
+
+	logger := testutil.NewTestLogger()
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(":memory:"), logger)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.Exec(gatewaySchema)
+	require.NoError(t, err)
+
+	exportCfg := publisher1.cfg
+	exportCfg.MirrorOrigin = mirror.URL
+	publisher2 := NewPublicPublisherService(NewDocumentStoreService(db, logger), publisher1.fileSvc, logger, exportCfg, priv, "test-key-1")
+	snap, err := publisher2.GetSnapshot(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), snap.HighWaterSequence)
+	assert.Equal(t, 1, snap.BatchCount)
+}
+
+func TestRecoverOutbox_RejectsCorruptRuntimeFile(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	require.NoError(t, publisher.fileSvc.WriteFile(context.Background(), constants.PublicFeedOutboxPath, []byte("{invalid\n"), constants.PermFilePrivate))
+
+	_, err := publisher.GetSnapshot(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrPublicFeedOutboxCorrupt)
+}
+
+func TestRecoverOutbox_RejectsSnapshotEquivocationAtHighWater(t *testing.T) {
+	publisher1, docStore, priv, _ := newPublicPublisherTestEnv(t)
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req models.PublicIngestRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		response := models.PublicIngestResponse{Accepted: true, HighWaterSequence: req.Batch.LastSequence, FeedChainHash: req.Batch.ContentHash}
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(response))
+	}))
+	t.Cleanup(mirror.Close)
+	publisher1.SetMirrorOrigin(mirror.URL)
+	require.NoError(t, publisher1.ExportBatch(context.Background(), []models.PublicFeedRecord{
+		makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"}),
+	}))
+
+	snapshotBytes, err := publisher1.fileSvc.ReadFile(context.Background(), constants.PublicFeedSnapshotPath)
+	require.NoError(t, err)
+	var snapshot models.PublicFeedSnapshot
+	require.NoError(t, json.Unmarshal(snapshotBytes, &snapshot))
+	snapshot.FeedChainHash = constants.PublicFeedZeroHashHex
+	snapshotBytes, err = json.Marshal(snapshot)
+	require.NoError(t, err)
+	require.NoError(t, publisher1.fileSvc.WriteFile(context.Background(), constants.PublicFeedSnapshotPath, snapshotBytes, constants.PermFilePrivate))
+
+	publisher2 := NewPublicPublisherService(docStore, publisher1.fileSvc, testutil.NewTestLogger(), publisher1.cfg, priv, "test-key-1")
+	_, err = publisher2.GetSnapshot(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrPublicFeedOutboxEquivocation)
 }
 
 // TestExportBatch_DisabledReturnsError verifies that exporting when the
@@ -550,7 +621,7 @@ func TestRotateKey_SwitchesSigningKey(t *testing.T) {
 	assert.NotEqual(t, oldPubKeyHex, newPubKeyHex)
 
 	// Export with the new key.
-	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 2, map[string]any{"campaign_id": "c1"})}
+	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 3, map[string]any{"campaign_id": "c1"})}
 	err = publisher.ExportBatch(context.Background(), records2)
 	require.NoError(t, err)
 
@@ -565,7 +636,7 @@ func TestRotateKey_SwitchesSigningKey(t *testing.T) {
 // mirror is unreachable, the batch remains in the outbox and can be
 // retransmitted later without losing sequence.
 func TestExportBatch_MirrorOutageDoesNotLoseSequence(t *testing.T) {
-	publisher, docStore, _, _ := newPublicPublisherTestEnv(t)
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
 
 	// Point to an invalid URL so the mirror is unreachable.
 	publisher.SetMirrorOrigin("http://127.0.0.1:1")
@@ -576,10 +647,11 @@ func TestExportBatch_MirrorOutageDoesNotLoseSequence(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrPublicFeedMaxRetriesExceeded)
 
 	// The outbox has the pending entry.
-	collection := marshaler.CollectionName(constants.CollectionPublicFeedOutbox)
-	docs, err := docStore.DocList(collection)
+	entries, err := publisher.outbox.List(context.Background())
 	require.NoError(t, err)
-	require.Len(t, docs, 1, "outbox must retain the pending entry")
+	require.Len(t, entries, 1, "outbox must retain the pending entry")
+	assert.Equal(t, models.PublicFeedOutboxStatusFailed, entries[0].Status)
+	assert.Equal(t, constants.PublicFeedRetryMaxAttempts, entries[0].Attempts)
 
 	// Now set up a working mirror and retransmit.
 	var accepted atomic.Int32

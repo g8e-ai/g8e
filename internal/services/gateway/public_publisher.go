@@ -21,12 +21,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
@@ -66,6 +66,185 @@ type ProofArtifactInput struct {
 	SourceRunID string
 }
 
+type PublicOutboxStore interface {
+	Append(context.Context, models.PublicOutboxEntry) error
+	List(context.Context) ([]models.PublicOutboxEntry, error)
+	Update(context.Context, models.PublicOutboxEntry) error
+	PruneAcknowledged(context.Context, time.Time) error
+}
+
+type runtimePublicOutboxStore struct {
+	fileSvc fs.RuntimeFileService
+	mu      sync.Mutex
+}
+
+func newRuntimePublicOutboxStore(fileSvc fs.RuntimeFileService) PublicOutboxStore {
+	return &runtimePublicOutboxStore{fileSvc: fileSvc}
+}
+
+func (s *runtimePublicOutboxStore) Append(ctx context.Context, entry models.PublicOutboxEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries, err := s.read(ctx)
+	if err != nil {
+		return err
+	}
+	for _, existing := range entries {
+		if existing.Sequence != entry.Sequence {
+			continue
+		}
+		if existing.BatchHash != entry.BatchHash || existing.BatchBytes != entry.BatchBytes {
+			return constants.ErrPublicFeedOutboxEquivocation
+		}
+		return constants.ErrPublicFeedDuplicateSequence
+	}
+	if err := validatePublicOutboxEntry(entry); err != nil {
+		return err
+	}
+	if len(entries) > 0 {
+		last := entries[len(entries)-1]
+		var batch models.PublicFeedBatch
+		if err := json.Unmarshal([]byte(entry.BatchBytes), &batch); err != nil {
+			return fmt.Errorf("%w: decode appended batch: %v", constants.ErrPublicFeedOutboxCorrupt, err)
+		}
+		if entry.Sequence <= last.Sequence {
+			return constants.ErrPublicFeedSequenceOutOfOrder
+		}
+		if batch.FirstSequence != last.Sequence+1 || batch.PreviousBatchHash != last.BatchHash {
+			return constants.ErrPublicFeedHashChainMismatch
+		}
+	}
+	entries = append(entries, entry)
+	return s.write(ctx, entries)
+}
+
+func (s *runtimePublicOutboxStore) List(ctx context.Context) ([]models.PublicOutboxEntry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.read(ctx)
+}
+
+func (s *runtimePublicOutboxStore) Update(ctx context.Context, entry models.PublicOutboxEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries, err := s.read(ctx)
+	if err != nil {
+		return err
+	}
+	found := false
+	for i := range entries {
+		if entries[i].Sequence != entry.Sequence {
+			continue
+		}
+		if entries[i].BatchHash != entry.BatchHash || entries[i].BatchBytes != entry.BatchBytes {
+			return constants.ErrPublicFeedOutboxEquivocation
+		}
+		entries[i] = entry
+		found = true
+		break
+	}
+	if !found {
+		return constants.ErrPublicFeedOutboxCorrupt
+	}
+	return s.write(ctx, entries)
+}
+
+func (s *runtimePublicOutboxStore) PruneAcknowledged(ctx context.Context, before time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries, err := s.read(ctx)
+	if err != nil {
+		return err
+	}
+	retained := entries[:0]
+	for _, entry := range entries {
+		if entry.Status == models.PublicFeedOutboxStatusAcknowledged && entry.AcknowledgedAt != nil && entry.AcknowledgedAt.Before(before) {
+			continue
+		}
+		retained = append(retained, entry)
+	}
+	if len(retained) == len(entries) {
+		return nil
+	}
+	return s.write(ctx, retained)
+}
+
+func (s *runtimePublicOutboxStore) read(ctx context.Context) ([]models.PublicOutboxEntry, error) {
+	exists, err := s.fileSvc.FileExists(ctx, constants.PublicFeedOutboxPath)
+	if err != nil {
+		return nil, fmt.Errorf("public-feed: outbox stat: %w", err)
+	}
+	if !exists {
+		return []models.PublicOutboxEntry{}, nil
+	}
+	data, err := s.fileSvc.ReadFile(ctx, constants.PublicFeedOutboxPath)
+	if err != nil {
+		return nil, fmt.Errorf("public-feed: outbox read: %w", err)
+	}
+	lines := bytes.Split(data, []byte{'\n'})
+	entries := make([]models.PublicOutboxEntry, 0, len(lines))
+	for index, line := range lines {
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+		var entry models.PublicOutboxEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			return nil, fmt.Errorf("%w: line %d: %v", constants.ErrPublicFeedOutboxCorrupt, index+1, err)
+		}
+		if err := validatePublicOutboxEntry(entry); err != nil {
+			return nil, fmt.Errorf("%w: line %d: %v", constants.ErrPublicFeedOutboxCorrupt, index+1, err)
+		}
+		var batch models.PublicFeedBatch
+		if err := json.Unmarshal([]byte(entry.BatchBytes), &batch); err != nil {
+			return nil, fmt.Errorf("%w: line %d batch: %v", constants.ErrPublicFeedOutboxCorrupt, index+1, err)
+		}
+		if len(entries) > 0 {
+			previous := entries[len(entries)-1]
+			if entry.Sequence == previous.Sequence && (entry.BatchHash != previous.BatchHash || entry.BatchBytes != previous.BatchBytes) {
+				return nil, constants.ErrPublicFeedOutboxEquivocation
+			}
+			if entry.Sequence <= previous.Sequence {
+				return nil, constants.ErrPublicFeedOutboxCorrupt
+			}
+			if batch.FirstSequence != previous.Sequence+1 || batch.PreviousBatchHash != previous.BatchHash {
+				return nil, constants.ErrPublicFeedHashChainMismatch
+			}
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+func (s *runtimePublicOutboxStore) write(ctx context.Context, entries []models.PublicOutboxEntry) error {
+	var data bytes.Buffer
+	for _, entry := range entries {
+		encoded, err := json.Marshal(entry)
+		if err != nil {
+			return fmt.Errorf("public-feed: outbox marshal: %w", err)
+		}
+		data.Write(encoded)
+		data.WriteByte('\n')
+	}
+	if err := s.fileSvc.WriteFile(ctx, constants.PublicFeedOutboxPath, data.Bytes(), constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("public-feed: outbox write: %w", err)
+	}
+	return nil
+}
+
+func validatePublicOutboxEntry(entry models.PublicOutboxEntry) error {
+	var batch models.PublicFeedBatch
+	if err := json.Unmarshal([]byte(entry.BatchBytes), &batch); err != nil {
+		return fmt.Errorf("%w: decode batch: %v", constants.ErrPublicFeedOutboxCorrupt, err)
+	}
+	if entry.Sequence <= 0 || batch.LastSequence != entry.Sequence || batch.ContentHash != entry.BatchHash {
+		return constants.ErrPublicFeedOutboxCorrupt
+	}
+	if computeBatchContentHash(batch) != batch.ContentHash {
+		return constants.ErrPublicFeedContentHashMismatch
+	}
+	return nil
+}
+
 // PublicPublisherService is the Gateway outbound publisher. It consumes
 // persisted O0-allowlisted projections, builds signed append-only batches,
 // durably writes an ordered outbox, and transmits to a hosted mirror over
@@ -74,6 +253,7 @@ type ProofArtifactInput struct {
 type PublicPublisherService struct {
 	docStore *DocumentStoreService
 	fileSvc  fs.RuntimeFileService
+	outbox   PublicOutboxStore
 	logger   *slog.Logger
 	cfg      models.PublicExportConfig
 
@@ -99,6 +279,7 @@ func NewPublicPublisherService(docStore *DocumentStoreService, fileSvc fs.Runtim
 	return &PublicPublisherService{
 		docStore:        docStore,
 		fileSvc:         fileSvc,
+		outbox:          newRuntimePublicOutboxStore(fileSvc),
 		logger:          logger,
 		cfg:             cfg,
 		signingPrivKey:  priv,
@@ -314,13 +495,25 @@ func (s *PublicPublisherService) ExportBatch(ctx context.Context, records []mode
 		return constants.ErrPublicFeedBatchOversized
 	}
 
+	if err := s.loadSnapshotFromOutbox(ctx); err != nil {
+		return fmt.Errorf("public-feed: export batch: recover outbox: %w", err)
+	}
+	s.mu.Lock()
+	nextSequence := s.highWaterSeq + 1
+	s.mu.Unlock()
+	for i, record := range records {
+		if record.Sequence != nextSequence+int64(i) {
+			return constants.ErrPublicFeedSequenceOutOfOrder
+		}
+	}
+
 	batch, err := s.BuildBatch(records)
 	if err != nil {
 		return fmt.Errorf("public-feed: export batch: build: %w", err)
 	}
 
 	// Persist to outbox before network transmission.
-	if err := s.writeOutboxEntry(batch); err != nil {
+	if err := s.writeOutboxEntry(ctx, batch); err != nil {
 		return fmt.Errorf("public-feed: export batch: write outbox: %w", err)
 	}
 
@@ -336,16 +529,19 @@ func (s *PublicPublisherService) ExportBatch(ctx context.Context, records []mode
 	s.batchCount++
 	s.mu.Unlock()
 
-	// Persist snapshot.
-	if err := s.persistSnapshot(); err != nil {
-		s.logger.Warn("public-feed: failed to persist snapshot", "error", err)
+	if err := s.persistSnapshot(ctx); err != nil {
+		return fmt.Errorf("public-feed: export batch: persist snapshot: %w", err)
+	}
+	ackWindow := time.Duration(s.cfg.AckWindowSecs) * time.Second
+	if err := s.outbox.PruneAcknowledged(ctx, time.Now().UTC().Add(-ackWindow)); err != nil {
+		return fmt.Errorf("public-feed: export batch: prune outbox: %w", err)
 	}
 
 	return nil
 }
 
 // writeOutboxEntry durably writes a batch to the outbox collection.
-func (s *PublicPublisherService) writeOutboxEntry(batch models.PublicFeedBatch) error {
+func (s *PublicPublisherService) writeOutboxEntry(ctx context.Context, batch models.PublicFeedBatch) error {
 	batchBytes, err := json.Marshal(batch)
 	if err != nil {
 		return fmt.Errorf("marshal batch: %w", err)
@@ -357,13 +553,7 @@ func (s *PublicPublisherService) writeOutboxEntry(batch models.PublicFeedBatch) 
 		Status:     models.PublicFeedOutboxStatusPending,
 		CreatedAt:  time.Now().UTC(),
 	}
-	entryBytes, err := json.Marshal(entry)
-	if err != nil {
-		return fmt.Errorf("marshal outbox entry: %w", err)
-	}
-	collection := marshaler.CollectionName(constants.CollectionPublicFeedOutbox)
-	docID := fmt.Sprintf("%d", batch.LastSequence)
-	return s.docStore.DocSet(collection, docID, entryBytes)
+	return s.outbox.Append(ctx, entry)
 }
 
 // transmitBatch sends a batch to the mirror with bounded retry. Returns nil
@@ -389,16 +579,21 @@ func (s *PublicPublisherService) transmitBatch(ctx context.Context, batch models
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		if err := s.updateOutboxStatus(ctx, batch.LastSequence, models.PublicFeedOutboxStatusSent, true); err != nil {
+			return fmt.Errorf("public-feed: update outbox attempt: %w", err)
+		}
 		err := s.sendToMirror(ctx, origin, batch)
 		if err == nil {
-			// Update outbox entry to acknowledged.
-			s.updateOutboxStatus(batch.LastSequence, models.PublicFeedOutboxStatusAcknowledged)
+			if err := s.updateOutboxStatus(ctx, batch.LastSequence, models.PublicFeedOutboxStatusAcknowledged, false); err != nil {
+				return fmt.Errorf("public-feed: acknowledge outbox: %w", err)
+			}
 			return nil
 		}
 		lastErr = err
 		if isMirrorRejection(err) {
-			// Rejections are not retried — the batch is fundamentally invalid.
-			s.updateOutboxStatus(batch.LastSequence, models.PublicFeedOutboxStatusFailed)
+			if statusErr := s.updateOutboxStatus(ctx, batch.LastSequence, models.PublicFeedOutboxStatusFailed, false); statusErr != nil {
+				return fmt.Errorf("public-feed: reject outbox: %w", statusErr)
+			}
 			return err
 		}
 		// Retryable error — compute backoff.
@@ -416,7 +611,9 @@ func (s *PublicPublisherService) transmitBatch(ctx context.Context, batch models
 			}
 		}
 	}
-	s.updateOutboxStatus(batch.LastSequence, models.PublicFeedOutboxStatusFailed)
+	if err := s.updateOutboxStatus(ctx, batch.LastSequence, models.PublicFeedOutboxStatusFailed, false); err != nil {
+		return fmt.Errorf("public-feed: exhaust outbox retries: %w", err)
+	}
 	return fmt.Errorf("%w: %v", constants.ErrPublicFeedMaxRetriesExceeded, lastErr)
 }
 
@@ -465,47 +662,45 @@ func (s *PublicPublisherService) sendToMirror(ctx context.Context, origin string
 }
 
 // updateOutboxStatus updates the status of an outbox entry.
-func (s *PublicPublisherService) updateOutboxStatus(seq int64, status models.PublicFeedOutboxStatus) {
-	collection := marshaler.CollectionName(constants.CollectionPublicFeedOutbox)
-	docID := fmt.Sprintf("%d", seq)
-	doc, err := s.docStore.DocGet(collection, docID)
-	if err != nil || doc == nil {
-		return
-	}
-	var entry models.PublicOutboxEntry
-	if err := unmarshalDocData(doc, &entry); err != nil {
-		return
-	}
-	entry.Status = status
-	now := time.Now().UTC()
-	if status == models.PublicFeedOutboxStatusAcknowledged {
-		entry.AcknowledgedAt = &now
-	}
-	entry.LastAttemptAt = &now
-	entryBytes, err := json.Marshal(entry)
+func (s *PublicPublisherService) updateOutboxStatus(ctx context.Context, seq int64, status models.PublicFeedOutboxStatus, incrementAttempt bool) error {
+	entries, err := s.outbox.List(ctx)
 	if err != nil {
-		return
+		return err
 	}
-	_ = s.docStore.DocSet(collection, docID, entryBytes)
+	for _, entry := range entries {
+		if entry.Sequence != seq {
+			continue
+		}
+		entry.Status = status
+		now := time.Now().UTC()
+		if incrementAttempt {
+			entry.Attempts++
+			entry.LastAttemptAt = &now
+		}
+		if status == models.PublicFeedOutboxStatusAcknowledged {
+			entry.AcknowledgedAt = &now
+		}
+		return s.outbox.Update(ctx, entry)
+	}
+	return constants.ErrPublicFeedOutboxCorrupt
 }
 
 // RetransmitOutbox retransmits all outbox entries to the mirror. The mirror
 // handles idempotent acceptance of duplicate batches. Entries that previously
 // failed transmission are retried.
 func (s *PublicPublisherService) RetransmitOutbox(ctx context.Context) error {
-	collection := marshaler.CollectionName(constants.CollectionPublicFeedOutbox)
-	docs, err := s.docStore.DocList(collection)
+	if err := s.loadSnapshotFromOutbox(ctx); err != nil {
+		return fmt.Errorf("public-feed: retransmit: recover: %w", err)
+	}
+	entries, err := s.outbox.List(ctx)
 	if err != nil {
 		return fmt.Errorf("public-feed: retransmit: list outbox: %w", err)
 	}
-	for _, doc := range docs {
-		var entry models.PublicOutboxEntry
-		if err := unmarshalDocData(doc, &entry); err != nil {
-			continue
-		}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Sequence < entries[j].Sequence })
+	for _, entry := range entries {
 		var batch models.PublicFeedBatch
 		if err := json.Unmarshal([]byte(entry.BatchBytes), &batch); err != nil {
-			continue
+			return fmt.Errorf("public-feed: retransmit: %w: %v", constants.ErrPublicFeedOutboxCorrupt, err)
 		}
 		if err := s.transmitBatch(ctx, batch); err != nil {
 			return fmt.Errorf("public-feed: retransmit: %w", err)
@@ -524,8 +719,8 @@ func (s *PublicPublisherService) GetSnapshot(ctx context.Context) (models.Public
 
 	if hw == 0 {
 		// Try recovering from the outbox entries (e.g. after publisher restart).
-		if err := s.loadSnapshotFromOutbox(); err != nil {
-			s.logger.Debug("public-feed: no snapshot in outbox", "error", err)
+		if err := s.loadSnapshotFromOutbox(ctx); err != nil {
+			return models.PublicFeedSnapshot{}, fmt.Errorf("public-feed: get snapshot: recover: %w", err)
 		}
 		s.mu.Lock()
 		hw = s.highWaterSeq
@@ -550,7 +745,7 @@ func (s *PublicPublisherService) GetSnapshot(ctx context.Context) (models.Public
 }
 
 // persistSnapshot writes the current snapshot to the runtime tree.
-func (s *PublicPublisherService) persistSnapshot() error {
+func (s *PublicPublisherService) persistSnapshot(ctx context.Context) error {
 	s.mu.Lock()
 	hw := s.highWaterSeq
 	fch := s.feedChainHash
@@ -574,29 +769,66 @@ func (s *PublicPublisherService) persistSnapshot() error {
 	if err != nil {
 		return fmt.Errorf("marshal snapshot: %w", err)
 	}
-	return s.fileSvc.WriteFile(context.Background(), constants.PublicFeedSnapshotFilename, snapBytes, constants.PermFilePrivate)
+	return s.fileSvc.WriteFile(ctx, constants.PublicFeedSnapshotPath, snapBytes, constants.PermFilePrivate)
 }
 
 // loadSnapshotFromOutbox reconstructs the high-water sequence and feed-chain
-// hash from the outbox entries in the docStore. Used when a new publisher
-// instance needs to recover state from the database (e.g. after process
-// restart with a new fileSvc).
-func (s *PublicPublisherService) loadSnapshotFromOutbox() error {
-	collection := marshaler.CollectionName(constants.CollectionPublicFeedOutbox)
-	docs, err := s.docStore.DocList(collection)
+// hash from the runtime snapshot and durable file outbox after process restart.
+func (s *PublicPublisherService) loadSnapshotFromOutbox(ctx context.Context) error {
+	var snapshot models.PublicFeedSnapshot
+	exists, err := s.fileSvc.FileExists(ctx, constants.PublicFeedSnapshotPath)
+	if err != nil {
+		return fmt.Errorf("load snapshot from outbox: stat snapshot: %w", err)
+	}
+	if exists {
+		data, err := s.fileSvc.ReadFile(ctx, constants.PublicFeedSnapshotPath)
+		if err != nil {
+			return fmt.Errorf("load snapshot from outbox: read snapshot: %w", err)
+		}
+		if err := json.Unmarshal(data, &snapshot); err != nil {
+			return fmt.Errorf("%w: decode snapshot: %v", constants.ErrPublicFeedOutboxCorrupt, err)
+		}
+		if snapshot.SourceID != s.cfg.SourceID || snapshot.HighWaterSequence <= 0 || snapshot.FeedChainHash == "" {
+			return fmt.Errorf("%w: invalid snapshot", constants.ErrPublicFeedOutboxCorrupt)
+		}
+	}
+
+	entries, err := s.outbox.List(ctx)
 	if err != nil {
 		return fmt.Errorf("load snapshot from outbox: list: %w", err)
 	}
-
-	var maxSeq int64
-	var lastHash string
-	count := 0
-	for _, doc := range docs {
-		var entry models.PublicOutboxEntry
-		if err := unmarshalDocData(doc, &entry); err != nil {
-			continue
+	maxSeq := snapshot.HighWaterSequence
+	lastHash := snapshot.FeedChainHash
+	count := snapshot.BatchCount
+	if snapshot.HighWaterSequence == 0 && len(entries) > 0 {
+		var firstBatch models.PublicFeedBatch
+		if err := json.Unmarshal([]byte(entries[0].BatchBytes), &firstBatch); err != nil {
+			return fmt.Errorf("%w: decode first batch: %v", constants.ErrPublicFeedOutboxCorrupt, err)
 		}
-		if entry.Sequence > maxSeq {
+		if firstBatch.FirstSequence != 1 || firstBatch.PreviousBatchHash != constants.PublicFeedZeroHashHex {
+			return constants.ErrPublicFeedOutboxCorrupt
+		}
+		maxSeq = entries[len(entries)-1].Sequence
+		lastHash = entries[len(entries)-1].BatchHash
+		count = len(entries)
+	} else {
+		for _, entry := range entries {
+			if entry.Sequence < maxSeq {
+				continue
+			}
+			if entry.Sequence == maxSeq {
+				if entry.BatchHash != lastHash {
+					return constants.ErrPublicFeedOutboxEquivocation
+				}
+				continue
+			}
+			var batch models.PublicFeedBatch
+			if err := json.Unmarshal([]byte(entry.BatchBytes), &batch); err != nil {
+				return fmt.Errorf("%w: decode recovery batch: %v", constants.ErrPublicFeedOutboxCorrupt, err)
+			}
+			if batch.FirstSequence != maxSeq+1 || batch.PreviousBatchHash != lastHash {
+				return constants.ErrPublicFeedOutboxCorrupt
+			}
 			maxSeq = entry.Sequence
 			lastHash = entry.BatchHash
 			count++
@@ -761,6 +993,10 @@ func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaign
 // computeProofRootHash computes the SHA-256 proof root hash over the
 // artifact hashes and manifest metadata (excluding the signature).
 func (s *PublicPublisherService) computeProofRootHash(manifest models.PublicProofManifest) string {
+	return computePublicProofRootHash(manifest)
+}
+
+func computePublicProofRootHash(manifest models.PublicProofManifest) string {
 	h := sha256.New()
 	h.Write([]byte(manifest.SchemaVersion))
 	h.Write([]byte(manifest.CampaignID))

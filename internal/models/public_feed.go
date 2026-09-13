@@ -43,6 +43,7 @@ const (
 	PublicFeedIngestRejectionSequenceOutOfOrder PublicFeedIngestRejectionReason = "sequence_out_of_order"
 	PublicFeedIngestRejectionHashChainMismatch  PublicFeedIngestRejectionReason = "hash_chain_mismatch"
 	PublicFeedIngestRejectionDuplicateSequence  PublicFeedIngestRejectionReason = "duplicate_sequence"
+	PublicFeedIngestRejectionEquivocation       PublicFeedIngestRejectionReason = "equivocation"
 	PublicFeedIngestRejectionOversizedBatch     PublicFeedIngestRejectionReason = "oversized_batch"
 	PublicFeedIngestRejectionRevokedKey         PublicFeedIngestRejectionReason = "revoked_key"
 	PublicFeedIngestRejectionUnknownKey         PublicFeedIngestRejectionReason = "unknown_key"
@@ -133,6 +134,24 @@ type PublicIngestResponse struct {
 	HighWaterSequence int64                           `json:"high_water_sequence,omitempty"`
 	FeedChainHash     string                          `json:"feed_chain_hash,omitempty"`
 	RejectionReason   PublicFeedIngestRejectionReason `json:"rejection_reason,omitempty"`
+}
+
+type PublicProofIngestArtifact struct {
+	ArtifactID string `json:"artifact_id"`
+	Content    []byte `json:"content"`
+}
+
+type PublicProofIngestRequest struct {
+	SourceID  string                      `json:"source_id"`
+	Manifest  PublicProofManifest         `json:"manifest"`
+	Catalog   PublicProofCatalog          `json:"catalog"`
+	Artifacts []PublicProofIngestArtifact `json:"artifacts"`
+}
+
+type PublicProofIngestResponse struct {
+	Accepted      bool   `json:"accepted"`
+	ArtifactCount int    `json:"artifact_count,omitempty"`
+	ProofRoot     string `json:"proof_root,omitempty"`
 }
 
 // PublicKeyRevocationRecord is a key revocation record published as a signed

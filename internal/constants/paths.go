@@ -869,9 +869,14 @@ const (
 const (
 	PublicFeedDirname              = "public-feed"
 	PublicFeedOutboxFilename       = "outbox.jsonl"
+	PublicFeedOutboxPath           = "public-feed/outbox.jsonl"
 	PublicFeedSnapshotFilename     = "snapshot.json"
+	PublicFeedSnapshotPath         = "public-feed/snapshot.json"
 	PublicFeedExportConfigFilename = "export-config.json"
 	PublicFeedSigningKeyFilename   = "signing-key.ed25519"
+	PublicMirrorDirname            = "public-mirror"
+	PublicMirrorStateFilename      = "state.json"
+	PublicMirrorStatePath          = "public-mirror/state.json"
 	PublicProofsDirname            = "public-proofs"
 	PublicProofCatalogFilename     = "proof-catalog.json"
 	PublicProofManifestFilename    = "proof-manifest.json"
@@ -879,16 +884,24 @@ const (
 
 // Public feed schema and protocol version constants.
 const (
-	PublicFeedProtocolVersion        = "1.0.0"
-	PublicFeedSchemaVersion          = "1.0.0"
-	PublicProofManifestSchemaVersion = "1.0.0"
-	PublicProofCatalogSchemaVersion  = "1.0.0"
-	PublicFeedBatchMaxRecords        = 100
-	PublicFeedBatchMaxBytes          = 4 << 20
-	PublicFeedRetryMaxAttempts       = 5
-	PublicFeedRetryInitialBackoff    = 1
-	PublicFeedRetryMaxBackoff        = 60
-	PublicFeedAckWindowSeconds       = 300
-	PublicFeedMaxArtifactBytes       = 64 << 20
-	PublicFeedZeroHashHex            = "0000000000000000000000000000000000000000000000000000000000000000"
+	PublicFeedProtocolVersion         = "1.0.0"
+	PublicFeedSchemaVersion           = "1.0.0"
+	PublicProofManifestSchemaVersion  = "1.0.0"
+	PublicProofCatalogSchemaVersion   = "1.0.0"
+	PublicFeedBatchMaxRecords         = 100
+	PublicFeedBatchMaxBytes           = 4 << 20
+	PublicFeedRetryMaxAttempts        = 5
+	PublicFeedRetryInitialBackoff     = 1
+	PublicFeedRetryMaxBackoff         = 60
+	PublicFeedAckWindowSeconds        = 300
+	PublicFeedMaxArtifactBytes        = 64 << 20
+	PublicFeedProofIngestMaxBytes     = 512 << 20
+	PublicFeedProofMaxArtifacts       = 1000
+	PublicFeedFreshnessDelayedSeconds = 60
+	PublicFeedFreshnessStaleSeconds   = 300
+	PublicFeedFreshnessOfflineSeconds = 900
+	PublicFeedAnonymousRatePerWindow  = 60
+	PublicFeedAnonymousRateWindowSecs = 60
+	PublicFeedAnonymousRateMaxClients = 10000
+	PublicFeedZeroHashHex             = "0000000000000000000000000000000000000000000000000000000000000000"
 )
