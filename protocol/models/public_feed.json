@@ -72,15 +72,30 @@
     "accepted": {"type": "boolean", "required": true, "description": "Whether the mirror accepted the batch"},
     "high_water_sequence": {"type": "integer", "required": false, "description": "Updated high-water sequence after acceptance. Omitted when rejected."},
     "feed_chain_hash": {"type": "string", "required": false, "description": "Updated feed-chain hash after acceptance. Omitted when rejected."},
-    "rejection_reason": {"type": "string", "required": false, "description": "Typed rejection reason when accepted is false", "enum": ["signature_invalid", "sequence_out_of_order", "hash_chain_mismatch", "duplicate_sequence", "oversized_batch", "revoked_key", "unknown_key"]}
+    "rejection_reason": {"type": "string", "required": false, "description": "Typed rejection reason when accepted is false", "enum": ["signature_invalid", "sequence_out_of_order", "hash_chain_mismatch", "duplicate_sequence", "equivocation", "oversized_batch", "revoked_key", "unknown_key"]}
+  },
+
+  "public_key_registration_request": {
+    "_description": "Authenticated pre-registration request for a replacement source signing key. The active key signs the complete request before the mirror admits the replacement key for the overlap window.",
+    "source_id": {"type": "string", "required": true, "description": "Pseudonymous source deployment identifier"},
+    "current_key_id": {"type": "string", "required": true, "description": "Identifier of the active signing key authorizing registration"},
+    "new_key_id": {"type": "string", "required": true, "description": "SHA-256 identifier of the replacement public key"},
+    "public_key": {"type": "string", "required": true, "description": "Replacement Ed25519 public key, hex-encoded"},
+    "signature": {"type": "string", "required": true, "description": "Ed25519 signature by the active key over the canonical registration request, hex-encoded"}
+  },
+
+  "public_key_registration_response": {
+    "_description": "Authenticated mirror response for replacement-key pre-registration.",
+    "accepted": {"type": "boolean", "required": true, "description": "Whether the mirror durably admitted the replacement key"}
   },
 
   "public_key_revocation_record": {
-    "_description": "A key revocation record published as a signed batch record before the old key is deactivated. Carries the revoked key ID, revocation time, and revocation signature from the new key.",
+    "_description": "A key revocation record published as a signed batch record after the replacement key is admitted and before the old key is deactivated. The active old key signs both the batch and the source-bound revocation record.",
+    "source_id": {"type": "string", "required": true, "description": "Pseudonymous source deployment identifier"},
     "revoked_key_id": {"type": "string", "required": true, "description": "Identifier of the revoked signing key"},
     "revoked_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp when the revocation was issued"},
-    "new_key_id": {"type": "string", "required": true, "description": "Identifier of the replacement signing key"},
-    "revocation_signature": {"type": "string", "required": true, "description": "Ed25519 signature over the revocation record from the new key, hex-encoded"}
+    "new_key_id": {"type": "string", "required": true, "description": "Identifier of the pre-registered replacement signing key"},
+    "revocation_signature": {"type": "string", "required": true, "description": "Ed25519 signature over the source-bound revocation record from the active old key, hex-encoded"}
   },
 
   "public_proof_manifest": {

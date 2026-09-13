@@ -879,6 +879,8 @@ const (
 	PublicFeedSigningKeyPath       = "public-feed/signing-key.ed25519"
 	PublicFeedIngestTokenFilename  = "ingest-token"
 	PublicFeedIngestTokenPath      = "public-feed/ingest-token"
+	PublicFeedKeyRotationFilename  = "key-rotation.json"
+	PublicFeedKeyRotationPath      = "public-feed/key-rotation.json"
 	PublicMirrorDirname            = "public-mirror"
 	PublicMirrorStateFilename      = "state.json"
 	PublicMirrorStatePath          = "public-mirror/state.json"
@@ -901,6 +903,7 @@ const (
 	PublicFeedAckWindowSeconds        = 300
 	PublicFeedMaxArtifactBytes        = 64 << 20
 	PublicFeedProofIngestMaxBytes     = 512 << 20
+	PublicFeedKeyRegistrationMaxBytes = 16 << 10
 	PublicFeedProofMaxArtifacts       = 1000
 	PublicFeedFreshnessDelayedSeconds = 60
 	PublicFeedFreshnessStaleSeconds   = 300

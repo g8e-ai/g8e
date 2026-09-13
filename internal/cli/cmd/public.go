@@ -65,6 +65,16 @@ func publicInitCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory pub
 			if err := fileSvc.MkdirAll(ctx, constants.PublicFeedDirname, constants.PermDirPrivate); err != nil {
 				return fmt.Errorf("public-feed: create runtime directory: %w", err)
 			}
+			createdPaths := make([]string, 0, 3)
+			rollback := func(cause error) error {
+				result := cause
+				for index := len(createdPaths) - 1; index >= 0; index-- {
+					if removeErr := fileSvc.Remove(ctx, createdPaths[index]); removeErr != nil {
+						result = errors.Join(result, fmt.Errorf("public-feed: roll back initialization path %s: %w", createdPaths[index], removeErr))
+					}
+				}
+				return result
+			}
 			publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 			if err != nil {
 				return fmt.Errorf("%w: %v", constants.ErrPublicFeedKeyGenFailed, err)
@@ -82,12 +92,15 @@ func publicInitCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory pub
 			if err := fileSvc.WriteFile(ctx, constants.PublicFeedSigningKeyPath, []byte(hex.EncodeToString(privateKey)), constants.PermFilePrivate); err != nil {
 				return fmt.Errorf("public-feed: write signing key: %w", err)
 			}
+			createdPaths = append(createdPaths, constants.PublicFeedSigningKeyPath)
 			if err := fileSvc.WriteFile(ctx, constants.PublicFeedIngestTokenPath, []byte(hex.EncodeToString(token)), constants.PermFilePrivate); err != nil {
-				return fmt.Errorf("public-feed: write ingest token: %w", err)
+				return rollback(fmt.Errorf("public-feed: write ingest token: %w", err))
 			}
+			createdPaths = append(createdPaths, constants.PublicFeedIngestTokenPath)
 			if err := writePublicExportConfig(ctx, fileSvc, exportConfig); err != nil {
-				return err
+				return rollback(err)
 			}
+			createdPaths = append(createdPaths, constants.PublicFeedExportConfigPath)
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public feed initialized for source %s\n", sourceID)
 			return err
 		},
@@ -195,6 +208,9 @@ func validatePublicExportConfig(exportConfig models.PublicExportConfig) error {
 	if strings.TrimSpace(exportConfig.SigningKeyID) == "" {
 		return constants.ErrPublicFeedSigningKeyIDRequired
 	}
+	if exportConfig.BatchMaxRecords <= 0 || exportConfig.BatchMaxRecords > constants.PublicFeedBatchMaxRecords || exportConfig.BatchMaxBytes <= 0 || exportConfig.BatchMaxBytes > constants.PublicFeedBatchMaxBytes || exportConfig.RetryMaxAttempts <= 0 || exportConfig.RetryInitialBackoffSecs < 0 || exportConfig.RetryMaxBackoffSecs < exportConfig.RetryInitialBackoffSecs || exportConfig.AckWindowSecs <= 0 {
+		return constants.ErrPublicFeedConfigRequired
+	}
 	return validatePublicMirrorOrigin(exportConfig.MirrorOrigin)
 }
 
@@ -232,7 +248,7 @@ func publicCmd() *cobra.Command {
 	return cmd
 }
 
-func loadPublicCommandRuntime(cmd *cobra.Command, configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) (fs.RuntimeFileService, models.PublicExportConfig, error) {
+func loadPublicCommandRuntimeUnchecked(cmd *cobra.Command, configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) (fs.RuntimeFileService, models.PublicExportConfig, error) {
 	cfg, err := configLoader("")
 	if err != nil {
 		return nil, models.PublicExportConfig{}, err
@@ -244,6 +260,21 @@ func loadPublicCommandRuntime(cmd *cobra.Command, configLoader publicConfigLoade
 	exportConfig, err := readPublicExportConfig(commandContext(cmd), fileSvc)
 	if err != nil {
 		return nil, models.PublicExportConfig{}, err
+	}
+	return fileSvc, exportConfig, nil
+}
+
+func loadPublicCommandRuntime(cmd *cobra.Command, configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) (fs.RuntimeFileService, models.PublicExportConfig, error) {
+	fileSvc, exportConfig, err := loadPublicCommandRuntimeUnchecked(cmd, configLoader, fileSvcFactory)
+	if err != nil {
+		return nil, models.PublicExportConfig{}, err
+	}
+	exists, err := fileSvc.FileExists(commandContext(cmd), constants.PublicFeedKeyRotationPath)
+	if err != nil {
+		return nil, models.PublicExportConfig{}, fmt.Errorf("public-feed: inspect key rotation state: %w", err)
+	}
+	if exists {
+		return nil, models.PublicExportConfig{}, constants.ErrPublicFeedKeyRotationPending
 	}
 	return fileSvc, exportConfig, nil
 }
@@ -373,7 +404,10 @@ func publicPushCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory pub
 			if err := publisher.RetransmitOutbox(commandContext(cmd)); err != nil {
 				return err
 			}
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Public outbox delivered")
+			if err := publisher.PushProofPackage(commandContext(cmd)); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Public outbox and proof package delivered")
 			return err
 		},
 	}
@@ -417,36 +451,170 @@ func publicStatusCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory p
 	}
 }
 
+func readPublicKeyRotation(ctx context.Context, fileSvc fs.RuntimeFileService) (*models.PublicKeyRotationState, error) {
+	exists, err := fileSvc.FileExists(ctx, constants.PublicFeedKeyRotationPath)
+	if err != nil {
+		return nil, fmt.Errorf("public-feed: inspect key rotation state: %w", err)
+	}
+	if !exists {
+		return nil, nil
+	}
+	data, err := fileSvc.ReadFile(ctx, constants.PublicFeedKeyRotationPath)
+	if err != nil {
+		return nil, fmt.Errorf("%w: read state: %v", constants.ErrPublicFeedKeyRotationPending, err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var state models.PublicKeyRotationState
+	if err := decoder.Decode(&state); err != nil {
+		return nil, fmt.Errorf("%w: decode state: %v", constants.ErrPublicFeedKeyRotationPending, err)
+	}
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return nil, fmt.Errorf("%w: trailing JSON", constants.ErrPublicFeedKeyRotationPending)
+	}
+	privateKey, err := hex.DecodeString(state.NewPrivateKey)
+	if err != nil || len(privateKey) != ed25519.PrivateKeySize || state.SourceID == "" || state.OldKeyID == "" || state.NewKeyID == "" || state.OldKeyID == state.NewKeyID {
+		return nil, constants.ErrPublicFeedKeyRotationPending
+	}
+	digest := sha256.Sum256(ed25519.PrivateKey(privateKey).Public().(ed25519.PublicKey))
+	if state.NewKeyID != hex.EncodeToString(digest[:]) {
+		return nil, constants.ErrPublicFeedKeyRotationPending
+	}
+	return &state, nil
+}
+
+func writePublicKeyRotation(ctx context.Context, fileSvc fs.RuntimeFileService, state models.PublicKeyRotationState) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("public-feed: encode key rotation state: %w", err)
+	}
+	if err := fileSvc.WriteFile(ctx, constants.PublicFeedKeyRotationPath, data, constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("public-feed: write key rotation state: %w", err)
+	}
+	return nil
+}
+
+func publicKeyRotationOutboxStatus(ctx context.Context, fileSvc fs.RuntimeFileService, rotation models.PublicKeyRotationState) (bool, bool, error) {
+	exists, err := fileSvc.FileExists(ctx, constants.PublicFeedOutboxPath)
+	if err != nil {
+		return false, false, fmt.Errorf("public-feed: inspect rotation outbox: %w", err)
+	}
+	if !exists {
+		return false, false, nil
+	}
+	data, err := fileSvc.ReadFile(ctx, constants.PublicFeedOutboxPath)
+	if err != nil {
+		return false, false, fmt.Errorf("public-feed: read rotation outbox: %w", err)
+	}
+	for lineNumber, line := range bytes.Split(data, []byte{'\n'}) {
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+		var entry models.PublicOutboxEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			return false, false, fmt.Errorf("%w: rotation outbox line %d: %v", constants.ErrPublicFeedOutboxCorrupt, lineNumber+1, err)
+		}
+		var batch models.PublicFeedBatch
+		if err := json.Unmarshal([]byte(entry.BatchBytes), &batch); err != nil {
+			return false, false, fmt.Errorf("%w: rotation batch line %d: %v", constants.ErrPublicFeedOutboxCorrupt, lineNumber+1, err)
+		}
+		for _, record := range batch.Records {
+			if record.RecordType != models.PublicFeedRecordTypeKeyRevocation {
+				continue
+			}
+			var revocation models.PublicKeyRevocationRecord
+			if err := json.Unmarshal([]byte(record.RecordBytes), &revocation); err != nil {
+				return false, false, fmt.Errorf("%w: rotation record line %d: %v", constants.ErrPublicFeedOutboxCorrupt, lineNumber+1, err)
+			}
+			if revocation.SourceID == rotation.SourceID && revocation.RevokedKeyID == rotation.OldKeyID && revocation.NewKeyID == rotation.NewKeyID {
+				return true, entry.Status == models.PublicFeedOutboxStatusAcknowledged, nil
+			}
+		}
+	}
+	return false, false, nil
+}
+
+func finalizePublicKeyRotation(ctx context.Context, fileSvc fs.RuntimeFileService, exportConfig models.PublicExportConfig, rotation models.PublicKeyRotationState) error {
+	if err := fileSvc.WriteFile(ctx, constants.PublicFeedSigningKeyPath, []byte(rotation.NewPrivateKey), constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("public-feed: persist rotated signing key: %w", err)
+	}
+	exportConfig.SigningKeyID = rotation.NewKeyID
+	if err := writePublicExportConfig(ctx, fileSvc, exportConfig); err != nil {
+		return err
+	}
+	if err := fileSvc.Remove(ctx, constants.PublicFeedKeyRotationPath); err != nil {
+		return fmt.Errorf("public-feed: remove completed key rotation state: %w", err)
+	}
+	return nil
+}
+
 func publicRotateKeyCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
 	return &cobra.Command{
 		Use:   "rotate-key",
 		Short: "Rotate the public-feed signing key",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
+			fileSvc, exportConfig, err := loadPublicCommandRuntimeUnchecked(cmd, configLoader, fileSvcFactory)
 			if err != nil {
 				return err
 			}
-			publisher, err := newPublicPublisherForCommand(commandContext(cmd), fileSvc, exportConfig)
+			ctx := commandContext(cmd)
+			rotation, err := readPublicKeyRotation(ctx, fileSvc)
 			if err != nil {
 				return err
 			}
-			publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+			if rotation == nil {
+				publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+				if err != nil {
+					return fmt.Errorf("%w: %v", constants.ErrPublicFeedKeyGenFailed, err)
+				}
+				digest := sha256.Sum256(publicKey)
+				rotation = &models.PublicKeyRotationState{
+					SourceID:      exportConfig.SourceID,
+					OldKeyID:      exportConfig.SigningKeyID,
+					NewKeyID:      hex.EncodeToString(digest[:]),
+					NewPrivateKey: hex.EncodeToString(privateKey),
+				}
+				if err := writePublicKeyRotation(ctx, fileSvc, *rotation); err != nil {
+					return err
+				}
+			}
+			if rotation.SourceID != exportConfig.SourceID || (exportConfig.SigningKeyID != rotation.OldKeyID && exportConfig.SigningKeyID != rotation.NewKeyID) {
+				return constants.ErrPublicFeedKeyRotationPending
+			}
+			found, acknowledged, err := publicKeyRotationOutboxStatus(ctx, fileSvc, *rotation)
 			if err != nil {
-				return fmt.Errorf("%w: %v", constants.ErrPublicFeedKeyGenFailed, err)
-			}
-			digest := sha256.Sum256(publicKey)
-			newKeyID := hex.EncodeToString(digest[:])
-			if err := publisher.RotateKeyTo(commandContext(cmd), privateKey, newKeyID); err != nil {
 				return err
 			}
-			if err := fileSvc.WriteFile(commandContext(cmd), constants.PublicFeedSigningKeyPath, []byte(hex.EncodeToString(privateKey)), constants.PermFilePrivate); err != nil {
-				return fmt.Errorf("public-feed: persist rotated signing key: %w", err)
+			if !acknowledged {
+				if exportConfig.SigningKeyID != rotation.OldKeyID {
+					return constants.ErrPublicFeedKeyRotationPending
+				}
+				publisher, err := newPublicPublisherForCommand(ctx, fileSvc, exportConfig)
+				if err != nil {
+					return err
+				}
+				if found {
+					err = publisher.RetransmitOutbox(ctx)
+				} else {
+					privateKey, _ := hex.DecodeString(rotation.NewPrivateKey)
+					err = publisher.RotateKeyTo(ctx, ed25519.PrivateKey(privateKey), rotation.NewKeyID)
+				}
+				if err != nil {
+					return err
+				}
+				_, acknowledged, err = publicKeyRotationOutboxStatus(ctx, fileSvc, *rotation)
+				if err != nil {
+					return err
+				}
+				if !acknowledged {
+					return constants.ErrPublicFeedKeyRotationPending
+				}
 			}
-			exportConfig.SigningKeyID = newKeyID
-			if err := writePublicExportConfig(commandContext(cmd), fileSvc, exportConfig); err != nil {
+			if err := finalizePublicKeyRotation(ctx, fileSvc, exportConfig, *rotation); err != nil {
 				return err
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public signing key rotated to %s; register public key %s with the mirror before the next publication\n", newKeyID, hex.EncodeToString(publicKey))
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public signing key rotated to %s\n", rotation.NewKeyID)
 			return err
 		},
 	}

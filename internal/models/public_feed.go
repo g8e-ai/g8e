@@ -136,6 +136,18 @@ type PublicIngestResponse struct {
 	RejectionReason   PublicFeedIngestRejectionReason `json:"rejection_reason,omitempty"`
 }
 
+type PublicKeyRegistrationRequest struct {
+	SourceID     string `json:"source_id"`
+	CurrentKeyID string `json:"current_key_id"`
+	NewKeyID     string `json:"new_key_id"`
+	PublicKey    string `json:"public_key"`
+	Signature    string `json:"signature"`
+}
+
+type PublicKeyRegistrationResponse struct {
+	Accepted bool `json:"accepted"`
+}
+
 type PublicProofIngestArtifact struct {
 	ArtifactID string `json:"artifact_id"`
 	Content    []byte `json:"content"`
@@ -157,6 +169,7 @@ type PublicProofIngestResponse struct {
 // PublicKeyRevocationRecord is a key revocation record published as a signed
 // batch record before the old key is deactivated.
 type PublicKeyRevocationRecord struct {
+	SourceID            string    `json:"source_id"`
 	RevokedKeyID        string    `json:"revoked_key_id"`
 	RevokedAt           time.Time `json:"revoked_at"`
 	NewKeyID            string    `json:"new_key_id"`
@@ -236,6 +249,13 @@ func DefaultPublicExportConfig() PublicExportConfig {
 type PublicFeedRecordInput struct {
 	RecordType  PublicFeedRecordType `json:"record_type"`
 	RecordBytes string               `json:"record_bytes"`
+}
+
+type PublicKeyRotationState struct {
+	SourceID      string `json:"source_id"`
+	OldKeyID      string `json:"old_key_id"`
+	NewKeyID      string `json:"new_key_id"`
+	NewPrivateKey string `json:"new_private_key"`
 }
 
 type PublicPublisherStatus struct {

@@ -6,8 +6,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,8 +23,23 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 )
+
+type publicFailOnceFileSvc struct {
+	fs.RuntimeFileService
+	path      string
+	remaining int
+}
+
+func (s *publicFailOnceFileSvc) WriteFile(ctx context.Context, relPath string, data []byte, mode os.FileMode) error {
+	if relPath == s.path && s.remaining > 0 {
+		s.remaining--
+		return fmt.Errorf("injected write failure")
+	}
+	return s.RuntimeFileService.WriteFile(ctx, relPath, data, mode)
+}
 
 func TestPublicCmd_ExposesProductionSurface(t *testing.T) {
 	cmd := publicCmd()
@@ -80,6 +98,10 @@ func TestPublicPublishAndRotateKeyCommands_DeriveDurableSequenceAndAuthenticateM
 		token, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedIngestTokenPath)
 		assert.NoError(t, err)
 		assert.Equal(t, "Bearer "+string(token), r.Header.Get("Authorization"))
+		if r.URL.Path == "/keys/register" {
+			assert.NoError(t, json.NewEncoder(w).Encode(models.PublicKeyRegistrationResponse{Accepted: true}))
+			return
+		}
 		var request models.PublicIngestRequest
 		assert.NoError(t, json.NewDecoder(r.Body).Decode(&request))
 		received = append(received, request.Batch)
@@ -144,6 +166,273 @@ func TestPublicPublishAndRotateKeyCommands_DeriveDurableSequenceAndAuthenticateM
 	rotatedKeyBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedSigningKeyPath)
 	require.NoError(t, err)
 	assert.NotEqual(t, keyBytes, rotatedKeyBytes)
+}
+
+func TestPublicRotateKeyCmd_PreRegistersNewKeyAndDurablyRevokesOldKey(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	initCmd := publicInitCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	initCmd.SetArgs([]string{"--source-id", "deployment-a", "--mirror-origin", "https://mirror.example"})
+	require.NoError(t, initCmd.Execute())
+
+	configBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedExportConfigPath)
+	require.NoError(t, err)
+	var oldConfig models.PublicExportConfig
+	require.NoError(t, json.Unmarshal(configBytes, &oldConfig))
+	oldKeyBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedSigningKeyPath)
+	require.NoError(t, err)
+	oldPrivateKeyBytes, err := hex.DecodeString(string(oldKeyBytes))
+	require.NoError(t, err)
+	tokenBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedIngestTokenPath)
+	require.NoError(t, err)
+
+	mirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc))
+	require.NoError(t, err)
+	mirror.SetIngestAuthToken(string(tokenBytes))
+	require.NoError(t, mirror.RegisterSourceKey(context.Background(), oldConfig.SourceID, oldConfig.SigningKeyID, ed25519.PrivateKey(oldPrivateKeyBytes).Public().(ed25519.PublicKey)))
+	server := httptest.NewServer(mirror.Handler())
+
+	setCmd := publicConfigSetCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	setCmd.SetArgs([]string{"--mirror-origin", server.URL})
+	require.NoError(t, setCmd.Execute())
+	inputPath := filepath.Join(cfg.ProjectRoot, constants.TestPublicFeedRecordsFilename)
+	input := models.PublicFeedRecordInput{RecordType: models.PublicFeedRecordTypeProjection, RecordBytes: `{"campaign_id":"campaign-a"}`}
+	inputBytes, err := json.Marshal(input)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(inputPath, append(inputBytes, '\n'), constants.PermFilePrivate))
+	publishCmd := publicPublishCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	publishCmd.SetArgs([]string{inputPath})
+	require.NoError(t, publishCmd.Execute())
+
+	rotateCmd := publicRotateKeyCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	require.NoError(t, rotateCmd.Execute())
+	server.Close()
+
+	state, err := gateway.NewRuntimePublicMirrorStore(fileSvc).Load(context.Background())
+	require.NoError(t, err)
+	require.Len(t, state.KeyRegistry, 2)
+	_, revoked := state.RevokedKeys[oldConfig.SourceID+":"+oldConfig.SigningKeyID]
+	assert.True(t, revoked)
+
+	restartedMirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc))
+	require.NoError(t, err)
+	restartedMirror.SetIngestAuthToken(string(tokenBytes))
+	restartedServer := httptest.NewServer(restartedMirror.Handler())
+	t.Cleanup(restartedServer.Close)
+	setCmd = publicConfigSetCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	setCmd.SetArgs([]string{"--mirror-origin", restartedServer.URL})
+	require.NoError(t, setCmd.Execute())
+	input.RecordBytes = `{"campaign_id":"campaign-b"}`
+	inputBytes, err = json.Marshal(input)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(inputPath, append(inputBytes, '\n'), constants.PermFilePrivate))
+	publishCmd = publicPublishCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	publishCmd.SetArgs([]string{inputPath})
+	require.NoError(t, publishCmd.Execute())
+
+	oldFileSvc, _ := newCmdTestEnv(t)
+	oldConfig.MirrorOrigin = restartedServer.URL
+	oldPublisher := gateway.NewPublicPublisherService(nil, oldFileSvc, slog.Default(), oldConfig, ed25519.PrivateKey(oldPrivateKeyBytes), oldConfig.SigningKeyID)
+	oldPublisher.SetIngestAuthToken(string(tokenBytes))
+	oldRecordBytes := `{"campaign_id":"old-key"}`
+	oldRecordHash := sha256.Sum256([]byte(oldRecordBytes))
+	err = oldPublisher.ExportBatch(context.Background(), []models.PublicFeedRecord{{
+		Sequence:    1,
+		RecordType:  models.PublicFeedRecordTypeProjection,
+		RecordHash:  hex.EncodeToString(oldRecordHash[:]),
+		RecordBytes: oldRecordBytes,
+	}})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrPublicFeedMirrorRejected)
+}
+
+func TestPublicInitCmd_RollsBackPartialSecretStateWhenConfigurationWriteFails(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	failingFileSvc := &publicFailOnceFileSvc{RuntimeFileService: fileSvc, path: constants.PublicFeedExportConfigPath, remaining: 1}
+	cmd := publicInitCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(failingFileSvc))
+	cmd.SetArgs([]string{"--source-id", "deployment-a", "--mirror-origin", "https://mirror.example"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	for _, relPath := range []string{constants.PublicFeedExportConfigPath, constants.PublicFeedSigningKeyPath, constants.PublicFeedIngestTokenPath} {
+		exists, existsErr := fileSvc.FileExists(context.Background(), relPath)
+		require.NoError(t, existsErr)
+		assert.False(t, exists)
+	}
+}
+
+func TestPublicRotateKeyCmd_RecoversAfterLocalConfigurationPersistenceFailure(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	initCmd := publicInitCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	initCmd.SetArgs([]string{"--source-id", "deployment-a", "--mirror-origin", "https://mirror.example"})
+	require.NoError(t, initCmd.Execute())
+	configBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedExportConfigPath)
+	require.NoError(t, err)
+	var oldConfig models.PublicExportConfig
+	require.NoError(t, json.Unmarshal(configBytes, &oldConfig))
+	keyBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedSigningKeyPath)
+	require.NoError(t, err)
+	privateKeyBytes, err := hex.DecodeString(string(keyBytes))
+	require.NoError(t, err)
+	tokenBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedIngestTokenPath)
+	require.NoError(t, err)
+	mirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc))
+	require.NoError(t, err)
+	mirror.SetIngestAuthToken(string(tokenBytes))
+	require.NoError(t, mirror.RegisterSourceKey(context.Background(), oldConfig.SourceID, oldConfig.SigningKeyID, ed25519.PrivateKey(privateKeyBytes).Public().(ed25519.PublicKey)))
+	server := httptest.NewServer(mirror.Handler())
+	t.Cleanup(server.Close)
+	setCmd := publicConfigSetCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	setCmd.SetArgs([]string{"--mirror-origin", server.URL})
+	require.NoError(t, setCmd.Execute())
+
+	failingFileSvc := &publicFailOnceFileSvc{RuntimeFileService: fileSvc, path: constants.PublicFeedExportConfigPath, remaining: 1}
+	rotateCmd := publicRotateKeyCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(failingFileSvc))
+	err = rotateCmd.Execute()
+	require.Error(t, err)
+	exists, err := fileSvc.FileExists(context.Background(), constants.PublicFeedKeyRotationPath)
+	require.NoError(t, err)
+	assert.True(t, exists)
+	state, err := gateway.NewRuntimePublicMirrorStore(fileSvc).Load(context.Background())
+	require.NoError(t, err)
+	require.Len(t, state.Sources[oldConfig.SourceID].Batches, 1)
+	_, revoked := state.RevokedKeys[oldConfig.SourceID+":"+oldConfig.SigningKeyID]
+	assert.True(t, revoked)
+
+	rotateCmd = publicRotateKeyCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	require.NoError(t, rotateCmd.Execute())
+	exists, err = fileSvc.FileExists(context.Background(), constants.PublicFeedKeyRotationPath)
+	require.NoError(t, err)
+	assert.False(t, exists)
+	state, err = gateway.NewRuntimePublicMirrorStore(fileSvc).Load(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, state.Sources[oldConfig.SourceID].Batches, 1)
+}
+
+func TestPublicCommands_RejectMalformedTrailingUnknownAndInvalidConfiguration(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	valid := models.DefaultPublicExportConfig()
+	valid.Enabled = true
+	valid.SourceID = "deployment-a"
+	valid.MirrorOrigin = "https://mirror.example"
+	valid.SigningKeyID = "key-a"
+	validBytes, err := json.Marshal(valid)
+	require.NoError(t, err)
+	unknown := append([]byte(nil), validBytes[:len(validBytes)-1]...)
+	unknown = append(unknown, []byte(`,"unexpected":true}`)...)
+	invalid := valid
+	invalid.BatchMaxRecords = 0
+	invalidBytes, err := json.Marshal(invalid)
+	require.NoError(t, err)
+	tests := []struct {
+		name string
+		body []byte
+	}{
+		{name: "malformed JSON", body: []byte(`{`)},
+		{name: "trailing JSON", body: append(append([]byte(nil), validBytes...), []byte(`{}`)...)},
+		{name: "unknown field", body: unknown},
+		{name: "invalid limits", body: invalidBytes},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			require.NoError(t, fileSvc.WriteFile(context.Background(), constants.PublicFeedExportConfigPath, testCase.body, constants.PermFilePrivate))
+			cmd := publicStatusCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrPublicFeedConfigRequired)
+		})
+	}
+}
+
+func TestPublicPushCmd_RetriesDurableOutboxAfterCommandRestart(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	failedMirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+	}))
+	initCmd := publicInitCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	initCmd.SetArgs([]string{"--source-id", "deployment-a", "--mirror-origin", failedMirror.URL})
+	require.NoError(t, initCmd.Execute())
+	configBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedExportConfigPath)
+	require.NoError(t, err)
+	var exportConfig models.PublicExportConfig
+	require.NoError(t, json.Unmarshal(configBytes, &exportConfig))
+	exportConfig.RetryMaxAttempts = 1
+	require.NoError(t, writePublicExportConfig(context.Background(), fileSvc, exportConfig))
+	input := models.PublicFeedRecordInput{RecordType: models.PublicFeedRecordTypeProjection, RecordBytes: `{"campaign_id":"campaign-a"}`}
+	inputBytes, err := json.Marshal(input)
+	require.NoError(t, err)
+	inputPath := filepath.Join(cfg.ProjectRoot, constants.TestPublicFeedRecordsFilename)
+	require.NoError(t, os.WriteFile(inputPath, append(inputBytes, '\n'), constants.PermFilePrivate))
+	publishCmd := publicPublishCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	publishCmd.SetArgs([]string{inputPath})
+	require.Error(t, publishCmd.Execute())
+	failedMirror.Close()
+
+	keyBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedSigningKeyPath)
+	require.NoError(t, err)
+	privateKeyBytes, err := hex.DecodeString(string(keyBytes))
+	require.NoError(t, err)
+	tokenBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedIngestTokenPath)
+	require.NoError(t, err)
+	mirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc))
+	require.NoError(t, err)
+	mirror.SetIngestAuthToken(string(tokenBytes))
+	require.NoError(t, mirror.RegisterSourceKey(context.Background(), exportConfig.SourceID, exportConfig.SigningKeyID, ed25519.PrivateKey(privateKeyBytes).Public().(ed25519.PublicKey)))
+	server := httptest.NewServer(mirror.Handler())
+	t.Cleanup(server.Close)
+	setCmd := publicConfigSetCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	setCmd.SetArgs([]string{"--mirror-origin", server.URL})
+	require.NoError(t, setCmd.Execute())
+	pushCmd := publicPushCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	require.NoError(t, pushCmd.Execute())
+	state, err := gateway.NewRuntimePublicMirrorStore(fileSvc).Load(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), state.Sources[exportConfig.SourceID].HighWaterSequence)
+	assert.Len(t, state.Sources[exportConfig.SourceID].Batches, 1)
+}
+
+func TestPublicPushCmd_AuthenticatesAndPublishesProofPackage(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	initCmd := publicInitCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	initCmd.SetArgs([]string{"--source-id", "deployment-a", "--mirror-origin", "https://mirror.example"})
+	require.NoError(t, initCmd.Execute())
+	exportConfig, err := readPublicExportConfig(context.Background(), fileSvc)
+	require.NoError(t, err)
+	keyBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedSigningKeyPath)
+	require.NoError(t, err)
+	privateKeyBytes, err := hex.DecodeString(string(keyBytes))
+	require.NoError(t, err)
+	tokenBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedIngestTokenPath)
+	require.NoError(t, err)
+	mirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc))
+	require.NoError(t, err)
+	mirror.SetIngestAuthToken(string(tokenBytes))
+	require.NoError(t, mirror.RegisterSourceKey(context.Background(), exportConfig.SourceID, exportConfig.SigningKeyID, ed25519.PrivateKey(privateKeyBytes).Public().(ed25519.PublicKey)))
+	server := httptest.NewServer(mirror.Handler())
+	t.Cleanup(server.Close)
+	exportConfig.MirrorOrigin = server.URL
+	require.NoError(t, writePublicExportConfig(context.Background(), fileSvc, exportConfig))
+	publisher, err := newPublicPublisherForCommand(context.Background(), fileSvc, exportConfig)
+	require.NoError(t, err)
+	_, err = publisher.BuildProofPackage(context.Background(), "campaign-a", "revision-a", "verified-index-hash-a", true, []gateway.ProofArtifactInput{{
+		Filename:   "proof-a.json",
+		MediaType:  "application/json",
+		Content:    []byte(`{"campaign_id":"campaign-a"}`),
+		CampaignID: "campaign-a",
+	}})
+	require.NoError(t, err)
+	manifest, err := publisher.BuildProofPackage(context.Background(), "campaign-b", "revision-b", "verified-index-hash-b", true, []gateway.ProofArtifactInput{{
+		Filename:   "proof-b.json",
+		MediaType:  "application/json",
+		Content:    []byte(`{"campaign_id":"campaign-b"}`),
+		CampaignID: "campaign-b",
+	}})
+	require.NoError(t, err)
+	pushCmd := publicPushCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	require.NoError(t, pushCmd.Execute())
+	state, err := gateway.NewRuntimePublicMirrorStore(fileSvc).Load(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, manifest.ProofRootSHA256, state.ProofManifests[exportConfig.SourceID].ProofRootSHA256)
+	assert.Len(t, state.ProofArtifacts, 2)
 }
 
 func TestPublicMirrorRunCmd_RegistersSourceKeyAndStopsWithContext(t *testing.T) {

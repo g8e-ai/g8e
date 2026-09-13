@@ -174,6 +174,16 @@ func validatePublicMirrorStoreState(state PublicMirrorStoreState) error {
 			if len(batch.RecordHashes) != len(batch.Records) || batch.LastSequence-batch.FirstSequence+1 != int64(len(batch.Records)) {
 				return fmt.Errorf("%w: invalid source batch records", constants.ErrPublicFeedMirrorStoreCorrupt)
 			}
+			revocations, err := validatePublicKeyRevocations(batch, state)
+			if err != nil {
+				return fmt.Errorf("%w: invalid key revocation: %v", constants.ErrPublicFeedMirrorStoreCorrupt, err)
+			}
+			for _, revocation := range revocations {
+				revokedAt, ok := state.RevokedKeys[revocation.SourceID+":"+revocation.RevokedKeyID]
+				if !ok || !revokedAt.Equal(revocation.RevokedAt) {
+					return fmt.Errorf("%w: key revocation state mismatch", constants.ErrPublicFeedMirrorStoreCorrupt)
+				}
+			}
 			if recordCount+len(batch.Records) > len(source.Records) {
 				return fmt.Errorf("%w: missing source records", constants.ErrPublicFeedMirrorStoreCorrupt)
 			}
@@ -540,14 +550,15 @@ func (m *PublicMirrorServer) validateBatch(batch models.PublicFeedBatch) (models
 	}
 
 	m.mu.RLock()
-	pubKey, keyKnown := m.state.KeyRegistry[m.keyRegistryKey(batch.SourceID, batch.SigningKeyID)]
-	_, isRevoked := m.state.RevokedKeys[m.keyRegistryKey(batch.SourceID, batch.SigningKeyID)]
-	state, sourceExists := m.state.Sources[batch.SourceID]
+	storeState, cloneErr := clonePublicMirrorStoreState(m.state)
 	m.mu.RUnlock()
-
-	if isRevoked {
-		return models.PublicFeedIngestRejectionRevokedKey, constants.ErrPublicFeedRevokedKey
+	if cloneErr != nil {
+		return models.PublicFeedIngestRejectionSignatureInvalid, cloneErr
 	}
+	pubKey, keyKnown := storeState.KeyRegistry[m.keyRegistryKey(batch.SourceID, batch.SigningKeyID)]
+	_, isRevoked := storeState.RevokedKeys[m.keyRegistryKey(batch.SourceID, batch.SigningKeyID)]
+	state, sourceExists := storeState.Sources[batch.SourceID]
+
 	if !keyKnown {
 		return models.PublicFeedIngestRejectionUnknownKey, constants.ErrPublicFeedUnknownKey
 	}
@@ -571,6 +582,19 @@ func (m *PublicMirrorServer) validateBatch(batch models.PublicFeedBatch) (models
 		if err := checkProhibitedFields(r.RecordBytes); err != nil {
 			return models.PublicFeedIngestRejectionSignatureInvalid, err
 		}
+	}
+	if _, err := validatePublicKeyRevocations(batch, storeState); err != nil {
+		return models.PublicFeedIngestRejectionSignatureInvalid, err
+	}
+	if sourceExists {
+		for _, accepted := range state.Batches {
+			if accepted.FirstSequence == batch.FirstSequence && accepted.LastSequence == batch.LastSequence && accepted.ContentHash == batch.ContentHash {
+				return "", nil
+			}
+		}
+	}
+	if isRevoked {
+		return models.PublicFeedIngestRejectionRevokedKey, constants.ErrPublicFeedRevokedKey
 	}
 
 	// Sequence and hash chain validation.
@@ -601,6 +625,46 @@ func (m *PublicMirrorServer) validateBatch(batch models.PublicFeedBatch) (models
 	}
 
 	return "", nil
+}
+
+func validatePublicKeyRevocations(batch models.PublicFeedBatch, state PublicMirrorStoreState) ([]models.PublicKeyRevocationRecord, error) {
+	revocations := make([]models.PublicKeyRevocationRecord, 0, 1)
+	for _, record := range batch.Records {
+		if record.RecordType != models.PublicFeedRecordTypeKeyRevocation {
+			continue
+		}
+		if len(revocations) != 0 {
+			return nil, constants.ErrPublicFeedKeyRevocation
+		}
+		decoder := json.NewDecoder(strings.NewReader(record.RecordBytes))
+		decoder.DisallowUnknownFields()
+		var revocation models.PublicKeyRevocationRecord
+		if err := decoder.Decode(&revocation); err != nil {
+			return nil, fmt.Errorf("%w: decode: %v", constants.ErrPublicFeedKeyRevocation, err)
+		}
+		var trailing json.RawMessage
+		if err := decoder.Decode(&trailing); err != io.EOF {
+			return nil, fmt.Errorf("%w: trailing JSON", constants.ErrPublicFeedKeyRevocation)
+		}
+		if revocation.SourceID != batch.SourceID || revocation.RevokedKeyID != batch.SigningKeyID || revocation.NewKeyID == "" || revocation.NewKeyID == revocation.RevokedKeyID || revocation.RevokedAt.IsZero() {
+			return nil, constants.ErrPublicFeedKeyRevocation
+		}
+		oldKey, oldKeyKnown := state.KeyRegistry[revocation.SourceID+":"+revocation.RevokedKeyID]
+		_, newKeyKnown := state.KeyRegistry[revocation.SourceID+":"+revocation.NewKeyID]
+		if !oldKeyKnown || !newKeyKnown {
+			return nil, constants.ErrPublicFeedKeyRevocation
+		}
+		signature, err := hex.DecodeString(revocation.RevocationSignature)
+		if err != nil || len(signature) != ed25519.SignatureSize {
+			return nil, constants.ErrPublicFeedKeyRevocation
+		}
+		signingBytes, err := publicKeyRevocationSigningBytes(revocation)
+		if err != nil || !ed25519.Verify(oldKey, signingBytes, signature) {
+			return nil, constants.ErrPublicFeedKeyRevocation
+		}
+		revocations = append(revocations, revocation)
+	}
+	return revocations, nil
 }
 
 func (m *PublicMirrorServer) sourceFreshness(state *PublicMirrorSourceState) models.CampaignFreshness {
@@ -642,6 +706,10 @@ func (m *PublicMirrorServer) batchAlreadyAccepted(batch models.PublicFeedBatch) 
 // records to in-memory SSE subscribers.
 func (m *PublicMirrorServer) acceptBatch(ctx context.Context, batch models.PublicFeedBatch) error {
 	if err := m.mutateState(ctx, func(storeState *PublicMirrorStoreState) error {
+		revocations, err := validatePublicKeyRevocations(batch, *storeState)
+		if err != nil {
+			return err
+		}
 		state := getOrCreatePublicMirrorSource(storeState, batch.SourceID)
 		if batch.FirstSequence != state.HighWaterSequence+1 || batch.PreviousBatchHash != state.FeedChainHash {
 			return constants.ErrPublicFeedHashChainMismatch
@@ -664,6 +732,9 @@ func (m *PublicMirrorServer) acceptBatch(ctx context.Context, batch models.Publi
 		}
 		state.LastAcceptedAt = m.now().UTC()
 		state.Freshness = models.CampaignFreshnessActive
+		for _, revocation := range revocations {
+			storeState.RevokedKeys[m.keyRegistryKey(revocation.SourceID, revocation.RevokedKeyID)] = revocation.RevokedAt
+		}
 		return nil
 	}); err != nil {
 		return err
@@ -690,6 +761,7 @@ func (m *PublicMirrorServer) acceptBatch(ctx context.Context, batch models.Publi
 func (m *PublicMirrorServer) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ingest", m.handleIngest)
+	mux.HandleFunc("/keys/register", m.handleKeyRegistration)
 	mux.HandleFunc("/proof-ingest", m.handleProofIngest)
 	mux.HandleFunc("/bootstrap", m.handleBootstrap)
 	mux.HandleFunc("/snapshot", m.handleSnapshot)
@@ -748,7 +820,7 @@ func (m *PublicMirrorServer) allowAnonymousRead(r *http.Request) bool {
 // Ingest does not need CORS (it is server-to-server).
 func (m *PublicMirrorServer) withCORS(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/ingest" && r.URL.Path != "/proof-ingest" {
+		if r.URL.Path != "/ingest" && r.URL.Path != "/keys/register" && r.URL.Path != "/proof-ingest" {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Last-Event-ID")
@@ -777,6 +849,74 @@ func (m *PublicMirrorServer) ingestAuthorized(r *http.Request) bool {
 	provided := r.Header.Get("Authorization")
 	expected := "Bearer " + token
 	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
+}
+
+func (m *PublicMirrorServer) handleKeyRegistration(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !m.ingestAuthorized(r) {
+		m.writeJSON(w, http.StatusUnauthorized, models.PublicKeyRegistrationResponse{Accepted: false})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, constants.PublicFeedKeyRegistrationMaxBytes)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	var request models.PublicKeyRegistrationRequest
+	if err := decoder.Decode(&request); err != nil {
+		m.writeJSON(w, http.StatusBadRequest, models.PublicKeyRegistrationResponse{Accepted: false})
+		return
+	}
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		m.writeJSON(w, http.StatusBadRequest, models.PublicKeyRegistrationResponse{Accepted: false})
+		return
+	}
+	if err := m.admitSourceKey(r.Context(), request); err != nil {
+		m.logger.Warn("mirror: key registration rejected", "source_id", request.SourceID, "error", err)
+		m.writeJSON(w, http.StatusBadRequest, models.PublicKeyRegistrationResponse{Accepted: false})
+		return
+	}
+	m.writeJSON(w, http.StatusOK, models.PublicKeyRegistrationResponse{Accepted: true})
+}
+
+func (m *PublicMirrorServer) admitSourceKey(ctx context.Context, request models.PublicKeyRegistrationRequest) error {
+	publicKey, err := hex.DecodeString(request.PublicKey)
+	if err != nil || len(publicKey) != ed25519.PublicKeySize || request.SourceID == "" || request.CurrentKeyID == "" || request.NewKeyID == "" || request.NewKeyID == request.CurrentKeyID {
+		return constants.ErrPublicFeedKeyRegistration
+	}
+	digest := sha256.Sum256(publicKey)
+	if request.NewKeyID != hex.EncodeToString(digest[:]) {
+		return constants.ErrPublicFeedKeyRegistration
+	}
+	signature, err := hex.DecodeString(request.Signature)
+	if err != nil || len(signature) != ed25519.SignatureSize {
+		return constants.ErrPublicFeedKeyRegistration
+	}
+	signingBytes, err := publicKeyRegistrationSigningBytes(request)
+	if err != nil {
+		return fmt.Errorf("%w: encode request: %v", constants.ErrPublicFeedKeyRegistration, err)
+	}
+	return m.mutateState(ctx, func(state *PublicMirrorStoreState) error {
+		currentRegistryID := m.keyRegistryKey(request.SourceID, request.CurrentKeyID)
+		currentKey, ok := state.KeyRegistry[currentRegistryID]
+		if !ok || !ed25519.Verify(currentKey, signingBytes, signature) {
+			return constants.ErrPublicFeedKeyRegistration
+		}
+		newRegistryID := m.keyRegistryKey(request.SourceID, request.NewKeyID)
+		if existing, exists := state.KeyRegistry[newRegistryID]; exists {
+			if !bytes.Equal(existing, publicKey) {
+				return constants.ErrPublicFeedEquivocation
+			}
+			return nil
+		}
+		if _, revoked := state.RevokedKeys[currentRegistryID]; revoked {
+			return constants.ErrPublicFeedRevokedKey
+		}
+		state.KeyRegistry[newRegistryID] = append(ed25519.PublicKey(nil), publicKey...)
+		return nil
+	})
 }
 
 // handleIngest handles POST /ingest — the authenticated ingest endpoint.

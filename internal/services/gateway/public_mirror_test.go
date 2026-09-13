@@ -942,6 +942,63 @@ func TestMirror_IntentionallyStopped_BootstrapReportsTerminalFreshness(t *testin
 // Key rotation tests
 // ---------------------------------------------------------------------------
 
+func TestMirror_KeyRegistration_RequiresAuthenticationStrictPayloadAndCurrentKeySignature(t *testing.T) {
+	tests := []struct {
+		name           string
+		authenticate   bool
+		mutate         func(*models.PublicKeyRegistrationRequest)
+		appendTrailing bool
+		expectedStatus int
+		expectedKeys   int
+	}{
+		{name: "missing authentication", expectedStatus: http.StatusUnauthorized, expectedKeys: 1},
+		{name: "invalid current key signature", authenticate: true, mutate: func(request *models.PublicKeyRegistrationRequest) {
+			request.Signature = strings.Repeat("00", ed25519.SignatureSize)
+		}, expectedStatus: http.StatusBadRequest, expectedKeys: 1},
+		{name: "mismatched key identifier", authenticate: true, mutate: func(request *models.PublicKeyRegistrationRequest) { request.NewKeyID = "wrong-key" }, expectedStatus: http.StatusBadRequest, expectedKeys: 1},
+		{name: "trailing JSON", authenticate: true, appendTrailing: true, expectedStatus: http.StatusBadRequest, expectedKeys: 1},
+		{name: "valid signed registration", authenticate: true, expectedStatus: http.StatusOK, expectedKeys: 2},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			env := newMirrorTestEnv(t)
+			env.mirror.SetIngestAuthToken("registration-token")
+			newPublicKey, _, err := ed25519.GenerateKey(nil)
+			require.NoError(t, err)
+			digest := sha256.Sum256(newPublicKey)
+			request := models.PublicKeyRegistrationRequest{
+				SourceID:     env.sourceID,
+				CurrentKeyID: env.keyID,
+				NewKeyID:     hex.EncodeToString(digest[:]),
+				PublicKey:    hex.EncodeToString(newPublicKey),
+			}
+			signingBytes, err := publicKeyRegistrationSigningBytes(request)
+			require.NoError(t, err)
+			request.Signature = hex.EncodeToString(ed25519.Sign(env.priv, signingBytes))
+			if testCase.mutate != nil {
+				testCase.mutate(&request)
+			}
+			body, err := json.Marshal(request)
+			require.NoError(t, err)
+			if testCase.appendTrailing {
+				body = append(body, []byte(`{}`)...)
+			}
+			httpRequest, err := http.NewRequest(http.MethodPost, env.server.URL+"/keys/register", bytes.NewReader(body))
+			require.NoError(t, err)
+			if testCase.authenticate {
+				httpRequest.Header.Set("Authorization", "Bearer registration-token")
+			}
+			response, err := env.client.Do(httpRequest)
+			require.NoError(t, err)
+			require.NoError(t, response.Body.Close())
+			assert.Equal(t, testCase.expectedStatus, response.StatusCode)
+			state, err := env.mirror.store.Load(context.Background())
+			require.NoError(t, err)
+			assert.Len(t, state.KeyRegistry, testCase.expectedKeys)
+		})
+	}
+}
+
 // TestMirror_KeyRotation_AcceptsNewKey verifies that the mirror accepts
 // batches signed by a newly registered key after the old key is revoked.
 func TestMirror_KeyRotation_AcceptsNewKey(t *testing.T) {
@@ -1408,13 +1465,22 @@ func TestMirror_RecordType_AcceptsProofManifestRecords(t *testing.T) {
 // accepts key_revocation-type records.
 func TestMirror_RecordType_AcceptsKeyRevocationRecords(t *testing.T) {
 	env := newMirrorTestEnv(t)
-
-	revBytes, _ := json.Marshal(map[string]any{
-		"revoked_key_id":       env.keyID,
-		"revoked_at":           time.Now().UTC().Format(time.RFC3339Nano),
-		"new_key_id":           "new-key",
-		"revocation_signature": "sig",
-	})
+	newPublicKey, _, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	newKeyDigest := sha256.Sum256(newPublicKey)
+	newKeyID := hex.EncodeToString(newKeyDigest[:])
+	require.NoError(t, env.mirror.RegisterSourceKey(context.Background(), env.sourceID, newKeyID, newPublicKey))
+	revocation := models.PublicKeyRevocationRecord{
+		SourceID:     env.sourceID,
+		RevokedKeyID: env.keyID,
+		RevokedAt:    time.Now().UTC(),
+		NewKeyID:     newKeyID,
+	}
+	signingBytes, err := publicKeyRevocationSigningBytes(revocation)
+	require.NoError(t, err)
+	revocation.RevocationSignature = hex.EncodeToString(ed25519.Sign(env.priv, signingBytes))
+	revBytes, err := json.Marshal(revocation)
+	require.NoError(t, err)
 	revHash := sha256.Sum256(revBytes)
 	records := []models.PublicFeedRecord{{
 		Sequence:    1,
@@ -1425,6 +1491,9 @@ func TestMirror_RecordType_AcceptsKeyRevocationRecords(t *testing.T) {
 	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
 	_, resp := env.sendIngest(batch)
 	assert.True(t, resp.Accepted)
+	state, err := env.mirror.store.Load(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, revocation.RevokedAt, state.RevokedKeys[env.sourceID+":"+env.keyID])
 }
 
 // ---------------------------------------------------------------------------

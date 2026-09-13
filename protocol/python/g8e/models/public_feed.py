@@ -153,6 +153,18 @@ class PublicIngestResponse(G8eBaseModel):
     rejection_reason: PublicFeedIngestRejectionReason | None = None
 
 
+class PublicKeyRegistrationRequest(G8eBaseModel):
+    source_id: str
+    current_key_id: str
+    new_key_id: str
+    public_key: str
+    signature: str
+
+
+class PublicKeyRegistrationResponse(G8eBaseModel):
+    accepted: bool
+
+
 # ---------------------------------------------------------------------------
 # Key revocation model
 # ---------------------------------------------------------------------------
@@ -162,6 +174,7 @@ class PublicKeyRevocationRecord(G8eBaseModel):
     """A key revocation record published as a signed batch record before the
     old key is deactivated."""
 
+    source_id: str
     revoked_key_id: str
     revoked_at: UTCDatetime
     new_key_id: str

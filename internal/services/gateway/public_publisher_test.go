@@ -614,12 +614,16 @@ func TestRotateKey_SwitchesSigningKey(t *testing.T) {
 
 	var receivedKeyIDs []string
 	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/keys/register" {
+			require.NoError(t, json.NewEncoder(w).Encode(models.PublicKeyRegistrationResponse{Accepted: true}))
+			return
+		}
 		var req models.PublicIngestRequest
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 		receivedKeyIDs = append(receivedKeyIDs, req.Batch.SigningKeyID)
 		resp := models.PublicIngestResponse{Accepted: true, HighWaterSequence: req.Batch.LastSequence, FeedChainHash: req.Batch.ContentHash}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	t.Cleanup(mirror.Close)
 	publisher.SetMirrorOrigin(mirror.URL)

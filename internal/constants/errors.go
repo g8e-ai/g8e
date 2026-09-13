@@ -1424,12 +1424,16 @@ var (
 	ErrPublicFeedProofManifestInvalid = errors.New("public-feed: proof manifest is invalid")
 	ErrPublicFeedProofCatalogMismatch = errors.New("public-feed: proof catalog does not match manifest")
 	ErrPublicFeedProofRestricted      = errors.New("public-feed: restricted artifact in proof package")
+	ErrPublicFeedProofIngestRejected  = errors.New("public-feed: mirror rejected proof package")
 	ErrPublicFeedProofDirExists       = errors.New("public-feed: proof directory already exists")
 	ErrPublicFeedProofIDRequired      = errors.New("public-feed: proof_id is required")
 	ErrPublicFeedRecordTypeInvalid    = errors.New("public-feed: invalid record type")
 	ErrPublicFeedRestrictedField      = errors.New("public-feed: restricted field in public record")
 	ErrPublicFeedBatchSignFailed      = errors.New("public-feed: failed to sign batch")
 	ErrPublicFeedKeyGenFailed         = errors.New("public-feed: failed to generate signing key")
+	ErrPublicFeedKeyRegistration      = errors.New("public-feed: signing key registration failed")
+	ErrPublicFeedKeyRevocation        = errors.New("public-feed: signing key revocation is invalid")
+	ErrPublicFeedKeyRotationPending   = errors.New("public-feed: signing key rotation requires recovery")
 
 	// Inference backend errors (g8ellama). The Go backend is an HTTP client
 	// to Ollama; it does not load or shut down models, so no load/shutdown

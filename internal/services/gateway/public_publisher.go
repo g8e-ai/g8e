@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -632,6 +633,16 @@ func isMirrorRejection(err error) bool {
 }
 
 // sendToMirror sends a single ingest request to the mirror.
+func publicKeyRegistrationSigningBytes(request models.PublicKeyRegistrationRequest) ([]byte, error) {
+	request.Signature = ""
+	return json.Marshal(request)
+}
+
+func publicKeyRevocationSigningBytes(record models.PublicKeyRevocationRecord) ([]byte, error) {
+	record.RevocationSignature = ""
+	return json.Marshal(record)
+}
+
 func (s *PublicPublisherService) sendToMirror(ctx context.Context, origin, ingestAuthToken string, batch models.PublicFeedBatch) error {
 	reqBody := models.PublicIngestRequest{Batch: batch}
 	bodyBytes, err := json.Marshal(reqBody)
@@ -856,6 +867,57 @@ func (s *PublicPublisherService) loadSnapshotFromOutbox(ctx context.Context) err
 	return nil
 }
 
+func (s *PublicPublisherService) registerRotatedKey(ctx context.Context, newKeyID string, newPublicKey ed25519.PublicKey) error {
+	s.mu.Lock()
+	origin := s.mirrorOrigin
+	token := s.ingestAuthToken
+	currentKeyID := s.signingKeyID
+	currentPrivateKey := append(ed25519.PrivateKey(nil), s.signingPrivKey...)
+	s.mu.Unlock()
+	if origin == "" {
+		return constants.ErrPublicFeedMirrorOriginRequired
+	}
+	request := models.PublicKeyRegistrationRequest{
+		SourceID:     s.cfg.SourceID,
+		CurrentKeyID: currentKeyID,
+		NewKeyID:     newKeyID,
+		PublicKey:    hex.EncodeToString(newPublicKey),
+	}
+	signingBytes, err := publicKeyRegistrationSigningBytes(request)
+	if err != nil {
+		return fmt.Errorf("%w: encode request: %v", constants.ErrPublicFeedKeyRegistration, err)
+	}
+	request.Signature = hex.EncodeToString(ed25519.Sign(currentPrivateKey, signingBytes))
+	body, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("%w: encode request: %v", constants.ErrPublicFeedKeyRegistration, err)
+	}
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(origin, "/")+"/keys/register", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("%w: %v", constants.ErrPublicFeedMirrorUnreachable, err)
+	}
+	httpRequest.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		httpRequest.Header.Set("Authorization", "Bearer "+token)
+	}
+	response, err := (&http.Client{Timeout: 30 * time.Second}).Do(httpRequest)
+	if err != nil {
+		return fmt.Errorf("%w: %v", constants.ErrPublicFeedMirrorUnreachable, err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode >= 500 {
+		return fmt.Errorf("%w: status %d", constants.ErrPublicFeedMirrorUnreachable, response.StatusCode)
+	}
+	var registrationResponse models.PublicKeyRegistrationResponse
+	if err := json.NewDecoder(response.Body).Decode(&registrationResponse); err != nil {
+		return fmt.Errorf("%w: decode response: %v", constants.ErrPublicFeedKeyRegistration, err)
+	}
+	if !registrationResponse.Accepted {
+		return constants.ErrPublicFeedKeyRegistration
+	}
+	return nil
+}
+
 // RotateKey generates a new Ed25519 key pair, emits a key revocation record
 // as a signed batch, and switches the signing key. Returns the new key ID
 // and new public key hex.
@@ -864,7 +926,8 @@ func (s *PublicPublisherService) RotateKey(ctx context.Context) (string, string,
 	if err != nil {
 		return "", "", fmt.Errorf("%w: %v", constants.ErrPublicFeedKeyGenFailed, err)
 	}
-	newKeyID := fmt.Sprintf("key-%d", time.Now().UnixNano())
+	keyDigest := sha256.Sum256(newPub)
+	newKeyID := hex.EncodeToString(keyDigest[:])
 	if err := s.RotateKeyTo(ctx, newPriv, newKeyID); err != nil {
 		return "", "", err
 	}
@@ -882,12 +945,20 @@ func (s *PublicPublisherService) RotateKeyTo(ctx context.Context, newPriv ed2551
 		return fmt.Errorf("public-feed: rotate key: recover outbox: %w", err)
 	}
 	newPub := newPriv.Public().(ed25519.PublicKey)
-	revRecord := models.PublicKeyRevocationRecord{
-		RevokedKeyID:        s.signingKeyID,
-		RevokedAt:           time.Now().UTC(),
-		NewKeyID:            newKeyID,
-		RevocationSignature: hex.EncodeToString(ed25519.Sign(s.signingPrivKey, []byte(s.signingKeyID+newKeyID))),
+	if err := s.registerRotatedKey(ctx, newKeyID, newPub); err != nil {
+		return fmt.Errorf("public-feed: rotate key: register new key: %w", err)
 	}
+	revRecord := models.PublicKeyRevocationRecord{
+		SourceID:     s.cfg.SourceID,
+		RevokedKeyID: s.signingKeyID,
+		RevokedAt:    time.Now().UTC(),
+		NewKeyID:     newKeyID,
+	}
+	revocationBytes, err := publicKeyRevocationSigningBytes(revRecord)
+	if err != nil {
+		return fmt.Errorf("public-feed: rotate key: encode revocation signature payload: %w", err)
+	}
+	revRecord.RevocationSignature = hex.EncodeToString(ed25519.Sign(s.signingPrivKey, revocationBytes))
 	revBytes, err := json.Marshal(revRecord)
 	if err != nil {
 		return fmt.Errorf("marshal revocation record: %w", err)
@@ -912,6 +983,105 @@ func (s *PublicPublisherService) RotateKeyTo(ctx context.Context, newPriv ed2551
 	s.signingPubKey = newPub
 	s.signingKeyID = newKeyID
 	s.mu.Unlock()
+	return nil
+}
+
+func (s *PublicPublisherService) PushProofPackage(ctx context.Context) error {
+	manifestExists, err := s.fileSvc.FileExists(ctx, constants.PublicProofManifestFilename)
+	if err != nil {
+		return fmt.Errorf("public-feed: inspect proof manifest: %w", err)
+	}
+	catalogExists, err := s.fileSvc.FileExists(ctx, constants.PublicProofCatalogFilename)
+	if err != nil {
+		return fmt.Errorf("public-feed: inspect proof catalog: %w", err)
+	}
+	if !manifestExists && !catalogExists {
+		return nil
+	}
+	if !manifestExists || !catalogExists {
+		return constants.ErrPublicFeedProofManifestInvalid
+	}
+	manifestBytes, err := s.fileSvc.ReadFile(ctx, constants.PublicProofManifestFilename)
+	if err != nil {
+		return fmt.Errorf("public-feed: read proof manifest: %w", err)
+	}
+	manifestDecoder := json.NewDecoder(bytes.NewReader(manifestBytes))
+	manifestDecoder.DisallowUnknownFields()
+	var manifest models.PublicProofManifest
+	if err := manifestDecoder.Decode(&manifest); err != nil {
+		return fmt.Errorf("%w: decode manifest: %v", constants.ErrPublicFeedProofManifestInvalid, err)
+	}
+	var trailing json.RawMessage
+	if err := manifestDecoder.Decode(&trailing); err != io.EOF {
+		return fmt.Errorf("%w: trailing manifest JSON", constants.ErrPublicFeedProofManifestInvalid)
+	}
+	catalogBytes, err := s.fileSvc.ReadFile(ctx, constants.PublicProofCatalogFilename)
+	if err != nil {
+		return fmt.Errorf("public-feed: read proof catalog: %w", err)
+	}
+	catalogDecoder := json.NewDecoder(bytes.NewReader(catalogBytes))
+	catalogDecoder.DisallowUnknownFields()
+	var catalog models.PublicProofCatalog
+	if err := catalogDecoder.Decode(&catalog); err != nil {
+		return fmt.Errorf("%w: decode catalog: %v", constants.ErrPublicFeedProofCatalogMismatch, err)
+	}
+	if err := catalogDecoder.Decode(&trailing); err != io.EOF {
+		return fmt.Errorf("%w: trailing catalog JSON", constants.ErrPublicFeedProofCatalogMismatch)
+	}
+	artifacts := make([]models.PublicProofIngestArtifact, 0, len(catalog.Entries))
+	for _, entry := range catalog.Entries {
+		if !safePublicProofFilename(entry.Filename) || entry.ArtifactID == "" {
+			return constants.ErrPublicFeedProofPathTraversal
+		}
+		relPath := filepath.Join(constants.PublicProofsDirname, entry.ArtifactID)
+		info, err := s.fileSvc.Lstat(ctx, relPath)
+		if err != nil {
+			return fmt.Errorf("public-feed: inspect proof artifact: %w", err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return constants.ErrPublicFeedProofSymlinkRejected
+		}
+		content, err := s.fileSvc.ReadFile(ctx, relPath)
+		if err != nil {
+			return fmt.Errorf("public-feed: read proof artifact: %w", err)
+		}
+		artifacts = append(artifacts, models.PublicProofIngestArtifact{ArtifactID: entry.ArtifactID, Content: content})
+	}
+	request := models.PublicProofIngestRequest{SourceID: s.cfg.SourceID, Manifest: manifest, Catalog: catalog, Artifacts: artifacts}
+	body, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("public-feed: encode proof ingest: %w", err)
+	}
+	s.mu.Lock()
+	origin := s.mirrorOrigin
+	token := s.ingestAuthToken
+	s.mu.Unlock()
+	if origin == "" {
+		return constants.ErrPublicFeedMirrorOriginRequired
+	}
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(origin, "/")+"/proof-ingest", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("%w: %v", constants.ErrPublicFeedMirrorUnreachable, err)
+	}
+	httpRequest.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		httpRequest.Header.Set("Authorization", "Bearer "+token)
+	}
+	response, err := (&http.Client{Timeout: 30 * time.Second}).Do(httpRequest)
+	if err != nil {
+		return fmt.Errorf("%w: %v", constants.ErrPublicFeedMirrorUnreachable, err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode >= 500 {
+		return fmt.Errorf("%w: status %d", constants.ErrPublicFeedMirrorUnreachable, response.StatusCode)
+	}
+	var ingestResponse models.PublicProofIngestResponse
+	if err := json.NewDecoder(response.Body).Decode(&ingestResponse); err != nil {
+		return fmt.Errorf("%w: decode response: %v", constants.ErrPublicFeedProofIngestRejected, err)
+	}
+	if !ingestResponse.Accepted {
+		return constants.ErrPublicFeedProofIngestRejected
+	}
 	return nil
 }
 
@@ -977,14 +1147,30 @@ func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaign
 	}
 
 	// Compute proof root hash.
+	catalog, err := s.GetProofCatalog(ctx)
+	if err != nil {
+		return models.PublicProofManifest{}, err
+	}
+	manifestEntries := append([]models.PublicProofCatalogEntry(nil), catalog.Entries...)
+	existingArtifactIDs := make(map[string]struct{}, len(manifestEntries))
+	for _, entry := range manifestEntries {
+		existingArtifactIDs[entry.ArtifactID] = struct{}{}
+	}
+	for _, entry := range entries {
+		if _, exists := existingArtifactIDs[entry.ArtifactID]; exists {
+			continue
+		}
+		manifestEntries = append(manifestEntries, entry)
+		existingArtifactIDs[entry.ArtifactID] = struct{}{}
+	}
 	manifest := models.PublicProofManifest{
 		SchemaVersion:               constants.PublicProofManifestSchemaVersion,
 		CampaignID:                  campaignID,
 		CampaignRevision:            campaignRevision,
 		VerifiedIndexGenerationHash: verifiedIndexGenHash,
 		VerificationOK:              verificationOK,
-		ArtifactCount:               len(entries),
-		Artifacts:                   entries,
+		ArtifactCount:               len(manifestEntries),
+		Artifacts:                   manifestEntries,
 		VerifierInstructions:        "Verify each artifact SHA-256 matches the catalog entry. Recompute the proof root hash from artifact hashes and manifest metadata. Verify the Ed25519 signature over the proof root hash.",
 		GeneratedAt:                 time.Now().UTC(),
 		SigningKeyID:                s.signingKeyID,
