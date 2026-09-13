@@ -32,7 +32,7 @@ import (
 // endpoint. No container logs, no Docker exec, no session ID from
 // environment variables.
 func TestPubSub_HeartbeatAdvances(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	first := activeOperator(t, ctx)
@@ -41,16 +41,15 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 		"first observation: active operator UpdatedAt must be set by at least one heartbeat")
 	t.Logf("first heartbeat observation: updated_at=%s", firstUpdatedAt.UTC().Format(time.RFC3339Nano))
 
-	// Poll until UpdatedAt advances past the first observation. The
-	// heartbeat interval is typically 10-15 seconds; a 60-second window
-	// accommodates jitter and pub/sub delivery latency without being so
-	// generous that a dead heartbeat path could pass.
+	// Poll until UpdatedAt advances past the first observation. The E2E
+	// stack uses a short configurable heartbeat interval so a dead path
+	// fails quickly.
 	var second *models.OperatorDocumentGo
 	require.Eventually(t, func() bool {
 		second = activeOperator(t, ctx)
 		return second.UpdatedAt.After(firstUpdatedAt)
-	}, 60*time.Second, 3*time.Second,
-		"heartbeat UpdatedAt did not advance past %s within 60s — pub/sub heartbeat path may be dead",
+	}, 10*time.Second, 500*time.Millisecond,
+		"heartbeat UpdatedAt did not advance past %s within 10s — pub/sub heartbeat path may be dead",
 		firstUpdatedAt.UTC().Format(time.RFC3339Nano))
 
 	assert.True(t, second.UpdatedAt.After(firstUpdatedAt),
@@ -63,7 +62,7 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 }
 
 // activeOperator fetches the operator list and returns a pointer to the first
-// active operator. It fails the test if no active operator is found. The
+// active remote operator. It fails the test if no active remote operator is found. The
 // caller owns the context; this helper does not call require.Eventually or
 // introduce its own polling — it is a single typed observation.
 func activeOperator(t *testing.T, ctx context.Context) *models.OperatorDocumentGo {
@@ -73,7 +72,7 @@ func activeOperator(t *testing.T, ctx context.Context) *models.OperatorDocumentG
 	require.True(t, operators.Success, "operator list response must report success")
 	require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
 	for i := range operators.Operators {
-		if operators.Operators[i].Status == constants.OperatorStatusActive {
+		if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
 			return &operators.Operators[i]
 		}
 	}

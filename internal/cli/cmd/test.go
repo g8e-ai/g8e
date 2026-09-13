@@ -117,6 +117,8 @@ func testIntegrationCmd() *cobra.Command {
 // argument propagation and failure wrapping without starting platform tests.
 type e2eCommandRunner func(ctx context.Context, name string, args ...string) (int, error)
 
+const defaultE2ERunRegexp = "^(TestApprovedRestart_|TestAuth_|TestCommandRoundtrip_|TestCompliance_|TestDashboard_|TestEnsemble_|TestGateway_|TestGovernance_|TestOperatorRegistry_|TestPlatform_FullBootstrap$|TestPubSub_|TestSSE_)"
+
 // realE2ERunner runs the Go test binary as a child process, streaming stdout
 // and stderr to the parent. It returns the child exit code and any start/run
 // error. Cancellation via ctx signals the child process.
@@ -142,9 +144,9 @@ func testE2ECmd() *cobra.Command {
 // testE2ECmdWithRunner constructs the canonical Tier 3 executor. It runs only
 // ./test/e2e/... with the e2e build tag, race detection on non-Windows
 // platforms, -count=1, -parallel=1 as a backstop against accidental
-// t.Parallel() use, and an optional --run regexp for scenario selection. The
-// external scenario runner owns Docker lifecycle; this command performs network
-// requests and assertions only.
+// t.Parallel() use, and the approved-stack test set by default. An explicit
+// --run regexp selects topology-specific scenarios. The external scenario runner
+// owns Docker lifecycle; this command performs network requests and assertions only.
 func testE2ECmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 	var runRegexp string
 
@@ -153,20 +155,20 @@ func testE2ECmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 		Short: "Run Tier 3 (Live Platform E2E) tests",
 		Long: `Run Tier 3 (Live Platform E2E) tests against a running production platform.
 
-Start the platform first (docker compose up or ./g8e gw start), then run this
-command. The test binary connects to the running platform and fails fast if it
-is not reachable. Supports an optional --run regexp to select specific tests.`,
+Start the approved platform first, then run this command. The default suite
+covers the approved-stack topology. Use --run to select a topology-specific
+scenario such as pending enrollment, headless, denial, or cross-enrollment.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
 
-			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s"}
+			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s", "-v"}
 			if runtime.GOOS != "windows" {
 				testArgs = append(testArgs, "-race")
 			}
-			if runRegexp != "" {
-				testArgs = append(testArgs, "-run", runRegexp)
+			if runRegexp == "" {
+				runRegexp = defaultE2ERunRegexp
 			}
-			testArgs = append(testArgs, "./test/e2e/...")
+			testArgs = append(testArgs, "-run", runRegexp, "./test/e2e/...")
 
 			code, err := runner(cmd.Context(), "go", testArgs...)
 			if err != nil {
@@ -229,14 +231,14 @@ the primary gateway. This is required for the TestCrossEnrollment_* E2E tests.`,
 			}
 
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
-			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s"}
+			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s", "-v"}
 			if runtime.GOOS != "windows" {
 				testArgs = append(testArgs, "-race")
 			}
-			if runRegexp != "" {
-				testArgs = append(testArgs, "-run", runRegexp)
+			if runRegexp == "" {
+				runRegexp = defaultE2ERunRegexp
 			}
-			testArgs = append(testArgs, "./test/e2e/...")
+			testArgs = append(testArgs, "-run", runRegexp, "./test/e2e/...")
 
 			code, err := runner(cmd.Context(), "go", testArgs...)
 			if err != nil {

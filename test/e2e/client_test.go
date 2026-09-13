@@ -323,7 +323,7 @@ func (c *E2EClient) GetAuditEvents(ctx context.Context) (models.AuditEventsRespo
 	return decodeJSON[models.AuditEventsResponse](body, "audit events")
 }
 
-// dispatchFsRead discovers the first active operator, dispatches an FS_READ
+// dispatchFsRead discovers the first active remote operator, dispatches an FS_READ
 // command for /etc/hostname, polls until the dispatch succeeds, and returns
 // the dispatch response. It is the shared action used by tests that need a
 // governed command to have executed before asserting on its consequences
@@ -340,7 +340,7 @@ func (c *E2EClient) dispatchFsRead(t *testing.T, ctx context.Context) dispatchRe
 
 	var target *models.OperatorDocumentGo
 	for i := range operators.Operators {
-		if operators.Operators[i].Status == constants.OperatorStatusActive {
+		if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
 			target = &operators.Operators[i]
 			break
 		}

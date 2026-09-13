@@ -46,9 +46,25 @@ func setupRefreshAuthTestInfra(t *testing.T, sessionID string, expired bool, cer
 
 	if sessionID != "" {
 		cliSessionID = sessionID
-		expiresAt := time.Now().Add(1 * time.Hour)
+		now := time.Now().UTC()
+		operatorDoc := models.OperatorDocumentGo{
+			ID:                "refresh-auth-operator",
+			UserID:            userID,
+			Status:            constants.OperatorStatusActive,
+			OperatorSessionID: "op-refresh-auth",
+			OperatorType:      constants.OperatorTypeRemote,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+		operatorBytes, err := json.Marshal(operatorDoc)
+		require.NoError(t, err)
+		require.NoError(t, infra.DocStore.DocSet(
+			marshaler.CollectionName(constants.CollectionOperators), operatorDoc.ID, operatorBytes,
+		))
+
+		expiresAt := now.Add(1 * time.Hour)
 		if expired {
-			expiresAt = time.Now().Add(-1 * time.Hour)
+			expiresAt = now.Add(-1 * time.Hour)
 		}
 		doc := models.CLISession{
 			ID:                cliSessionID,

@@ -296,10 +296,6 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 		bs.config.Posture = config.GatewayPosture(bootstrapConfig.Posture)
 	}
 
-	if bootstrapConfig.HeartbeatIntervalSeconds > 0 {
-		bs.config.HeartbeatInterval = time.Duration(bootstrapConfig.HeartbeatIntervalSeconds) * time.Second
-	}
-
 	if bootstrapConfig.OperatorCert != "" && bootstrapConfig.OperatorCertKey != "" {
 		if err := bs.rebuildTransportWithOperatorCert(bootstrapConfig.OperatorCert, bootstrapConfig.OperatorCertKey); err != nil {
 			// Per-operator mTLS is a hard security requirement once the platform

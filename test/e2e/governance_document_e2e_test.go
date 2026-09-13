@@ -89,7 +89,7 @@ func TestGovernance_DocumentUpdateAndDelete(t *testing.T) {
 	var targetOperatorID string
 	var targetSessionID string
 	for _, op := range operators.Operators {
-		if op.Status == constants.OperatorStatusActive {
+		if op.Status == constants.OperatorStatusActive && op.OperatorType == constants.OperatorTypeRemote {
 			targetOperatorID = op.ID
 			targetSessionID = op.OperatorSessionID
 			break

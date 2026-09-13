@@ -94,13 +94,22 @@ func TestTestE2ECmd_PropagatesArgumentsAndRaceFlag(t *testing.T) {
 	assert.Contains(t, captured, "-tags=e2e")
 	assert.Contains(t, captured, "-count=1")
 	assert.Contains(t, captured, "-parallel=1")
+	assert.Contains(t, captured, "-v")
 	assert.Contains(t, captured, "./test/e2e/...")
 	// -race is present on non-Windows platforms.
 	if runtime.GOOS != "windows" {
 		assert.Contains(t, captured, "-race")
 	}
-	// --run is omitted when unset.
-	assert.NotContains(t, captured, "-run")
+	idx := -1
+	for i, a := range captured {
+		if a == "-run" {
+			idx = i
+			break
+		}
+	}
+	require.GreaterOrEqual(t, idx, 0, "captured args should contain the approved-stack default -run: %v", captured)
+	require.True(t, len(captured) > idx+1, "captured args should have a value after -run: %v", captured)
+	assert.Equal(t, "^(TestApprovedRestart_|TestAuth_|TestCommandRoundtrip_|TestCompliance_|TestDashboard_|TestEnsemble_|TestGateway_|TestGovernance_|TestOperatorRegistry_|TestPlatform_FullBootstrap$|TestPubSub_|TestSSE_)", captured[idx+1])
 }
 
 func TestTestE2ECmd_RunFlagAppendsRegexp(t *testing.T) {

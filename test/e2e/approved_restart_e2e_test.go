@@ -55,7 +55,7 @@ func TestApprovedRestart_IdentityPersists(t *testing.T) {
 			return false
 		}
 		for i := range operators.Operators {
-			if operators.Operators[i].Status == constants.OperatorStatusActive {
+			if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
 				active = &operators.Operators[i]
 				return true
 			}
@@ -85,8 +85,8 @@ func TestApprovedRestart_IdentityPersists(t *testing.T) {
 
 	// Heartbeat must advance. The first observation captures the current
 	// UpdatedAt; the second must be strictly later, proving the pub/sub
-	// heartbeat path is live. A 90-second window accommodates heartbeat
-	// interval jitter and pub/sub delivery latency.
+	// heartbeat path is live. The E2E stack uses a short configurable
+	// heartbeat interval so this assertion remains fast and bounded.
 	firstUpdatedAt := active.UpdatedAt
 	require.False(t, firstUpdatedAt.IsZero(),
 		"first observation: operator UpdatedAt must be set")
@@ -97,8 +97,8 @@ func TestApprovedRestart_IdentityPersists(t *testing.T) {
 	require.Eventually(t, func() bool {
 		second = activeOperator(t, ctx)
 		return second.UpdatedAt.After(firstUpdatedAt)
-	}, 90*time.Second, 3*time.Second,
-		"heartbeat UpdatedAt did not advance past %s within 90s — pub/sub heartbeat path may have failed",
+	}, 10*time.Second, 500*time.Millisecond,
+		"heartbeat UpdatedAt did not advance past %s within 10s — pub/sub heartbeat path may have failed",
 		firstUpdatedAt.UTC().Format(time.RFC3339Nano))
 	assert.True(t, second.UpdatedAt.After(firstUpdatedAt),
 		"second heartbeat observation must be strictly later than the first")

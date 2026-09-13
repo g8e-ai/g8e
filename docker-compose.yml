@@ -108,7 +108,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "start", "-e", "g8e.local"]
+    command: ["operator", "start", "-e", "g8e.local", "--heartbeat-interval", "${G8E_HEARTBEAT_INTERVAL_SECONDS:-30}"]
     restart: unless-stopped
     deploy:
       resources:
@@ -149,7 +149,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "start", "-e", "g8e.local"]
+    command: ["operator", "start", "-e", "g8e.local", "--heartbeat-interval", "${G8E_HEARTBEAT_INTERVAL_SECONDS:-30}"]
     restart: unless-stopped
     deploy:
       resources:
