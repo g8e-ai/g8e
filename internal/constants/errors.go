@@ -1414,6 +1414,7 @@ var (
 	ErrPublicFeedProofDirExists       = errors.New("public-feed: proof directory already exists")
 	ErrPublicFeedProofIDRequired      = errors.New("public-feed: proof_id is required")
 	ErrPublicFeedRecordTypeInvalid    = errors.New("public-feed: invalid record type")
+	ErrPublicFeedRestrictedField      = errors.New("public-feed: restricted field in public record")
 	ErrPublicFeedBatchSignFailed      = errors.New("public-feed: failed to sign batch")
 	ErrPublicFeedKeyGenFailed         = errors.New("public-feed: failed to generate signing key")
 

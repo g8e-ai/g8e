@@ -15,10 +15,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -395,6 +393,20 @@ func TestExportBatch_RejectsOversizedBatch(t *testing.T) {
 
 // TestExportBatch_RecordHashMismatch verifies that a record with a wrong
 // hash is rejected before signing.
+func TestBuildBatch_RejectsNestedProhibitedField(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	record := makeProjectionRecord(t, 1, map[string]any{
+		"campaign_id": "c1",
+		"metadata": map[string]any{
+			"api_key": "restricted",
+		},
+	})
+
+	_, err := publisher.BuildBatch([]models.PublicFeedRecord{record})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrPublicFeedRestrictedField)
+}
+
 func TestExportBatch_RecordHashMismatch(t *testing.T) {
 	publisher, _, _, _ := newPublicPublisherTestEnv(t)
 
@@ -665,6 +677,5 @@ func TestExportBatch_RejectsProhibitedFields(t *testing.T) {
 	}
 	err = publisher.ExportBatch(context.Background(), records)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrPublicFeedRecordHashMismatch) || strings.Contains(err.Error(), "prohibited"),
-		"must reject prohibited fields, got: %v", err)
+	assert.ErrorIs(t, err, constants.ErrPublicFeedRestrictedField)
 }

@@ -247,7 +247,8 @@ class LiveOperationLeaseTemplate(BaseModel):
     budget: BudgetAuthority
     endpoint: str = Field(min_length=1)
     endpoint_class: Literal["remote"]
-    permitted_command: str = Field(min_length=1)
+    permitted_command_family: CommandFamily
+    required_runtime_authority_names: list[str] = Field(min_length=1)
     inventory_check_required: Literal[True]
     fresh_candidate_identity_required: Literal[True]
     fresh_report_root_required: Literal[True]
@@ -263,12 +264,35 @@ class LiveOperationLeaseTemplate(BaseModel):
         return value.rstrip("/")
 
     @model_validator(mode="after")
-    def _validate_hash(self) -> Self:
+    def _validate_template(self) -> Self:
+        if len(self.required_runtime_authority_names) != len(set(self.required_runtime_authority_names)):
+            raise ValueError("required runtime authority names must be unique")
+        if any(not name for name in self.required_runtime_authority_names):
+            raise ValueError("required runtime authority names must be non-empty")
         if self.stop_conditions != list(LeaseStopCondition):
             raise ValueError("stop_conditions must contain every lease stop condition in canonical order")
         expected = _content_hash(self)
         if self.content_hash != expected:
             raise ValueError(f"lease template content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}")
+        return self
+
+
+class LiveOperationLeaseTemplateSet(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    authority_id: str = Field(min_length=1)
+    authority_version: str = Field(default=AUTHORITY_SCHEMA_VERSION)
+    templates: list[LiveOperationLeaseTemplate] = Field(min_length=1)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_set(self) -> Self:
+        template_ids = [template.template_id for template in self.templates]
+        if len(template_ids) != len(set(template_ids)):
+            raise ValueError("lease template_id values must be unique")
+        expected = _content_hash(self)
+        if self.content_hash != expected:
+            raise ValueError(f"lease template set content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}")
         return self
 
 
@@ -296,11 +320,13 @@ class LiveOperationLease(BaseModel):
     candidate: CandidateIdentity
     model_inventory_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_identity: str = Field(min_length=1)
+    runtime_authorities: list[ArtifactBinding] = Field(min_length=1)
+    permitted_command: str = Field(min_length=1)
+    command_family: CommandFamily
     report_root: str = Field(min_length=1)
     app_identity: str = Field(min_length=1)
     operator_session_identity: str = Field(min_length=1)
     endpoint: str = Field(min_length=1)
-    permitted_command: str = Field(min_length=1)
     budget: BudgetAuthority
     issued_at: datetime
     start_deadline: datetime
@@ -314,8 +340,11 @@ class LiveOperationLease(BaseModel):
             raise ValueError("issued_at must precede start_deadline and expires_at")
         if self.endpoint != self.template.endpoint:
             raise ValueError("lease endpoint must match the template")
-        if self.permitted_command != self.template.permitted_command:
-            raise ValueError("lease permitted_command must match the template")
+        if self.command_family != self.template.permitted_command_family:
+            raise ValueError("lease command family must match the template")
+        runtime_authority_names = [authority.name for authority in self.runtime_authorities]
+        if runtime_authority_names != self.template.required_runtime_authority_names:
+            raise ValueError("lease runtime authorities must exactly match the template requirements in canonical order")
         if self.budget.content_hash != self.template.budget.content_hash:
             raise ValueError("lease budget must match the template")
         expected = _content_hash(self)
@@ -418,7 +447,8 @@ def build_live_operation_lease_template(
     operation_authority_hash: str,
     budget: BudgetAuthority,
     endpoint: str,
-    permitted_command: str,
+    permitted_command_family: CommandFamily,
+    required_runtime_authority_names: list[str],
 ) -> LiveOperationLeaseTemplate:
     fields = {
         "template_id": template_id,
@@ -428,7 +458,8 @@ def build_live_operation_lease_template(
         "budget": budget,
         "endpoint": endpoint,
         "endpoint_class": "remote",
-        "permitted_command": permitted_command,
+        "permitted_command_family": permitted_command_family,
+        "required_runtime_authority_names": required_runtime_authority_names,
         "inventory_check_required": True,
         "fresh_candidate_identity_required": True,
         "fresh_report_root_required": True,
@@ -438,6 +469,19 @@ def build_live_operation_lease_template(
     return LiveOperationLeaseTemplate(**fields, content_hash=_content_hash(provisional))
 
 
+def build_live_operation_lease_template_set(
+    authority_id: str,
+    templates: list[LiveOperationLeaseTemplate],
+) -> LiveOperationLeaseTemplateSet:
+    fields = {
+        "authority_id": authority_id,
+        "authority_version": AUTHORITY_SCHEMA_VERSION,
+        "templates": templates,
+    }
+    provisional = LiveOperationLeaseTemplateSet.model_construct(**fields, content_hash="0" * 64)
+    return LiveOperationLeaseTemplateSet(**fields, content_hash=_content_hash(provisional))
+
+
 def build_live_operation_lease(
     *,
     lease_id: str,
@@ -445,6 +489,9 @@ def build_live_operation_lease(
     candidate: CandidateIdentity,
     model_inventory_digest: str,
     operation_identity: str,
+    runtime_authorities: list[ArtifactBinding],
+    permitted_command: str,
+    command_family: CommandFamily,
     report_root: str,
     app_identity: str,
     operator_session_identity: str,
@@ -459,11 +506,13 @@ def build_live_operation_lease(
         "candidate": candidate,
         "model_inventory_digest": model_inventory_digest,
         "operation_identity": operation_identity,
+        "runtime_authorities": runtime_authorities,
+        "permitted_command": permitted_command,
+        "command_family": command_family,
         "report_root": report_root,
         "app_identity": app_identity,
         "operator_session_identity": operator_session_identity,
         "endpoint": template.endpoint,
-        "permitted_command": template.permitted_command,
         "budget": template.budget,
         "issued_at": issued_at,
         "start_deadline": start_deadline,

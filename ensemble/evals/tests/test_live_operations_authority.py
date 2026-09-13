@@ -19,6 +19,7 @@ from g8e_evals.live_operations_authority import (
     LiveOperationLease,
     LiveOperationLeaseSet,
     LiveOperationLeaseTemplate,
+    LiveOperationLeaseTemplateSet,
     LeaseStopCondition,
     ModelRole,
     OperationKind,
@@ -29,6 +30,7 @@ from g8e_evals.live_operations_authority import (
     build_governed_inference_smoke_authority,
     build_live_operation_lease,
     build_live_operation_lease_template,
+    build_live_operation_lease_template_set,
     render_authority_json,
 )
 
@@ -231,14 +233,54 @@ def test_lease_template_binds_budget_and_remote_endpoint() -> None:
     assert set(template.stop_conditions) == set(LeaseStopCondition)
 
 
+def test_lease_template_rejects_duplicate_runtime_authority_names() -> None:
+    with pytest.raises(ValidationError, match="runtime authority names"):
+        build_live_operation_lease_template(
+            template_id="governed-inference-smoke-v1",
+            operation_kind=OperationKind.GOVERNED_INFERENCE_SMOKE,
+            operation_authority_hash=_VALID_HASH,
+            budget=_budget(),
+            endpoint="http://192.168.1.2:11434",
+            permitted_command_family=CommandFamily.GOVERNED_INFERENCE_SMOKE,
+            required_runtime_authority_names=["smoke", "smoke"],
+        )
+
+
+def test_lease_template_set_is_content_addressed_and_rejects_duplicate_ids() -> None:
+    template = _template()
+    template_set = build_live_operation_lease_template_set("lease-templates-v1", [template])
+
+    assert isinstance(template_set, LiveOperationLeaseTemplateSet)
+    assert len(template_set.content_hash) == 64
+    with pytest.raises(ValidationError, match="template_id"):
+        build_live_operation_lease_template_set("lease-templates-v1", [template, template])
+
+
 def test_live_lease_binds_candidate_inventory_identity_and_ceiling() -> None:
     lease = _lease()
 
     assert lease.candidate == _candidate()
     assert lease.model_inventory_digest == "5" * 64
+    assert lease.runtime_authorities[0].name == "governed_inference_smoke"
+    assert lease.permitted_command == "g8e inference smoke --role primary --role assistant --role lite"
+    assert lease.command_family == CommandFamily.GOVERNED_INFERENCE_SMOKE
     assert lease.budget.max_requests == 3
     assert lease.status == LeaseStatus.ACTIVE
     assert lease.issued_at < lease.start_deadline < lease.expires_at
+
+
+def test_live_lease_rejects_missing_runtime_authority() -> None:
+    valid = _lease()
+
+    with pytest.raises(ValidationError, match="runtime_authorities"):
+        LiveOperationLease.model_validate(valid.model_dump() | {"runtime_authorities": []})
+
+
+def test_live_lease_rejects_command_family_mismatch() -> None:
+    valid = _lease()
+
+    with pytest.raises(ValidationError, match="command family"):
+        LiveOperationLease.model_validate(valid.model_dump() | {"command_family": CommandFamily.CAMPAIGN_RUN})
 
 
 def test_live_lease_rejects_expiry_before_start_deadline() -> None:
@@ -269,9 +311,27 @@ def test_phase0_builder_reproduces_reviewed_authority_bindings() -> None:
 
     assert first == second
     assert len(first.budget_authorities.budgets) == 15
+    assert len(first.lease_templates.templates) == 18
     assert all(budget.max_tokens == budget.max_requests * 16_384 for budget in first.budget_authorities.budgets)
     assert all(budget.min_free_disk_bytes == 1_073_741_824 for budget in first.budget_authorities.budgets)
     assert first.budget_authorities.budgets[-1].operation_id == "o7-two-cycle-rehearsal"
     assert first.budget_authorities.budgets[-1].max_requests == 900
+    assert [template.template_id for template in first.lease_templates.templates[:3]] == [
+        "embedded-authority-diagnostic-v1",
+        "governed-inference-smoke-v1",
+        "ef7-final-response-replacement-v1",
+    ]
+    assert [template.template_id for template in first.lease_templates.templates[11:15]] == [
+        "p12-child-a1a0287e1df76273afe1715dab1b7b61d4561c87660f714f8f75f3f4cda89231-v1",
+        "p12-child-e49f8e81119bb61e44d5facf2d2fd6177f5a7ba0f06f1a75c52547c7af07d1b9-v1",
+        "p12-child-5491db99c40772a84a88efbc1d35e648f1ac532fa506a640f526c62b979764f4-v1",
+        "p12-child-d81cf52d96b9aeec1cf0aa8218c50a82e1f8e74b0e9217a1ae8bbf6784f362ec-v1",
+    ]
+    assert first.lease_templates.templates[-1].required_runtime_authority_names == [
+        "o7_rehearsal_manifest",
+        "public_contract_pack",
+        "mirror_trust_authority",
+        "safety_stop_matrix",
+    ]
     assert first.ef7_transport_disposition.bindings[0].sha256 == "72c9762c9762fa9119f9ad6827038f2e94791c4055284bfa9b036517e0dc33f1"
     assert first.governed_inference_smoke.bindings[0].sha256 == "ada35b8d25596627e480a08ca5dd810f2c6ed16815b106b1b07aef45731d55bf"

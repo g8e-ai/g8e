@@ -8,6 +8,7 @@ from g8e_evals.constants import (
     EF7_TRANSPORT_DISPOSITION_JSON,
     GOVERNED_INFERENCE_SMOKE_AUTHORITY_JSON,
     LIVE_OPERATION_BUDGET_AUTHORITIES_JSON,
+    LIVE_OPERATION_LEASE_TEMPLATES_JSON,
     LIVE_PACKET_RELATIVE_DIR,
 )
 from g8e_evals.phase0_authority_builder import (
@@ -34,4 +35,8 @@ def test_phase0_authority_artifacts_reproduce_byte_for_byte() -> None:
     assert compare_rendered_authority(
         packet.budget_authorities,
         live_packet / LIVE_OPERATION_BUDGET_AUTHORITIES_JSON,
+    )
+    assert compare_rendered_authority(
+        packet.lease_templates,
+        live_packet / LIVE_OPERATION_LEASE_TEMPLATES_JSON,
     )

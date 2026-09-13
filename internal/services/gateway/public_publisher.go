@@ -140,13 +140,43 @@ func validRecordType(rt models.PublicFeedRecordType) bool {
 // checkProhibitedFields scans the record bytes for prohibited field names
 // in the JSON payload. Returns an error if any prohibited field is found.
 func checkProhibitedFields(recordBytes string) error {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(recordBytes), &fields); err != nil {
+	var value json.RawMessage
+	if err := json.Unmarshal([]byte(recordBytes), &value); err != nil {
 		return fmt.Errorf("public-feed: parse record for prohibited field check: %w", err)
 	}
-	for _, prohibited := range prohibitedRecordFields {
-		if _, ok := fields[prohibited]; ok {
-			return fmt.Errorf("public-feed: prohibited field '%s' in record", prohibited)
+	return checkProhibitedJSONValue(value)
+}
+
+func checkProhibitedJSONValue(value json.RawMessage) error {
+	trimmed := bytes.TrimSpace(value)
+	if len(trimmed) == 0 {
+		return nil
+	}
+	switch trimmed[0] {
+	case '{':
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(trimmed, &fields); err != nil {
+			return fmt.Errorf("public-feed: parse record object: %w", err)
+		}
+		for name, child := range fields {
+			for _, prohibited := range prohibitedRecordFields {
+				if name == prohibited {
+					return fmt.Errorf("%w: %s", constants.ErrPublicFeedRestrictedField, prohibited)
+				}
+			}
+			if err := checkProhibitedJSONValue(child); err != nil {
+				return err
+			}
+		}
+	case '[':
+		var values []json.RawMessage
+		if err := json.Unmarshal(trimmed, &values); err != nil {
+			return fmt.Errorf("public-feed: parse record array: %w", err)
+		}
+		for _, child := range values {
+			if err := checkProhibitedJSONValue(child); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
