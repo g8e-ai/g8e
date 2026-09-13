@@ -85,30 +85,43 @@ func testUnitCmd() *cobra.Command {
 }
 
 func testIntegrationCmd() *cobra.Command {
+	return testIntegrationCmdWithRunner(realE2ERunner(os.Stdout, os.Stderr))
+}
+
+func testIntegrationCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
+	var runRegexp string
+	var pkg string
+
 	cmd := &cobra.Command{
 		Use:   "integration",
 		Short: "Run Tier 2 (In-Process Integration) tests",
-		Long:  `Run in-process integration tests with the 'integration' build tag. These tests run the gateway in-process against real on-disk SQLite databases, local PKI generation, and local pubsub.`,
+		Long:  `Run in-process integration tests with the 'integration' build tag. These tests run the gateway in-process against real on-disk SQLite databases, local PKI generation, and local pubsub. Use --pkg and --run to select a package and tests by regular expression.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 2 (In-Process Integration) tests...")
 
-			testRace := ""
+			testArgs := []string{"test", "-tags=integration", "-count=1", "-timeout", "180s"}
 			if runtime.GOOS != "windows" {
-				testRace = "-race"
+				testArgs = append(testArgs, "-race")
 			}
+			if runRegexp != "" {
+				testArgs = append(testArgs, "-run", runRegexp)
+			}
+			testArgs = append(testArgs, pkg)
 
-			testCmd := exec.Command("go", "test", "-tags=integration", testRace, "-count=1", "-timeout", "180s", "./...")
-			testCmd.Stdout = os.Stdout
-			testCmd.Stderr = os.Stderr
-
-			if err := testCmd.Run(); err != nil {
+			code, err := runner(cmd.Context(), "go", testArgs...)
+			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrIntegrationTestsFailed, err)
+			}
+			if code != 0 {
+				return fmt.Errorf("%w: exit code %d", constants.ErrIntegrationTestsFailed, code)
 			}
 
 			fmt.Println("Integration tests completed successfully.")
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&runRegexp, "run", "", "Regular expression selecting which integration tests to run (passed to go test -run)")
 
 	return cmd
 }
