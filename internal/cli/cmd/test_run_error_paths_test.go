@@ -205,21 +205,26 @@ func TestTestIntegrationCmd_StructureAndFlags(t *testing.T) {
 	cmd := testIntegrationCmd()
 	assert.Equal(t, "integration", cmd.Use)
 	assert.NotNil(t, cmd.RunE)
-	flag := cmd.Flags().Lookup("run")
-	require.NotNil(t, flag)
-	assert.Equal(t, "", flag.DefValue)
+	runFlag := cmd.Flags().Lookup("run")
+	require.NotNil(t, runFlag)
+	assert.Equal(t, "", runFlag.DefValue)
+	pkgFlag := cmd.Flags().Lookup("pkg")
+	require.NotNil(t, pkgFlag)
+	assert.Equal(t, "./...", pkgFlag.DefValue)
 }
 
 func TestTestIntegrationCmd_RunFlagAppendsRegexp(t *testing.T) {
 	var captured []string
 	cmd := testIntegrationCmdWithRunner(recordingE2ERunner(0, nil, &captured))
+	require.NoError(t, cmd.Flags().Set("pkg", "./internal/services/gateway"))
 	require.NoError(t, cmd.Flags().Set("run", "TestPublicMirror|TestPublicPublisher"))
 
 	require.NoError(t, cmd.RunE(cmd, nil))
 
 	assert.Contains(t, captured, "-tags=integration")
 	assert.Contains(t, captured, "-count=1")
-	assert.Contains(t, captured, "./...")
+	assert.Contains(t, captured, "./internal/services/gateway")
+	assert.NotContains(t, captured, "./...")
 	if runtime.GOOS != "windows" {
 		assert.Contains(t, captured, "-race")
 	}

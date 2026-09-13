@@ -906,8 +906,7 @@ func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaign
 	}
 
 	// Check for symlinks in the proofs directory before writing.
-	proofsDir := s.fileSvc.Resolve(constants.PublicProofsDirname)
-	if err := checkNoSymlinks(proofsDir); err != nil {
+	if err := checkNoSymlinks(ctx, s.fileSvc, constants.PublicProofsDirname); err != nil {
 		return models.PublicProofManifest{}, err
 	}
 
@@ -918,8 +917,16 @@ func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaign
 
 	entries := make([]models.PublicProofCatalogEntry, 0, len(artifacts))
 	for _, art := range artifacts {
+		if !safePublicProofFilename(art.Filename) {
+			return models.PublicProofManifest{}, constants.ErrPublicFeedProofPathTraversal
+		}
 		if int64(len(art.Content)) > int64(constants.PublicFeedMaxArtifactBytes) {
 			return models.PublicProofManifest{}, constants.ErrPublicFeedProofOversized
+		}
+		if strings.Contains(art.MediaType, "json") {
+			if err := checkProhibitedFields(string(art.Content)); err != nil {
+				return models.PublicProofManifest{}, fmt.Errorf("%w: %w", constants.ErrPublicFeedProofRestricted, err)
+			}
 		}
 
 		h := sha256.Sum256(art.Content)
@@ -1107,10 +1114,9 @@ func (s *PublicPublisherService) StreamProof(ctx context.Context, artifactID str
 
 	// Resolve the file path and check for symlinks.
 	relPath := filepath.Join(constants.PublicProofsDirname, artifactID)
-	absPath := s.fileSvc.Resolve(relPath)
 
 	// Check if the file is a symlink.
-	fi, err := os.Lstat(absPath)
+	fi, err := s.fileSvc.Lstat(ctx, relPath)
 	if err != nil {
 		return constants.ErrPublicFeedProofNotFound
 	}
@@ -1119,7 +1125,7 @@ func (s *PublicPublisherService) StreamProof(ctx context.Context, artifactID str
 	}
 
 	// Read the file.
-	data, err := os.ReadFile(absPath)
+	data, err := s.fileSvc.ReadFile(ctx, relPath)
 	if err != nil {
 		return constants.ErrPublicFeedProofNotFound
 	}
@@ -1152,24 +1158,29 @@ func (s *PublicPublisherService) StreamProof(ctx context.Context, artifactID str
 
 // checkNoSymlinks walks the given directory and returns an error if any
 // symlink is found.
-func checkNoSymlinks(dir string) error {
-	info, err := os.Stat(dir)
+func checkNoSymlinks(ctx context.Context, fileSvc fs.RuntimeFileService, relDir string) error {
+	info, err := fileSvc.Lstat(ctx, relDir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, constants.ErrNotFound) {
 			return nil
 		}
-		return err
+		return fmt.Errorf("public-feed: inspect proof path: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return constants.ErrPublicFeedProofSymlinkRejected
 	}
 	if !info.IsDir() {
 		return nil
 	}
-	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
+	entries, err := fileSvc.ReadDir(ctx, relDir)
+	if err != nil {
+		return fmt.Errorf("public-feed: read proof directory: %w", err)
+	}
+	for _, entry := range entries {
+		childPath := filepath.Join(relDir, entry.Name())
+		if err := checkNoSymlinks(ctx, fileSvc, childPath); err != nil {
 			return err
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return constants.ErrPublicFeedProofSymlinkRejected
-		}
-		return nil
-	})
+	}
+	return nil
 }

@@ -32,13 +32,15 @@ import (
 )
 
 type PublicMirrorSourceState struct {
-	HighWaterSequence int64                     `json:"high_water_sequence"`
-	FeedChainHash     string                    `json:"feed_chain_hash"`
-	BatchCount        int                       `json:"batch_count"`
-	Records           []models.PublicFeedRecord `json:"records"`
-	Batches           []models.PublicFeedBatch  `json:"batches"`
-	Freshness         models.CampaignFreshness  `json:"freshness"`
-	LastAcceptedAt    time.Time                 `json:"last_accepted_at"`
+	HighWaterSequence         int64                     `json:"high_water_sequence"`
+	FeedChainHash             string                    `json:"feed_chain_hash"`
+	BatchCount                int                       `json:"batch_count"`
+	RetainedFromSequence      int64                     `json:"retained_from_sequence"`
+	RetainedPreviousBatchHash string                    `json:"retained_previous_batch_hash"`
+	Records                   []models.PublicFeedRecord `json:"records"`
+	Batches                   []models.PublicFeedBatch  `json:"batches"`
+	Freshness                 models.CampaignFreshness  `json:"freshness"`
+	LastAcceptedAt            time.Time                 `json:"last_accepted_at"`
 }
 
 type PublicMirrorStoreState struct {
@@ -135,6 +137,14 @@ func normalizePublicMirrorStoreState(state *PublicMirrorStoreState) {
 	if state.ProofManifests == nil {
 		state.ProofManifests = make(map[string]models.PublicProofManifest)
 	}
+	for _, source := range state.Sources {
+		if source.RetainedFromSequence == 0 {
+			source.RetainedFromSequence = 1
+		}
+		if source.RetainedPreviousBatchHash == "" {
+			source.RetainedPreviousBatchHash = constants.PublicFeedZeroHashHex
+		}
+	}
 }
 
 func validatePublicMirrorStoreState(state PublicMirrorStoreState) error {
@@ -144,11 +154,11 @@ func validatePublicMirrorStoreState(state PublicMirrorStoreState) error {
 		}
 	}
 	for sourceID, source := range state.Sources {
-		if sourceID == "" || source == nil || source.BatchCount != len(source.Batches) {
+		if sourceID == "" || source == nil || source.BatchCount < len(source.Batches) || source.RetainedFromSequence <= 0 || source.RetainedPreviousBatchHash == "" {
 			return fmt.Errorf("%w: invalid source state", constants.ErrPublicFeedMirrorStoreCorrupt)
 		}
-		previousHash := constants.PublicFeedZeroHashHex
-		var previousSequence int64
+		previousHash := source.RetainedPreviousBatchHash
+		previousSequence := source.RetainedFromSequence - 1
 		var recordCount int
 		for _, batch := range source.Batches {
 			if batch.SourceID != sourceID || batch.FirstSequence != previousSequence+1 || batch.PreviousBatchHash != previousHash || computeBatchContentHash(batch) != batch.ContentHash {
@@ -174,14 +184,39 @@ func validatePublicMirrorStoreState(state PublicMirrorStoreState) error {
 			previousSequence = batch.LastSequence
 			recordCount += len(batch.Records)
 		}
-		if len(source.Batches) > 0 && (source.HighWaterSequence != previousSequence || source.FeedChainHash != previousHash || len(source.Records) != recordCount || source.LastAcceptedAt.IsZero()) {
-			return fmt.Errorf("%w: source summary mismatch", constants.ErrPublicFeedMirrorStoreCorrupt)
+		if len(source.Batches) > 0 {
+			if source.HighWaterSequence != previousSequence || source.FeedChainHash != previousHash || len(source.Records) != recordCount || source.LastAcceptedAt.IsZero() {
+				return fmt.Errorf("%w: source summary mismatch", constants.ErrPublicFeedMirrorStoreCorrupt)
+			}
+		} else if source.HighWaterSequence != 0 || source.BatchCount != 0 || len(source.Records) != 0 {
+			return fmt.Errorf("%w: empty source summary mismatch", constants.ErrPublicFeedMirrorStoreCorrupt)
 		}
 	}
 	for artifactID, content := range state.ProofArtifacts {
 		hash := sha256.Sum256(content)
 		if artifactID != hex.EncodeToString(hash[:]) || len(content) > constants.PublicFeedMaxArtifactBytes {
 			return fmt.Errorf("%w: invalid proof artifact", constants.ErrPublicFeedMirrorStoreCorrupt)
+		}
+	}
+	if len(state.ProofCatalogs) != len(state.ProofManifests) {
+		return fmt.Errorf("%w: incomplete proof metadata", constants.ErrPublicFeedMirrorStoreCorrupt)
+	}
+	for sourceID, catalog := range state.ProofCatalogs {
+		manifest, ok := state.ProofManifests[sourceID]
+		if !ok {
+			return fmt.Errorf("%w: missing proof manifest", constants.ErrPublicFeedMirrorStoreCorrupt)
+		}
+		artifacts := make([]models.PublicProofIngestArtifact, 0, len(catalog.Entries))
+		for _, entry := range catalog.Entries {
+			content, ok := state.ProofArtifacts[entry.ArtifactID]
+			if !ok {
+				return fmt.Errorf("%w: missing proof artifact", constants.ErrPublicFeedMirrorStoreCorrupt)
+			}
+			artifacts = append(artifacts, models.PublicProofIngestArtifact{ArtifactID: entry.ArtifactID, Content: content})
+		}
+		request := models.PublicProofIngestRequest{SourceID: sourceID, Manifest: manifest, Catalog: catalog, Artifacts: artifacts}
+		if err := validatePublicProofPackage(request, state, false); err != nil {
+			return fmt.Errorf("%w: proof metadata for %s: %w", constants.ErrPublicFeedMirrorStoreCorrupt, sourceID, err)
 		}
 	}
 	return nil
@@ -233,7 +268,8 @@ type PublicMirrorServer struct {
 	maxBootstrapProjections int
 
 	// maxSSEQueueSize is the bounded SSE queue size per subscriber.
-	maxSSEQueueSize int
+	maxSSEQueueSize    int
+	maxRetainedBatches int
 
 	// defaultPageSize is the default cursor page size.
 	defaultPageSize int
@@ -252,10 +288,12 @@ type PublicMirrorServer struct {
 
 // mirrorSSESubscriber represents one active SSE connection.
 type mirrorSSESubscriber struct {
-	sourceID string
-	ch       chan models.PublicFeedRecord
-	closed   bool
-	mu       sync.Mutex
+	sourceID  string
+	clientID  string
+	ch        chan models.PublicFeedRecord
+	closed    bool
+	truncated bool
+	mu        sync.Mutex
 }
 
 type publicMirrorRateWindow struct {
@@ -278,6 +316,7 @@ func NewPublicMirrorServer(logger *slog.Logger, store PublicMirrorStore) (*Publi
 		sseSubscribers:          make(map[*mirrorSSESubscriber]struct{}),
 		maxBootstrapProjections: 50,
 		maxSSEQueueSize:         100,
+		maxRetainedBatches:      constants.PublicFeedMirrorRetainedBatches,
 		defaultPageSize:         20,
 		maxPageSize:             100,
 		now:                     time.Now,
@@ -313,6 +352,16 @@ func (m *PublicMirrorServer) SetMaxSSEQueueSize(n int) {
 	m.maxSSEQueueSize = n
 }
 
+func (m *PublicMirrorServer) SetMaxRetainedBatches(maxBatches int) error {
+	if maxBatches <= 0 {
+		return constants.ErrPublicFeedRetentionConfig
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.maxRetainedBatches = maxBatches
+	return nil
+}
+
 func (m *PublicMirrorServer) SetFreshnessWindows(delayed, stale, offline time.Duration) error {
 	if delayed <= 0 || stale <= delayed || offline <= stale {
 		return constants.ErrPublicFeedFreshnessConfig
@@ -337,6 +386,30 @@ func (m *PublicMirrorServer) SetAnonymousReadRateLimit(maxRequests int, window t
 	return nil
 }
 
+func (m *PublicMirrorServer) addSSESubscriber(sourceID, clientID string) (*mirrorSSESubscriber, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for subscriber := range m.sseSubscribers {
+		if subscriber.clientID == clientID {
+			return nil, false
+		}
+	}
+	subscriber := &mirrorSSESubscriber{
+		sourceID: sourceID,
+		clientID: clientID,
+		ch:       make(chan models.PublicFeedRecord, m.maxSSEQueueSize),
+	}
+	m.sseSubscribers[subscriber] = struct{}{}
+	return subscriber, true
+}
+
+func (m *PublicMirrorServer) removeSSESubscriber(subscriber *mirrorSSESubscriber) {
+	m.mu.Lock()
+	delete(m.sseSubscribers, subscriber)
+	m.mu.Unlock()
+	subscriber.close()
+}
+
 // RegisterSourceKey registers a public key for a source deployment. The
 // mirror accepts batches signed by this key until it is revoked.
 func (m *PublicMirrorServer) RegisterSourceKey(ctx context.Context, sourceID, keyID string, pubKey ed25519.PublicKey) error {
@@ -351,31 +424,6 @@ func (m *PublicMirrorServer) RegisterSourceKey(ctx context.Context, sourceID, ke
 func (m *PublicMirrorServer) RevokeSourceKey(ctx context.Context, sourceID, keyID string) error {
 	return m.mutateState(ctx, func(state *PublicMirrorStoreState) error {
 		state.RevokedKeys[m.keyRegistryKey(sourceID, keyID)] = time.Now().UTC()
-		return nil
-	})
-}
-
-// StoreProofArtifact stores a proof artifact's content indexed by its
-// content-addressed artifact ID (SHA-256 hex).
-func (m *PublicMirrorServer) StoreProofArtifact(ctx context.Context, artifactID string, content []byte) error {
-	return m.mutateState(ctx, func(state *PublicMirrorStoreState) error {
-		state.ProofArtifacts[artifactID] = append([]byte(nil), content...)
-		return nil
-	})
-}
-
-// StoreProofCatalog stores the proof catalog for a source deployment.
-func (m *PublicMirrorServer) StoreProofCatalog(ctx context.Context, sourceID string, catalog models.PublicProofCatalog) error {
-	return m.mutateState(ctx, func(state *PublicMirrorStoreState) error {
-		state.ProofCatalogs[sourceID] = catalog
-		return nil
-	})
-}
-
-// StoreProofManifest stores the proof manifest for a source deployment.
-func (m *PublicMirrorServer) StoreProofManifest(ctx context.Context, sourceID string, manifest models.PublicProofManifest) error {
-	return m.mutateState(ctx, func(state *PublicMirrorStoreState) error {
-		state.ProofManifests[sourceID] = manifest
 		return nil
 	})
 }
@@ -401,8 +449,10 @@ func getOrCreatePublicMirrorSource(state *PublicMirrorStoreState, sourceID strin
 	source, ok := state.Sources[sourceID]
 	if !ok {
 		source = &PublicMirrorSourceState{
-			FeedChainHash: constants.PublicFeedZeroHashHex,
-			Freshness:     models.CampaignFreshnessActive,
+			FeedChainHash:             constants.PublicFeedZeroHashHex,
+			RetainedFromSequence:      1,
+			RetainedPreviousBatchHash: constants.PublicFeedZeroHashHex,
+			Freshness:                 models.CampaignFreshnessActive,
 		}
 		state.Sources[sourceID] = source
 	}
@@ -598,6 +648,17 @@ func (m *PublicMirrorServer) acceptBatch(ctx context.Context, batch models.Publi
 		state.HighWaterSequence = batch.LastSequence
 		state.FeedChainHash = batch.ContentHash
 		state.BatchCount++
+		if excess := len(state.Batches) - m.maxRetainedBatches; excess > 0 {
+			lastRemoved := state.Batches[excess-1]
+			state.RetainedFromSequence = lastRemoved.LastSequence + 1
+			state.RetainedPreviousBatchHash = lastRemoved.ContentHash
+			state.Batches = append([]models.PublicFeedBatch(nil), state.Batches[excess:]...)
+			firstRetainedRecord := 0
+			for firstRetainedRecord < len(state.Records) && state.Records[firstRetainedRecord].Sequence < state.RetainedFromSequence {
+				firstRetainedRecord++
+			}
+			state.Records = append([]models.PublicFeedRecord(nil), state.Records[firstRetainedRecord:]...)
+		}
 		state.LastAcceptedAt = m.now().UTC()
 		state.Freshness = models.CampaignFreshnessActive
 		return nil
@@ -646,11 +707,16 @@ func publicMirrorAnonymousReadPath(requestPath string) bool {
 	}
 }
 
-func (m *PublicMirrorServer) allowAnonymousRead(r *http.Request) bool {
+func publicMirrorClientID(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		host = r.RemoteAddr
+		return r.RemoteAddr
 	}
+	return host
+}
+
+func (m *PublicMirrorServer) allowAnonymousRead(r *http.Request) bool {
+	host := publicMirrorClientID(r)
 	now := m.now().UTC()
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -814,6 +880,10 @@ func (m *PublicMirrorServer) storeProofPackage(ctx context.Context, request mode
 }
 
 func validatePublicProofIngest(request models.PublicProofIngestRequest, state PublicMirrorStoreState) error {
+	return validatePublicProofPackage(request, state, true)
+}
+
+func validatePublicProofPackage(request models.PublicProofIngestRequest, state PublicMirrorStoreState, rejectRevoked bool) error {
 	manifest := request.Manifest
 	if request.SourceID == "" || !manifest.VerificationOK || manifest.SchemaVersion != constants.PublicProofManifestSchemaVersion || request.Catalog.SchemaVersion != constants.PublicProofCatalogSchemaVersion {
 		return constants.ErrPublicFeedProofManifestInvalid
@@ -822,7 +892,7 @@ func validatePublicProofIngest(request models.PublicProofIngestRequest, state Pu
 		return constants.ErrPublicFeedProofCatalogMismatch
 	}
 	keyRegistryID := request.SourceID + ":" + manifest.SigningKeyID
-	if _, revoked := state.RevokedKeys[keyRegistryID]; revoked {
+	if _, revoked := state.RevokedKeys[keyRegistryID]; rejectRevoked && revoked {
 		return constants.ErrPublicFeedRevokedKey
 	}
 	key, ok := state.KeyRegistry[keyRegistryID]
@@ -1165,19 +1235,13 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 	}
 
 	// Subscribe to live updates.
-	sub := &mirrorSSESubscriber{
-		sourceID: sourceID,
-		ch:       make(chan models.PublicFeedRecord, m.maxSSEQueueSize),
+	sub, accepted := m.addSSESubscriber(sourceID, publicMirrorClientID(r))
+	if !accepted {
+		sseWriteSentinel(w, flusher, "error", "client stream already connected")
+		flusher.Flush()
+		return
 	}
-	m.mu.Lock()
-	m.sseSubscribers[sub] = struct{}{}
-	m.mu.Unlock()
-	defer func() {
-		m.mu.Lock()
-		delete(m.sseSubscribers, sub)
-		m.mu.Unlock()
-		sub.close()
-	}()
+	defer m.removeSSESubscriber(sub)
 
 	ctx := r.Context()
 	for {
@@ -1196,7 +1260,7 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 			sseWriteRecord(w, flusher, rec)
 		default:
 			// Check for queue overflow.
-			if len(sub.ch) >= m.maxSSEQueueSize {
+			if sub.consumeTruncated() {
 				sseWriteSentinel(w, flusher, "truncated", "queue overflow")
 				flusher.Flush()
 				return
@@ -1399,9 +1463,24 @@ func (s *mirrorSSESubscriber) send(record models.PublicFeedRecord) {
 	select {
 	case s.ch <- record:
 	default:
-		// Channel full — drop. The subscriber detects overflow via
-		// queue length check.
+		select {
+		case <-s.ch:
+		default:
+		}
+		select {
+		case s.ch <- record:
+		default:
+		}
+		s.truncated = true
 	}
+}
+
+func (s *mirrorSSESubscriber) consumeTruncated() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	truncated := s.truncated
+	s.truncated = false
+	return truncated
 }
 
 // close closes the subscriber's channel.

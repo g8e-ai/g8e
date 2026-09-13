@@ -903,5 +903,6 @@ const (
 	PublicFeedAnonymousRatePerWindow  = 60
 	PublicFeedAnonymousRateWindowSecs = 60
 	PublicFeedAnonymousRateMaxClients = 10000
+	PublicFeedMirrorRetainedBatches   = 1000
 	PublicFeedZeroHashHex             = "0000000000000000000000000000000000000000000000000000000000000000"
 )

@@ -152,6 +152,44 @@ func TestBuildProofPackage_RejectsOversizedArtifact(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrPublicFeedProofOversized)
 }
 
+func TestBuildProofPackage_RejectsUnsafeArtifactMetadataAndContent(t *testing.T) {
+	tests := []struct {
+		name     string
+		artifact ProofArtifactInput
+		err      error
+	}{
+		{
+			name: "path traversal filename",
+			artifact: ProofArtifactInput{
+				Filename:   "../private.json",
+				MediaType:  "application/json",
+				Content:    []byte(`{"campaign_id":"c1"}`),
+				CampaignID: "c1",
+			},
+			err: constants.ErrPublicFeedProofPathTraversal,
+		},
+		{
+			name: "nested restricted JSON field",
+			artifact: ProofArtifactInput{
+				Filename:   "public.json",
+				MediaType:  "application/json",
+				Content:    []byte(`{"campaign":{"credentials":{"token":"restricted"}}}`),
+				CampaignID: "c1",
+			},
+			err: constants.ErrPublicFeedProofRestricted,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			publisher := newProofBuilderTestEnv(t)
+			_, err := publisher.BuildProofPackage(context.Background(), "c1", "rev-1", "hash", true, []ProofArtifactInput{tt.artifact})
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tt.err)
+		})
+	}
+}
+
 // TestBuildProofPackage_ArtifactsContentAddressed verifies that artifact IDs
 // are derived from the SHA-256 of the content.
 func TestBuildProofPackage_ArtifactsContentAddressed(t *testing.T) {

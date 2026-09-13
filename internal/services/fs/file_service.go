@@ -45,6 +45,7 @@ type RuntimeFileService interface {
 
 	// Stat returns FileInfo for a path within the runtime directory.
 	Stat(ctx context.Context, relPath string) (os.FileInfo, error)
+	Lstat(ctx context.Context, relPath string) (os.FileInfo, error)
 
 	// WriteFile atomically writes data to a file within the runtime directory.
 	// Uses tmp+rename pattern with a unique temp file per call. Creates parent
@@ -213,6 +214,21 @@ func (fs *localFS) Stat(ctx context.Context, relPath string) (os.FileInfo, error
 	}
 	absPath := fs.Resolve(relPath)
 	info, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%w: %s", constants.ErrNotFound, absPath)
+		}
+		return nil, fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+	}
+	return info, nil
+}
+
+func (fs *localFS) Lstat(ctx context.Context, relPath string) (os.FileInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	absPath := fs.Resolve(relPath)
+	info, err := os.Lstat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("%w: %s", constants.ErrNotFound, absPath)

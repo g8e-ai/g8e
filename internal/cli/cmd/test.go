@@ -121,6 +121,7 @@ func testIntegrationCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&pkg, "pkg", "./...", "Package pattern selecting which integration test package to compile and run")
 	cmd.Flags().StringVar(&runRegexp, "run", "", "Regular expression selecting which integration tests to run (passed to go test -run)")
 
 	return cmd
