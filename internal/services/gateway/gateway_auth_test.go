@@ -1402,6 +1402,20 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.GetDocStore().DocSet("cli_sessions", cliSessionID, cliBytes))
 
+	// The persisted operator binding must resolve against the operators
+	// collection — the middleware validates it on every request.
+	opDoc := &models.OperatorDocumentGo{
+		ID:                "op-cli-auth",
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusActive,
+		UserID:            userID,
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
+	}
+	opBytes, err := json.Marshal(opDoc)
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-cli-auth", opBytes))
+
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("success"))
@@ -1534,7 +1548,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), "external apps cannot access privileged endpoints")
 	})
 
-	t.Run("auth middleware extracts operator session info from headers", func(t *testing.T) {
+	t.Run("auth middleware stamps operator identity from the persisted binding", func(t *testing.T) {
 		opID := "op-audit-123"
 		opSessionID := "opsess-audit-456"
 		cliSessionID := "cli-sess-audit-789"
@@ -1557,6 +1571,21 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 		}
 		userBytes, _ := json.Marshal(userDoc)
 		require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+
+		// The persisted operator binding resolves against the operators
+		// collection — the stamped identity comes from this document,
+		// never from request headers (the headers below merely agree with
+		// the persisted binding, which the middleware tolerates).
+		opDoc := &models.OperatorDocumentGo{
+			ID:                opID,
+			OperatorSessionID: opSessionID,
+			Status:            constants.OperatorStatusActive,
+			UserID:            userID,
+			CreatedAt:         time.Now().UTC(),
+			UpdatedAt:         time.Now().UTC(),
+		}
+		opBytes, _ := json.Marshal(opDoc)
+		require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), opID, opBytes))
 
 		wid := protocol.NewWorkloadIdentity()
 		cliURI, _ := wid.CLISPIFFEURL(userID, cliSessionID)
@@ -1590,4 +1619,224 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 		assert.Equal(t, opSessionID, capturedCtx.Value(constants.ContextKeyOperatorSessionID))
 		assert.Equal(t, cliSessionID, capturedCtx.Value(constants.ContextKeyCLISessionID))
 	})
+}
+
+// TestRouteAuthRegistry_CLISessionEndpoint verifies that the CLI session
+// info endpoint is explicitly classified as RouteAuthMTLS — the caller's
+// identity is derived from the verified CLI certificate URI SAN, and the
+// handler reports the persisted binding.
+func TestRouteAuthRegistry_CLISessionEndpoint(t *testing.T) {
+
+	registry := NewRouteAuthRegistry(false)
+
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.AuthCLISession),
+		"CLI session info must be RouteAuthMTLS (mTLS-derived identity)")
+}
+
+// seedBoundCLIAuthFixture creates an active user, an active operator
+// document, and a CLI session bound to that operator session — the
+// persisted state handleCLIAuth validates before stamping context.
+func seedBoundCLIAuthFixture(t *testing.T, db *CanonicalDBService, userID, operatorID, operatorSessionID, cliSessionID string) {
+	t.Helper()
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID:                operatorID,
+		OperatorSessionID: operatorSessionID,
+		Status:            constants.OperatorStatusActive,
+		UserID:            userID,
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
+	cliBytes, err := json.Marshal(&models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
+		IsActive:          true,
+		ExpiresAt:         time.Now().Add(1 * time.Hour),
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
+}
+
+// cliAuthRequest builds a GET request carrying a CLI SPIFFE URI SAN cert
+// and the CLI session header, matching what the mTLS handshake provides.
+func cliAuthRequest(t *testing.T, userID, cliSessionID string) *http.Request {
+	t.Helper()
+	wid := protocol.NewWorkloadIdentity()
+	cliURI, err := wid.CLISPIFFEURL(userID, cliSessionID)
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
+	req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{{URIs: []*url.URL{cliURI}}}}
+	return req
+}
+
+// TestHandleCLIAuth_StampsPersistedOperatorBinding verifies that the
+// stamped operator identity comes from the persisted CLI session binding
+// resolved against the operators collection — never from request headers.
+func TestHandleCLIAuth_StampsPersistedOperatorBinding(t *testing.T) {
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+
+	userID := "user-cli-binding"
+	operatorID := "op-bound-1"
+	operatorSessionID := "op-sess-bound-1"
+	cliSessionID := "cli-sess-bound-1"
+	seedBoundCLIAuthFixture(t, db, userID, operatorID, operatorSessionID, cliSessionID)
+
+	var capturedCtx context.Context
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedCtx = r.Context()
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := cliAuthRequest(t, userID, cliSessionID)
+	rr := httptest.NewRecorder()
+	handled := auth.handleCLIAuth(rr, req, cliSessionID, next)
+
+	require.True(t, handled)
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.NotNil(t, capturedCtx)
+	assert.Equal(t, userID, capturedCtx.Value(constants.ContextKeyUserID))
+	assert.Equal(t, cliSessionID, capturedCtx.Value(constants.ContextKeyCLISessionID))
+	assert.Equal(t, operatorID, capturedCtx.Value(constants.ContextKeyOperatorID))
+	assert.Equal(t, operatorSessionID, capturedCtx.Value(constants.ContextKeyOperatorSessionID))
+}
+
+// TestHandleCLIAuth_RejectsMismatchedOperatorHeaders verifies that
+// operator headers disagreeing with the persisted CLI session binding are
+// rejected with 403 — headers are client-controlled and must never
+// override the authoritative binding.
+func TestHandleCLIAuth_RejectsMismatchedOperatorHeaders(t *testing.T) {
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+
+	userID := "user-cli-hdr-mismatch"
+	cliSessionID := "cli-sess-hdr-mismatch"
+	seedBoundCLIAuthFixture(t, db, userID, "op-bound-hdr", "op-sess-bound-hdr", cliSessionID)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	tests := []struct {
+		name        string
+		opID        string
+		opSessionID string
+	}{
+		{name: "mismatched operator id", opID: "op-different", opSessionID: "op-sess-bound-hdr"},
+		{name: "mismatched operator session id", opID: "op-bound-hdr", opSessionID: "op-sess-different"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := cliAuthRequest(t, userID, cliSessionID)
+			req.Header.Set(constants.HeaderOperatorID, tt.opID)
+			req.Header.Set(constants.HeaderOperatorSessionID, tt.opSessionID)
+			rr := httptest.NewRecorder()
+
+			handled := auth.handleCLIAuth(rr, req, cliSessionID, next)
+
+			require.True(t, handled)
+			assert.Equal(t, http.StatusForbidden, rr.Code)
+			assert.Contains(t, rr.Body.String(), constants.ErrOperatorBindingMismatch.Error())
+		})
+	}
+}
+
+// TestHandleCLIAuth_RejectsOperatorHeadersOnUnboundSession verifies that a
+// caller must not assert an operator identity the session does not carry:
+// operator headers on a CLI session with no persisted binding are
+// rejected with 403.
+func TestHandleCLIAuth_RejectsOperatorHeadersOnUnboundSession(t *testing.T) {
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+
+	userID := "user-cli-unbound-hdr"
+	cliSessionID := "cli-sess-unbound-hdr"
+
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	cliBytes, err := json.Marshal(&models.CLISession{
+		ID:        cliSessionID,
+		UserID:    userID,
+		IsActive:  true,
+		ExpiresAt: time.Now().Add(1 * time.Hour),
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := cliAuthRequest(t, userID, cliSessionID)
+	req.Header.Set(constants.HeaderOperatorSessionID, "op-sess-asserted")
+	rr := httptest.NewRecorder()
+
+	handled := auth.handleCLIAuth(rr, req, cliSessionID, next)
+
+	require.True(t, handled)
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+	assert.Contains(t, rr.Body.String(), constants.ErrOperatorBindingMismatch.Error())
+}
+
+// TestAuthService_ValidateOperatorSession_EmbeddedExemptFromTTL verifies
+// that the embedded operator — the gateway's own in-process substrate —
+// is exempt from the 24h document-age TTL that applies to remote
+// operators. A remote operator document of the same age is rejected.
+func TestAuthService_ValidateOperatorSession_EmbeddedExemptFromTTL(t *testing.T) {
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+
+	userID := "user-ttl-exempt"
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+
+	oldTime := time.Now().UTC().Add(-48 * time.Hour)
+	persistAged := func(operatorID, sessionID string, opType constants.OperatorType) {
+		opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+			ID:                operatorID,
+			OperatorSessionID: sessionID,
+			Status:            constants.OperatorStatusActive,
+			UserID:            userID,
+			OperatorType:      opType,
+			CreatedAt:         oldTime,
+			UpdatedAt:         oldTime,
+		})
+		require.NoError(t, err)
+		require.NoError(t, db.GetDocStore().DocSetWithTimestamps(
+			marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes, oldTime, oldTime))
+	}
+	persistAged(string(constants.DocIDEmbeddedOperator), "sess-embedded-old", constants.OperatorTypeEmbedded)
+	persistAged("op-remote-old", "sess-remote-old", constants.OperatorTypeRemote)
+
+	op, err := auth.ValidateOperatorSession("sess-embedded-old")
+	require.NoError(t, err, "embedded operator is exempt from the document-age TTL")
+	assert.Equal(t, string(constants.DocIDEmbeddedOperator), op.ID)
+
+	_, err = auth.ValidateOperatorSession("sess-remote-old")
+	require.Error(t, err, "remote operator document older than the TTL is rejected")
+	assert.Contains(t, err.Error(), constants.ErrOperatorSessionExpired.Error())
 }

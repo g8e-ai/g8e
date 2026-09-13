@@ -812,3 +812,73 @@ func TestPasskeyHandler_RegisterVerify_EnrollmentToken_Valid(t *testing.T) {
 	// VerifyRegistration.
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
+
+// TestPasskeyHandler_BindEmbeddedOperatorToWebSession verifies the
+// embedded-operator binding the passkey verify paths (browser bootstrap
+// and enrollment-token registration) invoke after creating a web session:
+// the claimed embedded operator is bound via the KV pair, the
+// bound_sessions durability document, and the operator document's
+// bound_web_session_id. A real WebAuthn attestation cannot be produced in
+// a unit test, so the binding call the verify handlers make is exercised
+// directly. A web session for a different user silently binds nothing.
+func TestPasskeyHandler_BindEmbeddedOperatorToWebSession(t *testing.T) {
+	infra := setupTestInfrastructure(t, false)
+
+	user, err := infra.UserSvc.CreateUser()
+	require.NoError(t, err)
+	other, err := infra.UserSvc.CreateUser()
+	require.NoError(t, err)
+
+	// Claim the embedded operator for the first user — the same state the
+	// first user's bootstrap produces.
+	operatorID, operatorSessionID, err := newEmbeddedOperatorService(infra.DocStore, infra.OperatorSessionSvc).ClaimEmbeddedOperator(user.ID)
+	require.NoError(t, err)
+
+	t.Run("claimed operator binds to web session", func(t *testing.T) {
+		webSession, err := infra.WebSessionSvc.CreateWebSession(user.ID)
+		require.NoError(t, err)
+
+		infra.Passkey.bindEmbeddedOperatorSession(user.ID, webSession.ID)
+
+		// KV pair: operator session -> web session.
+		boundWebID, found := infra.KVStore.KVGet(sessionOperatorBindKey(operatorSessionID))
+		require.True(t, found, "sessionOperatorBind entry must exist")
+		assert.Equal(t, webSession.ID, boundWebID)
+
+		// KV pair: web session -> operator session IDs.
+		raw, found := infra.KVStore.KVGet(sessionWebBindKey(webSession.ID))
+		require.True(t, found, "sessionWebBind entry must exist")
+		var sessionIDs []string
+		require.NoError(t, json.Unmarshal([]byte(raw), &sessionIDs))
+		assert.Contains(t, sessionIDs, operatorSessionID)
+
+		// bound_sessions durability document.
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), webSession.ID)
+		require.NoError(t, err)
+		require.NotNil(t, doc)
+		var bDoc models.BoundSessionsDocumentGo
+		b, err := json.Marshal(doc.Data)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(b, &bDoc))
+		assert.Equal(t, user.ID, bDoc.UserID)
+		assert.Contains(t, bDoc.OperatorIDs, operatorID)
+		assert.Contains(t, bDoc.OperatorSessionIDs, operatorSessionID)
+
+		// The operator document itself carries bound_web_session_id.
+		op := loadEmbeddedOperatorDoc(t, infra.DocStore)
+		assert.Equal(t, webSession.ID, op.BoundWebSessionID)
+	})
+
+	t.Run("different user's web session binds nothing", func(t *testing.T) {
+		webSession, err := infra.WebSessionSvc.CreateWebSession(other.ID)
+		require.NoError(t, err)
+
+		infra.Passkey.bindEmbeddedOperatorSession(other.ID, webSession.ID)
+
+		_, found := infra.KVStore.KVGet(sessionWebBindKey(webSession.ID))
+		assert.False(t, found, "no binding for a different user's web session")
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), webSession.ID)
+		require.NoError(t, err)
+		assert.Nil(t, doc)
+	})
+}

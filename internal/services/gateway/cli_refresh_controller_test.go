@@ -290,3 +290,40 @@ func TestCLIRefreshController_Refresh_MethodNotAllowed(t *testing.T) {
 	c.handleRefresh(rr, req)
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 }
+
+// TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded verifies
+// the binding-recovery path: an old CLI session persisted before the
+// operator-binding work (empty operator_session_id) is rebound to the
+// user's active embedded operator session on refresh, and the new session
+// persists the recovered binding.
+func TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded(t *testing.T) {
+	c, user := setupTestCLIRefreshController(t)
+
+	// The user has an active embedded operator session — the canonical
+	// local binding — but the old CLI session predates the binding work
+	// and carries no operator_session_id.
+	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(
+		"embedded-sess-refresh", user.ID, user.ID, string(constants.DocIDEmbeddedOperator), string(constants.HeartbeatTypeBootstrap)))
+	oldSessionID := "refresh-ctrl-unbound-old"
+	persistCLISessionForController(t, c, user.ID, oldSessionID, "")
+
+	req := refreshRequestWithContext(t, user.ID, oldSessionID)
+	rr := httptest.NewRecorder()
+	c.handleRefresh(rr, req)
+
+	resp := parseRefreshResponse(t, rr)
+	assert.Equal(t, "embedded-sess-refresh", resp.OperatorSessionID)
+	assert.Equal(t, string(constants.DocIDEmbeddedOperator), resp.OperatorID)
+
+	// The new session persists the recovered binding.
+	newDoc, err := c.cliSessionSvc.db.DocGet(
+		marshaler.CollectionName(constants.CollectionCLISessions), resp.CLISessionID)
+	require.NoError(t, err)
+	require.NotNil(t, newDoc)
+	var newSession models.CLISession
+	dataBytes, err := json.Marshal(newDoc.Data)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(dataBytes, &newSession))
+	assert.Equal(t, "embedded-sess-refresh", newSession.OperatorSessionID,
+		"new session persists the recovered embedded binding")
+}

@@ -312,6 +312,21 @@ func TestStatusJSONComponentStatusMatches(t *testing.T) {
 	}
 }
 
+func TestStatusJSONOperatorTypeMatches(t *testing.T) {
+	statusJSON := loadStatusJSON(t)
+	cat, ok := statusJSON["operator_type"]
+	require.True(t, ok, "operator_type category exists")
+	require.Len(t, cat, 2, "operator_type vocabulary is exactly embedded and remote")
+	assert.Equal(t, string(OperatorTypeEmbedded), cat["embedded"].Value)
+	assert.Equal(t, string(OperatorTypeRemote), cat["remote"].Value)
+	_, hasSystem := cat["system"]
+	assert.False(t, hasSystem, "removed 'system' operator type must not reappear")
+	_, hasCloud := cat["cloud"]
+	assert.False(t, hasCloud, "removed 'cloud' operator type must not reappear")
+	_, hasCloudSubtype := statusJSON["cloud_subtype"]
+	assert.False(t, hasCloudSubtype, "removed 'cloud_subtype' category must not reappear")
+}
+
 func TestStatusJSONConsensusMemberMatches(t *testing.T) {
 	statusJSON := loadStatusJSON(t)
 	cat, ok := statusJSON["consensus_member"]

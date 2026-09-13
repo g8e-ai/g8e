@@ -522,6 +522,12 @@ func validateLocalCLI(a EnrollmentArtifacts, caFingerprint string) error {
 	if a.CLISessionID == "" || a.UserID == "" || a.CLICertPEM == "" {
 		return constants.ErrMissingRequiredField
 	}
+	// Rotation inherits the persisted operator binding from local
+	// credentials; bootstrap and recovery must carry the authoritative
+	// operator pair returned by the gateway.
+	if a.Source != EnrollmentSourceRotation && (a.OperatorSessionID == "" || a.OperatorID == "") {
+		return fmt.Errorf("%w: operator binding", constants.ErrMissingRequiredField)
+	}
 	if a.TrustBundlePEM == "" {
 		return constants.ErrEmptyTrustBundle
 	}
