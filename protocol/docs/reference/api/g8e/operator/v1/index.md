@@ -1671,7 +1671,6 @@ Reads a specific resource from the downstream MCP server.
 | is_slot | [bool](#bool) |  |  |
 | claimed | [bool](#bool) |  |  |
 | operator_type | [string](#string) |  |  |
-| cloud_subtype | [string](#string) |  |  |
 | system_fingerprint | [string](#string) |  |  |
 | created_at_unix_ms | [int64](#int64) |  |  |
 | updated_at_unix_ms | [int64](#int64) |  |  |

@@ -13,7 +13,6 @@ from g8e.enums import (
     ApprovalErrorType,
     ApprovalType,
     AttachmentType,
-    CloudSubtype,
     ConversationStatus,
     EscalationRisk,
     ExecutionStatus,

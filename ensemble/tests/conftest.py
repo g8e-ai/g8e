@@ -679,8 +679,8 @@ def enriched_investigation():
 
 
 @pytest.fixture
-def cloud_operator_doc():
-    from app.constants import CloudSubtype, OperatorType
+def remote_operator_doc():
+    from app.constants import OperatorType
     from app.models.operators import (
         HeartbeatDiskDetails,
         HeartbeatEnvironment,
@@ -694,11 +694,10 @@ def cloud_operator_doc():
     )
 
     return OperatorDocument(
-        id="cloud-op-1",
+        id="remote-op-1",
         user_id="test-user",
-        operator_session_id="session-cloud-op-1",
-        operator_type=OperatorType.CLOUD,
-        cloud_subtype=CloudSubtype.AWS,
+        operator_session_id="session-remote-op-1",
+        operator_type=OperatorType.REMOTE,
         granted_intents=["ec2_discovery", "s3_read"],
         latest_heartbeat_snapshot=HeartbeatSnapshot(
             system_identity=HeartbeatSystemIdentity(
@@ -741,8 +740,7 @@ def binary_operator_doc():
         id="binary-op-1",
         user_id="test-user",
         operator_session_id="session-binary-op-1",
-        operator_type=OperatorType.SYSTEM,
-        cloud_subtype=None,
+        operator_type=OperatorType.REMOTE,
         latest_heartbeat_snapshot=HeartbeatSnapshot(
             system_identity=HeartbeatSystemIdentity(
                 hostname="web-server-1",
@@ -762,7 +760,7 @@ def binary_operator_doc():
 
 
 @pytest.fixture
-def multi_operator_investigation(cloud_operator_doc, binary_operator_doc):
+def multi_operator_investigation(remote_operator_doc, binary_operator_doc):
     from app.constants import InvestigationStatus
     from tests.fakes.factories import build_enriched_context
 
@@ -771,7 +769,7 @@ def multi_operator_investigation(cloud_operator_doc, binary_operator_doc):
         case_id="case-test-123",
         user_id="user-test-123",
         status=InvestigationStatus.OPEN,
-        operator_documents=[cloud_operator_doc, binary_operator_doc],
+        operator_documents=[remote_operator_doc, binary_operator_doc],
     )
 
 

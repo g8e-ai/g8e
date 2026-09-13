@@ -1000,7 +1000,6 @@ async def create_operator_slot(
             name=f"{request.name_prefix}-{request.slot_number}",
             slot_number=request.slot_number,
             operator_type=request.operator_type,
-            cloud_subtype=request.cloud_subtype,
             status=OperatorStatus.OFFLINE,
             api_key=api_key,
             created_at=now(),

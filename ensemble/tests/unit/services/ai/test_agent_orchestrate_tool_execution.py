@@ -129,7 +129,7 @@ def sample_investigation(
                 id=unique_operator_id,
                 operator_session_id=unique_session_id,
                 status=OperatorStatus.OFFLINE,
-                operator_type=OperatorType.SYSTEM,
+                operator_type=OperatorType.REMOTE,
                 latest_heartbeat_snapshot=HeartbeatSnapshot(
                     system_identity=HeartbeatSystemIdentity(
                         hostname="op-1-host",
@@ -1281,7 +1281,7 @@ class TestTribunalRefinement:
             id=unique_operator_id,
             user_id=unique_user_id,
             operator_session_id=unique_session_id,
-            operator_type=OperatorType.SYSTEM,
+            operator_type=OperatorType.REMOTE,
             status=OperatorStatus.BOUND,
             latest_heartbeat_snapshot=HeartbeatSnapshot(
                 system_identity=HeartbeatSystemIdentity(os="ubuntu", hostname="srv-01")
@@ -1451,7 +1451,7 @@ class TestTargetOperatorResolution:
                     id="op-linux",
                     operator_session_id="session-linux",
                     status=OperatorStatus.OFFLINE,
-                    operator_type=OperatorType.SYSTEM,
+                    operator_type=OperatorType.REMOTE,
                     latest_heartbeat_snapshot=HeartbeatSnapshot(
                         system_identity=HeartbeatSystemIdentity(
                             hostname="linux-host",
@@ -1466,7 +1466,7 @@ class TestTargetOperatorResolution:
                     id="op-ubuntu",
                     operator_session_id="session-ubuntu",
                     status=OperatorStatus.OFFLINE,
-                    operator_type=OperatorType.SYSTEM,
+                    operator_type=OperatorType.REMOTE,
                     current_hostname="ubuntu-host",
                     latest_heartbeat_snapshot=HeartbeatSnapshot(
                         system_identity=HeartbeatSystemIdentity(

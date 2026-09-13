@@ -290,7 +290,7 @@ func TestDataCommandJSONUnmarshaling(t *testing.T) {
 		},
 		{
 			name:        "valid OperatorDocumentGo JSON",
-			jsonData:    `[{"id":"op1","cloud_subtype":"aws","status":"active"}]`,
+			jsonData:    `[{"id":"op1","operator_type":"remote","status":"active"}]`,
 			targetType:  &[]models.OperatorDocumentGo{},
 			expectError: false,
 		},

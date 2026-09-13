@@ -711,13 +711,6 @@ async def test_get_tools_includes_get_command_constraints(
     tool_names_operator = [tool.name for group in tools_operator for tool in group.tools]
     assert OperatorToolName.GET_COMMAND_CONSTRAINTS in tool_names_operator
 
-    # Test in cloud_operator_bound mode
-    tools_cloud = tool_service.get_tools(
-        agent_mode=AgentMode.CLOUD_OPERATOR_BOUND, model_to_use=None
-    )
-    tool_names_cloud = [tool.name for group in tools_cloud for tool in group.tools]
-    assert OperatorToolName.GET_COMMAND_CONSTRAINTS in tool_names_cloud
-
     # Test in unbound mode
     tools_unbound = tool_service.get_tools(
         agent_mode=AgentMode.G8E_NOT_BOUND, model_to_use=None

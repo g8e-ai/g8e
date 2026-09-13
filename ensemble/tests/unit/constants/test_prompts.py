@@ -63,7 +63,6 @@ class TestAgentModeFromG8e:
         [
             (AgentMode.G8E_BOUND, "AgentModeG8eBound", "g8e.bound"),
             (AgentMode.G8E_NOT_BOUND, "AgentModeG8eNotBound", "g8e.not.bound"),
-            (AgentMode.CLOUD_OPERATOR_BOUND, "AgentModeCloudOperatorBound", "g8e.cloud.bound"),
         ],
     )
     def test_mode_matches_g8e(self, member: AgentMode, g8e_key: str, expected: str):
@@ -71,7 +70,7 @@ class TestAgentModeFromG8e:
         assert member.value == expected
 
     def test_agent_mode_count(self):
-        assert len(list(AgentMode)) == 3
+        assert len(list(AgentMode)) == 2
 
 
 class TestAgentModePromptFiles:
@@ -89,7 +88,6 @@ class TestAgentModePromptFiles:
         [
             (AgentMode.G8E_BOUND, {PromptSection.CAPABILITIES, PromptSection.EXECUTION, PromptSection.TOOLS}),
             (AgentMode.G8E_NOT_BOUND, {PromptSection.CAPABILITIES, PromptSection.EXECUTION, PromptSection.TOOLS}),
-            (AgentMode.CLOUD_OPERATOR_BOUND, {PromptSection.CAPABILITIES, PromptSection.EXECUTION, PromptSection.TOOLS}),
         ],
     )
     def test_each_mode_has_capabilities_execution_tools(

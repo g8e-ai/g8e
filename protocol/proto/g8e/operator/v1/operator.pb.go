@@ -3260,7 +3260,6 @@ type OperatorDocument struct {
 	IsSlot             bool                   `protobuf:"varint,12,opt,name=is_slot,json=isSlot,proto3" json:"is_slot,omitempty"`
 	Claimed            bool                   `protobuf:"varint,13,opt,name=claimed,proto3" json:"claimed,omitempty"`
 	OperatorType       string                 `protobuf:"bytes,14,opt,name=operator_type,json=operatorType,proto3" json:"operator_type,omitempty"`
-	CloudSubtype       string                 `protobuf:"bytes,15,opt,name=cloud_subtype,json=cloudSubtype,proto3" json:"cloud_subtype,omitempty"`
 	SystemFingerprint  string                 `protobuf:"bytes,16,opt,name=system_fingerprint,json=systemFingerprint,proto3" json:"system_fingerprint,omitempty"`
 	CreatedAtUnixMs    int64                  `protobuf:"varint,17,opt,name=created_at_unix_ms,json=createdAtUnixMs,proto3" json:"created_at_unix_ms,omitempty"`
 	UpdatedAtUnixMs    int64                  `protobuf:"varint,18,opt,name=updated_at_unix_ms,json=updatedAtUnixMs,proto3" json:"updated_at_unix_ms,omitempty"`
@@ -3392,13 +3391,6 @@ func (x *OperatorDocument) GetClaimed() bool {
 func (x *OperatorDocument) GetOperatorType() string {
 	if x != nil {
 		return x.OperatorType
-	}
-	return ""
-}
-
-func (x *OperatorDocument) GetCloudSubtype() string {
-	if x != nil {
-		return x.CloudSubtype
 	}
 	return ""
 }
@@ -9597,7 +9589,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1f\n" +
 	"\voperator_id\x18\x02 \x01(\tR\n" +
 	"operatorId\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\x8d\x05\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xfd\x04\n" +
 	"\x10OperatorDocument\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12'\n" +
@@ -9614,11 +9606,10 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"slotNumber\x12\x17\n" +
 	"\ais_slot\x18\f \x01(\bR\x06isSlot\x12\x18\n" +
 	"\aclaimed\x18\r \x01(\bR\aclaimed\x12#\n" +
-	"\roperator_type\x18\x0e \x01(\tR\foperatorType\x12#\n" +
-	"\rcloud_subtype\x18\x0f \x01(\tR\fcloudSubtype\x12-\n" +
+	"\roperator_type\x18\x0e \x01(\tR\foperatorType\x12-\n" +
 	"\x12system_fingerprint\x18\x10 \x01(\tR\x11systemFingerprint\x12+\n" +
 	"\x12created_at_unix_ms\x18\x11 \x01(\x03R\x0fcreatedAtUnixMs\x12+\n" +
-	"\x12updated_at_unix_ms\x18\x12 \x01(\x03R\x0fupdatedAtUnixMs\"+\n" +
+	"\x12updated_at_unix_ms\x18\x12 \x01(\x03R\x0fupdatedAtUnixMsJ\x04\b\x0f\x10\x10R\rcloud_subtype\"+\n" +
 	"\x11ShutdownRequested\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"~\n" +
 	"\x13EvalAnswerRequested\x12\x1b\n" +

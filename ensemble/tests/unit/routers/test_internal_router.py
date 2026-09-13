@@ -412,8 +412,7 @@ async def test_create_operator_slot_success(request_context, g8e_context):
     request = OperatorSlotCreationRequest(
         context=request_context,
         slot_number=1,
-        operator_type="cloud",
-        cloud_subtype="aws",
+        operator_type="remote",
         name_prefix="operator",
     )
 
@@ -448,7 +447,7 @@ async def test_claim_operator_slot_success(request_context, g8e_context):
         operator_id="op-123",
         operator_session_id="session-123",
         bound_web_session_id="web-session-123",
-        operator_type="CLOUD",
+        operator_type="REMOTE",
     )
 
     mock_operator_lifecycle_service = MagicMock()

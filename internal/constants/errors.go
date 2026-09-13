@@ -1103,6 +1103,8 @@ var (
 	ErrMTLSCertRevoked            = errors.New("mTLS client certificate revoked or invalid")
 	ErrProtocolAuthRequired       = errors.New("protocol authentication required")
 	ErrMTLSIdentityMismatch       = errors.New("mTLS identity mismatch")
+	ErrOperatorBindingMismatch    = errors.New("operator binding mismatch; run './g8e auth refresh' to resync the local operator binding")
+	ErrEmbeddedOperatorClaimed    = errors.New("embedded operator already claimed")
 	ErrSessionLoadFailed          = errors.New("failed to load session")
 	ErrSessionParseFailed         = errors.New("failed to parse session")
 	ErrCLISessionExpired          = errors.New("CLI session expired")

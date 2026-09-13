@@ -121,15 +121,8 @@
       "operator_type": {
         "type": "string",
         "required": true,
-        "default": "system",
-        "values": ["system", "cloud"],
-        "description": "Operator deployment type. See status.json operator.type."
-      },
-      "cloud_subtype": {
-        "type": "string",
-        "required": false,
-        "values": ["aws", "gcp", "azure"],
-        "description": "Cloud provider. Only set when operator_type is cloud. See status.json cloud.subtype."
+        "values": ["embedded", "remote"],
+        "description": "Operator deployment type. 'embedded' is the gateway's own in-process operator substrate; 'remote' is any operator enrolled from another host or process. See status.json operator.type."
       },
       "consumed_by_operator_id": {
         "type": "string",
@@ -197,7 +190,6 @@
       },
       "operator_type": { "type": "string", "required": false },
       "granted_intents": { "type": "array", "items": "string", "required": true, "default": [], "description": "Active intent names (string projection of GrantedIntent objects). Always an array, empty when no intents are granted." },
-      "cloud_subtype": { "type": "string", "required": false },
       "current_hostname": {
         "type": "string",
         "required": false,

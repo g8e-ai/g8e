@@ -89,21 +89,23 @@ func defaultSystemFingerprint() (string, error) {
 
 // Bootstrap performs the initial unbootstrapped-gateway CLI enrollment
 // (POST /api/v1/auth/bootstrap over the discovery/plain-HTTP surface).
-// The caller supplies the CLI CSR (and its private key, for staging) and
-// an optional operator CSR. The gateway returns the first user/session
-// and the full runtime trust bundle.
+// The caller supplies the CLI CSR (and its private key, for staging). The
+// gateway claims its pending embedded operator as part of the same
+// explicit first-user enrollment act and returns the first user/session,
+// the embedded operator binding, and the full runtime trust bundle. The
+// embedded operator is certless — no operator CSR is submitted and no
+// operator certs are returned.
 //
 // baseURL, when non-empty, overrides the discovery URL (used by demos and
 // tests). caFingerprint, when non-empty, pins the expected root CA
 // fingerprint.
-func (c *EnrollmentClient) Bootstrap(ctx context.Context, cliCSR string, cliKey *ecdsa.PrivateKey, operatorCSR, caFingerprint, baseURL string) (EnrollmentArtifacts, error) {
+func (c *EnrollmentClient) Bootstrap(ctx context.Context, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint, baseURL string) (EnrollmentArtifacts, error) {
 	systemFp, err := c.systemFingerprint()
 	if err != nil {
 		return EnrollmentArtifacts{}, err
 	}
 
 	req := models.BootstrapRequest{
-		CSR:               operatorCSR,
 		CLICSR:            cliCSR,
 		SystemFingerprint: systemFp,
 		LocalOSUser:       getLocalOSUser(),
@@ -123,17 +125,15 @@ func (c *EnrollmentClient) Bootstrap(ctx context.Context, cliCSR string, cliKey 
 	}
 
 	artifacts := EnrollmentArtifacts{
-		Source:               EnrollmentSourceBootstrap,
-		CLISessionID:         resp.CLISessionID,
-		UserID:               resp.UserID,
-		OperatorSessionID:    resp.OperatorSessionID,
-		OperatorID:           resp.OperatorID,
-		CLICertPEM:           resp.CLICert,
-		CLICertChainPEM:      resp.CLICertChain,
-		CLIKey:               cliKey,
-		TrustBundlePEM:       resp.HubTrustBundle,
-		OperatorCertPEM:      resp.OperatorCert,
-		OperatorCertChainPEM: resp.OperatorCertChain,
+		Source:            EnrollmentSourceBootstrap,
+		CLISessionID:      resp.CLISessionID,
+		UserID:            resp.UserID,
+		OperatorSessionID: resp.OperatorSessionID,
+		OperatorID:        resp.OperatorID,
+		CLICertPEM:        resp.CLICert,
+		CLICertChainPEM:   resp.CLICertChain,
+		CLIKey:            cliKey,
+		TrustBundlePEM:    resp.HubTrustBundle,
 	}
 
 	if err := validateLocalCLI(artifacts, caFingerprint); err != nil {
@@ -339,19 +339,25 @@ func (c *EnrollmentClient) Refresh(ctx context.Context, fileSvc fs.RuntimeFileSe
 	if !resp.Success {
 		return CLISessionRefresh{}, fmt.Errorf("%w: refresh unsuccessful", constants.ErrCLIRefreshFailed)
 	}
-	if resp.CLISessionID == "" || resp.UserID == "" {
+	if resp.CLISessionID == "" || resp.UserID == "" || resp.OperatorSessionID == "" || resp.OperatorID == "" {
 		return CLISessionRefresh{}, constants.ErrMissingRequiredField
 	}
 	return CLISessionRefresh{
-		CLISessionID: resp.CLISessionID,
-		UserID:       resp.UserID,
+		CLISessionID:      resp.CLISessionID,
+		UserID:            resp.UserID,
+		OperatorSessionID: resp.OperatorSessionID,
+		OperatorID:        resp.OperatorID,
 	}, nil
 }
 
 // CLISessionRefresh is the result of a successful CLI session refresh.
+// It carries the full session/operator binding so the caller can persist
+// the authoritative pair back to local credentials.
 type CLISessionRefresh struct {
-	CLISessionID string
-	UserID       string
+	CLISessionID      string
+	UserID            string
+	OperatorSessionID string
+	OperatorID        string
 }
 
 // ProbeCLISession issues a lightweight authenticated mTLS GET to

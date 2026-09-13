@@ -144,8 +144,6 @@ class OperatorContext(G8eBaseModel):
     memory_mb: int | None = None
     public_ip: str | None = None
     operator_type: OperatorType | None = None
-    cloud_subtype: str | None = None
-    is_cloud_operator: bool = False
     granted_intents: list[str] | None = None
     distro: str | None = None
     kernel: str | None = None

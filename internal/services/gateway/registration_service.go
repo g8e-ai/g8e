@@ -435,7 +435,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 		Status:         constants.OperatorStatusOffline,
 		SlotNumber:     slotNumber,
 		IsSlot:         true,
-		OperatorType:   constants.OperatorTypeSystem,
+		OperatorType:   constants.OperatorTypeRemote,
 		CreatedAt:      time.Now().UTC(),
 		UpdatedAt:      time.Now().UTC(),
 	}
@@ -625,6 +625,42 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 		res.Error = lastErr.Error()
 	}
 	return res, nil
+}
+
+// BindEmbeddedOperatorToWebSession binds the gateway's embedded operator
+// to the given web session when — and only when — the embedded operator
+// has been claimed by this user. It returns false when the embedded
+// operator document is absent or is claimed by a different user (e.g., a
+// remote-only owner), in which case there is nothing to bind and the
+// caller skips silently.
+func (s *RegistrationService) BindEmbeddedOperatorToWebSession(userID, webSessionID string) (bool, error) {
+	doc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
+	if err != nil {
+		return false, fmt.Errorf("load embedded operator: %w", err)
+	}
+	if doc == nil {
+		return false, nil
+	}
+	op, err := s.toOperatorDoc(doc)
+	if err != nil {
+		return false, fmt.Errorf("decode embedded operator: %w", err)
+	}
+	if !op.Claimed || op.UserID != userID {
+		return false, nil
+	}
+
+	resp, err := s.BindOperators(models.BindOperatorsRequest{
+		OperatorIDs:  []string{op.ID},
+		UserID:       userID,
+		WebSessionID: webSessionID,
+	})
+	if err != nil {
+		return false, fmt.Errorf("bind embedded operator: %w", err)
+	}
+	if resp.BoundCount == 0 {
+		return false, fmt.Errorf("bind embedded operator: %s", resp.Error)
+	}
+	return true, nil
 }
 
 // UnbindOperators unbinds one or more operators from a session.

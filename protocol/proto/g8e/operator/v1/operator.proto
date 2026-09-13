@@ -379,7 +379,10 @@ message OperatorDocument {
   bool is_slot = 12;
   bool claimed = 13;
   string operator_type = 14;
-  string cloud_subtype = 15;
+  // Field 15 and the name cloud_subtype are reserved: the cloud subtype
+  // taxonomy was removed when operator types migrated to embedded/remote.
+  reserved 15;
+  reserved "cloud_subtype";
   string system_fingerprint = 16;
   int64 created_at_unix_ms = 17;
   int64 updated_at_unix_ms = 18;

@@ -62,7 +62,7 @@ def _make_operator() -> OperatorDocument:
         user_id="user-1",
         operator_session_id="sess-1",
         current_hostname="host-1",
-        operator_type=OperatorType.SYSTEM,
+        operator_type=OperatorType.REMOTE,
         bound_web_session_id="ws-1",
     )
 

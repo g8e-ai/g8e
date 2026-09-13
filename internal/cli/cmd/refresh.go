@@ -95,9 +95,13 @@ The gateway must already be running.`,
 				return fmt.Errorf("auth refresh: %w", err)
 			}
 
-			// Update the local credentials with the new session ID. The
-			// cert, user ID, and operator binding are unchanged.
+			// Update the local credentials with the new session ID and the
+			// authoritative operator binding returned by the gateway. This
+			// is also the resync path for stale or missing local operator
+			// bindings.
 			creds.CLISessionID = refresh.CLISessionID
+			creds.OperatorSessionID = refresh.OperatorSessionID
+			creds.OperatorID = refresh.OperatorID
 			if err := auth.SaveCredentials(fileSvc, cfg, creds); err != nil {
 				return fmt.Errorf("auth refresh: save credentials: %w", err)
 			}

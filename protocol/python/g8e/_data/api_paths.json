@@ -23,6 +23,7 @@
   "auth_cli_recovery_status": "/api/v1/auth/cli/recovery/status",
   "auth_cli_refresh": "/api/v1/auth/cli/refresh",
   "auth_cli_rotate": "/api/v1/auth/cli/rotate",
+  "auth_cli_session": "/api/v1/auth/cli/session",
   "auth_logout": "/api/v1/auth/logout",
   "auth_passkeys": "/api/v1/auth/passkeys",
   "auth_passkeys_by_id": "/api/v1/auth/passkeys/",

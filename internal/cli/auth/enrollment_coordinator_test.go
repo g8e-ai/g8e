@@ -72,7 +72,7 @@ func (m *mockGateway) CheckBootstrapStatus(ctx context.Context, baseURL string) 
 	return m.bootstrapped, m.bootstrappedErr
 }
 
-func (m *mockGateway) Bootstrap(ctx context.Context, cliCSR string, cliKey *ecdsa.PrivateKey, operatorCSR, caFingerprint, baseURL string) (EnrollmentArtifacts, error) {
+func (m *mockGateway) Bootstrap(ctx context.Context, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint, baseURL string) (EnrollmentArtifacts, error) {
 	m.mu.Lock()
 	m.bootstrapCalls++
 	m.mu.Unlock()

@@ -190,6 +190,12 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// path). The explicit classification documents the requirement.
 	r.addExact(constants.APIPaths.AuthCLIRefresh, RouteAuthMTLS)
 
+	// CLI session info — mTLS only. Returns the authenticated session's
+	// persisted operator binding so the CLI can resync local credentials.
+	// An expired or missing session fails closed (401) like every other
+	// session-bound route; the caller recovers via the refresh endpoint.
+	r.addExact(constants.APIPaths.AuthCLISession, RouteAuthMTLS)
+
 	// JIT passkey routes: RouteAuthNone when JWKS is enabled (JWT middleware handles auth),
 	// RouteAuthMTLS when JWKS is disabled (not accessible without mTLS).
 	if jwksEnabled {
@@ -465,12 +471,16 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 		return nil, &AuthError{Message: constants.ErrOperatorIdentityDisabled.Error(), Status: http.StatusUnauthorized}
 	}
 
-	// Enforce session expiry (TTL)
-	// Default session TTL is 24h if not specified.
-	sessionTTL := 24 * time.Hour
-	// We use the Document store's authoritative CreatedAt for TTL enforcement.
-	if !docs[0].CreatedAt.IsZero() && time.Since(docs[0].CreatedAt) > sessionTTL {
-		return nil, &AuthError{Message: constants.ErrOperatorSessionExpired.Error(), Status: http.StatusUnauthorized}
+	// Enforce session expiry (TTL) for remote operators. Default session
+	// TTL is 24h if not specified. The embedded operator is the gateway's
+	// own in-process substrate — its document persists for the lifetime of
+	// the gateway deployment and is exempt from the document-age TTL.
+	if op.OperatorType != constants.OperatorTypeEmbedded {
+		sessionTTL := 24 * time.Hour
+		// We use the Document store's authoritative CreatedAt for TTL enforcement.
+		if !docs[0].CreatedAt.IsZero() && time.Since(docs[0].CreatedAt) > sessionTTL {
+			return nil, &AuthError{Message: constants.ErrOperatorSessionExpired.Error(), Status: http.StatusUnauthorized}
+		}
 	}
 
 	// Check if the linked user is active (plan §4.6)
@@ -778,14 +788,44 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			s.responder.Error(w, http.StatusForbidden, constants.ErrMTLSIdentityMismatch.Error())
 			return true
 		}
-		// Stamp context with user_id, cli_session_id, and optional operator session info (for MCP proxying)
+		// Stamp context with user_id and cli_session_id. Operator identity
+		// is stamped from the persisted session binding — never from
+		// request headers, which are client-controlled and not
+		// authoritative.
 		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, cliSession.UserID)
 		ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, cliSessionID)
-		if opID := r.Header.Get(constants.HeaderOperatorID); opID != "" {
-			ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, opID)
-		}
-		if opSessionID := r.Header.Get(constants.HeaderOperatorSessionID); opSessionID != "" {
-			ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, opSessionID)
+
+		headerOpID := r.Header.Get(constants.HeaderOperatorID)
+		headerOpSessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+
+		if cliSession.OperatorSessionID != "" {
+			op, err := s.ValidateOperatorSession(cliSession.OperatorSessionID)
+			if err != nil {
+				if ae, ok := err.(*AuthError); ok {
+					s.logger.Warn("gateway: auth: persisted operator binding invalid", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
+					s.responder.Error(w, ae.Status, ae.Message)
+				} else {
+					s.logger.Error("gateway: auth: resolve persisted operator binding", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
+					s.responder.Error(w, http.StatusInternalServerError, constants.ErrIdentityValidationFailed.Error())
+				}
+				return true
+			}
+			if (headerOpID != "" && headerOpID != op.ID) || (headerOpSessionID != "" && headerOpSessionID != cliSession.OperatorSessionID) {
+				s.logger.Warn("gateway: auth: operator headers mismatch persisted CLI session binding",
+					"path", r.URL.Path,
+					"cli_session_id", cliSessionID,
+					"persisted_operator_session_id", safeTruncateID(cliSession.OperatorSessionID, 8))
+				s.responder.Error(w, http.StatusForbidden, constants.ErrOperatorBindingMismatch.Error())
+				return true
+			}
+			ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, op.ID)
+			ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, cliSession.OperatorSessionID)
+		} else if headerOpID != "" || headerOpSessionID != "" {
+			// No persisted binding: the caller must not assert an operator
+			// identity the session does not carry.
+			s.logger.Warn("gateway: auth: operator headers sent but CLI session has no operator binding", "path", r.URL.Path, "cli_session_id", cliSessionID)
+			s.responder.Error(w, http.StatusForbidden, constants.ErrOperatorBindingMismatch.Error())
+			return true
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 		return true

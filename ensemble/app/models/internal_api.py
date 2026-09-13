@@ -203,8 +203,7 @@ class OperatorSlotCreationRequest(G8eBaseModel):
         ..., description="Request context with session/user/organization identity"
     )
     slot_number: int = Field(..., description="Slot number")
-    operator_type: str = Field(..., description="Operator type (CLOUD, SYSTEM)")
-    cloud_subtype: str | None = Field(default=None, description="Cloud operator subtype")
+    operator_type: str = Field(..., description="Operator type (EMBEDDED, REMOTE)")
     name_prefix: str = Field(default="operator", description="Name prefix")
 
 
@@ -381,7 +380,7 @@ class OperatorDeviceLinkRegisterRequest(G8eBaseModel):
     operator_id: str | None = Field(
         default=None, description="Operator ID (optional if creating on-demand)"
     )
-    operator_type: str = Field(default="SYSTEM", description="Operator type")
+    operator_type: str = Field(default="REMOTE", description="Operator type")
     device_link_token: str | None = Field(
         default=None, description="Device link token for on-demand slot creation"
     )

@@ -84,7 +84,7 @@ type GatewayModeService struct {
 	platformEnrollmentSvc *PlatformEnrollmentService
 	consensusSvc          *consensus.ConsensusService
 	dispatchSvc           *DispatchService
-	inferenceDispatchSvc   *dispatch.DispatchService
+	inferenceDispatchSvc  *dispatch.DispatchService
 	observeProducer       *ObserveProducerService
 	responder             *response.Writer
 	server                *http.Server
@@ -208,6 +208,14 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	cliSessionSvc := NewCLISessionService(docStore, logger)
 	operatorSessionSvc := NewOperatorSessionService(docStore, logger)
 	webSessionSvc := NewWebSessionService(docStore, logger)
+
+	// Register the pending embedded-operator document. The gateway's
+	// in-process operator substrate is enrolled and bound only by the
+	// explicit first-user enrollment act; until then it exists as an
+	// unclaimed pending record. Idempotent across restarts.
+	if err := registerPendingEmbeddedOperator(docStore, logger); err != nil {
+		return nil, err
+	}
 
 	// --- Certificate identity and PKI initialization ---
 	extraIPs, extraDNSNames, err := resolveGatewayCertificateIdentity(cfg.Gateway.CertMode, cfg.Gateway.NetworkIdentityFile, network.NewDetector(logger), logger)
@@ -414,6 +422,8 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		Service:            passkey,
 		WebSessionSvc:      webSessionSvc,
 		EnrollmentTokenSvc: enrollmentTokenSvc,
+		OperatorBinder:     reg,
+		OperatorClaimer:    newEmbeddedOperatorService(docStore, operatorSessionSvc),
 		Responder:          res,
 		MaxPayload:         cfg.Gateway.MaxPayloadBytes,
 		Orchestrator:       passkeyOrchestrator,
@@ -678,6 +688,10 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			OperatorSessionSvc: operatorSessionSvc,
 			UserSvc:            userSvc,
 			Responder:          ls.responder,
+		},
+		CLISessionControllerDeps: CLISessionControllerDeps{
+			Logger:    logger,
+			Responder: ls.responder,
 		},
 		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
 			Cfg:                cfg,

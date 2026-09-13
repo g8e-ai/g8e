@@ -16,7 +16,6 @@ from app.constants import (
     INVESTIGATION_LOOKUP_MAX_RETRIES,
     INVESTIGATION_LOOKUP_RETRY_DELAYS_MS,
     OperatorStatus,
-    OperatorType,
 )
 from app.errors import ExternalServiceError, ResourceNotFoundError
 from app.models.agent import OperatorContext
@@ -501,8 +500,6 @@ def extract_single_operator_context(op: OperatorDocument) -> OperatorContext:
         memory_mb=system_identity.memory_mb if system_identity else None,
         public_ip=network.public_ip if network else None,
         operator_type=op.operator_type,
-        cloud_subtype=op.cloud_subtype,
-        is_cloud_operator=op.operator_type == OperatorType.CLOUD,
         granted_intents=op.granted_intents,
         distro=os_details.distro if os_details else None,
         kernel=os_details.kernel if os_details else None,
@@ -541,7 +538,7 @@ def extract_system_context(
     logger.info(
         "[CONTEXT] Primary operator context: operator_id=%s hostname=%s os=%s "
         "arch=%s memory_mb=%s cpu_count=%s public_ip=%s operator_type=%s "
-        "is_cloud=%s granted_intents=%s username=%s uid=%s shell=%s working_dir=%s",
+        "granted_intents=%s username=%s uid=%s shell=%s working_dir=%s",
         context.operator_id,
         context.hostname,
         context.os,
@@ -550,7 +547,6 @@ def extract_system_context(
         context.cpu_count,
         context.public_ip,
         context.operator_type,
-        context.is_cloud_operator,
         context.granted_intents or [],
         context.username,
         context.uid,
@@ -577,14 +573,13 @@ def extract_all_operators_context(
         context = extract_single_operator_context(operator_doc)
         logger.info(
             "[CONTEXT] Operator[%d] context: operator_id=%s hostname=%s os=%s "
-            "arch=%s operator_type=%s is_cloud=%s granted_intents=%s",
+            "arch=%s operator_type=%s granted_intents=%s",
             len(contexts),
             context.operator_id,
             context.hostname,
             context.os,
             context.architecture,
             context.operator_type,
-            context.is_cloud_operator,
             context.granted_intents or [],
         )
         contexts.append(context)

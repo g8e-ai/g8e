@@ -154,11 +154,13 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	passkeyOrchestrator, err := NewPasskeyOrchestrator(nil, suspendedTxService, sseStore, pubsub, logger)
 	require.NoError(t, err)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:       passkey,
-		WebSessionSvc: webSessionSvc,
-		Responder:     resp,
-		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
-		Orchestrator:  passkeyOrchestrator,
+		Service:         passkey,
+		WebSessionSvc:   webSessionSvc,
+		OperatorBinder:  reg,
+		OperatorClaimer: newEmbeddedOperatorService(docStore, operatorSessionSvc),
+		Responder:       resp,
+		MaxPayload:      cfg.Gateway.MaxPayloadBytes,
+		Orchestrator:    passkeyOrchestrator,
 	})
 
 	return &TestInfrastructure{

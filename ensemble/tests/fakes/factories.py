@@ -275,7 +275,7 @@ def build_minimal_operator_document(
     user_id: str | None = None,
     status: OperatorStatus = OperatorStatus.BOUND,
     hostname: str = "test-host",
-    operator_type: OperatorType = OperatorType.SYSTEM,
+    operator_type: OperatorType = OperatorType.REMOTE,
 ) -> OperatorDocument:
     """Build an OperatorDocument with minimal defaults for unit/safety tests.
 
@@ -314,7 +314,7 @@ def build_minimal_operator_document(
 def build_production_operator_document(
     operator_id: str | None = None,
     hostname: str = "eval-node-01",
-    operator_type: OperatorType = OperatorType.SYSTEM,
+    operator_type: OperatorType = OperatorType.REMOTE,
 ) -> OperatorDocument:
     """Build a production-like OperatorDocument for evaluation and benchmark tests.
 

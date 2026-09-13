@@ -174,8 +174,8 @@ func TestPlatformEnrollment_ApproveAndIssue_GatewayOriginBecomesActiveOperator(t
 		"gateway-as-operator doc must carry the approving owner's user_id")
 	assert.Equal(t, constants.OperatorStatusActive, op.Status,
 		"gateway-as-operator must be active after issuance")
-	assert.Equal(t, constants.OperatorTypeSystem, op.OperatorType,
-		"gateway-as-operator type must be system")
+	assert.Equal(t, constants.OperatorTypeRemote, op.OperatorType,
+		"gateway-as-operator type must be remote")
 	assert.True(t, op.Claimed, "gateway-as-operator must be claimed")
 	assert.Equal(t, gatewayHostname, op.Name,
 		"gateway-as-operator name must match the enrollment hostname")

@@ -275,14 +275,7 @@ func (s *CredentialStore) Commit(ctx context.Context, staged *stagedIdentity) er
 		return err
 	}
 
-	// 3. Operator cert/key, when the enrollment path produced them.
-	if a.OperatorCertPEM != "" {
-		if err := s.writeOperatorCert(ctx, a); err != nil {
-			return err
-		}
-	}
-
-	// 4. Credentials JSON LAST.
+	// 3. Credentials JSON LAST.
 	creds := &Credentials{
 		OperatorSessionID: a.OperatorSessionID,
 		UserID:            a.UserID,
@@ -291,33 +284,6 @@ func (s *CredentialStore) Commit(ctx context.Context, staged *stagedIdentity) er
 	}
 	if err := SaveCredentials(s.fileSvc, s.cfg, creds); err != nil {
 		return err
-	}
-	return nil
-}
-
-// writeOperatorCert writes the operator cert (and key, when present) to
-// the configured operator cert/key paths. Operator artifacts are optional
-// for local CLI enrollment (bootstrap produces them; rotation does not).
-func (s *CredentialStore) writeOperatorCert(ctx context.Context, a EnrollmentArtifacts) error {
-	opCertRel, err := s.fileSvc.RelFromAbs(s.cfg.OperatorCertFile())
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-	certContent := []byte(a.OperatorCertPEM)
-	if a.OperatorCertChainPEM != "" {
-		certContent = append(certContent, []byte("\n"+a.OperatorCertChainPEM)...)
-	}
-	if err := s.fileSvc.WriteFile(ctx, opCertRel, certContent, constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-	if a.OperatorKeyPEM != "" {
-		opKeyRel, err := s.fileSvc.RelFromAbs(s.cfg.OperatorKeyFile())
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-		}
-		if err := s.fileSvc.WriteFile(ctx, opKeyRel, []byte(a.OperatorKeyPEM), constants.PermFilePrivate); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-		}
 	}
 	return nil
 }

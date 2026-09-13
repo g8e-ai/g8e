@@ -149,7 +149,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 	// intact), look up the user's active operator session to inherit its
 	// binding. If no active operator session exists, return a clear actionable
 	// error — the caller must re-enroll to establish a fresh operator binding.
-	var operatorSessionID, systemFingerprint, certFingerprint, certSerial, loginMethod string
+	var operatorSessionID, operatorID, systemFingerprint, certFingerprint, certSerial, loginMethod string
 	if oldSession != nil {
 		operatorSessionID = oldSession.OperatorSessionID
 		systemFingerprint = oldSession.SystemFingerprint
@@ -169,6 +169,8 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		}
 		if opSession == nil || opSession.ID != operatorSessionID {
 			operatorSessionID = ""
+		} else {
+			operatorID = opSession.OperatorID
 		}
 	}
 	if operatorSessionID == "" && c.operatorSessionSvc != nil {
@@ -183,6 +185,7 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		}
 		if opSession != nil {
 			operatorSessionID = opSession.ID
+			operatorID = opSession.OperatorID
 			if loginMethod == "" {
 				loginMethod = opSession.LoginMethod
 			}
@@ -228,9 +231,11 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 	)
 
 	c.responder.JSON(w, http.StatusCreated, models.CLIRefreshResponse{
-		Success:      true,
-		CLISessionID: newCLISessionID,
-		UserID:       userID,
+		Success:           true,
+		CLISessionID:      newCLISessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
+		OperatorID:        operatorID,
 	})
 }
 

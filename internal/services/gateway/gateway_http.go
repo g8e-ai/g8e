@@ -40,6 +40,7 @@ type HTTPHandlerDependencies struct {
 	CLIRecoveryControllerDeps        CLIRecoveryControllerDeps
 	CLIRotationControllerDeps        CLIRotationControllerDeps
 	CLIRefreshControllerDeps         CLIRefreshControllerDeps
+	CLISessionControllerDeps         CLISessionControllerDeps
 	EnrollmentTokenControllerDeps    EnrollmentTokenControllerDeps
 	UserControllerDeps               UserControllerDeps
 	SessionControllerDeps            SessionControllerDeps
@@ -77,6 +78,7 @@ type HTTPHandler struct {
 	cliRecoveryController     *CLIRecoveryController
 	cliRotationController     *CLIRotationController
 	cliRefreshController      *CLIRefreshController
+	cliSessionController      *CLISessionController
 	enrollmentTokenController *EnrollmentTokenController
 	userController            *UserController
 	sessionController         *SessionController
@@ -194,6 +196,12 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	if deps.CLIRefreshControllerDeps.Responder == nil {
 		deps.CLIRefreshControllerDeps.Responder = responder
 	}
+	if deps.CLISessionControllerDeps.Logger == nil {
+		deps.CLISessionControllerDeps.Logger = deps.Logger
+	}
+	if deps.CLISessionControllerDeps.Responder == nil {
+		deps.CLISessionControllerDeps.Responder = responder
+	}
 
 	h := &HTTPHandler{
 		cfg:                          deps.Cfg,
@@ -208,6 +216,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		cliRecoveryController:        newCLIRecoveryController(deps.CLIRecoveryControllerDeps),
 		cliRotationController:        newCLIRotationController(deps.CLIRotationControllerDeps),
 		cliRefreshController:         newCLIRefreshController(deps.CLIRefreshControllerDeps),
+		cliSessionController:         newCLISessionController(deps.CLISessionControllerDeps),
 		enrollmentTokenController:    newEnrollmentTokenController(deps.EnrollmentTokenControllerDeps),
 		userController:               newUserController(deps.UserControllerDeps),
 		sessionController:            newSessionController(deps.SessionControllerDeps),

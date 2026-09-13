@@ -32,7 +32,6 @@ type OperatorRegistrationRequest struct {
 
 // BootstrapRequest is the inbound body for /api/v1/auth/bootstrap.
 type BootstrapRequest struct {
-	CSR               string       `json:"csr_pem"`
 	CLICSR            string       `json:"cli_csr_pem,omitempty"`
 	SystemFingerprint string       `json:"system_fingerprint"`
 	LocalOSUser       *LocalOSUser `json:"local_os_user,omitempty"`
@@ -127,7 +126,6 @@ type OperatorDocumentGo struct {
 	IsSlot               bool                     `json:"is_slot"`
 	Claimed              bool                     `json:"claimed"`
 	OperatorType         constants.OperatorType   `json:"operator_type,omitempty"`
-	CloudSubtype         constants.CloudSubtype   `json:"cloud_subtype,omitempty"`
 	SystemFingerprint    string                   `json:"system_fingerprint,omitempty"`
 	CreatedAt            time.Time                `json:"created_at"`
 	UpdatedAt            time.Time                `json:"updated_at"`
@@ -136,26 +134,6 @@ type OperatorDocumentGo struct {
 	LatestHeartbeat      json.RawMessage          `json:"latest_heartbeat_snapshot,omitempty"`
 	RuntimeConfig        *RuntimeConfig           `json:"runtime_config,omitempty"`
 	ConsumedByOperatorID string                   `json:"consumed_by_operator_id,omitempty"`
-}
-
-// MarshalJSON implements json.Marshaler with default enum values.
-// Ensures OperatorType and CloudSubtype are defaulted before serialization
-// to eliminate the need for coercion logic in downstream consumers (e.g., Python agent).
-func (o *OperatorDocumentGo) MarshalJSON() ([]byte, error) {
-	type Alias OperatorDocumentGo
-	defaulted := &struct {
-		*Alias
-	}{
-		Alias: (*Alias)(o),
-	}
-
-	// Apply defaults for enum fields
-	if defaulted.OperatorType == "" {
-		defaulted.OperatorType = constants.OperatorTypeSystem
-	}
-	// CloudSubtype defaults to empty string (no default subtype)
-
-	return json.Marshal(defaulted)
 }
 
 type OperatorSlotResponse struct {
@@ -664,7 +642,24 @@ type CLIRefreshRequest struct{}
 
 // CLIRefreshResponse is the wire response for POST /api/v1/auth/cli/refresh.
 type CLIRefreshResponse struct {
-	Success      bool   `json:"success"`
-	CLISessionID string `json:"cli_session_id"`
-	UserID       string `json:"user_id"`
+	Success           bool   `json:"success"`
+	CLISessionID      string `json:"cli_session_id"`
+	UserID            string `json:"user_id"`
+	OperatorSessionID string `json:"operator_session_id,omitempty"`
+	OperatorID        string `json:"operator_id,omitempty"`
+}
+
+// CLISessionInfoResponse is the wire response for
+// GET /api/v1/auth/cli/session. It reports the authenticated CLI session's
+// persisted identity binding verbatim: the operator session the session was
+// bound to at issuance (bootstrap, refresh, or recovery completion) and the
+// operator document it resolves to. OperatorSessionID and OperatorID are
+// empty when the session has no operator binding; the caller (the CLI's
+// `auth context`) decides whether an unbound session is actionable.
+type CLISessionInfoResponse struct {
+	Success           bool   `json:"success"`
+	CLISessionID      string `json:"cli_session_id"`
+	UserID            string `json:"user_id"`
+	OperatorSessionID string `json:"operator_session_id,omitempty"`
+	OperatorID        string `json:"operator_id,omitempty"`
 }

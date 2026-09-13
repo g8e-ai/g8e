@@ -609,7 +609,7 @@ class SetTargetContextResult(_message.Message):
     def __init__(self, success: _Optional[bool] = ..., operator_id: _Optional[str] = ..., error: _Optional[str] = ...) -> None: ...
 
 class OperatorDocument(_message.Message):
-    __slots__ = ("id", "user_id", "organization_id", "component", "name", "status", "operator_session_id", "bound_web_session_id", "operator_cert", "operator_cert_serial", "slot_number", "is_slot", "claimed", "operator_type", "cloud_subtype", "system_fingerprint", "created_at_unix_ms", "updated_at_unix_ms")
+    __slots__ = ("id", "user_id", "organization_id", "component", "name", "status", "operator_session_id", "bound_web_session_id", "operator_cert", "operator_cert_serial", "slot_number", "is_slot", "claimed", "operator_type", "system_fingerprint", "created_at_unix_ms", "updated_at_unix_ms")
     ID_FIELD_NUMBER: _ClassVar[int]
     USER_ID_FIELD_NUMBER: _ClassVar[int]
     ORGANIZATION_ID_FIELD_NUMBER: _ClassVar[int]
@@ -624,7 +624,6 @@ class OperatorDocument(_message.Message):
     IS_SLOT_FIELD_NUMBER: _ClassVar[int]
     CLAIMED_FIELD_NUMBER: _ClassVar[int]
     OPERATOR_TYPE_FIELD_NUMBER: _ClassVar[int]
-    CLOUD_SUBTYPE_FIELD_NUMBER: _ClassVar[int]
     SYSTEM_FINGERPRINT_FIELD_NUMBER: _ClassVar[int]
     CREATED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
     UPDATED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
@@ -642,11 +641,10 @@ class OperatorDocument(_message.Message):
     is_slot: bool
     claimed: bool
     operator_type: str
-    cloud_subtype: str
     system_fingerprint: str
     created_at_unix_ms: int
     updated_at_unix_ms: int
-    def __init__(self, id: _Optional[str] = ..., user_id: _Optional[str] = ..., organization_id: _Optional[str] = ..., component: _Optional[str] = ..., name: _Optional[str] = ..., status: _Optional[str] = ..., operator_session_id: _Optional[str] = ..., bound_web_session_id: _Optional[str] = ..., operator_cert: _Optional[str] = ..., operator_cert_serial: _Optional[str] = ..., slot_number: _Optional[int] = ..., is_slot: _Optional[bool] = ..., claimed: _Optional[bool] = ..., operator_type: _Optional[str] = ..., cloud_subtype: _Optional[str] = ..., system_fingerprint: _Optional[str] = ..., created_at_unix_ms: _Optional[int] = ..., updated_at_unix_ms: _Optional[int] = ...) -> None: ...
+    def __init__(self, id: _Optional[str] = ..., user_id: _Optional[str] = ..., organization_id: _Optional[str] = ..., component: _Optional[str] = ..., name: _Optional[str] = ..., status: _Optional[str] = ..., operator_session_id: _Optional[str] = ..., bound_web_session_id: _Optional[str] = ..., operator_cert: _Optional[str] = ..., operator_cert_serial: _Optional[str] = ..., slot_number: _Optional[int] = ..., is_slot: _Optional[bool] = ..., claimed: _Optional[bool] = ..., operator_type: _Optional[str] = ..., system_fingerprint: _Optional[str] = ..., created_at_unix_ms: _Optional[int] = ..., updated_at_unix_ms: _Optional[int] = ...) -> None: ...
 
 class ShutdownRequested(_message.Message):
     __slots__ = ("reason",)

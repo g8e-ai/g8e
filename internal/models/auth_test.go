@@ -19,10 +19,10 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// OperatorDocumentGo.MarshalJSON
+// OperatorDocumentGo JSON marshaling
 // ---------------------------------------------------------------------------
 
-func TestOperatorDocumentGoMarshalJSON_DefaultsOperatorTypeToSystem(t *testing.T) {
+func TestOperatorDocumentGoMarshalJSON_OmitsUnsetOperatorType(t *testing.T) {
 	t.Parallel()
 
 	doc := OperatorDocumentGo{
@@ -38,47 +38,32 @@ func TestOperatorDocumentGoMarshalJSON_DefaultsOperatorTypeToSystem(t *testing.T
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(data, &decoded))
 
-	assert.Equal(t, string(constants.OperatorTypeSystem), decoded["operator_type"])
+	// All writers must set operator_type explicitly; an unset type is
+	// omitted rather than silently defaulted.
+	_, ok := decoded["operator_type"]
+	assert.False(t, ok)
 }
 
 func TestOperatorDocumentGoMarshalJSON_PreservesExplicitOperatorType(t *testing.T) {
 	t.Parallel()
 
-	doc := OperatorDocumentGo{
-		ID:           "op-2",
-		UserID:       "user-2",
-		Component:    constants.ComponentNameG8EO,
-		Status:       constants.OperatorStatusActive,
-		OperatorType: constants.OperatorTypeCloud,
+	for _, opType := range []constants.OperatorType{constants.OperatorTypeEmbedded, constants.OperatorTypeRemote} {
+		doc := OperatorDocumentGo{
+			ID:           "op-2",
+			UserID:       "user-2",
+			Component:    constants.ComponentNameG8EO,
+			Status:       constants.OperatorStatusActive,
+			OperatorType: opType,
+		}
+
+		data, err := json.Marshal(&doc)
+		require.NoError(t, err)
+
+		var decoded map[string]any
+		require.NoError(t, json.Unmarshal(data, &decoded))
+
+		assert.Equal(t, string(opType), decoded["operator_type"])
 	}
-
-	data, err := json.Marshal(&doc)
-	require.NoError(t, err)
-
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(data, &decoded))
-
-	assert.Equal(t, string(constants.OperatorTypeCloud), decoded["operator_type"])
-}
-
-func TestOperatorDocumentGoMarshalJSON_PreservesCloudSubtype(t *testing.T) {
-	t.Parallel()
-
-	doc := OperatorDocumentGo{
-		ID:           "op-3",
-		UserID:       "user-3",
-		Component:    constants.ComponentNameG8EO,
-		Status:       constants.OperatorStatusActive,
-		CloudSubtype: constants.CloudSubtypeAWS,
-	}
-
-	data, err := json.Marshal(&doc)
-	require.NoError(t, err)
-
-	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(data, &decoded))
-
-	assert.Equal(t, string(constants.CloudSubtypeAWS), decoded["cloud_subtype"])
 }
 
 func TestOperatorDocumentGoMarshalJSON_RoundTrip(t *testing.T) {
@@ -90,8 +75,7 @@ func TestOperatorDocumentGoMarshalJSON_RoundTrip(t *testing.T) {
 		Component:    constants.ComponentNameG8EO,
 		Name:         "test-operator",
 		Status:       constants.OperatorStatusActive,
-		OperatorType: constants.OperatorTypeCloud,
-		CloudSubtype: constants.CloudSubtypeAzure,
+		OperatorType: constants.OperatorTypeRemote,
 		IsSlot:       true,
 		Claimed:      false,
 	}
@@ -108,7 +92,6 @@ func TestOperatorDocumentGoMarshalJSON_RoundTrip(t *testing.T) {
 	assert.Equal(t, doc.Name, decoded.Name)
 	assert.Equal(t, doc.Status, decoded.Status)
 	assert.Equal(t, doc.OperatorType, decoded.OperatorType)
-	assert.Equal(t, doc.CloudSubtype, decoded.CloudSubtype)
 	assert.Equal(t, doc.IsSlot, decoded.IsSlot)
 	assert.Equal(t, doc.Claimed, decoded.Claimed)
 }

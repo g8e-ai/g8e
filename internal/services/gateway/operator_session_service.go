@@ -67,11 +67,15 @@ func (s *OperatorSessionService) PersistOperatorSession(operatorSessionID, userI
 	return nil
 }
 
-// GetActiveSessionForUser returns the first active operator session for the
-// given user ID, or nil if none exists. Used by the CLI refresh controller
-// to inherit an operator binding when the old CLI session is missing (e.g.,
-// after a gateway volume reset that wiped CLI sessions but left operator
-// sessions intact).
+// GetActiveSessionForUser returns the active operator session the CLI
+// should bind to for the given user ID, or nil if none exists. Used by the
+// CLI refresh controller to inherit an operator binding when the old CLI
+// session is missing (e.g., after a gateway volume reset that wiped CLI
+// sessions but left operator sessions intact).
+//
+// When multiple active sessions exist, the session bound to the gateway's
+// embedded operator is preferred — the embedded operator is the canonical
+// local binding — otherwise the newest session wins.
 func (s *OperatorSessionService) GetActiveSessionForUser(userID string) (*models.OperatorSession, error) {
 	userIDVal, err := json.Marshal(userID)
 	if err != nil {
@@ -88,7 +92,7 @@ func (s *OperatorSessionService) GetActiveSessionForUser(userID string) (*models
 			{Field: "is_active", Op: "==", Value: activeVal},
 		},
 		"created_at DESC",
-		1,
+		0,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query active operator sessions for user %s: %w", userID, err)
@@ -96,7 +100,25 @@ func (s *OperatorSessionService) GetActiveSessionForUser(userID string) (*models
 	if len(docs) == 0 {
 		return nil, nil
 	}
-	dataBytes, err := json.Marshal(docs[0].Data)
+
+	embedded := string(constants.DocIDEmbeddedOperator)
+	selected := docs[0] // newest by created_at DESC
+	for _, doc := range docs {
+		dataBytes, err := json.Marshal(doc.Data)
+		if err != nil {
+			return nil, fmt.Errorf("marshal operator session document: %w", err)
+		}
+		var session models.OperatorSession
+		if err := json.Unmarshal(dataBytes, &session); err != nil {
+			return nil, fmt.Errorf("unmarshal operator session: %w", err)
+		}
+		if session.OperatorID == embedded {
+			selected = doc
+			break
+		}
+	}
+
+	dataBytes, err := json.Marshal(selected.Data)
 	if err != nil {
 		return nil, fmt.Errorf("marshal operator session document: %w", err)
 	}
@@ -104,6 +126,6 @@ func (s *OperatorSessionService) GetActiveSessionForUser(userID string) (*models
 	if err := json.Unmarshal(dataBytes, &session); err != nil {
 		return nil, fmt.Errorf("unmarshal operator session: %w", err)
 	}
-	session.ID = docs[0].ID
+	session.ID = selected.ID
 	return &session, nil
 }
