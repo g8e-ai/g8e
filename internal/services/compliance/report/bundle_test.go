@@ -153,6 +153,10 @@ func (s *recordingBundleFileService) Stat(context.Context, string) (os.FileInfo,
 	panic("unexpected Stat")
 }
 
+func (s *recordingBundleFileService) Lstat(context.Context, string) (os.FileInfo, error) {
+	panic("unexpected Lstat")
+}
+
 func (s *recordingBundleFileService) WriteFile(_ context.Context, relPath string, data []byte, _ os.FileMode) error {
 	s.writes = append(s.writes, relPath)
 	if relPath == s.writeErrPath {

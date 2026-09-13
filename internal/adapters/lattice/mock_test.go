@@ -198,8 +198,11 @@ func (m *mockFileSvc) FileExists(ctx context.Context, relPath string) (bool, err
 	return false, nil
 }
 func (m *mockFileSvc) Stat(ctx context.Context, relPath string) (os.FileInfo, error) { return nil, nil }
-func (m *mockFileSvc) Remove(ctx context.Context, relPath string) error              { return nil }
-func (m *mockFileSvc) RemoveAll(ctx context.Context, relPath string) error           { return nil }
+func (m *mockFileSvc) Lstat(ctx context.Context, relPath string) (os.FileInfo, error) {
+	return nil, nil
+}
+func (m *mockFileSvc) Remove(ctx context.Context, relPath string) error    { return nil }
+func (m *mockFileSvc) RemoveAll(ctx context.Context, relPath string) error { return nil }
 func (m *mockFileSvc) ReadDir(ctx context.Context, relPath string) ([]os.DirEntry, error) {
 	return nil, nil
 }

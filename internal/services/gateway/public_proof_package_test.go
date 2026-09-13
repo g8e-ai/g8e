@@ -71,7 +71,7 @@ func TestBuildProofPackage_CreatesCompletePackage(t *testing.T) {
 		{
 			Filename:    "campaign-projections.jsonl",
 			MediaType:   "application/json",
-			Content:     []byte(`{"campaign_id":"c1","variant_id":"v1"}\n`),
+			Content:     []byte("{\"campaign_id\":\"c1\",\"variant_id\":\"v1\"}\n"),
 			CampaignID:  "c1",
 			SourceRunID: "run-1",
 		},
