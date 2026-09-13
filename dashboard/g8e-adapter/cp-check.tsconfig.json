@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "isolatedModules": true
   },
-  "include": ["contract-pack/models.ts"]
+  "include": ["contract-pack/models.ts", "contract-pack/public/models.ts"]
 }

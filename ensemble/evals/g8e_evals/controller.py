@@ -5,13 +5,12 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Fixture-driven continuous controller core (CONT-CORE).
+"""Finite attended evaluation controller.
 
-A small explicit controller that orchestrates existing commands over one
-frozen cycle manifest. It does not recreate campaign, verifier, projector,
-promoter, or outbox semantics; it composes pluggable handlers that own
-those concerns. In Phase 2 the handlers are stubs; in Phase 7 (CONT-1) the
-real command handlers are wired in.
+The controller orchestrates existing commands over one owner-approved,
+content-addressed cycle manifest. It does not recreate campaign, verifier,
+projector, promoter, or public outbox semantics; the attended CLI composes
+closed command adapters for those concerns.
 
 The controller lifecycle for one cycle:
 
@@ -44,19 +43,24 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import time
 from enum import StrEnum
-from pathlib import Path
-from typing import Protocol, Self
+from pathlib import Path, PurePosixPath
+from typing import Literal, Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from g8e_evals.candidate_digest import CandidateDigestError, compute_candidate_tree_digest
 from g8e_evals.constants import (
     CONTROLLER_STATE_JSON,
+    CONTROLLER_STOP_REQUEST_JSON,
+    CONTROLLER_TRANSITIONS_JSONL,
     CYCLE_MANIFEST_JSON,
     OUTBOX_ENTRIES_DIR,
     OUTBOX_INDEX_JSONL,
 )
+from g8e_evals.replacement_rule import ReplacementManifestRule, compute_replacement_child_id
 
 
 CONTROLLER_SCHEMA_VERSION = "1.0.0"
@@ -80,6 +84,12 @@ def _canonical_json(data: object) -> str:
 
 def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _validate_relative_path(value: str) -> None:
+    path = PurePosixPath(value)
+    if path.is_absolute() or value != path.as_posix() or any(part in {"", ".", ".."} for part in path.parts):
+        raise ValueError(f"controller path must be a safe relative path: {value!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +164,11 @@ class StopConditions(BaseModel):
         ge=0,
         description="Maximum disk usage in GB across the report root. None disables the check.",
     )
+    min_free_disk_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description="Minimum free bytes required on the report filesystem. None disables the check.",
+    )
     stop_on_verifier_failure: bool = Field(
         default=True,
         description="Safety-stop when aggregate verification fails.",
@@ -214,6 +229,7 @@ class ChildCommand(BaseModel):
 
     @model_validator(mode="after")
     def _validate_command(self) -> Self:
+        _validate_relative_path(self.report_dir)
         expected = compute_child_command_hash(self)
         if self.content_hash != expected:
             raise ValueError(
@@ -284,6 +300,8 @@ class CycleManifest(BaseModel):
 
     @model_validator(mode="after")
     def _validate_manifest(self) -> Self:
+        _validate_relative_path(self.report_root)
+        _validate_relative_path(self.outbox_dir)
         child_ids = [c.child_id for c in self.children]
         if len(child_ids) != len(set(child_ids)):
             raise ValueError(f"duplicate child_id in cycle manifest: {child_ids}")
@@ -350,6 +368,11 @@ class ControllerState(BaseModel):
         default_factory=list,
         description="Children interrupted by a safety stop (dead evidence).",
     )
+    budget_spent_usd: float = Field(
+        default=0.0,
+        ge=0,
+        description="Observed provider cost accumulated across completed child attempts.",
+    )
     stop_reason: StopReason | None = Field(
         default=None,
         description="Reason the controller stopped, if stopped.",
@@ -370,6 +393,48 @@ class ControllerState(BaseModel):
                 f"controller state content_hash mismatch: "
                 f"declared {self.content_hash!r}, computed {expected!r}"
             )
+        return self
+
+
+class ControllerTransition(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    sequence: int = Field(ge=1)
+    controller_id: str = Field(min_length=1)
+    cycle_id: str = Field(min_length=1)
+    previous_transition_hash: str = Field(min_length=64, max_length=64)
+    state_hash: str = Field(min_length=64, max_length=64)
+    status: ControllerStatus
+    current_child_id: str | None = None
+    recorded_at: str = Field(min_length=1)
+    content_hash: str = Field(min_length=64, max_length=64)
+
+    @model_validator(mode="after")
+    def _validate_transition(self) -> Self:
+        data = self.model_dump(mode="json")
+        data.pop("content_hash", None)
+        expected = _sha256(_canonical_json(data))
+        if self.content_hash != expected:
+            raise ValueError("controller transition content_hash mismatch")
+        return self
+
+
+class ControllerStopRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    controller_id: str = Field(min_length=1)
+    cycle_id: str = Field(min_length=1)
+    immediate: bool
+    requested_at: str = Field(min_length=1)
+    content_hash: str = Field(min_length=64, max_length=64)
+
+    @model_validator(mode="after")
+    def _validate_request(self) -> Self:
+        data = self.model_dump(mode="json")
+        data.pop("content_hash", None)
+        expected = _sha256(_canonical_json(data))
+        if self.content_hash != expected:
+            raise ValueError("controller stop request content_hash mismatch")
         return self
 
 
@@ -417,6 +482,8 @@ class OutboxEntry(BaseModel):
 
     @model_validator(mode="after")
     def _validate_entry(self) -> Self:
+        if PurePosixPath(self.entry_id).name != self.entry_id or self.entry_id in {".", ".."}:
+            raise ValueError("outbox entry_id must be a safe filename")
         expected = compute_outbox_entry_hash(self)
         if self.content_hash != expected:
             raise ValueError(
@@ -424,6 +491,13 @@ class OutboxEntry(BaseModel):
                 f"declared {self.content_hash!r}, computed {expected!r}"
             )
         return self
+
+
+class OutboxIndexRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    entry_id: str = Field(min_length=1)
+    action: Literal["enqueue", "attempt", "published"]
 
 
 class Outbox:
@@ -452,22 +526,30 @@ class Outbox:
 
     def enqueue(self, entry: OutboxEntry) -> None:
         """Append one entry to the durable outbox index and payload."""
+        enqueue_order, _, _ = self._read_index()
         payload_path = self._entries_dir / f"{entry.entry_id}.json"
-        if payload_path.exists():
+        if entry.entry_id in enqueue_order or payload_path.exists():
             raise ValueError(f"outbox entry already exists: {entry.entry_id}")
         payload_path.write_text(_canonical_json(entry.model_dump(mode="json", by_alias=True)))
-        with self._index_path.open("a") as f:
-            f.write(_canonical_json({"entry_id": entry.entry_id, "action": "enqueue"}) + "\n")
+        self._append_index(entry.entry_id, "enqueue")
 
     def mark_published(self, entry_id: str) -> None:
         """Append a publication-success record to the durable outbox index."""
-        with self._index_path.open("a") as f:
-            f.write(_canonical_json({"entry_id": entry_id, "action": "published"}) + "\n")
+        enqueue_order, published, _ = self._read_index()
+        if entry_id not in enqueue_order:
+            raise ValueError(f"outbox entry is not enqueued: {entry_id}")
+        if entry_id in published:
+            raise ValueError(f"outbox entry is already published: {entry_id}")
+        self._append_index(entry_id, "published")
 
     def mark_attempt(self, entry_id: str) -> None:
         """Append a publication-attempt record to the durable outbox index."""
-        with self._index_path.open("a") as f:
-            f.write(_canonical_json({"entry_id": entry_id, "action": "attempt"}) + "\n")
+        enqueue_order, published, _ = self._read_index()
+        if entry_id not in enqueue_order:
+            raise ValueError(f"outbox entry is not enqueued: {entry_id}")
+        if entry_id in published:
+            raise ValueError(f"published outbox entry cannot be attempted: {entry_id}")
+        self._append_index(entry_id, "attempt")
 
     def recover(self) -> list[OutboxEntry]:
         """Read the full index and return unpublished entries in enqueue order.
@@ -477,79 +559,72 @@ class Outbox:
         order they were enqueued. Each returned entry has its
         ``publication_attempts`` updated from the index.
         """
-        if not self._index_path.exists():
-            return []
-        enqueue_order: list[str] = []
-        published: set[str] = set()
-        attempts: dict[str, int] = {}
-        for line in self._index_path.read_text().splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            record = json.loads(line)
-            entry_id = record["entry_id"]
-            action = record["action"]
-            if action == "enqueue":
-                if entry_id not in enqueue_order:
-                    enqueue_order.append(entry_id)
-            elif action == "published":
-                published.add(entry_id)
-            elif action == "attempt":
-                attempts[entry_id] = attempts.get(entry_id, 0) + 1
-        unpublished_ids = [eid for eid in enqueue_order if eid not in published]
-        entries: list[OutboxEntry] = []
-        for eid in unpublished_ids:
-            payload_path = self._entries_dir / f"{eid}.json"
-            if not payload_path.exists():
-                continue
-            data = json.loads(payload_path.read_text())
-            data["publication_attempts"] = attempts.get(eid, 0)
-            data["published"] = False
-            # Recompute hash since we mutated publication_attempts/published.
-            data["content_hash"] = _sha256(_canonical_json({
-                k: v for k, v in data.items() if k != "content_hash"
-            }))
-            entries.append(OutboxEntry.model_validate(data))
-        return entries
+        return [entry for entry in self._load_entries() if not entry.published]
 
     def all_entries(self) -> list[OutboxEntry]:
         """Return all entries in enqueue order, including published ones."""
-        if not self._index_path.exists():
-            return []
+        return self._load_entries()
+
+    def _append_index(self, entry_id: str, action: Literal["enqueue", "attempt", "published"]) -> None:
+        record = OutboxIndexRecord(entry_id=entry_id, action=action)
+        with self._index_path.open("a") as stream:
+            stream.write(_canonical_json(record.model_dump(mode="json")) + "\n")
+
+    def _read_index(self) -> tuple[list[str], set[str], dict[str, int]]:
         enqueue_order: list[str] = []
         published: set[str] = set()
         attempts: dict[str, int] = {}
         for line in self._index_path.read_text().splitlines():
-            line = line.strip()
-            if not line:
+            if not line.strip():
                 continue
-            record = json.loads(line)
-            entry_id = record["entry_id"]
-            action = record["action"]
-            if action == "enqueue":
-                if entry_id not in enqueue_order:
-                    enqueue_order.append(entry_id)
-            elif action == "published":
-                published.add(entry_id)
-            elif action == "attempt":
-                attempts[entry_id] = attempts.get(entry_id, 0) + 1
+            record = OutboxIndexRecord.model_validate_json(line)
+            if record.action == "enqueue":
+                if record.entry_id in enqueue_order:
+                    raise ValueError(f"duplicate outbox enqueue action: {record.entry_id}")
+                enqueue_order.append(record.entry_id)
+                attempts[record.entry_id] = 0
+                continue
+            if record.entry_id not in enqueue_order:
+                raise ValueError(f"outbox action precedes enqueue: {record.entry_id}")
+            if record.entry_id in published:
+                raise ValueError(f"outbox action follows publication: {record.entry_id}")
+            if record.action == "attempt":
+                attempts[record.entry_id] += 1
+            else:
+                published.add(record.entry_id)
+        return enqueue_order, published, attempts
+
+    def _load_entries(self) -> list[OutboxEntry]:
+        enqueue_order, published, attempts = self._read_index()
+        expected_payloads = {f"{entry_id}.json" for entry_id in enqueue_order}
+        actual_payloads: set[str] = set()
+        for path in self._entries_dir.iterdir():
+            if path.is_symlink() or not path.is_file():
+                raise ValueError(f"outbox payload is not a regular file: {path.name}")
+            actual_payloads.add(path.name)
+        if actual_payloads != expected_payloads:
+            missing = sorted(expected_payloads - actual_payloads)
+            unexpected = sorted(actual_payloads - expected_payloads)
+            if missing:
+                raise ValueError(f"outbox entry payload is missing: {missing}")
+            raise ValueError(f"outbox contains unexpected payloads: {unexpected}")
         entries: list[OutboxEntry] = []
-        for eid in enqueue_order:
-            payload_path = self._entries_dir / f"{eid}.json"
-            if not payload_path.exists():
-                continue
-            data = json.loads(payload_path.read_text())
-            data["publication_attempts"] = attempts.get(eid, 0)
-            data["published"] = eid in published
-            data["content_hash"] = _sha256(_canonical_json({
-                k: v for k, v in data.items() if k != "content_hash"
-            }))
+        for entry_id in enqueue_order:
+            payload = OutboxEntry.model_validate_json((self._entries_dir / f"{entry_id}.json").read_text())
+            if payload.entry_id != entry_id:
+                raise ValueError(f"outbox payload identity mismatch: {entry_id}")
+            if payload.publication_attempts != 0 or payload.published:
+                raise ValueError(f"outbox payload contains mutable status: {entry_id}")
+            data = payload.model_dump(mode="json")
+            data["publication_attempts"] = attempts[entry_id]
+            data["published"] = entry_id in published
+            data["content_hash"] = _sha256(_canonical_json({key: value for key, value in data.items() if key != "content_hash"}))
             entries.append(OutboxEntry.model_validate(data))
         return entries
 
 
 # ---------------------------------------------------------------------------
-# Handler protocols (pluggable; stubs in Phase 2, real in Phase 7)
+# Handler protocols
 # ---------------------------------------------------------------------------
 
 
@@ -572,6 +647,11 @@ class ChildResult(BaseModel):
     error: str | None = Field(
         default=None,
         description="Typed failure message when not ok.",
+    )
+    provider_cost_usd: float = Field(
+        default=0.0,
+        ge=0,
+        description="Observed provider cost recorded by the completed child report.",
     )
 
 
@@ -700,6 +780,183 @@ def save_controller_state(state: ControllerState, path: Path) -> None:
     Path(path).write_text(_canonical_json(state.model_dump(mode="json", by_alias=True)))
 
 
+def load_controller_transitions(path: Path) -> list[ControllerTransition]:
+    transitions: list[ControllerTransition] = []
+    if path.exists():
+        transitions = [
+            ControllerTransition.model_validate_json(line)
+            for line in path.read_text().splitlines()
+            if line.strip()
+        ]
+    for index, transition in enumerate(transitions):
+        if transition.sequence != index + 1:
+            raise ControllerError("controller transition sequence is not contiguous")
+        expected_previous = _ZERO_HASH if index == 0 else transitions[index - 1].content_hash
+        if transition.previous_transition_hash != expected_previous:
+            raise ControllerError("controller transition hash chain is invalid")
+    return transitions
+
+
+def _append_controller_transition(path: Path, state: ControllerState) -> ControllerTransition:
+    transitions = load_controller_transitions(path)
+    data = {
+        "sequence": len(transitions) + 1,
+        "controller_id": state.controller_id,
+        "cycle_id": state.cycle_id,
+        "previous_transition_hash": transitions[-1].content_hash if transitions else _ZERO_HASH,
+        "state_hash": state.content_hash,
+        "status": state.status,
+        "current_child_id": state.current_child_id,
+        "recorded_at": state.updated_at,
+    }
+    transition = ControllerTransition(**data, content_hash=_sha256(_canonical_json(data)))
+    with path.open("a") as stream:
+        stream.write(_canonical_json(transition.model_dump(mode="json")) + "\n")
+    return transition
+
+
+def request_controller_stop(work_dir: Path, *, immediate: bool) -> ControllerStopRequest:
+    root = Path(work_dir)
+    state = load_controller_state(root / CONTROLLER_STATE_JSON)
+    if state.status not in {ControllerStatus.IDLE, ControllerStatus.RUNNING, ControllerStatus.GRACEFUL_STOPPING}:
+        raise ControllerError(f"controller is not active: {state.status.value}")
+    path = root / CONTROLLER_STOP_REQUEST_JSON
+    if path.exists():
+        raise ControllerError("controller stop request already exists")
+    data = {
+        "controller_id": state.controller_id,
+        "cycle_id": state.cycle_id,
+        "immediate": immediate,
+        "requested_at": _now_iso(),
+    }
+    request = ControllerStopRequest(**data, content_hash=_sha256(_canonical_json(data)))
+    path.write_text(_canonical_json(request.model_dump(mode="json")))
+    return request
+
+
+def recover_interrupted_controller(work_dir: Path) -> ControllerState:
+    root = Path(work_dir)
+    state_path = root / CONTROLLER_STATE_JSON
+    state = load_controller_state(state_path)
+    if state.status not in {ControllerStatus.IDLE, ControllerStatus.RUNNING, ControllerStatus.GRACEFUL_STOPPING}:
+        raise ControllerError(f"controller is not recoverable: {state.status.value}")
+    interrupted = list(state.interrupted_children)
+    if state.current_child_id is not None and state.current_child_id not in interrupted:
+        interrupted.append(state.current_child_id)
+    recovered = make_controller_state(
+        controller_id=state.controller_id,
+        cycle_id=state.cycle_id,
+        status=ControllerStatus.SAFETY_STOPPED,
+        completed_children=list(state.completed_children),
+        failed_children=list(state.failed_children),
+        interrupted_children=interrupted,
+        budget_spent_usd=state.budget_spent_usd,
+        stop_reason=StopReason.SAFETY_STOP,
+        started_at=state.started_at,
+    )
+    save_controller_state(recovered, state_path)
+    _append_controller_transition(root / CONTROLLER_TRANSITIONS_JSONL, recovered)
+    return recovered
+
+
+def retry_controller_publication(
+    work_dir: Path,
+    publication_handler: PublicationHandler,
+) -> ControllerState:
+    root = Path(work_dir)
+    manifest = load_cycle_manifest(root / CYCLE_MANIFEST_JSON)
+    state_path = root / CONTROLLER_STATE_JSON
+    state = load_controller_state(state_path)
+    if state.cycle_id != manifest.cycle_id:
+        raise ControllerError("controller state and cycle manifest identity mismatch")
+    if state.status != ControllerStatus.SAFETY_STOPPED or state.stop_reason != StopReason.MIRROR_OUTAGE:
+        raise ControllerError("controller publication is not recoverable")
+    if state.current_child_id is not None or state.failed_children or state.interrupted_children:
+        raise ControllerError("controller publication recovery requires completed child execution")
+    expected_children = [child.child_id for child in manifest.children]
+    if state.completed_children != expected_children:
+        raise ControllerError("controller publication recovery child set mismatch")
+
+    transitions_path = root / CONTROLLER_TRANSITIONS_JSONL
+    transitions = load_controller_transitions(transitions_path)
+    if not transitions:
+        raise ControllerError("controller transition history is missing")
+    transition = transitions[-1]
+    if (
+        transition.controller_id != state.controller_id
+        or transition.cycle_id != state.cycle_id
+        or transition.state_hash != state.content_hash
+        or transition.status != state.status
+        or transition.current_child_id != state.current_child_id
+    ):
+        raise ControllerError("controller transition tip does not match durable state")
+
+    if manifest.approved_digest is None:
+        raise ControllerError("controller publication recovery requires an approved digest")
+    report_root = root / manifest.report_root
+    if report_root.is_symlink():
+        raise ControllerError("controller report root must not be a symlink")
+    report_dirs: dict[str, Path] = {}
+    for child in manifest.children:
+        report_dir = report_root / child.report_dir
+        if report_dir.is_symlink() or not report_dir.is_dir():
+            raise ControllerError(f"controller report directory is invalid: {child.child_id}")
+        report_dirs[child.child_id] = report_dir
+    try:
+        digest = compute_candidate_tree_digest(report_root)
+    except CandidateDigestError as error:
+        raise ControllerError(f"controller candidate digest validation failed: {error}") from error
+    if digest != manifest.approved_digest:
+        raise ControllerError("controller candidate digest does not match approved digest")
+
+    outbox_dir = root / manifest.outbox_dir
+    if not outbox_dir.is_dir():
+        raise ControllerError("controller publication outbox is missing")
+    outbox = Outbox(outbox_dir)
+    entries = outbox.all_entries()
+    if not entries:
+        raise ControllerError("controller publication outbox is empty")
+    for entry in entries:
+        if (
+            entry.cycle_id != manifest.cycle_id
+            or entry.child_id != "aggregate"
+            or entry.report_dir != manifest.report_root
+            or entry.digest != digest
+        ):
+            raise ControllerError("controller publication outbox binding mismatch")
+
+    for entry in outbox.recover():
+        outbox.mark_attempt(entry.entry_id)
+        result = publication_handler(entry, report_dirs)
+        if not result.ok:
+            retry_state = make_controller_state(
+                controller_id=state.controller_id,
+                cycle_id=state.cycle_id,
+                status=ControllerStatus.SAFETY_STOPPED,
+                completed_children=list(state.completed_children),
+                budget_spent_usd=state.budget_spent_usd,
+                stop_reason=StopReason.MIRROR_OUTAGE,
+                started_at=state.started_at,
+            )
+            save_controller_state(retry_state, state_path)
+            _append_controller_transition(transitions_path, retry_state)
+            return retry_state
+        outbox.mark_published(entry.entry_id)
+
+    completed = make_controller_state(
+        controller_id=state.controller_id,
+        cycle_id=state.cycle_id,
+        status=ControllerStatus.COMPLETED,
+        completed_children=list(state.completed_children),
+        budget_spent_usd=state.budget_spent_usd,
+        stop_reason=StopReason.COMPLETED,
+        started_at=state.started_at,
+    )
+    save_controller_state(completed, state_path)
+    _append_controller_transition(transitions_path, completed)
+    return completed
+
+
 def make_controller_state(
     controller_id: str,
     cycle_id: str,
@@ -708,6 +965,7 @@ def make_controller_state(
     completed_children: list[str] | None = None,
     failed_children: list[str] | None = None,
     interrupted_children: list[str] | None = None,
+    budget_spent_usd: float = 0.0,
     stop_reason: StopReason | None = None,
     started_at: str | None = None,
     updated_at: str | None = None,
@@ -722,6 +980,7 @@ def make_controller_state(
         completed_children=completed_children or [],
         failed_children=failed_children or [],
         interrupted_children=interrupted_children or [],
+        budget_spent_usd=budget_spent_usd,
         stop_reason=stop_reason,
         started_at=started_at or now,
         updated_at=updated_at or now,
@@ -736,6 +995,7 @@ def make_controller_state(
         completed_children=completed_children or [],
         failed_children=failed_children or [],
         interrupted_children=interrupted_children or [],
+        budget_spent_usd=budget_spent_usd,
         stop_reason=stop_reason,
         started_at=started_at or now,
         updated_at=updated_at or now,
@@ -804,6 +1064,34 @@ def make_child_command(
     )
 
 
+def make_replacement_child_command(
+    original: ChildCommand,
+    rule: ReplacementManifestRule,
+    attempt_number: int,
+    replacement_rule_path: str,
+    report_dir: str,
+) -> ChildCommand:
+    if original.command_name != "campaign_run":
+        raise ValueError("replacement rule applies only to campaign_run children")
+    if original.child_id not in rule.replaceable_child_ids:
+        raise ValueError("replacement rule does not authorize the original child")
+    if attempt_number < 1 or attempt_number > rule.max_attempts_per_child:
+        raise ValueError("replacement attempt exceeds the rule ceiling")
+    if report_dir == original.report_dir:
+        raise ValueError("replacement requires a fresh report directory")
+    _validate_relative_path(replacement_rule_path)
+    args = dict(original.args)
+    replacement_id = compute_replacement_child_id(rule.rule_id, original.child_id, attempt_number)
+    args["campaign-id"] = replacement_id
+    args["replacement-rule"] = replacement_rule_path
+    return make_child_command(
+        child_id=replacement_id,
+        command_name=original.command_name,
+        args=args,
+        report_dir=report_dir,
+    )
+
+
 def make_cycle_manifest(
     cycle_id: str,
     cycle_revision: str,
@@ -855,12 +1143,12 @@ class ControllerError(Exception):
 
 
 class Controller:
-    """Fixture-driven continuous controller core.
+    """Finite controller over one frozen cycle authority.
 
     Orchestrates one frozen cycle manifest through child execution,
     aggregate verification, strict validation, exact-digest approval,
-    and durable outbox publication. Handlers are injected so Phase 2
-    uses stubs and Phase 7 wires real commands.
+    and durable outbox publication. The production CLI supplies attended
+    command, verifier, validator, and public-push adapters.
 
     The controller owns one ``ControllerState`` record, persisted to
     ``controller-state.json`` after every transition. State ownership
@@ -895,6 +1183,22 @@ class Controller:
         self._outbox_dir = self._work_dir / manifest.outbox_dir
         self._state_path = self._work_dir / CONTROLLER_STATE_JSON
         self._manifest_path = self._work_dir / CYCLE_MANIFEST_JSON
+        self._transitions_path = self._work_dir / CONTROLLER_TRANSITIONS_JSONL
+        self._stop_request_path = self._work_dir / CONTROLLER_STOP_REQUEST_JSON
+
+        if self._state_path.exists():
+            existing_state = load_controller_state(self._state_path)
+            if existing_state.status in {ControllerStatus.IDLE, ControllerStatus.RUNNING, ControllerStatus.GRACEFUL_STOPPING}:
+                raise ControllerError(f"active controller already exists: {existing_state.controller_id}")
+            if existing_state.cycle_id == manifest.cycle_id:
+                raise ControllerError("replacement requires a fresh cycle identity")
+            if not self._manifest_path.exists():
+                raise ControllerError("prior cycle manifest is missing")
+            existing_manifest = load_cycle_manifest(self._manifest_path)
+            if manifest.report_root == existing_manifest.report_root:
+                raise ControllerError("replacement requires a fresh report root")
+            if manifest.outbox_dir == existing_manifest.outbox_dir:
+                raise ControllerError("replacement requires a fresh outbox directory")
 
         self._report_root.mkdir(parents=True, exist_ok=True)
         self._outbox = Outbox(self._outbox_dir)
@@ -902,6 +1206,7 @@ class Controller:
         self._graceful_stop_requested = False
         self._safety_stop_requested = False
         self._started_at = _now_iso()
+        self._budget_spent_usd = 0.0
 
         self._state = make_controller_state(
             controller_id=self._controller_id,
@@ -941,6 +1246,7 @@ class Controller:
         controller never resumes a partial report.
         """
         self._transition(ControllerStatus.RUNNING, current_child_id=None)
+        self._consume_stop_request()
 
         report_dirs: dict[str, Path] = {}
         completed: list[str] = []
@@ -948,6 +1254,7 @@ class Controller:
         interrupted: list[str] = []
 
         for child in self._manifest.children:
+            self._consume_stop_request()
             # Check safety stop before starting the next child.
             if self._safety_stop_requested:
                 self._transition(
@@ -996,6 +1303,7 @@ class Controller:
             child_report_dir.mkdir(parents=True, exist_ok=True)
 
             result = self._execute_child(child, child_report_dir)
+            self._consume_stop_request()
 
             # Check safety stop during child execution.
             if self._safety_stop_requested:
@@ -1031,6 +1339,20 @@ class Controller:
                     interrupted_children=interrupted,
                 )
                 continue
+
+            self._budget_spent_usd += result.provider_cost_usd
+            budget_limit = self._manifest.stop_conditions.max_budget_usd
+            if budget_limit is not None and self._budget_spent_usd > budget_limit:
+                completed.append(child.child_id)
+                report_dirs[child.child_id] = Path(result.report_dir) if result.report_dir is not None else child_report_dir
+                self._transition(
+                    ControllerStatus.SAFETY_STOPPED,
+                    completed_children=completed,
+                    failed_children=failed,
+                    interrupted_children=interrupted,
+                    stop_reason=StopReason.BUDGET_EXHAUSTED,
+                )
+                return self._state
 
             completed.append(child.child_id)
             if result.report_dir is not None:
@@ -1142,6 +1464,18 @@ class Controller:
     # Internal helpers
     # -----------------------------------------------------------------------
 
+    def _consume_stop_request(self) -> None:
+        if not self._stop_request_path.exists():
+            return
+        request = ControllerStopRequest.model_validate_json(self._stop_request_path.read_text())
+        if request.controller_id != self._controller_id or request.cycle_id != self._manifest.cycle_id:
+            raise ControllerError("controller stop request identity mismatch")
+        if request.immediate:
+            self._safety_stop_requested = True
+        else:
+            self._graceful_stop_requested = True
+        self._stop_request_path.unlink()
+
     def _execute_child(self, child: ChildCommand, report_dir: Path) -> ChildResult:
         if self._child_handler is None:
             raise ControllerError(
@@ -1190,16 +1524,14 @@ class Controller:
     def _check_stop_conditions(self) -> StopReason | None:
         """Check budget and disk ceilings. Returns a stop reason if exceeded."""
         conditions = self._manifest.stop_conditions
-        if conditions.max_budget_usd is not None:
-            # In Phase 2, budget tracking is delegated to the child handler.
-            # The controller checks the accumulated spend via a hook if
-            # provided. For now, the stub handler does not track budget.
-            # Real budget tracking is wired in Phase 7 (CONT-1).
-            pass
+        if conditions.max_budget_usd is not None and self._budget_spent_usd > conditions.max_budget_usd:
+            return StopReason.BUDGET_EXHAUSTED
         if conditions.max_disk_gb is not None:
             usage_gb = _directory_size_gb(self._report_root)
             if usage_gb > conditions.max_disk_gb:
                 return StopReason.DISK_FULL
+        if conditions.min_free_disk_bytes is not None and shutil.disk_usage(self._report_root).free < conditions.min_free_disk_bytes:
+            return StopReason.DISK_FULL
         return None
 
     def _classify_publication_failure(
@@ -1235,6 +1567,7 @@ class Controller:
             completed_children=completed_children if completed_children is not None else self._state.completed_children,
             failed_children=failed_children if failed_children is not None else self._state.failed_children,
             interrupted_children=interrupted_children if interrupted_children is not None else self._state.interrupted_children,
+            budget_spent_usd=self._budget_spent_usd,
             stop_reason=stop_reason,
             started_at=self._started_at,
             updated_at=_now_iso(),
@@ -1243,6 +1576,7 @@ class Controller:
 
     def _persist_state(self) -> None:
         save_controller_state(self._state, self._state_path)
+        _append_controller_transition(self._transitions_path, self._state)
 
 
 def _directory_size_gb(path: Path) -> float:
@@ -1269,6 +1603,8 @@ __all__ = [
     "ControllerError",
     "ControllerState",
     "ControllerStatus",
+    "ControllerStopRequest",
+    "ControllerTransition",
     "CycleManifest",
     "Outbox",
     "OutboxEntry",
@@ -1284,11 +1620,16 @@ __all__ = [
     "compute_cycle_manifest_hash",
     "compute_outbox_entry_hash",
     "load_controller_state",
+    "load_controller_transitions",
     "load_cycle_manifest",
     "make_child_command",
     "make_controller_state",
     "make_cycle_manifest",
     "make_outbox_entry",
+    "make_replacement_child_command",
+    "recover_interrupted_controller",
+    "request_controller_stop",
+    "retry_controller_publication",
     "save_controller_state",
     "save_cycle_manifest",
 ]

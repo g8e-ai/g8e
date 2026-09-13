@@ -94,6 +94,35 @@ Install the locked environment as described above, then run a suite without stac
 
 Use `--gold-set` to replace the suite dataset and `--limit` to run only the leading tasks. A custom task still requires typed assertions recognized by the selected suite and its registered graders.
 
+## Run finite attended controllers
+
+`g8e-evals controller` runs one finite, owner-approved cycle manifest. It is an attended entry point, not a daemon: it executes the manifest's ordered child commands through a closed command map, verifies every completed report, validates the exact candidate-tree digest, writes a durable publication outbox, invokes `g8e public push`, and exits in a typed terminal state. The controller never generates or changes an authority.
+
+A cycle manifest binds the cycle identity and revision, ordered content-addressed child commands, report root, controller outbox root, stop conditions, aggregate-verification requirement, strict-validation requirement, and approved candidate digest. `controller run` requires aggregate verification, strict validation, and an approved digest. Runtime paths are normalized relative paths; absolute paths and traversal fail closed. A replacement cycle uses a fresh cycle identity, report root, outbox root, and rule-derived child identity. The interrupted report remains dead evidence.
+
+Run and inspect a cycle from `ensemble/evals/`:
+
+```bash
+uv run --locked g8e-evals controller run --manifest <cycle-manifest.json> --work-dir <controller-work-dir> --controller-id <fresh-controller-id> --g8e-cli <g8e-binary>
+uv run --locked g8e-evals controller status --work-dir <controller-work-dir>
+```
+
+`controller stop` writes an identity-bound, content-addressed stop request. Without `--immediate`, the controller finishes the active child and stops before starting another child. With `--immediate`, the attended subprocess is terminated and the in-flight report is retained as dead evidence. A malformed request or a request bound to another controller or cycle fails closed.
+
+```bash
+uv run --locked g8e-evals controller stop --work-dir <controller-work-dir>
+uv run --locked g8e-evals controller stop --work-dir <controller-work-dir> --immediate
+```
+
+`controller recover` has two distinct modes. Execution recovery seals an interrupted active child as dead evidence and transitions the controller to `safety_stopped`; it does not resume that report. Publication recovery applies only to a terminal `mirror_outage`. It reloads and validates the frozen manifest, state hash, transition chain, completed child set, original report directories, approved candidate digest, and ordered durable outbox, then invokes only `g8e public push`. Each retry attempt and success is durable. The controller reaches `completed` only after every outbox entry is published, and publication recovery never constructs or invokes a child handler.
+
+```bash
+uv run --locked g8e-evals controller recover --work-dir <controller-work-dir>
+uv run --locked g8e-evals controller recover --work-dir <controller-work-dir> --publication --g8e-cli <g8e-binary>
+```
+
+Provider cost comes only from eligible `provider_cost_usd` observations in completed child `metrics.jsonl` files. The controller accumulates observed cost and enforces the manifest's aggregate USD ceiling. It also enforces maximum used disk and minimum free-disk reserve before each child. Verifier, disclosure, trust, integrity, authority, digest, budget, disk, child, and immediate-stop failures stop the finite cycle according to their typed reason. Publication retry reads immutable reports and the durable outbox; it never reruns inference.
+
 ## Report bundle contract
 
 The schema version comes from `manifest.json`. Readers reject unsupported versions, unknown fields, duplicate identities, missing references, invalid parent-stage graphs, digest mismatches, and incomplete evidence.

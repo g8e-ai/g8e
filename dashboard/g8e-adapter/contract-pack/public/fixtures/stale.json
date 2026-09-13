@@ -1,0 +1,53 @@
+{
+  "bootstrap": {
+    "generated_at": "2026-09-13T00:00:00Z",
+    "proof_catalog_summary": {
+      "artifact_count": 0,
+      "total_byte_size": 0
+    },
+    "protocol_version": "1.0.0",
+    "recent_projections": [
+      {
+        "campaign_id": "campaign-fixture",
+        "publication_status": "published",
+        "record_type": "projection",
+        "sequence": 1,
+        "source_freshness": "stale"
+      }
+    ],
+    "snapshot": {
+      "batch_count": 1,
+      "feed_chain_hash": "940cf73ed8c77f9a6a13fadfafd88b6870096573e77f9acc2a4b7fb5dc8fb602",
+      "freshness": "stale",
+      "generated_at": "2026-09-13T00:00:00Z",
+      "high_water_sequence": 1,
+      "protocol_version": "1.0.0",
+      "source_id": "fixture-source"
+    },
+    "source_freshness": "stale"
+  },
+  "fixture_public_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+  "signed_batch": {
+    "content_hash": "940cf73ed8c77f9a6a13fadfafd88b6870096573e77f9acc2a4b7fb5dc8fb602",
+    "first_sequence": 1,
+    "generated_at": "2026-09-13T00:00:00Z",
+    "last_sequence": 1,
+    "previous_batch_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "protocol_version": "1.0.0",
+    "record_hashes": [
+      "7ea258e4e42293a981236f6bc88849699d06ba9c5cc8c0eac0536bbfcc2b36eb"
+    ],
+    "records": [
+      {
+        "record_bytes": "{\n  \"campaign_id\": \"campaign-fixture\",\n  \"publication_status\": \"published\",\n  \"source_freshness\": \"stale\"\n}",
+        "record_hash": "7ea258e4e42293a981236f6bc88849699d06ba9c5cc8c0eac0536bbfcc2b36eb",
+        "record_type": "projection",
+        "sequence": 1
+      }
+    ],
+    "schema_version": "1.0.0",
+    "signature": "9c14cf2dd52e23a371ef28120b67bc7f873fc48feea2647bb619555dbf3cb7cc2965381a147ac761837452c48fda8184bfe559e71ee9d309f6f7c1f3e0226109",
+    "signing_key_id": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+    "source_id": "fixture-source"
+  }
+}

@@ -46,6 +46,7 @@ from g8e_evals import constants as evals_constants
 from g8e_evals.arms import ALL_ARMS, GOVERNED_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
 from g8e_evals.cli_binary import CLIBinaryError, resolve_g8e_cli
+from g8e_evals.controller_cli import controller_cmd
 from g8e_evals.provenance_bridge import ProvenanceBridgeError, load_cli_build_provenance
 from g8e_evals.graders import (
     DeterministicGradingContext,
@@ -511,6 +512,9 @@ def main():
     # Silence noisy loggers
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+
+main.add_command(controller_cmd)
 
 
 @main.command()

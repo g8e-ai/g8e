@@ -1,0 +1,63 @@
+{
+  "files": [
+    {
+      "path": "disclosure-matrix.json",
+      "sha256": "b86b4b1fbddf8b40589142fedfbf5de95d6de8cf6356e73507c04e22b9c375bd"
+    },
+    {
+      "path": "event-schemas.json",
+      "sha256": "1e23b01756ead0d711c9d2146db0da5c6e329d936d939cd487613910481fd158"
+    },
+    {
+      "path": "fixtures/active.json",
+      "sha256": "cb0788440609fb91fc3fc72641edbe6194368cf2ce0cc946fc651a534457f3ab"
+    },
+    {
+      "path": "fixtures/delayed.json",
+      "sha256": "1f410f0a4421467c7d823937b6bf5bc470550d5a4e65f9207e1913af90efd541"
+    },
+    {
+      "path": "fixtures/intentionally-stopped.json",
+      "sha256": "f949737e4ba788c06c9caae67af4d14f524552f3adc70995efc9ba95b019f5fe"
+    },
+    {
+      "path": "fixtures/safety-stopped.json",
+      "sha256": "eacc2e5dd26139706de1935ff36838996b78f2d606716e32a33aaf904828bcfd"
+    },
+    {
+      "path": "fixtures/source-offline.json",
+      "sha256": "eada5dd4397f90e1c9ea1768d1346aecef6119188ba38c2845bce5e905f39973"
+    },
+    {
+      "path": "fixtures/stale.json",
+      "sha256": "95dff2b2b9d119e82a5f8bfbb7e657e7831f694d35aa1466ebbb59997e04aee7"
+    },
+    {
+      "path": "models.ts",
+      "sha256": "dffd38460cb08f40a073d7b563165df7e75d85072bb3e1a0eba995f720816650"
+    },
+    {
+      "path": "offline-verifier.md",
+      "sha256": "ab648a2ca10e547a6e5167d0736b79ff1ac6c94685dc3d0e247e0ec4bbe9db82"
+    },
+    {
+      "path": "proof-schemas.json",
+      "sha256": "920fd70cb9164945c45f2faab2f67657157dc3bcc9fc04823cf3fce43329b3aa"
+    },
+    {
+      "path": "public-read.openapi.json",
+      "sha256": "d5b436f9e1a70b0a362519b103dcade7da6eea4b04f28e6a38a11693514094c2"
+    },
+    {
+      "path": "README.md",
+      "sha256": "90c5db86e3ac81be057930278e207f61a796e75ad0968251b52c00f315a3bad0"
+    },
+    {
+      "path": "runtime-config.schema.json",
+      "sha256": "dac454d762353a2bd846e3d2a0f89ef5a270777783acf53700688faf9de82801"
+    }
+  ],
+  "generated_at": "deterministic",
+  "generator": "dashboard/g8e-adapter/generator/gen-contract-pack.mjs",
+  "schema_version": "1.0.0"
+}

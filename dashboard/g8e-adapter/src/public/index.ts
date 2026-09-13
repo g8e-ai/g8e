@@ -1,3 +1,4 @@
+export * from './client';
 export * from './fetch';
 export * from './runtime_config';
 export * from './sse';

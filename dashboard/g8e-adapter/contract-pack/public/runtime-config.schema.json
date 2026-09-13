@@ -1,0 +1,22 @@
+{
+  "$id": "https://g8e/contract-pack/public/runtime-config.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "mirror_origin": {
+      "description": "Absolute public mirror origin. HTTPS is required except for loopback development origins.",
+      "pattern": "^https://[^/?#]+$|^http://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:\\d+)?/?$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "mirror_origin"
+  ],
+  "title": "PublicRuntimeConfig",
+  "type": "object"
+}

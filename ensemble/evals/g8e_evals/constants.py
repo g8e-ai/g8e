@@ -143,6 +143,8 @@ DISCLOSURE_OUTPUT_INVENTORY_JSON = "disclosure-output-inventory.json"
 # durable outbox for publication retries)
 CYCLE_MANIFEST_JSON = "cycle-manifest.json"
 CONTROLLER_STATE_JSON = "controller-state.json"
+CONTROLLER_TRANSITIONS_JSONL = "controller-transitions.jsonl"
+CONTROLLER_STOP_REQUEST_JSON = "controller-stop-request.json"
 OUTBOX_INDEX_JSONL = "outbox-index.jsonl"
 OUTBOX_ENTRIES_DIR = "outbox-entries"
 
