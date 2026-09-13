@@ -13,6 +13,6 @@ export const OperatorStatus = Object.freeze({
 });
 
 export const OperatorType = Object.freeze({
-    OPERATOR: 'system',
-    CLOUD:    'cloud',
+    EMBEDDED: 'embedded',
+    REMOTE:   'remote',
 });

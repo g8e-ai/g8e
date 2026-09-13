@@ -1,6 +1,6 @@
 # Network Architecture
 
-Last Updated: 2026-09-09
+Last Updated: 2026-09-12
 Version: v2.1.8
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
@@ -114,6 +114,7 @@ The old `handleCLIEnrollment` endpoint (`/api/v1/auth/cli/enroll`) and the trust
 - `POST /api/v1/auth/cli/recovery/approve-cli` is HTTPS-only and mTLS-only; it is the headless counterpart to the browser approve endpoint. An already-enrolled CLI authorizes the new CLI via `g8e auth approve-recovery <token>`, and the approver user ID is derived from the verified mTLS certificate URI SAN by the unified auth middleware. It is never registered on the plain HTTP router.
 - `POST /api/v1/auth/cli/rotate` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. Identity is derived from the verified client certificate, and only one replacement is performed per run.
 - `POST /api/v1/auth/cli/refresh` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. It allows a CLI with a valid certificate but an expired or missing session to re-establish its session without rotating the certificate. Identity is derived from the verified client certificate URI SAN.
+- `GET /api/v1/auth/cli/session` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. It returns the authenticated CLI session's persisted identity binding (`cli_session_id`, `user_id`, `operator_session_id`, and `operator_id`) resolved from the session record and the operators collection, never from request headers. A session with no operator binding reports empty operator fields; `g8e auth context` uses the response to resync local credentials against server-side state.
 
 The recovery request, status, and complete endpoints are reachable over both plain HTTP and HTTPS so a new CLI without trusted TLS can initiate recovery. The approve endpoint is HTTPS-only because it requires a web-session cookie, which is only set over TLS. The approve-cli endpoint is HTTPS-only and mTLS-only because the approver must already hold a valid CLI certificate.
 
