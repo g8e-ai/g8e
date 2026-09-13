@@ -138,6 +138,9 @@ func normalizePublicMirrorStoreState(state *PublicMirrorStoreState) {
 		state.ProofManifests = make(map[string]models.PublicProofManifest)
 	}
 	for _, source := range state.Sources {
+		if source == nil {
+			continue
+		}
 		if source.RetainedFromSequence == 0 {
 			source.RetainedFromSequence = 1
 		}

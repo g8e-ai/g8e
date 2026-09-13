@@ -435,6 +435,22 @@ func TestMirror_RetentionPrunesOldestHistoryAndRecoversChain(t *testing.T) {
 	assert.Equal(t, int64(4), state.Records[1].Sequence)
 }
 
+func TestMirror_RestartRejectsNullDurableSourceState(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	ctx := context.Background()
+	state, err := NewRuntimePublicMirrorStore(env.fileSvc).Load(ctx)
+	require.NoError(t, err)
+	state.Sources[env.sourceID] = nil
+	stateBytes, err := json.Marshal(state)
+	require.NoError(t, err)
+	require.NoError(t, env.fileSvc.WriteFile(ctx, constants.PublicMirrorStatePath, stateBytes, constants.PermFilePrivate))
+
+	_, err = NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrPublicFeedMirrorStoreCorrupt)
+}
+
 func TestMirror_RestartRejectsCorruptDurableState(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"campaign_id": "c1"})}, constants.PublicFeedZeroHashHex)
