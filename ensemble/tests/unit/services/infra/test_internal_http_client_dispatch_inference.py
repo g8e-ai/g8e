@@ -157,6 +157,28 @@ async def test_dispatch_inference_raises_network_error_on_non_2xx_with_status_pr
 
 
 @pytest.mark.asyncio
+async def test_dispatch_inference_preserves_network_error_details_from_http_client():
+    client = _make_client()
+    raised = NetworkError(
+        "HTTP request failed with status 403",
+        details={
+            "status_code": 403,
+            "response": {"error": "inference model override denied"},
+        },
+    )
+    client._http.post = AsyncMock(side_effect=raised)
+
+    with pytest.raises(NetworkError) as exc_info:
+        await client.dispatch_inference(_dispatch_request())
+
+    assert exc_info.value is raised
+    assert exc_info.value.error_detail.details["status_code"] == 403
+    assert exc_info.value.error_detail.details["response"] == {
+        "error": "inference model override denied"
+    }
+
+
+@pytest.mark.asyncio
 async def test_dispatch_inference_wraps_transport_exception_in_network_error():
     client = _make_client()
     client._http.post = AsyncMock(side_effect=ConnectionError("reset"))

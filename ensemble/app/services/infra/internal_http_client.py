@@ -491,6 +491,8 @@ class InternalHttpClient:
                     preserving_proto_field_name=True,
                 ),
             )
+        except NetworkError:
+            raise
         except Exception as e:
             raise NetworkError(
                 f"[HTTP-CLIENT] Inference dispatch failed: {e}",
