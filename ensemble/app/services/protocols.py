@@ -562,6 +562,7 @@ class InvestigationDataServiceProtocol(Protocol):
         sender: str,
         content: str,
         metadata: ConversationMessageMetadata,
+        context: RequestContext | None = None,
     ) -> bool:
         raise NotImplementedError
 

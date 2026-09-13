@@ -35,11 +35,13 @@ import (
 // session header when authenticated, limits response reads, checks status
 // codes, decodes a typed response, and returns contextual errors.
 type E2EClient struct {
-	publicClient *http.Client // no client cert, for health/CA bundle endpoints
-	mtlsClient   *http.Client // owner CLI cert, for authenticated endpoints
-	cliSessionID string
-	userID       string
-	gatewayHTTPS string
+	publicClient      *http.Client // no client cert, for health/CA bundle endpoints
+	mtlsClient        *http.Client // owner CLI cert, for authenticated endpoints
+	cliSessionID      string
+	userID            string
+	operatorID        string
+	operatorSessionID string
+	gatewayHTTPS      string
 }
 
 // newAuthenticatedRequest builds an HTTP request with the CLI session header

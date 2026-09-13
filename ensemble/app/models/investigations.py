@@ -641,6 +641,12 @@ class InvestigationCreateRequest(G8eBaseModel):
         default=None, description="Email of the user creating the investigation"
     )
     user_id: str = Field(..., description="ID of the user creating the investigation")
+    operator_id: str | None = Field(
+        default=None, description="Delegated Operator authority identifier"
+    )
+    operator_session_id: str | None = Field(
+        default=None, description="Delegated Operator authority session identifier"
+    )
     customer_context: InvestigationCustomerContext | None = Field(
         default=None, description="Customer context"
     )

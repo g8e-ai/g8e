@@ -213,6 +213,42 @@ class TestAuthServiceGetValidatedContext:
             await auth_service.get_validated_context(request, user)
 
     @pytest.mark.asyncio
+    async def test_get_validated_context_preserves_distinct_authority_and_execution_target(
+        self, auth_service
+    ):
+        request = MagicMock(spec=Request)
+        request.state = MagicMock()
+        request.state.g8e_context = G8eHttpContext(
+            user_id="user-123",
+            cli_session_id="cli-session-789",
+            source_component="CLIENT",
+            operator_id="embedded-operator",
+            operator_session_id="embedded-session-123",
+            bound_operators=[
+                BoundOperator(
+                    operator_id="remote-operator",
+                    operator_session_id="remote-session-456",
+                    status=OperatorStatus.BOUND,
+                )
+            ],
+        )
+        user = AuthenticatedUser(
+            uid="user-123",
+            user_id="user-123",
+            cli_session_id="cli-session-789",
+            operator_id="embedded-operator",
+            operator_session_id="embedded-session-123",
+            auth_method=AuthMethod.OPERATOR_SESSION,
+        )
+
+        validated = await auth_service.get_validated_context(request, user)
+
+        assert validated.operator_id == "embedded-operator"
+        assert validated.operator_session_id == "embedded-session-123"
+        assert validated.bound_operators[0].operator_id == "remote-operator"
+        assert validated.bound_operators[0].operator_session_id == "remote-session-456"
+
+    @pytest.mark.asyncio
     async def test_get_validated_context_rejects_routing_operator_outside_authoritative_binding(
         self, auth_service
     ):

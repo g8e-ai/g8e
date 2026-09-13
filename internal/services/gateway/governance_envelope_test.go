@@ -54,10 +54,11 @@ func identityEnvelope(t *testing.T, operatorID, operatorSessionID string) []byte
 
 // appEnvelope builds a wire envelope for an app workload (AGENT/CLIENT) that
 // authenticates via an app SPIFFE identity.
-func appEnvelope(t *testing.T, operatorID string, source commonv1.Component) []byte {
+func appEnvelope(t *testing.T, appID string, source commonv1.Component) []byte {
 	t.Helper()
 	return marshalEnvelope(t, &commonv1.GovernanceEnvelope{
-		OperatorId:      operatorID,
+		OperatorId:      appID,
+		ActingAppId:     appID,
 		SourceComponent: source,
 	})
 }
@@ -379,6 +380,46 @@ func TestVerifyEnvelopeIdentityBinding_MatchingAppSPIFFEID_ReturnsNil(t *testing
 	envelope := appEnvelope(t, "op-1", commonv1.Component_COMPONENT_AGENT)
 	err := verifyEnvelopeIdentityBinding(req, envelope)
 	require.NoError(t, err)
+}
+
+func TestVerifyEnvelopeIdentityBinding_AppCertificateAllowsDelegatedEmbeddedOperatorClaims(t *testing.T) {
+	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/app/g8ee")
+	require.NoError(t, parseErr)
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+	envelope := marshalEnvelope(t, &commonv1.GovernanceEnvelope{
+		ActionType:        string(constants.ActionTypeDocumentUpdate),
+		OperatorId:        string(constants.DocIDEmbeddedOperator),
+		OperatorSessionId: "embedded-operator-session",
+		ActingAppId:       "g8ee",
+		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
+	})
+	err := verifyEnvelopeIdentityBinding(req, envelope)
+	require.NoError(t, err)
+}
+
+func TestVerifyEnvelopeIdentityBinding_AppCertificateRejectsMismatchedActingApp(t *testing.T) {
+	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/app/g8ee")
+	require.NoError(t, parseErr)
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+	envelope := marshalEnvelope(t, &commonv1.GovernanceEnvelope{
+		ActionType:        string(constants.ActionTypeDocumentUpdate),
+		OperatorId:        string(constants.DocIDEmbeddedOperator),
+		OperatorSessionId: "embedded-operator-session",
+		ActingAppId:       "different-app",
+		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
+	})
+	err := verifyEnvelopeIdentityBinding(req, envelope)
+	require.ErrorIs(t, err, constants.ErrURISANMismatch)
 }
 
 func TestVerifyEnvelopeIdentityBinding_InvalidJSON_ReturnsNil(t *testing.T) {

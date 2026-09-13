@@ -155,6 +155,8 @@ class CaseDataService:
                 task_id=AITaskId.CASE,
                 web_session_id=case_data.web_session_id,
                 user_id=case_data.user_id,
+                operator_id=case_data.operator_id,
+                operator_session_id=case_data.operator_session_id,
                 payload=payload,
             )
             await self._governance_client.submit_envelope(message)

@@ -218,6 +218,25 @@ class TestLifespanStartup:
             for p in patches:
                 p.stop()
 
+    async def test_governance_client_uses_app_identity_when_operator_cert_env_is_set(
+        self, mock_app, monkeypatch
+    ):
+        monkeypatch.setenv("G8E_GOVERNANCE_OPERATOR_CERT", "/operator-state/pki/operator.crt")
+        monkeypatch.setenv("G8E_GOVERNANCE_OPERATOR_KEY", "/operator-state/pki/operator.key")
+        mocks, patches = _build_mocks()
+        _configure_settings(mocks)
+        _configure_factory(mocks)
+        try:
+            async with lifespan(mock_app):
+                pass
+
+            tls_config = mocks["GovernanceClient"].call_args.kwargs["tls_config"]
+            assert tls_config.client_cert_path == "/tmp/test-app-cert.pem"
+            assert tls_config.client_key_path == "/tmp/test-app-key.pem"
+        finally:
+            for p in patches:
+                p.stop()
+
     async def test_bootstrap_logging_called(self, mock_app):
         mocks, patches = _build_mocks()
         _configure_settings(mocks)

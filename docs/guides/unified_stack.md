@@ -214,7 +214,7 @@ The operator, ensemble, and dashboard each complete the owner-approved platform 
 
 The dashboard has two separate identities. Its container enrolls an app mTLS identity before Express starts, while the browser authenticates directly to the gateway with the owner's WebAuthn passkey.
 
-The governance envelope endpoint rejects app certificates. The unified compose therefore mounts the operator data volume read-only into the ensemble and supplies the operator certificate and key paths through `G8E_GOVERNANCE_OPERATOR_CERT` and `G8E_GOVERNANCE_OPERATOR_KEY`. The ensemble uses that identity only for governed envelope transport; its other gateway traffic uses its own app identity. Approving the operator first ensures these credentials exist before governed requests begin.
+The ensemble submits governance envelopes with its enrolled app certificate. The gateway binds AGENT and CLIENT transport identity to `acting_app_id`, while `operator_id` and `operator_session_id` carry the delegated human authority. The unified compose mounts operator state read-only only for bootstrap secrets; it never uses the Operator certificate for ensemble governance transport.
 
 See [Authentication and Identity](../architecture/auth.md) for the enrollment protocol and trust model.
 

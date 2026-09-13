@@ -93,7 +93,12 @@ async def test_interrogation_questions_not_published_when_missing():
     svc.investigation_service = MagicMock()
     svc.investigation_service.persist_ai_message = AsyncMock(return_value=True)
 
-    g8e_context = MagicMock()
+    g8e_context = G8eHttpContext(
+        investigation_id="inv-123",
+        case_id="case-456",
+        user_id="user-789",
+        web_session_id="sess-000",
+    )
     inputs = MagicMock(spec=AgentInputs)
     inputs.triage_result = None
     inputs.message_sender = "ai_primary"

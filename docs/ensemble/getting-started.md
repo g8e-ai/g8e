@@ -73,7 +73,7 @@ G8E_OPERATOR_PUBSUB_URL=wss://localhost:8443
 
 Configure a model provider and model before using chat. Environment variables provide bootstrap defaults, while stored platform settings and request-specific values take precedence. See [LLM Providers](llm-providers.md) for the supported providers and exact configuration keys.
 
-Governed collection mutations require an Operator-bound identity. Set `G8E_GOVERNANCE_OPERATOR_CERT` and `G8E_GOVERNANCE_OPERATOR_KEY` to the enrolled Operator certificate and key paths. Without both values, the ensemble starts with its app identity but governed submissions fail closed at the Gateway.
+Governed collection mutations use the ensemble's enrolled app identity for transport and carry the authenticated user's operator binding as delegated authority. The gateway verifies the app certificate against `acting_app_id` and validates the delegated operator session independently.
 
 Start the development server from `ensemble/` with the virtual environment active:
 

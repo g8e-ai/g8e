@@ -56,7 +56,7 @@ python -m app.main
 
 The development entry point listens on HTTP at `0.0.0.0:8443` with reload enabled. Its outbound gateway and operator connections use mTLS. On startup, the ensemble loads or requests its app identity, connects the DB, KV, pub/sub, and blob transports, loads platform settings, and starts its domain services. A new identity remains pending until an enrolled owner approves the ensemble workload request.
 
-Governed collection mutations require an operator-bound identity. The unified Compose stack mounts the operator credentials read-only and sets `G8E_GOVERNANCE_OPERATOR_CERT` and `G8E_GOVERNANCE_OPERATOR_KEY`; a local deployment must provide equivalent paths or governed submissions fail closed.
+Governed collection mutations use the ensemble's enrolled app certificate for transport and carry the authenticated user's operator identity as delegated authority. The Gateway binds the certificate to `acting_app_id` and validates the delegated operator session separately.
 
 ## Test and validate
 

@@ -73,9 +73,11 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 
 	chatReq := EnsembleChatRequest{
 		Context: EnsembleRequestContext{
-			CLISessionID:    e2eClient.cliSessionID,
-			UserID:          e2eClient.userID,
-			SourceComponent: "CLIENT",
+			CLISessionID:      e2eClient.cliSessionID,
+			UserID:            e2eClient.userID,
+			OperatorID:        e2eClient.operatorID,
+			OperatorSessionID: e2eClient.operatorSessionID,
+			SourceComponent:   "CLIENT",
 			BoundOperators: []EnsembleBoundOperator{
 				{
 					OperatorID:        targetOperatorID,

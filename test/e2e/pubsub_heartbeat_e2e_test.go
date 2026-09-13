@@ -46,8 +46,12 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 	// fails quickly.
 	var second *models.OperatorDocumentGo
 	require.Eventually(t, func() bool {
-		second = activeOperator(t, ctx)
-		return second.UpdatedAt.After(firstUpdatedAt)
+		operators, err := e2eClient.ListOperators(ctx)
+		if err != nil {
+			return false
+		}
+		second = findActiveRemoteOperator(operators.Operators)
+		return second != nil && second.UpdatedAt.After(firstUpdatedAt)
 	}, 10*time.Second, 500*time.Millisecond,
 		"heartbeat UpdatedAt did not advance past %s within 10s — pub/sub heartbeat path may be dead",
 		firstUpdatedAt.UTC().Format(time.RFC3339Nano))
@@ -71,11 +75,16 @@ func activeOperator(t *testing.T, ctx context.Context) *models.OperatorDocumentG
 	require.NoError(t, err, "operator list must succeed for heartbeat observation")
 	require.True(t, operators.Success, "operator list response must report success")
 	require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
-	for i := range operators.Operators {
-		if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
-			return &operators.Operators[i]
+	operator := findActiveRemoteOperator(operators.Operators)
+	require.NotNil(t, operator, "no active remote operator found in registry — heartbeat test requires an approved stack with a live operator")
+	return operator
+}
+
+func findActiveRemoteOperator(operators []models.OperatorDocumentGo) *models.OperatorDocumentGo {
+	for i := range operators {
+		if operators[i].Status == constants.OperatorStatusActive && operators[i].OperatorType == constants.OperatorTypeRemote {
+			return &operators[i]
 		}
 	}
-	t.Fatal("no active operator found in registry — heartbeat test requires an approved stack with a live operator")
 	return nil
 }

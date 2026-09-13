@@ -270,8 +270,8 @@ func NewPrivilegedRouteRegistry() *PrivilegedRouteRegistry {
 		prefixes: make(map[string]struct{}),
 	}
 
-	// Governance envelope submission requires operator/CLI auth
-	r.addPrefix(constants.APIPaths.GovernanceEnvelopes)
+	// Governance envelope submission admits policy-authorized apps and enforces
+	// transport identity plus the five-layer verification gauntlet in its handler.
 
 	// Query endpoints require operator/CLI auth
 	r.addPrefix(constants.APIPaths.QueryPrefix)

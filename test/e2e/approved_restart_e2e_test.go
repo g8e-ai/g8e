@@ -95,8 +95,12 @@ func TestApprovedRestart_IdentityPersists(t *testing.T) {
 
 	var second *models.OperatorDocumentGo
 	require.Eventually(t, func() bool {
-		second = activeOperator(t, ctx)
-		return second.UpdatedAt.After(firstUpdatedAt)
+		operators, err := e2eClient.ListOperators(ctx)
+		if err != nil {
+			return false
+		}
+		second = findActiveRemoteOperator(operators.Operators)
+		return second != nil && second.UpdatedAt.After(firstUpdatedAt)
 	}, 10*time.Second, 500*time.Millisecond,
 		"heartbeat UpdatedAt did not advance past %s within 10s — pub/sub heartbeat path may have failed",
 		firstUpdatedAt.UTC().Format(time.RFC3339Nano))

@@ -301,6 +301,8 @@ async def internal_chat(
             user_id=g8e_context.user_id,
             web_session_id=g8e_context.web_session_id,
             organization_id=g8e_context.organization_id,
+            operator_id=g8e_context.operator_id,
+            operator_session_id=g8e_context.operator_session_id,
         )
         case = await case_service.create_case(case_create_data, generated_title=None)
 
@@ -314,6 +316,8 @@ async def internal_chat(
             priority=Priority(case.priority) if isinstance(case.priority, str) else case.priority,
             user_email=case.user_email,
             user_id=case.user_id,
+            operator_id=g8e_context.operator_id,
+            operator_session_id=g8e_context.operator_session_id,
             sentinel_mode=request.sentinel_mode,
             created_with_case=True,
             case_source=case.source,

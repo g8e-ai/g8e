@@ -291,11 +291,14 @@ func TestValidateCredentials(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "valid credentials with only cli_session_id",
+			name: "missing operator_session_id",
 			creds: &auth.Credentials{
 				CLISessionID: "cli-session-xyz",
+				UserID:       "user-456",
+				OperatorID:   "op-789",
 			},
-			expectError: false,
+			expectError:   true,
+			errorContains: "missing operator_session_id",
 		},
 	}
 

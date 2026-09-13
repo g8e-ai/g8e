@@ -396,6 +396,7 @@ class InvestigationService:
         self,
         investigation_id: str | None,
         text: str,
+        context: RequestContext,
         grounding_metadata: GroundingMetadata | None = None,
         token_usage: TokenUsage | None = None,
         sender: MessageSender = MessageSender.AI_PRIMARY,
@@ -425,6 +426,7 @@ class InvestigationService:
                 grounding_metadata=grounding_metadata,
                 token_usage=token_usage,
             ),
+            context=context,
         )
 
     async def _push_run_projection(

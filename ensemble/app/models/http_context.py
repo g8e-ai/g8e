@@ -232,7 +232,7 @@ class G8eHttpContext(G8eBaseModel):
             )
 
         # 4. Operator session check for bound operators
-        if self.bound_operators and user.operator_session_id:
+        if self.bound_operators and user.operator_session_id and not self.operator_session_id:
             for op in self.bound_operators:
                 if op.operator_session_id and op.operator_session_id != user.operator_session_id:
                     from app.errors import AuthenticationError

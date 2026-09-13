@@ -1494,22 +1494,24 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 
 	middleware := auth.Middleware(handler)
 
-	t.Run("app auth with valid policy and mTLS URI SAN succeeds", func(t *testing.T) {
+	t.Run("app auth with valid policy and mTLS URI SAN reaches policy-authorized routes", func(t *testing.T) {
 		wid := protocol.NewWorkloadIdentity()
 		appURI, err := wid.AppSPIFFEURL(operatorID)
 		require.NoError(t, err)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		req.TLS = &tls.ConnectionState{
-			PeerCertificates: []*x509.Certificate{
-				{URIs: []*url.URL{appURI}},
-			},
-		}
-		rr := httptest.NewRecorder()
+		for _, path := range []string{"/api/test", constants.APIPaths.GovernanceEnvelopes} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.TLS = &tls.ConnectionState{
+				PeerCertificates: []*x509.Certificate{
+					{URIs: []*url.URL{appURI}},
+				},
+			}
+			rr := httptest.NewRecorder()
 
-		middleware.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Equal(t, "success", rr.Body.String())
+			middleware.ServeHTTP(rr, req)
+			assert.Equal(t, http.StatusOK, rr.Code)
+			assert.Equal(t, "success", rr.Body.String())
+		}
 	})
 
 	t.Run("app auth without policy is rejected", func(t *testing.T) {

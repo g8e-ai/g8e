@@ -476,6 +476,7 @@ class ChatPipelineService:
         persisted = await self.investigation_service.persist_ai_message(
             investigation_id=g8e_context.investigation_id,
             text=state.response_text,
+            context=RequestContext.from_app_context(g8e_context),
             grounding_metadata=state.grounding_metadata,
             token_usage=state.token_usage,
             sender=sender,
@@ -1003,6 +1004,7 @@ class ChatPipelineService:
                 await self.investigation_service.persist_ai_message(
                     investigation_id=inputs.investigation_id,
                     text=text,
+                    context=RequestContext.from_app_context(g8e_context),
                     sender=inputs.message_sender,
                 )
                 # Detect and publish clarifying questions from intermediate turns
