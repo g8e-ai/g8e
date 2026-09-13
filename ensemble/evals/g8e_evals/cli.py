@@ -194,6 +194,7 @@ from g8e_evals.suites import (
 
 if TYPE_CHECKING:
     from g8e_evals.campaign_set import CampaignChildPlan, CampaignSetPlan
+    from g8e_evals.replacement_rule import ReplacementManifestRule
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -714,6 +715,7 @@ def validate_campaign_set_child_preflight(
     provider_environment_scope: str,
     campaign_set_plan: CampaignSetPlan,
     task_ids: list[str],
+    replacement_rule: ReplacementManifestRule | None = None,
 ) -> None:
     """Reject campaign-set child authority mismatches before report-directory creation.
 
@@ -724,13 +726,41 @@ def validate_campaign_set_child_preflight(
     environment scopes, and task partition all match the plan's declared
     values for that child.
 
+    When ``replacement_rule`` is bound (D24), the rule must bind the
+    plan exactly (``set_id``, ``set_plan_hash``, replaceable-children
+    subset), and a ``campaign_id`` that is not a plan child may still
+    resolve as a rule-derived replacement ID; the replacement run's
+    authority checks then apply to the original child it supersedes —
+    the same partition and the same frozen hashes.
+
     Raises ``ValueError`` on any mismatch.
     """
+    if replacement_rule is not None:
+        from g8e_evals.replacement_rule import (
+            resolve_replacement_child_id,
+            validate_replacement_rule_plan_binding,
+        )
+
+        binding_failures = validate_replacement_rule_plan_binding(
+            replacement_rule, campaign_set_plan
+        )
+        if binding_failures:
+            raise ValueError(
+                f"replacement rule does not bind campaign-set plan "
+                f"{campaign_set_plan.set_id!r}: {'; '.join(binding_failures)}"
+            )
+
     child_plan: CampaignChildPlan | None = None
     for cp in campaign_set_plan.child_plans:
         if cp.child_id == campaign_id:
             child_plan = cp
             break
+    if child_plan is None and replacement_rule is not None:
+        resolved = resolve_replacement_child_id(
+            replacement_rule, campaign_set_plan, campaign_id
+        )
+        if resolved is not None:
+            child_plan = resolved[0]
     if child_plan is None:
         raise ValueError(
             f"campaign_id {campaign_id!r} does not match any child in "
@@ -821,18 +851,52 @@ def validate_campaign_identity(
     campaign_profile: CampaignProfile,
     gold_set_task_ids: list[str],
     task_slice_in_use: bool,
+    campaign_set_plan: CampaignSetPlan | None = None,
+    replacement_rule: ReplacementManifestRule | None = None,
 ) -> None:
     """Reject identity mismatches before report-directory creation.
 
-    Checks that ``--campaign-id`` matches ``campaign_profile.campaign_id``
-    and, when no task slice is in use, that the profile's ``task_ids``
-    match the loaded gold-set task IDs exactly (same set, same order).
-    A task slice (``--task-offset``/``--task-limit``) intentionally
-    selects a subset, so the task_id check is skipped when a slice is in
-    use.
+    Standalone runs: ``--campaign-id`` must match
+    ``campaign_profile.campaign_id`` and, when no task slice is in use,
+    the profile's ``task_ids`` must match the loaded gold-set task IDs
+    exactly (same set, same order). A task slice
+    (``--task-offset``/``--task-limit``) intentionally selects a subset,
+    so the task_id check is skipped when a slice is in use.
+
+    Campaign-set child runs (the S2-C invocation contract):
+    ``--campaign-id`` carries the plan-derived ``child_id`` — or a
+    rule-derived replacement child ID when ``replacement_rule`` is bound
+    — and the plan's ``parent_campaign_id`` must equal the profile's
+    ``campaign_id``. The child's task partition is checked by
+    ``validate_campaign_set_child_preflight``, so the profile-vs-gold-set
+    task comparison does not apply here.
 
     Raises ``ValueError`` on any mismatch.
     """
+    if campaign_set_plan is not None:
+        if campaign_set_plan.parent_campaign_id != campaign_profile.campaign_id:
+            raise ValueError(
+                f"campaign-set plan parent_campaign_id "
+                f"{campaign_set_plan.parent_campaign_id!r} does not match "
+                f"campaign_profile.campaign_id {campaign_profile.campaign_id!r}"
+            )
+        child_ids = {cp.child_id for cp in campaign_set_plan.child_plans}
+        if campaign_id in child_ids:
+            return
+        if replacement_rule is not None:
+            from g8e_evals.replacement_rule import resolve_replacement_child_id
+
+            if (
+                resolve_replacement_child_id(
+                    replacement_rule, campaign_set_plan, campaign_id
+                )
+                is not None
+            ):
+                return
+        raise ValueError(
+            f"campaign_id mismatch: --campaign-id '{campaign_id}' is not a "
+            f"child of campaign-set plan {campaign_set_plan.set_id!r}"
+        )
     if campaign_id != campaign_profile.campaign_id:
         raise ValueError(
             f"campaign_id mismatch: --campaign-id '{campaign_id}' does not "
@@ -963,7 +1027,9 @@ def campaign():
               help="Maximum number of tasks to load from the gold set (after --task-offset). When omitted, all tasks are loaded. Each batch is a separate campaign with its own report directory.")
 @click.option("--campaign-set-plan", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
               help="Path to a JSON CampaignSetPlan file. When provided, the campaign is validated as a child of the frozen campaign-set before report-directory creation, and the report-level CampaignBinding is marked as ReportRole.CHILD.")
-def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, max_tokens, model_tags, profile, models, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, task_offset, task_limit, campaign_set_plan):
+@click.option("--replacement-rule", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
+              help="Path to a JSON ReplacementManifestRule file. Requires --campaign-set-plan; the rule must bind that plan. A --campaign-id that is not a plan child must resolve as a rule-derived replacement ID.")
+def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, max_tokens, model_tags, profile, models, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, task_offset, task_limit, campaign_set_plan, replacement_rule):
     """Run an authoritative multi-arm, multi-cohort campaign.
 
     Creates one campaign identity, one report directory, one assignment
@@ -983,6 +1049,23 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         compute_task_assignment_hash,
     )
     from g8e_evals.schema import ProviderBudget
+
+    # S2-D fail-closed option coherence: reject incoherent option sets
+    # before any artifact is loaded. A campaign-set child requires the
+    # frozen profile and model-registry authorities; a replacement rule
+    # authorizes replacements only under a bound campaign-set plan.
+    if campaign_set_plan is not None and (profile is None or models is None):
+        raise click.UsageError(
+            "--campaign-set-plan requires --profile and --models: a "
+            "campaign-set child run must be bound to the frozen profile "
+            "and model-registry authorities"
+        )
+    if replacement_rule is not None and campaign_set_plan is None:
+        raise click.UsageError(
+            "--replacement-rule requires --campaign-set-plan: a "
+            "replacement rule authorizes replacements only under the "
+            "campaign-set plan it names"
+        )
 
     g8e_cli = _resolve_g8e_cli_option(g8e_cli)
     prereg_config = load_preregistration(preregistration)
@@ -1013,6 +1096,18 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     model_registry = None
     cohort_variant_map: dict[str, str] | None = None
     loaded_campaign_set_plan = None
+    loaded_replacement_rule = None
+
+    # Construct the provider budget from CLI ceilings before identity
+    # validation; the campaign-set preflight needs it for the
+    # budget-authority hash.
+    provider_budget = None
+    if max_usd is not None or max_requests is not None or max_tokens is not None:
+        provider_budget = ProviderBudget(
+            max_usd=max_usd if max_usd is not None else 0.0,
+            max_tokens=max_tokens,
+            max_requests=max_requests,
+        )
     if profile is not None and models is not None:
         from g8e_evals.profile import CampaignProfile
         from g8e_evals.registry import ModelRegistry
@@ -1028,6 +1123,30 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
             campaign_profile.validate_against_registry(model_registry)
         except ValueError as e:
             raise click.UsageError(f"profile validation failed: {e}") from e
+        # Load the campaign-set plan and replacement rule before identity
+        # validation: a set child identifies itself by its plan-derived
+        # child_id (or a rule-derived replacement ID), not by the parent
+        # profile's campaign_id (S2-C contract).
+        if campaign_set_plan is not None:
+            from g8e_evals.campaign_set import CampaignSetPlan as _CSP
+            try:
+                loaded_campaign_set_plan = _CSP.model_validate_json(
+                    campaign_set_plan.read_text()
+                )
+            except (ValidationError, OSError) as e:
+                raise click.UsageError(
+                    f"could not parse campaign-set plan {campaign_set_plan}: {e}"
+                ) from e
+        if replacement_rule is not None:
+            from g8e_evals.replacement_rule import ReplacementManifestRule as _RMR
+            try:
+                loaded_replacement_rule = _RMR.model_validate_json(
+                    replacement_rule.read_text()
+                )
+            except (ValidationError, OSError) as e:
+                raise click.UsageError(
+                    f"could not parse replacement rule {replacement_rule}: {e}"
+                ) from e
         # Reject identity mismatches before report-directory creation.
         # The campaign run command is production-posture by definition.
         task_slice_in_use = task_offset > 0 or task_limit is not None
@@ -1037,6 +1156,8 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
                 campaign_profile=campaign_profile,
                 gold_set_task_ids=[t.id for t in tasks],
                 task_slice_in_use=task_slice_in_use,
+                campaign_set_plan=loaded_campaign_set_plan,
+                replacement_rule=loaded_replacement_rule,
             )
         except ValueError as e:
             raise click.UsageError(f"identity validation failed: {e}") from e
@@ -1051,29 +1172,11 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
             )
         except ValueError as e:
             raise click.UsageError(f"profile cross-check failed: {e}") from e
-        # Construct the provider budget from CLI ceilings before the
-        # campaign-set preflight needs it for the budget-authority hash.
-        provider_budget = None
-        if max_usd is not None or max_requests is not None or max_tokens is not None:
-            provider_budget = ProviderBudget(
-                max_usd=max_usd if max_usd is not None else 0.0,
-                max_tokens=max_tokens,
-                max_requests=max_requests,
-            )
         # When --campaign-set-plan is provided, validate the child
         # campaign against the frozen CampaignSetPlan before
         # report-directory creation.
-        if campaign_set_plan is not None:
-            from g8e_evals.campaign_set import CampaignSetPlan as _CSP
+        if loaded_campaign_set_plan is not None:
             from g8e_evals.runner import compute_provider_budget_hash as _cpbh
-            try:
-                loaded_campaign_set_plan = _CSP.model_validate_json(
-                    campaign_set_plan.read_text()
-                )
-            except (ValidationError, OSError) as e:
-                raise click.UsageError(
-                    f"could not parse campaign-set plan {campaign_set_plan}: {e}"
-                ) from e
             retry_policy_hash = compute_retry_policy_hash(
                 max_retries, ["infrastructure_failed"],
             )
@@ -1092,6 +1195,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
                     provider_environment_scope=campaign_profile.provider_hardware_identity,
                     campaign_set_plan=loaded_campaign_set_plan,
                     task_ids=[t.id for t in tasks],
+                    replacement_rule=loaded_replacement_rule,
                 )
             except ValueError as e:
                 raise click.UsageError(
@@ -1242,6 +1346,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         model_registry=model_registry,
         cohort_variant_map=cohort_variant_map,
         campaign_set_plan=loaded_campaign_set_plan,
+        replacement_rule=loaded_replacement_rule,
     )
 
     try:
@@ -1619,7 +1724,9 @@ def campaign_set_validate(plan: Path, index: Path | None):
 @click.option("--child-dir", "child_dirs", type=(str, click.Path(exists=True, file_okay=False, path_type=Path)),
               multiple=True, required=True,
               help="Child ID and report directory path pair. Repeat for each child.")
-def campaign_set_verify(plan: Path, index: Path, child_dirs: list[tuple[str, Path]]):
+@click.option("--replacement-rule", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
+              help="Path to a JSON ReplacementManifestRule file. When provided, replacement lineage on child report bindings is verified against the rule.")
+def campaign_set_verify(plan: Path, index: Path, child_dirs: list[tuple[str, Path]], replacement_rule: Path | None):
     """Verify a complete campaign set: each child, then aggregate coverage.
 
     Runs the offline campaign verifier on each child report directory,
@@ -1628,6 +1735,7 @@ def campaign_set_verify(plan: Path, index: Path, child_dirs: list[tuple[str, Pat
     on any failure.
     """
     from g8e_evals.campaign_set import load_campaign_set_index, load_campaign_set_plan, verify_campaign_set_aggregate
+    from g8e_evals.replacement_rule import ReplacementManifestRule
 
     try:
         set_plan = load_campaign_set_plan(plan)
@@ -1643,11 +1751,25 @@ def campaign_set_verify(plan: Path, index: Path, child_dirs: list[tuple[str, Pat
     except OSError as e:
         raise click.UsageError(f"could not read campaign-set index {index}: {e}") from e
 
+    loaded_replacement_rule: ReplacementManifestRule | None = None
+    if replacement_rule is not None:
+        try:
+            loaded_replacement_rule = ReplacementManifestRule.model_validate_json(
+                replacement_rule.read_text()
+            )
+        except (ValidationError, OSError) as e:
+            raise click.UsageError(
+                f"could not parse replacement rule {replacement_rule}: {e}"
+            ) from e
+
     child_report_dirs: dict[str, Path] = {}
     for child_id, report_dir in child_dirs:
         child_report_dirs[child_id] = report_dir
 
-    result = verify_campaign_set_aggregate(set_plan, set_index, child_report_dirs)
+    result = verify_campaign_set_aggregate(
+        set_plan, set_index, child_report_dirs,
+        replacement_rule=loaded_replacement_rule,
+    )
 
     console = Console()
     console.print(f"[cyan]Campaign-set verification[/cyan] {result.set_id}")

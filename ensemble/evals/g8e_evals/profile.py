@@ -38,7 +38,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 if TYPE_CHECKING:
     from g8e_evals.registry import ModelRegistry
 
-from g8e_evals.schema import CampaignTrack, TrackArmAssignment
+from g8e_evals.schema import TrackArmAssignment
 
 
 CAMPAIGN_PROFILE_VERSION = "1.0.0"

@@ -507,6 +507,45 @@ class CampaignBinding(BaseModel):
         min_length=1,
         description="Declared track-to-arm assignments from the bound campaign profile. Every executed arm must appear here.",
     )
+    supersedes_child_id: str | None = Field(
+        default=None,
+        description="Original plan child ID this report replaces; set only on D24 replacement reports.",
+    )
+    replacement_attempt: int | None = Field(
+        default=None, ge=1,
+        description="Replacement attempt number under the bound replacement-manifest rule.",
+    )
+    replacement_rule_hash: str | None = Field(
+        default=None, min_length=64, max_length=64,
+        description="SHA-256 content hash of the ReplacementManifestRule authorizing this replacement.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_replacement_lineage(self) -> CampaignBinding:
+        """Replacement lineage is all-or-none and only valid on CHILD reports."""
+        fields_set = [
+            self.supersedes_child_id is not None,
+            self.replacement_attempt is not None,
+            self.replacement_rule_hash is not None,
+        ]
+        if any(fields_set) and not all(fields_set):
+            raise ValueError(
+                "replacement lineage fields supersedes_child_id, "
+                "replacement_attempt, and replacement_rule_hash must be "
+                "set together or omitted together"
+            )
+        if all(fields_set):
+            if self.report_role != ReportRole.CHILD or self.child_campaign_id is None:
+                raise ValueError(
+                    "replacement lineage requires report_role=child and a "
+                    "child_campaign_id"
+                )
+            if self.supersedes_child_id == self.child_campaign_id:
+                raise ValueError(
+                    "supersedes_child_id must differ from child_campaign_id: "
+                    "a replacement report carries a new derived child identity"
+                )
+        return self
 
 
 class RunManifest(BaseModel):

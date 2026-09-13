@@ -51,6 +51,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from g8e_evals.campaign_set import CampaignSetPlan
+    from g8e_evals.replacement_rule import ReplacementManifestRule
 
 from g8e_evals.analysis.canonical import (
     CanonicalEvalAnalysis,
@@ -125,6 +126,10 @@ from g8e_evals.index import (
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
 from g8e_evals.profile import CampaignProfile
 from g8e_evals.registry import ModelRegistry
+from g8e_evals.replacement_rule import (
+    resolve_replacement_child_id,
+    validate_replacement_rule_plan_binding,
+)
 from g8e_evals.report.validate import validate_standalone_report
 from g8e_evals.schema import (
     ArmManifestEntry,
@@ -871,6 +876,30 @@ def _validate_arm_coherence(
         )
 
 
+def _validate_replacement_rule_binding(
+    rule: ReplacementManifestRule,
+    plan: CampaignSetPlan | None,
+) -> None:
+    """Reject a replacement rule that is not bound to the loaded plan.
+
+    A ``ReplacementManifestRule`` authorizes replacement child runs only
+    for the campaign-set plan it binds by ``set_id`` and
+    ``set_plan_hash``. The rule must be accompanied by that plan, must
+    name the plan's set ID, must pin the plan's content hash, and may
+    only declare replaceable children that exist in the plan. Every
+    violation fails closed before the report directory is created.
+    """
+    if plan is None:
+        raise CampaignRunnerError(
+            "replacement_rule is bound but no campaign_set_plan is bound; "
+            "a replacement rule authorizes replacements only under the "
+            "campaign-set plan it names"
+        )
+    failures = validate_replacement_rule_plan_binding(rule, plan)
+    if failures:
+        raise CampaignRunnerError("; ".join(failures))
+
+
 def _unavailable(
     field_name: str,
     availability: MeasurementAvailability,
@@ -1330,6 +1359,7 @@ class CampaignRunner:
     model_registry: ModelRegistry | None = None
     cohort_variant_map: dict[str, str] | None = None
     campaign_set_plan: CampaignSetPlan | None = None
+    replacement_rule: ReplacementManifestRule | None = None
     disk_space_min_bytes: int = 0
     _run_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     _report_dir: Path | None = None
@@ -1682,6 +1712,9 @@ class CampaignRunner:
         child_campaign_id: str | None = None
         child_campaign_revision: str | None = None
         report_role = ReportRole.SINGLE
+        supersedes_child_id: str | None = None
+        replacement_attempt: int | None = None
+        replacement_rule_hash: str | None = None
 
         if self.campaign_set_plan is not None:
             child_plan = next(
@@ -1689,12 +1722,22 @@ class CampaignRunner:
                  if cp.child_id == self.spec.campaign_id),
                 None,
             )
+            if child_plan is None and self.replacement_rule is not None:
+                resolved = resolve_replacement_child_id(
+                    self.replacement_rule,
+                    self.campaign_set_plan,
+                    self.spec.campaign_id,
+                )
+                if resolved is not None:
+                    child_plan, replacement_attempt = resolved
+                    supersedes_child_id = child_plan.child_id
+                    replacement_rule_hash = self.replacement_rule.content_hash
             if child_plan is None:
                 raise CampaignRunnerError(
                     f"campaign_id {self.spec.campaign_id!r} does not match any "
                     f"child in campaign-set plan {self.campaign_set_plan.set_id!r}"
                 )
-            child_campaign_id = child_plan.child_id
+            child_campaign_id = self.spec.campaign_id
             child_campaign_revision = child_plan.child_revision
             report_role = ReportRole.CHILD
 
@@ -1704,6 +1747,9 @@ class CampaignRunner:
             report_role=report_role,
             child_campaign_id=child_campaign_id,
             child_campaign_revision=child_campaign_revision,
+            supersedes_child_id=supersedes_child_id,
+            replacement_attempt=replacement_attempt,
+            replacement_rule_hash=replacement_rule_hash,
             campaign_profile_hash=self.campaign_profile.content_hash,
             model_registry_hash=self.model_registry.content_hash,
             required_record_policy_hash=self.campaign_profile.required_record_policy_hash,
@@ -1968,6 +2014,22 @@ class CampaignRunner:
         if self.campaign_profile is not None:
             _validate_orchestrator_scope(self.campaign_profile.hardware_identity)
             _validate_arm_coherence(self.campaign_profile, self.spec.preregistration)
+
+        # 0c. Campaign-set and replacement-rule coherence. A bound plan
+        # requires a bound profile — the campaign binding is where child
+        # identity and replacement lineage are recorded, so a plan-bound
+        # run without a profile could not produce verifiable evidence. A
+        # bound replacement rule must bind the loaded plan exactly.
+        if self.campaign_set_plan is not None and self.campaign_profile is None:
+            raise CampaignRunnerError(
+                "campaign_set_plan is bound but no campaign_profile is bound; "
+                "a campaign-set child requires the frozen profile authority"
+            )
+        if self.replacement_rule is not None:
+            _validate_replacement_rule_binding(
+                self.replacement_rule,
+                self.campaign_set_plan,
+            )
 
         # 1. Build assignments and schedule
         assignments, schedule = build_campaign_state(self.spec)

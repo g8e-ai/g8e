@@ -35,7 +35,10 @@ from g8e_evals.profile import (
     TrackArmAssignment,
     compute_campaign_profile_hash,
 )
+from g8e_evals.replacement_rule import compute_replacement_child_id
 from g8e_evals.schema import CampaignTrack
+
+from _set_plan_fixture import make_campaign_set_plan, make_replacement_rule
 
 
 pytestmark = pytest.mark.unit
@@ -175,6 +178,95 @@ class TestValidateCampaignIdentity:
             gold_set_task_ids=["task-1"],
             task_slice_in_use=True,
         )
+
+
+class TestValidateCampaignIdentitySetChild:
+    """S2-C invocation contract: a campaign-set child identifies itself
+    by its plan-derived child_id (or a rule-derived replacement ID), and
+    the plan's parent_campaign_id must equal the profile's campaign_id.
+    The child's task partition is checked by the campaign-set child
+    preflight, not by the profile-vs-gold-set task comparison."""
+
+    def test_plan_child_id_accepted(self):
+        plan = make_campaign_set_plan()
+        profile = _make_profile(campaign_id=plan.parent_campaign_id)
+        validate_campaign_identity(
+            campaign_id=plan.child_plans[0].child_id,
+            campaign_profile=profile,
+            gold_set_task_ids=list(plan.child_plans[0].partition_task_ids),
+            task_slice_in_use=True,
+            campaign_set_plan=plan,
+        )
+
+    def test_parent_campaign_id_rejected_when_plan_bound(self):
+        """Under the S2-C contract the parent profile ID is not a valid
+        child identity for a set-bound run."""
+        plan = make_campaign_set_plan()
+        profile = _make_profile(campaign_id=plan.parent_campaign_id)
+        with pytest.raises(ValueError, match="not a child"):
+            validate_campaign_identity(
+                campaign_id=plan.parent_campaign_id,
+                campaign_profile=profile,
+                gold_set_task_ids=["task-1"],
+                task_slice_in_use=True,
+                campaign_set_plan=plan,
+            )
+
+    def test_plan_parent_mismatch_rejected(self):
+        plan = make_campaign_set_plan()
+        profile = _make_profile(campaign_id="other-campaign")
+        with pytest.raises(ValueError, match="parent_campaign_id"):
+            validate_campaign_identity(
+                campaign_id=plan.child_plans[0].child_id,
+                campaign_profile=profile,
+                gold_set_task_ids=["task-1"],
+                task_slice_in_use=True,
+                campaign_set_plan=plan,
+            )
+
+    def test_unknown_id_rejected(self):
+        plan = make_campaign_set_plan()
+        profile = _make_profile(campaign_id=plan.parent_campaign_id)
+        with pytest.raises(ValueError, match="not a child"):
+            validate_campaign_identity(
+                campaign_id="not-a-child-id",
+                campaign_profile=profile,
+                gold_set_task_ids=["task-1"],
+                task_slice_in_use=True,
+                campaign_set_plan=plan,
+            )
+
+    def test_replacement_id_accepted_with_bound_rule(self):
+        plan = make_campaign_set_plan()
+        rule = make_replacement_rule(plan=plan)
+        replacement_id = compute_replacement_child_id(
+            rule.rule_id, plan.child_plans[1].child_id, 1
+        )
+        profile = _make_profile(campaign_id=plan.parent_campaign_id)
+        validate_campaign_identity(
+            campaign_id=replacement_id,
+            campaign_profile=profile,
+            gold_set_task_ids=list(plan.child_plans[1].partition_task_ids),
+            task_slice_in_use=True,
+            campaign_set_plan=plan,
+            replacement_rule=rule,
+        )
+
+    def test_replacement_id_rejected_without_rule(self):
+        plan = make_campaign_set_plan()
+        rule = make_replacement_rule(plan=plan)
+        replacement_id = compute_replacement_child_id(
+            rule.rule_id, plan.child_plans[1].child_id, 1
+        )
+        profile = _make_profile(campaign_id=plan.parent_campaign_id)
+        with pytest.raises(ValueError, match="not a child"):
+            validate_campaign_identity(
+                campaign_id=replacement_id,
+                campaign_profile=profile,
+                gold_set_task_ids=["task-1"],
+                task_slice_in_use=True,
+                campaign_set_plan=plan,
+            )
 
 
 class TestLoadSourceBuildProvenanceOrReject:

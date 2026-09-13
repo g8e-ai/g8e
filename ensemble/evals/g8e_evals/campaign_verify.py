@@ -86,6 +86,7 @@ from g8e_evals.schema import (
     EscalationRecord,
     EvidenceIndex,
     MetricObservation,
+    ReportRole,
     RunManifest,
     SecurityEventRecord,
     StageKind,
@@ -1051,15 +1052,28 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
             failures.append(
                 "artifact identity: campaign_binding.required_record_policy_hash is missing, invalid, or zero"
             )
-        # Cross-check: the binding's campaign_id must match the campaign
-        # manifest's campaign_id. A mismatch indicates the report was
-        # produced under a different campaign authority than the manifest
-        # claims.
-        if manifest is not None and binding.campaign_id != manifest.campaign_id:
-            failures.append(
-                f"artifact identity: campaign_binding.campaign_id {binding.campaign_id!r} "
-                f"does not match campaign manifest campaign_id {manifest.campaign_id!r}"
-            )
+        # Cross-check: the binding's campaign identity must match the
+        # campaign manifest's campaign_id. For a single report the
+        # binding's campaign_id is the campaign identity. For a child
+        # report the manifest carries the plan child_id (or a rule-derived
+        # replacement ID) while the binding's campaign_id is the parent
+        # profile campaign — the manifest identity joins through the
+        # binding's child_campaign_id. A mismatch indicates the report
+        # was produced under a different campaign authority than the
+        # manifest claims.
+        if manifest is not None:
+            if binding.report_role == ReportRole.CHILD:
+                if binding.child_campaign_id != manifest.campaign_id:
+                    failures.append(
+                        f"artifact identity: campaign_binding.child_campaign_id "
+                        f"{binding.child_campaign_id!r} does not match campaign "
+                        f"manifest campaign_id {manifest.campaign_id!r}"
+                    )
+            elif binding.campaign_id != manifest.campaign_id:
+                failures.append(
+                    f"artifact identity: campaign_binding.campaign_id {binding.campaign_id!r} "
+                    f"does not match campaign manifest campaign_id {manifest.campaign_id!r}"
+                )
 
     # Layer 10b: arm coherence — every arm the report executed must be
     # declared by the bound profile's track_arm_assignments carried on

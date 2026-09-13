@@ -469,6 +469,10 @@ def _set_campaign_binding(report_dir: Path, *, policy_hash: str | None = None) -
         "orchestrator_environment_stratum": "dev",
         "provider_hardware_identity": "unavailable",
         "provider_environment_stratum": "unavailable",
+        "track_arm_assignments": [
+            {"track": "direct", "arm_id": "direct"},
+            {"track": "tier_fitness", "arm_id": "ensemble_ungoverned"},
+        ],
     }
     manifest_path.write_text(json.dumps(manifest))
 

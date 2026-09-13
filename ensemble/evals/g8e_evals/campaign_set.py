@@ -45,17 +45,24 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from g8e_evals.campaign_verify import verify_campaign
 from g8e_evals.constants import (
     ATTEMPTS_JSONL,
     CAMPAIGN_ASSIGNMENTS_JSONL,
     CAMPAIGN_VERIFICATION_REPORT_JSON,
+    MANIFEST_JSON,
     METRICS_JSONL,
     REPORT_CHECKSUM_JSON,
 )
 from g8e_evals.index import CampaignVerificationReport
+from g8e_evals.replacement_rule import (
+    ReplacementManifestRule,
+    compute_replacement_child_id,
+    validate_replacement_rule_plan_binding,
+)
+from g8e_evals.schema import CampaignBinding, ReportRole, RunManifest
 
 
 CAMPAIGN_SET_SCHEMA_VERSION = "1.0.0"
@@ -810,10 +817,116 @@ def _read_stored_report_checksum(report_dir: Path) -> str | None:
     return data.get("checksum")
 
 
+def _read_campaign_binding(report_dir: Path) -> CampaignBinding | None:
+    """Read the campaign binding from a child report's run manifest.
+
+    Returns ``None`` when the manifest is missing, unparseable, or
+    carries no campaign binding.
+    """
+    manifest_path = report_dir / MANIFEST_JSON
+    if not manifest_path.exists():
+        return None
+    try:
+        manifest = RunManifest.model_validate_json(manifest_path.read_text())
+    except (ValidationError, OSError):
+        return None
+    return manifest.campaign_binding
+
+
+def _verify_child_binding(
+    *,
+    binding: CampaignBinding,
+    plan: CampaignSetPlan,
+    child_id: str,
+    replacement_rule: ReplacementManifestRule | None,
+    failures: list[str],
+) -> None:
+    """Verify a child report's campaign binding against its plan slot.
+
+    The report directory is keyed under the plan slot's ``child_id``.
+    A non-replacement binding must declare ``report_role=child``, the
+    plan's ``parent_campaign_id``, and a ``child_campaign_id`` equal to
+    the slot it is keyed under. A replacement binding must carry D24
+    lineage that resolves under the bound rule: the rule hash must match,
+    the superseded ID must be this plan slot and listed as replaceable,
+    the attempt number must be within the rule ceiling, and
+    ``child_campaign_id`` must equal the derived replacement ID.
+    """
+    if binding.report_role != ReportRole.CHILD:
+        failures.append(
+            f"child {child_id}: campaign binding report_role "
+            f"{binding.report_role.value!r} != 'child'"
+        )
+    if binding.campaign_id != plan.parent_campaign_id:
+        failures.append(
+            f"child {child_id}: campaign binding campaign_id "
+            f"{binding.campaign_id!r} != plan parent_campaign_id "
+            f"{plan.parent_campaign_id!r}"
+        )
+
+    if binding.supersedes_child_id is None:
+        if binding.child_campaign_id != child_id:
+            failures.append(
+                f"child {child_id}: campaign binding child_campaign_id "
+                f"{binding.child_campaign_id!r} does not match the plan "
+                "slot the report is keyed under"
+            )
+        return
+
+    # D24 replacement lineage.
+    if replacement_rule is None:
+        failures.append(
+            f"child {child_id}: campaign binding carries replacement "
+            "lineage but no replacement rule is bound to verification"
+        )
+        return
+    if binding.replacement_rule_hash != replacement_rule.content_hash:
+        failures.append(
+            f"child {child_id}: campaign binding replacement_rule_hash "
+            f"{binding.replacement_rule_hash!r} != bound rule content_hash "
+            f"{replacement_rule.content_hash!r}"
+        )
+    if binding.supersedes_child_id != child_id:
+        failures.append(
+            f"child {child_id}: campaign binding supersedes_child_id "
+            f"{binding.supersedes_child_id!r} does not match the plan "
+            "slot the report is keyed under"
+        )
+    if binding.supersedes_child_id not in replacement_rule.replaceable_child_ids:
+        failures.append(
+            f"child {child_id}: superseded child "
+            f"{binding.supersedes_child_id!r} is not in the replacement "
+            "rule's replaceable_child_ids"
+        )
+    attempt = binding.replacement_attempt
+    if attempt is None or not (1 <= attempt <= replacement_rule.max_attempts_per_child):
+        failures.append(
+            f"child {child_id}: replacement_attempt {attempt!r} is not "
+            f"within the rule's max_attempts_per_child "
+            f"{replacement_rule.max_attempts_per_child}"
+        )
+        return
+    expected_id = compute_replacement_child_id(
+        replacement_rule.rule_id,
+        binding.supersedes_child_id,
+        attempt,
+    )
+    if binding.child_campaign_id != expected_id:
+        failures.append(
+            f"child {child_id}: campaign binding child_campaign_id "
+            f"{binding.child_campaign_id!r} does not equal the derived "
+            f"replacement ID {expected_id!r} for (rule "
+            f"{replacement_rule.rule_id!r}, superseded child, attempt "
+            f"{attempt})"
+        )
+
+
 def verify_campaign_set_aggregate(
     plan: CampaignSetPlan,
     index: CampaignSetIndex,
     child_report_dirs: dict[str, Path],
+    *,
+    replacement_rule: ReplacementManifestRule | None = None,
 ) -> AggregateVerificationResult:
     """Verify a complete campaign set: each child, then aggregate coverage.
 
@@ -839,6 +952,10 @@ def verify_campaign_set_aggregate(
        product of the partition's task IDs, the plan's repetition IDs,
        and the distinct variant pairs, with no duplicates or missing
        combinations.
+    9. Verifies each child report's ``CampaignBinding`` against its plan
+       slot: non-replacement children bind ``child_campaign_id`` to the
+       slot's ``child_id``; replacement children must carry D24 lineage
+       that derives under the bound ``replacement_rule``.
 
     A caller cannot pass four arbitrary directories; the child_report_dirs
     mapping must contain exactly the child IDs from the plan, and each
@@ -855,6 +972,9 @@ def verify_campaign_set_aggregate(
         validate_campaign_set_index(index, plan)
     except ValueError as e:
         failures.append(f"index/plan validation failed: {e}")
+
+    if replacement_rule is not None:
+        failures.extend(validate_replacement_rule_plan_binding(replacement_rule, plan))
 
     plan_child_ids = [cp.child_id for cp in plan.child_plans]
 
@@ -993,6 +1113,24 @@ def verify_campaign_set_aggregate(
                     f"{recomputed_checksum!r} != index report_checksum "
                     f"{index_entry.report_checksum!r}"
                 )
+
+        # --- Campaign binding child identity and replacement lineage ---
+        binding = _read_campaign_binding(report_dir)
+        if binding is None:
+            if replacement_rule is not None:
+                failures.append(
+                    f"child {child_id}: run manifest carries no campaign "
+                    "binding; a bound replacement rule requires every "
+                    "child report to bind its identity"
+                )
+        else:
+            _verify_child_binding(
+                binding=binding,
+                plan=plan,
+                child_id=child_id,
+                replacement_rule=replacement_rule,
+                failures=failures,
+            )
 
         # --- Prove exact task x repetition x variant product ---
         child_product_ok = True
