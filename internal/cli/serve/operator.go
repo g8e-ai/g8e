@@ -58,7 +58,7 @@ type ServeOperatorOptions struct {
 
 	// Inference (g8ellama). Enabled when the operator runs as an Inference
 	// Node calling the configured remote Ollama provider.
-	InferenceEnabled       bool
+	InferenceEnabled        bool
 	InferenceOllamaEndpoint string
 	InferencePrimaryModel   string
 	InferenceAssistantModel string

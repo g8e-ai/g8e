@@ -41,10 +41,10 @@ import (
 // canned GenerateResponse without contacting any real Ollama daemon. It
 // records the last request so the test can assert role/model routing.
 type stubInferenceBackend struct {
-	resp     *models.GenerateResponse
-	err      error
-	lastReq  models.GenerateRequest
-	called   bool
+	resp    *models.GenerateResponse
+	err     error
+	lastReq models.GenerateRequest
+	called  bool
 }
 
 func (s *stubInferenceBackend) Generate(_ context.Context, req models.GenerateRequest) (*models.GenerateResponse, error) {
@@ -100,12 +100,12 @@ func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stub
 
 	cfg := testutil.NewTestConfig(t)
 	cfg.Inference = config.InferenceConfig{
-		Enabled:      true,
-		Backend:      "ollama",
-		PrimaryModel:  "gemma3:4b",
+		Enabled:        true,
+		Backend:        "ollama",
+		PrimaryModel:   "gemma3:4b",
 		AssistantModel: "llama3.2:3b",
-		LiteModel:    "qwen3:1.5b",
-		KeepAlive:    "-1",
+		LiteModel:      "qwen3:1.5b",
+		KeepAlive:      "-1",
 	}
 	logger := testutil.NewTestLogger()
 

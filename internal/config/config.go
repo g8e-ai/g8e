@@ -92,8 +92,8 @@ type LoadOptions struct {
 	Lattice *latticeconfig.LatticeConfig
 
 	// Inference backend (g8ellama). Disabled when InferenceEnabled is false.
-	InferenceEnabled    bool
-	InferenceBackend    string
+	InferenceEnabled        bool
+	InferenceBackend        string
 	InferenceOllamaEndpoint string
 	InferencePrimaryModel   string
 	InferenceAssistantModel string
@@ -674,10 +674,10 @@ func newInferenceConfig(opts LoadOptions) InferenceConfig {
 		keepAlive = "-1"
 	}
 	return InferenceConfig{
-		Enabled:                  opts.InferenceEnabled,
-		Backend:                  backend,
-		OllamaEndpoint:           endpoint,
-		ModelsDir:                constants.DefaultModelsDir,
+		Enabled:        opts.InferenceEnabled,
+		Backend:        backend,
+		OllamaEndpoint: endpoint,
+		ModelsDir:      constants.DefaultModelsDir,
 		PrimaryModel:   opts.InferencePrimaryModel,
 		AssistantModel: opts.InferenceAssistantModel,
 		LiteModel:      opts.InferenceLiteModel,

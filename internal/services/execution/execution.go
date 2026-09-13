@@ -183,7 +183,7 @@ func NewExecutionService(cfg *config.Config, logger *slog.Logger) *ExecutionServ
 func getCloudCLICommands() map[string]bool {
 	return map[string]bool{
 		// Cloud provider CLIs
-		"aws": true,
+		"aws":    true,
 		"gcloud": true,
 		"az":     true,
 		"gsutil": true,

@@ -393,14 +393,14 @@ const (
 	// DefaultModelsDir are governed data assets (.gguf files that Ollama
 	// reads); the directory is the canonical path for staged models in
 	// air-gapped deployments.
-	InferenceDirname         = "inference"
-	ModelsDirname             = "models"
-	InferenceStateFilename   = "inference-state.json"
+	InferenceDirname           = "inference"
+	ModelsDirname              = "models"
+	InferenceStateFilename     = "inference-state.json"
 	InferenceModelfilesDirname = "modelfiles"
 	InferenceManifestFilename  = "inference-manifest.json"
 
 	DefaultInferenceDir = RuntimeDirname + "/" + InferenceDirname
-	DefaultModelsDir   = RuntimeDirname + "/" + InferenceDirname + "/" + ModelsDirname
+	DefaultModelsDir    = RuntimeDirname + "/" + InferenceDirname + "/" + ModelsDirname
 
 	// Ledger-specific directory and file names
 	FilesDirname      = "files"
@@ -856,11 +856,11 @@ const (
 // Supervisor runtime path constants (O1-supervisor: continuous campaign
 // supervisor with hash-linked cycle ledger and persisted spec).
 const (
-	SupervisorDirname             = "supervisor"
-	SupervisorSpecFilename        = "spec.json"
-	SupervisorLedgerFilename      = "cycle-ledger.jsonl"
-	SupervisorLockFilename        = "supervisor.lock"
-	SupervisorStateFilename       = "state.json"
+	SupervisorDirname        = "supervisor"
+	SupervisorSpecFilename   = "spec.json"
+	SupervisorLedgerFilename = "cycle-ledger.jsonl"
+	SupervisorLockFilename   = "supervisor.lock"
+	SupervisorStateFilename  = "state.json"
 )
 
 // Public feed runtime path constants (O3-public-feed: outbound publisher,
@@ -879,16 +879,16 @@ const (
 
 // Public feed schema and protocol version constants.
 const (
-	PublicFeedProtocolVersion       = "1.0.0"
-	PublicFeedSchemaVersion         = "1.0.0"
+	PublicFeedProtocolVersion        = "1.0.0"
+	PublicFeedSchemaVersion          = "1.0.0"
 	PublicProofManifestSchemaVersion = "1.0.0"
 	PublicProofCatalogSchemaVersion  = "1.0.0"
-	PublicFeedBatchMaxRecords       = 100
-	PublicFeedBatchMaxBytes         = 4 << 20
-	PublicFeedRetryMaxAttempts      = 5
-	PublicFeedRetryInitialBackoff   = 1
-	PublicFeedRetryMaxBackoff       = 60
-	PublicFeedAckWindowSeconds      = 300
-	PublicFeedMaxArtifactBytes      = 64 << 20
-	PublicFeedZeroHashHex           = "0000000000000000000000000000000000000000000000000000000000000000"
+	PublicFeedBatchMaxRecords        = 100
+	PublicFeedBatchMaxBytes          = 4 << 20
+	PublicFeedRetryMaxAttempts       = 5
+	PublicFeedRetryInitialBackoff    = 1
+	PublicFeedRetryMaxBackoff        = 60
+	PublicFeedAckWindowSeconds       = 300
+	PublicFeedMaxArtifactBytes       = 64 << 20
+	PublicFeedZeroHashHex            = "0000000000000000000000000000000000000000000000000000000000000000"
 )

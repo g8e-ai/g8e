@@ -47,8 +47,8 @@ type HTTPHandlerDependencies struct {
 	AdminControllerDeps              AdminControllerDeps
 	OperatorControllerDeps           OperatorControllerDeps
 	DispatchControllerDeps           DispatchControllerDeps
-	InferenceDispatchControllerDeps InferenceDispatchControllerDeps
-	SSEControllerDeps               SSEControllerDeps
+	InferenceDispatchControllerDeps  InferenceDispatchControllerDeps
+	SSEControllerDeps                SSEControllerDeps
 	HealthControllerDeps             HealthControllerDeps
 	GovernanceControllerDeps         GovernanceControllerDeps
 	MCPControllerDeps                MCPControllerDeps
@@ -70,27 +70,27 @@ type HTTPHandler struct {
 	passkeyController            *PasskeyController
 	platformEnrollmentController *PlatformEnrollmentController
 	// Controllers for domain-specific endpoints
-	pkiController             *PKIController
-	auditController           *AuditController
-	dataController            *DataController
-	signerController          *SignerController
-	bootstrapController       *BootstrapController
-	cliRecoveryController     *CLIRecoveryController
-	cliRotationController     *CLIRotationController
-	cliRefreshController      *CLIRefreshController
-	cliSessionController      *CLISessionController
-	enrollmentTokenController *EnrollmentTokenController
-	userController            *UserController
-	sessionController         *SessionController
-	adminController           *AdminController
-	operatorController        *OperatorController
-	dispatchController        *DispatchController
+	pkiController               *PKIController
+	auditController             *AuditController
+	dataController              *DataController
+	signerController            *SignerController
+	bootstrapController         *BootstrapController
+	cliRecoveryController       *CLIRecoveryController
+	cliRotationController       *CLIRotationController
+	cliRefreshController        *CLIRefreshController
+	cliSessionController        *CLISessionController
+	enrollmentTokenController   *EnrollmentTokenController
+	userController              *UserController
+	sessionController           *SessionController
+	adminController             *AdminController
+	operatorController          *OperatorController
+	dispatchController          *DispatchController
 	inferenceDispatchController *InferenceDispatchController
-	sseController             *SSEController
-	healthController          *HealthController
-	governanceController      *GovernanceController
-	observeController         *ObserveController
-	observeProducerController *ObserveProducerController
+	sseController               *SSEController
+	healthController            *HealthController
+	governanceController        *GovernanceController
+	observeController           *ObserveController
+	observeProducerController   *ObserveProducerController
 
 	// router is the main HTTP router, built once at construction by
 	// buildPublicRouter and cached for the lifetime of the handler. It is
@@ -223,7 +223,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		adminController:              newAdminController(deps.AdminControllerDeps),
 		operatorController:           newOperatorController(deps.OperatorControllerDeps),
 		dispatchController:           newDispatchController(deps.DispatchControllerDeps),
-		inferenceDispatchController: newInferenceDispatchController(deps.InferenceDispatchControllerDeps),
+		inferenceDispatchController:  newInferenceDispatchController(deps.InferenceDispatchControllerDeps),
 		sseController:                newSSEController(deps.SSEControllerDeps),
 		healthController:             newHealthController(deps.HealthControllerDeps),
 		governanceController:         newGovernanceController(deps.GovernanceControllerDeps),

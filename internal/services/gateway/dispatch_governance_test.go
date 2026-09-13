@@ -87,7 +87,7 @@ func baseEnvelopeParams(action constants.ActionType, payload []byte, posture str
 	return BuildEnvelopeParams{
 		OperatorID:        "op-001",
 		OperatorSessionID: "sess-001",
-		ActionType:         string(action),
+		ActionType:        string(action),
 		Payload:           payload,
 		TargetResource:    "localhost",
 		RequestorUserID:   "user-001",
@@ -220,9 +220,9 @@ func TestDispatchService_PostureTable_L2Deliberation(t *testing.T) {
 		{
 			name:            "consensus read deliberates",
 			posture:         constants.PostureConsensus,
-			action:           constants.ActionTypeFsRead,
-			payload:          fsReadPayload,
-			wantDeliberated:  true,
+			action:          constants.ActionTypeFsRead,
+			payload:         fsReadPayload,
+			wantDeliberated: true,
 		},
 		{
 			name:    "notary mutation rejected before deliberation",
@@ -300,9 +300,9 @@ func TestDispatchService_L2DeliberationFailureFailsClosed(t *testing.T) {
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: op.OperatorSessionID,
-		ActionType:               string(constants.ActionTypeFsRead),
-		Payload:                  fsReadPayload(t),
-		RequestorUserID:          "user-001",
+		ActionType:              string(constants.ActionTypeFsRead),
+		Payload:                 fsReadPayload(t),
+		RequestorUserID:         "user-001",
 	})
 	require.Error(t, err)
 	assert.False(t, published, "envelope must not be published when L2 deliberation fails")

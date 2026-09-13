@@ -63,10 +63,10 @@ func TestBuildProofPackage_CreatesCompletePackage(t *testing.T) {
 
 	artifacts := []ProofArtifactInput{
 		{
-			Filename:    "model-campaign.json",
-			MediaType:   "application/json",
-			Content:     []byte(`{"campaign_id":"c1","verification_ok":true}`),
-			CampaignID:  "c1",
+			Filename:   "model-campaign.json",
+			MediaType:  "application/json",
+			Content:    []byte(`{"campaign_id":"c1","verification_ok":true}`),
+			CampaignID: "c1",
 		},
 		{
 			Filename:    "campaign-projections.jsonl",

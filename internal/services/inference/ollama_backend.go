@@ -87,11 +87,11 @@ func NewOllamaBackend(endpoint string, logger *slog.Logger) (*OllamaBackend, err
 
 // ollamaChatRequest is the request body for Ollama's /api/chat endpoint.
 type ollamaChatRequest struct {
-	Model     string             `json:"model"`
+	Model     string              `json:"model"`
 	Messages  []ollamaChatMessage `json:"messages"`
-	Stream    bool               `json:"stream"`
+	Stream    bool                `json:"stream"`
 	Options   ollamaChatOptions   `json:"options,omitempty"`
-	KeepAlive string             `json:"keep_alive,omitempty"`
+	KeepAlive string              `json:"keep_alive,omitempty"`
 }
 
 type ollamaChatMessage struct {
@@ -107,12 +107,12 @@ type ollamaChatOptions struct {
 // ollamaChatResponse is the response body from Ollama's /api/chat endpoint
 // (non-streaming).
 type ollamaChatResponse struct {
-	Model     string `json:"model"`
-	Message   ollamaChatMessage `json:"message"`
-	Done      bool   `json:"done"`
-	DoneReason string `json:"done_reason"`
-	PromptEvalCount int32 `json:"prompt_eval_count"`
-	EvalCount       int32 `json:"eval_count"`
+	Model           string            `json:"model"`
+	Message         ollamaChatMessage `json:"message"`
+	Done            bool              `json:"done"`
+	DoneReason      string            `json:"done_reason"`
+	PromptEvalCount int32             `json:"prompt_eval_count"`
+	EvalCount       int32             `json:"eval_count"`
 }
 
 // ollamaTagsResponse is the response body from Ollama's /api/tags endpoint.

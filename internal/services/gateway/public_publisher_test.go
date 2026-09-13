@@ -649,8 +649,8 @@ func TestExportBatch_RejectsProhibitedFields(t *testing.T) {
 
 	// A record with a prohibited field.
 	badRecord := map[string]any{
-		"campaign_id":  "c1",
-		"raw_prompt":   "some private prompt",
+		"campaign_id": "c1",
+		"raw_prompt":  "some private prompt",
 	}
 	recordBytes, err := json.Marshal(badRecord)
 	require.NoError(t, err)

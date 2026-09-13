@@ -134,13 +134,13 @@ type SafetyStopResult struct {
 // supervisor's Status operation. It carries the current supervisor state, the
 // persisted spec, and the cycle ledger.
 type SupervisorSnapshot struct {
-	Spec            ContinuousRunSpec  `json:"spec"`
-	Status          SupervisorStatus   `json:"status"`
-	CurrentCycleID  string             `json:"current_cycle_id,omitempty"`
-	LastCycleID     string             `json:"last_cycle_id,omitempty"`
-	StopReason      StopReason         `json:"stop_reason,omitempty"`
-	CycleCount      int                `json:"cycle_count"`
-	LastCycleHash   string             `json:"last_cycle_hash,omitempty"`
-	Ledger          []CycleLedgerEntry `json:"ledger"`
-	ObservedAt      time.Time          `json:"observed_at"`
+	Spec           ContinuousRunSpec  `json:"spec"`
+	Status         SupervisorStatus   `json:"status"`
+	CurrentCycleID string             `json:"current_cycle_id,omitempty"`
+	LastCycleID    string             `json:"last_cycle_id,omitempty"`
+	StopReason     StopReason         `json:"stop_reason,omitempty"`
+	CycleCount     int                `json:"cycle_count"`
+	LastCycleHash  string             `json:"last_cycle_hash,omitempty"`
+	Ledger         []CycleLedgerEntry `json:"ledger"`
+	ObservedAt     time.Time          `json:"observed_at"`
 }

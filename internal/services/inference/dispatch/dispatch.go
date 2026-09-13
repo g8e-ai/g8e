@@ -233,16 +233,16 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	// clean timeout.
 	result, err := s.dispatcher.Dispatch(ctx, CommandDispatchRequest{
 		TargetOperatorSessionID: operatorSessionID,
-		ActionType:               string(constants.ActionTypeInference),
-		Payload:                  payload,
-		RequestorUserID:          req.RequestorUserID,
-		ActingAppID:              req.ActingAppID,
-		CaseID:                   req.CaseID,
-		InvestigationID:          req.InvestigationID,
-		TaskID:                   req.TaskID,
-		WebSessionID:             req.WebSessionID,
-		CliSessionID:             req.CliSessionID,
-		Timeout:                  RequestDeadline,
+		ActionType:              string(constants.ActionTypeInference),
+		Payload:                 payload,
+		RequestorUserID:         req.RequestorUserID,
+		ActingAppID:             req.ActingAppID,
+		CaseID:                  req.CaseID,
+		InvestigationID:         req.InvestigationID,
+		TaskID:                  req.TaskID,
+		WebSessionID:            req.WebSessionID,
+		CliSessionID:            req.CliSessionID,
+		Timeout:                 RequestDeadline,
 	})
 	if err != nil {
 		if errors.Is(err, constants.ErrDispatchResultTimeout) {

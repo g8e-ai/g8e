@@ -81,14 +81,14 @@ type PublicPublisherService struct {
 	signingPubKey  ed25519.PublicKey
 	signingKeyID   string
 
-	mu             sync.Mutex
-	mirrorOrigin   string
+	mu              sync.Mutex
+	mirrorOrigin    string
 	batchMaxRecords int
 
 	// highWaterSeq is the last acknowledged sequence number.
-	highWaterSeq   int64
-	feedChainHash  string
-	batchCount     int
+	highWaterSeq  int64
+	feedChainHash string
+	batchCount    int
 }
 
 // NewPublicPublisherService creates a new PublicPublisherService backed by
@@ -232,8 +232,8 @@ func (s *PublicPublisherService) computeBatchContentHash(batch models.PublicFeed
 	h.Write([]byte(batch.ProtocolVersion))
 	h.Write([]byte(batch.SchemaVersion))
 	h.Write([]byte(batch.SourceID))
-	h.Write([]byte(fmt.Sprintf("%d", batch.FirstSequence)))
-	h.Write([]byte(fmt.Sprintf("%d", batch.LastSequence)))
+	_, _ = fmt.Fprintf(h, "%d", batch.FirstSequence)
+	_, _ = fmt.Fprintf(h, "%d", batch.LastSequence)
 	h.Write([]byte(batch.PreviousBatchHash))
 	for _, rh := range batch.RecordHashes {
 		h.Write([]byte(rh))
@@ -688,16 +688,16 @@ func (s *PublicPublisherService) BuildProofPackage(ctx context.Context, campaign
 
 	// Compute proof root hash.
 	manifest := models.PublicProofManifest{
-		SchemaVersion:                constants.PublicProofManifestSchemaVersion,
-		CampaignID:                   campaignID,
-		CampaignRevision:             campaignRevision,
-		VerifiedIndexGenerationHash:  verifiedIndexGenHash,
-		VerificationOK:               verificationOK,
-		ArtifactCount:                len(entries),
-		Artifacts:                    entries,
-		VerifierInstructions:         "Verify each artifact SHA-256 matches the catalog entry. Recompute the proof root hash from artifact hashes and manifest metadata. Verify the Ed25519 signature over the proof root hash.",
-		GeneratedAt:                  time.Now().UTC(),
-		SigningKeyID:                 s.signingKeyID,
+		SchemaVersion:               constants.PublicProofManifestSchemaVersion,
+		CampaignID:                  campaignID,
+		CampaignRevision:            campaignRevision,
+		VerifiedIndexGenerationHash: verifiedIndexGenHash,
+		VerificationOK:              verificationOK,
+		ArtifactCount:               len(entries),
+		Artifacts:                   entries,
+		VerifierInstructions:        "Verify each artifact SHA-256 matches the catalog entry. Recompute the proof root hash from artifact hashes and manifest metadata. Verify the Ed25519 signature over the proof root hash.",
+		GeneratedAt:                 time.Now().UTC(),
+		SigningKeyID:                s.signingKeyID,
 	}
 
 	rootHash := s.computeProofRootHash(manifest)
@@ -736,14 +736,14 @@ func (s *PublicPublisherService) computeProofRootHash(manifest models.PublicProo
 	h.Write([]byte(manifest.CampaignID))
 	h.Write([]byte(manifest.CampaignRevision))
 	h.Write([]byte(manifest.VerifiedIndexGenerationHash))
-	h.Write([]byte(fmt.Sprintf("%t", manifest.VerificationOK)))
-	h.Write([]byte(fmt.Sprintf("%d", manifest.ArtifactCount)))
+	_, _ = fmt.Fprintf(h, "%t", manifest.VerificationOK)
+	_, _ = fmt.Fprintf(h, "%d", manifest.ArtifactCount)
 	for _, entry := range manifest.Artifacts {
 		h.Write([]byte(entry.ArtifactID))
 		h.Write([]byte(entry.SHA256))
 		h.Write([]byte(entry.Filename))
 		h.Write([]byte(entry.MediaType))
-		h.Write([]byte(fmt.Sprintf("%d", entry.ByteSize)))
+		_, _ = fmt.Fprintf(h, "%d", entry.ByteSize)
 	}
 	h.Write([]byte(manifest.GeneratedAt.UTC().Format(time.RFC3339Nano)))
 	h.Write([]byte(manifest.SigningKeyID))

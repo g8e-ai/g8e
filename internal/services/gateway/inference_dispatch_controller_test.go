@@ -272,13 +272,13 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
-		Role:                  operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
-		Prompt:                "summarize this",
-		Model:                 "gemma3:4b",
-		CaseId:                "case-1",
-		InvestigationId:       "inv-1",
-		TaskId:                "task-1",
-		WebSessionId:          "web-1",
+		Role:                    operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
+		Prompt:                  "summarize this",
+		Model:                   "gemma3:4b",
+		CaseId:                  "case-1",
+		InvestigationId:         "inv-1",
+		TaskId:                  "task-1",
+		WebSessionId:            "web-1",
 		TargetOperatorSessionId: "sess-inf-1",
 	})
 	req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
@@ -341,9 +341,9 @@ func TestInferenceDispatchController_ActingAppIDDerivedFromIdentity(t *testing.T
 
 func TestInferenceDispatchController_ErrorStatusMapping(t *testing.T) {
 	tests := []struct {
-		name       string
+		name        string
 		dispatchErr error
-		wantStatus int
+		wantStatus  int
 	}{
 		{name: "no inference operator", dispatchErr: constants.ErrInferenceOperatorNotFound, wantStatus: http.StatusNotFound},
 		{name: "ambiguous inference operators", dispatchErr: constants.ErrInferenceOperatorAmbiguous, wantStatus: http.StatusConflict},

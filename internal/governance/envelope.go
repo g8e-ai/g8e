@@ -29,17 +29,17 @@ type GovernanceEnvelope = commonv1.GovernanceEnvelope
 
 // GenerateMessageID creates a deterministic hash of the critical envelope fields.
 // Canonicalization rules (from docs/architecture/governance.md):
-// - Fields appended in the documented spec order: action_type,
-//   target_resource, payload, state_merkle_root, nonce, expires_at,
-//   intent_data, requestor_user_id, acting_app_id, operator_id,
-//   operator_session_id, case_id, investigation_id, task_id,
-//   web_session_id, cli_session_id
-// - Strings as UTF-8
-// - Numbers as decimal integers
-// - Absent optional fields omitted
-// - Nested messages recursed
-// - Bytes as base64
-// - Result hashed with SHA-256
+//   - Fields appended in the documented spec order: action_type,
+//     target_resource, payload, state_merkle_root, nonce, expires_at,
+//     intent_data, requestor_user_id, acting_app_id, operator_id,
+//     operator_session_id, case_id, investigation_id, task_id,
+//     web_session_id, cli_session_id
+//   - Strings as UTF-8
+//   - Numbers as decimal integers
+//   - Absent optional fields omitted
+//   - Nested messages recursed
+//   - Bytes as base64
+//   - Result hashed with SHA-256
 func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 	if env == nil {
 		return "", constants.ErrTxInvalidEnvelope

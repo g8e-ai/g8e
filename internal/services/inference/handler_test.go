@@ -28,7 +28,7 @@ type testCommandMessage struct {
 	payload []byte
 }
 
-func (m *testCommandMessage) GetPayload() []byte { return m.payload }
+func (m *testCommandMessage) GetPayload() []byte  { return m.payload }
 func (m *testCommandMessage) SetPayload(p []byte) { m.payload = p }
 
 func mustNewScrubbingSvc(t *testing.T) *scrubbing.ScrubbingService {
@@ -63,16 +63,16 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_PrimaryRole(t *testing.T) {
 		Model:        "gemma3:4b",
 	}}
 	cfg := &config.Config{Inference: config.InferenceConfig{
-		Enabled:       true,
-		PrimaryModel:  "gemma3:4b",
-		KeepAlive:     "-1",
+		Enabled:      true,
+		PrimaryModel: "gemma3:4b",
+		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:    operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt:  "What is 2+2?",
+		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Prompt: "What is 2+2?",
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -94,9 +94,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AssistantRole(t *testing.T)
 		Model:        "llama3.2:3b",
 	}}
 	cfg := &config.Config{Inference: config.InferenceConfig{
-		Enabled:         true,
-		AssistantModel:  "llama3.2:3b",
-		KeepAlive:       "-1",
+		Enabled:        true,
+		AssistantModel: "llama3.2:3b",
+		KeepAlive:      "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
@@ -123,7 +123,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_LiteRole(t *testing.T) {
 		Model:        "qwen3:1.5b",
 	}}
 	cfg := &config.Config{Inference: config.InferenceConfig{
-		Enabled:    true,
+		Enabled:   true,
 		LiteModel: "qwen3:1.5b",
 		KeepAlive: "-1",
 	}}
@@ -154,7 +154,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_MatchingModelOverrideAccept
 	cfg := &config.Config{Inference: config.InferenceConfig{
 		Enabled:      true,
 		PrimaryModel: "gemma3:4b",
-		KeepAlive:   "-1",
+		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
@@ -180,7 +180,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_UnauthorizedModelOverrideDe
 	cfg := &config.Config{Inference: config.InferenceConfig{
 		Enabled:      true,
 		PrimaryModel: "gemma3:4b",
-		KeepAlive:   "-1",
+		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
@@ -204,10 +204,10 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_CrossRoleModelDenied(t *tes
 	logger := testutil.NewTestLogger()
 	backend := &stubBackend{}
 	cfg := &config.Config{Inference: config.InferenceConfig{
-		Enabled:       true,
-		PrimaryModel:  "gemma3:4b",
-		LiteModel:     "qwen3:1.5b",
-		KeepAlive:     "-1",
+		Enabled:      true,
+		PrimaryModel: "gemma3:4b",
+		LiteModel:    "qwen3:1.5b",
+		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
@@ -349,7 +349,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_ScrubsPromptBeforeBackend(t
 	cfg := &config.Config{Inference: config.InferenceConfig{
 		Enabled:      true,
 		PrimaryModel: "test-model",
-		KeepAlive:   "-1",
+		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
@@ -387,7 +387,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_LongOutputStillBindsDigest(
 	cfg := &config.Config{Inference: config.InferenceConfig{
 		Enabled:      true,
 		PrimaryModel: "test-model",
-		KeepAlive:   "-1",
+		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
@@ -416,7 +416,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AppliesConfigKeepAliveDefau
 	cfg := &config.Config{Inference: config.InferenceConfig{
 		Enabled:      true,
 		PrimaryModel: "test-model",
-		KeepAlive:   "30m",
+		KeepAlive:    "30m",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
@@ -445,7 +445,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_RequestKeepAliveOverridesCo
 	cfg := &config.Config{Inference: config.InferenceConfig{
 		Enabled:      true,
 		PrimaryModel: "test-model",
-		KeepAlive:   "-1",
+		KeepAlive:    "-1",
 	}}
 	scrubbingSvc := mustNewScrubbingSvc(t)
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
@@ -467,10 +467,10 @@ func TestInferenceHandler_DefaultModelForRole_UnspecifiedReturnsEmpty(t *testing
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	cfg := &config.Config{Inference: config.InferenceConfig{
-		Enabled:      true,
-		PrimaryModel: "primary",
+		Enabled:        true,
+		PrimaryModel:   "primary",
 		AssistantModel: "assistant",
-		LiteModel:    "lite",
+		LiteModel:      "lite",
 	}}
 	handler := NewInferenceExecutionHandler(&stubBackend{}, cfg, mustNewScrubbingSvc(t), logger)
 

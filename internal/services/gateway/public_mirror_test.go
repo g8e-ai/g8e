@@ -130,14 +130,15 @@ func (e *mirrorTestEnv) sendIngest(batch models.PublicFeedBatch) (int, models.Pu
 }
 
 // getJSON performs a GET request and decodes the JSON response.
-func (e *mirrorTestEnv) getJSON(path string, target any) (int, *http.Response) {
+func (e *mirrorTestEnv) getJSON(path string, target any) int {
 	e.t.Helper()
 	resp, err := e.client.Get(e.server.URL + path)
 	require.NoError(e.t, err)
+	defer resp.Body.Close()
 	if target != nil {
 		require.NoError(e.t, json.NewDecoder(resp.Body).Decode(target))
 	}
-	return resp.StatusCode, resp
+	return resp.StatusCode
 }
 
 // ---------------------------------------------------------------------------
@@ -417,7 +418,7 @@ func TestMirror_Bootstrap_ReturnsSnapshotAndProjections(t *testing.T) {
 	require.True(t, resp.Accepted)
 
 	var bootstrap models.PublicFeedBootstrap
-	status, _ := env.getJSON("/bootstrap?source="+env.sourceID, &bootstrap)
+	status := env.getJSON("/bootstrap?source="+env.sourceID, &bootstrap)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, constants.PublicFeedProtocolVersion, bootstrap.ProtocolVersion)
 	assert.Equal(t, int64(3), bootstrap.Snapshot.HighWaterSequence)
@@ -431,7 +432,7 @@ func TestMirror_Bootstrap_ReturnsSnapshotAndProjections(t *testing.T) {
 func TestMirror_Bootstrap_EmptySourceReturnsOffline(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	var bootstrap models.PublicFeedBootstrap
-	status, _ := env.getJSON("/bootstrap?source=unknown-source", &bootstrap)
+	status := env.getJSON("/bootstrap?source=unknown-source", &bootstrap)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, models.CampaignFreshnessSourceOffline, bootstrap.SourceFreshness)
 	assert.Equal(t, 0, len(bootstrap.RecentProjections))
@@ -451,7 +452,7 @@ func TestMirror_Snapshot_ReturnsHighWater(t *testing.T) {
 	require.True(t, ingestResp.Accepted)
 
 	var snap models.PublicFeedSnapshot
-	status, _ := env.getJSON("/snapshot?source="+env.sourceID, &snap)
+	status := env.getJSON("/snapshot?source="+env.sourceID, &snap)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, int64(1), snap.HighWaterSequence)
 	assert.Equal(t, batch.ContentHash, snap.FeedChainHash)
@@ -478,7 +479,7 @@ func TestMirror_History_CursorPagination(t *testing.T) {
 
 	// Page 1 with limit 2.
 	var page1 models.PublicFeedCursorPage
-	status, _ := env.getJSON("/history?source="+env.sourceID+"&limit=2", &page1)
+	status := env.getJSON("/history?source="+env.sourceID+"&limit=2", &page1)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 2, len(page1.Items))
 	assert.True(t, page1.HasMore)
@@ -486,14 +487,14 @@ func TestMirror_History_CursorPagination(t *testing.T) {
 
 	// Page 2 with cursor.
 	var page2 models.PublicFeedCursorPage
-	status, _ = env.getJSON("/history?source="+env.sourceID+"&cursor=2&limit=2", &page2)
+	status = env.getJSON("/history?source="+env.sourceID+"&cursor=2&limit=2", &page2)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 2, len(page2.Items))
 	assert.True(t, page2.HasMore)
 
 	// Page 3 with cursor.
 	var page3 models.PublicFeedCursorPage
-	status, _ = env.getJSON("/history?source="+env.sourceID+"&cursor=4&limit=2", &page3)
+	status = env.getJSON("/history?source="+env.sourceID+"&cursor=4&limit=2", &page3)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 1, len(page3.Items))
 	assert.False(t, page3.HasMore)
@@ -515,7 +516,7 @@ func TestMirror_History_BoundedPageSize(t *testing.T) {
 
 	// Request limit=1000 (should be capped).
 	var page models.PublicFeedCursorPage
-	status, _ := env.getJSON("/history?source="+env.sourceID+"&limit=1000", &page)
+	status := env.getJSON("/history?source="+env.sourceID+"&limit=1000", &page)
 	assert.Equal(t, http.StatusOK, status)
 	assert.LessOrEqual(t, page.Limit, 100)
 }
@@ -660,7 +661,7 @@ func TestMirror_StaleSource_ReportsStaleFreshness(t *testing.T) {
 	env.mirror.SetSourceFreshness(env.sourceID, models.CampaignFreshnessStale)
 
 	var snap models.PublicFeedSnapshot
-	status, _ := env.getJSON("/snapshot?source="+env.sourceID, &snap)
+	status := env.getJSON("/snapshot?source="+env.sourceID, &snap)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, models.CampaignFreshnessStale, snap.Freshness)
 }
@@ -678,7 +679,7 @@ func TestMirror_StaleSource_BootstrapReportsStale(t *testing.T) {
 	env.mirror.SetSourceFreshness(env.sourceID, models.CampaignFreshnessIntentionallyStopped)
 
 	var bootstrap models.PublicFeedBootstrap
-	status, _ := env.getJSON("/bootstrap?source="+env.sourceID, &bootstrap)
+	status := env.getJSON("/bootstrap?source="+env.sourceID, &bootstrap)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, models.CampaignFreshnessIntentionallyStopped, bootstrap.SourceFreshness)
 	assert.Equal(t, models.CampaignFreshnessIntentionallyStopped, bootstrap.Snapshot.Freshness)
@@ -901,7 +902,7 @@ func TestMirror_ProofCatalog_ReturnsEntries(t *testing.T) {
 	})
 
 	var catalog models.PublicProofCatalog
-	status, _ := env.getJSON("/proof-catalog?source="+env.sourceID, &catalog)
+	status := env.getJSON("/proof-catalog?source="+env.sourceID, &catalog)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 1, len(catalog.Entries))
 	assert.Equal(t, artifactID, catalog.Entries[0].ArtifactID)
@@ -912,7 +913,7 @@ func TestMirror_ProofCatalog_ReturnsEntries(t *testing.T) {
 func TestMirror_ProofCatalog_EmptyReturnsEmptyArray(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	var catalog models.PublicProofCatalog
-	status, _ := env.getJSON("/proof-catalog?source="+env.sourceID, &catalog)
+	status := env.getJSON("/proof-catalog?source="+env.sourceID, &catalog)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, len(catalog.Entries))
 }
@@ -923,7 +924,7 @@ func TestMirror_ProofManifest_ReturnsManifest(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	manifest := models.PublicProofManifest{
 		SchemaVersion:               constants.PublicProofManifestSchemaVersion,
-		ProofRootSHA256:            "abc123",
+		ProofRootSHA256:             "abc123",
 		CampaignID:                  "c1",
 		CampaignRevision:            "rev1",
 		VerifiedIndexGenerationHash: "idx1",
@@ -938,7 +939,7 @@ func TestMirror_ProofManifest_ReturnsManifest(t *testing.T) {
 	env.mirror.StoreProofManifest(env.sourceID, manifest)
 
 	var result models.PublicProofManifest
-	status, _ := env.getJSON("/proof-manifest?source="+env.sourceID, &result)
+	status := env.getJSON("/proof-manifest?source="+env.sourceID, &result)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, "c1", result.CampaignID)
 	assert.Equal(t, "abc123", result.ProofRootSHA256)
@@ -1045,10 +1046,10 @@ func TestMirror_RecordType_AcceptsKeyRevocationRecords(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
 	revBytes, _ := json.Marshal(map[string]any{
-		"revoked_key_id":        env.keyID,
-		"revoked_at":            time.Now().UTC().Format(time.RFC3339Nano),
-		"new_key_id":            "new-key",
-		"revocation_signature":  "sig",
+		"revoked_key_id":       env.keyID,
+		"revoked_at":           time.Now().UTC().Format(time.RFC3339Nano),
+		"new_key_id":           "new-key",
+		"revocation_signature": "sig",
 	})
 	revHash := sha256.Sum256(revBytes)
 	records := []models.PublicFeedRecord{{
@@ -1097,7 +1098,7 @@ func TestMirror_MethodNotAllowed_RejectsGETOnIngest(t *testing.T) {
 func TestMirror_EmptySource_HistoryReturnsEmpty(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	var page models.PublicFeedCursorPage
-	status, _ := env.getJSON("/history?source="+env.sourceID, &page)
+	status := env.getJSON("/history?source="+env.sourceID, &page)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, len(page.Items))
 	assert.False(t, page.HasMore)
@@ -1108,7 +1109,7 @@ func TestMirror_EmptySource_HistoryReturnsEmpty(t *testing.T) {
 func TestMirror_EmptySource_SnapshotReturnsZero(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	var snap models.PublicFeedSnapshot
-	status, _ := env.getJSON("/snapshot?source="+env.sourceID, &snap)
+	status := env.getJSON("/snapshot?source="+env.sourceID, &snap)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, int64(0), snap.HighWaterSequence)
 	assert.Equal(t, constants.PublicFeedZeroHashHex, snap.FeedChainHash)

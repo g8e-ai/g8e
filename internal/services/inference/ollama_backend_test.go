@@ -40,10 +40,10 @@ func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 		require.NoError(t, json.Unmarshal(body, &capturedBody))
 
 		resp := ollamaChatResponse{
-			Model:   capturedBody.Model,
-			Message: ollamaChatMessage{Role: "assistant", Content: "generated text"},
-			Done:    true,
-			DoneReason: "stop",
+			Model:           capturedBody.Model,
+			Message:         ollamaChatMessage{Role: "assistant", Content: "generated text"},
+			Done:            true,
+			DoneReason:      "stop",
 			PromptEvalCount: 12,
 			EvalCount:       8,
 		}
@@ -97,9 +97,9 @@ func TestOllamaBackend_GenerateHandlesAllThreeRoles(t *testing.T) {
 	for i, role := range roles {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			resp := ollamaChatResponse{
-				Model:     modelsList[i],
-				Message:   ollamaChatMessage{Role: "assistant", Content: "ok"},
-				Done:      true,
+				Model:      modelsList[i],
+				Message:    ollamaChatMessage{Role: "assistant", Content: "ok"},
+				Done:       true,
 				DoneReason: "stop",
 			}
 			w.Header().Set("Content-Type", "application/json")
@@ -108,7 +108,7 @@ func TestOllamaBackend_GenerateHandlesAllThreeRoles(t *testing.T) {
 		defer server.Close()
 
 		backend, err := NewOllamaBackend(server.URL, logger)
-	require.NoError(t, err)
+		require.NoError(t, err)
 		resp, err := backend.Generate(context.Background(), models.GenerateRequest{
 			Role:  role,
 			Model: modelsList[i],

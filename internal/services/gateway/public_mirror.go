@@ -219,8 +219,8 @@ func computeBatchContentHash(batch models.PublicFeedBatch) string {
 	h.Write([]byte(batch.ProtocolVersion))
 	h.Write([]byte(batch.SchemaVersion))
 	h.Write([]byte(batch.SourceID))
-	h.Write([]byte(fmt.Sprintf("%d", batch.FirstSequence)))
-	h.Write([]byte(fmt.Sprintf("%d", batch.LastSequence)))
+	_, _ = fmt.Fprintf(h, "%d", batch.FirstSequence)
+	_, _ = fmt.Fprintf(h, "%d", batch.LastSequence)
 	h.Write([]byte(batch.PreviousBatchHash))
 	for _, rh := range batch.RecordHashes {
 		h.Write([]byte(rh))
@@ -395,7 +395,7 @@ func (m *PublicMirrorServer) handleIngest(w http.ResponseWriter, r *http.Request
 		auth := r.Header.Get("Authorization")
 		if auth != "Bearer "+token {
 			resp := models.PublicIngestResponse{Accepted: false, RejectionReason: models.PublicFeedIngestRejectionSignatureInvalid}
-			writeJSON(w, http.StatusUnauthorized, resp)
+			m.writeJSON(w, http.StatusUnauthorized, resp)
 			return
 		}
 	}
@@ -403,7 +403,7 @@ func (m *PublicMirrorServer) handleIngest(w http.ResponseWriter, r *http.Request
 	var req models.PublicIngestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		resp := models.PublicIngestResponse{Accepted: false, RejectionReason: models.PublicFeedIngestRejectionSignatureInvalid}
-		writeJSON(w, http.StatusBadRequest, resp)
+		m.writeJSON(w, http.StatusBadRequest, resp)
 		return
 	}
 
@@ -411,7 +411,7 @@ func (m *PublicMirrorServer) handleIngest(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		m.logger.Warn("mirror: ingest rejected", "source_id", req.Batch.SourceID, "reason", reason, "error", err)
 		resp := models.PublicIngestResponse{Accepted: false, RejectionReason: reason}
-		writeJSON(w, http.StatusOK, resp)
+		m.writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
@@ -428,7 +428,7 @@ func (m *PublicMirrorServer) handleIngest(w http.ResponseWriter, r *http.Request
 		HighWaterSequence: hw,
 		FeedChainHash:     fch,
 	}
-	writeJSON(w, http.StatusOK, resp)
+	m.writeJSON(w, http.StatusOK, resp)
 }
 
 // handleBootstrap handles GET /bootstrap — bounded initial snapshot for
@@ -452,16 +452,16 @@ func (m *PublicMirrorServer) handleBootstrap(w http.ResponseWriter, r *http.Requ
 
 	state, ok := m.sources[sourceID]
 	if !ok {
-		writeJSON(w, http.StatusOK, models.PublicFeedBootstrap{
+		m.writeJSON(w, http.StatusOK, models.PublicFeedBootstrap{
 			ProtocolVersion: constants.PublicFeedProtocolVersion,
 			Snapshot: models.PublicFeedSnapshot{
-				ProtocolVersion:  constants.PublicFeedProtocolVersion,
-				SourceID:         sourceID,
+				ProtocolVersion:   constants.PublicFeedProtocolVersion,
+				SourceID:          sourceID,
 				HighWaterSequence: 0,
-				FeedChainHash:    constants.PublicFeedZeroHashHex,
-				BatchCount:       0,
-				GeneratedAt:      time.Now().UTC(),
-				Freshness:        models.CampaignFreshnessSourceOffline,
+				FeedChainHash:     constants.PublicFeedZeroHashHex,
+				BatchCount:        0,
+				GeneratedAt:       time.Now().UTC(),
+				Freshness:         models.CampaignFreshnessSourceOffline,
 			},
 			SourceFreshness:     models.CampaignFreshnessSourceOffline,
 			RecentProjections:   []map[string]any{},
@@ -484,7 +484,7 @@ func (m *PublicMirrorServer) handleBootstrap(w http.ResponseWriter, r *http.Requ
 		summary.LastGeneratedAt = &catalog.GeneratedAt
 	}
 
-	writeJSON(w, http.StatusOK, models.PublicFeedBootstrap{
+	m.writeJSON(w, http.StatusOK, models.PublicFeedBootstrap{
 		ProtocolVersion: constants.PublicFeedProtocolVersion,
 		Snapshot: models.PublicFeedSnapshot{
 			ProtocolVersion:   constants.PublicFeedProtocolVersion,
@@ -531,11 +531,11 @@ func (m *PublicMirrorServer) handleSnapshot(w http.ResponseWriter, r *http.Reque
 			GeneratedAt:       time.Now().UTC(),
 			Freshness:         models.CampaignFreshnessSourceOffline,
 		}
-		writeJSON(w, http.StatusOK, resp)
+		m.writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, models.PublicFeedSnapshot{
+	m.writeJSON(w, http.StatusOK, models.PublicFeedSnapshot{
 		ProtocolVersion:   constants.PublicFeedProtocolVersion,
 		SourceID:          sourceID,
 		HighWaterSequence: state.highWaterSeq,
@@ -586,7 +586,7 @@ func (m *PublicMirrorServer) handleHistory(w http.ResponseWriter, r *http.Reques
 
 	state, ok := m.sources[sourceID]
 	if !ok {
-		writeJSON(w, http.StatusOK, models.PublicFeedCursorPage{
+		m.writeJSON(w, http.StatusOK, models.PublicFeedCursorPage{
 			ProtocolVersion: constants.PublicFeedProtocolVersion,
 			Items:           []map[string]any{},
 			HasMore:         false,
@@ -632,7 +632,7 @@ func (m *PublicMirrorServer) handleHistory(w http.ResponseWriter, r *http.Reques
 		items = []map[string]any{}
 	}
 
-	writeJSON(w, http.StatusOK, models.PublicFeedCursorPage{
+	m.writeJSON(w, http.StatusOK, models.PublicFeedCursorPage{
 		ProtocolVersion: constants.PublicFeedProtocolVersion,
 		Items:           items,
 		Cursor:          nextCursor,
@@ -786,7 +786,7 @@ func (m *PublicMirrorServer) handleProofCatalog(w http.ResponseWriter, r *http.R
 
 	catalog, ok := m.proofCatalogs[sourceID]
 	if !ok {
-		writeJSON(w, http.StatusOK, models.PublicProofCatalog{
+		m.writeJSON(w, http.StatusOK, models.PublicProofCatalog{
 			SchemaVersion: constants.PublicProofCatalogSchemaVersion,
 			Entries:       []models.PublicProofCatalogEntry{},
 			GeneratedAt:   time.Now().UTC(),
@@ -796,7 +796,7 @@ func (m *PublicMirrorServer) handleProofCatalog(w http.ResponseWriter, r *http.R
 	if catalog.Entries == nil {
 		catalog.Entries = []models.PublicProofCatalogEntry{}
 	}
-	writeJSON(w, http.StatusOK, catalog)
+	m.writeJSON(w, http.StatusOK, catalog)
 }
 
 // handleProofManifest handles GET /proof-manifest — the proof root manifest.
@@ -821,7 +821,7 @@ func (m *PublicMirrorServer) handleProofManifest(w http.ResponseWriter, r *http.
 		http.Error(w, "proof manifest not found", http.StatusNotFound)
 		return
 	}
-	writeJSON(w, http.StatusOK, manifest)
+	m.writeJSON(w, http.StatusOK, manifest)
 }
 
 // handleProofDownload handles GET /proofs/:artifactID — content-addressed
@@ -877,7 +877,9 @@ func (m *PublicMirrorServer) handleProofDownload(w http.ResponseWriter, r *http.
 	}
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	w.Header().Set("Content-Length", strconv.Itoa(len(content)))
-	w.Write(content)
+	if _, err := w.Write(content); err != nil {
+		m.logger.Error("mirror: write proof response", "error", err)
+	}
 }
 
 // recentProjectionsLocked returns the most recent projection records as
@@ -958,10 +960,12 @@ func (s *mirrorSSESubscriber) close() {
 }
 
 // writeJSON writes a JSON response with the given status code.
-func writeJSON(w http.ResponseWriter, status int, v any) {
+func (m *PublicMirrorServer) writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		m.logger.Error("mirror: encode JSON response", "error", err)
+	}
 }
 
 // sseWriteEvent writes a named SSE event with a JSON payload.
