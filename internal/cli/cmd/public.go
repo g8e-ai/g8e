@@ -1,0 +1,515 @@
+package cmd
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
+
+	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
+)
+
+type publicConfigLoader func(string) (*config.Config, error)
+type publicFileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)
+
+func publicInitCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	var sourceID string
+	var mirrorOrigin string
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: "Initialize the local public-feed publisher",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if strings.TrimSpace(sourceID) == "" {
+				return constants.ErrPublicFeedSourceIDRequired
+			}
+			if err := validatePublicMirrorOrigin(mirrorOrigin); err != nil {
+				return err
+			}
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory(cfg.ProjectRoot, slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			ctx := commandContext(cmd)
+			for _, relPath := range []string{constants.PublicFeedExportConfigPath, constants.PublicFeedSigningKeyPath, constants.PublicFeedIngestTokenPath} {
+				exists, existsErr := fileSvc.FileExists(ctx, relPath)
+				if existsErr != nil {
+					return fmt.Errorf("public-feed: inspect initialization path: %w", existsErr)
+				}
+				if exists {
+					return constants.ErrPublicFeedConfigExists
+				}
+			}
+			if err := fileSvc.MkdirAll(ctx, constants.PublicFeedDirname, constants.PermDirPrivate); err != nil {
+				return fmt.Errorf("public-feed: create runtime directory: %w", err)
+			}
+			publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				return fmt.Errorf("%w: %v", constants.ErrPublicFeedKeyGenFailed, err)
+			}
+			token := make([]byte, constants.PublicFeedIngestTokenBytes)
+			if _, err := rand.Read(token); err != nil {
+				return fmt.Errorf("public-feed: generate ingest token: %w", err)
+			}
+			keyDigest := sha256.Sum256(publicKey)
+			exportConfig := models.DefaultPublicExportConfig()
+			exportConfig.Enabled = true
+			exportConfig.SourceID = sourceID
+			exportConfig.MirrorOrigin = mirrorOrigin
+			exportConfig.SigningKeyID = hex.EncodeToString(keyDigest[:])
+			if err := fileSvc.WriteFile(ctx, constants.PublicFeedSigningKeyPath, []byte(hex.EncodeToString(privateKey)), constants.PermFilePrivate); err != nil {
+				return fmt.Errorf("public-feed: write signing key: %w", err)
+			}
+			if err := fileSvc.WriteFile(ctx, constants.PublicFeedIngestTokenPath, []byte(hex.EncodeToString(token)), constants.PermFilePrivate); err != nil {
+				return fmt.Errorf("public-feed: write ingest token: %w", err)
+			}
+			if err := writePublicExportConfig(ctx, fileSvc, exportConfig); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public feed initialized for source %s\n", sourceID)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&sourceID, "source-id", "", "Public source deployment pseudonym")
+	cmd.Flags().StringVar(&mirrorOrigin, "mirror-origin", "", "Hosted public mirror origin")
+	return cmd
+}
+
+func publicConfigSetCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	var sourceID string
+	var mirrorOrigin string
+	var enabled bool
+	cmd := &cobra.Command{
+		Use:   "set",
+		Short: "Update public-feed publisher configuration",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if !cmd.Flags().Changed("source-id") && !cmd.Flags().Changed("mirror-origin") && !cmd.Flags().Changed("enabled") {
+				return fmt.Errorf("%w: no configuration field was specified", constants.ErrValidationFailed)
+			}
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory(cfg.ProjectRoot, slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			ctx := commandContext(cmd)
+			exportConfig, err := readPublicExportConfig(ctx, fileSvc)
+			if err != nil {
+				return err
+			}
+			if cmd.Flags().Changed("source-id") {
+				exportConfig.SourceID = sourceID
+			}
+			if cmd.Flags().Changed("mirror-origin") {
+				exportConfig.MirrorOrigin = mirrorOrigin
+			}
+			if cmd.Flags().Changed("enabled") {
+				exportConfig.Enabled = enabled
+			}
+			if err := validatePublicExportConfig(exportConfig); err != nil {
+				return err
+			}
+			if err := writePublicExportConfig(ctx, fileSvc, exportConfig); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Public feed configuration updated")
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&sourceID, "source-id", "", "Public source deployment pseudonym")
+	cmd.Flags().StringVar(&mirrorOrigin, "mirror-origin", "", "Hosted public mirror origin")
+	cmd.Flags().BoolVar(&enabled, "enabled", true, "Enable or disable public publication")
+	return cmd
+}
+
+func commandContext(cmd *cobra.Command) context.Context {
+	if cmd.Context() != nil {
+		return cmd.Context()
+	}
+	return context.Background()
+}
+
+func readPublicExportConfig(ctx context.Context, fileSvc fs.RuntimeFileService) (models.PublicExportConfig, error) {
+	data, err := fileSvc.ReadFile(ctx, constants.PublicFeedExportConfigPath)
+	if err != nil {
+		return models.PublicExportConfig{}, fmt.Errorf("%w: %v", constants.ErrPublicFeedConfigRequired, err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var exportConfig models.PublicExportConfig
+	if err := decoder.Decode(&exportConfig); err != nil {
+		return models.PublicExportConfig{}, fmt.Errorf("%w: decode: %v", constants.ErrPublicFeedConfigRequired, err)
+	}
+	if err := rejectTrailingPublicJSON(decoder); err != nil {
+		return models.PublicExportConfig{}, err
+	}
+	if err := validatePublicExportConfig(exportConfig); err != nil {
+		return models.PublicExportConfig{}, err
+	}
+	return exportConfig, nil
+}
+
+func writePublicExportConfig(ctx context.Context, fileSvc fs.RuntimeFileService, exportConfig models.PublicExportConfig) error {
+	if err := validatePublicExportConfig(exportConfig); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(exportConfig, "", "  ")
+	if err != nil {
+		return fmt.Errorf("public-feed: encode export config: %w", err)
+	}
+	data = append(data, '\n')
+	if err := fileSvc.WriteFile(ctx, constants.PublicFeedExportConfigPath, data, constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("public-feed: write export config: %w", err)
+	}
+	return nil
+}
+
+func validatePublicExportConfig(exportConfig models.PublicExportConfig) error {
+	if strings.TrimSpace(exportConfig.SourceID) == "" {
+		return constants.ErrPublicFeedSourceIDRequired
+	}
+	if strings.TrimSpace(exportConfig.SigningKeyID) == "" {
+		return constants.ErrPublicFeedSigningKeyIDRequired
+	}
+	return validatePublicMirrorOrigin(exportConfig.MirrorOrigin)
+}
+
+func validatePublicMirrorOrigin(origin string) error {
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "" {
+		return constants.ErrPublicFeedMirrorOriginRequired
+	}
+	return nil
+}
+
+func rejectTrailingPublicJSON(decoder *json.Decoder) error {
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return fmt.Errorf("%w: trailing JSON", constants.ErrPublicFeedConfigRequired)
+	}
+	return nil
+}
+
+func publicCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "public", Short: "Manage the public spectator feed"}
+	configCmd := &cobra.Command{Use: "config", Short: "Manage public-feed configuration"}
+	configCmd.AddCommand(publicConfigSetCmdWithConfig(loadConfig, newFileSvc))
+	mirrorCmd := &cobra.Command{Use: "mirror", Short: "Manage the local public mirror"}
+	mirrorCmd.AddCommand(publicMirrorRunCmdWithConfig(loadConfig, newFileSvc))
+	cmd.AddCommand(
+		publicInitCmdWithConfig(loadConfig, newFileSvc),
+		configCmd,
+		mirrorCmd,
+		publicPublishCmdWithConfig(loadConfig, newFileSvc),
+		publicPushCmdWithConfig(loadConfig, newFileSvc),
+		publicStatusCmdWithConfig(loadConfig, newFileSvc),
+		publicRotateKeyCmdWithConfig(loadConfig, newFileSvc),
+	)
+	return cmd
+}
+
+func loadPublicCommandRuntime(cmd *cobra.Command, configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) (fs.RuntimeFileService, models.PublicExportConfig, error) {
+	cfg, err := configLoader("")
+	if err != nil {
+		return nil, models.PublicExportConfig{}, err
+	}
+	fileSvc, err := fileSvcFactory(cfg.ProjectRoot, slog.Default())
+	if err != nil {
+		return nil, models.PublicExportConfig{}, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+	}
+	exportConfig, err := readPublicExportConfig(commandContext(cmd), fileSvc)
+	if err != nil {
+		return nil, models.PublicExportConfig{}, err
+	}
+	return fileSvc, exportConfig, nil
+}
+
+func readPublicSecret(ctx context.Context, fileSvc fs.RuntimeFileService, relPath string, expectedBytes int, missingErr error) ([]byte, error) {
+	data, err := fileSvc.ReadFile(ctx, relPath)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", missingErr, err)
+	}
+	decoded, err := hex.DecodeString(strings.TrimSpace(string(data)))
+	if err != nil || len(decoded) != expectedBytes {
+		return nil, missingErr
+	}
+	return decoded, nil
+}
+
+func newPublicPublisherForCommand(ctx context.Context, fileSvc fs.RuntimeFileService, exportConfig models.PublicExportConfig) (*gateway.PublicPublisherService, error) {
+	key, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
+	if err != nil {
+		return nil, err
+	}
+	token, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
+	if err != nil {
+		return nil, err
+	}
+	publisher := gateway.NewPublicPublisherService(nil, fileSvc, slog.Default(), exportConfig, ed25519.PrivateKey(key), exportConfig.SigningKeyID)
+	publisher.SetIngestAuthToken(hex.EncodeToString(token))
+	return publisher, nil
+}
+
+func publicPublishCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "publish <records.jsonl>",
+		Short: "Publish public-safe records to the configured mirror",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
+			if err != nil {
+				return err
+			}
+			publisher, err := newPublicPublisherForCommand(commandContext(cmd), fileSvc, exportConfig)
+			if err != nil {
+				return err
+			}
+			inputs, err := readPublicRecordInputs(args[0], exportConfig.BatchMaxRecords, exportConfig.BatchMaxBytes)
+			if err != nil {
+				return err
+			}
+			nextSequence := int64(1)
+			snapshot, err := publisher.GetSnapshot(commandContext(cmd))
+			if err == nil {
+				nextSequence = snapshot.HighWaterSequence + 1
+			} else if !errors.Is(err, constants.ErrPublicFeedSnapshotNotFound) {
+				return err
+			}
+			records := make([]models.PublicFeedRecord, len(inputs))
+			for index, input := range inputs {
+				digest := sha256.Sum256([]byte(input.RecordBytes))
+				records[index] = models.PublicFeedRecord{
+					Sequence:    nextSequence + int64(index),
+					RecordType:  input.RecordType,
+					RecordHash:  hex.EncodeToString(digest[:]),
+					RecordBytes: input.RecordBytes,
+				}
+			}
+			if err := publisher.ExportBatch(commandContext(cmd), records); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Published %d records through sequence %d\n", len(records), records[len(records)-1].Sequence)
+			return err
+		},
+	}
+	return cmd
+}
+
+func readPublicRecordInputs(filename string, maxRecords, maxBytes int) ([]models.PublicFeedRecordInput, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("public-feed: open record input: %w", err)
+	}
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), maxBytes)
+	inputs := make([]models.PublicFeedRecordInput, 0)
+	for scanner.Scan() {
+		if len(bytes.TrimSpace(scanner.Bytes())) == 0 {
+			continue
+		}
+		var input models.PublicFeedRecordInput
+		decoder := json.NewDecoder(bytes.NewReader(scanner.Bytes()))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			_ = file.Close()
+			return nil, fmt.Errorf("public-feed: decode record input: %w", err)
+		}
+		inputs = append(inputs, input)
+		if len(inputs) > maxRecords {
+			_ = file.Close()
+			return nil, constants.ErrPublicFeedBatchOversized
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("public-feed: scan record input: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return nil, fmt.Errorf("public-feed: close record input: %w", err)
+	}
+	if len(inputs) == 0 {
+		return nil, constants.ErrPublicFeedBatchEmpty
+	}
+	return inputs, nil
+}
+
+func publicPushCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	return &cobra.Command{
+		Use:   "push",
+		Short: "Retry the durable public-feed outbox",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
+			if err != nil {
+				return err
+			}
+			publisher, err := newPublicPublisherForCommand(commandContext(cmd), fileSvc, exportConfig)
+			if err != nil {
+				return err
+			}
+			if err := publisher.RetransmitOutbox(commandContext(cmd)); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Public outbox delivered")
+			return err
+		},
+	}
+}
+
+func publicStatusCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show public-feed publication state",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
+			if err != nil {
+				return err
+			}
+			publisher, err := newPublicPublisherForCommand(commandContext(cmd), fileSvc, exportConfig)
+			if err != nil {
+				return err
+			}
+			status := models.PublicPublisherStatus{
+				Enabled:       exportConfig.Enabled,
+				MirrorOrigin:  exportConfig.MirrorOrigin,
+				SourceID:      exportConfig.SourceID,
+				SigningKeyID:  exportConfig.SigningKeyID,
+				FeedChainHash: constants.PublicFeedZeroHashHex,
+			}
+			snapshot, err := publisher.GetSnapshot(commandContext(cmd))
+			if err == nil {
+				status.HighWaterSequence = snapshot.HighWaterSequence
+				status.FeedChainHash = snapshot.FeedChainHash
+				status.BatchCount = snapshot.BatchCount
+			} else if !errors.Is(err, constants.ErrPublicFeedSnapshotNotFound) {
+				return err
+			}
+			body, err := json.Marshal(status)
+			if err != nil {
+				return fmt.Errorf("public-feed: encode status: %w", err)
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), string(body))
+			return err
+		},
+	}
+}
+
+func publicRotateKeyCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	return &cobra.Command{
+		Use:   "rotate-key",
+		Short: "Rotate the public-feed signing key",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
+			if err != nil {
+				return err
+			}
+			publisher, err := newPublicPublisherForCommand(commandContext(cmd), fileSvc, exportConfig)
+			if err != nil {
+				return err
+			}
+			publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				return fmt.Errorf("%w: %v", constants.ErrPublicFeedKeyGenFailed, err)
+			}
+			digest := sha256.Sum256(publicKey)
+			newKeyID := hex.EncodeToString(digest[:])
+			if err := publisher.RotateKeyTo(commandContext(cmd), privateKey, newKeyID); err != nil {
+				return err
+			}
+			if err := fileSvc.WriteFile(commandContext(cmd), constants.PublicFeedSigningKeyPath, []byte(hex.EncodeToString(privateKey)), constants.PermFilePrivate); err != nil {
+				return fmt.Errorf("public-feed: persist rotated signing key: %w", err)
+			}
+			exportConfig.SigningKeyID = newKeyID
+			if err := writePublicExportConfig(commandContext(cmd), fileSvc, exportConfig); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public signing key rotated to %s; register public key %s with the mirror before the next publication\n", newKeyID, hex.EncodeToString(publicKey))
+			return err
+		},
+	}
+}
+
+func publicMirrorRunCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	var listenAddress string
+	cmd := &cobra.Command{
+		Use:   "run",
+		Short: "Run the durable local public mirror",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
+			if err != nil {
+				return err
+			}
+			ctx := commandContext(cmd)
+			key, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
+			if err != nil {
+				return err
+			}
+			token, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
+			if err != nil {
+				return err
+			}
+			mirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc))
+			if err != nil {
+				return err
+			}
+			mirror.SetIngestAuthToken(hex.EncodeToString(token))
+			privateKey := ed25519.PrivateKey(key)
+			if err := mirror.RegisterSourceKey(ctx, exportConfig.SourceID, exportConfig.SigningKeyID, privateKey.Public().(ed25519.PublicKey)); err != nil {
+				return err
+			}
+			server := &http.Server{
+				Addr:              listenAddress,
+				Handler:           mirror.Handler(),
+				ReadHeaderTimeout: 5 * time.Second,
+				ReadTimeout:       30 * time.Second,
+				WriteTimeout:      30 * time.Second,
+				IdleTimeout:       60 * time.Second,
+			}
+			errCh := make(chan error, 1)
+			go func() { errCh <- server.ListenAndServe() }()
+			select {
+			case serveErr := <-errCh:
+				if errors.Is(serveErr, http.ErrServerClosed) {
+					return nil
+				}
+				return fmt.Errorf("public mirror: serve: %w", serveErr)
+			case <-ctx.Done():
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if err := server.Shutdown(shutdownCtx); err != nil {
+					return fmt.Errorf("public mirror: shutdown: %w", err)
+				}
+				serveErr := <-errCh
+				if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+					return fmt.Errorf("public mirror: serve: %w", serveErr)
+				}
+				return nil
+			}
+		},
+	}
+	cmd.Flags().StringVar(&listenAddress, "listen", "127.0.0.1:8081", "Mirror listen address")
+	return cmd
+}

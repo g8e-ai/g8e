@@ -1388,6 +1388,8 @@ var (
 	ErrPublicFeedSourceIDRequired     = errors.New("public-feed: source_id is required")
 	ErrPublicFeedSigningKeyRequired   = errors.New("public-feed: signing key is required")
 	ErrPublicFeedSigningKeyIDRequired = errors.New("public-feed: signing_key_id is required")
+	ErrPublicFeedIngestTokenRequired  = errors.New("public-feed: ingest token is required")
+	ErrPublicFeedConfigExists         = errors.New("public-feed: configuration already exists")
 	ErrPublicFeedBatchEmpty           = errors.New("public-feed: batch must contain at least one record")
 	ErrPublicFeedBatchOversized       = errors.New("public-feed: batch exceeds max records or bytes")
 	ErrPublicFeedRecordHashMismatch   = errors.New("public-feed: record hash does not match computed hash")

@@ -515,6 +515,7 @@ const (
 	TestPathNonexistentOverlayDir            = "/nonexistent/path/overlays"
 	TestCustomComplianceOutDir               = "custom-compliance-out"
 	TestInvalidJSONFilename                  = "invalid.json"
+	TestPublicFeedRecordsFilename            = "public-feed-records.jsonl"
 	TestOverlaysDirname                      = "test-overlays"
 	TestPathRepoRootFromCompliancePackage    = "../../.."
 	TestDataDirname                          = "testdata"
@@ -873,7 +874,11 @@ const (
 	PublicFeedSnapshotFilename     = "snapshot.json"
 	PublicFeedSnapshotPath         = "public-feed/snapshot.json"
 	PublicFeedExportConfigFilename = "export-config.json"
+	PublicFeedExportConfigPath     = "public-feed/export-config.json"
 	PublicFeedSigningKeyFilename   = "signing-key.ed25519"
+	PublicFeedSigningKeyPath       = "public-feed/signing-key.ed25519"
+	PublicFeedIngestTokenFilename  = "ingest-token"
+	PublicFeedIngestTokenPath      = "public-feed/ingest-token"
 	PublicMirrorDirname            = "public-mirror"
 	PublicMirrorStateFilename      = "state.json"
 	PublicMirrorStatePath          = "public-mirror/state.json"
@@ -904,5 +909,6 @@ const (
 	PublicFeedAnonymousRateWindowSecs = 60
 	PublicFeedAnonymousRateMaxClients = 10000
 	PublicFeedMirrorRetainedBatches   = 1000
+	PublicFeedIngestTokenBytes        = 32
 	PublicFeedZeroHashHex             = "0000000000000000000000000000000000000000000000000000000000000000"
 )

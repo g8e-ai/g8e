@@ -233,6 +233,21 @@ func DefaultPublicExportConfig() PublicExportConfig {
 	}
 }
 
+type PublicFeedRecordInput struct {
+	RecordType  PublicFeedRecordType `json:"record_type"`
+	RecordBytes string               `json:"record_bytes"`
+}
+
+type PublicPublisherStatus struct {
+	Enabled           bool   `json:"enabled"`
+	MirrorOrigin      string `json:"mirror_origin"`
+	SourceID          string `json:"source_id"`
+	SigningKeyID      string `json:"signing_key_id"`
+	HighWaterSequence int64  `json:"high_water_sequence"`
+	FeedChainHash     string `json:"feed_chain_hash"`
+	BatchCount        int    `json:"batch_count"`
+}
+
 // PublicOutboxEntry is one entry in the durable ordered outbox.
 type PublicOutboxEntry struct {
 	Sequence       int64                  `json:"sequence"`

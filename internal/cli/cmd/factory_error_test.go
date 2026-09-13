@@ -57,6 +57,79 @@ func configLoaderFor(cfg *config.Config) func(string) (*config.Config, error) {
 	return func(string) (*config.Config, error) { return cfg, nil }
 }
 
+func TestPublicInitCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicInitCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	cmd.SetArgs([]string{"--source-id", "deployment-a", "--mirror-origin", "https://mirror.example"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPublicConfigSetCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicConfigSetCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	cmd.SetArgs([]string{"--mirror-origin", "https://mirror.example"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPublicPublishCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicPublishCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	cmd.SetArgs([]string{constants.TestPublicFeedRecordsFilename})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPublicPushCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicPushCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPublicStatusCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicStatusCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPublicRotateKeyCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicRotateKeyCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPublicMirrorRunCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicMirrorRunCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
 func TestApproveCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 

@@ -263,6 +263,7 @@ type PublicPublisherService struct {
 
 	mu              sync.Mutex
 	mirrorOrigin    string
+	ingestAuthToken string
 	batchMaxRecords int
 
 	// highWaterSeq is the last acknowledged sequence number.
@@ -296,6 +297,12 @@ func (s *PublicPublisherService) SetMirrorOrigin(origin string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.mirrorOrigin = origin
+}
+
+func (s *PublicPublisherService) SetIngestAuthToken(token string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ingestAuthToken = token
 }
 
 // SetBatchMaxRecords updates the maximum records per batch limit.
@@ -561,6 +568,7 @@ func (s *PublicPublisherService) writeOutboxEntry(ctx context.Context, batch mod
 func (s *PublicPublisherService) transmitBatch(ctx context.Context, batch models.PublicFeedBatch) error {
 	s.mu.Lock()
 	origin := s.mirrorOrigin
+	ingestAuthToken := s.ingestAuthToken
 	s.mu.Unlock()
 
 	if origin == "" {
@@ -582,7 +590,7 @@ func (s *PublicPublisherService) transmitBatch(ctx context.Context, batch models
 		if err := s.updateOutboxStatus(ctx, batch.LastSequence, models.PublicFeedOutboxStatusSent, true); err != nil {
 			return fmt.Errorf("public-feed: update outbox attempt: %w", err)
 		}
-		err := s.sendToMirror(ctx, origin, batch)
+		err := s.sendToMirror(ctx, origin, ingestAuthToken, batch)
 		if err == nil {
 			if err := s.updateOutboxStatus(ctx, batch.LastSequence, models.PublicFeedOutboxStatusAcknowledged, false); err != nil {
 				return fmt.Errorf("public-feed: acknowledge outbox: %w", err)
@@ -624,7 +632,7 @@ func isMirrorRejection(err error) bool {
 }
 
 // sendToMirror sends a single ingest request to the mirror.
-func (s *PublicPublisherService) sendToMirror(ctx context.Context, origin string, batch models.PublicFeedBatch) error {
+func (s *PublicPublisherService) sendToMirror(ctx context.Context, origin, ingestAuthToken string, batch models.PublicFeedBatch) error {
 	reqBody := models.PublicIngestRequest{Batch: batch}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
@@ -637,6 +645,9 @@ func (s *PublicPublisherService) sendToMirror(ctx context.Context, origin string
 		return fmt.Errorf("%w: %v", constants.ErrPublicFeedMirrorUnreachable, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if ingestAuthToken != "" {
+		req.Header.Set("Authorization", "Bearer "+ingestAuthToken)
+	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -854,8 +865,23 @@ func (s *PublicPublisherService) RotateKey(ctx context.Context) (string, string,
 		return "", "", fmt.Errorf("%w: %v", constants.ErrPublicFeedKeyGenFailed, err)
 	}
 	newKeyID := fmt.Sprintf("key-%d", time.Now().UnixNano())
+	if err := s.RotateKeyTo(ctx, newPriv, newKeyID); err != nil {
+		return "", "", err
+	}
+	return newKeyID, hex.EncodeToString(newPub), nil
+}
 
-	// Build and export a key revocation record batch.
+func (s *PublicPublisherService) RotateKeyTo(ctx context.Context, newPriv ed25519.PrivateKey, newKeyID string) error {
+	if len(newPriv) != ed25519.PrivateKeySize {
+		return constants.ErrPublicFeedSigningKeyRequired
+	}
+	if newKeyID == "" {
+		return constants.ErrPublicFeedSigningKeyIDRequired
+	}
+	if err := s.loadSnapshotFromOutbox(ctx); err != nil {
+		return fmt.Errorf("public-feed: rotate key: recover outbox: %w", err)
+	}
+	newPub := newPriv.Public().(ed25519.PublicKey)
 	revRecord := models.PublicKeyRevocationRecord{
 		RevokedKeyID:        s.signingKeyID,
 		RevokedAt:           time.Now().UTC(),
@@ -864,34 +890,29 @@ func (s *PublicPublisherService) RotateKey(ctx context.Context) (string, string,
 	}
 	revBytes, err := json.Marshal(revRecord)
 	if err != nil {
-		return "", "", fmt.Errorf("marshal revocation record: %w", err)
+		return fmt.Errorf("marshal revocation record: %w", err)
 	}
 	revHash := sha256.Sum256(revBytes)
 
 	s.mu.Lock()
 	nextSeq := s.highWaterSeq + 1
 	s.mu.Unlock()
-
 	record := models.PublicFeedRecord{
 		Sequence:    nextSeq,
 		RecordType:  models.PublicFeedRecordTypeKeyRevocation,
 		RecordHash:  hex.EncodeToString(revHash[:]),
 		RecordBytes: string(revBytes),
 	}
-
-	// Export the revocation batch with the old key.
 	if err := s.ExportBatch(ctx, []models.PublicFeedRecord{record}); err != nil {
-		return "", "", fmt.Errorf("public-feed: rotate key: export revocation: %w", err)
+		return fmt.Errorf("public-feed: rotate key: export revocation: %w", err)
 	}
 
-	// Switch to the new key.
 	s.mu.Lock()
 	s.signingPrivKey = newPriv
 	s.signingPubKey = newPub
 	s.signingKeyID = newKeyID
 	s.mu.Unlock()
-
-	return newKeyID, hex.EncodeToString(newPub), nil
+	return nil
 }
 
 // BuildProofPackage creates a complete public proof package from a passing

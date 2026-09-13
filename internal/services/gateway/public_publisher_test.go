@@ -88,6 +88,21 @@ func makeProjectionRecord(t *testing.T, seq int64, proj map[string]any) models.P
 // signed batch from records, writes it to the durable outbox, and sends it
 // to the mirror. The batch must carry a valid Ed25519 signature over the
 // content hash.
+func TestExportBatch_SendsConfiguredIngestToken(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	publisher.SetIngestAuthToken("mirror-token")
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer mirror-token", r.Header.Get("Authorization"))
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicIngestResponse{Accepted: true}))
+	}))
+	t.Cleanup(mirror.Close)
+	publisher.SetMirrorOrigin(mirror.URL)
+
+	require.NoError(t, publisher.ExportBatch(context.Background(), []models.PublicFeedRecord{
+		makeProjectionRecord(t, 1, map[string]any{"campaign_id": "campaign-1"}),
+	}))
+}
+
 func TestExportBatch_SignsAndWritesOutbox(t *testing.T) {
 	publisher, _, _, pubKeyHex := newPublicPublisherTestEnv(t)
 
