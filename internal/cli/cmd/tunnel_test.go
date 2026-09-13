@@ -48,7 +48,7 @@ func TestTunnelCreateCmdFlags(t *testing.T) {
 		cmd := tunnelCreateCmd()
 		require.NotNil(t, cmd)
 
-		expectedFlags := []string{"name", "hostname", "config-dir", "https-port", "ca-bundle", "origin-server-name", "skip-dns"}
+		expectedFlags := []string{"name", "hostname", "config-dir", "https-port", "service", "ca-bundle", "origin-server-name", "skip-dns"}
 		for _, flagName := range expectedFlags {
 			flag := cmd.Flags().Lookup(flagName)
 			assert.NotNil(t, flag, "tunnel create should have --%s flag", flagName)
@@ -95,7 +95,7 @@ func TestGenerateTunnelConfig(t *testing.T) {
 			"abc123",
 			"/home/user/.cloudflared/abc123.json",
 			"console.g8e.ai",
-			8443,
+			"https://localhost:8443",
 			"",
 			"",
 		)
@@ -114,7 +114,7 @@ func TestGenerateTunnelConfig(t *testing.T) {
 			"abc123",
 			"/home/user/.cloudflared/abc123.json",
 			"console.g8e.ai",
-			8443,
+			"https://localhost:8443",
 			"./.g8e/pki/g8eg-ca-bundle.pem",
 			"g8e.local",
 		)
@@ -129,12 +129,28 @@ func TestGenerateTunnelConfig(t *testing.T) {
 			"abc123",
 			"/home/user/.cloudflared/abc123.json",
 			"console.g8e.ai",
-			9443,
+			"https://localhost:9443",
 			"",
 			"",
 		)
 
 		assert.Contains(t, config, "service: https://localhost:9443")
+	})
+
+	t.Run("uses plain HTTP mirror service without TLS origin settings", func(t *testing.T) {
+		config := generateTunnelConfig(
+			"abc123",
+			"/home/user/.cloudflared/abc123.json",
+			"feed.opendevops.ai",
+			"http://localhost:8081",
+			"",
+			"",
+		)
+
+		assert.Contains(t, config, "service: http://localhost:8081")
+		assert.NotContains(t, config, "originRequest:")
+		assert.NotContains(t, config, "noTLSVerify")
+		assert.NotContains(t, config, "http2Origin")
 	})
 }
 
