@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -622,10 +623,14 @@ func publicRotateKeyCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 
 func publicMirrorRunCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
 	var listenAddress string
+	var publicListenAddress string
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run the durable local public mirror",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := validatePublicMirrorListenAddresses(listenAddress, publicListenAddress); err != nil {
+				return err
+			}
 			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
 			if err != nil {
 				return err
@@ -648,36 +653,74 @@ func publicMirrorRunCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 			if err := mirror.RegisterSourceKey(ctx, exportConfig.SourceID, exportConfig.SigningKeyID, privateKey.Public().(ed25519.PublicKey)); err != nil {
 				return err
 			}
-			server := &http.Server{
-				Addr:              listenAddress,
-				Handler:           mirror.Handler(),
-				ReadHeaderTimeout: 5 * time.Second,
-				ReadTimeout:       30 * time.Second,
-				WriteTimeout:      30 * time.Second,
-				IdleTimeout:       60 * time.Second,
-			}
-			errCh := make(chan error, 1)
-			go func() { errCh <- server.ListenAndServe() }()
-			select {
-			case serveErr := <-errCh:
-				if errors.Is(serveErr, http.ErrServerClosed) {
-					return nil
-				}
-				return fmt.Errorf("public mirror: serve: %w", serveErr)
-			case <-ctx.Done():
-				shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				if err := server.Shutdown(shutdownCtx); err != nil {
-					return fmt.Errorf("public mirror: shutdown: %w", err)
-				}
-				serveErr := <-errCh
-				if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-					return fmt.Errorf("public mirror: serve: %w", serveErr)
-				}
-				return nil
-			}
+			return runPublicMirrorServers(
+				ctx,
+				newPublicMirrorHTTPServer(listenAddress, mirror.Handler()),
+				newPublicMirrorHTTPServer(publicListenAddress, mirror.PublicHandler()),
+			)
 		},
 	}
-	cmd.Flags().StringVar(&listenAddress, "listen", "127.0.0.1:8081", "Mirror listen address")
+	cmd.Flags().StringVar(&listenAddress, "listen", "127.0.0.1:8081", "Private authenticated ingest listen address")
+	cmd.Flags().StringVar(&publicListenAddress, "public-listen", "127.0.0.1:8082", "Public anonymous read-only listen address")
 	return cmd
+}
+
+func validatePublicMirrorListenAddresses(privateAddress, publicAddress string) error {
+	if privateAddress == publicAddress {
+		return fmt.Errorf("%w: duplicate address %q", constants.ErrPublicFeedListenAddress, privateAddress)
+	}
+	for _, address := range []string{privateAddress, publicAddress} {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return fmt.Errorf("%w: %q: %v", constants.ErrPublicFeedListenAddress, address, err)
+		}
+		ip := net.ParseIP(host)
+		if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+			return fmt.Errorf("%w: %q", constants.ErrPublicFeedListenAddress, address)
+		}
+	}
+	return nil
+}
+
+func newPublicMirrorHTTPServer(address string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              address,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+}
+
+func runPublicMirrorServers(ctx context.Context, servers ...*http.Server) error {
+	errCh := make(chan error, len(servers))
+	for _, server := range servers {
+		go func() { errCh <- server.ListenAndServe() }()
+	}
+	var serveErr error
+	select {
+	case serveErr = <-errCh:
+	case <-ctx.Done():
+	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, server := range servers {
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("public mirror: shutdown: %w", err)
+		}
+	}
+	remaining := len(servers)
+	if serveErr != nil {
+		remaining--
+	}
+	for range remaining {
+		if err := <-errCh; err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("public mirror: serve: %w", err)
+		}
+	}
+	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+		return fmt.Errorf("public mirror: serve: %w", serveErr)
+	}
+	return nil
 }

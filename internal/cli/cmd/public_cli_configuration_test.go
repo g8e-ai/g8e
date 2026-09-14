@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -39,6 +40,15 @@ func (s *publicFailOnceFileSvc) WriteFile(ctx context.Context, relPath string, d
 		return fmt.Errorf("injected write failure")
 	}
 	return s.RuntimeFileService.WriteFile(ctx, relPath, data, mode)
+}
+
+func publicTestListenAddress(t *testing.T) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	address := listener.Addr().String()
+	require.NoError(t, listener.Close())
+	return address
 }
 
 func TestPublicCmd_ExposesProductionSurface(t *testing.T) {
@@ -443,21 +453,55 @@ func TestPublicMirrorRunCmd_RegistersSourceKeyAndStopsWithContext(t *testing.T) 
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
+	privateAddress := publicTestListenAddress(t)
+	publicAddress := publicTestListenAddress(t)
 	runCmd := publicMirrorRunCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
 	runCmd.SetContext(ctx)
-	runCmd.SetArgs([]string{"--listen", "127.0.0.1:0"})
+	runCmd.SetArgs([]string{"--listen", privateAddress, "--public-listen", publicAddress})
 	errCh := make(chan error, 1)
 	go func() { errCh <- runCmd.Execute() }()
 	require.Eventually(t, func() bool {
-		exists, err := fileSvc.FileExists(context.Background(), constants.PublicMirrorStatePath)
-		return err == nil && exists
+		response, err := http.Get("http://" + publicAddress + "/bootstrap")
+		if err != nil {
+			return false
+		}
+		return response.Body.Close() == nil && response.StatusCode == http.StatusOK
 	}, time.Second, 10*time.Millisecond)
+	privateResponse, err := http.Post("http://"+privateAddress+"/ingest", "application/json", bytes.NewReader([]byte("{}")))
+	require.NoError(t, err)
+	require.NoError(t, privateResponse.Body.Close())
+	assert.Equal(t, http.StatusUnauthorized, privateResponse.StatusCode)
+	publicResponse, err := http.Post("http://"+publicAddress+"/ingest", "application/json", bytes.NewReader([]byte("{}")))
+	require.NoError(t, err)
+	require.NoError(t, publicResponse.Body.Close())
+	assert.Equal(t, http.StatusNotFound, publicResponse.StatusCode)
 	cancel()
 	require.NoError(t, <-errCh)
 
 	state, err := gateway.NewRuntimePublicMirrorStore(fileSvc).Load(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, state.KeyRegistry, 1)
+}
+
+func TestPublicMirrorRunCmd_RejectsNonLoopbackAndDuplicateListenAddresses(t *testing.T) {
+	tests := []struct {
+		name           string
+		privateAddress string
+		publicAddress  string
+	}{
+		{name: "duplicate", privateAddress: "127.0.0.1:8081", publicAddress: "127.0.0.1:8081"},
+		{name: "public non-loopback", privateAddress: "127.0.0.1:8081", publicAddress: "0.0.0.0:8082"},
+		{name: "private non-loopback", privateAddress: "0.0.0.0:8081", publicAddress: "127.0.0.1:8082"},
+		{name: "malformed", privateAddress: "127.0.0.1", publicAddress: "127.0.0.1:8082"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := publicMirrorRunCmdWithConfig(configLoaderFor(nil), fileSvcFactoryFor(nil))
+			cmd.SetArgs([]string{"--listen", tt.privateAddress, "--public-listen", tt.publicAddress})
+			err := cmd.Execute()
+			assert.ErrorIs(t, err, constants.ErrPublicFeedListenAddress)
+		})
+	}
 }
 
 func TestPublicConfigSetCmd_UpdatesOnlyExplicitFields(t *testing.T) {

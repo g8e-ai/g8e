@@ -187,6 +187,30 @@ func (e *mirrorTestEnv) getJSON(path string, target any) int {
 	return resp.StatusCode
 }
 
+func TestPublicMirror_PublicHandlerExposesOnlyAnonymousReadRoutes(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	server := httptest.NewServer(env.mirror.PublicHandler())
+	t.Cleanup(server.Close)
+
+	response, err := server.Client().Get(server.URL + "/bootstrap")
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	assert.Equal(t, "*", response.Header.Get("Access-Control-Allow-Origin"))
+
+	for _, path := range []string{"/ingest", "/keys/register", "/proof-ingest"} {
+		t.Run(path, func(t *testing.T) {
+			request, requestErr := http.NewRequest(http.MethodPost, server.URL+path, strings.NewReader("{}"))
+			require.NoError(t, requestErr)
+			mutationResponse, requestErr := server.Client().Do(request)
+			require.NoError(t, requestErr)
+			require.NoError(t, mutationResponse.Body.Close())
+			assert.Equal(t, http.StatusNotFound, mutationResponse.StatusCode)
+			assert.Empty(t, mutationResponse.Header.Get("Access-Control-Allow-Origin"))
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Ingest authentication tests
 // ---------------------------------------------------------------------------

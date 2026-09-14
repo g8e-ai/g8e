@@ -759,10 +759,19 @@ func (m *PublicMirrorServer) acceptBatch(ctx context.Context, batch models.Publi
 // Handler returns the http.Handler for the mirror server. Mount at the
 // mirror root path.
 func (m *PublicMirrorServer) Handler() http.Handler {
-	mux := http.NewServeMux()
+	mux := m.publicReadMux()
 	mux.HandleFunc("/ingest", m.handleIngest)
 	mux.HandleFunc("/keys/register", m.handleKeyRegistration)
 	mux.HandleFunc("/proof-ingest", m.handleProofIngest)
+	return m.withCORS(mux)
+}
+
+func (m *PublicMirrorServer) PublicHandler() http.Handler {
+	return m.withCORS(m.publicReadMux())
+}
+
+func (m *PublicMirrorServer) publicReadMux() *http.ServeMux {
+	mux := http.NewServeMux()
 	mux.HandleFunc("/bootstrap", m.handleBootstrap)
 	mux.HandleFunc("/snapshot", m.handleSnapshot)
 	mux.HandleFunc("/history", m.handleHistory)
@@ -770,7 +779,7 @@ func (m *PublicMirrorServer) Handler() http.Handler {
 	mux.HandleFunc("/proof-catalog", m.handleProofCatalog)
 	mux.HandleFunc("/proof-manifest", m.handleProofManifest)
 	mux.HandleFunc("/proofs/", m.handleProofDownload)
-	return m.withCORS(mux)
+	return mux
 }
 
 func publicMirrorAnonymousReadPath(requestPath string) bool {

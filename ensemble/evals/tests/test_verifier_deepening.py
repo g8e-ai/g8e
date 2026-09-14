@@ -63,6 +63,7 @@ from g8e_evals.constants import (
     EVIDENCE_INDEX_JSONL,
     ESCALATION_RECORDS_JSONL,
     EXPECTED_RECORD_POLICY_JSON,
+    MANIFEST_JSON,
     METRICS_JSONL,
     REPORT_CHECKSUM_JSON,
     RESOURCE_OBSERVATIONS_JSONL,
@@ -756,6 +757,86 @@ class TestModelVariantAndRoleCrossBinding:
         assert any("role" in f.lower() and "mismatch" in f.lower() for f in result.failures), (
             f"expected role mismatch failure, got: {result.failures}"
         )
+
+    def test_tier_fitness_allows_bound_baseline_model_calls(self, tmp_path: Path):
+        report_dir = _run_campaign(tmp_path)
+        _write_stages_for_all_attempts(report_dir)
+        _write_observations_for_all_attempts(report_dir)
+        manifest_path = report_dir / MANIFEST_JSON
+        manifest = json.loads(manifest_path.read_text())
+        manifest["campaign_binding"] = {
+            "campaign_id": _CAMPAIGN_ID,
+            "campaign_revision": "test-revision",
+            "report_role": "single",
+            "campaign_profile_hash": _VALID_HASH,
+            "model_registry_hash": _VALID_HASH,
+            "required_record_policy_hash": _VALID_HASH,
+            "orchestrator_hardware_identity": "linux/amd64/cpu",
+            "orchestrator_environment_stratum": "single-machine",
+            "provider_hardware_identity": "unavailable",
+            "provider_environment_stratum": "remote-ollama",
+            "track_arm_assignments": [
+                {"track": "direct", "arm_id": "direct"},
+                {"track": "tier_fitness", "arm_id": "ensemble_ungoverned"},
+            ],
+        }
+        manifest_path.write_text(json.dumps(manifest))
+
+        stage_path = report_dir / STAGES_JSONL
+        stages = [json.loads(line) for line in stage_path.read_text().splitlines() if line]
+        observation_path = report_dir / RESOURCE_OBSERVATIONS_JSONL
+        observations = [
+            json.loads(line) for line in observation_path.read_text().splitlines() if line
+        ]
+        attempts = [
+            json.loads(line)
+            for line in (report_dir / ATTEMPTS_JSONL).read_text().splitlines()
+            if line
+        ]
+        tier_fitness_attempt_id = next(
+            attempt["attempt_id"]
+            for attempt in attempts
+            if attempt["arm_id"] == "ensemble_ungoverned"
+        )
+        target_observation = next(
+            observation
+            for observation in observations
+            if observation["attempt_id"] == tier_fitness_attempt_id
+        )
+        baseline_stage_id = f"{target_observation['attempt_id']}:model_inference:baseline"
+        stages.append(
+            _make_stage_dict(
+                attempt_id=target_observation["attempt_id"],
+                run_id=target_observation["run_id"],
+                stage_id=baseline_stage_id,
+                agent_role="lite",
+                model="smollm2:360m",
+            )
+        )
+        observations.append(
+            _make_observation_dict(
+                ident={
+                    "campaign_id": target_observation["campaign_id"],
+                    "child_id": target_observation["child_id"],
+                    "run_id": target_observation["run_id"],
+                    "task_id": target_observation["task_id"],
+                    "assignment_id": target_observation["assignment_id"],
+                    "attempt_id": target_observation["attempt_id"],
+                    "inference_id": "inf-baseline",
+                    "stage_id": baseline_stage_id,
+                },
+                role="lite",
+                model_variant_id="smollm2:360m",
+            )
+        )
+        stage_path.write_text("\n".join(json.dumps(stage) for stage in stages) + "\n")
+        observation_path.write_text(
+            "\n".join(json.dumps(observation) for observation in observations) + "\n"
+        )
+
+        result = verify_campaign(report_dir)
+
+        assert result.ok, result.failures
 
 
 class TestStageIdCrossBinding:

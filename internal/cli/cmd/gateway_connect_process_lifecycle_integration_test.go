@@ -266,22 +266,33 @@ func TestConnectRestartGateway_ProfileWriteFailureRollsBackToPreviousConfig(t *t
 }
 
 // TestConnectStoppedGateway_PersistsResolvedPorts verifies that
-// connectStoppedGateway persists the resolved ports (not the requested
-// defaults) in the launch profile after StartOperator succeeds. The test binds
-// the default HTTP port (8080) to force StartOperator to shift to the next
-// available port, then calls gw connect on a stopped gateway. After the command
-// completes (it may fail at trust/verify since the subprocess only serves HTTP
-// health checks, not HTTPS), the test reads the persisted launch profile and
-// asserts the HTTP and HTTPS ports differ from the defaults.
+// connectStoppedGateway persists the resolved ports (not the requested ports)
+// in the launch profile after StartOperator succeeds. The test selects an
+// isolated port pair and binds the requested HTTP port to force StartOperator
+// to shift to the next available port, then calls gw connect on a stopped
+// gateway. After the command completes (it may fail at trust/verify since the
+// subprocess only serves HTTP health checks, not HTTPS), the test reads the
+// persisted launch profile and asserts the HTTP and HTTPS ports differ from the
+// requested ports.
 func TestConnectStoppedGateway_PersistsResolvedPorts(t *testing.T) {
 	fileSvc, cfg := newCmdTestEnv(t)
 	withServeReExec(t, fileSvc)
 	startZombieReaper(t)
 
-	// Bind the default HTTP port to force StartOperator to shift ports.
-	ln, err := net.Listen("tcp", "127.0.0.1:8080")
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = ln.Close() })
+	requestedHTTPPort := ln.Addr().(*net.TCPAddr).Port
+
+	httpsProbe, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	requestedHTTPSPort := httpsProbe.Addr().(*net.TCPAddr).Port
+	require.NoError(t, httpsProbe.Close())
+
+	baseCfg := defaultServeConfig()
+	baseCfg.HTTPPort = requestedHTTPPort
+	baseCfg.HTTPSPort = requestedHTTPSPort
+	require.NoError(t, serve.WriteLaunchProfile(fileSvc, baseCfg))
 
 	deps := connectDeps{
 		trustInstaller: &stubTrustInstaller{trusted: true},
@@ -310,18 +321,18 @@ func TestConnectStoppedGateway_PersistsResolvedPorts(t *testing.T) {
 	require.Error(t, err)
 
 	// Read the persisted launch profile and assert the ports were resolved
-	// (shifted from the defaults because 8080 was bound).
+	// after the requested HTTP port collision.
 	profile, readErr := serve.ReadLaunchProfile(fileSvc)
 	require.NoError(t, readErr, "launch profile should be persisted after successful start")
 
-	assert.NotEqual(t, constants.Ports.OperatorHttp, profile.Config.HTTPPort,
-		"HTTP port should be shifted from default %d", constants.Ports.OperatorHttp)
-	assert.NotEqual(t, constants.Ports.OperatorHttps, profile.Config.HTTPSPort,
-		"HTTPS port should be shifted from default %d", constants.Ports.OperatorHttps)
+	assert.NotEqual(t, requestedHTTPPort, profile.Config.HTTPPort,
+		"HTTP port should be shifted from requested port %d", requestedHTTPPort)
+	assert.NotEqual(t, requestedHTTPSPort, profile.Config.HTTPSPort,
+		"HTTPS port should be shifted from requested port %d", requestedHTTPSPort)
 
 	// The offset between HTTP and HTTPS should be preserved.
-	httpOffset := profile.Config.HTTPPort - constants.Ports.OperatorHttp
-	expectedHTTPS := constants.Ports.OperatorHttps + httpOffset
+	httpOffset := profile.Config.HTTPPort - requestedHTTPPort
+	expectedHTTPS := requestedHTTPSPort + httpOffset
 	assert.Equal(t, expectedHTTPS, profile.Config.HTTPSPort,
-		"HTTPS port should maintain the same offset from the default as HTTP port")
+		"HTTPS port should maintain the same offset from the requested port as HTTP port")
 }

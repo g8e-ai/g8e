@@ -1413,6 +1413,7 @@ var (
 	ErrPublicFeedRateLimitConfig      = errors.New("public-feed: anonymous read rate limit configuration is invalid")
 	ErrPublicFeedRetentionConfig      = errors.New("public-feed: retention configuration is invalid")
 	ErrPublicFeedFreshnessConfig      = errors.New("public-feed: freshness window configuration is invalid")
+	ErrPublicFeedListenAddress        = errors.New("public-feed: mirror listen address must be unique and loopback-only")
 	ErrPublicFeedMaxRetriesExceeded   = errors.New("public-feed: max retry attempts exceeded")
 	ErrPublicFeedSnapshotNotFound     = errors.New("public-feed: snapshot not found")
 	ErrPublicFeedProofNotFound        = errors.New("public-feed: proof not found")

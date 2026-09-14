@@ -82,6 +82,7 @@ from g8e_evals.index import (
 )
 from g8e_evals.schema import (
     AttemptRecord,
+    CampaignTrack,
     CorrelatedErrorRecord,
     EscalationRecord,
     EvidenceIndex,
@@ -579,40 +580,52 @@ def _cross_check_observation_model_binding(
     obs: ResourceObservation,
     assignment_by_id: dict[str, CampaignAssignment],
     cohort_by_id: dict[str, ModelCohort],
-    stage_ids: set[str],
+    stage_by_id: dict[str, StageObservation],
+    tier_fitness: bool,
     failures: list[str],
 ) -> None:
     """Cross-check a resource observation's model_variant_id, role, and
     stage_id against the assignment's cohort and the stage trail.
 
-    The model_variant_id must match one of the cohort's role-binding
-    model IDs. The role must match one of the cohort's role-binding
-    roles. The stage_id must exist in the stage observation trail when
-    the trail is present.
+    Non-tier-fitness observations must match one of the cohort's role
+    bindings. Tier-fitness attempts may also contain calls to frozen
+    non-target baseline tiers, while the target cohort model is checked
+    once per terminal attempt. Every observation must match its exact
+    model-inference stage when the stage trail is present.
     """
-    assignment = assignment_by_id.get(obs.assignment_id)
-    if assignment is not None:
-        cohort = cohort_by_id.get(assignment.model_cohort_id)
-        if cohort is not None:
-            cohort_model_ids = {rb.model_id for rb in cohort.role_bindings}
-            cohort_roles = {rb.role for rb in cohort.role_bindings}
-            if obs.model_variant_id not in cohort_model_ids:
-                failures.append(
-                    f"resource observation {obs.inference_id} model_variant_id mismatch: "
-                    f"got {obs.model_variant_id!r}, cohort {assignment.model_cohort_id!r} "
-                    f"has {sorted(cohort_model_ids)}"
-                )
-            obs_role = obs.role.value if hasattr(obs.role, "value") else str(obs.role)
-            if obs_role not in cohort_roles:
-                failures.append(
-                    f"resource observation {obs.inference_id} role mismatch: "
-                    f"got {obs_role!r}, cohort {assignment.model_cohort_id!r} "
-                    f"has {sorted(cohort_roles)}"
-                )
-    if stage_ids and obs.stage_id not in stage_ids:
+    stage = stage_by_id.get(obs.stage_id)
+    if stage_by_id and stage is None:
         failures.append(
             f"resource observation {obs.inference_id} stage_id {obs.stage_id!r} "
             f"not found in stage observation trail"
+        )
+    elif stage is not None and stage.model != obs.model_variant_id:
+        failures.append(
+            f"resource observation {obs.inference_id} model_variant_id mismatch: "
+            f"got {obs.model_variant_id!r}, stage {obs.stage_id!r} has {stage.model!r}"
+        )
+    if tier_fitness:
+        return
+    assignment = assignment_by_id.get(obs.assignment_id)
+    if assignment is None:
+        return
+    cohort = cohort_by_id.get(assignment.model_cohort_id)
+    if cohort is None:
+        return
+    cohort_model_ids = {rb.model_id for rb in cohort.role_bindings}
+    cohort_roles = {rb.role for rb in cohort.role_bindings}
+    if obs.model_variant_id not in cohort_model_ids:
+        failures.append(
+            f"resource observation {obs.inference_id} model_variant_id mismatch: "
+            f"got {obs.model_variant_id!r}, cohort {assignment.model_cohort_id!r} "
+            f"has {sorted(cohort_model_ids)}"
+        )
+    obs_role = obs.role.value if hasattr(obs.role, "value") else str(obs.role)
+    if obs_role not in cohort_roles:
+        failures.append(
+            f"resource observation {obs.inference_id} role mismatch: "
+            f"got {obs_role!r}, cohort {assignment.model_cohort_id!r} "
+            f"has {sorted(cohort_roles)}"
         )
 
 
@@ -1188,8 +1201,15 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
 
     # Load supporting typed artifacts for cross-binding and cardinality checks.
     stages = _load_stages(report_dir, failures)
-    stage_ids: set[str] = {s.stage_id for s in stages}
+    stage_by_id = {stage.stage_id: stage for stage in stages}
     cohort_by_id = _load_cohorts(report_dir, failures)
+    tier_fitness_arm_ids: set[str] = set()
+    if run_manifest is not None and run_manifest.campaign_binding is not None:
+        tier_fitness_arm_ids = {
+            assignment.arm_id
+            for assignment in run_manifest.campaign_binding.track_arm_assignments
+            if assignment.track == CampaignTrack.TIER_FITNESS
+        }
     evidence_index = _load_evidence_index(report_dir, failures)
     completed_attempt_count = sum(
         1 for a in attempts if a.terminal_status == TerminalStatus.COMPLETED
@@ -1245,8 +1265,14 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                     assignment_ids_from_attempts, attempt_ids, attempt_by_id,
                     failures,
                 )
+                attempt = attempt_by_id.get(obs.attempt_id)
                 _cross_check_observation_model_binding(
-                    obs, assignment_by_id, cohort_by_id, stage_ids, failures,
+                    obs,
+                    assignment_by_id,
+                    cohort_by_id,
+                    stage_by_id,
+                    attempt is not None and attempt.arm_id in tier_fitness_arm_ids,
+                    failures,
                 )
                 _cross_check_observation_environment_scope(
                     obs, binding_orchestrator_scope, binding_provider_scope, failures,

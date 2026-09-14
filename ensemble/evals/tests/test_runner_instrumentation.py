@@ -61,8 +61,9 @@ from g8e_evals.constants import (
 from g8e_evals.harness import InferenceObservation, Response, Score, Task
 from g8e_evals.index import MeasurementAvailability, MeasurementScope, ModelRole
 from g8e_evals.models import ScoreDetails, TaskMetadata
+from g8e_evals.profile import CampaignProfile
 from g8e_evals.runner import CampaignRunner, CampaignSpec, CampaignStopReason
-from g8e_evals.schema import ProviderBudget
+from g8e_evals.schema import CampaignTrack, ProviderBudget, TerminalStatus, TrackArmAssignment
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +141,21 @@ class AttemptLocalInferenceIDFakeSUT(InstrumentedFakeSUT):
         response = await super().get_answer(task)
         response.inference_observations[0].inference_id = "inf-0"
         return response
+
+
+@dataclass
+class UninstrumentedEnsembleFakeSUT:
+    model_id: str
+
+    async def get_answer(self, task: Task) -> Response:
+        return Response(
+            answer="This answer has no provider observation.",
+            model=self.model_id,
+            arm=Arm.ENSEMBLE_UNGOVERNED,
+        )
+
+    async def close(self) -> None:
+        return None
 
 
 @dataclass
@@ -486,6 +502,47 @@ class TestFiveJsonlFilesEmitted:
             assert obs["observation_boundary"] != ""
             assert obs["clock_domain"] != ""
             assert obs["collection_tool"] != ""
+
+    def test_ensemble_answer_without_provider_observation_is_invalid_evidence(
+        self, tmp_path: Path
+    ):
+        spec = _make_spec(task_ids=[_TASK_IDS[0]])
+        preregistration = spec.preregistration.model_copy(
+            update={
+                "baseline_arm_id": Arm.ENSEMBLE_UNGOVERNED.value,
+                "comparison_arm_ids": [],
+            }
+        )
+        spec = spec.model_copy(update={"preregistration": preregistration})
+        runner = CampaignRunner(
+            spec=spec,
+            sut_factory=lambda cohort, arm: UninstrumentedEnsembleFakeSUT(
+                model_id=cohort.role_bindings[0].model_id
+            ),
+            tasks=_make_tasks([_TASK_IDS[0]]),
+            grader=FakeGrader(),
+            output_dir=tmp_path,
+            campaign_profile=CampaignProfile.model_construct(
+                hardware_identity="linux/amd64/cpu",
+                track_arm_assignments=[
+                    TrackArmAssignment(
+                        track=CampaignTrack.TIER_FITNESS,
+                        arm_id=Arm.ENSEMBLE_UNGOVERNED.value,
+                    )
+                ],
+            ),
+        )
+
+        result = asyncio.run(runner.run())
+        attempts = [
+            json.loads(line)
+            for line in (result.report_dir / ATTEMPTS_JSONL).read_text().splitlines()
+            if line
+        ]
+
+        assert len(attempts) == 1
+        assert attempts[0]["terminal_status"] == TerminalStatus.INVALID_EVIDENCE.value
+        assert attempts[0]["missingness_or_failure"] == "inference_observation_missing"
 
 
 # ---------------------------------------------------------------------------

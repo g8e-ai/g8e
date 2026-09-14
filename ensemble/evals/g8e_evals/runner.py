@@ -1881,6 +1881,12 @@ class CampaignRunner:
                 terminal_status = TerminalStatus.MODEL_FAILED
             elif not response.answer:
                 terminal_status = TerminalStatus.MODEL_FAILED
+            elif (
+                self.campaign_profile is not None
+                and arm_def.uses_g8ee
+                and not response.inference_observations
+            ):
+                terminal_status = TerminalStatus.INVALID_EVIDENCE
             elif response.model and not _model_matches(response.model, expected_model):
                 # Cohort drift: the SUT returned a different model than
                 # the cohort declares. This invalidates the campaign.
@@ -1926,6 +1932,12 @@ class CampaignRunner:
                     if terminal_status == TerminalStatus.COMPLETED
                     else "observation_normalization_failed"
                     if normalization_error is not None
+                    else "inference_observation_missing"
+                    if (
+                        terminal_status == TerminalStatus.INVALID_EVIDENCE
+                        and response is not None
+                        and not response.inference_observations
+                    )
                     else terminal_status.value
                 ),
                 parent_attempt_id=parent_attempt_id,
