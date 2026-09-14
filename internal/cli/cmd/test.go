@@ -41,6 +41,7 @@ func testCmd() *cobra.Command {
 		testE2EFullCmd(),
 		testCoverageCmd(),
 		testLintCmd(),
+		publicLoopCmd(),
 		chaosCmd(),
 		testSummaryCmd(),
 	)

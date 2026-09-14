@@ -12,16 +12,9 @@
 // the format stays comparable with
 // g8e_evals.preflight.compute_source_tree_state_hash).
 //
-// Two collection modes exist:
-//
-//   - Tracked-source mode (git): the manifest is `git ls-files --cached
-//     --others --exclude-standard`, so .gitignore defines what counts as
-//     source. Tracked symlinks hash their link target (git blob
-//     semantics); tracked-but-deleted files record a non-hex marker.
-//   - Manifest mode (no .git, e.g. Docker build contexts): an explicit
-//     list of paths under the base root is walked, skipping entries whose
-//     path components match the exclude patterns. Symlinks anywhere in a
-//     walked tree are rejected.
+// Collection uses an explicit manifest of paths under the base root, skipping
+// entries whose path components match the exclude patterns. Symlinks anywhere
+// in a walked tree are rejected.
 package buildinfo
 
 import (
@@ -30,7 +23,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -38,14 +30,8 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-// missingContentMarker replaces the content digest for a tracked file that
-// is absent from the working tree. It is deliberately not 64-char hex so a
-// missing file can never collide with real content.
-const missingContentMarker = "!missing!"
-
 // hashedEntry pairs the canonical manifest key with the SHA-256 hex digest
-// of the content that key represents (file bytes, symlink target, or the
-// missing-content marker).
+// of the file bytes that key represents.
 type hashedEntry struct {
 	key    string
 	digest string
@@ -119,77 +105,6 @@ func ComputeSourceManifestHash(base string, entries, excludes []string) (string,
 		files = append(files, hashedEntry{key: key, digest: digest})
 	}
 	return digestEntries(files), nil
-}
-
-// ComputeTrackedSourceHash returns the canonical digest of the source
-// manifest reported by `git ls-files --cached --others --exclude-standard`
-// for the work tree containing repoRoot. File content comes from the
-// working tree, so uncommitted changes are captured; untracked files that
-// .gitignore excludes (venvs, build output, caches) are not part of the
-// manifest at all.
-func ComputeTrackedSourceHash(repoRoot string) (string, error) {
-	topLevel, err := git(repoRoot, "rev-parse", "--show-toplevel")
-	if err != nil {
-		return "", fmt.Errorf("buildinfo: resolve work tree root: %w", err)
-	}
-	out, err := git(topLevel, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
-	if err != nil {
-		return "", fmt.Errorf("buildinfo: list tracked source: %w", err)
-	}
-	var entries []hashedEntry
-	for _, name := range strings.Split(out, "\x00") {
-		if name == "" {
-			continue
-		}
-		entry, err := hashWorktreeEntry(topLevel, name)
-		if err != nil {
-			return "", err
-		}
-		entries = append(entries, entry)
-	}
-	return digestEntries(entries), nil
-}
-
-// SourceTreeHash picks the collection mode for base: tracked-source mode
-// when base is inside a git work tree, otherwise manifest mode over the
-// given entries. Manifest mode with no entries is an error.
-func SourceTreeHash(base string, entries, excludes []string) (string, error) {
-	if _, err := git(base, "rev-parse", "--git-dir"); err == nil {
-		return ComputeTrackedSourceHash(base)
-	}
-	if len(entries) == 0 {
-		return "", fmt.Errorf("%w: no manifest entries supplied and %s is not a git work tree", constants.ErrSourceTreeEntryNotFound, base)
-	}
-	return ComputeSourceManifestHash(base, entries, excludes)
-}
-
-// hashWorktreeEntry digests one git-manifest path under repoRoot. Tracked
-// symlinks hash their link target (the git blob content); tracked files
-// missing from the working tree record the missing marker.
-func hashWorktreeEntry(repoRoot, name string) (hashedEntry, error) {
-	abs := filepath.Join(repoRoot, filepath.FromSlash(name))
-	lstat, err := os.Lstat(abs)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return hashedEntry{key: name, digest: missingContentMarker}, nil
-		}
-		return hashedEntry{}, fmt.Errorf("buildinfo: lstat tracked source %s: %w", name, err)
-	}
-	if lstat.Mode()&os.ModeSymlink != 0 {
-		target, err := os.Readlink(abs)
-		if err != nil {
-			return hashedEntry{}, fmt.Errorf("buildinfo: readlink tracked source %s: %w", name, err)
-		}
-		return hashedEntry{key: name, digest: hashBytes([]byte(target))}, nil
-	}
-	if !lstat.Mode().IsRegular() {
-		return hashedEntry{key: name, digest: missingContentMarker}, nil
-	}
-	digest, err := hashFile(abs)
-	if err != nil {
-		return hashedEntry{}, err
-	}
-	return hashedEntry{key: name, digest: digest}, nil
 }
 
 // walkDir appends every regular file beneath absDir, keyed by path relative
@@ -300,11 +215,3 @@ func hashBytes(content []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func git(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("buildinfo: git %s: %w", strings.Join(args, " "), err)
-	}
-	return strings.TrimRight(string(out), "\n"), nil
-}

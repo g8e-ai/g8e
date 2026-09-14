@@ -8,6 +8,7 @@
 package cmd
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,7 +27,7 @@ func TestTestCmd(t *testing.T) {
 		cmd := testCmd()
 		require.NotNil(t, cmd)
 
-		expectedSubcommands := []string{"unit", "integration", "e2e", "e2e-full", "coverage", "lint", "chaos", "summary"}
+		expectedSubcommands := []string{"unit", "integration", "e2e", "e2e-full", "coverage", "lint", "chaos", "summary", "public-loop"}
 		for _, subcmd := range expectedSubcommands {
 			found := false
 			for _, c := range cmd.Commands() {
@@ -38,6 +39,20 @@ func TestTestCmd(t *testing.T) {
 			assert.True(t, found, "test command should have %s subcommand", subcmd)
 		}
 	})
+}
+
+func TestTestPublicLoopCmd_RequiresCandidateAndOutput(t *testing.T) {
+	called := false
+	cmd := publicLoopCmdWithRunner(func(_ context.Context, candidatePath, outputPath string) error {
+		called = true
+		assert.Equal(t, "candidate.json", candidatePath)
+		assert.Equal(t, "evidence.json", outputPath)
+		return nil
+	})
+	cmd.SetArgs([]string{"--candidate", "candidate.json", "--output", "evidence.json"})
+
+	require.NoError(t, cmd.Execute())
+	assert.True(t, called)
 }
 
 func TestTestUnitCmd(t *testing.T) {

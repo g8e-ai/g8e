@@ -50,6 +50,7 @@ from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
 from g8e_evals.cli_binary import CLIBinaryError, resolve_g8e_cli
 from g8e_evals.controller_cli import controller_cmd
 from g8e_evals.provenance_bridge import ProvenanceBridgeError, load_cli_build_provenance
+from g8e_evals.qualification_cli import qualification_cmd
 from g8e_evals.graders import (
     DeterministicGradingContext,
     grade_deterministically,
@@ -534,6 +535,7 @@ def main():
 
 
 main.add_command(controller_cmd)
+main.add_command(qualification_cmd)
 
 
 @main.command()

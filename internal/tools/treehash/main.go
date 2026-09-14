@@ -10,57 +10,52 @@
 // main.sourceTreeHash; `g8e version --json` surfaces it and the evals
 // provenance bridge consumes it.
 //
-// Modes:
-//
-//	auto     (default) tracked-source hashing when -base is inside a git
-//	         work tree, manifest hashing otherwise
-//	git      tracked-source hashing only (git ls-files over the work tree)
-//	manifest walk the positional entries relative to -base
-//
-// In manifest mode, -exclude is a comma-separated list of filepath.Match
-// patterns matched against each path component (e.g. ".venv,node_modules,
-// __pycache__,*.egg-info").
+// Manifest mode walks the positional entries relative to -base. The -exclude
+// value is a comma-separated list of filepath.Match patterns matched against
+// each path component.
 package main
 
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/buildinfo"
 )
 
+type manifestHashFunc func(string, []string, []string) (string, error)
+
 func main() {
-	base := flag.String("base", ".", "repository root the manifest entries are relative to")
-	exclude := flag.String("exclude", "", "comma-separated path-component patterns skipped in manifest mode")
-	mode := flag.String("mode", "auto", "collection mode: auto, git, or manifest")
-	flag.Parse()
+	os.Exit(runTreehash(os.Args[1:], os.Stdout, os.Stderr, buildinfo.ComputeSourceManifestHash))
+}
 
-	excludes := splitCSV(*exclude)
-	entries := flag.Args()
-
-	var hash string
-	var err error
-	switch *mode {
-	case "auto":
-		hash, err = buildinfo.SourceTreeHash(*base, entries, excludes)
-	case "git":
-		hash, err = buildinfo.ComputeTrackedSourceHash(*base)
-	case "manifest":
-		if len(entries) == 0 {
-			err = fmt.Errorf("manifest mode requires at least one source entry")
-		} else {
-			hash, err = buildinfo.ComputeSourceManifestHash(*base, entries, excludes)
-		}
-	default:
-		err = fmt.Errorf("unknown mode %q (want auto, git, or manifest)", *mode)
+func runTreehash(args []string, stdout, stderr io.Writer, hashManifest manifestHashFunc) int {
+	flags := flag.NewFlagSet("treehash", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	base := flags.String("base", ".", "repository root the manifest entries are relative to")
+	exclude := flags.String("exclude", "", "comma-separated path-component patterns skipped in manifest mode")
+	mode := flags.String("mode", "manifest", "collection mode: manifest")
+	if err := flags.Parse(args); err != nil {
+		return 2
 	}
+	if *mode != "manifest" {
+		fmt.Fprintf(stderr, "treehash: unknown mode %q (want manifest)\n", *mode)
+		return 1
+	}
+	entries := flags.Args()
+	if len(entries) == 0 {
+		fmt.Fprintln(stderr, "treehash: manifest mode requires at least one source entry")
+		return 1
+	}
+	hash, err := hashManifest(*base, entries, splitCSV(*exclude))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "treehash: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "treehash: %v\n", err)
+		return 1
 	}
-	fmt.Println(hash)
+	fmt.Fprintln(stdout, hash)
+	return 0
 }
 
 func splitCSV(csv string) []string {

@@ -205,37 +205,3 @@ func TestComputeSourceManifestHash_ExcludeSkipsNestedGeneratedDirs(t *testing.T)
 	assert.Equal(t, clean, excluded)
 }
 
-func TestSourceTreeHash_ManifestModeWithoutGit(t *testing.T) {
-	base := t.TempDir()
-	writeParityFixture(t, base)
-
-	digest, err := SourceTreeHash(base, []string{"dir"}, nil)
-	require.NoError(t, err)
-	assert.Len(t, digest, 64)
-}
-
-func TestSourceTreeHash_ManifestModeRejectsEmptyEntries(t *testing.T) {
-	base := t.TempDir()
-	writeParityFixture(t, base)
-
-	_, err := SourceTreeHash(base, nil, nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrSourceTreeEntryNotFound)
-}
-
-func TestComputeTrackedSourceHash_GitWorktree(t *testing.T) {
-	repoRoot, err := filepath.Abs("..")
-	require.NoError(t, err)
-	if _, err := git(repoRoot, "rev-parse", "--git-dir"); err != nil {
-		t.Skip("not inside a git work tree")
-	}
-
-	digest, err := ComputeTrackedSourceHash(repoRoot)
-	require.NoError(t, err)
-	assert.Len(t, digest, 64)
-
-	// Deterministic on unchanged source.
-	again, err := ComputeTrackedSourceHash(repoRoot)
-	require.NoError(t, err)
-	assert.Equal(t, digest, again)
-}
