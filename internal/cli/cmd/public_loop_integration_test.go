@@ -5,6 +5,8 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +18,32 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
+
+func TestVerifyPublicLoopPublicSurface_RequiresMutationRoutesAbsent(t *testing.T) {
+	tests := []struct {
+		name      string
+		handler   http.Handler
+		wantError bool
+	}{
+		{name: "read-only surface returns not found", handler: http.NotFoundHandler()},
+		{name: "private surface authentication response is rejected", handler: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusUnauthorized) }), wantError: true},
+		{name: "private surface authorization response is rejected", handler: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusForbidden) }), wantError: true},
+		{name: "registered route method response is rejected", handler: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusMethodNotAllowed) }), wantError: true},
+		{name: "successful mutation response is rejected", handler: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusOK) }), wantError: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(test.handler)
+			t.Cleanup(server.Close)
+			err := verifyPublicLoopMutationRoutesAbsent(context.Background(), server)
+			if test.wantError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
 
 func TestRunPublicLoop_EmitsCandidateBoundZeroInferenceEvidence(t *testing.T) {
 	root := testutil.TempDir(t)

@@ -262,3 +262,12 @@ def test_public_loop_requires_explicit_zero_inference() -> None:
 
     with pytest.raises(ValidationError, match="inference_invocations"):
         PublicLoopEvidence.model_validate(valid.model_dump() | {"inference_invocations": 1})
+
+
+def test_public_loop_accepts_go_harness_schema_version() -> None:
+    candidate = _candidate()
+    valid = _public_loop(candidate)
+
+    parsed = PublicLoopEvidence.model_validate(valid.model_dump() | {"schema_version": "1.0.0"})
+
+    assert parsed.schema_version == "1.0.0"

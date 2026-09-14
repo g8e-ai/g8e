@@ -126,17 +126,19 @@ func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error 
 	if err := mirror.RegisterSourceKey(ctx, sourceID, oldKeyID, oldPublic); err != nil {
 		return err
 	}
-	server := httptest.NewServer(mirror.Handler())
+	privateServer := httptest.NewServer(mirror.Handler())
+	publicServer := httptest.NewServer(mirror.PublicHandler())
+	defer privateServer.Close()
+	defer publicServer.Close()
 	cfg := models.DefaultPublicExportConfig()
 	cfg.Enabled = true
 	cfg.SourceID = sourceID
 	cfg.SigningKeyID = oldKeyID
-	cfg.MirrorOrigin = server.URL
+	cfg.MirrorOrigin = privateServer.URL
 	cfg.RetryMaxAttempts = 1
 	publisher := gateway.NewPublicPublisherService(nil, fileSvc, slog.Default(), cfg, oldPrivate, oldKeyID)
 	publisher.SetIngestAuthToken(ingestToken)
 	if err := publisher.ExportBatch(ctx, []models.PublicFeedRecord{publicLoopRecord(1, "campaign-a")}); err != nil {
-		server.Close()
 		return err
 	}
 	proofContent := []byte(`{"campaign_id":"campaign-a","verification_status":"passed"}`)
@@ -147,18 +149,16 @@ func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error 
 		CampaignID: "campaign-a",
 	}})
 	if err != nil {
-		server.Close()
 		return err
 	}
 	if err := publisher.PushProofPackage(ctx); err != nil {
-		server.Close()
 		return err
 	}
 	if len(manifest.Artifacts) != 1 {
-		server.Close()
 		return fmt.Errorf("public proof manifest artifact count mismatch")
 	}
-	server.Close()
+	privateServer.Close()
+	publicServer.Close()
 	if err := publisher.ExportBatch(ctx, []models.PublicFeedRecord{publicLoopRecord(2, "campaign-b")}); err == nil {
 		return fmt.Errorf("mirror outage did not retain a retryable batch")
 	}
@@ -167,8 +167,11 @@ func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error 
 		return err
 	}
 	restartedMirror.SetIngestAuthToken(ingestToken)
-	restartedServer := httptest.NewServer(restartedMirror.Handler())
-	publisher.SetMirrorOrigin(restartedServer.URL)
+	restartedPrivateServer := httptest.NewServer(restartedMirror.Handler())
+	restartedPublicServer := httptest.NewServer(restartedMirror.PublicHandler())
+	defer restartedPrivateServer.Close()
+	defer restartedPublicServer.Close()
+	publisher.SetMirrorOrigin(restartedPrivateServer.URL)
 	if err := publisher.RetransmitOutbox(ctx); err != nil {
 		return err
 	}
@@ -180,19 +183,25 @@ func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error 
 	if err := publisher.RotateKeyTo(ctx, newPrivate, newKeyID); err != nil {
 		return err
 	}
-	restartedServer.Close()
+	restartedPrivateServer.Close()
+	restartedPublicServer.Close()
 	finalMirror, err := gateway.NewPublicMirrorServer(slog.Default(), store)
 	if err != nil {
 		return err
 	}
 	finalMirror.SetIngestAuthToken(ingestToken)
-	finalServer := httptest.NewServer(finalMirror.Handler())
-	defer finalServer.Close()
-	publisher.SetMirrorOrigin(finalServer.URL)
+	finalPrivateServer := httptest.NewServer(finalMirror.Handler())
+	finalPublicServer := httptest.NewServer(finalMirror.PublicHandler())
+	defer finalPrivateServer.Close()
+	defer finalPublicServer.Close()
+	publisher.SetMirrorOrigin(finalPrivateServer.URL)
 	if err := publisher.ExportBatch(ctx, []models.PublicFeedRecord{publicLoopRecord(4, "campaign-c")}); err != nil {
 		return err
 	}
-	if err := verifyPublicLoopReads(ctx, finalServer, sourceID, manifest.Artifacts[0].ImmutableURL); err != nil {
+	if err := verifyPublicLoopReads(ctx, finalPublicServer, sourceID, manifest.Artifacts[0].ImmutableURL); err != nil {
+		return err
+	}
+	if err := verifyPublicLoopMutationRoutesAbsent(ctx, finalPublicServer); err != nil {
 		return err
 	}
 	state, err := store.Load(ctx)
@@ -309,6 +318,33 @@ func verifyPublicLoopReads(ctx context.Context, server *httptest.Server, sourceI
 	line, err := bufio.NewReader(response.Body).ReadString('\n')
 	if err != nil || line == "" || response.StatusCode != http.StatusOK {
 		return fmt.Errorf("public SSE replay failed")
+	}
+	return nil
+}
+
+func verifyPublicLoopMutationRoutesAbsent(ctx context.Context, server *httptest.Server) error {
+	for _, path := range []string{"/ingest", "/keys/register", "/proof-ingest"} {
+		request, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+path, nil)
+		if err != nil {
+			return err
+		}
+		request.Header.Set(constants.HeaderAuthorization, "Bearer qualification-token")
+		request.Header.Set("Content-Type", "application/json")
+		response, err := server.Client().Do(request)
+		if err != nil {
+			return err
+		}
+		_, readErr := io.Copy(io.Discard, response.Body)
+		closeErr := response.Body.Close()
+		if readErr != nil {
+			return fmt.Errorf("read public mutation route %s response: %w", path, readErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("close public mutation route %s response: %w", path, closeErr)
+		}
+		if response.StatusCode != http.StatusNotFound {
+			return fmt.Errorf("public mutation route %s returned status %d", path, response.StatusCode)
+		}
 	}
 	return nil
 }

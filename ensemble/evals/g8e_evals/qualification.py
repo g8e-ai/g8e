@@ -460,6 +460,7 @@ class GateResultEvidence(_FrozenModel):
 
 
 class PublicLoopEvidence(_FrozenModel):
+    schema_version: str = QUALIFICATION_SCHEMA_VERSION
     candidate_content_hash: str = Field(pattern=_HASH_PATTERN)
     source_id: str = Field(min_length=1)
     first_sequence: int = Field(ge=1)
@@ -480,7 +481,8 @@ class PublicLoopEvidence(_FrozenModel):
 
     @classmethod
     def build(cls, **values: Any) -> PublicLoopEvidence:
-        return cls(**values, content_hash=content_hash(values))
+        fields = {"schema_version": QUALIFICATION_SCHEMA_VERSION, **values}
+        return cls(**fields, content_hash=content_hash(fields))
 
     @model_validator(mode="after")
     def _validate_loop(self) -> Self:
