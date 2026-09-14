@@ -21,7 +21,7 @@ protobuf==7.36.1
 grpcio-tools==1.83.1
 
 # g8e Protocol Library
-g8e>=2.1.3
+g8e>=2.1.7
 
 # LLM providers
 openai==2.36.0
