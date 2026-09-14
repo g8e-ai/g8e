@@ -117,7 +117,7 @@ Prerequisites:
 				if err != nil {
 					return fmt.Errorf("%w: cannot determine home directory: %w", constants.ErrInternal, err)
 				}
-				configDir = filepath.Join(homeDir, ".cloudflared")
+				configDir = filepath.Join(homeDir, constants.CloudflaredDirname)
 			}
 
 			cmd.Println("[g8e] Cloudflare Tunnel Setup")
@@ -178,7 +178,7 @@ Prerequisites:
 				tunnelID = "<tunnel-id>"
 			}
 
-			credentialsFile := filepath.Join(configDir, tunnelID+".json")
+			credentialsFile := filepath.Join(configDir, tunnelID+constants.CloudflaredCredentialFileExtension)
 			if service == "" {
 				service = fmt.Sprintf("https://localhost:%d", httpsPort)
 			}
@@ -191,7 +191,7 @@ Prerequisites:
 			if err := os.MkdirAll(configDir, 0o700); err != nil {
 				return fmt.Errorf("%w: create config directory: %w", constants.ErrInternal, err)
 			}
-			configPath := filepath.Join(configDir, "config.yml")
+			configPath := filepath.Join(configDir, constants.CloudflaredConfigFilename)
 			if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
 				return fmt.Errorf("%w: write config.yml: %w", constants.ErrInternal, err)
 			}
@@ -229,6 +229,14 @@ Prerequisites:
 	return cmd
 }
 
+func buildTunnelRunArgs(tunnelName, configDir string) []string {
+	args := make([]string, 0, 5)
+	if configDir != "" {
+		args = append(args, "--config", filepath.Join(configDir, constants.CloudflaredConfigFilename))
+	}
+	return append(args, "tunnel", "run", tunnelName)
+}
+
 // tunnelRunCmd starts the cloudflared tunnel in the foreground.
 func tunnelRunCmd() *cobra.Command {
 	var tunnelName string
@@ -253,11 +261,7 @@ config.yml) before starting the tunnel.`,
 				return fmt.Errorf("%w: --name is required", constants.ErrMissingRequiredField)
 			}
 
-			args2 := []string{"tunnel", "run"}
-			if configDir != "" {
-				args2 = append(args2, "--config", filepath.Join(configDir, "config.yml"))
-			}
-			args2 = append(args2, tunnelName)
+			args2 := buildTunnelRunArgs(tunnelName, configDir)
 
 			cmd.Printf("[g8e] Starting Cloudflare tunnel '%s'...\n", tunnelName)
 			cmd.Println("[g8e] Press Ctrl+C to stop.")
@@ -283,11 +287,7 @@ config.yml) before starting the tunnel.`,
 			}()
 
 			if err := c.Wait(); err != nil {
-				// Exit code 0 or signal termination is not an error
-				if c.ProcessState != nil && c.ProcessState.Exited() {
-					return nil
-				}
-				return fmt.Errorf("cloudflared exited with error: %w", err)
+				return fmt.Errorf("%w: cloudflared exited: %w", constants.ErrServiceUnavailable, err)
 			}
 
 			return nil
@@ -383,7 +383,7 @@ This command:
 // cloudflaredAuthenticated checks whether cloudflared has been authenticated
 // by looking for the cert.pem file in the config directory.
 func cloudflaredAuthenticated(configDir string) bool {
-	certPath := filepath.Join(configDir, "cert.pem")
+	certPath := filepath.Join(configDir, constants.CloudflaredOriginCertFilename)
 	_, err := os.Stat(certPath)
 	return err == nil
 }

@@ -466,91 +466,94 @@ class G8eeChatSUT:
         logger.info("[SSE] Draining events for investigation_id=%s since_id=%d", investigation_id, since_id)
 
         try:
-            # Hard timeout for the entire drain operation
-            async with asyncio.timeout(self.idle_timeout_s + 10):
-                async with aconnect_sse(
-                    client,
-                    "GET",
-                    f"{self.env.operator_url}{path}",
-                    params=params,
-                    headers=self.env.auth_headers(),
-                ) as event_source:
-                    async for event in event_source.aiter_sse():
-                        if event.event == "heartbeat":
-                            if time.time() - last_event_at > self.idle_timeout_s:
-                                logger.warning("[SSE] Idle timeout (no actual events) reached during heartbeat-only stream")
-                                return ("".join(text_buf), trail, terminal, None)
+            async with aconnect_sse(
+                client,
+                "GET",
+                f"{self.env.operator_url}{path}",
+                params=params,
+                headers=self.env.auth_headers(),
+            ) as event_source:
+                events = event_source.aiter_sse().__aiter__()
+                while True:
+                    try:
+                        event = await asyncio.wait_for(anext(events), timeout=self.idle_timeout_s)
+                    except StopAsyncIteration:
+                        break
+                    if event.event == "heartbeat":
+                        if time.time() - last_event_at > self.idle_timeout_s:
+                            logger.warning("[SSE] Idle timeout (no actual events) reached during heartbeat-only stream")
+                            return ("".join(text_buf), trail, terminal, None)
+                        continue
+
+                    last_event_at = time.time()
+
+                    try:
+                        payload_obj = json.loads(event.data)
+                    except json.JSONDecodeError:
+                        payload_obj = {"_raw": event.data}
+
+                    row_id = int(event.id) if event.id else 0
+                    sse_event_name = event.event or "unknown"
+
+                    envelope = SSEWireEnvelope.parse(payload_obj)
+
+                    # The Gateway SSE stream wraps every g8e event in a
+                    # generic SSE "message" frame. The canonical g8e
+                    # event type lives inside the payload at
+                    # envelope.event.type, not in the SSE event field.
+                    if envelope is not None and envelope.event is not None:
+                        event_type = envelope.event.type or sse_event_name
+                    else:
+                        event_type = sse_event_name
+
+                    # Filter on the current investigation when available
+                    if investigation_id and envelope is not None:
+                        evt_inv = envelope.investigation_id()
+                        if evt_inv and evt_inv != investigation_id:
                             continue
 
-                        last_event_at = time.time()
+                    if (
+                        self.config.headless
+                        and event_type in _HEADLESS_APPROVAL_EVENTS
+                        and envelope is not None
+                    ):
+                        await self._approve_command(client, envelope, investigation_id)
 
+                    trail.append(AgentTrailEvent(
+                        id=row_id,
+                        event_type=event_type,
+                        payload=payload_obj,
+                    ))
+
+                    # Accumulate response text from streaming chunks.
+                    if event_type == "g8e.v1.ai.llm.chat.iteration.text.chunk.received" and envelope is not None:
+                        chunk = envelope.text_chunk()
+                        if chunk:
+                            text_buf.append(chunk)
+
+                    # The text.completed terminal event carries the full
+                    # response content. If we missed earlier chunks (e.g.
+                    # SSE subscription started mid-stream), use the complete
+                    # payload as the authoritative answer text.
+                    if event_type == "g8e.v1.ai.llm.chat.iteration.text.completed" and envelope is not None:
+                        complete_text = envelope.text_chunk()
+                        if complete_text:
+                            text_buf = [complete_text]
+
+                    if self.on_event is not None:
                         try:
-                            payload_obj = json.loads(event.data)
-                        except json.JSONDecodeError:
-                            payload_obj = {"_raw": event.data}
+                            r = self.on_event(event_type, payload_obj)
+                            if asyncio.iscoroutine(r):
+                                await r
+                        except Exception as e:
+                            logger.debug("Renderer callback exception: %s", e, exc_info=True)
 
-                        row_id = int(event.id) if event.id else 0
-                        sse_event_name = event.event or "unknown"
-
-                        envelope = SSEWireEnvelope.parse(payload_obj)
-
-                        # The Gateway SSE stream wraps every g8e event in a
-                        # generic SSE "message" frame. The canonical g8e
-                        # event type lives inside the payload at
-                        # envelope.event.type, not in the SSE event field.
-                        if envelope is not None and envelope.event is not None:
-                            event_type = envelope.event.type or sse_event_name
-                        else:
-                            event_type = sse_event_name
-
-                        # Filter on the current investigation when available
-                        if investigation_id and envelope is not None:
-                            evt_inv = envelope.investigation_id()
-                            if evt_inv and evt_inv != investigation_id:
-                                continue
-
-                        if (
-                            self.config.headless
-                            and event_type in _HEADLESS_APPROVAL_EVENTS
-                            and envelope is not None
-                        ):
-                            await self._approve_command(client, envelope, investigation_id)
-
-                        trail.append(AgentTrailEvent(
-                            id=row_id,
-                            event_type=event_type,
-                            payload=payload_obj,
-                        ))
-
-                        # Accumulate response text from streaming chunks.
-                        if event_type == "g8e.v1.ai.llm.chat.iteration.text.chunk.received" and envelope is not None:
-                            chunk = envelope.text_chunk()
-                            if chunk:
-                                text_buf.append(chunk)
-
-                        # The text.completed terminal event carries the full
-                        # response content. If we missed earlier chunks (e.g.
-                        # SSE subscription started mid-stream), use the complete
-                        # payload as the authoritative answer text.
-                        if event_type == "g8e.v1.ai.llm.chat.iteration.text.completed" and envelope is not None:
-                            complete_text = envelope.text_chunk()
-                            if complete_text:
-                                text_buf = [complete_text]
-
-                        if self.on_event is not None:
-                            try:
-                                r = self.on_event(event_type, payload_obj)
-                                if asyncio.iscoroutine(r):
-                                    await r
-                            except Exception as e:
-                                logger.debug("Renderer callback exception: %s", e, exc_info=True)
-
-                        if event_type in _TERMINAL_EVENTS:
-                            terminal = event_type
-                            return ("".join(text_buf), trail, terminal, None)
+                    if event_type in _TERMINAL_EVENTS:
+                        terminal = event_type
+                        return ("".join(text_buf), trail, terminal, None)
 
         except TimeoutError:
-            logger.warning("[SSE] Idle timeout or hard deadline reached for investigation %s", investigation_id)
+            logger.warning("[SSE] Idle timeout reached for investigation %s", investigation_id)
             error_reason = f"idle_timeout_{self.idle_timeout_s}s"
         except httpx.HTTPStatusError as e:
             logger.warning("[SSE] Stream auth/transport failure: %s", e)

@@ -1,0 +1,66 @@
+{
+  "aggregate_reconciliation": {
+    "computed_assignment_count": 1125,
+    "computed_provider_request_count": 2282,
+    "computed_provider_token_count": 20185634,
+    "computed_retry_count": 0,
+    "computed_verifier_failed": 4,
+    "computed_verifier_passed": 5,
+    "expected_assignment_count": 1125,
+    "expected_provider_request_count": 2282,
+    "expected_provider_token_count": 20185634,
+    "expected_retry_count": 0,
+    "expected_verifier_failed": 4,
+    "expected_verifier_passed": 5
+  },
+  "generated_at": "2026-09-14T12:00:00Z",
+  "model_coverage": {
+    "evaluated": 12,
+    "not_evaluated": 51,
+    "total_models": 63
+  },
+  "output_hash": "236561b8abcb2769cc813422a036841fb96c1f622b329407fa968e1a2a7fa239",
+  "per_model_reconciliation_mismatches": [
+    "suite=recovery variant=ministral-3-8b-instruct-2512: terminal_measurements expected 9, computed 10 (eligible=10, missing=0)",
+    "suite=technical_analysis variant=gemma-4-e2b-it: pass_rate expected 0.631579, computed 0.6 (numerator=12.0, terminal=20)",
+    "suite=technical_analysis variant=gemma-4-e2b-it: terminal_measurements expected 19, computed 20 (eligible=20, missing=0)",
+    "suite=verification variant=ministral-3-8b-instruct-2512: pass_rate expected 0.428571, computed 0.3 (numerator=3.0, terminal=10)",
+    "suite=verification variant=ministral-3-8b-instruct-2512: terminal_measurements expected 7, computed 10 (eligible=10, missing=0)",
+    "suite=ifeval_subset variant=gemma-4-e4b-it: pass_rate expected 0.631579, computed 0.6 (numerator=12.0, terminal=20)",
+    "suite=ifeval_subset variant=gemma-4-e4b-it: terminal_measurements expected 19, computed 20 (eligible=20, missing=0)",
+    "suite=ifeval_subset variant=phi-4-mini-reasoning: terminal_measurements expected 19, computed 20 (eligible=20, missing=0)"
+  ],
+  "per_model_reconciliation_note": "Mismatches are expected: morning-summary uses terminal_measurements (eligible minus attempts without resource observations) as denominator, while analysis.json uses eligible_count. The morning-summary is authoritative and used directly for model summaries.",
+  "quality_state_counts": {
+    "exploratory_partial": 559,
+    "exploratory_verified": 595,
+    "not_evaluated": 51,
+    "verified_public": 16
+  },
+  "reconciliation_mismatches": [],
+  "record_counts_by_kind": {
+    "assignment_result": 1135,
+    "catalog_snapshot": 2,
+    "evaluation_summary": 11,
+    "methodology_snapshot": 1,
+    "model_summary": 63,
+    "suite_summary": 9
+  },
+  "rejected_fields": [],
+  "schema_version": "1.1.0",
+  "source_artifact_hashes": {
+    "final_response_report": "a2cb288db3524162b48976fa08dd024e6d90eadc487e69a450a7daba6c8686c1",
+    "ifeval_subset_report": "f1cd7b3ea0296d356977d594755c1b8080d6ffc1b08c0f2c9e120336ce72dc89",
+    "model-registry.json": "94e8696b649a055f644e7f55ee8fc7fdbdc45da325b24992f848a65a64a3a75e",
+    "morning-summary.json": "1a0973ab4daceaf5a4abaee9786d7640cc0d4b641f16f422298fa9bd18ce904f",
+    "recovery_report": "5285b802a7c384f35b021a3b72cb4193605ef55d501d5603ffa2b292fb31b4d7",
+    "routing_delegation_report": "ea11f0777f9d4dd261c28b596c5f13b834c519a535e3fb4ffa9565e2cfec6777",
+    "security_policy_report": "289a5883762399b98cbb68574130c2fec4ebd2a6688ca2a7dde9d4821221aba9",
+    "technical_analysis_report": "a3431a3cec8f2c4fc13fb2ed358dc1866d8d0d23fc486864bde9e1e742aeb860",
+    "tool_arguments_report": "7d3a5607b9a975e6678e31ee95d9c79f030050713fa45644c7520152cf807b3c",
+    "tool_selection_report": "17830ccde880de3f22a774bee9688156e0c7cad95dbfa1314fdb1e53e7eb3de1",
+    "verification_report": "46eec81cb99e2dc4d7fc9f6cc7187a232b5ba6adce2b8de4ed250c7ef656c29b",
+    "working-model-selection.json": "45b40674c60069be74ec6a21d053829085933e490c21b6872c5f4c05d3bb54ef"
+  },
+  "unavailable_count": 55
+}

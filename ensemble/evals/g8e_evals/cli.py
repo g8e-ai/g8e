@@ -47,6 +47,7 @@ from g8e_evals import __version__ as EVALS_VERSION
 from g8e_evals import constants as evals_constants
 from g8e_evals.arms import ALL_ARMS, GOVERNED_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
+from g8e_evals.campaign_run_config import load_campaign_run_config
 from g8e_evals.cli_binary import CLIBinaryError, resolve_g8e_cli
 from g8e_evals.controller_cli import controller_cmd
 from g8e_evals.provenance_bridge import ProvenanceBridgeError, load_cli_build_provenance
@@ -552,7 +553,7 @@ main.add_command(qualification_cmd)
               help="Approve correlated command requests from the authenticated SSE stream")
 @click.option("--verbose-text/--no-verbose-text", default=False,
               help="Stream the agent's response text inline as chunks arrive")
-@click.option("--idle-timeout", type=float, default=10.0,
+@click.option("--idle-timeout", type=click.FloatRange(min=0.1), default=180.0,
               help="Seconds without an SSE event before declaring a task idle")
 @click.option("--g8ee-url", envvar="G8E_G8EE_URL",
               help="URL of the g8ee application endpoint. Defaults to http://localhost:8000 (the local compose/native app); not used by the direct arm.")
@@ -1007,6 +1008,59 @@ def campaign():
     dry-run output showing exact run, task, warm-up, measured-call, and
     disk ceilings without making provider calls.
     """
+
+
+def _campaign_callback(command: object, args: dict[str, object]) -> None:
+    callback = getattr(command, "callback", command)
+    if not callable(callback):
+        raise click.ClickException("campaign command is unavailable")
+    callback(**args)
+
+
+@campaign.command(name="check")
+@click.argument("config", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+def campaign_check(config: Path) -> None:
+    """Validate and summarize one campaign run configuration without provider calls."""
+    try:
+        run_config = load_campaign_run_config(config)
+    except (ValidationError, ValueError, OSError, json.JSONDecodeError) as error:
+        raise click.UsageError(f"invalid campaign run config {config}: {error}") from error
+    required_paths = [run_config.preregistration, run_config.gold_set]
+    optional_paths = [
+        run_config.model_tags,
+        run_config.profile,
+        run_config.models,
+        run_config.auth_project_root,
+        run_config.campaign_set_plan,
+        run_config.replacement_rule,
+    ]
+    missing = [str(path) for path in [*required_paths, *optional_paths] if path is not None and not path.exists()]
+    if missing:
+        raise click.UsageError(f"campaign run config paths do not exist: {', '.join(missing)}")
+    if run_config.profile is not None and run_config.models is not None:
+        _campaign_callback(campaign_validate, {"profile": run_config.profile, "models": run_config.models})
+    console = Console()
+    console.print(f"[cyan]Campaign run config[/cyan] {run_config.campaign_id}")
+    console.print(f"  [green]suite[/green] {run_config.suite}")
+    console.print(f"  [green]output[/green] {run_config.output_dir}")
+    console.print(f"  [green]budget[/green] {run_config.max_requests} requests, {run_config.max_tokens} tokens, ${run_config.max_usd:.2f}")
+    console.print(f"  [green]task_slice[/green] offset={run_config.task_offset}, limit={run_config.task_limit or 'all'}")
+    console.print("  [green]provider calls[/green] none")
+    console.print("  [green]status[/green] ready")
+
+
+@campaign.command(name="start")
+@click.argument("config", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--yes", is_flag=True, help="Confirm this finite provider-backed campaign operation.")
+def campaign_start(config: Path, yes: bool) -> None:
+    """Start one finite campaign from a strict JSON configuration."""
+    if not yes:
+        raise click.UsageError("campaign start requires --yes after reviewing `campaign check CONFIG`")
+    try:
+        run_config = load_campaign_run_config(config)
+    except (ValidationError, ValueError, OSError, json.JSONDecodeError) as error:
+        raise click.UsageError(f"invalid campaign run config {config}: {error}") from error
+    _campaign_callback(campaign_run, run_config.command_args())
 
 
 @campaign.command(name="run")

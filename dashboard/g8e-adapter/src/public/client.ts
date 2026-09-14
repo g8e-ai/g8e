@@ -45,6 +45,11 @@ function item(value: unknown): value is PublicItem {
   return candidate !== null && integer(candidate.sequence) && string(candidate.record_type);
 }
 
+function recentProjection(value: unknown): boolean {
+  const candidate = object(value);
+  return candidate !== null && integer(candidate.sequence) && candidate.record_type === undefined;
+}
+
 function bootstrap(value: unknown): value is PublicBootstrap {
   const candidate = object(value);
   const summary = object(candidate?.proof_catalog_summary);
@@ -53,7 +58,7 @@ function bootstrap(value: unknown): value is PublicBootstrap {
     && snapshot(candidate.snapshot)
     && string(candidate.source_freshness)
     && Array.isArray(candidate.recent_projections)
-    && candidate.recent_projections.every(item)
+    && candidate.recent_projections.every(recentProjection)
     && summary !== null
     && integer(summary.artifact_count)
     && integer(summary.total_byte_size)

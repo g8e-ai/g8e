@@ -48,7 +48,7 @@ curl -fsS http://127.0.0.1:8082/proof-catalog
 curl -fsS http://127.0.0.1:8082/proof-manifest
 ```
 
-A bounded SSE client connects to `/stream`, supplies the source pseudonym and optional `since_id`, and reconciles sequence plus feed-chain state against `/snapshot`. Public clients omit credentials. Freshness is derived from the last accepted batch and transitions honestly through active, delayed, stale, intentionally stopped, safety stopped, and source offline.
+A bounded SSE client connects to `/stream`, supplies the source pseudonym and optional `since_id`, and reconciles sequence plus feed-chain state against `/snapshot`. Public clients omit credentials. The mirror permits concurrent browser streams up to its global connection ceiling, so multiple visitors behind the loopback Cloudflare connector do not collapse into one stream. Anonymous request limits use Cloudflare's connecting IP only when the immediate peer is loopback. Freshness is derived from the last accepted batch and transitions honestly through active, delayed, stale, intentionally stopped, safety stopped, and source offline.
 
 ## Create the Cloudflare tunnel
 

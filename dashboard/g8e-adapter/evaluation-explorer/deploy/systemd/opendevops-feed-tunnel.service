@@ -1,0 +1,17 @@
+[Unit]
+Description=OpenDevOps.ai public feed Cloudflare Tunnel
+Wants=network-online.target g8e-public-mirror.service
+After=network-online.target g8e-public-mirror.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/bob/g8e
+ExecStart=/usr/local/bin/cloudflared --config /home/bob/.cloudflared/config.yml tunnel run opendevops-feed
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

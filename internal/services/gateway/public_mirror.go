@@ -297,12 +297,12 @@ type PublicMirrorServer struct {
 	anonymousRateMax     int
 	anonymousRateWindow  time.Duration
 	anonymousRateClients map[string]publicMirrorRateWindow
+	maxSSESubscribers    int
 }
 
 // mirrorSSESubscriber represents one active SSE connection.
 type mirrorSSESubscriber struct {
 	sourceID  string
-	clientID  string
 	ch        chan models.PublicFeedRecord
 	closed    bool
 	truncated bool
@@ -339,6 +339,7 @@ func NewPublicMirrorServer(logger *slog.Logger, store PublicMirrorStore) (*Publi
 		anonymousRateMax:        constants.PublicFeedAnonymousRatePerWindow,
 		anonymousRateWindow:     time.Duration(constants.PublicFeedAnonymousRateWindowSecs) * time.Second,
 		anonymousRateClients:    make(map[string]publicMirrorRateWindow),
+		maxSSESubscribers:       constants.PublicFeedSSEMaxSubscribers,
 	}, nil
 }
 
@@ -399,17 +400,14 @@ func (m *PublicMirrorServer) SetAnonymousReadRateLimit(maxRequests int, window t
 	return nil
 }
 
-func (m *PublicMirrorServer) addSSESubscriber(sourceID, clientID string) (*mirrorSSESubscriber, bool) {
+func (m *PublicMirrorServer) addSSESubscriber(sourceID string) (*mirrorSSESubscriber, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for subscriber := range m.sseSubscribers {
-		if subscriber.clientID == clientID {
-			return nil, false
-		}
+	if len(m.sseSubscribers) >= m.maxSSESubscribers {
+		return nil, false
 	}
 	subscriber := &mirrorSSESubscriber{
 		sourceID: sourceID,
-		clientID: clientID,
 		ch:       make(chan models.PublicFeedRecord, m.maxSSEQueueSize),
 	}
 	m.sseSubscribers[subscriber] = struct{}{}
@@ -794,7 +792,13 @@ func publicMirrorAnonymousReadPath(requestPath string) bool {
 func publicMirrorClientID(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
+	}
+	if remoteIP := net.ParseIP(host); remoteIP != nil && remoteIP.IsLoopback() {
+		connectingIP := strings.TrimSpace(r.Header.Get("CF-Connecting-IP"))
+		if net.ParseIP(connectingIP) != nil {
+			return connectingIP
+		}
 	}
 	return host
 }
@@ -1387,9 +1391,9 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 	}
 
 	// Subscribe to live updates.
-	sub, accepted := m.addSSESubscriber(sourceID, publicMirrorClientID(r))
+	sub, accepted := m.addSSESubscriber(sourceID)
 	if !accepted {
-		sseWriteSentinel(w, flusher, "error", "client stream already connected")
+		sseWriteSentinel(w, flusher, "error", "stream capacity reached")
 		flusher.Flush()
 		return
 	}

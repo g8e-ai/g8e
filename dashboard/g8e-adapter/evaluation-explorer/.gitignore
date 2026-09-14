@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.wrangler/
+.legacy-storefront/
+*.local
+scripts/.generated/
+scripts/.bridge/

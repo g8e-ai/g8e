@@ -76,6 +76,32 @@ func TestTunnelRunCmdFlags(t *testing.T) {
 	})
 }
 
+func TestBuildTunnelRunArgs_ConfigPrecedesTunnelSubcommand(t *testing.T) {
+	tests := []struct {
+		name      string
+		tunnel    string
+		configDir string
+		expected  []string
+	}{
+		{
+			name:      "explicit config directory",
+			tunnel:    "opendevops-feed",
+			configDir: "/home/user/.cloudflared",
+			expected:  []string{"--config", "/home/user/.cloudflared/config.yml", "tunnel", "run", "opendevops-feed"},
+		},
+		{
+			name:     "default config discovery",
+			tunnel:   "g8e",
+			expected: []string{"tunnel", "run", "g8e"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, buildTunnelRunArgs(tt.tunnel, tt.configDir))
+		})
+	}
+}
+
 func TestTunnelStatusCmdFlags(t *testing.T) {
 	t.Run("status command has all expected flags", func(t *testing.T) {
 		cmd := tunnelStatusCmd()

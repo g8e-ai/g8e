@@ -1,0 +1,49 @@
+{
+  "name": "@g8e/evaluation-explorer",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "dev:mock": "node dev.mjs --mode mock",
+    "dev:real": "node dev.mjs --mode real",
+    "seed": "node scripts/seed.mjs",
+    "replay": "node scripts/replay.mjs",
+    "health": "node scripts/mirror-health.mjs",
+    "bridge": "python3 scripts/bridge.py",
+    "build": "tsc --noEmit && vite build && node scripts/prepare-production-dist.mjs",
+    "build:production": "npm run build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:production": "npm run build && G8E_PUBLIC_MIRROR_ORIGIN=https://feed.opendevops.ai playwright test --config playwright.production.config.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "dependencies": {
+    "@tanstack/react-table": "^8.20.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "7.18.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.47.2",
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.0.1",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.8.0",
+    "@typescript-eslint/parser": "^8.8.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "eslint": "^9.11.1",
+    "globals": "^14.0.0",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.6.2",
+    "vite": "6.4.3",
+    "vitest": "5.0.0"
+  }
+}

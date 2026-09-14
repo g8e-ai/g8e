@@ -259,6 +259,21 @@ func TestMirror_IngestAuth_AcceptsWithValidToken(t *testing.T) {
 	assert.Equal(t, int64(1), ingestResp.HighWaterSequence)
 }
 
+func TestPublicMirrorClientIDUsesCloudflareAddressFromLoopbackConnector(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/snapshot", nil)
+	request.RemoteAddr = "127.0.0.1:32000"
+	request.Header.Set("CF-Connecting-IP", "192.0.2.20")
+
+	assert.Equal(t, "192.0.2.20", publicMirrorClientID(request))
+
+	request.RemoteAddr = "198.51.100.4:32000"
+	assert.Equal(t, "198.51.100.4", publicMirrorClientID(request))
+
+	request.RemoteAddr = "127.0.0.1:32000"
+	request.Header.Set("CF-Connecting-IP", "not-an-ip")
+	assert.Equal(t, "127.0.0.1", publicMirrorClientID(request))
+}
+
 func TestMirror_AnonymousReadRateLimitRejectsAndResetsPerClientWindow(t *testing.T) {
 	env := newMirrorTestEnv(t)
 	require.NoError(t, env.mirror.SetAnonymousReadRateLimit(2, time.Minute))
@@ -827,19 +842,21 @@ func TestMirror_SSE_ReplaysExistingRecords(t *testing.T) {
 	assert.GreaterOrEqual(t, eventCount, 3)
 }
 
-// TestMirror_SSE_ResumesFromSinceID verifies that the SSE stream resumes from
-// a given since_id, sending only records after that sequence.
-func TestMirror_SSERejectsSecondConnectionForClient(t *testing.T) {
+// TestMirror_SSEAllowsConcurrentConnectionsBehindOneProxyUntilGlobalLimit verifies
+// that tunnel topology does not collapse independent streams into one client.
+func TestMirror_SSEAllowsConcurrentConnectionsBehindOneProxyUntilGlobalLimit(t *testing.T) {
 	env := newMirrorTestEnv(t)
-	first, accepted := env.mirror.addSSESubscriber(env.sourceID, "192.0.2.1")
+	env.mirror.maxSSESubscribers = 2
+	first, accepted := env.mirror.addSSESubscriber(env.sourceID)
 	require.True(t, accepted)
 	t.Cleanup(func() { env.mirror.removeSSESubscriber(first) })
 
-	_, accepted = env.mirror.addSSESubscriber(env.sourceID, "192.0.2.1")
-	assert.False(t, accepted)
-	second, accepted := env.mirror.addSSESubscriber(env.sourceID, "192.0.2.2")
+	second, accepted := env.mirror.addSSESubscriber(env.sourceID)
 	require.True(t, accepted)
-	env.mirror.removeSSESubscriber(second)
+	t.Cleanup(func() { env.mirror.removeSSESubscriber(second) })
+
+	_, accepted = env.mirror.addSSESubscriber(env.sourceID)
+	assert.False(t, accepted)
 }
 
 func TestMirrorSSESubscriber_DropsOldestAndSignalsTruncation(t *testing.T) {

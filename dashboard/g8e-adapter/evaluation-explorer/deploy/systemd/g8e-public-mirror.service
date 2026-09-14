@@ -1,0 +1,16 @@
+[Unit]
+Description=g8e host public spectator mirror
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/bob/g8e
+ExecStart=/home/bob/g8e/g8e public mirror run --listen 127.0.0.1:8081 --public-listen 127.0.0.1:8082
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

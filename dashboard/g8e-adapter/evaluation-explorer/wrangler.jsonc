@@ -1,0 +1,17 @@
+{
+  "name": "opendevops-ai",
+  "compatibility_date": "2026-06-02",
+  "assets": {
+    "directory": "./dist"
+  },
+  "routes": [
+    {
+      "pattern": "opendevops.ai",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.opendevops.ai",
+      "custom_domain": true
+    }
+  ]
+}

@@ -32,7 +32,7 @@ The generated SPA wraps the audited `g8e-adapter` package. The adapter owns runt
 
 ## The audited adapter
 
-The `dashboard/g8e-adapter/` package is the audited integration core. It is verified by 414 unit tests and ships with a minimal host and a reference frontend that demonstrate valid usage. The builder's generated code imports from the adapter and calls its exported APIs.
+The `dashboard/g8e-adapter/` package is the audited integration core. It is verified by 444 unit tests and ships with a minimal host, a reference frontend, and the checked-in public evaluation explorer in `evaluation-explorer/`. The evaluation explorer consumes the anonymous public adapter while retaining its own typed full-corpus presentation store. Builder-generated code imports from the adapter and calls its exported APIs.
 
 The adapter exposes:
 

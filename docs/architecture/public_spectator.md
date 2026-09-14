@@ -236,9 +236,9 @@ A projection or proof accidentally includes a prohibited field. Mitigation: the 
 | --- | --- | --- |
 | Bootstrap response | One bounded snapshot per request | Fixed size, no pagination |
 | Cursor-paginated cycles/runs/evals | Page size 1-100 | Default 20 |
-| SSE live stream | One connection per client, bounded queue | 100-event in-memory buffer |
+| SSE live stream | Globally bounded concurrent connections with one bounded queue per connection | 1,000 connections; 100-event in-memory buffer per connection |
 | Proof download | One download per request, byte-counted | Maximum artifact size enforced |
-| Anonymous read rate | Requests per minute per client IP | Configured by mirror operator |
+| Anonymous read rate | Requests per minute per client IP | Configured by mirror operator; Cloudflare's connecting IP is accepted only from the loopback tunnel connector |
 
 Anonymous reads never expose mutation, producer, audit, filesystem, pub/sub, MCP, A2A, or tool routes. The public contract contains no mutation or producer operation.
 
@@ -292,6 +292,7 @@ The public spectator architecture extends the existing observe and SSE infrastru
 - The SSE event bridge (`GET /api/v1/sse/stream`, `GET /api/v1/sse/events`) remains session-scoped. The public SSE stream is served by the mirror, not by the Gateway.
 - The observe producer endpoints (`POST /api/v1/observe/producer/*`) remain mTLS-authenticated and ensemble-only. The CLI-local public publisher consumes only reviewed public-safe records, signs durable batches, and exports them through the private mirror listener; it does not expose a producer route to browsers.
 - The `PublicProjection` model in `ensemble/evals/g8e_evals/projection.py` defines the eval-layer allowlist. The outbound publisher and mirror enforce the same allowlist at the transport layer.
+- The checked-in evaluation explorer in `dashboard/g8e-adapter/evaluation-explorer/` uses the audited anonymous runtime parser, endpoint allowlist, credential-omitting fetch, and SSE client from `dashboard/g8e-adapter/src/public/`. Its typed evaluation store reconstructs complete paginated history before resuming SSE and never falls back to the private Gateway or production fixture data.
 - The campaign verifier (`ensemble/evals/g8e_evals/campaign_verify.py`) and source provenance verifier (`ensemble/evals/g8e_evals/provenance.py`) produce the verification reports and provenance records that public proofs carry. A public proof is built only from a passing verification report and exact index generation.
 
 See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](./dashboard.md) for the owner-local browser interface, [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) for the audited adapter and contract pack, [Public Spectator Operations Guide](../guides/public_spectator.md) for the host-backed deployment procedure, and [Network Architecture](./network.md) for private platform PKI and transport boundaries.

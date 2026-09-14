@@ -17,11 +17,16 @@ export interface PublicItem {
   readonly [field: string]: unknown;
 }
 
+export interface PublicRecentProjection {
+  readonly sequence: number;
+  readonly [field: string]: unknown;
+}
+
 export interface PublicBootstrap {
   readonly protocol_version: string;
   readonly snapshot: PublicSnapshot;
   readonly source_freshness: string;
-  readonly recent_projections: readonly PublicItem[];
+  readonly recent_projections: readonly PublicRecentProjection[];
   readonly proof_catalog_summary: {
     readonly artifact_count: number;
     readonly total_byte_size: number;
@@ -98,9 +103,10 @@ function appendItems(state: PublicMirrorState, incoming: readonly PublicItem[]):
     if (item.sequence !== expected) throw new PublicReconciliationError(`expected sequence ${expected}, received ${item.sequence}`);
     expected++;
   }
+  const last = incoming[incoming.length - 1]!;
   return {
     ...state,
-    observed_sequence: incoming[incoming.length - 1].sequence,
+    observed_sequence: last.sequence,
     items: retain([...state.items, ...incoming], state.max_items),
   };
 }
@@ -154,13 +160,13 @@ export function reconcilePublicBootstrap(state: PublicMirrorState, bootstrap: Pu
   let reconciled = reconcilePublicSnapshot(state, bootstrap.snapshot);
   const recent = [...bootstrap.recent_projections].sort((left, right) => left.sequence - right.sequence);
   if (recent.length > 0) {
-    if (recent[recent.length - 1].sequence !== bootstrap.snapshot.high_water_sequence) {
+    if (recent[recent.length - 1]!.sequence !== bootstrap.snapshot.high_water_sequence) {
       throw new PublicReconciliationError('bootstrap projections do not reach snapshot high-water sequence');
     }
     reconciled = {
       ...reconciled,
       observed_sequence: bootstrap.snapshot.high_water_sequence,
-      items: retain(recent, state.max_items),
+      items: retain(recent.map((item) => ({ ...item, record_type: 'projection' })), state.max_items),
     };
   } else {
     reconciled = { ...reconciled, observed_sequence: bootstrap.snapshot.high_water_sequence };

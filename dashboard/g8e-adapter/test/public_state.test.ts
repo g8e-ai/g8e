@@ -46,7 +46,7 @@ describe('public spectator state reconciliation', () => {
       protocol_version: '1.0.0',
       snapshot: snapshot(1, firstHash),
       source_freshness: 'active',
-      recent_projections: [{ sequence: 1, record_type: 'projection', campaign_id: 'campaign-a' }],
+      recent_projections: [{ sequence: 1, campaign_id: 'campaign-a' }],
       proof_catalog_summary: { artifact_count: 0, total_byte_size: 0 },
       generated_at: '2026-09-13T00:00:00Z',
     });

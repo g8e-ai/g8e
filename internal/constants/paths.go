@@ -856,6 +856,14 @@ const (
 	DemoConfigDirname = "config"
 )
 
+// Cloudflare Tunnel configuration path constants.
+const (
+	CloudflaredDirname                 = ".cloudflared"
+	CloudflaredConfigFilename          = "config.yml"
+	CloudflaredOriginCertFilename      = "cert.pem"
+	CloudflaredCredentialFileExtension = ".json"
+)
+
 // Supervisor runtime path constants (O1-supervisor: continuous campaign
 // supervisor with hash-linked cycle ledger and persisted spec).
 const (
@@ -914,6 +922,7 @@ const (
 	PublicFeedAnonymousRatePerWindow  = 60
 	PublicFeedAnonymousRateWindowSecs = 60
 	PublicFeedAnonymousRateMaxClients = 10000
+	PublicFeedSSEMaxSubscribers       = 1000
 	PublicFeedMirrorRetainedBatches   = 1000
 	PublicFeedIngestTokenBytes        = 32
 	PublicFeedZeroHashHex             = "0000000000000000000000000000000000000000000000000000000000000000"

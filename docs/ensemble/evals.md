@@ -123,6 +123,8 @@ uv run --locked g8e-evals controller recover --work-dir <controller-work-dir> --
 
 Provider cost comes only from eligible `provider_cost_usd` observations in completed child `metrics.jsonl` files. The controller accumulates observed cost and enforces the manifest's aggregate USD ceiling. It also enforces maximum used disk and minimum free-disk reserve before each child. Verifier, disclosure, trust, integrity, authority, digest, budget, disk, child, and immediate-stop failures stop the finite cycle according to their typed reason. Publication retry reads immutable reports and the durable outbox; it never reruns inference.
 
+The OpenDevOps.ai deployment optionally supervises its report bridge independently from evaluation execution. That bridge scans committed reports, creates disclosure-validated public projections, durably retains batches when publication is unavailable, and retries delivery without launching a provider call. Continuous publication does not weaken the finite attended controller or Live Operations lease requirement: each provider-backed cycle still requires a fresh frozen authority, finite ceilings, and an explicit owner-issued lease.
+
 ## Build collection-candidate qualification drafts
 
 `g8e-evals qualification` provides the non-Git release-candidate evidence workflow. It emits content-addressed evidence and an owner-review-required draft; it cannot create an owner approval, issue a Live Operations lease, query model inventory, or invoke a provider.

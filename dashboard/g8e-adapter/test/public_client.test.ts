@@ -15,7 +15,7 @@ const snapshot = {
 describe('public spectator typed client', () => {
   it('reads typed bootstrap, history, and snapshot responses anonymously', async () => {
     const responses = [
-      { protocol_version: '1.0.0', snapshot, source_freshness: 'source_offline', recent_projections: [], proof_catalog_summary: { artifact_count: 0, total_byte_size: 0 }, generated_at: '2026-09-13T00:00:00Z' },
+      { protocol_version: '1.0.0', snapshot, source_freshness: 'source_offline', recent_projections: [{ sequence: 1, kind: 'catalog_snapshot' }], proof_catalog_summary: { artifact_count: 0, total_byte_size: 0 }, generated_at: '2026-09-13T00:00:00Z' },
       { protocol_version: '1.0.0', items: [], has_more: false, limit: 20 },
       snapshot,
     ];

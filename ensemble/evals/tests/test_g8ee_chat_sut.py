@@ -238,6 +238,72 @@ async def test_drain_events_idle_timeout_survives_heartbeat_only_stream(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_drain_events_allows_active_stream_beyond_original_hard_deadline(monkeypatch):
+    config = MagicMock()
+    config.operator_session_id = "session-123"
+    config.operator_url = "http://operator"
+    config.primary.provider = "test"
+    config.primary.model = "model"
+
+    mock_env = MagicMock()
+    mock_env.operator_url = "http://operator"
+    mock_env.auth_headers.return_value = {"Authorization": "Bearer token"}
+    mock_env.cli_session_id = "cli-123"
+    monkeypatch.setattr("g8e_evals.sut.g8ee_chat.AuthContext.from_env", lambda **kw: mock_env)
+
+    sut = G8eeChatSUT(config=config, idle_timeout_s=0.03)
+    original_timeout = asyncio.timeout
+    monkeypatch.setattr(
+        "g8e_evals.sut.g8ee_chat.asyncio.timeout",
+        lambda delay: original_timeout(0.03 if delay > 1 else delay),
+    )
+
+    class MockEventSource:
+        async def _events(self):
+            for index, event_type in enumerate([
+                "g8e.v1.ai.llm.chat.iteration.text.chunk.received",
+                "g8e.v1.ai.llm.chat.iteration.text.chunk.received",
+                "g8e.v1.ai.llm.chat.iteration.text.chunk.received",
+                "g8e.v1.ai.llm.chat.iteration.text.completed",
+            ]):
+                await asyncio.sleep(0.015)
+                event = MagicMock()
+                event.event = "message"
+                event.data = json.dumps({
+                    "cli_session_id": "cli-123",
+                    "event": {
+                        "type": event_type,
+                        "data": {"content": "done" if index == 3 else "x", "investigation_id": "inv-123"},
+                    },
+                })
+                event.id = str(index + 1)
+                yield event
+
+        def aiter_sse(self):
+            return self._events()
+
+    class MockContextManager:
+        async def __aenter__(self):
+            return MockEventSource()
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    monkeypatch.setattr("g8e_evals.sut.g8ee_chat.aconnect_sse", lambda *a, **kw: MockContextManager())
+
+    answer, trail, terminal, error = await sut._drain_events(
+        AsyncMock(spec=httpx.AsyncClient),
+        since_id=0,
+        investigation_id="inv-123",
+    )
+
+    assert error is None
+    assert answer == "done"
+    assert len(trail) == 4
+    assert terminal == "g8e.v1.ai.llm.chat.iteration.text.completed"
+
+
+@pytest.mark.asyncio
 async def test_get_answer_surfaces_sse_error(monkeypatch):
     # Setup SUT
     config = MagicMock()
