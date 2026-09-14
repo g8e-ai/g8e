@@ -212,11 +212,13 @@ async def test_generate_and_update_title_success():
             message="some message",
             case_id="case-123",
             investigation_id="inv-123",
-            web_session_id="session-123",
-            user_id="user-123",
-            organization_id="org-123",
-            operator_id="operator-123",
-            operator_session_id="operator-session-123",
+            context=RequestContext(
+                web_session_id="session-123",
+                user_id="user-123",
+                organization_id="org-123",
+                operator_id="operator-123",
+                operator_session_id="operator-session-123",
+            ),
             user_settings=mock_user_settings,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,
@@ -230,6 +232,9 @@ async def test_generate_and_update_title_success():
         assert case_context.operator_id == "operator-123"
         assert case_context.operator_session_id == "operator-session-123"
         mock_investigation_service.update_investigation.assert_called_once()
+        investigation_context = mock_investigation_service.update_investigation.call_args[0][1].context
+        assert investigation_context.operator_id == "operator-123"
+        assert investigation_context.operator_session_id == "operator-session-123"
         assert mock_investigation_service.update_investigation.call_args[0][0] == "inv-123"
         assert (
             mock_investigation_service.update_investigation.call_args[0][1].case_title
@@ -254,11 +259,13 @@ async def test_generate_and_update_title_error():
             message="some message",
             case_id="case-123",
             investigation_id="inv-123",
-            web_session_id="session-123",
-            user_id="user-123",
-            organization_id="org-123",
-            operator_id="operator-123",
-            operator_session_id="operator-session-123",
+            context=RequestContext(
+                web_session_id="session-123",
+                user_id="user-123",
+                organization_id="org-123",
+                operator_id="operator-123",
+                operator_session_id="operator-session-123",
+            ),
             user_settings=mock_user_settings,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,

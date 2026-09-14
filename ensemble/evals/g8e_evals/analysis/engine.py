@@ -23,7 +23,7 @@ import hashlib
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, cast
 
 from pydantic import BaseModel
 
@@ -105,6 +105,7 @@ class _BoundRecordSpec:
     id_field: str
     type_name: str
     hash_prefix: str
+    attempt_scoped_id: bool = False
 
 
 _BOUND_RECORD_SPECS: list[_BoundRecordSpec] = [
@@ -137,7 +138,7 @@ _BOUND_RECORD_SPECS: list[_BoundRecordSpec] = [
     _BoundRecordSpec("economics_performance_observations", "observation_id", "economics_performance_observation", "economics_performance_observation"),
     _BoundRecordSpec("local_resource_observations", "observation_id", "local_resource_observation", "local_resource_observation"),
     _BoundRecordSpec("human_wait_observations", "observation_id", "human_wait_observation", "human_wait_observation"),
-    _BoundRecordSpec("resource_observations", "inference_id", "resource_observation", "resource_observation"),
+    _BoundRecordSpec("resource_observations", "inference_id", "resource_observation", "resource_observation", True),
     _BoundRecordSpec("tool_call_scorecards", "scorecard_id", "tool_call_scorecard", "tool_call_scorecard"),
     _BoundRecordSpec("escalation_records", "record_id", "escalation_record", "escalation_record"),
     _BoundRecordSpec("security_events", "record_id", "security_event", "security_event"),
@@ -201,15 +202,17 @@ def _validate_bound_sequence(
     type_name: str,
     attempt_by_id: dict[str, AttemptRecord],
     run_id: str,
+    attempt_scoped_id: bool = False,
 ) -> None:
     """Validate duplicate identity, unknown attempt, run match, and task match for a bound record sequence."""
-    seen_ids: set[str] = set()
+    seen_ids: set[str | tuple[str, str]] = set()
     for record in records:
         record_id: str = getattr(record, id_field)
-        if record_id in seen_ids:
-            raise ValueError(f"duplicate {type_name} ID: {record_id}")
-        seen_ids.add(record_id)
         attempt_id: str = record.attempt_id
+        identity: str | tuple[str, str] = (attempt_id, record_id) if attempt_scoped_id else record_id
+        if identity in seen_ids:
+            raise ValueError(f"duplicate {type_name} ID: {record_id}")
+        seen_ids.add(identity)
         attempt = attempt_by_id.get(attempt_id)
         if attempt is None:
             raise ValueError(f"{type_name} references unknown attempt: {attempt_id}")
@@ -291,7 +294,14 @@ def _validate_analysis_input_record(
 
     for spec in _BOUND_RECORD_SPECS:
         records: Sequence[_BoundRecord] = getattr(record, spec.field_name)
-        _validate_bound_sequence(records, spec.id_field, spec.type_name, attempt_by_id, run_id)
+        _validate_bound_sequence(
+            records,
+            spec.id_field,
+            spec.type_name,
+            attempt_by_id,
+            run_id,
+            spec.attempt_scoped_id,
+        )
 
     return attempt_by_id
 
@@ -330,7 +340,13 @@ def _compute_input_content_hash_from_record(record: AnalysisInputRecord) -> str:
 
     for spec in _BOUND_RECORD_SPECS:
         records: Sequence[BaseModel] = getattr(record, spec.field_name)
-        for rec in sorted(records, key=lambda r: str(getattr(r, spec.id_field))):
+        for rec in sorted(
+            records,
+            key=lambda r: (
+                str(cast(_BoundRecord, r).attempt_id) if spec.attempt_scoped_id else "",
+                str(getattr(r, spec.id_field)),
+            ),
+        ):
             parts.append(f"{spec.hash_prefix}:{canonical_model_json(rec)}")
 
     if record.price_table is not None:

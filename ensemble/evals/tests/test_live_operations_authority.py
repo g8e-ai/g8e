@@ -14,6 +14,7 @@ from g8e_evals.live_operations_authority import (
     CommandFamily,
     EF7TransportDisposition,
     EvidenceRequirement,
+    ExploratoryBaselineAuthority,
     GovernedInferenceSmokeAuthority,
     LeaseStatus,
     LiveOperationLease,
@@ -27,6 +28,7 @@ from g8e_evals.live_operations_authority import (
     build_budget_authority,
     build_budget_authority_set,
     build_ef7_transport_disposition,
+    build_exploratory_baseline_authority,
     build_governed_inference_smoke_authority,
     build_live_operation_lease,
     build_live_operation_lease_template,
@@ -51,7 +53,11 @@ def _bindings() -> list[ArtifactBinding]:
         "replacement_manifest_rule",
     ]
     return [
-        ArtifactBinding(name=name, path=f"live-packet/{name}.json", sha256=_VALID_HASH if index % 2 == 0 else _OTHER_HASH)
+        ArtifactBinding(
+            name=name,
+            path=f"live-packet/{name}.json",
+            sha256=_VALID_HASH if index % 2 == 0 else _OTHER_HASH,
+        )
         for index, name in enumerate(names)
     ]
 
@@ -93,7 +99,9 @@ def _candidate() -> CandidateIdentity:
     )
 
 
-def _lease(lease_id: str = "lease-1", status: LeaseStatus = LeaseStatus.ACTIVE) -> LiveOperationLease:
+def _lease(
+    lease_id: str = "lease-1", status: LeaseStatus = LeaseStatus.ACTIVE
+) -> LiveOperationLease:
     issued_at = datetime(2026, 9, 13, 12, 0, tzinfo=UTC)
     return build_live_operation_lease(
         lease_id=lease_id,
@@ -101,7 +109,11 @@ def _lease(lease_id: str = "lease-1", status: LeaseStatus = LeaseStatus.ACTIVE) 
         candidate=_candidate(),
         model_inventory_digest="5" * 64,
         operation_identity="governed-inference-smoke-v1",
-        runtime_authorities=[ArtifactBinding(name="governed_inference_smoke", path="live-packet/smoke.json", sha256=_VALID_HASH)],
+        runtime_authorities=[
+            ArtifactBinding(
+                name="governed_inference_smoke", path="live-packet/smoke.json", sha256=_VALID_HASH
+            )
+        ],
         permitted_command="g8e inference smoke --role primary --role assistant --role lite",
         command_family=CommandFamily.GOVERNED_INFERENCE_SMOKE,
         report_root="reports/governed-inference-smoke-v1",
@@ -130,9 +142,7 @@ def test_ef7_transport_disposition_rejects_governed_transport() -> None:
     valid = build_ef7_transport_disposition(_bindings())
 
     with pytest.raises(ValidationError, match="ensemble_ungoverned"):
-        EF7TransportDisposition.model_validate(
-            valid.model_dump() | {"transport_path": "g8e"}
-        )
+        EF7TransportDisposition.model_validate(valid.model_dump() | {"transport_path": "g8e"})
 
 
 def test_governed_inference_smoke_binds_all_roles_and_receipt_evidence() -> None:
@@ -157,6 +167,29 @@ def test_governed_inference_smoke_rejects_duplicate_roles() -> None:
         GovernedInferenceSmokeAuthority.model_validate(
             valid.model_dump() | {"roles": ["primary", "primary", "lite"]}
         )
+
+
+def test_exploratory_baseline_authority_binds_exact_ifeval_work() -> None:
+    bindings = [
+        ArtifactBinding(name=name, path=f"overnight/{name}.json", sha256=_VALID_HASH)
+        for name in (
+            "baseline_manifest",
+            "ifeval_dataset",
+            "ifeval_provenance",
+            "ifeval_profile",
+            "ifeval_preregistration",
+            "model_registry",
+        )
+    ]
+
+    authority = build_exploratory_baseline_authority(bindings)
+
+    assert isinstance(authority, ExploratoryBaselineAuthority)
+    assert authority.operation_kind == OperationKind.EXPLORATORY_BASELINE
+    assert authority.transport_path == TransportPath.ENSEMBLE_UNGOVERNED
+    assert authority.assignment_count == 180
+    assert authority.repetitions == 5
+    assert authority.publication_eligible is False
 
 
 def test_budget_authority_requires_every_ceiling_and_serial_execution() -> None:
@@ -262,7 +295,9 @@ def test_live_lease_binds_candidate_inventory_identity_and_ceiling() -> None:
     assert lease.candidate == _candidate()
     assert lease.model_inventory_digest == "5" * 64
     assert lease.runtime_authorities[0].name == "governed_inference_smoke"
-    assert lease.permitted_command == "g8e inference smoke --role primary --role assistant --role lite"
+    assert (
+        lease.permitted_command == "g8e inference smoke --role primary --role assistant --role lite"
+    )
     assert lease.command_family == CommandFamily.GOVERNED_INFERENCE_SMOKE
     assert lease.budget.max_requests == 3
     assert lease.status == LeaseStatus.ACTIVE
@@ -280,16 +315,16 @@ def test_live_lease_rejects_command_family_mismatch() -> None:
     valid = _lease()
 
     with pytest.raises(ValidationError, match="command family"):
-        LiveOperationLease.model_validate(valid.model_dump() | {"command_family": CommandFamily.CAMPAIGN_RUN})
+        LiveOperationLease.model_validate(
+            valid.model_dump() | {"command_family": CommandFamily.CAMPAIGN_RUN}
+        )
 
 
 def test_live_lease_rejects_expiry_before_start_deadline() -> None:
     valid = _lease()
 
     with pytest.raises(ValidationError, match="expires_at"):
-        LiveOperationLease.model_validate(
-            valid.model_dump() | {"expires_at": valid.issued_at}
-        )
+        LiveOperationLease.model_validate(valid.model_dump() | {"expires_at": valid.issued_at})
 
 
 def test_lease_set_rejects_multiple_active_leases() -> None:
@@ -312,8 +347,13 @@ def test_phase0_builder_reproduces_reviewed_authority_bindings() -> None:
     assert first == second
     assert len(first.budget_authorities.budgets) == 15
     assert len(first.lease_templates.templates) == 18
-    assert all(budget.max_tokens == budget.max_requests * 16_384 for budget in first.budget_authorities.budgets)
-    assert all(budget.min_free_disk_bytes == 1_073_741_824 for budget in first.budget_authorities.budgets)
+    assert all(
+        budget.max_tokens == budget.max_requests * 16_384
+        for budget in first.budget_authorities.budgets
+    )
+    assert all(
+        budget.min_free_disk_bytes == 1_073_741_824 for budget in first.budget_authorities.budgets
+    )
     assert first.budget_authorities.budgets[-1].operation_id == "o7-two-cycle-rehearsal"
     assert first.budget_authorities.budgets[-1].max_requests == 900
     assert [template.template_id for template in first.lease_templates.templates[:3]] == [
@@ -333,5 +373,11 @@ def test_phase0_builder_reproduces_reviewed_authority_bindings() -> None:
         "mirror_trust_authority",
         "safety_stop_matrix",
     ]
-    assert first.ef7_transport_disposition.bindings[0].sha256 == "72c9762c9762fa9119f9ad6827038f2e94791c4055284bfa9b036517e0dc33f1"
-    assert first.governed_inference_smoke.bindings[0].sha256 == "ada35b8d25596627e480a08ca5dd810f2c6ed16815b106b1b07aef45731d55bf"
+    assert (
+        first.ef7_transport_disposition.bindings[0].sha256
+        == "72c9762c9762fa9119f9ad6827038f2e94791c4055284bfa9b036517e0dc33f1"
+    )
+    assert (
+        first.governed_inference_smoke.bindings[0].sha256
+        == "ada35b8d25596627e480a08ca5dd810f2c6ed16815b106b1b07aef45731d55bf"
+    )

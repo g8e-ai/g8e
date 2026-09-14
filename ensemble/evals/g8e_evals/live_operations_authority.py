@@ -10,15 +10,27 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 AUTHORITY_SCHEMA_VERSION = "1.0.0"
-_REQUIRED_EF7_BINDINGS = frozenset({
-    "ef7_authority",
-    "model_registry",
-    "final_response_profile",
-    "final_response_instrumentation_policy",
-    "final_response_expected_record_policy",
-    "final_response_preregistration",
-    "replacement_manifest_rule",
-})
+_REQUIRED_EF7_BINDINGS = frozenset(
+    {
+        "ef7_authority",
+        "model_registry",
+        "final_response_profile",
+        "final_response_instrumentation_policy",
+        "final_response_expected_record_policy",
+        "final_response_preregistration",
+        "replacement_manifest_rule",
+    }
+)
+_REQUIRED_EXPLORATORY_BASELINE_BINDINGS = frozenset(
+    {
+        "baseline_manifest",
+        "ifeval_dataset",
+        "ifeval_provenance",
+        "ifeval_profile",
+        "ifeval_preregistration",
+        "model_registry",
+    }
+)
 
 
 class TransportPath(StrEnum):
@@ -44,6 +56,7 @@ class EvidenceRequirement(StrEnum):
 class OperationKind(StrEnum):
     EMBEDDED_AUTHORITY_DIAGNOSTIC = "embedded_authority_diagnostic"
     GOVERNED_INFERENCE_SMOKE = "governed_inference_smoke"
+    EXPLORATORY_BASELINE = "exploratory_baseline"
     EF7_REPLACEMENT = "ef7_replacement"
     P12_CHILD = "p12_child"
     EF7_PHASE_A = "ef7_phase_a"
@@ -155,7 +168,39 @@ class EF7TransportDisposition(BaseModel):
             raise ValueError(f"EF7 transport bindings are incomplete: {missing}")
         expected = _content_hash(self)
         if self.content_hash != expected:
-            raise ValueError(f"EF7 transport disposition content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}")
+            raise ValueError(
+                f"EF7 transport disposition content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
+            )
+        return self
+
+
+class ExploratoryBaselineAuthority(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    authority_id: str = Field(min_length=1)
+    authority_version: str = Field(default=AUTHORITY_SCHEMA_VERSION)
+    operation_kind: Literal[OperationKind.EXPLORATORY_BASELINE]
+    benchmark: Literal["ifeval_subset"]
+    transport_path: Literal[TransportPath.ENSEMBLE_UNGOVERNED]
+    assignment_count: Literal[180]
+    repetitions: Literal[5]
+    publication_eligible: Literal[False]
+    bindings: list[ArtifactBinding] = Field(min_length=1)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_authority(self) -> Self:
+        names = [binding.name for binding in self.bindings]
+        if len(names) != len(set(names)):
+            raise ValueError("exploratory baseline bindings must have unique names")
+        missing = sorted(_REQUIRED_EXPLORATORY_BASELINE_BINDINGS.difference(names))
+        if missing:
+            raise ValueError(f"exploratory baseline bindings are incomplete: {missing}")
+        expected = _content_hash(self)
+        if self.content_hash != expected:
+            raise ValueError(
+                f"exploratory baseline authority content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
+            )
         return self
 
 
@@ -178,17 +223,23 @@ class GovernedInferenceSmokeAuthority(BaseModel):
         if self.roles != list(ModelRole):
             raise ValueError(f"roles must be ordered as {[role.value for role in ModelRole]}")
         if [expectation.role for expectation in self.model_expectations] != self.roles:
-            raise ValueError("model_expectations must bind one exact model to each role in canonical order")
+            raise ValueError(
+                "model_expectations must bind one exact model to each role in canonical order"
+            )
         if self.max_provider_calls != len(self.roles):
             raise ValueError("max_provider_calls must equal the role count")
         if self.required_evidence != list(EvidenceRequirement):
-            raise ValueError("required_evidence must contain every governed inference acceptance requirement in canonical order")
+            raise ValueError(
+                "required_evidence must contain every governed inference acceptance requirement in canonical order"
+            )
         names = [binding.name for binding in self.bindings]
         if len(names) != len(set(names)):
             raise ValueError("governed inference smoke bindings must have unique names")
         expected = _content_hash(self)
         if self.content_hash != expected:
-            raise ValueError(f"governed inference smoke authority content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}")
+            raise ValueError(
+                f"governed inference smoke authority content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
+            )
         return self
 
 
@@ -211,10 +262,14 @@ class BudgetAuthority(BaseModel):
     @model_validator(mode="after")
     def _validate_hash(self) -> Self:
         if self.max_tokens > self.max_requests * self.max_tokens_per_request:
-            raise ValueError("aggregate max_tokens cannot exceed max_requests times max_tokens_per_request")
+            raise ValueError(
+                "aggregate max_tokens cannot exceed max_requests times max_tokens_per_request"
+            )
         expected = _content_hash(self)
         if self.content_hash != expected:
-            raise ValueError(f"budget authority content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}")
+            raise ValueError(
+                f"budget authority content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
+            )
         return self
 
 
@@ -233,7 +288,9 @@ class BudgetAuthoritySet(BaseModel):
             raise ValueError("budget operation_id values must be unique")
         expected = _content_hash(self)
         if self.content_hash != expected:
-            raise ValueError(f"budget authority set content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}")
+            raise ValueError(
+                f"budget authority set content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
+            )
         return self
 
 
@@ -265,15 +322,21 @@ class LiveOperationLeaseTemplate(BaseModel):
 
     @model_validator(mode="after")
     def _validate_template(self) -> Self:
-        if len(self.required_runtime_authority_names) != len(set(self.required_runtime_authority_names)):
+        if len(self.required_runtime_authority_names) != len(
+            set(self.required_runtime_authority_names)
+        ):
             raise ValueError("required runtime authority names must be unique")
         if any(not name for name in self.required_runtime_authority_names):
             raise ValueError("required runtime authority names must be non-empty")
         if self.stop_conditions != list(LeaseStopCondition):
-            raise ValueError("stop_conditions must contain every lease stop condition in canonical order")
+            raise ValueError(
+                "stop_conditions must contain every lease stop condition in canonical order"
+            )
         expected = _content_hash(self)
         if self.content_hash != expected:
-            raise ValueError(f"lease template content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}")
+            raise ValueError(
+                f"lease template content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
+            )
         return self
 
 
@@ -292,7 +355,9 @@ class LiveOperationLeaseTemplateSet(BaseModel):
             raise ValueError("lease template_id values must be unique")
         expected = _content_hash(self)
         if self.content_hash != expected:
-            raise ValueError(f"lease template set content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}")
+            raise ValueError(
+                f"lease template set content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
+            )
         return self
 
 
@@ -307,7 +372,9 @@ class CandidateIdentity(BaseModel):
     @field_validator("image_ids")
     @classmethod
     def _validate_image_ids(cls, values: list[str]) -> list[str]:
-        if len(values) != len(set(values)) or any(len(value) != 71 or not value.startswith("sha256:") for value in values):
+        if len(values) != len(set(values)) or any(
+            len(value) != 71 or not value.startswith("sha256:") for value in values
+        ):
             raise ValueError("image_ids must be unique sha256 image identities")
         return values
 
@@ -344,12 +411,16 @@ class LiveOperationLease(BaseModel):
             raise ValueError("lease command family must match the template")
         runtime_authority_names = [authority.name for authority in self.runtime_authorities]
         if runtime_authority_names != self.template.required_runtime_authority_names:
-            raise ValueError("lease runtime authorities must exactly match the template requirements in canonical order")
+            raise ValueError(
+                "lease runtime authorities must exactly match the template requirements in canonical order"
+            )
         if self.budget.content_hash != self.template.budget.content_hash:
             raise ValueError("lease budget must match the template")
         expected = _content_hash(self)
         if self.content_hash != expected:
-            raise ValueError(f"live operation lease content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}")
+            raise ValueError(
+                f"live operation lease content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
+            )
         return self
 
 
@@ -380,7 +451,27 @@ def build_ef7_transport_disposition(bindings: list[ArtifactBinding]) -> EF7Trans
     return EF7TransportDisposition(**fields, content_hash=_content_hash(provisional))
 
 
-def build_governed_inference_smoke_authority(bindings: list[ArtifactBinding]) -> GovernedInferenceSmokeAuthority:
+def build_exploratory_baseline_authority(
+    bindings: list[ArtifactBinding],
+) -> ExploratoryBaselineAuthority:
+    fields = {
+        "authority_id": "v2.1.8-exploratory-overnight-ifeval-baseline-v1",
+        "authority_version": AUTHORITY_SCHEMA_VERSION,
+        "operation_kind": OperationKind.EXPLORATORY_BASELINE,
+        "benchmark": "ifeval_subset",
+        "transport_path": TransportPath.ENSEMBLE_UNGOVERNED,
+        "assignment_count": 180,
+        "repetitions": 5,
+        "publication_eligible": False,
+        "bindings": bindings,
+    }
+    provisional = ExploratoryBaselineAuthority.model_construct(**fields, content_hash="0" * 64)
+    return ExploratoryBaselineAuthority(**fields, content_hash=_content_hash(provisional))
+
+
+def build_governed_inference_smoke_authority(
+    bindings: list[ArtifactBinding],
+) -> GovernedInferenceSmokeAuthority:
     fields = {
         "authority_id": "governed-inference-smoke-v1",
         "authority_version": AUTHORITY_SCHEMA_VERSION,
@@ -430,7 +521,9 @@ def build_budget_authority(
     return BudgetAuthority(**fields, content_hash=_content_hash(provisional))
 
 
-def build_budget_authority_set(authority_id: str, budgets: list[BudgetAuthority]) -> BudgetAuthoritySet:
+def build_budget_authority_set(
+    authority_id: str, budgets: list[BudgetAuthority]
+) -> BudgetAuthoritySet:
     fields = {
         "authority_id": authority_id,
         "authority_version": AUTHORITY_SCHEMA_VERSION,

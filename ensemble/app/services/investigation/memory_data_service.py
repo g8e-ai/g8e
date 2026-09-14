@@ -110,6 +110,8 @@ class MemoryDataService(MemoryDataServiceProtocol):
                 task_id=AITaskId.MEMORY,
                 web_session_id=context.web_session_id,
                 user_id=context.user_id,
+                operator_id=context.operator_id,
+                operator_session_id=context.operator_session_id,
                 payload=payload,
             )
             await self._governance_client.submit_envelope(message)

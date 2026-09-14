@@ -2009,6 +2009,19 @@ class CampaignRunner:
         """
         try:
             return await self._run_body()
+        except Exception:
+            status_path = self.report_dir / CAMPAIGN_STATUS_JSON
+            if status_path.exists():
+                try:
+                    status = json.loads(status_path.read_text())
+                    if status.get("status") == CampaignStatus.RUNNING.value:
+                        self._write_campaign_status(
+                            CampaignStatus.STOPPED,
+                            CampaignStopReason.NON_RETRYABLE_FAILURE,
+                        )
+                except Exception:
+                    logger.exception("failed to persist terminal campaign status")
+            raise
         finally:
             await self._close_suts()
 
@@ -2340,7 +2353,11 @@ class CampaignRunner:
 
         _write_atomic(self.report_dir / ANALYSIS_INPUT_JSON, canonical_model_json(analysis_input))
 
-        analysis: CanonicalEvalAnalysis = compute_canonical_analysis_from_record(analysis_input)
+        try:
+            analysis: CanonicalEvalAnalysis = compute_canonical_analysis_from_record(analysis_input)
+        except Exception:
+            self._write_campaign_status(CampaignStatus.STOPPED, CampaignStopReason.INVALID_EVIDENCE)
+            raise
 
         _write_atomic(self.report_dir / ANALYSIS_JSON, canonical_model_json(analysis))
 

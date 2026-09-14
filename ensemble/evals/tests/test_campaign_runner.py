@@ -449,6 +449,45 @@ class TestFullExecution:
         assert status["status"] == CampaignStatus.FINALIZED.value
         assert status["stop_reason"] == CampaignStopReason.COMPLETED.value
 
+    def test_final_analysis_failure_persists_terminal_status(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        def fail_analysis(*_args, **_kwargs):
+            raise ValueError("invalid analysis input")
+
+        monkeypatch.setattr("g8e_evals.runner.compute_canonical_analysis_from_record", fail_analysis)
+        runner = CampaignRunner(
+            spec=_make_spec(),
+            sut_factory=_make_fake_sut_factory(),
+            tasks=_make_tasks(),
+            grader=FakeGrader(),
+            output_dir=tmp_path,
+        )
+
+        with pytest.raises(ValueError, match="invalid analysis input"):
+            asyncio.run(runner.run())
+
+        status = json.loads((runner.report_dir / CAMPAIGN_STATUS_JSON).read_text())
+        assert status["status"] == CampaignStatus.STOPPED.value
+        assert status["stop_reason"] == CampaignStopReason.INVALID_EVIDENCE.value
+
+    def test_post_start_failure_persists_terminal_status(self, tmp_path: Path):
+        def fail_sut_factory(*_args, **_kwargs):
+            raise RuntimeError("sut construction failed")
+
+        runner = CampaignRunner(
+            spec=_make_spec(),
+            sut_factory=fail_sut_factory,
+            tasks=_make_tasks(),
+            grader=FakeGrader(),
+            output_dir=tmp_path,
+        )
+
+        with pytest.raises(RuntimeError, match="sut construction failed"):
+            asyncio.run(runner.run())
+
+        status = json.loads((runner.report_dir / CAMPAIGN_STATUS_JSON).read_text())
+        assert status["status"] == CampaignStatus.STOPPED.value
+        assert status["stop_reason"] == CampaignStopReason.NON_RETRYABLE_FAILURE.value
+
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------

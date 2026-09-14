@@ -135,6 +135,14 @@ class InstrumentedFakeSUT:
 
 
 @dataclass
+class AttemptLocalInferenceIDFakeSUT(InstrumentedFakeSUT):
+    async def get_answer(self, task: Task) -> Response:
+        response = await super().get_answer(task)
+        response.inference_observations[0].inference_id = "inf-0"
+        return response
+
+
+@dataclass
 class FailingFakeSUT:
     """Fake SUT that raises an infrastructure error on every call.
 
@@ -213,6 +221,13 @@ def _make_instrumented_sut_factory():
     def factory(cohort: ModelCohort, arm: Arm):
         model_id = cohort.role_bindings[0].model_id
         return InstrumentedFakeSUT(model_id=model_id)
+    return factory
+
+
+def _make_attempt_local_inference_id_sut_factory():
+    def factory(cohort: ModelCohort, arm: Arm):
+        model_id = cohort.role_bindings[0].model_id
+        return AttemptLocalInferenceIDFakeSUT(model_id=model_id)
     return factory
 
 
@@ -789,12 +804,11 @@ class TestResourceObservationIdentity:
             assert obs["inference_id"] != ""
             assert obs["stage_id"] != ""
 
-    def test_observations_have_distinct_inference_ids(self, tmp_path: Path):
-        """Each inference produces a distinct inference_id; no duplicates."""
+    def test_attempt_local_inference_ids_are_distinct_by_compound_identity(self, tmp_path: Path):
         spec = _make_spec()
         runner = CampaignRunner(
             spec=spec,
-            sut_factory=_make_instrumented_sut_factory(),
+            sut_factory=_make_attempt_local_inference_id_sut_factory(),
             tasks=_make_tasks(),
             grader=FakeGrader(),
             output_dir=tmp_path,
@@ -803,8 +817,9 @@ class TestResourceObservationIdentity:
 
         obs_text = (result.report_dir / RESOURCE_OBSERVATIONS_JSONL).read_text().strip()
         observations = [json.loads(line) for line in obs_text.splitlines() if line.strip()]
-        inference_ids = [obs["inference_id"] for obs in observations]
-        assert len(inference_ids) == len(set(inference_ids)), "duplicate inference_ids in observations"
+        assert [obs["inference_id"] for obs in observations] == ["inf-0", "inf-0"]
+        identities = {(obs["attempt_id"], obs["inference_id"]) for obs in observations}
+        assert len(identities) == len(observations)
 
     def test_child_id_equals_campaign_id_for_single_campaign(self, tmp_path: Path):
         """For a single (non-set) campaign, child_id equals campaign_id."""

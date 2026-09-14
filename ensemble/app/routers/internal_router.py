@@ -171,11 +171,7 @@ async def _generate_and_update_title(
     message: str,
     case_id: str,
     investigation_id: str,
-    web_session_id: str | None,
-    user_id: str | None,
-    organization_id: str | None,
-    operator_id: str | None,
-    operator_session_id: str | None,
+    context: RequestContext,
     user_settings: G8eeUserSettings,
     case_service: CaseDataService,
     investigation_service: InvestigationService,
@@ -184,16 +180,8 @@ async def _generate_and_update_title(
         case_result = await generate_case_title(message, settings=user_settings)
         ai_title = case_result.generated_title
 
-        # Build context for internal update call
-        context = RequestContext(
-            web_session_id=web_session_id,
-            user_id=user_id,
-            organization_id=organization_id,
-            case_id=case_id,
-            investigation_id=investigation_id,
-            source_component=G8EE_COMPONENT,
-            operator_id=operator_id,
-            operator_session_id=operator_session_id,
+        context = context.model_copy(
+            update={"case_id": case_id, "investigation_id": investigation_id}
         )
 
         updated_case = await case_service.update_case(
@@ -202,15 +190,15 @@ async def _generate_and_update_title(
         await investigation_service.update_investigation(
             investigation_id, InvestigationUpdateRequest(context=context, case_title=ai_title)
         )
-        if web_session_id:
+        if context.web_session_id:
             await case_service.publish_case_update_sse(
                 case_id=case_id,
-                web_session_id=web_session_id,
+                web_session_id=context.web_session_id,
                 payload=CaseEventPayload(
                     updated_at=updated_case.updated_at,
                     title=ai_title,
                 ),
-                user_id=user_id,
+                user_id=context.user_id,
             )
     except Exception as e:
         logger.error(
@@ -358,11 +346,7 @@ async def internal_chat(
                     message=request.message,
                     case_id=g8e_context.case_id,
                     investigation_id=g8e_context.investigation_id,
-                    web_session_id=g8e_context.web_session_id,
-                    user_id=g8e_context.user_id,
-                    organization_id=g8e_context.organization_id,
-                    operator_id=g8e_context.operator_id,
-                    operator_session_id=g8e_context.operator_session_id,
+                    context=RequestContext.from_app_context(g8e_context),
                     user_settings=user_settings,
                     case_service=case_service,
                     investigation_service=investigation_service,

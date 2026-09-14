@@ -37,6 +37,7 @@ from app.constants import (
     AGENT_RETRY_DELAY_SECONDS,
     AITaskId,
     DEFAULT_FINISH_REASON,
+    ReasoningAgent,
 )
 from app.llm.model_evidence import (
     model_boundary_hash,
