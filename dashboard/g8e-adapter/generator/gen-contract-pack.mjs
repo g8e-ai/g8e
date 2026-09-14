@@ -20,7 +20,7 @@
 // `npm run build` first so dist/ is current.
 
 import { createHash, createPrivateKey, createPublicKey, sign } from 'node:crypto';
-import { readFile, writeFile, mkdir, readdir, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -56,7 +56,6 @@ const REPO_ROOT = join(ADAPTER_ROOT, '..', '..');
 const PROTOCOL_MODELS = join(REPO_ROOT, 'protocol', 'models');
 const PROTOCOL_CONSTANTS = join(REPO_ROOT, 'protocol', 'constants');
 const OUT_DIR = join(ADAPTER_ROOT, 'contract-pack');
-const FIXTURES_DIR = join(OUT_DIR, 'fixtures');
 
 const CHECK_MODE = process.argv.includes('--check');
 
@@ -202,6 +201,7 @@ const EXCLUDED_MODELS = new Set([
 const inlineModels = new Map();
 
 function modelFields(modelName) {
+  if (EXCLUDED_MODELS.has(modelName)) throw new Error(`excluded model: ${modelName}`);
   const def = observeApi[modelName] ?? eventPayloads[modelName] ?? publicFeedModels[modelName];
   if (!def) throw new Error(`unknown model: ${modelName}`);
   const fields = {};

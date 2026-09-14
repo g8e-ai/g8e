@@ -55,6 +55,7 @@ var (
 	ErrSourceTreeSymlink            = errors.New("symlink rejected in source tree")
 	ErrSourceTreeEntryNotFound      = errors.New("source manifest entry not found")
 	ErrSourceTreeEntryInvalid       = errors.New("source manifest entry is not a clean relative path")
+	ErrSourceTreeHashInvalid        = errors.New("source tree hash is not a SHA-256 digest")
 	ErrFIPSModeNotActive            = errors.New("fips 140-3 mode is not active")
 	ErrCAParseFailed                = errors.New("failed to parse CA certificates")
 	ErrMissingRequiredField         = errors.New("missing required field")

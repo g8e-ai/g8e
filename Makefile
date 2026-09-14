@@ -33,7 +33,7 @@ MAIN_PKG := ./cmd/g8e
 # targets never pay for hashing or git.
 SOURCE_REVISION := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 PROVENANCE_SOURCE_PATHS := cmd internal protocol ensemble scripts test vendor Makefile VERSION go.mod go.sum buf.gen.yaml Dockerfile docker-compose.yml
-PROVENANCE_EXCLUDES := .git,.venv,node_modules,__pycache__,*.egg-info,.pytest_cache,.ruff_cache,.mypy_cache,build,dist,site,reports,.g8e-test-tmp
+PROVENANCE_EXCLUDES := .git,.env,.g8e*,.local.dev,.venv,node_modules,__pycache__,*.egg-info,.pytest_cache,.ruff_cache,.mypy_cache,bin,build,dist,site,coverage,reports,test-results,auditor-out,*.out,*.test
 SOURCE_TREE_HASH = $(shell go run ./internal/tools/treehash -base . -exclude '$(PROVENANCE_EXCLUDES)' $(wildcard $(PROVENANCE_SOURCE_PATHS)) 2>/dev/null || echo "unknown")
 LDFLAGS = -X main.version=$(VERSION) -X main.buildID=$(BUILD_ID) -X main.buildTime=$(BUILD_TIME) -X main.sourceRevision=$(SOURCE_REVISION) -X main.sourceTreeHash=$(SOURCE_TREE_HASH)
 HOST_OS := $(shell go env GOOS)

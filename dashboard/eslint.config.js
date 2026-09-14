@@ -4,14 +4,15 @@ import globals from 'globals';
 export default [
     {
         ignores: [
-            'coverage/**',
-            'node_modules/**',
+            '**/coverage/**',
+            '**/dist/**',
+            '**/node_modules/**',
             'public/js/vendor/**',
         ],
     },
     js.configs.recommended,
     {
-        files: ['**/*.js'],
+        files: ['**/*.{js,mjs}'],
         languageOptions: {
             ecmaVersion: 'latest',
             sourceType: 'module',

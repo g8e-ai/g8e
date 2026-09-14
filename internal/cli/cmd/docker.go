@@ -25,6 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -505,20 +506,28 @@ func dockerStatusCmd() *cobra.Command {
 	return cmd
 }
 
-func resolveDockerBuildID(ctx context.Context) (string, error) {
-	output, err := exec.CommandContext(ctx, "git", "rev-parse", "--short", "HEAD").Output()
-	if err != nil {
-		return "", fmt.Errorf("resolve Docker build ID: %w", err)
+func dockerBuildArgs(vi serve.VersionInfo, noCache bool) ([]string, error) {
+	if !isHex64(vi.SourceTreeStateHash) {
+		return nil, constants.ErrSourceTreeHashInvalid
 	}
-	return strings.TrimSpace(string(output)), nil
-}
-
-func dockerBuildArgs(buildID string, noCache bool) []string {
-	args := []string{"build", "--build-arg", "BUILD_ID=" + buildID}
+	buildID := strings.TrimSpace(vi.BuildID)
+	if buildID == "" {
+		buildID = string(constants.SystemHealthUnknown)
+	}
+	sourceRevision := strings.TrimSpace(vi.SourceRevision)
+	if sourceRevision == "" {
+		sourceRevision = string(constants.SystemHealthUnknown)
+	}
+	args := []string{
+		"build",
+		"--build-arg", "BUILD_ID=" + buildID,
+		"--build-arg", "SOURCE_REVISION=" + sourceRevision,
+		"--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash,
+	}
 	if noCache {
 		args = append(args, "--no-cache")
 	}
-	return args
+	return args, nil
 }
 
 func dockerBuildCmd() *cobra.Command {
@@ -533,12 +542,12 @@ func dockerBuildCmd() *cobra.Command {
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
 			}
-			buildID, err := resolveDockerBuildID(cmd.Context())
+			buildArgs, err := dockerBuildArgs(versionInfoFromCmd(cmd), noCache)
 			if err != nil {
-				return err
+				return fmt.Errorf("docker: build arguments: %w", err)
 			}
 			cmd.Println("Building Docker images...")
-			if err := runDockerCompose(dockerBuildArgs(buildID, noCache), resolveDockerProfile(true, profile)); err != nil {
+			if err := runDockerCompose(buildArgs, resolveDockerProfile(true, profile)); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
 			cmd.Println("\nDocker images built successfully.")

@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@peculiar/x509": "^1.12.3",
-    "@simplewebauthn/server": "^13.1.1",
+    "@simplewebauthn/server": "^13.3.3",
     "compression": "^1.7.4",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -29,8 +29,8 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@vitest/coverage-v8": "^4.0.8",
-    "@vitest/ui": "^4.1.10",
+    "@vitest/coverage-v8": "^5.0.0",
+    "@vitest/ui": "^5.0.0",
     "dompurify": "^3.4.14",
     "eslint": "10.9.1",
     "eventsource": "^4.1.0",
@@ -42,7 +42,7 @@
     "msw": "^2.15.0",
     "nodemon": "^3.1.9",
     "supertest": "^7.1.4",
-    "vitest": "^4.0.8"
+    "vitest": "^5.0.0"
   },
   "overrides": {
     "minimatch": ">=10.2.1"
