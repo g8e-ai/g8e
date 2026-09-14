@@ -381,7 +381,8 @@ class g8eEnsemble:
                     input_artifact_hash = recorded_model_boundary_hash(llm_provider, input_artifact_hash)
                     governed_evidence = recorded_governed_dispatch_evidence(llm_provider)
                     model_calls.append(ModelCallTelemetry(
-                        agent_role=inputs.agent_mode.value,
+                        agent_role=inputs.active_agent.value if inputs.active_agent else "unknown",
+                        model_role="assistant" if inputs.active_agent == ReasoningAgent.DASH else "primary",
                         provider=type(llm_provider).__name__,
                         model=model_name,
                         monotonic_start=monotonic_start,
@@ -400,7 +401,8 @@ class g8eEnsemble:
                 monotonic_end = time.monotonic()
                 governed_evidence = recorded_governed_dispatch_evidence(llm_provider)
                 model_calls.append(ModelCallTelemetry(
-                    agent_role=inputs.agent_mode.value,
+                    agent_role=inputs.active_agent.value if inputs.active_agent else "unknown",
+                    model_role="assistant" if inputs.active_agent == ReasoningAgent.DASH else "primary",
                     provider=type(llm_provider).__name__,
                     model=model_name,
                     monotonic_start=monotonic_start,

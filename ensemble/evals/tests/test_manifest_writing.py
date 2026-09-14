@@ -334,6 +334,44 @@ async def test_manifest_written_before_execution(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_manifest_classifies_remote_ollama_endpoint_as_remote(tmp_path, monkeypatch):
+    _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
+    _patch_source_build_provenance_env(monkeypatch)
+    _patch_verifier(monkeypatch)
+    _patch_sut(
+        monkeypatch,
+        settings=MagicMock(llm=MagicMock(primary_model="m")),
+        answer_response=Response(
+            answer="A valid answer.",
+            model="test",
+            chat_evidence=_receipt("g8e.v1.ai.llm.chat.iteration.text.completed"),
+            binding=BindingType.UNBOUND,
+            unbound_reason="answer-only turn",
+        ),
+    )
+    _patch_collector(monkeypatch)
+    config = SUTConfig(
+        g8ee_url="http://g8ee:8000",
+        primary=LLMRoleConfig(
+            provider="ollama",
+            model="test-model",
+            endpoint="http://192.168.1.2:11434",
+        ),
+        arm=Arm.ENSEMBLE_UNGOVERNED,
+    )
+
+    await cli._run_suite(
+        "ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key()
+    )
+
+    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    manifest = RunManifest.model_validate_json((report_dir / "manifest.json").read_text())
+    assert manifest.role_to_model.primary is not None
+    assert manifest.role_to_model.primary.endpoint_class == "remote"
+
+
+@pytest.mark.asyncio
 async def test_canary_task_emits_verified_scrubbing_metric_and_grade_reference(tmp_path, monkeypatch):
     assertion = CanaryScrubbingAssertion(
         assertion_id="email-canary",

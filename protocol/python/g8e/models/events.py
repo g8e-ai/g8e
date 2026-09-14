@@ -115,6 +115,7 @@ class ModelBoundaryPrivacyAttestation(G8eBaseModel):
 
 class ModelCallTelemetry(G8eBaseModel):
     agent_role: str
+    model_role: Literal["primary", "assistant", "lite"] | None = None
     provider: str
     model: str
     monotonic_start: float

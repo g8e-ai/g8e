@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import binascii
 import hashlib
+import ipaddress
 import json
 import logging
 import os
@@ -20,6 +21,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
+from urllib.parse import urlparse
 
 import click
 from pydantic import ValidationError
@@ -202,6 +204,23 @@ logger = logging.getLogger(__name__)
 
 _PROVIDER_CHOICES = ["openai", "anthropic", "gemini", "ollama", "llamacpp", "fake"]
 _KEYLESS_PROVIDERS = frozenset({"ollama", "llamacpp", "fake"})
+
+
+def _classify_provider_endpoint(provider: str, endpoint: str | None) -> str:
+    if not endpoint:
+        return "local" if provider in _KEYLESS_PROVIDERS else "remote"
+    hostname = urlparse(endpoint).hostname
+    if hostname == "localhost":
+        return "local"
+    if hostname:
+        try:
+            if ipaddress.ip_address(hostname).is_loopback:
+                return "local"
+        except ValueError:
+            pass
+    return "remote"
+
+
 _IFEVAL_GRADER_ID = "ifeval_subset_verifier"
 _EVAL_JUDGE_GRADER_ID = "eval_judge"
 _RECEIPT_INTEGRITY_GRADER_ID = "receipt_integrity"
@@ -1860,7 +1879,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             provider=rc.provider,
             model=rc.model,
             endpoint=rc.endpoint,
-            endpoint_class="local" if rc.provider in _KEYLESS_PROVIDERS or (rc.endpoint or "").startswith(("http://localhost", "http://127.")) else "remote",
+            endpoint_class=_classify_provider_endpoint(rc.provider, rc.endpoint),
             api_key_present=bool(rc.api_key),
         )
 

@@ -143,6 +143,7 @@ class TriageAgent:
                 finish_reason = response.candidates[0].finish_reason if response.candidates else None
                 model_call = ModelCallTelemetry(
                     agent_role="triage",
+                    model_role="lite",
                     provider=type(provider).__name__,
                     model=model,
                     monotonic_start=monotonic_start,
@@ -182,6 +183,7 @@ class TriageAgent:
                 )
                 failed_call = ModelCallTelemetry(
                     agent_role="triage",
+                    model_role="lite",
                     provider=type(provider).__name__,
                     model=model,
                     monotonic_start=monotonic_start,
@@ -202,6 +204,7 @@ class TriageAgent:
                 logger.exception("[TRIAGE] Provider call failed, defaulting to complex")
                 failed_call = ModelCallTelemetry(
                     agent_role="triage",
+                    model_role="lite",
                     provider=type(provider).__name__,
                     model=model,
                     monotonic_start=monotonic_start,

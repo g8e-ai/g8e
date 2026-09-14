@@ -215,6 +215,8 @@ async def test_generate_and_update_title_success():
             web_session_id="session-123",
             user_id="user-123",
             organization_id="org-123",
+            operator_id="operator-123",
+            operator_session_id="operator-session-123",
             user_settings=mock_user_settings,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,
@@ -223,7 +225,10 @@ async def test_generate_and_update_title_success():
         mock_generate.assert_called_once_with("some message", settings=mock_user_settings)
         mock_case_service.update_case.assert_called_once()
         assert mock_case_service.update_case.call_args[0][0] == "case-123"
+        case_context = mock_case_service.update_case.call_args[0][1].context
         assert mock_case_service.update_case.call_args[0][1].title == "My AI Title"
+        assert case_context.operator_id == "operator-123"
+        assert case_context.operator_session_id == "operator-session-123"
         mock_investigation_service.update_investigation.assert_called_once()
         assert mock_investigation_service.update_investigation.call_args[0][0] == "inv-123"
         assert (
@@ -252,6 +257,8 @@ async def test_generate_and_update_title_error():
             web_session_id="session-123",
             user_id="user-123",
             organization_id="org-123",
+            operator_id="operator-123",
+            operator_session_id="operator-session-123",
             user_settings=mock_user_settings,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,

@@ -241,6 +241,36 @@ class TestDataServicesUseGovernanceEnvelopes:
         assert "submit_envelope" in source
         assert "update_governed_doc" in source
 
+    @pytest.mark.asyncio
+    async def test_new_memory_write_preserves_delegated_operator_authority(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        from app.models.http_context import RequestContext
+        from app.models.investigations import InvestigationModel
+        from app.services.investigation.memory_data_service import MemoryDataService
+
+        governance_client = MagicMock()
+        governance_client.submit_envelope = AsyncMock()
+        service = MemoryDataService(MagicMock(), governance_client)
+        investigation = InvestigationModel(
+            id="investigation-1",
+            case_id="case-1",
+            user_id="user-1",
+            sentinel_mode=False,
+        )
+        context = RequestContext(
+            cli_session_id="cli-session-1",
+            user_id="user-1",
+            operator_id="operator-1",
+            operator_session_id="operator-session-1",
+        )
+
+        await service.create_memory(investigation, context)
+
+        message = governance_client.submit_envelope.await_args.args[0]
+        assert message.operator_id == "operator-1"
+        assert message.operator_session_id == "operator-session-1"
+
     def test_reputation_data_service_uses_governance(self):
         import inspect
 

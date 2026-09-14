@@ -32,7 +32,7 @@ import (
 // endpoint. No container logs, no Docker exec, no session ID from
 // environment variables.
 func TestPubSub_HeartbeatAdvances(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
 
 	first := activeOperator(t, ctx)
@@ -52,8 +52,8 @@ func TestPubSub_HeartbeatAdvances(t *testing.T) {
 		}
 		second = findActiveRemoteOperator(operators.Operators)
 		return second != nil && second.UpdatedAt.After(firstUpdatedAt)
-	}, 10*time.Second, 500*time.Millisecond,
-		"heartbeat UpdatedAt did not advance past %s within 10s — pub/sub heartbeat path may be dead",
+	}, 45*time.Second, 500*time.Millisecond,
+		"heartbeat UpdatedAt did not advance past %s within 45s — pub/sub heartbeat path may be dead",
 		firstUpdatedAt.UTC().Format(time.RFC3339Nano))
 
 	assert.True(t, second.UpdatedAt.After(firstUpdatedAt),

@@ -1836,33 +1836,44 @@ class CampaignRunner:
             # inference exposed by the SUT response boundary. One
             # ResourceObservation per inference; one StageObservation per
             # inference; one EvidenceIndex entry per indexed artifact.
+            normalization_error: Exception | None = None
+            attempt_resource_observations: list[ResourceObservation] = []
+            attempt_stages: list[StageObservation] = []
+            attempt_evidence: list[EvidenceIndex] = []
             if response is not None:
-                for inf_obs in response.inference_observations:
-                    stage_id = f"{attempt_id}:{inf_obs.inference_id}"
-                    resource_obs = _build_resource_observation(
-                        obs=inf_obs,
-                        campaign_id=self.spec.campaign_id,
-                        child_id=self.spec.campaign_id,
-                        run_id=self._run_id,
-                        assignment_id=assignment.assignment_id,
-                        attempt_id=attempt_id,
-                        task_id=task.id,
-                        stage_id=stage_id,
-                        orchestrator_scope=orchestrator_scope,
-                    )
-                    all_resource_observations.append(resource_obs)
-                    all_stages.append(_build_stage_observation(
-                        obs=inf_obs,
-                        stage_id=stage_id,
-                        attempt_id=attempt_id,
-                        run_id=self._run_id,
-                        task_id=task.id,
-                    ))
-                    all_evidence.extend(_build_evidence_index_entries(
-                        obs=inf_obs,
-                        run_id=self._run_id,
-                        attempt_id=attempt_id,
-                    ))
+                try:
+                    for inf_obs in response.inference_observations:
+                        stage_id = f"{attempt_id}:{inf_obs.inference_id}"
+                        attempt_resource_observations.append(_build_resource_observation(
+                            obs=inf_obs,
+                            campaign_id=self.spec.campaign_id,
+                            child_id=self.spec.campaign_id,
+                            run_id=self._run_id,
+                            assignment_id=assignment.assignment_id,
+                            attempt_id=attempt_id,
+                            task_id=task.id,
+                            stage_id=stage_id,
+                            orchestrator_scope=orchestrator_scope,
+                        ))
+                        attempt_stages.append(_build_stage_observation(
+                            obs=inf_obs,
+                            stage_id=stage_id,
+                            attempt_id=attempt_id,
+                            run_id=self._run_id,
+                            task_id=task.id,
+                        ))
+                        attempt_evidence.extend(_build_evidence_index_entries(
+                            obs=inf_obs,
+                            run_id=self._run_id,
+                            attempt_id=attempt_id,
+                        ))
+                except Exception as exc:
+                    normalization_error = exc
+                    infrastructure_error = exc
+                else:
+                    all_resource_observations.extend(attempt_resource_observations)
+                    all_stages.extend(attempt_stages)
+                    all_evidence.extend(attempt_evidence)
 
             if infrastructure_error is not None:
                 terminal_status = TerminalStatus.INFRASTRUCTURE_FAILED
@@ -1910,7 +1921,13 @@ class CampaignRunner:
                 ended_at=ended_at,
                 terminal_status=terminal_status,
                 posture=PostureObservation(requested_posture=arm_def.requested_posture),
-                missingness_or_failure=None if terminal_status == TerminalStatus.COMPLETED else terminal_status.value,
+                missingness_or_failure=(
+                    None
+                    if terminal_status == TerminalStatus.COMPLETED
+                    else "observation_normalization_failed"
+                    if normalization_error is not None
+                    else terminal_status.value
+                ),
                 parent_attempt_id=parent_attempt_id,
             )
             new_attempts.append(attempt)

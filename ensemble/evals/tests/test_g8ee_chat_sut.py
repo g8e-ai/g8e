@@ -613,6 +613,30 @@ def _make_sut(config: MagicMock | None = None) -> G8eeChatSUT:
     return sut
 
 
+def test_extract_inference_observations_keeps_persona_distinct_from_model_role():
+    sut = _make_sut()
+    trail = _make_completed_trail([
+        {
+            "agent_role": "triage",
+            "model_role": "lite",
+            "provider": "OllamaProvider",
+            "model": "gemma4:e4b",
+            "monotonic_start": 10.0,
+            "monotonic_end": 12.0,
+            "usage_reported": True,
+            "succeeded": True,
+        }
+    ])
+
+    observations = sut._extract_inference_observations(
+        trail, "g8e.v1.ai.llm.chat.iteration.text.completed"
+    )
+
+    assert len(observations) == 1
+    assert observations[0].agent_persona == "triage"
+    assert observations[0].role == "lite"
+
+
 def test_extract_inference_observations_multi_role_emits_one_per_role_model_call():
     """A text.completed event with three model_calls (primary, assistant, lite)
     produces exactly three InferenceObservation records, one per role-model
@@ -621,6 +645,7 @@ def test_extract_inference_observations_multi_role_emits_one_per_role_model_call
     model_calls = [
         {
             "agent_role": "primary",
+            "model_role": "primary",
             "provider": "OllamaProvider",
             "model": "qwen3:8b",
             "monotonic_start": 10.0,
@@ -638,6 +663,7 @@ def test_extract_inference_observations_multi_role_emits_one_per_role_model_call
         },
         {
             "agent_role": "assistant",
+            "model_role": "assistant",
             "provider": "OllamaProvider",
             "model": "granite3.3:8b",
             "monotonic_start": 13.0,
@@ -655,6 +681,7 @@ def test_extract_inference_observations_multi_role_emits_one_per_role_model_call
         },
         {
             "agent_role": "lite",
+            "model_role": "lite",
             "provider": "OllamaProvider",
             "model": "smollm2:360m",
             "monotonic_start": 14.5,
@@ -733,6 +760,7 @@ def test_extract_inference_observations_single_role_emits_one_observation():
     model_calls = [
         {
             "agent_role": "primary",
+            "model_role": "primary",
             "provider": "OllamaProvider",
             "model": "qwen3:8b",
             "monotonic_start": 5.0,
@@ -800,6 +828,7 @@ def test_extract_inference_observations_failed_call_carries_error_not_silently_d
     model_calls = [
         {
             "agent_role": "primary",
+            "model_role": "primary",
             "provider": "OllamaProvider",
             "model": "qwen3:8b",
             "monotonic_start": 10.0,
@@ -834,6 +863,7 @@ def test_extract_inference_observations_does_not_synthesize_remote_gpu_values():
     model_calls = [
         {
             "agent_role": "primary",
+            "model_role": "primary",
             "provider": "OllamaProvider",
             "model": "qwen3:8b",
             "monotonic_start": 10.0,
@@ -867,6 +897,7 @@ def test_extract_inference_observations_distinct_inference_ids_across_roles():
     model_calls = [
         {
             "agent_role": "primary",
+            "model_role": "primary",
             "provider": "OllamaProvider",
             "model": "qwen3:8b",
             "monotonic_start": 10.0,
@@ -880,6 +911,7 @@ def test_extract_inference_observations_distinct_inference_ids_across_roles():
         },
         {
             "agent_role": "assistant",
+            "model_role": "assistant",
             "provider": "OllamaProvider",
             "model": "granite3.3:8b",
             "monotonic_start": 11.5,
@@ -940,6 +972,7 @@ def test_extract_inference_observations_maps_native_timing_fields():
     model_calls = [
         {
             "agent_role": "primary",
+            "model_role": "primary",
             "provider": "OllamaProvider",
             "model": "qwen3:8b",
             "monotonic_start": 10.0,
@@ -958,6 +991,7 @@ def test_extract_inference_observations_maps_native_timing_fields():
         },
         {
             "agent_role": "lite",
+            "model_role": "lite",
             "provider": "OllamaProvider",
             "model": "smollm2:360m",
             "monotonic_start": 13.0,
@@ -989,6 +1023,7 @@ def test_extract_inference_observations_does_not_retain_restricted_plaintext():
     model_calls = [
         {
             "agent_role": "primary",
+            "model_role": "primary",
             "provider": "OllamaProvider",
             "model": "qwen3:8b",
             "monotonic_start": 10.0,

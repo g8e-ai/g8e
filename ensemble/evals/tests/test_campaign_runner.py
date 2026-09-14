@@ -43,7 +43,7 @@ from g8e_evals.campaign import (
     compute_model_cohort_hash,
     compute_task_assignment_hash,
 )
-from g8e_evals.harness import Response, Score, Task
+from g8e_evals.harness import InferenceObservation, Response, Score, Task
 from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.runner import (
     CampaignRunner,
@@ -112,6 +112,25 @@ class FakeSUT:
             raise RuntimeError("simulated infrastructure failure")
         model = f"ollama:{self.model_id}" if self.provider_prefix else self.model_id
         return Response(answer=self.answer, model=model, arm=Arm.DIRECT)
+
+
+@dataclass
+class InvalidObservationSUT:
+    model_id: str
+
+    async def get_answer(self, task: Task) -> Response:
+        return Response(
+            answer="answer materialized before instrumentation normalization",
+            model=self.model_id,
+            arm=Arm.ENSEMBLE_UNGOVERNED,
+            inference_observations=[
+                InferenceObservation(
+                    inference_id="inf-invalid-role",
+                    role="triage",
+                    model_variant_id=self.model_id,
+                )
+            ],
+        )
 
 
 @dataclass
@@ -618,6 +637,42 @@ class TestCohortDrift:
 
 
 class TestAtomicWrites:
+    def test_observation_normalization_failure_materializes_terminal_attempts(
+        self, tmp_path: Path
+    ):
+        spec = _make_spec(
+            retry_policy=RetryPolicy(
+                max_retries=0, retryable_terminal_statuses=["infrastructure_failed"]
+            )
+        )
+        runner = CampaignRunner(
+            spec=spec,
+            sut_factory=lambda cohort, arm: InvalidObservationSUT(
+                model_id=cohort.role_bindings[0].model_id
+            ),
+            tasks=_make_tasks(),
+            grader=FakeGrader(),
+            output_dir=tmp_path,
+        )
+
+        result = asyncio.run(runner.run())
+
+        attempts = [
+            json.loads(line)
+            for line in (result.report_dir / ATTEMPTS_JSONL).read_text().splitlines()
+        ]
+        assert len(attempts) == result.assignment_count
+        assert all(
+            attempt["terminal_status"] == TerminalStatus.INFRASTRUCTURE_FAILED.value
+            for attempt in attempts
+        )
+        assert all(
+            attempt["missingness_or_failure"] == "observation_normalization_failed"
+            for attempt in attempts
+        )
+        status = json.loads((result.report_dir / CAMPAIGN_STATUS_JSON).read_text())
+        assert status["status"] != CampaignStatus.RUNNING.value
+
     def test_no_temp_files_left_after_run(self, tmp_path: Path):
         spec = _make_spec()
         runner = CampaignRunner(

@@ -174,6 +174,8 @@ async def _generate_and_update_title(
     web_session_id: str | None,
     user_id: str | None,
     organization_id: str | None,
+    operator_id: str | None,
+    operator_session_id: str | None,
     user_settings: G8eeUserSettings,
     case_service: CaseDataService,
     investigation_service: InvestigationService,
@@ -190,6 +192,8 @@ async def _generate_and_update_title(
             case_id=case_id,
             investigation_id=investigation_id,
             source_component=G8EE_COMPONENT,
+            operator_id=operator_id,
+            operator_session_id=operator_session_id,
         )
 
         updated_case = await case_service.update_case(
@@ -357,6 +361,8 @@ async def internal_chat(
                     web_session_id=g8e_context.web_session_id,
                     user_id=g8e_context.user_id,
                     organization_id=g8e_context.organization_id,
+                    operator_id=g8e_context.operator_id,
+                    operator_session_id=g8e_context.operator_session_id,
                     user_settings=user_settings,
                     case_service=case_service,
                     investigation_service=investigation_service,

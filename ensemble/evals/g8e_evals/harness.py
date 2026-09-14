@@ -376,6 +376,7 @@ class InferenceObservation:
     inference_id: str
     role: str
     model_variant_id: str
+    agent_persona: str = ""
     provider: str = ""
     model: str = ""
     provider_call_latency_seconds: float | None = None

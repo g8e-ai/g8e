@@ -634,7 +634,8 @@ class G8eeChatSUT:
             return observations
 
         for idx, call in enumerate(complete_payload.model_calls):
-            role = call.agent_role or "primary"
+            agent_persona = call.agent_role
+            model_role = call.model_role or ""
             model_name = call.model
             provider_name = call.provider
             monotonic_start = call.monotonic_start
@@ -654,7 +655,8 @@ class G8eeChatSUT:
 
             observations.append(InferenceObservation(
                 inference_id=f"inf-{idx}",
-                role=role,
+                agent_persona=agent_persona,
+                role=model_role,
                 model_variant_id=model_name,
                 provider=provider_name,
                 model=model_name,
