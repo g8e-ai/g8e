@@ -5,7 +5,7 @@
 # pinned here unless the engine code imports them directly.
 
 # HTTP server
-fastapi==0.135.2
+fastapi==0.141.1
 uvicorn==0.52.4
 
 # Data validation and modeling
