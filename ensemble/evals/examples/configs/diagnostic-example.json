@@ -1,0 +1,39 @@
+{
+  "arm": "ensemble_ungoverned",
+  "budget": {
+    "concurrency": 1,
+    "max_requests": 30,
+    "max_retries": 1,
+    "max_tokens": 491520,
+    "max_usd": 0.0
+  },
+  "content_hash": "8249ca9a51f6aac45c3a5ba92625025b891d889f185e8906099ce39ac5cff361",
+  "evidence_key": {
+    "key_id": "key-example-001",
+    "path": ".local.dev/campaign/evidence-key.json"
+  },
+  "gold_set": {
+    "path": ".local.dev/campaign/gold.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "model_variant_id": "gemma4:e4b",
+  "operation_id": "diag-example-001",
+  "operation_kind": "diagnostic",
+  "provider_endpoint": {
+    "endpoint_class": "ollama-local",
+    "provider": "ollama"
+  },
+  "report_root": ".local.dev/campaign/diag-example",
+  "revision": "rev-1",
+  "sampling": {
+    "temperature": 0.0
+  },
+  "schema_version": "1.0.0",
+  "seed": 42,
+  "stop_conditions": {
+    "idle_timeout_s": 180.0
+  },
+  "suite": "ifeval_subset",
+  "task_limit": 5,
+  "task_offset": 0
+}

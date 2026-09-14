@@ -410,6 +410,72 @@ const (
 	GoModFilename     = "go.mod"
 )
 
+// Eval engine project paths. The `./g8e eval` facade resolves the eval
+// Python project relative to the repository root and validates it through
+// the owned markers below. No path is searched on PATH and no unrelated
+// virtualenv is consulted.
+const (
+	// EvalRootVersion and EvalRootMakefile are the repository-root
+	// markers the facade requires before accepting a directory as the
+	// owned source checkout. They are validated alongside the eval
+	// project markers to ensure the binary runs inside the repository.
+	EvalRootVersion  = "VERSION"
+	EvalRootMakefile = "Makefile"
+
+	// EvalProjectDir is the repository-relative path to the eval Python
+	// project owned by `ensemble/evals/`.
+	EvalProjectDir = "ensemble/evals"
+
+	// EvalProjectPyproject and EvalProjectLockfile are the owned project
+	// markers the facade requires before accepting a directory as the
+	// eval engine project.
+	EvalProjectPyproject = "pyproject.toml"
+	EvalProjectLockfile  = "uv.lock"
+
+	// EvalProjectVenvDir is the project-local virtualenv directory name
+	// created by `uv sync --project <eval-project> --locked`.
+	EvalProjectVenvDir = ".venv"
+
+	// EvalVenvPythonUnix and EvalVenvPythonWindows are the project-local
+	// interpreter paths inside the project virtualenv.
+	EvalVenvPythonUnix    = "bin/python"
+	EvalVenvPythonWindows = "Scripts/python.exe"
+
+	// EvalEngineModule is the private Python module entry point invoked
+	// through the project interpreter with `-m`. It is not a public
+	// console script and is not resolved from PATH.
+	EvalEngineModule = "g8e_evals.engine_cli"
+
+	// EvalDraftModule is the narrow Python module entry point invoked
+	// through the project interpreter for draft generation. It reads a
+	// typed JSON request file, calls the draft generation function, and
+	// emits the review summary as JSON on stdout.
+	EvalDraftModule = "g8e_evals.config_draft_cli"
+
+	// EvalConsoleScript is the legacy public console-script entry name
+	// removed by the unified facade. The constant exists so tests and
+	// diagnostics can refer to it by name rather than embedding a string.
+	EvalConsoleScript = "g8e-evals"
+
+	// UVExecutable is the approved uv executable name resolved through an
+	// injected executable resolver during `eval setup`.
+	UVExecutable = "uv"
+
+	// EvalLeaseDirname is the owner-local authority directory under the
+	// runtime tree where leases are stored with owner-only permissions.
+	EvalLeaseDirname = "eval/leases"
+
+	// EvalTestExtra is the optional dependency extra added by `eval setup`
+	// when `--with-test-tools` is explicitly requested.
+	EvalTestExtra = "test"
+
+	// EvalSelfCheckModules is the Python import expression the facade
+	// invokes through the project interpreter to verify the locked
+	// environment contains every required runtime module. The import
+	// also prints the engine version so setup and doctor can record it.
+	EvalSelfCheckModules = "import numpy, pydantic, cryptography, g8e, g8ee, g8e_evals; print(g8e_evals.__version__)"
+)
+
 // SSH config constants for basenames and key filenames.
 const (
 	SshConfigFilename     = "ssh_config"

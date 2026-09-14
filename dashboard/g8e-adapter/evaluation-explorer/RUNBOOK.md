@@ -70,6 +70,19 @@ systemctl --user status opendevops-eval-publisher.service
 
 A publication failure leaves the bridge batch in `/home/bob/g8e/.local.dev/campaign/public-live-bridge/outbox`. Recovery publishes that exact batch in order when the local publisher and mirror become available. Disclosure validation failures remain fatal and require correcting the producer or projection; the supervisor does not retry rejected content.
 
+## Run a managed finite campaign
+
+Create one reviewed, non-secret campaign JSON file for each newly authorized operation. Keep the campaign identity, output root, profile, model registry, dataset, endpoint, authentication root, and finite request, token, and USD ceilings in that file. The schema and example are documented in [Evals](../../../docs/ensemble/evals.md#run-managed-campaigns). Never reuse the interrupted `ef7-final-response-20260914-1551` output root or any completed report root.
+
+```bash
+cd /home/bob/g8e/ensemble/evals
+uv run --locked g8e-evals campaign check <campaign.json>
+uv run --locked g8e-evals campaign start <campaign.json> --yes
+uv run --locked g8e-evals campaign status <campaign.json>
+```
+
+`check` is provider-free. It validates the strict file, bound paths, profile, registry, and finite budgets. `start` is the only provider-backed step and requires explicit acknowledgment. `status` reads the same file, so operators do not repeat report paths or suite names. The continuous publisher discovers committed records under the configured `public-live` child root independently; publication retry never reruns this command.
+
 ## Run one fresh live evaluation
 
 Choose paths that do not already exist. Never resume or overwrite a prior report root or bridge state directory.

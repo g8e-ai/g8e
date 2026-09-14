@@ -29,13 +29,13 @@ func TestExecute(t *testing.T) {
 		assert.Contains(t, rootCmd.Short, "g8e Platform Manager")
 		assert.Contains(t, rootCmd.Short, "g8e Gateway")
 		assert.Contains(t, rootCmd.Short, "g8e Operator")
-		assert.Len(t, rootCmd.Commands(), 15)
+		assert.Len(t, rootCmd.Commands(), 16)
 	})
 
 	t.Run("root command has all expected subcommands", func(t *testing.T) {
 		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
-		expectedCommands := []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "docker", "audit", "swagger", "report", "public", "version", "compliance"}
+		expectedCommands := []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "docker", "audit", "swagger", "report", "public", "version", "compliance", "eval"}
 		for _, expected := range expectedCommands {
 			found := false
 			for _, cmd := range rootCmd.Commands() {
@@ -75,6 +75,7 @@ func TestExecute(t *testing.T) {
 		assert.Contains(t, output, "demos")
 		assert.Contains(t, output, "audit")
 		assert.Contains(t, output, "swagger")
+		assert.Contains(t, output, "eval")
 	})
 
 	t.Run("root command long description contains key components", func(t *testing.T) {
@@ -101,8 +102,8 @@ func TestRootCommandValidation(t *testing.T) {
 			expectedUse:    "g8e",
 			expectedShort:  "g8e Platform Manager",
 			expectedLong:   "zero-trust execution platform",
-			expectedCmds:   []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "docker", "audit", "swagger", "report", "public", "tui", "version", "compliance"},
-			expectedCmdLen: 15,
+			expectedCmds:   []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "docker", "audit", "swagger", "report", "public", "tui", "version", "compliance", "eval"},
+			expectedCmdLen: 16,
 		},
 	}
 
@@ -172,6 +173,7 @@ func TestSubcommandRegistration(t *testing.T) {
 		assert.NotNil(t, demosCmd(), "demosCmd should not be nil")
 		assert.NotNil(t, auditCmd(), "auditCmd should not be nil")
 		assert.NotNil(t, swaggerCmd(), "swaggerCmd should not be nil")
+		assert.NotNil(t, evalCmd(), "evalCmd should not be nil")
 	})
 
 	t.Run("all subcommands have valid cobra.Command structure", func(t *testing.T) {
@@ -185,6 +187,7 @@ func TestSubcommandRegistration(t *testing.T) {
 			demosCmd(),
 			auditCmd(),
 			swaggerCmd(),
+			evalCmd(),
 		}
 
 		for _, cmd := range commands {

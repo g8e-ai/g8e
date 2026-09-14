@@ -22,9 +22,6 @@ dependencies = [
     "numpy>=2.2.0",
 ]
 
-[project.scripts]
-g8e-evals = "g8e_evals.cli:main"
-
 [project.optional-dependencies]
 test = [
     "pyright==1.1.411",

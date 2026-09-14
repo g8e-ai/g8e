@@ -93,6 +93,7 @@ Run 'g8e tui' to launch the Tactical Governance Console (TUI).`,
 		tuiCmd(),
 		versionCmd(),
 		complianceCmd(),
+		evalCmd(),
 	)
 
 	return rootCmd

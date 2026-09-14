@@ -807,3 +807,25 @@ func TestGatewayConnectCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, errFactory)
 }
+
+// --- Eval commands (U3) ---
+
+func TestEvalDoctorCmdWithDeps_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	deps := evalDoctorDeps{
+		configLoader:   configLoaderFor(cfg),
+		fileSvcFactory: failingFileSvcFactory(errFactory),
+		stat:           stubEvalFileStat{existing: map[string]bool{}},
+		runner:         &stubEvalRunner{},
+		httpClient:     &http.Client{},
+	}
+	cmd := evalDoctorCmdWithDeps(deps)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}

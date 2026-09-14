@@ -53,7 +53,7 @@ class CampaignRunConfig(BaseModel):
 
     def resolved(self, config_path: Path) -> CampaignRunConfig:
         base = config_path.resolve().parent
-        updates: dict[str, Path] = {}
+        updates: dict[str, object] = {}
         for name in (
             "preregistration",
             "output_dir",
@@ -68,6 +68,11 @@ class CampaignRunConfig(BaseModel):
             value = getattr(self, name)
             if value is not None and not value.is_absolute():
                 updates[name] = (base / value).resolve()
+        g8e_cli = self.g8e_cli
+        if g8e_cli is not None and g8e_cli != "auto" and "/" in g8e_cli:
+            cli_path = Path(g8e_cli)
+            if not cli_path.is_absolute():
+                updates["g8e_cli"] = str((base / cli_path).resolve())
         return self.model_copy(update=updates)
 
     def command_args(self) -> dict[str, object]:

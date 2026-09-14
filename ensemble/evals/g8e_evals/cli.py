@@ -1001,12 +1001,9 @@ def load_source_build_provenance_or_reject(
 def campaign():
     """Campaign subcommands for multi-arm, multi-cohort evaluation.
 
-    The campaign group provides ``run``, ``validate``, and ``plan``
-    subcommands. ``run`` executes a campaign with a frozen specification.
-    ``validate`` performs side-effect-free validation of a campaign
-    profile against a model registry. ``plan`` produces a deterministic
-    dry-run output showing exact run, task, warm-up, measured-call, and
-    disk ceilings without making provider calls.
+    ``check``, ``start``, and ``status`` provide the normal config-file
+    workflow. ``run`` remains the low-level flag interface. ``validate``
+    and ``plan`` perform side-effect-free authority and schedule checks.
     """
 
 
@@ -1060,6 +1057,8 @@ def campaign_start(config: Path, yes: bool) -> None:
         run_config = load_campaign_run_config(config)
     except (ValidationError, ValueError, OSError, json.JSONDecodeError) as error:
         raise click.UsageError(f"invalid campaign run config {config}: {error}") from error
+    if run_config.output_dir.exists():
+        raise click.UsageError(f"campaign output root must be fresh and absent: {run_config.output_dir}")
     _campaign_callback(campaign_run, run_config.command_args())
 
 
@@ -1492,11 +1491,12 @@ def campaign_validate(profile: Path, models: Path):
 
 
 @campaign.command(name="status")
-@click.option("--output-dir", type=click.Path(exists=True, file_okay=False, path_type=Path), required=True,
+@click.argument("config", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=False)
+@click.option("--output-dir", type=click.Path(exists=True, file_okay=False, path_type=Path), required=False,
               help="Path to a campaign output directory (parent of report directories).")
 @click.option("--suite", type=str, default=None,
               help="Filter to a specific suite prefix.")
-def campaign_status(output_dir: Path, suite: str | None):
+def campaign_status(config: Path | None, output_dir: Path | None, suite: str | None):
     """Show live campaign progress for all report directories.
 
     Reads campaign-status.json and campaign-progress.json from each
@@ -1504,6 +1504,22 @@ def campaign_status(output_dir: Path, suite: str | None):
     Works on running and finalized campaigns alike.
     """
     from g8e_evals.constants import CAMPAIGN_PROGRESS_JSON, CAMPAIGN_STATUS_JSON
+
+    if config is not None and output_dir is not None:
+        raise click.UsageError("pass a campaign config or --output-dir, not both")
+    if config is not None:
+        try:
+            run_config = load_campaign_run_config(config)
+        except (ValidationError, ValueError, OSError, json.JSONDecodeError) as error:
+            raise click.UsageError(f"invalid campaign run config {config}: {error}") from error
+        output_dir = run_config.output_dir
+        if suite is None:
+            suite = run_config.suite
+    if output_dir is None:
+        raise click.UsageError("pass a campaign config or --output-dir")
+    if not output_dir.is_dir():
+        Console().print("[yellow]Campaign has not started.[/yellow]")
+        return
 
     prefix = f"{suite}-campaign-" if suite else "-campaign-"
     dirs = sorted(

@@ -94,6 +94,45 @@ Install the locked environment as described above, then run a suite without stac
 
 Use `--gold-set` to replace the suite dataset and `--limit` to run only the leading tasks. A custom task still requires typed assertions recognized by the selected suite and its registered graders.
 
+## Run managed campaigns
+
+The normal campaign workflow stores non-secret launch settings in one strict JSON configuration instead of repeating a large flag vector. Paths resolve relative to the configuration file, unknown fields fail closed, profile and model-registry authorities must appear together, and provider budgets are mandatory. The file does not store API keys or an Operator session override; provider credentials remain in supported environment variables and the current Operator session comes from the canonical CLI authentication context.
+
+A campaign configuration contains the low-level `campaign run` inputs:
+
+```json
+{
+  "schema_version": "1.0.0",
+  "suite": "ifeval_subset",
+  "preregistration": "authorities/preregistration.json",
+  "campaign_id": "fresh-campaign-id",
+  "release_version": "development",
+  "seed": 42,
+  "output_dir": "reports/fresh-campaign-id",
+  "gold_set": "datasets/input_data.jsonl",
+  "max_retries": 1,
+  "max_requests": 30,
+  "max_usd": 0.0,
+  "max_tokens": 491520,
+  "profile": "authorities/profile.json",
+  "models": "authorities/models.json",
+  "g8ee_url": "http://localhost:8000",
+  "auth_project_root": "../../.."
+}
+```
+
+Run the lifecycle from `ensemble/evals/`:
+
+```bash
+uv run --locked g8e-evals campaign check path/to/campaign.json
+uv run --locked g8e-evals campaign start path/to/campaign.json --yes
+uv run --locked g8e-evals campaign status path/to/campaign.json
+```
+
+`check` validates the strict launch shape, required paths, campaign profile, and model registry and prints the finite request, token, and USD ceilings without making provider calls. `start` requires an explicit `--yes` acknowledgment and delegates to the existing authoritative campaign runner, so report allocation, campaign identity, randomized schedule, typed terminal outcomes, and budget enforcement remain unchanged. `status` derives the report root and suite from the same file. The low-level `campaign run` flags remain available for automation that already constructs an argument vector.
+
+Each newly authorized operation uses a new configuration identity and output root. Never point a new configuration at an interrupted or completed report root.
+
 ## Run finite attended controllers
 
 `g8e-evals controller` runs one finite, owner-approved cycle manifest. It is an attended entry point, not a daemon: it executes the manifest's ordered child commands through a closed command map, verifies every completed report, validates the exact candidate-tree digest, writes a durable publication outbox, invokes `g8e public push`, and exits in a typed terminal state. The controller never generates or changes an authority.

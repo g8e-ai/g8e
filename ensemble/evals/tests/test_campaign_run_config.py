@@ -11,7 +11,7 @@ from g8e_evals import cli
 from g8e_evals.campaign_run_config import CampaignRunConfig, load_campaign_run_config
 from g8e_evals.cli import main
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 
 def _config() -> dict[str, object]:
@@ -82,7 +82,7 @@ def test_campaign_check_prints_finite_budget_without_starting_provider(
     assert "fresh-campaign" in result.output
     assert "30 requests" in result.output
     assert "491520 tokens" in result.output
-    assert "provider calls: none" in result.output
+    assert "provider calls none" in result.output
 
 
 def test_campaign_start_requires_explicit_confirmation(tmp_path: Path) -> None:
@@ -93,6 +93,27 @@ def test_campaign_start_requires_explicit_confirmation(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "--yes" in result.output
+
+
+def test_campaign_start_rejects_reused_output_root(tmp_path: Path) -> None:
+    config_path = tmp_path / "campaign.json"
+    config_path.write_text(json.dumps(_config()))
+    (tmp_path / "reports/fresh-campaign").mkdir(parents=True)
+
+    result = CliRunner().invoke(main, ["campaign", "start", str(config_path), "--yes"])
+
+    assert result.exit_code != 0
+    assert "must be fresh and absent" in result.output
+
+
+def test_campaign_status_uses_configured_report_root_before_start(tmp_path: Path) -> None:
+    config_path = tmp_path / "campaign.json"
+    config_path.write_text(json.dumps(_config()))
+
+    result = CliRunner().invoke(main, ["campaign", "status", str(config_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "Campaign has not started" in result.output
 
 
 def test_campaign_start_forwards_frozen_config_to_existing_runner(

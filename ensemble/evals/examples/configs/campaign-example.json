@@ -1,0 +1,56 @@
+{
+  "arms": [
+    "direct",
+    "ensemble_ungoverned"
+  ],
+  "budget": {
+    "concurrency": 1,
+    "max_requests": 100,
+    "max_retries": 1,
+    "max_tokens": 1000000,
+    "max_usd": 0.0
+  },
+  "campaign_id": "example-campaign",
+  "cohort_ids": [
+    "cohort-qwen3-8b"
+  ],
+  "content_hash": "a09f8f53ede022cfba642b3482e18bd83efcad2c256ac4d0acb459897b6ca65a",
+  "evidence_key": {
+    "key_id": "key-example-001",
+    "path": ".local.dev/campaign/evidence-key.json"
+  },
+  "gold_set": {
+    "path": ".local.dev/campaign/gold.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "model_registry": {
+    "path": ".local.dev/campaign/model-registry.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "operation_id": "camp-example-001",
+  "operation_kind": "campaign",
+  "preregistration": {
+    "path": ".local.dev/campaign/preregistration.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "profile": {
+    "path": ".local.dev/campaign/profile.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "provider_endpoint": {
+    "endpoint_class": "ollama-local",
+    "provider": "ollama"
+  },
+  "publication_eligible": true,
+  "release_version": "v2.1.8",
+  "repetitions": 3,
+  "report_root": ".local.dev/campaign/camp-example",
+  "revision": "rev-1",
+  "schema_version": "1.0.0",
+  "seed": 42,
+  "stop_conditions": {
+    "idle_timeout_s": 180.0
+  },
+  "suite": "ifeval_subset",
+  "task_offset": 0
+}
