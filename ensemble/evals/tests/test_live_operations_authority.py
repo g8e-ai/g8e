@@ -11,6 +11,7 @@ from g8e_evals.live_operations_authority import (
     BudgetAuthority,
     BudgetAuthoritySet,
     CandidateIdentity,
+    CollectionSmokeAuthority,
     CommandFamily,
     EF7TransportDisposition,
     EvidenceRequirement,
@@ -27,6 +28,7 @@ from g8e_evals.live_operations_authority import (
     TransportPath,
     build_budget_authority,
     build_budget_authority_set,
+    build_collection_smoke_authority,
     build_ef7_transport_disposition,
     build_exploratory_baseline_authority,
     build_governed_inference_smoke_authority,
@@ -190,6 +192,65 @@ def test_exploratory_baseline_authority_binds_exact_ifeval_work() -> None:
     assert authority.assignment_count == 180
     assert authority.repetitions == 5
     assert authority.publication_eligible is False
+
+
+def _collection_bindings() -> list[ArtifactBinding]:
+    names = [
+        "model_registry",
+        "d16_population_selection",
+        "ifeval_subset_dataset",
+        "ifeval_subset_provenance",
+        "ifeval_subset_profile",
+        "ifeval_subset_preregistration",
+        "final_response_profile",
+        "final_response_preregistration",
+        "recovery_profile",
+        "recovery_preregistration",
+        "routing_delegation_profile",
+        "routing_delegation_preregistration",
+        "security_policy_profile",
+        "security_policy_preregistration",
+        "technical_analysis_profile",
+        "technical_analysis_preregistration",
+        "tool_arguments_profile",
+        "tool_arguments_preregistration",
+        "tool_selection_profile",
+        "tool_selection_preregistration",
+        "verification_profile",
+        "verification_preregistration",
+    ]
+    return [
+        ArtifactBinding(name=name, path=f"collection/{name}.json", sha256=_VALID_HASH)
+        for name in names
+    ]
+
+
+def test_collection_smoke_authority_binds_exact_25_task_population() -> None:
+    authority = build_collection_smoke_authority(_collection_bindings())
+
+    assert isinstance(authority, CollectionSmokeAuthority)
+    assert authority.operation_kind == OperationKind.COLLECTION_SMOKE
+    assert authority.runnable_variant_count == 31
+    assert authority.task_count == 25
+    assert authority.assignment_count == 775
+    assert authority.repetitions == 1
+    assert authority.selected_ifeval_task_ids == ["1019", "136", "16", "32"]
+    assert authority.framework_transport == TransportPath.ENSEMBLE_UNGOVERNED
+    assert authority.ifeval_transport == "direct"
+
+
+def test_collection_smoke_authority_rejects_population_drift() -> None:
+    valid = build_collection_smoke_authority(_collection_bindings())
+
+    with pytest.raises(ValidationError, match="selected IFEval task IDs"):
+        CollectionSmokeAuthority.model_validate(
+            valid.model_dump() | {"selected_ifeval_task_ids": ["13", "16", "19", "24"]}
+        )
+
+
+def test_collection_smoke_authority_rejects_missing_suite_binding() -> None:
+    with pytest.raises(ValidationError, match="bindings are incomplete"):
+        build_collection_smoke_authority(_collection_bindings()[:-1])
 
 
 def test_budget_authority_requires_every_ceiling_and_serial_execution() -> None:

@@ -32,6 +32,16 @@ def test_ifeval_loader_validates_provenance():
 
 
 @pytest.mark.integration
+def test_ifeval_loader_validates_opendevops_d16_population():
+    base_dir = Path(__file__).parent.parent
+    gold_set = base_dir / "gold_sets/opendevops_d16/input_data.jsonl"
+
+    tasks = list(IFEvalLoader(gold_set).load())
+
+    assert [task.id for task in tasks] == ["1019", "136", "16", "32"]
+
+
+@pytest.mark.integration
 def test_ifeval_loader_preserves_typed_policy_state_and_privacy_expectations(tmp_path: Path, monkeypatch):
     dataset = tmp_path / "input_data.jsonl"
     dataset.write_text(json.dumps({

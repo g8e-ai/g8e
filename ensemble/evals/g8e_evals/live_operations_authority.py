@@ -9,6 +9,12 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from g8e_evals.population_policy import (
+    D16_POPULATION_SELECTION_HASH,
+    D16_SELECTED_IFEVAL_TASK_IDS,
+    FRAMEWORK_SUITE_IDS,
+)
+
 AUTHORITY_SCHEMA_VERSION = "1.0.0"
 _REQUIRED_EF7_BINDINGS = frozenset(
     {
@@ -29,6 +35,20 @@ _REQUIRED_EXPLORATORY_BASELINE_BINDINGS = frozenset(
         "ifeval_profile",
         "ifeval_preregistration",
         "model_registry",
+    }
+)
+_COLLECTION_SMOKE_SUITE_IDS = ("ifeval_subset", *FRAMEWORK_SUITE_IDS)
+_REQUIRED_COLLECTION_SMOKE_BINDINGS = frozenset(
+    {
+        "model_registry",
+        "d16_population_selection",
+        "ifeval_subset_dataset",
+        "ifeval_subset_provenance",
+        *(
+            f"{suite_id}_{artifact_kind}"
+            for suite_id in _COLLECTION_SMOKE_SUITE_IDS
+            for artifact_kind in ("profile", "preregistration")
+        ),
     }
 )
 
@@ -57,6 +77,7 @@ class OperationKind(StrEnum):
     EMBEDDED_AUTHORITY_DIAGNOSTIC = "embedded_authority_diagnostic"
     GOVERNED_INFERENCE_SMOKE = "governed_inference_smoke"
     EXPLORATORY_BASELINE = "exploratory_baseline"
+    COLLECTION_SMOKE = "collection_smoke"
     EF7_REPLACEMENT = "ef7_replacement"
     P12_CHILD = "p12_child"
     EF7_PHASE_A = "ef7_phase_a"
@@ -200,6 +221,49 @@ class ExploratoryBaselineAuthority(BaseModel):
         if self.content_hash != expected:
             raise ValueError(
                 f"exploratory baseline authority content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
+            )
+        return self
+
+
+class CollectionSmokeAuthority(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    authority_id: str = Field(min_length=1)
+    authority_version: str = Field(default=AUTHORITY_SCHEMA_VERSION)
+    operation_kind: Literal[OperationKind.COLLECTION_SMOKE]
+    population_selection_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    runnable_variant_count: Literal[31]
+    framework_suite_ids: list[str]
+    selected_ifeval_task_ids: list[str]
+    task_count: Literal[25]
+    assignment_count: Literal[775]
+    repetitions: Literal[1]
+    framework_transport: Literal[TransportPath.ENSEMBLE_UNGOVERNED]
+    ifeval_transport: Literal["direct"]
+    bindings: list[ArtifactBinding] = Field(min_length=1)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_authority(self) -> Self:
+        if self.population_selection_hash != D16_POPULATION_SELECTION_HASH:
+            raise ValueError("population selection hash does not match the frozen D16 authority")
+        if self.framework_suite_ids != list(FRAMEWORK_SUITE_IDS):
+            raise ValueError("framework suite IDs do not match the frozen D16 authority")
+        if self.selected_ifeval_task_ids != list(D16_SELECTED_IFEVAL_TASK_IDS):
+            raise ValueError("selected IFEval task IDs do not match the frozen D16 authority")
+        names = [binding.name for binding in self.bindings]
+        if len(names) != len(set(names)):
+            raise ValueError("collection smoke bindings must have unique names")
+        missing = sorted(_REQUIRED_COLLECTION_SMOKE_BINDINGS.difference(names))
+        extra = sorted(set(names).difference(_REQUIRED_COLLECTION_SMOKE_BINDINGS))
+        if missing or extra:
+            raise ValueError(
+                f"collection smoke bindings are incomplete or unexpected: missing={missing}, extra={extra}"
+            )
+        expected = _content_hash(self)
+        if self.content_hash != expected:
+            raise ValueError(
+                f"collection smoke authority content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
             )
         return self
 
@@ -467,6 +531,28 @@ def build_exploratory_baseline_authority(
     }
     provisional = ExploratoryBaselineAuthority.model_construct(**fields, content_hash="0" * 64)
     return ExploratoryBaselineAuthority(**fields, content_hash=_content_hash(provisional))
+
+
+def build_collection_smoke_authority(
+    bindings: list[ArtifactBinding],
+) -> CollectionSmokeAuthority:
+    fields = {
+        "authority_id": "opendevops-collection-smoke-v1",
+        "authority_version": AUTHORITY_SCHEMA_VERSION,
+        "operation_kind": OperationKind.COLLECTION_SMOKE,
+        "population_selection_hash": D16_POPULATION_SELECTION_HASH,
+        "runnable_variant_count": 31,
+        "framework_suite_ids": list(FRAMEWORK_SUITE_IDS),
+        "selected_ifeval_task_ids": list(D16_SELECTED_IFEVAL_TASK_IDS),
+        "task_count": 25,
+        "assignment_count": 775,
+        "repetitions": 1,
+        "framework_transport": TransportPath.ENSEMBLE_UNGOVERNED,
+        "ifeval_transport": "direct",
+        "bindings": bindings,
+    }
+    provisional = CollectionSmokeAuthority.model_construct(**fields, content_hash="0" * 64)
+    return CollectionSmokeAuthority(**fields, content_hash=_content_hash(provisional))
 
 
 def build_governed_inference_smoke_authority(
