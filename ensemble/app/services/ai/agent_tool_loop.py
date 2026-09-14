@@ -574,6 +574,7 @@ async def _process_single_tool_call(
         raise
     except Exception as exc:
         logger.error("[TOOL_EXEC] Function call %d (%s) failed: %s", idx, fc.name, exc)
+        execution_id = generate_command_execution_id()
         _exc_result = CommandExecutionResult(
             success=False,
             error=str(exc),
@@ -582,12 +583,12 @@ async def _process_single_tool_call(
             tool_name=fc.name or "",
             call_info=StreamChunkData(
                 tool_name=fc.name,
-                execution_id=None,
+                execution_id=execution_id,
                 command="",
                 is_operator_tool=False,
             ),
             result_info=StreamChunkData(
-                execution_id=None,
+                execution_id=execution_id,
                 success=False,
                 result=_exc_result,
                 error_type=CommandErrorType.EXECUTION_ERROR,
