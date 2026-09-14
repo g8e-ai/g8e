@@ -27,6 +27,8 @@ func TestRunPublicLoop_EmitsCandidateBoundZeroInferenceEvidence(t *testing.T) {
 		BinarySHA256:                strings.Repeat("3", 64),
 		Images: []publicLoopCandidateImage{
 			{Components: []string{"gateway", "operator"}, ImageID: "sha256:" + strings.Repeat("4", 64)},
+			{Components: []string{"ensemble"}, ImageID: "sha256:" + strings.Repeat("5", 64)},
+			{Components: []string{"dashboard"}, ImageID: "sha256:" + strings.Repeat("6", 64)},
 		},
 	}
 	var err error
@@ -49,5 +51,7 @@ func TestRunPublicLoop_EmitsCandidateBoundZeroInferenceEvidence(t *testing.T) {
 	assert.True(t, evidence.ReplacementKeyAcceptedAfterRestart)
 	assert.True(t, evidence.MirrorRestartRecovered)
 	assert.Equal(t, 1, evidence.RetryCount)
-	assert.NotEmpty(t, evidence.ContentHash)
+	reproducedHash, err := canonicalContentHash(evidence)
+	require.NoError(t, err)
+	assert.Equal(t, reproducedHash, evidence.ContentHash)
 }

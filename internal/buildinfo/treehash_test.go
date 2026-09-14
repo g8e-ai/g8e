@@ -204,4 +204,3 @@ func TestComputeSourceManifestHash_ExcludeSkipsNestedGeneratedDirs(t *testing.T)
 	require.NoError(t, err)
 	assert.Equal(t, clean, excluded)
 }
-

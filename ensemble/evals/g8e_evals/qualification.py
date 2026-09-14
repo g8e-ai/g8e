@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, cast
 
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 QUALIFICATION_SCHEMA_VERSION = "1.0.0"
@@ -81,6 +84,104 @@ class ArtifactDigest(_FrozenModel):
         )
 
 
+class SourceManifestAuthority(_FrozenModel):
+    authority_id: str = Field(min_length=1)
+    schema_version: str = QUALIFICATION_SCHEMA_VERSION
+    scope: Literal["full_source", "execution_source"]
+    mode: Literal["manifest"]
+    entries: list[str] = Field(min_length=1)
+    excludes: list[str]
+    owner_approved_at: datetime
+    content_hash: str = Field(pattern=_HASH_PATTERN)
+
+    @model_validator(mode="after")
+    def _validate_authority(self) -> Self:
+        if len(self.entries) != len(set(self.entries)):
+            raise ValueError("source manifest entries must be unique")
+        for entry in self.entries:
+            _safe_relative_path(entry)
+        if len(self.excludes) != len(set(self.excludes)) or any(
+            not value or "/" in value for value in self.excludes
+        ):
+            raise ValueError("source manifest excludes must be unique path-component patterns")
+        if self.content_hash != content_hash(self):
+            raise ValueError("source manifest authority content_hash mismatch")
+        return self
+
+
+class SourceManifestResult(_FrozenModel):
+    schema_version: str = QUALIFICATION_SCHEMA_VERSION
+    scope: Literal["full_source", "execution_source"]
+    authority: ArtifactDigest
+    source_tree_hash: str = Field(pattern=_HASH_PATTERN)
+    content_hash: str = Field(pattern=_HASH_PATTERN)
+
+    @classmethod
+    def build(cls, **values: Any) -> SourceManifestResult:
+        fields = {"schema_version": QUALIFICATION_SCHEMA_VERSION, **values}
+        return cls(**fields, content_hash=content_hash(fields))
+
+    @model_validator(mode="after")
+    def _validate_result(self) -> Self:
+        if self.content_hash != content_hash(self):
+            raise ValueError("source manifest result content_hash mismatch")
+        return self
+
+
+def compute_source_manifest_result(
+    authority_path: Path,
+    source_root: Path,
+    authority_record_path: str,
+) -> SourceManifestResult:
+    authority_digest = ArtifactDigest.from_json_file(
+        authority_path.name, authority_record_path, authority_path
+    )
+    authority = SourceManifestAuthority.model_validate_json(authority_path.read_bytes())
+    root = source_root.resolve(strict=True)
+    if not root.is_dir():
+        raise ValueError("source root must be a directory")
+    files: dict[str, str] = {}
+    for entry in authority.entries:
+        if any(
+            fnmatch.fnmatchcase(component, pattern)
+            for component in PurePosixPath(entry).parts
+            for pattern in authority.excludes
+        ):
+            continue
+        current = root
+        for part in PurePosixPath(entry).parts:
+            current = current / part
+            if current.is_symlink():
+                raise ValueError(f"source manifest entry contains a symlink: {entry}")
+        if not current.exists():
+            raise ValueError(f"source manifest entry not found: {entry}")
+        candidates = [current] if current.is_file() else current.rglob("*")
+        for candidate in candidates:
+            relative = candidate.relative_to(root)
+            if any(
+                fnmatch.fnmatchcase(component, pattern)
+                for component in relative.parts
+                for pattern in authority.excludes
+            ):
+                continue
+            if candidate.is_symlink():
+                raise ValueError(f"source manifest contains a symlink: {relative.as_posix()}")
+            if not candidate.is_file():
+                continue
+            files[relative.as_posix()] = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    digest = hashlib.sha256()
+    for path in sorted(files, key=lambda value: tuple(PurePosixPath(value).parts)):
+        digest.update(path.encode())
+        digest.update(b"\0")
+        digest.update(files[path].encode())
+        digest.update(b"\0")
+    return SourceManifestResult.build(
+        scope=authority.scope,
+        authority=authority_digest,
+        source_tree_hash=digest.hexdigest(),
+    )
+
+
 class ComponentImageIdentity(_FrozenModel):
     components: list[str] = Field(min_length=1)
     image_id: str = Field(pattern=_IMAGE_PATTERN)
@@ -120,6 +221,12 @@ class CandidateIdentityEvidence(_FrozenModel):
     def _validate_candidate(self) -> Self:
         components = [component for image in self.images for component in image.components]
         image_ids = [image.image_id for image in self.images]
+        if [image.components for image in self.images] != [
+            ["gateway", "operator"],
+            ["ensemble"],
+            ["dashboard"],
+        ]:
+            raise ValueError("candidate image components must match the canonical stack")
         if len(components) != len(set(components)):
             raise ValueError("candidate image components must be unique")
         if len(image_ids) != len(set(image_ids)):
@@ -127,6 +234,13 @@ class CandidateIdentityEvidence(_FrozenModel):
         if self.content_hash != content_hash(self):
             raise ValueError("candidate content_hash mismatch")
         return self
+
+
+class EvidencePath(_FrozenModel):
+    name: str = Field(min_length=1)
+    path: str = Field(min_length=1)
+
+    _validate_path = field_validator("path")(_safe_relative_path)
 
 
 class CertificateIdentityEvidence(_FrozenModel):
@@ -201,24 +315,135 @@ class RuntimeIdentityEvidence(_FrozenModel):
         return self
 
 
+class RuntimeCollectionRequest(_FrozenModel):
+    schema_version: str = QUALIFICATION_SCHEMA_VERSION
+    version: str = Field(pattern=r"^v[0-9]+\.[0-9]+\.[0-9]+$")
+    candidate_path: str
+    pki_root_path: str
+    certificate_paths: list[EvidencePath] = Field(min_length=4, max_length=4)
+    version_paths: list[EvidencePath] = Field(min_length=3, max_length=3)
+    owner_id: str = Field(min_length=1)
+    cli_session_id: str = Field(min_length=1)
+    embedded_operator_id: str = Field(min_length=1)
+    embedded_operator_session_id: str = Field(min_length=1)
+    remote_operator_id: str = Field(min_length=1)
+    remote_operator_session_id: str = Field(min_length=1)
+    healthy_components: list[str] = Field(min_length=4, max_length=4)
+    pending_enrollment_count: Literal[0]
+
+    _validate_paths = field_validator("candidate_path", "pki_root_path")(_safe_relative_path)
+
+    @model_validator(mode="after")
+    def _validate_collection_request(self) -> Self:
+        if [item.name for item in self.certificate_paths] != [
+            "cli",
+            "remote_operator",
+            "ensemble",
+            "dashboard",
+        ]:
+            raise ValueError("runtime certificate paths must use canonical component order")
+        if [item.name for item in self.version_paths] != ["host", "gateway", "operator"]:
+            raise ValueError("runtime version paths must use canonical component order")
+        if self.healthy_components != ["gateway", "operator", "ensemble", "dashboard"]:
+            raise ValueError("runtime health observations must use canonical component order")
+        return self
+
+
+def collect_runtime_identity(
+    request: RuntimeCollectionRequest,
+    base_dir: Path,
+) -> RuntimeIdentityEvidence:
+    _, candidate_bytes = _read_evidence_file(base_dir, request.candidate_path)
+    candidate = CandidateIdentityEvidence.model_validate_json(candidate_bytes)
+    root_path, root_bytes = _read_evidence_file(base_dir, request.pki_root_path)
+    root_certificates = x509.load_pem_x509_certificates(root_bytes)
+    if len(root_certificates) != 1:
+        raise ValueError(f"PKI root file must contain exactly one certificate: {root_path.name}")
+    certificates: list[CertificateIdentityEvidence] = []
+    for binding in request.certificate_paths:
+        _, certificate_bytes = _read_evidence_file(base_dir, binding.path)
+        if b"PRIVATE KEY" in certificate_bytes:
+            raise ValueError(f"certificate evidence contains private key material: {binding.path}")
+        parsed = x509.load_pem_x509_certificates(certificate_bytes)
+        if not parsed:
+            raise ValueError(f"certificate file contains no certificate: {binding.path}")
+        certificate = parsed[0]
+        try:
+            san = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+            spiffe_ids = san.value.get_values_for_type(x509.UniformResourceIdentifier)
+        except x509.ExtensionNotFound as error:
+            raise ValueError(f"certificate URI SAN missing: {binding.path}") from error
+        certificates.append(
+            CertificateIdentityEvidence(
+                component=cast(
+                    Literal["cli", "remote_operator", "ensemble", "dashboard"],
+                    binding.name,
+                ),
+                certificate_sha256=certificate.fingerprint(hashes.SHA256()).hex(),
+                spiffe_ids=spiffe_ids,
+            )
+        )
+    stamps: list[VersionStampEvidence] = []
+    host_version: dict[str, Any] | None = None
+    for binding in request.version_paths:
+        _, version_bytes = _read_evidence_file(base_dir, binding.path)
+        version_data = json.loads(version_bytes)
+        if not isinstance(version_data, dict):
+            raise ValueError(f"version evidence must be a JSON object: {binding.path}")
+        if version_data.get("version") != request.version:
+            raise ValueError(f"version evidence mismatch: {binding.path}")
+        source_hash = version_data.get("source_tree_state_hash")
+        if not isinstance(source_hash, str):
+            raise ValueError(f"version source hash missing: {binding.path}")
+        stamps.append(
+            VersionStampEvidence(
+                component=cast(Literal["host", "gateway", "operator"], binding.name),
+                version=request.version,
+                source_tree_state_hash=source_hash,
+            )
+        )
+        if binding.name == "host":
+            host_version = version_data
+    if host_version is None:
+        raise ValueError("host version evidence missing")
+    root_der = root_certificates[0].public_bytes(serialization.Encoding.DER)
+    return RuntimeIdentityEvidence.build(
+        candidate_content_hash=candidate.content_hash,
+        build_id=host_version.get("build_id") or "unavailable",
+        build_time=host_version.get("build_time"),
+        source_revision=host_version.get("source_revision") or "unavailable",
+        pki_root_sha256=hashlib.sha256(root_der).hexdigest(),
+        owner_id=request.owner_id,
+        cli_session_id=request.cli_session_id,
+        embedded_operator_id=request.embedded_operator_id,
+        embedded_operator_session_id=request.embedded_operator_session_id,
+        remote_operator_id=request.remote_operator_id,
+        remote_operator_session_id=request.remote_operator_session_id,
+        certificates=certificates,
+        version_stamps=stamps,
+        healthy_components=request.healthy_components,
+        pending_enrollment_count=request.pending_enrollment_count,
+    )
+
+
 class GateResultEvidence(_FrozenModel):
     gate_id: str = Field(min_length=1)
     candidate_content_hash: str = Field(pattern=_HASH_PATTERN)
     command: list[str] = Field(min_length=1)
     started_at: datetime
     completed_at: datetime
-    exit_code: Literal[0]
+    exit_code: int
     stdout_sha256: str = Field(pattern=_HASH_PATTERN)
     stderr_sha256: str = Field(pattern=_HASH_PATTERN)
     tool_versions: dict[str, str] = Field(min_length=1)
     skipped: list[str]
-    result: Literal["passed"] = "passed"
+    result: Literal["passed", "failed"]
     content_hash: str = Field(pattern=_HASH_PATTERN)
 
     @classmethod
     def build(cls, **values: Any) -> GateResultEvidence:
         fields = dict(values)
-        fields["result"] = "passed"
+        fields["result"] = "passed" if fields["exit_code"] == 0 else "failed"
         return cls(**fields, content_hash=content_hash(fields))
 
     @model_validator(mode="after")
@@ -250,6 +475,7 @@ class PublicLoopEvidence(_FrozenModel):
     replacement_key_accepted_after_restart: Literal[True]
     mirror_restart_recovered: Literal[True]
     inference_invocations: Literal[0]
+    generated_at: datetime
     content_hash: str = Field(pattern=_HASH_PATTERN)
 
     @classmethod
@@ -267,13 +493,6 @@ class PublicLoopEvidence(_FrozenModel):
 
 class QualificationStatus(StrEnum):
     OWNER_REVIEW_REQUIRED = "owner_review_required"
-
-
-class EvidencePath(_FrozenModel):
-    name: str = Field(min_length=1)
-    path: str = Field(min_length=1)
-
-    _validate_path = field_validator("path")(_safe_relative_path)
 
 
 class QualificationBuildRequest(_FrozenModel):
@@ -342,8 +561,15 @@ class QualificationInput(_FrozenModel):
             raise ValueError("runtime version mismatch")
         if any(gate.candidate_content_hash != self.candidate.content_hash for gate in self.gates):
             raise ValueError("gate candidate identity mismatch")
+        if any(
+            gate.started_at < self.runtime.build_time or gate.completed_at > self.generated_at
+            for gate in self.gates
+        ):
+            raise ValueError("gate evidence is stale or outside the qualification window")
         if self.public_loop.candidate_content_hash != self.candidate.content_hash:
             raise ValueError("public loop candidate identity mismatch")
+        if not self.runtime.build_time <= self.public_loop.generated_at <= self.generated_at:
+            raise ValueError("public loop evidence is stale or outside the qualification window")
         binding_names = [binding.name for binding in self.authority_bindings]
         if len(binding_names) != len(set(binding_names)):
             raise ValueError("authority binding names must be unique")
@@ -391,6 +617,10 @@ def _read_evidence_file(base_dir: Path, relative_path: str) -> tuple[Path, bytes
     if not resolved.is_relative_to(base) or not resolved.is_file():
         raise ValueError(f"evidence path is not a regular file under the input root: {relative_path}")
     return resolved, resolved.read_bytes()
+
+
+def verify_historical_qualification(path: Path) -> ArtifactDigest:
+    return ArtifactDigest.from_json_file(path.name, path.name, path)
 
 
 def resolve_qualification_input(
@@ -470,11 +700,17 @@ __all__ = [
     "PublicLoopEvidence",
     "QualificationBuildRequest",
     "QualificationInput",
-    "RuntimeIdentityEvidence",
-    "VersionStampEvidence",
     "QualificationStatus",
+    "RuntimeCollectionRequest",
+    "RuntimeIdentityEvidence",
+    "SourceManifestAuthority",
+    "SourceManifestResult",
+    "VersionStampEvidence",
     "build_collection_candidate_qualification",
+    "collect_runtime_identity",
+    "compute_source_manifest_result",
     "content_hash",
     "render_qualification_json",
     "resolve_qualification_input",
+    "verify_historical_qualification",
 ]

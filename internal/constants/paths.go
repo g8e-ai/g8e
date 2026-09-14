@@ -517,7 +517,7 @@ const (
 	TestInvalidJSONFilename                  = "invalid.json"
 	TestPublicFeedRecordsFilename            = "public-feed-records.jsonl"
 	TestQualificationCandidateFilename       = "qualification-candidate.json"
-	TestPublicLoopEvidenceFilename            = "public-loop-evidence.json"
+	TestPublicLoopEvidenceFilename           = "public-loop-evidence.json"
 	TestOverlaysDirname                      = "test-overlays"
 	TestPathRepoRootFromCompliancePackage    = "../../.."
 	TestDataDirname                          = "testdata"
@@ -870,7 +870,7 @@ const (
 // signed append-only batches, ordered outbox, and content-addressed proof
 // packages).
 const (
-	PublicLoopTempPrefix          = "g8e-public-loop-"
+	PublicLoopTempPrefix           = "g8e-public-loop-"
 	PublicFeedDirname              = "public-feed"
 	PublicFeedOutboxFilename       = "outbox.jsonl"
 	PublicFeedOutboxPath           = "public-feed/outbox.jsonl"

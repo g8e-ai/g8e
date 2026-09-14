@@ -42,23 +42,23 @@ type publicLoopCandidateImage struct {
 
 type publicLoopEvidence struct {
 	SchemaVersion                      string `json:"schema_version"`
-	CandidateContentHash                string `json:"candidate_content_hash"`
-	SourceID                            string `json:"source_id"`
-	FirstSequence                       int64  `json:"first_sequence"`
-	HighWaterSequence                   int64  `json:"high_water_sequence"`
-	BatchCount                          int    `json:"batch_count"`
-	FeedChainHash                       string `json:"feed_chain_hash"`
-	ProofArtifactSHA256                 string `json:"proof_artifact_sha256"`
-	ProofArtifactBytes                  int    `json:"proof_artifact_bytes"`
-	RetryCount                          int    `json:"retry_count"`
-	OldKeyID                            string `json:"old_key_id"`
-	ReplacementKeyID                    string `json:"replacement_key_id"`
-	OldKeyRevoked                       bool   `json:"old_key_revoked"`
+	CandidateContentHash               string `json:"candidate_content_hash"`
+	SourceID                           string `json:"source_id"`
+	FirstSequence                      int64  `json:"first_sequence"`
+	HighWaterSequence                  int64  `json:"high_water_sequence"`
+	BatchCount                         int    `json:"batch_count"`
+	FeedChainHash                      string `json:"feed_chain_hash"`
+	ProofArtifactSHA256                string `json:"proof_artifact_sha256"`
+	ProofArtifactBytes                 int    `json:"proof_artifact_bytes"`
+	RetryCount                         int    `json:"retry_count"`
+	OldKeyID                           string `json:"old_key_id"`
+	ReplacementKeyID                   string `json:"replacement_key_id"`
+	OldKeyRevoked                      bool   `json:"old_key_revoked"`
 	ReplacementKeyAcceptedAfterRestart bool   `json:"replacement_key_accepted_after_restart"`
-	MirrorRestartRecovered              bool   `json:"mirror_restart_recovered"`
-	InferenceInvocations                int    `json:"inference_invocations"`
-	GeneratedAt                         string `json:"generated_at"`
-	ContentHash                         string `json:"content_hash"`
+	MirrorRestartRecovered             bool   `json:"mirror_restart_recovered"`
+	InferenceInvocations               int    `json:"inference_invocations"`
+	GeneratedAt                        string `json:"generated_at"`
+	ContentHash                        string `json:"content_hash"`
 }
 
 func publicLoopCmd() *cobra.Command {
@@ -168,7 +168,6 @@ func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error 
 	}
 	restartedMirror.SetIngestAuthToken(ingestToken)
 	restartedServer := httptest.NewServer(restartedMirror.Handler())
-	defer restartedServer.Close()
 	publisher.SetMirrorOrigin(restartedServer.URL)
 	if err := publisher.RetransmitOutbox(ctx); err != nil {
 		return err
@@ -208,22 +207,22 @@ func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error 
 	_, newRegistered := state.KeyRegistry[sourceID+":"+newKeyID]
 	evidence := publicLoopEvidence{
 		SchemaVersion:                      "1.0.0",
-		CandidateContentHash:                candidate.ContentHash,
-		SourceID:                            sourceID,
-		FirstSequence:                       1,
-		HighWaterSequence:                   source.HighWaterSequence,
-		BatchCount:                          source.BatchCount,
-		FeedChainHash:                       source.FeedChainHash,
-		ProofArtifactSHA256:                 hashBytes(proofContent),
-		ProofArtifactBytes:                  len(proofContent),
-		RetryCount:                          1,
-		OldKeyID:                            oldKeyID,
-		ReplacementKeyID:                    newKeyID,
-		OldKeyRevoked:                       oldRevoked,
+		CandidateContentHash:               candidate.ContentHash,
+		SourceID:                           sourceID,
+		FirstSequence:                      1,
+		HighWaterSequence:                  source.HighWaterSequence,
+		BatchCount:                         source.BatchCount,
+		FeedChainHash:                      source.FeedChainHash,
+		ProofArtifactSHA256:                hashBytes(proofContent),
+		ProofArtifactBytes:                 len(proofContent),
+		RetryCount:                         1,
+		OldKeyID:                           oldKeyID,
+		ReplacementKeyID:                   newKeyID,
+		OldKeyRevoked:                      oldRevoked,
 		ReplacementKeyAcceptedAfterRestart: newRegistered,
-		MirrorRestartRecovered:              source.HighWaterSequence == 4,
-		InferenceInvocations:                0,
-		GeneratedAt:                         time.Now().UTC().Format(time.RFC3339),
+		MirrorRestartRecovered:             source.HighWaterSequence == 4,
+		InferenceInvocations:               0,
+		GeneratedAt:                        time.Now().UTC().Format(time.RFC3339),
 	}
 	if !evidence.OldKeyRevoked || !evidence.ReplacementKeyAcceptedAfterRestart || !evidence.MirrorRestartRecovered {
 		return fmt.Errorf("public loop recovery or key transition incomplete")
@@ -262,6 +261,14 @@ func readPublicLoopCandidate(path string) (publicLoopCandidate, error) {
 	}
 	if candidate.ContentHash != computed || !isHex64(candidate.SourceTreeHash) || !isHex64(candidate.ExecutionSourceManifestHash) || !isHex64(candidate.BinarySHA256) {
 		return publicLoopCandidate{}, fmt.Errorf("candidate identity hash validation failed")
+	}
+	if len(candidate.Images) != 3 || len(candidate.Images[0].Components) != 2 || candidate.Images[0].Components[0] != "gateway" || candidate.Images[0].Components[1] != "operator" || len(candidate.Images[1].Components) != 1 || candidate.Images[1].Components[0] != "ensemble" || len(candidate.Images[2].Components) != 1 || candidate.Images[2].Components[0] != "dashboard" {
+		return publicLoopCandidate{}, fmt.Errorf("candidate image component mapping is invalid")
+	}
+	for _, image := range candidate.Images {
+		if len(image.ImageID) != len("sha256:")+64 || image.ImageID[:len("sha256:")] != "sha256:" || !isHex64(image.ImageID[len("sha256:"):]) {
+			return publicLoopCandidate{}, fmt.Errorf("candidate image identity is invalid")
+		}
 	}
 	return candidate, nil
 }

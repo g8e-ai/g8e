@@ -153,3 +153,10 @@ GOVERNED_INFERENCE_SMOKE_AUTHORITY_JSON = "governed-inference-smoke-authority.js
 LIVE_OPERATION_BUDGET_AUTHORITIES_JSON = "live-operation-budget-authorities.json"
 LIVE_OPERATION_LEASE_TEMPLATES_JSON = "live-operation-lease-templates.json"
 LIVE_PACKET_RELATIVE_DIR = ".local.dev/campaign/live-packet"
+HISTORICAL_QUALIFICATION_FILENAMES = (
+    "collection-candidate-qualification.json",
+    "collection-candidate-qualification-r2.json",
+    "collection-candidate-qualification-r3.json",
+    "collection-candidate-qualification-r4.json",
+    "collection-candidate-qualification-r5.json",
+)

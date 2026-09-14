@@ -37,7 +37,7 @@ def _candidate() -> CandidateIdentityEvidence:
 
 
 def _gate(candidate: CandidateIdentityEvidence, gate_id: str = "go_platform") -> GateResultEvidence:
-    started_at = datetime(2026, 9, 14, 10, 0, tzinfo=UTC)
+    started_at = datetime(2026, 9, 14, 11, 10, tzinfo=UTC)
     return GateResultEvidence.build(
         gate_id=gate_id,
         candidate_content_hash=candidate.content_hash,
@@ -69,6 +69,7 @@ def _public_loop(candidate: CandidateIdentityEvidence) -> PublicLoopEvidence:
         replacement_key_accepted_after_restart=True,
         mirror_restart_recovered=True,
         inference_invocations=0,
+        generated_at=datetime(2026, 9, 14, 11, 30, tzinfo=UTC),
     )
 
 
@@ -184,9 +185,11 @@ def test_qualification_builder_is_byte_deterministic_and_draft_only() -> None:
 def test_qualification_rejects_failed_or_missing_required_gate() -> None:
     candidate = _candidate()
     valid = _input(candidate)
-    failed = _gate(candidate).model_copy(update={"exit_code": 1})
+    failed_fields = _gate(candidate).model_dump(exclude={"content_hash", "result"})
+    failed_fields["exit_code"] = 1
+    failed = GateResultEvidence.build(**failed_fields)
 
-    with pytest.raises(ValidationError, match="exit_code"):
+    with pytest.raises(ValidationError, match="passed"):
         QualificationInput.model_validate(valid.model_dump() | {"gates": [failed]})
     with pytest.raises(ValidationError, match="gates"):
         QualificationInput.model_validate(valid.model_dump() | {"gates": []})
@@ -209,6 +212,26 @@ def test_qualification_rejects_gate_or_public_loop_from_other_candidate() -> Non
     with pytest.raises(ValidationError, match="public loop candidate"):
         QualificationInput.model_validate(
             valid.model_dump() | {"public_loop": PublicLoopEvidence.build(**mismatched_loop)}
+        )
+
+
+def test_qualification_contract_rejects_secret_bearing_fields() -> None:
+    candidate = _candidate()
+
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        QualificationInput.model_validate(_input(candidate).model_dump() | {"ingest_token": "secret"})
+
+
+def test_qualification_rejects_stale_gate_evidence() -> None:
+    candidate = _candidate()
+    valid = _input(candidate)
+    stale_fields = _gate(candidate).model_dump(exclude={"content_hash", "result"})
+    stale_fields["started_at"] = datetime(2026, 9, 14, 10, 0, tzinfo=UTC)
+    stale_fields["completed_at"] = datetime(2026, 9, 14, 10, 1, tzinfo=UTC)
+
+    with pytest.raises(ValidationError, match="stale"):
+        QualificationInput.model_validate(
+            valid.model_dump() | {"gates": [GateResultEvidence.build(**stale_fields)]}
         )
 
 
