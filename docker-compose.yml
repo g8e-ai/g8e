@@ -87,6 +87,32 @@ services:
           cpus: '0.5'
           memory: 256M
 
+  g8e-eval-observer:
+    profiles: [evaluation]
+    image: g8e-gateway
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        target="/observe/$${G8E_EVAL_TARGET}"
+        if [ -L "$$target" ]; then
+          exit 4
+        fi
+        if [ -f "$$target" ]; then
+          cat "$$target"
+          exit 0
+        fi
+        exit 3
+    network_mode: none
+    volumes:
+      - g8e-shared-tmp:/observe:ro
+    read_only: true
+    user: "65534:65534"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
   g8e-operator:
     # Policy Execution Point: outbound-only mTLS to the gateway. Same image as the gateway.
     # Requires owner enrollment before starting — use `docker compose --profile bootstrapped up -d`.

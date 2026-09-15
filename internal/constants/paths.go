@@ -235,14 +235,20 @@ const (
 
 // Docker constants for the root unified-stack compose deployment.
 const (
-	DockerComposeFile         = "docker-compose.yml"
-	DockerBootstrappedProfile = "bootstrapped"
-	DockerCrossEnrollProfile  = "cross-enrollment"
-	DockerGatewayContainer    = "g8e-gateway"
-	DockerOperatorContainer   = "g8e-operator"
-	DockerEnsembleContainer   = "ensemble"
-	DockerDashboardContainer  = "dashboard"
-	DockerProjectPrefix       = "g8e"
+	DockerExecutable                 = "docker"
+	DockerComposeFile                = "docker-compose.yml"
+	DockerBootstrappedProfile        = "bootstrapped"
+	DockerCrossEnrollProfile         = "cross-enrollment"
+	DockerEvaluationProfile          = "evaluation"
+	DockerGatewayContainer           = "g8e-gateway"
+	DockerOperatorContainer          = "g8e-operator"
+	DockerEnsembleContainer          = "ensemble"
+	DockerDashboardContainer         = "dashboard"
+	DockerEvaluationObserverService  = "g8e-eval-observer"
+	DockerProjectPrefix              = "g8e"
+	EvaluationTargetContainerDir     = "/tmp"
+	EvaluationObserverTargetEnv      = "G8E_EVAL_TARGET"
+	EvaluationObserverAbsentExitCode = 3
 )
 
 // Demos constants for organization names, doctrine files, and compose config.
@@ -611,6 +617,7 @@ const (
 	TestPathRepoRootFromCompliancePackage    = "../../.."
 	TestDataDirname                          = "testdata"
 	TestEvalSyntheticGovernanceBundleDirname = "governance_adversarial-synthetic-20260906-000000"
+	TestEvaluationTargetFilename             = "evaluation-target.txt"
 
 	// Source-tree protocol path constants for contract tests in
 	// internal/constants and internal/models. These resolve canonical
@@ -806,6 +813,11 @@ const (
 	DemoRunMaxArtifactBytes                       = 16 << 20
 	DemoRunMaxResults                             = 1024
 	DemoRunMaxArtifactsPerDirectory               = 4096
+	EvaluationDirname                             = "eval"
+	EvaluationRunsDirname                         = "runs"
+	EvaluationReportFilename                      = "report.json"
+	EvaluationVerificationFilename                = "verification.json"
+	EvaluationEvidenceDirname                     = "evidence"
 	EvalRunsDirname                               = "eval-runs"
 	EvalRunManifestFilename                       = "manifest.json"
 	EvalRunTasksFilename                          = "tasks.jsonl"

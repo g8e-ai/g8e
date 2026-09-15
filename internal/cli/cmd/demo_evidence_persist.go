@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/scenarios"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
@@ -84,12 +85,6 @@ func persistReceiptEvidenceBodies(ctx context.Context, fileSvc fs.RuntimeFileSer
 	runDir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, runID)
 	receiptsDir := filepath.Join(runDir, constants.DemoRunReceiptsDirname)
 	persistenceDir := filepath.Join(runDir, constants.DemoRunPersistenceDirname)
-	if err := fileSvc.MkdirAll(ctx, receiptsDir, constants.PermDirStandard); err != nil {
-		return fmt.Errorf("%w: create demo evidence receipts dir: %w", constants.ErrDemoEvidencePersistFailed, err)
-	}
-	if err := fileSvc.MkdirAll(ctx, persistenceDir, constants.PermDirStandard); err != nil {
-		return fmt.Errorf("%w: create demo evidence persistence dir: %w", constants.ErrDemoEvidencePersistFailed, err)
-	}
 
 	for _, ev := range evidence {
 		if ev.Receipt == nil {
@@ -100,28 +95,19 @@ func persistReceiptEvidenceBodies(ctx context.Context, fileSvc fs.RuntimeFileSer
 			return fmt.Errorf("%w: receipt evidence for transaction %s has nil persistence attestation", constants.ErrDemoEvidencePersistFailed, ev.TransactionID)
 		}
 
-		receiptHex := contentAddressDigestHex(ev.ReceiptRef)
-		persistenceHex := contentAddressDigestHex(ev.PersistenceRef)
-		if receiptHex == "" || persistenceHex == "" {
-			return fmt.Errorf("%w: receipt evidence for transaction %s has malformed content address", constants.ErrDemoEvidencePersistFailed, ev.TransactionID)
-		}
-
-		receiptBytes, err := compliancev1.MarshalCanonical(ev.Receipt)
+		receiptArtifact, err := complianceevidence.PersistCanonicalProtoArtifact(ctx, fileSvc, receiptsDir, complianceevidence.ArtifactTypeActionReceipt, ev.Receipt)
 		if err != nil {
-			return fmt.Errorf("%w: marshal receipt body for transaction %s: %w", constants.ErrDemoEvidencePersistFailed, ev.TransactionID, err)
+			return fmt.Errorf("%w: persist receipt body for transaction %s: %w", constants.ErrDemoEvidencePersistFailed, ev.TransactionID, err)
 		}
-		persistenceBytes, err := compliancev1.MarshalCanonical(attestation)
+		if receiptArtifact.Reference.GetArtifactId() != ev.ReceiptRef {
+			return fmt.Errorf("%w: receipt evidence for transaction %s does not match its content address", constants.ErrDemoEvidencePersistFailed, ev.TransactionID)
+		}
+		persistenceArtifact, err := complianceevidence.PersistCanonicalProtoArtifact(ctx, fileSvc, persistenceDir, complianceevidence.ArtifactTypeReceiptPersistence, attestation)
 		if err != nil {
-			return fmt.Errorf("%w: marshal persistence attestation for transaction %s: %w", constants.ErrDemoEvidencePersistFailed, ev.TransactionID, err)
+			return fmt.Errorf("%w: persist receipt attestation for transaction %s: %w", constants.ErrDemoEvidencePersistFailed, ev.TransactionID, err)
 		}
-
-		receiptPath := filepath.Join(receiptsDir, receiptHex+".json")
-		if err := fileSvc.WriteFile(ctx, receiptPath, receiptBytes, constants.PermFileReadOnly); err != nil {
-			return fmt.Errorf("%w: write receipt body for transaction %s: %w", constants.ErrDemoEvidencePersistFailed, ev.TransactionID, err)
-		}
-		persistencePath := filepath.Join(persistenceDir, persistenceHex+".json")
-		if err := fileSvc.WriteFile(ctx, persistencePath, persistenceBytes, constants.PermFileReadOnly); err != nil {
-			return fmt.Errorf("%w: write persistence attestation for transaction %s: %w", constants.ErrDemoEvidencePersistFailed, ev.TransactionID, err)
+		if persistenceArtifact.Reference.GetArtifactId() != ev.PersistenceRef {
+			return fmt.Errorf("%w: receipt persistence evidence for transaction %s does not match its content address", constants.ErrDemoEvidencePersistFailed, ev.TransactionID)
 		}
 	}
 

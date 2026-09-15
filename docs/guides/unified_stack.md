@@ -27,7 +27,7 @@ You can also use `docker compose up -d --build` in the manual workflow.
 
 ## Stack Services
 
-The root `docker-compose.yml` defines four services on the `g8e-net` bridge network:
+The root `docker-compose.yml` defines the four long-running platform services on the `g8e-net` bridge network and one profile-gated evaluation observer with no network attachment:
 
 | Service | Build | Published ports | Role |
 | --- | --- | --- | --- |
@@ -35,14 +35,15 @@ The root `docker-compose.yml` defines four services on the `g8e-net` bridge netw
 | `g8e-operator` | Root `Dockerfile` | None | Policy Execution Point. It connects outbound to the gateway over mTLS, receives work, re-verifies proofs, and performs L4 and L5 execution. |
 | `ensemble` | `ensemble/Dockerfile` with the repository root as its build context | 8000 | First-party agentic ensemble. It runs the AI reasoning flow, submits governed transactions, and publishes events. See the [g8ee documentation](../ensemble/index.md). |
 | `dashboard` | `dashboard/Dockerfile` with the repository root as its build context | 3000 | First-party browser interface for chat, operator management, audit, and settings. See the [g8ed documentation](../dashboard/index.md). |
+| `g8e-eval-observer` | Existing `g8e-gateway` image | None | Short-lived independent target-state reader for native evaluation. It mounts only `g8e-shared-tmp` read-only at `/observe`, has no network or workload identity, and returns raw controlled-fixture bytes to the host-side evaluator. |
 
 The gateway and operator use the same Go image and binary. The Linux AMD64 binary includes the Go FIPS 140-3 cryptographic module. Strict runtime enforcement is off by default because the platform uses cryptographic primitives that strict mode rejects. See the [Docker Gateway Guide](./docker_gateway.md) for the supported operating environment and verification details.
 
 ## Startup Model
 
-Only `g8e-gateway` belongs to the default Compose profile. The operator, ensemble, and dashboard belong to the `bootstrapped` profile. A fresh gateway initializes its PKI immediately, but it starts with no users and does not issue workload credentials until the first owner enrolls and approves each platform enrollment request.
+Only `g8e-gateway` belongs to the default Compose profile. The operator, ensemble, and dashboard belong to the `bootstrapped` profile. The `g8e-eval-observer` service belongs to the `evaluation` profile and runs only as a short-lived `docker compose run --rm` process when the host-side native evaluator requests an independent fixture observation. A fresh gateway initializes its PKI immediately, but it starts with no users and does not issue workload credentials until the first owner enrolls and approves each platform enrollment request.
 
-The profile controls which containers Compose starts; it does not bypass enrollment. The three workload containers remain not ready while they wait for owner approval.
+The profile controls which containers Compose starts; it does not bypass enrollment. The three workload containers remain not ready while they wait for owner approval. The evaluation observer does not enroll: it has no `.g8e` runtime mount, certificate, session, or network path, and it does not participate in governance or execution.
 
 ## Automated Workflow
 

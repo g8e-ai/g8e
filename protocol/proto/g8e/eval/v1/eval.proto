@@ -1,0 +1,223 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
+syntax = "proto3";
+
+package g8e.eval.v1;
+
+option go_package = "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1;evalv1";
+
+import "g8e/compliance/v1/compliance.proto";
+import "google/protobuf/timestamp.proto";
+
+enum EvaluationLane {
+  EVALUATION_LANE_UNSPECIFIED = 0;
+  EVALUATION_LANE_PLATFORM = 1;
+}
+
+enum EvaluationGovernancePosture {
+  EVALUATION_GOVERNANCE_POSTURE_UNSPECIFIED = 0;
+  EVALUATION_GOVERNANCE_POSTURE_DOCTRINE = 1;
+  EVALUATION_GOVERNANCE_POSTURE_CONSENSUS = 2;
+  EVALUATION_GOVERNANCE_POSTURE_RATIFY = 3;
+  EVALUATION_GOVERNANCE_POSTURE_NOTARY = 4;
+}
+
+enum EvaluationRuntimeComponent {
+  EVALUATION_RUNTIME_COMPONENT_UNSPECIFIED = 0;
+  EVALUATION_RUNTIME_COMPONENT_EVALUATOR = 1;
+  EVALUATION_RUNTIME_COMPONENT_GATEWAY = 2;
+  EVALUATION_RUNTIME_COMPONENT_OPERATOR = 3;
+  EVALUATION_RUNTIME_COMPONENT_CONTROLLED_TARGET = 4;
+}
+
+enum EvaluationAttemptStatus {
+  EVALUATION_ATTEMPT_STATUS_UNSPECIFIED = 0;
+  EVALUATION_ATTEMPT_STATUS_COMPLETED = 1;
+  EVALUATION_ATTEMPT_STATUS_REJECTED = 2;
+  EVALUATION_ATTEMPT_STATUS_FAILED = 3;
+  EVALUATION_ATTEMPT_STATUS_UNAVAILABLE = 4;
+  EVALUATION_ATTEMPT_STATUS_UNSUPPORTED = 5;
+  EVALUATION_ATTEMPT_STATUS_INVALID_EVIDENCE = 6;
+}
+
+enum EvaluationObservationSource {
+  EVALUATION_OBSERVATION_SOURCE_UNSPECIFIED = 0;
+  EVALUATION_OBSERVATION_SOURCE_TARGET_OBSERVER = 1;
+  EVALUATION_OBSERVATION_SOURCE_OPERATOR_RECEIPT = 2;
+  EVALUATION_OBSERVATION_SOURCE_GATEWAY_ADMISSION = 3;
+  EVALUATION_OBSERVATION_SOURCE_HARNESS_EXCHANGE = 4;
+}
+
+enum EvaluationEvidenceAuthority {
+  EVALUATION_EVIDENCE_AUTHORITY_UNSPECIFIED = 0;
+  EVALUATION_EVIDENCE_AUTHORITY_INDEPENDENT_TARGET_STATE = 1;
+  EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE = 2;
+  EVALUATION_EVIDENCE_AUTHORITY_GATEWAY_COORDINATION = 3;
+  EVALUATION_EVIDENCE_AUTHORITY_HARNESS_EXCHANGE = 4;
+}
+
+enum EvaluationComparator {
+  EVALUATION_COMPARATOR_UNSPECIFIED = 0;
+  EVALUATION_COMPARATOR_EQUAL = 1;
+  EVALUATION_COMPARATOR_NOT_EQUAL = 2;
+  EVALUATION_COMPARATOR_GREATER_THAN = 3;
+  EVALUATION_COMPARATOR_GREATER_THAN_OR_EQUAL = 4;
+  EVALUATION_COMPARATOR_LESS_THAN = 5;
+  EVALUATION_COMPARATOR_LESS_THAN_OR_EQUAL = 6;
+}
+
+enum EvaluationVerdictStatus {
+  EVALUATION_VERDICT_STATUS_UNSPECIFIED = 0;
+  EVALUATION_VERDICT_STATUS_PASS = 1;
+  EVALUATION_VERDICT_STATUS_FAIL = 2;
+  EVALUATION_VERDICT_STATUS_UNAVAILABLE = 3;
+  EVALUATION_VERDICT_STATUS_UNSUPPORTED = 4;
+  EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE = 5;
+}
+
+enum EvaluationMetricDirection {
+  EVALUATION_METRIC_DIRECTION_UNSPECIFIED = 0;
+  EVALUATION_METRIC_DIRECTION_HIGHER_IS_BETTER = 1;
+  EVALUATION_METRIC_DIRECTION_LOWER_IS_BETTER = 2;
+  EVALUATION_METRIC_DIRECTION_TARGET_IS_BETTER = 3;
+}
+
+enum EvaluationMissingDataPolicy {
+  EVALUATION_MISSING_DATA_POLICY_UNSPECIFIED = 0;
+  EVALUATION_MISSING_DATA_POLICY_FAIL = 1;
+  EVALUATION_MISSING_DATA_POLICY_EXCLUDE = 2;
+  EVALUATION_MISSING_DATA_POLICY_UNAVAILABLE = 3;
+}
+
+enum EvaluationMetricUnit {
+  EVALUATION_METRIC_UNIT_UNSPECIFIED = 0;
+  EVALUATION_METRIC_UNIT_COUNT = 1;
+  EVALUATION_METRIC_UNIT_RATIO = 2;
+}
+
+message EvaluationRuntimeBoundary {
+  EvaluationRuntimeComponent component = 1;
+  string process_identity = 2;
+  string runtime_namespace = 3;
+  repeated string mounted_filesystems = 4;
+  string persistent_store = 5;
+  string endpoint = 6;
+  string authenticated_identity = 7;
+  string execution_owner_operator_id = 8;
+}
+
+message EvaluationDeploymentIdentity {
+  string deployment_id = 1;
+  g8e.compliance.v1.VersionedReference topology_ref = 2;
+  repeated EvaluationRuntimeBoundary runtime_boundaries = 3;
+  string controlled_target = 4;
+  string independent_observer = 5;
+}
+
+message EvaluationValue {
+  oneof value {
+    bool boolean_value = 1;
+    int64 integer_value = 2;
+    string string_value = 3;
+    g8e.compliance.v1.ComplianceEvidenceReference artifact_reference = 4;
+  }
+}
+
+message EvaluationRun {
+  string schema_version = 1;
+  string run_id = 2;
+  g8e.compliance.v1.VersionedReference suite_ref = 3;
+  EvaluationDeploymentIdentity deployment = 4;
+  EvaluationGovernancePosture active_posture = 5;
+  EvaluationLane lane = 6;
+  string target_operator_id = 7;
+  string target_operator_session_id = 8;
+  google.protobuf.Timestamp started_at = 9;
+  google.protobuf.Timestamp completed_at = 10;
+  repeated string attempt_refs = 11;
+  g8e.compliance.v1.ComplianceEvidenceReference final_verification_report_ref = 12;
+}
+
+message EvaluationAttempt {
+  string attempt_id = 1;
+  string run_id = 2;
+  g8e.compliance.v1.VersionedReference scenario_ref = 3;
+  EvaluationAttemptStatus status = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp completed_at = 6;
+  string transaction_id = 7;
+  string execution_id = 8;
+  repeated string observation_refs = 9;
+  repeated string assertion_refs = 10;
+  repeated string verdict_refs = 11;
+  string failure_detail = 12;
+}
+
+message EvaluationObservation {
+  string observation_id = 1;
+  g8e.compliance.v1.VersionedReference observation_type = 2;
+  EvaluationObservationSource source = 3;
+  google.protobuf.Timestamp observed_at = 4;
+  string run_id = 5;
+  string scenario_id = 6;
+  string attempt_id = 7;
+  EvaluationEvidenceAuthority authority = 8;
+  EvaluationValue value = 9;
+  repeated g8e.compliance.v1.ComplianceEvidenceReference evidence_refs = 10;
+}
+
+message EvaluationAssertion {
+  string assertion_id = 1;
+  string assertion_version = 2;
+  EvaluationComparator comparator = 3;
+  EvaluationValue expected = 4;
+  repeated g8e.compliance.v1.VersionedReference required_observation_types = 5;
+  repeated EvaluationEvidenceAuthority required_authorities = 6;
+}
+
+message EvaluationVerdict {
+  string verdict_id = 1;
+  g8e.compliance.v1.VersionedReference assertion_ref = 2;
+  EvaluationVerdictStatus status = 3;
+  repeated string observed_refs = 4;
+  repeated g8e.compliance.v1.ComplianceEvidenceReference evidence_refs = 5;
+  g8e.compliance.v1.VersionedReference grader_ref = 6;
+  google.protobuf.Timestamp evaluated_at = 7;
+  string failure_reason = 8;
+}
+
+message EvaluationMetric {
+  string metric_id = 1;
+  string metric_version = 2;
+  int64 numerator = 3;
+  int64 denominator = 4;
+  double value = 5;
+  EvaluationMetricUnit unit = 6;
+  EvaluationMetricDirection direction = 7;
+  g8e.compliance.v1.VersionedReference eligible_population_ref = 8;
+  EvaluationMissingDataPolicy missing_data_policy = 9;
+  repeated string source_verdict_refs = 10;
+  repeated g8e.compliance.v1.ComplianceEvidenceReference evidence_refs = 11;
+}
+
+message EvaluationReport {
+  string schema_version = 1;
+  EvaluationRun run = 2;
+  repeated EvaluationAttempt attempts = 3;
+  repeated EvaluationObservation observations = 4;
+  repeated EvaluationAssertion assertions = 5;
+  repeated EvaluationVerdict verdicts = 6;
+  repeated EvaluationMetric metrics = 7;
+  repeated g8e.compliance.v1.ComplianceEvidenceReference evidence_refs = 8;
+  reserved 9;
+  reserved "verification_report";
+  EvaluationVerdictStatus summary_status = 10;
+  uint32 required_verdict_count = 11;
+  uint32 passed_verdict_count = 12;
+  string summary = 13;
+}

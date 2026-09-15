@@ -25,6 +25,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -39,11 +42,13 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/execution"
 	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	inferdispatch "github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/g8e-ai/g8e/v2/protocol"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -405,6 +410,61 @@ func startInferenceOperatorWithResultTampering(t *testing.T, infra *TestInfrastr
 	return backend, keyID
 }
 
+func startFileEditOperator(t *testing.T, infra *TestInfrastructure, operatorID, sessionID, workDir string) (ed25519.PublicKey, string) {
+	t.Helper()
+	remoteCfg := *infra.Cfg
+	remoteCfg.OperatorID = operatorID
+	remoteCfg.OperatorSessionId = sessionID
+	remoteCfg.WorkDir = workDir
+	remoteCfg.HeartbeatInterval = 0
+
+	pubKey, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	keyID := hex.EncodeToString(pubKey)
+	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{
+		ID:        keyID,
+		PublicKey: keyID,
+		AddedAt:   time.Now().UTC(),
+		Enabled:   true,
+	}))
+
+	client := pubsub.NewInProcessPubSubClient(infra.Pubsub)
+	resultsSvc, err := pubsub.NewPubSubResultsService(&remoteCfg, infra.Logger, client)
+	require.NoError(t, err)
+	scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), infra.Logger, nil)
+	require.NoError(t, err)
+	operatorSvc, err := pubsub.NewOperatorPubSubService(pubsub.CommandServiceConfig{
+		Config:             &remoteCfg,
+		Logger:             infra.Logger,
+		FileEdit:           execution.NewFileEditService(&remoteCfg, infra.Logger),
+		PubSubClient:       client,
+		ResultsService:     resultsSvc,
+		ActuatorSigningKey: privKey,
+		ActuatorKeyID:      keyID,
+		AuditorSigningKey:  privKey,
+		AuditorKeyID:       keyID,
+		Scrubbing:          scrubbingSvc,
+		AuditStore:         infra.AuditStore,
+	}, pubsub.OutboundModeDeps{GovernanceCoreDeps: pubsub.GovernanceCoreDeps{
+		ReplayStore:       infra.ReplayStore,
+		StateRootProvider: infra.StateRootSvc,
+		TransactionAudit:  infra.AuditStore,
+		SignerStore:       infra.SignerStore,
+		Doctrine:          govsvc.NewL1Doctrine(),
+	}})
+	require.NoError(t, err)
+	require.NoError(t, operatorSvc.Start(context.Background()))
+	t.Cleanup(func() { require.NoError(t, operatorSvc.Stop()) })
+
+	cmdChannel := pubsub.CmdChannel(operatorID, sessionID)
+	require.Eventually(t, func() bool {
+		infra.Pubsub.handlersMu.RLock()
+		defer infra.Pubsub.handlersMu.RUnlock()
+		return len(infra.Pubsub.handlers[cmdChannel]) == 1
+	}, time.Second, 10*time.Millisecond)
+	return pubKey, keyID
+}
+
 func newInferenceBoundaryDispatchService(infra *TestInfrastructure, posture config.GatewayPosture) *inferdispatch.DispatchService {
 	commandSvc := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(posture), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
 	return inferdispatch.NewDispatchService(
@@ -412,6 +472,211 @@ func newInferenceBoundaryDispatchService(infra *TestInfrastructure, posture conf
 		&gatewayOperatorListerAdapter{svc: infra.Reg},
 		infra.Logger,
 	)
+}
+
+func TestDispatch_FileMutationExecutesOnceAndReplayProducesSignedRejection(t *testing.T) {
+	const (
+		userID      = "user-evaluation-boundary"
+		operatorID  = "operator-evaluation-boundary"
+		sessionID   = "session-evaluation-boundary"
+		runID       = "run-evaluation-boundary"
+		scenarioID  = "scenario-allowed-execution"
+		attemptID   = "attempt-allowed-execution"
+		executionID = "execution-allowed-execution"
+		seed        = "seed"
+		marker      = "evaluation-run-marker"
+	)
+
+	infra := setupTestInfrastructure(t, false)
+	seedActiveUser(t, infra, userID)
+	seedInferenceOperator(t, infra, userID, operatorID, sessionID, false)
+	targetDir := testutil.TempDir(t)
+	targetPath := filepath.Join(targetDir, constants.TestEvaluationTargetFilename)
+	require.NoError(t, os.WriteFile(targetPath, []byte(seed), constants.PermFilePrivate))
+	pubKey, _ := startFileEditOperator(t, infra, operatorID, sessionID, targetDir)
+
+	commandWire := make(chan []byte, 1)
+	unregisterCommandCapture := infra.Pubsub.RegisterHandler(pubsub.CmdChannel(operatorID, sessionID), func(_ string, data []byte) {
+		envelope := &commonv1.GovernanceEnvelope{}
+		if err := protojson.Unmarshal(data, envelope); err == nil && envelope.ActionType == string(constants.ActionTypeFileEdit) {
+			select {
+			case commandWire <- append([]byte(nil), data...):
+			default:
+			}
+		}
+	})
+	t.Cleanup(unregisterCommandCapture)
+
+	receipts := make(chan *operatorv1.ActionReceipt, 8)
+	unregisterReceiptCapture := infra.Pubsub.RegisterHandler(pubsub.ReceiptsChannel(operatorID, sessionID), func(_ string, data []byte) {
+		envelope := &commonv1.GovernanceEnvelope{}
+		if err := protojson.Unmarshal(data, envelope); err != nil {
+			return
+		}
+		receipt := &operatorv1.ActionReceipt{}
+		if err := proto.Unmarshal(envelope.Payload, receipt); err == nil {
+			receipts <- receipt
+		}
+	})
+	t.Cleanup(unregisterReceiptCapture)
+
+	payload, err := proto.Marshal(&operatorv1.FileEditRequested{
+		FilePath:    targetPath,
+		Operation:   string(constants.FileOperationReplace),
+		ExecutionId: executionID,
+		OldContent:  seed,
+		NewContent:  seed + "\n" + marker,
+	})
+	require.NoError(t, err)
+	dispatchSvc := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
+	result, err := dispatchSvc.Dispatch(context.Background(), DispatchRequest{
+		TargetOperatorSessionID: sessionID,
+		ActionType:              string(constants.ActionTypeFileEdit),
+		Payload:                 payload,
+		TargetResource:          targetPath,
+		RequestorUserID:         userID,
+		CaseID:                  runID,
+		InvestigationID:         scenarioID,
+		TaskID:                  attemptID,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	fileResult := &operatorv1.FileEditResult{}
+	require.NoError(t, proto.Unmarshal(result.ResultEnvelope.Payload, fileResult))
+	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, fileResult.Status)
+	assert.Equal(t, executionID, fileResult.ExecutionId)
+
+	body, err := os.ReadFile(targetPath)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(body), marker))
+
+	var wire []byte
+	select {
+	case wire = <-commandWire:
+	case <-time.After(time.Second):
+		t.Fatal("governed file mutation was not captured")
+	}
+
+	waitForReceipt := func(transactionID string) *operatorv1.ActionReceipt {
+		t.Helper()
+		timer := time.NewTimer(time.Second)
+		defer timer.Stop()
+		for {
+			select {
+			case receipt := <-receipts:
+				if receipt.TransactionId == transactionID {
+					return receipt
+				}
+			case <-timer.C:
+				t.Fatalf("receipt for transaction %s was not captured", transactionID)
+				return nil
+			}
+		}
+	}
+
+	completedReceipt := waitForReceipt(result.TransactionID)
+	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, completedReceipt.Status)
+	require.NoError(t, govsvc.VerifyActionReceiptSignature(completedReceipt, pubKey))
+	require.NoError(t, govsvc.VerifyReceiptPersistenceAttestation(completedReceipt, pubKey))
+	_, err = govsvc.ValidateDeterministicProtocolChain(completedReceipt)
+	require.NoError(t, err)
+	for _, stage := range completedReceipt.DeterministicStageEvidence {
+		assert.Equal(t, operatorID, stage.OperatorId)
+		assert.Equal(t, sessionID, stage.OperatorSessionId)
+		assert.Equal(t, runID, stage.CaseId)
+		assert.Equal(t, scenarioID, stage.InvestigationId)
+		assert.Equal(t, attemptID, stage.TaskId)
+		assert.Equal(t, string(constants.ActionTypeFileEdit), stage.ActionType)
+	}
+
+	persisted, err := infra.AuditStore.GetActionReceipt(result.TransactionID)
+	require.NoError(t, err)
+	require.NotNil(t, persisted)
+	require.NotNil(t, persisted.ActionReceipt)
+	assert.Equal(t, operatorID, persisted.OperatorID)
+	assert.Equal(t, sessionID, persisted.OperatorSessionID)
+	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, persisted.ActionReceipt.Status)
+	commitments, err := infra.AuditStore.CommitmentLedger().ListCommitments()
+	require.NoError(t, err)
+	matchingCommitments := 0
+	for _, commitment := range commitments {
+		if commitment.TransactionID == result.TransactionID {
+			matchingCommitments++
+			assert.Equal(t, string(constants.ActionTypeFileEdit), commitment.ActionType)
+		}
+	}
+	assert.Equal(t, 1, matchingCommitments)
+
+	deliveries := infra.Pubsub.Publish(pubsub.CmdChannel(operatorID, sessionID), wire)
+	require.Positive(t, deliveries)
+	rejectedReceipt := waitForReceipt(result.TransactionID)
+	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, rejectedReceipt.Status)
+	assert.Equal(t, operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED, rejectedReceipt.FailureCode)
+	require.NoError(t, govsvc.VerifyActionReceiptSignature(rejectedReceipt, pubKey))
+	require.NoError(t, govsvc.VerifyReceiptPersistenceAttestation(rejectedReceipt, pubKey))
+
+	body, err = os.ReadFile(targetPath)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(body), marker))
+}
+
+func TestDispatchController_HandleDispatch_DoctrineProhibitedRequestRejectedBeforeRemoteExecution(t *testing.T) {
+	const (
+		runID      = "run-prohibited-boundary"
+		scenarioID = "scenario-prohibited-boundary"
+		attemptID  = "attempt-prohibited-boundary"
+	)
+
+	h, _, infra := setupTestHTTPHandler(t)
+	h.dispatchController = newDispatchController(DispatchControllerDeps{
+		DispatchSvc: NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore),
+		Responder:   infra.Responder,
+		Logger:      infra.Logger,
+	})
+	h.router = h.buildPublicRouter()
+	operatorID, operatorSessionID, requestorUserID := seedOperatorForDispatch(t, infra)
+	cliSessionID, cliCert := seedCLISessionForDispatch(t, infra, requestorUserID)
+	published := make(chan struct{}, 1)
+	unregister := infra.Pubsub.RegisterHandler(pubsub.CmdChannel(operatorID, operatorSessionID), func(_ string, _ []byte) {
+		published <- struct{}{}
+	})
+	t.Cleanup(unregister)
+
+	targetPath := filepath.Join(testutil.TempDir(t), constants.TestEvaluationTargetFilename)
+	payload, err := proto.Marshal(&operatorv1.FileEditRequested{
+		FilePath:    targetPath,
+		Operation:   string(constants.FileOperationWrite),
+		ExecutionId: attemptID,
+		Content:     "rm -rf /",
+	})
+	require.NoError(t, err)
+	body, err := json.Marshal(OperatorCommandRequest{
+		TargetOperatorSessionID: operatorSessionID,
+		ActionType:              string(constants.ActionTypeFileEdit),
+		Payload:                 payload,
+		TargetResource:          targetPath,
+		CaseID:                  runID,
+		InvestigationID:         scenarioID,
+		TaskID:                  attemptID,
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.OperatorsCommands, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
+	req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cliCert}}
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	assert.Contains(t, rr.Body.String(), constants.ErrTxL1ValidationFailed.Error())
+	select {
+	case <-published:
+		t.Fatal("doctrine-prohibited request reached the remote execution channel")
+	default:
+	}
+	_, err = os.Stat(targetPath)
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestInferenceDispatch_RealBrokerAndOutboundOperator_VerifiesReceiptAuditAndCommitment(t *testing.T) {
