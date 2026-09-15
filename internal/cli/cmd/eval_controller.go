@@ -30,12 +30,91 @@ func evalControllerCmdWithDeps(deps evalLeaseDeps) *cobra.Command {
 		Short: "Controller lifecycle (run, status, stop, recover)",
 		Long: `controller owns the multi-operation controller lifecycle. A
 controller run executes a manifest of operations against a work
-directory and produces a coordinated run.
-
-U6 implements the run subcommand with lease verification. Later phases
-add status, stop, and recover.`,
+directory and produces a coordinated run. Status reconciles durable state,
+stop writes an identity-bound request, and recover seals interrupted execution
+or retries publication without rerunning inference.`,
 	}
-	cmd.AddCommand(evalControllerRunCmdWithDeps(deps))
+	cmd.AddCommand(
+		evalControllerRunCmdWithDeps(deps),
+		evalControllerStatusCmdWithDeps(deps),
+		evalControllerStopCmdWithDeps(deps),
+		evalControllerRecoverCmdWithDeps(deps),
+	)
+	return cmd
+}
+
+func evalControllerStatusCmdWithDeps(deps evalLeaseDeps) *cobra.Command {
+	var workDir string
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use: "status", Short: "Read durable controller state (read-only)", Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			absWorkDir, err := resolveAbsPath(workDir)
+			if err != nil {
+				return err
+			}
+			return runEvalUtilityOperation(cmd, deps, "", "", models.EvalOperationControllerStatus, map[string]string{"work_dir": absWorkDir}, jsonOutput)
+		},
+	}
+	cmd.Flags().StringVar(&workDir, "work-dir", "", "Controller work directory")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit a single canonical JSON object on stdout")
+	_ = cmd.MarkFlagRequired("work-dir")
+	return cmd
+}
+
+func evalControllerStopCmdWithDeps(deps evalLeaseDeps) *cobra.Command {
+	var workDir string
+	var immediate, yes, jsonOutput bool
+	cmd := &cobra.Command{
+		Use: "stop", Short: "Request a durable controller stop (local mutation)", Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if immediate && !yes {
+				return fmt.Errorf("%w: --immediate requires --yes", constants.ErrEvalConfigInvalid)
+			}
+			absWorkDir, err := resolveAbsPath(workDir)
+			if err != nil {
+				return err
+			}
+			result, err := runEvalEngineOperation(commandContext(cmd), deps, "", "", models.EvalOperationControllerStop, models.EvalEngineFlags{JSONOutput: true, ImmediateStop: immediate}, map[string]string{"work_dir": absWorkDir}, cmd.OutOrStderr())
+			if len(result.Payload) > 0 {
+				if jsonOutput {
+					fmt.Fprintln(cmd.OutOrStdout(), string(result.Payload))
+				} else {
+					fmt.Fprintf(cmd.OutOrStdout(), "controller stop: %s\n", result.Status)
+				}
+			}
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&workDir, "work-dir", "", "Controller work directory")
+	cmd.Flags().BoolVar(&immediate, "immediate", false, "Terminate the active child and retain dead evidence")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Confirm forced termination")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit a single canonical JSON object on stdout")
+	_ = cmd.MarkFlagRequired("work-dir")
+	return cmd
+}
+
+func evalControllerRecoverCmdWithDeps(deps evalLeaseDeps) *cobra.Command {
+	var workDir string
+	var publication, jsonOutput bool
+	cmd := &cobra.Command{
+		Use: "recover", Short: "Seal interrupted execution or retry durable publication", Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			absWorkDir, err := resolveAbsPath(workDir)
+			if err != nil {
+				return err
+			}
+			parameters := map[string]string{"work_dir": absWorkDir}
+			if publication {
+				parameters["publication"] = "true"
+			}
+			return runEvalUtilityOperation(cmd, deps, "", "", models.EvalOperationControllerRecover, parameters, jsonOutput)
+		},
+	}
+	cmd.Flags().StringVar(&workDir, "work-dir", "", "Controller work directory")
+	cmd.Flags().BoolVar(&publication, "publication", false, "Retry durable publication only")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit a single canonical JSON object on stdout")
+	_ = cmd.MarkFlagRequired("work-dir")
 	return cmd
 }
 

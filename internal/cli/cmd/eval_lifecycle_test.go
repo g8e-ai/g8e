@@ -137,6 +137,18 @@ func TestEvalLifecycleCommands_AreRegistered(t *testing.T) {
 	}
 }
 
+func TestEvalU8Commands_AreRegistered(t *testing.T) {
+	deps := newStartDepsForTest(t, &stubStartRunner{})
+	campaignSet := newCobraCommandView(evalCampaignSetCmdWithDeps(deps))
+	assert.ElementsMatch(t, []string{"plan", "validate", "verify"}, campaignSet.names)
+	qualification := newCobraCommandView(evalQualificationCmd())
+	assert.ElementsMatch(t, []string{"build", "candidate", "collect-runtime", "hash-source", "run-gate"}, qualification.names)
+	root := newCobraCommandView(evalCmd())
+	for _, name := range []string{"campaign-set", "bundle", "verify", "qualification", "bench-synthetic"} {
+		assert.Contains(t, root.names, name)
+	}
+}
+
 type cobraCommandView struct {
 	names []string
 }

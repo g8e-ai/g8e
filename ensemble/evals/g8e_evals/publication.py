@@ -151,6 +151,7 @@ class CampaignProjectionRow(BaseModel):
     verification_status: str = Field(min_length=1, description="Verification status.")
     evidence_link: str = Field(min_length=1, description="Relative path to the public proof artifact.")
     repetition: int = Field(ge=1, description="Repetition index for this measurement.")
+    role: str = Field(default="", description="Model role (primary, assistant, lite). Empty when unspecified.")
 
     @model_validator(mode="after")
     def _validate_row(self) -> Self:
@@ -626,9 +627,19 @@ def _extract_variant_id(model_cohort_id: str) -> str:
     by ``derive_cohorts_from_registry`` in the campaign runner.
     """
     prefix = "cohort-"
-    if model_cohort_id.startswith(prefix):
-        return model_cohort_id[len(prefix):]
-    return model_cohort_id
+    variant_id = model_cohort_id[len(prefix):] if model_cohort_id.startswith(prefix) else model_cohort_id
+    if "-role-" in variant_id:
+        candidate, role = variant_id.rsplit("-role-", 1)
+        if role in {"primary", "assistant", "lite"}:
+            return candidate
+    return variant_id
+
+
+def _extract_role(model_cohort_id: str) -> str:
+    if "-role-" not in model_cohort_id:
+        return ""
+    _, role = model_cohort_id.rsplit("-role-", 1)
+    return role if role in {"primary", "assistant", "lite"} else ""
 
 
 def _extract_repetition(replicate_id: str) -> int:
@@ -674,7 +685,9 @@ def _generate_projections(
         attempt = attempts_by_id.get(attempt_id)
         if attempt is None:
             continue
-        variant_id = _extract_variant_id(attempt.get("model_cohort_id", ""))
+        model_cohort_id = attempt.get("model_cohort_id", "")
+        variant_id = _extract_variant_id(model_cohort_id)
+        role = _extract_role(model_cohort_id)
         task_id = raw_metric.get("task_id", "")
         metric_id = raw_metric.get("metric_id", "")
         value = raw_metric.get("value", 0.0)
@@ -684,7 +697,8 @@ def _generate_projections(
         numerator = round(value)
         denominator = int(raw_metric.get("denominator_contribution", 1))
         rate = numerator / denominator if denominator > 0 else 0.0
-        evidence_link = f"proofs/{variant_id}/{task_id}/rep-{repetition}.json"
+        role_path = role or "unspecified"
+        evidence_link = f"proofs/{variant_id}/{role_path}/{task_id}/rep-{repetition}.json"
         rows.append(CampaignProjectionRow(
             campaign_id=campaign_id,
             campaign_revision=campaign_revision,
@@ -698,6 +712,7 @@ def _generate_projections(
             verification_status=verification_status,
             evidence_link=evidence_link,
             repetition=repetition,
+            role=role,
         ))
     return rows
 
@@ -766,13 +781,13 @@ def _generate_variant_summaries(
     if not projections:
         return []
 
-    grouped: dict[tuple[str, str], list[CampaignProjectionRow]] = {}
+    grouped: dict[tuple[str, str, str], list[CampaignProjectionRow]] = {}
     for row in projections:
-        key = (row.variant_id, row.metric_id)
+        key = (row.variant_id, row.metric_id, row.role)
         grouped.setdefault(key, []).append(row)
 
     summaries: list[CampaignVariantSummaryRow] = []
-    for (variant_id, metric_id), rows in sorted(grouped.items()):
+    for (variant_id, metric_id, role), rows in sorted(grouped.items()):
         numerator = sum(r.numerator for r in rows)
         denominator = sum(r.denominator for r in rows)
         rate = numerator / denominator if denominator > 0 else 0.0
@@ -796,7 +811,7 @@ def _generate_variant_summaries(
             superseded_count=0,
             invalid_count=0,
             missing_count=0,
-            role="",
+            role=role,
             per_task_denominators=dict(sorted(per_task_denominators.items())),
         ))
     return summaries

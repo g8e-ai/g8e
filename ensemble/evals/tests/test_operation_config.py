@@ -375,6 +375,19 @@ class TestPresets:
         assert preset.suite == "ifeval_subset"
         assert preset.repetitions == 3
 
+    def test_all_roles_governed_preset_uses_full_stack_doctrine_arm(self):
+        preset = get_campaign_preset("all-roles-governed")
+        assert preset.arms == ["doctrine"]
+        assert preset.task_limit == 5
+        assert preset.repetitions == 3
+        assert preset.budget.concurrency == 1
+
+    def test_all_roles_governed_smoke_preset_is_minimal(self):
+        preset = get_campaign_preset("all-roles-governed-smoke")
+        assert preset.arms == ["doctrine"]
+        assert preset.task_limit == 1
+        assert preset.repetitions == 1
+
     def test_get_diagnostic_preset_unknown_raises(self):
         with pytest.raises(KeyError, match="unknown diagnostic preset"):
             get_diagnostic_preset("nonexistent")

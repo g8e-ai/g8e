@@ -95,10 +95,10 @@ def _make_variant(
     )
 
 
-def _make_cohort(variant_id: str, model_tag: str) -> ModelCohort:
-    cohort_id = f"cohort-{variant_id}"
+def _make_cohort(variant_id: str, model_tag: str, role: str | None = None) -> ModelCohort:
+    cohort_id = f"cohort-{variant_id}" if role is None else f"cohort-{variant_id}-role-{role}"
     bindings = [RoleModelBinding(
-        role="primary",
+        role=role or "primary",
         model_id=model_tag,
         provider="ollama",
         endpoint=_OLLAMA_ENDPOINT,
@@ -236,6 +236,40 @@ class TestBuildTierFitnessSutConfig:
         assert config.lite.provider == "ollama"
         assert config.candidate_model == "qwen3:8b"
 
+    def test_cohort_role_selects_assignment_when_model_runs_in_every_tier(self):
+        from g8e_evals.runner import build_tier_fitness_sut_config
+
+        v = _make_variant("qwen3-4b", "qwen3:4b")
+        registry = _make_registry([v])
+        profile = _make_tier_fitness_profile(
+            variant_ids=["qwen3-4b"],
+            tier_assignments=[
+                ModelTierAssignment(variant_id="qwen3-4b", target_tier="primary"),
+                ModelTierAssignment(variant_id="qwen3-4b", target_tier="assistant"),
+                ModelTierAssignment(variant_id="qwen3-4b", target_tier="lite"),
+            ],
+            baseline_mappings={
+                "primary": "granite3.3:8b",
+                "assistant": "phi4-mini:3.8b",
+                "lite": "smollm2:360m",
+            },
+            registry_hash=registry.content_hash,
+        )
+        cohort = _make_cohort("qwen3-4b", "qwen3:4b", "assistant")
+        cohort_variant_map = {cohort.cohort_id: "qwen3-4b"}
+
+        config = build_tier_fitness_sut_config(
+            cohort=cohort,
+            arm=Arm.DOCTRINE,
+            campaign_profile=profile,
+            cohort_variant_map=cohort_variant_map,
+            g8ee_url="https://localhost:8443",
+        )
+
+        assert config.primary.model == "granite3.3:8b"
+        assert config.assistant.model == "qwen3:4b"
+        assert config.lite.model == "smollm2:360m"
+
     def test_candidate_model_replaces_assistant_tier(self):
         from g8e_evals.runner import build_tier_fitness_sut_config
 
@@ -247,8 +281,8 @@ class TestBuildTierFitnessSutConfig:
             baseline_mappings={"primary": "qwen3:8b", "lite": "qwen3:0.6b"},
             registry_hash=registry.content_hash,
         )
-        cohort = _make_cohort("qwen3-4b", "qwen3:4b")
-        cohort_variant_map = {"cohort-qwen3-4b": "qwen3-4b"}
+        cohort = _make_cohort("qwen3-4b", "qwen3:4b", "assistant")
+        cohort_variant_map = {cohort.cohort_id: "qwen3-4b"}
 
         config = build_tier_fitness_sut_config(
             cohort=cohort,
@@ -274,8 +308,8 @@ class TestBuildTierFitnessSutConfig:
             baseline_mappings={"primary": "qwen3:8b", "assistant": "qwen3:4b"},
             registry_hash=registry.content_hash,
         )
-        cohort = _make_cohort("qwen3-06b", "qwen3:0.6b")
-        cohort_variant_map = {"cohort-qwen3-06b": "qwen3-06b"}
+        cohort = _make_cohort("qwen3-06b", "qwen3:0.6b", "lite")
+        cohort_variant_map = {cohort.cohort_id: "qwen3-06b"}
 
         config = build_tier_fitness_sut_config(
             cohort=cohort,

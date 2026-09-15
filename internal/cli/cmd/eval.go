@@ -126,6 +126,11 @@ Run 'g8e eval doctor' for read-only environment diagnostics.`,
 		evalCampaignCmd(),
 		evalControllerCmd(),
 		evalLeaseCmd(),
+		evalCampaignSetCmd(),
+		evalBundleCmd(),
+		evalVerifyCmd(),
+		evalQualificationCmd(),
+		evalBenchSyntheticCmd(),
 	)
 	return cmd
 }

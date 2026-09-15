@@ -4296,7 +4296,7 @@ async def _run_synthetic_suite(
     output_dir: Path,
     limit: int | None,
     preregistration: PreregistrationConfig | None = None,
-) -> None:
+) -> Path:
     spec = assert_simulation_eligible(suite)
     if gold_set is None:
         gold_set = spec.default_gold_set
@@ -6193,6 +6193,7 @@ async def _run_synthetic_suite(
     _scan_report_for_canary_leaks(report_dir, canary_values, per_run_key)
 
     console.print(f"\n[bold green]Synthetic report saved to {report_dir}[/bold green]")
+    return report_dir
 
 
 @main.command(name="bundle")

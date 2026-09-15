@@ -169,6 +169,7 @@ def test_check_diagnostic_validates_authorities_key_disk_and_fresh_root(tmp_path
         "authorities",
         "authority_identity",
         "authority_binding",
+        "task_parity",
         "evidence_key",
         "endpoint_identity",
         "report_root",
@@ -227,15 +228,38 @@ def test_check_fails_on_insufficient_disk(tmp_path: Path) -> None:
 
 
 def test_status_distinguishes_live_and_stale_producer_metadata(tmp_path: Path) -> None:
+    from datetime import datetime, timezone
+
+    from g8e_evals.operation_lifecycle import LaunchState
+
     config_path = _write_diagnostic_config(tmp_path, report_exists=True)
     report_root = tmp_path / "reports" / "diagnostic"
     launch_path = report_root / EVAL_LAUNCH_STATE_JSON
-    launch_path.write_text(json.dumps({"operation_id": "diagnostic-1", "revision": "rev-1", "pid": os.getpid(), "status": "running"}))
+    # Live case: this process is running, so started_at must be close to
+    # now for the PID-reuse check to classify it as live rather than reused.
+    now_iso = datetime.now(timezone.utc).isoformat()
+    live_launch = LaunchState(
+        operation_id="diagnostic-1",
+        revision="rev-1",
+        pid=os.getpid(),
+        status="running",
+        started_at=now_iso,
+        updated_at=now_iso,
+    )
+    launch_path.write_text(live_launch.model_dump_json(indent=2))
 
     live = operation_status(config_path, tmp_path)
     assert live.process_state == "running"
 
-    launch_path.write_text(json.dumps({"operation_id": "diagnostic-1", "revision": "rev-1", "pid": 99999999, "status": "running"}))
+    stale_launch = LaunchState(
+        operation_id="diagnostic-1",
+        revision="rev-1",
+        pid=99999999,
+        status="running",
+        started_at="2026-01-01T00:00:00+00:00",
+        updated_at="2026-01-01T00:00:00+00:00",
+    )
+    launch_path.write_text(stale_launch.model_dump_json(indent=2))
     stale = operation_status(config_path, tmp_path)
     assert stale.process_state == "stale"
     assert stale.safe_detail == "producer metadata is stale"
@@ -247,13 +271,17 @@ def test_graceful_stop_writes_identity_bound_durable_request(tmp_path: Path) -> 
     from g8e_evals.operation_config import load_operation_config
     config = load_operation_config(config_path)
     launch_content_hash = hashlib.sha256(b"launch-identity").hexdigest()
-    (report_root / EVAL_LAUNCH_STATE_JSON).write_text(json.dumps({
-        "operation_id": "diagnostic-1",
-        "revision": "rev-1",
-        "pid": os.getpid(),
-        "status": "running",
-        "content_hash": launch_content_hash,
-    }))
+    from g8e_evals.operation_lifecycle import LaunchState
+    launch = LaunchState(
+        operation_id="diagnostic-1",
+        revision="rev-1",
+        pid=os.getpid(),
+        status="running",
+        started_at="2026-01-01T00:00:00+00:00",
+        updated_at="2026-01-01T00:00:00+00:00",
+        content_hash=launch_content_hash,
+    )
+    (report_root / EVAL_LAUNCH_STATE_JSON).write_text(launch.model_dump_json(indent=2))
 
     result = stop_operation(config_path, tmp_path, immediate=False)
 
@@ -268,19 +296,21 @@ def test_graceful_stop_writes_identity_bound_durable_request(tmp_path: Path) -> 
 
 def _write_launch_with_hash(report_root: Path, *, status: str = "running", pid: int = 99999999, operation_id: str = "diagnostic-1", revision: str = "rev-1") -> str:
     """Write a launch record with a valid content hash and return the hash."""
-    record = {
-        "operation_id": operation_id,
-        "revision": revision,
-        "pid": pid,
-        "status": status,
-        "started_at": "2026-01-01T00:00:00+00:00",
-        "updated_at": "2026-01-01T00:00:00+00:00",
-    }
+    from g8e_evals.operation_lifecycle import LaunchState
+    launch = LaunchState(
+        operation_id=operation_id,
+        revision=revision,
+        pid=pid,
+        status=status,
+        started_at="2026-01-01T00:00:00+00:00",
+        updated_at="2026-01-01T00:00:00+00:00",
+    )
+    payload = launch.model_dump(exclude={"content_hash"}, exclude_none=True)
     content_hash = hashlib.sha256(
-        json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
-    record["content_hash"] = content_hash
-    (report_root / EVAL_LAUNCH_STATE_JSON).write_text(json.dumps(record))
+    launch = launch.model_copy(update={"content_hash": content_hash})
+    (report_root / EVAL_LAUNCH_STATE_JSON).write_text(launch.model_dump_json(indent=2))
     return content_hash
 
 
@@ -300,32 +330,57 @@ def test_status_reports_inconsistent_when_launch_content_hash_tampered(tmp_path:
 
 
 def test_status_derives_budget_from_stages_and_metrics_not_progress_fields(tmp_path: Path) -> None:
+    from g8e_evals.constants import STAGES_JSONL, METRICS_JSONL, TASKS_JSONL, ATTEMPTS_JSONL
+    from g8e_evals.arms import Arm
+    from g8e_evals.schema import (
+        AttemptRecord,
+        MetricObservation,
+        StageKind,
+        StageObservation,
+        TaskDefinition,
+        TerminalStatus,
+    )
+
     config_path = _write_diagnostic_config(tmp_path, report_exists=True)
     report_root = tmp_path / "reports" / "diagnostic"
     _write_launch_with_hash(report_root, status="completed", pid=99999999)
-    # Write stage records: 2 model_inference stages with token usage
-    from g8e_evals.constants import STAGES_JSONL, METRICS_JSONL, TASKS_JSONL, ATTEMPTS_JSONL
+    # Write typed stage records: 2 model_inference stages with token usage
+    # plus a grading stage that must not count toward provider requests.
     stages = [
-        {"kind": "model_inference", "input_tokens": 100, "output_tokens": 50, "thinking_tokens": 0},
-        {"kind": "model_inference", "input_tokens": 200, "output_tokens": 100, "thinking_tokens": 10},
-        {"kind": "grading", "input_tokens": 5, "output_tokens": 0, "thinking_tokens": 0},
+        StageObservation(
+            stage_id="s1", attempt_id="a1", run_id="r1", kind=StageKind.MODEL_INFERENCE,
+            input_tokens=100, output_tokens=50, thinking_tokens=0,
+        ),
+        StageObservation(
+            stage_id="s2", attempt_id="a2", run_id="r1", kind=StageKind.MODEL_INFERENCE,
+            input_tokens=200, output_tokens=100, thinking_tokens=10,
+        ),
+        StageObservation(
+            stage_id="s3", attempt_id="a3", run_id="r1", kind=StageKind.GRADING,
+            input_tokens=5, output_tokens=0, thinking_tokens=0,
+        ),
     ]
     with open(report_root / STAGES_JSONL, "w") as f:
         for s in stages:
-            f.write(json.dumps(s) + "\n")
+            f.write(s.model_dump_json() + "\n")
     metrics = [
-        {"metric_id": "provider_cost_usd", "value": 0.15},
-        {"metric_id": "provider_cost_usd", "value": 0.25},
-        {"metric_id": "accuracy", "value": 0.9},
+        MetricObservation(metric_id="provider_cost_usd", attempt_id="a1", run_id="r1", arm_id=Arm.DIRECT, task_id="0", value=0.15),
+        MetricObservation(metric_id="provider_cost_usd", attempt_id="a2", run_id="r1", arm_id=Arm.DIRECT, task_id="0", value=0.25),
+        MetricObservation(metric_id="accuracy", attempt_id="a1", run_id="r1", arm_id=Arm.DIRECT, task_id="0", value=0.9),
     ]
     with open(report_root / METRICS_JSONL, "w") as f:
         for m in metrics:
-            f.write(json.dumps(m) + "\n")
-    # Write tasks and a completed attempt
+            f.write(m.model_dump_json() + "\n")
+    # Write a typed task definition and a completed attempt
+    task_def = TaskDefinition(task_id="0", suite_id="tool_selection", suite_version="1.0.0", prompt_hash=hashlib.sha256(b"prompt").hexdigest())
     with open(report_root / TASKS_JSONL, "w") as f:
-        f.write(json.dumps({"task_id": "0"}) + "\n")
+        f.write(task_def.model_dump_json() + "\n")
+    attempt = AttemptRecord(
+        attempt_id="a1", run_id="r1", task_id="0", arm_id=Arm.DIRECT,
+        terminal_status=TerminalStatus.COMPLETED,
+    )
     with open(report_root / ATTEMPTS_JSONL, "w") as f:
-        f.write(json.dumps({"terminal_status": "completed"}) + "\n")
+        f.write(attempt.model_dump_json() + "\n")
 
     result = operation_status(config_path, tmp_path)
     assert result.provider_requests == 2  # only model_inference stages
@@ -337,6 +392,7 @@ def test_status_derives_budget_from_stages_and_metrics_not_progress_fields(tmp_p
 
 def test_status_reports_verification_state_for_campaign(tmp_path: Path) -> None:
     from g8e_evals.constants import CAMPAIGN_VERIFICATION_REPORT_JSON
+    from g8e_evals.index import INDEX_GENERATION_SCHEMA_VERSION, CampaignVerificationReport
     from g8e_evals.operation_config import (
         AuthorityRef,
         BudgetCeilings,
@@ -388,13 +444,21 @@ def test_status_reports_verification_state_for_campaign(tmp_path: Path) -> None:
     # No verification report -> not_verified
     result = operation_status(config_path, tmp_path)
     assert result.verification_state == "not_verified"
-    # Write a passing verification report -> verified, status becomes "verified"
-    (report_root / CAMPAIGN_VERIFICATION_REPORT_JSON).write_text(json.dumps({"ok": True}))
+    # Write a passing typed verification report -> verified, status becomes "verified"
+    passing_report = CampaignVerificationReport(
+        verification_schema_version=INDEX_GENERATION_SCHEMA_VERSION,
+        campaign_id="campaign-1",
+        campaign_revision="rev-1",
+        ok=True,
+        verified_index_generation_hash="0" * 64,
+    )
+    (report_root / CAMPAIGN_VERIFICATION_REPORT_JSON).write_text(passing_report.model_dump_json(indent=2))
     result = operation_status(config_path, tmp_path)
     assert result.verification_state == "verified"
     assert result.status == "verified"
-    # Write a failing verification report -> failed
-    (report_root / CAMPAIGN_VERIFICATION_REPORT_JSON).write_text(json.dumps({"ok": False}))
+    # Write a failing typed verification report -> failed
+    failing_report = passing_report.model_copy(update={"ok": False})
+    (report_root / CAMPAIGN_VERIFICATION_REPORT_JSON).write_text(failing_report.model_dump_json(indent=2))
     result = operation_status(config_path, tmp_path)
     assert result.verification_state == "failed"
 
@@ -434,7 +498,7 @@ def test_stop_rejects_force_stop_on_reused_pid(tmp_path: Path) -> None:
 
 _VALID_HASH = "a" * 64
 _VARIANT_ID = "qwen3-8b-q4_0"
-_COHORT_ID = "cohort-qwen3-8b"
+_COHORT_ID = "cohort-qwen3-8b-q4_0-role-primary"
 
 
 def _make_registry() -> ModelRegistry:
@@ -498,6 +562,7 @@ def _make_profile(
     registry_hash: str,
     *,
     arm_ids: list[str] | None = None,
+    task_ids: list[str] | None = None,
 ) -> CampaignProfile:
     from g8e_evals.profile import (
         CAMPAIGN_PROFILE_VERSION,
@@ -511,6 +576,8 @@ def _make_profile(
 
     if arm_ids is None:
         arm_ids = ["direct"]
+    if task_ids is None:
+        task_ids = ["0"]
     track_by_arm = {
         "direct": CampaignTrack.DIRECT,
         "ensemble_ungoverned": CampaignTrack.TIER_FITNESS,
@@ -530,7 +597,7 @@ def _make_profile(
         "dataset_hashes": [_VALID_HASH],
         "grader_hashes": ["g" * 64],
         "prompt_serialization_hash": _VALID_HASH,
-        "task_ids": ["task-1"],
+        "task_ids": task_ids,
         "repetitions": 1,
         "track_arm_assignments": track_arm_assignments,
         "model_tier_assignments": [],
@@ -702,3 +769,96 @@ def test_check_campaign_rejects_replacement_rule_plan_binding_mismatch(tmp_path:
 
     with pytest.raises(ValueError, match="set_plan_hash"):
         check_operation(config_path, tmp_path)
+
+
+def test_plan_campaign_reports_gold_set_task_identities(tmp_path: Path) -> None:
+    """Campaign plan must load task identities from the gold set (the
+    same source execution uses), not from the profile's declared
+    task_ids alone. The profile's task_ids are verified against the
+    gold set, not trusted blindly."""
+    registry = _make_registry()
+    profile = _make_profile(registry.content_hash)
+    preregistration = _make_preregistration(baseline="direct")
+    config_path = _write_campaign_config(tmp_path, registry=registry, profile=profile, preregistration=preregistration)
+
+    plan = plan_operation(config_path, tmp_path)
+
+    assert plan.operation_kind == "campaign"
+    assert plan.task_identities == ["0"]
+    assert plan.task_count == 1
+    assert len(plan.task_manifest_digest) == 64
+    assert plan.assignment_count == 1
+
+
+def test_plan_campaign_rejects_profile_task_ids_mismatch(tmp_path: Path) -> None:
+    """When the profile's declared task_ids do not match the gold-set
+    task identities, planning fails closed. This prevents the
+    plan/execution task-identity divergence that caused the overnight
+    campaign to plan one task set and execute another."""
+    registry = _make_registry()
+    profile = _make_profile(registry.content_hash, task_ids=["task-1"])
+    preregistration = _make_preregistration(baseline="direct")
+    config_path = _write_campaign_config(
+        tmp_path, registry=registry, profile=profile, preregistration=preregistration
+    )
+
+    with pytest.raises(ValueError, match="do not match the campaign profile"):
+        plan_operation(config_path, tmp_path)
+
+
+def test_check_campaign_rejects_task_ids_mismatch(tmp_path: Path) -> None:
+    """Preflight must reject a campaign whose profile task_ids do not
+    match the gold-set task identities before report-root creation."""
+    registry = _make_registry()
+    profile = _make_profile(registry.content_hash, task_ids=["task-1"])
+    preregistration = _make_preregistration(baseline="direct")
+    config_path = _write_campaign_config(
+        tmp_path, registry=registry, profile=profile, preregistration=preregistration
+    )
+
+    with pytest.raises(ValueError, match="do not match the campaign profile"):
+        check_operation(config_path, tmp_path)
+
+
+def test_plan_campaign_task_manifest_digest_is_stable(tmp_path: Path) -> None:
+    """The task manifest digest is deterministic for the same gold set
+    and config. Two plans over the same inputs produce the same digest."""
+    registry = _make_registry()
+    profile = _make_profile(registry.content_hash)
+    preregistration = _make_preregistration(baseline="direct")
+    config_path = _write_campaign_config(tmp_path, registry=registry, profile=profile, preregistration=preregistration)
+
+    plan1 = plan_operation(config_path, tmp_path)
+    plan2 = plan_operation(config_path, tmp_path)
+
+    assert plan1.task_manifest_digest == plan2.task_manifest_digest
+    assert len(plan1.task_manifest_digest) == 64
+
+
+def test_check_campaign_includes_task_parity_check(tmp_path: Path) -> None:
+    """The preflight check set includes a task_parity check that
+    verifies gold-set task identities match the profile's declared
+    task_ids and reports the manifest digest."""
+    registry = _make_registry()
+    profile = _make_profile(registry.content_hash)
+    preregistration = _make_preregistration(baseline="direct")
+    config_path = _write_campaign_config(tmp_path, registry=registry, profile=profile, preregistration=preregistration)
+
+    result = check_operation(config_path, tmp_path)
+
+    check_ids = {check.check_id for check in result.checks}
+    assert "task_parity" in check_ids
+    task_parity = next(check for check in result.checks if check.check_id == "task_parity")
+    assert task_parity.status == "pass"
+    assert "manifest digest" in task_parity.safe_detail
+
+
+def test_plan_diagnostic_includes_task_manifest_digest(tmp_path: Path) -> None:
+    """The diagnostic plan also carries a task manifest digest binding
+    the plan to the exact task content."""
+    config_path = _write_diagnostic_config(tmp_path)
+
+    plan = plan_operation(config_path, tmp_path)
+
+    assert len(plan.task_manifest_digest) == 64
+    assert plan.task_manifest_digest != ""

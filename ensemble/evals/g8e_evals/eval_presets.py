@@ -102,6 +102,57 @@ _DIAGNOSTIC_PRESETS: dict[str, DiagnosticPreset] = {
 }
 
 _CAMPAIGN_PRESETS: dict[str, CampaignPreset] = {
+    "all-roles-governed": CampaignPreset(
+        name="all-roles-governed",
+        description=(
+            "Five-task campaign running every declared model-role cohort "
+            "through the full g8ee stack under the doctrine arm. Three "
+            "repetitions, concurrency one. Budget: 20000 requests, "
+            "200000000 tokens, 0 USD. Publication eligible."
+        ),
+        suite="ifeval_subset",
+        seed=42,
+        arms=["doctrine"],
+        repetitions=3,
+        task_limit=5,
+        budget=BudgetCeilings(
+            max_requests=20000,
+            max_tokens=200000000,
+            max_usd=0,
+            concurrency=1,
+            min_free_disk_gb=5,
+        ),
+        stop_conditions=StopConditions(
+            idle_timeout_s=300.0,
+            max_duration_s=86400.0,
+        ),
+        publication_eligible=True,
+    ),
+    "all-roles-governed-smoke": CampaignPreset(
+        name="all-roles-governed-smoke",
+        description=(
+            "One-task campaign validating role-scoped cohorts through the "
+            "full g8ee stack under the doctrine arm. One repetition, "
+            "concurrency one. Budget: 100 requests, 2000000 tokens, 0 USD."
+        ),
+        suite="ifeval_subset",
+        seed=42,
+        arms=["doctrine"],
+        repetitions=1,
+        task_limit=1,
+        budget=BudgetCeilings(
+            max_requests=100,
+            max_tokens=2000000,
+            max_usd=0,
+            concurrency=1,
+            min_free_disk_gb=1,
+        ),
+        stop_conditions=StopConditions(
+            idle_timeout_s=300.0,
+            max_duration_s=3600.0,
+        ),
+        publication_eligible=False,
+    ),
     "opendevops-development": CampaignPreset(
         name="opendevops-development",
         description=(

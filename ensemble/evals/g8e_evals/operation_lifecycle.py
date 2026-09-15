@@ -15,7 +15,7 @@ import signal
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from g8e_evals.constants import (
     ATTEMPTS_JSONL,
@@ -52,6 +52,7 @@ class OperationPlan(BaseModel):
     arms: list[str]
     task_count: int
     task_identities: list[str]
+    task_manifest_digest: str
     repetitions: int
     assignment_count: int
     warmup_calls: int
@@ -199,48 +200,87 @@ def _authorities(config: OperationConfigBase) -> list[tuple[str, AuthorityRef]]:
     return refs
 
 
-def _selected_diagnostic_tasks(config: DiagnosticConfig, repository_root: Path) -> list[str]:
-    """Load the full ordered task population, apply offset and limit to
-    the actual ordered task set, reject out-of-range or empty slices, and
-    return the exact selected task identities. The count is never
-    ceiling-derived from task_limit alone."""
+def _load_gold_set_tasks(config: OperationConfigBase, repository_root: Path) -> list[str]:
+    """Load the full ordered task identities from the gold set using the
+    same loader the execution path uses. This is the single source of
+    truth for task identity; planning and execution must consume the
+    same ordered task manifest."""
     from g8e_evals.suites import assert_model_comparison_eligible
 
     gold_path = _verify_authority(repository_root, config.gold_set, "gold_set")
     tasks = list(assert_model_comparison_eligible(config.suite).loader_factory(gold_path).load())
-    full_count = len(tasks)
-    if config.task_offset > full_count:
+    return [task.id for task in tasks]
+
+
+def _apply_task_slice(
+    task_ids: list[str],
+    offset: int,
+    limit: int | None,
+) -> list[str]:
+    """Apply offset and limit to an ordered task identity list, rejecting
+    out-of-range offset and empty selection."""
+    full_count = len(task_ids)
+    if offset > full_count:
         raise ValueError(
-            f"task_offset {config.task_offset} exceeds task population {full_count}"
+            f"task_offset {offset} exceeds task population {full_count}"
         )
-    selected = tasks[config.task_offset:]
-    if config.task_limit is not None:
-        selected = selected[:config.task_limit]
-    identities = [task.id for task in selected]
-    if not identities:
-        raise ValueError("task selection is empty after offset and limit")
-    return identities
-
-
-def _selected_campaign_tasks(config: CampaignConfig, repository_root: Path) -> list[str]:
-    """Load the campaign profile's ordered task_ids, apply offset and
-    limit to the actual ordered set, reject out-of-range or empty slices,
-    and return the exact selected task identities."""
-    from g8e_evals.profile import CampaignProfile
-
-    profile_path = _verify_authority(repository_root, config.profile, "profile")
-    profile = CampaignProfile.model_validate_json(profile_path.read_text())
-    full_count = len(profile.task_ids)
-    if config.task_offset > full_count:
-        raise ValueError(
-            f"task_offset {config.task_offset} exceeds profile task_ids {full_count}"
-        )
-    selected = profile.task_ids[config.task_offset:]
-    if config.task_limit is not None:
-        selected = selected[:config.task_limit]
+    selected = task_ids[offset:]
+    if limit is not None:
+        selected = selected[:limit]
     if not selected:
         raise ValueError("task selection is empty after offset and limit")
     return list(selected)
+
+
+def _compute_task_manifest_digest(task_ids: list[str], repository_root: Path, config: OperationConfigBase) -> str:
+    """Compute a content-addressed digest over the selected task
+    definitions (task IDs and prompt hashes). This binds the plan to the
+    exact task content, not just the task identities."""
+    from g8e_evals.suites import assert_model_comparison_eligible
+
+    gold_path = _verify_authority(repository_root, config.gold_set, "gold_set")
+    tasks = list(assert_model_comparison_eligible(config.suite).loader_factory(gold_path).load())
+    task_by_id = {t.id: t for t in tasks}
+    payload: list[dict[str, str]] = []
+    for tid in task_ids:
+        task = task_by_id.get(tid)
+        if task is None:
+            raise ValueError(f"task {tid} not found in gold set")
+        prompt_hash = hashlib.sha256(task.prompt.encode()).hexdigest()
+        payload.append({"task_id": tid, "prompt_hash": prompt_hash})
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _selected_diagnostic_tasks(config: DiagnosticConfig, repository_root: Path) -> list[str]:
+    """Load the full ordered task population from the gold set, apply
+    offset and limit to the actual ordered task set, reject out-of-range
+    or empty slices, and return the exact selected task identities. The
+    count is never ceiling-derived from task_limit alone."""
+    full_ids = _load_gold_set_tasks(config, repository_root)
+    return _apply_task_slice(full_ids, config.task_offset, config.task_limit)
+
+
+def _selected_campaign_tasks(config: CampaignConfig, repository_root: Path) -> list[str]:
+    """Load the full ordered task population from the gold set (the same
+    source execution uses), verify the gold-set task identities exactly
+    match the campaign profile's declared ``task_ids``, then apply
+    offset and limit. Planning and execution consume the same ordered
+    task manifest; the profile's declaration is validated against the
+    actual data, not trusted blindly."""
+    from g8e_evals.profile import CampaignProfile
+
+    full_ids = _load_gold_set_tasks(config, repository_root)
+    profile_path = _verify_authority(repository_root, config.profile, "profile")
+    profile = CampaignProfile.model_validate_json(profile_path.read_text())
+    if full_ids != profile.task_ids:
+        raise ValueError(
+            f"gold-set task identities {full_ids} do not match the campaign "
+            f"profile's declared task_ids {profile.task_ids}; planning and "
+            "execution must consume the same ordered task manifest"
+        )
+    return _apply_task_slice(full_ids, config.task_offset, config.task_limit)
 
 
 def _campaign_models(config: CampaignConfig, repository_root: Path) -> list[str]:
@@ -263,7 +303,10 @@ def _campaign_models(config: CampaignConfig, repository_root: Path) -> list[str]
         raise ValueError(f"campaign arms must exactly match the profile: expected {sorted(profile_arms)}, got {sorted(config.arms)}")
     if config.repetitions != profile.repetitions:
         raise ValueError(f"campaign repetitions must match the profile: expected {profile.repetitions}, got {config.repetitions}")
-    return [variant_by_cohort[cohort_id] for cohort_id in config.cohort_ids]
+    return [
+        f"{variant_by_cohort[cohort_id]}@{cohort_id.rsplit('-role-', 1)[1]}"
+        for cohort_id in config.cohort_ids
+    ]
 
 
 def plan_operation(config_path: Path, repository_root: Path) -> OperationPlan:
@@ -284,11 +327,13 @@ def plan_operation(config_path: Path, repository_root: Path) -> OperationPlan:
         raise ValueError(f"unsupported operation config: {type(config).__name__}")
     task_count = len(task_identities)
     assignment_count = len(selected_models) * len(arms) * task_count * repetitions
+    task_manifest_digest = _compute_task_manifest_digest(task_identities, repository_root, config)
     schedule_payload = {
         "content_hash": config.content_hash,
         "models": selected_models,
         "arms": arms,
         "task_identities": task_identities,
+        "task_manifest_digest": task_manifest_digest,
         "tasks": task_count,
         "repetitions": repetitions,
         "seed": config.seed,
@@ -304,6 +349,7 @@ def plan_operation(config_path: Path, repository_root: Path) -> OperationPlan:
         arms=arms,
         task_count=task_count,
         task_identities=task_identities,
+        task_manifest_digest=task_manifest_digest,
         repetitions=repetitions,
         assignment_count=assignment_count,
         warmup_calls=warmup_calls,
@@ -378,6 +424,35 @@ def _validate_authority_bindings(
     )
 
 
+def _verify_task_parity(
+    config: OperationConfigBase,
+    documents: dict[str, BaseModel | None],
+    repository_root: Path,
+) -> str:
+    """Verify that the gold-set task identities exactly match the
+    campaign profile's declared ``task_ids`` and that the selected
+    task slice (after offset/limit) produces a stable content-addressed
+    task manifest digest. For diagnostics, the gold set is the only
+    task authority and no profile comparison is needed. Raises
+    ``ValueError`` on mismatch so preflight fails closed before
+    report-root creation or engine launch."""
+    full_ids = _load_gold_set_tasks(config, repository_root)
+    if isinstance(config, CampaignConfig):
+        profile = documents.get("profile")
+        from g8e_evals.profile import CampaignProfile
+        if not isinstance(profile, CampaignProfile):
+            raise ValueError("campaign profile must be a typed authority for task parity")
+        if full_ids != profile.task_ids:
+            raise ValueError(
+                f"gold-set task identities {full_ids} do not match the campaign "
+                f"profile's declared task_ids {profile.task_ids}; planning and "
+                "execution must consume the same ordered task manifest"
+            )
+    selected = _apply_task_slice(full_ids, config.task_offset, config.task_limit)
+    digest = _compute_task_manifest_digest(selected, repository_root, config)
+    return f"{len(selected)} tasks selected, manifest digest {digest[:12]}"
+
+
 def check_operation(config_path: Path, repository_root: Path) -> OperationCheckResult:
     config = load_operation_config(config_path)
     checks = [OperationCheck(check_id="config", status="pass", safe_detail="typed config and content hash valid")]
@@ -399,6 +474,12 @@ def check_operation(config_path: Path, repository_root: Path) -> OperationCheckR
         check_id="authority_binding",
         status="pass",
         safe_detail=binding_detail,
+    ))
+    task_parity_detail = _verify_task_parity(config, documents, repository_root)
+    checks.append(OperationCheck(
+        check_id="task_parity",
+        status="pass",
+        safe_detail=task_parity_detail,
     ))
     key_path = _resolve_owned_path(repository_root, config.evidence_key.path, "evidence_key")
     key = load_evidence_encryption_key(key_path)
@@ -474,6 +555,60 @@ class OperationVerifyResult(BaseModel):
     failures: list[str]
 
 
+class LaunchState(BaseModel):
+    """Typed on-disk launch record written by the engine and read by
+    status reconciliation. Carries the content hash that tamper
+    detection verifies on load."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    operation_id: str
+    revision: str
+    config_content_hash: str = ""
+    lease_id: str = ""
+    lease_path: str = ""
+    pid: int = 0
+    candidate_binary_sha256: str = ""
+    report_root: str = ""
+    status: str = ""
+    started_at: str = ""
+    updated_at: str = ""
+    content_hash: str | None = None
+
+
+class CampaignStatusRecord(BaseModel):
+    """Typed campaign-status.json record written by the runner and read
+    by status reconciliation."""
+
+    model_config = ConfigDict(extra="allow", frozen=True)
+
+    campaign_id: str = ""
+    run_id: str = ""
+    status: str = ""
+    stop_reason: str | None = None
+    updated_at: str = ""
+
+
+class CampaignProgressRecord(BaseModel):
+    """Typed campaign-progress.json record written by the runner and
+    read by status reconciliation."""
+
+    model_config = ConfigDict(extra="allow", frozen=True)
+
+    campaign_id: str = ""
+    run_id: str = ""
+    total_assignments: int = 0
+    completed_assignments: int = 0
+    remaining_assignments: int = 0
+    current_cohort: str | None = None
+    current_task: str | None = None
+    current_arm: str | None = None
+    current_status: str | None = None
+    elapsed_seconds: float = 0.0
+    status_counts: dict[str, int] = Field(default_factory=dict)
+    updated_at: str = ""
+
+
 def resolve_report_root(config: OperationConfigBase, repository_root: Path) -> Path:
     root = repository_root.resolve()
     report_root = (root / config.report_root).resolve()
@@ -484,44 +619,54 @@ def resolve_report_root(config: OperationConfigBase, repository_root: Path) -> P
     return report_root
 
 
-def _load_json_object(path: Path) -> dict[str, object]:
-    if not path.is_file():
-        return {}
-    value = json.loads(path.read_text())
-    if not isinstance(value, dict):
-        raise ValueError(f"expected JSON object: {path.name}")
-    return value
-
-
-def _read_jsonl(path: Path) -> list[dict[str, object]]:
-    """Read a JSONL file into a list of parsed objects. Returns an empty
-    list when the file is absent. Raises ValueError on malformed lines."""
+def _read_jsonl_typed[T: BaseModel](path: Path, model_cls: type[T]) -> list[T]:
+    """Read a JSONL file into a list of typed Pydantic models. Returns
+    an empty list when the file is absent. Raises ValueError on NUL-byte
+    corruption, partial JSON records, or validation failures — the
+    typed model boundary rejects corrupt data that a raw-dict reader
+    would silently accept."""
     if not path.is_file():
         return []
-    records: list[dict[str, object]] = []
-    for line in path.read_text().splitlines():
+    raw = path.read_bytes()
+    if b"\x00" in raw:
+        raise ValueError(f"{path.name} contains NUL-byte corruption")
+    records: list[T] = []
+    for line in raw.decode("utf-8").splitlines():
         if not line.strip():
             continue
-        value = json.loads(line)
-        if not isinstance(value, dict):
-            raise ValueError(f"expected JSON object in {path.name}: {type(value).__name__}")
-        records.append(value)
+        try:
+            records.append(model_cls.model_validate_json(line))
+        except ValidationError as exc:
+            raise ValueError(f"{path.name} contains a partial or corrupt record: {exc}") from exc
     return records
 
 
-def _verify_launch_content_hash(launch: dict[str, object]) -> bool:
+def _load_typed[T: BaseModel](path: Path, model_cls: type[T]) -> T | None:
+    """Load a typed Pydantic model from a JSON file. Returns None when
+    the file is absent. Raises ValueError on corrupt or invalid JSON so
+    the caller can classify the failure rather than silently degrading."""
+    if not path.is_file():
+        return None
+    try:
+        return model_cls.model_validate_json(path.read_text())
+    except (ValidationError, ValueError) as exc:
+        raise ValueError(f"{path.name} is corrupt or invalid: {exc}") from exc
+    except OSError as exc:
+        raise ValueError(f"{path.name} is unreadable: {exc}") from exc
+
+
+def _verify_launch_content_hash(launch: LaunchState) -> bool:
     """Verify the launch record's declared content hash matches the
     recomputed hash over canonical JSON excluding content_hash. Returns
     True when consistent (or when no hash is declared). Returns False when
     the declared hash does not match the recomputed hash (tampered)."""
-    declared = launch.get("content_hash")
-    if not isinstance(declared, str) or len(declared) != 64:
+    if launch.content_hash is None or len(launch.content_hash) != 64:
         return True  # No hash to verify; treat as consistent (legacy record)
-    payload = {k: v for k, v in launch.items() if k != "content_hash"}
+    payload = launch.model_dump(exclude={"content_hash"}, exclude_none=True)
     recomputed = hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
-    return declared == recomputed
+    return launch.content_hash == recomputed
 
 
 def _derive_budget(report_root: Path) -> tuple[int, int, float]:
@@ -534,24 +679,24 @@ def _derive_budget(report_root: Path) -> tuple[int, int, float]:
     over model_inference stages. USD spend is the sum of provider_cost_usd
     metric values in metrics.jsonl.
     """
-    stages = _read_jsonl(report_root / STAGES_JSONL)
+    from g8e_evals.schema import MetricObservation, StageKind, StageObservation
+
+    stages = _read_jsonl_typed(report_root / STAGES_JSONL, StageObservation)
     provider_requests = 0
     tokens = 0
     for stage in stages:
-        if stage.get("kind") != "model_inference":
+        if stage.kind != StageKind.MODEL_INFERENCE:
             continue
         provider_requests += 1
-        for field in ("input_tokens", "output_tokens", "thinking_tokens"):
-            value = stage.get(field)
-            if isinstance(value, int) and value > 0:
+        for value in (stage.input_tokens, stage.output_tokens, stage.thinking_tokens):
+            if value is not None and value > 0:
                 tokens += value
     spent_usd = 0.0
-    for metric in _read_jsonl(report_root / METRICS_JSONL):
-        if metric.get("metric_id") != "provider_cost_usd":
+    for metric in _read_jsonl_typed(report_root / METRICS_JSONL, MetricObservation):
+        if metric.metric_id != "provider_cost_usd":
             continue
-        value = metric.get("value")
-        if isinstance(value, (int, float)):
-            spent_usd += float(value)
+        if metric.value is not None:
+            spent_usd += float(metric.value)
     return provider_requests, tokens, spent_usd
 
 
@@ -559,16 +704,16 @@ def _verification_state(report_root: Path, is_campaign: bool) -> str:
     """Derive the verification state from the authoritative verification
     report presence and ok flag."""
     if is_campaign:
+        from g8e_evals.index import CampaignVerificationReport
+
         report_path = report_root / CAMPAIGN_VERIFICATION_REPORT_JSON
         if not report_path.is_file():
             return "not_verified"
         try:
-            report = json.loads(report_path.read_text())
-        except (OSError, json.JSONDecodeError):
+            report = CampaignVerificationReport.model_validate_json(report_path.read_text())
+        except (ValidationError, ValueError, OSError):
             return "not_verified"
-        if not isinstance(report, dict):
-            return "not_verified"
-        return "verified" if report.get("ok") is True else "failed"
+        return "verified" if report.ok else "failed"
     # Diagnostic standalone reports do not carry a typed verification
     # report file; verification is run on demand via verify_operation.
     return "not_verified"
@@ -622,7 +767,7 @@ def _process_start_epoch(pid: int) -> float | None:
     return None
 
 
-def _process_matches_launch(pid: int, launch: dict[str, object]) -> bool:
+def _process_matches_launch(pid: int, launch: LaunchState) -> bool:
     """Check whether the process at ``pid`` is the one recorded in ``launch``.
 
     Protects against PID reuse: if the process at the PID started at a
@@ -635,11 +780,10 @@ def _process_matches_launch(pid: int, launch: dict[str, object]) -> bool:
     start_epoch = _process_start_epoch(pid)
     if start_epoch is None:
         return True  # Cannot verify start time; assume running
-    started_at = launch.get("started_at")
-    if not isinstance(started_at, str):
+    if not launch.started_at:
         return True  # No recorded start time; assume running
     try:
-        record_epoch = datetime.fromisoformat(started_at).timestamp()
+        record_epoch = datetime.fromisoformat(launch.started_at).timestamp()
     except ValueError:
         return True  # Unparseable start time; assume running
     # 5-second tolerance for clock skew and rounding
@@ -659,13 +803,24 @@ def operation_status(config_path: Path, repository_root: Path) -> OperationStatu
             process_state="absent",
             report_root=str(report_root),
         )
-    launch = _load_json_object(report_root / EVAL_LAUNCH_STATE_JSON)
-    if launch and (launch.get("operation_id") != config.operation_id or launch.get("revision") != config.revision):
+    try:
+        launch = _load_typed(report_root / EVAL_LAUNCH_STATE_JSON, LaunchState)
+    except ValueError as exc:
+        return OperationStatus(
+            operation_kind=config.operation_kind.value,
+            operation_id=config.operation_id,
+            revision=config.revision,
+            status="inconsistent",
+            process_state="unknown",
+            report_root=str(report_root),
+            safe_detail=str(exc),
+        )
+    if launch is not None and (launch.operation_id != config.operation_id or launch.revision != config.revision):
         raise ValueError("launch state identity does not match operation config")
 
     # Verify the launch record's declared content hash. A mismatch means
     # the launch state was tampered with after the engine wrote it.
-    if launch and not _verify_launch_content_hash(launch):
+    if launch is not None and not _verify_launch_content_hash(launch):
         return OperationStatus(
             operation_kind=config.operation_kind.value,
             operation_id=config.operation_id,
@@ -676,10 +831,9 @@ def operation_status(config_path: Path, repository_root: Path) -> OperationStatu
             safe_detail="launch state content hash does not match the recorded state",
         )
 
-    pid = launch.get("pid", 0)
-    running = _process_matches_launch(pid, launch) if isinstance(pid, int) else False
-    raw_launch_status = launch.get("status")
-    launch_status = raw_launch_status if isinstance(raw_launch_status, str) else ""
+    pid = launch.pid if launch is not None else 0
+    running = _process_matches_launch(pid, launch) if launch is not None and pid else False
+    launch_status = launch.status if launch is not None else ""
 
     # Reconcile the process state against the recorded launch status.
     if launch_status == "running":
@@ -692,15 +846,24 @@ def operation_status(config_path: Path, repository_root: Path) -> OperationStatu
     # Derive the reconciled lifecycle status from the launch record,
     # the campaign status file (campaigns only), and the process state.
     stop_reason = ""
+    campaign_status = ""
     if is_campaign:
-        status_record = _load_json_object(report_root / CAMPAIGN_STATUS_JSON)
-        raw_campaign_status = status_record.get("status")
-        campaign_status = raw_campaign_status if isinstance(raw_campaign_status, str) else ""
-        campaign_stop_reason = status_record.get("stop_reason")
-        if isinstance(campaign_stop_reason, str):
-            stop_reason = campaign_stop_reason
-    else:
-        campaign_status = ""
+        try:
+            status_record = _load_typed(report_root / CAMPAIGN_STATUS_JSON, CampaignStatusRecord)
+        except ValueError as exc:
+            return OperationStatus(
+                operation_kind=config.operation_kind.value,
+                operation_id=config.operation_id,
+                revision=config.revision,
+                status="inconsistent",
+                process_state=process_state,
+                report_root=str(report_root),
+                safe_detail=str(exc),
+            )
+        if status_record is not None:
+            campaign_status = status_record.status
+            if status_record.stop_reason is not None:
+                stop_reason = status_record.stop_reason
 
     if launch_status == "running" and not running:
         status = "interrupted"
@@ -715,23 +878,42 @@ def operation_status(config_path: Path, repository_root: Path) -> OperationStatu
 
     # Assignment counts: campaigns read the real progress fields; diagnostics
     # derive total from tasks.jsonl and completed from terminal attempts.
-    progress = _load_json_object(report_root / CAMPAIGN_PROGRESS_JSON)
-    if is_campaign:
-        raw_total = progress.get("total_assignments")
-        raw_completed = progress.get("completed_assignments")
-        total_assignments = raw_total if isinstance(raw_total, int) else 0
-        completed_assignments = raw_completed if isinstance(raw_completed, int) else 0
-    else:
-        task_records = _read_jsonl(report_root / TASKS_JSONL)
-        total_assignments = len(task_records)
-        attempt_records = _read_jsonl(report_root / ATTEMPTS_JSONL)
-        completed_assignments = sum(
-            1 for a in attempt_records
-            if a.get("terminal_status") in ("completed", "COMPLETED")
+    try:
+        if is_campaign:
+            progress = _load_typed(report_root / CAMPAIGN_PROGRESS_JSON, CampaignProgressRecord)
+            total_assignments = progress.total_assignments if progress is not None else 0
+            completed_assignments = progress.completed_assignments if progress is not None else 0
+        else:
+            from g8e_evals.schema import AttemptRecord, TaskDefinition, TerminalStatus
+            total_assignments = len(_read_jsonl_typed(report_root / TASKS_JSONL, TaskDefinition))
+            completed_assignments = sum(
+                1 for a in _read_jsonl_typed(report_root / ATTEMPTS_JSONL, AttemptRecord)
+                if a.terminal_status == TerminalStatus.COMPLETED
+            )
+    except ValueError as exc:
+        return OperationStatus(
+            operation_kind=config.operation_kind.value,
+            operation_id=config.operation_id,
+            revision=config.revision,
+            status="inconsistent",
+            process_state=process_state,
+            report_root=str(report_root),
+            safe_detail=str(exc),
         )
 
-    provider_requests, tokens, spent_usd = _derive_budget(report_root)
-    verification_state = _verification_state(report_root, is_campaign)
+    try:
+        provider_requests, tokens, spent_usd = _derive_budget(report_root)
+        verification_state = _verification_state(report_root, is_campaign)
+    except ValueError as exc:
+        return OperationStatus(
+            operation_kind=config.operation_kind.value,
+            operation_id=config.operation_id,
+            revision=config.revision,
+            status="inconsistent",
+            process_state=process_state,
+            report_root=str(report_root),
+            safe_detail=str(exc),
+        )
     publication_state = _publication_state(report_root)
 
     # A completed run that has passed verification is "verified"; a
@@ -766,31 +948,31 @@ def stop_operation(config_path: Path, repository_root: Path, *, immediate: bool)
     report_root = resolve_report_root(config, repository_root)
     if not report_root.is_dir():
         raise ValueError("operation has not started")
-    launch = _load_json_object(report_root / EVAL_LAUNCH_STATE_JSON)
-    if launch.get("operation_id") != config.operation_id or launch.get("revision") != config.revision:
+    launch = _load_typed(report_root / EVAL_LAUNCH_STATE_JSON, LaunchState)
+    if launch is None:
+        raise ValueError("launch state is missing; cannot bind a stop request")
+    if launch.operation_id != config.operation_id or launch.revision != config.revision:
         raise ValueError("launch state identity does not match operation config")
-    launch_content_hash = launch.get("content_hash")
-    if not isinstance(launch_content_hash, str) or len(launch_content_hash) != 64:
+    if launch.content_hash is None or len(launch.content_hash) != 64:
         raise ValueError("launch state is missing its content hash; cannot bind a stop request")
     request_path = report_root / EVAL_STOP_REQUEST_JSON
     if request_path.exists():
         raise FileExistsError("stop request already exists")
-    pid = launch.get("pid")
     # All forced-stop validation must pass before the request is
     # persisted or any signal is sent. A reused or mismatched PID is
     # never signaled.
     kill_pid: int | None = None
     if immediate:
-        if not isinstance(pid, int) or not _process_matches_launch(pid, launch):
+        if not launch.pid or not _process_matches_launch(launch.pid, launch):
             raise ValueError("cannot force-stop a process that is not running or has been reused")
-        kill_pid = pid
+        kill_pid = launch.pid
     config_content_hash = config.content_hash or config.compute_content_hash()
     request = build_stop_request(
         StopRequestIdentity(
             operation_id=config.operation_id,
             revision=config.revision,
             config_content_hash=config_content_hash,
-            launch_content_hash=launch_content_hash,
+            launch_content_hash=launch.content_hash,
         ),
         immediate=immediate,
         requested_at=datetime.now(UTC).isoformat(),

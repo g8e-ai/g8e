@@ -282,10 +282,13 @@ class CampaignProfile(BaseModel):
                     f"unknown arm_id in track_arm_assignments: {assignment.arm_id!r}"
                 )
 
-        tier_variant_ids = [a.variant_id for a in self.model_tier_assignments]
-        if len(tier_variant_ids) != len(set(tier_variant_ids)):
+        tier_assignment_keys = [
+            (assignment.variant_id, assignment.target_tier)
+            for assignment in self.model_tier_assignments
+        ]
+        if len(tier_assignment_keys) != len(set(tier_assignment_keys)):
             raise ValueError(
-                f"duplicate variant_id in model_tier_assignments: {tier_variant_ids}"
+                f"duplicate model tier assignment: {tier_assignment_keys}"
             )
 
         for assignment in self.model_tier_assignments:

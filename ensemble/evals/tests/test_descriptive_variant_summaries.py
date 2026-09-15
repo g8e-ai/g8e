@@ -132,7 +132,7 @@ def test_variant_summary_row_round_trip() -> None:
 # --- _generate_variant_summaries tests ---
 
 
-def _make_proj(variant: str, task: str, rep: int, value: float) -> CampaignProjectionRow:
+def _make_proj(variant: str, task: str, rep: int, value: float, role: str = "") -> CampaignProjectionRow:
     return CampaignProjectionRow(
         campaign_id="campaign-1",
         campaign_revision="1",
@@ -146,7 +146,36 @@ def _make_proj(variant: str, task: str, rep: int, value: float) -> CampaignProje
         verification_status="verified",
         evidence_link=f"proofs/{variant}/{task}/rep-{rep}.json",
         repetition=rep,
+        role=role,
     )
+
+
+def test_role_scoped_cohort_identity_preserves_variant_and_role() -> None:
+    from g8e_evals.publication import _extract_role, _extract_variant_id
+
+    cohort_id = "cohort-qwen3-8b-role-assistant"
+
+    assert _extract_variant_id(cohort_id) == "qwen3-8b"
+    assert _extract_role(cohort_id) == "assistant"
+
+
+def test_generate_variant_summaries_separates_roles_for_same_variant() -> None:
+    from g8e_evals.publication import _generate_variant_summaries
+
+    projections = [
+        _make_proj("variant-a", "task-1", 1, 1.0, "primary"),
+        _make_proj("variant-a", "task-1", 1, 0.0, "assistant"),
+        _make_proj("variant-a", "task-1", 1, 1.0, "lite"),
+    ]
+
+    summaries = _generate_variant_summaries(projections)
+
+    assert len(summaries) == 3
+    assert {(summary.role, summary.rate) for summary in summaries} == {
+        ("primary", 1.0),
+        ("assistant", 0.0),
+        ("lite", 1.0),
+    }
 
 
 def test_generate_variant_summaries_aggregates_per_variant() -> None:

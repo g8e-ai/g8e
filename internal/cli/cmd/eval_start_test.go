@@ -571,6 +571,9 @@ func TestEvalControllerCmd_RegistersRunSubcommand(t *testing.T) {
 		names = append(names, sub.Name())
 	}
 	assert.Contains(t, names, "run")
+	assert.Contains(t, names, "status")
+	assert.Contains(t, names, "stop")
+	assert.Contains(t, names, "recover")
 }
 
 func TestEvalCmd_RegistersController(t *testing.T) {

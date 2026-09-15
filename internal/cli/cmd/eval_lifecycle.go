@@ -8,12 +8,14 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -42,6 +44,7 @@ type evalOperationPlan struct {
 	Arms                 []string                    `json:"arms"`
 	TaskCount            int                         `json:"task_count"`
 	TaskIdentities       []string                    `json:"task_identities"`
+	TaskManifestDigest   string                      `json:"task_manifest_digest"`
 	Repetitions          int                         `json:"repetitions"`
 	AssignmentCount      int                         `json:"assignment_count"`
 	WarmupCalls          int                         `json:"warmup_calls"`
@@ -170,15 +173,41 @@ func runEvalOperationCheck(ctx context.Context, deps evalLeaseDeps, configPath s
 }
 
 func runEvalEngineLifecycle(ctx context.Context, deps evalLeaseDeps, configPath string, operation models.EvalOperation, flags models.EvalEngineFlags, stderr io.Writer) (evalEngineResultJSON, error) {
-	env, err := resolveEvalLifecycleEnvironment(ctx, deps, configPath)
+	return runEvalEngineOperation(ctx, deps, configPath, "", operation, flags, nil, stderr)
+}
+
+func runEvalEngineOperation(ctx context.Context, deps evalLeaseDeps, configPath, reportRoot string, operation models.EvalOperation, flags models.EvalEngineFlags, parameters map[string]string, stderr io.Writer) (evalEngineResultJSON, error) {
+	projectRoot, err := evalProjectRootFromConfig(deps.configLoader, "")
 	if err != nil {
 		return evalEngineResultJSON{}, err
+	}
+	roots, err := resolveEvalRoots(ctx, projectRoot, deps.stat)
+	if err != nil {
+		return evalEngineResultJSON{}, err
+	}
+	resolved, err := (&evalEnvironmentResolver{stat: deps.stat}).Resolve(ctx, evalProjectRootSpec(roots))
+	if err != nil {
+		return evalEngineResultJSON{}, err
+	}
+	absConfigPath := ""
+	if configPath != "" {
+		absConfigPath, err = resolveAbsPath(configPath)
+		if err != nil {
+			return evalEngineResultJSON{}, err
+		}
+	}
+	absReportRoot := ""
+	if reportRoot != "" {
+		absReportRoot, err = resolveAbsPath(reportRoot)
+		if err != nil {
+			return evalEngineResultJSON{}, err
+		}
 	}
 	cfg, err := deps.configLoader("")
 	if err != nil {
 		return evalEngineResultJSON{}, fmt.Errorf("eval: load config: %w", err)
 	}
-	candidate, err := deps.candidateResolver.Resolve(ctx, env.RepositoryRoot)
+	candidate, err := deps.candidateResolver.Resolve(ctx, roots.RepositoryRoot)
 	if err != nil {
 		return evalEngineResultJSON{}, err
 	}
@@ -190,14 +219,17 @@ func runEvalEngineLifecycle(ctx context.Context, deps evalLeaseDeps, configPath 
 	if fileSvc, ferr := deps.fileSvcFactory(cfg.ProjectRoot, slog.Default()); ferr == nil && deps.authContextLoader != nil {
 		authCtx, _ = deps.authContextLoader(fileSvc, cfg)
 	}
+	env := evalLifecycleEnvironment{RepositoryRoot: roots.RepositoryRoot, EvalProject: roots.EvalProject, InterpreterPath: resolved.InterpreterPath, ConfigPath: absConfigPath}
 	request := models.EvalEngineRequest{
 		SchemaVersion: models.EvalEngineRequestSchemaVersion,
 		Operation:     operation,
-		ConfigPath:    env.ConfigPath,
+		ConfigPath:    absConfigPath,
+		ReportRoot:    absReportRoot,
 		Platform:      buildEvalPlatformContext(ctx, env, cfg, candidate, authCtx),
 		Flags:         flags,
+		Parameters:    parameters,
 	}
-	return invokeEngine(ctx, deps, env.InterpreterPath, request, stderr)
+	return invokeEngine(ctx, deps, resolved.InterpreterPath, request, stderr)
 }
 
 func evalDiagnosticPlanCmdWithDeps(deps evalLeaseDeps) *cobra.Command {
@@ -394,6 +426,340 @@ func evalOperationVerifyCmdWithDeps(deps evalLeaseDeps, noun string, operation m
 	return cmd
 }
 
+func runEvalUtilityOperation(cmd *cobra.Command, deps evalLeaseDeps, configPath, reportRoot string, operation models.EvalOperation, parameters map[string]string, jsonOutput bool) error {
+	result, err := runEvalEngineOperation(commandContext(cmd), deps, configPath, reportRoot, operation, models.EvalEngineFlags{JSONOutput: true}, parameters, cmd.OutOrStderr())
+	if len(result.Payload) > 0 {
+		if jsonOutput {
+			fmt.Fprintln(cmd.OutOrStdout(), string(result.Payload))
+		} else {
+			var formatted bytes.Buffer
+			if indentErr := json.Indent(&formatted, result.Payload, "  ", "  "); indentErr != nil {
+				return fmt.Errorf("%w: render engine payload: %w", constants.ErrEvalConfigInvalid, indentErr)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n  %s\n", operation, result.Status, formatted.String())
+		}
+	}
+	return err
+}
+
+func evalCampaignSetCmd() *cobra.Command {
+	return evalCampaignSetCmdWithDeps(evalStartDepsFromLeaseDeps())
+}
+
+func evalCampaignSetCmdWithDeps(deps evalLeaseDeps) *cobra.Command {
+	cmd := &cobra.Command{Use: "campaign-set", Short: "Plan, validate, and verify campaign sets"}
+	var planJSON bool
+	planCmd := &cobra.Command{Use: "plan <plan>", Short: "Print a deterministic campaign-set plan (read-only)", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		return runEvalUtilityOperation(cmd, deps, args[0], "", models.EvalOperationCampaignSetPlan, nil, planJSON)
+	}}
+	planCmd.Flags().BoolVar(&planJSON, "json", false, "Emit a single canonical JSON object on stdout")
+	var index string
+	var validateJSON bool
+	validateCmd := &cobra.Command{Use: "validate <plan>", Short: "Validate a campaign-set plan and index (read-only)", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		absIndex, err := resolveAbsPath(index)
+		if err != nil {
+			return err
+		}
+		return runEvalUtilityOperation(cmd, deps, args[0], "", models.EvalOperationCampaignSetValidate, map[string]string{"index": absIndex}, validateJSON)
+	}}
+	validateCmd.Flags().StringVar(&index, "index", "", "Campaign-set index path")
+	validateCmd.Flags().BoolVar(&validateJSON, "json", false, "Emit a single canonical JSON object on stdout")
+	_ = validateCmd.MarkFlagRequired("index")
+	var verifyIndex, replacementRule string
+	var childDirs []string
+	var verifyJSON bool
+	verifyCmd := &cobra.Command{Use: "verify <plan>", Short: "Run complete campaign-set verification (read-only)", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		absIndex, err := resolveAbsPath(verifyIndex)
+		if err != nil {
+			return err
+		}
+		children := make(map[string]string, len(childDirs))
+		for _, child := range childDirs {
+			id, path, ok := strings.Cut(child, "=")
+			if !ok || id == "" || path == "" {
+				return fmt.Errorf("%w: --child-dir values must use child-id=report-dir", constants.ErrEvalConfigInvalid)
+			}
+			absPath, pathErr := resolveAbsPath(path)
+			if pathErr != nil {
+				return pathErr
+			}
+			children[id] = absPath
+		}
+		childJSON, err := json.Marshal(children)
+		if err != nil {
+			return fmt.Errorf("%w: marshal child directories: %w", constants.ErrEvalConfigInvalid, err)
+		}
+		parameters := map[string]string{"index": absIndex, "child_dirs": string(childJSON)}
+		if replacementRule != "" {
+			parameters["replacement_rule"], err = resolveAbsPath(replacementRule)
+			if err != nil {
+				return err
+			}
+		}
+		return runEvalUtilityOperation(cmd, deps, args[0], "", models.EvalOperationCampaignSetVerify, parameters, verifyJSON)
+	}}
+	verifyCmd.Flags().StringVar(&verifyIndex, "index", "", "Campaign-set index path")
+	verifyCmd.Flags().StringSliceVar(&childDirs, "child-dir", nil, "Child binding in child-id=report-dir form")
+	verifyCmd.Flags().StringVar(&replacementRule, "replacement-rule", "", "Replacement rule path")
+	verifyCmd.Flags().BoolVar(&verifyJSON, "json", false, "Emit a single canonical JSON object on stdout")
+	_ = verifyCmd.MarkFlagRequired("index")
+	_ = verifyCmd.MarkFlagRequired("child-dir")
+	cmd.AddCommand(planCmd, validateCmd, verifyCmd)
+	return cmd
+}
+
+func evalBundleCmd() *cobra.Command {
+	deps := evalStartDepsFromLeaseDeps()
+	var yes, jsonOutput bool
+	cmd := &cobra.Command{Use: "bundle <report-dir>", Short: "Create a signed immutable eval bundle (local mutation)", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if !yes {
+			return fmt.Errorf("%w: --yes is required for bundle", constants.ErrEvalConfigInvalid)
+		}
+		reportRoot, err := resolveAbsPath(args[0])
+		if err != nil {
+			return err
+		}
+		cfg, err := deps.configLoader("")
+		if err != nil {
+			return fmt.Errorf("eval: load config: %w", err)
+		}
+		fileSvc, err := deps.fileSvcFactory(cfg.ProjectRoot, slog.Default())
+		if err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+		}
+		parameters := map[string]string{
+			"bundle_dir":       reportRoot + constants.EvalBundleDirectorySuffix,
+			"bundle_id":        filepath.Base(reportRoot),
+			"signing_key_path": fileSvc.Resolve(constants.EvalBundleSigningKeyPath),
+		}
+		return runEvalUtilityOperation(cmd, deps, "", reportRoot, models.EvalOperationBundle, parameters, jsonOutput)
+	}}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Confirm bundle creation")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit a single canonical JSON object on stdout")
+	return cmd
+}
+
+func evalVerifyCmd() *cobra.Command {
+	deps := evalStartDepsFromLeaseDeps()
+	var receipts, jsonOutput bool
+	cmd := &cobra.Command{Use: "verify <report-dir>", Short: "Run complete offline bundle verification (read-only)", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		root, err := resolveAbsPath(args[0])
+		if err != nil {
+			return err
+		}
+		cfg, err := deps.configLoader("")
+		if err != nil {
+			return fmt.Errorf("eval: load config: %w", err)
+		}
+		fileSvc, err := deps.fileSvcFactory(cfg.ProjectRoot, slog.Default())
+		if err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+		}
+		if receipts {
+			return runEvalUtilityOperation(cmd, deps, "", root, models.EvalOperationVerifyReceipts, map[string]string{"pki_dir": fileSvc.Resolve(constants.PkiDirname)}, jsonOutput)
+		}
+		parameters := map[string]string{}
+		exists, err := fileSvc.FileExists(commandContext(cmd), constants.EvalBundleTrustStorePath)
+		if err != nil {
+			return err
+		}
+		if exists {
+			parameters["trust_store"] = fileSvc.Resolve(constants.EvalBundleTrustStorePath)
+		}
+		return runEvalUtilityOperation(cmd, deps, "", root, models.EvalOperationVerify, parameters, jsonOutput)
+	}}
+	cmd.Flags().BoolVar(&receipts, "receipts", false, "Run receipt-signature verification only")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit a single canonical JSON object on stdout")
+	return cmd
+}
+
+func evalQualificationCmd() *cobra.Command {
+	deps := evalStartDepsFromLeaseDeps()
+	cmd := &cobra.Command{Use: "qualification", Short: "Build deterministic collection-candidate qualification evidence"}
+	var authority, sourceRoot, authorityRecordPath, hashOutput string
+	var hashJSON bool
+	hashCmd := &cobra.Command{Use: "hash-source", Short: "Hash an owner-approved source manifest (read-only)", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		parameters, err := resolveEvalPathParameters(map[string]string{"authority": authority, "source_root": sourceRoot, "output": hashOutput})
+		if err != nil {
+			return err
+		}
+		parameters["authority_record_path"] = authorityRecordPath
+		return runEvalUtilityOperation(cmd, deps, "", "", models.EvalOperationQualificationHashSource, parameters, hashJSON)
+	}}
+	hashCmd.Flags().StringVar(&authority, "authority", "", "Source manifest authority path")
+	hashCmd.Flags().StringVar(&sourceRoot, "source-root", "", "Source tree root")
+	hashCmd.Flags().StringVar(&authorityRecordPath, "authority-record-path", "", "Authority record path stored in evidence")
+	hashCmd.Flags().StringVarP(&hashOutput, "output", "o", "", "Output path")
+	hashCmd.Flags().BoolVar(&hashJSON, "json", false, "Emit a single canonical JSON object on stdout")
+	for _, name := range []string{"authority", "source-root", "authority-record-path", "output"} {
+		_ = hashCmd.MarkFlagRequired(name)
+	}
+	var fullSource, executionSource, binaryPath, candidateOutput string
+	var images []string
+	var candidateJSON bool
+	candidateCmd := &cobra.Command{Use: "candidate", Short: "Build a typed candidate identity (read-only)", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		parameters, err := resolveEvalPathParameters(map[string]string{"full_source": fullSource, "execution_source": executionSource, "binary": binaryPath, "output": candidateOutput})
+		if err != nil {
+			return err
+		}
+		parsedImages := make([]evalQualificationImage, 0, len(images))
+		for _, image := range images {
+			components, imageID, ok := strings.Cut(image, "=")
+			if !ok || components == "" || imageID == "" {
+				return fmt.Errorf("%w: --image values must use component[,component]=sha256:<digest>", constants.ErrEvalConfigInvalid)
+			}
+			parsedImages = append(parsedImages, evalQualificationImage{Components: strings.Split(components, ","), ImageID: imageID})
+		}
+		encoded, err := json.Marshal(parsedImages)
+		if err != nil {
+			return fmt.Errorf("%w: marshal image identities: %w", constants.ErrEvalConfigInvalid, err)
+		}
+		parameters["images"] = string(encoded)
+		return runEvalUtilityOperation(cmd, deps, "", "", models.EvalOperationQualificationCandidate, parameters, candidateJSON)
+	}}
+	candidateCmd.Flags().StringVar(&fullSource, "full-source", "", "Full-source manifest result")
+	candidateCmd.Flags().StringVar(&executionSource, "execution-source", "", "Execution-source manifest result")
+	candidateCmd.Flags().StringVar(&binaryPath, "binary", "", "Candidate binary")
+	candidateCmd.Flags().StringSliceVar(&images, "image", nil, "Component image identity")
+	candidateCmd.Flags().StringVarP(&candidateOutput, "output", "o", "", "Output path")
+	candidateCmd.Flags().BoolVar(&candidateJSON, "json", false, "Emit a single canonical JSON object on stdout")
+	for _, name := range []string{"full-source", "execution-source", "binary", "image", "output"} {
+		_ = candidateCmd.MarkFlagRequired(name)
+	}
+	var collectRequest, collectOutput string
+	var collectJSON bool
+	collectCmd := &cobra.Command{Use: "collect-runtime", Short: "Collect public runtime identity evidence (local mutation)", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		parameters, err := resolveEvalPathParameters(map[string]string{"request": collectRequest, "output": collectOutput})
+		if err != nil {
+			return err
+		}
+		return runEvalUtilityOperation(cmd, deps, "", "", models.EvalOperationQualificationCollectRuntime, parameters, collectJSON)
+	}}
+	collectCmd.Flags().StringVar(&collectRequest, "request", "", "Runtime collection request")
+	collectCmd.Flags().StringVarP(&collectOutput, "output", "o", "", "Output path")
+	collectCmd.Flags().BoolVar(&collectJSON, "json", false, "Emit a single canonical JSON object on stdout")
+	_ = collectCmd.MarkFlagRequired("request")
+	_ = collectCmd.MarkFlagRequired("output")
+	var gateCandidate, gateID, gateOutput string
+	var toolVersions []string
+	var gateJSON bool
+	gateCmd := &cobra.Command{Use: "run-gate -- <command> [args...]", Short: "Run one deterministic candidate-bound gate (local mutation)", Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		parameters, err := resolveEvalPathParameters(map[string]string{"candidate": gateCandidate, "output": gateOutput})
+		if err != nil {
+			return err
+		}
+		versions := make(map[string]string, len(toolVersions))
+		for _, item := range toolVersions {
+			name, version, ok := strings.Cut(item, "=")
+			if !ok || name == "" || version == "" {
+				return fmt.Errorf("%w: --tool-version values must use name=version", constants.ErrEvalConfigInvalid)
+			}
+			versions[name] = version
+		}
+		commandJSON, err := json.Marshal(args)
+		if err != nil {
+			return fmt.Errorf("%w: marshal gate command: %w", constants.ErrEvalConfigInvalid, err)
+		}
+		versionJSON, err := json.Marshal(versions)
+		if err != nil {
+			return fmt.Errorf("%w: marshal tool versions: %w", constants.ErrEvalConfigInvalid, err)
+		}
+		parameters["gate_id"] = gateID
+		parameters["command"] = string(commandJSON)
+		parameters["tool_versions"] = string(versionJSON)
+		return runEvalUtilityOperation(cmd, deps, "", "", models.EvalOperationQualificationRunGate, parameters, gateJSON)
+	}}
+	gateCmd.Flags().StringVar(&gateCandidate, "candidate", "", "Candidate identity path")
+	gateCmd.Flags().StringVar(&gateID, "gate-id", "", "Gate identity")
+	gateCmd.Flags().StringSliceVar(&toolVersions, "tool-version", nil, "Tool version in name=version form")
+	gateCmd.Flags().StringVarP(&gateOutput, "output", "o", "", "Output path")
+	gateCmd.Flags().BoolVar(&gateJSON, "json", false, "Emit a single canonical JSON object on stdout")
+	for _, name := range []string{"candidate", "gate-id", "tool-version", "output"} {
+		_ = gateCmd.MarkFlagRequired(name)
+	}
+	var buildInput, buildOutput, buildCheck string
+	var buildJSON bool
+	buildCmd := &cobra.Command{Use: "build", Short: "Build or reproduce a qualification draft (local mutation)", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		parameters, err := resolveEvalPathParameters(map[string]string{"input": buildInput})
+		if err != nil {
+			return err
+		}
+		if (buildOutput == "") == (buildCheck == "") {
+			return fmt.Errorf("%w: exactly one of --output or --check is required", constants.ErrEvalConfigInvalid)
+		}
+		optional, err := resolveEvalPathParameters(map[string]string{"output": buildOutput, "check": buildCheck})
+		if err != nil {
+			return err
+		}
+		for name, value := range optional {
+			parameters[name] = value
+		}
+		return runEvalUtilityOperation(cmd, deps, "", "", models.EvalOperationQualificationBuild, parameters, buildJSON)
+	}}
+	buildCmd.Flags().StringVar(&buildInput, "input", "", "Qualification build request")
+	buildCmd.Flags().StringVarP(&buildOutput, "output", "o", "", "Output path")
+	buildCmd.Flags().StringVar(&buildCheck, "check", "", "Existing draft to reproduce")
+	buildCmd.Flags().BoolVar(&buildJSON, "json", false, "Emit a single canonical JSON object on stdout")
+	_ = buildCmd.MarkFlagRequired("input")
+	cmd.AddCommand(hashCmd, candidateCmd, collectCmd, gateCmd, buildCmd)
+	return cmd
+}
+
+type evalQualificationImage struct {
+	Components []string `json:"components"`
+	ImageID    string   `json:"image_id"`
+}
+
+func resolveEvalPathParameters(values map[string]string) (map[string]string, error) {
+	resolved := make(map[string]string, len(values))
+	for name, value := range values {
+		if value == "" {
+			continue
+		}
+		abs, err := resolveAbsPath(value)
+		if err != nil {
+			return nil, err
+		}
+		resolved[name] = abs
+	}
+	return resolved, nil
+}
+
+func evalBenchSyntheticCmd() *cobra.Command {
+	deps := evalStartDepsFromLeaseDeps()
+	var suite, goldSet, outputDir, preregistration string
+	var limit int
+	var yes, jsonOutput bool
+	cmd := &cobra.Command{Use: "bench-synthetic", Short: "Run a deterministic provider-free synthetic benchmark (local mutation)", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		if !yes {
+			return fmt.Errorf("%w: --yes is required for bench-synthetic", constants.ErrEvalConfigInvalid)
+		}
+		parameters := map[string]string{"suite": suite}
+		for name, value := range map[string]string{"gold_set": goldSet, "preregistration": preregistration} {
+			if value != "" {
+				abs, err := resolveAbsPath(value)
+				if err != nil {
+					return err
+				}
+				parameters[name] = abs
+			}
+		}
+		if limit > 0 {
+			parameters["limit"] = fmt.Sprintf("%d", limit)
+		}
+		return runEvalUtilityOperation(cmd, deps, "", outputDir, models.EvalOperationBenchSynthetic, parameters, jsonOutput)
+	}}
+	cmd.Flags().StringVar(&suite, "suite", "", "Synthetic suite name")
+	cmd.Flags().StringVar(&goldSet, "gold-set", "", "Optional gold-set path")
+	cmd.Flags().StringVarP(&outputDir, "out", "o", "reports", "Output directory")
+	cmd.Flags().StringVar(&preregistration, "preregistration", "", "Optional preregistration path")
+	cmd.Flags().IntVar(&limit, "limit", 0, "Limit the number of tasks")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Confirm synthetic benchmark creation")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit a single canonical JSON object on stdout")
+	_ = cmd.MarkFlagRequired("suite")
+	return cmd
+}
+
 func printEvalOperationStatus(stdout io.Writer, result evalOperationStatus) {
 	fmt.Fprintf(stdout, "%s status: %s\n", result.OperationKind, result.Status)
 	fmt.Fprintf(stdout, "  operation_id:          %s\n", result.OperationID)
@@ -419,6 +785,7 @@ func printEvalOperationPlan(stdout io.Writer, result evalOperationPlan) {
 	fmt.Fprintf(stdout, "  arms:                   %s\n", strings.Join(result.Arms, ", "))
 	fmt.Fprintf(stdout, "  tasks:                  %d\n", result.TaskCount)
 	fmt.Fprintf(stdout, "  task_identities:        %s\n", strings.Join(result.TaskIdentities, ", "))
+	fmt.Fprintf(stdout, "  task_manifest_digest:   %s\n", result.TaskManifestDigest)
 	fmt.Fprintf(stdout, "  repetitions:            %d\n", result.Repetitions)
 	fmt.Fprintf(stdout, "  assignments:            %d\n", result.AssignmentCount)
 	fmt.Fprintf(stdout, "  warmup_calls:           %d\n", result.WarmupCalls)

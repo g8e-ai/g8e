@@ -328,11 +328,26 @@ class TestCampaignProfile:
         with pytest.raises(ValueError, match="duplicate track in track_arm_assignments"):
             CampaignProfile(**data)
 
+    def test_allows_same_model_in_each_tier(self):
+        assignments = [
+            ModelTierAssignment(variant_id="v1", target_tier=role)
+            for role in ("primary", "assistant", "lite")
+        ]
+        candidate = _make_profile().model_copy(
+            update={"model_tier_assignments": assignments, "content_hash": "0" * 64}
+        )
+        profile = CampaignProfile.model_validate(
+            candidate.model_copy(
+                update={"content_hash": compute_campaign_profile_hash(candidate)}
+            ).model_dump()
+        )
+        assert len(profile.model_tier_assignments) == 3
+
     def test_rejects_duplicate_model_tier_assignments(self):
         assignment = ModelTierAssignment(variant_id="v1", target_tier="primary")
         data = _make_profile().model_dump()
         data["model_tier_assignments"] = [assignment, assignment]
-        with pytest.raises(ValueError, match="duplicate variant_id in model_tier_assignments"):
+        with pytest.raises(ValueError, match="duplicate model tier assignment"):
             CampaignProfile(**data)
 
     def test_content_hash_mismatch_raises(self):

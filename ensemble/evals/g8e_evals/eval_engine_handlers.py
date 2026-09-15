@@ -7,9 +7,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import io
 import json
 import os
+import subprocess
 import sys
 from collections.abc import Callable
 from contextlib import redirect_stdout
@@ -496,6 +499,435 @@ def _verify(request: EvalEngineRequest) -> EvalEngineResult:
     return succeeded_result(request, payload)
 
 
+def _required_parameter(request: EvalEngineRequest, name: str) -> str:
+    value = request.parameters.get(name, "")
+    if not value:
+        raise EngineError(EvalErrorCode.CONFIG_INVALID, request.operation.value, f"missing required parameter: {name}")
+    return value
+
+
+def _optional_path(request: EvalEngineRequest, name: str) -> Path | None:
+    value = request.parameters.get(name)
+    return Path(value) if value else None
+
+
+def _campaign_set_plan(request: EvalEngineRequest) -> EvalEngineResult:
+    from g8e_evals.campaign_set import compute_dry_run_plan, load_campaign_set_plan
+
+    try:
+        plan = load_campaign_set_plan(Path(request.config_path))
+        return succeeded_result(request, compute_dry_run_plan(plan))
+    except (OSError, ValueError) as exc:
+        raise EngineError(EvalErrorCode.CONFIG_INVALID, "campaign_set_plan", _safe_detail(exc)) from exc
+
+
+def _campaign_set_validate(request: EvalEngineRequest) -> EvalEngineResult:
+    from g8e_evals.campaign_set import (
+        load_campaign_set_index,
+        load_campaign_set_plan,
+        validate_campaign_set_index,
+        validate_campaign_set_plan,
+    )
+
+    try:
+        plan = load_campaign_set_plan(Path(request.config_path))
+        validate_campaign_set_plan(plan)
+        payload: dict[str, object] = {
+            "ok": True,
+            "set_id": plan.set_id,
+            "child_count": len(plan.child_plans),
+            "total_tasks": len(plan.population_task_ids),
+            "expected_total_assignment_count": plan.expected_total_assignment_count,
+        }
+        index_path = _optional_path(request, "index")
+        if index_path is not None:
+            index = load_campaign_set_index(index_path)
+            validate_campaign_set_index(index, plan)
+            payload["index"] = index.model_dump(mode="json")
+        return succeeded_result(request, payload)
+    except (OSError, ValueError) as exc:
+        raise EngineError(EvalErrorCode.AUTHORITY_INVALID, "campaign_set_validate", _safe_detail(exc)) from exc
+
+
+def _campaign_set_verify(request: EvalEngineRequest) -> EvalEngineResult:
+    from pydantic import TypeAdapter, ValidationError
+
+    from g8e_evals.campaign_set import (
+        load_campaign_set_index,
+        load_campaign_set_plan,
+        verify_campaign_set_aggregate,
+    )
+    from g8e_evals.replacement_rule import ReplacementManifestRule
+
+    try:
+        plan = load_campaign_set_plan(Path(request.config_path))
+        index = load_campaign_set_index(Path(_required_parameter(request, "index")))
+        child_paths = TypeAdapter(dict[str, str]).validate_json(_required_parameter(request, "child_dirs"))
+        replacement_path = _optional_path(request, "replacement_rule")
+        replacement = (
+            ReplacementManifestRule.model_validate_json(replacement_path.read_text())
+            if replacement_path is not None
+            else None
+        )
+        result = verify_campaign_set_aggregate(
+            plan,
+            index,
+            {child_id: Path(path) for child_id, path in child_paths.items()},
+            replacement_rule=replacement,
+        )
+    except EngineError:
+        raise
+    except (OSError, ValueError, ValidationError) as exc:
+        raise EngineError(EvalErrorCode.CONFIG_INVALID, "campaign_set_verify", _safe_detail(exc)) from exc
+    payload = result.model_dump(mode="json")
+    if not result.ok:
+        return failed_result(
+            request,
+            EvalErrorCode.AUTHORITY_INVALID,
+            "campaign_set_verify",
+            f"campaign-set verification failed with {len(result.failures)} failure(s)",
+            payload,
+        )
+    return succeeded_result(request, payload)
+
+
+def _controller_status(request: EvalEngineRequest) -> EvalEngineResult:
+    from g8e_evals.constants import CONTROLLER_STATE_JSON
+    from g8e_evals.controller import load_controller_state
+
+    try:
+        state = load_controller_state(Path(_required_parameter(request, "work_dir")) / CONTROLLER_STATE_JSON)
+        return succeeded_result(request, state.model_dump(mode="json"))
+    except EngineError:
+        raise
+    except (OSError, ValueError) as exc:
+        raise EngineError(EvalErrorCode.STATUS_RECONCILIATION_FAILED, "controller_status", _safe_detail(exc)) from exc
+
+
+def _controller_stop(request: EvalEngineRequest) -> EvalEngineResult:
+    from g8e_evals.controller import request_controller_stop
+
+    try:
+        result = request_controller_stop(
+            Path(_required_parameter(request, "work_dir")),
+            immediate=request.flags.immediate_stop,
+        )
+        return succeeded_result(request, result.model_dump(mode="json"))
+    except EngineError:
+        raise
+    except (OSError, ValueError) as exc:
+        raise EngineError(EvalErrorCode.STATUS_RECONCILIATION_FAILED, "controller_stop", _safe_detail(exc)) from exc
+
+
+def _controller_recover(request: EvalEngineRequest) -> EvalEngineResult:
+    from g8e_evals.controller import recover_interrupted_controller, retry_controller_publication
+    from g8e_evals.controller_cli import PublicOutboxPublisher
+
+    try:
+        work_dir = Path(_required_parameter(request, "work_dir"))
+        if request.parameters.get("publication") == "true":
+            state = retry_controller_publication(
+                work_dir,
+                PublicOutboxPublisher(Path(request.platform.g8e_binary_path), work_dir),
+            )
+        else:
+            state = recover_interrupted_controller(work_dir)
+        payload = state.model_dump(mode="json")
+        if request.parameters.get("publication") == "true" and state.status.value != "completed":
+            return failed_result(
+                request,
+                EvalErrorCode.STATUS_RECONCILIATION_FAILED,
+                "controller_recover",
+                f"controller publication remains stopped: {state.stop_reason}",
+                payload,
+            )
+        return succeeded_result(request, payload)
+    except EngineError:
+        raise
+    except (OSError, ValueError) as exc:
+        raise EngineError(EvalErrorCode.STATUS_RECONCILIATION_FAILED, "controller_recover", _safe_detail(exc)) from exc
+
+
+def _bundle(request: EvalEngineRequest) -> EvalEngineResult:
+    from g8e_evals.bundle.produce import BundleProductionError, produce_bundle
+    from g8e_evals.bundle.signing import EvalSigningKey
+
+    try:
+        signing_key = EvalSigningKey.from_seed(Path(_required_parameter(request, "signing_key_path")).read_bytes())
+        manifest = produce_bundle(
+            report_dir=Path(request.report_root),
+            bundle_dir=Path(_required_parameter(request, "bundle_dir")),
+            bundle_id=_required_parameter(request, "bundle_id"),
+            signing_key=signing_key,
+        )
+        return succeeded_result(request, manifest.model_dump(mode="json"))
+    except EngineError:
+        raise
+    except FileExistsError as exc:
+        raise EngineError(EvalErrorCode.REPORT_ROOT_REUSED, "bundle", _safe_detail(exc)) from exc
+    except (BundleProductionError, OSError, ValueError) as exc:
+        raise EngineError(EvalErrorCode.AUTHORITY_INVALID, "bundle", _safe_detail(exc)) from exc
+
+
+def _verify_bundle(request: EvalEngineRequest) -> EvalEngineResult:
+    from g8e_evals.bundle.signing import EvalTrustStore
+    from g8e_evals.bundle.verify import verify_bundle
+
+    try:
+        trust_store_path = _optional_path(request, "trust_store")
+        trust_store = (
+            EvalTrustStore.model_validate_json(trust_store_path.read_text())
+            if trust_store_path is not None
+            else None
+        )
+        report = verify_bundle(Path(request.report_root), trust_store=trust_store)
+    except (OSError, ValueError) as exc:
+        raise EngineError(EvalErrorCode.CONFIG_INVALID, "verify", _safe_detail(exc)) from exc
+    payload = report.model_dump(mode="json")
+    if not report.ok:
+        return failed_result(
+            request,
+            EvalErrorCode.AUTHORITY_INVALID,
+            "verify",
+            f"bundle verification failed with {len(report.failures)} failure(s)",
+            payload,
+        )
+    return succeeded_result(request, payload)
+
+
+def _verify_receipts(request: EvalEngineRequest) -> EvalEngineResult:
+    import click
+
+    from g8e_evals.cli import verify_receipts
+
+    output = io.StringIO()
+    callback = getattr(verify_receipts, "callback", verify_receipts)
+    try:
+        with redirect_stdout(output):
+            callback(
+                report_dir=Path(request.report_root),
+                pki_dir=Path(_required_parameter(request, "pki_dir")),
+                json_output=True,
+            )
+    except click.exceptions.Exit as exc:
+        payload = json.loads(output.getvalue())
+        return failed_result(
+            request,
+            EvalErrorCode.AUTHORITY_INVALID,
+            "verify_receipts",
+            f"receipt verification exited with status {exc.exit_code}",
+            payload,
+        )
+    except EngineError:
+        raise
+    except (OSError, ValueError, click.ClickException) as exc:
+        raise EngineError(EvalErrorCode.AUTHORITY_INVALID, "verify_receipts", _safe_detail(exc)) from exc
+    return succeeded_result(request, json.loads(output.getvalue()))
+
+
+def _write_new_json(path: Path, payload: bytes) -> None:
+    with path.open("xb") as output:
+        output.write(payload)
+
+
+def _qualification_hash_source(request: EvalEngineRequest) -> EvalEngineResult:
+    from g8e_evals.qualification import compute_source_manifest_result, render_qualification_json
+
+    try:
+        result = compute_source_manifest_result(
+            Path(_required_parameter(request, "authority")),
+            Path(_required_parameter(request, "source_root")),
+            _required_parameter(request, "authority_record_path"),
+        )
+        output = Path(_required_parameter(request, "output"))
+        _write_new_json(output, render_qualification_json(result))
+        return succeeded_result(request, result.model_dump(mode="json"))
+    except EngineError:
+        raise
+    except FileExistsError as exc:
+        raise EngineError(EvalErrorCode.REPORT_ROOT_REUSED, "qualification_hash_source", _safe_detail(exc)) from exc
+    except (OSError, ValueError) as exc:
+        raise EngineError(EvalErrorCode.CONFIG_INVALID, "qualification_hash_source", _safe_detail(exc)) from exc
+
+
+def _qualification_candidate(request: EvalEngineRequest) -> EvalEngineResult:
+    from pydantic import TypeAdapter, ValidationError
+
+    from g8e_evals.qualification import (
+        CandidateIdentityEvidence,
+        ComponentImageIdentity,
+        SourceManifestResult,
+        render_qualification_json,
+    )
+
+    try:
+        full_source = SourceManifestResult.model_validate_json(
+            Path(_required_parameter(request, "full_source")).read_bytes()
+        )
+        execution_source = SourceManifestResult.model_validate_json(
+            Path(_required_parameter(request, "execution_source")).read_bytes()
+        )
+        if full_source.scope != "full_source" or execution_source.scope != "execution_source":
+            raise ValueError("candidate source manifest scopes are invalid")
+        binary = Path(_required_parameter(request, "binary"))
+        if binary.is_symlink():
+            raise ValueError("candidate binary must not be a symlink")
+        images = TypeAdapter(list[ComponentImageIdentity]).validate_json(_required_parameter(request, "images"))
+        result = CandidateIdentityEvidence.build(
+            source_tree_hash=full_source.source_tree_hash,
+            execution_source_manifest_hash=execution_source.source_tree_hash,
+            binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
+            images=images,
+        )
+        _write_new_json(Path(_required_parameter(request, "output")), render_qualification_json(result))
+        return succeeded_result(request, result.model_dump(mode="json"))
+    except EngineError:
+        raise
+    except FileExistsError as exc:
+        raise EngineError(EvalErrorCode.REPORT_ROOT_REUSED, "qualification_candidate", _safe_detail(exc)) from exc
+    except (OSError, ValueError, ValidationError) as exc:
+        raise EngineError(EvalErrorCode.CONFIG_INVALID, "qualification_candidate", _safe_detail(exc)) from exc
+
+
+def _qualification_collect_runtime(request: EvalEngineRequest) -> EvalEngineResult:
+    from pydantic import ValidationError
+
+    from g8e_evals.qualification import RuntimeCollectionRequest, collect_runtime_identity, render_qualification_json
+
+    try:
+        request_path = Path(_required_parameter(request, "request"))
+        collection = RuntimeCollectionRequest.model_validate_json(request_path.read_bytes())
+        result = collect_runtime_identity(collection, request_path.parent)
+        _write_new_json(Path(_required_parameter(request, "output")), render_qualification_json(result))
+        return succeeded_result(request, result.model_dump(mode="json"))
+    except EngineError:
+        raise
+    except FileExistsError as exc:
+        raise EngineError(EvalErrorCode.REPORT_ROOT_REUSED, "qualification_collect_runtime", _safe_detail(exc)) from exc
+    except (OSError, ValueError, ValidationError) as exc:
+        raise EngineError(EvalErrorCode.CONFIG_INVALID, "qualification_collect_runtime", _safe_detail(exc)) from exc
+
+
+def _qualification_run_gate(request: EvalEngineRequest) -> EvalEngineResult:
+    from pydantic import TypeAdapter, ValidationError
+
+    from g8e_evals.qualification import (
+        CandidateIdentityEvidence,
+        GateResultEvidence,
+        render_qualification_json,
+    )
+
+    try:
+        candidate = CandidateIdentityEvidence.model_validate_json(
+            Path(_required_parameter(request, "candidate")).read_bytes()
+        )
+        command = TypeAdapter(list[str]).validate_json(_required_parameter(request, "command"))
+        versions = TypeAdapter(dict[str, str]).validate_json(_required_parameter(request, "tool_versions"))
+        if not command or any(not value for value in command):
+            raise ValueError("gate command arguments must be non-empty")
+        started_at = datetime.now(UTC)
+        completed = subprocess.run(command, check=False, capture_output=True)
+        result = GateResultEvidence.build(
+            gate_id=_required_parameter(request, "gate_id"),
+            candidate_content_hash=candidate.content_hash,
+            command=command,
+            started_at=started_at,
+            completed_at=datetime.now(UTC),
+            exit_code=completed.returncode,
+            stdout_sha256=hashlib.sha256(completed.stdout).hexdigest(),
+            stderr_sha256=hashlib.sha256(completed.stderr).hexdigest(),
+            tool_versions=versions,
+            skipped=[],
+        )
+        _write_new_json(Path(_required_parameter(request, "output")), render_qualification_json(result))
+    except EngineError:
+        raise
+    except FileExistsError as exc:
+        raise EngineError(EvalErrorCode.REPORT_ROOT_REUSED, "qualification_run_gate", _safe_detail(exc)) from exc
+    except (OSError, ValueError, ValidationError) as exc:
+        raise EngineError(EvalErrorCode.CONFIG_INVALID, "qualification_run_gate", _safe_detail(exc)) from exc
+    payload = result.model_dump(mode="json")
+    if result.exit_code != 0:
+        return failed_result(
+            request,
+            EvalErrorCode.CHILD_EXIT_NON_ZERO,
+            "qualification_run_gate",
+            f"qualification gate exited with status {result.exit_code}",
+            payload,
+        )
+    return succeeded_result(request, payload)
+
+
+def _qualification_build(request: EvalEngineRequest) -> EvalEngineResult:
+    from pydantic import ValidationError
+
+    from g8e_evals.qualification import (
+        QualificationBuildRequest,
+        build_collection_candidate_qualification,
+        render_qualification_json,
+        resolve_qualification_input,
+    )
+
+    try:
+        input_path = Path(_required_parameter(request, "input"))
+        build_request = QualificationBuildRequest.model_validate_json(input_path.read_bytes())
+        result = build_collection_candidate_qualification(resolve_qualification_input(build_request, input_path.parent))
+        rendered = render_qualification_json(result)
+        check_path = _optional_path(request, "check")
+        output_path = _optional_path(request, "output")
+        if (check_path is None) == (output_path is None):
+            raise ValueError("exactly one of output or check is required")
+        if check_path is not None:
+            if check_path.read_bytes() != rendered:
+                return failed_result(
+                    request,
+                    EvalErrorCode.AUTHORITY_INVALID,
+                    "qualification_build",
+                    "qualification draft does not reproduce",
+                    result.model_dump(mode="json"),
+                )
+        elif output_path is not None:
+            _write_new_json(output_path, rendered)
+        return succeeded_result(request, result.model_dump(mode="json"))
+    except EngineError:
+        raise
+    except FileExistsError as exc:
+        raise EngineError(EvalErrorCode.REPORT_ROOT_REUSED, "qualification_build", _safe_detail(exc)) from exc
+    except (OSError, ValueError, ValidationError) as exc:
+        raise EngineError(EvalErrorCode.CONFIG_INVALID, "qualification_build", _safe_detail(exc)) from exc
+
+
+def _bench_synthetic(request: EvalEngineRequest) -> EvalEngineResult:
+    from g8e_evals.cli import _run_synthetic_suite, load_preregistration
+    from g8e_evals.suites import assert_simulation_eligible
+
+    try:
+        gold_set = _optional_path(request, "gold_set")
+        if gold_set is None:
+            gold_set = Path(request.platform.eval_project) / assert_simulation_eligible(
+                _required_parameter(request, "suite")
+            ).default_gold_set
+        preregistration_path = _optional_path(request, "preregistration")
+        preregistration = load_preregistration(preregistration_path) if preregistration_path is not None else None
+        limit_value = request.parameters.get("limit")
+        limit = int(limit_value) if limit_value else None
+        with redirect_stdout(sys.stderr):
+            report_dir = asyncio.run(
+                _run_synthetic_suite(
+                    _required_parameter(request, "suite"),
+                    gold_set,
+                    Path(request.report_root),
+                    limit,
+                    preregistration=preregistration,
+                )
+            )
+        return succeeded_result(request, {"report_root": str(report_dir)})
+    except EngineError:
+        raise
+    except (OSError, ValueError) as exc:
+        raise EngineError(EvalErrorCode.CHILD_EXIT_NON_ZERO, "bench_synthetic", _safe_detail(exc)) from exc
+
+
 def builtin_operation_handlers() -> dict[EvalOperation, OperationHandler]:
     handlers: dict[EvalOperation, Callable[[EvalEngineRequest], EvalEngineResult]] = {
         EvalOperation.DIAGNOSTIC_START: _diagnostic_start,
@@ -506,5 +938,20 @@ def builtin_operation_handlers() -> dict[EvalOperation, OperationHandler]:
         EvalOperation.CAMPAIGN_STATUS: _status,
         EvalOperation.CAMPAIGN_STOP: _stop,
         EvalOperation.CAMPAIGN_VERIFY: _verify,
+        EvalOperation.CAMPAIGN_SET_PLAN: _campaign_set_plan,
+        EvalOperation.CAMPAIGN_SET_VALIDATE: _campaign_set_validate,
+        EvalOperation.CAMPAIGN_SET_VERIFY: _campaign_set_verify,
+        EvalOperation.CONTROLLER_STATUS: _controller_status,
+        EvalOperation.CONTROLLER_STOP: _controller_stop,
+        EvalOperation.CONTROLLER_RECOVER: _controller_recover,
+        EvalOperation.BUNDLE: _bundle,
+        EvalOperation.VERIFY: _verify_bundle,
+        EvalOperation.VERIFY_RECEIPTS: _verify_receipts,
+        EvalOperation.QUALIFICATION_HASH_SOURCE: _qualification_hash_source,
+        EvalOperation.QUALIFICATION_CANDIDATE: _qualification_candidate,
+        EvalOperation.QUALIFICATION_COLLECT_RUNTIME: _qualification_collect_runtime,
+        EvalOperation.QUALIFICATION_RUN_GATE: _qualification_run_gate,
+        EvalOperation.QUALIFICATION_BUILD: _qualification_build,
+        EvalOperation.BENCH_SYNTHETIC: _bench_synthetic,
     }
     return handlers

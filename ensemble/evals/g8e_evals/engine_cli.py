@@ -210,7 +210,7 @@ def run_engine(request_path: str) -> int:
     except Exception as exc:
         result = failed_result(
             request,
-            error_code=EvalErrorCode.NONE,
+            error_code=EvalErrorCode.CHILD_EXIT_NON_ZERO,
             error_stage="dispatch",
             safe_detail=f"unexpected engine error: {type(exc).__name__}",
         )
@@ -230,4 +230,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    sys.modules.setdefault("g8e_evals.engine_cli", sys.modules[__name__])
     sys.exit(main())

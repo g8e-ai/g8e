@@ -481,7 +481,10 @@ const (
 
 	// EvalLeaseDirname is the owner-local authority directory under the
 	// runtime tree where leases are stored with owner-only permissions.
-	EvalLeaseDirname = "eval/leases"
+	EvalLeaseDirname          = "eval/leases"
+	EvalBundleSigningKeyPath  = "eval/bundle-signing-key.seed"
+	EvalBundleTrustStorePath  = "eval/bundle-trust-store.json"
+	EvalBundleDirectorySuffix = ".bundle"
 
 	// EvalTestExtra is the optional dependency extra added by `eval setup`
 	// when `--with-test-tools` is explicitly requested.

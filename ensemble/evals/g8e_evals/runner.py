@@ -124,7 +124,7 @@ from g8e_evals.index import (
     compute_index_generation_hash,
 )
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
-from g8e_evals.profile import CampaignProfile
+from g8e_evals.profile import CampaignProfile, ModelTierAssignment
 from g8e_evals.registry import ModelRegistry
 from g8e_evals.replacement_rule import (
     resolve_replacement_child_id,
@@ -715,28 +715,36 @@ def _write_jsonl(path: Path, records: Sequence[BaseModel]) -> None:
 
 
 def _append_jsonl(path: Path, records: Sequence[BaseModel]) -> None:
-    """Append records to a JSONL file (incremental persistence)."""
+    """Append records to a JSONL file with durable persistence.
+
+    Flushes and fsyncs after the append so a process kill immediately
+    after the write does not lose the data to the OS buffer cache.
+    """
     if not records:
         return
     with open(path, "a", encoding="utf-8") as f:
         for r in records:
             f.write(r.model_dump_json() + "\n")
+        f.flush()
+        os.fsync(f.fileno())
 
 
 def _read_jsonl(path: Path, model_cls: type[BaseModel]) -> list[BaseModel]:
     """Read a JSONL file into a list of Pydantic models.
 
-    Handles trailing null-byte padding that can result from a process
-    kill mid-write (the OS may have allocated a full block that was
-    only partially filled with valid JSON lines).
+    Rejects NUL-byte corruption outright rather than silently stripping
+    it. A NUL byte means the OS allocated a block partially filled
+    before a process kill; silently stripping it would hide data loss.
+    Partial or invalid JSON records raise so the caller can classify
+    the failure rather than degrading silently.
     """
     if not path.exists():
         return []
     raw = path.read_bytes()
-    # Strip trailing null-byte padding from process-kill corruption
-    raw = raw.rstrip(b"\x00")
+    if b"\x00" in raw:
+        raise ValueError(f"{path.name} contains NUL-byte corruption")
     records: list[BaseModel] = []
-    for line in raw.decode("utf-8", errors="replace").splitlines():
+    for line in raw.decode("utf-8").splitlines():
         line = line.strip()
         if not line:
             continue
@@ -1160,16 +1168,42 @@ def derive_cohorts_from_registry(
         vid for vid in profile.generative_variant_ids
         if vid in runnable_ids
     ]
+    explicit_tier_assignments = bool(profile.model_tier_assignments)
+    assignments = [
+        assignment
+        for assignment in profile.model_tier_assignments
+        if assignment.variant_id in runnable_ids
+    ]
+    assigned_ids = {assignment.variant_id for assignment in assignments}
+    assignments.extend(
+        ModelTierAssignment(variant_id=variant_id, target_tier="primary")
+        for variant_id in measured_ids
+        if variant_id not in assigned_ids
+    )
 
     cohorts: list[ModelCohort] = []
     cohort_variant_map: dict[str, str] = {}
-    for variant_id in measured_ids:
-        variant = registry.get_variant(variant_id)
-        cohort_id = f"cohort-{variant_id}"
+    for assignment in assignments:
+        variant = registry.get_variant(assignment.variant_id)
+        cohort_id = f"cohort-{assignment.variant_id}-role-{assignment.target_tier}"
+        role_models = {
+            assignment.target_tier: (
+                variant.served_model_tag,
+                variant.backend_name,
+            )
+        }
+        if explicit_tier_assignments:
+            for tier_name in _ALL_TIER_NAMES:
+                if tier_name == assignment.target_tier:
+                    continue
+                baseline_tag = profile.baseline_tier_mappings.get(tier_name)
+                if baseline_tag is None:
+                    raise ValueError(f"missing baseline_tier_mapping for {tier_name}")
+                role_models[tier_name] = (baseline_tag, "ollama")
         bindings = [RoleModelBinding(
-            role="primary",
-            model_id=variant.served_model_tag,
-            provider=variant.backend_name,
+            role=tier_name,
+            model_id=role_models[tier_name][0],
+            provider=role_models[tier_name][1],
             endpoint="http://192.168.1.2:11434",
             sampling_settings=SamplingSettings(
                 temperature=profile.temperature,
@@ -1179,14 +1213,14 @@ def derive_cohorts_from_registry(
             ),
             timeout_seconds=profile.timeout_seconds,
             seed_capable=True,
-        )]
+        ) for tier_name in _ALL_TIER_NAMES if tier_name in role_models]
         ch = compute_model_cohort_hash(cohort_id, bindings)
         cohorts.append(ModelCohort(
             cohort_id=cohort_id,
             role_bindings=bindings,
             content_hash=ch,
         ))
-        cohort_variant_map[cohort_id] = variant_id
+        cohort_variant_map[cohort_id] = assignment.variant_id
 
     return cohorts, cohort_variant_map
 
@@ -1225,40 +1259,45 @@ def build_tier_fitness_sut_config(
             f"cohort {cohort.cohort_id!r} not found in cohort_variant_map"
         )
 
-    tier_assignment = None
-    for assignment in campaign_profile.model_tier_assignments:
-        if assignment.variant_id == variant_id:
-            tier_assignment = assignment
-            break
-    if tier_assignment is None:
+    target_tier = cohort.role_bindings[0].role
+    if "-role-" in cohort.cohort_id:
+        _, declared_tier = cohort.cohort_id.rsplit("-role-", 1)
+        if declared_tier in _ALL_TIER_NAMES:
+            target_tier = declared_tier
+    if not any(
+        assignment.variant_id == variant_id and assignment.target_tier == target_tier
+        for assignment in campaign_profile.model_tier_assignments
+    ):
         raise ValueError(
-            f"no model_tier_assignment found for variant {variant_id!r}"
+            f"no model_tier_assignment found for variant {variant_id!r} and tier {target_tier!r}"
         )
 
-    target_tier = tier_assignment.target_tier
-    candidate_model = cohort.role_bindings[0].model_id
-    candidate_endpoint = cohort.role_bindings[0].endpoint
-    candidate_provider = cohort.role_bindings[0].provider
+    binding_by_role = {binding.role: binding for binding in cohort.role_bindings}
+    candidate_binding = binding_by_role.get(target_tier)
+    if candidate_binding is None:
+        raise ValueError(f"cohort {cohort.cohort_id!r} has no binding for target tier {target_tier!r}")
+    candidate_model = candidate_binding.model_id
 
     role_configs: dict[str, LLMRoleConfig] = {}
     for tier_name in _ALL_TIER_NAMES:
-        if tier_name == target_tier:
+        binding = binding_by_role.get(tier_name)
+        if binding is not None:
             role_configs[tier_name] = LLMRoleConfig(
-                provider=candidate_provider,
-                model=candidate_model,
-                endpoint=candidate_endpoint,
+                provider=binding.provider,
+                model=binding.model_id,
+                endpoint=binding.endpoint,
             )
-        else:
-            baseline_tag = campaign_profile.baseline_tier_mappings.get(tier_name)
-            if baseline_tag is None:
-                raise ValueError(
-                    f"missing baseline_tier_mapping for {tier_name}"
-                )
-            role_configs[tier_name] = LLMRoleConfig(
-                provider="ollama",
-                model=baseline_tag,
-                endpoint=candidate_endpoint,
+            continue
+        baseline_tag = campaign_profile.baseline_tier_mappings.get(tier_name)
+        if baseline_tag is None:
+            raise ValueError(
+                f"missing baseline_tier_mapping for {tier_name}"
             )
+        role_configs[tier_name] = LLMRoleConfig(
+            provider="ollama",
+            model=baseline_tag,
+            endpoint=candidate_binding.endpoint,
+        )
 
     return SUTConfig(
         g8ee_url=g8ee_url,
@@ -1300,8 +1339,15 @@ def build_campaign_sut_factory(
 
     def factory(cohort: ModelCohort, arm: Arm) -> SUTProtocol:
         if arm == Arm.DIRECT or campaign_profile is None or cohort_variant_map is None:
-            model_id = cohort.role_bindings[0].model_id
-            endpoint = cohort.role_bindings[0].endpoint
+            binding = cohort.role_bindings[0]
+            if "-role-" in cohort.cohort_id:
+                _, target_tier = cohort.cohort_id.rsplit("-role-", 1)
+                binding = next(
+                    (candidate for candidate in cohort.role_bindings if candidate.role == target_tier),
+                    binding,
+                )
+            model_id = binding.model_id
+            endpoint = binding.endpoint
             config = SUTConfig(
                 g8ee_url="",
                 primary=LLMRoleConfig(provider="ollama", model=model_id, endpoint=endpoint),

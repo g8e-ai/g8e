@@ -112,6 +112,7 @@ def _write_profile(
     *,
     registry_hash: str | None = None,
     generative_variant_ids: list[str] | None = None,
+    tier_assignments: list[ModelTierAssignment] | None = None,
 ) -> Path:
     if generative_variant_ids is None:
         generative_variant_ids = ["qwen3-8b-q4_0"]
@@ -122,9 +123,10 @@ def _write_profile(
     track_assignments = [
         TrackArmAssignment(track=CampaignTrack.DIRECT, arm_id="direct"),
     ]
-    tier_assignments = [
-        ModelTierAssignment(variant_id=generative_variant_ids[0], target_tier="primary"),
-    ]
+    if tier_assignments is None:
+        tier_assignments = [
+            ModelTierAssignment(variant_id=generative_variant_ids[0], target_tier="primary"),
+        ]
     temp = CampaignProfile.model_construct(
         campaign_id="generative-campaign-v1",
         campaign_revision="1",
@@ -246,6 +248,45 @@ class TestDeriveCohortsFromRegistry:
         assert len(cohorts) == 1
         assert cohort_variant_map[cohorts[0].cohort_id] == "qwen3-8b-q4_0"
 
+    def test_derives_one_cohort_per_model_role_assignment(self, tmp_path: Path):
+        from g8e_evals.runner import derive_cohorts_from_registry
+
+        variant = _make_variant()
+        registry_path = _write_registry(tmp_path, [variant])
+        registry = ModelRegistry.model_validate_json(registry_path.read_text())
+        assignments = [
+            ModelTierAssignment(variant_id=variant.variant_id, target_tier=role)
+            for role in ("primary", "assistant", "lite")
+        ]
+        profile_path = _write_profile(
+            tmp_path,
+            registry_hash=registry.content_hash,
+            tier_assignments=assignments,
+        )
+        profile = CampaignProfile.model_validate_json(profile_path.read_text())
+
+        cohorts, cohort_variant_map = derive_cohorts_from_registry(profile, registry)
+
+        assert len(cohorts) == 3
+        assert all(
+            {binding.role for binding in cohort.role_bindings} == {"primary", "assistant", "lite"}
+            for cohort in cohorts
+        )
+        assert {
+            cohort.cohort_id.rsplit("-role-", 1)[1]
+            for cohort in cohorts
+        } == {"primary", "assistant", "lite"}
+        assert {cohort_variant_map[cohort.cohort_id] for cohort in cohorts} == {variant.variant_id}
+        for cohort in cohorts:
+            target_role = cohort.cohort_id.rsplit("-role-", 1)[1]
+            binding_by_role = {binding.role: binding for binding in cohort.role_bindings}
+            assert binding_by_role[target_role].model_id == variant.served_model_tag
+        assert {cohort.cohort_id for cohort in cohorts} == {
+            f"cohort-{variant.variant_id}-role-primary",
+            f"cohort-{variant.variant_id}-role-assistant",
+            f"cohort-{variant.variant_id}-role-lite",
+        }
+
     def test_cohort_role_binding_carries_served_model_tag(self, tmp_path: Path):
         from g8e_evals.runner import derive_cohorts_from_registry
 
@@ -323,7 +364,7 @@ class TestDeriveCohortsFromRegistry:
         profile = CampaignProfile.model_validate_json(profile_path.read_text())
 
         cohorts, _ = derive_cohorts_from_registry(profile, registry)
-        assert cohorts[0].cohort_id == "cohort-qwen3-8b-q4_0"
+        assert cohorts[0].cohort_id == "cohort-qwen3-8b-q4_0-role-primary"
 
     def test_cohort_content_hash_is_computed(self, tmp_path: Path):
         from g8e_evals.runner import derive_cohorts_from_registry

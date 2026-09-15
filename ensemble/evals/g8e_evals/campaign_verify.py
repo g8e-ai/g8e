@@ -612,20 +612,13 @@ def _cross_check_observation_model_binding(
     cohort = cohort_by_id.get(assignment.model_cohort_id)
     if cohort is None:
         return
-    cohort_model_ids = {rb.model_id for rb in cohort.role_bindings}
-    cohort_roles = {rb.role for rb in cohort.role_bindings}
-    if obs.model_variant_id not in cohort_model_ids:
-        failures.append(
-            f"resource observation {obs.inference_id} model_variant_id mismatch: "
-            f"got {obs.model_variant_id!r}, cohort {assignment.model_cohort_id!r} "
-            f"has {sorted(cohort_model_ids)}"
-        )
+    cohort_bindings = {(rb.role, rb.model_id) for rb in cohort.role_bindings}
     obs_role = obs.role.value if hasattr(obs.role, "value") else str(obs.role)
-    if obs_role not in cohort_roles:
+    if (obs_role, obs.model_variant_id) not in cohort_bindings:
         failures.append(
-            f"resource observation {obs.inference_id} role mismatch: "
-            f"got {obs_role!r}, cohort {assignment.model_cohort_id!r} "
-            f"has {sorted(cohort_roles)}"
+            f"resource observation {obs.inference_id} model_variant_id and role binding mismatch: "
+            f"got {(obs_role, obs.model_variant_id)!r}, cohort {assignment.model_cohort_id!r} "
+            f"has {sorted(cohort_bindings)}"
         )
 
 
