@@ -35,6 +35,7 @@ from g8e_evals.live_operations_authority import (
     build_live_operation_lease,
     build_live_operation_lease_template,
     build_live_operation_lease_template_set,
+    compute_request_digest,
     render_authority_json,
 )
 
@@ -116,7 +117,12 @@ def _lease(
                 name="governed_inference_smoke", path="live-packet/smoke.json", sha256=_VALID_HASH
             )
         ],
-        permitted_command="g8e inference smoke --role primary --role assistant --role lite",
+        request_digest=compute_request_digest(
+            operation_config_content_hash=_VALID_HASH,
+            operation_id="governed-inference-smoke",
+            command_family=CommandFamily.GOVERNED_INFERENCE_SMOKE,
+            command_version="1.0.0",
+        ),
         command_family=CommandFamily.GOVERNED_INFERENCE_SMOKE,
         report_root="reports/governed-inference-smoke-v1",
         app_identity="spiffe://g8e.local/app/g8ee",
@@ -356,13 +362,65 @@ def test_live_lease_binds_candidate_inventory_identity_and_ceiling() -> None:
     assert lease.candidate == _candidate()
     assert lease.model_inventory_digest == "5" * 64
     assert lease.runtime_authorities[0].name == "governed_inference_smoke"
-    assert (
-        lease.permitted_command == "g8e inference smoke --role primary --role assistant --role lite"
-    )
+    assert len(lease.request_digest) == 64
     assert lease.command_family == CommandFamily.GOVERNED_INFERENCE_SMOKE
+    assert lease.command_version == "1.0.0"
     assert lease.budget.max_requests == 3
     assert lease.status == LeaseStatus.ACTIVE
     assert lease.issued_at < lease.start_deadline < lease.expires_at
+
+
+def test_request_digest_is_deterministic_and_bind_specific() -> None:
+    base = compute_request_digest(
+        operation_config_content_hash=_VALID_HASH,
+        operation_id="governed-inference-smoke",
+        command_family=CommandFamily.GOVERNED_INFERENCE_SMOKE,
+        command_version="1.0.0",
+    )
+    drifted_config = compute_request_digest(
+        operation_config_content_hash=_OTHER_HASH,
+        operation_id="governed-inference-smoke",
+        command_family=CommandFamily.GOVERNED_INFERENCE_SMOKE,
+        command_version="1.0.0",
+    )
+    drifted_operation = compute_request_digest(
+        operation_config_content_hash=_VALID_HASH,
+        operation_id="embedded-authority-diagnostic",
+        command_family=CommandFamily.GOVERNED_INFERENCE_SMOKE,
+        command_version="1.0.0",
+    )
+    drifted_family = compute_request_digest(
+        operation_config_content_hash=_VALID_HASH,
+        operation_id="governed-inference-smoke",
+        command_family=CommandFamily.CAMPAIGN_RUN,
+        command_version="1.0.0",
+    )
+    drifted_version = compute_request_digest(
+        operation_config_content_hash=_VALID_HASH,
+        operation_id="governed-inference-smoke",
+        command_family=CommandFamily.GOVERNED_INFERENCE_SMOKE,
+        command_version="2.0.0",
+    )
+
+    assert base == compute_request_digest(
+        operation_config_content_hash=_VALID_HASH,
+        operation_id="governed-inference-smoke",
+        command_family=CommandFamily.GOVERNED_INFERENCE_SMOKE,
+        command_version="1.0.0",
+    )
+    assert base != drifted_config
+    assert base != drifted_operation
+    assert base != drifted_family
+    assert base != drifted_version
+
+
+def test_live_lease_rejects_non_hex_request_digest() -> None:
+    valid = _lease()
+
+    with pytest.raises(ValidationError, match="request_digest"):
+        LiveOperationLease.model_validate(
+            valid.model_dump() | {"request_digest": "not-a-hex-digest"}
+        )
 
 
 def test_live_lease_rejects_missing_runtime_authority() -> None:

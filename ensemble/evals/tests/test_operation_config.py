@@ -17,7 +17,6 @@ semantics, and preset override behavior.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -44,7 +43,6 @@ from g8e_evals.operation_config import (
     EvidenceKeyRef,
     OperationKind,
     ProviderEndpointRef,
-    SamplingPolicy,
     StopConditions,
     load_operation_config,
     write_operation_config,
@@ -62,45 +60,45 @@ REGISTRY_SHA = "d" * 64
 
 
 def _diag_kwargs(**overrides):
-    base = dict(
-        operation_id="diag-001",
-        revision="rev-1",
-        suite="ifeval_subset",
-        seed=42,
-        report_root=".local.dev/campaign/diag-test",
-        gold_set=AuthorityRef(path=".local.dev/campaign/gold.json", sha256=GOLD_SHA),
-        evidence_key=EvidenceKeyRef(path=".local.dev/campaign/key.json", key_id="key-001"),
-        provider_endpoint=ProviderEndpointRef(provider="ollama", endpoint_class="ollama-local"),
-        budget=BudgetCeilings(max_requests=30, max_tokens=491520, max_usd=0),
-        stop_conditions=StopConditions(idle_timeout_s=180.0),
-        model_variant_id="gemma4:e4b",
-        arm="ensemble_ungoverned",
-    )
+    base = {
+        "operation_id": "diag-001",
+        "revision": "rev-1",
+        "suite": "ifeval_subset",
+        "seed": 42,
+        "report_root": ".local.dev/campaign/diag-test",
+        "gold_set": AuthorityRef(path=".local.dev/campaign/gold.json", sha256=GOLD_SHA),
+        "evidence_key": EvidenceKeyRef(path=".local.dev/campaign/key.json", key_id="key-001"),
+        "provider_endpoint": ProviderEndpointRef(provider="ollama", endpoint_class="ollama-local"),
+        "budget": BudgetCeilings(max_requests=30, max_tokens=491520, max_usd=0),
+        "stop_conditions": StopConditions(idle_timeout_s=180.0),
+        "model_variant_id": "gemma4:e4b",
+        "arm": "ensemble_ungoverned",
+    }
     base.update(overrides)
     return base
 
 
 def _camp_kwargs(**overrides):
-    base = dict(
-        operation_id="camp-001",
-        revision="rev-1",
-        suite="ifeval_subset",
-        seed=42,
-        report_root=".local.dev/campaign/camp-test",
-        gold_set=AuthorityRef(path=".local.dev/campaign/gold.json", sha256=GOLD_SHA),
-        evidence_key=EvidenceKeyRef(path=".local.dev/campaign/key.json", key_id="key-001"),
-        provider_endpoint=ProviderEndpointRef(provider="ollama", endpoint_class="ollama-local"),
-        budget=BudgetCeilings(max_requests=100, max_tokens=1000000, max_usd=0, concurrency=1),
-        stop_conditions=StopConditions(idle_timeout_s=180.0),
-        campaign_id="test-campaign",
-        release_version="v2.1.8",
-        preregistration=AuthorityRef(path=".local.dev/campaign/prereg.json", sha256=PREREG_SHA),
-        profile=AuthorityRef(path=".local.dev/campaign/profile.json", sha256=PROFILE_SHA),
-        model_registry=AuthorityRef(path=".local.dev/campaign/registry.json", sha256=REGISTRY_SHA),
-        arms=["direct", "ensemble_ungoverned"],
-        cohort_ids=["cohort-qwen3-8b"],
-        repetitions=3,
-    )
+    base = {
+        "operation_id": "camp-001",
+        "revision": "rev-1",
+        "suite": "ifeval_subset",
+        "seed": 42,
+        "report_root": ".local.dev/campaign/camp-test",
+        "gold_set": AuthorityRef(path=".local.dev/campaign/gold.json", sha256=GOLD_SHA),
+        "evidence_key": EvidenceKeyRef(path=".local.dev/campaign/key.json", key_id="key-001"),
+        "provider_endpoint": ProviderEndpointRef(provider="ollama", endpoint_class="ollama-local"),
+        "budget": BudgetCeilings(max_requests=100, max_tokens=1000000, max_usd=0, concurrency=1),
+        "stop_conditions": StopConditions(idle_timeout_s=180.0),
+        "campaign_id": "test-campaign",
+        "release_version": "v2.1.8",
+        "preregistration": AuthorityRef(path=".local.dev/campaign/prereg.json", sha256=PREREG_SHA),
+        "profile": AuthorityRef(path=".local.dev/campaign/profile.json", sha256=PROFILE_SHA),
+        "model_registry": AuthorityRef(path=".local.dev/campaign/registry.json", sha256=REGISTRY_SHA),
+        "arms": ["direct", "ensemble_ungoverned"],
+        "cohort_ids": ["cohort-qwen3-8b"],
+        "repetitions": 3,
+    }
     base.update(overrides)
     return base
 

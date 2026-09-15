@@ -54,33 +54,18 @@ type evalDraftDeps struct {
 // evalDraftSummary is the typed review summary emitted by draft commands.
 // It mirrors the Python DraftReviewSummary model.
 type evalDraftSummary struct {
-	OperationKind   string         `json:"operation_kind"`
-	OperationID     string         `json:"operation_id"`
-	Revision        string         `json:"revision"`
-	Preset          string         `json:"preset"`
-	Suite           string         `json:"suite"`
-	ReportRoot      string         `json:"report_root"`
-	ContentHash     string         `json:"content_hash"`
-	Dimensions      map[string]any `json:"dimensions"`
-	Budget          map[string]any `json:"budget"`
+	OperationKind   string            `json:"operation_kind"`
+	OperationID     string            `json:"operation_id"`
+	Revision        string            `json:"revision"`
+	Preset          string            `json:"preset"`
+	Suite           string            `json:"suite"`
+	ReportRoot      string            `json:"report_root"`
+	ContentHash     string            `json:"content_hash"`
+	Dimensions      map[string]any    `json:"dimensions"`
+	Budget          map[string]any    `json:"budget"`
 	AuthorityHashes map[string]string `json:"authority_hashes"`
-	EndpointClass   string         `json:"endpoint_class"`
-	Provider        string         `json:"provider"`
-}
-
-// evalDraftRequestBase carries the common fields for both diagnostic and
-// campaign draft requests. The Go facade marshals this to JSON and passes
-// it to the Python draft module.
-type evalDraftRequestBase struct {
-	Kind            string             `json:"kind"`
-	Preset          string             `json:"preset"`
-	OperationID     string             `json:"operation_id"`
-	Revision        string             `json:"revision"`
-	ReportRoot      string             `json:"report_root"`
-	GoldSet         evalAuthorityRefJSON `json:"gold_set"`
-	EvidenceKey     evalEvidenceKeyRefJSON `json:"evidence_key"`
-	ProviderEndpoint evalProviderEndpointRefJSON `json:"provider_endpoint"`
-	OutputPath      string             `json:"output_path"`
+	EndpointClass   string            `json:"endpoint_class"`
+	Provider        string            `json:"provider"`
 }
 
 type evalAuthorityRefJSON struct {

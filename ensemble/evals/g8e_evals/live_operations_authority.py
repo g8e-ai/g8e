@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from g8e_evals.engine_protocol import EVAL_ENGINE_REQUEST_SCHEMA_VERSION
 from g8e_evals.population_policy import (
     D16_POPULATION_SELECTION_HASH,
     D16_SELECTED_IFEVAL_TASK_IDS,
@@ -16,6 +17,10 @@ from g8e_evals.population_policy import (
 )
 
 AUTHORITY_SCHEMA_VERSION = "1.0.0"
+# The command version a lease binds. It must match the engine request
+# schema version so the request digest pins the exact typed request shape
+# the Go facade dispatches to the engine.
+LEASE_COMMAND_VERSION = EVAL_ENGINE_REQUEST_SCHEMA_VERSION
 _REQUIRED_EF7_BINDINGS = frozenset(
     {
         "ef7_authority",
@@ -431,7 +436,7 @@ class CandidateIdentity(BaseModel):
     source_tree_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     execution_source_manifest_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     binary_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    image_ids: list[str] = Field(min_length=1)
+    image_ids: list[str] = Field(default_factory=list)
 
     @field_validator("image_ids")
     @classmethod
@@ -452,8 +457,9 @@ class LiveOperationLease(BaseModel):
     model_inventory_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_identity: str = Field(min_length=1)
     runtime_authorities: list[ArtifactBinding] = Field(min_length=1)
-    permitted_command: str = Field(min_length=1)
+    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     command_family: CommandFamily
+    command_version: str = Field(min_length=1)
     report_root: str = Field(min_length=1)
     app_identity: str = Field(min_length=1)
     operator_session_identity: str = Field(min_length=1)
@@ -498,6 +504,34 @@ class LiveOperationLeaseSet(BaseModel):
         if sum(lease.status == LeaseStatus.ACTIVE for lease in self.leases) > 1:
             raise ValueError("only one active lease is permitted")
         return self
+
+
+def compute_request_digest(
+    *,
+    operation_config_content_hash: str,
+    operation_id: str,
+    command_family: CommandFamily,
+    command_version: str,
+) -> str:
+    """Return the SHA-256 hex digest binding a lease to the exact typed
+    request it authorizes. The digest is over the canonical JSON of the
+    operation config content hash, operation id, command family, and
+    command version. The Go facade recomputes this digest at start time
+    from the loaded config and request schema version and refuses to
+    launch when it does not match the lease.
+    """
+    payload = json.dumps(
+        {
+            "operation_config_content_hash": operation_config_content_hash,
+            "operation_id": operation_id,
+            "command_family": str(command_family),
+            "command_version": command_version,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
+    return hashlib.sha256(payload).hexdigest()
 
 
 def build_ef7_transport_disposition(bindings: list[ArtifactBinding]) -> EF7TransportDisposition:
@@ -669,8 +703,9 @@ def build_live_operation_lease(
     model_inventory_digest: str,
     operation_identity: str,
     runtime_authorities: list[ArtifactBinding],
-    permitted_command: str,
+    request_digest: str,
     command_family: CommandFamily,
+    command_version: str = LEASE_COMMAND_VERSION,
     report_root: str,
     app_identity: str,
     operator_session_identity: str,
@@ -686,8 +721,9 @@ def build_live_operation_lease(
         "model_inventory_digest": model_inventory_digest,
         "operation_identity": operation_identity,
         "runtime_authorities": runtime_authorities,
-        "permitted_command": permitted_command,
+        "request_digest": request_digest,
         "command_family": command_family,
+        "command_version": command_version,
         "report_root": report_root,
         "app_identity": app_identity,
         "operator_session_identity": operator_session_identity,

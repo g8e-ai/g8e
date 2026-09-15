@@ -78,6 +78,8 @@ CAMPAIGN_RETRY_POLICY_JSON = "campaign-retry-policy.json"
 CAMPAIGN_STATUS_JSON = "campaign-status.json"
 CAMPAIGN_INDEX_JSONL = "campaign-index.jsonl"
 CAMPAIGN_PROGRESS_JSON = "campaign-progress.json"
+EVAL_LAUNCH_STATE_JSON = "eval-launch-state.json"
+EVAL_STOP_REQUEST_JSON = "eval-stop-request.json"
 
 # Campaign verification report (the typed output of the offline campaign verifier)
 CAMPAIGN_VERIFICATION_REPORT_JSON = "campaign-verification-report.json"

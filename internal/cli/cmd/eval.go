@@ -124,6 +124,8 @@ Run 'g8e eval doctor' for read-only environment diagnostics.`,
 		evalDoctorCmd(),
 		evalDiagnosticCmd(),
 		evalCampaignCmd(),
+		evalControllerCmd(),
+		evalLeaseCmd(),
 	)
 	return cmd
 }

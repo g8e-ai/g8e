@@ -14,24 +14,21 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // evalCampaignCmd returns the production `eval campaign` command tree
 // with real dependencies.
 func evalCampaignCmd() *cobra.Command {
-	return evalCampaignCmdWithDeps(evalDraftDeps{
-		configLoader:   config.Load,
-		stat:           realEvalFileStat{},
-		runner:         realEvalCommandRunner{},
-		tempFileWriter: realEvalTempFileWriter{},
-	})
+	return evalCampaignCmdWithDeps(evalStartDepsFromLeaseDeps())
 }
 
 // evalCampaignCmdWithDeps returns the `eval campaign` command tree wired
-// with the supplied dependencies for testability.
-func evalCampaignCmdWithDeps(deps evalDraftDeps) *cobra.Command {
+// with the supplied dependencies for testability. The draft subcommand
+// uses the draft subset of the lease deps; the start subcommand uses the
+// full lease deps for lease verification and engine invocation.
+func evalCampaignCmdWithDeps(deps evalLeaseDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "campaign",
 		Short: "Campaign lifecycle (draft, plan, check, start, status, stop, verify, publish)",
@@ -40,34 +37,49 @@ lifecycle. A campaign creates one campaign identity, one report
 directory, one assignment manifest, one randomized schedule, and one
 final canonical analysis.
 
-U5 implements the draft subcommand. Later phases add plan, check, start,
-status, stop, verify, and publish.`,
+Draft creates the typed config. Plan and check are provider-free; check
+requires an active lease and validates its exact candidate and inventory
+bindings. Start is the only provider-backed campaign operation.`,
 	}
-	cmd.AddCommand(evalCampaignDraftCmdWithDeps(deps))
+	draftDeps := evalDraftDeps{
+		configLoader:   deps.configLoader,
+		stat:           deps.stat,
+		runner:         deps.runner,
+		tempFileWriter: deps.tempFileWriter,
+	}
+	cmd.AddCommand(
+		evalCampaignDraftCmdWithDeps(draftDeps),
+		evalCampaignPlanCmdWithDeps(deps),
+		evalCampaignCheckCmdWithDeps(deps),
+		evalCampaignStartCmdWithDeps(deps),
+		evalCampaignStatusCmdWithDeps(deps),
+		evalCampaignStopCmdWithDeps(deps),
+		evalCampaignVerifyCmdWithDeps(deps),
+	)
 	return cmd
 }
 
 // evalCampaignDraftRequest is the typed JSON request the Go facade sends
 // to the Python draft module for a campaign draft.
 type evalCampaignDraftRequest struct {
-	Kind             string                 `json:"kind"`
-	Preset           string                 `json:"preset"`
-	OperationID      string                 `json:"operation_id"`
-	Revision         string                 `json:"revision"`
-	ReportRoot       string                 `json:"report_root"`
-	GoldSet          evalAuthorityRefJSON   `json:"gold_set"`
-	EvidenceKey      evalEvidenceKeyRefJSON  `json:"evidence_key"`
+	Kind             string                      `json:"kind"`
+	Preset           string                      `json:"preset"`
+	OperationID      string                      `json:"operation_id"`
+	Revision         string                      `json:"revision"`
+	ReportRoot       string                      `json:"report_root"`
+	GoldSet          evalAuthorityRefJSON        `json:"gold_set"`
+	EvidenceKey      evalEvidenceKeyRefJSON      `json:"evidence_key"`
 	ProviderEndpoint evalProviderEndpointRefJSON `json:"provider_endpoint"`
-	CampaignID       string                 `json:"campaign_id"`
-	ReleaseVersion   string                 `json:"release_version"`
-	Preregistration  evalAuthorityRefJSON   `json:"preregistration"`
-	Profile          evalAuthorityRefJSON   `json:"profile"`
-	ModelRegistry    evalAuthorityRefJSON   `json:"model_registry"`
-	CohortIDs        []string               `json:"cohort_ids"`
-	ModelTags        *evalAuthorityRefJSON  `json:"model_tags,omitempty"`
-	CampaignSetPlan  *evalAuthorityRefJSON  `json:"campaign_set_plan,omitempty"`
-	ReplacementRule  *evalAuthorityRefJSON  `json:"replacement_rule,omitempty"`
-	OutputPath       string                 `json:"output_path"`
+	CampaignID       string                      `json:"campaign_id"`
+	ReleaseVersion   string                      `json:"release_version"`
+	Preregistration  evalAuthorityRefJSON        `json:"preregistration"`
+	Profile          evalAuthorityRefJSON        `json:"profile"`
+	ModelRegistry    evalAuthorityRefJSON        `json:"model_registry"`
+	CohortIDs        []string                    `json:"cohort_ids"`
+	ModelTags        *evalAuthorityRefJSON       `json:"model_tags,omitempty"`
+	CampaignSetPlan  *evalAuthorityRefJSON       `json:"campaign_set_plan,omitempty"`
+	ReplacementRule  *evalAuthorityRefJSON       `json:"replacement_rule,omitempty"`
+	OutputPath       string                      `json:"output_path"`
 }
 
 func evalCampaignDraftCmdWithDeps(deps evalDraftDeps) *cobra.Command {
@@ -105,8 +117,8 @@ new config file only.`,
 				OperationID:      operationID,
 				Revision:         revision,
 				ReportRoot:       reportRoot,
-				GoldSet:           evalAuthorityRefJSON{Path: goldSetPath, SHA256: goldSetSHA256},
-				EvidenceKey:       evalEvidenceKeyRefJSON{Path: evidenceKeyPath, KeyID: evidenceKeyID},
+				GoldSet:          evalAuthorityRefJSON{Path: goldSetPath, SHA256: goldSetSHA256},
+				EvidenceKey:      evalEvidenceKeyRefJSON{Path: evidenceKeyPath, KeyID: evidenceKeyID},
 				ProviderEndpoint: evalProviderEndpointRefJSON{Provider: provider, EndpointClass: endpointClass},
 				CampaignID:       campaignID,
 				ReleaseVersion:   releaseVersion,
@@ -172,5 +184,53 @@ new config file only.`,
 	_ = cmd.MarkFlagRequired("model-registry-path")
 	_ = cmd.MarkFlagRequired("model-registry-sha256")
 	_ = cmd.MarkFlagRequired("cohort-ids")
+	return cmd
+}
+
+// evalCampaignStartCmdWithDeps returns the `eval campaign start` command
+// wired with the supplied dependencies. Start is provider-backed and
+// requires a valid active lease; it routes through runEvalStart so lease
+// verification cannot be bypassed.
+func evalCampaignStartCmdWithDeps(deps evalLeaseDeps) *cobra.Command {
+	var jsonOutput, verbose, yes bool
+
+	cmd := &cobra.Command{
+		Use:   "start <config>",
+		Short: "Start a provider-backed campaign run (requires lease)",
+		Long: `start launches a multi-arm, multi-cohort campaign run against the
+provider. It is provider-backed: it requires a valid active lease bound
+to the exact typed request digest of the supplied operation config.
+Issue a lease with 'eval lease issue' before start.
+
+The command verifies the lease before report-root creation or engine
+launch. A missing, inactive, expired, consumed, or mismatched lease
+fails closed with a typed error. After the engine reaches a terminal
+state the lease is transitioned to completed (success) or stopped
+(failure/interruption).
+
+This command requires --yes.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !yes {
+				return fmt.Errorf("%w: --yes is required for campaign start", constants.ErrEvalLeaseMissing)
+			}
+			ctx := commandContext(cmd)
+			result, err := runEvalStart(ctx, deps, args[0], models.EvalOperationCampaignStart, "campaign_run", jsonOutput, verbose, cmd.OutOrStdout(), cmd.OutOrStderr())
+			if err != nil {
+				if jsonOutput {
+					return emitEvalJSON(cmd, result)
+				}
+				return err
+			}
+			if jsonOutput {
+				return emitEvalJSON(cmd, result)
+			}
+			printEvalStartHuman(cmd.OutOrStdout(), result)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Confirm the provider-backed launch")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit a single canonical JSON object on stdout")
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "Add authority and per-assignment detail to human output")
 	return cmd
 }

@@ -98,6 +98,12 @@ class EngineError(Exception):
         self.safe_detail = safe_detail
 
 
+def install_builtin_handlers() -> None:
+    from g8e_evals.eval_engine_handlers import builtin_operation_handlers
+
+    _OPERATION_HANDLERS.update(builtin_operation_handlers())
+
+
 def dispatch(request: EvalEngineRequest) -> EvalEngineResult:
     """Dispatch a validated request to its registered operation handler.
 
@@ -189,6 +195,7 @@ def run_engine(request_path: str) -> int:
         return exit_code_for(result)
 
     try:
+        install_builtin_handlers()
         result = dispatch(request)
     except EngineError as exc:
         result = failed_result(

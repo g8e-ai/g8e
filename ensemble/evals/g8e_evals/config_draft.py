@@ -25,8 +25,6 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from g8e_evals.eval_presets import (
-    CampaignPreset,
-    DiagnosticPreset,
     get_campaign_preset,
     get_diagnostic_preset,
 )
@@ -36,7 +34,6 @@ from g8e_evals.operation_config import (
     CampaignConfig,
     DiagnosticConfig,
     EvidenceKeyRef,
-    OperationConfigBase,
     ProviderEndpointRef,
     SamplingPolicy,
     StopConditions,

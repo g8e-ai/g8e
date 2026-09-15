@@ -452,6 +452,24 @@ const (
 	// emits the review summary as JSON on stdout.
 	EvalDraftModule = "g8e_evals.config_draft_cli"
 
+	// EvalLeaseLifecycleModule is the narrow Python module entry point
+	// invoked through the project interpreter for lease lifecycle
+	// operations (issue, inspect, stop, expire, complete). It reads a
+	// typed JSON request file, dispatches to the lease lifecycle function,
+	// and emits the result as JSON on stdout.
+	EvalLeaseLifecycleModule = "g8e_evals.lease_lifecycle_cli"
+
+	// EvalLeaseStartVerificationModule is the narrow Python module entry
+	// point invoked through the project interpreter to verify a lease
+	// before a provider-backed start. It reads a typed JSON request file,
+	// loads the config and lease, calls verify_lease_for_start, and emits
+	// the verification result as JSON on stdout.
+	EvalLeaseStartVerificationModule = "g8e_evals.lease_start_verification_cli"
+
+	// EvalOperationLifecycleModule is the narrow Python module entry point
+	// for provider-free operation planning and preflight validation.
+	EvalOperationLifecycleModule = "g8e_evals.operation_lifecycle_cli"
+
 	// EvalConsoleScript is the legacy public console-script entry name
 	// removed by the unified facade. The constant exists so tests and
 	// diagnostics can refer to it by name rather than embedding a string.

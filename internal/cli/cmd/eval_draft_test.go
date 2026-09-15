@@ -70,7 +70,7 @@ type stubFileInfo struct{ name string }
 
 func (f stubFileInfo) Name() string       { return f.name }
 func (f stubFileInfo) Size() int64        { return 0 }
-func (f stubFileInfo) Mode() os.FileMode   { return 0o644 }
+func (f stubFileInfo) Mode() os.FileMode  { return 0o644 }
 func (f stubFileInfo) ModTime() time.Time { return time.Time{} }
 func (f stubFileInfo) IsDir() bool        { return false }
 func (f stubFileInfo) Sys() any           { return nil }
@@ -97,7 +97,6 @@ func validDraftSummaryJSON() string {
 // Diagnostic draft
 // ---------------------------------------------------------------------------
 
-
 func TestEvalDiagnosticDraftCmd_WritesRequestAndEmitsSummary(t *testing.T) {
 	runner := &stubDraftRunner{stdoutJSON: validDraftSummaryJSON()}
 	writer := &stubDraftTempFileWriter{}
@@ -110,7 +109,7 @@ func TestEvalDiagnosticDraftCmd_WritesRequestAndEmitsSummary(t *testing.T) {
 		"operation-id":      "diag-001",
 		"report-root":       ".local.dev/campaign/diag-test",
 		"gold-set-path":     ".local.dev/campaign/gold.json",
-		"gold-set-sha256":  strings.Repeat("a", 64),
+		"gold-set-sha256":   strings.Repeat("a", 64),
 		"evidence-key-path": ".local.dev/campaign/key.json",
 		"evidence-key-id":   "key-001",
 		"provider":          "ollama",
@@ -157,7 +156,7 @@ func TestEvalDiagnosticDraftCmd_JSONOutputEmitsJSON(t *testing.T) {
 		"operation-id":      "diag-001",
 		"report-root":       ".local.dev/campaign/diag-test",
 		"gold-set-path":     ".local.dev/campaign/gold.json",
-		"gold-set-sha256":  strings.Repeat("a", 64),
+		"gold-set-sha256":   strings.Repeat("a", 64),
 		"evidence-key-path": ".local.dev/campaign/key.json",
 		"evidence-key-id":   "key-001",
 		"provider":          "ollama",
@@ -190,7 +189,7 @@ func TestEvalDiagnosticDraftCmd_RunnerErrorReturnsConfigInvalid(t *testing.T) {
 		"operation-id":      "diag-001",
 		"report-root":       ".local.dev/campaign/diag-test",
 		"gold-set-path":     ".local.dev/campaign/gold.json",
-		"gold-set-sha256":  strings.Repeat("a", 64),
+		"gold-set-sha256":   strings.Repeat("a", 64),
 		"evidence-key-path": ".local.dev/campaign/key.json",
 		"evidence-key-id":   "key-001",
 		"provider":          "ollama",
@@ -217,7 +216,7 @@ func TestEvalDiagnosticDraftCmd_InvalidSummaryReturnsConfigInvalid(t *testing.T)
 		"operation-id":      "diag-001",
 		"report-root":       ".local.dev/campaign/diag-test",
 		"gold-set-path":     ".local.dev/campaign/gold.json",
-		"gold-set-sha256":  strings.Repeat("a", 64),
+		"gold-set-sha256":   strings.Repeat("a", 64),
 		"evidence-key-path": ".local.dev/campaign/key.json",
 		"evidence-key-id":   "key-001",
 		"provider":          "ollama",
@@ -252,7 +251,6 @@ func TestEvalDiagnosticDraftCmd_RegistersWithExpectedFlags(t *testing.T) {
 // Campaign draft
 // ---------------------------------------------------------------------------
 
-
 func TestEvalCampaignDraftCmd_WritesRequestAndEmitsSummary(t *testing.T) {
 	campSummary := `{"operation_kind":"campaign","operation_id":"camp-001","revision":"rev-1","preset":"opendevops-development","suite":"ifeval_subset","report_root":".local.dev/campaign/camp-test","content_hash":"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789","dimensions":{"arms":["direct","ensemble_ungoverned"],"cohort_count":1,"repetitions":3},"budget":{"max_requests":100,"max_tokens":1000000,"max_usd":0,"concurrency":1},"authority_hashes":{"gold_set":"aaaa","preregistration":"bbbb","profile":"cccc","model_registry":"dddd"},"endpoint_class":"ollama-local","provider":"ollama"}`
 	runner := &stubDraftRunner{stdoutJSON: campSummary}
@@ -261,25 +259,25 @@ func TestEvalCampaignDraftCmd_WritesRequestAndEmitsSummary(t *testing.T) {
 
 	cmd := evalCampaignDraftCmdWithDeps(deps)
 	setDraftFlags(t, cmd, map[string]string{
-		"preset":                "opendevops-development",
-		"out":                  "/tmp/camp-out.json",
-		"operation-id":         "camp-001",
-		"report-root":          ".local.dev/campaign/camp-test",
-		"gold-set-path":        ".local.dev/campaign/gold.json",
-		"gold-set-sha256":      strings.Repeat("a", 64),
-		"evidence-key-path":    ".local.dev/campaign/key.json",
-		"evidence-key-id":      "key-001",
-		"provider":             "ollama",
-		"endpoint-class":       "ollama-local",
-		"campaign-id":          "test-campaign",
-		"release-version":      "v2.1.8",
-		"preregistration-path":  ".local.dev/campaign/prereg.json",
+		"preset":                 "opendevops-development",
+		"out":                    "/tmp/camp-out.json",
+		"operation-id":           "camp-001",
+		"report-root":            ".local.dev/campaign/camp-test",
+		"gold-set-path":          ".local.dev/campaign/gold.json",
+		"gold-set-sha256":        strings.Repeat("a", 64),
+		"evidence-key-path":      ".local.dev/campaign/key.json",
+		"evidence-key-id":        "key-001",
+		"provider":               "ollama",
+		"endpoint-class":         "ollama-local",
+		"campaign-id":            "test-campaign",
+		"release-version":        "v2.1.8",
+		"preregistration-path":   ".local.dev/campaign/prereg.json",
 		"preregistration-sha256": strings.Repeat("b", 64),
-		"profile-path":         ".local.dev/campaign/profile.json",
-		"profile-sha256":      strings.Repeat("c", 64),
-		"model-registry-path":   ".local.dev/campaign/registry.json",
-		"model-registry-sha256": strings.Repeat("d", 64),
-		"cohort-ids":           "cohort-qwen3-8b",
+		"profile-path":           ".local.dev/campaign/profile.json",
+		"profile-sha256":         strings.Repeat("c", 64),
+		"model-registry-path":    ".local.dev/campaign/registry.json",
+		"model-registry-sha256":  strings.Repeat("d", 64),
+		"cohort-ids":             "cohort-qwen3-8b",
 	})
 
 	var stdout strings.Builder
@@ -310,25 +308,25 @@ func TestEvalCampaignDraftCmd_JSONOutputEmitsJSON(t *testing.T) {
 
 	cmd := evalCampaignDraftCmdWithDeps(deps)
 	setDraftFlags(t, cmd, map[string]string{
-		"preset":                "opendevops-development",
-		"out":                  "/tmp/camp-out.json",
-		"operation-id":         "camp-001",
-		"report-root":          ".local.dev/campaign/camp-test",
-		"gold-set-path":        ".local.dev/campaign/gold.json",
-		"gold-set-sha256":      strings.Repeat("a", 64),
-		"evidence-key-path":    ".local.dev/campaign/key.json",
-		"evidence-key-id":      "key-001",
-		"provider":             "ollama",
-		"endpoint-class":       "ollama-local",
-		"campaign-id":          "test-campaign",
-		"release-version":      "v2.1.8",
-		"preregistration-path":  ".local.dev/campaign/prereg.json",
+		"preset":                 "opendevops-development",
+		"out":                    "/tmp/camp-out.json",
+		"operation-id":           "camp-001",
+		"report-root":            ".local.dev/campaign/camp-test",
+		"gold-set-path":          ".local.dev/campaign/gold.json",
+		"gold-set-sha256":        strings.Repeat("a", 64),
+		"evidence-key-path":      ".local.dev/campaign/key.json",
+		"evidence-key-id":        "key-001",
+		"provider":               "ollama",
+		"endpoint-class":         "ollama-local",
+		"campaign-id":            "test-campaign",
+		"release-version":        "v2.1.8",
+		"preregistration-path":   ".local.dev/campaign/prereg.json",
 		"preregistration-sha256": strings.Repeat("b", 64),
-		"profile-path":         ".local.dev/campaign/profile.json",
-		"profile-sha256":      strings.Repeat("c", 64),
-		"model-registry-path":   ".local.dev/campaign/registry.json",
-		"model-registry-sha256": strings.Repeat("d", 64),
-		"cohort-ids":           "cohort-qwen3-8b",
+		"profile-path":           ".local.dev/campaign/profile.json",
+		"profile-sha256":         strings.Repeat("c", 64),
+		"model-registry-path":    ".local.dev/campaign/registry.json",
+		"model-registry-sha256":  strings.Repeat("d", 64),
+		"cohort-ids":             "cohort-qwen3-8b",
 	})
 	require.NoError(t, cmd.Flags().Set("json", "true"))
 
@@ -363,19 +361,26 @@ func TestEvalCampaignDraftCmd_RegistersWithExpectedFlags(t *testing.T) {
 // Command tree registration
 // ---------------------------------------------------------------------------
 
-
 func TestEvalDiagnosticCmd_RegistersDraftSubcommand(t *testing.T) {
-	cmd := evalDiagnosticCmdWithDeps(newDraftDepsForTest(&stubDraftRunner{}, &stubDraftTempFileWriter{}))
+	cmd := evalDiagnosticCmdWithDeps(newLeaseDepsForTest(t, &stubLeaseRunner{}, &stubDraftTempFileWriter{}))
 	subs := cmd.Commands()
-	require.Len(t, subs, 1)
-	assert.Equal(t, "draft", subs[0].Use)
+	names := make([]string, 0)
+	for _, sub := range subs {
+		names = append(names, sub.Name())
+	}
+	assert.Contains(t, names, "draft")
+	assert.Contains(t, names, "start")
 }
 
 func TestEvalCampaignCmd_RegistersDraftSubcommand(t *testing.T) {
-	cmd := evalCampaignCmdWithDeps(newDraftDepsForTest(&stubDraftRunner{}, &stubDraftTempFileWriter{}))
+	cmd := evalCampaignCmdWithDeps(newLeaseDepsForTest(t, &stubLeaseRunner{}, &stubDraftTempFileWriter{}))
 	subs := cmd.Commands()
-	require.Len(t, subs, 1)
-	assert.Equal(t, "draft", subs[0].Use)
+	names := make([]string, 0)
+	for _, sub := range subs {
+		names = append(names, sub.Name())
+	}
+	assert.Contains(t, names, "draft")
+	assert.Contains(t, names, "start")
 }
 
 func TestEvalCmd_RegistersDiagnosticAndCampaign(t *testing.T) {
@@ -391,7 +396,6 @@ func TestEvalCmd_RegistersDiagnosticAndCampaign(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
 
 func setDraftFlags(t *testing.T, cmd *cobra.Command, flags map[string]string) {
 	t.Helper()
