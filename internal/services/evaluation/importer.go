@@ -28,6 +28,14 @@ func (i *EvidenceImporter) SourceID() string {
 	return "native-evaluation"
 }
 
+// RunID returns the run ID this importer is bound to.
+func (i *EvidenceImporter) RunID() string {
+	if i == nil {
+		return ""
+	}
+	return i.runID
+}
+
 func (i *EvidenceImporter) Import(ctx context.Context) ([]complianceevidence.EvidenceNode, error) {
 	if i == nil || i.reader == nil || !complianceevidence.ValidPathElement(i.runID) || i.now == nil {
 		return nil, fmt.Errorf("%w: native evaluation importer is incomplete", constants.ErrInvalidEvidenceGraph)

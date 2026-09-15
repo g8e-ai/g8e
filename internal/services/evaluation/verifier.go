@@ -386,6 +386,10 @@ func (v *Verifier) allowedEvidence(attempt *evalv1.EvaluationAttempt, state *ver
 }
 
 func (v *Verifier) verifyReceiptBinding(report *evalv1.EvaluationReport, attempt *evalv1.EvaluationAttempt, receipt *operatorv1.ActionReceipt, records []*models.ActionReceiptRecord, fail func(error, string, string)) {
+	if attempt.GetExecutionId() != attempt.GetAttemptId() {
+		fail(constants.ErrEvidenceScopeMismatch, attempt.GetAttemptId(), "attempt execution ID does not match attempt ID")
+		return
+	}
 	record, err := exactReceiptRecord(records, attempt.GetTransactionId())
 	if err != nil {
 		fail(constants.ErrEvaluationReceiptUnavailable, attempt.GetAttemptId(), err.Error())
