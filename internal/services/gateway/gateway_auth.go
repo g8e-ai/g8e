@@ -149,7 +149,6 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addPrefix(constants.APIPaths.ObserveProducerPrefix, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.ObserveProducerAgentState, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.ObserveProducerRunState, RouteAuthMTLS)
-	r.addExact(constants.APIPaths.ObserveProducerEvalPublication, RouteAuthMTLS)
 
 	// CLI recovery approval — browser console, authenticated existing user.
 	r.addExact(constants.APIPaths.AuthCLIRecoveryApprove, RouteAuthWebSession)

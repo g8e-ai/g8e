@@ -256,76 +256,6 @@ func (c *ObserveProducerController) handleRunState(w http.ResponseWriter, r *htt
 	c.responder.JSON(w, http.StatusOK, models.ObserveProducerResponse{Accepted: true})
 }
 
-// handleEvalPublication accepts a typed eval publication request from
-// either an mTLS-authenticated app workload (the g8ee ensemble) or an
-// mTLS-authenticated CLI session (the g8e-evals publish command). The
-// gateway derives user_id from the mTLS peer certificate, never from the
-// request body, and delegates to the observe producer service which
-// persists the eval projection and download catalog, writes artifact
-// bytes to the runtime downloads directory, updates the run projection,
-// and emits ai.eval.run.completed and ai.eval.metric.recorded SSE events
-// after successful persistence (persist-before-publish).
-//
-// @Summary		Publish verified eval bundle
-// @Description	Accepts a typed eval publication request from an mTLS-authenticated app workload (the g8ee ensemble) or CLI session (the g8e-evals publish command). The gateway derives user_id from the peer certificate, verifies the bundle, persists the eval projection and download catalog, writes artifact bytes, and emits ai.eval.run.completed and ai.eval.metric.recorded SSE events after successful persistence.
-// @Tags			observe
-// @Accept			json
-// @Produce		json
-// @Param			payload	body		models.ObserveProducerEvalPublicationRequest	true	"Eval publication request"
-// @Success		200		{string}	string										"accepted"
-// @Failure		400		{string}	string										"Invalid request, unverified bundle, or invalid download catalog"
-// @Failure		401		{string}	string										"Unauthorized — mTLS user identity required"
-// @Failure		403		{string}	string										"Forbidden — not an app workload or CLI session"
-// @Failure		500		{string}	string										"Persistence failure"
-// @Router			/api/v1/observe/producer/eval-publication [post]
-func (c *ObserveProducerController) handleEvalPublication(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
-		return
-	}
-	// The eval publication endpoint accepts two distinct mTLS auth
-	// domains: app workloads (the ensemble's InternalHttpClient, stamped
-	// by handleAppAuth) and CLI sessions (the g8e-evals publish command,
-	// stamped by handleCLIAuth). Both derive user_id from the peer
-	// certificate, never from the request body. Dispatch to the focused
-	// validator for whichever identity the middleware stamped.
-	appID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
-	var userID string
-	var ok bool
-	if appID != "" {
-		userID, ok = c.requireAppUserID(w, r)
-	} else {
-		userID, ok = c.requireCLIUserID(w, r)
-	}
-	if !ok {
-		return
-	}
-	body, err := readRequestBody(r, c.maxBodyBytes)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	var req models.ObserveProducerEvalPublicationRequest
-	if err := decodeProducerRequest(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := validateEvalPublicationRequest(req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := validateProducerRouting(req.WebSessionID, req.CLISessionID); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	route := buildProducerRoute(userID, req.WebSessionID, req.CLISessionID)
-	if err := c.producerSvc.PublishEval(r.Context(), userID, route, req); err != nil {
-		c.mapProducerError(w, err, "eval publication")
-		return
-	}
-	c.responder.JSON(w, http.StatusOK, models.ObserveProducerResponse{Accepted: true})
-}
-
 // mapProducerError maps a typed observe producer error to the correct HTTP
 // status code. Invalid transitions, stale updates, missing required fields,
 // and payload validation failures are 400. Cross-user ownership violations
@@ -349,21 +279,7 @@ func (c *ObserveProducerController) mapProducerError(w http.ResponseWriter, err 
 		errors.Is(err, constants.ErrObserveEndBeforeStart),
 		errors.Is(err, constants.ErrGatewaySSERouteUserIDRequired),
 		errors.Is(err, constants.ErrGatewaySSERouteSessionRequired),
-		errors.Is(err, constants.ErrGatewaySSERouteSessionMutuallyExclusive),
-		errors.Is(err, constants.ErrObservePublicationBundleIDRequired),
-		errors.Is(err, constants.ErrObservePublicationRunIDRequired),
-		errors.Is(err, constants.ErrObservePublicationNotVerified),
-		errors.Is(err, constants.ErrObservePublicationNoPublicArtifacts),
-		errors.Is(err, constants.ErrObservePublicationArtifactIDRequired),
-		errors.Is(err, constants.ErrObservePublicationFilenameRequired),
-		errors.Is(err, constants.ErrObservePublicationSHA256Invalid),
-		errors.Is(err, constants.ErrObservePublicationMediaTypeRequired),
-		errors.Is(err, constants.ErrObservePublicationByteSizeNegative),
-		errors.Is(err, constants.ErrObservePublicationDuplicateArtifactID),
-		errors.Is(err, constants.ErrObservePublicationRestrictedArtifact),
-		errors.Is(err, constants.ErrObservePublicationContentHashMismatch),
-		errors.Is(err, constants.ErrObservePublicationContentSizeMismatch),
-		errors.Is(err, constants.ErrObservePublicationArtifactOversized):
+		errors.Is(err, constants.ErrGatewaySSERouteSessionMutuallyExclusive):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, constants.ErrObserveAgentNotFound),
 		errors.Is(err, constants.ErrObserveRunNotFound):
