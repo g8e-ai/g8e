@@ -31,6 +31,7 @@ Constant modules:
 - tool_registry_pending.py: Pending tool registry definitions
 """
 
+from app.constants.agents import PersonaCapability
 from app.constants.api_paths import API_PATHS, GatewayAPIPaths, InternalAPIPaths
 from app.constants.channels import (
     CHANNEL_SEGMENT_COUNT,
@@ -625,6 +626,7 @@ __all__ = [
     "OperatorToolName",
     "OperatorType",
     "PathConstants",
+    "PersonaCapability",
     "Platform",
     "PortConstants",
     "Priority",

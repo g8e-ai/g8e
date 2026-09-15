@@ -31,10 +31,10 @@ func NewGrader(now func() time.Time) *Grader {
 
 func (g *Grader) Grade(attemptID string, assertion *evalv1.EvaluationAssertion, observations []*evalv1.EvaluationObservation) *evalv1.EvaluationVerdict {
 	verdict := &evalv1.EvaluationVerdict{
-		VerdictId: attemptID + ":" + assertion.GetAssertionId(),
+		VerdictId:    attemptID + ":" + assertion.GetAssertionId(),
 		AssertionRef: versioned(assertion.GetAssertionId(), assertion.GetAssertionVersion()),
-		GraderRef: versioned(GraderID, GraderVersion),
-		EvaluatedAt: timestamppb.New(g.now().UTC()),
+		GraderRef:    versioned(GraderID, GraderVersion),
+		EvaluatedAt:  timestamppb.New(g.now().UTC()),
 	}
 	if len(assertion.GetRequiredObservationTypes()) != 1 || len(assertion.GetRequiredAuthorities()) != 1 || assertion.GetExpected().GetValue() == nil {
 		verdict.Status = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE
@@ -86,10 +86,10 @@ func (g *Grader) Grade(attemptID string, assertion *evalv1.EvaluationAssertion, 
 func DeriveRequiredVerdictMetric(verdicts []*evalv1.EvaluationVerdict) *evalv1.EvaluationMetric {
 	metric := &evalv1.EvaluationMetric{
 		MetricId: MetricRequiredVerdictPassRate, MetricVersion: RegistryVersion,
-		Unit: evalv1.EvaluationMetricUnit_EVALUATION_METRIC_UNIT_RATIO,
-		Direction: evalv1.EvaluationMetricDirection_EVALUATION_METRIC_DIRECTION_HIGHER_IS_BETTER,
+		Unit:                  evalv1.EvaluationMetricUnit_EVALUATION_METRIC_UNIT_RATIO,
+		Direction:             evalv1.EvaluationMetricDirection_EVALUATION_METRIC_DIRECTION_HIGHER_IS_BETTER,
 		EligiblePopulationRef: versioned(MetricEligiblePopulation, RegistryVersion),
-		MissingDataPolicy: evalv1.EvaluationMissingDataPolicy_EVALUATION_MISSING_DATA_POLICY_FAIL,
+		MissingDataPolicy:     evalv1.EvaluationMissingDataPolicy_EVALUATION_MISSING_DATA_POLICY_FAIL,
 	}
 	for _, verdict := range verdicts {
 		metric.Denominator++

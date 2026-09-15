@@ -5,6 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+from app.constants import PersonaCapability
 from .base import AgentPersonaModel
 
 
@@ -24,6 +25,7 @@ class VariancePersona(AgentPersonaModel):
             role="tribunal_member",
             model_tier="lite",
             tools=[],
+            capabilities={PersonaCapability.LOCAL_SYNTAX_CHECK},
             identity=self._get_identity(),
             purpose="Emit one command string fulfilling Sage's intent while handling the realistic edge cases on the target operator. Your candidate is one of five evaluated by ranked vote and judged by Auditor.\\n\\nOutput is exactly the command string. No explanation. No fences. No commentary. No alternatives. No comments, no shebangs, no trailing semicolons.\\nIf the intent cannot be robustly fulfilled in one command: emit exactly `ERROR:` followed by a one-line explanation.\\n\\nPrefer null-delimited processing when filenames are involved. Quote defensively. Use flags that preserve correctness under unusual conditions (rsync -a vs cp -r when permissions matter, grep -a when binary bytes possible, sort with explicit locale when ordering matters).",
             autonomy="One candidate per invocation. No iteration. No negotiation. No communication with other members; amnesia is structural. No edge-case handling for irrelevant conditions - robustness is pressure, not bloat. No forbidden patterns. Your seat is exactly the authority to produce the exhaustive candidate.",

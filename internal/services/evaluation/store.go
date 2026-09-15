@@ -9,10 +9,10 @@ package evaluation
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
@@ -21,15 +21,14 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-type TargetStateEvidence struct {
-	SchemaVersion  string    `json:"schema_version"`
-	RunID          string    `json:"run_id"`
-	ScenarioID     string    `json:"scenario_id"`
-	AttemptID      string    `json:"attempt_id"`
-	TargetResource string    `json:"target_resource"`
-	ObservedAt     time.Time `json:"observed_at"`
-	Present        bool      `json:"present"`
-	Content        []byte    `json:"content"`
+// EvidenceScope binds a persisted evidence artifact to its run, scenario,
+// attempt, and transaction so a returned reference can never describe a body
+// outside its declared scope.
+type EvidenceScope struct {
+	RunID         string
+	ScenarioID    string
+	AttemptID     string
+	TransactionID string
 }
 
 type Store struct {
@@ -40,34 +39,78 @@ func NewStore(files fs.RuntimeFileService) *Store {
 	return &Store{files: files}
 }
 
-func (s *Store) SaveTargetState(ctx context.Context, evidence *TargetStateEvidence) (*compliancev1.ComplianceEvidenceReference, error) {
-	if s == nil || s.files == nil || evidence == nil || evidence.SchemaVersion != RegistryVersion || !complianceevidence.ValidPathElement(evidence.RunID) || !complianceevidence.ValidPathElement(evidence.ScenarioID) || !complianceevidence.ValidPathElement(evidence.AttemptID) || evidence.TargetResource == "" || evidence.ObservedAt.IsZero() || (!evidence.Present && len(evidence.Content) != 0) {
+// SaveTargetState persists one canonical EvaluationTargetState observation
+// body under the run's content-addressed evidence directory and returns the
+// scoped reference.
+func (s *Store) SaveTargetState(ctx context.Context, evidence *evalv1.EvaluationTargetState) (*compliancev1.ComplianceEvidenceReference, error) {
+	if s == nil || s.files == nil || evidence == nil || evidence.GetSchemaVersion() != RegistryVersion || !complianceevidence.ValidPathElement(evidence.GetRunId()) || !complianceevidence.ValidPathElement(evidence.GetScenarioId()) || !complianceevidence.ValidPathElement(evidence.GetAttemptId()) || evidence.GetTargetResource() == "" || evidence.GetObservedAt() == nil || evidence.GetObservedAt().CheckValid() != nil || (!evidence.GetPresent() && len(evidence.GetContent()) != 0) {
 		return nil, fmt.Errorf("%w: target state evidence is incomplete", constants.ErrEvaluationReportPersistFailed)
 	}
-	body, err := json.Marshal(evidence)
+	return s.SaveProtoArtifact(ctx, EvidenceScope{
+		RunID: evidence.GetRunId(), ScenarioID: evidence.GetScenarioId(), AttemptID: evidence.GetAttemptId(),
+	}, complianceevidence.ArtifactTypeEvalObservation, evidence)
+}
+
+// SaveProtoArtifact persists one canonical protobuf evidence body beneath the
+// run's evidence directory and returns a scope-bound reference. The body is
+// durably written before the reference is returned.
+func (s *Store) SaveProtoArtifact(ctx context.Context, scope EvidenceScope, artifactType complianceevidence.ArtifactType, message proto.Message) (*compliancev1.ComplianceEvidenceReference, error) {
+	if s == nil || s.files == nil || message == nil || !validEvidenceScope(scope) || !complianceevidence.ContainsArtifactType(complianceevidence.SupportedArtifactTypes(), artifactType) {
+		return nil, fmt.Errorf("%w: evidence scope, supported artifact type, and protocol message are required", constants.ErrEvaluationReportPersistFailed)
+	}
+	artifact, err := complianceevidence.PersistCanonicalProtoArtifact(ctx, s.files, evaluationEvidenceDir(scope.RunID), artifactType, message)
 	if err != nil {
-		return nil, fmt.Errorf("%w: canonicalize target state evidence: %w", constants.ErrEvaluationReportPersistFailed, err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	return scopedReference(artifact.Reference, scope), nil
+}
+
+// SaveJSONArtifact persists one already-canonical JSON evidence body, such as
+// a recorded exchange or admission response, beneath the run's evidence
+// directory and returns a scope-bound reference.
+func (s *Store) SaveJSONArtifact(ctx context.Context, scope EvidenceScope, artifactType complianceevidence.ArtifactType, body []byte) (*compliancev1.ComplianceEvidenceReference, error) {
+	if s == nil || s.files == nil || len(body) == 0 || !validEvidenceScope(scope) || !complianceevidence.ContainsArtifactType(complianceevidence.SupportedArtifactTypes(), artifactType) {
+		return nil, fmt.Errorf("%w: evidence scope, supported artifact type, and canonical body are required", constants.ErrEvaluationReportPersistFailed)
 	}
 	if err := complianceevidence.ValidateCanonicalJSON(body); err != nil {
-		return nil, fmt.Errorf("%w: canonical target state evidence: %w", constants.ErrEvaluationReportPersistFailed, err)
+		return nil, fmt.Errorf("%w: canonical evidence body: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
-	artifactType := string(complianceevidence.ArtifactTypeEvalObservation)
-	artifactID := complianceevidence.ContentReferenceForBody(artifactType, body)
-	_, digest, ok := complianceevidence.ParseExpectedContentReference(artifactID, artifactType)
+	artifactID := complianceevidence.ContentAddress(artifactType, body)
+	_, digest, ok := complianceevidence.ParseContentAddress(artifactID)
 	if !ok {
-		return nil, fmt.Errorf("%w: target state content address is invalid", constants.ErrEvaluationReportPersistFailed)
+		return nil, fmt.Errorf("%w: evidence content address is invalid", constants.ErrEvaluationReportPersistFailed)
 	}
-	directory := evaluationEvidenceDir(evidence.RunID)
+	directory := evaluationEvidenceDir(scope.RunID)
 	if err := s.files.MkdirAll(ctx, directory, constants.PermDirStandard); err != nil {
 		return nil, fmt.Errorf("%w: create evidence directory: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
 	if err := s.files.WriteFile(ctx, filepath.Join(directory, digest+constants.FileExtJSON), body, constants.PermFileReadOnly); err != nil {
-		return nil, fmt.Errorf("%w: write target state evidence: %w", constants.ErrEvaluationReportPersistFailed, err)
+		return nil, fmt.Errorf("%w: write evidence artifact: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
-	return &compliancev1.ComplianceEvidenceReference{
-		ArtifactId: artifactID, ArtifactType: artifactType, Sha256: digest, MediaType: constants.MediaTypeJSON,
-		RunId: evidence.RunID, ScenarioId: evidence.ScenarioID, AttemptId: evidence.AttemptID,
-	}, nil
+	return scopedReference(&compliancev1.ComplianceEvidenceReference{
+		ArtifactId: artifactID, ArtifactType: string(artifactType), Sha256: digest, MediaType: constants.MediaTypeJSON,
+	}, scope), nil
+}
+
+func validEvidenceScope(scope EvidenceScope) bool {
+	if !complianceevidence.ValidPathElement(scope.RunID) {
+		return false
+	}
+	if scope.ScenarioID != "" && !complianceevidence.ValidPathElement(scope.ScenarioID) {
+		return false
+	}
+	if scope.AttemptID != "" && !complianceevidence.ValidPathElement(scope.AttemptID) {
+		return false
+	}
+	return true
+}
+
+func scopedReference(reference *compliancev1.ComplianceEvidenceReference, scope EvidenceScope) *compliancev1.ComplianceEvidenceReference {
+	reference.RunId = scope.RunID
+	reference.ScenarioId = scope.ScenarioID
+	reference.AttemptId = scope.AttemptID
+	reference.TransactionId = scope.TransactionID
+	return reference
 }
 
 func (s *Store) SaveReport(ctx context.Context, report *evalv1.EvaluationReport) error {

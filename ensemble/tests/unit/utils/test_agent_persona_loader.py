@@ -10,6 +10,7 @@
 import pytest
 from pydantic import ValidationError
 
+from app.constants import PersonaCapability
 from app.llm.prompts import PromptFile, build_tribunal_auditor_context
 from app.prompts_data.loader import load_prompt
 from app.services.ai.auditor_service import AuditorInput
@@ -348,6 +349,45 @@ class TestSharpenedTribunalPersonas:
         # Nemesis is the only member that should reference the adversarial
         # request_posture signal - that coupling is part of the design.
         assert "adversarial" in nemesis.identity.lower()
+
+
+class TestPersonaCapabilities:
+    """Persona capability declarations: an upper bound intersected with user
+    settings and model support before the pipeline enables a behavior."""
+
+    def test_tribunal_members_declare_local_syntax_check(self):
+        """All five Tribunal seats declare the local syntax-check capability."""
+        for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
+            member = get_tribunal_member(member_id)
+            assert PersonaCapability.LOCAL_SYNTAX_CHECK in member.capabilities, (
+                f"{member_id} must declare local_syntax_check"
+            )
+
+    def test_non_member_personas_have_no_capabilities(self):
+        """Personas that perform no local validation declare no capabilities."""
+        for persona_id in ("triage", "sage", "dash", "tribunal", "auditor", "warden"):
+            persona = get_agent_persona(persona_id)
+            assert persona.capabilities == frozenset(), (
+                f"{persona_id} unexpectedly declares capabilities: {persona.capabilities}"
+            )
+
+    def test_capabilities_default_to_empty_frozenset(self):
+        """AgentPersona validates without a capabilities field."""
+        persona = AgentPersona.model_validate(
+            {
+                "id": "stub",
+                "display_name": "Stub",
+                "icon": "x",
+                "description": "stub",
+                "role": "stub",
+                "model_tier": "primary",
+                "tools": [],
+                "identity": "I am a stub.",
+                "purpose": "To be replaced.",
+                "autonomy": "none",
+            }
+        )
+        assert persona.capabilities == frozenset()
 
 
 class TestListAllAgents:

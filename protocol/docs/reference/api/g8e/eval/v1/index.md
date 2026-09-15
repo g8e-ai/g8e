@@ -12,6 +12,7 @@
     - [EvaluationReport](#g8e-eval-v1-EvaluationReport)
     - [EvaluationRun](#g8e-eval-v1-EvaluationRun)
     - [EvaluationRuntimeBoundary](#g8e-eval-v1-EvaluationRuntimeBoundary)
+    - [EvaluationTargetState](#g8e-eval-v1-EvaluationTargetState)
     - [EvaluationValue](#g8e-eval-v1-EvaluationValue)
     - [EvaluationVerdict](#g8e-eval-v1-EvaluationVerdict)
   
@@ -220,6 +221,28 @@
 | endpoint | [string](#string) |  |  |
 | authenticated_identity | [string](#string) |  |  |
 | execution_owner_operator_id | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-EvaluationTargetState"></a>
+
+### EvaluationTargetState
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| schema_version | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| scenario_id | [string](#string) |  |  |
+| attempt_id | [string](#string) |  |  |
+| target_resource | [string](#string) |  |  |
+| observed_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| present | [bool](#bool) |  |  |
+| content | [bytes](#bytes) |  |  |
 
 
 

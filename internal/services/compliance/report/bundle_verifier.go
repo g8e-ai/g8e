@@ -419,6 +419,7 @@ var evidenceVerificationRoutes = map[evidence.ArtifactType]evidenceVerificationR
 	evidence.ArtifactTypeEvalAttempt:         evidenceVerificationRouteEval,
 	evidence.ArtifactTypeEvalMetric:          evidenceVerificationRouteEval,
 	evidence.ArtifactTypeEvalObservation:     evidenceVerificationRouteEval,
+	evidence.ArtifactTypeEvalExchange:        evidenceVerificationRouteEval,
 	evidence.ArtifactTypeEvalStage:           evidenceVerificationRouteEval,
 	evidence.ArtifactTypeEvalReceipt:         evidenceVerificationRouteEval,
 	evidence.ArtifactTypeAuditRecord:         evidenceVerificationRouteAudit,

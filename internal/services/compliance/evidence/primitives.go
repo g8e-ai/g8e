@@ -311,11 +311,11 @@ type ReceiptProjection struct {
 }
 
 type VerifiedReceiptEvidence struct {
-	Binding               ReceiptBinding
-	ReceiptReference      *compliancev1.ComplianceEvidenceReference
-	PersistenceReference  *compliancev1.ComplianceEvidenceReference
+	Binding                ReceiptBinding
+	ReceiptReference       *compliancev1.ComplianceEvidenceReference
+	PersistenceReference   *compliancev1.ComplianceEvidenceReference
 	ProtocolChainReference string
-	Receipt               *operatorv1.ActionReceipt
+	Receipt                *operatorv1.ActionReceipt
 }
 
 func BuildVerifiedReceiptEvidence(binding ReceiptBinding, projection ReceiptProjection, receipt *operatorv1.ActionReceipt) (*VerifiedReceiptEvidence, error) {
@@ -369,7 +369,7 @@ func BuildVerifiedReceiptEvidence(binding ReceiptBinding, projection ReceiptProj
 			RunId: binding.RunID, AttemptId: binding.AttemptID, ScenarioId: binding.ScenarioID, TransactionId: binding.TransactionID,
 		},
 		ProtocolChainReference: chain.ContentReference,
-		Receipt: receipt,
+		Receipt:                receipt,
 	}, nil
 }
 

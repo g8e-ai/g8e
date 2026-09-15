@@ -44,6 +44,7 @@ const (
 	ArtifactTypeEvalAttempt         ArtifactType = "eval-attempt"
 	ArtifactTypeEvalMetric          ArtifactType = "eval-metric"
 	ArtifactTypeEvalObservation     ArtifactType = "eval-observation"
+	ArtifactTypeEvalExchange        ArtifactType = "eval-exchange"
 	ArtifactTypeEvalStage           ArtifactType = "eval-stage"
 	ArtifactTypeEvalReceipt         ArtifactType = "eval-receipt"
 	ArtifactTypeAuditRecord         ArtifactType = "audit-record"
@@ -73,6 +74,7 @@ func SupportedArtifactTypes() []ArtifactType {
 		ArtifactTypeEvalAttempt,
 		ArtifactTypeEvalMetric,
 		ArtifactTypeEvalObservation,
+		ArtifactTypeEvalExchange,
 		ArtifactTypeEvalStage,
 		ArtifactTypeEvalReceipt,
 		ArtifactTypeAuditRecord,

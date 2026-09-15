@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
@@ -328,9 +329,9 @@ func TestPersistenceImporter_Import_RejectsDigestCanonicalAndBindingMutations(t 
 			fixture.persistenceBinding.Reference = ContentReferenceForBody(constants.ReceiptPersistenceReferencePrefix, body)
 		}, targetErr: constants.ErrEvidenceArtifactMalformed},
 		{name: "persistence differs from embedded attestation", mutate: func(t *testing.T, fixture *standaloneReceiptFixture) {
-			attestation := *fixture.receipt.FinalPersistenceAttestation
+			attestation := proto.Clone(fixture.receipt.FinalPersistenceAttestation).(*operatorv1.ReceiptPersistenceAttestation)
 			attestation.AuditRecordId = "other-audit-record"
-			body, err := compliancev1.MarshalCanonical(&attestation)
+			body, err := compliancev1.MarshalCanonical(attestation)
 			require.NoError(t, err)
 			fixture.reader.files[fixture.persistenceBinding.Path] = body
 			fixture.persistenceBinding.Reference = ContentReferenceForBody(constants.ReceiptPersistenceReferencePrefix, body)

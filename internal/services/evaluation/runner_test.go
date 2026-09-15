@@ -63,7 +63,7 @@ func (o *runnerTestObserver) Observe(context.Context, string) (*TargetState, err
 
 type runnerTestStore struct {
 	report   *evalv1.EvaluationReport
-	evidence []*TargetStateEvidence
+	evidence []*evalv1.EvaluationTargetState
 }
 
 func (s *runnerTestStore) SaveReport(_ context.Context, report *evalv1.EvaluationReport) error {
@@ -71,10 +71,8 @@ func (s *runnerTestStore) SaveReport(_ context.Context, report *evalv1.Evaluatio
 	return nil
 }
 
-func (s *runnerTestStore) SaveTargetState(_ context.Context, evidence *TargetStateEvidence) (*compliancev1.ComplianceEvidenceReference, error) {
-	copyEvidence := *evidence
-	copyEvidence.Content = append([]byte(nil), evidence.Content...)
-	s.evidence = append(s.evidence, &copyEvidence)
+func (s *runnerTestStore) SaveTargetState(_ context.Context, evidence *evalv1.EvaluationTargetState) (*compliancev1.ComplianceEvidenceReference, error) {
+	s.evidence = append(s.evidence, proto.Clone(evidence).(*evalv1.EvaluationTargetState))
 	return testEvidenceReference(fmt.Sprintf("target-state-%d", len(s.evidence))), nil
 }
 
@@ -108,11 +106,11 @@ func TestRunner_CoreExecutionBoundaryProducesPersistedPassingReport(t *testing.T
 	require.NotNil(t, store.report)
 	assert.True(t, proto.Equal(report, store.report))
 	require.Len(t, store.evidence, 3)
-	assert.Equal(t, AllowedExecutionScenarioID, store.evidence[0].ScenarioID)
-	assert.Equal(t, report.Attempts[0].AttemptId, store.evidence[0].AttemptID)
+	assert.Equal(t, AllowedExecutionScenarioID, store.evidence[0].ScenarioId)
+	assert.Equal(t, report.Attempts[0].AttemptId, store.evidence[0].AttemptId)
 	assert.False(t, store.evidence[0].Present)
-	assert.Equal(t, ProhibitedExecutionScenarioID, store.evidence[2].ScenarioID)
-	assert.Equal(t, report.Attempts[1].AttemptId, store.evidence[2].AttemptID)
+	assert.Equal(t, ProhibitedExecutionScenarioID, store.evidence[2].ScenarioId)
+	assert.Equal(t, report.Attempts[1].AttemptId, store.evidence[2].AttemptId)
 	require.Len(t, report.Metrics, 1)
 	assert.Equal(t, int64(10), report.Metrics[0].Numerator)
 	assert.Equal(t, int64(10), report.Metrics[0].Denominator)

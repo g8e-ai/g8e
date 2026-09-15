@@ -69,7 +69,7 @@ type RunRequest struct {
 
 type ReportStore interface {
 	SaveReport(ctx context.Context, report *evalv1.EvaluationReport) error
-	SaveTargetState(ctx context.Context, evidence *TargetStateEvidence) (*compliancev1.ComplianceEvidenceReference, error)
+	SaveTargetState(ctx context.Context, evidence *evalv1.EvaluationTargetState) (*compliancev1.ComplianceEvidenceReference, error)
 }
 
 type Runner struct {
@@ -192,13 +192,13 @@ func (r *Runner) observeCount(ctx context.Context, runID, scenarioID, attemptID,
 	if state.Present {
 		count = int64(bytes.Count(state.Content, []byte(marker)))
 	}
-	reference, err := r.store.SaveTargetState(ctx, &TargetStateEvidence{
+	reference, err := r.store.SaveTargetState(ctx, &evalv1.EvaluationTargetState{
 		SchemaVersion:  RegistryVersion,
-		RunID:          runID,
-		ScenarioID:     scenarioID,
-		AttemptID:      attemptID,
+		RunId:          runID,
+		ScenarioId:     scenarioID,
+		AttemptId:      attemptID,
 		TargetResource: targetResource,
-		ObservedAt:     state.ObservedAt.UTC(),
+		ObservedAt:     timestamppb.New(state.ObservedAt.UTC()),
 		Present:        state.Present,
 		Content:        append([]byte(nil), state.Content...),
 	})

@@ -171,6 +171,17 @@ message EvaluationObservation {
   repeated g8e.compliance.v1.ComplianceEvidenceReference evidence_refs = 10;
 }
 
+message EvaluationTargetState {
+  string schema_version = 1;
+  string run_id = 2;
+  string scenario_id = 3;
+  string attempt_id = 4;
+  string target_resource = 5;
+  google.protobuf.Timestamp observed_at = 6;
+  bool present = 7;
+  bytes content = 8;
+}
+
 message EvaluationAssertion {
   string assertion_id = 1;
   string assertion_version = 2;

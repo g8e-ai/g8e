@@ -96,7 +96,7 @@ func coreExecutionBoundarySuite() SuiteDefinition {
 func equalBooleanAssertion(id string, expected bool, observationType string, authority evalv1.EvaluationEvidenceAuthority) *evalv1.EvaluationAssertion {
 	return &evalv1.EvaluationAssertion{
 		AssertionId: id, AssertionVersion: RegistryVersion, Comparator: evalv1.EvaluationComparator_EVALUATION_COMPARATOR_EQUAL,
-		Expected: &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_BooleanValue{BooleanValue: expected}},
+		Expected:                 &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_BooleanValue{BooleanValue: expected}},
 		RequiredObservationTypes: []*compliancev1.VersionedReference{versioned(observationType, RegistryVersion)},
 		RequiredAuthorities:      []evalv1.EvaluationEvidenceAuthority{authority},
 	}
@@ -105,7 +105,7 @@ func equalBooleanAssertion(id string, expected bool, observationType string, aut
 func equalIntegerAssertion(id string, expected int64, observationType string, authority evalv1.EvaluationEvidenceAuthority) *evalv1.EvaluationAssertion {
 	return &evalv1.EvaluationAssertion{
 		AssertionId: id, AssertionVersion: RegistryVersion, Comparator: evalv1.EvaluationComparator_EVALUATION_COMPARATOR_EQUAL,
-		Expected: &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_IntegerValue{IntegerValue: expected}},
+		Expected:                 &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_IntegerValue{IntegerValue: expected}},
 		RequiredObservationTypes: []*compliancev1.VersionedReference{versioned(observationType, RegistryVersion)},
 		RequiredAuthorities:      []evalv1.EvaluationEvidenceAuthority{authority},
 	}

@@ -276,6 +276,26 @@ class EvaluationObservation(_message.Message):
     evidence_refs: _containers.RepeatedCompositeFieldContainer[_compliance_pb2.ComplianceEvidenceReference]
     def __init__(self, observation_id: _Optional[str] = ..., observation_type: _Optional[_Union[_compliance_pb2.VersionedReference, _Mapping]] = ..., source: _Optional[_Union[EvaluationObservationSource, str]] = ..., observed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., run_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., attempt_id: _Optional[str] = ..., authority: _Optional[_Union[EvaluationEvidenceAuthority, str]] = ..., value: _Optional[_Union[EvaluationValue, _Mapping]] = ..., evidence_refs: _Optional[_Iterable[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]]] = ...) -> None: ...
 
+class EvaluationTargetState(_message.Message):
+    __slots__ = ("schema_version", "run_id", "scenario_id", "attempt_id", "target_resource", "observed_at", "present", "content")
+    SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_ID_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_RESOURCE_FIELD_NUMBER: _ClassVar[int]
+    OBSERVED_AT_FIELD_NUMBER: _ClassVar[int]
+    PRESENT_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    schema_version: str
+    run_id: str
+    scenario_id: str
+    attempt_id: str
+    target_resource: str
+    observed_at: _timestamp_pb2.Timestamp
+    present: bool
+    content: bytes
+    def __init__(self, schema_version: _Optional[str] = ..., run_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., attempt_id: _Optional[str] = ..., target_resource: _Optional[str] = ..., observed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., present: _Optional[bool] = ..., content: _Optional[bytes] = ...) -> None: ...
+
 class EvaluationAssertion(_message.Message):
     __slots__ = ("assertion_id", "assertion_version", "comparator", "expected", "required_observation_types", "required_authorities")
     ASSERTION_ID_FIELD_NUMBER: _ClassVar[int]

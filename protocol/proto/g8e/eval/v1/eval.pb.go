@@ -1299,6 +1299,106 @@ func (x *EvaluationObservation) GetEvidenceRefs() []*v1.ComplianceEvidenceRefere
 	return nil
 }
 
+type EvaluationTargetState struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion  string                 `protobuf:"bytes,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
+	RunId          string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	ScenarioId     string                 `protobuf:"bytes,3,opt,name=scenario_id,json=scenarioId,proto3" json:"scenario_id,omitempty"`
+	AttemptId      string                 `protobuf:"bytes,4,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
+	TargetResource string                 `protobuf:"bytes,5,opt,name=target_resource,json=targetResource,proto3" json:"target_resource,omitempty"`
+	ObservedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	Present        bool                   `protobuf:"varint,7,opt,name=present,proto3" json:"present,omitempty"`
+	Content        []byte                 `protobuf:"bytes,8,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *EvaluationTargetState) Reset() {
+	*x = EvaluationTargetState{}
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EvaluationTargetState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EvaluationTargetState) ProtoMessage() {}
+
+func (x *EvaluationTargetState) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EvaluationTargetState.ProtoReflect.Descriptor instead.
+func (*EvaluationTargetState) Descriptor() ([]byte, []int) {
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *EvaluationTargetState) GetSchemaVersion() string {
+	if x != nil {
+		return x.SchemaVersion
+	}
+	return ""
+}
+
+func (x *EvaluationTargetState) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *EvaluationTargetState) GetScenarioId() string {
+	if x != nil {
+		return x.ScenarioId
+	}
+	return ""
+}
+
+func (x *EvaluationTargetState) GetAttemptId() string {
+	if x != nil {
+		return x.AttemptId
+	}
+	return ""
+}
+
+func (x *EvaluationTargetState) GetTargetResource() string {
+	if x != nil {
+		return x.TargetResource
+	}
+	return ""
+}
+
+func (x *EvaluationTargetState) GetObservedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ObservedAt
+	}
+	return nil
+}
+
+func (x *EvaluationTargetState) GetPresent() bool {
+	if x != nil {
+		return x.Present
+	}
+	return false
+}
+
+func (x *EvaluationTargetState) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
 type EvaluationAssertion struct {
 	state                    protoimpl.MessageState        `protogen:"open.v1"`
 	AssertionId              string                        `protobuf:"bytes,1,opt,name=assertion_id,json=assertionId,proto3" json:"assertion_id,omitempty"`
@@ -1313,7 +1413,7 @@ type EvaluationAssertion struct {
 
 func (x *EvaluationAssertion) Reset() {
 	*x = EvaluationAssertion{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[6]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1325,7 +1425,7 @@ func (x *EvaluationAssertion) String() string {
 func (*EvaluationAssertion) ProtoMessage() {}
 
 func (x *EvaluationAssertion) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[6]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1338,7 +1438,7 @@ func (x *EvaluationAssertion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluationAssertion.ProtoReflect.Descriptor instead.
 func (*EvaluationAssertion) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{6}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *EvaluationAssertion) GetAssertionId() string {
@@ -1399,7 +1499,7 @@ type EvaluationVerdict struct {
 
 func (x *EvaluationVerdict) Reset() {
 	*x = EvaluationVerdict{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[7]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1411,7 +1511,7 @@ func (x *EvaluationVerdict) String() string {
 func (*EvaluationVerdict) ProtoMessage() {}
 
 func (x *EvaluationVerdict) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[7]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1424,7 +1524,7 @@ func (x *EvaluationVerdict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluationVerdict.ProtoReflect.Descriptor instead.
 func (*EvaluationVerdict) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{7}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *EvaluationVerdict) GetVerdictId() string {
@@ -1502,7 +1602,7 @@ type EvaluationMetric struct {
 
 func (x *EvaluationMetric) Reset() {
 	*x = EvaluationMetric{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[8]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1514,7 +1614,7 @@ func (x *EvaluationMetric) String() string {
 func (*EvaluationMetric) ProtoMessage() {}
 
 func (x *EvaluationMetric) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[8]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1527,7 +1627,7 @@ func (x *EvaluationMetric) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluationMetric.ProtoReflect.Descriptor instead.
 func (*EvaluationMetric) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{8}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *EvaluationMetric) GetMetricId() string {
@@ -1627,7 +1727,7 @@ type EvaluationReport struct {
 
 func (x *EvaluationReport) Reset() {
 	*x = EvaluationReport{}
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[9]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1639,7 +1739,7 @@ func (x *EvaluationReport) String() string {
 func (*EvaluationReport) ProtoMessage() {}
 
 func (x *EvaluationReport) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_eval_v1_eval_proto_msgTypes[9]
+	mi := &file_g8e_eval_v1_eval_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1652,7 +1752,7 @@ func (x *EvaluationReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluationReport.ProtoReflect.Descriptor instead.
 func (*EvaluationReport) Descriptor() ([]byte, []int) {
-	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{9}
+	return file_g8e_eval_v1_eval_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *EvaluationReport) GetSchemaVersion() string {
@@ -1812,7 +1912,19 @@ const file_g8e_eval_v1_eval_proto_rawDesc = "" +
 	"\tauthority\x18\b \x01(\x0e2(.g8e.eval.v1.EvaluationEvidenceAuthorityR\tauthority\x122\n" +
 	"\x05value\x18\t \x01(\v2\x1c.g8e.eval.v1.EvaluationValueR\x05value\x12S\n" +
 	"\revidence_refs\x18\n" +
-	" \x03(\v2..g8e.compliance.v1.ComplianceEvidenceReferenceR\fevidenceRefs\"\xa4\x03\n" +
+	" \x03(\v2..g8e.compliance.v1.ComplianceEvidenceReferenceR\fevidenceRefs\"\xaf\x02\n" +
+	"\x15EvaluationTargetState\x12%\n" +
+	"\x0eschema_version\x18\x01 \x01(\tR\rschemaVersion\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1f\n" +
+	"\vscenario_id\x18\x03 \x01(\tR\n" +
+	"scenarioId\x12\x1d\n" +
+	"\n" +
+	"attempt_id\x18\x04 \x01(\tR\tattemptId\x12'\n" +
+	"\x0ftarget_resource\x18\x05 \x01(\tR\x0etargetResource\x12;\n" +
+	"\vobserved_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"observedAt\x12\x18\n" +
+	"\apresent\x18\a \x01(\bR\apresent\x12\x18\n" +
+	"\acontent\x18\b \x01(\fR\acontent\"\xa4\x03\n" +
 	"\x13EvaluationAssertion\x12!\n" +
 	"\fassertion_id\x18\x01 \x01(\tR\vassertionId\x12+\n" +
 	"\x11assertion_version\x18\x02 \x01(\tR\x10assertionVersion\x12A\n" +
@@ -1941,7 +2053,7 @@ func file_g8e_eval_v1_eval_proto_rawDescGZIP() []byte {
 }
 
 var file_g8e_eval_v1_eval_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
-var file_g8e_eval_v1_eval_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_g8e_eval_v1_eval_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_g8e_eval_v1_eval_proto_goTypes = []any{
 	(EvaluationLane)(0),                    // 0: g8e.eval.v1.EvaluationLane
 	(EvaluationGovernancePosture)(0),       // 1: g8e.eval.v1.EvaluationGovernancePosture
@@ -1960,63 +2072,65 @@ var file_g8e_eval_v1_eval_proto_goTypes = []any{
 	(*EvaluationRun)(nil),                  // 14: g8e.eval.v1.EvaluationRun
 	(*EvaluationAttempt)(nil),              // 15: g8e.eval.v1.EvaluationAttempt
 	(*EvaluationObservation)(nil),          // 16: g8e.eval.v1.EvaluationObservation
-	(*EvaluationAssertion)(nil),            // 17: g8e.eval.v1.EvaluationAssertion
-	(*EvaluationVerdict)(nil),              // 18: g8e.eval.v1.EvaluationVerdict
-	(*EvaluationMetric)(nil),               // 19: g8e.eval.v1.EvaluationMetric
-	(*EvaluationReport)(nil),               // 20: g8e.eval.v1.EvaluationReport
-	(*v1.VersionedReference)(nil),          // 21: g8e.compliance.v1.VersionedReference
-	(*v1.ComplianceEvidenceReference)(nil), // 22: g8e.compliance.v1.ComplianceEvidenceReference
-	(*timestamppb.Timestamp)(nil),          // 23: google.protobuf.Timestamp
+	(*EvaluationTargetState)(nil),          // 17: g8e.eval.v1.EvaluationTargetState
+	(*EvaluationAssertion)(nil),            // 18: g8e.eval.v1.EvaluationAssertion
+	(*EvaluationVerdict)(nil),              // 19: g8e.eval.v1.EvaluationVerdict
+	(*EvaluationMetric)(nil),               // 20: g8e.eval.v1.EvaluationMetric
+	(*EvaluationReport)(nil),               // 21: g8e.eval.v1.EvaluationReport
+	(*v1.VersionedReference)(nil),          // 22: g8e.compliance.v1.VersionedReference
+	(*v1.ComplianceEvidenceReference)(nil), // 23: g8e.compliance.v1.ComplianceEvidenceReference
+	(*timestamppb.Timestamp)(nil),          // 24: google.protobuf.Timestamp
 }
 var file_g8e_eval_v1_eval_proto_depIdxs = []int32{
 	2,  // 0: g8e.eval.v1.EvaluationRuntimeBoundary.component:type_name -> g8e.eval.v1.EvaluationRuntimeComponent
-	21, // 1: g8e.eval.v1.EvaluationDeploymentIdentity.topology_ref:type_name -> g8e.compliance.v1.VersionedReference
+	22, // 1: g8e.eval.v1.EvaluationDeploymentIdentity.topology_ref:type_name -> g8e.compliance.v1.VersionedReference
 	11, // 2: g8e.eval.v1.EvaluationDeploymentIdentity.runtime_boundaries:type_name -> g8e.eval.v1.EvaluationRuntimeBoundary
-	22, // 3: g8e.eval.v1.EvaluationValue.artifact_reference:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	21, // 4: g8e.eval.v1.EvaluationRun.suite_ref:type_name -> g8e.compliance.v1.VersionedReference
+	23, // 3: g8e.eval.v1.EvaluationValue.artifact_reference:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	22, // 4: g8e.eval.v1.EvaluationRun.suite_ref:type_name -> g8e.compliance.v1.VersionedReference
 	12, // 5: g8e.eval.v1.EvaluationRun.deployment:type_name -> g8e.eval.v1.EvaluationDeploymentIdentity
 	1,  // 6: g8e.eval.v1.EvaluationRun.active_posture:type_name -> g8e.eval.v1.EvaluationGovernancePosture
 	0,  // 7: g8e.eval.v1.EvaluationRun.lane:type_name -> g8e.eval.v1.EvaluationLane
-	23, // 8: g8e.eval.v1.EvaluationRun.started_at:type_name -> google.protobuf.Timestamp
-	23, // 9: g8e.eval.v1.EvaluationRun.completed_at:type_name -> google.protobuf.Timestamp
-	22, // 10: g8e.eval.v1.EvaluationRun.final_verification_report_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	21, // 11: g8e.eval.v1.EvaluationAttempt.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	24, // 8: g8e.eval.v1.EvaluationRun.started_at:type_name -> google.protobuf.Timestamp
+	24, // 9: g8e.eval.v1.EvaluationRun.completed_at:type_name -> google.protobuf.Timestamp
+	23, // 10: g8e.eval.v1.EvaluationRun.final_verification_report_ref:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	22, // 11: g8e.eval.v1.EvaluationAttempt.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
 	3,  // 12: g8e.eval.v1.EvaluationAttempt.status:type_name -> g8e.eval.v1.EvaluationAttemptStatus
-	23, // 13: g8e.eval.v1.EvaluationAttempt.started_at:type_name -> google.protobuf.Timestamp
-	23, // 14: g8e.eval.v1.EvaluationAttempt.completed_at:type_name -> google.protobuf.Timestamp
-	21, // 15: g8e.eval.v1.EvaluationObservation.observation_type:type_name -> g8e.compliance.v1.VersionedReference
+	24, // 13: g8e.eval.v1.EvaluationAttempt.started_at:type_name -> google.protobuf.Timestamp
+	24, // 14: g8e.eval.v1.EvaluationAttempt.completed_at:type_name -> google.protobuf.Timestamp
+	22, // 15: g8e.eval.v1.EvaluationObservation.observation_type:type_name -> g8e.compliance.v1.VersionedReference
 	4,  // 16: g8e.eval.v1.EvaluationObservation.source:type_name -> g8e.eval.v1.EvaluationObservationSource
-	23, // 17: g8e.eval.v1.EvaluationObservation.observed_at:type_name -> google.protobuf.Timestamp
+	24, // 17: g8e.eval.v1.EvaluationObservation.observed_at:type_name -> google.protobuf.Timestamp
 	5,  // 18: g8e.eval.v1.EvaluationObservation.authority:type_name -> g8e.eval.v1.EvaluationEvidenceAuthority
 	13, // 19: g8e.eval.v1.EvaluationObservation.value:type_name -> g8e.eval.v1.EvaluationValue
-	22, // 20: g8e.eval.v1.EvaluationObservation.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	6,  // 21: g8e.eval.v1.EvaluationAssertion.comparator:type_name -> g8e.eval.v1.EvaluationComparator
-	13, // 22: g8e.eval.v1.EvaluationAssertion.expected:type_name -> g8e.eval.v1.EvaluationValue
-	21, // 23: g8e.eval.v1.EvaluationAssertion.required_observation_types:type_name -> g8e.compliance.v1.VersionedReference
-	5,  // 24: g8e.eval.v1.EvaluationAssertion.required_authorities:type_name -> g8e.eval.v1.EvaluationEvidenceAuthority
-	21, // 25: g8e.eval.v1.EvaluationVerdict.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
-	7,  // 26: g8e.eval.v1.EvaluationVerdict.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	22, // 27: g8e.eval.v1.EvaluationVerdict.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	21, // 28: g8e.eval.v1.EvaluationVerdict.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
-	23, // 29: g8e.eval.v1.EvaluationVerdict.evaluated_at:type_name -> google.protobuf.Timestamp
-	10, // 30: g8e.eval.v1.EvaluationMetric.unit:type_name -> g8e.eval.v1.EvaluationMetricUnit
-	8,  // 31: g8e.eval.v1.EvaluationMetric.direction:type_name -> g8e.eval.v1.EvaluationMetricDirection
-	21, // 32: g8e.eval.v1.EvaluationMetric.eligible_population_ref:type_name -> g8e.compliance.v1.VersionedReference
-	9,  // 33: g8e.eval.v1.EvaluationMetric.missing_data_policy:type_name -> g8e.eval.v1.EvaluationMissingDataPolicy
-	22, // 34: g8e.eval.v1.EvaluationMetric.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	14, // 35: g8e.eval.v1.EvaluationReport.run:type_name -> g8e.eval.v1.EvaluationRun
-	15, // 36: g8e.eval.v1.EvaluationReport.attempts:type_name -> g8e.eval.v1.EvaluationAttempt
-	16, // 37: g8e.eval.v1.EvaluationReport.observations:type_name -> g8e.eval.v1.EvaluationObservation
-	17, // 38: g8e.eval.v1.EvaluationReport.assertions:type_name -> g8e.eval.v1.EvaluationAssertion
-	18, // 39: g8e.eval.v1.EvaluationReport.verdicts:type_name -> g8e.eval.v1.EvaluationVerdict
-	19, // 40: g8e.eval.v1.EvaluationReport.metrics:type_name -> g8e.eval.v1.EvaluationMetric
-	22, // 41: g8e.eval.v1.EvaluationReport.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	7,  // 42: g8e.eval.v1.EvaluationReport.summary_status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
-	43, // [43:43] is the sub-list for method output_type
-	43, // [43:43] is the sub-list for method input_type
-	43, // [43:43] is the sub-list for extension type_name
-	43, // [43:43] is the sub-list for extension extendee
-	0,  // [0:43] is the sub-list for field type_name
+	23, // 20: g8e.eval.v1.EvaluationObservation.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	24, // 21: g8e.eval.v1.EvaluationTargetState.observed_at:type_name -> google.protobuf.Timestamp
+	6,  // 22: g8e.eval.v1.EvaluationAssertion.comparator:type_name -> g8e.eval.v1.EvaluationComparator
+	13, // 23: g8e.eval.v1.EvaluationAssertion.expected:type_name -> g8e.eval.v1.EvaluationValue
+	22, // 24: g8e.eval.v1.EvaluationAssertion.required_observation_types:type_name -> g8e.compliance.v1.VersionedReference
+	5,  // 25: g8e.eval.v1.EvaluationAssertion.required_authorities:type_name -> g8e.eval.v1.EvaluationEvidenceAuthority
+	22, // 26: g8e.eval.v1.EvaluationVerdict.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
+	7,  // 27: g8e.eval.v1.EvaluationVerdict.status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	23, // 28: g8e.eval.v1.EvaluationVerdict.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	22, // 29: g8e.eval.v1.EvaluationVerdict.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
+	24, // 30: g8e.eval.v1.EvaluationVerdict.evaluated_at:type_name -> google.protobuf.Timestamp
+	10, // 31: g8e.eval.v1.EvaluationMetric.unit:type_name -> g8e.eval.v1.EvaluationMetricUnit
+	8,  // 32: g8e.eval.v1.EvaluationMetric.direction:type_name -> g8e.eval.v1.EvaluationMetricDirection
+	22, // 33: g8e.eval.v1.EvaluationMetric.eligible_population_ref:type_name -> g8e.compliance.v1.VersionedReference
+	9,  // 34: g8e.eval.v1.EvaluationMetric.missing_data_policy:type_name -> g8e.eval.v1.EvaluationMissingDataPolicy
+	23, // 35: g8e.eval.v1.EvaluationMetric.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	14, // 36: g8e.eval.v1.EvaluationReport.run:type_name -> g8e.eval.v1.EvaluationRun
+	15, // 37: g8e.eval.v1.EvaluationReport.attempts:type_name -> g8e.eval.v1.EvaluationAttempt
+	16, // 38: g8e.eval.v1.EvaluationReport.observations:type_name -> g8e.eval.v1.EvaluationObservation
+	18, // 39: g8e.eval.v1.EvaluationReport.assertions:type_name -> g8e.eval.v1.EvaluationAssertion
+	19, // 40: g8e.eval.v1.EvaluationReport.verdicts:type_name -> g8e.eval.v1.EvaluationVerdict
+	20, // 41: g8e.eval.v1.EvaluationReport.metrics:type_name -> g8e.eval.v1.EvaluationMetric
+	23, // 42: g8e.eval.v1.EvaluationReport.evidence_refs:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	7,  // 43: g8e.eval.v1.EvaluationReport.summary_status:type_name -> g8e.eval.v1.EvaluationVerdictStatus
+	44, // [44:44] is the sub-list for method output_type
+	44, // [44:44] is the sub-list for method input_type
+	44, // [44:44] is the sub-list for extension type_name
+	44, // [44:44] is the sub-list for extension extendee
+	0,  // [0:44] is the sub-list for field type_name
 }
 
 func init() { file_g8e_eval_v1_eval_proto_init() }
@@ -2036,7 +2150,7 @@ func file_g8e_eval_v1_eval_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_eval_v1_eval_proto_rawDesc), len(file_g8e_eval_v1_eval_proto_rawDesc)),
 			NumEnums:      11,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
