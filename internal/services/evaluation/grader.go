@@ -94,7 +94,9 @@ func DeriveRequiredVerdictMetric(verdicts []*evalv1.EvaluationVerdict) *evalv1.E
 	for _, verdict := range verdicts {
 		metric.Denominator++
 		metric.SourceVerdictRefs = append(metric.SourceVerdictRefs, verdict.GetVerdictId())
-		metric.EvidenceRefs = append(metric.EvidenceRefs, verdict.GetEvidenceRefs()...)
+		for _, reference := range verdict.GetEvidenceRefs() {
+			metric.EvidenceRefs = appendUniqueReference(metric.EvidenceRefs, reference)
+		}
 		if verdict.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
 			metric.Numerator++
 		}
@@ -207,6 +209,18 @@ func VerdictSummary(verdicts []*evalv1.EvaluationVerdict) string {
 		}
 	}
 	return fmt.Sprintf("%d/%d required invariants passed", passed, len(verdicts))
+}
+
+func appendUniqueReference(references []*compliancev1.ComplianceEvidenceReference, candidate *compliancev1.ComplianceEvidenceReference) []*compliancev1.ComplianceEvidenceReference {
+	if candidate == nil {
+		return references
+	}
+	for _, reference := range references {
+		if proto.Equal(reference, candidate) {
+			return references
+		}
+	}
+	return append(references, proto.Clone(candidate).(*compliancev1.ComplianceEvidenceReference))
 }
 
 func cloneReferences(references []*compliancev1.ComplianceEvidenceReference) []*compliancev1.ComplianceEvidenceReference {

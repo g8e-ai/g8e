@@ -8,129 +8,250 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
+	"log/slog"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
+	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
+	"github.com/g8e-ai/g8e/v2/internal/uuid"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-// evalCommandRunner abstracts subprocess execution so Tier 1 tests do not
-// spawn processes. The real implementation uses exec.CommandContext
-// directly without a shell. The facade never invokes a shell for engine
-// execution.
-type evalCommandRunner interface {
-	Run(ctx context.Context, name string, args []string, stdout, stderr io.Writer) error
+type nativeEvalClientFactory func(harnessconfig.Config) (*harnessclient.Client, error)
+type nativeEvalAuthLoader func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error)
+
+type nativeEvalDeps struct {
+	configLoader   func(string) (*config.Config, error)
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)
+	clientFactory  nativeEvalClientFactory
+	authLoader     nativeEvalAuthLoader
+	now            func() time.Time
+	newID          func() string
 }
 
-// realEvalCommandRunner is the production evalCommandRunner backed by
-// exec.CommandContext. It connects stdout and stderr directly to the
-// supplied writers and respects context cancellation.
-type realEvalCommandRunner struct{}
-
-func (realEvalCommandRunner) Run(ctx context.Context, name string, args []string, stdout, stderr io.Writer) error {
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd.Run()
+func evalCmd() *cobra.Command {
+	return evalCmdWithConfig(nativeEvalDeps{configLoader: config.Load, fileSvcFactory: newFileSvc, clientFactory: harnessclient.New, authLoader: auth.LoadClientAuthContext, now: time.Now, newID: uuid.NewString})
 }
 
-// evalFileReader abstracts file reads so Tier 1 tests do not touch the
-// filesystem. The real implementation calls os.ReadFile.
-type evalFileReader interface {
-	ReadFile(path string) ([]byte, error)
+func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
+	cmd := &cobra.Command{Use: "eval", Short: "Run and verify native g8e evaluations"}
+	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
+	cmd.AddCommand(nativeEvalRunCmd(deps), nativeEvalVerifyCmd(deps), nativeEvalShowCmd(deps))
+	return cmd
 }
 
-// realEvalFileReader is the production evalFileReader backed by os.ReadFile.
-type realEvalFileReader struct{}
-
-func (realEvalFileReader) ReadFile(path string) ([]byte, error) { return os.ReadFile(path) }
-
-// realEvalExecutableLookup is the production evalExecutableLookup backed
-// by exec.LookPath.
-type realEvalExecutableLookup struct{}
-
-func (realEvalExecutableLookup) LookPath(file string) (string, error) { return exec.LookPath(file) }
-
-// evalRoots is the resolved and validated repository root and eval
-// project path. Both are absolute. The eval project is validated through
-// the owned markers; the repository root is validated through the root
-// markers.
-type evalRoots struct {
-	RepositoryRoot string
-	EvalProject    string
-}
-
-// resolveEvalRoots validates the repository root markers and returns the
-// resolved eval project path. It fails closed with a typed error if the
-// root markers are missing. The eval project markers are validated
-// separately by the environment resolver.
-func resolveEvalRoots(ctx context.Context, projectRoot string, stat evalFileStat) (evalRoots, error) {
-	if projectRoot == "" {
-		return evalRoots{}, fmt.Errorf("%w: project root is empty", constants.ErrEvalProjectNotFound)
+func nativeEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
+	var operatorSessionID string
+	var jsonOutput bool
+	command := &cobra.Command{
+		Use:   "run core-execution-boundary",
+		Short: "Run the native core execution-boundary evaluation",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if args[0] != evaluation.CoreExecutionBoundarySuiteID {
+				return fmt.Errorf("%w: %s", constants.ErrEvaluationSuiteUnsupported, args[0])
+			}
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			authContext, err := deps.authLoader(fileSvc, cfg)
+			if err != nil {
+				return fmt.Errorf("evaluation: load CLI identity: %w", err)
+			}
+			clientConfig := nativeEvalClientConfig(cfg, authContext)
+			gatewayClient, err := deps.clientFactory(clientConfig)
+			if err != nil {
+				return fmt.Errorf("evaluation: initialize gateway client: %w", err)
+			}
+			runID := deps.newID()
+			target := filepath.Join(constants.EvaluationTargetContainerDir, constants.EvaluationTargetFilenamePrefix+runID+constants.FileExtText)
+			marker := constants.EvaluationTargetFilenamePrefix + runID
+			store := evaluation.NewStore(fileSvc)
+			lane := evaluation.NewCommandLane(gatewayClient, store, harnessclient.Persona{ID: "g8e-native-evaluator", CLISessionID: authContext.CLISessionID, UserID: authContext.UserID}, 0, 0)
+			runner := evaluation.NewRunner(evaluation.NewRegistry(), lane, evaluation.NewComposeTargetObserver(cfg.ProjectRoot), store, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			report, runErr := runner.Run(cmd.Context(), evaluation.RunRequest{RunID: runID, PinnedOperatorSessionID: operatorSessionID, TargetResource: target, Marker: marker, Deployment: nativeEvalDeployment(cfg, authContext, runID, target)})
+			if report == nil {
+				return runErr
+			}
+			verification, verifyErr := evaluation.NewVerifier(fileSvc, evaluation.NewRegistry(), deps.now).Verify(cmd.Context(), runID)
+			if verifyErr != nil {
+				return fmt.Errorf("evaluation: verify persisted run: %w", verifyErr)
+			}
+			verificationRef, saveErr := store.SaveVerification(cmd.Context(), runID, verification)
+			if saveErr != nil {
+				return saveErr
+			}
+			report.Run.FinalVerificationReportRef = verificationRef
+			if saveErr := store.SaveReport(cmd.Context(), report); saveErr != nil {
+				return saveErr
+			}
+			if err := writeNativeEvalRun(cmd, report, verification, jsonOutput); err != nil {
+				return err
+			}
+			if runErr != nil {
+				return runErr
+			}
+			if !verification.GetValid() {
+				return constants.ErrEvalRunVerificationFailed
+			}
+			return nil
+		},
 	}
-	absRoot, err := filepath.Abs(projectRoot)
+	command.Flags().StringVar(&operatorSessionID, "operator-session", "", "Pin the evaluation to one exact active remote Operator session")
+	command.Flags().BoolVar(&jsonOutput, "json", false, "Emit canonical evaluation report protojson")
+	return command
+}
+
+func nativeEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
+	var jsonOutput bool
+	command := &cobra.Command{
+		Use:   "verify <run-id>",
+		Short: "Independently re-verify a persisted native evaluation run",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			report, err := evaluation.NewVerifier(fileSvc, evaluation.NewRegistry(), deps.now).Verify(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			if err := writeNativeVerification(cmd, report, jsonOutput); err != nil {
+				return err
+			}
+			if !report.GetValid() {
+				return constants.ErrEvalRunVerificationFailed
+			}
+			return nil
+		},
+	}
+	command.Flags().BoolVar(&jsonOutput, "json", false, "Emit canonical ComplianceVerificationReport protojson")
+	return command
+}
+
+func nativeEvalShowCmd(deps nativeEvalDeps) *cobra.Command {
+	var jsonOutput bool
+	command := &cobra.Command{
+		Use:   "show <run-id>",
+		Short: "Show a persisted native evaluation report",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			report, err := evaluation.NewStore(fileSvc).LoadReport(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			if jsonOutput {
+				body, err := evalv1.MarshalCanonical(report)
+				if err != nil {
+					return fmt.Errorf("evaluation: canonicalize report: %w", err)
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(body))
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Run: %s\nSuite: %s@%s\nStatus: %s\nSummary: %s\nOperator: %s\nSession: %s\n", report.GetRun().GetRunId(), report.GetRun().GetSuiteRef().GetId(), report.GetRun().GetSuiteRef().GetVersion(), report.GetSummaryStatus().String(), report.GetSummary(), report.GetRun().GetTargetOperatorId(), report.GetRun().GetTargetOperatorSessionId())
+			if err != nil {
+				return err
+			}
+			for _, verdict := range report.GetVerdicts() {
+				if verdict.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+					continue
+				}
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "- %s: %s (%s)\n", verdict.GetAssertionRef().GetId(), verdict.GetStatus().String(), verdict.GetFailureReason()); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	}
+	command.Flags().BoolVar(&jsonOutput, "json", false, "Emit canonical evaluation report protojson")
+	return command
+}
+
+func nativeEvalEnvironment(cmd *cobra.Command, deps nativeEvalDeps) (*config.Config, fs.RuntimeFileService, error) {
+	projectRoot, err := cmd.Flags().GetString("project-root")
 	if err != nil {
-		return evalRoots{}, fmt.Errorf("%w: resolve project root: %w", constants.ErrEvalProjectNotFound, err)
+		return nil, nil, fmt.Errorf("evaluation: read project root: %w", err)
 	}
-	for _, marker := range []string{constants.EvalRootVersion, constants.EvalRootMakefile} {
-		markerPath := filepath.Join(absRoot, marker)
-		if _, err := stat.Stat(markerPath); err != nil {
-			return evalRoots{}, fmt.Errorf("%w: missing root marker %s", constants.ErrEvalProjectNotFound, marker)
+	cfg, err := deps.configLoader(projectRoot)
+	if err != nil {
+		return nil, nil, fmt.Errorf("evaluation: load config: %w", err)
+	}
+	fileSvc, err := deps.fileSvcFactory(cfg.ProjectRoot, slog.Default())
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+	}
+	if err := fileSvc.CreateRuntimeTree(cmd.Context()); err != nil {
+		return nil, nil, fmt.Errorf("evaluation: create runtime tree: %w", err)
+	}
+	return cfg, fileSvc, nil
+}
+
+func nativeEvalClientConfig(cfg *config.Config, authContext *auth.ClientAuthContext) harnessconfig.Config {
+	credentials := harnessconfig.Auth{ClientCert: authContext.ClientCert, ClientKey: authContext.ClientKey, CABundle: cfg.ResolvedTrustBundlePath()}
+	return harnessconfig.Config{MTLSBaseURL: cfg.OperatorHTTPURL(), PublicBaseURL: cfg.OperatorDiscoveryURL(), Auth: credentials, CLIAuth: credentials, UseCLIConfig: true, UserID: authContext.UserID, CLISessionID: authContext.CLISessionID, OperatorSessionID: authContext.OperatorSessionID}
+}
+
+func nativeEvalDeployment(cfg *config.Config, authContext *auth.ClientAuthContext, runID, target string) *evalv1.EvaluationDeploymentIdentity {
+	return &evalv1.EvaluationDeploymentIdentity{
+		DeploymentId:        runID,
+		TopologyRef:         &compliancev1.VersionedReference{Id: evaluation.TopologyID, Version: evaluation.TopologyVersion},
+		ControlledTarget:    target,
+		IndependentObserver: constants.DockerEvaluationObserverService,
+		RuntimeBoundaries: []*evalv1.EvaluationRuntimeBoundary{
+			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_EVALUATOR, ProcessIdentity: "host-side g8e eval process", RuntimeNamespace: "Docker host workspace", Endpoint: cfg.OperatorHTTPURL(), AuthenticatedIdentity: authContext.UserID},
+			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_GATEWAY, ProcessIdentity: constants.DockerGatewayContainer, RuntimeNamespace: "Gateway container", PersistentStore: "Gateway runtime volume", Endpoint: cfg.OperatorHTTPURL(), AuthenticatedIdentity: authContext.CLISessionID},
+			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_OPERATOR, ProcessIdentity: constants.DockerOperatorContainer, RuntimeNamespace: "Operator container", MountedFilesystems: []string{"Operator runtime volume", "shared controlled fixture volume"}, PersistentStore: "Operator runtime volume"},
+			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_CONTROLLED_TARGET, ProcessIdentity: target, RuntimeNamespace: "shared controlled fixture volume", MountedFilesystems: []string{"shared controlled fixture volume"}},
+		},
+	}
+}
+
+func writeNativeEvalRun(cmd *cobra.Command, report *evalv1.EvaluationReport, verification *compliancev1.ComplianceVerificationReport, jsonOutput bool) error {
+	if jsonOutput {
+		body, err := evalv1.MarshalCanonical(report)
+		if err != nil {
+			return fmt.Errorf("evaluation: canonicalize report: %w", err)
+		}
+		_, err = fmt.Fprintln(cmd.OutOrStdout(), string(body))
+		return err
+	}
+	_, err := fmt.Fprintf(cmd.OutOrStdout(), "Run: %s\nStatus: %s\nSummary: %s\nVerification: %t\nOperator: %s\nSession: %s\n", report.GetRun().GetRunId(), report.GetSummaryStatus().String(), report.GetSummary(), verification.GetValid(), report.GetRun().GetTargetOperatorId(), report.GetRun().GetTargetOperatorSessionId())
+	return err
+}
+
+func writeNativeVerification(cmd *cobra.Command, report *compliancev1.ComplianceVerificationReport, jsonOutput bool) error {
+	if jsonOutput {
+		body, err := compliancev1.MarshalCanonical(report)
+		if err != nil {
+			return fmt.Errorf("evaluation: canonicalize verification: %w", err)
+		}
+		_, err = fmt.Fprintln(cmd.OutOrStdout(), string(body))
+		return err
+	}
+	_, err := fmt.Fprintf(cmd.OutOrStdout(), "Run: %s\nValid: %t\nFailures: %d\n", report.GetReportId(), report.GetValid(), len(report.GetFailures()))
+	if err != nil {
+		return err
+	}
+	for _, failure := range report.GetFailures() {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "- %s: %s (%s)\n", failure.GetCode(), failure.GetReason(), failure.GetSubjectRef()); err != nil {
+			return err
 		}
 	}
-	evalProject := filepath.Join(absRoot, constants.EvalProjectDir)
-	return evalRoots{RepositoryRoot: absRoot, EvalProject: evalProject}, nil
-}
-
-// evalProjectRootFromConfig resolves the project root from the config
-// loader or an explicit override. The override takes precedence when
-// supplied and non-empty.
-func evalProjectRootFromConfig(configLoader func(string) (*config.Config, error), projectRootOverride string) (string, error) {
-	cfg, err := configLoader(projectRootOverride)
-	if err != nil {
-		return "", fmt.Errorf("eval: load config: %w", err)
-	}
-	return cfg.ProjectRoot, nil
-}
-
-// evalCmd returns the parent `eval` Cobra command. It registers the
-// setup and doctor subcommands implemented in U3. Later phases add
-// diagnostic, campaign, controller, lease, bundle, verify, publish,
-// qualification, and bench-synthetic subcommands.
-func evalCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "eval",
-		Short: "Evaluation engine orchestration (setup, doctor, diagnostics, campaigns)",
-		Long: `eval owns the unified evaluation operator surface.
-
-The Go facade resolves the eval Python project, validates the locked
-environment, and dispatches typed engine requests to the internal Python
-engine. Operators never invoke uv, activate a virtualenv, change into
-ensemble/evals, or call g8e-evals directly.
-
-Run 'g8e eval setup' to create or synchronize the eval environment.
-Run 'g8e eval doctor' for read-only environment diagnostics.`,
-	}
-	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
-	cmd.AddCommand(
-		evalSetupCmd(),
-		evalDoctorCmd(),
-		evalDiagnosticCmd(),
-		evalCampaignCmd(),
-		evalControllerCmd(),
-		evalLeaseCmd(),
-		evalCampaignSetCmd(),
-		evalBundleCmd(),
-		evalVerifyCmd(),
-		evalQualificationCmd(),
-		evalBenchSyntheticCmd(),
-	)
-	return cmd
+	return nil
 }

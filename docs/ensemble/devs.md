@@ -138,6 +138,8 @@ pip install -e ".[dev,test,docs]"
 ## Project Conventions
 
 - Follow existing code patterns — let Ruff and Pyright guide type safety and formatting
+- Reuse existing implementations before writing new code — search `app/` and the in-tree `g8e` package for existing models, utilities, services, and constants; the codebase already contains what most tasks need, so keep additions minimal and extend existing code rather than introducing parallel functionality
+- Never add shims, compatibility wrappers, or duplicate helpers that reinvent existing functionality
 - Keep changes minimal, focused, and covered by tests
 - Add unit tests for new functionality and regression tests for bug fixes
 - Update documentation in `docs/ensemble/` when interfaces or models change

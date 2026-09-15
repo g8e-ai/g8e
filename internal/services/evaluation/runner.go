@@ -237,7 +237,9 @@ func (r *Runner) finalize(report *evalv1.EvaluationReport) {
 	report.Metrics = []*evalv1.EvaluationMetric{DeriveRequiredVerdictMetric(report.Verdicts)}
 	report.Summary = VerdictSummary(report.Verdicts)
 	for _, observation := range report.Observations {
-		report.EvidenceRefs = append(report.EvidenceRefs, observation.GetEvidenceRefs()...)
+		for _, reference := range observation.GetEvidenceRefs() {
+			report.EvidenceRefs = appendUniqueReference(report.EvidenceRefs, reference)
+		}
 	}
 }
 

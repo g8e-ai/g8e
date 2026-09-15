@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
@@ -542,13 +543,8 @@ func (v *bundleVerifier) verifyDemoSourceVerificationReports(ctx context.Context
 
 type evalSourceInventory struct {
 	verificationReport *compliancev1.ComplianceVerificationReport
-	manifest           bool
-	tasks              bool
-	attempts           bool
-	receipts           bool
-	stages             bool
-	metrics            bool
-	evidenceIndex      bool
+	report             bool
+	evidence           bool
 }
 
 func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context) {
@@ -590,30 +586,18 @@ func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context
 				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval runtime source path is incomplete")
 				continue
 			}
-			if len(parts) > 5 {
-				if parts[4] != constants.EvalRunEvidenceDirname {
-					v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval runtime nested source path is unsupported")
-				}
+			if len(parts) == 5 && parts[4] == constants.EvaluationReportFilename {
+				inventory.report = true
 				continue
 			}
-			switch parts[4] {
-			case constants.EvalRunManifestFilename:
-				inventory.manifest = true
-			case constants.EvalRunTasksFilename:
-				inventory.tasks = true
-			case constants.EvalRunAttemptsFilename:
-				inventory.attempts = true
-			case constants.EvalRunReceiptsFilename:
-				inventory.receipts = true
-			case constants.EvalRunStagesFilename:
-				inventory.stages = true
-			case constants.EvalRunMetricsFilename:
-				inventory.metrics = true
-			case constants.EvalRunEvidenceIndexFilename:
-				inventory.evidenceIndex = true
-			default:
-				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval runtime root source path is unsupported")
+			if len(parts) == 5 && parts[4] == constants.EvaluationVerificationFilename {
+				continue
 			}
+			if len(parts) == 6 && parts[4] == constants.EvaluationEvidenceDirname {
+				inventory.evidence = true
+				continue
+			}
+			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval runtime source path is unsupported")
 		default:
 			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval source path is unsupported")
 		}
@@ -623,7 +607,7 @@ func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context
 			bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
 			v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "eval evidence run lacks a valid independent source verification report")
 		}
-		complete := inventory.manifest && inventory.tasks && inventory.attempts && inventory.receipts && inventory.stages && inventory.metrics && inventory.evidenceIndex
+		complete := inventory.report && inventory.evidence
 		if !complete {
 			bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID)
 			v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "eval evidence run lacks a complete protected runtime source inventory")
@@ -1328,9 +1312,9 @@ func (v *bundleVerifier) verifySourceVerificationReport(bundlePath string, body 
 }
 
 func (v *bundleVerifier) replayEvalSourceVerification(ctx context.Context, runID string, expected *compliancev1.ComplianceVerificationReport) {
-	runtimeRoot := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.EvalRunsDirname, runID)
+	runtimeRoot := filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname, runID)
 	reader := &bundledRuntimeArtifactReader{bodies: v.bodies, runID: runID, sourceDir: constants.ComplianceBundleSourceEvalsDirname, runtimeRoot: runtimeRoot}
-	replayed, err := evidence.VerifyEvalRun(ctx, reader, runID, runtimeRoot, expected.GetVerifiedAt().AsTime())
+	replayed, err := evaluation.NewVerifier(reader, evaluation.NewRegistry(), func() time.Time { return expected.GetVerifiedAt().AsTime() }).Verify(ctx, runID)
 	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
 	if err != nil {
 		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, err.Error())

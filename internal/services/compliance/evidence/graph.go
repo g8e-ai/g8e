@@ -58,6 +58,10 @@ const (
 	ArtifactTypeAssessorAttestation ArtifactType = "assessor-attestation"
 )
 
+func EvalScopeID(suiteID string) string {
+	return constants.EvalScopePrefix + suiteID
+}
+
 func SupportedArtifactTypes() []ArtifactType {
 	return []ArtifactType{
 		ArtifactTypeDemoManifest,

@@ -1,7 +1,7 @@
 # Developer Guidelines
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-15
+Version: v2.1.8
 
 This guide defines the coding and maintenance rules for the g8e repository. The current working tree is the source of truth for current behavior. Use the [Code Map](codemap.md) for package and runtime ownership, the [Testing Guide](tests.md) for test infrastructure and commands, and the [Documentation Guide](docs.md) for documentation ownership, style, metadata, generation, and validation.
 
@@ -45,12 +45,14 @@ This guide owns repository-wide invariants and Go platform conventions. Componen
 - Format Go with `gofmt` and group imports as standard library, external dependencies, and internal repository packages.
 - Pass pointers for mutable or large structs and values for small read-only structs.
 - Confirm a dependency is already available before importing it; add new dependencies through the owning package manager rather than editing lock or manifest entries by hand.
+- Search the codebase for an existing implementation before writing new code. Reuse established services, utilities, models, constants, and patterns; the repository already contains the primitives most tasks need, so keep additions minimal and extend existing code rather than introducing parallel functionality.
 - Keep changes focused and leave the affected code cleaner than it was.
 - Reproduce bugs with a failing regression test before changing production code, then verify the test passes with the fix.
 - Update documentation and generated artifacts in the same change as the behavior they describe.
 
 ### Never
 
+- Do not reinvent the wheel: no new helpers, shims, wrappers, or compatibility layers that duplicate an existing implementation. Extend or reuse the existing code instead.
 - Do not add `ensure*` or `getOrCreate*` helpers that combine reads and writes or hide creation as a lookup side effect.
 - Do not use protobuf `Any`, `map[string]interface{}`, or equivalent untyped containers for a known contract.
 - Do not declare package-level sentinel errors outside `internal/constants/errors.go`.

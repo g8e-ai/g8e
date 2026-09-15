@@ -26,7 +26,10 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
+	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 )
 
 var errFactory = errors.New("factory boom")
@@ -808,24 +811,41 @@ func TestGatewayConnectCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
-// --- Eval commands (U3) ---
+// --- Eval commands ---
 
-func TestEvalDoctorCmdWithDeps_FileSvcFactoryError(t *testing.T) {
+func TestEvalCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
-	deps := evalDoctorDeps{
+	deps := nativeEvalDeps{
 		configLoader:   configLoaderFor(cfg),
 		fileSvcFactory: failingFileSvcFactory(errFactory),
-		stat:           stubEvalFileStat{existing: map[string]bool{}},
-		runner:         &stubEvalRunner{},
-		httpClient:     &http.Client{},
+		clientFactory: func(harnessconfig.Config) (*harnessclient.Client, error) {
+			panic("client factory should not be called when fileSvcFactory fails")
+		},
+		authLoader: func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error) {
+			panic("auth loader should not be called when fileSvcFactory fails")
+		},
+		now:   time.Now,
+		newID: func() string { return "run-id" },
 	}
-	cmd := evalDoctorCmdWithDeps(deps)
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	err := cmd.Execute()
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
-	assert.ErrorIs(t, err, errFactory)
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "run", args: []string{"run", evaluation.CoreExecutionBoundarySuiteID}},
+		{name: "verify", args: []string{"verify", "run-id"}},
+		{name: "show", args: []string{"show", "run-id"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cmd := evalCmdWithConfig(deps)
+			cmd.SetArgs(test.args)
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+			assert.ErrorIs(t, err, errFactory)
+		})
+	}
 }

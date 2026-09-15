@@ -7,6 +7,13 @@
 
 package constants
 
+import "time"
+
+const (
+	EvaluationReceiptPollInterval = 500 * time.Millisecond
+	EvaluationReceiptPollTimeout  = 30 * time.Second
+)
+
 const (
 	PlatformUsageUpdated = "g8e.v1.platform.usage.updated"
 	PlatformNotification = "g8e.v1.platform.notification"
