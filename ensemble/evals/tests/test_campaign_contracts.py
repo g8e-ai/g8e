@@ -44,6 +44,7 @@ from g8e_evals.campaign import (
     validate_retry_chain,
     validate_schedule,
 )
+from g8e_evals.index import ModelRole
 from g8e_evals.schema import AttemptRecord, TerminalStatus
 
 
@@ -66,7 +67,7 @@ def _make_sampling() -> SamplingSettings:
     return SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42)
 
 
-def _make_role_binding(role: str = "primary", model_id: str = "qwen3:8b") -> RoleModelBinding:
+def _make_role_binding(role: ModelRole = ModelRole.PRIMARY, model_id: str = "qwen3:8b") -> RoleModelBinding:
     return RoleModelBinding(
         role=role,
         model_id=model_id,
@@ -79,9 +80,16 @@ def _make_role_binding(role: str = "primary", model_id: str = "qwen3:8b") -> Rol
 
 
 def _make_cohort(cohort_id: str = "cohort-qwen3-8b", model_id: str = "qwen3:8b") -> ModelCohort:
-    bindings = [_make_role_binding("primary", model_id)]
-    ch = compute_model_cohort_hash(cohort_id, bindings)
-    return ModelCohort(cohort_id=cohort_id, role_bindings=bindings, content_hash=ch)
+    bindings = [_make_role_binding(ModelRole.PRIMARY, model_id)]
+    variant_id = cohort_id[len("cohort-"):] if cohort_id.startswith("cohort-") else cohort_id
+    ch = compute_model_cohort_hash(cohort_id, variant_id, ModelRole.PRIMARY, bindings)
+    return ModelCohort(
+        cohort_id=cohort_id,
+        candidate_variant_id=variant_id,
+        candidate_role=ModelRole.PRIMARY,
+        role_bindings=bindings,
+        content_hash=ch,
+    )
 
 
 def _make_task_assignment() -> TaskAssignmentManifest:
@@ -187,16 +195,20 @@ class TestModelCohort:
         with pytest.raises(ValueError, match="content_hash mismatch"):
             ModelCohort(
                 cohort_id="cohort-qwen3-8b",
+                candidate_variant_id="qwen3-8b",
+                candidate_role=ModelRole.PRIMARY,
                 role_bindings=bindings,
                 content_hash="f" * 64,
             )
 
     def test_cohort_rejects_duplicate_roles(self):
-        bindings = [_make_role_binding("primary"), _make_role_binding("primary", "granite3.3:8b")]
-        ch = compute_model_cohort_hash("cohort-x", bindings)
+        bindings = [_make_role_binding(ModelRole.PRIMARY), _make_role_binding(ModelRole.PRIMARY, "granite3.3:8b")]
+        ch = compute_model_cohort_hash("cohort-x", "x", ModelRole.PRIMARY, bindings)
         with pytest.raises(ValueError, match="duplicate role"):
             ModelCohort(
                 cohort_id="cohort-x",
+                candidate_variant_id="x",
+                candidate_role=ModelRole.PRIMARY,
                 role_bindings=bindings,
                 content_hash=ch,
             )
@@ -205,46 +217,48 @@ class TestModelCohort:
         with pytest.raises(Exception, match="should have at least 1 item"):
             ModelCohort(
                 cohort_id="cohort-x",
+                candidate_variant_id="x",
+                candidate_role=ModelRole.PRIMARY,
                 role_bindings=[],
                 content_hash="0" * 64,
             )
 
     def test_different_model_changes_hash(self):
-        ch1 = compute_model_cohort_hash("c1", [_make_role_binding("primary", "qwen3:8b")])
-        ch2 = compute_model_cohort_hash("c1", [_make_role_binding("primary", "granite3.3:8b")])
+        ch1 = compute_model_cohort_hash("c1", "v1", ModelRole.PRIMARY, [_make_role_binding(ModelRole.PRIMARY, "qwen3:8b")])
+        ch2 = compute_model_cohort_hash("c1", "v1", ModelRole.PRIMARY, [_make_role_binding(ModelRole.PRIMARY, "granite3.3:8b")])
         assert ch1 != ch2
 
     def test_different_sampling_changes_hash(self):
         s1 = SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42)
         s2 = SamplingSettings(temperature=0.7, top_p=1.0, max_tokens=4096, seed=42)
-        rb1 = RoleModelBinding(role="primary", model_id="qwen3:8b", provider="ollama",
+        rb1 = RoleModelBinding(role=ModelRole.PRIMARY, model_id="qwen3:8b", provider="ollama",
                                endpoint="http://x", sampling_settings=s1, timeout_seconds=120.0, seed_capable=True)
-        rb2 = RoleModelBinding(role="primary", model_id="qwen3:8b", provider="ollama",
+        rb2 = RoleModelBinding(role=ModelRole.PRIMARY, model_id="qwen3:8b", provider="ollama",
                                endpoint="http://x", sampling_settings=s2, timeout_seconds=120.0, seed_capable=True)
-        ch1 = compute_model_cohort_hash("c1", [rb1])
-        ch2 = compute_model_cohort_hash("c1", [rb2])
+        ch1 = compute_model_cohort_hash("c1", "v1", ModelRole.PRIMARY, [rb1])
+        ch2 = compute_model_cohort_hash("c1", "v1", ModelRole.PRIMARY, [rb2])
         assert ch1 != ch2
 
     def test_different_endpoint_changes_hash(self):
-        rb1 = RoleModelBinding(role="primary", model_id="qwen3:8b", provider="ollama",
+        rb1 = RoleModelBinding(role=ModelRole.PRIMARY, model_id="qwen3:8b", provider="ollama",
                                endpoint="http://a:11434", sampling_settings=_make_sampling(),
                                timeout_seconds=120.0, seed_capable=True)
-        rb2 = RoleModelBinding(role="primary", model_id="qwen3:8b", provider="ollama",
+        rb2 = RoleModelBinding(role=ModelRole.PRIMARY, model_id="qwen3:8b", provider="ollama",
                                endpoint="http://b:11434", sampling_settings=_make_sampling(),
                                timeout_seconds=120.0, seed_capable=True)
-        ch1 = compute_model_cohort_hash("c1", [rb1])
-        ch2 = compute_model_cohort_hash("c1", [rb2])
+        ch1 = compute_model_cohort_hash("c1", "v1", ModelRole.PRIMARY, [rb1])
+        ch2 = compute_model_cohort_hash("c1", "v1", ModelRole.PRIMARY, [rb2])
         assert ch1 != ch2
 
     def test_different_timeout_changes_hash(self):
-        rb1 = RoleModelBinding(role="primary", model_id="qwen3:8b", provider="ollama",
+        rb1 = RoleModelBinding(role=ModelRole.PRIMARY, model_id="qwen3:8b", provider="ollama",
                                endpoint="http://x", sampling_settings=_make_sampling(),
                                timeout_seconds=120.0, seed_capable=True)
-        rb2 = RoleModelBinding(role="primary", model_id="qwen3:8b", provider="ollama",
+        rb2 = RoleModelBinding(role=ModelRole.PRIMARY, model_id="qwen3:8b", provider="ollama",
                                endpoint="http://x", sampling_settings=_make_sampling(),
                                timeout_seconds=60.0, seed_capable=True)
-        ch1 = compute_model_cohort_hash("c1", [rb1])
-        ch2 = compute_model_cohort_hash("c1", [rb2])
+        ch1 = compute_model_cohort_hash("c1", "v1", ModelRole.PRIMARY, [rb1])
+        ch2 = compute_model_cohort_hash("c1", "v1", ModelRole.PRIMARY, [rb2])
         assert ch1 != ch2
 
 

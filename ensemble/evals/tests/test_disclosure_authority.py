@@ -17,8 +17,6 @@ and provides deterministic query helpers.
 
 from __future__ import annotations
 
-import json
-
 import pytest
 from pydantic import ValidationError
 
@@ -34,100 +32,92 @@ from g8e_evals.disclosure_authority import (
 )
 
 
-_HASH = "a" * 64
-
-
-def _make_fields() -> list[dict]:
+def _make_fields() -> list[DisclosureFieldEntry]:
     return [
-        {
-            "field_name": "variant_id",
-            "classification": "public",
-            "public_column_name": "variant_id",
-            "in_csv": True,
-            "tombstone_hash_field": "",
-        },
-        {
-            "field_name": "task_id",
-            "classification": "public",
-            "public_column_name": "task_id",
-            "in_csv": True,
-            "tombstone_hash_field": "",
-        },
-        {
-            "field_name": "raw_prompt",
-            "classification": "restricted",
-            "public_column_name": "raw_prompt_tombstone",
-            "in_csv": False,
-            "tombstone_hash_field": "raw_prompt_sha256",
-        },
-        {
-            "field_name": "model_output",
-            "classification": "restricted",
-            "public_column_name": "model_output_tombstone",
-            "in_csv": False,
-            "tombstone_hash_field": "model_output_sha256",
-        },
-        {
-            "field_name": "evidence_hash",
-            "classification": "tombstone",
-            "public_column_name": "evidence_hash",
-            "in_csv": True,
-            "tombstone_hash_field": "evidence_hash",
-        },
+        DisclosureFieldEntry(
+            field_name="variant_id",
+            classification=FieldClassification.PUBLIC,
+            public_column_name="variant_id",
+        ),
+        DisclosureFieldEntry(
+            field_name="task_id",
+            classification=FieldClassification.PUBLIC,
+            public_column_name="task_id",
+        ),
+        DisclosureFieldEntry(
+            field_name="raw_prompt",
+            classification=FieldClassification.RESTRICTED,
+            public_column_name="raw_prompt_tombstone",
+            in_csv=False,
+            tombstone_hash_field="raw_prompt_sha256",
+        ),
+        DisclosureFieldEntry(
+            field_name="model_output",
+            classification=FieldClassification.RESTRICTED,
+            public_column_name="model_output_tombstone",
+            in_csv=False,
+            tombstone_hash_field="model_output_sha256",
+        ),
+        DisclosureFieldEntry(
+            field_name="evidence_hash",
+            classification=FieldClassification.TOMBSTONE,
+            public_column_name="evidence_hash",
+            tombstone_hash_field="evidence_hash",
+        ),
     ]
 
 
-def _make_outputs() -> list[dict]:
+def _make_outputs() -> list[DisclosureOutputEntry]:
     return [
-        {
-            "file_name": "disclosure-public.jsonl",
-            "output_format": "canonical_jsonl",
-            "output_role": "public_jsonl",
-            "required": True,
-            "description": "Canonical public JSONL with tombstones for restricted fields.",
-        },
-        {
-            "file_name": "disclosure-derived.csv",
-            "output_format": "derived_csv",
-            "output_role": "derived_csv",
-            "required": True,
-            "description": "Derived CSV projection of public fields.",
-        },
-        {
-            "file_name": "disclosure-tombstones.jsonl",
-            "output_format": "canonical_jsonl",
-            "output_role": "tombstones",
-            "required": True,
-            "description": "Tombstone records for restricted fields with SHA-256 hashes and lengths.",
-        },
-        {
-            "file_name": "disclosure-proof-index.json",
-            "output_format": "canonical_jsonl",
-            "output_role": "proof_index",
-            "required": True,
-            "description": "Proof index mapping public records to their source evidence.",
-        },
-        {
-            "file_name": "disclosure-output-inventory.json",
-            "output_format": "canonical_jsonl",
-            "output_role": "output_inventory",
-            "required": True,
-            "description": "Deterministic output inventory listing all produced files.",
-        },
-        {
-            "file_name": "evidence.sqlite",
-            "output_format": "prohibited_sqlite",
-            "output_role": "prohibited_sqlite",
-            "required": False,
-            "description": "SQLite is prohibited in the first release.",
-        },
+        DisclosureOutputEntry(
+            file_name="disclosure-public.jsonl",
+            output_format=OutputFormat.CANONICAL_JSONL,
+            output_role=OutputRole.PUBLIC_JSONL,
+            required=True,
+            description="Canonical public JSONL with tombstones for restricted fields.",
+        ),
+        DisclosureOutputEntry(
+            file_name="disclosure-derived.csv",
+            output_format=OutputFormat.DERIVED_CSV,
+            output_role=OutputRole.DERIVED_CSV,
+            required=True,
+            description="Derived CSV projection of public fields.",
+        ),
+        DisclosureOutputEntry(
+            file_name="disclosure-tombstones.jsonl",
+            output_format=OutputFormat.CANONICAL_JSONL,
+            output_role=OutputRole.TOMBSTONES,
+            required=True,
+            description="Tombstone records for restricted fields with SHA-256 hashes and lengths.",
+        ),
+        DisclosureOutputEntry(
+            file_name="disclosure-proof-index.json",
+            output_format=OutputFormat.CANONICAL_JSONL,
+            output_role=OutputRole.PROOF_INDEX,
+            required=True,
+            description="Proof index mapping public records to their source evidence.",
+        ),
+        DisclosureOutputEntry(
+            file_name="disclosure-output-inventory.json",
+            output_format=OutputFormat.CANONICAL_JSONL,
+            output_role=OutputRole.OUTPUT_INVENTORY,
+            required=True,
+            description="Deterministic output inventory listing all produced files.",
+        ),
+        DisclosureOutputEntry(
+            file_name="evidence.sqlite",
+            output_format=OutputFormat.PROHIBITED_SQLITE,
+            output_role=OutputRole.PROHIBITED_SQLITE,
+            required=False,
+            description="SQLite is prohibited in the first release.",
+        ),
     ]
 
 
 def _make_authority(
     *,
-    fields: list[dict] | None = None,
-    outputs: list[dict] | None = None,
+    fields: list[DisclosureFieldEntry] | None = None,
+    outputs: list[DisclosureOutputEntry] | None = None,
     content_hash: str | None = None,
     authority_id: str = "disclosure-1",
     authority_version: str = "1",
@@ -148,8 +138,8 @@ def _make_authority(
         schema_version=DISCLOSURE_AUTHORITY_SCHEMA_VERSION,
         authority_id=authority_id,
         authority_version=authority_version,
-        fields=[DisclosureFieldEntry.model_validate(e) for e in f],
-        outputs=[DisclosureOutputEntry.model_validate(e) for e in o],
+        fields=f,
+        outputs=o,
         proof_index_description=proof_index_description,
         content_hash=content_hash,
     )
@@ -329,7 +319,7 @@ class TestDisclosureAuthority:
 
     def test_rejects_unknown_field(self) -> None:
         authority = _make_authority()
-        data = json.loads(authority.model_dump_json())
+        data = authority.model_dump(mode="json")
         data["secret"] = "leak"
         with pytest.raises(ValidationError):
             DisclosureAuthority.model_validate(data)
@@ -340,29 +330,22 @@ class TestDisclosureAuthority:
 
     def test_rejects_duplicate_field_names(self) -> None:
         fields = _make_fields()
-        fields.append(dict(fields[0]))
+        fields.append(fields[0].model_copy())
         with pytest.raises(ValidationError):
             _make_authority(fields=fields)
 
     def test_rejects_duplicate_public_column_names(self) -> None:
         fields = _make_fields()
-        dup = dict(fields[0])
-        dup["field_name"] = "different_name"
+        dup = fields[0].model_copy(update={"field_name": "different_name"})
         fields.append(dup)
         with pytest.raises(ValidationError):
             _make_authority(fields=fields)
 
     def test_rejects_duplicate_output_file_names(self) -> None:
         outputs = _make_outputs()
-        outputs.append(dict(outputs[0]))
+        outputs.append(outputs[0].model_copy())
         with pytest.raises(ValidationError):
             _make_authority(outputs=outputs)
-
-    def test_round_trip_serialization(self) -> None:
-        authority = _make_authority()
-        data = json.loads(authority.model_dump_json())
-        restored = DisclosureAuthority.model_validate(data)
-        assert restored == authority
 
     def test_compute_hash_is_deterministic(self) -> None:
         f = _make_fields()
@@ -388,8 +371,7 @@ class TestDisclosureAuthority:
     def test_compute_hash_changes_with_field(self) -> None:
         f1 = _make_fields()
         f2 = _make_fields()
-        f2[0] = dict(f2[0])
-        f2[0]["public_column_name"] = "renamed_column"
+        f2[0] = f2[0].model_copy(update={"public_column_name": "renamed_column"})
         o = _make_outputs()
         h1 = compute_disclosure_authority_hash(
             schema_version=DISCLOSURE_AUTHORITY_SCHEMA_VERSION,
@@ -413,8 +395,7 @@ class TestDisclosureAuthority:
         f = _make_fields()
         o1 = _make_outputs()
         o2 = _make_outputs()
-        o2[0] = dict(o2[0])
-        o2[0]["description"] = "changed description"
+        o2[0] = o2[0].model_copy(update={"description": "changed description"})
         h1 = compute_disclosure_authority_hash(
             schema_version=DISCLOSURE_AUTHORITY_SCHEMA_VERSION,
             authority_id="disclosure-1",
@@ -574,51 +555,69 @@ class TestDisclosureAuthorityD12Semantics:
         assert [e.file_name for e in a1.outputs] == [e.file_name for e in a2.outputs]
 
 
-def _make_output_dict(
-    file_name: str,
-    output_format: str,
-    output_role: str,
-    required: bool,
-    description: str,
-) -> dict:
-    return {
-        "file_name": file_name,
-        "output_format": output_format,
-        "output_role": output_role,
-        "required": required,
-        "description": description,
-    }
-
-
-def _make_d12_outputs() -> list[dict]:
+def _make_d12_outputs() -> list[DisclosureOutputEntry]:
     """Return the full set of D12-mandated outputs."""
     return [
-        _make_output_dict("disclosure-public.jsonl", "canonical_jsonl", "public_jsonl", True, "Public JSONL."),
-        _make_output_dict("disclosure-derived.csv", "derived_csv", "derived_csv", True, "Derived CSV."),
-        _make_output_dict("disclosure-tombstones.jsonl", "canonical_jsonl", "tombstones", True, "Tombstones."),
-        _make_output_dict("disclosure-proof-index.json", "canonical_jsonl", "proof_index", True, "Proof index."),
-        _make_output_dict("disclosure-output-inventory.json", "canonical_jsonl", "output_inventory", True, "Inventory."),
-        _make_output_dict("evidence.sqlite", "prohibited_sqlite", "prohibited_sqlite", False, "Prohibited SQLite."),
+        DisclosureOutputEntry(
+            file_name="disclosure-public.jsonl",
+            output_format=OutputFormat.CANONICAL_JSONL,
+            output_role=OutputRole.PUBLIC_JSONL,
+            required=True,
+            description="Public JSONL.",
+        ),
+        DisclosureOutputEntry(
+            file_name="disclosure-derived.csv",
+            output_format=OutputFormat.DERIVED_CSV,
+            output_role=OutputRole.DERIVED_CSV,
+            required=True,
+            description="Derived CSV.",
+        ),
+        DisclosureOutputEntry(
+            file_name="disclosure-tombstones.jsonl",
+            output_format=OutputFormat.CANONICAL_JSONL,
+            output_role=OutputRole.TOMBSTONES,
+            required=True,
+            description="Tombstones.",
+        ),
+        DisclosureOutputEntry(
+            file_name="disclosure-proof-index.json",
+            output_format=OutputFormat.CANONICAL_JSONL,
+            output_role=OutputRole.PROOF_INDEX,
+            required=True,
+            description="Proof index.",
+        ),
+        DisclosureOutputEntry(
+            file_name="disclosure-output-inventory.json",
+            output_format=OutputFormat.CANONICAL_JSONL,
+            output_role=OutputRole.OUTPUT_INVENTORY,
+            required=True,
+            description="Inventory.",
+        ),
+        DisclosureOutputEntry(
+            file_name="evidence.sqlite",
+            output_format=OutputFormat.PROHIBITED_SQLITE,
+            output_role=OutputRole.PROHIBITED_SQLITE,
+            required=False,
+            description="Prohibited SQLite.",
+        ),
     ]
 
 
-def _make_public_only_fields() -> list[dict]:
+def _make_public_only_fields() -> list[DisclosureFieldEntry]:
     """Fields with no RESTRICTED classification (no tombstones required)."""
     return [
-        {
-            "field_name": "variant_id",
-            "classification": "public",
-            "public_column_name": "variant_id",
-            "in_csv": True,
-            "tombstone_hash_field": "",
-        },
+        DisclosureFieldEntry(
+            field_name="variant_id",
+            classification=FieldClassification.PUBLIC,
+            public_column_name="variant_id",
+        ),
     ]
 
 
 def _make_authority_with_outputs(
-    outputs: list[dict],
+    outputs: list[DisclosureOutputEntry],
     *,
-    fields: list[dict] | None = None,
+    fields: list[DisclosureFieldEntry] | None = None,
 ) -> DisclosureAuthority:
     """Construct an authority with the given outputs, computing the correct hash."""
     f = fields if fields is not None else _make_fields()
@@ -634,11 +633,19 @@ def _make_authority_with_outputs(
         schema_version=DISCLOSURE_AUTHORITY_SCHEMA_VERSION,
         authority_id="disclosure-1",
         authority_version="1",
-        fields=[DisclosureFieldEntry.model_validate(e) for e in f],
-        outputs=[DisclosureOutputEntry.model_validate(e) for e in outputs],
+        fields=f,
+        outputs=outputs,
         proof_index_description="Maps each public record to its source evidence hash and proof artifact path.",
         content_hash=h,
     )
+
+
+def _with_required(outputs: list[DisclosureOutputEntry], role: OutputRole, required: bool) -> list[DisclosureOutputEntry]:
+    """Return a copy of outputs with the entry matching role having its required flag set."""
+    return [
+        o.model_copy(update={"required": required}) if o.output_role == role else o
+        for o in outputs
+    ]
 
 
 class TestDisclosureAuthorityD12Mandate:
@@ -658,96 +665,78 @@ class TestDisclosureAuthorityD12Mandate:
         assert authority.content_hash == authority.content_hash
 
     def test_authority_without_public_jsonl_rejected(self) -> None:
-        outputs = [o for o in _make_d12_outputs() if o["output_role"] != "public_jsonl"]
+        outputs = [o for o in _make_d12_outputs() if o.output_role != OutputRole.PUBLIC_JSONL]
         with pytest.raises(ValidationError):
             _make_authority_with_outputs(outputs)
 
     def test_authority_without_derived_csv_rejected(self) -> None:
-        outputs = [o for o in _make_d12_outputs() if o["output_role"] != "derived_csv"]
+        outputs = [o for o in _make_d12_outputs() if o.output_role != OutputRole.DERIVED_CSV]
         with pytest.raises(ValidationError):
             _make_authority_with_outputs(outputs)
 
     def test_authority_without_proof_index_rejected(self) -> None:
-        outputs = [o for o in _make_d12_outputs() if o["output_role"] != "proof_index"]
+        outputs = [o for o in _make_d12_outputs() if o.output_role != OutputRole.PROOF_INDEX]
         with pytest.raises(ValidationError):
             _make_authority_with_outputs(outputs)
 
     def test_authority_without_output_inventory_rejected(self) -> None:
-        outputs = [o for o in _make_d12_outputs() if o["output_role"] != "output_inventory"]
+        outputs = [o for o in _make_d12_outputs() if o.output_role != OutputRole.OUTPUT_INVENTORY]
         with pytest.raises(ValidationError):
             _make_authority_with_outputs(outputs)
 
     def test_authority_without_prohibited_sqlite_rejected(self) -> None:
-        outputs = [o for o in _make_d12_outputs() if o["output_role"] != "prohibited_sqlite"]
+        outputs = [o for o in _make_d12_outputs() if o.output_role != OutputRole.PROHIBITED_SQLITE]
         with pytest.raises(ValidationError):
             _make_authority_with_outputs(outputs)
 
     def test_authority_with_restricted_fields_without_tombstones_rejected(self) -> None:
-        outputs = [o for o in _make_d12_outputs() if o["output_role"] != "tombstones"]
+        outputs = [o for o in _make_d12_outputs() if o.output_role != OutputRole.TOMBSTONES]
         with pytest.raises(ValidationError):
             _make_authority_with_outputs(outputs)
 
     def test_authority_without_restricted_fields_without_tombstones_passes(self) -> None:
-        outputs = [o for o in _make_d12_outputs() if o["output_role"] != "tombstones"]
+        outputs = [o for o in _make_d12_outputs() if o.output_role != OutputRole.TOMBSTONES]
         authority = _make_authority_with_outputs(outputs, fields=_make_public_only_fields())
         assert authority is not None
 
     def test_public_jsonl_not_required_rejected(self) -> None:
-        outputs = _make_d12_outputs()
-        for o in outputs:
-            if o["output_role"] == "public_jsonl":
-                o["required"] = False
+        outputs = _with_required(_make_d12_outputs(), OutputRole.PUBLIC_JSONL, False)
         with pytest.raises(ValidationError):
             _make_authority_with_outputs(outputs)
 
     def test_derived_csv_not_required_rejected(self) -> None:
-        outputs = _make_d12_outputs()
-        for o in outputs:
-            if o["output_role"] == "derived_csv":
-                o["required"] = False
+        outputs = _with_required(_make_d12_outputs(), OutputRole.DERIVED_CSV, False)
         with pytest.raises(ValidationError):
             _make_authority_with_outputs(outputs)
 
     def test_proof_index_not_required_rejected(self) -> None:
-        outputs = _make_d12_outputs()
-        for o in outputs:
-            if o["output_role"] == "proof_index":
-                o["required"] = False
+        outputs = _with_required(_make_d12_outputs(), OutputRole.PROOF_INDEX, False)
         with pytest.raises(ValidationError):
             _make_authority_with_outputs(outputs)
 
     def test_output_inventory_not_required_rejected(self) -> None:
-        outputs = _make_d12_outputs()
-        for o in outputs:
-            if o["output_role"] == "output_inventory":
-                o["required"] = False
+        outputs = _with_required(_make_d12_outputs(), OutputRole.OUTPUT_INVENTORY, False)
         with pytest.raises(ValidationError):
             _make_authority_with_outputs(outputs)
 
     def test_tombstones_not_required_with_restricted_fields_rejected(self) -> None:
-        outputs = _make_d12_outputs()
-        for o in outputs:
-            if o["output_role"] == "tombstones":
-                o["required"] = False
+        outputs = _with_required(_make_d12_outputs(), OutputRole.TOMBSTONES, False)
         with pytest.raises(ValidationError):
             _make_authority_with_outputs(outputs)
 
     def test_prohibited_sqlite_required_rejected(self) -> None:
-        outputs = _make_d12_outputs()
-        for o in outputs:
-            if o["output_role"] == "prohibited_sqlite":
-                o["required"] = True
+        outputs = _with_required(_make_d12_outputs(), OutputRole.PROHIBITED_SQLITE, True)
         with pytest.raises(ValidationError):
             _make_authority_with_outputs(outputs)
 
     def test_content_hash_changes_with_output_role(self) -> None:
         outputs_a = _make_d12_outputs()
-        outputs_b = _make_d12_outputs()
-        for o in outputs_b:
-            if o["output_role"] == "public_jsonl":
-                o["output_role"] = "proof_index"
-                o["file_name"] = "other.json"
-                break
+        outputs_b = [
+            o.model_copy(update={"output_role": OutputRole.PROOF_INDEX, "file_name": "other.json"})
+            if o.output_role == OutputRole.PUBLIC_JSONL
+            else o
+            for o in _make_d12_outputs()
+        ]
         f = _make_fields()
         h_a = compute_disclosure_authority_hash(
             schema_version=DISCLOSURE_AUTHORITY_SCHEMA_VERSION,

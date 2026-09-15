@@ -18,15 +18,18 @@ not mutate, create, or delete any files.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
+from pydantic import ValidationError
+
+from g8e_evals.analysis.canonical import CanonicalEvalAnalysis
 from g8e_evals.constants import (
     ANALYSIS_JSON,
     ATTEMPTS_JSONL,
     MANIFEST_JSON,
     METRICS_JSONL,
 )
+from g8e_evals.schema import RunManifest
 
 
 class ReportCompletenessError(ValueError):
@@ -62,16 +65,22 @@ def is_report_complete(report_dir: Path) -> bool:
         if not path.is_file():
             return False
 
-    # Validate that JSON artifacts are parseable. A corrupted manifest
-    # or analysis file is an error, not a partial report.
-    for json_artifact in (MANIFEST_JSON, ANALYSIS_JSON):
-        path = report_dir / json_artifact
-        try:
-            json.loads(path.read_text())
-        except (json.JSONDecodeError, OSError) as e:
-            raise ReportCompletenessError(
-                f"corrupted {json_artifact} in report {report_dir}: {e}"
-            ) from e
+    # Validate that JSON artifacts are parseable as their typed models. A
+    # corrupted manifest or analysis file is an error, not a partial report.
+    manifest_path = report_dir / MANIFEST_JSON
+    try:
+        RunManifest.model_validate_json(manifest_path.read_text())
+    except (ValidationError, ValueError, OSError) as e:
+        raise ReportCompletenessError(
+            f"corrupted {MANIFEST_JSON} in report {report_dir}: {e}"
+        ) from e
+    analysis_path = report_dir / ANALYSIS_JSON
+    try:
+        CanonicalEvalAnalysis.model_validate_json(analysis_path.read_text())
+    except (ValidationError, ValueError, OSError) as e:
+        raise ReportCompletenessError(
+            f"corrupted {ANALYSIS_JSON} in report {report_dir}: {e}"
+        ) from e
 
     return True
 

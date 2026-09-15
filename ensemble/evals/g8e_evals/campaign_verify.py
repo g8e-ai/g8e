@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from g8e_evals.campaign import (
     CampaignAssignment,
@@ -125,23 +125,18 @@ _OPTIONAL_ARTIFACTS = (
 )
 
 
-def _read_jsonl_models(path: Path, model_cls: type) -> list[object]:
-    """Read a JSONL file and validate each line as a Pydantic model."""
-    records: list[object] = []
+def _read_jsonl_models[T: BaseModel](path: Path, model_cls: type[T]) -> list[T]:
+    """Read a JSONL file and validate each line as a typed Pydantic model.
+
+    Each non-empty line is parsed and validated directly into ``model_cls``
+    so the boundary stays typed end-to-end; no raw dict intermediate crosses
+    the application boundary.
+    """
+    records: list[T] = []
     for line in path.read_text().splitlines():
         line = line.strip()
         if line:
             records.append(model_cls.model_validate_json(line))
-    return records
-
-
-def _read_jsonl_dicts(path: Path) -> list[dict]:
-    """Read a JSONL file and return a list of parsed dicts."""
-    records: list[dict] = []
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if line:
-            records.append(json.loads(line))
     return records
 
 
@@ -958,11 +953,8 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     assignment_by_id: dict[str, CampaignAssignment] = {}
     if _check_file_safety(assignments_path, failures, CAMPAIGN_ASSIGNMENTS_JSONL):
         try:
-            assignment_records = _read_jsonl_dicts(assignments_path)
-            assignments: list[CampaignAssignment] = []
-            for r in assignment_records:
-                a = CampaignAssignment.model_validate(r)
-                assignments.append(a)
+            assignments = _read_jsonl_models(assignments_path, CampaignAssignment)
+            for a in assignments:
                 assignment_by_id[a.assignment_id] = a
             assignment_ids: set[str] = set(assignment_by_id.keys())
 
@@ -986,8 +978,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     attempts: list[AttemptRecord] = []
     if _check_file_safety(attempts_path, failures, ATTEMPTS_JSONL):
         try:
-            attempt_records = _read_jsonl_dicts(attempts_path)
-            attempts = [AttemptRecord.model_validate(r) for r in attempt_records]
+            attempts = _read_jsonl_models(attempts_path, AttemptRecord)
         except (ValidationError, json.JSONDecodeError) as e:
             failures.append(f"terminal attempt check failed: {e}")
 
@@ -997,8 +988,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     metrics: list[MetricObservation] = []
     if _check_file_safety(metrics_path, failures, METRICS_JSONL):
         try:
-            metric_records = _read_jsonl_dicts(metrics_path)
-            metrics = [MetricObservation.model_validate(r) for r in metric_records]
+            metrics = _read_jsonl_models(metrics_path, MetricObservation)
             metrics_by_attempt: dict[str, list[MetricObservation]] = {}
             for m in metrics:
                 metrics_by_attempt.setdefault(m.attempt_id, []).append(m)
@@ -1242,8 +1232,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     )
     if _check_optional_file_safety(resource_obs_path, "resource observations", failures):
         try:
-            obs_records = _read_jsonl_dicts(resource_obs_path)
-            observations = [ResourceObservation.model_validate(r) for r in obs_records]
+            observations = _read_jsonl_models(resource_obs_path, ResourceObservation)
             validate_resource_observations(observations)
             resource_observations = observations
             # Extract binding environment scopes for cross-checking.
@@ -1304,8 +1293,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     )
     if _check_optional_file_safety(scorecard_path, "tool call scorecards", failures):
         try:
-            sc_records = _read_jsonl_dicts(scorecard_path)
-            scorecards = [ToolCallScorecard.model_validate(r) for r in sc_records]
+            scorecards = _read_jsonl_models(scorecard_path, ToolCallScorecard)
             validate_tool_call_scorecards(scorecards)
             for sc in scorecards:
                 _cross_check_event_identity(
@@ -1349,8 +1337,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     )
     if _check_optional_file_safety(escalation_path, "escalation records", failures):
         try:
-            er_records = _read_jsonl_dicts(escalation_path)
-            escalation_records = [EscalationRecord.model_validate(r) for r in er_records]
+            escalation_records = _read_jsonl_models(escalation_path, EscalationRecord)
             validate_escalation_records(escalation_records)
             for er in escalation_records:
                 _cross_check_event_identity(
@@ -1394,8 +1381,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     )
     if _check_optional_file_safety(security_path, "security event records", failures):
         try:
-            se_records = _read_jsonl_dicts(security_path)
-            security_records = [SecurityEventRecord.model_validate(r) for r in se_records]
+            security_records = _read_jsonl_models(security_path, SecurityEventRecord)
             validate_security_event_records(security_records)
             for se in security_records:
                 _cross_check_event_identity(
@@ -1439,8 +1425,7 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
     )
     if _check_optional_file_safety(correlated_path, "correlated error records", failures):
         try:
-            ce_records = _read_jsonl_dicts(correlated_path)
-            correlated_records = [CorrelatedErrorRecord.model_validate(r) for r in ce_records]
+            correlated_records = _read_jsonl_models(correlated_path, CorrelatedErrorRecord)
             validate_correlated_error_records(correlated_records)
             for ce in correlated_records:
                 _cross_check_event_identity(

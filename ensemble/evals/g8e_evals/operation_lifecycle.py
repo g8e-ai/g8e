@@ -17,6 +17,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from g8e_evals.analysis.canonical import PreregistrationConfig
+from g8e_evals.campaign_set import CampaignSetPlan
 from g8e_evals.constants import (
     ATTEMPTS_JSONL,
     CAMPAIGN_PROGRESS_JSON,
@@ -36,10 +38,41 @@ from g8e_evals.operation_config import (
     OperationConfigBase,
     load_operation_config,
 )
+from g8e_evals.profile import CampaignProfile
+from g8e_evals.registry import ModelRegistry
+from g8e_evals.replacement_rule import ReplacementManifestRule
 from g8e_evals.stop_request import (
     StopRequestIdentity,
     build_stop_request,
 )
+
+
+class OperationLifecycleError(ValueError):
+    """Typed exception for flow-path failures in operation lifecycle.
+
+    Extends ``ValueError`` so existing ``except (OSError, ValueError)``
+    catch sites in consumers (engine handlers, CLI) continue to work.
+    Raised on authority verification failures, config binding failures,
+    task parity failures, launch state mismatches, and preflight
+    invariant violations — every flow-path failure that was previously a
+    bare ``raise ValueError``.
+    """
+
+
+class AuthorityDocuments(BaseModel):
+    """Typed container for the authority documents loaded during a
+    preflight check. Each field holds the validated typed model for the
+    corresponding authority, or ``None`` when the authority is absent
+    (not declared for this operation kind) or is a data-file authority
+    with no typed model (gold sets, model tags)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    profile: CampaignProfile | None = None
+    model_registry: ModelRegistry | None = None
+    preregistration: PreregistrationConfig | None = None
+    campaign_set_plan: CampaignSetPlan | None = None
+    replacement_rule: ReplacementManifestRule | None = None
 
 
 class OperationPlan(BaseModel):
@@ -92,14 +125,14 @@ def _resolve_owned_path(repository_root: Path, relative_path: str, label: str) -
     for part in Path(relative_path).parts:
         current = current / part
         if current.is_symlink():
-            raise ValueError(f"{label} path component must not be a symlink: {current.relative_to(root)}")
+            raise OperationLifecycleError(f"{label} path component must not be a symlink: {current.relative_to(root)}")
     resolved = path.resolve()
     try:
         resolved.relative_to(root)
     except ValueError as exc:
-        raise ValueError(f"{label} escapes repository root: {relative_path}") from exc
+        raise OperationLifecycleError(f"{label} escapes repository root: {relative_path}") from exc
     if not resolved.is_file():
-        raise ValueError(f"{label} file not found: {relative_path}")
+        raise OperationLifecycleError(f"{label} file not found: {relative_path}")
     return resolved
 
 
@@ -107,7 +140,7 @@ def _verify_authority(repository_root: Path, authority: AuthorityRef, label: str
     path = _resolve_owned_path(repository_root, authority.path, label)
     actual = hashlib.sha256(path.read_bytes()).hexdigest()
     if actual != authority.sha256:
-        raise ValueError(f"{label} SHA-256 mismatch: expected {authority.sha256}, got {actual}")
+        raise OperationLifecycleError(f"{label} SHA-256 mismatch: expected {authority.sha256}, got {actual}")
     return path
 
 
@@ -126,12 +159,6 @@ def _verify_authority_identity(path: Path, label: str) -> tuple[BaseModel | None
     returned so callers can validate cross-authority bindings against
     the registry or expected identity each authority declares.
     """
-    from g8e_evals.analysis.canonical import PreregistrationConfig
-    from g8e_evals.campaign_set import CampaignSetPlan
-    from g8e_evals.profile import CampaignProfile
-    from g8e_evals.registry import ModelRegistry
-    from g8e_evals.replacement_rule import ReplacementManifestRule
-
     typed_models: dict[str, type[BaseModel]] = {
         "preregistration": PreregistrationConfig,
         "profile": CampaignProfile,
@@ -145,25 +172,11 @@ def _verify_authority_identity(path: Path, label: str) -> tuple[BaseModel | None
         try:
             document = model.model_validate_json(text)
         except ValidationError as exc:
-            raise ValueError(f"{label} authority identity invalid: {exc}") from exc
-        identity = (
-            getattr(document, "authority_id", None)
-            or getattr(document, "config_id", None)
-            or getattr(document, "campaign_id", None)
-            or getattr(document, "registry_id", None)
-            or getattr(document, "set_id", None)
-            or getattr(document, "rule_id", None)
-            or "untyped"
-        )
-        schema_version = (
-            getattr(document, "schema_version", None)
-            or getattr(document, "authority_version", None)
-            or getattr(document, "config_version", None)
-            or getattr(document, "set_version", None)
-            or getattr(document, "rule_version", None)
-            or "unversioned"
-        )
+            raise OperationLifecycleError(f"{label} authority identity invalid: {exc}") from exc
+        identity, schema_version = _authority_identity(document)
         return document, f"{label} {identity} (schema {schema_version})"
+    # data-file authority: gold sets and model tags have no typed model;
+    # the file hash is the identity, so only JSON/JSONL validity is checked.
     try:
         json.loads(text)
     except json.JSONDecodeError:
@@ -174,8 +187,27 @@ def _verify_authority_identity(path: Path, label: str) -> tuple[BaseModel | None
                 if line.strip():
                     json.loads(line)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"{label} data file is not parseable JSON/JSONL: {exc}") from exc
+            raise OperationLifecycleError(f"{label} data file is not parseable JSON/JSONL: {exc}") from exc
     return None, f"{label} data file hash-bound"
+
+
+def _authority_identity(document: BaseModel) -> tuple[str, str]:
+    """Extract the identity and schema version from a typed authority
+    document via ``isinstance`` dispatch, not ``getattr`` string-keyed
+    access. Each authority model declares its own identity and version
+    field names; this function maps the typed model to the correct
+    fields."""
+    if isinstance(document, CampaignProfile):
+        return document.campaign_id, document.schema_version
+    if isinstance(document, ModelRegistry):
+        return document.registry_id, document.schema_version
+    if isinstance(document, PreregistrationConfig):
+        return document.config_id, document.config_version
+    if isinstance(document, CampaignSetPlan):
+        return document.set_id, document.set_version
+    if isinstance(document, ReplacementManifestRule):
+        return document.rule_id, document.rule_version
+    return "untyped", "unversioned"
 
 
 def _authorities(config: OperationConfigBase) -> list[tuple[str, AuthorityRef]]:
@@ -221,14 +253,14 @@ def _apply_task_slice(
     out-of-range offset and empty selection."""
     full_count = len(task_ids)
     if offset > full_count:
-        raise ValueError(
+        raise OperationLifecycleError(
             f"task_offset {offset} exceeds task population {full_count}"
         )
     selected = task_ids[offset:]
     if limit is not None:
         selected = selected[:limit]
     if not selected:
-        raise ValueError("task selection is empty after offset and limit")
+        raise OperationLifecycleError("task selection is empty after offset and limit")
     return list(selected)
 
 
@@ -245,7 +277,7 @@ def _compute_task_manifest_digest(task_ids: list[str], repository_root: Path, co
     for tid in task_ids:
         task = task_by_id.get(tid)
         if task is None:
-            raise ValueError(f"task {tid} not found in gold set")
+            raise OperationLifecycleError(f"task {tid} not found in gold set")
         prompt_hash = hashlib.sha256(task.prompt.encode()).hexdigest()
         payload.append({"task_id": tid, "prompt_hash": prompt_hash})
     return hashlib.sha256(
@@ -275,7 +307,7 @@ def _selected_campaign_tasks(config: CampaignConfig, repository_root: Path) -> l
     profile_path = _verify_authority(repository_root, config.profile, "profile")
     profile = CampaignProfile.model_validate_json(profile_path.read_text())
     if full_ids != profile.task_ids:
-        raise ValueError(
+        raise OperationLifecycleError(
             f"gold-set task identities {full_ids} do not match the campaign "
             f"profile's declared task_ids {profile.task_ids}; planning and "
             "execution must consume the same ordered task manifest"
@@ -284,8 +316,6 @@ def _selected_campaign_tasks(config: CampaignConfig, repository_root: Path) -> l
 
 
 def _campaign_models(config: CampaignConfig, repository_root: Path) -> list[str]:
-    from g8e_evals.profile import CampaignProfile
-    from g8e_evals.registry import ModelRegistry
     from g8e_evals.runner import derive_cohorts_from_registry
 
     profile_path = _verify_authority(repository_root, config.profile, "profile")
@@ -293,18 +323,19 @@ def _campaign_models(config: CampaignConfig, repository_root: Path) -> list[str]
     profile = CampaignProfile.model_validate_json(profile_path.read_text())
     registry = ModelRegistry.model_validate_json(registry_path.read_text())
     profile.validate_against_registry(registry)
-    cohorts, variant_by_cohort = derive_cohorts_from_registry(profile, registry)
-    available = {cohort.cohort_id for cohort in cohorts}
+    cohorts = derive_cohorts_from_registry(profile, registry)
+    cohort_by_id = {cohort.cohort_id: cohort for cohort in cohorts}
+    available = set(cohort_by_id)
     selected = set(config.cohort_ids)
     if selected != available:
-        raise ValueError(f"campaign cohort IDs must exactly match the derived profile: expected {sorted(available)}, got {sorted(selected)}")
+        raise OperationLifecycleError(f"campaign cohort IDs must exactly match the derived profile: expected {sorted(available)}, got {sorted(selected)}")
     profile_arms = {assignment.arm_id for assignment in profile.track_arm_assignments}
     if set(config.arms) != profile_arms:
-        raise ValueError(f"campaign arms must exactly match the profile: expected {sorted(profile_arms)}, got {sorted(config.arms)}")
+        raise OperationLifecycleError(f"campaign arms must exactly match the profile: expected {sorted(profile_arms)}, got {sorted(config.arms)}")
     if config.repetitions != profile.repetitions:
-        raise ValueError(f"campaign repetitions must match the profile: expected {profile.repetitions}, got {config.repetitions}")
+        raise OperationLifecycleError(f"campaign repetitions must match the profile: expected {profile.repetitions}, got {config.repetitions}")
     return [
-        f"{variant_by_cohort[cohort_id]}@{cohort_id.rsplit('-role-', 1)[1]}"
+        f"{cohort_by_id[cohort_id].candidate_variant_id}@{cohort_by_id[cohort_id].candidate_role.value}"
         for cohort_id in config.cohort_ids
     ]
 
@@ -324,7 +355,7 @@ def plan_operation(config_path: Path, repository_root: Path) -> OperationPlan:
         repetitions = config.repetitions
         warmup_calls = len(selected_models) * len(arms)
     else:
-        raise ValueError(f"unsupported operation config: {type(config).__name__}")
+        raise OperationLifecycleError(f"unsupported operation config: {type(config).__name__}")
     task_count = len(task_identities)
     assignment_count = len(selected_models) * len(arms) * task_count * repetitions
     task_manifest_digest = _compute_task_manifest_digest(task_identities, repository_root, config)
@@ -365,7 +396,7 @@ def plan_operation(config_path: Path, repository_root: Path) -> OperationPlan:
 
 def _validate_authority_bindings(
     config: OperationConfigBase,
-    documents: dict[str, BaseModel | None],
+    documents: AuthorityDocuments,
 ) -> str:
     """Validate cross-authority bindings the config declares.
 
@@ -377,48 +408,43 @@ def _validate_authority_bindings(
     the profile's ``track_arm_assignments``, and a bound replacement
     rule must bind the loaded campaign-set plan exactly. Returns a
     short detail string describing the verified bindings. Raises
-    ``ValueError`` on the first binding failure so the preflight fails
-    closed before report-root creation or engine launch.
+    ``OperationLifecycleError`` on the first binding failure so the
+    preflight fails closed before report-root creation or engine
+    launch.
     """
-    from g8e_evals.analysis.canonical import PreregistrationConfig
-    from g8e_evals.campaign_set import CampaignSetPlan
-    from g8e_evals.profile import CampaignProfile
-    from g8e_evals.registry import ModelRegistry
-    from g8e_evals.replacement_rule import ReplacementManifestRule, validate_replacement_rule_plan_binding
+    from g8e_evals.replacement_rule import validate_replacement_rule_plan_binding
 
     if not isinstance(config, CampaignConfig):
         return "no cross-authority bindings for diagnostic"
-    profile = documents.get("profile")
-    registry = documents.get("model_registry")
-    preregistration = documents.get("preregistration")
-    if not isinstance(profile, CampaignProfile) or not isinstance(registry, ModelRegistry):
-        raise ValueError("campaign profile and model registry must be typed authorities")
+    profile = documents.profile
+    registry = documents.model_registry
+    preregistration = documents.preregistration
+    if profile is None or registry is None:
+        raise OperationLifecycleError("campaign profile and model registry must be typed authorities")
     profile.validate_against_registry(registry)
-    if not isinstance(preregistration, PreregistrationConfig):
-        raise ValueError("campaign preregistration must be a typed authority")
+    if preregistration is None:
+        raise OperationLifecycleError("campaign preregistration must be a typed authority")
     declared_arms = {a.arm_id for a in profile.track_arm_assignments}
     prereg_arms = {preregistration.baseline_arm_id, *preregistration.comparison_arm_ids}
     unauthorized = sorted(prereg_arms - declared_arms)
     if unauthorized:
-        raise ValueError(
+        raise OperationLifecycleError(
             f"preregistration declares arms {unauthorized} not present in the "
             f"profile's track_arm_assignments {sorted(declared_arms)}; "
             "a profile-bound campaign may only execute declared arms"
         )
-    plan = documents.get("campaign_set_plan")
-    rule = documents.get("replacement_rule")
+    plan = documents.campaign_set_plan
+    rule = documents.replacement_rule
     if rule is not None:
-        if not isinstance(rule, ReplacementManifestRule):
-            raise ValueError("campaign replacement_rule must be a typed authority")
-        if not isinstance(plan, CampaignSetPlan):
-            raise ValueError(
+        if plan is None:
+            raise OperationLifecycleError(
                 "replacement_rule is bound but campaign_set_plan is not a typed authority; "
                 "a replacement rule authorizes replacements only under the "
                 "campaign-set plan it names"
             )
         failures = validate_replacement_rule_plan_binding(rule, plan)
         if failures:
-            raise ValueError("; ".join(failures))
+            raise OperationLifecycleError("; ".join(failures))
     return "profile binds registry; preregistration arms declared by profile" + (
         "; replacement rule binds campaign-set plan" if rule is not None else ""
     )
@@ -426,7 +452,7 @@ def _validate_authority_bindings(
 
 def _verify_task_parity(
     config: OperationConfigBase,
-    documents: dict[str, BaseModel | None],
+    documents: AuthorityDocuments,
     repository_root: Path,
 ) -> str:
     """Verify that the gold-set task identities exactly match the
@@ -434,16 +460,15 @@ def _verify_task_parity(
     task slice (after offset/limit) produces a stable content-addressed
     task manifest digest. For diagnostics, the gold set is the only
     task authority and no profile comparison is needed. Raises
-    ``ValueError`` on mismatch so preflight fails closed before
-    report-root creation or engine launch."""
+    ``OperationLifecycleError`` on mismatch so preflight fails closed
+    before report-root creation or engine launch."""
     full_ids = _load_gold_set_tasks(config, repository_root)
     if isinstance(config, CampaignConfig):
-        profile = documents.get("profile")
-        from g8e_evals.profile import CampaignProfile
-        if not isinstance(profile, CampaignProfile):
-            raise ValueError("campaign profile must be a typed authority for task parity")
+        profile = documents.profile
+        if profile is None:
+            raise OperationLifecycleError("campaign profile must be a typed authority for task parity")
         if full_ids != profile.task_ids:
-            raise ValueError(
+            raise OperationLifecycleError(
                 f"gold-set task identities {full_ids} do not match the campaign "
                 f"profile's declared task_ids {profile.task_ids}; planning and "
                 "execution must consume the same ordered task manifest"
@@ -457,12 +482,32 @@ def check_operation(config_path: Path, repository_root: Path) -> OperationCheckR
     config = load_operation_config(config_path)
     checks = [OperationCheck(check_id="config", status="pass", safe_detail="typed config and content hash valid")]
     identity_details: list[str] = []
-    documents: dict[str, BaseModel | None] = {}
+    profile: CampaignProfile | None = None
+    model_registry: ModelRegistry | None = None
+    preregistration: PreregistrationConfig | None = None
+    campaign_set_plan: CampaignSetPlan | None = None
+    replacement_rule: ReplacementManifestRule | None = None
     for label, authority in _authorities(config):
         auth_path = _verify_authority(repository_root, authority, label)
         document, detail = _verify_authority_identity(auth_path, label)
-        documents[label] = document
+        if label == "profile":
+            profile = document  # type: ignore[assignment]
+        elif label == "model_registry":
+            model_registry = document  # type: ignore[assignment]
+        elif label == "preregistration":
+            preregistration = document  # type: ignore[assignment]
+        elif label == "campaign_set_plan":
+            campaign_set_plan = document  # type: ignore[assignment]
+        elif label == "replacement_rule":
+            replacement_rule = document  # type: ignore[assignment]
         identity_details.append(detail)
+    documents = AuthorityDocuments(
+        profile=profile,
+        model_registry=model_registry,
+        preregistration=preregistration,
+        campaign_set_plan=campaign_set_plan,
+        replacement_rule=replacement_rule,
+    )
     checks.append(OperationCheck(check_id="authorities", status="pass", safe_detail="all authority hashes match"))
     checks.append(OperationCheck(
         check_id="authority_identity",
@@ -484,14 +529,14 @@ def check_operation(config_path: Path, repository_root: Path) -> OperationCheckR
     key_path = _resolve_owned_path(repository_root, config.evidence_key.path, "evidence_key")
     key = load_evidence_encryption_key(key_path)
     if key.key_id != config.evidence_key.key_id:
-        raise ValueError(f"evidence key ID mismatch: expected {config.evidence_key.key_id}, got {key.key_id}")
+        raise OperationLifecycleError(f"evidence key ID mismatch: expected {config.evidence_key.key_id}, got {key.key_id}")
     key_mode = key_path.stat().st_mode & 0o777
     if key_mode != 0o600:
-        raise ValueError(f"evidence key permissions must be 0600, got {oct(key_mode)}")
+        raise OperationLifecycleError(f"evidence key permissions must be 0600, got {oct(key_mode)}")
     checks.append(OperationCheck(check_id="evidence_key", status="pass", safe_detail="evidence key identity and permissions match"))
     _SUPPORTED_PROVIDERS = frozenset({"openai", "anthropic", "gemini", "ollama", "llamacpp", "fake"})
     if config.provider_endpoint.provider not in _SUPPORTED_PROVIDERS:
-        raise ValueError(
+        raise OperationLifecycleError(
             f"unsupported provider: {config.provider_endpoint.provider}; "
             f"supported: {sorted(_SUPPORTED_PROVIDERS)}"
         )

@@ -85,11 +85,47 @@ class DraftReviewSummary(BaseModel):
     suite: str
     report_root: str
     content_hash: str
-    dimensions: dict[str, object] = Field(default_factory=dict)
-    budget: dict[str, object] = Field(default_factory=dict)
+    dimensions: DiagnosticDraftDimensions | CampaignDraftDimensions
+    budget: DraftBudget
     authority_hashes: dict[str, str] = Field(default_factory=dict)
     endpoint_class: str
     provider: str
+
+
+class DiagnosticDraftDimensions(BaseModel):
+    """Dimensions for a diagnostic draft review summary."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    arm: str | None = None
+    model_variant_id: str
+    task_limit: int | None = None
+    task_offset: int | None = None
+
+
+class CampaignDraftDimensions(BaseModel):
+    """Dimensions for a campaign draft review summary."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    arms: list[str]
+    cohort_count: int
+    cohort_ids: list[str]
+    repetitions: int
+    task_limit: int | None = None
+    task_offset: int | None = None
+    publication_eligible: bool
+
+
+class DraftBudget(BaseModel):
+    """Budget summary for a draft review."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    max_requests: int
+    max_tokens: int
+    max_usd: float
+    concurrency: int
 
 
 def _merge_override[T](preset_value: T, override: T | None) -> T:
@@ -151,18 +187,18 @@ def generate_diagnostic_draft(
         suite=config.suite,
         report_root=report_root,
         content_hash=finalized.compute_content_hash(),
-        dimensions={
-            "arm": config.arm,
-            "model_variant_id": config.model_variant_id,
-            "task_limit": config.task_limit,
-            "task_offset": config.task_offset,
-        },
-        budget={
-            "max_requests": config.budget.max_requests,
-            "max_tokens": config.budget.max_tokens,
-            "max_usd": config.budget.max_usd,
-            "concurrency": config.budget.concurrency,
-        },
+        dimensions=DiagnosticDraftDimensions(
+            arm=config.arm,
+            model_variant_id=config.model_variant_id,
+            task_limit=config.task_limit,
+            task_offset=config.task_offset,
+        ),
+        budget=DraftBudget(
+            max_requests=config.budget.max_requests,
+            max_tokens=config.budget.max_tokens,
+            max_usd=config.budget.max_usd,
+            concurrency=config.budget.concurrency,
+        ),
         authority_hashes={
             "gold_set": config.gold_set.sha256,
         },
@@ -256,21 +292,21 @@ def generate_campaign_draft(
         suite=config.suite,
         report_root=report_root,
         content_hash=finalized.compute_content_hash(),
-        dimensions={
-            "arms": config.arms,
-            "cohort_count": len(config.cohort_ids),
-            "cohort_ids": config.cohort_ids,
-            "repetitions": config.repetitions,
-            "task_limit": config.task_limit,
-            "task_offset": config.task_offset,
-            "publication_eligible": config.publication_eligible,
-        },
-        budget={
-            "max_requests": config.budget.max_requests,
-            "max_tokens": config.budget.max_tokens,
-            "max_usd": config.budget.max_usd,
-            "concurrency": config.budget.concurrency,
-        },
+        dimensions=CampaignDraftDimensions(
+            arms=config.arms,
+            cohort_count=len(config.cohort_ids),
+            cohort_ids=config.cohort_ids,
+            repetitions=config.repetitions,
+            task_limit=config.task_limit,
+            task_offset=config.task_offset,
+            publication_eligible=config.publication_eligible,
+        ),
+        budget=DraftBudget(
+            max_requests=config.budget.max_requests,
+            max_tokens=config.budget.max_tokens,
+            max_usd=config.budget.max_usd,
+            concurrency=config.budget.concurrency,
+        ),
         authority_hashes=authority_hashes,
         endpoint_class=config.provider_endpoint.endpoint_class,
         provider=config.provider_endpoint.provider,

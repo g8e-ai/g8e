@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import subprocess
 import sys
@@ -98,7 +97,7 @@ class AttendedChildHandler:
         for line in metrics_path.read_text().splitlines():
             if not line.strip():
                 continue
-            metric = MetricObservation.model_validate(json.loads(line))
+            metric = MetricObservation.model_validate_json(line)
             if metric.metric_id == "provider_cost_usd" and metric.eligible and metric.value is not None:
                 total += metric.value
         return total

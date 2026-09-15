@@ -47,6 +47,7 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from g8e_evals.campaign import CampaignAssignment
 from g8e_evals.campaign_verify import verify_campaign
 from g8e_evals.constants import (
     ATTEMPTS_JSONL,
@@ -62,7 +63,9 @@ from g8e_evals.replacement_rule import (
     compute_replacement_child_id,
     validate_replacement_rule_plan_binding,
 )
+from g8e_evals.report.validate import ReportChecksum
 from g8e_evals.schema import CampaignBinding, ReportRole, RunManifest
+from g8e_evals.serialization import provisional_hash
 
 
 CAMPAIGN_SET_SCHEMA_VERSION = "1.0.0"
@@ -730,28 +733,27 @@ def _read_assignment_ids(report_dir: Path) -> list[str]:
         line = line.strip()
         if not line:
             continue
-        record = json.loads(line)
-        aid = record.get("assignment_id")
-        if aid:
-            assignment_ids.append(str(aid))
+        record = CampaignAssignment.model_validate_json(line)
+        assignment_ids.append(record.assignment_id)
     return sorted(assignment_ids)
 
 
-def _read_assignment_records(report_dir: Path) -> list[dict[str, object]]:
+def _read_assignment_records(report_dir: Path) -> list[CampaignAssignment]:
     """Read full assignment records from a child report's campaign-assignments.jsonl.
 
-    Returns a list of parsed dicts, each carrying ``assignment_id``,
-    ``task_id``, ``model_cohort_id``, ``arm_id``, and ``replicate_id``.
+    Returns typed ``CampaignAssignment`` records, each carrying
+    ``assignment_id``, ``task_id``, ``model_cohort_id``, ``arm_id``, and
+    ``replicate_id``.
     """
     assignments_path = report_dir / CAMPAIGN_ASSIGNMENTS_JSONL
     if not assignments_path.exists():
         return []
-    records: list[dict[str, object]] = []
+    records: list[CampaignAssignment] = []
     for line in assignments_path.read_text().splitlines():
         line = line.strip()
         if not line:
             continue
-        records.append(json.loads(line))
+        records.append(CampaignAssignment.model_validate_json(line))
     return records
 
 
@@ -773,26 +775,29 @@ def _recompute_report_checksum(report_dir: Path) -> str | None:
 
     Matches the standalone report validator's computation: SHA-256 over
     canonical JSON of ``{"attempts": [...], "metrics": [...]}``. Returns
-    ``None`` when neither file exists.
+    ``None`` when neither file exists or when a file contains malformed
+    records that fail typed validation (tampering detected).
     """
+    from pydantic import ValidationError
+
+    from g8e_evals.schema import AttemptRecord, MetricObservation
+    from g8e_evals.serialization import canonical_model_list, read_jsonl_models
+
     attempts_path = report_dir / ATTEMPTS_JSONL
     metrics_path = report_dir / METRICS_JSONL
 
-    attempts_data: list[dict[str, object]] = []
-    if attempts_path.exists():
-        for line in attempts_path.read_text().splitlines():
-            line = line.strip()
-            if line:
-                attempts_data.append(json.loads(line))
-
-    metrics_data: list[dict[str, object]] = []
-    if metrics_path.exists():
-        for line in metrics_path.read_text().splitlines():
-            line = line.strip()
-            if line:
-                metrics_data.append(json.loads(line))
-
     if not attempts_path.exists() and not metrics_path.exists():
+        return None
+
+    try:
+        attempts_data: list[dict[str, object]] = []
+        if attempts_path.exists():
+            attempts_data = canonical_model_list(read_jsonl_models(attempts_path, AttemptRecord))
+
+        metrics_data: list[dict[str, object]] = []
+        if metrics_path.exists():
+            metrics_data = canonical_model_list(read_jsonl_models(metrics_path, MetricObservation))
+    except (ValidationError, ValueError):
         return None
 
     payload = json.dumps(
@@ -813,8 +818,7 @@ def _read_stored_report_checksum(report_dir: Path) -> str | None:
     checksum_path = report_dir / REPORT_CHECKSUM_JSON
     if not checksum_path.exists():
         return None
-    data = json.loads(checksum_path.read_text())
-    return data.get("checksum")
+    return ReportChecksum.model_validate_json(checksum_path.read_text()).checksum
 
 
 def _read_campaign_binding(report_dir: Path) -> CampaignBinding | None:
@@ -1144,10 +1148,10 @@ def verify_campaign_set_aggregate(
                 f"child {child_id}: no assignment records to verify product"
             )
         else:
-            task_ids_found = sorted({str(r.get("task_id", "")) for r in assignment_records})
-            replicate_ids_found = sorted({str(r.get("replicate_id", "")) for r in assignment_records})
+            task_ids_found = sorted({r.task_id for r in assignment_records})
+            replicate_ids_found = sorted({r.replicate_id for r in assignment_records})
             variant_pairs: set[tuple[str, str]] = {
-                (str(r.get("model_cohort_id", "")), str(r.get("arm_id", "")))
+                (r.model_cohort_id, r.arm_id)
                 for r in assignment_records
             }
             variant_count = len(variant_pairs)
@@ -1176,10 +1180,10 @@ def verify_campaign_set_aggregate(
 
             product_tuples: set[tuple[str, str, str, str]] = {
                 (
-                    str(r.get("task_id", "")),
-                    str(r.get("replicate_id", "")),
-                    str(r.get("model_cohort_id", "")),
-                    str(r.get("arm_id", "")),
+                    r.task_id,
+                    r.replicate_id,
+                    r.model_cohort_id,
+                    r.arm_id,
                 )
                 for r in assignment_records
             }
@@ -1255,7 +1259,8 @@ def verify_campaign_set_aggregate(
         and hash_binding_ok
     )
 
-    result = AggregateVerificationResult.model_construct(
+    content_hash = provisional_hash(
+        AggregateVerificationResult,
         verification_schema_version=CAMPAIGN_SET_SCHEMA_VERSION,
         set_id=plan.set_id,
         set_plan_hash=plan.content_hash,
@@ -1268,43 +1273,105 @@ def verify_campaign_set_aggregate(
         product_coverage_ok=product_coverage_ok,
         hash_binding_ok=hash_binding_ok,
         failures=sorted(failures),
-        content_hash="0" * 64,
     )
-    content_hash = compute_aggregate_verification_result_hash(result)
-    return result.model_copy(update={"content_hash": content_hash})
+    return AggregateVerificationResult(
+        verification_schema_version=CAMPAIGN_SET_SCHEMA_VERSION,
+        set_id=plan.set_id,
+        set_plan_hash=plan.content_hash,
+        set_index_hash=index.content_hash,
+        ok=ok,
+        child_results=child_results,
+        total_assignments_verified=total_unique,
+        assignment_uniqueness_ok=assignment_uniqueness_ok,
+        coverage_ok=coverage_ok,
+        product_coverage_ok=product_coverage_ok,
+        hash_binding_ok=hash_binding_ok,
+        failures=sorted(failures),
+        content_hash=content_hash,
+    )
 
 
-def compute_dry_run_plan(plan: CampaignSetPlan) -> dict[str, object]:
+class DryRunChildPlan(BaseModel):
+    """One child's dry-run plan entry.
+
+    Carries the child campaign ID, revision, partition index, task count
+    for this partition, the plan-level repetition count, and the expected
+    assignment count for this child. The fields mirror the
+    ``CampaignChildPlan`` values that are available without reading any
+    report directory or making provider calls.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    child_id: str = Field(min_length=1, description="Child campaign ID.")
+    child_revision: str = Field(min_length=1, description="Child campaign revision identifier.")
+    partition_index: int = Field(ge=0, description="Zero-indexed partition position (0-3).")
+    tasks_per_child: int = Field(ge=1, description="Number of tasks in this child's partition.")
+    repetition_count: int = Field(ge=1, description="Plan-level repetition count.")
+    expected_assignment_count: int = Field(ge=1, description="Expected assignment count for this child.")
+
+
+class DryRunPlan(BaseModel):
+    """Typed deterministic dry-run output for a campaign-set plan.
+
+    Proves the expected assignment counts per child and total, without
+    reading any report directories or making provider calls. The output
+    is deterministic: the same plan always produces the same output.
+
+    The ``content_hash`` field carries the source ``CampaignSetPlan``
+    content hash so consumers can bind the dry-run output to the frozen
+    plan identity.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    set_id: str = Field(min_length=1, description="Campaign-set identity.")
+    set_version: str = Field(min_length=1, description="Campaign-set schema version.")
+    parent_campaign_id: str = Field(min_length=1, description="Parent campaign identity.")
+    parent_campaign_revision: str = Field(min_length=1, description="Parent campaign revision.")
+    child_count: int = Field(ge=1, description="Number of child plans.")
+    total_tasks: int = Field(ge=1, description="Total task count across all children.")
+    repetition_count: int = Field(ge=1, description="Plan-level repetition count.")
+    expected_child_assignment_count: int = Field(ge=1, description="Expected assignment count per child.")
+    expected_total_assignment_count: int = Field(ge=1, description="Expected total assignment count across all children.")
+    children: list[DryRunChildPlan] = Field(min_length=1, description="One dry-run child plan per child.")
+    content_hash: str = Field(
+        min_length=64, max_length=64,
+        description="Content hash of the source CampaignSetPlan.",
+    )
+
+
+def compute_dry_run_plan(plan: CampaignSetPlan) -> DryRunPlan:
     """Compute deterministic dry-run output for a campaign-set plan.
 
-    Returns a dict proving the expected assignment counts per child and
-    total, without reading any report directories or making provider
-    calls. The output is deterministic: the same plan always produces
-    the same output.
+    Returns a typed ``DryRunPlan`` proving the expected assignment counts
+    per child and total, without reading any report directories or making
+    provider calls. The output is deterministic: the same plan always
+    produces the same output.
     """
-    children: list[dict[str, object]] = []
+    children: list[DryRunChildPlan] = []
     for cp in plan.child_plans:
-        children.append({
-            "child_id": cp.child_id,
-            "child_revision": cp.child_revision,
-            "partition_index": cp.partition_index,
-            "tasks_per_child": len(cp.partition_task_ids),
-            "repetition_count": len(plan.repetition_ids),
-            "expected_assignment_count": cp.expected_assignment_count,
-        })
-    return {
-        "set_id": plan.set_id,
-        "set_version": plan.set_version,
-        "parent_campaign_id": plan.parent_campaign_id,
-        "parent_campaign_revision": plan.parent_campaign_revision,
-        "child_count": len(plan.child_plans),
-        "total_tasks": len(plan.population_task_ids),
-        "repetition_count": len(plan.repetition_ids),
-        "expected_child_assignment_count": plan.expected_child_assignment_count,
-        "expected_total_assignment_count": plan.expected_total_assignment_count,
-        "children": children,
-        "content_hash": plan.content_hash,
-    }
+        children.append(DryRunChildPlan(
+            child_id=cp.child_id,
+            child_revision=cp.child_revision,
+            partition_index=cp.partition_index,
+            tasks_per_child=len(cp.partition_task_ids),
+            repetition_count=len(plan.repetition_ids),
+            expected_assignment_count=cp.expected_assignment_count,
+        ))
+    return DryRunPlan(
+        set_id=plan.set_id,
+        set_version=plan.set_version,
+        parent_campaign_id=plan.parent_campaign_id,
+        parent_campaign_revision=plan.parent_campaign_revision,
+        child_count=len(plan.child_plans),
+        total_tasks=len(plan.population_task_ids),
+        repetition_count=len(plan.repetition_ids),
+        expected_child_assignment_count=plan.expected_child_assignment_count,
+        expected_total_assignment_count=plan.expected_total_assignment_count,
+        children=children,
+        content_hash=plan.content_hash,
+    )
 
 
 def build_campaign_set_plan(
@@ -1385,7 +1452,8 @@ def build_campaign_set_plan(
             expected_assignment_count=EXPECTED_CHILD_ASSIGNMENT_COUNT,
         ))
 
-    plan = CampaignSetPlan.model_construct(
+    content_hash = provisional_hash(
+        CampaignSetPlan,
         set_id=set_id,
         set_version=set_version,
         parent_campaign_id=parent_campaign_id,
@@ -1405,9 +1473,7 @@ def build_campaign_set_plan(
         provider_environment_scope=provider_environment_scope,
         expected_child_assignment_count=EXPECTED_CHILD_ASSIGNMENT_COUNT,
         expected_total_assignment_count=EXPECTED_TOTAL_ASSIGNMENT_COUNT,
-        content_hash="0" * 64,
     )
-    content_hash = compute_campaign_set_plan_hash(plan)
     return CampaignSetPlan(
         set_id=set_id,
         set_version=set_version,
@@ -1467,6 +1533,8 @@ __all__ = [
     "CampaignSetPlan",
     "CampaignSetStatus",
     "ChildVerificationResult",
+    "DryRunChildPlan",
+    "DryRunPlan",
     "build_campaign_set_plan",
     "compute_aggregate_verification_result_hash",
     "compute_campaign_set_index_hash",

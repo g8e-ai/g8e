@@ -217,14 +217,10 @@ def _make_provenance_manifest():
         SourceInclusionEntry(path="src/main.py", sha256=_HASH, byte_length=100),
         SourceInclusionEntry(path="src/util.py", sha256="b" * 64, byte_length=50),
     ]
-    entry_dicts = [
-        {"path": e.path, "sha256": e.sha256, "byte_length": e.byte_length}
-        for e in entries
-    ]
     return SourceInclusionManifest(
         schema_version="1.0.0",
         entries=entries,
-        manifest_hash=compute_manifest_hash(entry_dicts),
+        manifest_hash=compute_manifest_hash(entries),
     )
 
 

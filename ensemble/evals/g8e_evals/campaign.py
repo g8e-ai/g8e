@@ -28,8 +28,12 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from g8e_evals.index import ModelRole
+
 
 CAMPAIGN_CONTRACT_VERSION = "1.0.0"
+
+MODEL_ROLE_ORDER: tuple[ModelRole, ...] = (ModelRole.PRIMARY, ModelRole.ASSISTANT, ModelRole.LITE)
 
 
 def _canonical_json(model: BaseModel) -> str:
@@ -97,7 +101,7 @@ class RoleModelBinding(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    role: str = Field(min_length=1, description="Role name (e.g. primary, assistant, lite).")
+    role: ModelRole = Field(description="Capacity tier this binding serves.")
     model_id: str = Field(min_length=1, description="Canonical model ID (e.g. qwen3:8b).")
     provider: str = Field(min_length=1, description="Provider ID (e.g. ollama).")
     endpoint: str = Field(min_length=1, description="Endpoint URL.")
@@ -123,6 +127,13 @@ class ModelCohort(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     cohort_id: str = Field(min_length=1, description="Unique cohort identifier.")
+    candidate_variant_id: str = Field(
+        min_length=1,
+        description="Identity of the model variant under test (registry variant ID or model tag).",
+    )
+    candidate_role: ModelRole = Field(
+        description="Tier the candidate occupies; bindings at every other tier are baselines.",
+    )
     role_bindings: list[RoleModelBinding] = Field(
         min_length=1,
         description="Complete role-to-model bindings. One per role used by any arm in the campaign.",
@@ -135,15 +146,20 @@ class ModelCohort(BaseModel):
 
     @model_validator(mode="after")
     def _validate_cohort(self) -> Self:
-        roles: list[str] = [rb.role for rb in self.role_bindings]
+        roles: list[ModelRole] = [rb.role for rb in self.role_bindings]
         if len(roles) != len(set(roles)):
-            seen: set[str] = set()
-            dupes: list[str] = []
+            seen: set[ModelRole] = set()
+            dupes: list[ModelRole] = []
             for r in roles:
                 if r in seen:
                     dupes.append(r)
                 seen.add(r)
             raise ValueError(f"duplicate role in model cohort: {sorted(set(dupes))}")
+        if self.candidate_role not in roles:
+            raise ValueError(
+                f"cohort {self.cohort_id!r} candidate_role {self.candidate_role!r} "
+                "has no role binding"
+            )
         expected = self._compute_hash()
         if self.content_hash != expected:
             raise ValueError(
@@ -151,13 +167,28 @@ class ModelCohort(BaseModel):
             )
         return self
 
+    def candidate_binding(self) -> RoleModelBinding:
+        """Return the binding at the cohort's candidate role.
+
+        The validator guarantees a binding exists at ``candidate_role``;
+        the lookup cannot diverge from it.
+        """
+        for rb in self.role_bindings:
+            if rb.role == self.candidate_role:
+                return rb
+        raise ValueError(
+            f"cohort {self.cohort_id!r} candidate_role {self.candidate_role!r} has no role binding"
+        )
+
     def _compute_hash(self) -> str:
         sorted_bindings = sorted(self.role_bindings, key=lambda rb: rb.role)
         payload = json.dumps(
             {
                 "cohort_id": self.cohort_id,
+                "candidate_variant_id": self.candidate_variant_id,
+                "candidate_role": self.candidate_role,
                 "role_bindings": [
-                    json.loads(rb.model_dump_json()) for rb in sorted_bindings
+                    rb.model_dump(mode="json") for rb in sorted_bindings
                 ],
             },
             allow_nan=False,
@@ -469,14 +500,21 @@ class CampaignManifest(BaseModel):
         return _sha256(payload)
 
 
-def compute_model_cohort_hash(cohort_id: str, role_bindings: list[RoleModelBinding]) -> str:
+def compute_model_cohort_hash(
+    cohort_id: str,
+    candidate_variant_id: str,
+    candidate_role: ModelRole,
+    role_bindings: list[RoleModelBinding],
+) -> str:
     """Compute the content hash for a model cohort without constructing the full model."""
     sorted_bindings = sorted(role_bindings, key=lambda rb: rb.role)
     payload = json.dumps(
         {
             "cohort_id": cohort_id,
+            "candidate_variant_id": candidate_variant_id,
+            "candidate_role": candidate_role,
             "role_bindings": [
-                json.loads(rb.model_dump_json()) for rb in sorted_bindings
+                rb.model_dump(mode="json") for rb in sorted_bindings
             ],
         },
         allow_nan=False,
@@ -854,6 +892,7 @@ def validate_retry_chain(
 
 __all__ = [
     "CAMPAIGN_CONTRACT_VERSION",
+    "MODEL_ROLE_ORDER",
     "CampaignAssignment",
     "CampaignManifest",
     "CampaignStatus",

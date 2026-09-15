@@ -38,12 +38,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 if TYPE_CHECKING:
     from g8e_evals.registry import ModelRegistry
 
+from g8e_evals.index import ModelRole
 from g8e_evals.schema import TrackArmAssignment
 
 
 CAMPAIGN_PROFILE_VERSION = "1.0.0"
 
-_VALID_TIER_NAMES = frozenset({"primary", "assistant", "lite"})
 _VALID_ARM_IDS = frozenset({"direct", "ensemble_ungoverned", "doctrine"})
 
 
@@ -93,7 +93,7 @@ class ModelTierAssignment(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     variant_id: str = Field(min_length=1, description="Model variant ID from the registry.")
-    target_tier: str = Field(min_length=1, description="Target g8ee tier (primary, assistant, or lite).")
+    target_tier: ModelRole = Field(description="Target g8ee tier (primary, assistant, or lite).")
 
 
 class CampaignProfile(BaseModel):
@@ -290,13 +290,6 @@ class CampaignProfile(BaseModel):
             raise ValueError(
                 f"duplicate model tier assignment: {tier_assignment_keys}"
             )
-
-        for assignment in self.model_tier_assignments:
-            if assignment.target_tier not in _VALID_TIER_NAMES:
-                raise ValueError(
-                    f"target_tier must be one of {sorted(_VALID_TIER_NAMES)}: "
-                    f"got {assignment.target_tier!r}"
-                )
 
         expected = compute_campaign_profile_hash(self)
         if self.content_hash != expected:

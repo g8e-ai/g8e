@@ -132,6 +132,10 @@ class _FakeSUT:
         return Response(answer=self.answer, model=self.model_id, arm=Arm.DIRECT)
 
 
+    def close(self) -> None:
+        pass
+
+
 @dataclass
 class _FakeGrader:
     grader_id: str = "ifeval_subset_verifier"
@@ -142,26 +146,22 @@ class _FakeGrader:
 
 
 def _make_spec() -> CampaignSpec:
+    binding = RoleModelBinding(
+        role=ModelRole.PRIMARY,
+        model_id="qwen3:8b",
+        provider="ollama",
+        endpoint="http://192.168.1.2:11434",
+        sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
+        timeout_seconds=120.0,
+        seed_capable=True,
+    )
+    variant_id = _COHORT_ID[len("cohort-"):] if _COHORT_ID.startswith("cohort-") else _COHORT_ID
     cohort = ModelCohort(
         cohort_id=_COHORT_ID,
-        role_bindings=[RoleModelBinding(
-            role="primary",
-            model_id="qwen3:8b",
-            provider="ollama",
-            endpoint="http://192.168.1.2:11434",
-            sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
-            timeout_seconds=120.0,
-            seed_capable=True,
-        )],
-        content_hash=compute_model_cohort_hash(_COHORT_ID, [RoleModelBinding(
-            role="primary",
-            model_id="qwen3:8b",
-            provider="ollama",
-            endpoint="http://192.168.1.2:11434",
-            sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
-            timeout_seconds=120.0,
-            seed_capable=True,
-        )]),
+        candidate_variant_id=variant_id,
+        candidate_role=ModelRole.PRIMARY,
+        role_bindings=[binding],
+        content_hash=compute_model_cohort_hash(_COHORT_ID, variant_id, ModelRole.PRIMARY, [binding]),
     )
     task_assignment = TaskAssignmentManifest(
         task_assignment_id="task-assignment-v1",

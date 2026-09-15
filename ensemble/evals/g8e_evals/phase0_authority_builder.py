@@ -55,7 +55,13 @@ class Phase0AuthorityPacket(BaseModel):
     lease_templates: LiveOperationLeaseTemplateSet
 
 
-def _budget(operation_id: str, max_requests: int, max_duration_seconds: int, max_retries: int, max_replacements: int) -> BudgetAuthority:
+def _budget(
+    operation_id: str,
+    max_requests: int,
+    max_duration_seconds: int,
+    max_retries: int,
+    max_replacements: int,
+) -> BudgetAuthority:
     return build_budget_authority(
         operation_id=operation_id,
         max_requests=max_requests,
@@ -96,6 +102,10 @@ def build_phase0_budget_authorities() -> BudgetAuthoritySet:
 def _budget_by_id(budgets: BudgetAuthoritySet, operation_id: str) -> BudgetAuthority:
     matches = [budget for budget in budgets.budgets if budget.operation_id == operation_id]
     if len(matches) != 1:
+        # Programming-error invariant: the budget list is hardcoded in
+        # build_phase0_budget_authorities and the lookup keys are hardcoded
+        # operation IDs in this module. A mismatch is a developer error in
+        # the phase0 builder, not a flow-path parse failure on untrusted input.
         raise ValueError(f"expected exactly one budget for {operation_id!r}")
     return matches[0]
 
@@ -179,36 +189,55 @@ def build_phase0_lease_templates(
         )
         for child_id in _P12_CHILD_IDS
     )
-    templates.extend([
-        _lease_template(
-            template_id="phase-c-repeatability-v1",
-            operation_kind=OperationKind.PHASE_C,
-            operation_authority_hash=_REPEATABILITY_POLICY_HASH,
-            budget_authorities=budget_authorities,
-            budget_operation_id="phase-c-repeatability",
-            command_family=CommandFamily.CAMPAIGN_RUN,
-            runtime_authority_names=["phase_b_role_candidate_manifest", "d16_population_selection", "phase_c_campaign_manifest"],
-        ),
-        _lease_template(
-            template_id="phase-d-stack-evaluation-v1",
-            operation_kind=OperationKind.PHASE_D,
-            operation_authority_hash=_STACK_POLICY_HASH,
-            budget_authorities=budget_authorities,
-            budget_operation_id="phase-d-stack-evaluation",
-            command_family=CommandFamily.CAMPAIGN_RUN,
-            runtime_authority_names=["phase_b_role_candidate_manifest", "d16_population_selection", "phase_d_stack_manifest"],
-        ),
-        _lease_template(
-            template_id="o7-two-cycle-rehearsal-v1",
-            operation_kind=OperationKind.O7_CYCLE,
-            operation_authority_hash=_budget_by_id(budget_authorities, "o7-two-cycle-rehearsal").content_hash,
-            budget_authorities=budget_authorities,
-            budget_operation_id="o7-two-cycle-rehearsal",
-            command_family=CommandFamily.CONTROLLER_RUN,
-            runtime_authority_names=["o7_rehearsal_manifest", "public_contract_pack", "mirror_trust_authority", "safety_stop_matrix"],
-        ),
-    ])
-    return build_live_operation_lease_template_set("v2.1.8-live-operation-lease-templates-v1", templates)
+    templates.extend(
+        [
+            _lease_template(
+                template_id="phase-c-repeatability-v1",
+                operation_kind=OperationKind.PHASE_C,
+                operation_authority_hash=_REPEATABILITY_POLICY_HASH,
+                budget_authorities=budget_authorities,
+                budget_operation_id="phase-c-repeatability",
+                command_family=CommandFamily.CAMPAIGN_RUN,
+                runtime_authority_names=[
+                    "phase_b_role_candidate_manifest",
+                    "d16_population_selection",
+                    "phase_c_campaign_manifest",
+                ],
+            ),
+            _lease_template(
+                template_id="phase-d-stack-evaluation-v1",
+                operation_kind=OperationKind.PHASE_D,
+                operation_authority_hash=_STACK_POLICY_HASH,
+                budget_authorities=budget_authorities,
+                budget_operation_id="phase-d-stack-evaluation",
+                command_family=CommandFamily.CAMPAIGN_RUN,
+                runtime_authority_names=[
+                    "phase_b_role_candidate_manifest",
+                    "d16_population_selection",
+                    "phase_d_stack_manifest",
+                ],
+            ),
+            _lease_template(
+                template_id="o7-two-cycle-rehearsal-v1",
+                operation_kind=OperationKind.O7_CYCLE,
+                operation_authority_hash=_budget_by_id(
+                    budget_authorities, "o7-two-cycle-rehearsal"
+                ).content_hash,
+                budget_authorities=budget_authorities,
+                budget_operation_id="o7-two-cycle-rehearsal",
+                command_family=CommandFamily.CONTROLLER_RUN,
+                runtime_authority_names=[
+                    "o7_rehearsal_manifest",
+                    "public_contract_pack",
+                    "mirror_trust_authority",
+                    "safety_stop_matrix",
+                ],
+            ),
+        ]
+    )
+    return build_live_operation_lease_template_set(
+        "v2.1.8-live-operation-lease-templates-v1", templates
+    )
 
 
 def build_phase0_authority_packet() -> Phase0AuthorityPacket:

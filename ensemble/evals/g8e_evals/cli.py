@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol
 from urllib.parse import urlparse
 
 import click
@@ -1130,6 +1130,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         compute_retry_policy_hash,
         compute_task_assignment_hash,
     )
+    from g8e_evals.index import ModelRole
     from g8e_evals.schema import ProviderBudget
 
     # S2-D fail-closed option coherence: reject incoherent option sets
@@ -1176,7 +1177,6 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     # model identity and CampaignBinding population.
     campaign_profile = None
     model_registry = None
-    cohort_variant_map: dict[str, str] | None = None
     loaded_campaign_set_plan = None
     loaded_replacement_rule = None
 
@@ -1283,7 +1283,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
                 raise click.UsageError(
                     f"campaign-set child preflight failed: {e}"
                 ) from e
-        cohorts, cohort_variant_map = derive_cohorts_from_registry(campaign_profile, model_registry)
+        cohorts = derive_cohorts_from_registry(campaign_profile, model_registry)
         if not cohorts:
             raise click.UsageError("no runnable variants found in the model registry for the profile's generative_variant_ids")
         # Update the preregistration's model_cohort_ids to match the
@@ -1307,8 +1307,9 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
             # ensemble_ungoverned arm would add assistant/lite roles; that
             # wiring is part of R7 (live topology restoration).
             model_id = _derive_model_tag(cohort_id, model_tag_map)
+            variant_id = cohort_id[len("cohort-"):] if cohort_id.startswith("cohort-") else cohort_id
             bindings = [RoleModelBinding(
-                role="primary",
+                role=ModelRole.PRIMARY,
                 model_id=model_id,
                 provider="ollama",
                 endpoint="http://192.168.1.2:11434",
@@ -1316,8 +1317,14 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
                 timeout_seconds=120.0,
                 seed_capable=True,
             )]
-            ch = compute_model_cohort_hash(cohort_id, bindings)
-            cohorts.append(ModelCohort(cohort_id=cohort_id, role_bindings=bindings, content_hash=ch))
+            ch = compute_model_cohort_hash(cohort_id, variant_id, ModelRole.PRIMARY, bindings)
+            cohorts.append(ModelCohort(
+                cohort_id=cohort_id,
+                candidate_variant_id=variant_id,
+                candidate_role=ModelRole.PRIMARY,
+                role_bindings=bindings,
+                content_hash=ch,
+            ))
 
     task_ids = [t.id for t in tasks]
     task_assignment = TaskAssignmentManifest(
@@ -1412,7 +1419,6 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     from g8e_evals.runner import build_campaign_sut_factory
     sut_factory = build_campaign_sut_factory(
         campaign_profile=campaign_profile,
-        cohort_variant_map=cohort_variant_map,
         g8ee_url=g8ee_url or "",
         operator_url=operator_url,
         operator_session_id=operator_session_id or (auth_context.operator_session_id if auth_context else None),
@@ -1428,7 +1434,6 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         output_dir=output_dir,
         campaign_profile=campaign_profile,
         model_registry=model_registry,
-        cohort_variant_map=cohort_variant_map,
         campaign_set_plan=loaded_campaign_set_plan,
         replacement_rule=loaded_replacement_rule,
         _report_dir=exact_report_dir,
@@ -1742,24 +1747,23 @@ def campaign_set_plan(plan: Path):
 
     dry = compute_dry_run_plan(set_plan)
     console = Console()
-    console.print(f"[cyan]Campaign-set plan[/cyan] {dry['set_id']}")
-    console.print(f"  [green]version[/green] {dry['set_version']}")
-    console.print(f"  [green]parent_campaign_id[/green] {dry['parent_campaign_id']}")
-    console.print(f"  [green]parent_campaign_revision[/green] {dry['parent_campaign_revision']}")
-    console.print(f"  [green]child_count[/green] {dry['child_count']}")
-    console.print(f"  [green]total_tasks[/green] {dry['total_tasks']}")
-    console.print(f"  [green]repetition_count[/green] {dry['repetition_count']}")
-    console.print(f"  [green]expected_child_assignment_count[/green] {dry['expected_child_assignment_count']}")
-    console.print(f"  [green]expected_total_assignment_count[/green] {dry['expected_total_assignment_count']}")
+    console.print(f"[cyan]Campaign-set plan[/cyan] {dry.set_id}")
+    console.print(f"  [green]version[/green] {dry.set_version}")
+    console.print(f"  [green]parent_campaign_id[/green] {dry.parent_campaign_id}")
+    console.print(f"  [green]parent_campaign_revision[/green] {dry.parent_campaign_revision}")
+    console.print(f"  [green]child_count[/green] {dry.child_count}")
+    console.print(f"  [green]total_tasks[/green] {dry.total_tasks}")
+    console.print(f"  [green]repetition_count[/green] {dry.repetition_count}")
+    console.print(f"  [green]expected_child_assignment_count[/green] {dry.expected_child_assignment_count}")
+    console.print(f"  [green]expected_total_assignment_count[/green] {dry.expected_total_assignment_count}")
     console.print("  [green]children[/green]")
-    children = cast(list[dict[str, object]], dry["children"])
-    for child in children:
-        console.print(f"    [cyan]child[/cyan] {child['child_id']}")
-        console.print(f"      [green]revision[/green] {child['child_revision']}")
-        console.print(f"      [green]partition_index[/green] {child['partition_index']}")
-        console.print(f"      [green]tasks_per_child[/green] {child['tasks_per_child']}")
-        console.print(f"      [green]expected_assignment_count[/green] {child['expected_assignment_count']}")
-    console.print(f"  [green]content_hash[/green] {dry['content_hash']}")
+    for child in dry.children:
+        console.print(f"    [cyan]child[/cyan] {child.child_id}")
+        console.print(f"      [green]revision[/green] {child.child_revision}")
+        console.print(f"      [green]partition_index[/green] {child.partition_index}")
+        console.print(f"      [green]tasks_per_child[/green] {child.tasks_per_child}")
+        console.print(f"      [green]expected_assignment_count[/green] {child.expected_assignment_count}")
+    console.print(f"  [green]content_hash[/green] {dry.content_hash}")
     console.print("  [green]status[/green] planned")
 
 

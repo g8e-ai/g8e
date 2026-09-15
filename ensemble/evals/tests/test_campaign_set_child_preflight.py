@@ -38,6 +38,7 @@ from g8e_evals.campaign import (
     CampaignManifest,
     compute_campaign_manifest_hash,
 )
+from g8e_evals.index import ModelRole
 from g8e_evals.campaign_set import (
     CAMPAIGN_SET_SCHEMA_VERSION,
     CHILD_COUNT,
@@ -623,26 +624,21 @@ class TestBuildCampaignBindingReportRole:
             content_hash=profile_content_hash,
         )
 
+        binding = RoleModelBinding(
+            role=ModelRole.PRIMARY,
+            model_id="qwen3:8b",
+            provider="ollama",
+            endpoint="http://192.168.1.2:11434",
+            sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
+            timeout_seconds=120.0,
+            seed_capable=True,
+        )
         cohort = ModelCohort(
             cohort_id="cohort-qwen3-8b",
-            role_bindings=[RoleModelBinding(
-                role="primary",
-                model_id="qwen3:8b",
-                provider="ollama",
-                endpoint="http://192.168.1.2:11434",
-                sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
-                timeout_seconds=120.0,
-                seed_capable=True,
-            )],
-            content_hash=compute_model_cohort_hash("cohort-qwen3-8b", [RoleModelBinding(
-                role="primary",
-                model_id="qwen3:8b",
-                provider="ollama",
-                endpoint="http://192.168.1.2:11434",
-                sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
-                timeout_seconds=120.0,
-                seed_capable=True,
-            )]),
+            candidate_variant_id="qwen3-8b",
+            candidate_role=ModelRole.PRIMARY,
+            role_bindings=[binding],
+            content_hash=compute_model_cohort_hash("cohort-qwen3-8b", "qwen3-8b", ModelRole.PRIMARY, [binding]),
         )
         task_assignment = TaskAssignmentManifest(
             task_assignment_id="ta-v1",
@@ -699,7 +695,6 @@ class TestBuildCampaignBindingReportRole:
             output_dir=Path("/tmp"),
             campaign_profile=profile,
             model_registry=registry,
-            cohort_variant_map={"cohort-qwen3-8b": "qwen3-8b-q4_0"},
             campaign_set_plan=campaign_set_plan,
         )
 

@@ -22,12 +22,28 @@ from __future__ import annotations
 import logging
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.constants.api_paths import GatewayAPIPaths
 from g8e_evals.arms import GovernancePosture
 from g8e_evals.transport import AuthContext
 
 logger = logging.getLogger(__name__)
+
+
+class GatewayPostureResponse(BaseModel):
+    """Typed response from the gateway ``/health`` endpoint.
+
+    The gateway exposes its configured posture as a short name (``doctrine``,
+    ``consensus``, ``notary``, ``none``). The ``posture`` field is the only
+    field the eval runner consumes; sibling fields in the response are
+    ignored via ``extra="ignore"`` so the gateway may extend its health
+    payload without breaking the eval runner.
+    """
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    posture: str = Field(default="")
 
 # The gateway supports the short posture names doctrine, consensus, ratify,
 # and notary. The canonical eval design defines governed arms only for
@@ -66,8 +82,12 @@ async def observe_gateway_posture(env: AuthContext) -> GovernancePosture | None:
                     resp.status_code,
                 )
                 return None
-            data = resp.json()
-            posture_str = data.get("posture", "")
+            try:
+                data = GatewayPostureResponse.model_validate_json(resp.content)
+            except ValueError:
+                logger.warning("Gateway health response is not valid JSON")
+                return None
+            posture_str = data.posture
             if not posture_str:
                 logger.warning("Gateway health response missing posture field")
                 return None

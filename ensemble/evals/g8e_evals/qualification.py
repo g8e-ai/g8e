@@ -6,11 +6,13 @@ import json
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal, Self, cast
+from typing import Any, Literal, Self
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from g8e_evals.serialization import content_hash_of, provisional_hash
 
 QUALIFICATION_SCHEMA_VERSION = "1.0.0"
 _HASH_PATTERN = r"^[0-9a-f]{64}$"
@@ -21,21 +23,32 @@ class _FrozenModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
 
 
-def _payload(value: BaseModel | dict[str, Any]) -> dict[str, Any]:
-    data = value.model_dump(mode="json", by_alias=True) if isinstance(value, BaseModel) else dict(value)
-    data.pop("content_hash", None)
-    return TypeAdapter(dict[str, Any]).dump_python(data, mode="json")
+class ContentAddressedArtifact(BaseModel):
+    """Generic wrapper for any content-addressed JSON artifact.
+
+    open map: ``extra="allow"`` is required because this model wraps arbitrary
+    qualification authority artifacts (SourceManifestAuthority, future
+    authority types) whose full field set is not known at this call site.
+    The ``content_hash`` field is typed; all other fields are opaque extras
+    that participate in the content hash via ``model_dump``.
+    """
+
+    model_config = ConfigDict(extra="allow", frozen=True)
+
+    content_hash: str = Field(pattern=_HASH_PATTERN)
 
 
-def content_hash(value: BaseModel | dict[str, Any]) -> str:
-    encoded = json.dumps(
-        _payload(value),
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
-    return hashlib.sha256(encoded).hexdigest()
+class CertificateComponent(StrEnum):
+    CLI = "cli"
+    REMOTE_OPERATOR = "remote_operator"
+    ENSEMBLE = "ensemble"
+    DASHBOARD = "dashboard"
+
+
+class VersionComponent(StrEnum):
+    HOST = "host"
+    GATEWAY = "gateway"
+    OPERATOR = "operator"
 
 
 def render_qualification_json(value: BaseModel) -> bytes:
@@ -69,12 +82,9 @@ class ArtifactDigest(_FrozenModel):
     @classmethod
     def from_json_file(cls, name: str, path: str, file_path: Path) -> ArtifactDigest:
         rendered = file_path.read_bytes()
-        parsed = json.loads(rendered)
-        if not isinstance(parsed, dict):
-            raise ValueError("content-addressed JSON artifact must be an object")
-        declared = parsed.get("content_hash")
-        computed = content_hash(parsed)
-        if declared != computed:
+        artifact = ContentAddressedArtifact.model_validate_json(rendered)
+        computed = content_hash_of(artifact)
+        if artifact.content_hash != computed:
             raise ValueError("JSON artifact content_hash mismatch")
         return cls(
             name=name,
@@ -104,7 +114,7 @@ class SourceManifestAuthority(_FrozenModel):
             not value or "/" in value for value in self.excludes
         ):
             raise ValueError("source manifest excludes must be unique path-component patterns")
-        if self.content_hash != content_hash(self):
+        if self.content_hash != content_hash_of(self):
             raise ValueError("source manifest authority content_hash mismatch")
         return self
 
@@ -119,11 +129,11 @@ class SourceManifestResult(_FrozenModel):
     @classmethod
     def build(cls, **values: Any) -> SourceManifestResult:
         fields = {"schema_version": QUALIFICATION_SCHEMA_VERSION, **values}
-        return cls(**fields, content_hash=content_hash(fields))
+        return cls(**fields, content_hash=provisional_hash(cls, **fields))
 
     @model_validator(mode="after")
     def _validate_result(self) -> Self:
-        if self.content_hash != content_hash(self):
+        if self.content_hash != content_hash_of(self):
             raise ValueError("source manifest result content_hash mismatch")
         return self
 
@@ -188,7 +198,9 @@ class ComponentImageIdentity(_FrozenModel):
 
     @model_validator(mode="after")
     def _validate_components(self) -> Self:
-        if len(self.components) != len(set(self.components)) or any(not value for value in self.components):
+        if len(self.components) != len(set(self.components)) or any(
+            not value for value in self.components
+        ):
             raise ValueError("image components must be non-empty and unique")
         return self
 
@@ -215,7 +227,7 @@ class CandidateIdentityEvidence(_FrozenModel):
             "binary_sha256": binary_sha256,
             "images": images,
         }
-        return cls(**fields, content_hash=content_hash(fields))
+        return cls(**fields, content_hash=provisional_hash(cls, **fields))
 
     @model_validator(mode="after")
     def _validate_candidate(self) -> Self:
@@ -231,7 +243,7 @@ class CandidateIdentityEvidence(_FrozenModel):
             raise ValueError("candidate image components must be unique")
         if len(image_ids) != len(set(image_ids)):
             raise ValueError("candidate image identities must be unique")
-        if self.content_hash != content_hash(self):
+        if self.content_hash != content_hash_of(self):
             raise ValueError("candidate content_hash mismatch")
         return self
 
@@ -244,7 +256,7 @@ class EvidencePath(_FrozenModel):
 
 
 class CertificateIdentityEvidence(_FrozenModel):
-    component: Literal["cli", "remote_operator", "ensemble", "dashboard"]
+    component: CertificateComponent
     certificate_sha256: str = Field(pattern=_HASH_PATTERN)
     spiffe_ids: list[str] = Field(min_length=1)
 
@@ -258,9 +270,25 @@ class CertificateIdentityEvidence(_FrozenModel):
 
 
 class VersionStampEvidence(_FrozenModel):
-    component: Literal["host", "gateway", "operator"]
+    component: VersionComponent
     version: str = Field(pattern=r"^v[0-9]+\.[0-9]+\.[0-9]+$")
     source_tree_state_hash: str = Field(pattern=_HASH_PATTERN)
+
+
+class HostVersionRecord(_FrozenModel):
+    """Typed ``version.json`` record produced by trusted build or CI metadata.
+
+    The ``build_id`` and ``source_revision`` fields default to empty
+    strings when the build system does not supply them; the collection
+    flow substitutes the ``"unavailable"`` default at the call site
+    rather than here so the on-disk record can omit the keys entirely.
+    """
+
+    version: str = Field(pattern=r"^v[0-9]+\.[0-9]+\.[0-9]+$")
+    source_tree_state_hash: str = Field(pattern=_HASH_PATTERN)
+    build_id: str = ""
+    build_time: datetime | None = None
+    source_revision: str = ""
 
 
 class RuntimeIdentityEvidence(_FrozenModel):
@@ -283,7 +311,7 @@ class RuntimeIdentityEvidence(_FrozenModel):
 
     @classmethod
     def build(cls, **values: Any) -> RuntimeIdentityEvidence:
-        return cls(**values, content_hash=content_hash(values))
+        return cls(**values, content_hash=provisional_hash(cls, **values))
 
     @model_validator(mode="after")
     def _validate_runtime(self) -> Self:
@@ -304,13 +332,16 @@ class RuntimeIdentityEvidence(_FrozenModel):
                 f"spiffe://g8e.local/user/{self.owner_id}",
             },
         }
-        if any(set(certificates[name].spiffe_ids) != expected for name, expected in expected_spiffe.items()):
+        if any(
+            set(certificates[name].spiffe_ids) != expected
+            for name, expected in expected_spiffe.items()
+        ):
             raise ValueError("runtime certificate SPIFFE identity mismatch")
         if {stamp.component for stamp in self.version_stamps} != {"host", "gateway", "operator"}:
             raise ValueError("runtime version stamp components are incomplete")
         if self.healthy_components != ["gateway", "operator", "ensemble", "dashboard"]:
             raise ValueError("runtime healthy components must be complete and canonical")
-        if self.content_hash != content_hash(self):
+        if self.content_hash != content_hash_of(self):
             raise ValueError("runtime identity content_hash mismatch")
         return self
 
@@ -375,43 +406,35 @@ def collect_runtime_identity(
             raise ValueError(f"certificate URI SAN missing: {binding.path}") from error
         certificates.append(
             CertificateIdentityEvidence(
-                component=cast(
-                    Literal["cli", "remote_operator", "ensemble", "dashboard"],
-                    binding.name,
-                ),
+                component=CertificateComponent(binding.name),
                 certificate_sha256=certificate.fingerprint(hashes.SHA256()).hex(),
                 spiffe_ids=spiffe_ids,
             )
         )
     stamps: list[VersionStampEvidence] = []
-    host_version: dict[str, Any] | None = None
+    host_version: HostVersionRecord | None = None
     for binding in request.version_paths:
         _, version_bytes = _read_evidence_file(base_dir, binding.path)
-        version_data = json.loads(version_bytes)
-        if not isinstance(version_data, dict):
-            raise ValueError(f"version evidence must be a JSON object: {binding.path}")
-        if version_data.get("version") != request.version:
+        version_record = HostVersionRecord.model_validate_json(version_bytes)
+        if version_record.version != request.version:
             raise ValueError(f"version evidence mismatch: {binding.path}")
-        source_hash = version_data.get("source_tree_state_hash")
-        if not isinstance(source_hash, str):
-            raise ValueError(f"version source hash missing: {binding.path}")
         stamps.append(
             VersionStampEvidence(
-                component=cast(Literal["host", "gateway", "operator"], binding.name),
+                component=VersionComponent(binding.name),
                 version=request.version,
-                source_tree_state_hash=source_hash,
+                source_tree_state_hash=version_record.source_tree_state_hash,
             )
         )
-        if binding.name == "host":
-            host_version = version_data
+        if binding.name == VersionComponent.HOST.value:
+            host_version = version_record
     if host_version is None:
         raise ValueError("host version evidence missing")
     root_der = root_certificates[0].public_bytes(serialization.Encoding.DER)
     return RuntimeIdentityEvidence.build(
         candidate_content_hash=candidate.content_hash,
-        build_id=host_version.get("build_id") or "unavailable",
-        build_time=host_version.get("build_time"),
-        source_revision=host_version.get("source_revision") or "unavailable",
+        build_id=host_version.build_id or "unavailable",
+        build_time=host_version.build_time,
+        source_revision=host_version.source_revision or "unavailable",
         pki_root_sha256=hashlib.sha256(root_der).hexdigest(),
         owner_id=request.owner_id,
         cli_session_id=request.cli_session_id,
@@ -444,7 +467,7 @@ class GateResultEvidence(_FrozenModel):
     def build(cls, **values: Any) -> GateResultEvidence:
         fields = dict(values)
         fields["result"] = "passed" if fields["exit_code"] == 0 else "failed"
-        return cls(**fields, content_hash=content_hash(fields))
+        return cls(**fields, content_hash=provisional_hash(cls, **fields))
 
     @model_validator(mode="after")
     def _validate_gate(self) -> Self:
@@ -454,7 +477,7 @@ class GateResultEvidence(_FrozenModel):
             raise ValueError("gate command arguments must be non-empty")
         if any(not name or not version for name, version in self.tool_versions.items()):
             raise ValueError("gate tool versions must be non-empty")
-        if self.content_hash != content_hash(self):
+        if self.content_hash != content_hash_of(self):
             raise ValueError("gate content_hash mismatch")
         return self
 
@@ -482,13 +505,13 @@ class PublicLoopEvidence(_FrozenModel):
     @classmethod
     def build(cls, **values: Any) -> PublicLoopEvidence:
         fields = {"schema_version": QUALIFICATION_SCHEMA_VERSION, **values}
-        return cls(**fields, content_hash=content_hash(fields))
+        return cls(**fields, content_hash=provisional_hash(cls, **fields))
 
     @model_validator(mode="after")
     def _validate_loop(self) -> Self:
         if self.first_sequence > self.high_water_sequence:
             raise ValueError("public loop sequence range is invalid")
-        if self.content_hash != content_hash(self):
+        if self.content_hash != content_hash_of(self):
             raise ValueError("public loop content_hash mismatch")
         return self
 
@@ -549,7 +572,9 @@ class QualificationInput(_FrozenModel):
         if len(gate_ids) != len(set(gate_ids)):
             raise ValueError("gate IDs must be unique")
         if gate_ids != self.required_gate_ids:
-            raise ValueError("required gate IDs must exactly match supplied gates in canonical order")
+            raise ValueError(
+                "required gate IDs must exactly match supplied gates in canonical order"
+            )
         if any(gate.result != "passed" or gate.exit_code != 0 for gate in self.gates):
             raise ValueError("every qualification gate must have passed")
         if self.runtime.candidate_content_hash != self.candidate.content_hash:
@@ -603,7 +628,7 @@ class CollectionCandidateQualification(_FrozenModel):
 
     @model_validator(mode="after")
     def _validate_record(self) -> Self:
-        if self.content_hash != content_hash(self):
+        if self.content_hash != content_hash_of(self):
             raise ValueError("qualification content_hash mismatch")
         return self
 
@@ -617,7 +642,9 @@ def _read_evidence_file(base_dir: Path, relative_path: str) -> tuple[Path, bytes
             raise ValueError(f"evidence path contains a symlink: {relative_path}")
     resolved = current.resolve(strict=True)
     if not resolved.is_relative_to(base) or not resolved.is_file():
-        raise ValueError(f"evidence path is not a regular file under the input root: {relative_path}")
+        raise ValueError(
+            f"evidence path is not a regular file under the input root: {relative_path}"
+        )
     return resolved, resolved.read_bytes()
 
 
@@ -688,17 +715,22 @@ def build_collection_candidate_qualification(
         "live_operation_lease_status": "no_active_lease",
         "model_inventory_status": "not_queried",
     }
-    return CollectionCandidateQualification(**fields, content_hash=content_hash(fields))
+    return CollectionCandidateQualification(
+        **fields, content_hash=provisional_hash(CollectionCandidateQualification, **fields)
+    )
 
 
 __all__ = [
     "ArtifactDigest",
     "CandidateIdentityEvidence",
+    "CertificateComponent",
     "CertificateIdentityEvidence",
     "CollectionCandidateQualification",
     "ComponentImageIdentity",
+    "ContentAddressedArtifact",
     "EvidencePath",
     "GateResultEvidence",
+    "HostVersionRecord",
     "PublicLoopEvidence",
     "QualificationBuildRequest",
     "QualificationInput",
@@ -707,11 +739,11 @@ __all__ = [
     "RuntimeIdentityEvidence",
     "SourceManifestAuthority",
     "SourceManifestResult",
+    "VersionComponent",
     "VersionStampEvidence",
     "build_collection_candidate_qualification",
     "collect_runtime_identity",
     "compute_source_manifest_result",
-    "content_hash",
     "render_qualification_json",
     "resolve_qualification_input",
     "verify_historical_qualification",

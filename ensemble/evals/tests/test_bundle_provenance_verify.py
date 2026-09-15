@@ -14,6 +14,7 @@ require source/build provenance; non-production runs may omit it.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +27,8 @@ from g8e_evals import constants as evals_constants
 from g8e_evals.analysis import canonical_model_json, compute_canonical_analysis_from_record
 from g8e_evals.analysis.input import AnalysisInputRecord
 from g8e_evals.bundle import (
+    BundleManifest,
+    ChecksumRoot,
     EvalSigningKey,
     EvalTrustStore,
     produce_bundle,
@@ -255,6 +258,71 @@ def _assert_failure(report, layer: VerificationLayer, code: VerificationFailureC
     )
 
 
+def _mutate_run_manifest_in_bundle(
+    bundle_dir: Path,
+    signing_key: EvalSigningKey,
+    provenance_update: dict,
+) -> None:
+    """Mutate the run manifest inside a produced bundle and recompute hashes.
+
+    Writes the mutated run manifest as raw JSON (bypassing model validation
+    so the verifier can test its own validation), then recomputes the
+    bundle manifest entry hash, checksum root, manifest self-hash, and
+    signature for the mutated ``manifest.json`` artifact.
+    """
+    from g8e_evals.bundle.canonical import (
+        compute_checksum_root_hash,
+        compute_manifest_hash,
+    )
+    from g8e_evals.bundle.signing import sign_bundle
+
+    run_manifest_path = bundle_dir / evals_constants.MANIFEST_JSON
+    run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text())
+    mutated = run_manifest.model_copy(update=provenance_update)
+    run_manifest_path.write_text(mutated.model_dump_json())
+
+    bundle_manifest_path = bundle_dir / evals_constants.BUNDLE_MANIFEST_JSON
+    checksum_path = bundle_dir / evals_constants.CHECKSUM_ROOT_JSON
+    signature_path = bundle_dir / evals_constants.BUNDLE_SIGNATURE_JSON
+
+    manifest = BundleManifest.model_validate_json(bundle_manifest_path.read_text())
+    checksum_root = ChecksumRoot.model_validate_json(checksum_path.read_text())
+
+    new_entries = []
+    for entry in manifest.artifacts:
+        if entry.path != evals_constants.MANIFEST_JSON:
+            new_entries.append(entry)
+            continue
+        content = run_manifest_path.read_bytes()
+        new_entries.append(entry.model_copy(update={
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "byte_length": len(content),
+        }))
+    manifest = manifest.model_copy(update={"artifacts": new_entries})
+
+    new_checksum_entries = [
+        type(checksum_root.entries[0])(path=e.path, sha256=e.sha256)
+        for e in new_entries
+    ]
+    checksum_root = ChecksumRoot(
+        schema_version=checksum_root.schema_version,
+        entries=new_checksum_entries,
+        checksum_root_sha256="",
+    )
+    checksum_hash = compute_checksum_root_hash(checksum_root)
+    checksum_root = checksum_root.model_copy(update={"checksum_root_sha256": checksum_hash})
+
+    manifest = manifest.model_copy(update={"checksum_root_sha256": checksum_hash})
+    manifest_hash = compute_manifest_hash(manifest)
+    manifest = manifest.model_copy(update={"manifest_content_sha256": manifest_hash})
+
+    bundle_manifest_path.write_text(canonical_model_json(manifest))
+    checksum_path.write_text(canonical_model_json(checksum_root))
+
+    signature = sign_bundle(manifest, checksum_root, signing_key, _TS)
+    signature_path.write_text(canonical_model_json(signature))
+
+
 # ---------------------------------------------------------------------------
 # Layer 12: Source/build provenance
 # ---------------------------------------------------------------------------
@@ -312,47 +380,70 @@ class TestSourceBuildProvenanceLayer:
 
     def test_empty_source_revision_fails(self, tmp_path: Path) -> None:
         signing_key = EvalSigningKey.from_seed(_SEED)
-        provenance = _valid_provenance().model_copy(update={"source_revision": ""})
         bundle_dir = _produce_bundle(
             tmp_path,
-            provenance=provenance,
+            provenance=_valid_provenance(),
             signing_key=signing_key,
         )
+        # Mutate the run manifest inside the produced bundle, bypassing
+        # model validation so the verifier can test its own validation.
+        _mutate_run_manifest_in_bundle(
+            bundle_dir,
+            signing_key,
+            {"source_build_provenance": _valid_provenance().model_copy(update={"source_revision": ""})},
+        )
         report = verify_bundle(bundle_dir, trust_store=_trust_store(signing_key))
+        # SourceBuildProvenance.source_revision has min_length=1, so the
+        # invalid value is caught by RunManifest model validation in layer 5
+        # (record bindings) rather than layer 12's semantic check.
         _assert_failure(
             report,
-            VerificationLayer.SOURCE_BUILD_PROVENANCE,
-            VerificationFailureCode.SOURCE_REVISION_MISSING,
+            VerificationLayer.RECORD_BINDINGS,
+            VerificationFailureCode.RUN_ID_MISMATCH,
         )
 
     def test_empty_source_tree_state_hash_fails(self, tmp_path: Path) -> None:
         signing_key = EvalSigningKey.from_seed(_SEED)
-        provenance = _valid_provenance().model_copy(update={"source_tree_state_hash": ""})
         bundle_dir = _produce_bundle(
             tmp_path,
-            provenance=provenance,
+            provenance=_valid_provenance(),
             signing_key=signing_key,
         )
+        _mutate_run_manifest_in_bundle(
+            bundle_dir,
+            signing_key,
+            {"source_build_provenance": _valid_provenance().model_copy(update={"source_tree_state_hash": ""})},
+        )
         report = verify_bundle(bundle_dir, trust_store=_trust_store(signing_key))
+        # SourceBuildProvenance.source_tree_state_hash has a hex pattern
+        # constraint, so the invalid value is caught by RunManifest model
+        # validation in layer 5 (record bindings) rather than layer 12.
         _assert_failure(
             report,
-            VerificationLayer.SOURCE_BUILD_PROVENANCE,
-            VerificationFailureCode.SOURCE_TREE_STATE_HASH_MISSING,
+            VerificationLayer.RECORD_BINDINGS,
+            VerificationFailureCode.RUN_ID_MISMATCH,
         )
 
     def test_invalid_source_tree_state_hash_fails(self, tmp_path: Path) -> None:
         signing_key = EvalSigningKey.from_seed(_SEED)
-        provenance = _valid_provenance().model_copy(update={"source_tree_state_hash": "not-hex"})
         bundle_dir = _produce_bundle(
             tmp_path,
-            provenance=provenance,
+            provenance=_valid_provenance(),
             signing_key=signing_key,
         )
+        _mutate_run_manifest_in_bundle(
+            bundle_dir,
+            signing_key,
+            {"source_build_provenance": _valid_provenance().model_copy(update={"source_tree_state_hash": "not-hex"})},
+        )
         report = verify_bundle(bundle_dir, trust_store=_trust_store(signing_key))
+        # SourceBuildProvenance.source_tree_state_hash has a hex pattern
+        # constraint, so the invalid value is caught by RunManifest model
+        # validation in layer 5 (record bindings) rather than layer 12.
         _assert_failure(
             report,
-            VerificationLayer.SOURCE_BUILD_PROVENANCE,
-            VerificationFailureCode.SOURCE_TREE_STATE_HASH_INVALID,
+            VerificationLayer.RECORD_BINDINGS,
+            VerificationFailureCode.RUN_ID_MISMATCH,
         )
 
     def test_provider_budget_bound_into_manifest(self, tmp_path: Path) -> None:

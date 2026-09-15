@@ -26,6 +26,7 @@ from g8e_evals.campaign import (
     SamplingSettings,
     compute_model_cohort_hash,
 )
+from g8e_evals.index import ModelRole
 from g8e_evals.profile import (
     CAMPAIGN_PROFILE_VERSION,
     CampaignLifecycleStatus,
@@ -95,10 +96,10 @@ def _make_variant(
     )
 
 
-def _make_cohort(variant_id: str, model_tag: str, role: str | None = None) -> ModelCohort:
-    cohort_id = f"cohort-{variant_id}" if role is None else f"cohort-{variant_id}-role-{role}"
+def _make_cohort(variant_id: str, model_tag: str, role: ModelRole = ModelRole.PRIMARY) -> ModelCohort:
+    cohort_id = f"cohort-{variant_id}-role-{role.value}"
     bindings = [RoleModelBinding(
-        role=role or "primary",
+        role=role,
         model_id=model_tag,
         provider="ollama",
         endpoint=_OLLAMA_ENDPOINT,
@@ -106,8 +107,14 @@ def _make_cohort(variant_id: str, model_tag: str, role: str | None = None) -> Mo
         timeout_seconds=120.0,
         seed_capable=True,
     )]
-    ch = compute_model_cohort_hash(cohort_id, bindings)
-    return ModelCohort(cohort_id=cohort_id, role_bindings=bindings, content_hash=ch)
+    ch = compute_model_cohort_hash(cohort_id, variant_id, role, bindings)
+    return ModelCohort(
+        cohort_id=cohort_id,
+        candidate_variant_id=variant_id,
+        candidate_role=role,
+        role_bindings=bindings,
+        content_hash=ch,
+    )
 
 
 def _make_tier_fitness_profile(
@@ -218,13 +225,11 @@ class TestBuildTierFitnessSutConfig:
             registry_hash=registry.content_hash,
         )
         cohort = _make_cohort("qwen3-8b", "qwen3:8b")
-        cohort_variant_map = {"cohort-qwen3-8b": "qwen3-8b"}
 
         config = build_tier_fitness_sut_config(
             cohort=cohort,
             arm=Arm.ENSEMBLE_UNGOVERNED,
             campaign_profile=profile,
-            cohort_variant_map=cohort_variant_map,
             g8ee_url="https://localhost:8443",
         )
 
@@ -255,14 +260,12 @@ class TestBuildTierFitnessSutConfig:
             },
             registry_hash=registry.content_hash,
         )
-        cohort = _make_cohort("qwen3-4b", "qwen3:4b", "assistant")
-        cohort_variant_map = {cohort.cohort_id: "qwen3-4b"}
+        cohort = _make_cohort("qwen3-4b", "qwen3:4b", ModelRole.ASSISTANT)
 
         config = build_tier_fitness_sut_config(
             cohort=cohort,
             arm=Arm.DOCTRINE,
             campaign_profile=profile,
-            cohort_variant_map=cohort_variant_map,
             g8ee_url="https://localhost:8443",
         )
 
@@ -281,14 +284,12 @@ class TestBuildTierFitnessSutConfig:
             baseline_mappings={"primary": "qwen3:8b", "lite": "qwen3:0.6b"},
             registry_hash=registry.content_hash,
         )
-        cohort = _make_cohort("qwen3-4b", "qwen3:4b", "assistant")
-        cohort_variant_map = {cohort.cohort_id: "qwen3-4b"}
+        cohort = _make_cohort("qwen3-4b", "qwen3:4b", ModelRole.ASSISTANT)
 
         config = build_tier_fitness_sut_config(
             cohort=cohort,
             arm=Arm.ENSEMBLE_UNGOVERNED,
             campaign_profile=profile,
-            cohort_variant_map=cohort_variant_map,
             g8ee_url="https://localhost:8443",
         )
 
@@ -308,14 +309,12 @@ class TestBuildTierFitnessSutConfig:
             baseline_mappings={"primary": "qwen3:8b", "assistant": "qwen3:4b"},
             registry_hash=registry.content_hash,
         )
-        cohort = _make_cohort("qwen3-06b", "qwen3:0.6b", "lite")
-        cohort_variant_map = {cohort.cohort_id: "qwen3-06b"}
+        cohort = _make_cohort("qwen3-06b", "qwen3:0.6b", ModelRole.LITE)
 
         config = build_tier_fitness_sut_config(
             cohort=cohort,
             arm=Arm.ENSEMBLE_UNGOVERNED,
             campaign_profile=profile,
-            cohort_variant_map=cohort_variant_map,
             g8ee_url="https://localhost:8443",
         )
 
@@ -336,13 +335,11 @@ class TestBuildTierFitnessSutConfig:
             registry_hash=registry.content_hash,
         )
         cohort = _make_cohort("qwen3-8b", "qwen3:8b")
-        cohort_variant_map = {"cohort-qwen3-8b": "qwen3-8b"}
 
         config = build_tier_fitness_sut_config(
             cohort=cohort,
             arm=Arm.ENSEMBLE_UNGOVERNED,
             campaign_profile=profile,
-            cohort_variant_map=cohort_variant_map,
             g8ee_url="https://localhost:8443",
         )
 
@@ -360,13 +357,11 @@ class TestBuildTierFitnessSutConfig:
             registry_hash=registry.content_hash,
         )
         cohort = _make_cohort("qwen3-8b", "qwen3:8b")
-        cohort_variant_map = {"cohort-qwen3-8b": "qwen3-8b"}
 
         config = build_tier_fitness_sut_config(
             cohort=cohort,
             arm=Arm.DOCTRINE,
             campaign_profile=profile,
-            cohort_variant_map=cohort_variant_map,
             g8ee_url="https://localhost:8443",
         )
 
@@ -384,13 +379,11 @@ class TestBuildTierFitnessSutConfig:
             registry_hash=registry.content_hash,
         )
         cohort = _make_cohort("qwen3-8b", "qwen3:8b")
-        cohort_variant_map = {"cohort-qwen3-8b": "qwen3-8b"}
 
         config = build_tier_fitness_sut_config(
             cohort=cohort,
             arm=Arm.ENSEMBLE_UNGOVERNED,
             campaign_profile=profile,
-            cohort_variant_map=cohort_variant_map,
             g8ee_url="https://localhost:8443",
         )
 
@@ -408,13 +401,11 @@ class TestBuildTierFitnessSutConfig:
             registry_hash=registry.content_hash,
         )
         cohort = _make_cohort("qwen3-8b", "qwen3:8b")
-        cohort_variant_map = {"cohort-qwen3-8b": "qwen3-8b"}
 
         config = build_tier_fitness_sut_config(
             cohort=cohort,
             arm=Arm.ENSEMBLE_UNGOVERNED,
             campaign_profile=profile,
-            cohort_variant_map=cohort_variant_map,
             g8ee_url="https://localhost:8443",
         )
 
@@ -433,14 +424,12 @@ class TestBuildTierFitnessSutConfig:
             registry_hash=registry.content_hash,
         )
         cohort = _make_cohort("qwen3-8b", "qwen3:8b")
-        cohort_variant_map = {"cohort-qwen3-8b": "qwen3-8b"}
 
         with pytest.raises(ValueError, match="no model_tier_assignment found"):
             build_tier_fitness_sut_config(
                 cohort=cohort,
                 arm=Arm.ENSEMBLE_UNGOVERNED,
                 campaign_profile=profile,
-                cohort_variant_map=cohort_variant_map,
                 g8ee_url="https://localhost:8443",
             )
 
@@ -456,39 +445,38 @@ class TestBuildTierFitnessSutConfig:
             registry_hash=registry.content_hash,
         )
         cohort = _make_cohort("qwen3-8b", "qwen3:8b")
-        cohort_variant_map = {"cohort-qwen3-8b": "qwen3-8b"}
 
         with pytest.raises(ValueError, match="missing baseline_tier_mapping for lite"):
             build_tier_fitness_sut_config(
                 cohort=cohort,
                 arm=Arm.ENSEMBLE_UNGOVERNED,
                 campaign_profile=profile,
-                cohort_variant_map=cohort_variant_map,
                 g8ee_url="https://localhost:8443",
             )
 
-    def test_raises_when_cohort_not_in_variant_map(self):
+    def test_candidate_variant_id_from_cohort_not_variant_map(self):
         from g8e_evals.runner import build_tier_fitness_sut_config
 
         v = _make_variant("qwen3-8b", "qwen3:8b")
         registry = _make_registry([v])
         profile = _make_tier_fitness_profile(
             variant_ids=["qwen3-8b"],
-            tier_assignments=[ModelTierAssignment(variant_id="qwen3-8b", target_tier="primary")],
+            tier_assignments=[ModelTierAssignment(variant_id="qwen3-8b", target_tier=ModelRole.PRIMARY)],
             baseline_mappings={"assistant": "qwen3:4b", "lite": "qwen3:0.6b"},
             registry_hash=registry.content_hash,
         )
+        # The cohort carries its own candidate_variant_id; no external
+        # variant map is consulted. A cohort whose candidate_variant_id
+        # has no matching model_tier_assignment fails closed.
         cohort = _make_cohort("qwen3-8b", "qwen3:8b")
-        cohort_variant_map = {"cohort-other": "other"}
 
-        with pytest.raises(ValueError, match=r"cohort .* not found in cohort_variant_map"):
-            build_tier_fitness_sut_config(
-                cohort=cohort,
-                arm=Arm.ENSEMBLE_UNGOVERNED,
-                campaign_profile=profile,
-                cohort_variant_map=cohort_variant_map,
-                g8ee_url="https://localhost:8443",
-            )
+        config = build_tier_fitness_sut_config(
+            cohort=cohort,
+            arm=Arm.ENSEMBLE_UNGOVERNED,
+            campaign_profile=profile,
+            g8ee_url="https://localhost:8443",
+        )
+        assert config.candidate_model == "qwen3:8b"
 
 
 class TestBuildCampaignSutFactory:
@@ -505,11 +493,9 @@ class TestBuildCampaignSutFactory:
             registry_hash=registry.content_hash,
         )
         cohort = _make_cohort("qwen3-8b", "qwen3:8b")
-        cohort_variant_map = {"cohort-qwen3-8b": "qwen3-8b"}
 
         factory = build_campaign_sut_factory(
             campaign_profile=profile,
-            cohort_variant_map=cohort_variant_map,
             g8ee_url="https://localhost:8443",
         )
         sut = factory(cohort, Arm.DIRECT)
@@ -528,11 +514,9 @@ class TestBuildCampaignSutFactory:
             registry_hash=registry.content_hash,
         )
         cohort = _make_cohort("qwen3-4b", "qwen3:4b")
-        cohort_variant_map = {"cohort-qwen3-4b": "qwen3-4b"}
 
         factory = build_campaign_sut_factory(
             campaign_profile=profile,
-            cohort_variant_map=cohort_variant_map,
             g8ee_url="https://localhost:8443",
         )
         sut = factory(cohort, Arm.DIRECT)
@@ -556,11 +540,9 @@ class TestBuildCampaignSutFactory:
             registry_hash=registry.content_hash,
         )
         cohort = _make_cohort("qwen3-8b", "qwen3:8b")
-        cohort_variant_map = {"cohort-qwen3-8b": "qwen3-8b"}
 
         factory = build_campaign_sut_factory(
             campaign_profile=profile,
-            cohort_variant_map=cohort_variant_map,
             g8ee_url="https://localhost:8443",
         )
         # G8eeChatSUT.__init__ calls AuthContext.from_env() which requires

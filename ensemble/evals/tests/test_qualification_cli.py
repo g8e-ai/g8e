@@ -19,6 +19,7 @@ from g8e_evals.qualification import (
     CandidateIdentityEvidence,
     CertificateIdentityEvidence,
     ComponentImageIdentity,
+    ContentAddressedArtifact,
     EvidencePath,
     GateResultEvidence,
     PublicLoopEvidence,
@@ -30,10 +31,10 @@ from g8e_evals.qualification import (
     SourceManifestResult,
     VersionStampEvidence,
     build_collection_candidate_qualification,
-    content_hash,
     render_qualification_json,
     resolve_qualification_input,
 )
+from g8e_evals.serialization import provisional_hash
 pytestmark = pytest.mark.integration
 
 
@@ -149,10 +150,12 @@ def _write_input(path: Path) -> QualificationInput:
     (path.parent / "runtime.json").write_text(runtime.model_dump_json(indent=2) + "\n")
     (path.parent / "gate.json").write_text(gate.model_dump_json(indent=2) + "\n")
     (path.parent / "public-loop.json").write_text(public_loop.model_dump_json(indent=2) + "\n")
-    authority = {"disposition_id": "invalidation", "content_hash": "0" * 64}
-    authority["content_hash"] = content_hash(authority)
+    authority = ContentAddressedArtifact(
+        disposition_id="invalidation",
+        content_hash=provisional_hash(ContentAddressedArtifact, disposition_id="invalidation"),
+    )
     (path.parent / "invalidation.json").write_text(
-        json.dumps(authority, indent=2, sort_keys=True) + "\n"
+        authority.model_dump_json(indent=2) + "\n"
     )
     request = QualificationBuildRequest(
         record_id="v2.1.8-collection-candidate-qualification-r6",
@@ -222,7 +225,7 @@ def test_qualification_hash_source_uses_explicit_manifest_and_excludes(tmp_path:
         "owner_approved_at": "2026-09-14T12:00:00Z",
     }
     authority = SourceManifestAuthority(
-        **authority_fields, content_hash=content_hash(authority_fields)
+        **authority_fields, content_hash=provisional_hash(SourceManifestAuthority, **authority_fields)
     )
     authority_path = tmp_path / "authority.json"
     output_path = tmp_path / "source-result.json"

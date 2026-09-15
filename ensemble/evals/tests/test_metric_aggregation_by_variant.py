@@ -17,9 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from g8e_evals.index import (
-    aggregate_metrics_by_variant,
-)
+from g8e_evals.index import MetricInputRecord, aggregate_metrics_by_variant
 
 
 pytestmark = pytest.mark.unit
@@ -31,13 +29,13 @@ def _metric(
     task_id: str = "task-1",
     value: float = 1.0,
     unit: str = "boolean",
-) -> dict:
-    return {
-        "model_variant_id": variant_id,
-        "task_id": task_id,
-        "value": value,
-        "unit": unit,
-    }
+) -> MetricInputRecord:
+    return MetricInputRecord(
+        model_variant_id=variant_id,
+        task_id=task_id,
+        value=value,
+        unit=unit,
+    )
 
 
 class TestMetricAggregationByVariant:

@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 from enum import StrEnum
 from pathlib import Path
@@ -44,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write("usage: python -m g8e_evals.operation_lifecycle_cli <request-path>\n")
         return 1
     try:
-        request = OperationLifecycleRequest.model_validate(json.loads(Path(args[0]).read_text()))
+        request = OperationLifecycleRequest.model_validate_json(Path(args[0]).read_bytes())
         result = run_operation_lifecycle(request)
     except (OSError, ValueError, ValidationError) as exc:
         sys.stderr.write(f"operation lifecycle failed: {exc}\n")

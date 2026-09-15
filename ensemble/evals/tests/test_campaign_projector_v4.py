@@ -25,6 +25,7 @@ import pytest
 pytestmark = pytest.mark.integration
 
 from g8e_evals.constants import (
+    CAMPAIGN_COHORTS_JSONL,
     CAMPAIGN_PROJECTIONS_JSONL,
     CAMPAIGN_PROVENANCE_JSON,
     CAMPAIGN_STATISTICAL_ANALYSIS_JSON,
@@ -32,7 +33,13 @@ from g8e_evals.constants import (
     MODEL_CAMPAIGN_JSON,
     PUBLICATION_SCHEMA_V4,
 )
-from g8e_evals.index import CampaignVerificationReport
+from g8e_evals.campaign import (
+    ModelCohort,
+    RoleModelBinding,
+    SamplingSettings,
+    compute_model_cohort_hash,
+)
+from g8e_evals.index import CampaignVerificationReport, ModelRole
 from g8e_evals.publication import (
     ModelCampaignRef,
     PublicationSchemaV4,
@@ -211,14 +218,10 @@ def _make_provenance_manifest(tmp_path: Path) -> SourceInclusionManifest:
         SourceInclusionEntry(path="src/main.py", sha256=_HASH, byte_length=100),
         SourceInclusionEntry(path="src/util.py", sha256="b" * 64, byte_length=50),
     ]
-    entry_dicts = [
-        {"path": e.path, "sha256": e.sha256, "byte_length": e.byte_length}
-        for e in entries
-    ]
     return SourceInclusionManifest(
         schema_version="1.0.0",
         entries=entries,
-        manifest_hash=compute_manifest_hash(entry_dicts),
+        manifest_hash=compute_manifest_hash(entries),
         reviewed_by="reviewer-1",
         review_timestamp="2026-09-01T00:00:00Z",
     )
@@ -337,7 +340,30 @@ def _build_report_dir(
     (report_dir / "campaign-statistical-analysis.json").write_text(
         json.dumps(statistical_analysis)
     )
+    _write_cohort_file(report_dir)
     return report_dir
+
+
+def _write_cohort_file(report_dir: Path) -> None:
+    cohort_id = "cohort-qwen3-8b-q4_0"
+    variant_id = "qwen3-8b-q4_0"
+    binding = RoleModelBinding(
+        role=ModelRole.PRIMARY,
+        model_id="qwen3:8b",
+        provider="ollama",
+        endpoint="http://192.168.1.2:11434",
+        sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
+        timeout_seconds=120.0,
+        seed_capable=True,
+    )
+    cohort = ModelCohort(
+        cohort_id=cohort_id,
+        candidate_variant_id=variant_id,
+        candidate_role=ModelRole.PRIMARY,
+        role_bindings=[binding],
+        content_hash=compute_model_cohort_hash(cohort_id, variant_id, ModelRole.PRIMARY, [binding]),
+    )
+    (report_dir / CAMPAIGN_COHORTS_JSONL).write_text(cohort.model_dump_json() + "\n")
 
 
 def _project(

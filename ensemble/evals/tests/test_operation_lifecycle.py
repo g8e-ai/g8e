@@ -228,16 +228,17 @@ def test_check_fails_on_insufficient_disk(tmp_path: Path) -> None:
 
 
 def test_status_distinguishes_live_and_stale_producer_metadata(tmp_path: Path) -> None:
-    from datetime import datetime, timezone
+    from datetime import UTC, datetime
 
-    from g8e_evals.operation_lifecycle import LaunchState
+    from g8e_evals.operation_lifecycle import LaunchState, _process_start_epoch
 
     config_path = _write_diagnostic_config(tmp_path, report_exists=True)
     report_root = tmp_path / "reports" / "diagnostic"
     launch_path = report_root / EVAL_LAUNCH_STATE_JSON
-    # Live case: this process is running, so started_at must be close to
-    # now for the PID-reuse check to classify it as live rather than reused.
-    now_iso = datetime.now(timezone.utc).isoformat()
+    # Live case: bind started_at to this process's actual start time so
+    # the PID-reuse check classifies the producer as live.
+    process_start = _process_start_epoch(os.getpid())
+    now_iso = datetime.fromtimestamp(process_start, UTC).isoformat() if process_start else datetime.now(UTC).isoformat()
     live_launch = LaunchState(
         operation_id="diagnostic-1",
         revision="rev-1",

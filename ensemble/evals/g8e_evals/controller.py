@@ -41,7 +41,6 @@ SHA-256 over canonical JSON (sorted keys, no extra whitespace).
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import shutil
 import time
@@ -61,6 +60,7 @@ from g8e_evals.constants import (
     OUTBOX_INDEX_JSONL,
 )
 from g8e_evals.replacement_rule import ReplacementManifestRule, compute_replacement_child_id
+from g8e_evals.serialization import canonical_json, content_hash_of, provisional_hash
 
 
 CONTROLLER_SCHEMA_VERSION = "1.0.0"
@@ -73,13 +73,7 @@ def _sha256(data: str) -> str:
 
 
 def _canonical_json(data: object) -> str:
-    return json.dumps(
-        data,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
+    return canonical_json(data)
 
 
 def _now_iso() -> str:
@@ -217,6 +211,9 @@ class ChildCommand(BaseModel):
         default_factory=dict,
         description="Typed arguments passed to the command handler.",
     )
+    # open map: arbitrary CLI option name/value pairs forwarded to the child
+    # command subprocess; option names are validated against _OPTION_NAME at
+    # the controller_cli boundary, not at the model boundary.
     report_dir: str = Field(
         min_length=1,
         description="Relative report directory under the cycle's report root.",
@@ -411,9 +408,7 @@ class ControllerTransition(BaseModel):
 
     @model_validator(mode="after")
     def _validate_transition(self) -> Self:
-        data = self.model_dump(mode="json")
-        data.pop("content_hash", None)
-        expected = _sha256(_canonical_json(data))
+        expected = content_hash_of(self)
         if self.content_hash != expected:
             raise ValueError("controller transition content_hash mismatch")
         return self
@@ -430,9 +425,7 @@ class ControllerStopRequest(BaseModel):
 
     @model_validator(mode="after")
     def _validate_request(self) -> Self:
-        data = self.model_dump(mode="json")
-        data.pop("content_hash", None)
-        expected = _sha256(_canonical_json(data))
+        expected = content_hash_of(self)
         if self.content_hash != expected:
             raise ValueError("controller stop request content_hash mismatch")
         return self
@@ -529,7 +522,7 @@ class Outbox:
         enqueue_order, _, _ = self._read_index()
         payload_path = self._entries_dir / f"{entry.entry_id}.json"
         if entry.entry_id in enqueue_order or payload_path.exists():
-            raise ValueError(f"outbox entry already exists: {entry.entry_id}")
+            raise ControllerError(f"outbox entry already exists: {entry.entry_id}")
         payload_path.write_text(_canonical_json(entry.model_dump(mode="json", by_alias=True)))
         self._append_index(entry.entry_id, "enqueue")
 
@@ -537,18 +530,18 @@ class Outbox:
         """Append a publication-success record to the durable outbox index."""
         enqueue_order, published, _ = self._read_index()
         if entry_id not in enqueue_order:
-            raise ValueError(f"outbox entry is not enqueued: {entry_id}")
+            raise ControllerError(f"outbox entry is not enqueued: {entry_id}")
         if entry_id in published:
-            raise ValueError(f"outbox entry is already published: {entry_id}")
+            raise ControllerError(f"outbox entry is already published: {entry_id}")
         self._append_index(entry_id, "published")
 
     def mark_attempt(self, entry_id: str) -> None:
         """Append a publication-attempt record to the durable outbox index."""
         enqueue_order, published, _ = self._read_index()
         if entry_id not in enqueue_order:
-            raise ValueError(f"outbox entry is not enqueued: {entry_id}")
+            raise ControllerError(f"outbox entry is not enqueued: {entry_id}")
         if entry_id in published:
-            raise ValueError(f"published outbox entry cannot be attempted: {entry_id}")
+            raise ControllerError(f"published outbox entry cannot be attempted: {entry_id}")
         self._append_index(entry_id, "attempt")
 
     def recover(self) -> list[OutboxEntry]:
@@ -580,14 +573,14 @@ class Outbox:
             record = OutboxIndexRecord.model_validate_json(line)
             if record.action == "enqueue":
                 if record.entry_id in enqueue_order:
-                    raise ValueError(f"duplicate outbox enqueue action: {record.entry_id}")
+                    raise ControllerError(f"duplicate outbox enqueue action: {record.entry_id}")
                 enqueue_order.append(record.entry_id)
                 attempts[record.entry_id] = 0
                 continue
             if record.entry_id not in enqueue_order:
-                raise ValueError(f"outbox action precedes enqueue: {record.entry_id}")
+                raise ControllerError(f"outbox action precedes enqueue: {record.entry_id}")
             if record.entry_id in published:
-                raise ValueError(f"outbox action follows publication: {record.entry_id}")
+                raise ControllerError(f"outbox action follows publication: {record.entry_id}")
             if record.action == "attempt":
                 attempts[record.entry_id] += 1
             else:
@@ -600,26 +593,45 @@ class Outbox:
         actual_payloads: set[str] = set()
         for path in self._entries_dir.iterdir():
             if path.is_symlink() or not path.is_file():
-                raise ValueError(f"outbox payload is not a regular file: {path.name}")
+                raise ControllerError(f"outbox payload is not a regular file: {path.name}")
             actual_payloads.add(path.name)
         if actual_payloads != expected_payloads:
             missing = sorted(expected_payloads - actual_payloads)
             unexpected = sorted(actual_payloads - expected_payloads)
             if missing:
-                raise ValueError(f"outbox entry payload is missing: {missing}")
-            raise ValueError(f"outbox contains unexpected payloads: {unexpected}")
+                raise ControllerError(f"outbox entry payload is missing: {missing}")
+            raise ControllerError(f"outbox contains unexpected payloads: {unexpected}")
         entries: list[OutboxEntry] = []
         for entry_id in enqueue_order:
             payload = OutboxEntry.model_validate_json((self._entries_dir / f"{entry_id}.json").read_text())
             if payload.entry_id != entry_id:
-                raise ValueError(f"outbox payload identity mismatch: {entry_id}")
+                raise ControllerError(f"outbox payload identity mismatch: {entry_id}")
             if payload.publication_attempts != 0 or payload.published:
-                raise ValueError(f"outbox payload contains mutable status: {entry_id}")
-            data = payload.model_dump(mode="json")
-            data["publication_attempts"] = attempts[entry_id]
-            data["published"] = entry_id in published
-            data["content_hash"] = _sha256(_canonical_json({key: value for key, value in data.items() if key != "content_hash"}))
-            entries.append(OutboxEntry.model_validate(data))
+                raise ControllerError(f"outbox payload contains mutable status: {entry_id}")
+            resolved_publication_attempts = attempts[entry_id]
+            resolved_published = entry_id in published
+            content_hash = provisional_hash(
+                OutboxEntry,
+                entry_id=payload.entry_id,
+                cycle_id=payload.cycle_id,
+                child_id=payload.child_id,
+                report_dir=payload.report_dir,
+                digest=payload.digest,
+                publication_attempts=resolved_publication_attempts,
+                published=resolved_published,
+                enqueued_at=payload.enqueued_at,
+            )
+            entries.append(OutboxEntry(
+                entry_id=payload.entry_id,
+                cycle_id=payload.cycle_id,
+                child_id=payload.child_id,
+                report_dir=payload.report_dir,
+                digest=payload.digest,
+                publication_attempts=resolved_publication_attempts,
+                published=resolved_published,
+                enqueued_at=payload.enqueued_at,
+                content_hash=content_hash,
+            ))
         return entries
 
 
@@ -729,30 +741,22 @@ class PublicationHandler(Protocol):
 
 def compute_child_command_hash(command: ChildCommand) -> str:
     """Compute the content hash for a child command."""
-    data = command.model_dump(mode="json", by_alias=True)
-    data.pop("content_hash", None)
-    return _sha256(_canonical_json(data))
+    return content_hash_of(command)
 
 
 def compute_cycle_manifest_hash(manifest: CycleManifest) -> str:
     """Compute the content hash for a cycle manifest."""
-    data = manifest.model_dump(mode="json", by_alias=True)
-    data.pop("content_hash", None)
-    return _sha256(_canonical_json(data))
+    return content_hash_of(manifest)
 
 
 def compute_controller_state_hash(state: ControllerState) -> str:
     """Compute the content hash for a controller state."""
-    data = state.model_dump(mode="json", by_alias=True)
-    data.pop("content_hash", None)
-    return _sha256(_canonical_json(data))
+    return content_hash_of(state)
 
 
 def compute_outbox_entry_hash(entry: OutboxEntry) -> str:
     """Compute the content hash for an outbox entry."""
-    data = entry.model_dump(mode="json", by_alias=True)
-    data.pop("content_hash", None)
-    return _sha256(_canonical_json(data))
+    return content_hash_of(entry)
 
 
 # ---------------------------------------------------------------------------
@@ -799,17 +803,31 @@ def load_controller_transitions(path: Path) -> list[ControllerTransition]:
 
 def _append_controller_transition(path: Path, state: ControllerState) -> ControllerTransition:
     transitions = load_controller_transitions(path)
-    data = {
-        "sequence": len(transitions) + 1,
-        "controller_id": state.controller_id,
-        "cycle_id": state.cycle_id,
-        "previous_transition_hash": transitions[-1].content_hash if transitions else _ZERO_HASH,
-        "state_hash": state.content_hash,
-        "status": state.status,
-        "current_child_id": state.current_child_id,
-        "recorded_at": state.updated_at,
-    }
-    transition = ControllerTransition(**data, content_hash=_sha256(_canonical_json(data)))
+    sequence = len(transitions) + 1
+    previous_transition_hash = transitions[-1].content_hash if transitions else _ZERO_HASH
+    recorded_at = state.updated_at
+    content_hash = provisional_hash(
+        ControllerTransition,
+        sequence=sequence,
+        controller_id=state.controller_id,
+        cycle_id=state.cycle_id,
+        previous_transition_hash=previous_transition_hash,
+        state_hash=state.content_hash,
+        status=state.status,
+        current_child_id=state.current_child_id,
+        recorded_at=recorded_at,
+    )
+    transition = ControllerTransition(
+        sequence=sequence,
+        controller_id=state.controller_id,
+        cycle_id=state.cycle_id,
+        previous_transition_hash=previous_transition_hash,
+        state_hash=state.content_hash,
+        status=state.status,
+        current_child_id=state.current_child_id,
+        recorded_at=recorded_at,
+        content_hash=content_hash,
+    )
     with path.open("a") as stream:
         stream.write(_canonical_json(transition.model_dump(mode="json")) + "\n")
     return transition
@@ -823,13 +841,21 @@ def request_controller_stop(work_dir: Path, *, immediate: bool) -> ControllerSto
     path = root / CONTROLLER_STOP_REQUEST_JSON
     if path.exists():
         raise ControllerError("controller stop request already exists")
-    data = {
-        "controller_id": state.controller_id,
-        "cycle_id": state.cycle_id,
-        "immediate": immediate,
-        "requested_at": _now_iso(),
-    }
-    request = ControllerStopRequest(**data, content_hash=_sha256(_canonical_json(data)))
+    requested_at = _now_iso()
+    content_hash = provisional_hash(
+        ControllerStopRequest,
+        controller_id=state.controller_id,
+        cycle_id=state.cycle_id,
+        immediate=immediate,
+        requested_at=requested_at,
+    )
+    request = ControllerStopRequest(
+        controller_id=state.controller_id,
+        cycle_id=state.cycle_id,
+        immediate=immediate,
+        requested_at=requested_at,
+        content_hash=content_hash,
+    )
     path.write_text(_canonical_json(request.model_dump(mode="json")))
     return request
 
@@ -972,33 +998,37 @@ def make_controller_state(
 ) -> ControllerState:
     """Construct a ControllerState with a computed content hash."""
     now = _now_iso()
-    partial = ControllerState.model_construct(
+    resolved_started_at = started_at or now
+    resolved_updated_at = updated_at or now
+    resolved_completed = completed_children or []
+    resolved_failed = failed_children or []
+    resolved_interrupted = interrupted_children or []
+    content_hash = provisional_hash(
+        ControllerState,
         controller_id=controller_id,
         cycle_id=cycle_id,
         status=status,
         current_child_id=current_child_id,
-        completed_children=completed_children or [],
-        failed_children=failed_children or [],
-        interrupted_children=interrupted_children or [],
+        completed_children=resolved_completed,
+        failed_children=resolved_failed,
+        interrupted_children=resolved_interrupted,
         budget_spent_usd=budget_spent_usd,
         stop_reason=stop_reason,
-        started_at=started_at or now,
-        updated_at=updated_at or now,
-        content_hash=_ZERO_HASH,
+        started_at=resolved_started_at,
+        updated_at=resolved_updated_at,
     )
-    content_hash = compute_controller_state_hash(partial)
     return ControllerState(
         controller_id=controller_id,
         cycle_id=cycle_id,
         status=status,
         current_child_id=current_child_id,
-        completed_children=completed_children or [],
-        failed_children=failed_children or [],
-        interrupted_children=interrupted_children or [],
+        completed_children=resolved_completed,
+        failed_children=resolved_failed,
+        interrupted_children=resolved_interrupted,
         budget_spent_usd=budget_spent_usd,
         stop_reason=stop_reason,
-        started_at=started_at or now,
-        updated_at=updated_at or now,
+        started_at=resolved_started_at,
+        updated_at=resolved_updated_at,
         content_hash=content_hash,
     )
 
@@ -1013,7 +1043,9 @@ def make_outbox_entry(
 ) -> OutboxEntry:
     """Construct an OutboxEntry with a computed content hash."""
     now = _now_iso()
-    partial = OutboxEntry.model_construct(
+    resolved_enqueued_at = enqueued_at or now
+    content_hash = provisional_hash(
+        OutboxEntry,
         entry_id=entry_id,
         cycle_id=cycle_id,
         child_id=child_id,
@@ -1021,10 +1053,8 @@ def make_outbox_entry(
         digest=digest,
         publication_attempts=0,
         published=False,
-        enqueued_at=enqueued_at or now,
-        content_hash=_ZERO_HASH,
+        enqueued_at=resolved_enqueued_at,
     )
-    content_hash = compute_outbox_entry_hash(partial)
     return OutboxEntry(
         entry_id=entry_id,
         cycle_id=cycle_id,
@@ -1033,7 +1063,7 @@ def make_outbox_entry(
         digest=digest,
         publication_attempts=0,
         published=False,
-        enqueued_at=enqueued_at or now,
+        enqueued_at=resolved_enqueued_at,
         content_hash=content_hash,
     )
 
@@ -1047,14 +1077,13 @@ def make_child_command(
     """Construct a ChildCommand with a computed content hash."""
     resolved_args = args or {}
     resolved_report_dir = report_dir or f"reports/{child_id}"
-    partial = ChildCommand.model_construct(
+    content_hash = provisional_hash(
+        ChildCommand,
         child_id=child_id,
         command_name=command_name,
         args=resolved_args,
         report_dir=resolved_report_dir,
-        content_hash=_ZERO_HASH,
     )
-    content_hash = compute_child_command_hash(partial)
     return ChildCommand(
         child_id=child_id,
         command_name=command_name,
@@ -1072,13 +1101,13 @@ def make_replacement_child_command(
     report_dir: str,
 ) -> ChildCommand:
     if original.command_name != "campaign_run":
-        raise ValueError("replacement rule applies only to campaign_run children")
+        raise ControllerError("replacement rule applies only to campaign_run children")
     if original.child_id not in rule.replaceable_child_ids:
-        raise ValueError("replacement rule does not authorize the original child")
+        raise ControllerError("replacement rule does not authorize the original child")
     if attempt_number < 1 or attempt_number > rule.max_attempts_per_child:
-        raise ValueError("replacement attempt exceeds the rule ceiling")
+        raise ControllerError("replacement attempt exceeds the rule ceiling")
     if report_dir == original.report_dir:
-        raise ValueError("replacement requires a fresh report directory")
+        raise ControllerError("replacement requires a fresh report directory")
     _validate_relative_path(replacement_rule_path)
     args = dict(original.args)
     replacement_id = compute_replacement_child_id(rule.rule_id, original.child_id, attempt_number)
@@ -1104,26 +1133,26 @@ def make_cycle_manifest(
     outbox_dir: str = "outbox",
 ) -> CycleManifest:
     """Construct a CycleManifest with a computed content hash."""
-    partial = CycleManifest.model_construct(
+    resolved_stop_conditions = stop_conditions or StopConditions()
+    content_hash = provisional_hash(
+        CycleManifest,
         cycle_id=cycle_id,
         cycle_revision=cycle_revision,
         schema_version=CONTROLLER_SCHEMA_VERSION,
         children=children,
-        stop_conditions=stop_conditions or StopConditions(),
+        stop_conditions=resolved_stop_conditions,
         require_aggregate_verification=require_aggregate_verification,
         require_strict_validation=require_strict_validation,
         approved_digest=approved_digest,
         report_root=report_root,
         outbox_dir=outbox_dir,
-        content_hash=_ZERO_HASH,
     )
-    content_hash = compute_cycle_manifest_hash(partial)
     return CycleManifest(
         cycle_id=cycle_id,
         cycle_revision=cycle_revision,
         schema_version=CONTROLLER_SCHEMA_VERSION,
         children=children,
-        stop_conditions=stop_conditions or StopConditions(),
+        stop_conditions=resolved_stop_conditions,
         require_aggregate_verification=require_aggregate_verification,
         require_strict_validation=require_strict_validation,
         approved_digest=approved_digest,

@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from enum import StrEnum
 from typing import Self
 
@@ -38,7 +39,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 INDEX_GENERATION_SCHEMA_VERSION = "1.0.0"
 
-_VALID_TIER_NAMES = frozenset({"primary", "assistant", "lite"})
 _VALID_ARM_IDS = frozenset({"direct", "ensemble_ungoverned", "doctrine"})
 _RETRYABLE_STATUSES = frozenset({"infrastructure_failed"})
 
@@ -406,8 +406,25 @@ class TierObservationRecord(BaseModel):
     evidence_hash: str = Field(min_length=64, max_length=64, description="SHA-256 of the evidence supporting this observation.")
 
 
+class TaskTierDeclaration(BaseModel):
+    """Typed declaration of the candidate tiers a task exercises.
+
+    Binds a task ID to the list of model roles declared for that task.
+    Each declared tier must have at least one matching positive
+    ``TierObservationRecord``.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    task_id: str = Field(min_length=1, description="Task ID.")
+    declared_tiers: list[ModelRole] = Field(
+        min_length=1,
+        description="Model roles declared for this task.",
+    )
+
+
 def validate_observed_tier_binding(
-    task_tier_declarations: list[dict],
+    task_tier_declarations: Sequence[TaskTierDeclaration],
     observations: list[TierObservationRecord],
 ) -> None:
     """Validate that every declared tier has matching provider-boundary telemetry.
@@ -416,30 +433,26 @@ def validate_observed_tier_binding(
     observation with ``observed=True``. Observations for non-declared
     tiers are ignored. Explicit non-observations (``observed=False``) for
     declared tiers are rejected.
-
-    ``task_tier_declarations`` is a list of dicts with keys ``task_id``
-    and ``declared_tiers`` (a list of tier name strings).
     """
     obs_by_task: dict[str, dict[str, list[TierObservationRecord]]] = {}
     for obs in observations:
         obs_by_task.setdefault(obs.task_id, {}).setdefault(obs.tier, []).append(obs)
 
     for declaration in task_tier_declarations:
-        task_id = declaration["task_id"]
-        declared_tiers = declaration["declared_tiers"]
+        task_id = declaration.task_id
         task_obs = obs_by_task.get(task_id, {})
 
-        for tier in declared_tiers:
-            tier_obs_list = task_obs.get(tier, [])
+        for tier in declaration.declared_tiers:
+            tier_obs_list = task_obs.get(tier.value, [])
             if not tier_obs_list:
                 raise ValueError(
-                    f"missing tier observation: task {task_id!r} declares tier {tier!r} "
+                    f"missing tier observation: task {task_id!r} declares tier {tier.value!r} "
                     f"but no observation exists"
                 )
             has_positive = any(o.observed for o in tier_obs_list)
             if not has_positive:
                 raise ValueError(
-                    f"declared tier {tier!r} for task {task_id!r} is not observed: "
+                    f"declared tier {tier.value!r} for task {task_id!r} is not observed: "
                     f"all observations have observed=False"
                 )
 
@@ -461,33 +474,46 @@ class VariantMetricAggregate(BaseModel):
     unit: str = Field(min_length=1, description="Metric unit (e.g. boolean, ratio).")
 
 
-def aggregate_metrics_by_variant(metrics: list[dict]) -> list[VariantMetricAggregate]:
+class MetricInputRecord(BaseModel):
+    """Typed input metric record for per-variant aggregation.
+
+    Binds a model variant ID to a task ID, value, and unit. Metrics
+    with different units for the same variant are rejected during
+    aggregation.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model_variant_id: str = Field(min_length=1, description="Model variant ID.")
+    task_id: str = Field(min_length=1, description="Task ID.")
+    value: float = Field(description="Metric value.")
+    unit: str = Field(min_length=1, description="Metric unit (e.g. boolean, ratio).")
+
+
+def aggregate_metrics_by_variant(metrics: Sequence[MetricInputRecord]) -> list[VariantMetricAggregate]:
     """Aggregate metrics by model variant, never pooling across variants.
 
-    Each metric dict must have keys ``model_variant_id``, ``task_id``,
-    ``value``, and ``unit``. Metrics with different units for the same
-    variant are rejected. Results are sorted by variant ID for
-    deterministic output.
+    Metrics with different units for the same variant are rejected.
+    Results are sorted by variant ID for deterministic output.
     """
     if not metrics:
         return []
 
-    by_variant: dict[str, list[dict]] = {}
+    by_variant: dict[str, list[MetricInputRecord]] = {}
     for m in metrics:
-        variant_id = m["model_variant_id"]
-        by_variant.setdefault(variant_id, []).append(m)
+        by_variant.setdefault(m.model_variant_id, []).append(m)
 
     results: list[VariantMetricAggregate] = []
     for variant_id in sorted(by_variant.keys()):
         variant_metrics = by_variant[variant_id]
-        units = {m["unit"] for m in variant_metrics}
+        units = {m.unit for m in variant_metrics}
         if len(units) > 1:
             raise ValueError(
                 f"unit mismatch for variant {variant_id!r}: {sorted(units)}"
             )
-        unit = variant_metrics[0]["unit"]
+        unit = variant_metrics[0].unit
         denominator = len(variant_metrics)
-        numerator = sum(1 for m in variant_metrics if m["value"] >= 1.0)
+        numerator = sum(1 for m in variant_metrics if m.value >= 1.0)
         rate = numerator / denominator if denominator > 0 else 0.0
         results.append(VariantMetricAggregate(
             variant_id=variant_id,

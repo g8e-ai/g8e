@@ -287,7 +287,7 @@ def compute_contract_hash(
             "estimand": estimand.value,
             "effect_size_measure": effect_size_measure,
             "pareto_views": [
-                json.loads(v.model_dump_json())
+                v.model_dump(mode="json")
                 for v in sorted(pareto_views, key=lambda v: v.view_id)
             ],
             "descriptive_fallback": descriptive_fallback.value,
@@ -502,15 +502,15 @@ def compute_role_track_hash(
             "track_version": track_version,
             "description": description,
             "combinations": [
-                json.loads(c.model_dump_json())
+                c.model_dump(mode="json")
                 for c in sorted(combinations, key=lambda c: c.combination_id.combination_id)
             ],
             "role_exercise_declarations": [
-                json.loads(d.model_dump_json())
+                d.model_dump(mode="json")
                 for d in sorted(role_exercise_declarations, key=lambda d: d.task_id)
             ],
             "task_role_bindings": [
-                json.loads(b.model_dump_json())
+                b.model_dump(mode="json")
                 for b in sorted(task_role_bindings, key=lambda b: (b.task_id, b.combination_id))
             ],
         },

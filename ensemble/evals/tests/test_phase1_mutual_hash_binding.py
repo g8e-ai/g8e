@@ -555,26 +555,8 @@ def _make_disclosure_authority() -> DisclosureAuthority:
         schema_version=DISCLOSURE_AUTHORITY_SCHEMA_VERSION,
         authority_id="phase1-binding-test-disclosure",
         authority_version="1.0.0",
-        fields=[
-            {
-                "field_name": f.field_name,
-                "classification": f.classification.value,
-                "public_column_name": f.public_column_name,
-                "in_csv": f.in_csv,
-                "tombstone_hash_field": f.tombstone_hash_field,
-            }
-            for f in fields
-        ],
-        outputs=[
-            {
-                "file_name": o.file_name,
-                "output_format": o.output_format.value,
-                "output_role": o.output_role.value,
-                "required": o.required,
-                "description": o.description,
-            }
-            for o in outputs
-        ],
+        fields=fields,
+        outputs=outputs,
         proof_index_description=proof_index_description,
     )
     return DisclosureAuthority(
@@ -1615,26 +1597,8 @@ class TestCrossAuthorityMutationVectors:
             schema_version=a1.schema_version,
             authority_id=a1.authority_id,
             authority_version=a1.authority_version,
-            fields=[
-                {
-                    "field_name": f.field_name,
-                    "classification": f.classification.value,
-                    "public_column_name": f.public_column_name,
-                    "in_csv": f.in_csv,
-                    "tombstone_hash_field": f.tombstone_hash_field,
-                }
-                for f in fields2
-            ],
-            outputs=[
-                {
-                    "file_name": o.file_name,
-                    "output_format": o.output_format.value,
-                    "output_role": o.output_role.value,
-                    "required": o.required,
-                    "description": o.description,
-                }
-                for o in a1.outputs
-            ],
+            fields=fields2,
+            outputs=a1.outputs,
             proof_index_description=a1.proof_index_description,
         )
         assert a1.content_hash != content_hash2

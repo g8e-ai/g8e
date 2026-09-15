@@ -69,6 +69,7 @@ from g8e_evals.campaign import (
     compute_model_cohort_hash,
     compute_task_assignment_hash,
 )
+from g8e_evals.index import ModelRole
 from g8e_evals.campaign_set import (
     CHILD_COUNT,
     AggregateVerificationResult,
@@ -142,6 +143,10 @@ class _FakeSUT:
         return Response(answer=self.answer, model=self.model_id, arm=Arm.DIRECT)
 
 
+    def close(self) -> None:
+        pass
+
+
 @dataclass
 class _FakeGrader:
     grader_id: str = "ifeval_subset_verifier"
@@ -154,7 +159,7 @@ class _FakeGrader:
 def _make_two_cohort_spec(campaign_id: str, task_ids: list[str]) -> CampaignSpec:
     """Build a CampaignSpec with two cohorts (candidate + anchor)."""
     candidate_binding = RoleModelBinding(
-        role="primary",
+        role=ModelRole.PRIMARY,
         model_id=_CANDIDATE_VARIANT,
         provider="ollama",
         endpoint="http://192.168.1.2:11434",
@@ -163,7 +168,7 @@ def _make_two_cohort_spec(campaign_id: str, task_ids: list[str]) -> CampaignSpec
         seed_capable=True,
     )
     anchor_binding = RoleModelBinding(
-        role="primary",
+        role=ModelRole.PRIMARY,
         model_id=_ANCHOR_VARIANT,
         provider="ollama",
         endpoint="http://192.168.1.2:11434",
@@ -173,13 +178,17 @@ def _make_two_cohort_spec(campaign_id: str, task_ids: list[str]) -> CampaignSpec
     )
     candidate_cohort = ModelCohort(
         cohort_id=_CANDIDATE_COHORT,
+        candidate_variant_id=_CANDIDATE_VARIANT,
+        candidate_role=ModelRole.PRIMARY,
         role_bindings=[candidate_binding],
-        content_hash=compute_model_cohort_hash(_CANDIDATE_COHORT, [candidate_binding]),
+        content_hash=compute_model_cohort_hash(_CANDIDATE_COHORT, _CANDIDATE_VARIANT, ModelRole.PRIMARY, [candidate_binding]),
     )
     anchor_cohort = ModelCohort(
         cohort_id=_ANCHOR_COHORT,
+        candidate_variant_id=_ANCHOR_VARIANT,
+        candidate_role=ModelRole.PRIMARY,
         role_bindings=[anchor_binding],
-        content_hash=compute_model_cohort_hash(_ANCHOR_COHORT, [anchor_binding]),
+        content_hash=compute_model_cohort_hash(_ANCHOR_COHORT, _ANCHOR_VARIANT, ModelRole.PRIMARY, [anchor_binding]),
     )
     task_assignment = TaskAssignmentManifest(
         task_assignment_id=f"task-assignment-{campaign_id}",

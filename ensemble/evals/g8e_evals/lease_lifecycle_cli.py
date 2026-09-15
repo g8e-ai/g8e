@@ -20,7 +20,6 @@ eval``.
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 from typing import Literal
@@ -57,13 +56,7 @@ def run_lease_lifecycle(request_path: str) -> int:
         return 1
 
     try:
-        data = json.loads(path.read_text())
-    except json.JSONDecodeError as exc:
-        sys.stderr.write(f"invalid request JSON: {exc}\n")
-        return 1
-
-    try:
-        req = LeaseLifecycleCLIRequest.model_validate(data)
+        req = LeaseLifecycleCLIRequest.model_validate_json(path.read_bytes())
     except ValidationError as exc:
         sys.stderr.write(f"invalid request: {exc}\n")
         return 1

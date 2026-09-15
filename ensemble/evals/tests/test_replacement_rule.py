@@ -60,6 +60,7 @@ from g8e_evals.campaign import (
     compute_model_cohort_hash,
     compute_task_assignment_hash,
 )
+from g8e_evals.index import ModelRole
 from g8e_evals.campaign_set import (
     CAMPAIGN_SET_SCHEMA_VERSION,
     CHILD_COUNT,
@@ -729,7 +730,7 @@ def _make_profile(
 
 def _make_spec(campaign_id: str, task_ids: list[str]) -> CampaignSpec:
     binding = RoleModelBinding(
-        role="primary",
+        role=ModelRole.PRIMARY,
         model_id="qwen3:8b",
         provider="ollama",
         endpoint="http://192.168.1.2:11434",
@@ -737,10 +738,13 @@ def _make_spec(campaign_id: str, task_ids: list[str]) -> CampaignSpec:
         timeout_seconds=120.0,
         seed_capable=True,
     )
+    variant_id = _COHORT_ID[len("cohort-"):] if _COHORT_ID.startswith("cohort-") else _COHORT_ID
     cohort = ModelCohort(
         cohort_id=_COHORT_ID,
+        candidate_variant_id=variant_id,
+        candidate_role=ModelRole.PRIMARY,
         role_bindings=[binding],
-        content_hash=compute_model_cohort_hash(_COHORT_ID, [binding]),
+        content_hash=compute_model_cohort_hash(_COHORT_ID, variant_id, ModelRole.PRIMARY, [binding]),
     )
     task_assignment = TaskAssignmentManifest(
         task_assignment_id=f"task-assignment-{campaign_id[:16]}",
@@ -818,6 +822,10 @@ class _FakeSUT:
         return Response(answer=self.answer, model=self.model_id, arm=Arm.DIRECT)
 
 
+    def close(self) -> None:
+        pass
+
+
 @dataclass
 class _FakeGrader:
     grader_id: str = "ifeval_subset_verifier"
@@ -847,7 +855,6 @@ def _make_runner(
         kwargs.update(
             campaign_profile=profile,
             model_registry=registry,
-            cohort_variant_map={_COHORT_ID: _VARIANT_ID},
         )
     return CampaignRunner(
         spec=_make_spec(campaign_id, task_ids),

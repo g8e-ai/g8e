@@ -55,10 +55,10 @@ from g8e_evals.profile import (
     ClaimBoundary,
     ModelTierAssignment,
     TrackArmAssignment,
-    compute_campaign_profile_hash,
 )
 from g8e_evals.registry import ModelRegistry
 from g8e_evals.schema import CampaignTrack
+from g8e_evals.serialization import provisional_hash
 
 _VALID_ROLES = ("primary", "assistant", "lite")
 
@@ -240,7 +240,8 @@ def build_role_competition_profile(
         ),
     ]
 
-    temp_profile = CampaignProfile.model_construct(
+    profile_hash = provisional_hash(
+        CampaignProfile,
         campaign_id=campaign_id,
         campaign_revision=campaign_revision,
         schema_version=CAMPAIGN_PROFILE_VERSION,
@@ -273,9 +274,7 @@ def build_role_competition_profile(
         unit_of_analysis=unit_of_analysis,
         claim_boundary=claim_boundary,
         model_registry_hash=registry.content_hash,
-        content_hash="0" * 64,
     )
-    profile_hash = compute_campaign_profile_hash(temp_profile)
 
     campaign_profile = CampaignProfile(
         campaign_id=campaign_id,

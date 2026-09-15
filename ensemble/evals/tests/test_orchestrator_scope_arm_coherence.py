@@ -56,7 +56,7 @@ from g8e_evals.campaign import (
 from g8e_evals.campaign_verify import verify_campaign
 from g8e_evals.constants import ATTEMPTS_JSONL, MANIFEST_JSON, RESOURCE_OBSERVATIONS_JSONL
 from g8e_evals.harness import InferenceObservation, Response, Score, Task
-from g8e_evals.index import ResourceObservation
+from g8e_evals.index import ModelRole, ResourceObservation
 from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.profile import (
     CAMPAIGN_PROFILE_VERSION,
@@ -135,6 +135,10 @@ class _FakeSUT:
             arm=Arm.DIRECT,
             inference_observations=[inference_obs],
         )
+
+
+    def close(self) -> None:
+        pass
 
 
 @dataclass
@@ -257,7 +261,7 @@ def _make_spec(*, arm_ids: list[str] | None = None) -> CampaignSpec:
     if arm_ids is None:
         arm_ids = ["direct", "ensemble_ungoverned"]
     binding = RoleModelBinding(
-        role="primary",
+        role=ModelRole.PRIMARY,
         model_id="qwen3:8b",
         provider="ollama",
         endpoint="http://192.168.1.2:11434",
@@ -265,10 +269,13 @@ def _make_spec(*, arm_ids: list[str] | None = None) -> CampaignSpec:
         timeout_seconds=120.0,
         seed_capable=True,
     )
+    variant_id = _COHORT_ID[len("cohort-"):] if _COHORT_ID.startswith("cohort-") else _COHORT_ID
     cohort = ModelCohort(
         cohort_id=_COHORT_ID,
+        candidate_variant_id=variant_id,
+        candidate_role=ModelRole.PRIMARY,
         role_bindings=[binding],
-        content_hash=compute_model_cohort_hash(_COHORT_ID, [binding]),
+        content_hash=compute_model_cohort_hash(_COHORT_ID, variant_id, ModelRole.PRIMARY, [binding]),
     )
     task_assignment = TaskAssignmentManifest(
         task_assignment_id="task-assignment-v1",
@@ -362,7 +369,6 @@ def _make_runner(
         output_dir=tmp_path,
         campaign_profile=profile,
         model_registry=registry,
-        cohort_variant_map={_COHORT_ID: _VARIANT_ID},
     )
 
 

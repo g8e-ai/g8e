@@ -60,6 +60,8 @@ from typing import TYPE_CHECKING, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from g8e_evals.serialization import provisional_hash
+
 from g8e_evals.analysis import statistics
 from g8e_evals.registry import WeightClass
 
@@ -1188,7 +1190,8 @@ def compute_model_comparison(
         authority_hashes.metric_registry_hash,
     )
 
-    output = ModelComparisonOutput.model_construct(
+    content_hash = provisional_hash(
+        ModelComparisonOutput,
         engine_version=MODEL_COMPARISON_ENGINE_VERSION,
         authority_hash=preregistration.content_hash,
         aggregate_verification_hash=authority_hashes.aggregate_verification_hash,
@@ -1200,11 +1203,21 @@ def compute_model_comparison(
         code_metric_identity_hash=code_metric_hash,
         environment_stratum=preregistration.environment_stratum,
         results=sorted_results,
-        content_hash="0" * 64,
     )
-
-    expected_hash = compute_model_comparison_output_hash(output)
-    return output.model_copy(update={"content_hash": expected_hash})
+    return ModelComparisonOutput(
+        engine_version=MODEL_COMPARISON_ENGINE_VERSION,
+        authority_hash=preregistration.content_hash,
+        aggregate_verification_hash=authority_hashes.aggregate_verification_hash,
+        campaign_set_plan_hash=authority_hashes.campaign_set_plan_hash,
+        campaign_set_index_hash=authority_hashes.campaign_set_index_hash,
+        profile_hash=authority_hashes.profile_hash,
+        registry_hash=authority_hashes.registry_hash,
+        benchmark_population_hash=authority_hashes.benchmark_population_hash,
+        code_metric_identity_hash=code_metric_hash,
+        environment_stratum=preregistration.environment_stratum,
+        results=sorted_results,
+        content_hash=content_hash,
+    )
 
 
 def _reduce_cells_by_task(

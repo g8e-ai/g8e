@@ -10,11 +10,11 @@ campaign profile.
 
 Verifies that ``derive_cohorts_from_registry`` builds cohorts from the
 registry's runnable variants (filtered by the profile's
-generative_variant_ids), that each cohort's role binding carries the
-variant's served model tag and backend name, and that the
-cohort-variant map binds each cohort to its variant ID. Also verifies
-that the ``campaign run`` CLI accepts ``--profile`` and ``--models``
-options.
+``generative_variant_ids``), that each cohort's role binding carries the
+variant's served model tag and backend name, and that each cohort
+carries its candidate variant ID and role as typed fields. Also
+verifies that the ``campaign run`` CLI accepts ``--profile`` and
+``--models`` options.
 """
 
 from __future__ import annotations
@@ -244,11 +244,12 @@ class TestDeriveCohortsFromRegistry:
         profile_path = _write_profile(tmp_path, registry_hash=registry.content_hash)
         profile = CampaignProfile.model_validate_json(profile_path.read_text())
 
-        cohorts, cohort_variant_map = derive_cohorts_from_registry(profile, registry)
+        cohorts = derive_cohorts_from_registry(profile, registry)
         assert len(cohorts) == 1
-        assert cohort_variant_map[cohorts[0].cohort_id] == "qwen3-8b-q4_0"
+        assert cohorts[0].candidate_variant_id == "qwen3-8b-q4_0"
 
     def test_derives_one_cohort_per_model_role_assignment(self, tmp_path: Path):
+        from g8e_evals.index import ModelRole
         from g8e_evals.runner import derive_cohorts_from_registry
 
         variant = _make_variant()
@@ -256,7 +257,7 @@ class TestDeriveCohortsFromRegistry:
         registry = ModelRegistry.model_validate_json(registry_path.read_text())
         assignments = [
             ModelTierAssignment(variant_id=variant.variant_id, target_tier=role)
-            for role in ("primary", "assistant", "lite")
+            for role in (ModelRole.PRIMARY, ModelRole.ASSISTANT, ModelRole.LITE)
         ]
         profile_path = _write_profile(
             tmp_path,
@@ -265,20 +266,17 @@ class TestDeriveCohortsFromRegistry:
         )
         profile = CampaignProfile.model_validate_json(profile_path.read_text())
 
-        cohorts, cohort_variant_map = derive_cohorts_from_registry(profile, registry)
+        cohorts = derive_cohorts_from_registry(profile, registry)
 
         assert len(cohorts) == 3
         assert all(
-            {binding.role for binding in cohort.role_bindings} == {"primary", "assistant", "lite"}
+            {binding.role for binding in cohort.role_bindings} == {ModelRole.PRIMARY, ModelRole.ASSISTANT, ModelRole.LITE}
             for cohort in cohorts
         )
-        assert {
-            cohort.cohort_id.rsplit("-role-", 1)[1]
-            for cohort in cohorts
-        } == {"primary", "assistant", "lite"}
-        assert {cohort_variant_map[cohort.cohort_id] for cohort in cohorts} == {variant.variant_id}
+        assert {cohort.candidate_role for cohort in cohorts} == {ModelRole.PRIMARY, ModelRole.ASSISTANT, ModelRole.LITE}
+        assert {cohort.candidate_variant_id for cohort in cohorts} == {variant.variant_id}
         for cohort in cohorts:
-            target_role = cohort.cohort_id.rsplit("-role-", 1)[1]
+            target_role = cohort.candidate_role
             binding_by_role = {binding.role: binding for binding in cohort.role_bindings}
             assert binding_by_role[target_role].model_id == variant.served_model_tag
         assert {cohort.cohort_id for cohort in cohorts} == {
@@ -296,7 +294,7 @@ class TestDeriveCohortsFromRegistry:
         profile_path = _write_profile(tmp_path, registry_hash=registry.content_hash)
         profile = CampaignProfile.model_validate_json(profile_path.read_text())
 
-        cohorts, _ = derive_cohorts_from_registry(profile, registry)
+        cohorts = derive_cohorts_from_registry(profile, registry)
         assert len(cohorts) == 1
         rb = cohorts[0].role_bindings[0]
         assert rb.model_id == "qwen3:8b"
@@ -316,9 +314,9 @@ class TestDeriveCohortsFromRegistry:
         )
         profile = CampaignProfile.model_validate_json(profile_path.read_text())
 
-        cohorts, cohort_variant_map = derive_cohorts_from_registry(profile, registry)
+        cohorts = derive_cohorts_from_registry(profile, registry)
         assert len(cohorts) == 2
-        variant_ids = sorted(cohort_variant_map.values())
+        variant_ids = sorted(cohort.candidate_variant_id for cohort in cohorts)
         assert variant_ids == ["granite-3.3-8b-q4_0", "qwen3-8b-q4_0"]
 
     def test_excludes_non_runnable_variants(self, tmp_path: Path):
@@ -350,9 +348,9 @@ class TestDeriveCohortsFromRegistry:
         )
         profile = CampaignProfile.model_validate_json(profile_path.read_text())
 
-        cohorts, cohort_variant_map = derive_cohorts_from_registry(profile, registry)
+        cohorts = derive_cohorts_from_registry(profile, registry)
         assert len(cohorts) == 1
-        assert cohort_variant_map[cohorts[0].cohort_id] == "qwen3-8b-q4_0"
+        assert cohorts[0].candidate_variant_id == "qwen3-8b-q4_0"
 
     def test_cohort_id_is_derived_from_variant_id(self, tmp_path: Path):
         from g8e_evals.runner import derive_cohorts_from_registry
@@ -363,7 +361,7 @@ class TestDeriveCohortsFromRegistry:
         profile_path = _write_profile(tmp_path, registry_hash=registry.content_hash)
         profile = CampaignProfile.model_validate_json(profile_path.read_text())
 
-        cohorts, _ = derive_cohorts_from_registry(profile, registry)
+        cohorts = derive_cohorts_from_registry(profile, registry)
         assert cohorts[0].cohort_id == "cohort-qwen3-8b-q4_0-role-primary"
 
     def test_cohort_content_hash_is_computed(self, tmp_path: Path):
@@ -375,7 +373,7 @@ class TestDeriveCohortsFromRegistry:
         profile_path = _write_profile(tmp_path, registry_hash=registry.content_hash)
         profile = CampaignProfile.model_validate_json(profile_path.read_text())
 
-        cohorts, _ = derive_cohorts_from_registry(profile, registry)
+        cohorts = derive_cohorts_from_registry(profile, registry)
         assert len(cohorts[0].content_hash) == 64
 
     def test_sampling_settings_from_profile(self, tmp_path: Path):
@@ -387,7 +385,7 @@ class TestDeriveCohortsFromRegistry:
         profile_path = _write_profile(tmp_path, registry_hash=registry.content_hash)
         profile = CampaignProfile.model_validate_json(profile_path.read_text())
 
-        cohorts, _ = derive_cohorts_from_registry(profile, registry)
+        cohorts = derive_cohorts_from_registry(profile, registry)
         rb = cohorts[0].role_bindings[0]
         assert rb.sampling_settings.temperature == profile.temperature
         assert rb.sampling_settings.top_p == profile.top_p

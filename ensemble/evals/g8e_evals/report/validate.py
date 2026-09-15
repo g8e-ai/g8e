@@ -27,6 +27,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from g8e_evals.analysis.canonical import CanonicalEvalAnalysis
 from g8e_evals.constants import (
     ANALYSIS_JSON,
     ATTEMPTS_JSONL,
@@ -36,7 +37,31 @@ from g8e_evals.constants import (
     REPORT_CHECKSUM_JSON,
     TASKS_JSONL,
 )
-from g8e_evals.schema import AttemptRecord, MetricObservation, RunManifest, TerminalStatus
+from g8e_evals.schema import (
+    AttemptRecord,
+    EvidenceIndex,
+    MetricObservation,
+    RunManifest,
+    TaskDefinition,
+    TerminalStatus,
+)
+from g8e_evals.serialization import read_jsonl_models
+
+
+class ReportChecksum(BaseModel):
+    """Typed model for the report-checksum.json artifact.
+
+    Carries the SHA-256 checksum of the complete report (attempts and
+    metrics). The file is written by the runner after finalization and
+    verified by the standalone report validator.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    checksum: str = Field(
+        min_length=64, max_length=64,
+        description="SHA-256 checksum of the complete report.",
+    )
 
 
 class StandaloneReportResult(BaseModel):
@@ -61,16 +86,6 @@ class StandaloneReportResult(BaseModel):
     )
 
 
-def _read_jsonl(path: Path) -> list[dict]:
-    """Read a JSONL file and return a list of parsed dicts."""
-    records: list[dict] = []
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if line:
-            records.append(json.loads(line))
-    return records
-
-
 def _check_regular_file(path: Path, failures: list[str], label: str) -> bool:
     """Check that a path exists, is a regular file (not a symlink)."""
     if not path.exists():
@@ -87,22 +102,18 @@ def _check_regular_file(path: Path, failures: list[str], label: str) -> bool:
 
 def _compute_report_checksum(report_dir: Path) -> str:
     """Compute SHA-256 over canonical JSON of attempts and metrics."""
+    from g8e_evals.serialization import canonical_model_list, read_jsonl_models
+
     attempts_path = report_dir / ATTEMPTS_JSONL
     metrics_path = report_dir / METRICS_JSONL
 
-    attempts_data: list[dict] = []
+    attempts_data: list[dict[str, object]] = []
     if attempts_path.exists():
-        for line in attempts_path.read_text().splitlines():
-            line = line.strip()
-            if line:
-                attempts_data.append(json.loads(line))
+        attempts_data = canonical_model_list(read_jsonl_models(attempts_path, AttemptRecord))
 
-    metrics_data: list[dict] = []
+    metrics_data: list[dict[str, object]] = []
     if metrics_path.exists():
-        for line in metrics_path.read_text().splitlines():
-            line = line.strip()
-            if line:
-                metrics_data.append(json.loads(line))
+        metrics_data = canonical_model_list(read_jsonl_models(metrics_path, MetricObservation))
 
     payload = json.dumps(
         {"attempts": attempts_data, "metrics": metrics_data},
@@ -146,8 +157,7 @@ def validate_standalone_report(report_dir: Path) -> StandaloneReportResult:
     attempts: list[AttemptRecord] = []
     if _check_regular_file(attempts_path, failures, "attempts"):
         try:
-            raw_records = _read_jsonl(attempts_path)
-            attempts = [AttemptRecord.model_validate(r) for r in raw_records]
+            attempts = read_jsonl_models(attempts_path, AttemptRecord)
         except (ValidationError, json.JSONDecodeError) as e:
             failures.append(f"attempts validation failed: {e}")
 
@@ -160,15 +170,13 @@ def validate_standalone_report(report_dir: Path) -> StandaloneReportResult:
     tasks_path = report_dir / TASKS_JSONL
     if tasks_path.exists() and tasks_path.is_file() and not tasks_path.is_symlink():
         try:
-            task_records = _read_jsonl(tasks_path)
-            task_ids: set[str] = {
-                t["task_id"] for t in task_records if t.get("task_id")
-            }
+            task_records = read_jsonl_models(tasks_path, TaskDefinition)
+            task_ids: set[str] = {t.task_id for t in task_records}
             attempted_task_ids = {a.task_id for a in attempts}
             missing_tasks = task_ids - attempted_task_ids
             for tid in sorted(missing_tasks):
                 failures.append(f"task {tid} has no terminal attempt")
-        except json.JSONDecodeError as e:
+        except (ValidationError, json.JSONDecodeError) as e:
             failures.append(f"tasks validation failed: {e}")
 
     # Layer 3: metrics
@@ -177,8 +185,7 @@ def validate_standalone_report(report_dir: Path) -> StandaloneReportResult:
     metrics: list[MetricObservation] = []
     if _check_regular_file(metrics_path, failures, "metrics"):
         try:
-            raw_records = _read_jsonl(metrics_path)
-            metrics = [MetricObservation.model_validate(r) for r in raw_records]
+            metrics = read_jsonl_models(metrics_path, MetricObservation)
         except (ValidationError, json.JSONDecodeError) as e:
             failures.append(f"metrics validation failed: {e}")
 
@@ -204,8 +211,8 @@ def validate_standalone_report(report_dir: Path) -> StandaloneReportResult:
             failures.append(f"evidence index is not a regular file: {evidence_path.name}")
         else:
             try:
-                _read_jsonl(evidence_path)
-            except json.JSONDecodeError as e:
+                read_jsonl_models(evidence_path, EvidenceIndex)
+            except (ValidationError, json.JSONDecodeError) as e:
                 failures.append(f"evidence index validation failed: {e}")
 
     # Layer 5: analysis (summary)
@@ -213,8 +220,8 @@ def validate_standalone_report(report_dir: Path) -> StandaloneReportResult:
     analysis_path = report_dir / ANALYSIS_JSON
     if _check_regular_file(analysis_path, failures, "analysis"):
         try:
-            json.loads(analysis_path.read_text())
-        except json.JSONDecodeError as e:
+            CanonicalEvalAnalysis.model_validate_json(analysis_path.read_text())
+        except (ValidationError, json.JSONDecodeError) as e:
             failures.append(f"analysis validation failed: {e}")
 
     # Layer 6: checksum (optional)
@@ -227,15 +234,15 @@ def validate_standalone_report(report_dir: Path) -> StandaloneReportResult:
             failures.append(f"checksum is not a regular file: {checksum_path.name}")
         else:
             try:
-                checksum_data = json.loads(checksum_path.read_text())
-                declared = checksum_data.get("checksum", "")
+                checksum_data = ReportChecksum.model_validate_json(checksum_path.read_text())
+                declared = checksum_data.checksum
                 if declared:
                     computed = _compute_report_checksum(report_dir)
                     if declared != computed:
                         failures.append(
                             f"report checksum mismatch: declared={declared}, computed={computed}"
                         )
-            except json.JSONDecodeError as e:
+            except (ValidationError, json.JSONDecodeError) as e:
                 failures.append(f"checksum validation failed: {e}")
 
     ok = len(failures) == 0
@@ -248,6 +255,7 @@ def validate_standalone_report(report_dir: Path) -> StandaloneReportResult:
 
 
 __all__ = [
+    "ReportChecksum",
     "StandaloneReportResult",
     "validate_standalone_report",
 ]

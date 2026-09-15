@@ -22,24 +22,13 @@ same operation identity.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-
-def _stop_request_canonical(data: dict[str, object]) -> bytes:
-    payload = {k: v for k, v in data.items() if k != "content_hash"}
-    return json.dumps(
-        payload,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
+from g8e_evals.serialization import content_hash_of, provisional_hash
 
 
 class EvalStopRequest(BaseModel):
@@ -62,9 +51,7 @@ class EvalStopRequest(BaseModel):
 
     @model_validator(mode="after")
     def _validate_content_hash(self) -> Self:
-        expected = hashlib.sha256(
-            _stop_request_canonical(self.model_dump(mode="json"))
-        ).hexdigest()
+        expected = content_hash_of(self)
         if self.content_hash != expected:
             raise ValueError(
                 f"stop request content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
@@ -97,19 +84,23 @@ def build_stop_request(
     immediate: bool,
     requested_at: str,
 ) -> EvalStopRequest:
-    """Construct a content-hashed stop request bound to ``identity``."""
-    provisional = EvalStopRequest.model_construct(
+    """Construct a content-hashed stop request bound to ``identity``.
+
+    The content hash is computed over the canonical JSON of the request
+    excluding ``content_hash`` itself. The two-phase construction is
+    handled by ``provisional_hash``: it builds a provisional model with a
+    placeholder hash, computes the real hash, and the final model is
+    constructed via normal validation with the correct hash.
+    """
+    content_hash = provisional_hash(
+        EvalStopRequest,
         operation_id=identity.operation_id,
         revision=identity.revision,
         config_content_hash=identity.config_content_hash,
         launch_content_hash=identity.launch_content_hash,
         immediate=immediate,
         requested_at=requested_at,
-        content_hash="0" * 64,
     )
-    content_hash = hashlib.sha256(
-        _stop_request_canonical(provisional.model_dump(mode="json"))
-    ).hexdigest()
     return EvalStopRequest(
         operation_id=identity.operation_id,
         revision=identity.revision,

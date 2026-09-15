@@ -24,6 +24,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from g8e_evals.engine_cli import (
     ProtocolMismatchError,
@@ -296,7 +297,7 @@ def test_load_request_raises_on_missing_file():
 def test_load_request_raises_on_invalid_json(tmp_path: Path):
     path = tmp_path / "bad.json"
     path.write_text("not json at all")
-    with pytest.raises(json.JSONDecodeError):
+    with pytest.raises((json.JSONDecodeError, ValidationError)):
         load_request(str(path))
 
 

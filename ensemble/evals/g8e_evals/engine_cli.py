@@ -70,9 +70,7 @@ def load_request(request_path: str) -> EvalEngineRequest:
     path = Path(request_path)
     if not path.is_file():
         raise FileNotFoundError(f"request file not found: {request_path}")
-    raw = path.read_bytes()
-    data = json.loads(raw)
-    return EvalEngineRequest.model_validate(data)
+    return EvalEngineRequest.model_validate_json(path.read_bytes())
 
 
 def validate_schema_version(request: EvalEngineRequest) -> None:

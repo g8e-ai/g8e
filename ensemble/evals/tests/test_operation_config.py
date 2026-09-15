@@ -41,6 +41,7 @@ from g8e_evals.operation_config import (
     CampaignConfig,
     DiagnosticConfig,
     EvidenceKeyRef,
+    OperationConfigError,
     OperationKind,
     ProviderEndpointRef,
     StopConditions,
@@ -345,7 +346,7 @@ class TestLoadDispatch:
             "stop_conditions": {"idle_timeout_s": 1.0},
             "content_hash": None,
         }))
-        with pytest.raises(ValueError, match="unknown operation_kind"):
+        with pytest.raises(OperationConfigError, match="unknown operation_kind"):
             load_operation_config(out)
 
 

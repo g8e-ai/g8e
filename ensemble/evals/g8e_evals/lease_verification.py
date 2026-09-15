@@ -92,6 +92,12 @@ class LeaseVerificationContext:
     I/O (loading the operation config, computing the candidate identity,
     checking the model inventory, testing report-root existence). The
     verifier itself performs no I/O.
+
+    Internal coordination object: built once per start call, passed
+    directly to ``verify_lease_for_start``, never serialized or persisted
+    across a boundary. Kept as a frozen dataclass rather than a Pydantic
+    model because it carries no content hash and crosses no
+    serialization surface.
     """
 
     operation_config_content_hash: str
@@ -292,8 +298,7 @@ def _verify_endpoint(lease: LiveOperationLease, ctx: LeaseVerificationContext) -
     if lease.endpoint != lease.template.endpoint:
         raise LeaseVerificationError(
             LeaseVerificationFailureCode.ENDPOINT_MISMATCH,
-            f"lease endpoint {lease.endpoint} does not match "
-            f"template {lease.template.endpoint}",
+            f"lease endpoint {lease.endpoint} does not match template {lease.template.endpoint}",
         )
 
 

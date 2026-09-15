@@ -266,20 +266,29 @@ class CampaignConfig(OperationConfigBase):
         return self
 
 
+class OperationConfigError(ValueError):
+    """Raised when an operation config fails to load or validate."""
+
+
 def load_operation_config(path: Path) -> OperationConfigBase:
     """Load and validate an operation config from a JSON file. The
     content hash is verified on load. Returns the specialized config
     instance (``DiagnosticConfig`` or ``CampaignConfig``) selected by
     ``operation_kind``.
     """
-    raw = path.read_text()
-    data = json.loads(raw)
-    kind = data.get("operation_kind")
+    raw = path.read_bytes()
+    try:
+        probe = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise OperationConfigError(f"operation config is not valid JSON: {exc}") from exc
+    if not isinstance(probe, dict):
+        raise OperationConfigError("operation config must be a JSON object")
+    kind = probe.get("operation_kind")
     if kind == OperationKind.DIAGNOSTIC.value:
-        return DiagnosticConfig.model_validate(data)
+        return DiagnosticConfig.model_validate_json(raw)
     if kind == OperationKind.CAMPAIGN.value:
-        return CampaignConfig.model_validate(data)
-    raise ValueError(f"unknown operation_kind: {kind!r}")
+        return CampaignConfig.model_validate_json(raw)
+    raise OperationConfigError(f"unknown operation_kind: {kind!r}")
 
 
 def write_operation_config(config: OperationConfigBase, path: Path) -> None:

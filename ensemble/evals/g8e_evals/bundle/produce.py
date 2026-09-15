@@ -44,7 +44,8 @@ from g8e_evals.bundle.manifest import (
     PrivacyClass,
 )
 from g8e_evals.bundle.signing import EvalSigningKey, sign_bundle
-from g8e_evals.schema import EvidenceEncryption
+from g8e_evals.schema import EvidenceEncryption, RunManifest
+from g8e_evals.analysis.input import AnalysisInputRecord
 
 
 # Mapping from report-directory filenames to (ArtifactType, PrivacyClass).
@@ -226,61 +227,46 @@ def _load_evidence_encryption_map(report_dir: Path) -> dict[str, EvidenceEncrypt
 def _derive_run_id(report_dir: Path) -> str:
     """Derive the run ID from the run manifest in the report directory.
 
-    Parses ``manifest.json`` and extracts the ``run_id`` field. The run
-    manifest is not fully schema-validated at production time; the verifier
-    performs full schema validation in layer 2. Raises
-    ``BundleProductionError`` if the manifest is missing, invalid JSON, or
-    lacks a ``run_id`` field.
+    Validates ``manifest.json`` as a ``RunManifest`` and extracts the
+    ``run_id`` field. Raises ``BundleProductionError`` if the manifest is
+    missing, fails validation, or has an empty ``run_id``.
     """
-    import json as _json
-
     manifest_path = report_dir / evals_constants.MANIFEST_JSON
     if not manifest_path.exists():
         raise BundleProductionError(
             f"run manifest not found in report directory: {manifest_path}"
         )
     try:
-        manifest_data = _json.loads(manifest_path.read_text())
+        manifest = RunManifest.model_validate_json(manifest_path.read_text())
     except Exception as exc:
         raise BundleProductionError(
-            f"invalid run manifest JSON in report directory: {exc}"
+            f"invalid run manifest in report directory: {exc}"
         ) from exc
-    run_id = manifest_data.get("run_id")
-    if not run_id or not isinstance(run_id, str):
-        raise BundleProductionError(
-            "run manifest missing or invalid run_id field"
-        )
-    return run_id
+    return manifest.run_id
 
 
 def _derive_release_version(report_dir: Path) -> str:
     """Derive the release version from the analysis input in the report directory.
 
-    Parses ``analysis-input.json`` and extracts the ``release_version``
-    field. The analysis input is not fully schema-validated at production
-    time; the verifier performs full schema validation in layer 2. Raises
-    ``BundleProductionError`` if the analysis input is missing, invalid
-    JSON, or lacks a ``release_version`` field.
+    Validates ``analysis-input.json`` as an ``AnalysisInputRecord`` and
+    extracts the ``release_version`` field. Raises ``BundleProductionError``
+    if the analysis input is missing, fails validation, or has an empty
+    ``release_version``.
     """
-    import json as _json
-
     analysis_input_path = report_dir / evals_constants.ANALYSIS_INPUT_JSON
     if not analysis_input_path.exists():
         raise BundleProductionError(
             f"analysis input not found in report directory: {analysis_input_path}"
         )
     try:
-        analysis_data = _json.loads(analysis_input_path.read_text())
+        analysis_input = AnalysisInputRecord.model_validate_json(
+            analysis_input_path.read_text()
+        )
     except Exception as exc:
         raise BundleProductionError(
-            f"invalid analysis input JSON in report directory: {exc}"
+            f"invalid analysis input in report directory: {exc}"
         ) from exc
-    release_version = analysis_data.get("release_version")
-    if not release_version or not isinstance(release_version, str):
-        raise BundleProductionError(
-            "analysis input missing or invalid release_version field"
-        )
-    return release_version
+    return analysis_input.release_version
 
 
 def _build_artifact_entry(

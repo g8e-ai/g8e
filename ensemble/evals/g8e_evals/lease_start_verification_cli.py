@@ -26,7 +26,6 @@ This module is not a public CLI; operators discover start through
 
 from __future__ import annotations
 
-import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -139,13 +138,7 @@ def run_lease_start_verification(request_path: str) -> int:
         return 1
 
     try:
-        data = json.loads(path.read_text())
-    except json.JSONDecodeError as exc:
-        sys.stderr.write(f"invalid request JSON: {exc}\n")
-        return 1
-
-    try:
-        req = LeaseStartVerificationRequest.model_validate(data)
+        req = LeaseStartVerificationRequest.model_validate_json(path.read_bytes())
     except ValidationError as exc:
         sys.stderr.write(f"invalid request: {exc}\n")
         return 1

@@ -196,6 +196,9 @@ class G8eeChatSUT:
         """Minimal headers for g8ee (now authenticated by Gateway/mTLS)."""
         return self.env.auth_headers()
 
+    def close(self) -> None:
+        """No resources to release; HTTP clients are context-managed per call."""
+
     # ---- Main entry point ----------------------------------------------
 
     async def get_answer(self, task: Task) -> Response:

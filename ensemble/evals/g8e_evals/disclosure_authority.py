@@ -46,11 +46,13 @@ publication.
 from __future__ import annotations
 
 import hashlib
-import json
+from collections.abc import Sequence
 from enum import StrEnum
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from g8e_evals.serialization import canonical_json, canonical_model_list
 
 
 DISCLOSURE_AUTHORITY_SCHEMA_VERSION = "1.0.0"
@@ -262,26 +264,8 @@ class DisclosureAuthority(BaseModel):
             schema_version=self.schema_version,
             authority_id=self.authority_id,
             authority_version=self.authority_version,
-            fields=[
-                {
-                    "field_name": e.field_name,
-                    "classification": e.classification.value,
-                    "public_column_name": e.public_column_name,
-                    "in_csv": e.in_csv,
-                    "tombstone_hash_field": e.tombstone_hash_field,
-                }
-                for e in self.fields
-            ],
-            outputs=[
-                {
-                    "file_name": e.file_name,
-                    "output_format": e.output_format.value,
-                    "output_role": e.output_role.value,
-                    "required": e.required,
-                    "description": e.description,
-                }
-                for e in self.outputs
-            ],
+            fields=self.fields,
+            outputs=self.outputs,
             proof_index_description=self.proof_index_description,
         )
         if self.content_hash != expected:
@@ -411,24 +395,20 @@ def compute_disclosure_authority_hash(
     schema_version: str,
     authority_id: str,
     authority_version: str,
-    fields: list[dict],
-    outputs: list[dict],
+    fields: Sequence[DisclosureFieldEntry],
+    outputs: Sequence[DisclosureOutputEntry],
     proof_index_description: str,
 ) -> str:
     """Compute the content hash for a disclosure authority without constructing the full model."""
-    payload = json.dumps(
+    payload = canonical_json(
         {
             "schema_version": schema_version,
             "authority_id": authority_id,
             "authority_version": authority_version,
-            "fields": sorted(fields, key=lambda f: f["field_name"]),
-            "outputs": sorted(outputs, key=lambda o: o["file_name"]),
+            "fields": canonical_model_list(sorted(fields, key=lambda f: f.field_name)),
+            "outputs": canonical_model_list(sorted(outputs, key=lambda o: o.file_name)),
             "proof_index_description": proof_index_description,
-        },
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
+        }
     )
     return _sha256(payload)
 

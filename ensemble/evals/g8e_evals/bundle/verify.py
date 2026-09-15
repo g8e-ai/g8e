@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from enum import IntEnum, StrEnum
 from pathlib import Path
@@ -57,6 +58,7 @@ from g8e_evals.bundle.validation import (
     validate_bundle_manifest,
     validate_bundle_path,
 )
+from g8e_evals.schema import RunManifest
 
 VERIFICATION_REPORT_SCHEMA_VERSION = "1.0.0"
 
@@ -843,21 +845,20 @@ def _verify_record_bindings(
     run_id = manifest.run_id
     if run_manifest_path.exists():
         try:
-            run_manifest = json.loads(run_manifest_path.read_text())
-            file_run_id = run_manifest.get("run_id", "")
-            if file_run_id and file_run_id != run_id:
+            run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text())
+            if run_manifest.run_id != run_id:
                 failures.append(VerificationFailure(
                     layer=VerificationLayer.RECORD_BINDINGS,
                     code=VerificationFailureCode.RUN_ID_MISMATCH,
                     record_id="run_manifest",
-                    message=f"run_id mismatch: manifest={run_id} run_manifest={file_run_id}",
+                    message=f"run_id mismatch: manifest={run_id} run_manifest={run_manifest.run_id}",
                 ))
-        except (json.JSONDecodeError, ValueError):
+        except (ValidationError, ValueError) as exc:
             failures.append(VerificationFailure(
                 layer=VerificationLayer.RECORD_BINDINGS,
                 code=VerificationFailureCode.RUN_ID_MISMATCH,
                 record_id="run_manifest",
-                message="run manifest is not valid JSON",
+                message=f"run manifest failed validation: {exc}",
             ))
 
     # Read tasks and attempts with strict typed parsing.
@@ -1611,12 +1612,41 @@ def _verify_source_record_cross_check(
     """
     failures: list[VerificationFailure] = []
 
-    # Parse analysis-input.json as raw dict for field-by-field comparison.
-    analysis_input_path = bundle_root / evals_constants.ANALYSIS_INPUT_JSON
-    try:
-        ai_raw = json.loads(analysis_input_path.read_text())
-    except (json.JSONDecodeError, ValueError):
-        return failures  # Already reported as schema invalid.
+    # Map analysis-input field names to the typed model's record sequences.
+    ai_fields: dict[str, Sequence[BaseModel]] = {
+        "tasks": analysis_input.tasks,
+        "attempts": analysis_input.attempts,
+        "metric_observations": analysis_input.metric_observations,
+        "receipts": analysis_input.receipts,
+        "stages": analysis_input.stages,
+        "final_state_observations": analysis_input.final_state_observations,
+        "state_observations": analysis_input.state_observations,
+        "rehydration_observations": analysis_input.rehydration_observations,
+        "secret_detection_observations": analysis_input.secret_detection_observations,
+        "unauthorized_mutation_observations": analysis_input.unauthorized_mutation_observations,
+        "token_store_persistence_observations": analysis_input.token_store_persistence_observations,
+        "token_ttl_expiry_observations": analysis_input.token_ttl_expiry_observations,
+        "token_persistence_failure_observations": analysis_input.token_persistence_failure_observations,
+        "exfiltration_attempt_observations": analysis_input.exfiltration_attempt_observations,
+        "artifact_leakage_observations": analysis_input.artifact_leakage_observations,
+        "replay_attempt_observations": analysis_input.replay_attempt_observations,
+        "signed_field_tampering_observations": analysis_input.signed_field_tampering_observations,
+        "payload_tampering_observations": analysis_input.payload_tampering_observations,
+        "stale_state_root_observations": analysis_input.stale_state_root_observations,
+        "identity_mismatch_observations": analysis_input.identity_mismatch_observations,
+        "nonce_expiration_observations": analysis_input.nonce_expiration_observations,
+        "signer_defect_observations": analysis_input.signer_defect_observations,
+        "l3_proof_transplant_observations": analysis_input.l3_proof_transplant_observations,
+        "revoked_credential_observations": analysis_input.revoked_credential_observations,
+        "evidence_preservation_observations": analysis_input.evidence_preservation_observations,
+        "policy_attack_observations": analysis_input.policy_attack_observations,
+        "tool_sequence_observations": analysis_input.tool_sequence_observations,
+        "factual_qa_observations": analysis_input.factual_qa_observations,
+        "citation_backed_observations": analysis_input.citation_backed_observations,
+        "partial_milestone_observations": analysis_input.partial_milestone_observations,
+        "reliability_observations": analysis_input.reliability_observations,
+        "economics_performance_observations": analysis_input.economics_performance_observations,
+    }
 
     for filename, field_name in _SOURCE_RECORD_MAP:
         jsonl_path = bundle_root / filename
@@ -1640,11 +1670,13 @@ def _verify_source_record_cross_check(
                     message=f"invalid JSON at {filename} line {line_num}: {exc}",
                 ))
 
-        # Read analysis-input.json field records as canonical JSON strings.
-        ai_field = ai_raw.get(field_name, [])
-        ai_records: list[str] = []
-        for record in ai_field:
-            ai_records.append(json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
+        # Read analysis-input field records as canonical JSON strings from
+        # the typed model so the comparison is against validated data, not a
+        # re-parsed raw dict.
+        ai_records: list[str] = [
+            json.dumps(record.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+            for record in ai_fields[field_name]
+        ]
 
         # Compare as sets (order-independent).
         if set(jsonl_records) != set(ai_records):
@@ -1781,18 +1813,15 @@ def _verify_source_build_provenance(
         return failures
 
     try:
-        run_manifest_data = json.loads(run_manifest_path.read_text())
-    except (json.JSONDecodeError, ValueError):
+        run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text())
+    except (ValidationError, ValueError):
         # Already reported by layer 5 (record bindings) as RUN_ID_MISMATCH.
         return failures
 
-    provenance_data = run_manifest_data.get("source_build_provenance")
-    arms = run_manifest_data.get("arms", [])
-    is_production = any(
-        arm.get("is_production_posture", False) for arm in arms if isinstance(arm, dict)
-    )
+    provenance = run_manifest.source_build_provenance
+    is_production = any(arm.is_production_posture for arm in run_manifest.arms)
 
-    if provenance_data is None:
+    if provenance is None:
         if is_production:
             failures.append(VerificationFailure(
                 layer=VerificationLayer.SOURCE_BUILD_PROVENANCE,
@@ -1802,32 +1831,9 @@ def _verify_source_build_provenance(
             ))
         return failures
 
-    source_revision = provenance_data.get("source_revision", "")
-    if not source_revision:
-        failures.append(VerificationFailure(
-            layer=VerificationLayer.SOURCE_BUILD_PROVENANCE,
-            code=VerificationFailureCode.SOURCE_REVISION_MISSING,
-            record_id="run_manifest",
-            message="source_build_provenance.source_revision is empty",
-        ))
-
-    source_tree_state_hash = provenance_data.get("source_tree_state_hash", "")
-    if not source_tree_state_hash:
-        failures.append(VerificationFailure(
-            layer=VerificationLayer.SOURCE_BUILD_PROVENANCE,
-            code=VerificationFailureCode.SOURCE_TREE_STATE_HASH_MISSING,
-            record_id="run_manifest",
-            message="source_build_provenance.source_tree_state_hash is empty",
-        ))
-    elif len(source_tree_state_hash) != 64 or not all(
-        c in "0123456789abcdef" for c in source_tree_state_hash
-    ):
-        failures.append(VerificationFailure(
-            layer=VerificationLayer.SOURCE_BUILD_PROVENANCE,
-            code=VerificationFailureCode.SOURCE_TREE_STATE_HASH_INVALID,
-            record_id="run_manifest",
-            message="source_build_provenance.source_tree_state_hash is not a 64-char hex string",
-        ))
+    # source_revision and source_tree_state_hash constraints are enforced by
+    # the SourceBuildProvenance model (min_length=1, hex pattern), so they
+    # are already validated by RunManifest.model_validate_json above.
 
     return failures
 

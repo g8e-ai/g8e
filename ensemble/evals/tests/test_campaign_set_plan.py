@@ -25,9 +25,6 @@ validation and the pure validation functions.
 
 from __future__ import annotations
 
-import json
-from typing import cast
-
 import pytest
 from pydantic import ValidationError
 
@@ -646,25 +643,25 @@ class TestDryRunPlan:
     def test_produces_correct_counts(self):
         plan = _make_plan()
         dry = compute_dry_run_plan(plan)
-        assert dry["child_count"] == CHILD_COUNT
-        assert dry["total_tasks"] == TOTAL_IFEVAL_TASKS
-        assert dry["repetition_count"] == REPETITION_COUNT
-        assert dry["expected_child_assignment_count"] == EXPECTED_CHILD_ASSIGNMENT_COUNT
-        assert dry["expected_total_assignment_count"] == EXPECTED_TOTAL_ASSIGNMENT_COUNT
+        assert dry.child_count == CHILD_COUNT
+        assert dry.total_tasks == TOTAL_IFEVAL_TASKS
+        assert dry.repetition_count == REPETITION_COUNT
+        assert dry.expected_child_assignment_count == EXPECTED_CHILD_ASSIGNMENT_COUNT
+        assert dry.expected_total_assignment_count == EXPECTED_TOTAL_ASSIGNMENT_COUNT
 
     def test_each_child_has_2790_assignments(self):
         plan = _make_plan()
         dry = compute_dry_run_plan(plan)
-        for child in cast(list[dict[str, object]], dry["children"]):
-            assert child["expected_assignment_count"] == EXPECTED_CHILD_ASSIGNMENT_COUNT
-            assert child["tasks_per_child"] == TASKS_PER_CHILD
-            assert child["repetition_count"] == REPETITION_COUNT
+        for child in dry.children:
+            assert child.expected_assignment_count == EXPECTED_CHILD_ASSIGNMENT_COUNT
+            assert child.tasks_per_child == TASKS_PER_CHILD
+            assert child.repetition_count == REPETITION_COUNT
 
     def test_total_is_11160(self):
         plan = _make_plan()
         dry = compute_dry_run_plan(plan)
-        assert dry["expected_total_assignment_count"] == EXPECTED_TOTAL_ASSIGNMENT_COUNT
-        child_total = sum(c["expected_assignment_count"] for c in cast(list[dict[str, object]], dry["children"]))  # type: ignore[arg-type]
+        assert dry.expected_total_assignment_count == EXPECTED_TOTAL_ASSIGNMENT_COUNT
+        child_total = sum(c.expected_assignment_count for c in dry.children)
         assert child_total == EXPECTED_TOTAL_ASSIGNMENT_COUNT
 
     def test_is_deterministic(self):
@@ -676,15 +673,13 @@ class TestDryRunPlan:
     def test_child_ids_match_plan(self):
         plan = _make_plan()
         dry = compute_dry_run_plan(plan)
-        for i, child in enumerate(cast(list[dict[str, object]], dry["children"])):
-            assert child["child_id"] == plan.child_plans[i].child_id
+        for i, child in enumerate(dry.children):
+            assert child.child_id == plan.child_plans[i].child_id
 
-    def test_is_json_serializable(self):
+    def test_content_hash_binds_to_plan(self):
         plan = _make_plan()
         dry = compute_dry_run_plan(plan)
-        serialized = json.dumps(dry, sort_keys=True)
-        deserialized = json.loads(serialized)
-        assert deserialized == dry
+        assert dry.content_hash == plan.content_hash
 
 
 class TestAggregateVerificationResultModel:

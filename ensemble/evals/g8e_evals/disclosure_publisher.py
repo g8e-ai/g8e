@@ -42,21 +42,30 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
-import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Self
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from g8e_evals.constants import (
     CAMPAIGN_PROJECTIONS_JSONL,
 )
 from g8e_evals.disclosure_authority import (
+    DISCLOSURE_AUTHORITY_SCHEMA_VERSION,
     DisclosureAuthority,
     DisclosureFieldEntry,
     DisclosureOutputEntry,
     FieldClassification,
+    OutputFormat,
+    OutputRole,
     compute_disclosure_authority_hash,
+)
+from g8e_evals.publication import CampaignProjectionRow
+from g8e_evals.serialization import (
+    canonical_json,
+    canonical_model_list,
+    read_jsonl_models,
 )
 
 
@@ -77,10 +86,6 @@ def _sha256_bytes(data: bytes) -> str:
 
 def _sha256_str(data: str) -> str:
     return hashlib.sha256(data.encode()).hexdigest()
-
-
-def _canonical_json(obj: Any) -> str:
-    return json.dumps(obj, allow_nan=False, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
 class DisclosurePublishError(ValueError):
@@ -158,10 +163,7 @@ class OutputInventory(BaseModel):
         expected = compute_output_inventory_hash(
             schema_version=self.schema_version,
             disclosure_authority_hash=self.disclosure_authority_hash,
-            outputs=[
-                {"file_name": e.file_name, "sha256": e.sha256, "byte_length": e.byte_length}
-                for e in self.outputs
-            ],
+            outputs=self.outputs,
         )
         if self.content_hash != expected:
             raise ValueError(
@@ -171,34 +173,37 @@ class OutputInventory(BaseModel):
         return self
 
 
+class ProofIndex(BaseModel):
+    """Proof index mapping public records to their source evidence artifacts.
+
+    The ``disclosure_authority_hash`` binds the proof index to the exact
+    authority that produced it. The ``entries`` list maps each public
+    record (by 0-based index) to its source artifact path and SHA-256.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: str = Field(min_length=1, description="Proof index schema version.")
+    disclosure_authority_hash: str = Field(min_length=64, max_length=64, description="SHA-256 of the disclosure authority.")
+    proof_index_description: str = Field(min_length=1, description="Description of the proof index.")
+    entries: list[ProofIndexEntry] = Field(min_length=1, description="Proof index entries, one per public record.")
+
+
 def compute_output_inventory_hash(
     *,
     schema_version: str,
     disclosure_authority_hash: str,
-    outputs: list[dict],
+    outputs: Sequence[OutputInventoryEntry],
 ) -> str:
     """Compute the content hash for an output inventory without constructing the full model."""
-    payload = json.dumps(
+    payload = canonical_json(
         {
             "schema_version": schema_version,
             "disclosure_authority_hash": disclosure_authority_hash,
-            "outputs": sorted(outputs, key=lambda o: o["file_name"]),
-        },
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
+            "outputs": canonical_model_list(sorted(outputs, key=lambda o: o.file_name)),
+        }
     )
     return _sha256_str(payload)
-
-
-def _read_jsonl_records(path: Path) -> list[dict]:
-    records: list[dict] = []
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if line:
-            records.append(json.loads(line))
-    return records
 
 
 def _classify_field(
@@ -213,9 +218,9 @@ def _classify_field(
     return entry
 
 
-def _build_tombstone(value: Any) -> tuple[str, int]:
+def _build_tombstone(value: object) -> tuple[str, int]:
     """Return (sha256, byte_length) for a field value's canonical JSON encoding."""
-    encoded = _canonical_json(value).encode()
+    encoded = canonical_json(value).encode()
     return _sha256_bytes(encoded), len(encoded)
 
 
@@ -251,7 +256,7 @@ def build_disclosure_outputs(
             f"missing {CAMPAIGN_PROJECTIONS_JSONL} in candidate directory"
         )
     source_sha256 = _sha256_bytes(projections_path.read_bytes())
-    records = _read_jsonl_records(projections_path)
+    records = read_jsonl_models(projections_path, CampaignProjectionRow)
 
     public_fields = authority.public_fields()
     restricted_fields = authority.restricted_fields()
@@ -259,13 +264,16 @@ def build_disclosure_outputs(
 
     output_dir.mkdir(parents=True)
 
-    public_rows: list[dict] = []
+    # open map: column keys are the authority's public_column_name values,
+    # determined at runtime by the authority's field classifications.
+    public_rows: list[dict[str, str | int | float | dict[str, str | int]]] = []
     tombstone_records: list[TombstoneRecord] = []
     proof_entries: list[ProofIndexEntry] = []
 
     for index, record in enumerate(records):
-        public_row: dict[str, Any] = {}
-        for field_name, value in sorted(record.items()):
+        record_dict = record.model_dump(mode="json")
+        public_row: dict[str, str | int | float | dict[str, str | int]] = {}
+        for field_name, value in sorted(record_dict.items()):
             entry = _classify_field(authority, field_name)
             if entry.classification == FieldClassification.PUBLIC:
                 public_row[entry.public_column_name] = value
@@ -308,12 +316,19 @@ def _reject_sqlite_in_candidate(candidate_dir: Path) -> None:
             )
 
 
-def _write_public_jsonl(path: Path, rows: list[dict]) -> None:
-    lines = [_canonical_json(row) for row in rows]
+def _write_public_jsonl(
+    path: Path,
+    rows: list[dict[str, str | int | float | dict[str, str | int]]],
+) -> None:
+    lines = [canonical_json(row) for row in rows]
     path.write_text("".join(line + "\n" for line in lines))
 
 
-def _write_derived_csv(path: Path, rows: list[dict], public_fields: list[DisclosureFieldEntry]) -> None:
+def _write_derived_csv(
+    path: Path,
+    rows: list[dict[str, str | int | float | dict[str, str | int]]],
+    public_fields: list[DisclosureFieldEntry],
+) -> None:
     csv_fields = [e for e in public_fields if e.in_csv]
     header = [e.public_column_name for e in csv_fields]
     buffer = io.StringIO()
@@ -329,13 +344,13 @@ def _write_tombstones_jsonl(path: Path, records: list[TombstoneRecord]) -> None:
 
 
 def _write_proof_index(path: Path, entries: list[ProofIndexEntry], authority: DisclosureAuthority) -> None:
-    payload = {
-        "schema_version": DISCLOSURE_OUTPUT_SCHEMA_VERSION,
-        "disclosure_authority_hash": authority.content_hash,
-        "proof_index_description": authority.proof_index_description,
-        "entries": [json.loads(e.model_dump_json()) for e in entries],
-    }
-    path.write_text(_canonical_json(payload) + "\n")
+    proof_index = ProofIndex(
+        schema_version=DISCLOSURE_OUTPUT_SCHEMA_VERSION,
+        disclosure_authority_hash=authority.content_hash,
+        proof_index_description=authority.proof_index_description,
+        entries=entries,
+    )
+    path.write_text(canonical_json(proof_index.model_dump(mode="json", by_alias=True)) + "\n")
 
 
 def _build_output_inventory(output_dir: Path, authority: DisclosureAuthority) -> OutputInventory:
@@ -351,10 +366,7 @@ def _build_output_inventory(output_dir: Path, authority: DisclosureAuthority) ->
     content_hash = compute_output_inventory_hash(
         schema_version=DISCLOSURE_OUTPUT_SCHEMA_VERSION,
         disclosure_authority_hash=authority.content_hash,
-        outputs=[
-            {"file_name": e.file_name, "sha256": e.sha256, "byte_length": e.byte_length}
-            for e in entries
-        ],
+        outputs=entries,
     )
     return OutputInventory(
         schema_version=DISCLOSURE_OUTPUT_SCHEMA_VERSION,
@@ -443,8 +455,8 @@ def validate_disclosure_outputs(
     proof_path = output_dir / DISCLOSURE_PROOF_INDEX_JSON
     if proof_path.is_file() and not proof_path.is_symlink():
         try:
-            proof_data = json.loads(proof_path.read_text())
-            if proof_data.get("disclosure_authority_hash") != authority.content_hash:
+            proof = ProofIndex.model_validate_json(proof_path.read_text())
+            if proof.disclosure_authority_hash != authority.content_hash:
                 failures.append("proof index disclosure_authority_hash mismatch")
         except Exception as e:
             failures.append(f"proof index validation failed: {e}")
@@ -454,11 +466,14 @@ def validate_disclosure_outputs(
     if public_path.is_file() and not public_path.is_symlink():
         try:
             authority_columns = {e.public_column_name for e in authority.fields}
+            # open map: column keys are the authority's public_column_name values,
+            # determined at runtime by the authority's field classifications.
+            row_adapter: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
             for line in public_path.read_text().splitlines():
                 line = line.strip()
                 if not line:
                     continue
-                row = json.loads(line)
+                row = row_adapter.validate_json(line)
                 for key in row:
                     if key not in authority_columns:
                         failures.append(f"unclassified field in public JSONL: {key!r}")
@@ -482,52 +497,102 @@ def validate_disclosure_outputs(
     )
 
 
+def _default_public_field(field_name: str) -> DisclosureFieldEntry:
+    """Construct a PUBLIC field entry for a projection row field name."""
+    return DisclosureFieldEntry(
+        field_name=field_name,
+        classification=FieldClassification.PUBLIC,
+        public_column_name=field_name,
+        in_csv=True,
+        tombstone_hash_field="",
+    )
+
+
+def _default_output_entries(*, include_tombstones: bool) -> list[DisclosureOutputEntry]:
+    """Construct the D12-mandated output inventory entries."""
+    outputs = [
+        DisclosureOutputEntry(
+            file_name=DISCLOSURE_PUBLIC_JSONL,
+            output_format=OutputFormat.CANONICAL_JSONL,
+            output_role=OutputRole.PUBLIC_JSONL,
+            required=True,
+            description="Canonical public JSONL with PUBLIC field values and tombstones for restricted fields.",
+        ),
+        DisclosureOutputEntry(
+            file_name=DISCLOSURE_DERIVED_CSV,
+            output_format=OutputFormat.DERIVED_CSV,
+            output_role=OutputRole.DERIVED_CSV,
+            required=True,
+            description="Flat CSV projection of public fields for spreadsheet consumption.",
+        ),
+    ]
+    if include_tombstones:
+        outputs.append(DisclosureOutputEntry(
+            file_name=DISCLOSURE_TOMBSTONES_JSONL,
+            output_format=OutputFormat.CANONICAL_JSONL,
+            output_role=OutputRole.TOMBSTONES,
+            required=True,
+            description="Tombstone records (SHA-256 hash and byte length) for restricted fields.",
+        ))
+    outputs.extend([
+        DisclosureOutputEntry(
+            file_name=DISCLOSURE_PROOF_INDEX_JSON,
+            output_format=OutputFormat.CANONICAL_JSONL,
+            output_role=OutputRole.PROOF_INDEX,
+            required=True,
+            description="Proof index mapping public records to their source evidence artifacts.",
+        ),
+        DisclosureOutputEntry(
+            file_name=DISCLOSURE_OUTPUT_INVENTORY_JSON,
+            output_format=OutputFormat.CANONICAL_JSONL,
+            output_role=OutputRole.OUTPUT_INVENTORY,
+            required=True,
+            description="Deterministic output inventory listing all produced disclosure files with SHA-256 hashes.",
+        ),
+        DisclosureOutputEntry(
+            file_name=DISCLOSURE_PROHIBITED_SQLITE,
+            output_format=OutputFormat.PROHIBITED_SQLITE,
+            output_role=OutputRole.PROHIBITED_SQLITE,
+            required=False,
+            description="SQLite is explicitly prohibited in the first release per D12.",
+        ),
+    ])
+    return outputs
+
+
 def build_default_disclosure_authority() -> DisclosureAuthority:
     """Build the default D12 disclosure authority for v5 campaign projections.
 
-    The default authority classifies the public projection row fields from
-    ``CampaignProjectionRow`` as PUBLIC, with no RESTRICTED fields. This is
-    the baseline authority for the first release where all projection fields
-    are already public-safe. A campaign with restricted evidence fields
-    must define a campaign-specific authority that classifies those fields
-    as RESTRICTED.
+    The default authority classifies every field of
+    ``CampaignProjectionRow`` as PUBLIC, with no RESTRICTED fields. The
+    field universe is derived from ``CampaignProjectionRow.model_fields``
+    (typed introspection) so it cannot drift from the projection row
+    model. This is the baseline authority for the first release where all
+    projection fields are already public-safe. A campaign with restricted
+    evidence fields must define a campaign-specific authority that
+    classifies those fields as RESTRICTED.
     """
-    fields = [
-        {"field_name": "campaign_id", "classification": "public", "public_column_name": "campaign_id", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "campaign_revision", "classification": "public", "public_column_name": "campaign_revision", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "variant_id", "classification": "public", "public_column_name": "variant_id", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "task_id", "classification": "public", "public_column_name": "task_id", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "metric_id", "classification": "public", "public_column_name": "metric_id", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "numerator", "classification": "public", "public_column_name": "numerator", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "denominator", "classification": "public", "public_column_name": "denominator", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "rate", "classification": "public", "public_column_name": "rate", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "unit", "classification": "public", "public_column_name": "unit", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "verification_status", "classification": "public", "public_column_name": "verification_status", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "evidence_link", "classification": "public", "public_column_name": "evidence_link", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "repetition", "classification": "public", "public_column_name": "repetition", "in_csv": True, "tombstone_hash_field": ""},
-    ]
-    outputs = [
-        {"file_name": DISCLOSURE_PUBLIC_JSONL, "output_format": "canonical_jsonl", "output_role": "public_jsonl", "required": True, "description": "Canonical public JSONL with PUBLIC field values and tombstones for restricted fields."},
-        {"file_name": DISCLOSURE_DERIVED_CSV, "output_format": "derived_csv", "output_role": "derived_csv", "required": True, "description": "Flat CSV projection of public fields for spreadsheet consumption."},
-        {"file_name": DISCLOSURE_PROOF_INDEX_JSON, "output_format": "canonical_jsonl", "output_role": "proof_index", "required": True, "description": "Proof index mapping public records to their source evidence artifacts."},
-        {"file_name": DISCLOSURE_OUTPUT_INVENTORY_JSON, "output_format": "canonical_jsonl", "output_role": "output_inventory", "required": True, "description": "Deterministic output inventory listing all produced disclosure files with SHA-256 hashes."},
-        {"file_name": DISCLOSURE_PROHIBITED_SQLITE, "output_format": "prohibited_sqlite", "output_role": "prohibited_sqlite", "required": False, "description": "SQLite is explicitly prohibited in the first release per D12."},
-    ]
+    fields = [_default_public_field(name) for name in CampaignProjectionRow.model_fields]
+    outputs = _default_output_entries(include_tombstones=False)
+    proof_index_description = (
+        "Maps each public projection record to its source "
+        "campaign-projections.jsonl artifact by record index and source SHA-256."
+    )
     content_hash = compute_disclosure_authority_hash(
-        schema_version="1.0.0",
+        schema_version=DISCLOSURE_AUTHORITY_SCHEMA_VERSION,
         authority_id="default-v5-projection",
         authority_version="1",
         fields=fields,
         outputs=outputs,
-        proof_index_description="Maps each public projection record to its source campaign-projections.jsonl artifact by record index and source SHA-256.",
+        proof_index_description=proof_index_description,
     )
     return DisclosureAuthority(
-        schema_version="1.0.0",
+        schema_version=DISCLOSURE_AUTHORITY_SCHEMA_VERSION,
         authority_id="default-v5-projection",
         authority_version="1",
-        fields=[DisclosureFieldEntry.model_validate(f) for f in fields],
-        outputs=[DisclosureOutputEntry.model_validate(o) for o in outputs],
-        proof_index_description="Maps each public projection record to its source campaign-projections.jsonl artifact by record index and source SHA-256.",
+        fields=fields,
+        outputs=outputs,
+        proof_index_description=proof_index_description,
         content_hash=content_hash,
     )
 
@@ -536,47 +601,55 @@ def build_restricted_disclosure_authority() -> DisclosureAuthority:
     """Build a D12 disclosure authority with RESTRICTED fields for testing.
 
     This authority classifies ``evidence_link`` as RESTRICTED so the
-    disclosure publisher emits tombstones for it. It includes the required
-    TOMBSTONES output role. Used by the disclosure dress rehearsal
-    mutation tests to verify tombstone generation.
+    disclosure publisher emits tombstones for it. The field universe is
+    derived from ``CampaignProjectionRow.model_fields`` with an explicit
+    override for ``evidence_link``. It includes the required TOMBSTONES
+    output role. Used by the disclosure dress rehearsal mutation tests to
+    verify tombstone generation.
     """
-    fields = [
-        {"field_name": "campaign_id", "classification": "public", "public_column_name": "campaign_id", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "campaign_revision", "classification": "public", "public_column_name": "campaign_revision", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "variant_id", "classification": "public", "public_column_name": "variant_id", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "task_id", "classification": "public", "public_column_name": "task_id", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "metric_id", "classification": "public", "public_column_name": "metric_id", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "numerator", "classification": "public", "public_column_name": "numerator", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "denominator", "classification": "public", "public_column_name": "denominator", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "rate", "classification": "public", "public_column_name": "rate", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "unit", "classification": "public", "public_column_name": "unit", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "verification_status", "classification": "public", "public_column_name": "verification_status", "in_csv": True, "tombstone_hash_field": ""},
-        {"field_name": "evidence_link", "classification": "restricted", "public_column_name": "evidence_link", "in_csv": False, "tombstone_hash_field": "evidence_link_hash"},
-        {"field_name": "repetition", "classification": "public", "public_column_name": "repetition", "in_csv": True, "tombstone_hash_field": ""},
-    ]
-    outputs = [
-        {"file_name": DISCLOSURE_PUBLIC_JSONL, "output_format": "canonical_jsonl", "output_role": "public_jsonl", "required": True, "description": "Canonical public JSONL with PUBLIC field values and tombstones for restricted fields."},
-        {"file_name": DISCLOSURE_DERIVED_CSV, "output_format": "derived_csv", "output_role": "derived_csv", "required": True, "description": "Flat CSV projection of public fields for spreadsheet consumption."},
-        {"file_name": DISCLOSURE_TOMBSTONES_JSONL, "output_format": "canonical_jsonl", "output_role": "tombstones", "required": True, "description": "Tombstone records (SHA-256 hash and byte length) for restricted fields."},
-        {"file_name": DISCLOSURE_PROOF_INDEX_JSON, "output_format": "canonical_jsonl", "output_role": "proof_index", "required": True, "description": "Proof index mapping public records to their source evidence artifacts."},
-        {"file_name": DISCLOSURE_OUTPUT_INVENTORY_JSON, "output_format": "canonical_jsonl", "output_role": "output_inventory", "required": True, "description": "Deterministic output inventory listing all produced disclosure files with SHA-256 hashes."},
-        {"file_name": DISCLOSURE_PROHIBITED_SQLITE, "output_format": "prohibited_sqlite", "output_role": "prohibited_sqlite", "required": False, "description": "SQLite is explicitly prohibited in the first release per D12."},
-    ]
+    # RestrictedFieldOverride: field_name -> (classification, public_column_name, in_csv, tombstone_hash_field)
+    overrides: dict[str, tuple[FieldClassification, str, bool, str]] = {
+        "evidence_link": (
+            FieldClassification.RESTRICTED,
+            "evidence_link",
+            False,
+            "evidence_link_hash",
+        ),
+    }
+    fields: list[DisclosureFieldEntry] = []
+    for name in CampaignProjectionRow.model_fields:
+        if name in overrides:
+            classification, public_column_name, in_csv, tombstone_hash_field = overrides[name]
+            fields.append(DisclosureFieldEntry(
+                field_name=name,
+                classification=classification,
+                public_column_name=public_column_name,
+                in_csv=in_csv,
+                tombstone_hash_field=tombstone_hash_field,
+            ))
+        else:
+            fields.append(_default_public_field(name))
+    outputs = _default_output_entries(include_tombstones=True)
+    proof_index_description = (
+        "Maps each public projection record to its source "
+        "campaign-projections.jsonl artifact by record index and source "
+        "SHA-256. Restricted evidence_link fields are replaced with tombstones."
+    )
     content_hash = compute_disclosure_authority_hash(
-        schema_version="1.0.0",
+        schema_version=DISCLOSURE_AUTHORITY_SCHEMA_VERSION,
         authority_id="restricted-v5-projection",
         authority_version="1",
         fields=fields,
         outputs=outputs,
-        proof_index_description="Maps each public projection record to its source campaign-projections.jsonl artifact by record index and source SHA-256. Restricted evidence_link fields are replaced with tombstones.",
+        proof_index_description=proof_index_description,
     )
     return DisclosureAuthority(
-        schema_version="1.0.0",
+        schema_version=DISCLOSURE_AUTHORITY_SCHEMA_VERSION,
         authority_id="restricted-v5-projection",
         authority_version="1",
-        fields=[DisclosureFieldEntry.model_validate(f) for f in fields],
-        outputs=[DisclosureOutputEntry.model_validate(o) for o in outputs],
-        proof_index_description="Maps each public projection record to its source campaign-projections.jsonl artifact by record index and source SHA-256. Restricted evidence_link fields are replaced with tombstones.",
+        fields=fields,
+        outputs=outputs,
+        proof_index_description=proof_index_description,
         content_hash=content_hash,
     )
 
@@ -593,6 +666,7 @@ __all__ = [
     "DisclosureValidationResult",
     "OutputInventory",
     "OutputInventoryEntry",
+    "ProofIndex",
     "ProofIndexEntry",
     "TombstoneRecord",
     "build_default_disclosure_authority",

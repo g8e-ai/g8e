@@ -178,7 +178,11 @@ def _config_to_budget_authority(config: OperationConfigBase) -> BudgetAuthority:
         min_free_disk_bytes = int(ceilings.min_free_disk_gb * 1_073_741_824)
     if min_free_disk_bytes == 0:
         min_free_disk_bytes = 1_073_741_824
-    max_duration = int(config.stop_conditions.max_duration_s) if config.stop_conditions.max_duration_s else 3600
+    max_duration = (
+        int(config.stop_conditions.max_duration_s)
+        if config.stop_conditions.max_duration_s
+        else 3600
+    )
     if ceilings.concurrency != 1:
         raise LeaseLifecycleError(
             "budget_concurrency_unsupported",
@@ -199,16 +203,26 @@ def _config_to_budget_authority(config: OperationConfigBase) -> BudgetAuthority:
 
 
 def _list_leases(lease_store_dir: Path) -> list[LiveOperationLease]:
-    """List all leases in the store directory."""
+    """List all leases in the store directory.
+
+    Fail-closed: a corrupt or unparseable lease file is evidence
+    corruption, not a silently-skippable file. Raises
+    ``LeaseLifecycleError`` with a ``corrupt_lease_file`` code naming the
+    offending file so the operator can investigate and repair the
+    store before any lease operation proceeds.
+    """
     if not lease_store_dir.exists():
         return []
     leases: list[LiveOperationLease] = []
     for path in sorted(lease_store_dir.glob("*.json")):
         try:
             lease = LiveOperationLease.model_validate_json(path.read_text())
-            leases.append(lease)
-        except Exception:
-            continue
+        except (ValueError, OSError) as exc:
+            raise LeaseLifecycleError(
+                "corrupt_lease_file",
+                f"lease store contains a corrupt or unparseable lease file {path.name}: {exc}",
+            ) from exc
+        leases.append(lease)
     return leases
 
 
@@ -228,7 +242,10 @@ def _find_lease_for_config(
 ) -> LiveOperationLease | None:
     """Find the lease matching the config's operation_id and report_root."""
     for lease in leases:
-        if lease.operation_identity == config.operation_id and lease.report_root == config.report_root:
+        if (
+            lease.operation_identity == config.operation_id
+            and lease.report_root == config.report_root
+        ):
             return lease
     return None
 

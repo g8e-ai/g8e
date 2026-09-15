@@ -39,12 +39,13 @@ import pytest
 from pydantic import ValidationError
 
 from g8e_evals.constants import (
+    CAMPAIGN_COHORTS_JSONL,
     COLD_START_WARM_INFERENCE_TRADEOFF_JSON,
     PUBLICATION_SCHEMA_V5,
     RADAR_PROFILE_JSON,
     TOOL_SCORECARD_SUMMARY_JSON,
 )
-from g8e_evals.index import CampaignVerificationReport
+from g8e_evals.index import CampaignVerificationReport, ModelRole
 from g8e_evals.publication import (
     PublicationSchemaV5,
     project_campaign_v5,
@@ -1134,14 +1135,10 @@ def _make_provenance_manifest():
         SourceInclusionEntry(path="src/main.py", sha256=_HASH, byte_length=100),
         SourceInclusionEntry(path="src/util.py", sha256="b" * 64, byte_length=50),
     ]
-    entry_dicts = [
-        {"path": e.path, "sha256": e.sha256, "byte_length": e.byte_length}
-        for e in entries
-    ]
     return SourceInclusionManifest(
         schema_version="1.0.0",
         entries=entries,
-        manifest_hash=compute_manifest_hash(entry_dicts),
+        manifest_hash=compute_manifest_hash(entries),
     )
 
 
@@ -1160,52 +1157,75 @@ def _write_report_dir(report_dir: Path) -> None:
     )
     report_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write attempts.jsonl
-    attempt = {
-        "attempt_id": "attempt-1",
-        "schema_version": "1.44.0",
-        "run_id": "run-1",
-        "assignment_id": "assignment-1",
-        "task_id": "task-1",
-        "model_cohort_id": "cohort-qwen3-8b-q4_0",
-        "replicate_id": "replicate-1",
-        "terminal_status": "completed",
-        "answer": "test answer",
-        "verification_status": "verified",
-    }
-    (report_dir / ATTEMPTS_JSONL).write_text(json.dumps(attempt) + "\n")
+    # Write attempts.jsonl as a typed AttemptRecord.
+    from g8e_evals.arms import Arm
+    from g8e_evals.schema import AttemptRecord, TerminalStatus
+
+    attempt = AttemptRecord(
+        attempt_id="attempt-1",
+        schema_version="1.44.0",
+        run_id="run-1",
+        assignment_id="assignment-1",
+        task_id="task-1",
+        arm_id=Arm.DIRECT,
+        model_cohort_id="cohort-qwen3-8b-q4_0",
+        replicate_id="replicate-1",
+        terminal_status=TerminalStatus.COMPLETED,
+    )
+    (report_dir / ATTEMPTS_JSONL).write_text(attempt.model_dump_json() + "\n")
 
     # Write metrics.jsonl with a tool_call metric so the v5 projector builds a tool scorecard summary
-    metric = {
-        "attempt_id": "attempt-1",
-        "task_id": "task-1",
-        "metric_id": "tool_call_recognition",
-        "metric_version": "1.0.0",
-        "value": 1.0,
-        "unit": "boolean",
-        "denominator_contribution": 1,
-        "verification_status": "verified",
-    }
-    (report_dir / METRICS_JSONL).write_text(json.dumps(metric) + "\n")
+    from g8e_evals.index import VerificationStatus
+    from g8e_evals.schema import GraderClass, MetricObservation
 
-    # Write campaign-assignments.jsonl
-    assignment = {
-        "assignment_id": "assignment-1",
-        "model_cohort_id": "cohort-qwen3-8b-q4_0",
-        "task_id": "task-1",
-    }
-    (report_dir / CAMPAIGN_ASSIGNMENTS_JSONL).write_text(json.dumps(assignment) + "\n")
+    metric = MetricObservation(
+        schema_version="1.44.0",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        arm_id=Arm.DIRECT,
+        task_id="task-1",
+        metric_id="tool_call_recognition",
+        metric_version="1.0.0",
+        value=1.0,
+        unit="boolean",
+        denominator_contribution=1,
+        verification_status=VerificationStatus.VERIFIED,
+        grader_class=GraderClass.DETERMINISTIC,
+    )
+    (report_dir / METRICS_JSONL).write_text(metric.model_dump_json() + "\n")
 
-    # Write campaign-index.jsonl with the finalization generation
-    index_gen = {
-        "generation_number": 1,
-        "content_hash": _FINALIZATION_HASH,
-        "creation_reason": "finalization",
-        "assignment_dispositions": [
-            {"assignment_id": "assignment-1", "disposition": "effective"},
+    # Write campaign-assignments.jsonl as a typed CampaignAssignment.
+    from g8e_evals.campaign import CampaignAssignment
+
+    assignment = CampaignAssignment(
+        campaign_id="campaign-1",
+        assignment_id="assignment-1",
+        task_id="task-1",
+        model_cohort_id="cohort-qwen3-8b-q4_0",
+        arm_id="direct",
+        initial_state_assignment_id="initial-1",
+        replicate_id="replicate-1",
+        schedule_position=0,
+    )
+    (report_dir / CAMPAIGN_ASSIGNMENTS_JSONL).write_text(assignment.model_dump_json() + "\n")
+
+    # Write campaign-index.jsonl with the finalization generation as a typed IndexGeneration.
+    from g8e_evals.index import AssignmentDisposition, AssignmentDispositionEntry, IndexCreationReason, IndexGeneration
+
+    index_gen = IndexGeneration(
+        generation_number=1,
+        parent_generation_hash=_HASH,
+        creation_reason=IndexCreationReason.FINALIZATION,
+        report_checksums=[_HASH],
+        content_hash=_FINALIZATION_HASH,
+        assignment_dispositions=[
+            AssignmentDispositionEntry(
+                assignment_id="assignment-1",
+                disposition=AssignmentDisposition.EFFECTIVE,
+            ),
         ],
-    }
-    (report_dir / CAMPAIGN_INDEX_JSONL).write_text(json.dumps(index_gen) + "\n")
+    )
+    (report_dir / CAMPAIGN_INDEX_JSONL).write_text(index_gen.model_dump_json() + "\n")
 
     # Write the 5 event/resource files (empty) so the v5 projector copies them
     # to the candidate and the v5 validator's required-event-resource layer passes.
@@ -1217,6 +1237,30 @@ def _write_report_dir(report_dir: Path) -> None:
         CORRELATED_ERRORS_JSONL,
     ):
         (report_dir / event_resource_file).write_text("")
+
+    # Write campaign-cohorts.jsonl so the v4 projector can resolve the
+    # candidate variant ID from the typed cohort record.
+    from g8e_evals.campaign import ModelCohort, RoleModelBinding, SamplingSettings, compute_model_cohort_hash
+
+    cohort_id = "cohort-qwen3-8b-q4_0"
+    variant_id = "qwen3-8b-q4_0"
+    binding = RoleModelBinding(
+        role=ModelRole.PRIMARY,
+        model_id="qwen3:8b",
+        provider="ollama",
+        endpoint="http://192.168.1.2:11434",
+        sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
+        timeout_seconds=120.0,
+        seed_capable=True,
+    )
+    cohort = ModelCohort(
+        cohort_id=cohort_id,
+        candidate_variant_id=variant_id,
+        candidate_role=ModelRole.PRIMARY,
+        role_bindings=[binding],
+        content_hash=compute_model_cohort_hash(cohort_id, variant_id, ModelRole.PRIMARY, [binding]),
+    )
+    (report_dir / CAMPAIGN_COHORTS_JSONL).write_text(cohort.model_dump_json() + "\n")
 
 
 def _project_v5(tmp_path: Path) -> Path:

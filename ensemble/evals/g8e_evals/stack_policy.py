@@ -314,14 +314,12 @@ def compute_stack_policy_hash(
             "policy_id": policy_id,
             "policy_version": policy_version,
             "selectors": [
-                json.loads(s.model_dump_json())
+                s.model_dump(mode="json")
                 for s in sorted(selectors, key=lambda s: s.selector_id.value)
             ],
             "lineage_metadata_source": lineage_metadata_source.value,
             "deduplication_rule": deduplication_rule.value,
-            "homogeneous_family_rule": json.loads(
-                homogeneous_family_rule.model_dump_json()
-            ),
+            "homogeneous_family_rule": homogeneous_family_rule.model_dump(mode="json"),
         },
         allow_nan=False,
         ensure_ascii=False,

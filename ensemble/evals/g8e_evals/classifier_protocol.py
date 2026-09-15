@@ -331,14 +331,14 @@ def compute_classifier_protocol_hash(
             "protocol_version": protocol_version,
             "binary_predicate": binary_predicate,
             "source_corpus": source_corpus,
-            "annotation_protocol": json.loads(annotation_protocol.model_dump_json()),
+            "annotation_protocol": annotation_protocol.model_dump(mode="json"),
             "class_prevalence": dict(sorted(class_prevalence.items())),
-            "subgroup_policy": json.loads(subgroup_policy.model_dump_json()),
+            "subgroup_policy": subgroup_policy.model_dump(mode="json"),
             "leakage_resistant_groups": [
-                json.loads(g.model_dump_json())
+                g.model_dump(mode="json")
                 for g in sorted(leakage_resistant_groups, key=lambda g: g.group_id)
             ],
-            "split": json.loads(split.model_dump_json()),
+            "split": split.model_dump(mode="json"),
         },
         allow_nan=False,
         ensure_ascii=False,

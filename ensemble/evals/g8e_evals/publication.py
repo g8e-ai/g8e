@@ -35,6 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from g8e_evals.constants import (
     ATTEMPTS_JSONL,
     CAMPAIGN_ASSIGNMENTS_JSONL,
+    CAMPAIGN_COHORTS_JSONL,
     CAMPAIGN_INDEX_JSONL,
     CAMPAIGN_PROJECTIONS_JSONL,
     CAMPAIGN_PROVENANCE_JSON,
@@ -61,13 +62,16 @@ from g8e_evals.campaign_set import (
     CampaignSetIndex,
     CampaignSetPlan,
 )
+from g8e_evals.campaign import CampaignAssignment, ModelCohort
 from g8e_evals.index import (
     AssignmentDisposition,
     CampaignVerificationReport,
+    IndexGeneration,
     MeasurementAvailability,
 )
 from g8e_evals.profile import CampaignProfile
 from g8e_evals.provenance import SourceInclusionManifest
+from g8e_evals.schema import AttemptRecord, MetricObservation
 from g8e_evals.radar_profile import (
     ColdStartWarmInferenceTradeoff,
     ColdStartWarmInferenceTradeoffSummary,
@@ -87,6 +91,7 @@ from g8e_evals.radar_profile import (
     compute_tool_scorecard_summary_hash,
 )
 from g8e_evals.registry import ModelRegistry
+from g8e_evals.serialization import canonical_json, canonical_model_dict, canonical_model_list
 
 
 PUBLICATION_V4_VERSION = "4.0.0"
@@ -478,37 +483,31 @@ def compute_model_campaign_hash(
         "campaign_id": campaign_id,
         "campaign_revision": campaign_revision,
         "publication_schema_version": publication_schema_version,
-        "campaign_profile": json.loads(campaign_profile.model_dump_json()),
-        "model_variants": [
-            json.loads(v.model_dump_json())
-            for v in sorted(model_variants, key=lambda v: v.variant_id)
-        ],
+        "campaign_profile": canonical_model_dict(campaign_profile),
+        "model_variants": canonical_model_list(
+            sorted(model_variants, key=lambda v: v.variant_id)
+        ),
         "model_registry_hash": model_registry_hash,
         "verification_ok": verification_ok,
         "verified_index_generation_hash": verified_index_generation_hash,
         "checked_layers": sorted(checked_layers),
-        "projections": [
-            json.loads(p.model_dump_json())
-            for p in sorted(projections, key=lambda p: (p.variant_id, p.task_id, p.metric_id, p.repetition))
-        ],
-        "dispositions": [
-            json.loads(d.model_dump_json())
-            for d in sorted(dispositions, key=lambda d: d.assignment_id)
-        ],
-        "comparison_rows": [
-            json.loads(c.model_dump_json())
-            for c in sorted(comparison_rows, key=lambda c: (c.task_id, c.combination_id, c.metric_id, c.repetition))
-        ],
-        "efficiency_observations": [
-            json.loads(e.model_dump_json())
-            for e in sorted(efficiency_observations, key=lambda e: e.variant_id)
-        ],
-        "variant_summaries": [
-            json.loads(s.model_dump_json())
-            for s in sorted(variant_summaries or [], key=lambda s: (s.variant_id, s.metric_id))
-        ],
-        "statistical_analysis": json.loads(statistical_analysis.model_dump_json()),
-        "provenance": json.loads(provenance.model_dump_json()),
+        "projections": canonical_model_list(
+            sorted(projections, key=lambda p: (p.variant_id, p.task_id, p.metric_id, p.repetition))
+        ),
+        "dispositions": canonical_model_list(
+            sorted(dispositions, key=lambda d: d.assignment_id)
+        ),
+        "comparison_rows": canonical_model_list(
+            sorted(comparison_rows, key=lambda c: (c.task_id, c.combination_id, c.metric_id, c.repetition))
+        ),
+        "efficiency_observations": canonical_model_list(
+            sorted(efficiency_observations, key=lambda e: e.variant_id)
+        ),
+        "variant_summaries": canonical_model_list(
+            sorted(variant_summaries or [], key=lambda s: (s.variant_id, s.metric_id))
+        ),
+        "statistical_analysis": canonical_model_dict(statistical_analysis),
+        "provenance": canonical_model_dict(provenance),
         "caveats": caveats_values,
     }
     # Include aggregate authority hashes in the content hash only when
@@ -520,13 +519,7 @@ def compute_model_campaign_hash(
         payload["campaign_set_index_hash"] = campaign_set_index_hash
     if aggregate_verification_hash is not None:
         payload["aggregate_verification_hash"] = aggregate_verification_hash
-    payload_json = json.dumps(
-        payload,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
+    payload_json = canonical_json(payload)
     return _sha256(payload_json)
 
 
@@ -610,36 +603,39 @@ def _project_provenance(manifest: SourceInclusionManifest) -> CampaignProvenance
     )
 
 
-def _read_jsonl_dicts(path: Path) -> list[dict]:
-    """Read a JSONL file and return a list of parsed dicts."""
-    records: list[dict] = []
+def _read_jsonl_models[T: BaseModel](path: Path, model_cls: type[T]) -> list[T]:
+    """Read a JSONL file and validate each line as a typed Pydantic model.
+
+    Each non-empty line is parsed and validated directly into ``model_cls``
+    so the boundary stays typed end-to-end; no raw dict intermediate crosses
+    the application boundary.
+    """
+    records: list[T] = []
     for line in path.read_text().splitlines():
         line = line.strip()
         if line:
-            records.append(json.loads(line))
+            records.append(model_cls.model_validate_json(line))
     return records
 
 
-def _extract_variant_id(model_cohort_id: str) -> str:
-    """Extract the variant ID from a cohort ID.
+def _load_cohorts_by_id(report_dir: Path) -> dict[str, ModelCohort]:
+    """Load ``campaign-cohorts.jsonl`` into a dict keyed by cohort ID.
 
-    Cohort IDs follow the convention ``cohort-{variant_id}`` established
-    by ``derive_cohorts_from_registry`` in the campaign runner.
+    Returns an empty dict when the file is absent. Each cohort carries
+    its candidate variant ID and role as typed fields; the projector and
+    disposition generator read them directly rather than parsing the
+    cohort ID string.
     """
-    prefix = "cohort-"
-    variant_id = model_cohort_id[len(prefix):] if model_cohort_id.startswith(prefix) else model_cohort_id
-    if "-role-" in variant_id:
-        candidate, role = variant_id.rsplit("-role-", 1)
-        if role in {"primary", "assistant", "lite"}:
-            return candidate
-    return variant_id
-
-
-def _extract_role(model_cohort_id: str) -> str:
-    if "-role-" not in model_cohort_id:
-        return ""
-    _, role = model_cohort_id.rsplit("-role-", 1)
-    return role if role in {"primary", "assistant", "lite"} else ""
+    cohorts_path = report_dir / CAMPAIGN_COHORTS_JSONL
+    if not cohorts_path.exists():
+        return {}
+    cohorts: dict[str, ModelCohort] = {}
+    for line in cohorts_path.read_text().splitlines():
+        line = line.strip()
+        if line:
+            cohort = ModelCohort.model_validate_json(line)
+            cohorts[cohort.cohort_id] = cohort
+    return cohorts
 
 
 def _extract_repetition(replicate_id: str) -> int:
@@ -664,41 +660,41 @@ def _generate_projections(
 
     Reads ``metrics.jsonl`` and ``attempts.jsonl`` from the report
     directory, joins them via ``attempt_id``, and produces one
-    ``CampaignProjectionRow`` per measured metric. The variant ID is
-    extracted from the attempt's ``model_cohort_id`` and the repetition
-    from the attempt's ``replicate_id``.
+    ``CampaignProjectionRow`` per measured metric. The variant ID and
+    role are read from the typed cohort loaded from
+    ``campaign-cohorts.jsonl``; an attempt whose cohort is not present
+    fails closed and is skipped.
     """
     metrics_path = report_dir / METRICS_JSONL
     attempts_path = report_dir / ATTEMPTS_JSONL
     if not metrics_path.exists() or not attempts_path.exists():
         return []
 
-    attempts_by_id: dict[str, dict] = {}
-    for raw in _read_jsonl_dicts(attempts_path):
-        aid = raw.get("attempt_id")
-        if aid:
-            attempts_by_id[aid] = raw
+    attempts_by_id: dict[str, AttemptRecord] = {
+        a.attempt_id: a for a in _read_jsonl_models(attempts_path, AttemptRecord)
+    }
+    cohorts_by_id = _load_cohorts_by_id(report_dir)
 
     rows: list[CampaignProjectionRow] = []
-    for raw_metric in _read_jsonl_dicts(metrics_path):
-        attempt_id = raw_metric.get("attempt_id", "")
-        attempt = attempts_by_id.get(attempt_id)
+    for metric in _read_jsonl_models(metrics_path, MetricObservation):
+        attempt = attempts_by_id.get(metric.attempt_id)
         if attempt is None:
             continue
-        model_cohort_id = attempt.get("model_cohort_id", "")
-        variant_id = _extract_variant_id(model_cohort_id)
-        role = _extract_role(model_cohort_id)
-        task_id = raw_metric.get("task_id", "")
-        metric_id = raw_metric.get("metric_id", "")
-        value = raw_metric.get("value", 0.0)
-        unit = raw_metric.get("unit", "boolean")
-        verification_status = raw_metric.get("verification_status", "verified")
-        repetition = _extract_repetition(attempt.get("replicate_id", "replicate-1"))
+        cohort = cohorts_by_id.get(attempt.model_cohort_id)
+        if cohort is None:
+            continue
+        variant_id = cohort.candidate_variant_id
+        role = cohort.candidate_role.value
+        task_id = metric.task_id
+        metric_id = metric.metric_id
+        value = metric.value if metric.value is not None else 0.0
+        unit = metric.unit or "boolean"
+        verification_status = metric.verification_status.value if metric.verification_status else "verified"
+        repetition = _extract_repetition(attempt.replicate_id)
         numerator = round(value)
-        denominator = int(raw_metric.get("denominator_contribution", 1))
+        denominator = metric.denominator_contribution
         rate = numerator / denominator if denominator > 0 else 0.0
-        role_path = role or "unspecified"
-        evidence_link = f"proofs/{variant_id}/{role_path}/{task_id}/rep-{repetition}.json"
+        evidence_link = f"proofs/{variant_id}/{role}/{task_id}/rep-{repetition}.json"
         rows.append(CampaignProjectionRow(
             campaign_id=campaign_id,
             campaign_revision=campaign_revision,
@@ -727,39 +723,45 @@ def _generate_dispositions(
     Reads ``campaign-index.jsonl`` and finds the generation whose
     ``content_hash`` matches the verified index generation hash. Then
     reads ``campaign-assignments.jsonl`` to join each disposition with
-    its variant ID and task ID.
+    its variant ID and task ID. The variant ID is read from the typed
+    cohort loaded from ``campaign-cohorts.jsonl``; an assignment whose
+    cohort is not present fails closed and its disposition row carries
+    an empty variant ID.
     """
     index_path = report_dir / CAMPAIGN_INDEX_JSONL
     assignments_path = report_dir / CAMPAIGN_ASSIGNMENTS_JSONL
     if not index_path.exists() or not assignments_path.exists():
         return []
 
-    assignments_by_id: dict[str, dict] = {}
-    for raw in _read_jsonl_dicts(assignments_path):
-        aid = raw.get("assignment_id")
-        if aid:
-            assignments_by_id[aid] = raw
+    assignments_by_id: dict[str, CampaignAssignment] = {
+        a.assignment_id: a for a in _read_jsonl_models(assignments_path, CampaignAssignment)
+    }
+    cohorts_by_id = _load_cohorts_by_id(report_dir)
 
-    matching_gen: dict | None = None
-    for raw in _read_jsonl_dicts(index_path):
-        if raw.get("content_hash") == verified_index_generation_hash:
-            matching_gen = raw
+    matching_gen: IndexGeneration | None = None
+    for gen in _read_jsonl_models(index_path, IndexGeneration):
+        if gen.content_hash == verified_index_generation_hash:
+            matching_gen = gen
             break
     if matching_gen is None:
         return []
 
     rows: list[CampaignDispositionRow] = []
-    for disp in matching_gen.get("assignment_dispositions", []):
-        assignment_id = disp.get("assignment_id", "")
-        assignment = assignments_by_id.get(assignment_id, {})
-        variant_id = _extract_variant_id(assignment.get("model_cohort_id", ""))
-        task_id = assignment.get("task_id", "")
+    for disp in matching_gen.assignment_dispositions:
+        assignment = assignments_by_id.get(disp.assignment_id)
+        variant_id = ""
+        task_id = ""
+        if assignment is not None:
+            task_id = assignment.task_id
+            cohort = cohorts_by_id.get(assignment.model_cohort_id)
+            if cohort is not None:
+                variant_id = cohort.candidate_variant_id
         rows.append(CampaignDispositionRow(
-            assignment_id=assignment_id,
-            disposition=disp.get("disposition", "effective"),
+            assignment_id=disp.assignment_id,
+            disposition=disp.disposition,
             variant_id=variant_id,
             task_id=task_id,
-            reason=disp.get("reason", ""),
+            reason="",
         ))
     return rows
 
@@ -831,22 +833,14 @@ def _generate_statistical_analysis(
     """
     stat_path = report_dir / CAMPAIGN_STATISTICAL_ANALYSIS_JSON
     if stat_path.exists():
-        stat_data = json.loads(stat_path.read_text())
-        return CampaignStatisticalAnalysisRef(
-            method=stat_data["method"],
-            independent_unit=stat_data["independent_unit"],
-            population=stat_data["population"],
-            correction_family=stat_data["correction_family"],
-            claim_status=stat_data["claim_status"],
-            content_hash=stat_data["content_hash"],
-        )
+        return CampaignStatisticalAnalysisRef.model_validate_json(stat_path.read_text())
 
     method = "descriptive"
     independent_unit = campaign_profile.unit_of_analysis
     population = len(campaign_profile.task_ids)
     correction_family = "none"
     claim_status = campaign_profile.claim_boundary.value
-    stat_payload = json.dumps(
+    stat_payload = canonical_json(
         {
             "method": method,
             "independent_unit": independent_unit,
@@ -854,9 +848,6 @@ def _generate_statistical_analysis(
             "correction_family": correction_family,
             "claim_status": claim_status,
         },
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
     )
     content_hash = _sha256(stat_payload)
     return CampaignStatisticalAnalysisRef(

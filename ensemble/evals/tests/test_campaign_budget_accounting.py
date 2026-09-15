@@ -43,6 +43,7 @@ from g8e_evals.campaign import (
     compute_model_cohort_hash,
     compute_task_assignment_hash,
 )
+from g8e_evals.index import ModelRole
 from g8e_evals.harness import Response, Score, Task
 from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.runner import (
@@ -100,6 +101,9 @@ class FakeSUT:
         model = f"ollama:{self.model_id}" if self.provider_prefix else self.model_id
         return Response(answer=self.answer, model=model, arm=Arm.DIRECT)
 
+    def close(self) -> None:
+        pass
+
 
 @dataclass
 class FakeGrader:
@@ -137,7 +141,7 @@ def _make_sampling() -> SamplingSettings:
     return SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42)
 
 
-def _make_role_binding(role: str = "primary", model_id: str = "qwen3:8b") -> RoleModelBinding:
+def _make_role_binding(role: ModelRole = ModelRole.PRIMARY, model_id: str = "qwen3:8b") -> RoleModelBinding:
     return RoleModelBinding(
         role=role,
         model_id=model_id,
@@ -150,9 +154,16 @@ def _make_role_binding(role: str = "primary", model_id: str = "qwen3:8b") -> Rol
 
 
 def _make_cohort(cohort_id: str = "cohort-qwen3-8b", model_id: str = "qwen3:8b") -> ModelCohort:
-    bindings = [_make_role_binding("primary", model_id)]
-    ch = compute_model_cohort_hash(cohort_id, bindings)
-    return ModelCohort(cohort_id=cohort_id, role_bindings=bindings, content_hash=ch)
+    bindings = [_make_role_binding(ModelRole.PRIMARY, model_id)]
+    variant_id = cohort_id[len("cohort-"):] if cohort_id.startswith("cohort-") else cohort_id
+    ch = compute_model_cohort_hash(cohort_id, variant_id, ModelRole.PRIMARY, bindings)
+    return ModelCohort(
+        cohort_id=cohort_id,
+        candidate_variant_id=variant_id,
+        candidate_role=ModelRole.PRIMARY,
+        role_bindings=bindings,
+        content_hash=ch,
+    )
 
 
 def _make_task_assignment(task_ids: list[str] | None = None) -> TaskAssignmentManifest:
@@ -410,6 +421,9 @@ class TokenReportingSUT:
             arm=Arm.DIRECT,
             chat_evidence=_DirectEvidenceWrapper(evidence),
         )
+
+    def close(self) -> None:
+        pass
 
 
 def _make_token_reporting_sut_factory(tokens_per_call: int = 100):

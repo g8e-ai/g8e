@@ -29,8 +29,12 @@ def qualification_cmd() -> None:
 
 
 @qualification_cmd.command(name="hash-source")
-@click.option("--authority", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True)
-@click.option("--source-root", type=click.Path(exists=True, file_okay=False, path_type=Path), required=True)
+@click.option(
+    "--authority", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True
+)
+@click.option(
+    "--source-root", type=click.Path(exists=True, file_okay=False, path_type=Path), required=True
+)
 @click.option("--authority-record-path", required=True)
 @click.option("--output", type=click.Path(dir_okay=False, path_type=Path), required=True)
 def qualification_hash_source(
@@ -50,9 +54,17 @@ def qualification_hash_source(
 
 
 @qualification_cmd.command(name="candidate")
-@click.option("--full-source", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True)
-@click.option("--execution-source", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True)
-@click.option("--binary", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True)
+@click.option(
+    "--full-source", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True
+)
+@click.option(
+    "--execution-source",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option(
+    "--binary", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True
+)
 @click.option("--image", multiple=True, required=True)
 @click.option("--output", type=click.Path(dir_okay=False, path_type=Path), required=True)
 def qualification_candidate(
@@ -74,8 +86,13 @@ def qualification_candidate(
         if binary.is_symlink():
             raise ValueError("candidate binary must not be a symlink")
         full_source_result = SourceManifestResult.model_validate_json(full_source.read_bytes())
-        execution_source_result = SourceManifestResult.model_validate_json(execution_source.read_bytes())
-        if full_source_result.scope != "full_source" or execution_source_result.scope != "execution_source":
+        execution_source_result = SourceManifestResult.model_validate_json(
+            execution_source.read_bytes()
+        )
+        if (
+            full_source_result.scope != "full_source"
+            or execution_source_result.scope != "execution_source"
+        ):
             raise ValueError("candidate source manifest scopes are invalid")
         identity = CandidateIdentityEvidence.build(
             source_tree_hash=full_source_result.source_tree_hash,
@@ -91,7 +108,9 @@ def qualification_candidate(
 
 
 @qualification_cmd.command(name="collect-runtime")
-@click.option("--request", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True)
+@click.option(
+    "--request", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True
+)
 @click.option("--output", type=click.Path(dir_okay=False, path_type=Path), required=True)
 def qualification_collect_runtime(request: Path, output: Path) -> None:
     """Collect public runtime identity evidence from explicit local inputs."""
@@ -106,7 +125,9 @@ def qualification_collect_runtime(request: Path, output: Path) -> None:
 
 
 @qualification_cmd.command(name="run-gate")
-@click.option("--candidate", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True)
+@click.option(
+    "--candidate", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True
+)
 @click.option("--gate-id", required=True)
 @click.option("--tool-version", multiple=True, required=True)
 @click.option("--output", type=click.Path(dir_okay=False, path_type=Path), required=True)
@@ -154,7 +175,12 @@ def qualification_run_gate(
 
 
 @qualification_cmd.command(name="build")
-@click.option("--input", "input_path", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True)
+@click.option(
+    "--input",
+    "input_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
 @click.option("--output", type=click.Path(dir_okay=False, path_type=Path))
 @click.option("--check", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 def qualification_build(input_path: Path, output: Path | None, check: Path | None) -> None:

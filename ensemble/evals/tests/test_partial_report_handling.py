@@ -25,6 +25,14 @@ import pytest
 
 pytestmark = pytest.mark.integration
 
+from g8e_evals.analysis.canonical import (
+    ANALYSIS_COMPUTATION_VERSION,
+    ANALYSIS_SCHEMA_VERSION,
+    CanonicalEvalAnalysis,
+    MissingnessBreakdown,
+    ReceiptCoverageAnalysis,
+    AnalysisInputSummary,
+)
 from g8e_evals.constants import (
     ANALYSIS_JSON,
     ATTEMPTS_JSONL,
@@ -50,15 +58,60 @@ def _write_jsonl(path: Path, records: list[dict]) -> None:
     path.write_text("\n".join(lines) + ("\n" if lines else ""))
 
 
+def _make_valid_manifest() -> dict:
+    """Build a minimal valid RunManifest dict for fixtures."""
+    return {
+        "schema_version": "1.44.0",
+        "run_id": "run-1",
+        "suite_id": "ifeval_subset",
+        "suite_version": "1.0.0",
+        "orchestrator_version": "v2.1.8",
+    }
+
+
+def _make_valid_analysis() -> dict:
+    """Build a minimal valid CanonicalEvalAnalysis dict for fixtures."""
+    return json.loads(CanonicalEvalAnalysis(
+        analysis_schema_version=ANALYSIS_SCHEMA_VERSION,
+        analysis_computation_version=ANALYSIS_COMPUTATION_VERSION,
+        release_version="v2.1.8",
+        run_id="run-1",
+        input_summary=AnalysisInputSummary(
+            task_count=1,
+            attempt_count=1,
+            observation_count=0,
+            receipt_count=0,
+            stage_count=0,
+            metric_observation_count=0,
+            input_content_hash="abc123",
+        ),
+        missingness=MissingnessBreakdown(
+            completed=1,
+            model_failed=0,
+            governance_rejected=0,
+            human_denied=0,
+            timed_out=0,
+            infrastructure_failed=0,
+            invalid_evidence=0,
+        ),
+        receipt_coverage=ReceiptCoverageAnalysis(
+            eligible_attempt_count=0,
+            receipt_bound_count=0,
+            receipt_verified_count=0,
+        ),
+        arm_ids=["direct"],
+    ).model_dump_json())
+
+
 class TestReportCompleteness:
     def test_complete_report_passes_completeness_check(self, tmp_path: Path):
         """A report directory with all required artifacts is complete."""
         report_dir = tmp_path / "report-complete"
         report_dir.mkdir()
-        _write_json(report_dir / MANIFEST_JSON, {"run_id": "run-1"})
+        _write_json(report_dir / MANIFEST_JSON, _make_valid_manifest())
         _write_jsonl(report_dir / ATTEMPTS_JSONL, [{"attempt_id": "a1", "terminal_status": "completed"}])
         _write_jsonl(report_dir / METRICS_JSONL, [{"metric_id": "m1", "value": 1.0}])
-        _write_json(report_dir / ANALYSIS_JSON, {"run_id": "run-1"})
+        _write_json(report_dir / ANALYSIS_JSON, _make_valid_analysis())
         assert is_report_complete(report_dir)
 
     def test_partial_report_missing_manifest_is_not_complete(self, tmp_path: Path):
@@ -72,14 +125,14 @@ class TestReportCompleteness:
         """A report directory missing attempts.jsonl is not complete."""
         report_dir = tmp_path / "report-partial"
         report_dir.mkdir()
-        _write_json(report_dir / MANIFEST_JSON, {"run_id": "run-1"})
+        _write_json(report_dir / MANIFEST_JSON, _make_valid_manifest())
         assert not is_report_complete(report_dir)
 
     def test_partial_report_missing_metrics_is_not_complete(self, tmp_path: Path):
         """A report directory missing metrics.jsonl is not complete."""
         report_dir = tmp_path / "report-partial"
         report_dir.mkdir()
-        _write_json(report_dir / MANIFEST_JSON, {"run_id": "run-1"})
+        _write_json(report_dir / MANIFEST_JSON, _make_valid_manifest())
         _write_jsonl(report_dir / ATTEMPTS_JSONL, [{"attempt_id": "a1", "terminal_status": "completed"}])
         assert not is_report_complete(report_dir)
 
@@ -87,7 +140,7 @@ class TestReportCompleteness:
         """A report directory missing analysis.json is not complete."""
         report_dir = tmp_path / "report-partial"
         report_dir.mkdir()
-        _write_json(report_dir / MANIFEST_JSON, {"run_id": "run-1"})
+        _write_json(report_dir / MANIFEST_JSON, _make_valid_manifest())
         _write_jsonl(report_dir / ATTEMPTS_JSONL, [{"attempt_id": "a1", "terminal_status": "completed"}])
         _write_jsonl(report_dir / METRICS_JSONL, [{"metric_id": "m1", "value": 1.0}])
         assert not is_report_complete(report_dir)
@@ -110,7 +163,7 @@ class TestPartialReportImmutability:
         analysis.json remains interruption evidence, never complete."""
         report_dir = tmp_path / "report-killed"
         report_dir.mkdir()
-        _write_json(report_dir / MANIFEST_JSON, {"run_id": "run-1"})
+        _write_json(report_dir / MANIFEST_JSON, _make_valid_manifest())
         _write_json(report_dir / CAMPAIGN_STATUS_JSON, {"status": "running"})
         _write_jsonl(report_dir / ATTEMPTS_JSONL, [{"attempt_id": "a1", "terminal_status": "completed"}])
         # No analysis.json: the process was killed before finalization
@@ -120,7 +173,7 @@ class TestPartialReportImmutability:
         """Even with a campaign manifest, a report is not complete without analysis."""
         report_dir = tmp_path / "report-partial-campaign"
         report_dir.mkdir()
-        _write_json(report_dir / MANIFEST_JSON, {"run_id": "run-1"})
+        _write_json(report_dir / MANIFEST_JSON, _make_valid_manifest())
         _write_json(report_dir / CAMPAIGN_MANIFEST_JSON, {"campaign_id": "c1"})
         _write_json(report_dir / CAMPAIGN_STATUS_JSON, {"status": "running"})
         _write_jsonl(report_dir / ATTEMPTS_JSONL, [{"attempt_id": "a1", "terminal_status": "completed"}])
@@ -136,6 +189,6 @@ class TestReportCompletenessError:
         (report_dir / MANIFEST_JSON).write_text("{invalid json")
         _write_jsonl(report_dir / ATTEMPTS_JSONL, [{"attempt_id": "a1", "terminal_status": "completed"}])
         _write_jsonl(report_dir / METRICS_JSONL, [{"metric_id": "m1", "value": 1.0}])
-        _write_json(report_dir / ANALYSIS_JSON, {"run_id": "run-1"})
+        _write_json(report_dir / ANALYSIS_JSON, _make_valid_analysis())
         with pytest.raises(ReportCompletenessError):
             is_report_complete(report_dir)

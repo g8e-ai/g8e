@@ -121,6 +121,8 @@ class PreflightRequest:
     content_hashes: list[ContentHash]
     required_content_hash_names: frozenset[str]
     preregistration_hash: str | None
+    # open map: redacted projection of arbitrary caller config keys; only
+    # key-name fragments are checked, values are opaque.
     redacted_config: dict[str, object]
     stack_environment: StackEnvironment
     source_build_provenance: SourceBuildProvenance | None

@@ -15,6 +15,7 @@ from g8e_evals.population_policy import (
     D16_SELECTED_IFEVAL_TASK_IDS,
     FRAMEWORK_SUITE_IDS,
 )
+from g8e_evals.serialization import canonical_model_dict, content_hash_of, provisional_hash
 
 AUTHORITY_SCHEMA_VERSION = "1.0.0"
 # The command version a lease binds. It must match the engine request
@@ -124,26 +125,10 @@ class RoleModelExpectation(BaseModel):
     model: str = Field(min_length=1)
 
 
-def _canonical_payload(model: BaseModel) -> bytes:
-    data = model.model_dump(mode="json", by_alias=True)
-    data.pop("content_hash", None)
-    return json.dumps(
-        data,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
-
-
-def _content_hash(model: BaseModel) -> str:
-    return hashlib.sha256(_canonical_payload(model)).hexdigest()
-
-
 def render_authority_json(model: BaseModel) -> bytes:
     return (
         json.dumps(
-            model.model_dump(mode="json", by_alias=True),
+            canonical_model_dict(model),
             allow_nan=False,
             ensure_ascii=False,
             indent=2,
@@ -192,7 +177,7 @@ class EF7TransportDisposition(BaseModel):
         missing = sorted(_REQUIRED_EF7_BINDINGS.difference(names))
         if missing:
             raise ValueError(f"EF7 transport bindings are incomplete: {missing}")
-        expected = _content_hash(self)
+        expected = content_hash_of(self)
         if self.content_hash != expected:
             raise ValueError(
                 f"EF7 transport disposition content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
@@ -222,7 +207,7 @@ class ExploratoryBaselineAuthority(BaseModel):
         missing = sorted(_REQUIRED_EXPLORATORY_BASELINE_BINDINGS.difference(names))
         if missing:
             raise ValueError(f"exploratory baseline bindings are incomplete: {missing}")
-        expected = _content_hash(self)
+        expected = content_hash_of(self)
         if self.content_hash != expected:
             raise ValueError(
                 f"exploratory baseline authority content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
@@ -265,7 +250,7 @@ class CollectionSmokeAuthority(BaseModel):
             raise ValueError(
                 f"collection smoke bindings are incomplete or unexpected: missing={missing}, extra={extra}"
             )
-        expected = _content_hash(self)
+        expected = content_hash_of(self)
         if self.content_hash != expected:
             raise ValueError(
                 f"collection smoke authority content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
@@ -304,7 +289,7 @@ class GovernedInferenceSmokeAuthority(BaseModel):
         names = [binding.name for binding in self.bindings]
         if len(names) != len(set(names)):
             raise ValueError("governed inference smoke bindings must have unique names")
-        expected = _content_hash(self)
+        expected = content_hash_of(self)
         if self.content_hash != expected:
             raise ValueError(
                 f"governed inference smoke authority content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
@@ -334,7 +319,7 @@ class BudgetAuthority(BaseModel):
             raise ValueError(
                 "aggregate max_tokens cannot exceed max_requests times max_tokens_per_request"
             )
-        expected = _content_hash(self)
+        expected = content_hash_of(self)
         if self.content_hash != expected:
             raise ValueError(
                 f"budget authority content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
@@ -355,7 +340,7 @@ class BudgetAuthoritySet(BaseModel):
         operation_ids = [budget.operation_id for budget in self.budgets]
         if len(operation_ids) != len(set(operation_ids)):
             raise ValueError("budget operation_id values must be unique")
-        expected = _content_hash(self)
+        expected = content_hash_of(self)
         if self.content_hash != expected:
             raise ValueError(
                 f"budget authority set content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
@@ -401,7 +386,7 @@ class LiveOperationLeaseTemplate(BaseModel):
             raise ValueError(
                 "stop_conditions must contain every lease stop condition in canonical order"
             )
-        expected = _content_hash(self)
+        expected = content_hash_of(self)
         if self.content_hash != expected:
             raise ValueError(
                 f"lease template content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
@@ -422,7 +407,7 @@ class LiveOperationLeaseTemplateSet(BaseModel):
         template_ids = [template.template_id for template in self.templates]
         if len(template_ids) != len(set(template_ids)):
             raise ValueError("lease template_id values must be unique")
-        expected = _content_hash(self)
+        expected = content_hash_of(self)
         if self.content_hash != expected:
             raise ValueError(
                 f"lease template set content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
@@ -486,7 +471,7 @@ class LiveOperationLease(BaseModel):
             )
         if self.budget.content_hash != self.template.budget.content_hash:
             raise ValueError("lease budget must match the template")
-        expected = _content_hash(self)
+        expected = content_hash_of(self)
         if self.content_hash != expected:
             raise ValueError(
                 f"live operation lease content_hash mismatch: declared {self.content_hash!r}, computed {expected!r}"
@@ -535,80 +520,128 @@ def compute_request_digest(
 
 
 def build_ef7_transport_disposition(bindings: list[ArtifactBinding]) -> EF7TransportDisposition:
-    fields = {
-        "authority_id": "ef7-v2.1.8-transport-disposition-v1",
-        "authority_version": AUTHORITY_SCHEMA_VERSION,
-        "transport_path": TransportPath.ENSEMBLE_UNGOVERNED,
-        "provider_adapter": "g8e_evals.sut.g8ee_chat.G8eeChatSUT",
-        "timeout_seconds": 120,
-        "max_retries": 1,
-        "concurrency": 1,
-        "bindings": bindings,
-    }
-    provisional = EF7TransportDisposition.model_construct(**fields, content_hash="0" * 64)
-    return EF7TransportDisposition(**fields, content_hash=_content_hash(provisional))
+    content_hash = provisional_hash(
+        EF7TransportDisposition,
+        authority_id="ef7-v2.1.8-transport-disposition-v1",
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        transport_path=TransportPath.ENSEMBLE_UNGOVERNED,
+        provider_adapter="g8e_evals.sut.g8ee_chat.G8eeChatSUT",
+        timeout_seconds=120,
+        max_retries=1,
+        concurrency=1,
+        bindings=bindings,
+    )
+    return EF7TransportDisposition(
+        authority_id="ef7-v2.1.8-transport-disposition-v1",
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        transport_path=TransportPath.ENSEMBLE_UNGOVERNED,
+        provider_adapter="g8e_evals.sut.g8ee_chat.G8eeChatSUT",
+        timeout_seconds=120,
+        max_retries=1,
+        concurrency=1,
+        bindings=bindings,
+        content_hash=content_hash,
+    )
 
 
 def build_exploratory_baseline_authority(
     bindings: list[ArtifactBinding],
 ) -> ExploratoryBaselineAuthority:
-    fields = {
-        "authority_id": "v2.1.8-exploratory-overnight-ifeval-baseline-v1",
-        "authority_version": AUTHORITY_SCHEMA_VERSION,
-        "operation_kind": OperationKind.EXPLORATORY_BASELINE,
-        "benchmark": "ifeval_subset",
-        "transport_path": TransportPath.ENSEMBLE_UNGOVERNED,
-        "assignment_count": 180,
-        "repetitions": 5,
-        "publication_eligible": False,
-        "bindings": bindings,
-    }
-    provisional = ExploratoryBaselineAuthority.model_construct(**fields, content_hash="0" * 64)
-    return ExploratoryBaselineAuthority(**fields, content_hash=_content_hash(provisional))
+    content_hash = provisional_hash(
+        ExploratoryBaselineAuthority,
+        authority_id="v2.1.8-exploratory-overnight-ifeval-baseline-v1",
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        operation_kind=OperationKind.EXPLORATORY_BASELINE,
+        benchmark="ifeval_subset",
+        transport_path=TransportPath.ENSEMBLE_UNGOVERNED,
+        assignment_count=180,
+        repetitions=5,
+        publication_eligible=False,
+        bindings=bindings,
+    )
+    return ExploratoryBaselineAuthority(
+        authority_id="v2.1.8-exploratory-overnight-ifeval-baseline-v1",
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        operation_kind=OperationKind.EXPLORATORY_BASELINE,
+        benchmark="ifeval_subset",
+        transport_path=TransportPath.ENSEMBLE_UNGOVERNED,
+        assignment_count=180,
+        repetitions=5,
+        publication_eligible=False,
+        bindings=bindings,
+        content_hash=content_hash,
+    )
 
 
 def build_collection_smoke_authority(
     bindings: list[ArtifactBinding],
 ) -> CollectionSmokeAuthority:
-    fields = {
-        "authority_id": "opendevops-collection-smoke-v1",
-        "authority_version": AUTHORITY_SCHEMA_VERSION,
-        "operation_kind": OperationKind.COLLECTION_SMOKE,
-        "population_selection_hash": D16_POPULATION_SELECTION_HASH,
-        "runnable_variant_count": 31,
-        "framework_suite_ids": list(FRAMEWORK_SUITE_IDS),
-        "selected_ifeval_task_ids": list(D16_SELECTED_IFEVAL_TASK_IDS),
-        "task_count": 25,
-        "assignment_count": 775,
-        "repetitions": 1,
-        "framework_transport": TransportPath.ENSEMBLE_UNGOVERNED,
-        "ifeval_transport": "direct",
-        "bindings": bindings,
-    }
-    provisional = CollectionSmokeAuthority.model_construct(**fields, content_hash="0" * 64)
-    return CollectionSmokeAuthority(**fields, content_hash=_content_hash(provisional))
+    content_hash = provisional_hash(
+        CollectionSmokeAuthority,
+        authority_id="opendevops-collection-smoke-v1",
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        operation_kind=OperationKind.COLLECTION_SMOKE,
+        population_selection_hash=D16_POPULATION_SELECTION_HASH,
+        runnable_variant_count=31,
+        framework_suite_ids=list(FRAMEWORK_SUITE_IDS),
+        selected_ifeval_task_ids=list(D16_SELECTED_IFEVAL_TASK_IDS),
+        task_count=25,
+        assignment_count=775,
+        repetitions=1,
+        framework_transport=TransportPath.ENSEMBLE_UNGOVERNED,
+        ifeval_transport="direct",
+        bindings=bindings,
+    )
+    return CollectionSmokeAuthority(
+        authority_id="opendevops-collection-smoke-v1",
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        operation_kind=OperationKind.COLLECTION_SMOKE,
+        population_selection_hash=D16_POPULATION_SELECTION_HASH,
+        runnable_variant_count=31,
+        framework_suite_ids=list(FRAMEWORK_SUITE_IDS),
+        selected_ifeval_task_ids=list(D16_SELECTED_IFEVAL_TASK_IDS),
+        task_count=25,
+        assignment_count=775,
+        repetitions=1,
+        framework_transport=TransportPath.ENSEMBLE_UNGOVERNED,
+        ifeval_transport="direct",
+        bindings=bindings,
+        content_hash=content_hash,
+    )
 
 
 def build_governed_inference_smoke_authority(
     bindings: list[ArtifactBinding],
 ) -> GovernedInferenceSmokeAuthority:
-    fields = {
-        "authority_id": "governed-inference-smoke-v1",
-        "authority_version": AUTHORITY_SCHEMA_VERSION,
-        "roles": list(ModelRole),
-        "model_expectations": [
-            RoleModelExpectation(role=ModelRole.PRIMARY, model="qwen3:4b"),
-            RoleModelExpectation(role=ModelRole.ASSISTANT, model="qwen3:1.7b"),
-            RoleModelExpectation(role=ModelRole.LITE, model="qwen3:0.6b"),
-        ],
-        "max_provider_calls": len(ModelRole),
-        "automatic_retry": False,
-        "target_operator_session_required": True,
-        "required_evidence": list(EvidenceRequirement),
-        "bindings": bindings,
-    }
-    provisional = GovernedInferenceSmokeAuthority.model_construct(**fields, content_hash="0" * 64)
-    return GovernedInferenceSmokeAuthority(**fields, content_hash=_content_hash(provisional))
+    model_expectations = [
+        RoleModelExpectation(role=ModelRole.PRIMARY, model="qwen3:4b"),
+        RoleModelExpectation(role=ModelRole.ASSISTANT, model="qwen3:1.7b"),
+        RoleModelExpectation(role=ModelRole.LITE, model="qwen3:0.6b"),
+    ]
+    content_hash = provisional_hash(
+        GovernedInferenceSmokeAuthority,
+        authority_id="governed-inference-smoke-v1",
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        roles=list(ModelRole),
+        model_expectations=model_expectations,
+        max_provider_calls=len(ModelRole),
+        automatic_retry=False,
+        target_operator_session_required=True,
+        required_evidence=list(EvidenceRequirement),
+        bindings=bindings,
+    )
+    return GovernedInferenceSmokeAuthority(
+        authority_id="governed-inference-smoke-v1",
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        roles=list(ModelRole),
+        model_expectations=model_expectations,
+        max_provider_calls=len(ModelRole),
+        automatic_retry=False,
+        target_operator_session_required=True,
+        required_evidence=list(EvidenceRequirement),
+        bindings=bindings,
+        content_hash=content_hash,
+    )
 
 
 def build_budget_authority(
@@ -624,33 +657,51 @@ def build_budget_authority(
     max_retries: int,
     max_replacements: int,
 ) -> BudgetAuthority:
-    fields = {
-        "operation_id": operation_id,
-        "authority_version": AUTHORITY_SCHEMA_VERSION,
-        "max_requests": max_requests,
-        "max_tokens_per_request": max_tokens_per_request,
-        "max_tokens": max_tokens,
-        "max_usd": max_usd,
-        "concurrency": concurrency,
-        "min_free_disk_bytes": min_free_disk_bytes,
-        "max_duration_seconds": max_duration_seconds,
-        "max_retries": max_retries,
-        "max_replacements": max_replacements,
-    }
-    provisional = BudgetAuthority.model_construct(**fields, content_hash="0" * 64)
-    return BudgetAuthority(**fields, content_hash=_content_hash(provisional))
+    content_hash = provisional_hash(
+        BudgetAuthority,
+        operation_id=operation_id,
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        max_requests=max_requests,
+        max_tokens_per_request=max_tokens_per_request,
+        max_tokens=max_tokens,
+        max_usd=max_usd,
+        concurrency=concurrency,
+        min_free_disk_bytes=min_free_disk_bytes,
+        max_duration_seconds=max_duration_seconds,
+        max_retries=max_retries,
+        max_replacements=max_replacements,
+    )
+    return BudgetAuthority(
+        operation_id=operation_id,
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        max_requests=max_requests,
+        max_tokens_per_request=max_tokens_per_request,
+        max_tokens=max_tokens,
+        max_usd=max_usd,
+        concurrency=concurrency,
+        min_free_disk_bytes=min_free_disk_bytes,
+        max_duration_seconds=max_duration_seconds,
+        max_retries=max_retries,
+        max_replacements=max_replacements,
+        content_hash=content_hash,
+    )
 
 
 def build_budget_authority_set(
     authority_id: str, budgets: list[BudgetAuthority]
 ) -> BudgetAuthoritySet:
-    fields = {
-        "authority_id": authority_id,
-        "authority_version": AUTHORITY_SCHEMA_VERSION,
-        "budgets": budgets,
-    }
-    provisional = BudgetAuthoritySet.model_construct(**fields, content_hash="0" * 64)
-    return BudgetAuthoritySet(**fields, content_hash=_content_hash(provisional))
+    content_hash = provisional_hash(
+        BudgetAuthoritySet,
+        authority_id=authority_id,
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        budgets=budgets,
+    )
+    return BudgetAuthoritySet(
+        authority_id=authority_id,
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        budgets=budgets,
+        content_hash=content_hash,
+    )
 
 
 def build_live_operation_lease_template(
@@ -663,36 +714,56 @@ def build_live_operation_lease_template(
     permitted_command_family: CommandFamily,
     required_runtime_authority_names: list[str],
 ) -> LiveOperationLeaseTemplate:
-    fields = {
-        "template_id": template_id,
-        "authority_version": AUTHORITY_SCHEMA_VERSION,
-        "operation_kind": operation_kind,
-        "operation_authority_hash": operation_authority_hash,
-        "budget": budget,
-        "endpoint": endpoint,
-        "endpoint_class": "remote",
-        "permitted_command_family": permitted_command_family,
-        "required_runtime_authority_names": required_runtime_authority_names,
-        "inventory_check_required": True,
-        "fresh_candidate_identity_required": True,
-        "fresh_report_root_required": True,
-        "stop_conditions": list(LeaseStopCondition),
-    }
-    provisional = LiveOperationLeaseTemplate.model_construct(**fields, content_hash="0" * 64)
-    return LiveOperationLeaseTemplate(**fields, content_hash=_content_hash(provisional))
+    content_hash = provisional_hash(
+        LiveOperationLeaseTemplate,
+        template_id=template_id,
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        operation_kind=operation_kind,
+        operation_authority_hash=operation_authority_hash,
+        budget=budget,
+        endpoint=endpoint,
+        endpoint_class="remote",
+        permitted_command_family=permitted_command_family,
+        required_runtime_authority_names=required_runtime_authority_names,
+        inventory_check_required=True,
+        fresh_candidate_identity_required=True,
+        fresh_report_root_required=True,
+        stop_conditions=list(LeaseStopCondition),
+    )
+    return LiveOperationLeaseTemplate(
+        template_id=template_id,
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        operation_kind=operation_kind,
+        operation_authority_hash=operation_authority_hash,
+        budget=budget,
+        endpoint=endpoint,
+        endpoint_class="remote",
+        permitted_command_family=permitted_command_family,
+        required_runtime_authority_names=required_runtime_authority_names,
+        inventory_check_required=True,
+        fresh_candidate_identity_required=True,
+        fresh_report_root_required=True,
+        stop_conditions=list(LeaseStopCondition),
+        content_hash=content_hash,
+    )
 
 
 def build_live_operation_lease_template_set(
     authority_id: str,
     templates: list[LiveOperationLeaseTemplate],
 ) -> LiveOperationLeaseTemplateSet:
-    fields = {
-        "authority_id": authority_id,
-        "authority_version": AUTHORITY_SCHEMA_VERSION,
-        "templates": templates,
-    }
-    provisional = LiveOperationLeaseTemplateSet.model_construct(**fields, content_hash="0" * 64)
-    return LiveOperationLeaseTemplateSet(**fields, content_hash=_content_hash(provisional))
+    content_hash = provisional_hash(
+        LiveOperationLeaseTemplateSet,
+        authority_id=authority_id,
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        templates=templates,
+    )
+    return LiveOperationLeaseTemplateSet(
+        authority_id=authority_id,
+        authority_version=AUTHORITY_SCHEMA_VERSION,
+        templates=templates,
+        content_hash=content_hash,
+    )
 
 
 def build_live_operation_lease(
@@ -714,25 +785,45 @@ def build_live_operation_lease(
     expires_at: datetime,
     status: LeaseStatus,
 ) -> LiveOperationLease:
-    fields = {
-        "lease_id": lease_id,
-        "template": template,
-        "candidate": candidate,
-        "model_inventory_digest": model_inventory_digest,
-        "operation_identity": operation_identity,
-        "runtime_authorities": runtime_authorities,
-        "request_digest": request_digest,
-        "command_family": command_family,
-        "command_version": command_version,
-        "report_root": report_root,
-        "app_identity": app_identity,
-        "operator_session_identity": operator_session_identity,
-        "endpoint": template.endpoint,
-        "budget": template.budget,
-        "issued_at": issued_at,
-        "start_deadline": start_deadline,
-        "expires_at": expires_at,
-        "status": status,
-    }
-    provisional = LiveOperationLease.model_construct(**fields, content_hash="0" * 64)
-    return LiveOperationLease(**fields, content_hash=_content_hash(provisional))
+    content_hash = provisional_hash(
+        LiveOperationLease,
+        lease_id=lease_id,
+        template=template,
+        candidate=candidate,
+        model_inventory_digest=model_inventory_digest,
+        operation_identity=operation_identity,
+        runtime_authorities=runtime_authorities,
+        request_digest=request_digest,
+        command_family=command_family,
+        command_version=command_version,
+        report_root=report_root,
+        app_identity=app_identity,
+        operator_session_identity=operator_session_identity,
+        endpoint=template.endpoint,
+        budget=template.budget,
+        issued_at=issued_at,
+        start_deadline=start_deadline,
+        expires_at=expires_at,
+        status=status,
+    )
+    return LiveOperationLease(
+        lease_id=lease_id,
+        template=template,
+        candidate=candidate,
+        model_inventory_digest=model_inventory_digest,
+        operation_identity=operation_identity,
+        runtime_authorities=runtime_authorities,
+        request_digest=request_digest,
+        command_family=command_family,
+        command_version=command_version,
+        report_root=report_root,
+        app_identity=app_identity,
+        operator_session_identity=operator_session_identity,
+        endpoint=template.endpoint,
+        budget=template.budget,
+        issued_at=issued_at,
+        start_deadline=start_deadline,
+        expires_at=expires_at,
+        status=status,
+        content_hash=content_hash,
+    )

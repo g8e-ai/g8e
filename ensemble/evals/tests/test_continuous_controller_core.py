@@ -727,7 +727,7 @@ class TestOrderedOutboxRecovery:
         outbox = Outbox(outbox_dir)
         e1 = make_outbox_entry("e1", "cycle-1", "child-a", "reports/a", _VALID_DIGEST)
         outbox.enqueue(e1)
-        with pytest.raises(ValueError, match="already exists"):
+        with pytest.raises(ControllerError, match="already exists"):
             outbox.enqueue(e1)
 
     def test_outbox_recovery_rejects_unknown_index_action(self, tmp_path: Path):
@@ -748,7 +748,7 @@ class TestOrderedOutboxRecovery:
         outbox.enqueue(entry)
         (outbox_dir / OUTBOX_ENTRIES_DIR / "e1.json").unlink()
 
-        with pytest.raises(ValueError, match="payload is missing"):
+        with pytest.raises(ControllerError, match="payload is missing"):
             outbox.recover()
 
     def test_outbox_entry_rejects_unsafe_path_identity(self):

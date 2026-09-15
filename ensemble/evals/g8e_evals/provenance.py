@@ -25,6 +25,7 @@ delete any files.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 
@@ -103,20 +104,20 @@ class ProvenanceVerificationResult(BaseModel):
     failures: list[ProvenanceFailure]
 
 
-def compute_manifest_hash(entries: list[dict]) -> str:
+def compute_manifest_hash(entries: Sequence[SourceInclusionEntry]) -> str:
     """Compute a deterministic SHA-256 over the canonical manifest content.
 
     Entries are sorted by path so the hash is independent of input order.
     Each entry contributes its path, SHA-256, and byte length.
     """
-    sorted_entries = sorted(entries, key=lambda e: e["path"])
+    sorted_entries = sorted(entries, key=lambda e: e.path)
     hasher = hashlib.sha256()
     for entry in sorted_entries:
-        hasher.update(entry["path"].encode("utf-8"))
+        hasher.update(entry.path.encode("utf-8"))
         hasher.update(b"\0")
-        hasher.update(entry["sha256"].encode("utf-8"))
+        hasher.update(entry.sha256.encode("utf-8"))
         hasher.update(b"\0")
-        hasher.update(str(entry["byte_length"]).encode("utf-8"))
+        hasher.update(str(entry.byte_length).encode("utf-8"))
         hasher.update(b"\0")
     return hasher.hexdigest()
 
@@ -155,11 +156,7 @@ def verify_source_provenance(
 
     # Layer 1: manifest hash
     checked_layers.append("manifest_hash")
-    entry_dicts = [
-        {"path": e.path, "sha256": e.sha256, "byte_length": e.byte_length}
-        for e in manifest.entries
-    ]
-    computed_hash = compute_manifest_hash(entry_dicts)
+    computed_hash = compute_manifest_hash(manifest.entries)
     if computed_hash != manifest.manifest_hash:
         failures.append(ProvenanceFailure(
             code=ProvenanceFailureCode.MANIFEST_HASH_MISMATCH,

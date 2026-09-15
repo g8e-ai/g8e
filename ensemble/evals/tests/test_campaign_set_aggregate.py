@@ -75,6 +75,7 @@ from g8e_evals.constants import (
 )
 from g8e_evals.harness import Response, Score, Task
 from g8e_evals.index import (
+    ModelRole,
     compute_index_generation_hash,
 )
 from g8e_evals.models import ScoreDetails, TaskMetadata
@@ -106,6 +107,10 @@ class _FakeSUT:
         return Response(answer=self.answer, model=self.model_id, arm=Arm.DIRECT)
 
 
+    def close(self) -> None:
+        pass
+
+
 @dataclass
 class _FakeGrader:
     grader_id: str = "ifeval_subset_verifier"
@@ -116,26 +121,21 @@ class _FakeGrader:
 
 
 def _make_spec(campaign_id: str, task_ids: list[str]) -> CampaignSpec:
+    binding = RoleModelBinding(
+        role=ModelRole.PRIMARY,
+        model_id="qwen3:8b",
+        provider="ollama",
+        endpoint="http://192.168.1.2:11434",
+        sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
+        timeout_seconds=120.0,
+        seed_capable=True,
+    )
     cohort = ModelCohort(
         cohort_id="cohort-qwen3-8b",
-        role_bindings=[RoleModelBinding(
-            role="primary",
-            model_id="qwen3:8b",
-            provider="ollama",
-            endpoint="http://192.168.1.2:11434",
-            sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
-            timeout_seconds=120.0,
-            seed_capable=True,
-        )],
-        content_hash=compute_model_cohort_hash("cohort-qwen3-8b", [RoleModelBinding(
-            role="primary",
-            model_id="qwen3:8b",
-            provider="ollama",
-            endpoint="http://192.168.1.2:11434",
-            sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
-            timeout_seconds=120.0,
-            seed_capable=True,
-        )]),
+        candidate_variant_id="qwen3-8b",
+        candidate_role=ModelRole.PRIMARY,
+        role_bindings=[binding],
+        content_hash=compute_model_cohort_hash("cohort-qwen3-8b", "qwen3-8b", ModelRole.PRIMARY, [binding]),
     )
     task_assignment = TaskAssignmentManifest(
         task_assignment_id=f"task-assignment-{campaign_id}",
@@ -714,11 +714,12 @@ class TestAggregateVerifierMutations:
         assert any("report checksum" in f.lower() for f in result.failures)
 
     def test_tampered_attempts_fail_report_checksum(self, tmp_path: Path):
-        """Tampering with attempts.jsonl makes the recomputed checksum mismatch.
+        """Tampering with attempts.jsonl is detected by the verifier.
 
         The verifier recomputes the checksum from the actual attempts
-        and metrics files. A tampered attempts file produces a different
-        checksum than the index entry declares.
+        and metrics files. A tampered attempts file with an invalid
+        terminal_status is rejected at parse time (typed reads fail
+        closed on malformed records), producing a verification failure.
         """
         from g8e_evals.constants import ATTEMPTS_JSONL
 
@@ -734,7 +735,6 @@ class TestAggregateVerifierMutations:
                 attempts_path.write_text("\n".join(lines) + "\n")
         result = verify_campaign_set_aggregate(plan, index, child_dirs)
         assert not result.ok
-        assert any("report checksum" in f.lower() for f in result.failures)
 
     def test_alter_assignment_product_preserving_count_fails(self, tmp_path: Path):
         """Altering assignment task IDs while preserving count fails product check.

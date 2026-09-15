@@ -151,12 +151,29 @@ def _make_proj(variant: str, task: str, rep: int, value: float, role: str = "") 
 
 
 def test_role_scoped_cohort_identity_preserves_variant_and_role() -> None:
-    from g8e_evals.publication import _extract_role, _extract_variant_id
+    from g8e_evals.campaign import ModelCohort, RoleModelBinding, SamplingSettings, compute_model_cohort_hash
+    from g8e_evals.index import ModelRole
 
     cohort_id = "cohort-qwen3-8b-role-assistant"
+    binding = RoleModelBinding(
+        role=ModelRole.ASSISTANT,
+        model_id="qwen3:8b",
+        provider="ollama",
+        endpoint="http://192.168.1.2:11434",
+        sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=42),
+        timeout_seconds=120.0,
+        seed_capable=True,
+    )
+    cohort = ModelCohort(
+        cohort_id=cohort_id,
+        candidate_variant_id="qwen3-8b",
+        candidate_role=ModelRole.ASSISTANT,
+        role_bindings=[binding],
+        content_hash=compute_model_cohort_hash(cohort_id, "qwen3-8b", ModelRole.ASSISTANT, [binding]),
+    )
 
-    assert _extract_variant_id(cohort_id) == "qwen3-8b"
-    assert _extract_role(cohort_id) == "assistant"
+    assert cohort.candidate_variant_id == "qwen3-8b"
+    assert cohort.candidate_role == ModelRole.ASSISTANT
 
 
 def test_generate_variant_summaries_separates_roles_for_same_variant() -> None:

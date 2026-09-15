@@ -31,8 +31,8 @@ from g8e_evals.engine_protocol import (
     succeeded_result,
 )
 from g8e_evals.constants import EVAL_LAUNCH_STATE_JSON
-from g8e_evals.operation_config import CampaignConfig, DiagnosticConfig, load_operation_config
-from g8e_evals.operation_lifecycle import operation_status, resolve_report_root, stop_operation, verify_operation
+from g8e_evals.operation_config import CampaignConfig, DiagnosticConfig, OperationConfigBase, load_operation_config
+from g8e_evals.operation_lifecycle import LaunchState, operation_status, resolve_report_root, stop_operation, verify_operation
 from g8e_evals.stop_request import (
     StopRequestConsumer,
     StopRequestError,
@@ -141,7 +141,7 @@ def _classify_callback_exception(exc: BaseException) -> tuple[EvalErrorCode, str
     return EvalErrorCode.CHILD_EXIT_NON_ZERO, _safe_detail(exc)
 
 
-def _build_launch_record(request: EvalEngineRequest, config: object, report_root: Path, status: str, started_at: str | None = None) -> dict:
+def _build_launch_record(request: EvalEngineRequest, config: OperationConfigBase, report_root: Path, status: str, started_at: str | None = None) -> LaunchState:
     """Build a content-hashed, identity-bound launch record.
 
     Binds operation ID, revision, config content hash, lease ID, lease
@@ -150,27 +150,29 @@ def _build_launch_record(request: EvalEngineRequest, config: object, report_root
     content_hash field itself, matching the operation config convention.
     """
     lease_id = Path(request.lease_path).stem if request.lease_path else ""
-    record = {
-        "operation_id": request.operation_id,
-        "revision": request.revision,
-        "config_content_hash": getattr(config, "content_hash", ""),
-        "lease_id": lease_id,
-        "lease_path": request.lease_path,
-        "pid": os.getpid(),
-        "candidate_binary_sha256": request.platform.g8e_binary_sha256,
-        "report_root": str(report_root),
-        "status": status,
-        "started_at": started_at or datetime.now(UTC).isoformat(),
-        "updated_at": datetime.now(UTC).isoformat(),
-    }
-    hash_payload = {k: v for k, v in record.items() if k != "content_hash"}
-    record["content_hash"] = hashlib.sha256(
+    now = datetime.now(UTC).isoformat()
+    effective_started_at = started_at or now
+    record = LaunchState(
+        operation_id=request.operation_id,
+        revision=request.revision,
+        config_content_hash=config.content_hash or "",
+        lease_id=lease_id,
+        lease_path=request.lease_path,
+        pid=os.getpid(),
+        candidate_binary_sha256=request.platform.g8e_binary_sha256,
+        report_root=str(report_root),
+        status=status,
+        started_at=effective_started_at,
+        updated_at=now,
+    )
+    hash_payload = record.model_dump(exclude={"content_hash"}, exclude_none=True)
+    content_hash = hashlib.sha256(
         json.dumps(hash_payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
-    return record
+    return record.model_copy(update={"content_hash": content_hash})
 
 
-def _write_launch_state(report_root: Path, request: EvalEngineRequest, config: object, status: str, started_at: str | None = None) -> dict:
+def _write_launch_state(report_root: Path, request: EvalEngineRequest, config: OperationConfigBase, status: str, started_at: str | None = None) -> LaunchState:
     """Atomically write a content-hashed launch record.
 
     Writes to a temp file then renames so the record is never partially
@@ -179,50 +181,52 @@ def _write_launch_state(report_root: Path, request: EvalEngineRequest, config: o
     record = _build_launch_record(request, config, report_root, status, started_at)
     target = report_root / EVAL_LAUNCH_STATE_JSON
     tmp = target.with_suffix(".tmp")
-    tmp.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n")
+    tmp.write_text(record.model_dump_json(indent=2) + "\n")
     tmp.replace(target)
     return record
 
 
-def _transition_launch_state(report_root: Path, request: EvalEngineRequest, config: object, status: str, started_at: str) -> None:
+def _transition_launch_state(report_root: Path, request: EvalEngineRequest, config: OperationConfigBase, status: str, started_at: str) -> None:
     """Atomically transition the launch record to a terminal state.
 
     Preserves the original started_at and verifies the operation identity
     before transitioning. Does not rely on PID existence alone.
     """
     target = report_root / EVAL_LAUNCH_STATE_JSON
-    existing = {}
+    existing: LaunchState | None = None
     if target.is_file():
-        existing = json.loads(target.read_text())
-    if existing.get("operation_id") != request.operation_id or existing.get("revision") != request.revision:
+        try:
+            existing = LaunchState.model_validate_json(target.read_text())
+        except (ValueError, OSError):
+            existing = None
+    if existing is None or existing.operation_id != request.operation_id or existing.revision != request.revision:
         raise EngineError(
             EvalErrorCode.STATUS_RECONCILIATION_FAILED,
             "launch_state",
             "launch state identity does not match operation",
         )
     record = _build_launch_record(request, config, report_root, status, started_at)
-    record["started_at"] = existing.get("started_at", started_at)
-    hash_payload = {k: v for k, v in record.items() if k != "content_hash"}
-    record["content_hash"] = hashlib.sha256(
-        json.dumps(hash_payload, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
+    record = record.model_copy(update={"started_at": existing.started_at or started_at})
     tmp = target.with_suffix(".tmp")
-    tmp.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n")
+    tmp.write_text(record.model_dump_json(indent=2) + "\n")
     tmp.replace(target)
 
 
-def _build_stop_consumer(report_root: Path, request: EvalEngineRequest, config: object) -> StopRequestConsumer | None:
+def _build_stop_consumer(report_root: Path, request: EvalEngineRequest, config: OperationConfigBase) -> StopRequestConsumer | None:
     """Construct a StopRequestConsumer bound to the launch record's
     content hash. Returns None when the launch record has no content hash
     (the consumer cannot bind without it)."""
     launch_path = report_root / EVAL_LAUNCH_STATE_JSON
     if not launch_path.is_file():
         return None
-    launch = json.loads(launch_path.read_text())
-    launch_content_hash = launch.get("content_hash")
+    try:
+        launch = LaunchState.model_validate_json(launch_path.read_text())
+    except (ValueError, OSError):
+        return None
+    launch_content_hash = launch.content_hash
     if not isinstance(launch_content_hash, str) or len(launch_content_hash) != 64:
         return None
-    config_content_hash = getattr(config, "content_hash", "") or ""
+    config_content_hash = config.content_hash or ""
     identity = StopRequestIdentity(
         operation_id=request.operation_id,
         revision=request.revision,

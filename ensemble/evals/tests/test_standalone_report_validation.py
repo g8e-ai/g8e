@@ -23,6 +23,14 @@ import pytest
 
 pytestmark = pytest.mark.integration
 
+from g8e_evals.analysis.canonical import (
+    ANALYSIS_COMPUTATION_VERSION,
+    ANALYSIS_SCHEMA_VERSION,
+    CanonicalEvalAnalysis,
+    MissingnessBreakdown,
+    ReceiptCoverageAnalysis,
+    AnalysisInputSummary,
+)
 from g8e_evals.constants import (
     ANALYSIS_JSON,
     ATTEMPTS_JSONL,
@@ -32,6 +40,7 @@ from g8e_evals.constants import (
     TASKS_JSONL,
 )
 from g8e_evals.report.validate import (
+    ReportChecksum,
     StandaloneReportResult,
     validate_standalone_report,
 )
@@ -49,6 +58,40 @@ def _write_jsonl(path: Path, records: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [json.dumps(r) for r in records]
     path.write_text("\n".join(lines) + ("\n" if lines else ""))
+
+
+def _make_valid_analysis() -> CanonicalEvalAnalysis:
+    """Build a minimal valid CanonicalEvalAnalysis for fixtures."""
+    return CanonicalEvalAnalysis(
+        analysis_schema_version=ANALYSIS_SCHEMA_VERSION,
+        analysis_computation_version=ANALYSIS_COMPUTATION_VERSION,
+        release_version="v2.1.8",
+        run_id="run-1",
+        input_summary=AnalysisInputSummary(
+            task_count=1,
+            attempt_count=1,
+            observation_count=0,
+            receipt_count=0,
+            stage_count=0,
+            metric_observation_count=0,
+            input_content_hash="abc123",
+        ),
+        missingness=MissingnessBreakdown(
+            completed=1,
+            model_failed=0,
+            governance_rejected=0,
+            human_denied=0,
+            timed_out=0,
+            infrastructure_failed=0,
+            invalid_evidence=0,
+        ),
+        receipt_coverage=ReceiptCoverageAnalysis(
+            eligible_attempt_count=0,
+            receipt_bound_count=0,
+            receipt_verified_count=0,
+        ),
+        arm_ids=["direct"],
+    )
 
 
 def _make_valid_report(report_dir: Path) -> None:
@@ -81,7 +124,7 @@ def _make_valid_report(report_dir: Path) -> None:
          "verification_status": "verified", "grader_class": "deterministic",
          "evidence_refs": []},
     ])
-    _write_json(report_dir / ANALYSIS_JSON, {"run_id": "run-1"})
+    _write_json(report_dir / ANALYSIS_JSON, json.loads(_make_valid_analysis().model_dump_json()))
     _write_jsonl(report_dir / EVIDENCE_INDEX_JSONL, [])
 
 
@@ -111,7 +154,7 @@ class TestStandaloneReportValidationFail:
         _write_jsonl(report_dir / ATTEMPTS_JSONL, [
             {"attempt_id": "att-1", "terminal_status": "completed"}])
         _write_jsonl(report_dir / METRICS_JSONL, [])
-        _write_json(report_dir / ANALYSIS_JSON, {})
+        _write_json(report_dir / ANALYSIS_JSON, json.loads(_make_valid_analysis().model_dump_json()))
         result = validate_standalone_report(report_dir)
         assert not result.ok
         assert any("manifest" in f for f in result.failures)
@@ -187,10 +230,9 @@ class TestStandaloneReportValidationFail:
         """A report checksum that does not match the computed checksum fails."""
         report_dir = tmp_path / "report-checksum-mismatch"
         _make_valid_report(report_dir)
-        _write_json(report_dir / "report-checksum.json", {
-            "checksum": "0" * 64,
-            "algorithm": "sha256",
-        })
+        _write_json(report_dir / "report-checksum.json", ReportChecksum(
+            checksum="0" * 64,
+        ).model_dump())
         result = validate_standalone_report(report_dir)
         assert not result.ok
         assert any("checksum" in f.lower() for f in result.failures)

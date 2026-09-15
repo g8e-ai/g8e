@@ -44,7 +44,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from collections.abc import Sequence
+from collections.abc import Awaitable, Sequence
 from typing import TYPE_CHECKING, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -63,6 +63,7 @@ from g8e_evals.analysis.input import AnalysisInputRecord
 from g8e_evals.arms import Arm, ArmDefinition, get_arm_definition
 from g8e_evals.campaign import (
     CAMPAIGN_CONTRACT_VERSION,
+    MODEL_ROLE_ORDER,
     CampaignAssignment,
     CampaignManifest,
     CampaignStatus,
@@ -124,12 +125,17 @@ from g8e_evals.index import (
     compute_index_generation_hash,
 )
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
+from g8e_evals.operation_lifecycle import (
+    CampaignProgressRecord,
+    CampaignStatusRecord,
+)
 from g8e_evals.profile import CampaignProfile, ModelTierAssignment
 from g8e_evals.registry import ModelRegistry
 from g8e_evals.replacement_rule import (
     resolve_replacement_child_id,
     validate_replacement_rule_plan_binding,
 )
+from g8e_evals.serialization import canonical_model_list
 from g8e_evals.stop_request import StopRequestConsumer
 from g8e_evals.report.validate import validate_standalone_report
 from g8e_evals.schema import (
@@ -468,6 +474,17 @@ class SUTProtocol(Protocol):
 
     async def get_answer(self, task: Task) -> Response: ...
 
+    def close(self) -> Awaitable[None] | None:
+        """Release resources held by the SUT.
+
+        Optional: implementations may declare an async ``close`` coroutine
+        or a sync ``close`` method. The runner awaits coroutine results and
+        ignores sync ``None`` returns. SUTs with no resources to release
+        may omit this method entirely; the runner treats absence as a
+        no-op.
+        """
+        ...
+
 
 class SUTFactory(Protocol):
     """Factory that creates a SUT for a (cohort, arm) pair."""
@@ -775,14 +792,6 @@ def compute_provider_budget_hash(budget: ProviderBudget | None) -> str:
     return _compute_simple_hash(
         f"budget:max_usd={budget.max_usd}:max_tokens={max_tokens_str}:max_requests={max_requests_str}"
     )
-
-
-def _model_id_for_cohort(cohort: ModelCohort) -> str:
-    """Extract the primary model ID from a cohort's role bindings."""
-    for rb in cohort.role_bindings:
-        if rb.role == "primary":
-            return rb.model_id
-    return cohort.role_bindings[0].model_id
 
 
 def _model_matches(observed: str, expected: str) -> bool:
@@ -1151,17 +1160,16 @@ def _build_evidence_index_entries(
 def derive_cohorts_from_registry(
     profile: CampaignProfile,
     registry: ModelRegistry,
-) -> tuple[list[ModelCohort], dict[str, str]]:
+) -> list[ModelCohort]:
     """Derive campaign cohorts from the model registry.
 
-    Builds one cohort per runnable variant in the profile's
-    ``generative_variant_ids``. Each cohort's primary role binding
-    carries the variant's served model tag and backend name, with
-    sampling settings and timeout from the profile. The cohort ID is
-    ``cohort-{variant_id}``.
+    Builds one cohort per runnable (variant, target tier) assignment in
+    the profile's ``model_tier_assignments``; variants without an
+    explicit assignment default to the primary tier. Each cohort carries
+    the candidate variant identity and role as typed fields; the cohort
+    ID is a display label only and is never parsed for semantics.
 
-    Returns the list of cohorts and a mapping from cohort ID to variant
-    ID for SUT factory wiring.
+    Returns the list of cohorts.
     """
     runnable_ids = set(registry.runnable_variant_ids())
     measured_ids = [
@@ -1176,13 +1184,12 @@ def derive_cohorts_from_registry(
     ]
     assigned_ids = {assignment.variant_id for assignment in assignments}
     assignments.extend(
-        ModelTierAssignment(variant_id=variant_id, target_tier="primary")
+        ModelTierAssignment(variant_id=variant_id, target_tier=ModelRole.PRIMARY)
         for variant_id in measured_ids
         if variant_id not in assigned_ids
     )
 
     cohorts: list[ModelCohort] = []
-    cohort_variant_map: dict[str, str] = {}
     for assignment in assignments:
         variant = registry.get_variant(assignment.variant_id)
         cohort_id = f"cohort-{assignment.variant_id}-role-{assignment.target_tier}"
@@ -1193,7 +1200,7 @@ def derive_cohorts_from_registry(
             )
         }
         if explicit_tier_assignments:
-            for tier_name in _ALL_TIER_NAMES:
+            for tier_name in MODEL_ROLE_ORDER:
                 if tier_name == assignment.target_tier:
                     continue
                 baseline_tag = profile.baseline_tier_mappings.get(tier_name)
@@ -1213,26 +1220,25 @@ def derive_cohorts_from_registry(
             ),
             timeout_seconds=profile.timeout_seconds,
             seed_capable=True,
-        ) for tier_name in _ALL_TIER_NAMES if tier_name in role_models]
-        ch = compute_model_cohort_hash(cohort_id, bindings)
+        ) for tier_name in MODEL_ROLE_ORDER if tier_name in role_models]
+        ch = compute_model_cohort_hash(
+            cohort_id, assignment.variant_id, assignment.target_tier, bindings
+        )
         cohorts.append(ModelCohort(
             cohort_id=cohort_id,
+            candidate_variant_id=assignment.variant_id,
+            candidate_role=assignment.target_tier,
             role_bindings=bindings,
             content_hash=ch,
         ))
-        cohort_variant_map[cohort_id] = assignment.variant_id
 
-    return cohorts, cohort_variant_map
-
-
-_ALL_TIER_NAMES = ("primary", "assistant", "lite")
+    return cohorts
 
 
 def build_tier_fitness_sut_config(
     cohort: ModelCohort,
     arm: Arm,
     campaign_profile: CampaignProfile,
-    cohort_variant_map: dict[str, str],
     g8ee_url: str,
     operator_url: str | None = None,
     operator_session_id: str | None = None,
@@ -1241,29 +1247,19 @@ def build_tier_fitness_sut_config(
 ) -> SUTConfig:
     """Build a ``SUTConfig`` for a tier-fitness assignment.
 
-    The candidate model (from the cohort's primary role binding) replaces
-    the target tier declared in the campaign profile's
-    ``model_tier_assignments``. Non-target tiers are filled from
-    ``baseline_tier_mappings``.
+    The candidate model is the cohort's candidate binding (the role the
+    candidate occupies). Non-candidate roles are filled from the cohort's
+    own role bindings, falling back to the profile's
+    ``baseline_tier_mappings`` when the cohort does not bind that role.
 
-    Raises ``ValueError`` when the cohort's variant is not found in
-    ``cohort_variant_map``, when no ``model_tier_assignment`` exists for
-    the variant, or when a ``baseline_tier_mapping`` is missing for a
-    non-target tier.
+    Raises ``ValueError`` when no ``model_tier_assignment`` exists for the
+    cohort's candidate variant and role, or when a ``baseline_tier_mapping``
+    is missing for a role the cohort does not bind.
     """
     from g8e_evals.harness import LLMRoleConfig
 
-    variant_id = cohort_variant_map.get(cohort.cohort_id)
-    if variant_id is None:
-        raise ValueError(
-            f"cohort {cohort.cohort_id!r} not found in cohort_variant_map"
-        )
-
-    target_tier = cohort.role_bindings[0].role
-    if "-role-" in cohort.cohort_id:
-        _, declared_tier = cohort.cohort_id.rsplit("-role-", 1)
-        if declared_tier in _ALL_TIER_NAMES:
-            target_tier = declared_tier
+    variant_id = cohort.candidate_variant_id
+    target_tier = cohort.candidate_role
     if not any(
         assignment.variant_id == variant_id and assignment.target_tier == target_tier
         for assignment in campaign_profile.model_tier_assignments
@@ -1273,13 +1269,11 @@ def build_tier_fitness_sut_config(
         )
 
     binding_by_role = {binding.role: binding for binding in cohort.role_bindings}
-    candidate_binding = binding_by_role.get(target_tier)
-    if candidate_binding is None:
-        raise ValueError(f"cohort {cohort.cohort_id!r} has no binding for target tier {target_tier!r}")
+    candidate_binding = cohort.candidate_binding()
     candidate_model = candidate_binding.model_id
 
-    role_configs: dict[str, LLMRoleConfig] = {}
-    for tier_name in _ALL_TIER_NAMES:
+    role_configs: dict[ModelRole, LLMRoleConfig] = {}
+    for tier_name in MODEL_ROLE_ORDER:
         binding = binding_by_role.get(tier_name)
         if binding is not None:
             role_configs[tier_name] = LLMRoleConfig(
@@ -1301,9 +1295,9 @@ def build_tier_fitness_sut_config(
 
     return SUTConfig(
         g8ee_url=g8ee_url,
-        primary=role_configs["primary"],
-        assistant=role_configs["assistant"],
-        lite=role_configs["lite"],
+        primary=role_configs[ModelRole.PRIMARY],
+        assistant=role_configs[ModelRole.ASSISTANT],
+        lite=role_configs[ModelRole.LITE],
         arm=arm,
         operator_url=operator_url or "https://localhost:8444",
         operator_session_id=operator_session_id,
@@ -1315,7 +1309,6 @@ def build_tier_fitness_sut_config(
 
 def build_campaign_sut_factory(
     campaign_profile: CampaignProfile | None,
-    cohort_variant_map: dict[str, str] | None,
     g8ee_url: str = "",
     operator_url: str | None = None,
     operator_session_id: str | None = None,
@@ -1325,9 +1318,9 @@ def build_campaign_sut_factory(
     """Build a ``SUTFactory`` that dispatches by arm type.
 
     For the ``direct`` arm, creates a ``DirectProviderSUT`` using the
-    cohort's primary model. For ``ensemble_ungoverned`` and ``doctrine``
-    arms, creates a ``G8eeChatSUT`` with tier replacement logic from the
-    campaign profile's ``model_tier_assignments`` and
+    cohort's candidate binding. For ``ensemble_ungoverned`` and
+    ``doctrine`` arms, creates a ``G8eeChatSUT`` with tier replacement
+    logic from the campaign profile's ``model_tier_assignments`` and
     ``baseline_tier_mappings``.
 
     When ``campaign_profile`` is ``None`` (no profile provided), the
@@ -1338,14 +1331,8 @@ def build_campaign_sut_factory(
     from g8e_evals.sut.direct_provider import DirectProviderSUT
 
     def factory(cohort: ModelCohort, arm: Arm) -> SUTProtocol:
-        if arm == Arm.DIRECT or campaign_profile is None or cohort_variant_map is None:
-            binding = cohort.role_bindings[0]
-            if "-role-" in cohort.cohort_id:
-                _, target_tier = cohort.cohort_id.rsplit("-role-", 1)
-                binding = next(
-                    (candidate for candidate in cohort.role_bindings if candidate.role == target_tier),
-                    binding,
-                )
+        if arm == Arm.DIRECT or campaign_profile is None:
+            binding = cohort.candidate_binding()
             model_id = binding.model_id
             endpoint = binding.endpoint
             config = SUTConfig(
@@ -1361,7 +1348,6 @@ def build_campaign_sut_factory(
             cohort=cohort,
             arm=arm,
             campaign_profile=campaign_profile,
-            cohort_variant_map=cohort_variant_map,
             g8ee_url=g8ee_url,
             operator_url=operator_url,
             operator_session_id=operator_session_id,
@@ -1391,9 +1377,9 @@ class CampaignRunner:
     ``RunManifest`` with the campaign identity, frozen profile and
     registry hashes, expected-record policy hash, both environment
     scopes, and report role. Assignment, model, repetition, role, and
-    inference identities remain on their own records. The
-    ``cohort_variant_map`` maps cohort IDs to registry variant IDs for
-    SUT factory wiring.
+    inference identities remain on their own records. Each cohort
+    carries its candidate variant and role as typed fields; the SUT
+    factory reads them directly.
 
     Each ``run`` starts a fresh report directory. The runner does not
     reload a prior campaign during ``run``; explicit batching via
@@ -1409,7 +1395,6 @@ class CampaignRunner:
     evidence_key: object | None = None
     campaign_profile: CampaignProfile | None = None
     model_registry: ModelRegistry | None = None
-    cohort_variant_map: dict[str, str] | None = None
     campaign_set_plan: CampaignSetPlan | None = None
     replacement_rule: ReplacementManifestRule | None = None
     disk_space_min_bytes: int = 0
@@ -1463,11 +1448,8 @@ class CampaignRunner:
         """
         cleanup_errors: list[Exception] = []
         for sut in self._suts.values():
-            close = getattr(sut, "close", None)
-            if close is None:
-                continue
             try:
-                result = close()
+                result = sut.close()
                 if hasattr(result, "__await__"):
                     await result
             except Exception as e:
@@ -1488,14 +1470,14 @@ class CampaignRunner:
 
     def _write_campaign_status(self, status: CampaignStatus, stop_reason: CampaignStopReason | None = None) -> None:
         """Write the typed campaign status file."""
-        record = {
-            "campaign_id": self.spec.campaign_id,
-            "run_id": self._run_id,
-            "status": status.value,
-            "stop_reason": stop_reason.value if stop_reason else None,
-            "updated_at": datetime.now(UTC).isoformat(),
-        }
-        _write_atomic(self.report_dir / CAMPAIGN_STATUS_JSON, json.dumps(record, indent=2))
+        record = CampaignStatusRecord(
+            campaign_id=self.spec.campaign_id,
+            run_id=self._run_id,
+            status=status.value,
+            stop_reason=stop_reason.value if stop_reason else None,
+            updated_at=datetime.now(UTC).isoformat(),
+        )
+        _write_atomic(self.report_dir / CAMPAIGN_STATUS_JSON, record.model_dump_json(indent=2))
 
     def _write_progress(
         self,
@@ -1507,21 +1489,21 @@ class CampaignRunner:
         status_counts: dict[str, int],
     ) -> None:
         """Write a pollable progress JSON file for live observation."""
-        record = {
-            "campaign_id": self.spec.campaign_id,
-            "run_id": self._run_id,
-            "total_assignments": total,
-            "completed_assignments": completed,
-            "remaining_assignments": total - completed,
-            "current_cohort": current_assignment.model_cohort_id if current_assignment else None,
-            "current_task": current_assignment.task_id if current_assignment else None,
-            "current_arm": current_assignment.arm_id if current_assignment else None,
-            "current_status": terminal_status,
-            "elapsed_seconds": round(elapsed, 2),
-            "status_counts": status_counts,
-            "updated_at": datetime.now(UTC).isoformat(),
-        }
-        _write_atomic(self.report_dir / CAMPAIGN_PROGRESS_JSON, json.dumps(record, indent=2))
+        record = CampaignProgressRecord(
+            campaign_id=self.spec.campaign_id,
+            run_id=self._run_id,
+            total_assignments=total,
+            completed_assignments=completed,
+            remaining_assignments=total - completed,
+            current_cohort=current_assignment.model_cohort_id if current_assignment else None,
+            current_task=current_assignment.task_id if current_assignment else None,
+            current_arm=current_assignment.arm_id if current_assignment else None,
+            current_status=terminal_status,
+            elapsed_seconds=round(elapsed, 2),
+            status_counts=status_counts,
+            updated_at=datetime.now(UTC).isoformat(),
+        )
+        _write_atomic(self.report_dir / CAMPAIGN_PROGRESS_JSON, record.model_dump_json(indent=2))
 
     def _persist_campaign_state(
         self,
@@ -1593,10 +1575,8 @@ class CampaignRunner:
         The checksum covers canonical JSON of both attempts and metrics,
         matching the standalone report validator's computation.
         """
-        attempts_data = [json.loads(a.model_dump_json()) for a in attempts]
-        metrics_data = (
-            [json.loads(m.model_dump_json()) for m in metrics] if metrics else []
-        )
+        attempts_data = canonical_model_list(attempts)
+        metrics_data = canonical_model_list(metrics) if metrics else []
         payload = json.dumps(
             {"attempts": attempts_data, "metrics": metrics_data},
             allow_nan=False,
@@ -1704,11 +1684,11 @@ class CampaignRunner:
                     endpoint_class="local" if rb.endpoint.startswith(("http://localhost", "http://127.")) else "remote",
                     api_key_present=False,
                 )
-                if rb.role == "primary":
+                if rb.role == ModelRole.PRIMARY:
                     role_to_model = role_to_model.model_copy(update={"primary": identity})
-                elif rb.role == "assistant":
+                elif rb.role == ModelRole.ASSISTANT:
                     role_to_model = role_to_model.model_copy(update={"assistant": identity})
-                elif rb.role == "lite":
+                elif rb.role == ModelRole.LITE:
                     role_to_model = role_to_model.model_copy(update={"lite": identity})
 
         content_hashes = [
@@ -1845,7 +1825,7 @@ class CampaignRunner:
         orchestrator_scope = self._effective_orchestrator_scope()
 
         sut = self._get_sut(cohort, arm_def.arm_id)
-        expected_model = _model_id_for_cohort(cohort)
+        expected_model = cohort.candidate_binding().model_id
 
         new_attempts: list[AttemptRecord] = []
         all_resource_observations: list[ResourceObservation] = []
@@ -1954,7 +1934,7 @@ class CampaignRunner:
             metrics: list[MetricObservation] = []
             if terminal_status == TerminalStatus.COMPLETED and response is not None:
                 score = self.grader.grade(task, response)
-                passed = bool(getattr(score, "passed", False))
+                passed = score.passed
                 metric = MetricObservation(
                     metric_id=self.grader.grader_id,
                     attempt_id=attempt_id,
@@ -2108,8 +2088,8 @@ class CampaignRunner:
             status_path = self.report_dir / CAMPAIGN_STATUS_JSON
             if status_path.exists():
                 try:
-                    status = json.loads(status_path.read_text())
-                    if status.get("status") == CampaignStatus.RUNNING.value:
+                    status = CampaignStatusRecord.model_validate_json(status_path.read_text())
+                    if status.status == CampaignStatus.RUNNING.value:
                         self._write_campaign_status(
                             CampaignStatus.STOPPED,
                             CampaignStopReason.NON_RETRYABLE_FAILURE,
@@ -2526,10 +2506,12 @@ __all__ = [
     "BudgetExhaustedDuringExecution",
     "BudgetObservabilityPolicy",
     "BudgetTracker",
+    "CampaignProgressRecord",
     "CampaignResult",
     "CampaignRunner",
     "CampaignRunnerError",
     "CampaignSpec",
+    "CampaignStatusRecord",
     "CampaignStopReason",
     "CleanupError",
     "DiskSpacePreflightError",

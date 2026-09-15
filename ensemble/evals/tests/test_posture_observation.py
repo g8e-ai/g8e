@@ -15,6 +15,7 @@ governed arms.
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock
 
 import httpx
@@ -31,6 +32,7 @@ class _StubResponse:
     def __init__(self, status_code: int, json_data: dict | None = None):
         self.status_code = status_code
         self._json = json_data or {}
+        self.content = json.dumps(self._json).encode() if json_data is not None else b"{}"
 
     def json(self) -> dict:
         return self._json
