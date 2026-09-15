@@ -143,6 +143,7 @@ def test_receipt_collector_uses_typed_cli_context(monkeypatch: pytest.MonkeyPatc
         "operator_url": "https://gateway:8443",
         "runtime_identity": RuntimeIdentity.GATEWAY,
         "cli_context": cli_context,
+        "trust_bundle": None,
     }]
 
 

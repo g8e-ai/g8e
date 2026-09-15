@@ -104,8 +104,14 @@ class AuthContext:
         operator_url: str | None = None,
         runtime_identity: RuntimeIdentity = RuntimeIdentity.APP,
         cli_context: CLIAuthContext | None = None,
+        trust_bundle: str | None = None,
     ) -> AuthContext:
         """Resolve the canonical auth context from CLI identity and process configuration.
+
+        ``trust_bundle`` is the facade-supplied absolute bundle path; when
+        set it wins over the ``G8E_*_TRUST_BUNDLE``/pki-directory lookup so
+        the engine child never depends on its working directory. The legacy
+        direct-CLI path leaves it unset and keeps the env-var fallback.
 
         Raises :class:`RuntimeError` if a required value is missing or if
         the mTLS client certificate files do not exist on disk.
@@ -163,7 +169,7 @@ class AuthContext:
                 "Run `./g8e auth enroll user` to create one."
             )
 
-        trust_bundle = resolve_trust_bundle(runtime_identity)
+        resolved_trust_bundle = trust_bundle if trust_bundle else resolve_trust_bundle(runtime_identity)
 
         operator_https_port = PORTS["ports"]["OperatorHttps"]["value"]
         app_url = (g8ee_url or os.environ.get("G8E_G8EE_URL") or DEFAULT_G8EE_URL).rstrip("/")
@@ -187,7 +193,7 @@ class AuthContext:
         return cls(
             g8ee_url=app_url,
             operator_url=op_url,
-            trust_bundle=trust_bundle,
+            trust_bundle=resolved_trust_bundle,
             client_cert=client_cert,
             client_key=client_key,
             operator_session_id=sid,

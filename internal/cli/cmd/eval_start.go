@@ -17,9 +17,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/v2/internal/buildinfo"
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 // evalLeaseStartVerificationRequest is the typed JSON request the Go
@@ -126,9 +130,16 @@ func runEvalStart(
 	candidate := preflight.Candidate
 	verification := preflight.Verification
 
+	// Load the canonical CLI auth identity for the engine request. Missing
+	// credentials fail closed here — before engine launch — rather than
+	// surfacing as an engine-child auth failure.
+	authCtx, err := loadEvalAuthContext(deps, preflight.FileSvc, cfg)
+	if err != nil {
+		return evalStartResult{}, err
+	}
+
 	// Construct the typed engine request. The lease path is the verified
 	// lease file; the report root is repository-relative from the config.
-	binaryPath, _ := os.Executable()
 	engineReq := models.EvalEngineRequest{
 		SchemaVersion: models.EvalEngineRequestSchemaVersion,
 		Operation:     operation,
@@ -137,20 +148,12 @@ func runEvalStart(
 		ConfigPath:    env.ConfigPath,
 		LeasePath:     verification.LeasePath,
 		ReportRoot:    verification.ReportRoot,
-		Platform: models.EvalPlatformContext{
-			RepositoryRoot:  env.RepositoryRoot,
-			EvalProject:      env.EvalProject,
-			G8EBinaryPath:    binaryPath,
-			G8EBinarySHA256:  candidate.BinarySHA256,
-			AuthProjectRoot:  cfg.ProjectRoot,
-			RuntimeDir:       cfg.RuntimeDir,
-			TrustBundlePath:  cfg.ResolvedTrustBundlePath(),
-			GatewayHTTPURL:   cfg.OperatorDiscoveryURL(),
-			GatewayHTTPSURL:  cfg.OperatorPublicURL(),
-			EnsembleURL:      evalEnsembleBaseURL(cfg),
-		},
+		Platform:      buildEvalPlatformContext(ctx, env, cfg, candidate, authCtx),
 		Flags: models.EvalEngineFlags{
-			JSONOutput: jsonOutput,
+			// The engine-to-facade protocol is always JSON so the facade
+			// can parse the typed result. The user's --json flag controls
+			// facade-to-user rendering, not the engine protocol.
+			JSONOutput: true,
 			Verbose:    verbose,
 		},
 	}
@@ -289,7 +292,10 @@ func mapEvalEngineErrorCode(code, detail string) error {
 }
 
 // invokeEngine constructs an EvalEngineRequest JSON file, invokes the
-// Python engine module, and returns the parsed result.
+// Python engine module, and returns the parsed result. The typed
+// platform context carries the auth identity, trust bundle path, and
+// build provenance the SUT needs so the child process authenticates to
+// the running platform without any G8E_* environment injection.
 func invokeEngine(
 	ctx context.Context,
 	deps evalLeaseDeps,
@@ -382,6 +388,80 @@ func printEvalStartHuman(stdout io.Writer, result evalStartResult) {
 	}
 }
 
+// loadEvalAuthContext loads the canonical local CLI auth context for an
+// engine request. When the persisted credentials lack an operator
+// binding, the binding is resolved from the gateway's authoritative CLI
+// session record and persisted — the same recovery path `g8e auth
+// context` performs. Missing credentials fail closed with a typed
+// platform-identity error so they never surface as an engine-child auth
+// failure.
+func loadEvalAuthContext(deps evalLeaseDeps, fileSvc fs.RuntimeFileService, cfg *config.Config) (*auth.ClientAuthContext, error) {
+	if deps.authContextLoader == nil {
+		return nil, fmt.Errorf("%w: auth context loader unavailable", constants.ErrEvalPlatformIdentityUnavailable)
+	}
+	authCtx, err := deps.authContextLoader(fileSvc, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrEvalPlatformIdentityUnavailable, err)
+	}
+	if authCtx.OperatorSessionID == "" {
+		if deps.clientFactory == nil {
+			return nil, fmt.Errorf("%w: operator session binding missing; run './g8e auth refresh' or './g8e auth enroll user'", constants.ErrEvalPlatformIdentityUnavailable)
+		}
+		client, err := deps.clientFactory(fileSvc, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", constants.ErrEvalPlatformIdentityUnavailable, err)
+		}
+		if err := resolveClientOperatorContext(client, authCtx); err != nil {
+			return nil, fmt.Errorf("%w: %w", constants.ErrEvalPlatformIdentityUnavailable, err)
+		}
+		if err := persistClientOperatorContext(fileSvc, cfg, authCtx); err != nil {
+			return nil, fmt.Errorf("%w: %w", constants.ErrEvalPlatformIdentityUnavailable, err)
+		}
+	}
+	return authCtx, nil
+}
+
+// evalBuildStamp returns the running binary's build stamp — the same
+// version info and VCS identity `g8e version --json` reads.
+func evalBuildStamp(ctx context.Context) (serve.VersionInfo, string) {
+	vi, _ := ctx.Value(versionInfoKey{}).(serve.VersionInfo)
+	return vi, effectiveSourceRevision(vi, buildinfo.ReadVCSStamp())
+}
+
+// buildEvalPlatformContext constructs the platform-owned context the
+// facade injects into every engine request. authCtx may be nil for
+// read-only lifecycle operations that never authenticate to the
+// platform; the auth fields are then empty and the engine handlers that
+// require them fail closed on the missing identity.
+func buildEvalPlatformContext(ctx context.Context, env evalLifecycleEnvironment, cfg *config.Config, candidate evalCandidateIdentity, authCtx *auth.ClientAuthContext) models.EvalPlatformContext {
+	binaryPath, _ := os.Executable()
+	vi, sourceRevision := evalBuildStamp(ctx)
+	platform := models.EvalPlatformContext{
+		RepositoryRoot:      env.RepositoryRoot,
+		EvalProject:         env.EvalProject,
+		G8EBinaryPath:       binaryPath,
+		G8EBinarySHA256:     candidate.BinarySHA256,
+		PlatformVersion:     vi.Version,
+		AuthProjectRoot:     cfg.ProjectRoot,
+		RuntimeDir:          cfg.RuntimeDir,
+		TrustBundlePath:     cfg.ResolvedTrustBundlePath(),
+		GatewayHTTPURL:      cfg.OperatorDiscoveryURL(),
+		GatewayHTTPSURL:     cfg.OperatorPublicURL(),
+		EnsembleURL:         evalEnsembleBaseURL(cfg),
+		SourceRevision:      sourceRevision,
+		SourceTreeStateHash: candidate.SourceTreeHash,
+	}
+	if authCtx != nil {
+		platform.CLICertPath = authCtx.ClientCert
+		platform.CLIKeyPath = authCtx.ClientKey
+		platform.OperatorSessionID = authCtx.OperatorSessionID
+		platform.CLISessionID = authCtx.CLISessionID
+		platform.UserID = authCtx.UserID
+		platform.OperatorID = authCtx.OperatorID
+	}
+	return platform
+}
+
 // evalStartDepsFromLeaseDeps returns the evalLeaseDeps needed for start
 // commands. Start commands reuse the lease deps structure since they need
 // the same config loader, file service factory, stat, runner, temp file
@@ -397,5 +477,6 @@ func evalStartDepsFromLeaseDeps() evalLeaseDeps {
 		candidateResolver:      realEvalCandidateResolver{fileReader: realEvalFileReader{}},
 		modelInventoryResolver: realEvalModelInventoryResolver{fileReader: realEvalFileReader{}},
 		httpClient:             &http.Client{Timeout: 5 * time.Second},
+		authContextLoader:      auth.LoadClientAuthContext,
 	}
 }

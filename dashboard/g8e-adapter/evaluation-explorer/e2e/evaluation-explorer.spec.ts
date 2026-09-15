@@ -45,7 +45,7 @@ test('reconstructs the evaluation explorer from the public mirror', async ({ pag
 
   await page.getByRole('link', { name: 'Live' }).click();
   await expect(page.getByRole('heading', { name: 'AI agents. Working in public.' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Agents' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Models' })).toBeVisible();
   await page.getByRole('combobox', { name: 'Select dataset' }).selectOption('ds-verified-public-20260914');
   await expect(page.getByRole('region', { name: 'System overview' })).toContainText('Verified public snapshot');
 

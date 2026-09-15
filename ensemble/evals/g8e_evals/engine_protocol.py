@@ -113,6 +113,12 @@ class EvalPlatformContext(BaseModel):
     """Platform-owned identity and paths the facade injects from the
     selected repository/runtime context. Configs never carry these
     fields; the facade is their only source.
+
+    The CLI auth identity fields carry the canonical local credentials
+    for provider-backed starts so the engine child never reads G8E_*
+    auth variables from the process environment; they are empty for
+    read-only lifecycle operations that never authenticate to the
+    platform.
     """
 
     repository_root: str
@@ -126,6 +132,14 @@ class EvalPlatformContext(BaseModel):
     gateway_http_url: str
     gateway_https_url: str
     ensemble_url: str
+    cli_cert_path: str
+    cli_key_path: str
+    operator_session_id: str
+    cli_session_id: str
+    user_id: str
+    operator_id: str
+    source_revision: str
+    source_tree_state_hash: str
 
 
 class EvalEngineFlags(BaseModel):

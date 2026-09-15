@@ -149,6 +149,22 @@ class LeaseLifecycleError(Exception):
         super().__init__(f"{code}: {detail}")
 
 
+def _load_config_for_lease(config_path: Path) -> OperationConfigBase:
+    """Load an operation config, mapping a missing file to a typed error.
+
+    A caller that passes a lease ID (or any non-config path) where a
+    config path is expected must receive a typed ``config_not_found``
+    error rather than a raw ``FileNotFoundError`` traceback.
+    """
+    try:
+        return load_operation_config(config_path)
+    except FileNotFoundError as exc:
+        raise LeaseLifecycleError(
+            "config_not_found",
+            f"operation config not found: {config_path}",
+        ) from exc
+
+
 def _config_to_budget_authority(config: OperationConfigBase) -> BudgetAuthority:
     """Construct a BudgetAuthority from an operation config's BudgetCeilings."""
     ceilings = config.budget
@@ -163,30 +179,23 @@ def _config_to_budget_authority(config: OperationConfigBase) -> BudgetAuthority:
     if min_free_disk_bytes == 0:
         min_free_disk_bytes = 1_073_741_824
     max_duration = int(config.stop_conditions.max_duration_s) if config.stop_conditions.max_duration_s else 3600
+    if ceilings.concurrency != 1:
+        raise LeaseLifecycleError(
+            "budget_concurrency_unsupported",
+            f"budget concurrency {ceilings.concurrency} is not supported; only 1 is permitted",
+        )
     return build_budget_authority(
         operation_id=config.operation_id,
         max_requests=ceilings.max_requests,
         max_tokens_per_request=max_tokens_per_request,
         max_tokens=ceilings.max_tokens,
         max_usd=ceilings.max_usd,
-        concurrency=ceilings.concurrency,
+        concurrency=1,
         min_free_disk_bytes=min_free_disk_bytes,
         max_duration_seconds=max_duration,
         max_retries=ceilings.max_retries,
         max_replacements=0,
     )
-
-
-def _config_to_authority_names(config: OperationConfigBase) -> list[str]:
-    """Extract runtime authority names from the config's authority refs."""
-    names = ["gold_set", "evidence_key"]
-    if hasattr(config, "preregistration") and config.preregistration is not None:
-        names.append("preregistration")
-    if hasattr(config, "profile") and config.profile is not None:
-        names.append("profile")
-    if hasattr(config, "model_registry") and config.model_registry is not None:
-        names.append("model_registry")
-    return names
 
 
 def _list_leases(lease_store_dir: Path) -> list[LiveOperationLease]:
@@ -231,7 +240,7 @@ def issue_lease(request: LeaseIssueRequest) -> LeaseIssueResult:
     store, the operation fails with ``active_lease_exists``. The new
     lease is stored as ``<lease_id>.json`` in the lease store directory.
     """
-    config = load_operation_config(Path(request.config_path))
+    config = _load_config_for_lease(Path(request.config_path))
     config_content_hash = config.content_hash or config.compute_content_hash()
 
     lease_store_dir = Path(request.lease_store_dir)
@@ -315,7 +324,7 @@ def issue_lease(request: LeaseIssueRequest) -> LeaseIssueResult:
 
 def inspect_lease(request: LeaseInspectRequest) -> LeaseInspectResult:
     """Inspect the lease matching the given config, if any."""
-    config = load_operation_config(Path(request.config_path))
+    config = _load_config_for_lease(Path(request.config_path))
     lease_store_dir = Path(request.lease_store_dir)
     leases = _list_leases(lease_store_dir)
     lease = _find_lease_for_config(leases, config)
@@ -333,7 +342,7 @@ def transition_lease(request: LeaseTransitionRequest) -> LeaseTransitionResult:
     state). All three are terminal; the lease cannot be reactivated.
     Publication retry does not reactivate a terminal lease.
     """
-    config = load_operation_config(Path(request.config_path))
+    config = _load_config_for_lease(Path(request.config_path))
     lease_store_dir = Path(request.lease_store_dir)
     leases = _list_leases(lease_store_dir)
     lease = _find_lease_for_config(leases, config)

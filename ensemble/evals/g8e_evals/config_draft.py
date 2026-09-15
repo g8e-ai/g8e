@@ -92,7 +92,7 @@ class DraftReviewSummary(BaseModel):
     provider: str
 
 
-def _merge_override(preset_value: object, override: object) -> object:
+def _merge_override[T](preset_value: T, override: T | None) -> T:
     """Return the override when not None, otherwise the preset value."""
     return override if override is not None else preset_value
 
@@ -150,7 +150,7 @@ def generate_diagnostic_draft(
         preset=preset_name,
         suite=config.suite,
         report_root=report_root,
-        content_hash=finalized.content_hash,
+        content_hash=finalized.compute_content_hash(),
         dimensions={
             "arm": config.arm,
             "model_variant_id": config.model_variant_id,
@@ -255,7 +255,7 @@ def generate_campaign_draft(
         preset=preset_name,
         suite=config.suite,
         report_root=report_root,
-        content_hash=finalized.content_hash,
+        content_hash=finalized.compute_content_hash(),
         dimensions={
             "arms": config.arms,
             "cohort_count": len(config.cohort_ids),

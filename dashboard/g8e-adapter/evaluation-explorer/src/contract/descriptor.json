@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "enums": {
     "QualityState": [
       "verified_public",
@@ -35,6 +35,10 @@
     "EvaluationUnit": [
       "model",
       "system"
+    ],
+    "EnvironmentSource": [
+      "declared",
+      "observed"
     ],
     "EscalationDisposition": [
       "correct_autonomous_completion",

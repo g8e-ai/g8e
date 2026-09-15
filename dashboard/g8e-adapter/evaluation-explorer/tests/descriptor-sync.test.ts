@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import descriptor from '../src/contract/descriptor.json';
 import {
   DATASET_KINDS,
+  ENVIRONMENT_SOURCES,
   ESCALATION_DISPOSITIONS,
   EVALUATION_UNITS,
   FEED_RECORD_TYPES,
@@ -31,6 +32,7 @@ type EnumName =
   | 'ModelRole'
   | 'ScenarioCategory'
   | 'EvaluationUnit'
+  | 'EnvironmentSource'
   | 'EscalationDisposition'
   | 'ToolScoreDimension'
   | 'SecurityPrivacyEvent'
@@ -49,6 +51,7 @@ const tsEnums: Record<EnumName, readonly string[]> = {
   ModelRole: MODEL_ROLES,
   ScenarioCategory: SCENARIO_CATEGORIES,
   EvaluationUnit: EVALUATION_UNITS,
+  EnvironmentSource: ENVIRONMENT_SOURCES,
   EscalationDisposition: ESCALATION_DISPOSITIONS,
   ToolScoreDimension: TOOL_SCORE_DIMENSIONS,
   SecurityPrivacyEvent: SECURITY_PRIVACY_EVENTS,
@@ -64,7 +67,7 @@ const tsEnums: Record<EnumName, readonly string[]> = {
 
 describe('descriptor.json stays in sync with types.ts', () => {
   it('exposes the frozen schema version', () => {
-    expect(descriptor.schema_version).toBe('1.1.0');
+    expect(descriptor.schema_version).toBe('1.2.0');
   });
 
   for (const [name, tsValues] of Object.entries(tsEnums) as Array<[EnumName, readonly string[]]>) {

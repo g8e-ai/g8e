@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from g8e_evals.lease_lifecycle import (
+    LeaseCommandFamily,
     LeaseInspectRequest,
     LeaseIssueRequest,
     LeaseLifecycleError,
@@ -52,7 +53,6 @@ def _candidate() -> CandidateIdentity:
 
 def _write_config(tmp_path: Path) -> Path:
     config = DiagnosticConfig(
-        operation_kind="diagnostic",
         operation_id="test-diagnostic",
         revision="rev-1",
         suite="ifeval_subset",
@@ -77,7 +77,7 @@ def _issue_request(
     return LeaseIssueRequest(
         config_path=config_path,
         lease_store_dir=lease_store_dir,
-        command_family="campaign_run",
+        command_family=LeaseCommandFamily.CAMPAIGN_RUN,
         command_version="1.0.0",
         candidate=_candidate(),
         model_inventory_digest="5" * 64,
@@ -186,6 +186,7 @@ def test_stop_transitions_active_to_stopped(tmp_path: Path) -> None:
         lease_store_dir=str(lease_store),
     )
     inspect_result = inspect_lease(inspect_req)
+    assert inspect_result.lease is not None
     assert inspect_result.lease.status == LeaseStatus.STOPPED
 
 
@@ -250,7 +251,6 @@ def test_stopped_lease_does_not_block_new_lease_for_different_config(tmp_path: P
     transition_lease(transition_req)
 
     other_config = DiagnosticConfig(
-        operation_kind="diagnostic",
         operation_id="other-diagnostic",
         revision="rev-1",
         suite="ifeval_subset",
@@ -286,3 +286,44 @@ def test_lease_file_is_valid_json_with_content_hash(tmp_path: Path) -> None:
     assert data["status"] == "active"
     assert data["request_digest"] == result.request_digest
     assert data["command_version"] == "1.0.0"
+
+
+def test_inspect_missing_config_raises_typed_error(tmp_path: Path) -> None:
+    """Passing a lease ID (or any non-config path) where a config path is
+    expected must produce a typed ``config_not_found`` error, not a raw
+    ``FileNotFoundError`` traceback.
+    """
+    lease_store = tmp_path / "leases"
+    inspect_req = LeaseInspectRequest(
+        config_path=str(tmp_path / "diag-u7-acceptance-009-20260915"),
+        lease_store_dir=str(lease_store),
+    )
+    with pytest.raises(LeaseLifecycleError, match="config_not_found") as exc_info:
+        inspect_lease(inspect_req)
+    assert exc_info.value.code == "config_not_found"
+
+
+def test_issue_missing_config_raises_typed_error(tmp_path: Path) -> None:
+    """Issue against a missing config must produce a typed
+    ``config_not_found`` error, not a raw ``FileNotFoundError`` traceback.
+    """
+    lease_store = tmp_path / "leases"
+    req = _issue_request(str(tmp_path / "nonexistent-config.json"), str(lease_store))
+    with pytest.raises(LeaseLifecycleError, match="config_not_found") as exc_info:
+        issue_lease(req)
+    assert exc_info.value.code == "config_not_found"
+
+
+def test_transition_missing_config_raises_typed_error(tmp_path: Path) -> None:
+    """Stop/expire/complete against a missing config must produce a typed
+    ``config_not_found`` error, not a raw ``FileNotFoundError`` traceback.
+    """
+    lease_store = tmp_path / "leases"
+    transition_req = LeaseTransitionRequest(
+        config_path=str(tmp_path / "nonexistent-config.json"),
+        lease_store_dir=str(lease_store),
+        transition="stop",
+    )
+    with pytest.raises(LeaseLifecycleError, match="config_not_found") as exc_info:
+        transition_lease(transition_req)
+    assert exc_info.value.code == "config_not_found"

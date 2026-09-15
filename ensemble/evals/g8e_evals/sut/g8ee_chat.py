@@ -150,6 +150,7 @@ class G8eeChatSUT:
             g8ee_url=config.g8ee_url,
             operator_url=config.operator_url,
             cli_context=config.auth_context,
+            trust_bundle=config.trust_bundle_path or None,
         )
 
         # Used by the report header / CLI banner. For tier-fitness campaigns

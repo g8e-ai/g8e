@@ -19,7 +19,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
+	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 // ---------------------------------------------------------------------------
@@ -112,6 +115,19 @@ func validTransitionResultJSON() string {
 	return `{"lease_id":"test-diagnostic-20260914-120000-abcdef12","previous_status":"active","new_status":"completed","transitioned_at":"2026-09-14T12:15:00Z"}`
 }
 
+// stubEvalAuthContextLoader returns a complete canonical CLI auth
+// context so start-path tests never touch the runtime credentials.
+func stubEvalAuthContextLoader(_ fs.RuntimeFileService, _ *config.Config) (*auth.ClientAuthContext, error) {
+	return &auth.ClientAuthContext{
+		OperatorSessionID: "op-session-1",
+		CLISessionID:      "cli-session-1",
+		UserID:            "user-1",
+		OperatorID:        "op-1",
+		ClientCert:        "/tmp/cli.crt",
+		ClientKey:         "/tmp/cli.key",
+	}, nil
+}
+
 func newStartDepsForTest(t *testing.T, runner *stubStartRunner) evalLeaseDeps {
 	fileSvc, cfg := newCmdTestEnv(t)
 	_ = cfg
@@ -123,6 +139,7 @@ func newStartDepsForTest(t *testing.T, runner *stubStartRunner) evalLeaseDeps {
 		tempFileWriter:         &stubDraftTempFileWriter{},
 		candidateResolver:      stubLeaseCandidateResolver{candidate: evalCandidateIdentity{SourceTreeHash: strings.Repeat("1", 64), ExecutionSourceManifestHash: strings.Repeat("2", 64), BinarySHA256: strings.Repeat("3", 64), ImageIDs: []string{}}},
 		modelInventoryResolver: stubLeaseModelInventoryResolver{digest: strings.Repeat("5", 64)},
+		authContextLoader:      stubEvalAuthContextLoader,
 	}
 }
 
@@ -232,6 +249,24 @@ func TestEvalDiagnosticStartCmd_ReportRootReusedReturnsReportRootReusedError(t *
 	assert.ErrorIs(t, err, constants.ErrEvalReportRootReused)
 }
 
+func TestEvalDiagnosticStartCmd_OperationDeadlineExceedsLeaseReturnsBudgetPreflightFailed(t *testing.T) {
+	runner := &stubStartRunner{
+		leaseVerifyJSON: failedLeaseStartVerificationJSON("lease_operation_deadline_exceeds_lease", "operation deadline exceeds lease expiry"),
+	}
+	deps := newStartDepsForTest(t, runner)
+
+	cmd := evalDiagnosticStartCmdWithDeps(deps)
+	require.NoError(t, cmd.Flags().Set("yes", "true"))
+	cmd.SetArgs([]string{"/tmp/config.json"})
+
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvalBudgetPreflightFailed)
+	assert.Equal(t, []string{constants.EvalLeaseStartVerificationModule}, runner.calls, "engine must not be invoked when lease verification fails")
+}
+
 func TestEvalDiagnosticStartCmd_SuccessTransitionsLeaseToCompleted(t *testing.T) {
 	runner := &stubStartRunner{
 		leaseVerifyJSON: validLeaseStartVerificationJSON(),
@@ -331,6 +366,63 @@ func TestEvalDiagnosticStartCmd_RegistersExpectedFlags(t *testing.T) {
 	flags := cmd.Flags()
 	for _, name := range []string{"yes", "json", "verbose"} {
 		assert.NotNil(t, flags.Lookup(name), "flag %s should be registered", name)
+	}
+}
+
+func TestEvalDiagnosticStartCmd_MissingCredentialsFailsClosed(t *testing.T) {
+	runner := &stubStartRunner{
+		leaseVerifyJSON: validLeaseStartVerificationJSON(),
+		engineJSON:      validEngineResultJSON(),
+		transitionJSON:  validTransitionResultJSON(),
+	}
+	deps := newStartDepsForTest(t, runner)
+	deps.authContextLoader = func(_ fs.RuntimeFileService, _ *config.Config) (*auth.ClientAuthContext, error) {
+		return nil, constants.ErrNotAuthenticated
+	}
+
+	cmd := evalDiagnosticStartCmdWithDeps(deps)
+	require.NoError(t, cmd.Flags().Set("yes", "true"))
+	cmd.SetArgs([]string{"/tmp/config.json"})
+
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvalPlatformIdentityUnavailable)
+	assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
+	for _, call := range runner.calls {
+		assert.NotEqual(t, constants.EvalEngineModule, call, "engine must not be invoked when credentials are absent")
+	}
+}
+
+func TestEvalDiagnosticStartCmd_MissingOperatorBindingFailsClosed(t *testing.T) {
+	runner := &stubStartRunner{
+		leaseVerifyJSON: validLeaseStartVerificationJSON(),
+		engineJSON:      validEngineResultJSON(),
+		transitionJSON:  validTransitionResultJSON(),
+	}
+	deps := newStartDepsForTest(t, runner)
+	deps.authContextLoader = func(_ fs.RuntimeFileService, _ *config.Config) (*auth.ClientAuthContext, error) {
+		return &auth.ClientAuthContext{
+			CLISessionID: "cli-session-1",
+			UserID:       "user-1",
+			ClientCert:   "/tmp/cli.crt",
+			ClientKey:    "/tmp/cli.key",
+		}, nil
+	}
+	// No clientFactory: the operator binding cannot be resolved.
+
+	cmd := evalDiagnosticStartCmdWithDeps(deps)
+	require.NoError(t, cmd.Flags().Set("yes", "true"))
+	cmd.SetArgs([]string{"/tmp/config.json"})
+
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvalPlatformIdentityUnavailable)
+	for _, call := range runner.calls {
+		assert.NotEqual(t, constants.EvalEngineModule, call, "engine must not be invoked when the operator binding is absent")
 	}
 }
 

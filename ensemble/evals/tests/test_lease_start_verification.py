@@ -12,7 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from g8e_evals.lease_lifecycle import LeaseIssueRequest, issue_lease
+from g8e_evals.lease_lifecycle import (
+    LeaseCommandFamily,
+    LeaseIssueRequest,
+    issue_lease,
+)
 from g8e_evals.lease_start_verification_cli import (
     LeaseStartVerificationRequest,
     verify_lease_for_start_request,
@@ -48,7 +52,6 @@ def _candidate() -> CandidateIdentity:
 
 def _write_config(tmp_path: Path) -> Path:
     config = DiagnosticConfig(
-        operation_kind="diagnostic",
         operation_id="test-diagnostic",
         revision="rev-1",
         suite="ifeval_subset",
@@ -73,7 +76,7 @@ def _issue_request(
     return LeaseIssueRequest(
         config_path=config_path,
         lease_store_dir=lease_store_dir,
-        command_family="campaign_run",
+        command_family=LeaseCommandFamily.CAMPAIGN_RUN,
         command_version="1.0.0",
         candidate=_candidate(),
         model_inventory_digest="5" * 64,
@@ -328,3 +331,34 @@ def test_verify_result_json_round_trip(tmp_path: Path) -> None:
     assert data["verified"] is True
     assert data["operation_id"] == "test-diagnostic"
     assert data["lease_id"]
+
+
+def test_verify_fails_when_operation_deadline_exceeds_lease(tmp_path: Path) -> None:
+    """A config whose ``max_duration_s`` pushes the operation deadline
+    past the lease expiry must fail closed with
+    ``lease_operation_deadline_exceeds_lease``.
+    """
+    config = DiagnosticConfig(
+        operation_id="test-diagnostic",
+        revision="rev-1",
+        suite="ifeval_subset",
+        seed=42,
+        report_root="reports/test-diagnostic",
+        gold_set=AuthorityRef(path="authorities/gold.json", sha256=_VALID_HASH),
+        evidence_key=EvidenceKeyRef(path="keys/eval.key", key_id="eval-key-1"),
+        provider_endpoint=ProviderEndpointRef(provider="ollama", endpoint_class="remote"),
+        budget=BudgetCeilings(max_requests=10, max_tokens=10000, max_usd=0.0),
+        stop_conditions=StopConditions(idle_timeout_s=180.0, max_duration_s=3600),
+        model_variant_id="qwen3:4b",
+        arm="direct",
+    )
+    config_path = tmp_path / "config.json"
+    write_operation_config(config, config_path)
+    lease_store = tmp_path / "leases"
+    issue_lease(_issue_request(str(config_path), str(lease_store), expires_in=1800))
+
+    req = _verification_request(str(config_path), str(lease_store), str(tmp_path))
+    result = verify_lease_for_start_request(req)
+
+    assert result.verified is False
+    assert result.failure_code == "lease_operation_deadline_exceeds_lease"

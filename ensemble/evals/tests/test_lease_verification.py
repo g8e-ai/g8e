@@ -24,6 +24,7 @@ from g8e_evals.live_operations_authority import (
     CommandFamily,
     LeaseStatus,
     LiveOperationLease,
+    LiveOperationLeaseTemplate,
     OperationKind,
     build_budget_authority,
     build_live_operation_lease,
@@ -53,7 +54,7 @@ def _budget() -> BudgetAuthority:
     )
 
 
-def _template() -> object:
+def _template() -> LiveOperationLeaseTemplate:
     return build_live_operation_lease_template(
         template_id="governed-inference-smoke-v1",
         operation_kind=OperationKind.GOVERNED_INFERENCE_SMOKE,

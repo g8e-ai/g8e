@@ -7,6 +7,7 @@ import {
   type CatalogSnapshot,
   type ConfidenceInterval,
   DATASET_KINDS,
+  ENVIRONMENT_SOURCES,
   ESCALATION_DISPOSITIONS,
   EVALUATION_UNITS,
   type FeedBootstrap,
@@ -139,7 +140,7 @@ function assertEnvelope(
   kindSet: readonly string[],
 ): void {
   assertString(value.schema_version, `${path}.schema_version`);
-  assert(['1.0.0', '1.1.0'].includes(value.schema_version), `${path}.schema_version`, `expected 1.0.0 or 1.1.0`);
+  assert(['1.0.0', '1.1.0', '1.2.0'].includes(value.schema_version), `${path}.schema_version`, `expected 1.0.0, 1.1.0, or 1.2.0`);
   assertEnum(value.kind, kindSet, `${path}.kind`);
   assertString(value.dataset_id, `${path}.dataset_id`);
   assertEnum(value.quality_state, QUALITY_STATES, `${path}.quality_state`);
@@ -218,9 +219,22 @@ function assertBenchmarkObservations(value: unknown, path: string): void {
   assertStringArray(value.unavailable_reasons, `${path}.unavailable_reasons`);
 }
 
+const PROVIDER_ENVIRONMENT_FIELDS = ['source', 'processor', 'memory', 'graphics', 'storage', 'system_type'] as const;
+
+function assertProviderEnvironment(value: unknown, path: string): void {
+  assertObject(value, path);
+  rejectUnknown(value, PROVIDER_ENVIRONMENT_FIELDS, path);
+  const env = value as Record<string, unknown>;
+  assertEnum(env.source, ENVIRONMENT_SOURCES, `${path}.source`);
+  for (const field of PROVIDER_ENVIRONMENT_FIELDS) {
+    if (field === 'source') continue;
+    assertOptional(env[field], `${path}.${field}`, assertString);
+  }
+}
+
 export function isCatalogSnapshot(value: unknown): asserts value is CatalogSnapshot {
   assertObject(value, 'catalog_snapshot');
-  rejectUnknown(value, [...ENVELOPE_FIELDS, 'dataset_kind', 'title', 'description', 'limitations', 'model_count', 'evaluated_count', 'suite_count', 'run_count', 'assignment_count', 'provider_request_count', 'provider_token_count', 'retry_count', 'verifier_passed_count', 'verifier_failed_count', 'generated_at'], 'catalog_snapshot');
+  rejectUnknown(value, [...ENVELOPE_FIELDS, 'dataset_kind', 'title', 'description', 'limitations', 'model_count', 'evaluated_count', 'suite_count', 'run_count', 'assignment_count', 'provider_request_count', 'provider_token_count', 'retry_count', 'verifier_passed_count', 'verifier_failed_count', 'generated_at', 'provider_environment'], 'catalog_snapshot');
   assertEnvelope(value, 'catalog_snapshot', ['catalog_snapshot']);
   assertEnum(value.dataset_kind, DATASET_KINDS, 'catalog_snapshot.dataset_kind');
   assertString(value.title, 'catalog_snapshot.title');
@@ -250,6 +264,9 @@ export function isCatalogSnapshot(value: unknown): asserts value is CatalogSnaps
   assertInteger(value.verifier_failed_count, 'catalog_snapshot.verifier_failed_count');
   assert(value.verifier_failed_count >= 0, 'catalog_snapshot.verifier_failed_count', 'must be >= 0');
   assertString(value.generated_at, 'catalog_snapshot.generated_at');
+  if (value.provider_environment !== undefined) {
+    assertProviderEnvironment(value.provider_environment, 'catalog_snapshot.provider_environment');
+  }
 }
 
 export function isModelSummary(value: unknown): asserts value is ModelSummary {

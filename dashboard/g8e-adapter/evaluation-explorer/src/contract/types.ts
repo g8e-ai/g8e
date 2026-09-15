@@ -8,11 +8,11 @@
 // projector can emit faithful records without remapping. See
 // src/contract/CONTRACT.md for the ownership map and integration decisions.
 //
-// FROZEN at schema_version 1.1.0 on 2026-09-14 by Worker 0. A change to any
+// FROZEN at schema_version 1.2.0 on 2026-09-14 by Worker 0. A change to any
 // enum value or required field is a contract revision: bump VIEW_SCHEMA_VERSION,
 // update descriptor.json, regenerate validators, and notify all workers.
 
-export const VIEW_SCHEMA_VERSION = '1.1.0' as const;
+export const VIEW_SCHEMA_VERSION = '1.2.0' as const;
 
 /** Quality state for every dataset, run, metric, and task shown in the site. */
 export const QUALITY_STATES = [
@@ -54,6 +54,12 @@ export type ScenarioCategory = (typeof SCENARIO_CATEGORIES)[number];
 
 export const EVALUATION_UNITS = ['model', 'system'] as const;
 export type EvaluationUnit = (typeof EVALUATION_UNITS)[number];
+
+/** Provenance of a provider-host environment description. `declared` means
+ *  the owner asserted the labels; `observed` means the producer measured them
+ *  on the host. */
+export const ENVIRONMENT_SOURCES = ['declared', 'observed'] as const;
+export type EnvironmentSource = (typeof ENVIRONMENT_SOURCES)[number];
 
 export const ESCALATION_DISPOSITIONS = [
   'correct_autonomous_completion',
@@ -238,6 +244,20 @@ export interface BenchmarkObservations {
   unavailable_reasons: string[];
 }
 
+/** Public-safe description of the provider host that served model inference
+ *  for the dataset. The remote Ollama boundary exposes no hardware metadata,
+ *  so every field is a display label, not a measured value or a
+ *  machine-specific identifier: no hostname, IP, endpoint, or filesystem
+ *  path may appear here. */
+export interface ProviderEnvironment {
+  source: EnvironmentSource;
+  processor?: string;
+  memory?: string;
+  graphics?: string;
+  storage?: string;
+  system_type?: string;
+}
+
 /** 1. catalog_snapshot: dataset identity and aggregate counts. */
 export interface CatalogSnapshot extends ViewRecordEnvelope {
   kind: 'catalog_snapshot';
@@ -256,6 +276,7 @@ export interface CatalogSnapshot extends ViewRecordEnvelope {
   verifier_passed_count: number;
   verifier_failed_count: number;
   generated_at: string;
+  provider_environment?: ProviderEnvironment;
 }
 
 /** 2. model_summary: per-model aggregate metrics and coverage. */

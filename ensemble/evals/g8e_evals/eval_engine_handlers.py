@@ -15,6 +15,7 @@ from collections.abc import Callable
 from contextlib import redirect_stdout
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from g8e_evals.engine_cli import EngineError, OperationHandler
 from g8e_evals.engine_protocol import (
@@ -29,10 +30,25 @@ from g8e_evals.engine_protocol import (
 from g8e_evals.constants import EVAL_LAUNCH_STATE_JSON
 from g8e_evals.operation_config import CampaignConfig, DiagnosticConfig, load_operation_config
 from g8e_evals.operation_lifecycle import operation_status, resolve_report_root, stop_operation, verify_operation
-from g8e_evals.stop_request import StopRequestError
+from g8e_evals.stop_request import (
+    StopRequestConsumer,
+    StopRequestError,
+    StopRequestIdentity,
+)
+
+if TYPE_CHECKING:
+    from g8e_evals.auth_bridge import CLIAuthContext
+    from g8e_evals.schema import SourceBuildProvenance
 
 
 def _provider_api_key(provider: str) -> str | None:
+    """Return the provider credential from the process environment.
+
+    API keys are secrets and never travel through the typed engine
+    request; the process environment is the only permitted channel.
+    Provider endpoints are never sourced here — the verified lease is
+    the only authority for the approved endpoint URL.
+    """
     names = {
         "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
@@ -40,12 +56,31 @@ def _provider_api_key(provider: str) -> str | None:
     return os.environ.get(names.get(provider, "G8E_TEST_LLM_PRIMARY_API_KEY"))
 
 
-def _provider_endpoint(provider: str) -> str | None:
-    names = {
-        "openai": "OPENAI_BASE_URL",
-        "ollama": "OLLAMA_HOST",
-    }
-    return os.environ.get(names.get(provider, "G8E_TEST_LLM_PRIMARY_ENDPOINT_URL"))
+def _request_provider_endpoint(request: EvalEngineRequest) -> str:
+    """Load the approved provider endpoint from the verified lease.
+
+    The endpoint is bound into the lease at issue time and re-verified
+    by the shared preflight before engine launch, so the engine child
+    never reads provider endpoint environment variables and never
+    invents a default.
+    """
+    from g8e_evals.live_operations_authority import LiveOperationLease
+
+    try:
+        lease = LiveOperationLease.model_validate_json(Path(request.lease_path).read_text())
+    except FileNotFoundError as exc:
+        raise EngineError(
+            EvalErrorCode.LEASE_MISSING,
+            "lease",
+            "verified lease file is absent",
+        ) from exc
+    except (OSError, ValueError) as exc:
+        raise EngineError(
+            EvalErrorCode.LEASE_MISMATCHED,
+            "lease",
+            f"verified lease failed to load: {_safe_detail(exc)}",
+        ) from exc
+    return lease.endpoint
 
 
 # Patterns that must never appear in safe_detail output. The redaction is
@@ -66,7 +101,7 @@ _SECRET_PATTERNS = (
 )
 
 
-def _safe_detail(exc: Exception) -> str:
+def _safe_detail(exc: BaseException) -> str:
     """Return a redacted error detail that cannot expose credentials or
     secret-bearing provider errors. If the exception message contains any
     known secret-bearing pattern, a generic safe message is returned.
@@ -79,7 +114,7 @@ def _safe_detail(exc: Exception) -> str:
     return f"{type(exc).__name__}: {message}"
 
 
-def _classify_callback_exception(exc: Exception) -> tuple[EvalErrorCode, str]:
+def _classify_callback_exception(exc: BaseException) -> tuple[EvalErrorCode, str]:
     """Map a callback exception to the exact stable EvalErrorCode and a
     redacted safe detail.
 
@@ -177,8 +212,6 @@ def _build_stop_consumer(report_root: Path, request: EvalEngineRequest, config: 
     """Construct a StopRequestConsumer bound to the launch record's
     content hash. Returns None when the launch record has no content hash
     (the consumer cannot bind without it)."""
-    from g8e_evals.stop_request import StopRequestIdentity
-
     launch_path = report_root / EVAL_LAUNCH_STATE_JSON
     if not launch_path.is_file():
         return None
@@ -196,12 +229,74 @@ def _build_stop_consumer(report_root: Path, request: EvalEngineRequest, config: 
     return StopRequestConsumer(request_path=report_root / "eval-stop-request.json", identity=identity)
 
 
+def _request_cli_auth_context(request: EvalEngineRequest) -> CLIAuthContext:
+    """Build the canonical CLI identity from the typed platform context.
+
+    The Go facade populates the platform auth fields from the on-disk
+    credentials before engine launch, so the engine child never reads
+    G8E_* auth variables from the process environment. A request that
+    carries no usable identity fails closed here rather than surfacing
+    as an engine-child auth failure.
+    """
+    from pydantic import ValidationError
+
+    from g8e_evals.auth_bridge import CLIAuthContext
+
+    platform = request.platform
+    try:
+        return CLIAuthContext(
+            operator_session_id=platform.operator_session_id,
+            cli_session_id=platform.cli_session_id,
+            user_id=platform.user_id,
+            operator_id=platform.operator_id,
+            client_cert=platform.cli_cert_path,
+            client_key=platform.cli_key_path,
+        )
+    except ValidationError as exc:
+        raise EngineError(
+            EvalErrorCode.PLATFORM_IDENTITY_UNAVAILABLE,
+            "auth",
+            "platform context carries no usable CLI auth identity",
+        ) from exc
+
+
+def _request_build_provenance(request: EvalEngineRequest) -> SourceBuildProvenance:
+    """Build source/build provenance from the typed platform context.
+
+    The facade stamps the running binary's source revision and the
+    preflight-computed source tree state hash into the request, so the
+    engine child never consults G8E_EVALS_SOURCE_* env vars or shells
+    out to `g8e version` for provenance.
+    """
+    from pydantic import ValidationError
+
+    from g8e_evals.schema import SourceBuildProvenance
+
+    platform = request.platform
+    try:
+        return SourceBuildProvenance(
+            source_revision=platform.source_revision,
+            source_tree_state_hash=platform.source_tree_state_hash,
+            build_system="g8e-facade",
+            binary_sha256=platform.g8e_binary_sha256,
+        )
+    except ValidationError as exc:
+        raise EngineError(
+            EvalErrorCode.PLATFORM_IDENTITY_UNAVAILABLE,
+            "provenance",
+            "platform context carries no usable source/build provenance",
+        ) from exc
+
+
 def _diagnostic_start(request: EvalEngineRequest) -> EvalEngineResult:
     from g8e_evals.cli import run
 
     config = load_operation_config(Path(request.config_path))
     if not isinstance(config, DiagnosticConfig):
         raise EngineError(EvalErrorCode.CONFIG_INVALID, "start", "diagnostic start requires a diagnostic config")
+    auth_context = _request_cli_auth_context(request)
+    build_provenance = _request_build_provenance(request)
+    provider_endpoint = _request_provider_endpoint(request)
     repository_root = Path(request.platform.repository_root)
     report_root = resolve_report_root(config, repository_root)
     if report_root.exists():
@@ -243,7 +338,7 @@ def _diagnostic_start(request: EvalEngineRequest) -> EvalEngineResult:
                 l2_key=None,
                 l2_key_id=None,
                 primary_api_key=_provider_api_key(config.provider_endpoint.provider),
-                primary_endpoint=_provider_endpoint(config.provider_endpoint.provider),
+                primary_endpoint=provider_endpoint,
                 assistant_api_key=None,
                 assistant_endpoint=None,
                 lite_api_key=None,
@@ -262,6 +357,9 @@ def _diagnostic_start(request: EvalEngineRequest) -> EvalEngineResult:
                 exact_report_dir=report_root,
                 exact_task_offset=config.task_offset,
                 stop_consumer=stop_consumer,
+                auth_context=auth_context,
+                build_provenance=build_provenance,
+                trust_bundle_path=request.platform.trust_bundle_path,
             )
     except KeyboardInterrupt:
         _transition_launch_state(report_root, request, config, "interrupted", started_at)
@@ -286,6 +384,8 @@ def _campaign_start(request: EvalEngineRequest) -> EvalEngineResult:
     config = load_operation_config(Path(request.config_path))
     if not isinstance(config, CampaignConfig):
         raise EngineError(EvalErrorCode.CONFIG_INVALID, "start", "campaign start requires a campaign config")
+    auth_context = _request_cli_auth_context(request)
+    build_provenance = _request_build_provenance(request)
     repository_root = Path(request.platform.repository_root)
     report_root = resolve_report_root(config, repository_root)
     if report_root.exists():
@@ -323,6 +423,9 @@ def _campaign_start(request: EvalEngineRequest) -> EvalEngineResult:
                 replacement_rule=repository_root / config.replacement_rule.path if config.replacement_rule else None,
                 exact_report_dir=report_root,
                 stop_consumer=stop_consumer,
+                auth_context=auth_context,
+                build_provenance=build_provenance,
+                trust_bundle_path=request.platform.trust_bundle_path,
             )
     except KeyboardInterrupt:
         _transition_launch_state(report_root, request, config, "interrupted", started_at)

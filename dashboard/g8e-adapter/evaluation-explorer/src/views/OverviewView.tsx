@@ -85,10 +85,10 @@ function AgentsStrip({ models, datasetId }: { models: ModelSummary[]; datasetId:
   );
 
   return (
-    <section className="panel" aria-label="Agents">
+    <section className="panel" aria-label="Models">
       <div className="panel-head">
         <h2>
-          Agents <span className="panel-sub">· {agents.length} evaluated</span>
+          Models <span className="panel-sub">· {agents.length} evaluated</span>
         </h2>
         <Link to={`/models?dataset=${datasetId}`} className="panel-link">
           View all models →

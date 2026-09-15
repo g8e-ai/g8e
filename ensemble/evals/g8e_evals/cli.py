@@ -598,7 +598,7 @@ main.add_command(qualification_cmd)
               help="Backend seed support declaration: none (no seed support), deterministic (seed supported), unknown (unverified).")
 @click.option("--preregistration", type=click.Path(exists=True, dir_okay=False, path_type=Path),
               help="Path to a JSON preregistration config file for paired analysis and Holm correction.")
-def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, judge_model, judge_provider, headless, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, judge_api_key, judge_endpoint, web_search_project, web_search_app, web_search_api_key, temperature, top_p, max_tokens, seed, seed_support, preregistration, exact_report_dir=None, exact_task_offset=0, stop_consumer=None):
+def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, judge_model, judge_provider, headless, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, judge_api_key, judge_endpoint, web_search_project, web_search_app, web_search_api_key, temperature, top_p, max_tokens, seed, seed_support, preregistration, exact_report_dir=None, exact_task_offset=0, stop_consumer=None, auth_context=None, build_provenance=None, trust_bundle_path=None):
     """Run a single-arm diagnostic against one model and one arm.
 
     This command is a diagnostic: it executes one arm against one model
@@ -628,7 +628,10 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
     # authenticate via the canonical CLI identity.
     if selected_arm == Arm.DIRECT:
         auth_context = None
-    else:
+    elif auth_context is None:
+        # The Go facade supplies auth_context through the typed engine
+        # request; the subprocess bridge runs only for the legacy
+        # direct-CLI path where no typed context exists.
         if auth_project_root is None:
             raise click.UsageError(
                 "--auth-project-root or G8E_AUTH_PROJECT_ROOT is required for ensemble and governed arms. "
@@ -691,6 +694,7 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         operator_url=operator_url,
         operator_session_id=operator_session_id or (auth_context.operator_session_id if auth_context else ""),
         auth_context=auth_context,
+        trust_bundle_path=trust_bundle_path or "",
         state_root=state_root,
         l2_private_key=l2_key,
         l2_key_id=l2_key_id,
@@ -703,7 +707,7 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         prereg_config = load_preregistration(preregistration)
 
     try:
-        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout, evidence_key=evidence_key, preregistration=prereg_config, effective_sampling=effective_sampling, seed_support=seed_support, g8e_cli=g8e_cli, exact_report_dir=exact_report_dir, task_offset=exact_task_offset, stop_consumer=stop_consumer))
+        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout, evidence_key=evidence_key, preregistration=prereg_config, effective_sampling=effective_sampling, seed_support=seed_support, g8e_cli=g8e_cli, exact_report_dir=exact_report_dir, task_offset=exact_task_offset, stop_consumer=stop_consumer, build_provenance=build_provenance))
     except EvaluationRunError as error:
         raise click.ClickException(str(error)) from error
 
@@ -1107,7 +1111,7 @@ def campaign_start(config: Path, yes: bool) -> None:
               help="Path to a JSON CampaignSetPlan file. When provided, the campaign is validated as a child of the frozen campaign-set before report-directory creation, and the report-level CampaignBinding is marked as ReportRole.CHILD.")
 @click.option("--replacement-rule", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
               help="Path to a JSON ReplacementManifestRule file. Requires --campaign-set-plan; the rule must bind that plan. A --campaign-id that is not a plan child must resolve as a rule-derived replacement ID.")
-def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, max_tokens, model_tags, profile, models, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, task_offset, task_limit, campaign_set_plan, replacement_rule, exact_report_dir=None, stop_consumer=None):
+def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, max_tokens, model_tags, profile, models, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, task_offset, task_limit, campaign_set_plan, replacement_rule, exact_report_dir=None, stop_consumer=None, auth_context=None, build_provenance=None, trust_bundle_path=None):
     """Run an authoritative multi-arm, multi-cohort campaign.
 
     Creates one campaign identity, one report directory, one assignment
@@ -1344,12 +1348,13 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     grader = suite_spec.grader_factory()
 
     # The campaign run command is production-posture by definition: it
-    # calls live providers. Source/build provenance comes from the stamped
-    # g8e CLI binary or from environment variables set by the trusted build
-    # system or CI pipeline. Reject before execution when provenance is
-    # absent or malformed.
+    # calls live providers. Source/build provenance comes from the typed
+    # engine request when the Go facade supplies it, otherwise from the
+    # stamped g8e CLI binary or environment variables set by the trusted
+    # build system or CI pipeline. Reject before execution when
+    # provenance is absent or malformed.
     try:
-        source_build_provenance = load_source_build_provenance_or_reject(
+        source_build_provenance = build_provenance or load_source_build_provenance_or_reject(
             is_production_posture=True,
             g8e_cli=g8e_cli,
         )
@@ -1384,13 +1389,13 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
     # and baseline_tier_mappings.
 
     # Load the canonical CLI auth context when ensemble or doctrine arms
-    # are in use.
-    auth_context = None
+    # are in use. A facade-supplied context bypasses the subprocess bridge
+    # entirely.
     has_ensemble_track = (
         campaign_profile is not None
         and any(a.arm_id != "direct" for a in campaign_profile.track_arm_assignments)
     )
-    if has_ensemble_track:
+    if has_ensemble_track and auth_context is None:
         if auth_project_root is None:
             raise click.UsageError(
                 "--auth-project-root or G8E_AUTH_PROJECT_ROOT is required for "
@@ -1412,6 +1417,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         operator_url=operator_url,
         operator_session_id=operator_session_id or (auth_context.operator_session_id if auth_context else None),
         auth_context=auth_context,
+        trust_bundle_path=trust_bundle_path,
     )
 
     runner = CampaignRunner(
@@ -1890,7 +1896,7 @@ def campaign_set_verify(plan: Path, index: Path, child_dirs: list[tuple[str, Pat
     console.print("  [green]status[/green] verified")
 
 
-async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None, effective_sampling: SamplingSettings | None = None, seed_support: str = "unknown", g8e_cli: str | None = None, exact_report_dir: Path | None = None, task_offset: int = 0, stop_consumer=None):
+async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None, effective_sampling: SamplingSettings | None = None, seed_support: str = "unknown", g8e_cli: str | None = None, exact_report_dir: Path | None = None, task_offset: int = 0, stop_consumer=None, build_provenance: SourceBuildProvenance | None = None):
     # 1. Load benchmark via the typed suite registry. The registry
     #    rejects deterministic-simulation suites from the model-comparison
     #    set so a simulator-only result can never be represented as model
@@ -2148,12 +2154,13 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     )
 
     # 5a. Load source/build provenance and provider budget. Provenance
-    #     comes from the stamped g8e CLI binary when present, otherwise
-    #     from environment variables set by the trusted build system or
-    #     CI. Preflight fails before execution when a required identity or
-    #     hash is unavailable. The runner never runs ad hoc Git commands.
+    #     comes from the typed engine request when the Go facade supplies
+    #     it, otherwise from the stamped g8e CLI binary or environment
+    #     variables set by the trusted build system or CI. Preflight fails
+    #     before execution when a required identity or hash is
+    #     unavailable. The runner never runs ad hoc Git commands.
     try:
-        source_build_provenance = load_source_build_provenance_or_reject(
+        source_build_provenance = build_provenance or load_source_build_provenance_or_reject(
             is_production_posture=True,
             g8e_cli=g8e_cli,
         )
@@ -2219,7 +2226,11 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     manifest_path = report_dir / evals_constants.MANIFEST_JSON
     manifest_path.write_text(manifest.model_dump_json(indent=2))
 
-    collector = ReceiptCollector(config.operator_url, cli_context=config.auth_context)
+    collector = ReceiptCollector(
+        config.operator_url,
+        cli_context=config.auth_context,
+        trust_bundle=config.trust_bundle_path or None,
+    )
 
     # Load warden pub key for verification
     warden_pub_path = Path(os.environ.get("G8E_GATEWAY_PKI_DIR", ".g8e/pki")) / "warden_pub.pem"
@@ -2239,6 +2250,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             g8ee_url=config.g8ee_url,
             operator_url=config.operator_url,
             cli_context=config.auth_context,
+            trust_bundle=config.trust_bundle_path or None,
         )
         observed_posture = await observe_gateway_posture(gw_env)
         posture_source = "gateway_health_endpoint"

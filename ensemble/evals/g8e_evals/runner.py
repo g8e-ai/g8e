@@ -1203,6 +1203,7 @@ def build_tier_fitness_sut_config(
     operator_url: str | None = None,
     operator_session_id: str | None = None,
     auth_context: object | None = None,
+    trust_bundle_path: str | None = None,
 ) -> SUTConfig:
     """Build a ``SUTConfig`` for a tier-fitness assignment.
 
@@ -1268,6 +1269,7 @@ def build_tier_fitness_sut_config(
         operator_url=operator_url or "https://localhost:8444",
         operator_session_id=operator_session_id,
         auth_context=auth_context,  # type: ignore[arg-type]
+        trust_bundle_path=trust_bundle_path or "",
         candidate_model=candidate_model,
     )
 
@@ -1279,6 +1281,7 @@ def build_campaign_sut_factory(
     operator_url: str | None = None,
     operator_session_id: str | None = None,
     auth_context: object | None = None,
+    trust_bundle_path: str | None = None,
 ) -> SUTFactory:
     """Build a ``SUTFactory`` that dispatches by arm type.
 
@@ -1317,6 +1320,7 @@ def build_campaign_sut_factory(
             operator_url=operator_url,
             operator_session_id=operator_session_id,
             auth_context=auth_context,
+            trust_bundle_path=trust_bundle_path,
         )
         return G8eeChatSUT(config)
 

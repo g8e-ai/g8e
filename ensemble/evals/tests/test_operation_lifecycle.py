@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -30,6 +31,13 @@ from g8e_evals.operation_lifecycle import (
     plan_operation,
     stop_operation,
 )
+
+if TYPE_CHECKING:
+    from g8e_evals.analysis.canonical import PreregistrationConfig
+    from g8e_evals.campaign_set import CampaignSetPlan
+    from g8e_evals.profile import CampaignProfile
+    from g8e_evals.registry import ModelRegistry
+    from g8e_evals.replacement_rule import ReplacementManifestRule
 
 pytestmark = pytest.mark.unit
 
@@ -192,6 +200,29 @@ def test_check_rejects_evidence_key_identity_mismatch(tmp_path: Path) -> None:
     key_path.write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match="evidence key ID mismatch"):
+        check_operation(config_path, tmp_path)
+
+
+def test_check_rejects_unsupported_provider(tmp_path: Path) -> None:
+    config_path = _write_diagnostic_config(tmp_path)
+    from g8e_evals.operation_config import load_operation_config
+    config = load_operation_config(config_path)
+    config = config.model_copy(update={"provider_endpoint": ProviderEndpointRef(provider="closedai", endpoint_class="remote")})
+    write_operation_config(config, config_path)
+
+    with pytest.raises(ValueError, match="unsupported provider"):
+        check_operation(config_path, tmp_path)
+
+
+def test_check_fails_on_insufficient_disk(tmp_path: Path) -> None:
+    config_path = _write_diagnostic_config(tmp_path)
+    from g8e_evals.operation_config import load_operation_config
+    config = load_operation_config(config_path)
+    # Require more free disk than any realistic tmp_path filesystem has.
+    config = config.model_copy(update={"budget": BudgetCeilings(max_requests=10, max_tokens=1000, max_usd=2.5, min_free_disk_gb=999999)})
+    write_operation_config(config, config_path)
+
+    with pytest.raises(ValueError, match="minimum free disk not met"):
         check_operation(config_path, tmp_path)
 
 
@@ -406,7 +437,7 @@ _VARIANT_ID = "qwen3-8b-q4_0"
 _COHORT_ID = "cohort-qwen3-8b"
 
 
-def _make_registry() -> object:
+def _make_registry() -> ModelRegistry:
     from g8e_evals.registry import (
         MODEL_REGISTRY_VERSION,
         ModelRegistry,
@@ -467,7 +498,7 @@ def _make_profile(
     registry_hash: str,
     *,
     arm_ids: list[str] | None = None,
-) -> object:
+) -> CampaignProfile:
     from g8e_evals.profile import (
         CAMPAIGN_PROFILE_VERSION,
         CampaignLifecycleStatus,
@@ -525,7 +556,7 @@ def _make_profile(
     return CampaignProfile(**fields, content_hash=compute_campaign_profile_hash(temp))
 
 
-def _make_preregistration(baseline: str = "direct", comparisons: list[str] | None = None) -> object:
+def _make_preregistration(baseline: str = "direct", comparisons: list[str] | None = None) -> PreregistrationConfig:
     from g8e_evals.analysis.canonical import (
         ClaimPolicy,
         ContinuousTestPolicy,
@@ -555,11 +586,11 @@ def _make_preregistration(baseline: str = "direct", comparisons: list[str] | Non
 def _write_campaign_config(
     tmp_path: Path,
     *,
-    registry,
-    profile,
-    preregistration,
-    campaign_set_plan=None,
-    replacement_rule=None,
+    registry: ModelRegistry,
+    profile: CampaignProfile,
+    preregistration: PreregistrationConfig,
+    campaign_set_plan: CampaignSetPlan | None = None,
+    replacement_rule: ReplacementManifestRule | None = None,
 ) -> Path:
     """Write authority files and a CampaignConfig referencing them."""
     from g8e_evals.operation_config import CampaignConfig
@@ -607,7 +638,7 @@ def _write_campaign_config(
         rule_path.write_text(replacement_rule.model_dump_json())
         kwargs["replacement_rule"] = AuthorityRef(path=rule_path.name, sha256=_sha256(rule_path))
 
-    config = CampaignConfig(**kwargs)
+    config = CampaignConfig.model_validate(kwargs)
     config_path = tmp_path / "campaign.json"
     write_operation_config(config, config_path)
     return config_path

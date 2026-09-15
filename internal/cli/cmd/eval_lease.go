@@ -22,6 +22,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -160,6 +161,10 @@ type evalLeaseDeps struct {
 	candidateResolver      evalCandidateResolver
 	modelInventoryResolver evalModelInventoryResolver
 	httpClient             *http.Client
+	// authContextLoader loads the canonical local CLI auth context. The
+	// production wiring is auth.LoadClientAuthContext; Tier 1 tests stub
+	// it so credential resolution never touches the runtime.
+	authContextLoader func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error)
 }
 
 // evalLeaseCmd returns the production `eval lease` command tree.
@@ -174,6 +179,7 @@ func evalLeaseCmd() *cobra.Command {
 		candidateResolver:      realEvalCandidateResolver{fileReader: realEvalFileReader{}},
 		modelInventoryResolver: realEvalModelInventoryResolver{fileReader: realEvalFileReader{}},
 		httpClient:             &http.Client{Timeout: 5 * time.Second},
+		authContextLoader:      auth.LoadClientAuthContext,
 	})
 }
 

@@ -678,7 +678,8 @@ def operation_status(config_path: Path, repository_root: Path) -> OperationStatu
 
     pid = launch.get("pid", 0)
     running = _process_matches_launch(pid, launch) if isinstance(pid, int) else False
-    launch_status = launch.get("status") if isinstance(launch.get("status"), str) else ""
+    raw_launch_status = launch.get("status")
+    launch_status = raw_launch_status if isinstance(raw_launch_status, str) else ""
 
     # Reconcile the process state against the recorded launch status.
     if launch_status == "running":
@@ -693,7 +694,8 @@ def operation_status(config_path: Path, repository_root: Path) -> OperationStatu
     stop_reason = ""
     if is_campaign:
         status_record = _load_json_object(report_root / CAMPAIGN_STATUS_JSON)
-        campaign_status = status_record.get("status") if isinstance(status_record.get("status"), str) else ""
+        raw_campaign_status = status_record.get("status")
+        campaign_status = raw_campaign_status if isinstance(raw_campaign_status, str) else ""
         campaign_stop_reason = status_record.get("stop_reason")
         if isinstance(campaign_stop_reason, str):
             stop_reason = campaign_stop_reason
@@ -715,8 +717,10 @@ def operation_status(config_path: Path, repository_root: Path) -> OperationStatu
     # derive total from tasks.jsonl and completed from terminal attempts.
     progress = _load_json_object(report_root / CAMPAIGN_PROGRESS_JSON)
     if is_campaign:
-        total_assignments = int(progress.get("total_assignments", 0)) if isinstance(progress.get("total_assignments"), int) else 0
-        completed_assignments = int(progress.get("completed_assignments", 0)) if isinstance(progress.get("completed_assignments"), int) else 0
+        raw_total = progress.get("total_assignments")
+        raw_completed = progress.get("completed_assignments")
+        total_assignments = raw_total if isinstance(raw_total, int) else 0
+        completed_assignments = raw_completed if isinstance(raw_completed, int) else 0
     else:
         task_records = _read_jsonl(report_root / TASKS_JSONL)
         total_assignments = len(task_records)
@@ -775,8 +779,11 @@ def stop_operation(config_path: Path, repository_root: Path, *, immediate: bool)
     # All forced-stop validation must pass before the request is
     # persisted or any signal is sent. A reused or mismatched PID is
     # never signaled.
-    if immediate and (not isinstance(pid, int) or not _process_matches_launch(pid, launch)):
-        raise ValueError("cannot force-stop a process that is not running or has been reused")
+    kill_pid: int | None = None
+    if immediate:
+        if not isinstance(pid, int) or not _process_matches_launch(pid, launch):
+            raise ValueError("cannot force-stop a process that is not running or has been reused")
+        kill_pid = pid
     config_content_hash = config.content_hash or config.compute_content_hash()
     request = build_stop_request(
         StopRequestIdentity(
@@ -789,8 +796,8 @@ def stop_operation(config_path: Path, repository_root: Path, *, immediate: bool)
         requested_at=datetime.now(UTC).isoformat(),
     )
     request_path.write_text(request.model_dump_json(indent=2) + "\n")
-    if immediate:
-        os.kill(pid, signal.SIGTERM)
+    if kill_pid is not None:
+        os.kill(kill_pid, signal.SIGTERM)
     return OperationStopResult(
         operation_kind=config.operation_kind.value,
         operation_id=config.operation_id,

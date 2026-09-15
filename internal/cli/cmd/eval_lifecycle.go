@@ -12,11 +12,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
@@ -180,27 +182,20 @@ func runEvalEngineLifecycle(ctx context.Context, deps evalLeaseDeps, configPath 
 	if err != nil {
 		return evalEngineResultJSON{}, err
 	}
-	binaryPath, err := os.Executable()
-	if err != nil {
-		return evalEngineResultJSON{}, fmt.Errorf("eval: resolve g8e binary: %w", err)
+	// Best-effort auth context: lifecycle operations (status, stop,
+	// verify) never authenticate to the platform, so missing credentials
+	// do not block them. Provider-backed starts enforce auth separately
+	// through loadEvalAuthContext.
+	var authCtx *auth.ClientAuthContext
+	if fileSvc, ferr := deps.fileSvcFactory(cfg.ProjectRoot, slog.Default()); ferr == nil && deps.authContextLoader != nil {
+		authCtx, _ = deps.authContextLoader(fileSvc, cfg)
 	}
 	request := models.EvalEngineRequest{
 		SchemaVersion: models.EvalEngineRequestSchemaVersion,
-		Operation: operation,
-		ConfigPath: env.ConfigPath,
-		Platform: models.EvalPlatformContext{
-			RepositoryRoot: env.RepositoryRoot,
-			EvalProject: env.EvalProject,
-			G8EBinaryPath: binaryPath,
-			G8EBinarySHA256: candidate.BinarySHA256,
-			AuthProjectRoot: cfg.ProjectRoot,
-			RuntimeDir: cfg.RuntimeDir,
-			TrustBundlePath: cfg.ResolvedTrustBundlePath(),
-			GatewayHTTPURL: cfg.OperatorDiscoveryURL(),
-			GatewayHTTPSURL: cfg.OperatorPublicURL(),
-			EnsembleURL: evalEnsembleBaseURL(cfg),
-		},
-		Flags: flags,
+		Operation:     operation,
+		ConfigPath:    env.ConfigPath,
+		Platform:      buildEvalPlatformContext(ctx, env, cfg, candidate, authCtx),
+		Flags:         flags,
 	}
 	return invokeEngine(ctx, deps, env.InterpreterPath, request, stderr)
 }

@@ -93,19 +93,31 @@ const (
 
 // EvalPlatformContext carries platform-owned identity and paths the facade
 // injects from the selected repository/runtime context. Configs never
-// carry these fields; the facade is their only source.
+// carry these fields; the facade is their only source. The CLI auth
+// identity fields are populated from the canonical local credentials for
+// provider-backed starts so the engine child never reads G8E_* auth
+// variables from the process environment; they are empty for read-only
+// lifecycle operations that never authenticate to the platform.
 type EvalPlatformContext struct {
-	RepositoryRoot  string `json:"repository_root"`
-	EvalProject     string `json:"eval_project"`
-	G8EBinaryPath   string `json:"g8e_binary_path"`
-	G8EBinarySHA256 string `json:"g8e_binary_sha256"`
-	PlatformVersion string `json:"platform_version"`
-	AuthProjectRoot string `json:"auth_project_root"`
-	RuntimeDir      string `json:"runtime_dir"`
-	TrustBundlePath string `json:"trust_bundle_path"`
-	GatewayHTTPURL  string `json:"gateway_http_url"`
-	GatewayHTTPSURL string `json:"gateway_https_url"`
-	EnsembleURL     string `json:"ensemble_url"`
+	RepositoryRoot      string `json:"repository_root"`
+	EvalProject         string `json:"eval_project"`
+	G8EBinaryPath       string `json:"g8e_binary_path"`
+	G8EBinarySHA256     string `json:"g8e_binary_sha256"`
+	PlatformVersion     string `json:"platform_version"`
+	AuthProjectRoot     string `json:"auth_project_root"`
+	RuntimeDir          string `json:"runtime_dir"`
+	TrustBundlePath     string `json:"trust_bundle_path"`
+	GatewayHTTPURL      string `json:"gateway_http_url"`
+	GatewayHTTPSURL     string `json:"gateway_https_url"`
+	EnsembleURL         string `json:"ensemble_url"`
+	CLICertPath         string `json:"cli_cert_path"`
+	CLIKeyPath          string `json:"cli_key_path"`
+	OperatorSessionID   string `json:"operator_session_id"`
+	CLISessionID        string `json:"cli_session_id"`
+	UserID              string `json:"user_id"`
+	OperatorID          string `json:"operator_id"`
+	SourceRevision      string `json:"source_revision"`
+	SourceTreeStateHash string `json:"source_tree_state_hash"`
 }
 
 // EvalEngineFlags carries non-secret engine flags. Secret values

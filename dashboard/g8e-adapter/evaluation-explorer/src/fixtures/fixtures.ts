@@ -12,6 +12,7 @@ import type {
   LiveEvent,
   MethodologySnapshot,
   ModelSummary,
+  ProviderEnvironment,
   SuiteSummary,
 } from '../contract/types';
 
@@ -26,8 +27,19 @@ export const FIXTURE_DATASET_IDS = {
   live: LIVE_DATASET,
 } as const;
 
+/** Owner-declared description of the provider host serving local inference.
+ *  Every dataset in this deployment ran against the same Ollama machine. */
+export const fixtureProviderEnvironment: ProviderEnvironment = {
+  source: 'declared',
+  processor: '13th Gen Intel(R) Core(TM) i9-13900K (3.00 GHz)',
+  memory: '64.0 GB',
+  graphics: 'NVIDIA GeForce RTX 4070 Ti SUPER (16 GB)',
+  storage: '2.20 TB of 4.55 TB used',
+  system_type: '64-bit operating system, x64-based processor',
+};
+
 export const fixtureCatalogExploratory: CatalogSnapshot = {
-  schema_version: '1.1.0',
+  schema_version: '1.2.0',
   kind: 'catalog_snapshot',
   dataset_id: EXPLO_DATASET,
   dataset_kind: 'exploratory_baseline',
@@ -53,10 +65,11 @@ export const fixtureCatalogExploratory: CatalogSnapshot = {
   verifier_passed_count: 5,
   verifier_failed_count: 4,
   generated_at: NOW,
+  provider_environment: fixtureProviderEnvironment,
 };
 
 export const fixtureCatalogVerified: CatalogSnapshot = {
-  schema_version: '1.1.0',
+  schema_version: '1.2.0',
   kind: 'catalog_snapshot',
   dataset_id: VERIFIED_DATASET,
   dataset_kind: 'verified_public_snapshot',
@@ -81,10 +94,11 @@ export const fixtureCatalogVerified: CatalogSnapshot = {
   verifier_passed_count: 2,
   verifier_failed_count: 0,
   generated_at: NOW,
+  provider_environment: fixtureProviderEnvironment,
 };
 
 export const fixtureCatalogLive: CatalogSnapshot = {
-  schema_version: '1.1.0',
+  schema_version: '1.2.0',
   kind: 'catalog_snapshot',
   dataset_id: LIVE_DATASET,
   dataset_kind: 'live_run',
@@ -109,6 +123,7 @@ export const fixtureCatalogLive: CatalogSnapshot = {
   verifier_passed_count: 0,
   verifier_failed_count: 0,
   generated_at: NOW,
+  provider_environment: fixtureProviderEnvironment,
 };
 
 // Nine evaluated role candidates from the exploratory baseline.
@@ -245,7 +260,7 @@ const evaluatedVariants: Array<{
 ];
 
 export const fixtureModelSummaries: ModelSummary[] = evaluatedVariants.map((v) => ({
-  schema_version: '1.1.0',
+  schema_version: '1.2.0',
   kind: 'model_summary',
   dataset_id: EXPLO_DATASET,
   quality_state: 'exploratory_partial',
@@ -289,7 +304,7 @@ const unevaluatedNames = [
   'wizard-coder-7b', 'codeup-13b',
 ];
 export const fixtureUnevaluatedModels: ModelSummary[] = unevaluatedNames.map((name, i) => ({
-  schema_version: '1.1.0',
+  schema_version: '1.2.0',
   kind: 'model_summary',
   dataset_id: EXPLO_DATASET,
   quality_state: 'not_evaluated',
@@ -305,7 +320,7 @@ export const fixtureUnevaluatedModels: ModelSummary[] = unevaluatedNames.map((na
 // Inventory-only models (additional provider models outside the registry).
 export const fixtureInventoryOnlyModels: ModelSummary[] = [
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'model_summary',
     dataset_id: EXPLO_DATASET,
     quality_state: 'not_evaluated',
@@ -332,7 +347,7 @@ const suiteDefs = [
 ];
 
 export const fixtureSuiteSummaries: SuiteSummary[] = suiteDefs.map((s) => ({
-  schema_version: '1.1.0',
+  schema_version: '1.2.0',
   kind: 'suite_summary',
   dataset_id: EXPLO_DATASET,
   quality_state: s.verifier === 'passed' ? 'exploratory_verified' : 'exploratory_partial',
@@ -360,7 +375,7 @@ export const fixtureSuiteSummaries: SuiteSummary[] = suiteDefs.map((s) => ({
 }));
 
 export const fixtureEvaluationSummaries: EvaluationSummary[] = suiteDefs.map((s) => ({
-  schema_version: '1.1.0',
+  schema_version: '1.2.0',
   kind: 'evaluation_summary',
   dataset_id: EXPLO_DATASET,
   quality_state: s.verifier === 'passed' ? 'exploratory_verified' : 'exploratory_partial',
@@ -402,7 +417,7 @@ export const fixtureEvaluationSummaries: EvaluationSummary[] = suiteDefs.map((s)
 
 export const fixtureAssignmentResults: AssignmentResult[] = [
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'assignment_result',
     dataset_id: EXPLO_DATASET,
     quality_state: 'exploratory_verified',
@@ -462,7 +477,7 @@ export const fixtureAssignmentResults: AssignmentResult[] = [
     verification_disposition: 'passed',
   },
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'assignment_result',
     dataset_id: EXPLO_DATASET,
     quality_state: 'exploratory_partial',
@@ -490,7 +505,7 @@ export const fixtureAssignmentResults: AssignmentResult[] = [
 ];
 
 export const fixtureMethodology: MethodologySnapshot = {
-  schema_version: '1.1.0',
+  schema_version: '1.2.0',
   kind: 'methodology_snapshot',
   dataset_id: EXPLO_DATASET,
   quality_state: 'exploratory_partial',
@@ -561,7 +576,7 @@ export const fixtureMethodology: MethodologySnapshot = {
 // Deterministic live event sequence for the scripted evaluation scenario.
 export const fixtureLiveEvents: LiveEvent[] = [
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'evaluation_queued',
     dataset_id: LIVE_DATASET,
     quality_state: 'live_in_progress',
@@ -573,7 +588,7 @@ export const fixtureLiveEvents: LiveEvent[] = [
     total: 5,
   },
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'evaluation_started',
     dataset_id: LIVE_DATASET,
     quality_state: 'live_in_progress',
@@ -585,7 +600,7 @@ export const fixtureLiveEvents: LiveEvent[] = [
     total: 5,
   },
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'assignment_started',
     dataset_id: LIVE_DATASET,
     quality_state: 'live_in_progress',
@@ -601,7 +616,7 @@ export const fixtureLiveEvents: LiveEvent[] = [
     stage_label: 'bootstrap',
   },
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'stage_updated',
     dataset_id: LIVE_DATASET,
     quality_state: 'live_in_progress',
@@ -615,7 +630,7 @@ export const fixtureLiveEvents: LiveEvent[] = [
     stage_label: 'inference',
   },
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'assignment_completed',
     dataset_id: LIVE_DATASET,
     quality_state: 'live_in_progress',
@@ -631,7 +646,7 @@ export const fixtureLiveEvents: LiveEvent[] = [
     metric_delta: { pass: { value: 1 } },
   },
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'evaluation_completed',
     dataset_id: LIVE_DATASET,
     quality_state: 'verified_public',
@@ -646,7 +661,7 @@ export const fixtureLiveEvents: LiveEvent[] = [
   // Committed metric delta published after an assignment's results are
   // aggregated. Covers the metric_updated event kind in the success path.
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'metric_updated',
     dataset_id: LIVE_DATASET,
     quality_state: 'live_in_progress',
@@ -665,7 +680,7 @@ export const fixtureLiveEvents: LiveEvent[] = [
   // evaluation_failed. The run uses a distinct id so it never collides with
   // the success scenario.
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'assignment_failed',
     dataset_id: LIVE_DATASET,
     quality_state: 'terminal_failed',
@@ -680,7 +695,7 @@ export const fixtureLiveEvents: LiveEvent[] = [
     total: 5,
   },
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'evaluation_failed',
     dataset_id: LIVE_DATASET,
     quality_state: 'terminal_failed',
@@ -694,7 +709,7 @@ export const fixtureLiveEvents: LiveEvent[] = [
   // Stopped scenario: a third live run stopped before a natural terminal
   // state. Covers evaluation_stopped.
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'evaluation_stopped',
     dataset_id: LIVE_DATASET,
     quality_state: 'terminal_failed',
@@ -708,7 +723,7 @@ export const fixtureLiveEvents: LiveEvent[] = [
 ];
 
 export const fixtureLiveEvaluationSummary: EvaluationSummary = {
-  schema_version: '1.1.0',
+  schema_version: '1.2.0',
   kind: 'evaluation_summary',
   dataset_id: LIVE_DATASET,
   quality_state: 'live_in_progress',
@@ -776,7 +791,7 @@ const verifiedModels: Array<{
 ];
 
 export const fixtureVerifiedModelSummaries: ModelSummary[] = verifiedModels.map((m) => ({
-  schema_version: '1.1.0',
+  schema_version: '1.2.0',
   kind: 'model_summary',
   dataset_id: VERIFIED_DATASET,
   quality_state: 'verified_public',
@@ -798,7 +813,7 @@ export const fixtureVerifiedModelSummaries: ModelSummary[] = verifiedModels.map(
 }));
 
 export const fixtureVerifiedSuiteSummary: SuiteSummary = {
-  schema_version: '1.1.0',
+  schema_version: '1.2.0',
   kind: 'suite_summary',
   dataset_id: VERIFIED_DATASET,
   quality_state: 'verified_public',
@@ -822,7 +837,7 @@ export const fixtureVerifiedSuiteSummary: SuiteSummary = {
 
 export const fixtureVerifiedEvaluationSummaries: EvaluationSummary[] = [
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'evaluation_summary',
     dataset_id: VERIFIED_DATASET,
     quality_state: 'verified_public',
@@ -854,7 +869,7 @@ export const fixtureVerifiedEvaluationSummaries: EvaluationSummary[] = [
     evidence_link: 'checksum://verified-ifeval-1',
   },
   {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'evaluation_summary',
     dataset_id: VERIFIED_DATASET,
     quality_state: 'verified_public',
@@ -894,7 +909,7 @@ function verifiedAssignment(
   passed: boolean,
 ): AssignmentResult {
   return {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     kind: 'assignment_result',
     dataset_id: VERIFIED_DATASET,
     quality_state: 'verified_public',

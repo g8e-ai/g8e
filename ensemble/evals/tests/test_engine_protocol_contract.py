@@ -111,6 +111,32 @@ _EXPECTED_STATUSES = {
     "stopped",
 }
 
+# The platform context field set pinned in lockstep with the Go contract
+# test ``TestEvalPlatformContextFieldContract`` in
+# ``internal/models/eval_engine_contract_test.go``. If either side adds,
+# removes, or renames a field, both tests fail.
+_EXPECTED_PLATFORM_FIELDS = {
+    "repository_root",
+    "eval_project",
+    "g8e_binary_path",
+    "g8e_binary_sha256",
+    "platform_version",
+    "auth_project_root",
+    "runtime_dir",
+    "trust_bundle_path",
+    "gateway_http_url",
+    "gateway_https_url",
+    "ensemble_url",
+    "cli_cert_path",
+    "cli_key_path",
+    "operator_session_id",
+    "cli_session_id",
+    "user_id",
+    "operator_id",
+    "source_revision",
+    "source_tree_state_hash",
+}
+
 
 def test_schema_version_matches_go_contract():
     assert EVAL_ENGINE_REQUEST_SCHEMA_VERSION == _EXPECTED_SCHEMA_VERSION
@@ -129,6 +155,10 @@ def test_error_code_enum_matches_go_contract():
 def test_engine_status_enum_matches_go_contract():
     python_statuses = {status.value for status in EvalEngineStatus}
     assert python_statuses == _EXPECTED_STATUSES
+
+
+def test_platform_context_fields_match_go_contract():
+    assert set(EvalPlatformContext.model_fields) == _EXPECTED_PLATFORM_FIELDS
 
 
 def test_operation_enum_is_exhaustive_and_unique():
@@ -165,6 +195,14 @@ def _sample_request(
             gateway_http_url="http://127.0.0.1:8080",
             gateway_https_url="https://127.0.0.1:8443",
             ensemble_url="http://127.0.0.1:8000",
+            cli_cert_path="/repo/.g8e/cli.crt",
+            cli_key_path="/repo/.g8e/cli.key",
+            operator_session_id="op-session-1",
+            cli_session_id="cli-session-1",
+            user_id="user-1",
+            operator_id="op-1",
+            source_revision="deadbeef",
+            source_tree_state_hash="a" * 64,
         ),
     )
 

@@ -32,6 +32,7 @@ class ReceiptCollector:
         timeout_seconds: int = 30,
         auth: AuthContext | None = None,
         cli_context: CLIAuthContext | None = None,
+        trust_bundle: str | None = None,
     ):
         self.operator_url = operator_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
@@ -39,6 +40,7 @@ class ReceiptCollector:
             operator_url=operator_url,
             runtime_identity=RuntimeIdentity.GATEWAY,
             cli_context=cli_context,
+            trust_bundle=trust_bundle,
         )
 
     async def collect_receipt(self, transaction_id: str) -> ActionReceipt | None:

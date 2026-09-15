@@ -200,11 +200,13 @@ class TestUnknownFieldRejection:
 
     def test_authority_ref_rejects_unknown_field(self):
         with pytest.raises(ValidationError, match="extra"):
-            AuthorityRef(path="ok.json", sha256=GOLD_SHA, extra_field="bad")
+            AuthorityRef.model_validate({"path": "ok.json", "sha256": GOLD_SHA, "extra_field": "bad"})
 
     def test_budget_rejects_unknown_field(self):
         with pytest.raises(ValidationError, match="extra"):
-            BudgetCeilings(max_requests=1, max_tokens=1, max_usd=0, secret="abc")
+            BudgetCeilings.model_validate(
+                {"max_requests": 1, "max_tokens": 1, "max_usd": 0, "secret": "abc"}
+            )
 
 
 # ---------------------------------------------------------------------------

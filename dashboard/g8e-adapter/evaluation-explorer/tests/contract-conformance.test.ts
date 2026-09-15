@@ -32,7 +32,7 @@ function validate(record: unknown): void {
 
 describe('contract schema version', () => {
   it('exposes the frozen schema version', () => {
-    expect(VIEW_SCHEMA_VERSION).toBe('1.1.0');
+    expect(VIEW_SCHEMA_VERSION).toBe('1.2.0');
   });
 });
 

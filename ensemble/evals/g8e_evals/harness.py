@@ -305,6 +305,7 @@ class SUTConfig:
     operator_url: str = f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}"
     operator_session_id: str | None = None
     auth_context: CLIAuthContext | None = None
+    trust_bundle_path: str = ""
     state_root: str = "test-state-root-v1"
 
     l2_private_key: str | None = None

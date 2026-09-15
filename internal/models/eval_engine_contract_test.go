@@ -9,6 +9,8 @@ package models
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -128,6 +130,41 @@ func TestEvalEngineStatusContract(t *testing.T) {
 	}
 }
 
+// TestEvalPlatformContextFieldContract asserts the Go EvalPlatformContext
+// JSON field names match the Python EvalPlatformContext model fields
+// pinned in tests/test_engine_protocol_contract.py. If either side adds,
+// removes, or renames a field, both tests fail.
+func TestEvalPlatformContextFieldContract(t *testing.T) {
+	expected := map[string]bool{
+		"repository_root":        true,
+		"eval_project":           true,
+		"g8e_binary_path":        true,
+		"g8e_binary_sha256":      true,
+		"platform_version":       true,
+		"auth_project_root":      true,
+		"runtime_dir":            true,
+		"trust_bundle_path":      true,
+		"gateway_http_url":       true,
+		"gateway_https_url":      true,
+		"ensemble_url":           true,
+		"cli_cert_path":          true,
+		"cli_key_path":           true,
+		"operator_session_id":    true,
+		"cli_session_id":         true,
+		"user_id":                true,
+		"operator_id":            true,
+		"source_revision":        true,
+		"source_tree_state_hash": true,
+	}
+	typ := reflect.TypeOf(EvalPlatformContext{})
+	actual := make(map[string]bool, typ.NumField())
+	for i := 0; i < typ.NumField(); i++ {
+		tag := strings.Split(typ.Field(i).Tag.Get("json"), ",")[0]
+		actual[tag] = true
+	}
+	assert.Equal(t, expected, actual)
+}
+
 // TestEvalEngineRequestJSONRoundTrip asserts the Go struct round-trips
 // through JSON with the canonical wire field names.
 func TestEvalEngineRequestJSONRoundTrip(t *testing.T) {
@@ -140,17 +177,25 @@ func TestEvalEngineRequestJSONRoundTrip(t *testing.T) {
 		LeasePath:     "/tmp/lease.json",
 		ReportRoot:    "/tmp/report",
 		Platform: EvalPlatformContext{
-			RepositoryRoot:  "/repo",
-			EvalProject:     "/repo/ensemble/evals",
-			G8EBinaryPath:   "/repo/g8e",
-			G8EBinarySHA256: "abc123",
-			PlatformVersion: "2.1.0",
-			AuthProjectRoot: "/repo",
-			RuntimeDir:      "/repo/.g8e",
-			TrustBundlePath: "/repo/.g8e/pki/trust/bundle.pem",
-			GatewayHTTPURL:  "http://127.0.0.1:8080",
-			GatewayHTTPSURL: "https://127.0.0.1:8443",
-			EnsembleURL:     "http://127.0.0.1:8000",
+			RepositoryRoot:      "/repo",
+			EvalProject:         "/repo/ensemble/evals",
+			G8EBinaryPath:       "/repo/g8e",
+			G8EBinarySHA256:     "abc123",
+			PlatformVersion:     "2.1.0",
+			AuthProjectRoot:     "/repo",
+			RuntimeDir:          "/repo/.g8e",
+			TrustBundlePath:     "/repo/.g8e/pki/trust/bundle.pem",
+			GatewayHTTPURL:      "http://127.0.0.1:8080",
+			GatewayHTTPSURL:     "https://127.0.0.1:8443",
+			EnsembleURL:         "http://127.0.0.1:8000",
+			CLICertPath:         "/repo/.g8e/cli.crt",
+			CLIKeyPath:          "/repo/.g8e/cli.key",
+			OperatorSessionID:   "op-session-1",
+			CLISessionID:        "cli-session-1",
+			UserID:              "user-1",
+			OperatorID:          "op-1",
+			SourceRevision:      "deadbeef",
+			SourceTreeStateHash: strings.Repeat("a", 64),
 		},
 	}
 	data, err := json.Marshal(req)
@@ -161,6 +206,8 @@ func TestEvalEngineRequestJSONRoundTrip(t *testing.T) {
 	assert.Equal(t, req.Operation, restored.Operation)
 	assert.Equal(t, req.OperationID, restored.OperationID)
 	assert.Equal(t, req.Platform.RepositoryRoot, restored.Platform.RepositoryRoot)
+	assert.Equal(t, req.Platform.OperatorSessionID, restored.Platform.OperatorSessionID)
+	assert.Equal(t, req.Platform.SourceTreeStateHash, restored.Platform.SourceTreeStateHash)
 }
 
 // TestEvalEngineResultJSONRoundTrip asserts the result struct round-trips
