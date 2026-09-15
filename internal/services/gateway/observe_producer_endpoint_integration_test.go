@@ -755,16 +755,23 @@ func TestObserveProducerEndpoint_NonAppMTLSCallerRejected(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
+func seedCLISessionForProducer(t *testing.T, infra *TestInfrastructure, userID string) (string, *x509.Certificate) {
+	t.Helper()
+	cliSessionID := "cli-session-producer"
+	body, err := json.Marshal(&models.CLISession{ID: cliSessionID, UserID: userID, ExpiresAt: time.Now().Add(time.Hour)})
+	require.NoError(t, err)
+	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, body))
+	return cliSessionID, cliMTLSCert(t, userID, cliSessionID)
+}
+
 // TestObserveProducerEndpoint_AgentStateCLISessionRejected verifies that a
-// valid CLI session mTLS cert is rejected by the agent state producer
-// endpoint. Agent and run producer endpoints remain app-only; only the eval
-// publication endpoint accepts CLI session auth.
+// valid CLI session mTLS cert is rejected by the app-only agent state producer.
 func TestObserveProducerEndpoint_AgentStateCLISessionRejected(t *testing.T) {
 	env := setupObserveProducerEndpointEnv(t)
 
 	userID := "user-agent-cli-reject"
 	seedActiveUser(t, env.infra, userID)
-	cliSessionID, cert := seedCLISessionForEval(t, env.infra, userID)
+	cliSessionID, cert := seedCLISessionForProducer(t, env.infra, userID)
 
 	body := validAgentStateBody(t, "agent-cli-session", models.AgentLifecycleStatusRunning, "")
 	// Patch the body to route via cli_session_id instead of web_session_id.
@@ -787,7 +794,7 @@ func TestObserveProducerEndpoint_RunStateCLISessionRejected(t *testing.T) {
 
 	userID := "user-run-cli-reject"
 	seedActiveUser(t, env.infra, userID)
-	cliSessionID, cert := seedCLISessionForEval(t, env.infra, userID)
+	cliSessionID, cert := seedCLISessionForProducer(t, env.infra, userID)
 
 	body := validRunStateBody(t, "run-cli-session", models.RunLifecycleStatusRunning, "")
 	var raw map[string]json.RawMessage
@@ -1189,5 +1196,3 @@ func TestObserveProducerEndpoint_FailedPersistence_RunState_HTTP500NoSSERow(t *t
 	assert.Equal(t, http.StatusInternalServerError, updateW.Code)
 	assert.NotContains(t, updateW.Body.String(), "accepted")
 }
-
-

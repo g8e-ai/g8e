@@ -67,26 +67,6 @@ func (c *ObserveProducerController) requireAppUserID(w http.ResponseWriter, r *h
 	return userID, ok
 }
 
-// requireCLIUserID extracts the authenticated user ID from the request
-// context and verifies the caller is a CLI session. The unified auth
-// middleware stamps ContextKeyUserID and ContextKeyCLISessionID during
-// handleCLIAuth. Returns the user ID and true on success. On failure it
-// writes a 401 (missing user_id) or 403 (not a CLI session) response and
-// returns false.
-func (c *ObserveProducerController) requireCLIUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
-	cliSessionID, _ := r.Context().Value(constants.ContextKeyCLISessionID).(string)
-	if cliSessionID == "" {
-		c.responder.Error(w, http.StatusForbidden, constants.ErrForbidden.Error())
-		return "", false
-	}
-	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
-	if !ok || userID == "" {
-		c.responder.Error(w, http.StatusUnauthorized, constants.ErrNotAuthenticated.Error())
-		return "", false
-	}
-	return userID, true
-}
-
 // buildProducerRoute constructs an SSERoute from the derived user_id and
 // the request body's session routing fields. Exactly one of web_session_id
 // or cli_session_id must be set; the caller rejects dual routing before

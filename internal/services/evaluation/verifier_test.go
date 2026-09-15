@@ -84,14 +84,14 @@ func (e verifierDirEntry) Info() (os.FileInfo, error) { return nil, nil }
 // --- Fixture data ---
 
 const (
-	vRunID              = "run-1"
-	vAllowedAttemptID   = "allowed-attempt-1"
+	vRunID               = "run-1"
+	vAllowedAttemptID    = "allowed-attempt-1"
 	vProhibitedAttemptID = "prohibited-attempt-2"
-	vTransactionID      = "tx-1"
-	vOperatorID         = "operator-1"
-	vSessionID          = "session-1"
-	vTargetResource     = "/tmp/g8e-eval-run-1.txt"
-	vMarker             = "run-1"
+	vTransactionID       = "tx-1"
+	vOperatorID          = "operator-1"
+	vSessionID           = "session-1"
+	vTargetResource      = "/tmp/g8e-eval-run-1.txt"
+	vMarker              = "run-1"
 )
 
 // verifierFixture holds all the pieces needed to build a complete valid
@@ -106,26 +106,26 @@ type verifierFixture struct {
 	// artifact bodies keyed by artifact ID
 	bodies map[string][]byte
 	// evidence references
-	targetState1Ref     *compliancev1.ComplianceEvidenceReference
-	targetState2Ref     *compliancev1.ComplianceEvidenceReference
-	targetState3Ref     *compliancev1.ComplianceEvidenceReference
-	receiptRef          *compliancev1.ComplianceEvidenceReference
-	persistenceRef      *compliancev1.ComplianceEvidenceReference
-	allowedAuditRef     *compliancev1.ComplianceEvidenceReference
-	allowedExchangeRef  *compliancev1.ComplianceEvidenceReference
-	prohibitedAuditRef  *compliancev1.ComplianceEvidenceReference
+	targetState1Ref       *compliancev1.ComplianceEvidenceReference
+	targetState2Ref       *compliancev1.ComplianceEvidenceReference
+	targetState3Ref       *compliancev1.ComplianceEvidenceReference
+	receiptRef            *compliancev1.ComplianceEvidenceReference
+	persistenceRef        *compliancev1.ComplianceEvidenceReference
+	allowedAuditRef       *compliancev1.ComplianceEvidenceReference
+	allowedExchangeRef    *compliancev1.ComplianceEvidenceReference
+	prohibitedAuditRef    *compliancev1.ComplianceEvidenceReference
 	prohibitedExchangeRef *compliancev1.ComplianceEvidenceReference
-	verificationRef     *compliancev1.ComplianceEvidenceReference
-	verificationBody    []byte
+	verificationRef       *compliancev1.ComplianceEvidenceReference
+	verificationBody      []byte
 }
 
 func buildValidVerifierFixture(t *testing.T) *verifierFixture {
 	t.Helper()
 	now := func() time.Time { return time.Unix(1_700_000_200, 0).UTC() }
 	fix := &verifierFixture{
-		reader:  &verifierArtifactReader{files: map[string][]byte{}},
-		now:     now,
-		bodies:  map[string][]byte{},
+		reader: &verifierArtifactReader{files: map[string][]byte{}},
+		now:    now,
+		bodies: map[string][]byte{},
 	}
 
 	// Generate signing key pair
@@ -153,16 +153,16 @@ func buildValidVerifierFixture(t *testing.T) *verifierFixture {
 
 	// Build allowed audit record
 	record := &models.ActionReceiptRecord{
-		TransactionID:       fix.receipt.TransactionId,
-		TransactionHash:     fix.receipt.TransactionHash,
-		InvestigationID:     AllowedExecutionScenarioID,
-		OperatorID:          vOperatorID,
-		OperatorSessionID:   vSessionID,
-		ActionType:          constants.ActionTypeFileEdit,
-		Status:              operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
-		SignerKeyID:         fix.receipt.SignerKeyId,
-		Signature:           fix.receipt.Signature,
-		ActionReceipt:       fix.receipt,
+		TransactionID:     fix.receipt.TransactionId,
+		TransactionHash:   fix.receipt.TransactionHash,
+		InvestigationID:   AllowedExecutionScenarioID,
+		OperatorID:        vOperatorID,
+		OperatorSessionID: vSessionID,
+		ActionType:        constants.ActionTypeFileEdit,
+		Status:            operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		SignerKeyID:       fix.receipt.SignerKeyId,
+		Signature:         fix.receipt.Signature,
+		ActionReceipt:     fix.receipt,
 	}
 	allowedAuditResponse := &models.AuditReceiptsResponse{Success: true, Receipts: []*models.ActionReceiptRecord{record}}
 	allowedAuditBody, err := json.Marshal(allowedAuditResponse)
@@ -185,9 +185,9 @@ func buildValidVerifierFixture(t *testing.T) *verifierFixture {
 	dispatchRespBody, err := json.Marshal(client.DispatchCommandResponse{Success: true, TransactionID: fix.receipt.TransactionId})
 	require.NoError(t, err)
 	signerRespBody, err := json.Marshal(map[string]any{
-		"id":            fix.signerKeyID,
+		"id":             fix.signerKeyID,
 		"public_key_hex": fix.signerKeyID,
-		"enabled":       true,
+		"enabled":        true,
 	})
 	require.NoError(t, err)
 	allowedExchanges := []client.Exchange{
@@ -339,13 +339,13 @@ func (f *verifierFixture) buildReport(t *testing.T) *evalv1.EvaluationReport {
 
 	allowedAttempt := &evalv1.EvaluationAttempt{
 		AttemptId: vAllowedAttemptID, RunId: vRunID, ScenarioRef: versioned(AllowedExecutionScenarioID, CoreExecutionBoundarySuiteVersion),
-		Status: evalv1.EvaluationAttemptStatus_EVALUATION_ATTEMPT_STATUS_COMPLETED,
+		Status:    evalv1.EvaluationAttemptStatus_EVALUATION_ATTEMPT_STATUS_COMPLETED,
 		StartedAt: timestamppb.New(startedAt), CompletedAt: timestamppb.New(completedAt),
 		TransactionId: f.receipt.TransactionId, ExecutionId: vAllowedAttemptID,
 	}
 	prohibitedAttempt := &evalv1.EvaluationAttempt{
 		AttemptId: vProhibitedAttemptID, RunId: vRunID, ScenarioRef: versioned(ProhibitedExecutionScenarioID, CoreExecutionBoundarySuiteVersion),
-		Status: evalv1.EvaluationAttemptStatus_EVALUATION_ATTEMPT_STATUS_REJECTED,
+		Status:    evalv1.EvaluationAttemptStatus_EVALUATION_ATTEMPT_STATUS_REJECTED,
 		StartedAt: timestamppb.New(startedAt), CompletedAt: timestamppb.New(completedAt),
 	}
 
@@ -382,9 +382,9 @@ func (f *verifierFixture) buildReport(t *testing.T) *evalv1.EvaluationReport {
 			SchemaVersion: RegistryVersion, RunId: vRunID,
 			SuiteRef: versioned(CoreExecutionBoundarySuiteID, CoreExecutionBoundarySuiteVersion),
 			Deployment: &evalv1.EvaluationDeploymentIdentity{
-				DeploymentId: vRunID,
-				TopologyRef:  versioned(TopologyID, TopologyVersion),
-				ControlledTarget: vTargetResource,
+				DeploymentId:        vRunID,
+				TopologyRef:         versioned(TopologyID, TopologyVersion),
+				ControlledTarget:    vTargetResource,
 				IndependentObserver: constants.DockerEvaluationObserverService,
 				RuntimeBoundaries: []*evalv1.EvaluationRuntimeBoundary{
 					{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_EVALUATOR, ProcessIdentity: "host-side g8e eval process", RuntimeNamespace: "Docker host workspace", Endpoint: "https://localhost:8443", AuthenticatedIdentity: "user-1"},
@@ -393,13 +393,13 @@ func (f *verifierFixture) buildReport(t *testing.T) *evalv1.EvaluationReport {
 					{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_CONTROLLED_TARGET, ProcessIdentity: vTargetResource, RuntimeNamespace: "shared controlled fixture volume", MountedFilesystems: []string{"shared controlled fixture volume"}},
 				},
 			},
-			ActivePosture: evalv1.EvaluationGovernancePosture_EVALUATION_GOVERNANCE_POSTURE_DOCTRINE,
-			Lane:          evalv1.EvaluationLane_EVALUATION_LANE_PLATFORM,
+			ActivePosture:    evalv1.EvaluationGovernancePosture_EVALUATION_GOVERNANCE_POSTURE_DOCTRINE,
+			Lane:             evalv1.EvaluationLane_EVALUATION_LANE_PLATFORM,
 			TargetOperatorId: vOperatorID, TargetOperatorSessionId: vSessionID,
 			StartedAt: timestamppb.New(startedAt), CompletedAt: timestamppb.New(completedAt),
 			AttemptRefs: []string{vAllowedAttemptID, vProhibitedAttemptID},
 		},
-		Attempts:    []*evalv1.EvaluationAttempt{allowedAttempt, prohibitedAttempt},
+		Attempts:     []*evalv1.EvaluationAttempt{allowedAttempt, prohibitedAttempt},
 		Observations: observations,
 		Assertions:   allAssertions,
 		Verdicts:     allVerdicts,
@@ -429,7 +429,7 @@ func buildVerifierSignedReceipt(t *testing.T, privateKey ed25519.PrivateKey, sig
 		TransactionId: vTransactionID, TransactionHash: "tx-hash", Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		StateRootBefore: "root-before", StateRootAfter: "root-after", SignerKeyId: signerKeyID,
 		ExecutedAtUnixMs: 1_700_000_001_000,
-		L2Status: operatorv1.L2Status_L2_STATUS_REQUIRED_VALID, L3Status: operatorv1.L3Status_L3_STATUS_NOT_REQUIRED,
+		L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID, L3Status: operatorv1.L3Status_L3_STATUS_NOT_REQUIRED,
 	}
 	l4ID := receipt.TransactionId + ":L4"
 	l5ID := receipt.TransactionId + ":L5"
@@ -477,10 +477,10 @@ func verifierEvidenceRef(artifactID string, artifactType complianceevidence.Arti
 func verifierIntObs(id, obsType, runID, scenarioID, attemptID string, value int64, evidenceRef *compliancev1.ComplianceEvidenceReference, observedAt time.Time) *evalv1.EvaluationObservation {
 	return &evalv1.EvaluationObservation{
 		ObservationId: id, ObservationType: versioned(obsType, RegistryVersion),
-		Source: evalv1.EvaluationObservationSource_EVALUATION_OBSERVATION_SOURCE_TARGET_OBSERVER,
-		Authority: evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_INDEPENDENT_TARGET_STATE,
+		Source:     evalv1.EvaluationObservationSource_EVALUATION_OBSERVATION_SOURCE_TARGET_OBSERVER,
+		Authority:  evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_INDEPENDENT_TARGET_STATE,
 		ObservedAt: timestamppb.New(observedAt), RunId: runID, ScenarioId: scenarioID, AttemptId: attemptID,
-		Value:       &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_IntegerValue{IntegerValue: value}},
+		Value:        &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_IntegerValue{IntegerValue: value}},
 		EvidenceRefs: []*compliancev1.ComplianceEvidenceReference{evidenceRef},
 	}
 }
@@ -494,7 +494,7 @@ func verifierBoolObs(id, obsType, runID, scenarioID, attemptID string, value boo
 		ObservationId: id, ObservationType: versioned(obsType, RegistryVersion),
 		Source: source, Authority: authority, ObservedAt: timestamppb.New(observedAt),
 		RunId: runID, ScenarioId: scenarioID, AttemptId: attemptID,
-		Value:       &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_BooleanValue{BooleanValue: value}},
+		Value:        &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_BooleanValue{BooleanValue: value}},
 		EvidenceRefs: refs,
 	}
 }
@@ -506,10 +506,10 @@ func verifierIntOutcomeObs(id, obsType, runID, scenarioID, attemptID string, val
 	}
 	return &evalv1.EvaluationObservation{
 		ObservationId: id, ObservationType: versioned(obsType, RegistryVersion),
-		Source: evalv1.EvaluationObservationSource_EVALUATION_OBSERVATION_SOURCE_OPERATOR_RECEIPT,
-		Authority: evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE,
+		Source:     evalv1.EvaluationObservationSource_EVALUATION_OBSERVATION_SOURCE_OPERATOR_RECEIPT,
+		Authority:  evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_OPERATOR_AUTHORITATIVE,
 		ObservedAt: timestamppb.New(observedAt), RunId: runID, ScenarioId: scenarioID, AttemptId: attemptID,
-		Value:       &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_IntegerValue{IntegerValue: value}},
+		Value:        &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_IntegerValue{IntegerValue: value}},
 		EvidenceRefs: refs,
 	}
 }
@@ -550,6 +550,7 @@ func removeEvidence(reader *verifierArtifactReader, runID, artifactID string) {
 
 // --- Mutation matrix tests ---
 
+//nolint:gocyclo // The single table makes the complete fail-closed mutation matrix auditable.
 func TestVerifier_MutationMatrix(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -715,9 +716,9 @@ func TestVerifier_MutationMatrix(t *testing.T) {
 		// 16. signer response missing or disabled
 		{name: "signer response disabled", mutate: func(t *testing.T, fix *verifierFixture) {
 			signerRespBody, err := json.Marshal(map[string]any{
-				"id":            fix.signerKeyID,
+				"id":             fix.signerKeyID,
 				"public_key_hex": fix.signerKeyID,
-				"enabled":       false,
+				"enabled":        false,
 			})
 			require.NoError(t, err)
 			allowedExchanges := []client.Exchange{
@@ -1244,5 +1245,3 @@ func TestVerifier_ImportFailsForIncompleteImporter(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrInvalidEvidenceGraph))
 }
-
-

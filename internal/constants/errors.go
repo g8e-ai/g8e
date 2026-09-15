@@ -1321,10 +1321,10 @@ var (
 	// Observe download streaming errors (Phase 4: authenticated byte
 	// streaming with hash and size verification).
 	ErrObserveDownloadRestrictedArtifact = errors.New("observe: restricted download artifact")
-	ErrObserveDownloadHashMismatch    = errors.New("observe: download hash mismatch")
-	ErrObserveDownloadSizeMismatch    = errors.New("observe: download size mismatch")
-	ErrObserveDownloadOversized       = errors.New("observe: download exceeds max bytes")
-	ErrObserveDownloadSymlinkRejected = errors.New("observe: download symlink rejected")
+	ErrObserveDownloadHashMismatch       = errors.New("observe: download hash mismatch")
+	ErrObserveDownloadSizeMismatch       = errors.New("observe: download size mismatch")
+	ErrObserveDownloadOversized          = errors.New("observe: download exceeds max bytes")
+	ErrObserveDownloadSymlinkRejected    = errors.New("observe: download symlink rejected")
 
 	// Live campaign producer errors (O2-live: typed live projections with
 	// persist-before-event, monotonic sequence, and duplicate suppression).

@@ -834,5 +834,3 @@ func TestObserveProducerController_HandleRunState_ResponseHasNoOwnershipField(t 
 	assert.NotContains(t, body, "run_id")
 	assert.Contains(t, body, "accepted")
 }
-
-

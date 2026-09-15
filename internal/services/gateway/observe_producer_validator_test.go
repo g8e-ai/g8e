@@ -257,5 +257,3 @@ func TestDecodeProducerRequest_AcceptsValidJSON(t *testing.T) {
 	assert.Equal(t, "a", dst.AgentID)
 	assert.Equal(t, "w", dst.WebSessionID)
 }
-
-

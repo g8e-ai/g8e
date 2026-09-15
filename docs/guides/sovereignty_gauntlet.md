@@ -33,7 +33,7 @@ The current repository supports four complementary evidence lanes. Demo evidence
 | Evidence-grade evals | Engineering diagnostics, model comparison, and future campaign input | Real-provider `ifeval_subset` reports and deterministic synthetic suites with immutable manifests, typed tasks, attempts, metrics, observations, receipts where applicable, and compatibility summaries | State whether the run used real providers or a synthetic local system; do not use either as the unimplemented flagship matrix |
 | Signed compliance report bundle | Point-in-time, scope-bound offline review | Canonical analysis, framework profiles, deterministic JSON, OSCAL, Markdown, HTML, and CLI renderers, protected source inventories, a signed bundle, and a canonical offline verification report | Publish the exact verified bundle scope and external trust inputs; do not relabel point-in-time report integrity as certification, recurring effectiveness, or eval-native verification |
 
-The real-provider `g8e-evals run` command supports the curated `ifeval_subset` suite. The separate `g8e-evals bench-synthetic` command supports `privacy_token_lifecycle`, `governance_adversarial`, `privacy_boundary_leakage`, `policy_attack`, `benign_overblock`, `tool_sequence`, `factual_qa`, `citation_backed`, `partial_milestone`, `final_state`, `ledger_consistency`, `reliability`, and `economics_performance`; these runs exercise deterministic observers and graders against local production-shaped systems without a real LLM, g8ee, gateway, Operator, or authenticated governance path. `g8e-evals verify-receipts` verifies canonical receipt signatures and final persistence attestations but does not verify a complete eval bundle, commitment ledger, trust root, all record references, or all input hashes.
+The Go-native `g8e eval run core-execution-boundary` command exercises the authenticated Gateway ingress, one exact remote Operator, and an independent networkless target observer. `g8e eval verify` independently verifies the complete persisted report and content-addressed evidence without executing another mutation.
 
 The compliance CLI separately implements `g8e compliance evidence-graph verify`, signed `g8e compliance report generate`, and complete offline `g8e compliance report verify`. The report verifier independently replays the protected demo, eval, KSI, commitment, customer or assessor attestation, audit, ledger, and build or configuration sources represented in that signed report bundle, reproduces analysis and renderers, and requires external assessed trust. It is not an eval-native verifier and does not turn the available suites into the planned frozen utility/privacy/policy/protocol experiment. The preregistered minimum 25-scenario flagship matrix, generated proof card, eval-native canonical analysis and signed bundle, statistical release gate, and complete eval-native verifier remain unimplemented. Until those capabilities exist and all publication gates pass, describe this work as a **Sovereignty Gauntlet demonstration** or **rehearsal**, not the completed publication-grade flagship experiment.
 
@@ -372,96 +372,24 @@ Require a zero exit status and `"valid":true` before claiming that the persisted
 
 Say “simulated coalition datalink” and “synthetic data.” Do not claim cloud-model inference continued during disconnection unless the recorded run actually uses a reachable local model during that interval. Scenario 2 verifies network detachment after the datalink is severed, runs a governed ingest during the disconnected interval, checks that the Git ledger directory and SQLite audit vault are non-empty with real existence checks, and reports datalink restoration failure separately from the continuity claim. Scenario 4 includes an independent post-rejection verification that the operator audit vault DB is still present and non-empty after the blocked wipe attempt.
 
-## 5. Run evidence-grade evals as diagnostics
+## 5. Run the native execution-boundary evaluation
 
-Use `g8e-evals run` to generate typed real-provider or fake-provider evidence for the curated `ifeval_subset` benchmark. Use `g8e-evals bench-synthetic` to exercise the 13 deterministic local suites listed in [What is runnable today](#what-is-runnable-today). Synthetic suites run without a real LLM, g8ee, gateway, Operator, authentication context, or production governance posture, so label their outputs as observer and grader pipeline diagnostics rather than model or real-stack results. Neither command implements the frozen, repeated, publication-grade Sovereignty Gauntlet matrix.
-
-Create an owner-only evidence key outside the campaign directory. The key never enters the published bundle:
+Run the Go-native suite against the healthy unified stack with one active remote Operator:
 
 ```bash
-EVIDENCE_KEY_FILE="$HOME/.config/g8e/eval-evidence-key.json"
-mkdir -p "$(dirname "${EVIDENCE_KEY_FILE}")"
-if test -e "${EVIDENCE_KEY_FILE}"; then
-  printf '%s\n' "Reusing existing evidence key: ${EVIDENCE_KEY_FILE}"
-else
-  umask 077
-  python3 -c 'import base64,json,secrets,sys; json.dump({"version":1,"key_id":"eval-owner-1","key_b64":base64.b64encode(secrets.token_bytes(32)).decode()},open(sys.argv[1],"w"))' "${EVIDENCE_KEY_FILE}"
-  chmod 600 "${EVIDENCE_KEY_FILE}"
-fi
+./g8e eval run core-execution-boundary
 ```
 
-If an existing key must be replaced, preserve it or choose a new versioned key ID deliberately; do not overwrite retained key material without user approval.
+The command submits one allowed typed file mutation through the authenticated Gateway command ingress and the exact remote Operator session, observes the controlled target through the networkless Compose observer, then submits the doctrine-prohibited equivalent and proves rejection without another effect. It persists `report.json`, `verification.json`, and digest-named evidence files under `.g8e/data/eval/runs/<run-id>/`.
 
-Copy the producing actuators' public keys to a verifier directory. Receipts in a unified-stack run are signed by both the gateway actuator and the operator actuator, so the verifier needs both keys. This is public verification material, not the private evidence key. Set the app and gateway trust-bundle paths separately; the eval transport fails closed when either bundle is missing:
+Re-run verification and inspect the report in separate read-only invocations:
 
 ```bash
-mkdir -p "${CAMPAIGN_DIR}/evals/verifier-pki"
-docker cp g8e-gateway:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/evals/verifier-pki/gateway-Actuator_pub.pem"
-docker cp g8e-operator:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/evals/verifier-pki/operator-Actuator_pub.pem"
-export G8E_GATEWAY_PKI_DIR="${CAMPAIGN_DIR}/evals/verifier-pki"
-export G8E_APP_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
-export G8E_GATEWAY_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
+./g8e eval verify <run-id>
+./g8e eval show <run-id>
 ```
 
-From `ensemble/evals/`, install the locked environment and run a diagnostic arm against the healthy unified stack. Declare provider and model flags explicitly when the fresh stack has no saved user settings. Set `--idle-timeout` above the measured interval between events for the selected model; the example uses 180 seconds for a local 12B model whose measured responses exceeded the 10-second default:
-
-```bash
-cd "${REPO_ROOT}/ensemble/evals"
-uv sync --locked --extra test
-uv run g8e-evals run \
-  --suite ifeval_subset \
-  --arm doctrine \
-  --idle-timeout 180 \
-  --g8ee-url http://localhost:8000 \
-  --operator-url https://localhost:8443 \
-  --g8e-cli "${REPO_ROOT}/g8e" \
-  --auth-project-root "${REPO_ROOT}" \
-  --provider ollama \
-  --model '<declared-local-model>' \
-  --primary-endpoint '<declared-local-endpoint>' \
-  --evidence-key-file "${EVIDENCE_KEY_FILE}" \
-  --output-dir "${CAMPAIGN_DIR}/evals" \
-  2>&1 | tee "${CAMPAIGN_DIR}/logs/evals-doctrine.log"
-```
-
-Provider, model, endpoint, API-key, judge, task-limit, headless, and timeout options are listed by `uv run g8e-evals run --help`. Record exact model-role mappings from `manifest.json`; never describe an omitted or fake role as a real frontier model.
-
-Run a synthetic suite separately, with its own output directory and classification:
-
-```bash
-uv run g8e-evals bench-synthetic \
-  --suite governance_adversarial \
-  --output-dir "${CAMPAIGN_DIR}/evals/synthetic"
-```
-
-Use `uv run g8e-evals bench-synthetic --help` for the complete suite list. Preserve the generated manifest, tasks, attempts, suite-specific typed observations, metrics, receipts where applicable, restricted-evidence index, and summary. Do not combine synthetic and real-provider denominators or describe a synthetic suite as proof that a live gateway rejected an attack.
-
-Locate the generated report and verify receipt signatures and final persistence attestations:
-
-```bash
-EVAL_REPORT_DIR="$(ls -dt "${CAMPAIGN_DIR}"/evals/ifeval_subset-*/ | head -n 1)"
-uv run g8e-evals verify-receipts "${EVAL_REPORT_DIR}" --pki-dir "${G8E_GATEWAY_PKI_DIR}" | tee "${CAMPAIGN_DIR}/logs/eval-receipt-verification.txt"
-printf '%s\n' "${EVAL_REPORT_DIR}"
-```
-
-The public key must come from the producing environment; copying it proves provenance but does not independently establish trust in it. Require the command to report a non-zero receipt total, zero failures, and equal total and verified counts before making any receipt-verification claim. A missing key, missing `receipts.jsonl`, or zero bound receipts is not a receipt-verification pass even when the command exits zero. The current `ifeval_subset` tasks can complete as answer-only turns with no ActionReceipt; that run remains a model and eval-system diagnostic, reports zero receipt coverage, and supports no signed-receipt claim. The command is receipt-only verification, not complete eval-bundle or signed compliance report-bundle verification.
-
-The useful eval files are:
-
-| Artifact | Use |
-| --- | --- |
-| `manifest.json` | Exact source, suite, hashes, roles, model identities, posture request, and environment |
-| `tasks.jsonl` | Assigned denominator and content-addressed task definitions |
-| `attempts.jsonl` | Terminal outcomes, correlation IDs, and evidence references |
-| `stages.jsonl` | Model, governance, privacy, persistence, commitment, and grading timeline |
-| `metrics.jsonl` | Typed measured values linked to attempts and evidence |
-| `receipts.jsonl` | Canonical signed receipt observations for governed attempts |
-| `final-state-observations.jsonl` | Receipt-bound state-root observations |
-| `state-observations.jsonl` | Independently collected typed state observations when an integration supplies an observer |
-| `rehydration-observations.jsonl` | Exact local restoration observations when an integration supplies an observer |
-| `secret-detection-observations.jsonl` | Typed detector confusion-matrix observations when an integration supplies an observer |
-| `evidence-index.jsonl` | Authenticated metadata for encrypted restricted evidence |
-| `summary.json` | Compatibility summary suitable for quick orientation, not the authoritative source for extraordinary claims |
+Acceptance requires 10/10 required invariants, valid verification with zero failures, exactly one allowed marker, no prohibited additional effect, valid receipt and persistence signatures, a valid deterministic protocol chain, exact Operator and session binding, and Gateway L1 attribution for the prohibited attempt. See [Native Evaluations](../ensemble/evals.md) for the complete evidence and trust-boundary model.
 
 ## 6. Where the juicy data is
 

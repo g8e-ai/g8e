@@ -237,7 +237,7 @@ Dashboard application code lives in `dashboard/public/`, workload enrollment liv
 
 ### Website and README
 
-The root `README.md` is generated from `docs/templates/README.md.tmpl` and the reviewed public evidence snapshot in `docs/evidence/readme/current/`. `scripts/generate_readme.py` validates the manifest and checksums before rendering. `website/` converts the README into the static site and packages the Cloudflare Worker. The [Documentation Guide](docs.md) catalogs every first-party documentation surface and defines audit, ownership, generation, cross-linking, metadata, and validation rules.
+The root `README.md` is the handwritten product overview. `website/` converts the README into the static site and packages the Cloudflare Worker. The [Documentation Guide](docs.md) catalogs every first-party documentation surface and defines audit, ownership, cross-linking, metadata, and validation rules.
 
 ## Test Map
 
@@ -261,7 +261,7 @@ See [Testing Guide](./tests.md) for fixture conventions, build tags, and the ful
 
 ## Build and Validation Map
 
-The root `Makefile` coordinates protobuf generation, Go builds, Python protocol packaging, platform tests, component tests, linting, vulnerability checks, Swagger generation, doctrine and COSAiS validation, README generation, website generation, Docker builds, and FIPS builds.
+The root `Makefile` coordinates protobuf generation, Go builds, Python protocol packaging, platform tests, component tests, linting, vulnerability checks, Swagger generation, doctrine and COSAiS validation, website generation, Docker builds, and FIPS builds.
 
 The primary boundaries are:
 
@@ -271,4 +271,3 @@ The primary boundaries are:
 - `make python-build`: Builds the Python protocol distribution with bundled registries.
 - `make dashboard-test`, `make ensemble-test`, and `make website-test`: Validate non-Go components.
 - `make build-fips` and `make verify-fips`: Build and verify the pinned Linux AMD64 FIPS variant. See [FIPS 140-3 Compliance](../reference/fips140-3.md).
-- `make readme`, `make readme-check`, and `make readme-test`: Generate and validate the public README and evidence projection.
