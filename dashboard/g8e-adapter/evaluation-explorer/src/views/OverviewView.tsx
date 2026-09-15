@@ -1,37 +1,568 @@
-// Overview view — the first viewport. Per the plan, the first screen
-// contains feed state, a live evaluation panel, dataset selector, aggregate
-// counts, top measured model per role, recent runs, and concise metric
-// explanations. Architecture marketing moves below evaluation content.
+// Overview view — the landing page. Layout mirrors the OpenDevOps.ai
+// surface: evaluated role agents, the live event stream, a system overview
+// with dataset coverage, the measured-model table, recent runs, and the
+// public mirror download endpoints. Every panel renders real store data;
+// nothing on this page is decorative.
 
-import { useSearchParams } from 'react-router-dom';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
 import { recordKey, useStoreState, useFeedStatus } from '../state/store';
+import { loadRuntimeConfig } from '../state/feed';
 import { DatasetSelector } from '../components/DatasetSelector';
 import {
   EmptyState,
-  ErrorState,
   ProgressBar,
-  QualityBadge,
-  StatTile,
-  Timeline,
-  formatPercent,
   formatNumber,
-  formatDuration,
+  formatPercent,
   formatTimestamp,
+  formatLatency,
+  formatThroughput,
 } from '../components/shared';
-import type { ModelSummary } from '../contract/types';
+import { formatCompact, formatRelativeTime } from '../utils/format';
+import { qualityStateLabel, qualityStateTone, type FeedConnectionState } from '../utils/feed-state';
+import descriptorUrl from '../contract/descriptor.json?url';
+import type {
+  CatalogSnapshot,
+  EvaluationSummary,
+  LiveEvent,
+  ModelSummary,
+  QualityState,
+  SuiteSummary,
+} from '../contract/types';
 
-function topModelPerRole(models: ModelSummary[]): Record<string, ModelSummary | undefined> {
-  const byRole: Record<string, ModelSummary | undefined> = { primary: undefined, assistant: undefined, lite: undefined };
-  for (const model of models) {
-    if (model.inventory_only || !model.pass_rate) continue;
-    const current = byRole[model.role];
-    if (!current || !current.pass_rate || model.pass_rate.estimate > current.pass_rate.estimate) {
-      byRole[model.role] = model;
-    }
+const ROLE_LABELS: Record<ModelSummary['role'], string> = {
+  primary: 'Task owner & delegation',
+  assistant: 'Bounded technical work',
+  lite: 'Constrained decisions',
+};
+
+function agentStatus(state: QualityState): { label: string; tone: string } {
+  const tone = qualityStateTone(state);
+  switch (state) {
+    case 'verified_public':
+    case 'exploratory_verified':
+      return { label: 'Verified', tone };
+    case 'exploratory_partial':
+      return { label: 'Partial', tone };
+    case 'live_in_progress':
+      return { label: 'Running', tone };
+    case 'terminal_failed':
+      return { label: 'Failed', tone };
+    case 'dead_evidence':
+      return { label: 'Dead evidence', tone };
+    default:
+      return { label: qualityStateLabel(state), tone };
   }
-  return byRole;
+}
+
+function eventTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleTimeString('en-US', { hour12: false });
+}
+
+function shortRunId(runId: string): string {
+  return runId.length > 14 ? `…${runId.slice(-12)}` : runId;
+}
+
+function scrollTo(id: string): void {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/** Evaluated models as role agents: name, role duty, status, throughput. */
+function AgentsStrip({ models, datasetId }: { models: ModelSummary[]; datasetId: string }) {
+  const agents = useMemo(
+    () =>
+      models
+        .filter((m) => !m.inventory_only && m.pass_rate)
+        .sort(
+          (a, b) =>
+            (b.output_throughput_p50?.value ?? 0) - (a.output_throughput_p50?.value ?? 0),
+        )
+        .slice(0, 8),
+    [models],
+  );
+
+  return (
+    <section className="panel" aria-label="Agents">
+      <div className="panel-head">
+        <h2>
+          Agents <span className="panel-sub">· {agents.length} evaluated</span>
+        </h2>
+        <Link to={`/models?dataset=${datasetId}`} className="panel-link">
+          View all models →
+        </Link>
+      </div>
+      {agents.length === 0 ? (
+        <p className="panel-empty">No evaluated models in the active dataset.</p>
+      ) : (
+        <ul className="agents-grid">
+          {agents.map((model) => {
+            const status = agentStatus(model.quality_state);
+            const tps = model.output_throughput_p50?.value;
+            return (
+              <li key={model.variant_id} className="agent-card">
+                <div className="agent-icon" aria-hidden="true">
+                  {model.display_name.slice(0, 1)}
+                </div>
+                <div className="agent-body">
+                  <Link
+                    to={`/models/${datasetId}/${model.variant_id}`}
+                    className="agent-name"
+                  >
+                    {model.display_name}
+                  </Link>
+                  <span className="agent-role">{ROLE_LABELS[model.role]}</span>
+                  <span className={`agent-status status-${status.tone}`}>
+                    <span className="status-dot" aria-hidden="true" />
+                    {status.label}
+                    {tps !== undefined ? ` · ${formatCompact(tps)} t/s` : ''}
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** Live event stream table fed by SSE projections, newest first. */
+function LiveStreamPanel({
+  events,
+  connection,
+}: {
+  events: LiveEvent[];
+  connection: FeedConnectionState;
+}) {
+  const [agentFilter, setAgentFilter] = useState('all');
+  const [kindFilter, setKindFilter] = useState('all');
+  const [pausedRows, setPausedRows] = useState<LiveEvent[] | null>(null);
+  const [clearedAt, setClearedAt] = useState(0);
+
+  const models = useStoreState((state) => state.models);
+
+  const agentOptions = useMemo(
+    () =>
+      Array.from(new Set(events.map((e) => e.variant_id).filter((v): v is string => Boolean(v)))).sort(),
+    [events],
+  );
+  const kindOptions = useMemo(() => Array.from(new Set(events.map((e) => e.kind))).sort(), [events]);
+
+  const visible = (pausedRows ?? events.slice(clearedAt))
+    .filter((e) => agentFilter === 'all' || e.variant_id === agentFilter)
+    .filter((e) => kindFilter === 'all' || e.kind === kindFilter)
+    .slice(-15)
+    .reverse();
+
+  return (
+    <section className="panel stream-panel" id="live-stream" aria-label="Live event stream">
+      <div className="panel-head">
+        <h2>
+          Live event stream{' '}
+          <span className={`stream-state ${connection === 'live' ? 'status-ok' : 'status-warn'}`}>
+            <span className="status-dot" aria-hidden="true" />
+            {connection === 'live' ? 'Streaming via SSE' : 'Mirror offline — last accepted data'}
+          </span>
+        </h2>
+        <div className="stream-controls">
+          <select
+            aria-label="Filter by agent"
+            value={agentFilter}
+            onChange={(e) => setAgentFilter(e.target.value)}
+          >
+            <option value="all">All agents</option>
+            {agentOptions.map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Filter by event kind"
+            value={kindFilter}
+            onChange={(e) => setKindFilter(e.target.value)}
+          >
+            <option value="all">All events</option>
+            {kindOptions.map((kind) => (
+              <option key={kind} value={kind}>
+                {kind.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="stream-btn"
+            aria-label={pausedRows ? 'Resume stream' : 'Pause stream'}
+            onClick={() => setPausedRows(pausedRows ? null : events.slice(clearedAt))}
+          >
+            {pausedRows ? '▶' : '❚❚'}
+          </button>
+          <button
+            type="button"
+            className="stream-btn"
+            onClick={() => {
+              setClearedAt(events.length);
+              setPausedRows(null);
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+      {visible.length === 0 ? (
+        <EmptyState hasRecords={events.length > 0} hasFilters={agentFilter !== 'all' || kindFilter !== 'all'} connection={connection} />
+      ) : (
+        <div className="table-scroll">
+          <table className="stream-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Agent</th>
+                <th>Event</th>
+                <th>Model / Tool</th>
+                <th>Progress</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((event) => {
+                const model = event.variant_id
+                  ? models.get(recordKey(event.dataset_id, event.variant_id))
+                  : undefined;
+                const tool = model?.served_model_tag ?? event.variant_id ?? event.kind.split('_')[0];
+                return (
+                  <tr key={event.event_id}>
+                    <td className="stream-time">{eventTime(event.observed_at)}</td>
+                    <td>
+                      <span className={`stream-agent status-${event.lifecycle_status}`}>
+                        <span className="status-dot" aria-hidden="true" />
+                        {event.variant_id ?? 'platform'}
+                      </span>
+                    </td>
+                    <td className="stream-event">
+                      {event.kind.replace(/_/g, ' ')}
+                      {event.stage_label ? ` · ${event.stage_label}` : ''}
+                    </td>
+                    <td>
+                      <code className="stream-chip">{tool}</code>
+                    </td>
+                    <td className="stream-progress">
+                      {event.total > 0 ? `${event.completed}/${event.total}` : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CoverageBar({ label, done, total }: { label: string; done: number; total: number }) {
+  const pct = total > 0 ? Math.min(100, (done / total) * 100) : 0;
+  return (
+    <div className="usage-row">
+      <div className="usage-label">
+        <span>{label}</span>
+        <span>
+          {formatNumber(done)} / {formatNumber(total)}
+        </span>
+      </div>
+      <div className="usage-track">
+        <div className="usage-fill" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/** System overview: headline counts, dataset coverage bars, current run. */
+function SystemOverviewPanel({
+  catalog,
+  models,
+  evaluations,
+  suites,
+  events,
+  activeDatasetId,
+  connection,
+}: {
+  catalog: CatalogSnapshot | undefined;
+  models: ModelSummary[];
+  evaluations: EvaluationSummary[];
+  suites: SuiteSummary[];
+  events: LiveEvent[];
+  activeDatasetId: string;
+  connection: FeedConnectionState;
+}) {
+  const evaluatedCount = models.filter((m) => m.pass_rate).length;
+  const totalThroughput = models.reduce(
+    (sum, m) => sum + (m.output_throughput_p50?.value ?? 0),
+    0,
+  );
+  const completedRuns = evaluations.filter((e) => e.lifecycle_state === 'completed').length;
+  const assignmentDone = evaluations.reduce((sum, e) => sum + e.assignment_completed, 0);
+  const assignmentTotal = evaluations.reduce((sum, e) => sum + e.assignment_total, 0);
+  const verifierTotal = catalog
+    ? catalog.verifier_passed_count + catalog.verifier_failed_count
+    : 0;
+
+  const latestEvent = events.length > 0 ? events[events.length - 1] : undefined;
+  const currentRun = useStoreState((state) =>
+    latestEvent ? state.evaluations.get(recordKey(latestEvent.dataset_id, latestEvent.run_id)) : undefined,
+  );
+  const currentSuite = currentRun
+    ? suites.find((s) => s.suite_id === currentRun.suite_id)
+    : undefined;
+
+  return (
+    <section className="panel sys-panel" aria-label="System overview">
+      <div className="panel-head">
+        <h2>System overview</h2>
+        <span className={`stream-state ${connection === 'live' ? 'status-ok' : 'status-warn'}`}>
+          <span className="status-dot" aria-hidden="true" />
+          {connection === 'live' ? 'Live' : 'Offline'}
+        </span>
+      </div>
+
+      <div className="sys-stats">
+        <div>
+          <strong>{formatNumber(catalog?.evaluated_count ?? evaluatedCount)}</strong>
+          <span>Models evaluated</span>
+        </div>
+        <div>
+          <strong>{formatNumber(catalog?.run_count ?? evaluations.length)}</strong>
+          <span>Runs recorded</span>
+        </div>
+        <div>
+          <strong>
+            {verifierTotal > 0 && catalog
+              ? formatPercent(catalog.verifier_passed_count / verifierTotal)
+              : '—'}
+          </strong>
+          <span>Verifier pass</span>
+        </div>
+        <div>
+          <strong>{totalThroughput > 0 ? `${formatCompact(totalThroughput)} t/s` : '—'}</strong>
+          <span>Throughput p50</span>
+        </div>
+      </div>
+
+      <DatasetSelector activeId={activeDatasetId} />
+      {catalog ? <p className="panel-note">{catalog.title}</p> : null}
+
+      {catalog ? (
+        <div className="usage-list" aria-label="Dataset coverage">
+          <h3>Dataset coverage</h3>
+          <CoverageBar label="Models evaluated" done={catalog.evaluated_count} total={catalog.model_count} />
+          <CoverageBar label="Suites verified" done={catalog.verifier_passed_count} total={catalog.suite_count} />
+          <CoverageBar label="Runs completed" done={completedRuns} total={evaluations.length} />
+          <CoverageBar label="Assignments done" done={assignmentDone} total={assignmentTotal} />
+        </div>
+      ) : null}
+
+      <div className="task-card">
+        <div className="panel-head">
+          <h3>Current task</h3>
+          {currentRun ? (
+            <Link to={`/evaluations/${currentRun.dataset_id}/${currentRun.run_id}`} className="panel-link">
+              View run →
+            </Link>
+          ) : null}
+        </div>
+        {currentRun && latestEvent ? (
+          <>
+            <p className="task-title">{currentSuite?.display_name ?? currentRun.suite_id}</p>
+            <p className="task-sub">
+              {shortRunId(currentRun.run_id)} · {currentRun.lifecycle_state}
+            </p>
+            <ProgressBar
+              completed={latestEvent.completed}
+              total={latestEvent.total}
+              label="Assignment progress"
+            />
+            <div className="task-chips">
+              <code className="stream-chip">{currentRun.arm}</code>
+              <code className="stream-chip">{currentRun.suite_id}</code>
+              {currentRun.started_at ? (
+                <span className="task-started">Started {formatRelativeTime(currentRun.started_at)}</span>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <p className="panel-empty">No evaluation has been observed yet.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Measured-model comparison table for the active dataset. */
+function ModelLab({ models, datasetId }: { models: ModelSummary[]; datasetId: string }) {
+  const measured = useMemo(
+    () =>
+      models
+        .filter((m) => m.pass_rate)
+        .sort((a, b) => (b.pass_rate?.estimate ?? 0) - (a.pass_rate?.estimate ?? 0))
+        .slice(0, 6),
+    [models],
+  );
+
+  return (
+    <section className="panel" aria-label="Model evaluation lab">
+      <div className="panel-head">
+        <div>
+          <h2>Model evaluation lab</h2>
+          <p className="panel-note">Measured models in the active dataset</p>
+        </div>
+        <Link to={`/models?dataset=${datasetId}`} className="panel-link">
+          View all results →
+        </Link>
+      </div>
+      {measured.length === 0 ? (
+        <p className="panel-empty">No measured models in this dataset.</p>
+      ) : (
+        <div className="table-scroll">
+          <table className="lab-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Role</th>
+                <th>Quant</th>
+                <th>Tokens/s</th>
+                <th>Agreement</th>
+                <th>Pass rate</th>
+                <th>Latency p50</th>
+              </tr>
+            </thead>
+            <tbody>
+              {measured.map((model) => (
+                <tr key={model.variant_id}>
+                  <td>
+                    <Link to={`/models/${datasetId}/${model.variant_id}`}>
+                      {model.display_name}
+                    </Link>
+                  </td>
+                  <td>{model.role === 'lite' ? 'Light' : model.role}</td>
+                  <td>{model.quantization_weight_class?.toUpperCase() ?? '—'}</td>
+                  <td>
+                    {model.output_throughput_p50?.value !== undefined
+                      ? formatThroughput(model.output_throughput_p50.value)
+                      : '—'}
+                  </td>
+                  <td>
+                    {model.agreement_pairwise?.value !== undefined
+                      ? formatPercent(model.agreement_pairwise.value, 0)
+                      : '—'}
+                  </td>
+                  <td>{model.pass_rate ? formatPercent(model.pass_rate.estimate, 0) : '—'}</td>
+                  <td>
+                    {model.latency_p50_ms?.value !== undefined
+                      ? formatLatency(model.latency_p50_ms.value)
+                      : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Most recent runs for the active dataset. */
+function RecentRuns({ evaluations }: { evaluations: EvaluationSummary[] }) {
+  const recent = evaluations.slice(-5).reverse();
+  return (
+    <section className="panel" aria-label="Recent runs">
+      <div className="panel-head">
+        <h2>Recent runs</h2>
+        <Link to="/evaluations" className="panel-link">
+          View all runs →
+        </Link>
+      </div>
+      {recent.length === 0 ? (
+        <p className="panel-empty">No runs recorded for this dataset.</p>
+      ) : (
+        <ul className="mini-runs">
+          {recent.map((run) => (
+            <li key={run.run_id}>
+              <Link to={`/evaluations/${run.dataset_id}/${run.run_id}`} className="mini-run">
+                <code className="mini-run-id">{shortRunId(run.run_id)}</code>
+                <span className="mini-run-name">{run.suite_id}</span>
+                <span className="mini-run-when">
+                  {formatRelativeTime(run.started_at ?? run.observed_at)}
+                </span>
+                <span className={`status-dot status-${run.lifecycle_state}`} aria-label={run.lifecycle_state} />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** Anonymous public mirror endpoints as downloadable artifacts. */
+function DownloadsPanel() {
+  const [origin, setOrigin] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadRuntimeConfig()
+      .then((config) => {
+        if (!cancelled) setOrigin(config.mirror_origin);
+      })
+      .catch(() => {
+        if (!cancelled) setOrigin(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const items = [
+    { label: 'Feed bootstrap', format: 'JSON', href: origin ? `${origin}/bootstrap` : undefined },
+    { label: 'Feed history', format: 'JSON pages', href: origin ? `${origin}/history` : undefined },
+    { label: 'Proof catalog', format: 'JSON', href: origin ? `${origin}/proof-catalog` : undefined },
+    { label: 'Live event stream', format: 'SSE', href: origin ? `${origin}/stream` : undefined },
+    { label: 'View schema descriptor', format: 'JSON', href: descriptorUrl },
+  ];
+
+  return (
+    <section className="panel" id="downloads" aria-label="Download data">
+      <div className="panel-head">
+        <div>
+          <h2>Download data</h2>
+          <p className="panel-note">Everything the mirror publishes is open.</p>
+        </div>
+      </div>
+      <ul className="dl-list">
+        {items.map((item) => (
+          <li key={item.label} className="dl-item">
+            {item.href ? (
+              <a href={item.href} target="_blank" rel="noopener noreferrer">
+                {item.label}
+              </a>
+            ) : (
+              <span>{item.label}</span>
+            )}
+            <span className="dl-format">{item.format}</span>
+          </li>
+        ))}
+      </ul>
+      {origin ? (
+        <a className="dl-browse" href={`${origin}/bootstrap`} target="_blank" rel="noopener noreferrer">
+          Browse the public feed →
+        </a>
+      ) : (
+        <p className="panel-empty">Mirror origin unavailable.</p>
+      )}
+    </section>
+  );
 }
 
 export function OverviewView() {
@@ -47,54 +578,59 @@ export function OverviewView() {
   const evaluations = useStoreState((state) =>
     Array.from(state.evaluations.values()).filter((e) => e.dataset_id === activeDatasetId),
   );
+  const suites = useStoreState((state) =>
+    Array.from(state.suites.values()).filter((s) => s.dataset_id === activeDatasetId),
+  );
   const events = useStoreState((state) => state.events);
   const connection = useStoreState((state) => state.connection);
 
-  // The live panel tracks the most recently active run, including its
-  // terminal state — a finished run does not silently revert to "idle".
-  const latestEvent = events.length > 0 ? events[events.length - 1] : undefined;
-  const liveRunId = latestEvent?.run_id;
-  const liveRunDataset = latestEvent?.dataset_id;
-  const liveEvents = liveRunId
-    ? events.filter((e) => e.run_id === liveRunId && e.dataset_id === liveRunDataset).slice(-8)
-    : [];
-  const liveRun = useStoreState((state) =>
-    liveRunId && liveRunDataset ? state.evaluations.get(recordKey(liveRunDataset, liveRunId)) : undefined,
-  );
-
-  const recentEvaluations = evaluations.slice(-5).reverse();
-  const evaluatedModels = models.filter((m) => !m.inventory_only && m.pass_rate);
-  const topPerRole = topModelPerRole(evaluatedModels);
-
   return (
     <div className="overview">
-      <section className="overview-hero">
-        <div className="hero-copy">
-          <p className="section-kicker">OPEN EVALUATION INTELLIGENCE</p>
-          <h1>AI evaluations. <span>Working in public.</span></h1>
-          <p className="hero-description">Explore measured model performance, inspect every run and watch public-safe evaluation events arrive through the live mirror.</p>
-          <div className="hero-actions">
-            <Link to="/evaluations" className="hero-primary">Explore evaluations</Link>
-            <Link to="/models" className="hero-secondary">Compare models</Link>
+      <section className="od-hero">
+        <div className="od-hero-copy">
+          <h1>
+            AI agents. <span>Working in public.</span>
+          </h1>
+          <p className="od-hero-sub">
+            Watch autonomous agents build, test, audit and operate a real system.
+            Every tool call. Every model. Every token. Every failure.
+          </p>
+          <div className="od-hero-actions">
+            <button type="button" className="btn-primary" onClick={() => scrollTo('live-stream')}>
+              ▶ Watch live
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => scrollTo('downloads')}>
+              ↓ Download &amp; run it yourself
+            </button>
           </div>
-          <ul className="hero-facts" aria-label="Public evaluation properties">
-            <li>Live SSE telemetry</li>
-            <li>Real measured workloads</li>
-            <li>Typed public records</li>
-            <li>Private data excluded</li>
+          <ul className="od-hero-facts" aria-label="Public evaluation properties">
+            <li>Live agent stream</li>
+            <li>Real workloads</li>
+            <li>Full audit trail</li>
+            <li>Open data</li>
+            <li>Privacy first</li>
           </ul>
-          <DatasetSelector activeId={activeDatasetId} />
         </div>
-        <div className="hero-flow" role="img" aria-label="Committed evaluation reports publish outward through the public mirror to this browser">
-          <p className="hero-flow-label">Outbound-only public visibility</p>
-          <div className="flow-nodes">
-            <div className="flow-node"><span>Source</span><strong>Eval reports</strong><small>Committed records</small></div>
-            <div className="flow-arrow" aria-hidden="true">→</div>
-            <div className="flow-node flow-node-accent"><span>Read model</span><strong>Public mirror</strong><small>Signed · read-only</small></div>
-            <div className="flow-arrow" aria-hidden="true">→</div>
-            <div className="flow-node"><span>Consumer</span><strong>This browser</strong><small>No credentials</small></div>
+        <div className="od-hero-card">
+          <p className="od-hero-card-title">Running on a local machine.</p>
+          <div className="mc-diagram" role="img" aria-label="Your machine holds state and data; the cloud model is a stateless processor">
+            <div className="mc-node">
+              <strong>Your machine</strong>
+              <small>State &amp; data</small>
+            </div>
+            <div className="mc-arrows">
+              <span>Ephemeral request →</span>
+              <span>← Response (no state)</span>
+            </div>
+            <div className="mc-node">
+              <strong>Cloud model</strong>
+              <small>Stateless processor</small>
+            </div>
           </div>
-          <p className="hero-flow-note">The mirror reports visibility. It does not authorize execution or replace Operator evidence.</p>
+          <p className="mc-note">
+            Your data stays on your machine. Models are stateless.{' '}
+            <Link to="/methodology">Learn more →</Link>
+          </p>
         </div>
       </section>
 
@@ -108,162 +644,26 @@ export function OverviewView() {
         </section>
       ) : null}
 
-      <section className="evaluation-lenses" aria-labelledby="evaluation-lenses-title">
-        <div className="section-heading-row">
-          <div>
-            <p className="section-kicker">BENCHMARK FOUNDATION</p>
-            <h2 id="evaluation-lenses-title">Four questions, not one score</h2>
-          </div>
-          <Link to="/methodology" className="methodology-link">See the campaign design</Link>
-        </div>
-        <div className="lens-grid">
-          <article><span>01 · Capability</span><h3>Can the model do the job?</h3><p>Task accuracy, instruction following, reasoning, and tool selection.</p></article>
-          <article><span>02 · Protocol</span><h3>Can it behave inside the protocol?</h3><p>Schemas, routing, handoffs, retries, escalation, and recovery.</p></article>
-          <article><span>03 · Governance</span><h3>Can the platform govern it safely?</h3><p>Policy enforcement, exposure, privilege boundaries, and audit completeness.</p></article>
-          <article><span>04 · Local value</span><h3>Is it worth running locally?</h3><p>Cold start, latency, throughput, memory, power, tokens, and compute efficiency.</p></article>
-        </div>
-      </section>
+      <AgentsStrip models={models} datasetId={activeDatasetId} />
 
-      <div className="overview-dashboard-grid">
-      <section className="live-panel" aria-label="Live evaluation">
-        <h2>Live evaluation</h2>
-        {liveEvents.length === 0 || !latestEvent || !liveRunId || !liveRunDataset ? (
-          <p className="live-idle">
-            No evaluation has been observed yet. Historical and scripted runs are available below.
-          </p>
-        ) : (
-          <div className="live-current">
-            <div className="live-meta">
-              <Link to={`/evaluations/${liveRunDataset}/${liveRunId}`} className="live-run">
-                {liveRunId}
-              </Link>
-              <span className={`lifecycle-state lifecycle-${latestEvent.lifecycle_status}`}>
-                {latestEvent.lifecycle_status}
-              </span>
-              {liveRun ? <span className="live-suite">Suite: {liveRun.suite_id}</span> : null}
-              <ProgressBar
-                completed={latestEvent.completed}
-                total={latestEvent.total}
-                label="Assignment progress"
-              />
-            </div>
-            {liveRun ? (
-              <ul className="role-mapping live-roles">
-                {Object.entries(liveRun.model_role_mapping).map(([role, variantId]) => (
-                  <li key={role}>
-                    <span className="role-label">{role === 'lite' ? 'Light' : role}</span>
-                    <Link to={`/models/${liveRunDataset}/${variantId}`}>{variantId}</Link>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <Timeline events={liveEvents} />
-          </div>
-        )}
-      </section>
-
-      {catalog ? (
-        <section className="overview-stats" aria-label="Dataset summary">
-          <h2>{catalog.title}</h2>
-          <QualityBadge state={catalog.quality_state} />
-          <p className="catalog-description">{catalog.description}</p>
-          {catalog.limitations.length > 0 ? (
-            <ul className="catalog-limitations">
-              {catalog.limitations.map((lim, i) => (
-                <li key={i}>{lim}</li>
-              ))}
-            </ul>
-          ) : null}
-          <div className="stat-grid">
-            <StatTile label="Models" value={formatNumber(catalog.model_count)} hint={`${catalog.evaluated_count} evaluated`} />
-            <StatTile label="Suites" value={formatNumber(catalog.suite_count)} hint={`${catalog.verifier_passed_count} passed, ${catalog.verifier_failed_count} failed`} />
-            <StatTile label="Assignments" value={formatNumber(catalog.assignment_count)} />
-            <StatTile label="Provider calls" value={formatNumber(catalog.provider_request_count)} />
-            <StatTile label="Tokens" value={formatNumber(catalog.provider_token_count)} hint="reported total" />
-            <StatTile label="Retries" value={formatNumber(catalog.retry_count)} />
-          </div>
-        </section>
-      ) : connection === 'offline' ? (
-        <EmptyState hasRecords={false} hasFilters={false} connection="offline" />
-      ) : (
-        <ErrorState message="No catalog loaded for the selected dataset." />
-      )}
+      <div className="ov-grid-main">
+        <LiveStreamPanel events={events} connection={connection} />
+        <SystemOverviewPanel
+          catalog={catalog}
+          models={models}
+          evaluations={evaluations}
+          suites={suites}
+          events={events}
+          activeDatasetId={activeDatasetId}
+          connection={connection}
+        />
       </div>
 
-      <div className="overview-secondary-grid">
-      <section className="top-models" aria-label="Top measured model per role">
-        <h2>Top measured model per role</h2>
-        <p className="disclosure">
-          Exploratory pass-rate leaders by role. This is not a superiority claim; intervals reflect sampling uncertainty.
-        </p>
-        <div className="role-grid">
-          {(['primary', 'assistant', 'lite'] as const).map((role) => {
-            const model = topPerRole[role];
-            return (
-              <div key={role} className="role-card">
-                <h3>{role === 'lite' ? 'Light' : role}</h3>
-                {model ? (
-                  <Link to={`/models/${activeDatasetId}/${model.variant_id}`} className="role-model-link">
-                    <span className="role-model-name">{model.display_name}</span>
-                    {model.pass_rate ? (
-                      <span className="role-model-rate">
-                        {formatPercent(model.pass_rate.estimate)}
-                        <span className="role-model-interval">
-                          {' '}[{formatPercent(model.pass_rate.lower)}, {formatPercent(model.pass_rate.upper)}]
-                        </span>
-                      </span>
-                    ) : null}
-                    <QualityBadge state={model.quality_state} />
-                  </Link>
-                ) : (
-                  <span className="role-no-model">No measured model for this role.</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="recent-runs" aria-label="Recent evaluation runs">
-        <h2>Recent evaluation runs</h2>
-        {recentEvaluations.length === 0 ? (
-          <EmptyState hasRecords={false} hasFilters={false} connection={connection} />
-        ) : (
-          <ul className="run-list">
-            {recentEvaluations.map((run) => (
-              <li key={run.run_id}>
-                <Link to={`/evaluations/${run.dataset_id}/${run.run_id}`} className="run-link">
-                  <span className="run-id">{run.run_id}</span>
-                  <span className="run-suite">{run.suite_id}</span>
-                  <span className="run-status">{run.lifecycle_state}</span>
-                  {run.elapsed_seconds ? <span className="run-elapsed">{formatDuration(run.elapsed_seconds)}</span> : null}
-                  <QualityBadge state={run.quality_state} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <div className="ov-grid-bottom">
+        <ModelLab models={models} datasetId={activeDatasetId} />
+        <RecentRuns evaluations={evaluations} />
+        <DownloadsPanel />
       </div>
-
-      <section className="metric-explainer" aria-label="Metric explanations">
-        <h2>What these metrics mean</h2>
-        <dl className="metric-explainer-list">
-          <div>
-            <dt>Pass rate</dt>
-            <dd>The fraction of eligible assignments that passed. The interval is a bootstrap confidence bound, not a superiority claim.</dd>
-          </div>
-          <div>
-            <dt>Agreement</dt>
-            <dd>How often repetitions of the same task agree. Higher means more consistent results.</dd>
-          </div>
-          <div>
-            <dt>Repeatability</dt>
-            <dd>How consistently a model produces the same outcome across repetitions: consistently correct, consistently wrong, inconsistent, or insufficient.</dd>
-          </div>
-        </dl>
-        <Link to="/methodology" className="methodology-link">Read the full methodology</Link>
-      </section>
     </div>
   );
 }

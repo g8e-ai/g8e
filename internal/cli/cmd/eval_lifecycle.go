@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"strings"
 
@@ -40,6 +39,7 @@ type evalOperationPlan struct {
 	SelectedModels       []string                    `json:"selected_models"`
 	Arms                 []string                    `json:"arms"`
 	TaskCount            int                         `json:"task_count"`
+	TaskIdentities       []string                    `json:"task_identities"`
 	Repetitions          int                         `json:"repetitions"`
 	AssignmentCount      int                         `json:"assignment_count"`
 	WarmupCalls          int                         `json:"warmup_calls"`
@@ -158,59 +158,11 @@ func runEvalOperationPlan(ctx context.Context, deps evalLeaseDeps, configPath st
 }
 
 func runEvalOperationCheck(ctx context.Context, deps evalLeaseDeps, configPath string) (evalOperationCheckResult, error) {
-	env, err := resolveEvalLifecycleEnvironment(ctx, deps, configPath)
+	preflight, err := runEvalPreflight(ctx, deps, configPath, "campaign_run")
 	if err != nil {
-		return evalOperationCheckResult{}, err
+		return preflight.CheckResult, err
 	}
-	cfg, err := deps.configLoader("")
-	if err != nil {
-		return evalOperationCheckResult{}, fmt.Errorf("eval: load config: %w", err)
-	}
-	fileSvc, err := deps.fileSvcFactory(cfg.ProjectRoot, slog.Default())
-	if err != nil {
-		return evalOperationCheckResult{}, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-	}
-	candidate, err := deps.candidateResolver.Resolve(ctx, env.RepositoryRoot)
-	if err != nil {
-		return evalOperationCheckResult{}, err
-	}
-	inventoryDigest, err := deps.modelInventoryResolver.Digest(ctx)
-	if err != nil {
-		return evalOperationCheckResult{}, err
-	}
-	verification, err := invokeLeaseStartVerification(ctx, deps, env.InterpreterPath, evalLeaseStartVerificationRequest{
-		ConfigPath: env.ConfigPath, LeaseStoreDir: fileSvc.Resolve(constants.EvalLeaseDirname), RepositoryRoot: env.RepositoryRoot,
-		Candidate: candidate, ModelInventoryDigest: inventoryDigest, CommandFamily: "campaign_run", CommandVersion: models.EvalEngineRequestSchemaVersion,
-	})
-	if err != nil {
-		return evalOperationCheckResult{}, err
-	}
-	if !verification.Verified {
-		return evalOperationCheckResult{}, mapLeaseVerificationFailureCode(verification.FailureCode, verification.FailureDetail)
-	}
-	payload, err := invokeEvalOperationLifecycle(ctx, deps, env, "check")
-	if err != nil {
-		return evalOperationCheckResult{}, fmt.Errorf("%w: %w", constants.ErrEvalAuthorityInvalid, err)
-	}
-	var result evalOperationCheckResult
-	if err := json.Unmarshal(payload, &result); err != nil {
-		return evalOperationCheckResult{}, fmt.Errorf("%w: parse check result: %w", constants.ErrEvalConfigInvalid, err)
-	}
-	trustCheck := checkEvalTrustBundle(ctx, fileSvc)
-	result.Checks = append(result.Checks, evalOperationCheck{CheckID: trustCheck.ID, Status: string(trustCheck.Status), SafeDetail: trustCheck.SafeDetail})
-	if trustCheck.Status == evalDoctorCheckFail {
-		return result, fmt.Errorf("%w: %s", constants.ErrEvalPlatformIdentityUnavailable, trustCheck.SafeDetail)
-	}
-	if deps.httpClient != nil {
-		doctorDeps := evalDoctorDeps{httpClient: deps.httpClient}
-		for _, healthCheck := range runEvalDoctorStackChecks(ctx, doctorDeps, cfg) {
-			result.Checks = append(result.Checks, evalOperationCheck{CheckID: healthCheck.ID, Status: string(healthCheck.Status), SafeDetail: healthCheck.SafeDetail})
-			if healthCheck.Status == evalDoctorCheckFail {
-				return result, fmt.Errorf("%w: %s: %s", constants.ErrEvalPlatformUnhealthy, healthCheck.ID, healthCheck.SafeDetail)
-			}
-		}
-	}
-	return result, nil
+	return preflight.CheckResult, nil
 }
 
 func runEvalEngineLifecycle(ctx context.Context, deps evalLeaseDeps, configPath string, operation models.EvalOperation, flags models.EvalEngineFlags, stderr io.Writer) (evalEngineResultJSON, error) {
@@ -244,6 +196,7 @@ func runEvalEngineLifecycle(ctx context.Context, deps evalLeaseDeps, configPath 
 			TrustBundlePath: cfg.ResolvedTrustBundlePath(),
 			GatewayHTTPURL: cfg.OperatorDiscoveryURL(),
 			GatewayHTTPSURL: cfg.OperatorPublicURL(),
+			EnsembleURL: evalEnsembleBaseURL(cfg),
 		},
 		Flags: flags,
 	}
@@ -442,6 +395,7 @@ func printEvalOperationPlan(stdout io.Writer, result evalOperationPlan) {
 	fmt.Fprintf(stdout, "  selected_models:        %s\n", strings.Join(result.SelectedModels, ", "))
 	fmt.Fprintf(stdout, "  arms:                   %s\n", strings.Join(result.Arms, ", "))
 	fmt.Fprintf(stdout, "  tasks:                  %d\n", result.TaskCount)
+	fmt.Fprintf(stdout, "  task_identities:        %s\n", strings.Join(result.TaskIdentities, ", "))
 	fmt.Fprintf(stdout, "  repetitions:            %d\n", result.Repetitions)
 	fmt.Fprintf(stdout, "  assignments:            %d\n", result.AssignmentCount)
 	fmt.Fprintf(stdout, "  warmup_calls:           %d\n", result.WarmupCalls)

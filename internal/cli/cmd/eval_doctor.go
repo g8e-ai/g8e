@@ -374,11 +374,20 @@ func evalOperatorHealthURL(cfg *config.Config) string {
 
 // evalEnsembleHealthURL returns the Ensemble health endpoint URL.
 func evalEnsembleHealthURL(cfg *config.Config) string {
+	return evalEnsembleBaseURL(cfg) + "/health"
+}
+
+// evalEnsembleBaseURL returns the Ensemble (g8ee) HTTP base URL derived
+// from the configured host and the canonical Ensemble port. It is the
+// platform-owned value the facade injects into EvalPlatformContext so
+// configs never carry the endpoint and the engine never receives an
+// empty ensemble URL.
+func evalEnsembleBaseURL(cfg *config.Config) string {
 	host := "localhost"
 	if cfg.Paths != nil && cfg.Paths.Host != "" {
 		host = cfg.Paths.Host
 	}
-	return fmt.Sprintf("http://%s:8000/health", host)
+	return fmt.Sprintf("http://%s:%d", host, constants.EnsembleDefaultPort)
 }
 
 // printEvalDoctorHuman prints a concise human-readable doctor summary.

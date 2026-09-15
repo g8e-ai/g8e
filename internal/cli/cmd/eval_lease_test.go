@@ -63,7 +63,7 @@ type stubLeaseModelInventoryResolver struct {
 	err    error
 }
 
-func (s stubLeaseModelInventoryResolver) Digest(_ context.Context) (string, error) {
+func (s stubLeaseModelInventoryResolver) Digest(_ context.Context, _ string) (string, error) {
 	if s.err != nil {
 		return "", s.err
 	}

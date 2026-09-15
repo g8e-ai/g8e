@@ -48,15 +48,16 @@ function Shell() {
             onClick={() => navigate('/')}
             aria-label="OpenDevOps.AI evaluation explorer home"
           >
-            OPEN<span>DEVOPS</span>.AI
+            OpenDevOps<span>.ai</span>
           </button>
-          <span className="header-tag">EVALUATION EXPLORER</span>
+          <span className="header-tag">Evaluation Explorer</span>
         </div>
         <nav className="app-nav" aria-label="Primary navigation">
-          <NavItem to="/" label="Overview" />
+          <NavItem to="/" label="Live" />
+          <NavItem to="/evaluations" label="Evals" />
           <NavItem to="/models" label="Models" />
-          <NavItem to="/evaluations" label="Evaluations" />
-          <NavItem to="/methodology" label="Methodology" />
+          <NavItem to="/compare" label="Compare" />
+          <NavItem to="/methodology" label="Docs" />
         </nav>
         <div className="header-right">
           {feedStatus ? <FreshnessBadge freshness={feedStatus.freshness} /> : null}

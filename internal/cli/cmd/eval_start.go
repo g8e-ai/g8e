@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -69,6 +68,8 @@ func mapLeaseVerificationFailureCode(code, detail string) error {
 		return fmt.Errorf("%w: %s", constants.ErrEvalLeaseExpired, detail)
 	case "lease_consumed":
 		return fmt.Errorf("%w: %s", constants.ErrEvalLeaseConsumed, detail)
+	case "lease_operation_deadline_exceeds_lease":
+		return fmt.Errorf("%w: %s", constants.ErrEvalBudgetPreflightFailed, detail)
 	case "request_digest_mismatch", "command_family_mismatch",
 		"command_version_mismatch", "operation_identity_mismatch",
 		"budget_mismatch", "endpoint_mismatch":
@@ -112,64 +113,18 @@ func runEvalStart(
 	jsonOutput, verbose bool,
 	stdout, stderr io.Writer,
 ) (evalStartResult, error) {
-	projectRoot, err := evalProjectRootFromConfig(deps.configLoader, "")
+	// runEvalPreflight is the single fail-closed gate. It resolves the
+	// environment, verifies the lease, and runs the provider-free checks
+	// exactly once. Start never re-runs lease verification or check, so
+	// the gate cannot be duplicated or bypassed.
+	preflight, err := runEvalPreflight(ctx, deps, configPath, commandFamily)
 	if err != nil {
 		return evalStartResult{}, err
 	}
-	roots, err := resolveEvalRoots(ctx, projectRoot, deps.stat)
-	if err != nil {
-		return evalStartResult{}, err
-	}
-	resolver := &evalEnvironmentResolver{stat: deps.stat}
-	env, err := resolver.Resolve(ctx, evalProjectRootSpec(roots))
-	if err != nil {
-		return evalStartResult{}, err
-	}
-
-	cfg, err := deps.configLoader("")
-	if err != nil {
-		return evalStartResult{}, fmt.Errorf("eval: load config: %w", err)
-	}
-	fileSvc, err := deps.fileSvcFactory(cfg.ProjectRoot, slog.Default())
-	if err != nil {
-		return evalStartResult{}, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-	}
-	leaseStoreDir := fileSvc.Resolve(constants.EvalLeaseDirname)
-
-	candidate, err := deps.candidateResolver.Resolve(ctx, roots.RepositoryRoot)
-	if err != nil {
-		return evalStartResult{}, err
-	}
-	modelInventoryDigest, err := deps.modelInventoryResolver.Digest(ctx)
-	if err != nil {
-		return evalStartResult{}, err
-	}
-
-	absConfigPath, err := resolveAbsPath(configPath)
-	if err != nil {
-		return evalStartResult{}, err
-	}
-
-	// Verify the lease before report-root creation or engine launch. This
-	// is the gate that prevents any provider-backed start from config alone.
-	verification, err := invokeLeaseStartVerification(ctx, deps, env.InterpreterPath, evalLeaseStartVerificationRequest{
-		ConfigPath:           absConfigPath,
-		LeaseStoreDir:        leaseStoreDir,
-		RepositoryRoot:       roots.RepositoryRoot,
-		Candidate:            candidate,
-		ModelInventoryDigest: modelInventoryDigest,
-		CommandFamily:        commandFamily,
-		CommandVersion:       models.EvalEngineRequestSchemaVersion,
-	})
-	if err != nil {
-		return evalStartResult{}, err
-	}
-	if !verification.Verified {
-		return evalStartResult{}, mapLeaseVerificationFailureCode(verification.FailureCode, verification.FailureDetail)
-	}
-	if _, err := runEvalOperationCheck(ctx, deps, configPath); err != nil {
-		return evalStartResult{}, err
-	}
+	env := preflight.Env
+	cfg := preflight.Cfg
+	candidate := preflight.Candidate
+	verification := preflight.Verification
 
 	// Construct the typed engine request. The lease path is the verified
 	// lease file; the report root is repository-relative from the config.
@@ -179,19 +134,20 @@ func runEvalStart(
 		Operation:     operation,
 		OperationID:   verification.OperationID,
 		Revision:      verification.Revision,
-		ConfigPath:    absConfigPath,
+		ConfigPath:    env.ConfigPath,
 		LeasePath:     verification.LeasePath,
 		ReportRoot:    verification.ReportRoot,
 		Platform: models.EvalPlatformContext{
-			RepositoryRoot:  roots.RepositoryRoot,
-			EvalProject:     roots.EvalProject,
-			G8EBinaryPath:   binaryPath,
-			G8EBinarySHA256: candidate.BinarySHA256,
-			AuthProjectRoot: cfg.ProjectRoot,
-			RuntimeDir:      cfg.RuntimeDir,
-			TrustBundlePath: cfg.ResolvedTrustBundlePath(),
-			GatewayHTTPURL:  cfg.OperatorDiscoveryURL(),
-			GatewayHTTPSURL: cfg.OperatorPublicURL(),
+			RepositoryRoot:  env.RepositoryRoot,
+			EvalProject:      env.EvalProject,
+			G8EBinaryPath:    binaryPath,
+			G8EBinarySHA256:  candidate.BinarySHA256,
+			AuthProjectRoot:  cfg.ProjectRoot,
+			RuntimeDir:       cfg.RuntimeDir,
+			TrustBundlePath:  cfg.ResolvedTrustBundlePath(),
+			GatewayHTTPURL:   cfg.OperatorDiscoveryURL(),
+			GatewayHTTPSURL:  cfg.OperatorPublicURL(),
+			EnsembleURL:      evalEnsembleBaseURL(cfg),
 		},
 		Flags: models.EvalEngineFlags{
 			JSONOutput: jsonOutput,
@@ -211,7 +167,7 @@ func runEvalStart(
 		transition = "complete"
 		leaseStatus = "completed"
 	}
-	transitionErr := transitionLeaseAfterRun(ctx, deps, env.InterpreterPath, absConfigPath, leaseStoreDir, transition)
+	transitionErr := transitionLeaseAfterRun(ctx, deps, env.InterpreterPath, env.ConfigPath, preflight.LeaseStoreDir, transition)
 	if transitionErr != nil {
 		fmt.Fprintf(stderr, "warning: lease transition failed: %v\n", transitionErr)
 	}
@@ -433,7 +389,7 @@ func evalStartDepsFromLeaseDeps() evalLeaseDeps {
 		runner:                 realEvalCommandRunner{},
 		tempFileWriter:         realEvalTempFileWriter{},
 		candidateResolver:      realEvalCandidateResolver{fileReader: realEvalFileReader{}},
-		modelInventoryResolver: realEvalModelInventoryResolver{},
+		modelInventoryResolver: realEvalModelInventoryResolver{fileReader: realEvalFileReader{}},
 		httpClient:             &http.Client{Timeout: 5 * time.Second},
 	}
 }

@@ -33,7 +33,7 @@ inputs.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 
 from g8e_evals.live_operations_authority import (
@@ -54,6 +54,7 @@ class LeaseVerificationFailureCode(StrEnum):
     LEASE_CONSUMED = "lease_consumed"
     LEASE_NOT_YET_VALID = "lease_not_yet_valid"
     LEASE_STOPPED = "lease_stopped"
+    LEASE_OPERATION_DEADLINE_EXCEEDS_LEASE = "lease_operation_deadline_exceeds_lease"
     REQUEST_DIGEST_MISMATCH = "request_digest_mismatch"
     COMMAND_FAMILY_MISMATCH = "command_family_mismatch"
     COMMAND_VERSION_MISMATCH = "command_version_mismatch"
@@ -101,6 +102,7 @@ class LeaseVerificationContext:
     model_inventory_digest: str
     report_root_exists: bool
     now: datetime
+    operation_max_duration_s: float | None = None
 
 
 def verify_lease_for_start(
@@ -187,6 +189,14 @@ def _verify_time_window(lease: LiveOperationLease, ctx: LeaseVerificationContext
             f"lease {lease.lease_id} start deadline {lease.start_deadline.isoformat()} passed, "
             f"now is {ctx.now.isoformat()}",
         )
+    if ctx.operation_max_duration_s is not None:
+        operation_deadline = ctx.now + timedelta(seconds=ctx.operation_max_duration_s)
+        if operation_deadline > lease.expires_at:
+            raise LeaseVerificationError(
+                LeaseVerificationFailureCode.LEASE_OPERATION_DEADLINE_EXCEEDS_LEASE,
+                f"operation deadline {operation_deadline.isoformat()} exceeds lease expiry "
+                f"{lease.expires_at.isoformat()} (max_duration_s={ctx.operation_max_duration_s})",
+            )
 
 
 def _verify_request_digest(lease: LiveOperationLease, ctx: LeaseVerificationContext) -> None:

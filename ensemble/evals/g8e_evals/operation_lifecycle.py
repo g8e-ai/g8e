@@ -42,6 +42,7 @@ class OperationPlan(BaseModel):
     selected_models: list[str]
     arms: list[str]
     task_count: int
+    task_identities: list[str]
     repetitions: int
     assignment_count: int
     warmup_calls: int
@@ -74,8 +75,14 @@ class OperationCheckResult(BaseModel):
 def _resolve_owned_path(repository_root: Path, relative_path: str, label: str) -> Path:
     root = repository_root.resolve()
     path = root / relative_path
-    if path.is_symlink():
-        raise ValueError(f"{label} must not be a symlink: {relative_path}")
+    # Reject symlinks in any path component, not just the final path.
+    # A symlink in a parent directory could redirect the resolution
+    # outside the repository root without the final path being a symlink.
+    current = root
+    for part in Path(relative_path).parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError(f"{label} path component must not be a symlink: {current.relative_to(root)}")
     resolved = path.resolve()
     try:
         resolved.relative_to(root)
@@ -116,25 +123,48 @@ def _authorities(config: OperationConfigBase) -> list[tuple[str, AuthorityRef]]:
     return refs
 
 
-def _task_count(config: OperationConfigBase, repository_root: Path) -> int:
-    if isinstance(config, DiagnosticConfig):
-        if config.task_limit is not None:
-            return config.task_limit
-        from g8e_evals.suites import assert_model_comparison_eligible
+def _selected_diagnostic_tasks(config: DiagnosticConfig, repository_root: Path) -> list[str]:
+    """Load the full ordered task population, apply offset and limit to
+    the actual ordered task set, reject out-of-range or empty slices, and
+    return the exact selected task identities. The count is never
+    ceiling-derived from task_limit alone."""
+    from g8e_evals.suites import assert_model_comparison_eligible
 
-        gold_path = _verify_authority(repository_root, config.gold_set, "gold_set")
-        tasks = list(assert_model_comparison_eligible(config.suite).loader_factory(gold_path).load())
-        return max(0, len(tasks) - config.task_offset)
-    if isinstance(config, CampaignConfig):
-        from g8e_evals.profile import CampaignProfile
+    gold_path = _verify_authority(repository_root, config.gold_set, "gold_set")
+    tasks = list(assert_model_comparison_eligible(config.suite).loader_factory(gold_path).load())
+    full_count = len(tasks)
+    if config.task_offset > full_count:
+        raise ValueError(
+            f"task_offset {config.task_offset} exceeds task population {full_count}"
+        )
+    selected = tasks[config.task_offset:]
+    if config.task_limit is not None:
+        selected = selected[:config.task_limit]
+    identities = [task.id for task in selected]
+    if not identities:
+        raise ValueError("task selection is empty after offset and limit")
+    return identities
 
-        profile_path = _verify_authority(repository_root, config.profile, "profile")
-        profile = CampaignProfile.model_validate_json(profile_path.read_text())
-        selected = profile.task_ids[config.task_offset:]
-        if config.task_limit is not None:
-            selected = selected[:config.task_limit]
-        return len(selected)
-    raise ValueError(f"unsupported operation config: {type(config).__name__}")
+
+def _selected_campaign_tasks(config: CampaignConfig, repository_root: Path) -> list[str]:
+    """Load the campaign profile's ordered task_ids, apply offset and
+    limit to the actual ordered set, reject out-of-range or empty slices,
+    and return the exact selected task identities."""
+    from g8e_evals.profile import CampaignProfile
+
+    profile_path = _verify_authority(repository_root, config.profile, "profile")
+    profile = CampaignProfile.model_validate_json(profile_path.read_text())
+    full_count = len(profile.task_ids)
+    if config.task_offset > full_count:
+        raise ValueError(
+            f"task_offset {config.task_offset} exceeds profile task_ids {full_count}"
+        )
+    selected = profile.task_ids[config.task_offset:]
+    if config.task_limit is not None:
+        selected = selected[:config.task_limit]
+    if not selected:
+        raise ValueError("task selection is empty after offset and limit")
+    return list(selected)
 
 
 def _campaign_models(config: CampaignConfig, repository_root: Path) -> list[str]:
@@ -162,24 +192,27 @@ def _campaign_models(config: CampaignConfig, repository_root: Path) -> list[str]
 
 def plan_operation(config_path: Path, repository_root: Path) -> OperationPlan:
     config = load_operation_config(config_path)
-    task_count = _task_count(config, repository_root)
     if isinstance(config, DiagnosticConfig):
+        task_identities = _selected_diagnostic_tasks(config, repository_root)
         selected_models = [config.model_variant_id]
         arms = [config.arm]
         repetitions = 1
         warmup_calls = 0
     elif isinstance(config, CampaignConfig):
+        task_identities = _selected_campaign_tasks(config, repository_root)
         selected_models = _campaign_models(config, repository_root)
         arms = config.arms
         repetitions = config.repetitions
         warmup_calls = len(selected_models) * len(arms)
     else:
         raise ValueError(f"unsupported operation config: {type(config).__name__}")
+    task_count = len(task_identities)
     assignment_count = len(selected_models) * len(arms) * task_count * repetitions
     schedule_payload = {
         "content_hash": config.content_hash,
         "models": selected_models,
         "arms": arms,
+        "task_identities": task_identities,
         "tasks": task_count,
         "repetitions": repetitions,
         "seed": config.seed,
@@ -194,6 +227,7 @@ def plan_operation(config_path: Path, repository_root: Path) -> OperationPlan:
         selected_models=selected_models,
         arms=arms,
         task_count=task_count,
+        task_identities=task_identities,
         repetitions=repetitions,
         assignment_count=assignment_count,
         warmup_calls=warmup_calls,
@@ -217,7 +251,21 @@ def check_operation(config_path: Path, repository_root: Path) -> OperationCheckR
     key = load_evidence_encryption_key(key_path)
     if key.key_id != config.evidence_key.key_id:
         raise ValueError(f"evidence key ID mismatch: expected {config.evidence_key.key_id}, got {key.key_id}")
-    checks.append(OperationCheck(check_id="evidence_key", status="pass", safe_detail="evidence key identity matches"))
+    key_mode = key_path.stat().st_mode & 0o777
+    if key_mode != 0o600:
+        raise ValueError(f"evidence key permissions must be 0600, got {oct(key_mode)}")
+    checks.append(OperationCheck(check_id="evidence_key", status="pass", safe_detail="evidence key identity and permissions match"))
+    _SUPPORTED_PROVIDERS = frozenset({"openai", "anthropic", "gemini", "ollama", "llamacpp", "fake"})
+    if config.provider_endpoint.provider not in _SUPPORTED_PROVIDERS:
+        raise ValueError(
+            f"unsupported provider: {config.provider_endpoint.provider}; "
+            f"supported: {sorted(_SUPPORTED_PROVIDERS)}"
+        )
+    checks.append(OperationCheck(
+        check_id="endpoint_identity",
+        status="pass",
+        safe_detail=f"provider {config.provider_endpoint.provider} endpoint_class {config.provider_endpoint.endpoint_class}",
+    ))
     report_root = (repository_root.resolve() / config.report_root).resolve()
     if report_root.exists():
         raise FileExistsError(f"report root already exists: {report_root}")
@@ -300,6 +348,58 @@ def _process_is_running(pid: int) -> bool:
     return True
 
 
+def _process_start_epoch(pid: int) -> float | None:
+    """Return the process start time as a Unix timestamp on Linux, or None.
+
+    Reads ``/proc/<pid>/stat`` to get the process start time in clock ticks
+    since boot and converts it to a Unix timestamp using the boot time from
+    ``/proc/stat``. On non-Linux platforms or when the proc filesystem is
+    unavailable, returns None so the caller falls back to PID-existence
+    checks alone.
+    """
+    try:
+        stat_text = Path(f"/proc/{pid}/stat").read_text()
+        # /proc/<pid>/stat: field 22 (1-indexed) is starttime in clock ticks
+        # since boot. The comm field (field 2) is in parentheses and may
+        # contain spaces, so parse from the last ')' onward.
+        comm_end = stat_text.rfind(")")
+        fields = stat_text[comm_end + 1:].split()
+        starttime_ticks = int(fields[19])  # 0-indexed: field 22 - 2 = 19 after comm
+        clk_tck = os.sysconf(os.sysconf_names["SC_CLK_TCK"])
+        with open("/proc/stat") as f:
+            for line in f:
+                if line.startswith("btime "):
+                    boot_time = int(line.split()[1])
+                    return boot_time + starttime_ticks / clk_tck
+    except (OSError, ValueError, IndexError, KeyError):
+        return None
+    return None
+
+
+def _process_matches_launch(pid: int, launch: dict[str, object]) -> bool:
+    """Check whether the process at ``pid`` is the one recorded in ``launch``.
+
+    Protects against PID reuse: if the process at the PID started at a
+    different time than the launch record's ``started_at``, the PID has
+    been reused by an unrelated process. On platforms where the process
+    start time cannot be determined, falls back to PID-existence alone.
+    """
+    if not _process_is_running(pid):
+        return False
+    start_epoch = _process_start_epoch(pid)
+    if start_epoch is None:
+        return True  # Cannot verify start time; assume running
+    started_at = launch.get("started_at")
+    if not isinstance(started_at, str):
+        return True  # No recorded start time; assume running
+    try:
+        record_epoch = datetime.fromisoformat(started_at).timestamp()
+    except ValueError:
+        return True  # Unparseable start time; assume running
+    # 5-second tolerance for clock skew and rounding
+    return abs(start_epoch - record_epoch) <= 5
+
+
 def operation_status(config_path: Path, repository_root: Path) -> OperationStatus:
     config = load_operation_config(config_path)
     report_root = resolve_report_root(config, repository_root)
@@ -316,7 +416,7 @@ def operation_status(config_path: Path, repository_root: Path) -> OperationStatu
     if launch and (launch.get("operation_id") != config.operation_id or launch.get("revision") != config.revision):
         raise ValueError("launch state identity does not match operation config")
     pid = launch.get("pid", 0)
-    running = _process_is_running(pid) if isinstance(pid, int) else False
+    running = _process_matches_launch(pid, launch) if isinstance(pid, int) else False
     process_state = "running" if running else ("stale" if launch.get("status") == "running" else "terminal")
     status_record = _load_json_object(report_root / CAMPAIGN_STATUS_JSON)
     progress = _load_json_object(report_root / CAMPAIGN_PROGRESS_JSON)
@@ -352,8 +452,8 @@ def stop_operation(config_path: Path, repository_root: Path, *, immediate: bool)
     if request_path.exists():
         raise FileExistsError("stop request already exists")
     pid = launch.get("pid")
-    if immediate and (not isinstance(pid, int) or not _process_is_running(pid)):
-        raise ValueError("cannot force-stop a process that is not running")
+    if immediate and (not isinstance(pid, int) or not _process_matches_launch(pid, launch)):
+        raise ValueError("cannot force-stop a process that is not running or has been reused")
     requested_at = datetime.now(UTC).isoformat()
     payload = {
         "operation_id": config.operation_id,

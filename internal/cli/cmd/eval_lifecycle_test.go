@@ -48,7 +48,7 @@ func (r *stubEvalLifecycleRunner) Run(_ context.Context, _ string, args []string
 }
 
 func TestEvalDiagnosticPlanCmd_UsesTypedLifecycleModule(t *testing.T) {
-	runner := &stubEvalLifecycleRunner{lifecycleJSON: `{"operation_kind":"diagnostic","operation_id":"diag-1","revision":"rev-1","selected_models":["qwen3:8b"],"arms":["direct"],"task_count":5,"repetitions":1,"assignment_count":5,"warmup_calls":0,"maximum_provider_calls":10,"maximum_tokens":1000,"maximum_usd":1.5,"maximum_duration_s":600,"minimum_free_disk_gb":2,"schedule_identity":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","stop_conditions":{"idle_timeout_s":180,"max_duration_s":600}}`}
+	runner := &stubEvalLifecycleRunner{lifecycleJSON: `{"operation_kind":"diagnostic","operation_id":"diag-1","revision":"rev-1","selected_models":["qwen3:8b"],"arms":["direct"],"task_count":5,"task_identities":["t1","t2","t3","t4","t5"],"repetitions":1,"assignment_count":5,"warmup_calls":0,"maximum_provider_calls":10,"maximum_tokens":1000,"maximum_usd":1.5,"maximum_duration_s":600,"minimum_free_disk_gb":2,"schedule_identity":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","stop_conditions":{"idle_timeout_s":180,"max_duration_s":600}}`}
 	deps := newStartDepsForTest(t, &stubStartRunner{})
 	deps.runner = runner
 	cmd := evalDiagnosticPlanCmdWithDeps(deps)

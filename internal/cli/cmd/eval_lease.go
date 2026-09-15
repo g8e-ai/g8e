@@ -39,18 +39,32 @@ type evalCandidateIdentity struct {
 }
 
 // evalModelInventoryResolver abstracts model inventory digest computation
-// so Tier 1 tests do not touch the provider.
+// so Tier 1 tests do not touch the provider. The digest is computed from
+// the operation config file's SHA-256, which binds to the exact models,
+// arms, cohorts, and provider endpoint declared in the config. The same
+// config file always produces the same digest; a changed config file
+// produces a different digest, providing actual drift protection.
 type evalModelInventoryResolver interface {
-	Digest(ctx context.Context) (string, error)
+	Digest(ctx context.Context, configPath string) (string, error)
 }
 
-// realEvalModelInventoryResolver returns a fixed digest for source-checkout
-// execution where no live model inventory is available at issue time. The
-// digest is recomputed at start time by the engine; a mismatch fails closed.
-type realEvalModelInventoryResolver struct{}
+// realEvalModelInventoryResolver computes the model inventory digest from
+// the operation config file's SHA-256. This is an actual stable digest
+// that binds to the configured model inventory: the same config file
+// always produces the same digest, and any change to the config (which
+// may change the declared models, arms, cohorts, or provider endpoint)
+// produces a different digest. This replaces the prior fixed placeholder
+// string that provided no drift protection.
+type realEvalModelInventoryResolver struct {
+	fileReader evalFileReader
+}
 
-func (realEvalModelInventoryResolver) Digest(ctx context.Context) (string, error) {
-	h := sha256.Sum256([]byte("source-checkout-no-live-inventory"))
+func (r realEvalModelInventoryResolver) Digest(ctx context.Context, configPath string) (string, error) {
+	bytes, err := r.fileReader.ReadFile(configPath)
+	if err != nil {
+		return "", fmt.Errorf("eval: read config for inventory digest: %w", err)
+	}
+	h := sha256.Sum256(bytes)
 	return hex.EncodeToString(h[:]), nil
 }
 
@@ -114,7 +128,7 @@ func evalLeaseCmd() *cobra.Command {
 		runner:                 realEvalCommandRunner{},
 		tempFileWriter:         realEvalTempFileWriter{},
 		candidateResolver:      realEvalCandidateResolver{fileReader: realEvalFileReader{}},
-		modelInventoryResolver: realEvalModelInventoryResolver{},
+		modelInventoryResolver: realEvalModelInventoryResolver{fileReader: realEvalFileReader{}},
 		httpClient:             &http.Client{Timeout: 5 * time.Second},
 	})
 }
@@ -360,12 +374,13 @@ func runEvalLeaseIssue(ctx context.Context, deps evalLeaseDeps, configPath, endp
 	if err != nil {
 		return evalLeaseIssueResult{}, err
 	}
-	modelInventoryDigest, err := deps.modelInventoryResolver.Digest(ctx)
+
+	absConfigPath, err := resolveAbsPath(configPath)
 	if err != nil {
 		return evalLeaseIssueResult{}, err
 	}
 
-	absConfigPath, err := resolveAbsPath(configPath)
+	modelInventoryDigest, err := deps.modelInventoryResolver.Digest(ctx, absConfigPath)
 	if err != nil {
 		return evalLeaseIssueResult{}, err
 	}

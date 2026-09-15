@@ -106,6 +106,7 @@ def verify_lease_for_start_request(
         model_inventory_digest=request.model_inventory_digest,
         report_root_exists=report_root_exists,
         now=datetime.now(UTC).replace(microsecond=0),
+        operation_max_duration_s=config.stop_conditions.max_duration_s,
     )
 
     try:

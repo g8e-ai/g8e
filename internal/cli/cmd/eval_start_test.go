@@ -253,12 +253,11 @@ func TestEvalDiagnosticStartCmd_SuccessTransitionsLeaseToCompleted(t *testing.T)
 	assert.Contains(t, out, "diagnostic_start: succeeded")
 	assert.Contains(t, out, "lease_status: completed")
 
-	require.Len(t, runner.calls, 5)
+	require.Len(t, runner.calls, 4)
 	assert.Equal(t, constants.EvalLeaseStartVerificationModule, runner.calls[0])
-	assert.Equal(t, constants.EvalLeaseStartVerificationModule, runner.calls[1])
-	assert.Equal(t, constants.EvalOperationLifecycleModule, runner.calls[2])
-	assert.Equal(t, constants.EvalEngineModule, runner.calls[3])
-	assert.Equal(t, constants.EvalLeaseLifecycleModule, runner.calls[4])
+	assert.Equal(t, constants.EvalOperationLifecycleModule, runner.calls[1])
+	assert.Equal(t, constants.EvalEngineModule, runner.calls[2])
+	assert.Equal(t, constants.EvalLeaseLifecycleModule, runner.calls[3])
 }
 
 func TestEvalDiagnosticStartCmd_EngineFailureTransitionsLeaseToStopped(t *testing.T) {

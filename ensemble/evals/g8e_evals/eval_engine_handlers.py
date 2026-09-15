@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -44,15 +45,105 @@ def _provider_endpoint(provider: str) -> str | None:
     return os.environ.get(names.get(provider, "G8E_TEST_LLM_PRIMARY_ENDPOINT_URL"))
 
 
-def _write_launch_state(report_root: Path, request: EvalEngineRequest, status: str) -> None:
-    state = {
+# Patterns that must never appear in safe_detail output. The redaction is
+# conservative: any exception string containing a known secret-bearing
+# pattern is replaced with a generic safe message.
+_SECRET_PATTERNS = (
+    "api_key",
+    "api-key",
+    "apikey",
+    "token",
+    "secret",
+    "password",
+    "credential",
+    "authorization",
+    "bearer",
+    "private_key",
+    "key_b64",
+)
+
+
+def _safe_detail(exc: Exception) -> str:
+    """Return a redacted error detail that cannot expose credentials or
+    secret-bearing provider errors. If the exception message contains any
+    known secret-bearing pattern, a generic safe message is returned.
+    """
+    message = str(exc)
+    lower = message.lower()
+    for pattern in _SECRET_PATTERNS:
+        if pattern in lower:
+            return f"{type(exc).__name__}: redacted (secret-bearing error)"
+    return f"{type(exc).__name__}: {message}"
+
+
+def _build_launch_record(request: EvalEngineRequest, config: object, report_root: Path, status: str, started_at: str | None = None) -> dict:
+    """Build a content-hashed, identity-bound launch record.
+
+    Binds operation ID, revision, config content hash, lease ID, lease
+    path, engine PID, candidate binary hash, report root, and start time.
+    The content hash is computed over the canonical JSON excluding the
+    content_hash field itself, matching the operation config convention.
+    """
+    lease_id = Path(request.lease_path).stem if request.lease_path else ""
+    record = {
         "operation_id": request.operation_id,
         "revision": request.revision,
+        "config_content_hash": getattr(config, "content_hash", ""),
+        "lease_id": lease_id,
+        "lease_path": request.lease_path,
         "pid": os.getpid(),
+        "candidate_binary_sha256": request.platform.g8e_binary_sha256,
+        "report_root": str(report_root),
         "status": status,
+        "started_at": started_at or datetime.now(UTC).isoformat(),
         "updated_at": datetime.now(UTC).isoformat(),
     }
-    (report_root / EVAL_LAUNCH_STATE_JSON).write_text(json.dumps(state, sort_keys=True, indent=2) + "\n")
+    hash_payload = {k: v for k, v in record.items() if k != "content_hash"}
+    record["content_hash"] = hashlib.sha256(
+        json.dumps(hash_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return record
+
+
+def _write_launch_state(report_root: Path, request: EvalEngineRequest, config: object, status: str, started_at: str | None = None) -> dict:
+    """Atomically write a content-hashed launch record.
+
+    Writes to a temp file then renames so the record is never partially
+    written. Returns the written record.
+    """
+    record = _build_launch_record(request, config, report_root, status, started_at)
+    target = report_root / EVAL_LAUNCH_STATE_JSON
+    tmp = target.with_suffix(".tmp")
+    tmp.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n")
+    tmp.replace(target)
+    return record
+
+
+def _transition_launch_state(report_root: Path, request: EvalEngineRequest, config: object, status: str, started_at: str) -> None:
+    """Atomically transition the launch record to a terminal state.
+
+    Preserves the original started_at and verifies the operation identity
+    before transitioning. Does not rely on PID existence alone.
+    """
+    target = report_root / EVAL_LAUNCH_STATE_JSON
+    existing = {}
+    if target.is_file():
+        existing = json.loads(target.read_text())
+    if existing.get("operation_id") != request.operation_id or existing.get("revision") != request.revision:
+        raise EngineError(
+            EvalErrorCode.STATUS_RECONCILIATION_FAILED,
+            "launch_state",
+            "launch state identity does not match operation",
+        )
+    record = _build_launch_record(request, config, report_root, status, started_at)
+    record["started_at"] = existing.get("started_at", started_at)
+    hash_payload = {k: v for k, v in record.items() if k != "content_hash"}
+    record["content_hash"] = hashlib.sha256(
+        json.dumps(hash_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    tmp = target.with_suffix(".tmp")
+    tmp.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n")
+    tmp.replace(target)
 
 
 def _diagnostic_start(request: EvalEngineRequest) -> EvalEngineResult:
@@ -66,7 +157,11 @@ def _diagnostic_start(request: EvalEngineRequest) -> EvalEngineResult:
     if report_root.exists():
         raise EngineError(EvalErrorCode.REPORT_ROOT_REUSED, "start", "report root already exists")
     report_root.mkdir(parents=True)
-    _write_launch_state(report_root, request, "running")
+    started_at = datetime.now(UTC).isoformat()
+    _write_launch_state(report_root, request, config, "running", started_at)
+    state_root = hashlib.sha256(
+        f"{config.content_hash}:{request.operation_id}:{request.revision}".encode()
+    ).hexdigest()
     callback = getattr(run, "callback", run)
     try:
         with redirect_stdout(sys.stderr):
@@ -89,7 +184,7 @@ def _diagnostic_start(request: EvalEngineRequest) -> EvalEngineResult:
                 g8e_cli=request.platform.g8e_binary_path,
                 auth_project_root=Path(request.platform.auth_project_root),
                 arm=config.arm,
-                state_root="eval-operation-state",
+                state_root=state_root,
                 output_dir=report_root.parent,
                 evidence_key_file=repository_root / config.evidence_key.path,
                 gold_set=repository_root / config.gold_set.path,
@@ -117,9 +212,9 @@ def _diagnostic_start(request: EvalEngineRequest) -> EvalEngineResult:
                 exact_task_offset=config.task_offset,
             )
     except Exception as exc:
-        _write_launch_state(report_root, request, "failed")
-        raise EngineError(EvalErrorCode.CHILD_EXIT_NON_ZERO, "diagnostic_start", str(exc)) from exc
-    _write_launch_state(report_root, request, "completed")
+        _transition_launch_state(report_root, request, config, "failed", started_at)
+        raise EngineError(EvalErrorCode.CHILD_EXIT_NON_ZERO, "diagnostic_start", _safe_detail(exc)) from exc
+    _transition_launch_state(report_root, request, config, "completed", started_at)
     return succeeded_result(request, {"report_root": str(report_root)})
 
 
@@ -134,7 +229,8 @@ def _campaign_start(request: EvalEngineRequest) -> EvalEngineResult:
     if report_root.exists():
         raise EngineError(EvalErrorCode.REPORT_ROOT_REUSED, "start", "report root already exists")
     report_root.mkdir(parents=True)
-    _write_launch_state(report_root, request, "running")
+    started_at = datetime.now(UTC).isoformat()
+    _write_launch_state(report_root, request, config, "running", started_at)
     callback = getattr(campaign_run, "callback", campaign_run)
     try:
         with redirect_stdout(sys.stderr):
@@ -165,9 +261,9 @@ def _campaign_start(request: EvalEngineRequest) -> EvalEngineResult:
                 exact_report_dir=report_root,
             )
     except Exception as exc:
-        _write_launch_state(report_root, request, "failed")
-        raise EngineError(EvalErrorCode.CHILD_EXIT_NON_ZERO, "campaign_start", str(exc)) from exc
-    _write_launch_state(report_root, request, "completed")
+        _transition_launch_state(report_root, request, config, "failed", started_at)
+        raise EngineError(EvalErrorCode.CHILD_EXIT_NON_ZERO, "campaign_start", _safe_detail(exc)) from exc
+    _transition_launch_state(report_root, request, config, "completed", started_at)
     return succeeded_result(request, {"report_root": str(report_root)})
 
 
