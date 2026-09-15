@@ -26,9 +26,9 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from typing_extensions import Self
 
 
 def _stop_request_canonical(data: dict[str, object]) -> bytes:
