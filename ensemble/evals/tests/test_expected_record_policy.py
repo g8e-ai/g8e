@@ -73,7 +73,7 @@ def _policy_dict(
             policy_id=policy_id,
             policy_version=policy_version,
             suite_id=suite_id,
-            entries=entries,
+            entries=[ExpectedRecordEntry.model_validate(entry) for entry in entries],
         ),
     }
 
@@ -290,14 +290,14 @@ class TestExpectedRecordPolicy:
             policy_id="policy-1",
             policy_version="1.0.0",
             suite_id="ifeval_subset",
-            entries=entries,
+            entries=[ExpectedRecordEntry.model_validate(entry) for entry in entries],
         )
         hash2 = compute_expected_record_policy_hash(
             schema_version=EXPECTED_RECORD_POLICY_SCHEMA_VERSION,
             policy_id="policy-1",
             policy_version="1.0.0",
             suite_id="ifeval_subset",
-            entries=entries,
+            entries=[ExpectedRecordEntry.model_validate(entry) for entry in entries],
         )
         assert hash1 == hash2
 
@@ -310,14 +310,14 @@ class TestExpectedRecordPolicy:
             policy_id="policy-1",
             policy_version="1.0.0",
             suite_id="ifeval_subset",
-            entries=entries1,
+            entries=[ExpectedRecordEntry.model_validate(entry) for entry in entries1],
         )
         hash2 = compute_expected_record_policy_hash(
             schema_version=EXPECTED_RECORD_POLICY_SCHEMA_VERSION,
             policy_id="policy-1",
             policy_version="1.0.0",
             suite_id="ifeval_subset",
-            entries=entries2,
+            entries=[ExpectedRecordEntry.model_validate(entry) for entry in entries2],
         )
         assert hash1 != hash2
 
@@ -336,14 +336,14 @@ class TestExpectedRecordPolicy:
             policy_id="policy-1",
             policy_version="1.0.0",
             suite_id="ifeval_subset",
-            entries=entries_a,
+            entries=[ExpectedRecordEntry.model_validate(entry) for entry in entries_a],
         )
         hash_b = compute_expected_record_policy_hash(
             schema_version=EXPECTED_RECORD_POLICY_SCHEMA_VERSION,
             policy_id="policy-1",
             policy_version="1.0.0",
             suite_id="ifeval_subset",
-            entries=entries_b,
+            entries=[ExpectedRecordEntry.model_validate(entry) for entry in entries_b],
         )
         assert hash_a == hash_b
 

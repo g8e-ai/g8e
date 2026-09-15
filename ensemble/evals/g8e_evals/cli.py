@@ -16,7 +16,7 @@ import logging
 import os
 import sys
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -47,7 +47,7 @@ from g8e_evals import __version__ as EVALS_VERSION
 from g8e_evals import constants as evals_constants
 from g8e_evals.arms import ALL_ARMS, GOVERNED_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
-from g8e_evals.campaign_run_config import load_campaign_run_config
+from g8e_evals.campaign_run_config import CampaignRunArgs, CampaignValidationArgs, load_campaign_run_config
 from g8e_evals.cli_binary import CLIBinaryError, resolve_g8e_cli
 from g8e_evals.controller_cli import controller_cmd
 from g8e_evals.provenance_bridge import ProvenanceBridgeError, load_cli_build_provenance
@@ -58,7 +58,7 @@ from g8e_evals.graders import (
     observe_receipt_final_state,
 )
 from g8e_evals.evidence import EvidenceEncryptionKey, encrypt_evidence_artifact, load_evidence_encryption_key
-from g8e_evals.harness import BindingType, LLMRoleConfig, ReceiptEvidence, RowResult, SUTConfig, Score
+from g8e_evals.harness import BindingType, LLMRoleConfig, ReceiptEvidence, Response, RowResult, SUTConfig, Score
 from g8e_evals.stages import EvidenceArtifact, normalize_attempt_evidence
 from g8e_evals.profile import CampaignProfile
 from g8e_evals.schema import (
@@ -221,6 +221,68 @@ def _classify_provider_endpoint(provider: str, endpoint: str | None) -> str:
         except ValueError:
             pass
     return "remote"
+
+
+# Per-role env-var suffix map for the G8E_TEST_LLM_* overlay. Typed, closed,
+# and the single source of truth for the env-overlay field names.
+_ROLE_ENV_SUFFIX: tuple[tuple[str, str], ...] = (
+    ("primary", "PRIMARY"),
+    ("assistant", "ASSISTANT"),
+    ("lite", "LITE"),
+    ("judge", "JUDGE"),
+)
+
+
+def _apply_env_overlay(role: LLMRoleConfig, env_suffix: str) -> LLMRoleConfig:
+    """Return a new frozen ``LLMRoleConfig`` with ``G8E_TEST_LLM_<SUFFIX>_*`` env vars applied as fallbacks.
+
+    Each field keeps its existing value when already set; the env var only fills
+    a missing field. Construction is explicit and validated — no mutation, no
+    ``model_copy``.
+    """
+    provider = role.provider or os.environ.get(f"G8E_TEST_LLM_{env_suffix}_PROVIDER", "").strip() or None
+    model = role.model or os.environ.get(f"G8E_TEST_LLM_{env_suffix}_MODEL", "").strip() or None
+    api_key = role.api_key or os.environ.get(f"G8E_TEST_LLM_{env_suffix}_API_KEY", "").strip() or None
+    endpoint = role.endpoint or os.environ.get(f"G8E_TEST_LLM_{env_suffix}_ENDPOINT_URL", "").strip() or None
+    return LLMRoleConfig(provider=provider, model=model, api_key=api_key, endpoint=endpoint)
+
+
+def _build_model_identity(role_name: str, rc: LLMRoleConfig) -> ModelIdentity | None:
+    """Construct a ``ModelIdentity`` from a typed role config, or ``None`` if incomplete."""
+    if not rc.provider or not rc.model:
+        return None
+    return ModelIdentity(
+        role=role_name,
+        provider=rc.provider,
+        model=rc.model,
+        endpoint=rc.endpoint,
+        endpoint_class=_classify_provider_endpoint(rc.provider, rc.endpoint),
+        api_key_present=bool(rc.api_key),
+    )
+
+
+# Provider → typed credential accessor on ``LLMSettings``. Replaces the
+# ``getattr(llm_settings, remote_key_field, None)`` string-keyed access.
+_PROVIDER_API_KEY_ACCESSOR: dict[str, Callable[[LLMSettings], str | None]] = {
+    "openai": lambda s: s.openai_api_key,
+    "anthropic": lambda s: s.anthropic_api_key,
+    "gemini": lambda s: s.gemini_api_key,
+}
+
+
+def _remote_role_api_key(llm_settings: LLMSettings, role_name: str) -> str | None:
+    """Return the remote-stored API key for a role via typed accessor methods.
+
+    Replaces ``getattr(llm_settings, f"{role_name}_api_key", None)`` with
+    explicit typed method dispatch.
+    """
+    if role_name == "primary":
+        return llm_settings.get_primary_api_key()
+    if role_name == "assistant":
+        return llm_settings.get_assistant_api_key()
+    if role_name == "lite":
+        return llm_settings.get_lite_api_key()
+    return None
 
 
 _IFEVAL_GRADER_ID = "ifeval_subset_verifier"
@@ -1011,11 +1073,11 @@ def campaign():
     """
 
 
-def _campaign_callback(command: object, args: dict[str, object]) -> None:
-    callback = getattr(command, "callback", command)
-    if not callable(callback):
+def _campaign_callback(command: click.Command, args: CampaignRunArgs | CampaignValidationArgs) -> None:
+    callback = command.callback
+    if callback is None:
         raise click.ClickException("campaign command is unavailable")
-    callback(**args)
+    callback(**args.model_dump())
 
 
 @campaign.command(name="check")
@@ -1039,7 +1101,10 @@ def campaign_check(config: Path) -> None:
     if missing:
         raise click.UsageError(f"campaign run config paths do not exist: {', '.join(missing)}")
     if run_config.profile is not None and run_config.models is not None:
-        _campaign_callback(campaign_validate, {"profile": run_config.profile, "models": run_config.models})
+        _campaign_callback(
+            campaign_validate,
+            CampaignValidationArgs(profile=run_config.profile, models=run_config.models),
+        )
     console = Console()
     console.print(f"[cyan]Campaign run config[/cyan] {run_config.campaign_id}")
     console.print(f"  [green]suite[/green] {run_config.suite}")
@@ -1922,32 +1987,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     # 2. Apply G8E_TEST_LLM_* env vars as fallbacks (uniform with integration tests)
     # Priority: CLI flags > G8E_TEST_LLM_* env vars > g8ee settings
-    if not config.primary.provider:
-        config.primary.provider = os.environ.get("G8E_TEST_LLM_PRIMARY_PROVIDER", "").strip() or None
-    if not config.primary.model:
-        config.primary.model = os.environ.get("G8E_TEST_LLM_PRIMARY_MODEL", "").strip() or None
-    if not config.primary.api_key:
-        config.primary.api_key = os.environ.get("G8E_TEST_LLM_PRIMARY_API_KEY", "").strip() or None
-    if not config.primary.endpoint:
-        config.primary.endpoint = os.environ.get("G8E_TEST_LLM_PRIMARY_ENDPOINT_URL", "").strip() or None
-
-    if not config.assistant.provider:
-        config.assistant.provider = os.environ.get("G8E_TEST_LLM_ASSISTANT_PROVIDER", "").strip() or None
-    if not config.assistant.model:
-        config.assistant.model = os.environ.get("G8E_TEST_LLM_ASSISTANT_MODEL", "").strip() or None
-    if not config.assistant.api_key:
-        config.assistant.api_key = os.environ.get("G8E_TEST_LLM_ASSISTANT_API_KEY", "").strip() or None
-    if not config.assistant.endpoint:
-        config.assistant.endpoint = os.environ.get("G8E_TEST_LLM_ASSISTANT_ENDPOINT_URL", "").strip() or None
-
-    if not config.lite.provider:
-        config.lite.provider = os.environ.get("G8E_TEST_LLM_LITE_PROVIDER", "").strip() or None
-    if not config.lite.model:
-        config.lite.model = os.environ.get("G8E_TEST_LLM_LITE_MODEL", "").strip() or None
-    if not config.lite.api_key:
-        config.lite.api_key = os.environ.get("G8E_TEST_LLM_LITE_API_KEY", "").strip() or None
-    if not config.lite.endpoint:
-        config.lite.endpoint = os.environ.get("G8E_TEST_LLM_LITE_ENDPOINT_URL", "").strip() or None
+    # LLMRoleConfig is frozen; construct new instances with env fallbacks applied.
+    config.primary = _apply_env_overlay(config.primary, "PRIMARY")
+    config.assistant = _apply_env_overlay(config.assistant, "ASSISTANT")
+    config.lite = _apply_env_overlay(config.lite, "LITE")
 
     arm_def = config.arm_definition
 
@@ -1956,23 +1999,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     #    only the primary role; g8ee arms require at least one model
     #    (primary, assistant, or lite) either from CLI flags or g8ee
     #    settings (resolved during preflight).
-    def _model_identity(role: str) -> ModelIdentity | None:
-        rc = getattr(config, role)
-        if not rc.provider or not rc.model:
-            return None
-        return ModelIdentity(
-            role=role,
-            provider=rc.provider,
-            model=rc.model,
-            endpoint=rc.endpoint,
-            endpoint_class=_classify_provider_endpoint(rc.provider, rc.endpoint),
-            api_key_present=bool(rc.api_key),
-        )
-
-    primary_identity = _model_identity("primary")
-    assistant_identity = _model_identity("assistant")
-    lite_identity = _model_identity("lite")
-    judge_identity = _model_identity("judge")
+    primary_identity = _build_model_identity("primary", config.primary)
+    assistant_identity = _build_model_identity("assistant", config.assistant)
+    lite_identity = _build_model_identity("lite", config.lite)
+    judge_identity = _build_model_identity("judge", config.judge)
 
     if bool(config.judge.provider) != bool(config.judge.model):
         raise EvaluationRunError("eval judge requires both provider and model")
@@ -2023,10 +2053,14 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
         llm_settings = remote_settings.llm if remote_settings else None
 
-        errors = []
-        for role_name in ["primary", "assistant", "lite", "judge"]:
-            role_config = getattr(config, role_name)
-            if not role_config or not role_config.provider:
+        errors: list[str] = []
+        for role_name, role_config in (
+            ("primary", config.primary),
+            ("assistant", config.assistant),
+            ("lite", config.lite),
+            ("judge", config.judge),
+        ):
+            if not role_config.provider:
                 continue
 
             if role_config.provider in _KEYLESS_PROVIDERS:
@@ -2045,16 +2079,11 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 errors.append(f"Missing API key for {role_name} provider '{role_config.provider}' (could not fetch remote settings)")
                 continue
 
-            provider_key_map = {
-                "openai": "openai_api_key",
-                "anthropic": "anthropic_api_key",
-                "gemini": "gemini_api_key",
-            }
-            remote_key_field = provider_key_map.get(role_config.provider)
-            if remote_key_field and getattr(llm_settings, remote_key_field, None):
+            provider_accessor = _PROVIDER_API_KEY_ACCESSOR.get(role_config.provider)
+            if provider_accessor and provider_accessor(llm_settings):
                 continue
 
-            if getattr(llm_settings, f"{role_name}_api_key", None):
+            if _remote_role_api_key(llm_settings, role_name):
                 continue
 
             errors.append(f"Missing API key for {role_name} provider '{role_config.provider}'")
@@ -2641,7 +2670,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                         collected_receipts.append(receipt)
                         collected_transaction_ids.add(receipt.transaction_id)
 
-            response.receipts = [
+            receipts = [
                 ReceiptEvidence(
                     action_receipt=receipt,
                     verified=bool(
@@ -2652,24 +2681,41 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 )
                 for receipt in collected_receipts
             ]
+            primary_transaction_id: str | None = response.primary_transaction_id
             if task.metadata.expected_action_class:
                 matching_receipts = [
                     receipt.action_receipt.transaction_id
-                    for receipt in response.receipts
+                    for receipt in receipts
                     if receipt_action_type(receipt.action_receipt)
                     == task.metadata.expected_action_class
                 ]
                 if len(matching_receipts) == 1:
-                    response.primary_transaction_id = matching_receipts[0]
-            elif response.receipts:
-                response.primary_transaction_id = response.receipts[0].action_receipt.transaction_id
+                    primary_transaction_id = matching_receipts[0]
+            elif receipts:
+                primary_transaction_id = receipts[0].action_receipt.transaction_id
 
-            if response.primary_transaction_id:
-                response.binding = BindingType.RECEIPT_BOUND
-                response.unbound_reason = None
-            elif response.receipts:
-                response.binding = BindingType.UNBOUND
-                response.unbound_reason = "declared-action receipt was not uniquely identified"
+            binding = response.binding
+            unbound_reason: str | None = response.unbound_reason
+            if primary_transaction_id:
+                binding = BindingType.RECEIPT_BOUND
+                unbound_reason = None
+            elif receipts:
+                binding = BindingType.UNBOUND
+                unbound_reason = "declared-action receipt was not uniquely identified"
+
+            response = Response(
+                answer=response.answer,
+                model=response.model,
+                arm=response.arm,
+                transaction_ids=response.transaction_ids,
+                governed_action_types=response.governed_action_types,
+                chat_evidence=response.chat_evidence,
+                receipts=receipts,
+                primary_transaction_id=primary_transaction_id,
+                binding=binding,
+                unbound_reason=unbound_reason,
+                inference_observations=response.inference_observations,
+            )
 
         # Score
         if verifier is not None:

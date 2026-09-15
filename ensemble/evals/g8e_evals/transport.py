@@ -141,7 +141,7 @@ class AuthContext:
         valid_sources = {component.value for component in ComponentName} | {G8EE_COMPONENT}
         if raw_source:
             if raw_source not in valid_sources:
-                raise ValueError(
+                raise AuthenticationError(
                     f"Invalid G8E_SOURCE_COMPONENT='{raw_source}'. "
                     f"Must be one of: {sorted(valid_sources)}"
                 )

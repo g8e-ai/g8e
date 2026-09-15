@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict
 
 from app.models.model_telemetry import ModelCallTelemetry
 from g8e.operator.v1.operator_pb2 import (
@@ -39,14 +40,16 @@ from g8e_evals.schema import (
 )
 
 
-@dataclass(frozen=True)
-class EvidenceArtifact:
+class EvidenceArtifact(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     index: EvidenceIndex
     content: str
 
 
-@dataclass(frozen=True)
-class NormalizedAttemptEvidence:
+class NormalizedAttemptEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     stages: list[StageObservation]
     usage: UsageReconciliation
     raw_evidence: EvidenceArtifact | None

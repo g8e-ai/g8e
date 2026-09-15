@@ -18,7 +18,14 @@ L2_IMPLEMENTATION_LABEL = "deterministic_replicated_doctrine"
 def aggregate_results(suite: str, results: list[RowResult]) -> Aggregate:
     total = len(results)
     if total == 0:
-        return Aggregate(suite, 0.0, 0, 0, 0.0, 0.0)
+        return Aggregate(
+            suite=suite,
+            pass_rate=0.0,
+            total_tasks=0,
+            passed_tasks=0,
+            receipt_coverage_pct=0.0,
+            receipt_verification_pct=0.0,
+        )
 
     passed = sum(1 for r in results if r.score.passed)
     pass_rate = (passed / total) * 100.0

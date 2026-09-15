@@ -36,6 +36,7 @@ from g8e_evals.transport import (
     DEFAULT_G8EE_URL,
     SESSION_COOKIE_NAME,
     AuthContext,
+    AuthenticationError,
 )
 from app.models.http_context import BoundOperator
 from app.constants import G8EE_COMPONENT
@@ -274,7 +275,7 @@ def test_invalid_source_component_raises_error(fake_pki):
     try:
         os.environ.clear()
         os.environ.update(env)
-        with pytest.raises(ValueError, match="Invalid G8E_SOURCE_COMPONENT='invalid-component-name'"):
+        with pytest.raises(AuthenticationError, match="Invalid G8E_SOURCE_COMPONENT='invalid-component-name'"):
             AuthContext.from_env()
     finally:
         os.environ.clear()

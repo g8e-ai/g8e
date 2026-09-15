@@ -7,8 +7,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Literal, Protocol
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from g8e.operator.v1.operator_pb2 import (
     DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND,
@@ -106,43 +107,44 @@ class UnsupportedGraderError(ValueError):
     pass
 
 
-@dataclass(frozen=True)
-class DeterministicGradingContext:
+class DeterministicGradingContext(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
     task: TaskDefinition
     attempt: AttemptRecord
     receipts: list[ReceiptObservation]
     stages: list[StageObservation]
-    final_state_observations: list[FinalStateObservation] = field(default_factory=list)
-    state_observations: list[StateObservation] = field(default_factory=list)
-    rehydration_observations: list[RehydrationObservation] = field(default_factory=list)
-    secret_detection_observations: list[SecretDetectionObservation] = field(default_factory=list)
-    unauthorized_mutation_observations: list[UnauthorizedMutationObservation] = field(default_factory=list)
-    token_store_persistence_observations: list[TokenStorePersistenceObservation] = field(default_factory=list)
-    token_ttl_expiry_observations: list[TokenTTLExpiryObservation] = field(default_factory=list)
-    token_persistence_failure_observations: list[TokenPersistenceFailureObservation] = field(default_factory=list)
-    exfiltration_attempt_observations: list[ExfiltrationAttemptObservation] = field(default_factory=list)
-    artifact_leakage_observations: list[ArtifactLeakageObservation] = field(default_factory=list)
-    replay_attempt_observations: list[ReplayAttemptObservation] = field(default_factory=list)
-    signed_field_tampering_observations: list[SignedFieldTamperingObservation] = field(default_factory=list)
-    payload_tampering_observations: list[PayloadTamperingObservation] = field(default_factory=list)
-    stale_state_root_observations: list[StaleStateRootObservation] = field(default_factory=list)
-    identity_mismatch_observations: list[IdentityMismatchObservation] = field(default_factory=list)
-    nonce_expiration_observations: list[NonceExpirationObservation] = field(default_factory=list)
-    signer_defect_observations: list[SignerDefectObservation] = field(default_factory=list)
-    l3_proof_transplant_observations: list[L3ProofTransplantObservation] = field(default_factory=list)
-    revoked_credential_observations: list[RevokedCredentialObservation] = field(default_factory=list)
-    evidence_preservation_observations: list[EvidencePreservationObservation] = field(default_factory=list)
-    policy_attack_observations: list[PolicyAttackObservation] = field(default_factory=list)
-    tool_sequence_observations: list[ToolSequenceObservation] = field(default_factory=list)
-    factual_qa_observations: list[FactualQAObservation] = field(default_factory=list)
-    citation_backed_observations: list[CitationBackedObservation] = field(default_factory=list)
-    partial_milestone_observations: list[PartialMilestoneObservation] = field(default_factory=list)
-    reliability_observations: list[ReliabilityObservation] = field(default_factory=list)
-    economics_performance_observations: list[EconomicsPerformanceObservation] = field(default_factory=list)
+    final_state_observations: list[FinalStateObservation] = Field(default_factory=list)
+    state_observations: list[StateObservation] = Field(default_factory=list)
+    rehydration_observations: list[RehydrationObservation] = Field(default_factory=list)
+    secret_detection_observations: list[SecretDetectionObservation] = Field(default_factory=list)
+    unauthorized_mutation_observations: list[UnauthorizedMutationObservation] = Field(default_factory=list)
+    token_store_persistence_observations: list[TokenStorePersistenceObservation] = Field(default_factory=list)
+    token_ttl_expiry_observations: list[TokenTTLExpiryObservation] = Field(default_factory=list)
+    token_persistence_failure_observations: list[TokenPersistenceFailureObservation] = Field(default_factory=list)
+    exfiltration_attempt_observations: list[ExfiltrationAttemptObservation] = Field(default_factory=list)
+    artifact_leakage_observations: list[ArtifactLeakageObservation] = Field(default_factory=list)
+    replay_attempt_observations: list[ReplayAttemptObservation] = Field(default_factory=list)
+    signed_field_tampering_observations: list[SignedFieldTamperingObservation] = Field(default_factory=list)
+    payload_tampering_observations: list[PayloadTamperingObservation] = Field(default_factory=list)
+    stale_state_root_observations: list[StaleStateRootObservation] = Field(default_factory=list)
+    identity_mismatch_observations: list[IdentityMismatchObservation] = Field(default_factory=list)
+    nonce_expiration_observations: list[NonceExpirationObservation] = Field(default_factory=list)
+    signer_defect_observations: list[SignerDefectObservation] = Field(default_factory=list)
+    l3_proof_transplant_observations: list[L3ProofTransplantObservation] = Field(default_factory=list)
+    revoked_credential_observations: list[RevokedCredentialObservation] = Field(default_factory=list)
+    evidence_preservation_observations: list[EvidencePreservationObservation] = Field(default_factory=list)
+    policy_attack_observations: list[PolicyAttackObservation] = Field(default_factory=list)
+    tool_sequence_observations: list[ToolSequenceObservation] = Field(default_factory=list)
+    factual_qa_observations: list[FactualQAObservation] = Field(default_factory=list)
+    citation_backed_observations: list[CitationBackedObservation] = Field(default_factory=list)
+    partial_milestone_observations: list[PartialMilestoneObservation] = Field(default_factory=list)
+    reliability_observations: list[ReliabilityObservation] = Field(default_factory=list)
+    economics_performance_observations: list[EconomicsPerformanceObservation] = Field(default_factory=list)
 
 
-@dataclass(frozen=True)
-class DeterministicGrade:
+class DeterministicGrade(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     value: float
     verification_status: VerificationStatus
     evidence_refs: list[str]
@@ -642,25 +644,20 @@ class ProtocolChainGrader:
                     "deterministic stage action does not match the receipt",
                     [primary.receipt_id],
                 )
-        for field_name in (
-            "operator_id",
-            "operator_session_id",
-            "requestor_user_id",
-            "acting_app_id",
-            "case_id",
-            "investigation_id",
-            "task_id",
-        ):
-            values = {
-                getattr(stage, field_name)
-                for stage in stages
-                if getattr(stage, field_name)
-            }
-            if len(values) > 1:
-                return self._failed(
-                    "deterministic stage identity fields are inconsistent",
-                    [primary.receipt_id],
-                )
+        identity_values = (
+            {stage.operator_id for stage in stages if stage.operator_id},
+            {stage.operator_session_id for stage in stages if stage.operator_session_id},
+            {stage.requestor_user_id for stage in stages if stage.requestor_user_id},
+            {stage.acting_app_id for stage in stages if stage.acting_app_id},
+            {stage.case_id for stage in stages if stage.case_id},
+            {stage.investigation_id for stage in stages if stage.investigation_id},
+            {stage.task_id for stage in stages if stage.task_id},
+        )
+        if any(len(values) > 1 for values in identity_values):
+            return self._failed(
+                "deterministic stage identity fields are inconsistent",
+                [primary.receipt_id],
+            )
 
         kinds = [stage.kind for stage in stages]
         if any(kind not in self._kind_order for kind in kinds) or len(kinds) != len(set(kinds)):

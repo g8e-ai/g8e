@@ -547,9 +547,10 @@ class CampaignSpec(BaseModel):
     stack_environment: StackEnvironment = Field(default_factory=StackEnvironment)
 
 
-@dataclass(frozen=True)
-class CampaignResult:
+class CampaignResult(BaseModel):
     """Result of a campaign run."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     campaign_id: str
     run_id: str
@@ -1600,10 +1601,7 @@ class CampaignRunner:
             parent_generation_hash=parent_generation_hash,
             creation_reason=creation_reason,
             report_checksums=report_checksums,
-            assignment_dispositions=[
-                {"assignment_id": d.assignment_id, "disposition": d.disposition.value}
-                for d in assignment_dispositions
-            ],
+            assignment_dispositions=assignment_dispositions,
         )
         generation = IndexGeneration(
             generation_number=generation_number,

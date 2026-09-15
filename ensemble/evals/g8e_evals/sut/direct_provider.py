@@ -23,9 +23,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
-
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, ConfigDict, JsonValue, computed_field
 
 from app.constants import LLMProvider
 from app.llm.factory import get_llm_provider
@@ -45,7 +43,7 @@ from app.models.model_telemetry import ModelBoundaryPrivacyAttestation
 from app.models.settings import LLMSettings
 
 from g8e_evals.arms import Arm
-from g8e_evals.harness import BindingType, InferenceObservation, Response, SUTConfig, Task
+from g8e_evals.harness import BindingType, InferenceObservation, LLMRoleConfig, Response, SUTConfig, Task
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +58,8 @@ class DirectCallEvidence(BaseModel):
     It captures the raw provider response metadata needed for stage
     instrumentation and cost analysis.
     """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     binding: str = "direct_provider"
     provider: str
@@ -304,7 +304,7 @@ class _DirectEvidenceWrapper:
     def __init__(self, evidence: DirectCallEvidence):
         self._evidence = evidence
 
-    def model_dump(self) -> dict[str, Any]:
+    def model_dump(self) -> dict[str, JsonValue]:
         return self._evidence.model_dump()
 
     @property
@@ -322,7 +322,7 @@ class _DirectEvidenceWrapper:
         return 0
 
 
-def _build_llm_settings(primary: Any) -> LLMSettings:
+def _build_llm_settings(primary: LLMRoleConfig) -> LLMSettings:
     """Construct a minimal ``LLMSettings`` with only the primary role set."""
     provider_enum = LLMProvider(primary.provider)
     return LLMSettings(

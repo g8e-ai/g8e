@@ -75,6 +75,7 @@ from g8e_evals.index import (
     IndexCreationReason,
     IndexGeneration,
     ResourceObservation,
+    VerificationStatus,
     validate_index_chain,
     validate_no_duplicate_effective_assignments,
     validate_resource_observations,
@@ -375,7 +376,7 @@ def _cross_check_observation_environment_scope(
 
 
 def _check_evidence_binding(
-    verification_status: object,
+    verification_status: VerificationStatus,
     source_evidence_refs: list[str],
     source_evidence_sha256: str | None,
     record_id: str,
@@ -387,8 +388,7 @@ def _check_evidence_binding(
     A VERIFIED record without source evidence references or a source
     evidence hash is not independently verifiable and is rejected.
     """
-    status_str = getattr(verification_status, "value", str(verification_status))
-    if status_str == "verified":
+    if verification_status == VerificationStatus.VERIFIED:
         if not source_evidence_refs:
             failures.append(
                 f"verified {label} {record_id} has no source_evidence_refs"
@@ -429,7 +429,7 @@ def _load_evidence_index(report_dir: Path, failures: list[str]) -> dict[str, Evi
 
 
 def _check_evidence_index_resolution(
-    verification_status: object,
+    verification_status: VerificationStatus,
     source_evidence_refs: list[str],
     source_evidence_sha256: str | None,
     record_id: str,
@@ -445,8 +445,7 @@ def _check_evidence_index_resolution(
     between the record and the indexed entry is rejected. The indexed
     entry's run_id must match the record's run_id when both are present.
     """
-    status_str = getattr(verification_status, "value", str(verification_status))
-    if status_str != "verified":
+    if verification_status != VerificationStatus.VERIFIED:
         return
     if not evidence_index:
         return
@@ -467,7 +466,7 @@ def _check_evidence_index_resolution(
 
 
 def _check_verified_evidence_index_required(
-    verification_status: object,
+    verification_status: VerificationStatus,
     source_evidence_refs: list[str],
     record_id: str,
     label: str,
@@ -485,8 +484,7 @@ def _check_verified_evidence_index_required(
     ensures the index itself exists and is non-empty so that resolution is
     possible at all.
     """
-    status_str = getattr(verification_status, "value", str(verification_status))
-    if status_str != "verified":
+    if verification_status != VerificationStatus.VERIFIED:
         return
     if not evidence_index:
         failures.append(
@@ -496,7 +494,7 @@ def _check_verified_evidence_index_required(
 
 
 def _check_evidence_index_ownership(
-    verification_status: object,
+    verification_status: VerificationStatus,
     source_evidence_refs: list[str],
     record_run_id: str,
     record_id: str,
@@ -509,8 +507,7 @@ def _check_evidence_index_ownership(
     run_id does not match the record's run_id is rejected as an ownership
     violation.
     """
-    status_str = getattr(verification_status, "value", str(verification_status))
-    if status_str != "verified":
+    if verification_status != VerificationStatus.VERIFIED:
         return
     if not evidence_index:
         return

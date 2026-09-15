@@ -315,7 +315,9 @@ def _diagnostic_start(request: EvalEngineRequest) -> EvalEngineResult:
     state_root = hashlib.sha256(
         f"{config.content_hash}:{request.operation_id}:{request.revision}".encode()
     ).hexdigest()
-    callback = getattr(run, "callback", run)
+    callback = run.callback
+    if callback is None:
+        raise EngineError(EvalErrorCode.CHILD_START_FAILED, "diagnostic_start", "diagnostic command is unavailable")
     try:
         with redirect_stdout(sys.stderr):
             callback(
@@ -401,7 +403,9 @@ def _campaign_start(request: EvalEngineRequest) -> EvalEngineResult:
     started_at = datetime.now(UTC).isoformat()
     _write_launch_state(report_root, request, config, "running", started_at)
     stop_consumer = _build_stop_consumer(report_root, request, config)
-    callback = getattr(campaign_run, "callback", campaign_run)
+    callback = campaign_run.callback
+    if callback is None:
+        raise EngineError(EvalErrorCode.CHILD_START_FAILED, "campaign_start", "campaign command is unavailable")
     try:
         with redirect_stdout(sys.stderr):
             callback(
@@ -536,7 +540,7 @@ def _campaign_set_validate(request: EvalEngineRequest) -> EvalEngineResult:
     try:
         plan = load_campaign_set_plan(Path(request.config_path))
         validate_campaign_set_plan(plan)
-        payload: dict[str, object] = {
+        payload = {
             "ok": True,
             "set_id": plan.set_id,
             "child_count": len(plan.child_plans),
@@ -705,7 +709,9 @@ def _verify_receipts(request: EvalEngineRequest) -> EvalEngineResult:
     from g8e_evals.cli import verify_receipts
 
     output = io.StringIO()
-    callback = getattr(verify_receipts, "callback", verify_receipts)
+    callback = verify_receipts.callback
+    if callback is None:
+        raise EngineError(EvalErrorCode.CHILD_START_FAILED, "verify_receipts", "receipt verifier is unavailable")
     try:
         with redirect_stdout(output):
             callback(

@@ -29,6 +29,7 @@ from g8e_evals.population_policy import (
     D16SelectionRule,
     FRAMEWORK_SCENARIO_COUNT,
     FRAMEWORK_SUITE_IDS,
+    GoldTaskRow,
     build_d16_population_selection,
     build_published_d16_population_selection,
     compute_d16_selection_hash,
@@ -41,20 +42,20 @@ pytestmark = pytest.mark.unit
 _VALID_HASH = "a" * 64
 
 
-def _make_ifeval_rows() -> list[dict[str, object]]:
+def _make_ifeval_rows() -> list[GoldTaskRow]:
     return [
-        {"key": 13, "instruction_id_list": ["detectable_format:json_format"]},
-        {"key": 16, "instruction_id_list": ["detectable_format:title", "combination:repeat_prompt"]},
-        {"key": 19, "instruction_id_list": ["length_constraints:number_words", "length_constraints:number_words"]},
-        {"key": 24, "instruction_id_list": ["detectable_format:numbered_list"]},
-        {"key": 30, "instruction_id_list": ["change_case:capital_word"]},
-        {"key": 32, "instruction_id_list": ["punctuation:no_comma"]},
-        {"key": 102, "instruction_id_list": ["detectable_format:number_highlight"]},
-        {"key": 136, "instruction_id_list": ["detectable_format:title"]},
-        {"key": 1019, "instruction_id_list": ["change_case:english_capital"]},
-        {"key": 1001, "instruction_id_list": ["keywords:existence"]},
-        {"key": 1005, "instruction_id_list": ["detectable_content:number_placeholders"]},
-        {"key": 1051, "instruction_id_list": ["length_constraints:number_sentences"]},
+        GoldTaskRow(key="13", instruction_id_list=["detectable_format:json_format"]),
+        GoldTaskRow(key="16", instruction_id_list=["detectable_format:title", "combination:repeat_prompt"]),
+        GoldTaskRow(key="19", instruction_id_list=["length_constraints:number_words", "length_constraints:number_words"]),
+        GoldTaskRow(key="24", instruction_id_list=["detectable_format:numbered_list"]),
+        GoldTaskRow(key="30", instruction_id_list=["change_case:capital_word"]),
+        GoldTaskRow(key="32", instruction_id_list=["punctuation:no_comma"]),
+        GoldTaskRow(key="102", instruction_id_list=["detectable_format:number_highlight"]),
+        GoldTaskRow(key="136", instruction_id_list=["detectable_format:title"]),
+        GoldTaskRow(key="1019", instruction_id_list=["change_case:english_capital"]),
+        GoldTaskRow(key="1001", instruction_id_list=["keywords:existence"]),
+        GoldTaskRow(key="1005", instruction_id_list=["detectable_content:number_placeholders"]),
+        GoldTaskRow(key="1051", instruction_id_list=["length_constraints:number_sentences"]),
     ]
 
 
@@ -85,23 +86,20 @@ class TestD16SelectionAlgorithm:
         selected = select_d16_ifeval_tasks(rows)
         families: set[str] = set()
         for row in rows:
-            if str(row["key"]) in selected:
-                raw_iids = row.get("instruction_id_list", [])
-                iids = list(raw_iids) if isinstance(raw_iids, list) else []
-                if iids:
-                    families.add(sorted(iids)[0].split(":")[0])
+            if row.key in selected and row.instruction_id_list:
+                families.add(sorted(row.instruction_id_list)[0].split(":")[0])
         assert len(families) >= 2, (
             f"expected at least 2 families in selection, got {families}"
         )
 
     def test_rejects_insufficient_tasks(self):
-        rows = [{"key": 1, "instruction_id_list": ["detectable_format:title"]}]
+        rows = [GoldTaskRow(key="1", instruction_id_list=["detectable_format:title"])]
         with pytest.raises(ValueError, match="at least 4 tasks"):
             select_d16_ifeval_tasks(rows)
 
     def test_result_blind_ignores_outcome_fields(self):
-        rows_a = [{"key": 1, "instruction_id_list": ["detectable_format:title"], "outcome": "pass"}]
-        rows_b = [{"key": 1, "instruction_id_list": ["detectable_format:title"], "outcome": "fail"}]
+        rows_a = [GoldTaskRow(key="1", instruction_id_list=["detectable_format:title"])]
+        rows_b = [GoldTaskRow(key="1", instruction_id_list=["detectable_format:title"])]
         rows_a += _make_ifeval_rows()
         rows_b += _make_ifeval_rows()
         assert select_d16_ifeval_tasks(rows_a) == select_d16_ifeval_tasks(rows_b)
@@ -109,7 +107,11 @@ class TestD16SelectionAlgorithm:
     def test_stable_when_extra_rows_added(self):
         rows = _make_ifeval_rows()
         selected_original = select_d16_ifeval_tasks(rows)
-        rows_extended = [*rows, {"key": 9999, "instruction_id_list": ["keywords:existence"]}, {"key": 8888, "instruction_id_list": ["startend:quotation"]}]
+        rows_extended = [
+            *rows,
+            GoldTaskRow(key="9999", instruction_id_list=["keywords:existence"]),
+            GoldTaskRow(key="8888", instruction_id_list=["startend:quotation"]),
+        ]
         selected_extended = select_d16_ifeval_tasks(rows_extended)
         assert selected_original == selected_extended, (
             "adding tasks should not change the first four selected tasks "

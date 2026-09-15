@@ -62,6 +62,7 @@ from g8e_evals.constants import (
 from g8e_evals.campaign_verify import verify_campaign
 from g8e_evals.harness import Response, Score, Task
 from g8e_evals.index import (
+    AssignmentDispositionEntry,
     ModelRole,
     ResourceObservation,
     compute_index_generation_hash,
@@ -441,7 +442,10 @@ class TestCampaignVerifierSupersessionWiring:
             parent_generation_hash=last_gen["parent_generation_hash"],
             creation_reason="resume",
             report_checksums=last_gen["report_checksums"],
-            assignment_dispositions=last_gen["assignment_dispositions"],
+            assignment_dispositions=[
+                AssignmentDispositionEntry.model_validate(entry)
+                for entry in last_gen["assignment_dispositions"]
+            ],
         )
         lines[-1] = json.dumps(last_gen)
         index_path.write_text("\n".join(lines) + "\n")
@@ -486,7 +490,10 @@ class TestCampaignVerifierSupersessionWiring:
             parent_generation_hash=new_gen["parent_generation_hash"],
             creation_reason=new_gen["creation_reason"],
             report_checksums=new_gen["report_checksums"],
-            assignment_dispositions=new_gen["assignment_dispositions"],
+            assignment_dispositions=[
+                AssignmentDispositionEntry.model_validate(entry)
+                for entry in new_gen["assignment_dispositions"]
+            ],
         )
         lines.append(json.dumps(new_gen))
         index_path.write_text("\n".join(lines) + "\n")

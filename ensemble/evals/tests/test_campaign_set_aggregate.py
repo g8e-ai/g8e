@@ -75,6 +75,7 @@ from g8e_evals.constants import (
 )
 from g8e_evals.harness import Response, Score, Task
 from g8e_evals.index import (
+    AssignmentDispositionEntry,
     ModelRole,
     compute_index_generation_hash,
 )
@@ -479,7 +480,10 @@ class TestAggregateVerifierMutations:
                 parent_generation_hash=generations[1]["parent_generation_hash"],
                 creation_reason=generations[1]["creation_reason"],
                 report_checksums=generations[1]["report_checksums"],
-                assignment_dispositions=generations[1]["assignment_dispositions"],
+                assignment_dispositions=[
+                    AssignmentDispositionEntry.model_validate(entry)
+                    for entry in generations[1]["assignment_dispositions"]
+                ],
             )
         index_path.write_text("\n".join(json.dumps(g) for g in generations) + "\n")
         result = verify_campaign_set_aggregate(plan, index, child_dirs)
@@ -609,7 +613,10 @@ class TestAggregateVerifierMutations:
                 parent_generation_hash=last_gen["parent_generation_hash"],
                 creation_reason=last_gen["creation_reason"],
                 report_checksums=last_gen["report_checksums"],
-                assignment_dispositions=last_gen["assignment_dispositions"],
+                assignment_dispositions=[
+                    AssignmentDispositionEntry.model_validate(entry)
+                    for entry in last_gen["assignment_dispositions"]
+                ],
             )
             generations[-1] = last_gen
         index_path.write_text("\n".join(json.dumps(g) for g in generations) + "\n")

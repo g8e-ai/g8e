@@ -139,8 +139,8 @@ class InstrumentedFakeSUT:
 class AttemptLocalInferenceIDFakeSUT(InstrumentedFakeSUT):
     async def get_answer(self, task: Task) -> Response:
         response = await super().get_answer(task)
-        response.inference_observations[0].inference_id = "inf-0"
-        return response
+        observation = response.inference_observations[0].model_copy(update={"inference_id": "inf-0"})
+        return response.model_copy(update={"inference_observations": [observation]})
 
 
 @dataclass

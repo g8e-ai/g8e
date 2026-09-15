@@ -218,10 +218,7 @@ class IndexGeneration(BaseModel):
             parent_generation_hash=self.parent_generation_hash,
             creation_reason=self.creation_reason,
             report_checksums=self.report_checksums,
-            assignment_dispositions=[
-                {"assignment_id": d.assignment_id, "disposition": d.disposition.value}
-                for d in self.assignment_dispositions
-            ],
+            assignment_dispositions=self.assignment_dispositions,
         )
         if self.content_hash != expected:
             raise ValueError(
@@ -236,8 +233,8 @@ def compute_index_generation_hash(
     generation_number: int,
     parent_generation_hash: str,
     creation_reason: IndexCreationReason | str,
-    report_checksums: list[str],
-    assignment_dispositions: list[dict],
+    report_checksums: Sequence[str],
+    assignment_dispositions: Sequence[AssignmentDispositionEntry],
 ) -> str:
     """Compute the content hash for an index generation without constructing the full model."""
     reason_value = creation_reason.value if isinstance(creation_reason, IndexCreationReason) else creation_reason
@@ -247,10 +244,16 @@ def compute_index_generation_hash(
             "parent_generation_hash": parent_generation_hash,
             "creation_reason": reason_value,
             "report_checksums": sorted(report_checksums),
-            "assignment_dispositions": sorted(
-                assignment_dispositions,
-                key=lambda d: (d["assignment_id"], d["disposition"]),
-            ),
+            "assignment_dispositions": [
+                disposition.model_dump(mode="json")
+                for disposition in sorted(
+                    assignment_dispositions,
+                    key=lambda disposition: (
+                        disposition.assignment_id,
+                        disposition.disposition.value,
+                    ),
+                )
+            ],
         },
         allow_nan=False,
         ensure_ascii=False,
@@ -656,11 +659,25 @@ class ResourceObservation(BaseModel):
                 )
             unavailable_fields.add(um.field_name)
 
-        none_fields: set[str] = set()
-        for field_name in _RESOURCE_MEASUREMENT_FIELDS:
-            value = getattr(self, field_name)
-            if value is None:
-                none_fields.add(field_name)
+        measurements = (
+            ("model_load_time_seconds", self.model_load_time_seconds),
+            ("peak_resident_memory_bytes", self.peak_resident_memory_bytes),
+            ("peak_accelerator_memory_bytes", self.peak_accelerator_memory_bytes),
+            ("artifact_bytes", self.artifact_bytes),
+            ("measured_energy_joules", self.measured_energy_joules),
+            ("end_to_end_latency_seconds", self.end_to_end_latency_seconds),
+            ("provider_call_latency_seconds", self.provider_call_latency_seconds),
+            ("output_throughput_tokens_per_second", self.output_throughput_tokens_per_second),
+            ("hidden_reasoning_throughput_tokens_per_second", self.hidden_reasoning_throughput_tokens_per_second),
+            ("time_to_first_token_seconds", self.time_to_first_token_seconds),
+            ("generation_duration_seconds", self.generation_duration_seconds),
+            ("accelerator_memory_before_bytes", self.accelerator_memory_before_bytes),
+            ("gpu_utilization_percent", self.gpu_utilization_percent),
+            ("gpu_temperature_celsius", self.gpu_temperature_celsius),
+            ("gpu_power_draw_watts", self.gpu_power_draw_watts),
+            ("gpu_clock_mhz", self.gpu_clock_mhz),
+        )
+        none_fields = {field_name for field_name, value in measurements if value is None}
 
         missing_explanations = none_fields - unavailable_fields
         if missing_explanations:

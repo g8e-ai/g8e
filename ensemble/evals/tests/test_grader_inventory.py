@@ -141,7 +141,7 @@ def test_inventory_assertion_fields_are_valid_task_definition_fields():
 def test_inventory_observation_fields_are_valid_context_fields():
     from g8e_evals.graders import DeterministicGradingContext
 
-    valid_fields = set(DeterministicGradingContext.__dataclass_fields__.keys())
+    valid_fields = set(DeterministicGradingContext.model_fields.keys())
     for entry in GRADER_INVENTORY.values():
         if entry.observation_field is None:
             continue

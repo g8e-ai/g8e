@@ -18,6 +18,8 @@ from __future__ import annotations
 import hashlib
 import json
 
+from pydantic import JsonValue
+
 from g8e_evals.bundle.manifest import BundleManifest, ChecksumRoot
 from g8e_evals.bundle.validation import BundlePathError, validate_bundle_path
 
@@ -36,7 +38,7 @@ def _safe_sort_key(path: str) -> str:
         return path
 
 
-def _canonical_json(model_dict: dict) -> bytes:
+def _canonical_json(model_dict: dict[str, JsonValue]) -> bytes:
     return json.dumps(
         model_dict,
         allow_nan=False,
@@ -46,12 +48,12 @@ def _canonical_json(model_dict: dict) -> bytes:
     ).encode()
 
 
-def _sorted_artifact_dicts(manifest: BundleManifest) -> list[dict]:
+def _sorted_artifact_dicts(manifest: BundleManifest) -> list[dict[str, JsonValue]]:
     artifacts = [a.model_dump(mode="json", by_alias=True) for a in manifest.artifacts]
     return sorted(artifacts, key=lambda a: _safe_sort_key(a["path"]))
 
 
-def _sorted_external_refs(manifest: BundleManifest) -> list[dict]:
+def _sorted_external_refs(manifest: BundleManifest) -> list[dict[str, JsonValue]]:
     refs = [r.model_dump(mode="json", by_alias=True) for r in manifest.external_references]
     return sorted(refs, key=lambda r: r["reference_id"])
 
@@ -75,7 +77,7 @@ def compute_manifest_hash(manifest: BundleManifest) -> str:
     return hashlib.sha256(canonical_manifest_bytes(manifest)).hexdigest()
 
 
-def _sorted_checksum_entries(root: ChecksumRoot) -> list[dict]:
+def _sorted_checksum_entries(root: ChecksumRoot) -> list[dict[str, JsonValue]]:
     entries = [e.model_dump(mode="json", by_alias=True) for e in root.entries]
     return sorted(entries, key=lambda e: _safe_sort_key(e["path"]))
 

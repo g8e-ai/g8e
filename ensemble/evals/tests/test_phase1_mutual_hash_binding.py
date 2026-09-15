@@ -194,16 +194,7 @@ def _make_expected_record_policy(
         policy_id=policy_id,
         policy_version="1.0.0",
         suite_id="ifeval_subset",
-        entries=[
-            {
-                "file_name": e.file_name,
-                "applicability": e.applicability.value,
-                "cardinality_rule": e.cardinality_rule.value,
-                "expected_count": e.expected_count,
-                "derivation_rule": e.derivation_rule,
-            }
-            for e in entries
-        ],
+        entries=entries,
     )
     return ExpectedRecordPolicy(
         schema_version=EXPECTED_RECORD_POLICY_SCHEMA_VERSION,

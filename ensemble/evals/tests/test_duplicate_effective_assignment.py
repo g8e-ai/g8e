@@ -42,13 +42,6 @@ def _make_generation(
     creation_reason: IndexCreationReason = IndexCreationReason.INITIAL,
 ) -> IndexGeneration:
     report_checksums = [_VALID_HASH] * len({d["assignment_id"] for d in assignment_dispositions})
-    content_hash = compute_index_generation_hash(
-        generation_number=generation_number,
-        parent_generation_hash=parent_generation_hash,
-        creation_reason=creation_reason,
-        report_checksums=report_checksums,
-        assignment_dispositions=assignment_dispositions,
-    )
     disposition_entries = [
         AssignmentDispositionEntry(
             assignment_id=d["assignment_id"],
@@ -58,6 +51,13 @@ def _make_generation(
         )
         for d in assignment_dispositions
     ]
+    content_hash = compute_index_generation_hash(
+        generation_number=generation_number,
+        parent_generation_hash=parent_generation_hash,
+        creation_reason=creation_reason,
+        report_checksums=report_checksums,
+        assignment_dispositions=disposition_entries,
+    )
     return IndexGeneration(
         generation_number=generation_number,
         parent_generation_hash=parent_generation_hash,

@@ -29,6 +29,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 from g8e_evals.harness import BindingType, Task
+from g8e_evals.arms import Arm
 from g8e_evals.sut.g8ee_chat import (
     AgentTrailEvent,
     G8eeChatSUT,
@@ -311,6 +312,7 @@ async def test_get_answer_surfaces_sse_error(monkeypatch):
     config.operator_url = "http://operator"
     config.primary.provider = "test"
     config.primary.model = "model"
+    config.arm = Arm.ENSEMBLE_UNGOVERNED
 
     mock_env = MagicMock()
     mock_env.g8ee_url = "http://g8ee"
@@ -367,6 +369,7 @@ async def test_get_answer_preserves_observed_action_types_without_receipt_events
     config.operator_url = "http://operator"
     config.primary.provider = "test"
     config.primary.model = "model"
+    config.arm = Arm.ENSEMBLE_UNGOVERNED
     config.arm_definition.receipt_binding = True
 
     mock_env = MagicMock()

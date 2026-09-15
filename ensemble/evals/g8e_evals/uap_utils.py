@@ -9,9 +9,8 @@ import base64
 import binascii
 import hashlib
 from datetime import UTC, datetime, timedelta
-from typing import Any
-
 import nacl.signing
+from pydantic import JsonValue
 from google.protobuf import json_format
 
 from g8e.common.v1 import common_pb2
@@ -26,7 +25,7 @@ def format_rfc3339_nano(dt: datetime) -> str:
         formatted += f".{utc.microsecond:06d}".rstrip("0")
     return f"{formatted}Z"
 
-def canonicalize_value(v: Any) -> str:
+def canonicalize_value(v: JsonValue) -> str:
     if v is None:
         return ""
     if isinstance(v, str):
@@ -42,7 +41,7 @@ def canonicalize_value(v: Any) -> str:
         return canonicalize_map(v)
     return str(v)
 
-def canonicalize_map(m: dict[str, Any]) -> str:
+def canonicalize_map(m: dict[str, JsonValue]) -> str:
     if not m:
         return ""
     sorted_keys = sorted(m.keys())

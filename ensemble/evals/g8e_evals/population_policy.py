@@ -76,6 +76,15 @@ class D16SelectionRule(StrEnum):
     HASH_STRATIFIED_ROUND_ROBIN = "hash-stratified-round-robin"
 
 
+class GoldTaskRow(BaseModel):
+    """Typed IFEval row used by the D16 population selector."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    key: str = Field(min_length=1)
+    instruction_id_list: list[str] = Field(default_factory=list)
+
+
 class D16PopulationSelection(BaseModel):
     """Frozen D16 population selection record.
 
@@ -210,7 +219,7 @@ def _primary_family(instruction_id_list: list[str]) -> str:
 
 
 def select_d16_ifeval_tasks(
-    ifeval_rows: list[dict[str, object]],
+    ifeval_rows: list[GoldTaskRow],
 ) -> list[str]:
     """Select exactly four IFEval task IDs using the D16 hash-stratified rule.
 
@@ -240,12 +249,9 @@ def select_d16_ifeval_tasks(
 
     strata: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for row in ifeval_rows:
-        key = str(row["key"])
-        raw_iid = row.get("instruction_id_list", [])
-        iid_list: list[str] = list(raw_iid) if isinstance(raw_iid, list) else []
-        fam = _primary_family(iid_list)
-        h = _task_selection_hash(key, iid_list)
-        strata[fam].append((key, h))
+        fam = _primary_family(row.instruction_id_list)
+        h = _task_selection_hash(row.key, row.instruction_id_list)
+        strata[fam].append((row.key, h))
 
     sorted_families = sorted(strata.keys(), key=_sha256)
 
@@ -275,7 +281,7 @@ def select_d16_ifeval_tasks(
 
 def build_d16_population_selection(
     *,
-    ifeval_rows: list[dict[str, object]],
+    ifeval_rows: list[GoldTaskRow],
     ifeval_population_hash: str,
     selection_id: str = "d16-population-selection",
 ) -> D16PopulationSelection:

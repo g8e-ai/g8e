@@ -28,7 +28,8 @@ import json
 import math
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
-from typing import Any, Self
+from collections.abc import Sequence
+from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -479,7 +480,7 @@ def compute_model_campaign_hash(
     caveats_values = sorted(
         c.value if isinstance(c, CampaignCaveat) else c for c in caveats
     )
-    payload: dict[str, Any] = {
+    payload = {
         "campaign_id": campaign_id,
         "campaign_revision": campaign_revision,
         "publication_schema_version": publication_schema_version,
@@ -977,7 +978,7 @@ def _write_json(path: Path, content: str) -> None:
     path.write_text(content)
 
 
-def _write_jsonl(path: Path, rows: list[Any]) -> None:
+def _write_jsonl(path: Path, rows: Sequence[BaseModel]) -> None:
     """Write a list of Pydantic models as canonical JSONL."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(r.model_dump_json() + "\n" for r in rows))

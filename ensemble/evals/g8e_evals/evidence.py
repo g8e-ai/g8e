@@ -13,11 +13,11 @@ import hashlib
 import json
 import os
 import stat
-from dataclasses import dataclass
 from pathlib import Path
+from typing import Self
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from g8e_evals.schema import (
     EvidenceAccessControl,
@@ -35,20 +35,23 @@ _KEY_BYTES = 32
 _AUTHORIZATION_SCOPE = "restricted_evaluation_evidence"
 
 
-@dataclass(frozen=True)
-class EvidenceEncryptionKey:
+class EvidenceEncryptionKey(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     key_id: str
     key: bytes
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def validate_key(self) -> Self:
         if not self.key_id.strip():
             raise ValueError("evidence encryption key id must not be empty")
         if len(self.key) != _KEY_BYTES:
             raise ValueError("evidence encryption key must be exactly 32 bytes")
+        return self
 
 
 class _EvidenceKeyFile(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     version: int
     key_id: str
@@ -56,7 +59,7 @@ class _EvidenceKeyFile(BaseModel):
 
 
 class _EncryptedEvidenceEnvelope(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     version: int
     algorithm: EvidenceEncryptionAlgorithm
@@ -65,8 +68,9 @@ class _EncryptedEvidenceEnvelope(BaseModel):
     ciphertext_b64: str
 
 
-@dataclass(frozen=True)
-class EncryptedEvidenceArtifact:
+class EncryptedEvidenceArtifact(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     index: EvidenceIndex
     envelope_json: str
 

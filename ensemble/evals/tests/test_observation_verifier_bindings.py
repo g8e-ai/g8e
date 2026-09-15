@@ -484,15 +484,14 @@ def _make_policy(
             {"file_name": SECURITY_EVENTS_JSONL, "applicability": "optional", "cardinality_rule": "one_per_attempt"},
             {"file_name": CORRELATED_ERRORS_JSONL, "applicability": "optional", "cardinality_rule": "one_per_inference"},
         ]
-    # Normalize entries to include all 5 keys for hash computation
-    normalized = [
-        {
-            "file_name": e["file_name"],
-            "applicability": e["applicability"],
-            "cardinality_rule": e["cardinality_rule"],
-            "expected_count": e.get("expected_count"),
-            "derivation_rule": e.get("derivation_rule", ""),
-        }
+    typed_entries = [
+        ExpectedRecordEntry(
+            file_name=e["file_name"],
+            applicability=RecordApplicability(e["applicability"]),
+            cardinality_rule=CardinalityRule(e["cardinality_rule"]),
+            expected_count=e.get("expected_count"),
+            derivation_rule=e.get("derivation_rule", ""),
+        )
         for e in entries
     ]
     content_hash = compute_expected_record_policy_hash(
@@ -500,23 +499,14 @@ def _make_policy(
         policy_id=policy_id,
         policy_version="1.0.0",
         suite_id="ifeval_subset",
-        entries=normalized,
+        entries=typed_entries,
     )
     return ExpectedRecordPolicy(
         schema_version="1.0.0",
         policy_id=policy_id,
         policy_version="1.0.0",
         suite_id="ifeval_subset",
-        entries=[
-            ExpectedRecordEntry(
-                file_name=e["file_name"],
-                applicability=RecordApplicability(e["applicability"]),
-                cardinality_rule=CardinalityRule(e["cardinality_rule"]),
-                expected_count=e.get("expected_count"),
-                derivation_rule=e.get("derivation_rule", ""),
-            )
-            for e in entries
-        ],
+        entries=typed_entries,
         content_hash=content_hash,
     )
 

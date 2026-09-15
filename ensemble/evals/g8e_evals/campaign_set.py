@@ -790,18 +790,13 @@ def _recompute_report_checksum(report_dir: Path) -> str | None:
         return None
 
     try:
-        attempts_data: list[dict[str, object]] = []
-        if attempts_path.exists():
-            attempts_data = canonical_model_list(read_jsonl_models(attempts_path, AttemptRecord))
-
-        metrics_data: list[dict[str, object]] = []
-        if metrics_path.exists():
-            metrics_data = canonical_model_list(read_jsonl_models(metrics_path, MetricObservation))
+        attempts = read_jsonl_models(attempts_path, AttemptRecord) if attempts_path.exists() else []
+        metrics = read_jsonl_models(metrics_path, MetricObservation) if metrics_path.exists() else []
     except (ValidationError, ValueError):
         return None
 
     payload = json.dumps(
-        {"attempts": attempts_data, "metrics": metrics_data},
+        {"attempts": canonical_model_list(attempts), "metrics": canonical_model_list(metrics)},
         allow_nan=False,
         ensure_ascii=False,
         separators=(",", ":"),

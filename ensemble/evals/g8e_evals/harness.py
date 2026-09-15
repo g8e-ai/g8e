@@ -10,7 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from app.models.model_telemetry import ModelCallTelemetry
 from g8e.constants import PORTS
@@ -53,6 +55,7 @@ if TYPE_CHECKING:
     )
 
 
+@runtime_checkable
 class EvidenceLike(Protocol):
     """Structural protocol for chat evidence attached to a Response.
 
@@ -67,7 +70,7 @@ class EvidenceLike(Protocol):
     @property
     def event_count(self) -> int: ...
 
-    def model_dump(self) -> dict[str, Any]: ...
+    def model_dump(self) -> dict[str, JsonValue]: ...
 
 
 class StateObserver(Protocol):
@@ -283,8 +286,9 @@ class BindingType(StrEnum):
     UNBOUND = "UNBOUND"
 
 
-@dataclass
-class LLMRoleConfig:
+class LLMRoleConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     provider: str | None = None
     model: str | None = None
     api_key: str | None = None
@@ -345,21 +349,22 @@ class SUTConfig:
         """Return the static arm definition for this config's arm."""
         return get_arm_definition(self.arm)
 
-@dataclass
-class Task:
+class Task(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     id: str
     prompt: str
-    metadata: TaskMetadata = field(default_factory=TaskMetadata)
+    metadata: TaskMetadata = Field(default_factory=TaskMetadata)
 
 
-@dataclass(frozen=True)
-class ReceiptEvidence:
+class ReceiptEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
     action_receipt: ActionReceipt
     verified: bool
 
 
-@dataclass
-class InferenceObservation:
+class InferenceObservation(BaseModel):
     """Per-inference metadata exposed by the SUT response boundary.
 
     One ``InferenceObservation`` per actual provider inference. Direct
@@ -373,6 +378,8 @@ class InferenceObservation:
     values are never inferred; they remain ``None`` with typed
     unavailable explanations on the resulting ``ResourceObservation``.
     """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     inference_id: str
     role: str
@@ -402,48 +409,52 @@ class InferenceObservation:
     receipt_status: str | None = None
 
 
-@dataclass
-class Response:
+class Response(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
     answer: str
     model: str
     arm: Arm = Arm.ENSEMBLE_UNGOVERNED
-    transaction_ids: list[str] = field(default_factory=list)
-    governed_action_types: list[str] = field(default_factory=list)
+    transaction_ids: list[str] = Field(default_factory=list)
+    governed_action_types: list[str] = Field(default_factory=list)
     chat_evidence: EvidenceLike | None = None
-    receipts: list[ReceiptEvidence] = field(default_factory=list)
+    receipts: list[ReceiptEvidence] = Field(default_factory=list)
     primary_transaction_id: str | None = None
     binding: BindingType = BindingType.UNBOUND
     unbound_reason: str | None = None
-    inference_observations: list[InferenceObservation] = field(default_factory=list)
+    inference_observations: list[InferenceObservation] = Field(default_factory=list)
 
     @property
     def receipts_verified(self) -> bool:
         return bool(self.receipts) and all(receipt.verified for receipt in self.receipts)
 
 
-@dataclass
-class Score:
+class Score(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     task_id: str
     passed: bool
-    details: ScoreDetails = field(default_factory=ScoreDetails)
-    model_calls: list[ModelCallTelemetry] = field(default_factory=list)
+    details: ScoreDetails = Field(default_factory=ScoreDetails)
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
 
 
-@dataclass
-class RowResult:
+class RowResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     task: Task
     response: Response
     score: Score
     arm: Arm = Arm.ENSEMBLE_UNGOVERNED
-    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-@dataclass
-class Aggregate:
+class Aggregate(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     suite: str
     pass_rate: float
     total_tasks: int
     passed_tasks: int
     receipt_coverage_pct: float
     receipt_verification_pct: float
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, JsonValue] = Field(default_factory=dict)  # open map: aggregate extensions vary by suite

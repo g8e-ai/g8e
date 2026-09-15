@@ -43,6 +43,7 @@ from __future__ import annotations
 import hashlib
 import json
 from enum import StrEnum
+from collections.abc import Sequence
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -186,16 +187,7 @@ class ExpectedRecordPolicy(BaseModel):
             policy_id=self.policy_id,
             policy_version=self.policy_version,
             suite_id=self.suite_id,
-            entries=[
-                {
-                    "file_name": e.file_name,
-                    "applicability": e.applicability.value,
-                    "cardinality_rule": e.cardinality_rule.value,
-                    "expected_count": e.expected_count,
-                    "derivation_rule": e.derivation_rule,
-                }
-                for e in self.entries
-            ],
+            entries=self.entries,
         )
         if self.content_hash != expected:
             raise ValueError(
@@ -239,7 +231,7 @@ def compute_expected_record_policy_hash(
     policy_id: str,
     policy_version: str,
     suite_id: str,
-    entries: list[dict],
+    entries: Sequence[ExpectedRecordEntry],
 ) -> str:
     """Compute the content hash for an expected-record policy without constructing the full model."""
     payload = json.dumps(
@@ -248,10 +240,10 @@ def compute_expected_record_policy_hash(
             "policy_id": policy_id,
             "policy_version": policy_version,
             "suite_id": suite_id,
-            "entries": sorted(
-                entries,
-                key=lambda e: e["file_name"],
-            ),
+            "entries": [
+                entry.model_dump(mode="json")
+                for entry in sorted(entries, key=lambda entry: entry.file_name)
+            ],
         },
         allow_nan=False,
         ensure_ascii=False,

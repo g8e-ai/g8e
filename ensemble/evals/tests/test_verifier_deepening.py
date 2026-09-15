@@ -80,6 +80,7 @@ from g8e_evals.expected_record_policy import (
 )
 from g8e_evals.harness import Response, Score, Task
 from g8e_evals.index import (
+    AssignmentDispositionEntry,
     MeasurementAvailability,
     MeasurementScope,
     ModelRole,
@@ -368,14 +369,14 @@ def _make_policy(
             {"file_name": SECURITY_EVENTS_JSONL, "applicability": "optional", "cardinality_rule": "one_per_attempt"},
             {"file_name": CORRELATED_ERRORS_JSONL, "applicability": "optional", "cardinality_rule": "one_per_inference"},
         ]
-    normalized = [
-        {
-            "file_name": e["file_name"],
-            "applicability": e["applicability"],
-            "cardinality_rule": e["cardinality_rule"],
-            "expected_count": e.get("expected_count"),
-            "derivation_rule": e.get("derivation_rule", ""),
-        }
+    typed_entries = [
+        ExpectedRecordEntry(
+            file_name=e["file_name"],
+            applicability=RecordApplicability(e["applicability"]),
+            cardinality_rule=CardinalityRule(e["cardinality_rule"]),
+            expected_count=e.get("expected_count"),
+            derivation_rule=e.get("derivation_rule", ""),
+        )
         for e in entries
     ]
     content_hash = compute_expected_record_policy_hash(
@@ -383,23 +384,14 @@ def _make_policy(
         policy_id=policy_id,
         policy_version="1.0.0",
         suite_id="ifeval_subset",
-        entries=normalized,
+        entries=typed_entries,
     )
     return ExpectedRecordPolicy(
         schema_version="1.0.0",
         policy_id=policy_id,
         policy_version="1.0.0",
         suite_id="ifeval_subset",
-        entries=[
-            ExpectedRecordEntry(
-                file_name=e["file_name"],
-                applicability=RecordApplicability(e["applicability"]),
-                cardinality_rule=CardinalityRule(e["cardinality_rule"]),
-                expected_count=e.get("expected_count"),
-                derivation_rule=e.get("derivation_rule", ""),
-            )
-            for e in entries
-        ],
+        entries=typed_entries,
         content_hash=content_hash,
     )
 
@@ -541,8 +533,8 @@ class TestTypedAssignmentParsingAndDispositionCompleteness:
             creation_reason=final_gen["creation_reason"],
             report_checksums=final_gen["report_checksums"],
             assignment_dispositions=[
-                {"assignment_id": d["assignment_id"], "disposition": d["disposition"]}
-                for d in final_gen["assignment_dispositions"]
+                AssignmentDispositionEntry.model_validate(entry)
+                for entry in final_gen["assignment_dispositions"]
             ],
         )
         lines[-1] = json.dumps(final_gen)
@@ -573,8 +565,8 @@ class TestTypedAssignmentParsingAndDispositionCompleteness:
             creation_reason=final_gen["creation_reason"],
             report_checksums=final_gen["report_checksums"],
             assignment_dispositions=[
-                {"assignment_id": d["assignment_id"], "disposition": d["disposition"]}
-                for d in final_gen["assignment_dispositions"]
+                AssignmentDispositionEntry.model_validate(entry)
+                for entry in final_gen["assignment_dispositions"]
             ],
         )
         lines[-1] = json.dumps(final_gen)

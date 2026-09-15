@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal, Self
+from typing import Literal, Self, TypedDict, Unpack
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -119,6 +119,12 @@ class SourceManifestAuthority(_FrozenModel):
         return self
 
 
+class SourceManifestResultFields(TypedDict):
+    scope: Literal["full_source", "execution_source"]
+    authority: ArtifactDigest
+    source_tree_hash: str
+
+
 class SourceManifestResult(_FrozenModel):
     schema_version: str = QUALIFICATION_SCHEMA_VERSION
     scope: Literal["full_source", "execution_source"]
@@ -127,9 +133,21 @@ class SourceManifestResult(_FrozenModel):
     content_hash: str = Field(pattern=_HASH_PATTERN)
 
     @classmethod
-    def build(cls, **values: Any) -> SourceManifestResult:
-        fields = {"schema_version": QUALIFICATION_SCHEMA_VERSION, **values}
-        return cls(**fields, content_hash=provisional_hash(cls, **fields))
+    def build(cls, **values: Unpack[SourceManifestResultFields]) -> SourceManifestResult:
+        content_hash = provisional_hash(
+            cls,
+            schema_version=QUALIFICATION_SCHEMA_VERSION,
+            scope=values["scope"],
+            authority=values["authority"],
+            source_tree_hash=values["source_tree_hash"],
+        )
+        return cls(
+            schema_version=QUALIFICATION_SCHEMA_VERSION,
+            scope=values["scope"],
+            authority=values["authority"],
+            source_tree_hash=values["source_tree_hash"],
+            content_hash=content_hash,
+        )
 
     @model_validator(mode="after")
     def _validate_result(self) -> Self:
@@ -291,6 +309,24 @@ class HostVersionRecord(_FrozenModel):
     source_revision: str = ""
 
 
+class RuntimeIdentityEvidenceFields(TypedDict):
+    candidate_content_hash: str
+    build_id: str
+    build_time: datetime
+    source_revision: str
+    pki_root_sha256: str
+    owner_id: str
+    cli_session_id: str
+    embedded_operator_id: str
+    embedded_operator_session_id: str
+    remote_operator_id: str
+    remote_operator_session_id: str
+    certificates: list[CertificateIdentityEvidence]
+    version_stamps: list[VersionStampEvidence]
+    healthy_components: list[str]
+    pending_enrollment_count: Literal[0]
+
+
 class RuntimeIdentityEvidence(_FrozenModel):
     candidate_content_hash: str = Field(pattern=_HASH_PATTERN)
     build_id: str = Field(min_length=1)
@@ -310,8 +346,9 @@ class RuntimeIdentityEvidence(_FrozenModel):
     content_hash: str = Field(pattern=_HASH_PATTERN)
 
     @classmethod
-    def build(cls, **values: Any) -> RuntimeIdentityEvidence:
-        return cls(**values, content_hash=provisional_hash(cls, **values))
+    def build(cls, **values: Unpack[RuntimeIdentityEvidenceFields]) -> RuntimeIdentityEvidence:
+        content_hash = provisional_hash(cls, **values)
+        return cls(**values, content_hash=content_hash)
 
     @model_validator(mode="after")
     def _validate_runtime(self) -> Self:
@@ -449,6 +486,19 @@ def collect_runtime_identity(
     )
 
 
+class GateResultEvidenceFields(TypedDict):
+    gate_id: str
+    candidate_content_hash: str
+    command: list[str]
+    started_at: datetime
+    completed_at: datetime
+    exit_code: int
+    stdout_sha256: str
+    stderr_sha256: str
+    tool_versions: dict[str, str]
+    skipped: list[str]
+
+
 class GateResultEvidence(_FrozenModel):
     gate_id: str = Field(min_length=1)
     candidate_content_hash: str = Field(pattern=_HASH_PATTERN)
@@ -464,10 +514,10 @@ class GateResultEvidence(_FrozenModel):
     content_hash: str = Field(pattern=_HASH_PATTERN)
 
     @classmethod
-    def build(cls, **values: Any) -> GateResultEvidence:
-        fields = dict(values)
-        fields["result"] = "passed" if fields["exit_code"] == 0 else "failed"
-        return cls(**fields, content_hash=provisional_hash(cls, **fields))
+    def build(cls, **values: Unpack[GateResultEvidenceFields]) -> GateResultEvidence:
+        result: Literal["passed", "failed"] = "passed" if values["exit_code"] == 0 else "failed"
+        content_hash = provisional_hash(cls, **values, result=result)
+        return cls(**values, result=result, content_hash=content_hash)
 
     @model_validator(mode="after")
     def _validate_gate(self) -> Self:
@@ -480,6 +530,25 @@ class GateResultEvidence(_FrozenModel):
         if self.content_hash != content_hash_of(self):
             raise ValueError("gate content_hash mismatch")
         return self
+
+
+class PublicLoopEvidenceFields(TypedDict):
+    candidate_content_hash: str
+    source_id: str
+    first_sequence: int
+    high_water_sequence: int
+    batch_count: int
+    feed_chain_hash: str
+    proof_artifact_sha256: str
+    proof_artifact_bytes: int
+    retry_count: int
+    old_key_id: str
+    replacement_key_id: str
+    old_key_revoked: Literal[True]
+    replacement_key_accepted_after_restart: Literal[True]
+    mirror_restart_recovered: Literal[True]
+    inference_invocations: Literal[0]
+    generated_at: datetime
 
 
 class PublicLoopEvidence(_FrozenModel):
@@ -503,9 +572,9 @@ class PublicLoopEvidence(_FrozenModel):
     content_hash: str = Field(pattern=_HASH_PATTERN)
 
     @classmethod
-    def build(cls, **values: Any) -> PublicLoopEvidence:
-        fields = {"schema_version": QUALIFICATION_SCHEMA_VERSION, **values}
-        return cls(**fields, content_hash=provisional_hash(cls, **fields))
+    def build(cls, **values: Unpack[PublicLoopEvidenceFields]) -> PublicLoopEvidence:
+        content_hash = provisional_hash(cls, schema_version=QUALIFICATION_SCHEMA_VERSION, **values)
+        return cls(schema_version=QUALIFICATION_SCHEMA_VERSION, **values, content_hash=content_hash)
 
     @model_validator(mode="after")
     def _validate_loop(self) -> Self:

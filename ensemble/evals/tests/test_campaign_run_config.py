@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import click
 import pytest
 from click.testing import CliRunner
 from pydantic import ValidationError
@@ -74,7 +75,7 @@ def test_campaign_check_prints_finite_budget_without_starting_provider(
     ):
         path.parent.mkdir(exist_ok=True)
         path.touch()
-    monkeypatch.setattr(cli, "campaign_validate", lambda **kwargs: None)
+    monkeypatch.setattr(cli, "campaign_validate", click.Command("validate", callback=lambda **kwargs: None))
 
     result = CliRunner().invoke(main, ["campaign", "check", str(config_path)])
 
@@ -127,7 +128,7 @@ def test_campaign_start_forwards_frozen_config_to_existing_runner(
     def run(**kwargs: object) -> None:
         received.update(kwargs)
 
-    monkeypatch.setattr(cli, "campaign_run", run)
+    monkeypatch.setattr(cli, "campaign_run", click.Command("run", callback=run))
     result = CliRunner().invoke(main, ["campaign", "start", str(config_path), "--yes"])
 
     assert result.exit_code == 0, result.output

@@ -200,9 +200,9 @@ def test_qualification_rejects_gate_or_public_loop_from_other_candidate() -> Non
     valid = _input(candidate)
     other_hash = "0" * 64
 
-    mismatched_gate = _gate(candidate).model_dump(exclude={"content_hash"})
+    mismatched_gate = _gate(candidate).model_dump(exclude={"content_hash", "result"})
     mismatched_gate["candidate_content_hash"] = other_hash
-    mismatched_loop = _public_loop(candidate).model_dump(exclude={"content_hash"})
+    mismatched_loop = _public_loop(candidate).model_dump(exclude={"content_hash", "schema_version"})
     mismatched_loop["candidate_content_hash"] = other_hash
 
     with pytest.raises(ValidationError, match="gate candidate"):
