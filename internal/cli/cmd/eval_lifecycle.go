@@ -73,19 +73,21 @@ type evalLifecycleEnvironment struct {
 }
 
 type evalOperationStatus struct {
-	OperationKind       string  `json:"operation_kind"`
-	OperationID         string  `json:"operation_id"`
-	Revision            string  `json:"revision"`
-	Status              string  `json:"status"`
-	ProcessState        string  `json:"process_state"`
-	ReportRoot          string  `json:"report_root"`
+	OperationKind        string  `json:"operation_kind"`
+	OperationID          string  `json:"operation_id"`
+	Revision             string  `json:"revision"`
+	Status               string  `json:"status"`
+	ProcessState         string  `json:"process_state"`
+	ReportRoot           string  `json:"report_root"`
 	CompletedAssignments int     `json:"completed_assignments"`
-	TotalAssignments    int     `json:"total_assignments"`
-	ProviderRequests    int     `json:"provider_requests"`
-	Tokens              int     `json:"tokens"`
-	SpentUSD            float64 `json:"spent_usd"`
-	PublicationState    string  `json:"publication_state"`
-	SafeDetail          string  `json:"safe_detail,omitempty"`
+	TotalAssignments     int     `json:"total_assignments"`
+	ProviderRequests     int     `json:"provider_requests"`
+	Tokens               int     `json:"tokens"`
+	SpentUSD             float64 `json:"spent_usd"`
+	StopReason           string  `json:"stop_reason,omitempty"`
+	VerificationState    string  `json:"verification_state"`
+	PublicationState     string  `json:"publication_state"`
+	SafeDetail           string  `json:"safe_detail,omitempty"`
 }
 
 type evalOperationStopResult struct {
@@ -354,6 +356,29 @@ func evalOperationVerifyCmdWithDeps(deps evalLeaseDeps, noun string, operation m
 		Use: "verify <config>", Short: "Run complete offline report verification (read-only)", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			engineResult, err := runEvalEngineLifecycle(commandContext(cmd), deps, args[0], operation, models.EvalEngineFlags{JSONOutput: true}, cmd.OutOrStderr())
+			// Render the typed payload even when the engine returned a
+			// failed result so --json does not lose the checked layers or
+			// the specific failures. The mapped error is returned after
+			// rendering so the nonzero exit classification is preserved.
+			if len(engineResult.Payload) > 0 {
+				var result evalOperationVerifyResult
+				if uerr := json.Unmarshal(engineResult.Payload, &result); uerr == nil && result.OperationKind == noun {
+					if jsonOutput {
+						if jerr := emitEvalJSON(cmd, result); jerr != nil {
+							return jerr
+						}
+					} else {
+						if result.OK {
+							fmt.Fprintf(cmd.OutOrStdout(), "%s verify: verified (%s)\n", noun, strings.Join(result.CheckedLayers, ", "))
+						} else {
+							fmt.Fprintf(cmd.OutOrStdout(), "%s verify: failed (%s)\n", noun, strings.Join(result.CheckedLayers, ", "))
+							for _, failure := range result.Failures {
+								fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", failure)
+							}
+						}
+					}
+				}
+			}
 			if err != nil {
 				return err
 			}
@@ -364,10 +389,9 @@ func evalOperationVerifyCmdWithDeps(deps evalLeaseDeps, noun string, operation m
 			if result.OperationKind != noun {
 				return fmt.Errorf("%w: expected %s config, got %s", constants.ErrEvalConfigInvalid, noun, result.OperationKind)
 			}
-			if jsonOutput {
-				return emitEvalJSON(cmd, result)
+			if !result.OK {
+				return fmt.Errorf("%w: offline verification failed with %d failure(s)", constants.ErrEvalAuthorityInvalid, len(result.Failures))
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%s verify: verified (%s)\n", noun, strings.Join(result.CheckedLayers, ", "))
 			return nil
 		},
 	}
@@ -383,6 +407,10 @@ func printEvalOperationStatus(stdout io.Writer, result evalOperationStatus) {
 	fmt.Fprintf(stdout, "  provider_requests:     %d\n", result.ProviderRequests)
 	fmt.Fprintf(stdout, "  tokens:                %d\n", result.Tokens)
 	fmt.Fprintf(stdout, "  spent_usd:             %.2f\n", result.SpentUSD)
+	if result.StopReason != "" {
+		fmt.Fprintf(stdout, "  stop_reason:           %s\n", result.StopReason)
+	}
+	fmt.Fprintf(stdout, "  verification:          %s\n", result.VerificationState)
 	fmt.Fprintf(stdout, "  publication:           %s\n", result.PublicationState)
 	if result.SafeDetail != "" {
 		fmt.Fprintf(stdout, "  detail:                %s\n", result.SafeDetail)

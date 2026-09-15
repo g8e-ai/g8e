@@ -15,13 +15,18 @@ import signal
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from g8e_evals.constants import (
+    ATTEMPTS_JSONL,
     CAMPAIGN_PROGRESS_JSON,
     CAMPAIGN_STATUS_JSON,
+    CAMPAIGN_VERIFICATION_REPORT_JSON,
     EVAL_LAUNCH_STATE_JSON,
     EVAL_STOP_REQUEST_JSON,
+    METRICS_JSONL,
+    STAGES_JSONL,
+    TASKS_JSONL,
 )
 from g8e_evals.evidence import load_evidence_encryption_key
 from g8e_evals.operation_config import (
@@ -30,6 +35,10 @@ from g8e_evals.operation_config import (
     DiagnosticConfig,
     OperationConfigBase,
     load_operation_config,
+)
+from g8e_evals.stop_request import (
+    StopRequestIdentity,
+    build_stop_request,
 )
 
 
@@ -99,6 +108,73 @@ def _verify_authority(repository_root: Path, authority: AuthorityRef, label: str
     if actual != authority.sha256:
         raise ValueError(f"{label} SHA-256 mismatch: expected {authority.sha256}, got {actual}")
     return path
+
+
+def _verify_authority_identity(path: Path, label: str) -> tuple[BaseModel | None, str]:
+    """Validate the canonical identity of an authority document beyond
+    its file hash.
+
+    Typed authority documents are validated with their authoritative
+    model, which enforces the schema version, identity fields, and
+    content-hash self-consistency declared by that document class.
+    Data-file authorities (gold sets, model tags) carry no typed
+    identity model; their file hash is the identity, so they are only
+    required to parse as JSON or JSONL. Returns the loaded typed
+    document (or ``None`` for data-file authorities) and a short detail
+    string describing the verified identity. The loaded document is
+    returned so callers can validate cross-authority bindings against
+    the registry or expected identity each authority declares.
+    """
+    from g8e_evals.analysis.canonical import PreregistrationConfig
+    from g8e_evals.campaign_set import CampaignSetPlan
+    from g8e_evals.profile import CampaignProfile
+    from g8e_evals.registry import ModelRegistry
+    from g8e_evals.replacement_rule import ReplacementManifestRule
+
+    typed_models: dict[str, type[BaseModel]] = {
+        "preregistration": PreregistrationConfig,
+        "profile": CampaignProfile,
+        "model_registry": ModelRegistry,
+        "campaign_set_plan": CampaignSetPlan,
+        "replacement_rule": ReplacementManifestRule,
+    }
+    text = path.read_text()
+    model = typed_models.get(label)
+    if model is not None:
+        try:
+            document = model.model_validate_json(text)
+        except ValidationError as exc:
+            raise ValueError(f"{label} authority identity invalid: {exc}") from exc
+        identity = (
+            getattr(document, "authority_id", None)
+            or getattr(document, "config_id", None)
+            or getattr(document, "campaign_id", None)
+            or getattr(document, "registry_id", None)
+            or getattr(document, "set_id", None)
+            or getattr(document, "rule_id", None)
+            or "untyped"
+        )
+        schema_version = (
+            getattr(document, "schema_version", None)
+            or getattr(document, "authority_version", None)
+            or getattr(document, "config_version", None)
+            or getattr(document, "set_version", None)
+            or getattr(document, "rule_version", None)
+            or "unversioned"
+        )
+        return document, f"{label} {identity} (schema {schema_version})"
+    try:
+        json.loads(text)
+    except json.JSONDecodeError:
+        # JSONL data files (for example gold sets): every non-empty line
+        # must be a JSON value.
+        try:
+            for line in text.splitlines():
+                if line.strip():
+                    json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{label} data file is not parseable JSON/JSONL: {exc}") from exc
+    return None, f"{label} data file hash-bound"
 
 
 def _authorities(config: OperationConfigBase) -> list[tuple[str, AuthorityRef]]:
@@ -241,12 +317,89 @@ def plan_operation(config_path: Path, repository_root: Path) -> OperationPlan:
     )
 
 
+def _validate_authority_bindings(
+    config: OperationConfigBase,
+    documents: dict[str, BaseModel | None],
+) -> str:
+    """Validate cross-authority bindings the config declares.
+
+    Each typed authority document is already validated in isolation by
+    ``_verify_authority_identity`` (schema version, identity fields,
+    content-hash self-consistency). This validates the bindings between
+    authorities: the profile's declared model-registry hash must match
+    the loaded registry, every preregistration arm must be declared by
+    the profile's ``track_arm_assignments``, and a bound replacement
+    rule must bind the loaded campaign-set plan exactly. Returns a
+    short detail string describing the verified bindings. Raises
+    ``ValueError`` on the first binding failure so the preflight fails
+    closed before report-root creation or engine launch.
+    """
+    from g8e_evals.analysis.canonical import PreregistrationConfig
+    from g8e_evals.campaign_set import CampaignSetPlan
+    from g8e_evals.profile import CampaignProfile
+    from g8e_evals.registry import ModelRegistry
+    from g8e_evals.replacement_rule import ReplacementManifestRule, validate_replacement_rule_plan_binding
+
+    if not isinstance(config, CampaignConfig):
+        return "no cross-authority bindings for diagnostic"
+    profile = documents.get("profile")
+    registry = documents.get("model_registry")
+    preregistration = documents.get("preregistration")
+    if not isinstance(profile, CampaignProfile) or not isinstance(registry, ModelRegistry):
+        raise ValueError("campaign profile and model registry must be typed authorities")
+    profile.validate_against_registry(registry)
+    if not isinstance(preregistration, PreregistrationConfig):
+        raise ValueError("campaign preregistration must be a typed authority")
+    declared_arms = {a.arm_id for a in profile.track_arm_assignments}
+    prereg_arms = {preregistration.baseline_arm_id, *preregistration.comparison_arm_ids}
+    unauthorized = sorted(prereg_arms - declared_arms)
+    if unauthorized:
+        raise ValueError(
+            f"preregistration declares arms {unauthorized} not present in the "
+            f"profile's track_arm_assignments {sorted(declared_arms)}; "
+            "a profile-bound campaign may only execute declared arms"
+        )
+    plan = documents.get("campaign_set_plan")
+    rule = documents.get("replacement_rule")
+    if rule is not None:
+        if not isinstance(rule, ReplacementManifestRule):
+            raise ValueError("campaign replacement_rule must be a typed authority")
+        if not isinstance(plan, CampaignSetPlan):
+            raise ValueError(
+                "replacement_rule is bound but campaign_set_plan is not a typed authority; "
+                "a replacement rule authorizes replacements only under the "
+                "campaign-set plan it names"
+            )
+        failures = validate_replacement_rule_plan_binding(rule, plan)
+        if failures:
+            raise ValueError("; ".join(failures))
+    return "profile binds registry; preregistration arms declared by profile" + (
+        "; replacement rule binds campaign-set plan" if rule is not None else ""
+    )
+
+
 def check_operation(config_path: Path, repository_root: Path) -> OperationCheckResult:
     config = load_operation_config(config_path)
     checks = [OperationCheck(check_id="config", status="pass", safe_detail="typed config and content hash valid")]
+    identity_details: list[str] = []
+    documents: dict[str, BaseModel | None] = {}
     for label, authority in _authorities(config):
-        _verify_authority(repository_root, authority, label)
+        auth_path = _verify_authority(repository_root, authority, label)
+        document, detail = _verify_authority_identity(auth_path, label)
+        documents[label] = document
+        identity_details.append(detail)
     checks.append(OperationCheck(check_id="authorities", status="pass", safe_detail="all authority hashes match"))
+    checks.append(OperationCheck(
+        check_id="authority_identity",
+        status="pass",
+        safe_detail="; ".join(identity_details),
+    ))
+    binding_detail = _validate_authority_bindings(config, documents)
+    checks.append(OperationCheck(
+        check_id="authority_binding",
+        status="pass",
+        safe_detail=binding_detail,
+    ))
     key_path = _resolve_owned_path(repository_root, config.evidence_key.path, "evidence_key")
     key = load_evidence_encryption_key(key_path)
     if key.key_id != config.evidence_key.key_id:
@@ -295,6 +448,8 @@ class OperationStatus(BaseModel):
     provider_requests: int = 0
     tokens: int = 0
     spent_usd: float = 0.0
+    stop_reason: str = ""
+    verification_state: str = "not_verified"
     publication_state: str = "not_published"
     safe_detail: str = ""
 
@@ -336,6 +491,97 @@ def _load_json_object(path: Path) -> dict[str, object]:
     if not isinstance(value, dict):
         raise ValueError(f"expected JSON object: {path.name}")
     return value
+
+
+def _read_jsonl(path: Path) -> list[dict[str, object]]:
+    """Read a JSONL file into a list of parsed objects. Returns an empty
+    list when the file is absent. Raises ValueError on malformed lines."""
+    if not path.is_file():
+        return []
+    records: list[dict[str, object]] = []
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        value = json.loads(line)
+        if not isinstance(value, dict):
+            raise ValueError(f"expected JSON object in {path.name}: {type(value).__name__}")
+        records.append(value)
+    return records
+
+
+def _verify_launch_content_hash(launch: dict[str, object]) -> bool:
+    """Verify the launch record's declared content hash matches the
+    recomputed hash over canonical JSON excluding content_hash. Returns
+    True when consistent (or when no hash is declared). Returns False when
+    the declared hash does not match the recomputed hash (tampered)."""
+    declared = launch.get("content_hash")
+    if not isinstance(declared, str) or len(declared) != 64:
+        return True  # No hash to verify; treat as consistent (legacy record)
+    payload = {k: v for k, v in launch.items() if k != "content_hash"}
+    recomputed = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return declared == recomputed
+
+
+def _derive_budget(report_root: Path) -> tuple[int, int, float]:
+    """Derive provider request count, token sum, and USD spend from the
+    authoritative stage and metric records rather than from nonexistent
+    campaign-progress fields.
+
+    Provider requests are the count of model_inference stage records.
+    Tokens are the sum of input_tokens + output_tokens + thinking_tokens
+    over model_inference stages. USD spend is the sum of provider_cost_usd
+    metric values in metrics.jsonl.
+    """
+    stages = _read_jsonl(report_root / STAGES_JSONL)
+    provider_requests = 0
+    tokens = 0
+    for stage in stages:
+        if stage.get("kind") != "model_inference":
+            continue
+        provider_requests += 1
+        for field in ("input_tokens", "output_tokens", "thinking_tokens"):
+            value = stage.get(field)
+            if isinstance(value, int) and value > 0:
+                tokens += value
+    spent_usd = 0.0
+    for metric in _read_jsonl(report_root / METRICS_JSONL):
+        if metric.get("metric_id") != "provider_cost_usd":
+            continue
+        value = metric.get("value")
+        if isinstance(value, (int, float)):
+            spent_usd += float(value)
+    return provider_requests, tokens, spent_usd
+
+
+def _verification_state(report_root: Path, is_campaign: bool) -> str:
+    """Derive the verification state from the authoritative verification
+    report presence and ok flag."""
+    if is_campaign:
+        report_path = report_root / CAMPAIGN_VERIFICATION_REPORT_JSON
+        if not report_path.is_file():
+            return "not_verified"
+        try:
+            report = json.loads(report_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return "not_verified"
+        if not isinstance(report, dict):
+            return "not_verified"
+        return "verified" if report.get("ok") is True else "failed"
+    # Diagnostic standalone reports do not carry a typed verification
+    # report file; verification is run on demand via verify_operation.
+    return "not_verified"
+
+
+def _publication_state(report_root: Path) -> str:
+    """Derive the publication state from the presence of the published
+    campaign artifacts."""
+    from g8e_evals.constants import MODEL_CAMPAIGN_JSON
+
+    if (report_root / MODEL_CAMPAIGN_JSON).is_file():
+        return "published"
+    return "not_published"
 
 
 def _process_is_running(pid: int) -> bool:
@@ -403,6 +649,7 @@ def _process_matches_launch(pid: int, launch: dict[str, object]) -> bool:
 def operation_status(config_path: Path, repository_root: Path) -> OperationStatus:
     config = load_operation_config(config_path)
     report_root = resolve_report_root(config, repository_root)
+    is_campaign = isinstance(config, CampaignConfig)
     if not report_root.is_dir():
         return OperationStatus(
             operation_kind=config.operation_kind.value,
@@ -415,14 +662,82 @@ def operation_status(config_path: Path, repository_root: Path) -> OperationStatu
     launch = _load_json_object(report_root / EVAL_LAUNCH_STATE_JSON)
     if launch and (launch.get("operation_id") != config.operation_id or launch.get("revision") != config.revision):
         raise ValueError("launch state identity does not match operation config")
+
+    # Verify the launch record's declared content hash. A mismatch means
+    # the launch state was tampered with after the engine wrote it.
+    if launch and not _verify_launch_content_hash(launch):
+        return OperationStatus(
+            operation_kind=config.operation_kind.value,
+            operation_id=config.operation_id,
+            revision=config.revision,
+            status="inconsistent",
+            process_state="unknown",
+            report_root=str(report_root),
+            safe_detail="launch state content hash does not match the recorded state",
+        )
+
     pid = launch.get("pid", 0)
     running = _process_matches_launch(pid, launch) if isinstance(pid, int) else False
-    process_state = "running" if running else ("stale" if launch.get("status") == "running" else "terminal")
-    status_record = _load_json_object(report_root / CAMPAIGN_STATUS_JSON)
+    launch_status = launch.get("status") if isinstance(launch.get("status"), str) else ""
+
+    # Reconcile the process state against the recorded launch status.
+    if launch_status == "running":
+        process_state = "running" if running else "stale"
+    elif launch_status:
+        process_state = "terminal"
+    else:
+        process_state = "absent" if not running else "running"
+
+    # Derive the reconciled lifecycle status from the launch record,
+    # the campaign status file (campaigns only), and the process state.
+    stop_reason = ""
+    if is_campaign:
+        status_record = _load_json_object(report_root / CAMPAIGN_STATUS_JSON)
+        campaign_status = status_record.get("status") if isinstance(status_record.get("status"), str) else ""
+        campaign_stop_reason = status_record.get("stop_reason")
+        if isinstance(campaign_stop_reason, str):
+            stop_reason = campaign_stop_reason
+    else:
+        campaign_status = ""
+
+    if launch_status == "running" and not running:
+        status = "interrupted"
+    elif launch_status in ("completed", "failed", "stopped", "interrupted"):
+        status = launch_status
+    elif campaign_status:
+        status = campaign_status
+    elif launch_status == "running" and running:
+        status = "running"
+    else:
+        status = "report_present"
+
+    # Assignment counts: campaigns read the real progress fields; diagnostics
+    # derive total from tasks.jsonl and completed from terminal attempts.
     progress = _load_json_object(report_root / CAMPAIGN_PROGRESS_JSON)
-    status = status_record.get("status") or launch.get("status") or "report_present"
-    if not isinstance(status, str):
-        raise ValueError("operation status must be a string")
+    if is_campaign:
+        total_assignments = int(progress.get("total_assignments", 0)) if isinstance(progress.get("total_assignments"), int) else 0
+        completed_assignments = int(progress.get("completed_assignments", 0)) if isinstance(progress.get("completed_assignments"), int) else 0
+    else:
+        task_records = _read_jsonl(report_root / TASKS_JSONL)
+        total_assignments = len(task_records)
+        attempt_records = _read_jsonl(report_root / ATTEMPTS_JSONL)
+        completed_assignments = sum(
+            1 for a in attempt_records
+            if a.get("terminal_status") in ("completed", "COMPLETED")
+        )
+
+    provider_requests, tokens, spent_usd = _derive_budget(report_root)
+    verification_state = _verification_state(report_root, is_campaign)
+    publication_state = _publication_state(report_root)
+
+    # A completed run that has passed verification is "verified"; a
+    # completed run pending publication is "finalized".
+    if status == "completed" and verification_state == "verified":
+        status = "verified"
+    elif status == "completed" and publication_state == "not_published":
+        status = "finalized"
+
+    safe_detail = "producer metadata is stale" if process_state == "stale" else ""
     return OperationStatus(
         operation_kind=config.operation_kind.value,
         operation_id=config.operation_id,
@@ -430,13 +745,15 @@ def operation_status(config_path: Path, repository_root: Path) -> OperationStatu
         status=status,
         process_state=process_state,
         report_root=str(report_root),
-        completed_assignments=int(progress.get("completed_assignments", 0)),
-        total_assignments=int(progress.get("total_assignments", 0)),
-        provider_requests=int(progress.get("provider_requests", 0)),
-        tokens=int(progress.get("tokens", 0)),
-        spent_usd=float(progress.get("spent_usd", 0.0)),
-        publication_state=str(progress.get("publication_state", "not_published")),
-        safe_detail="producer metadata is stale" if process_state == "stale" else "",
+        completed_assignments=completed_assignments,
+        total_assignments=total_assignments,
+        provider_requests=provider_requests,
+        tokens=tokens,
+        spent_usd=spent_usd,
+        stop_reason=stop_reason,
+        verification_state=verification_state,
+        publication_state=publication_state,
+        safe_detail=safe_detail,
     )
 
 
@@ -448,23 +765,30 @@ def stop_operation(config_path: Path, repository_root: Path, *, immediate: bool)
     launch = _load_json_object(report_root / EVAL_LAUNCH_STATE_JSON)
     if launch.get("operation_id") != config.operation_id or launch.get("revision") != config.revision:
         raise ValueError("launch state identity does not match operation config")
+    launch_content_hash = launch.get("content_hash")
+    if not isinstance(launch_content_hash, str) or len(launch_content_hash) != 64:
+        raise ValueError("launch state is missing its content hash; cannot bind a stop request")
     request_path = report_root / EVAL_STOP_REQUEST_JSON
     if request_path.exists():
         raise FileExistsError("stop request already exists")
     pid = launch.get("pid")
+    # All forced-stop validation must pass before the request is
+    # persisted or any signal is sent. A reused or mismatched PID is
+    # never signaled.
     if immediate and (not isinstance(pid, int) or not _process_matches_launch(pid, launch)):
         raise ValueError("cannot force-stop a process that is not running or has been reused")
-    requested_at = datetime.now(UTC).isoformat()
-    payload = {
-        "operation_id": config.operation_id,
-        "revision": config.revision,
-        "immediate": immediate,
-        "requested_at": requested_at,
-    }
-    payload["content_hash"] = hashlib.sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
-    request_path.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n")
+    config_content_hash = config.content_hash or config.compute_content_hash()
+    request = build_stop_request(
+        StopRequestIdentity(
+            operation_id=config.operation_id,
+            revision=config.revision,
+            config_content_hash=config_content_hash,
+            launch_content_hash=launch_content_hash,
+        ),
+        immediate=immediate,
+        requested_at=datetime.now(UTC).isoformat(),
+    )
+    request_path.write_text(request.model_dump_json(indent=2) + "\n")
     if immediate:
         os.kill(pid, signal.SIGTERM)
     return OperationStopResult(

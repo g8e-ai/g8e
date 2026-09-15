@@ -598,7 +598,7 @@ main.add_command(qualification_cmd)
               help="Backend seed support declaration: none (no seed support), deterministic (seed supported), unknown (unverified).")
 @click.option("--preregistration", type=click.Path(exists=True, dir_okay=False, path_type=Path),
               help="Path to a JSON preregistration config file for paired analysis and Holm correction.")
-def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, judge_model, judge_provider, headless, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, judge_api_key, judge_endpoint, web_search_project, web_search_app, web_search_api_key, temperature, top_p, max_tokens, seed, seed_support, preregistration, exact_report_dir=None, exact_task_offset=0):
+def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, judge_model, judge_provider, headless, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, judge_api_key, judge_endpoint, web_search_project, web_search_app, web_search_api_key, temperature, top_p, max_tokens, seed, seed_support, preregistration, exact_report_dir=None, exact_task_offset=0, stop_consumer=None):
     """Run a single-arm diagnostic against one model and one arm.
 
     This command is a diagnostic: it executes one arm against one model
@@ -703,7 +703,7 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         prereg_config = load_preregistration(preregistration)
 
     try:
-        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout, evidence_key=evidence_key, preregistration=prereg_config, effective_sampling=effective_sampling, seed_support=seed_support, g8e_cli=g8e_cli, exact_report_dir=exact_report_dir, task_offset=exact_task_offset))
+        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout, evidence_key=evidence_key, preregistration=prereg_config, effective_sampling=effective_sampling, seed_support=seed_support, g8e_cli=g8e_cli, exact_report_dir=exact_report_dir, task_offset=exact_task_offset, stop_consumer=stop_consumer))
     except EvaluationRunError as error:
         raise click.ClickException(str(error)) from error
 
@@ -1107,7 +1107,7 @@ def campaign_start(config: Path, yes: bool) -> None:
               help="Path to a JSON CampaignSetPlan file. When provided, the campaign is validated as a child of the frozen campaign-set before report-directory creation, and the report-level CampaignBinding is marked as ReportRole.CHILD.")
 @click.option("--replacement-rule", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
               help="Path to a JSON ReplacementManifestRule file. Requires --campaign-set-plan; the rule must bind that plan. A --campaign-id that is not a plan child must resolve as a rule-derived replacement ID.")
-def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, max_tokens, model_tags, profile, models, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, task_offset, task_limit, campaign_set_plan, replacement_rule, exact_report_dir=None):
+def campaign_run(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd, max_tokens, model_tags, profile, models, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, task_offset, task_limit, campaign_set_plan, replacement_rule, exact_report_dir=None, stop_consumer=None):
     """Run an authoritative multi-arm, multi-cohort campaign.
 
     Creates one campaign identity, one report directory, one assignment
@@ -1426,6 +1426,7 @@ def campaign_run(suite, preregistration, campaign_id, release_version, seed, out
         campaign_set_plan=loaded_campaign_set_plan,
         replacement_rule=loaded_replacement_rule,
         _report_dir=exact_report_dir,
+        stop_consumer=stop_consumer,
     )
 
     try:
@@ -1889,7 +1890,7 @@ def campaign_set_verify(plan: Path, index: Path, child_dirs: list[tuple[str, Pat
     console.print("  [green]status[/green] verified")
 
 
-async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None, effective_sampling: SamplingSettings | None = None, seed_support: str = "unknown", g8e_cli: str | None = None, exact_report_dir: Path | None = None, task_offset: int = 0):
+async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None, effective_sampling: SamplingSettings | None = None, seed_support: str = "unknown", g8e_cli: str | None = None, exact_report_dir: Path | None = None, task_offset: int = 0, stop_consumer=None):
     # 1. Load benchmark via the typed suite registry. The registry
     #    rejects deterministic-simulation suites from the model-comparison
     #    set so a simulator-only result can never be represented as model
@@ -2546,6 +2547,14 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     evidence_preservation_records: list[EvidencePreservationObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
+        # Operator stop check: poll the identity-bound stop request at
+        # the safe task boundary. A verified request finishes the current
+        # unit, persists terminal evidence, and stops before the next
+        # task. A tampered or foreign request raises StopRequestError
+        # (fail closed) and is never silently honored.
+        if stop_consumer is not None and stop_consumer.poll() is not None:
+            break
+
         intent = ""
         if suite == "ifeval_subset" and task.metadata.instruction_id_list:
             constraints = [instruction_id.split(":")[-1] for instruction_id in task.metadata.instruction_id_list]

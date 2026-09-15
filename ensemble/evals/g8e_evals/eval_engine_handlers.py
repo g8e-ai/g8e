@@ -22,11 +22,14 @@ from g8e_evals.engine_protocol import (
     EvalEngineRequest,
     EvalEngineResult,
     EvalOperation,
+    failed_result,
+    stopped_result,
     succeeded_result,
 )
 from g8e_evals.constants import EVAL_LAUNCH_STATE_JSON
 from g8e_evals.operation_config import CampaignConfig, DiagnosticConfig, load_operation_config
 from g8e_evals.operation_lifecycle import operation_status, resolve_report_root, stop_operation, verify_operation
+from g8e_evals.stop_request import StopRequestError
 
 
 def _provider_api_key(provider: str) -> str | None:
@@ -74,6 +77,30 @@ def _safe_detail(exc: Exception) -> str:
         if pattern in lower:
             return f"{type(exc).__name__}: redacted (secret-bearing error)"
     return f"{type(exc).__name__}: {message}"
+
+
+def _classify_callback_exception(exc: Exception) -> tuple[EvalErrorCode, str]:
+    """Map a callback exception to the exact stable EvalErrorCode and a
+    redacted safe detail.
+
+    Terminal model/task outcomes (a model failing a grade) are not
+    launcher defects and must not produce a nonzero launcher exit; those
+    are handled inside the callback and surface as a succeeded run. This
+    classifier reserves CHILD_EXIT_NON_ZERO for genuine lifecycle defects
+    that are not config, report-root, stop-request, or interruption
+    failures.
+    """
+    import click
+
+    if isinstance(exc, StopRequestError):
+        return EvalErrorCode.STATUS_RECONCILIATION_FAILED, _safe_detail(exc)
+    if isinstance(exc, FileExistsError):
+        return EvalErrorCode.REPORT_ROOT_REUSED, _safe_detail(exc)
+    if isinstance(exc, (click.UsageError,)):
+        return EvalErrorCode.CONFIG_INVALID, _safe_detail(exc)
+    if isinstance(exc, KeyboardInterrupt):
+        return EvalErrorCode.CHILD_INTERRUPTED, "interrupted by operator"
+    return EvalErrorCode.CHILD_EXIT_NON_ZERO, _safe_detail(exc)
 
 
 def _build_launch_record(request: EvalEngineRequest, config: object, report_root: Path, status: str, started_at: str | None = None) -> dict:
@@ -146,6 +173,29 @@ def _transition_launch_state(report_root: Path, request: EvalEngineRequest, conf
     tmp.replace(target)
 
 
+def _build_stop_consumer(report_root: Path, request: EvalEngineRequest, config: object) -> StopRequestConsumer | None:
+    """Construct a StopRequestConsumer bound to the launch record's
+    content hash. Returns None when the launch record has no content hash
+    (the consumer cannot bind without it)."""
+    from g8e_evals.stop_request import StopRequestIdentity
+
+    launch_path = report_root / EVAL_LAUNCH_STATE_JSON
+    if not launch_path.is_file():
+        return None
+    launch = json.loads(launch_path.read_text())
+    launch_content_hash = launch.get("content_hash")
+    if not isinstance(launch_content_hash, str) or len(launch_content_hash) != 64:
+        return None
+    config_content_hash = getattr(config, "content_hash", "") or ""
+    identity = StopRequestIdentity(
+        operation_id=request.operation_id,
+        revision=request.revision,
+        config_content_hash=config_content_hash,
+        launch_content_hash=launch_content_hash,
+    )
+    return StopRequestConsumer(request_path=report_root / "eval-stop-request.json", identity=identity)
+
+
 def _diagnostic_start(request: EvalEngineRequest) -> EvalEngineResult:
     from g8e_evals.cli import run
 
@@ -159,6 +209,7 @@ def _diagnostic_start(request: EvalEngineRequest) -> EvalEngineResult:
     report_root.mkdir(parents=True)
     started_at = datetime.now(UTC).isoformat()
     _write_launch_state(report_root, request, config, "running", started_at)
+    stop_consumer = _build_stop_consumer(report_root, request, config)
     state_root = hashlib.sha256(
         f"{config.content_hash}:{request.operation_id}:{request.revision}".encode()
     ).hexdigest()
@@ -210,10 +261,21 @@ def _diagnostic_start(request: EvalEngineRequest) -> EvalEngineResult:
                 preregistration=repository_root / config.preregistration.path if config.preregistration else None,
                 exact_report_dir=report_root,
                 exact_task_offset=config.task_offset,
+                stop_consumer=stop_consumer,
             )
+    except KeyboardInterrupt:
+        _transition_launch_state(report_root, request, config, "interrupted", started_at)
+        raise EngineError(EvalErrorCode.CHILD_INTERRUPTED, "diagnostic_start", "interrupted by operator")
     except Exception as exc:
-        _transition_launch_state(report_root, request, config, "failed", started_at)
-        raise EngineError(EvalErrorCode.CHILD_EXIT_NON_ZERO, "diagnostic_start", _safe_detail(exc)) from exc
+        code, detail = _classify_callback_exception(exc)
+        if code == EvalErrorCode.STATUS_RECONCILIATION_FAILED:
+            _transition_launch_state(report_root, request, config, "stopped", started_at)
+        else:
+            _transition_launch_state(report_root, request, config, "failed", started_at)
+        raise EngineError(code, "diagnostic_start", detail) from exc
+    if stop_consumer is not None and stop_consumer.consumed is not None:
+        _transition_launch_state(report_root, request, config, "stopped", started_at)
+        return stopped_result(request, {"report_root": str(report_root), "stop_reason": "operator_requested"})
     _transition_launch_state(report_root, request, config, "completed", started_at)
     return succeeded_result(request, {"report_root": str(report_root)})
 
@@ -231,6 +293,7 @@ def _campaign_start(request: EvalEngineRequest) -> EvalEngineResult:
     report_root.mkdir(parents=True)
     started_at = datetime.now(UTC).isoformat()
     _write_launch_state(report_root, request, config, "running", started_at)
+    stop_consumer = _build_stop_consumer(report_root, request, config)
     callback = getattr(campaign_run, "callback", campaign_run)
     try:
         with redirect_stdout(sys.stderr):
@@ -259,19 +322,42 @@ def _campaign_start(request: EvalEngineRequest) -> EvalEngineResult:
                 campaign_set_plan=repository_root / config.campaign_set_plan.path if config.campaign_set_plan else None,
                 replacement_rule=repository_root / config.replacement_rule.path if config.replacement_rule else None,
                 exact_report_dir=report_root,
+                stop_consumer=stop_consumer,
             )
+    except KeyboardInterrupt:
+        _transition_launch_state(report_root, request, config, "interrupted", started_at)
+        raise EngineError(EvalErrorCode.CHILD_INTERRUPTED, "campaign_start", "interrupted by operator")
     except Exception as exc:
-        _transition_launch_state(report_root, request, config, "failed", started_at)
-        raise EngineError(EvalErrorCode.CHILD_EXIT_NON_ZERO, "campaign_start", _safe_detail(exc)) from exc
+        code, detail = _classify_callback_exception(exc)
+        if code == EvalErrorCode.STATUS_RECONCILIATION_FAILED:
+            _transition_launch_state(report_root, request, config, "stopped", started_at)
+        else:
+            _transition_launch_state(report_root, request, config, "failed", started_at)
+        raise EngineError(code, "campaign_start", detail) from exc
+    if stop_consumer is not None and stop_consumer.consumed is not None:
+        _transition_launch_state(report_root, request, config, "stopped", started_at)
+        return stopped_result(request, {"report_root": str(report_root), "stop_reason": "operator_requested"})
     _transition_launch_state(report_root, request, config, "completed", started_at)
     return succeeded_result(request, {"report_root": str(report_root)})
+
+
+def _classify_lifecycle_exception(exc: Exception) -> EvalErrorCode:
+    """Split config-load failures from reconciliation failures for the
+    status/stop/verify lifecycle handlers."""
+    from pydantic import ValidationError
+
+    if isinstance(exc, (ValidationError, FileNotFoundError, json.JSONDecodeError)):
+        return EvalErrorCode.CONFIG_INVALID
+    if isinstance(exc, FileExistsError):
+        return EvalErrorCode.REPORT_ROOT_REUSED
+    return EvalErrorCode.STATUS_RECONCILIATION_FAILED
 
 
 def _status(request: EvalEngineRequest) -> EvalEngineResult:
     try:
         result = operation_status(Path(request.config_path), Path(request.platform.repository_root))
     except (OSError, ValueError) as exc:
-        raise EngineError(EvalErrorCode.STATUS_RECONCILIATION_FAILED, "status", str(exc)) from exc
+        raise EngineError(_classify_lifecycle_exception(exc), "status", _safe_detail(exc)) from exc
     return succeeded_result(request, result.model_dump(exclude_none=True))
 
 
@@ -283,7 +369,7 @@ def _stop(request: EvalEngineRequest) -> EvalEngineResult:
             immediate=request.flags.immediate_stop,
         )
     except (OSError, ValueError) as exc:
-        raise EngineError(EvalErrorCode.STATUS_RECONCILIATION_FAILED, "stop", str(exc)) from exc
+        raise EngineError(_classify_lifecycle_exception(exc), "stop", _safe_detail(exc)) from exc
     return succeeded_result(request, result.model_dump(exclude_none=True))
 
 
@@ -291,14 +377,20 @@ def _verify(request: EvalEngineRequest) -> EvalEngineResult:
     try:
         result = verify_operation(Path(request.config_path), Path(request.platform.repository_root))
     except (OSError, ValueError) as exc:
-        raise EngineError(EvalErrorCode.AUTHORITY_INVALID, "verify", str(exc)) from exc
+        raise EngineError(_classify_lifecycle_exception(exc), "verify", _safe_detail(exc)) from exc
+    payload = result.model_dump(exclude_none=True)
     if not result.ok:
-        raise EngineError(
-            EvalErrorCode.AUTHORITY_INVALID,
-            "verify",
-            f"offline verification failed with {len(result.failures)} failure(s)",
+        # Emit the typed failure payload (checked_layers and failures)
+        # even on a nonzero verify so the Go facade can render --json
+        # without losing the checked layers or the specific failures.
+        return failed_result(
+            request,
+            error_code=EvalErrorCode.AUTHORITY_INVALID,
+            error_stage="verify",
+            safe_detail=f"offline verification failed with {len(result.failures)} failure(s)",
+            payload=payload,
         )
-    return succeeded_result(request, result.model_dump(exclude_none=True))
+    return succeeded_result(request, payload)
 
 
 def builtin_operation_handlers() -> dict[EvalOperation, OperationHandler]:

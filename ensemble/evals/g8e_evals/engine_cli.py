@@ -101,7 +101,10 @@ class EngineError(Exception):
 def install_builtin_handlers() -> None:
     from g8e_evals.eval_engine_handlers import builtin_operation_handlers
 
-    _OPERATION_HANDLERS.update(builtin_operation_handlers())
+    # setdefault preserves test-registered handlers so the production
+    # install never overwrites a handler a test wired before dispatch.
+    for operation, handler in builtin_operation_handlers().items():
+        _OPERATION_HANDLERS.setdefault(operation, handler)
 
 
 def dispatch(request: EvalEngineRequest) -> EvalEngineResult:

@@ -212,6 +212,26 @@ def failed_result(
     )
 
 
+def stopped_result(
+    request: EvalEngineRequest,
+    payload: dict[str, Any] | None = None,
+) -> EvalEngineResult:
+    """Construct a stopped result from a request and optional payload.
+
+    A stopped result is a successful launcher execution (exit 0): the
+    operator requested a graceful stop and the running loop honored it
+    at a safe boundary. It is distinct from ``failed`` (a lifecycle
+    defect) and ``succeeded`` (the full run completed).
+    """
+    return EvalEngineResult(
+        schema_version=EVAL_ENGINE_REQUEST_SCHEMA_VERSION,
+        operation=request.operation,
+        operation_id=request.operation_id,
+        status=EvalEngineStatus.STOPPED,
+        payload=payload,
+    )
+
+
 # Exit code mapping matching the Go facade's exit classification. The Go
 # facade owns the authoritative mapping from typed Go sentinel errors to
 # exit codes; this table is the Python-side reference for the engine's own

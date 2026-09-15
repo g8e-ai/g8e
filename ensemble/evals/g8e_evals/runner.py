@@ -130,6 +130,7 @@ from g8e_evals.replacement_rule import (
     resolve_replacement_child_id,
     validate_replacement_rule_plan_binding,
 )
+from g8e_evals.stop_request import StopRequestConsumer
 from g8e_evals.report.validate import validate_standalone_report
 from g8e_evals.schema import (
     ArmManifestEntry,
@@ -179,6 +180,7 @@ class CampaignStopReason(StrEnum):
     COHORT_DRIFT = "cohort_drift"
     NON_RETRYABLE_FAILURE = "non_retryable_failure"
     INVALID_EVIDENCE = "invalid_evidence"
+    OPERATOR_REQUESTED = "operator_requested"
 
 
 class BudgetExhausted(Exception):
@@ -1361,6 +1363,10 @@ class CampaignRunner:
     campaign_set_plan: CampaignSetPlan | None = None
     replacement_rule: ReplacementManifestRule | None = None
     disk_space_min_bytes: int = 0
+    # Optional identity-bound stop request consumer. When set, the
+    # assignment loop polls it at each safe boundary and stops before
+    # the next assignment when a verified request is present.
+    stop_consumer: StopRequestConsumer | None = None
     _run_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     _report_dir: Path | None = None
     _suts: dict[tuple[str, str], SUTProtocol] = field(default_factory=dict)
@@ -2003,6 +2009,33 @@ class CampaignRunner:
             missingness_or_failure="budget_exhausted",
         )
 
+    def _materialize_operator_stop(
+        self,
+        assignment: CampaignAssignment,
+        arm_def: ArmDefinition,
+    ) -> AttemptRecord:
+        """Materialize a typed terminal outcome for an unexecuted assignment
+        when the campaign stops because the operator requested a graceful
+        stop via the identity-bound stop request."""
+        attempt_id = f"{self._run_id}:{assignment.assignment_id}:0"
+        now = datetime.now(UTC)
+        return AttemptRecord(
+            attempt_id=attempt_id,
+            run_id=self._run_id,
+            task_id=assignment.task_id,
+            arm_id=arm_def.arm_id,
+            model_cohort_id=assignment.model_cohort_id,
+            state_snapshot_hash=_NO_STATE_HASH,
+            replicate_id=assignment.replicate_id,
+            assignment_id=assignment.assignment_id,
+            assignment_order=assignment.schedule_position,
+            started_at=now,
+            ended_at=now,
+            terminal_status=TerminalStatus.INFRASTRUCTURE_FAILED,
+            posture=PostureObservation(requested_posture=arm_def.requested_posture),
+            missingness_or_failure="operator_stop",
+        )
+
     async def run(self) -> CampaignResult:
         """Execute the campaign and produce the final canonical analysis.
 
@@ -2169,6 +2202,24 @@ class CampaignRunner:
         )
 
         for assignment_id in schedule.ordered_assignment_ids:
+            # Operator stop check: poll the identity-bound stop request at
+            # the safe assignment boundary. A verified request finishes
+            # the current unit, materializes terminal outcomes for the
+            # remaining assignments, and stops before the next unit. A
+            # tampered or foreign request raises StopRequestError (fail
+            # closed) and is never silently honored.
+            if self.stop_consumer is not None and self.stop_consumer.poll() is not None:
+                remaining = [
+                    a for a in assignments
+                    if schedule.ordered_assignment_ids.index(a.assignment_id) >= schedule.ordered_assignment_ids.index(assignment_id)
+                ]
+                for rem in remaining:
+                    rem_arm_def = get_arm_definition(Arm(rem.arm_id))
+                    stop_attempt = self._materialize_operator_stop(rem, rem_arm_def)
+                    all_attempts.append(stop_attempt)
+                stop_reason = CampaignStopReason.OPERATOR_REQUESTED
+                break
+
             # Disk-space preflight: check before every block
             check_disk_space(self.report_dir, min_bytes=self.disk_space_min_bytes)
 
