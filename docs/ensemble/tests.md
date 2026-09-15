@@ -47,18 +47,7 @@ For focused pytest runs from `ensemble/`:
 - `python -m pytest tests/integration/ -m ai_integration` runs live LLM tests.
 - `python -m pytest tests/integration/ -m "requires_web_search or requires_api"` runs live search tests.
 
-The repository `./g8e test` subcommands run the Go platform test suites. They do not run the Python ensemble or eval suites.
-
-## Run the Standalone Eval Tests
-
-From the repository root:
-
-- `make evals-test` runs eval Tier 1 and Tier 2 tests.
-- `make evals-test-unit` runs tests marked `unit`.
-- `make evals-test-integration` runs tests marked `integration`. Some tests use local filesystem or subprocess dependencies, and CI builds the `g8e` binary before this tier.
-- `make evals-lint` runs Ruff over `g8e_evals` and its tests, then runs Pyright with the eval project configuration.
-
-The eval package registers an `e2e` marker for tests that require a live stack or provider, but no current eval test uses that marker and the root eval targets do not select it.
+The repository `./g8e test` subcommands run the Go platform test suites. They do not run the Python ensemble suite.
 
 ## Markers and External Configuration
 

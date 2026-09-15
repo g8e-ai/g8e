@@ -300,7 +300,7 @@ select = [
     ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "g8e_evals"]
+known-first-party = ["app"]
 
 [tool.ruff.format]
 quote-style = "double"

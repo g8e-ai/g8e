@@ -8,7 +8,7 @@
     "dashboard_safe": "The event carries a protocol-owned typed payload suitable for direct browser rendering in the live narrative stream. Restricted content is redacted or summarized by the event presentation registry.",
     "unsupported": "The event is registered but has no real producer, no protocol-owned payload schema, or contains content unsuitable for browser display. It remains inspectable in diagnostic views but never updates derived dashboard state."
   },
-  "_note": "The four observability dashboard events (app.agent.status.updated, app.run.status.updated, ai.eval.run.completed, ai.eval.metric.recorded) are dashboard_safe by definition once their producers land. app.agent.status.updated and app.run.status.updated producers are verified through the Gateway mTLS producer endpoints (POST /api/v1/observe/producer/agent-state and /run-state) with real HTTP integration tests. ai.eval.run.completed and ai.eval.metric.recorded producers are verified through the Gateway mTLS eval publication endpoint (POST /api/v1/observe/producer/eval-publication) with real HTTP integration tests that assert persist-before-publish ordering, typed SSE envelopes, and cross-user isolation.",
+  "_note": "The four observability dashboard events (app.agent.status.updated, app.run.status.updated, ai.eval.run.completed, ai.eval.metric.recorded) are dashboard_safe by definition. The Gateway mTLS producer endpoints emit app.agent.status.updated and app.run.status.updated. The native evaluation system does not yet publish ai.eval.run.completed or ai.eval.metric.recorded to the dashboard.",
   "families": {
     "g8e.v1.ai.agent": {
       "classification": "produced_to_sse",
@@ -23,7 +23,7 @@
     "g8e.v1.ai.eval": {
       "classification": "produced_to_sse",
       "dashboard_safe": true,
-      "description": "ai.eval.run.completed and ai.eval.metric.recorded are emitted by the ensemble through the Gateway mTLS eval publication endpoint (POST /api/v1/observe/producer/eval-publication) after the bundle verification report confirms ok=true and the eval projection, download catalog, and run projection are persisted. The live campaign events (ai.eval.cycle.started, ai.eval.cycle.completed, ai.eval.assignment.started, ai.eval.assignment.completed, ai.eval.model_role.invoked, ai.eval.metric.available, ai.eval.verifier.completed, ai.eval.proof.available, ai.eval.publication.completed, ai.eval.heartbeat, ai.eval.stop.requested) are emitted by the observe producer after persisting the corresponding projection (persist-before-event). Each live event carries a monotonic source_sequence and a unique event_id for ordering, replay, and duplicate suppression. Safe for narrative display; verification status, metric summaries, role-combination identity, and stop reasons shown as non-actionable notices."
+      "description": "ai.eval.run.completed and ai.eval.metric.recorded remain reserved dashboard-safe event contracts and currently have no native evaluation producer. The live campaign events are emitted by the observe producer after persisting the corresponding projection. Each live event carries a monotonic source_sequence and a unique event_id for ordering, replay, and duplicate suppression."
     },
     "g8e.v1.public.feed": {
       "classification": "produced_to_sse",

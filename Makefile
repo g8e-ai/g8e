@@ -191,9 +191,6 @@ help:
 	@echo "  validate-doctrines Validate doctrine JSON schema"
 	@echo "  validate-cosais     Validate COSAiS overlay coverage (Phase 8 CI guard)"
 	@echo "  swagger-generate Generate Swagger/OpenAPI documentation from code annotations"
-	@echo "  readme          Generate README.md from template and public proof snapshot"
-	@echo "  readme-check    Check README.md is up to date without modifying files"
-	@echo "  readme-test     Run generator unit tests"
 	@echo "  website-build   Render g8e.ai from README.md"
 	@echo "  website-test    Test the g8e.ai generator and Worker"
 	@echo ""
@@ -213,13 +210,8 @@ help:
 	@echo ""
 	@echo "Ensemble (g8ee):"
 	@echo "  ensemble-test   Run the ensemble pytest unit + in-process integration suite (Tier 1 + Tier 2)"
-	@echo "  evals-test      Run standalone eval Tier 1 + Tier 2 tests"
-	@echo "  evals-test-unit Run standalone eval Tier 1 tests"
-	@echo "  evals-test-integration Run standalone eval Tier 2 tests"
 	@echo "  test-external   Run the ensemble external test suite (Tier 4: real LLM/API, gated on credentials)"
 	@echo "  ensemble-lint   Run ruff + pyright on the ensemble"
-	@echo "  evals-lint      Run ruff + pyright on the standalone eval package"
-	@echo "  evals-bin       Ensure ./g8e exists and matches the current source tree (rebuilds when stale)"
 	@echo "  build-ensemble  Build the ensemble Docker image"
 	@echo ""
 	@echo "Dashboard (g8ed):"
@@ -235,33 +227,6 @@ python-build:
 	@cp -r protocol/constants/doctrine protocol/python/g8e/_data/
 	@cd protocol/python && uv build
 	@echo "Python package built. Check protocol/python/dist/"
-
-# =============================================================================
-# README GENERATION
-# =============================================================================
-.PHONY: readme
-readme:
-	@echo "Generating README.md from template and public proof snapshot..."
-	@python3 scripts/generate_readme.py
-
-.PHONY: readme-check
-readme-check:
-	@echo "Checking README.md is up to date..."
-	@python3 scripts/generate_readme.py --check
-
-.PHONY: readme-test
-readme-test:
-	@echo "Running README generator tests..."
-	@python3 -m unittest discover -s scripts/tests -p 'test_generate_readme.py'
-	@echo "Running publication schema v4, campaign projector, and validator tests..."
-	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test pytest -q \
-		tests/test_publication_schema_v4.py \
-		tests/test_campaign_projector_v4.py \
-		tests/test_publication_validator_v4.py
-	@echo "Running publication schema v5, radar profile, and semantic regression tests..."
-	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test pytest -q \
-		tests/test_radar_profile_and_publication_v5.py \
-		tests/test_v5_semantic_regression.py
 
 .PHONY: website-build
 website-build:
@@ -315,21 +280,13 @@ proto-node: buf-install proto-node-install
 	@cd protocol/node && $(abspath $(BUF)) generate ../proto --template buf.gen.yaml
 	@echo "Node TypeScript Protobuf generation complete."
 
-# Regenerate downstream uv.lock files that depend on the protocol/python
-# package via directory dependencies. The g8e version in protocol/python is
-# the source of truth; any bump propagates into ensemble/ and ensemble/evals/.
-# Without this, `uv sync --locked` (used by CI and local dev) fails because the
-# locked g8e version no longer matches the directory source.
+# Regenerate the ensemble uv.lock file that depends on protocol/python through
+# a directory dependency. The protocol/python package version is authoritative.
 .PHONY: proto-lockfiles
 proto-lockfiles:
-	@echo "Regenerating downstream uv.lock files..."
-	@if ! command -v $(EVALS_UV) &> /dev/null; then \
-		echo "Error: uv not found. Install with: pip install uv" >&2; \
-		exit 1; \
-	fi
-	@cd ensemble/evals && $(EVALS_UV) lock --quiet
-	@cd ensemble && $(EVALS_UV) lock --quiet
-	@echo "Downstream uv.lock files regenerated."
+	@echo "Regenerating the ensemble uv.lock file..."
+	@cd ensemble && uv lock --quiet
+	@echo "Ensemble uv.lock regenerated."
 
 .PHONY: proto-force
 proto-force: buf-install
@@ -673,40 +630,11 @@ demo-verify: build
 PYTHON := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; else echo python3; fi)
 ENSEMBLE_RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
 ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
-EVALS_UV := $(shell command -v uv 2>/dev/null || echo uv)
 
 .PHONY: ensemble-test
 ensemble-test:
 	@echo "Running ensemble (g8ee) pytest unit + in-process integration suite (Tier 1 + Tier 2)..."
 	@cd ensemble && $(PYTHON) -m pytest tests/unit/ tests/integration/ -q -m "not ai_integration and not requires_web_search and not requires_api"
-
-.PHONY: evals-test
-evals-test: evals-test-unit evals-test-integration
-
-.PHONY: evals-test-unit
-evals-test-unit:
-	@echo "Running standalone eval Tier 1 tests..."
-	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test pytest -q -m unit
-
-.PHONY: evals-test-integration
-evals-test-integration:
-	@echo "Running standalone eval Tier 2 tests..."
-	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test pytest -q -m integration
-
-# Ensure the repo-root ./g8e exists and was built from the current source
-# tree. The evals consume the binary's stamped provenance via
-# `g8e version --json`; a missing binary or one whose source_tree_state_hash
-# differs from the current tree is rebuilt via `make build`.
-.PHONY: evals-bin
-evals-bin:
-	@STAMPED=$$(./g8e version --json 2>/dev/null | sed -n 's/.*"source_tree_state_hash": *"\([0-9a-f]\{64\}\)".*/\1/p'); \
-	CURRENT="$(SOURCE_TREE_HASH)"; \
-	if [ -x ./g8e ] && [ -n "$$STAMPED" ] && [ "$$STAMPED" = "$$CURRENT" ]; then \
-		echo "evals CLI is current: ./g8e (source_tree_state_hash $$STAMPED)"; \
-	else \
-		echo "evals CLI missing or stale (stamped=$${STAMPED:-none} current=$$CURRENT) — rebuilding via 'make build'"; \
-		$(MAKE) --no-print-directory build; \
-	fi
 
 .PHONY: test-external
 test-external:
@@ -719,13 +647,6 @@ ensemble-lint:
 	@cd ensemble && $(ENSEMBLE_RUFF) check app
 	@echo "Running pyright on ensemble..."
 	@cd ensemble && $(ENSEMBLE_PYRIGHT) app
-
-.PHONY: evals-lint
-evals-lint:
-	@echo "Running ruff on standalone evals..."
-	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test ruff check g8e_evals tests
-	@echo "Running pyright on standalone evals..."
-	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test pyright --project pyproject.toml
 
 .PHONY: build-ensemble
 build-ensemble:

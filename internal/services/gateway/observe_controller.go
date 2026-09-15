@@ -406,7 +406,7 @@ func (c *ObserveController) handleGetDownload(w http.ResponseWriter, r *http.Req
 func (c *ObserveController) mapDownloadStreamError(w http.ResponseWriter, err error, userID, artifactID string) {
 	switch {
 	case errors.Is(err, constants.ErrObserveDownloadNotFound),
-		errors.Is(err, constants.ErrObservePublicationRestrictedArtifact),
+		errors.Is(err, constants.ErrObserveDownloadRestrictedArtifact),
 		errors.Is(err, constants.ErrObserveDownloadSymlinkRejected),
 		errors.Is(err, constants.ErrObserveDownloadOversized),
 		errors.Is(err, constants.ErrObserveDownloadSizeMismatch),

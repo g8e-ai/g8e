@@ -454,7 +454,7 @@ func (s *ObserveProducerService) StreamDownload(ctx context.Context, userID, art
 	// Reject restricted artifacts (the catalog should only contain public_safe,
 	// but fail closed if a restricted artifact somehow appears).
 	if proj.PrivacyClassification != models.DownloadPrivacyPublicSafe {
-		return fmt.Errorf("observe producer: stream download: %w: %q", constants.ErrObservePublicationRestrictedArtifact, artifactID)
+		return fmt.Errorf("observe producer: stream download: %w: %q", constants.ErrObserveDownloadRestrictedArtifact, artifactID)
 	}
 
 	// Resolve the on-disk file path and verify it stays within the downloads

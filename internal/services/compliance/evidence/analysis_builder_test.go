@@ -197,7 +197,7 @@ func analysisTestGraph(t *testing.T) *evidence.EvidenceGraph {
 		VerifierID:         "test-verifier",
 		VerifierVersion:    "1.0.0",
 		VerifiedAt:         analysisTestEvaluatedAt.Add(-time.Hour),
-		BundlePath:         constants.EvalRunReceiptsFilename,
+		BundlePath:         constants.EvaluationReportFilename,
 		CanonicalBytes:     receiptBody,
 		References:         []string{},
 	}))
@@ -209,7 +209,7 @@ func analysisTestGraph(t *testing.T) *evidence.EvidenceGraph {
 		ArtifactType:       evidence.ArtifactTypeEvalMetric,
 		SHA256:             hex.EncodeToString(metricDigest[:]),
 		MediaType:          constants.MediaTypeJSON,
-		SchemaRef:          "g8e_evals.schema.MetricObservation",
+		SchemaRef:          "g8e.eval.v1.EvaluationMetric",
 		ProducerIdentity:   "policy_outcome@1.0.0",
 		ProducedAt:         analysisTestEvaluatedAt.Add(-time.Hour),
 		ScopeID:            "scope-1",
@@ -218,7 +218,7 @@ func analysisTestGraph(t *testing.T) *evidence.EvidenceGraph {
 		VerifierID:         "test-verifier",
 		VerifierVersion:    "1.0.0",
 		VerifiedAt:         analysisTestEvaluatedAt.Add(-time.Hour),
-		BundlePath:         constants.EvalRunMetricsFilename,
+		BundlePath:         constants.EvaluationReportFilename,
 		CanonicalBytes:     metricBody,
 		References:         []string{receiptID},
 	}))
@@ -589,8 +589,8 @@ func TestBuildComplianceAnalysis_CanonicalVectorIsPinned(t *testing.T) {
 	canonical, err := compliancev1.MarshalCanonical(analysis)
 	require.NoError(t, err)
 	digest := sha256.Sum256(canonical)
-	assert.Equal(t, "compliance-analysis:sha256:e7bf3f5704d223f6895146dba1261055c75f5a126d099bc0aeaa95854989ebf0", analysis.GetAnalysisId())
-	assert.Equal(t, "d19e6bba9bc8415f5ce959e69b595c01101c1e2fda46cc8b3918bdca02be6c92", hex.EncodeToString(digest[:]))
+	assert.Equal(t, "compliance-analysis:sha256:e5d4e0ac1f0e77824da524a8ab3be075208166e5a6e8f3ba7ad6a23ea1d9f74d", analysis.GetAnalysisId())
+	assert.Equal(t, "bf692fbb7f0852907a4806cc90eb4fd35b6b8d301abc2b9006248257bc138308", hex.EncodeToString(digest[:]))
 }
 
 func TestBuildComplianceAnalysis_CanonicalBytesIgnoreInputOrdering(t *testing.T) {

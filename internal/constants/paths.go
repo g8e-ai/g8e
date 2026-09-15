@@ -528,9 +528,8 @@ const (
 	TestPublicLoopEvidenceFilename           = "public-loop-evidence.json"
 	TestOverlaysDirname                      = "test-overlays"
 	TestPathRepoRootFromCompliancePackage    = "../../.."
-	TestDataDirname                          = "testdata"
-	TestEvalSyntheticGovernanceBundleDirname = "governance_adversarial-synthetic-20260906-000000"
-	TestEvaluationTargetFilename             = "evaluation-target.txt"
+	TestDataDirname              = "testdata"
+	TestEvaluationTargetFilename = "evaluation-target.txt"
 
 	// Source-tree protocol path constants for contract tests in
 	// internal/constants and internal/models. These resolve canonical
@@ -731,17 +730,7 @@ const (
 	EvaluationReportFilename                      = "report.json"
 	EvaluationVerificationFilename                = "verification.json"
 	EvaluationEvidenceDirname                     = "evidence"
-	EvalRunsDirname                               = "eval-runs"
-	EvalRunManifestFilename                       = "manifest.json"
-	EvalRunTasksFilename                          = "tasks.jsonl"
-	EvalRunAttemptsFilename                       = "attempts.jsonl"
-	EvalRunReceiptsFilename                       = "receipts.jsonl"
-	EvalRunStagesFilename                         = "stages.jsonl"
-	EvalRunMetricsFilename                        = "metrics.jsonl"
-	EvalRunEvidenceIndexFilename                  = "evidence-index.jsonl"
-	EvalRunEvidenceDirname                        = "evidence"
-	EvalRunEncryptedSuffix                        = ".enc"
-	EvalRunVerifierID                             = "g8e-eval-bundle-importer"
+	EvalRunVerifierID                             = "g8e-native-evaluation-verifier"
 	EvalRunVerifierVersion                        = "1.0.0"
 	EvalScopePrefix                               = "eval:"
 	EvalRestrictedEvidenceScope                   = "restricted_evaluation_evidence"
@@ -753,15 +742,11 @@ const (
 	MediaTypeMarkdown                             = "text/markdown; charset=utf-8"
 	MediaTypeHTML                                 = "text/html; charset=utf-8"
 	MediaTypeText                                 = "text/plain; charset=utf-8"
-	EvalRunMaxRecords                             = 4096
 	ObserveEventPayloadSchemaVersion              = "1.0.0"
 	ObserveMeasurementSchemaVersion               = "1.0.0"
 	ObserveAPIReadModelSchemaVersion              = "1.0.0"
-	ObservePublicationSchemaVersion               = "1.0.0"
 	ObserveDownloadsDirname                       = "observe-downloads"
 	ObserveDownloadArtifactMaxBytes               = 64 << 20
-	BundleManifestSchemaVersion                   = "1.0.0"
-	VerificationReportSchemaVersion               = "1.0.0"
 	EvidenceGraphVerifierID                       = "g8e-evidence-graph-verifier"
 	EvidenceGraphVerifierVersion                  = "1.0.0"
 	EvidenceGraphMaxBytes                         = 64 << 20

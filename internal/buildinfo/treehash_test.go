@@ -18,17 +18,13 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-// goldenFixtureDigest is the digest produced by the Python reference
-// implementation (g8e_evals.preflight.compute_source_tree_state_hash) for
-// the fixture built by writeParityFixture. The same constant is asserted
-// in ensemble/evals/tests/test_source_tree_hash_parity.py, pinning the
-// canonical digest format across both implementations.
+// goldenFixtureDigest pins the canonical digest for writeParityFixture.
 const goldenFixtureDigest = "36ee160f6da7ad1edd2ffebe9086a825c7361dacbb77238f33d432964b0e634f"
 
 // writeParityFixture builds the cross-language parity fixture. The layout
 // deliberately exercises path-component ordering: "a" is a directory whose
 // entries must sort before "a.b" and "a.txt" even though '.' < '/' in
-// byte order. Mirrored byte-for-byte by the Python parity test.
+// byte order.
 func writeParityFixture(t *testing.T, root string) {
 	t.Helper()
 	files := map[string]string{

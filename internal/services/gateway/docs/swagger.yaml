@@ -200,50 +200,6 @@ definitions:
       sign_count:
         type: integer
     type: object
-  models.BundleArtifactEntryWire:
-    properties:
-      artifact_type:
-        type: string
-      byte_length:
-        type: integer
-      encryption:
-        $ref: '#/definitions/models.EvidenceEncryptionWire'
-      media_type:
-        type: string
-      path:
-        type: string
-      privacy_class:
-        type: string
-      record_count:
-        type: integer
-      sha256:
-        type: string
-    type: object
-  models.BundleManifestWire:
-    properties:
-      artifacts:
-        items:
-          $ref: '#/definitions/models.BundleArtifactEntryWire'
-        type: array
-      bundle_id:
-        type: string
-      checksum_root_sha256:
-        type: string
-      created_at:
-        type: string
-      external_references:
-        items:
-          $ref: '#/definitions/models.ExternalReferenceWire'
-        type: array
-      manifest_content_sha256:
-        type: string
-      release_version:
-        type: string
-      run_id:
-        type: string
-      schema_version:
-        type: string
-    type: object
   models.DownloadArtifact:
     properties:
       artifact_id:
@@ -416,19 +372,6 @@ definitions:
     - EvalVerificationProjectionValidated
     - EvalVerificationReceiptVerificationNotApplicable
     - EvalVerificationVerified
-  models.EvidenceEncryptionWire:
-    properties:
-      aad_sha256:
-        type: string
-      algorithm:
-        type: string
-      ciphertext_byte_length:
-        type: integer
-      ciphertext_sha256:
-        type: string
-      key_id:
-        type: string
-    type: object
   models.EvidenceSafeLink:
     properties:
       artifact_id:
@@ -438,21 +381,6 @@ definitions:
       media_type:
         type: string
       schema_version:
-        type: string
-    type: object
-  models.ExternalReferenceWire:
-    properties:
-      byte_length:
-        type: integer
-      content_sha256:
-        type: string
-      description:
-        type: string
-      media_type:
-        type: string
-      reference_id:
-        type: string
-      source_uri:
         type: string
     type: object
   models.HealthResponse:
@@ -471,15 +399,6 @@ definitions:
         $ref: '#/definitions/constants.GatewayMode'
       version:
         type: string
-    type: object
-  models.LayerResultWire:
-    properties:
-      failure_count:
-        type: integer
-      layer:
-        type: integer
-      passed:
-        type: boolean
     type: object
   models.LocalOSUser:
     properties:
@@ -582,74 +501,6 @@ definitions:
         $ref: '#/definitions/models.AgentLifecycleStatus'
       task_id:
         type: string
-      web_session_id:
-        type: string
-    type: object
-  models.ObserveProducerDownloadArtifactInput:
-    properties:
-      artifact_id:
-        type: string
-      byte_size:
-        type: integer
-      content:
-        type: string
-      filename:
-        type: string
-      media_type:
-        type: string
-      privacy_classification:
-        $ref: '#/definitions/models.DownloadPrivacyClassification'
-      sha256:
-        type: string
-      source_run_id:
-        type: string
-    type: object
-  models.ObserveProducerEvalPublicationRequest:
-    properties:
-      arm_ids:
-        items:
-          type: string
-        type: array
-      assigned_tasks:
-        type: integer
-      assignment_count:
-        type: integer
-      bundle_id:
-        type: string
-      bundle_manifest:
-        $ref: '#/definitions/models.BundleManifestWire'
-      campaign_id:
-        type: string
-      cli_session_id:
-        type: string
-      downloads:
-        items:
-          $ref: '#/definitions/models.ObserveProducerDownloadArtifactInput'
-        type: array
-      metrics:
-        items:
-          $ref: '#/definitions/models.EvalMetricSummary'
-        type: array
-      model_cohort_ids:
-        items:
-          type: string
-        type: array
-      receipt_count:
-        type: integer
-      release_version:
-        type: string
-      run_id:
-        type: string
-      schema_version:
-        type: string
-      suite_id:
-        type: string
-      suite_version:
-        type: string
-      terminal_attempts:
-        type: integer
-      verification_report:
-        $ref: '#/definitions/models.VerificationReportWire'
       web_session_id:
         type: string
     type: object
@@ -1100,40 +951,6 @@ definitions:
         type: boolean
       user:
         $ref: '#/definitions/models.User'
-    type: object
-  models.VerificationFailureWire:
-    properties:
-      code:
-        type: string
-      layer:
-        type: integer
-      message:
-        type: string
-      record_id:
-        type: string
-    type: object
-  models.VerificationReportWire:
-    properties:
-      bundle_id:
-        type: string
-      failures:
-        items:
-          $ref: '#/definitions/models.VerificationFailureWire'
-        type: array
-      layers:
-        items:
-          $ref: '#/definitions/models.LayerResultWire'
-        type: array
-      ok:
-        type: boolean
-      release_version:
-        type: string
-      run_id:
-        type: string
-      schema_version:
-        type: string
-      verified_at:
-        type: string
     type: object
   models.WebAuthnAssertionResponse:
     properties:
@@ -2704,49 +2521,6 @@ paths:
           schema:
             type: string
       summary: Push observe agent state
-      tags:
-      - observe
-  /api/v1/observe/producer/eval-publication:
-    post:
-      consumes:
-      - application/json
-      description: Accepts a typed eval publication request from an mTLS-authenticated
-        app workload (the g8ee ensemble) or CLI session (the g8e-evals publish command).
-        The gateway derives user_id from the peer certificate, verifies the bundle,
-        persists the eval projection and download catalog, writes artifact bytes,
-        and emits ai.eval.run.completed and ai.eval.metric.recorded SSE events after
-        successful persistence.
-      parameters:
-      - description: Eval publication request
-        in: body
-        name: payload
-        required: true
-        schema:
-          $ref: '#/definitions/models.ObserveProducerEvalPublicationRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: accepted
-          schema:
-            type: string
-        "400":
-          description: Invalid request, unverified bundle, or invalid download catalog
-          schema:
-            type: string
-        "401":
-          description: Unauthorized — mTLS user identity required
-          schema:
-            type: string
-        "403":
-          description: Forbidden — not an app workload or CLI session
-          schema:
-            type: string
-        "500":
-          description: Persistence failure
-          schema:
-            type: string
-      summary: Publish verified eval bundle
       tags:
       - observe
   /api/v1/observe/producer/run-state:

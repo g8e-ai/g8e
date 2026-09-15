@@ -638,7 +638,7 @@ func TestAssembleBundle_IncludesManifestReferencedSourceArtifacts(t *testing.T) 
 
 func TestAssembleBundle_PreservesEmptyEvalSourceArtifacts(t *testing.T) {
 	request, _ := bundleAssemblyFixture(t)
-	emptyPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, "eval-run-1", constants.ComplianceBundleSourceRuntimeDirname, constants.EvalRunReceiptsFilename)
+	emptyPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, "eval-run-1", constants.ComplianceBundleSourceRuntimeDirname, constants.EvaluationReportFilename)
 	request.SourceArtifacts = append(request.SourceArtifacts, SourceArtifact{BundlePath: emptyPath, Body: []byte{}, MediaType: constants.MediaTypeJSON})
 
 	result, err := AssembleBundle(request)

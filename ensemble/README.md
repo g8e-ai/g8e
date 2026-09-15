@@ -75,14 +75,11 @@ Tier 4 tests use live LLM providers or external APIs and run separately:
 make test-external
 ```
 
-The evaluation harness is a standalone package under `ensemble/evals/` with its own locked environment. Run `make evals-test` and `make evals-lint` from the repository root. See [Testing](../docs/ensemble/tests.md) and [Evals](../docs/ensemble/evals.md) for test tiers, markers, credential gating, and eval commands.
-
 ## Project layout
 
 - `app/`: FastAPI application, transport clients, typed models, LLM providers, agent services, security filters, storage adapters, and route handlers.
 - `config/`: Command validation allowlist, blocklist, and auto-approval configuration.
 - `tests/`: Unit, in-process integration, external, and end-to-end test suites, plus shared fakes and fixtures.
-- `evals/`: Standalone evaluation package, benchmark datasets, receipt verification, and reports.
 - `pyproject.toml`: Package metadata, dependencies, pytest settings, coverage settings, and Ruff configuration.
 - `Dockerfile`: Multi-stage runtime image built with the repository root as its build context.
 - `Makefile`: Ensemble-local setup, protobuf verification, formatting, linting, and test targets.

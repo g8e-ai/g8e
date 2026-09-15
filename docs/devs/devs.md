@@ -158,7 +158,7 @@ Use these primary entry points:
 - `./g8e test chaos`
 - `./g8e test summary`
 - `make test`, `make test-unit`, `make test-integration`, `make test-docker`, and `make test-coverage`
-- `make ensemble-test`, `make evals-test`, `make test-external`, and `make dashboard-test`
+- `make ensemble-test`, `make test-external`, and `make dashboard-test`
 
 The CLI and Makefile do not select identical package sets and timeout flags for every suite. Reproduce a CI failure through the same owning entry point. Read the [Testing Guide](tests.md) for exact selection, lifecycle, state, race, coverage, and component-specific behavior.
 
@@ -168,14 +168,14 @@ Generated output is changed through its owner:
 
 | Output | Source | Update and validation |
 | --- | --- | --- |
-| Root `README.md` | `docs/templates/README.md.tmpl` and the promoted snapshot under `docs/evidence/readme/current/` | `make readme`, `make readme-test`, and `make readme-check` |
+| Root `README.md` | Handwritten product overview | Re-read changed sections, validate links, and run commands whose behavior the prose documents |
 | Go, Python, TypeScript, and Markdown protobuf output | Schemas and comments under `protocol/proto/g8e/` | `make proto` (`make generate` is an alias) plus affected conformance tests |
 | Gateway OpenAPI | Swagger annotations in the Go owners | `make swagger-generate` plus route and contract tests |
 | Website | Generated root `README.md` | `make website-test` and `make website-build` when rendering is affected |
 | Doctrine references | JSON under `protocol/constants/doctrine/` and demo doctrine inputs | `make validate-doctrines` |
 | COSAiS overlays | Canonical overlay and doctrine references | `make validate-cosais` |
 
-Do not edit the generated root README, protobuf API reference, or OpenAPI files as the source change. The [Documentation Guide](docs.md#generated-and-machine-readable-documentation) defines complete ownership and validation, and the [Release Process](release_process.md) defines attended evidence promotion.
+Do not edit generated protobuf API reference or OpenAPI files as the source change. The [Documentation Guide](docs.md#generated-and-machine-readable-documentation) defines complete ownership and validation, and the [Release Process](release_process.md) defines attended evidence promotion.
 
 ## Doctrine Changes
 

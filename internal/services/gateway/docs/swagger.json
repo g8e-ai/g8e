@@ -1052,64 +1052,6 @@
                 }
             }
         },
-        "/api/v1/observe/producer/eval-publication": {
-            "post": {
-                "description": "Accepts a typed eval publication request from an mTLS-authenticated app workload (the g8ee ensemble) or CLI session (the g8e-evals publish command). The gateway derives user_id from the peer certificate, verifies the bundle, persists the eval projection and download catalog, writes artifact bytes, and emits ai.eval.run.completed and ai.eval.metric.recorded SSE events after successful persistence.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "observe"
-                ],
-                "summary": "Publish verified eval bundle",
-                "parameters": [
-                    {
-                        "description": "Eval publication request",
-                        "name": "payload",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.ObserveProducerEvalPublicationRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "accepted",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request, unverified bundle, or invalid download catalog",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized — mTLS user identity required",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden — not an app workload or CLI session",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "Persistence failure",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/observe/producer/run-state": {
             "post": {
                 "description": "Accepts a typed run state update from an mTLS-authenticated app workload (the g8ee ensemble). The gateway derives user_id from the peer certificate, persists the run state projection, and emits an app.run.status.updated SSE event after successful persistence.",
@@ -2104,73 +2046,6 @@
                 }
             }
         },
-        "models.BundleArtifactEntryWire": {
-            "type": "object",
-            "properties": {
-                "artifact_type": {
-                    "type": "string"
-                },
-                "byte_length": {
-                    "type": "integer"
-                },
-                "encryption": {
-                    "$ref": "#/definitions/models.EvidenceEncryptionWire"
-                },
-                "media_type": {
-                    "type": "string"
-                },
-                "path": {
-                    "type": "string"
-                },
-                "privacy_class": {
-                    "type": "string"
-                },
-                "record_count": {
-                    "type": "integer"
-                },
-                "sha256": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.BundleManifestWire": {
-            "type": "object",
-            "properties": {
-                "artifacts": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.BundleArtifactEntryWire"
-                    }
-                },
-                "bundle_id": {
-                    "type": "string"
-                },
-                "checksum_root_sha256": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "external_references": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.ExternalReferenceWire"
-                    }
-                },
-                "manifest_content_sha256": {
-                    "type": "string"
-                },
-                "release_version": {
-                    "type": "string"
-                },
-                "run_id": {
-                    "type": "string"
-                },
-                "schema_version": {
-                    "type": "string"
-                }
-            }
-        },
         "models.DownloadArtifact": {
             "type": "object",
             "properties": {
@@ -2428,26 +2303,6 @@
                 "EvalVerificationVerified"
             ]
         },
-        "models.EvidenceEncryptionWire": {
-            "type": "object",
-            "properties": {
-                "aad_sha256": {
-                    "type": "string"
-                },
-                "algorithm": {
-                    "type": "string"
-                },
-                "ciphertext_byte_length": {
-                    "type": "integer"
-                },
-                "ciphertext_sha256": {
-                    "type": "string"
-                },
-                "key_id": {
-                    "type": "string"
-                }
-            }
-        },
         "models.EvidenceSafeLink": {
             "type": "object",
             "properties": {
@@ -2461,29 +2316,6 @@
                     "type": "string"
                 },
                 "schema_version": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.ExternalReferenceWire": {
-            "type": "object",
-            "properties": {
-                "byte_length": {
-                    "type": "integer"
-                },
-                "content_sha256": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "media_type": {
-                    "type": "string"
-                },
-                "reference_id": {
-                    "type": "string"
-                },
-                "source_uri": {
                     "type": "string"
                 }
             }
@@ -2511,20 +2343,6 @@
                 },
                 "version": {
                     "type": "string"
-                }
-            }
-        },
-        "models.LayerResultWire": {
-            "type": "object",
-            "properties": {
-                "failure_count": {
-                    "type": "integer"
-                },
-                "layer": {
-                    "type": "integer"
-                },
-                "passed": {
-                    "type": "boolean"
                 }
             }
         },
@@ -2675,109 +2493,6 @@
                 },
                 "task_id": {
                     "type": "string"
-                },
-                "web_session_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.ObserveProducerDownloadArtifactInput": {
-            "type": "object",
-            "properties": {
-                "artifact_id": {
-                    "type": "string"
-                },
-                "byte_size": {
-                    "type": "integer"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "filename": {
-                    "type": "string"
-                },
-                "media_type": {
-                    "type": "string"
-                },
-                "privacy_classification": {
-                    "$ref": "#/definitions/models.DownloadPrivacyClassification"
-                },
-                "sha256": {
-                    "type": "string"
-                },
-                "source_run_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.ObserveProducerEvalPublicationRequest": {
-            "type": "object",
-            "properties": {
-                "arm_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "assigned_tasks": {
-                    "type": "integer"
-                },
-                "assignment_count": {
-                    "type": "integer"
-                },
-                "bundle_id": {
-                    "type": "string"
-                },
-                "bundle_manifest": {
-                    "$ref": "#/definitions/models.BundleManifestWire"
-                },
-                "campaign_id": {
-                    "type": "string"
-                },
-                "cli_session_id": {
-                    "type": "string"
-                },
-                "downloads": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.ObserveProducerDownloadArtifactInput"
-                    }
-                },
-                "metrics": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.EvalMetricSummary"
-                    }
-                },
-                "model_cohort_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "receipt_count": {
-                    "type": "integer"
-                },
-                "release_version": {
-                    "type": "string"
-                },
-                "run_id": {
-                    "type": "string"
-                },
-                "schema_version": {
-                    "type": "string"
-                },
-                "suite_id": {
-                    "type": "string"
-                },
-                "suite_version": {
-                    "type": "string"
-                },
-                "terminal_attempts": {
-                    "type": "integer"
-                },
-                "verification_report": {
-                    "$ref": "#/definitions/models.VerificationReportWire"
                 },
                 "web_session_id": {
                     "type": "string"
@@ -3457,58 +3172,6 @@
                 },
                 "user": {
                     "$ref": "#/definitions/models.User"
-                }
-            }
-        },
-        "models.VerificationFailureWire": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "layer": {
-                    "type": "integer"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "record_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.VerificationReportWire": {
-            "type": "object",
-            "properties": {
-                "bundle_id": {
-                    "type": "string"
-                },
-                "failures": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.VerificationFailureWire"
-                    }
-                },
-                "layers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.LayerResultWire"
-                    }
-                },
-                "ok": {
-                    "type": "boolean"
-                },
-                "release_version": {
-                    "type": "string"
-                },
-                "run_id": {
-                    "type": "string"
-                },
-                "schema_version": {
-                    "type": "string"
-                },
-                "verified_at": {
-                    "type": "string"
                 }
             }
         },

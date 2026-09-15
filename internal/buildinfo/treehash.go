@@ -8,9 +8,7 @@
 // Package buildinfo computes source-tree state hashes for build-time
 // provenance stamping. The canonical digest covers each file's
 // slash-separated manifest-relative path and the SHA-256 of its content,
-// ordered by path-component tuples (matching Python's PurePath ordering so
-// the format stays comparable with
-// g8e_evals.preflight.compute_source_tree_state_hash).
+// ordered by path-component tuples.
 //
 // Collection uses an explicit manifest of paths under the base root, skipping
 // entries whose path components match the exclude patterns. Symlinks anywhere
@@ -39,9 +37,7 @@ type hashedEntry struct {
 
 // ComputeSourceTreeHash returns the canonical digest of every regular file
 // beneath root, keyed by path relative to root. Symlinks are rejected.
-// This is the single-directory form and matches the Python
-// compute_source_tree_state_hash digest byte-for-byte when no excludes are
-// given.
+// This is the single-directory form used when no source manifest is supplied.
 func ComputeSourceTreeHash(root string, excludes ...string) (string, error) {
 	info, err := os.Stat(root)
 	if err != nil {
