@@ -165,6 +165,32 @@ func TestEvalPlatformContextFieldContract(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
+// TestEvalEngineRequestFieldContract asserts the Go EvalEngineRequest
+// JSON field names match the Python EvalEngineRequest model fields pinned
+// in tests/test_engine_protocol_contract.py. If either side adds,
+// removes, or renames a field, both tests fail.
+func TestEvalEngineRequestFieldContract(t *testing.T) {
+	expected := map[string]bool{
+		"schema_version": true,
+		"operation":      true,
+		"operation_id":   true,
+		"revision":       true,
+		"config_path":    true,
+		"lease_path":     true,
+		"report_root":    true,
+		"platform":       true,
+		"flags":          true,
+		"parameters":     true,
+	}
+	typ := reflect.TypeOf(EvalEngineRequest{})
+	actual := make(map[string]bool, typ.NumField())
+	for i := 0; i < typ.NumField(); i++ {
+		tag := strings.Split(typ.Field(i).Tag.Get("json"), ",")[0]
+		actual[tag] = true
+	}
+	assert.Equal(t, expected, actual)
+}
+
 // TestEvalEngineRequestJSONRoundTrip asserts the Go struct round-trips
 // through JSON with the canonical wire field names.
 func TestEvalEngineRequestJSONRoundTrip(t *testing.T) {
@@ -176,6 +202,11 @@ func TestEvalEngineRequestJSONRoundTrip(t *testing.T) {
 		ConfigPath:    "/tmp/config.json",
 		LeasePath:     "/tmp/lease.json",
 		ReportRoot:    "/tmp/report",
+		Parameters: map[string]string{
+			"work_dir":    "/tmp/work",
+			"bundle_id":   "b-001",
+			"child_index": "3",
+		},
 		Platform: EvalPlatformContext{
 			RepositoryRoot:      "/repo",
 			EvalProject:         "/repo/ensemble/evals",
@@ -208,6 +239,7 @@ func TestEvalEngineRequestJSONRoundTrip(t *testing.T) {
 	assert.Equal(t, req.Platform.RepositoryRoot, restored.Platform.RepositoryRoot)
 	assert.Equal(t, req.Platform.OperatorSessionID, restored.Platform.OperatorSessionID)
 	assert.Equal(t, req.Platform.SourceTreeStateHash, restored.Platform.SourceTreeStateHash)
+	assert.Equal(t, req.Parameters, restored.Parameters)
 }
 
 // TestEvalEngineResultJSONRoundTrip asserts the result struct round-trips

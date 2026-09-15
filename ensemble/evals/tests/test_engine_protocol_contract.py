@@ -137,6 +137,22 @@ _EXPECTED_PLATFORM_FIELDS = {
     "source_tree_state_hash",
 }
 
+# The request field set pinned in lockstep with the Go contract test
+# ``TestEvalEngineRequestFieldContract``. If either side adds, removes,
+# or renames a field, both tests fail.
+_EXPECTED_REQUEST_FIELDS = {
+    "schema_version",
+    "operation",
+    "operation_id",
+    "revision",
+    "config_path",
+    "lease_path",
+    "report_root",
+    "platform",
+    "flags",
+    "parameters",
+}
+
 
 def test_schema_version_matches_go_contract():
     assert EVAL_ENGINE_REQUEST_SCHEMA_VERSION == _EXPECTED_SCHEMA_VERSION
@@ -159,6 +175,10 @@ def test_engine_status_enum_matches_go_contract():
 
 def test_platform_context_fields_match_go_contract():
     assert set(EvalPlatformContext.model_fields) == _EXPECTED_PLATFORM_FIELDS
+
+
+def test_request_fields_match_go_contract():
+    assert set(EvalEngineRequest.model_fields) == _EXPECTED_REQUEST_FIELDS
 
 
 def test_operation_enum_is_exhaustive_and_unique():
@@ -204,6 +224,7 @@ def _sample_request(
             source_revision="deadbeef",
             source_tree_state_hash="a" * 64,
         ),
+        parameters={"work_dir": "/tmp/work", "bundle_id": "b-001", "child_index": "3"},
     )
 
 
@@ -214,6 +235,7 @@ def test_request_round_trip_json():
     assert restored.operation == original.operation
     assert restored.operation_id == original.operation_id
     assert restored.platform.repository_root == original.platform.repository_root
+    assert restored.parameters == original.parameters
 
 
 def test_result_round_trip_json():

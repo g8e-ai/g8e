@@ -135,6 +135,12 @@ type EvalEngineFlags struct {
 // internal Python engine. It is the only engine entry shape; the facade
 // never reconstructs a giant shell vector. The request is passed as a
 // typed JSON file path argument, not positional reconstruction.
+//
+// Parameters carries per-operation string inputs that do not fit the
+// fixed fields (controller work_dir, bundle destination/id, campaign-set
+// plan/index/child-dirs, qualification inputs/outputs, bench-synthetic
+// selection). Values are strings only; secrets never travel here. The
+// field is omitted from the wire payload when empty.
 type EvalEngineRequest struct {
 	SchemaVersion string              `json:"schema_version"`
 	Operation     EvalOperation       `json:"operation"`
@@ -145,6 +151,7 @@ type EvalEngineRequest struct {
 	ReportRoot    string              `json:"report_root"`
 	Platform      EvalPlatformContext `json:"platform"`
 	Flags         EvalEngineFlags     `json:"flags,omitempty"`
+	Parameters    map[string]string   `json:"parameters,omitempty"`
 }
 
 // EvalEngineResult is the typed contract the Python engine returns. The

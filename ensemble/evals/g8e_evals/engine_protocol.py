@@ -161,6 +161,12 @@ class EvalEngineRequest(BaseModel):
     The request is passed as a typed JSON file path argument, not
     positional reconstruction. The facade never constructs a giant shell
     vector.
+
+    ``parameters`` carries per-operation string inputs that do not fit
+    the fixed fields (controller ``work_dir``, bundle destination/id,
+    campaign-set plan/index/child-dirs, qualification inputs/outputs,
+    bench-synthetic selection). Values are strings only; secrets never
+    travel here. The field is omitted from the wire payload when empty.
     """
 
     schema_version: str
@@ -172,6 +178,7 @@ class EvalEngineRequest(BaseModel):
     report_root: str = ""
     platform: EvalPlatformContext
     flags: EvalEngineFlags = Field(default_factory=EvalEngineFlags)
+    parameters: dict[str, str] = Field(default_factory=dict)
 
 
 class EvalEngineResult(BaseModel):
