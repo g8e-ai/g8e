@@ -160,7 +160,7 @@ func runEvalOperationPlan(ctx context.Context, deps evalLeaseDeps, configPath st
 }
 
 func runEvalOperationCheck(ctx context.Context, deps evalLeaseDeps, configPath string) (evalOperationCheckResult, error) {
-	preflight, err := runEvalPreflight(ctx, deps, configPath, "campaign_run")
+	preflight, err := runEvalPreflight(ctx, deps, configPath, evalCommandFamilyCampaignRun)
 	if err != nil {
 		return preflight.CheckResult, err
 	}

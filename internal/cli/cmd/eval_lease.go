@@ -107,10 +107,53 @@ func (r realEvalCandidateResolver) Resolve(ctx context.Context, repositoryRoot s
 	}, nil
 }
 
+// evalLeaseOperation identifies the lease lifecycle operation the Python
+// module dispatches on. It mirrors the operation literal in the Python
+// LeaseLifecycleCLIRequest envelope.
+type evalLeaseOperation string
+
+const (
+	evalLeaseOperationIssue    evalLeaseOperation = "issue"
+	evalLeaseOperationInspect  evalLeaseOperation = "inspect"
+	evalLeaseOperationStop     evalLeaseOperation = "stop"
+	evalLeaseOperationExpire   evalLeaseOperation = "expire"
+	evalLeaseOperationComplete evalLeaseOperation = "complete"
+)
+
+// evalLeaseTransition is the terminal transition applied to the active
+// lease bound to a config. It mirrors the transition literal in the
+// Python LeaseTransitionRequest model.
+type evalLeaseTransition string
+
+const (
+	evalLeaseTransitionStop     evalLeaseTransition = "stop"
+	evalLeaseTransitionExpire   evalLeaseTransition = "expire"
+	evalLeaseTransitionComplete evalLeaseTransition = "complete"
+)
+
+// evalCommandFamily is the command family a lease authorizes. It mirrors
+// the Python LeaseCommandFamily enum.
+type evalCommandFamily string
+
+const (
+	evalCommandFamilyCampaignRun   evalCommandFamily = "campaign_run"
+	evalCommandFamilyControllerRun evalCommandFamily = "controller_run"
+)
+
+// evalLeaseOperationKind is the Live Operations operation kind a lease
+// authorizes. It mirrors the Python OperationKind enum subset the facade
+// currently issues.
+type evalLeaseOperationKind string
+
+const (
+	evalLeaseOperationKindEmbeddedAuthorityDiagnostic evalLeaseOperationKind = "embedded_authority_diagnostic"
+)
+
 // evalLeaseDeps carries the injected dependencies for lease commands.
 type evalLeaseDeps struct {
 	configLoader           func(string) (*config.Config, error)
 	fileSvcFactory         func(string, *slog.Logger) (fs.RuntimeFileService, error)
+	clientFactory          apiClientFactory
 	stat                   evalFileStat
 	runner                 evalCommandRunner
 	tempFileWriter         evalTempFileWriter
@@ -124,6 +167,7 @@ func evalLeaseCmd() *cobra.Command {
 	return evalLeaseCmdWithDeps(evalLeaseDeps{
 		configLoader:           config.Load,
 		fileSvcFactory:         newFileSvc,
+		clientFactory:          defaultAPIClientFactory,
 		stat:                   realEvalFileStat{},
 		runner:                 realEvalCommandRunner{},
 		tempFileWriter:         realEvalTempFileWriter{},
@@ -157,23 +201,48 @@ stops, or safety-fails.`,
 	return cmd
 }
 
-// evalLeaseIssueRequest is the typed JSON request the Go facade sends
-// to the Python lease lifecycle module for issue.
+// evalLeaseIssueRequest is the typed payload nested under the "issue"
+// key of the lease lifecycle request envelope.
 type evalLeaseIssueRequest struct {
-	Kind                          string                `json:"kind"`
-	ConfigPath                    string                `json:"config_path"`
-	LeaseStoreDir                 string                `json:"lease_store_dir"`
-	CommandFamily                 string                `json:"command_family"`
-	CommandVersion                string                `json:"command_version"`
-	Candidate                     evalCandidateIdentity `json:"candidate"`
-	ModelInventoryDigest          string                `json:"model_inventory_digest"`
-	Endpoint                      string                `json:"endpoint"`
-	AppIdentity                   string                `json:"app_identity"`
-	OperatorSessionIdentity       string                `json:"operator_session_identity"`
-	ExpiresInSeconds              int                   `json:"expires_in_seconds"`
-	StartDeadlineSeconds          int                   `json:"start_deadline_seconds"`
-	OperationKind                 string                `json:"operation_kind"`
-	RequiredRuntimeAuthorityNames []string              `json:"required_runtime_authority_names"`
+	ConfigPath                    string                 `json:"config_path"`
+	LeaseStoreDir                 string                 `json:"lease_store_dir"`
+	CommandFamily                 evalCommandFamily      `json:"command_family"`
+	CommandVersion                string                 `json:"command_version"`
+	Candidate                     evalCandidateIdentity  `json:"candidate"`
+	ModelInventoryDigest          string                 `json:"model_inventory_digest"`
+	Endpoint                      string                 `json:"endpoint"`
+	AppIdentity                   string                 `json:"app_identity"`
+	OperatorSessionIdentity       string                 `json:"operator_session_identity"`
+	ExpiresInSeconds              int                    `json:"expires_in_seconds"`
+	StartDeadlineSeconds          int                    `json:"start_deadline_seconds"`
+	OperationKind                 evalLeaseOperationKind `json:"operation_kind"`
+	RequiredRuntimeAuthorityNames []string               `json:"required_runtime_authority_names"`
+}
+
+// evalLeaseInspectRequest is the typed payload nested under the
+// "inspect" key of the lease lifecycle request envelope.
+type evalLeaseInspectRequest struct {
+	ConfigPath    string `json:"config_path"`
+	LeaseStoreDir string `json:"lease_store_dir"`
+}
+
+// evalLeaseTransitionRequest is the typed payload nested under the
+// "transition" key of the lease lifecycle request envelope.
+type evalLeaseTransitionRequest struct {
+	ConfigPath    string              `json:"config_path"`
+	LeaseStoreDir string              `json:"lease_store_dir"`
+	Transition    evalLeaseTransition `json:"transition"`
+}
+
+// evalLeaseLifecycleRequest is the typed request envelope the Go facade
+// sends to the Python lease lifecycle module. Exactly one of Issue,
+// Inspect, or Transition is populated per Operation; the Python
+// LeaseLifecycleCLIRequest model rejects any other combination.
+type evalLeaseLifecycleRequest struct {
+	Operation  evalLeaseOperation          `json:"operation"`
+	Issue      *evalLeaseIssueRequest      `json:"issue,omitempty"`
+	Inspect    *evalLeaseInspectRequest    `json:"inspect,omitempty"`
+	Transition *evalLeaseTransitionRequest `json:"transition,omitempty"`
 }
 
 // evalLeaseIssueResult is the typed result emitted by lease issue.
@@ -236,10 +305,22 @@ This command is a local mutation. It requires --yes.`,
 	return cmd
 }
 
+// evalLeaseInspectLease is the typed subset of the stored
+// LiveOperationLease document rendered by `eval lease inspect`.
+type evalLeaseInspectLease struct {
+	LeaseID           string `json:"lease_id"`
+	Status            string `json:"status"`
+	OperationIdentity string `json:"operation_identity"`
+	ReportRoot        string `json:"report_root"`
+	IssuedAt          string `json:"issued_at"`
+	ExpiresAt         string `json:"expires_at"`
+	ContentHash       string `json:"content_hash"`
+}
+
 // evalLeaseInspectResult is the typed result emitted by lease inspect.
 type evalLeaseInspectResult struct {
-	Found bool             `json:"found"`
-	Lease *json.RawMessage `json:"lease,omitempty"`
+	Found bool                   `json:"found"`
+	Lease *evalLeaseInspectLease `json:"lease,omitempty"`
 }
 
 func evalLeaseInspectCmdWithDeps(deps evalLeaseDeps) *cobra.Command {
@@ -293,7 +374,7 @@ This command is a local mutation. It requires --yes.`,
 			if !yes {
 				return fmt.Errorf("%w: --yes is required for lease stop", constants.ErrEvalLeaseMissing)
 			}
-			result, err := runEvalLeaseTransition(ctx, deps, args[0], "stop")
+			result, err := runEvalLeaseTransition(ctx, deps, args[0], evalLeaseTransitionStop)
 			if err != nil {
 				return err
 			}
@@ -326,7 +407,7 @@ This command is a local mutation. It requires --yes.`,
 			if !yes {
 				return fmt.Errorf("%w: --yes is required for lease expire", constants.ErrEvalLeaseMissing)
 			}
-			result, err := runEvalLeaseTransition(ctx, deps, args[0], "expire")
+			result, err := runEvalLeaseTransition(ctx, deps, args[0], evalLeaseTransitionExpire)
 			if err != nil {
 				return err
 			}
@@ -385,21 +466,23 @@ func runEvalLeaseIssue(ctx context.Context, deps evalLeaseDeps, configPath, endp
 		return evalLeaseIssueResult{}, err
 	}
 
-	req := evalLeaseIssueRequest{
-		Kind:                          "issue",
-		ConfigPath:                    absConfigPath,
-		LeaseStoreDir:                 leaseStoreDir,
-		CommandFamily:                 "campaign_run",
-		CommandVersion:                models.EvalEngineRequestSchemaVersion,
-		Candidate:                     candidate,
-		ModelInventoryDigest:          modelInventoryDigest,
-		Endpoint:                      endpoint,
-		AppIdentity:                   appIdentity,
-		OperatorSessionIdentity:       operatorSessionIdentity,
-		ExpiresInSeconds:              expiresInSeconds,
-		StartDeadlineSeconds:          300,
-		OperationKind:                 "embedded_authority_diagnostic",
-		RequiredRuntimeAuthorityNames: []string{"gold_set", "evidence_key"},
+	req := evalLeaseLifecycleRequest{
+		Operation: evalLeaseOperationIssue,
+		Issue: &evalLeaseIssueRequest{
+			ConfigPath:                    absConfigPath,
+			LeaseStoreDir:                 leaseStoreDir,
+			CommandFamily:                 evalCommandFamilyCampaignRun,
+			CommandVersion:                models.EvalEngineRequestSchemaVersion,
+			Candidate:                     candidate,
+			ModelInventoryDigest:          modelInventoryDigest,
+			Endpoint:                      endpoint,
+			AppIdentity:                   appIdentity,
+			OperatorSessionIdentity:       operatorSessionIdentity,
+			ExpiresInSeconds:              expiresInSeconds,
+			StartDeadlineSeconds:          300,
+			OperationKind:                 evalLeaseOperationKindEmbeddedAuthorityDiagnostic,
+			RequiredRuntimeAuthorityNames: []string{"gold_set", "evidence_key"},
+		},
 	}
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
@@ -445,11 +528,11 @@ func runEvalLeaseInspect(ctx context.Context, deps evalLeaseDeps, configPath str
 		return evalLeaseInspectResult{}, err
 	}
 
-	req := map[string]any{
-		"operation": "inspect",
-		"inspect": map[string]any{
-			"config_path":     absConfigPath,
-			"lease_store_dir": leaseStoreDir,
+	req := evalLeaseLifecycleRequest{
+		Operation: evalLeaseOperationInspect,
+		Inspect: &evalLeaseInspectRequest{
+			ConfigPath:    absConfigPath,
+			LeaseStoreDir: leaseStoreDir,
 		},
 	}
 	reqJSON, err := json.Marshal(req)
@@ -468,9 +551,25 @@ func runEvalLeaseInspect(ctx context.Context, deps evalLeaseDeps, configPath str
 	return inspectResult, nil
 }
 
+// leaseOperationForTransition maps a lease transition to the matching
+// envelope operation. The transition and operation literals are distinct
+// enums on the Python side; an unknown transition fails closed.
+func leaseOperationForTransition(transition evalLeaseTransition) (evalLeaseOperation, error) {
+	switch transition {
+	case evalLeaseTransitionStop:
+		return evalLeaseOperationStop, nil
+	case evalLeaseTransitionExpire:
+		return evalLeaseOperationExpire, nil
+	case evalLeaseTransitionComplete:
+		return evalLeaseOperationComplete, nil
+	default:
+		return "", fmt.Errorf("%w: unknown lease transition %q", constants.ErrEvalConfigInvalid, transition)
+	}
+}
+
 // runEvalLeaseTransition invokes the Python lease lifecycle module to
 // stop or expire the active lease for a config.
-func runEvalLeaseTransition(ctx context.Context, deps evalLeaseDeps, configPath, transition string) (evalLeaseTransitionResult, error) {
+func runEvalLeaseTransition(ctx context.Context, deps evalLeaseDeps, configPath string, transition evalLeaseTransition) (evalLeaseTransitionResult, error) {
 	projectRoot, err := evalProjectRootFromConfig(deps.configLoader, "")
 	if err != nil {
 		return evalLeaseTransitionResult{}, err
@@ -500,12 +599,16 @@ func runEvalLeaseTransition(ctx context.Context, deps evalLeaseDeps, configPath,
 		return evalLeaseTransitionResult{}, err
 	}
 
-	req := map[string]any{
-		"operation": transition,
-		"transition": map[string]any{
-			"config_path":     absConfigPath,
-			"lease_store_dir": leaseStoreDir,
-			"transition":      transition,
+	operation, err := leaseOperationForTransition(transition)
+	if err != nil {
+		return evalLeaseTransitionResult{}, err
+	}
+	req := evalLeaseLifecycleRequest{
+		Operation: operation,
+		Transition: &evalLeaseTransitionRequest{
+			ConfigPath:    absConfigPath,
+			LeaseStoreDir: leaseStoreDir,
+			Transition:    transition,
 		},
 	}
 	reqJSON, err := json.Marshal(req)
@@ -601,18 +704,14 @@ func printEvalLeaseInspectHuman(stdout io.Writer, result evalLeaseInspectResult)
 		fmt.Fprintf(stdout, "No lease found for this config.\n")
 		return
 	}
-	var lease map[string]any
-	if err := json.Unmarshal(*result.Lease, &lease); err != nil {
-		fmt.Fprintf(stdout, "Lease found but could not be displayed.\n")
-		return
-	}
-	fmt.Fprintf(stdout, "Lease: %s\n", lease["lease_id"])
-	fmt.Fprintf(stdout, "  status:        %s\n", lease["status"])
-	fmt.Fprintf(stdout, "  operation:     %s\n", lease["operation_identity"])
-	fmt.Fprintf(stdout, "  report_root:   %s\n", lease["report_root"])
-	fmt.Fprintf(stdout, "  issued_at:     %s\n", lease["issued_at"])
-	fmt.Fprintf(stdout, "  expires_at:    %s\n", lease["expires_at"])
-	fmt.Fprintf(stdout, "  content_hash:  %s\n", lease["content_hash"])
+	lease := result.Lease
+	fmt.Fprintf(stdout, "Lease: %s\n", lease.LeaseID)
+	fmt.Fprintf(stdout, "  status:        %s\n", lease.Status)
+	fmt.Fprintf(stdout, "  operation:     %s\n", lease.OperationIdentity)
+	fmt.Fprintf(stdout, "  report_root:   %s\n", lease.ReportRoot)
+	fmt.Fprintf(stdout, "  issued_at:     %s\n", lease.IssuedAt)
+	fmt.Fprintf(stdout, "  expires_at:    %s\n", lease.ExpiresAt)
+	fmt.Fprintf(stdout, "  content_hash:  %s\n", lease.ContentHash)
 }
 
 func printEvalLeaseTransitionHuman(stdout io.Writer, verb string, result evalLeaseTransitionResult) {

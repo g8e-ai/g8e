@@ -178,7 +178,7 @@ This command requires --yes.`,
 				return fmt.Errorf("%w: --yes is required for diagnostic start", constants.ErrEvalLeaseMissing)
 			}
 			ctx := commandContext(cmd)
-			result, err := runEvalStart(ctx, deps, args[0], models.EvalOperationDiagnosticStart, "campaign_run", jsonOutput, verbose, cmd.OutOrStdout(), cmd.OutOrStderr())
+			result, err := runEvalStart(ctx, deps, args[0], models.EvalOperationDiagnosticStart, evalCommandFamilyCampaignRun, jsonOutput, verbose, cmd.OutOrStdout(), cmd.OutOrStderr())
 			if err != nil {
 				if jsonOutput {
 					return emitEvalJSON(cmd, result)

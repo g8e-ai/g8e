@@ -68,7 +68,7 @@ This command requires --yes.`,
 				return fmt.Errorf("%w: --yes is required for controller run", constants.ErrEvalLeaseMissing)
 			}
 			ctx := commandContext(cmd)
-			result, err := runEvalStart(ctx, deps, args[0], models.EvalOperationControllerRun, "controller_run", jsonOutput, verbose, cmd.OutOrStdout(), cmd.OutOrStderr())
+			result, err := runEvalStart(ctx, deps, args[0], models.EvalOperationControllerRun, evalCommandFamilyControllerRun, jsonOutput, verbose, cmd.OutOrStdout(), cmd.OutOrStderr())
 			if err != nil {
 				if jsonOutput {
 					return emitEvalJSON(cmd, result)

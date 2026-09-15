@@ -43,7 +43,7 @@ type evalPreflightResult struct {
 // check and start both consume this result so lease verification cannot
 // be duplicated or bypassed: start never re-runs check or lease
 // verification, and check never reaches the engine.
-func runEvalPreflight(ctx context.Context, deps evalLeaseDeps, configPath, commandFamily string) (evalPreflightResult, error) {
+func runEvalPreflight(ctx context.Context, deps evalLeaseDeps, configPath string, commandFamily evalCommandFamily) (evalPreflightResult, error) {
 	env, err := resolveEvalLifecycleEnvironment(ctx, deps, configPath)
 	if err != nil {
 		return evalPreflightResult{}, err
@@ -108,8 +108,8 @@ func runEvalPreflight(ctx context.Context, deps evalLeaseDeps, configPath, comma
 	}
 	// Stack health checks (no inference).
 	if deps.httpClient != nil {
-		doctorDeps := evalDoctorDeps{httpClient: deps.httpClient}
-		for _, healthCheck := range runEvalDoctorStackChecks(ctx, doctorDeps, cfg) {
+		doctorDeps := evalDoctorDeps{httpClient: deps.httpClient, clientFactory: deps.clientFactory}
+		for _, healthCheck := range runEvalDoctorStackChecks(ctx, doctorDeps, fileSvc, cfg) {
 			checkResult.Checks = append(checkResult.Checks, evalOperationCheck{CheckID: healthCheck.ID, Status: string(healthCheck.Status), SafeDetail: healthCheck.SafeDetail})
 			if healthCheck.Status == evalDoctorCheckFail {
 				preflight.CheckResult = checkResult

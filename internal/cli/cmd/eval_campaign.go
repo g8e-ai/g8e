@@ -215,7 +215,7 @@ This command requires --yes.`,
 				return fmt.Errorf("%w: --yes is required for campaign start", constants.ErrEvalLeaseMissing)
 			}
 			ctx := commandContext(cmd)
-			result, err := runEvalStart(ctx, deps, args[0], models.EvalOperationCampaignStart, "campaign_run", jsonOutput, verbose, cmd.OutOrStdout(), cmd.OutOrStderr())
+			result, err := runEvalStart(ctx, deps, args[0], models.EvalOperationCampaignStart, evalCommandFamilyCampaignRun, jsonOutput, verbose, cmd.OutOrStdout(), cmd.OutOrStderr())
 			if err != nil {
 				if jsonOutput {
 					return emitEvalJSON(cmd, result)

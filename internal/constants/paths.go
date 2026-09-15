@@ -489,9 +489,11 @@ const (
 
 	// EvalSelfCheckModules is the Python import expression the facade
 	// invokes through the project interpreter to verify the locked
-	// environment contains every required runtime module. The import
-	// also prints the engine version so setup and doctor can record it.
-	EvalSelfCheckModules = "import numpy, pydantic, cryptography, g8e, g8ee, g8e_evals; print(g8e_evals.__version__)"
+	// environment contains every required runtime module. The g8ee
+	// distribution ships the `app` and `config` modules, not a top-level
+	// `g8ee` module, so the check imports `app`. The import also prints
+	// the engine version so setup and doctor can record it.
+	EvalSelfCheckModules = "import numpy, pydantic, cryptography, g8e, app, g8e_evals; print(g8e_evals.__version__)"
 )
 
 // SSH config constants for basenames and key filenames.

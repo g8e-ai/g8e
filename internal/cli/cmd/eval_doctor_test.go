@@ -10,6 +10,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -22,8 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -353,6 +356,106 @@ func TestEvalDoctor_CmdRegistersWithExpectedFlags(t *testing.T) {
 		}
 	}
 	assert.True(t, doctorFound, "eval parent should register doctor subcommand")
+}
+
+func TestEvalDoctor_GatewayHealthURLUsesDiscoveryHealthPath(t *testing.T) {
+	cfg := &config.Config{}
+	url := evalGatewayHealthURL(cfg)
+	assert.True(t, strings.HasSuffix(url, constants.APIPaths.Health), "gateway health must use %s, got %s", constants.APIPaths.Health, url)
+	assert.Contains(t, url, "http://", "gateway health is served on the unauthenticated HTTP discovery surface")
+}
+
+func TestEvalDoctor_OperatorHealthWarnsWithoutClientFactory(t *testing.T) {
+	deps, cfg, _ := newEvalDoctorTestEnv(t)
+	fileSvc, err := deps.fileSvcFactory(cfg.ProjectRoot, nil)
+	require.NoError(t, err)
+
+	check := checkEvalOperatorSession(deps, fileSvc, cfg)
+
+	assert.Equal(t, "operator_health", check.ID)
+	assert.Equal(t, evalDoctorCheckWarn, check.Status)
+}
+
+func TestEvalDoctor_OperatorHealthWarnsWhenNotAuthenticated(t *testing.T) {
+	deps, cfg, _ := newEvalDoctorTestEnv(t)
+	deps.clientFactory = panickingClientFactory()
+	fileSvc, err := deps.fileSvcFactory(cfg.ProjectRoot, nil)
+	require.NoError(t, err)
+
+	check := checkEvalOperatorSession(deps, fileSvc, cfg)
+
+	assert.Equal(t, evalDoctorCheckWarn, check.Status)
+	assert.Contains(t, check.CorrectiveAction, "enroll")
+}
+
+func newDoctorOperatorClient(t *testing.T, deps *evalDoctorDeps, fileSvc fs.RuntimeFileService, cfg *config.Config, client apiClient) {
+	t.Helper()
+	require.NoError(t, auth.SaveCredentials(fileSvc, cfg, &auth.Credentials{
+		UserID:            "user-test",
+		OperatorSessionID: "op-sess-test",
+		CLISessionID:      "cli-sess-test",
+		OperatorID:        "op-test",
+	}))
+	deps.clientFactory = mockClientFactory(client)
+}
+
+func TestEvalDoctor_OperatorHealthPassesWithActiveSession(t *testing.T) {
+	deps, cfg, _ := newEvalDoctorTestEnv(t)
+	fileSvc, err := deps.fileSvcFactory(cfg.ProjectRoot, nil)
+	require.NoError(t, err)
+	resp, err := json.Marshal(models.OperatorSlotResponse{
+		Success: true,
+		Operators: []models.OperatorDocumentGo{
+			{ID: "op-1", Status: constants.OperatorStatusActive},
+			{ID: "op-2", Status: constants.OperatorStatusBound},
+		},
+	})
+	require.NoError(t, err)
+	newDoctorOperatorClient(t, &deps, fileSvc, cfg, &mockAPIClient{getResp: resp})
+
+	check := checkEvalOperatorSession(deps, fileSvc, cfg)
+
+	assert.Equal(t, evalDoctorCheckPass, check.Status)
+	assert.Contains(t, check.SafeDetail, "2")
+}
+
+func TestEvalDoctor_OperatorHealthFailsWithNoActiveSession(t *testing.T) {
+	deps, cfg, _ := newEvalDoctorTestEnv(t)
+	fileSvc, err := deps.fileSvcFactory(cfg.ProjectRoot, nil)
+	require.NoError(t, err)
+	resp, err := json.Marshal(models.OperatorSlotResponse{
+		Success:   true,
+		Operators: []models.OperatorDocumentGo{{ID: "op-1", Status: constants.OperatorStatusOffline}},
+	})
+	require.NoError(t, err)
+	newDoctorOperatorClient(t, &deps, fileSvc, cfg, &mockAPIClient{getResp: resp})
+
+	check := checkEvalOperatorSession(deps, fileSvc, cfg)
+
+	assert.Equal(t, evalDoctorCheckFail, check.Status)
+	assert.Contains(t, check.SafeDetail, "No active operator session")
+}
+
+func TestEvalDoctor_OperatorHealthFailsWhenStatusUnreachable(t *testing.T) {
+	deps, cfg, _ := newEvalDoctorTestEnv(t)
+	fileSvc, err := deps.fileSvcFactory(cfg.ProjectRoot, nil)
+	require.NoError(t, err)
+	newDoctorOperatorClient(t, &deps, fileSvc, cfg, &mockAPIClient{getErr: errors.New("connection refused")})
+
+	check := checkEvalOperatorSession(deps, fileSvc, cfg)
+
+	assert.Equal(t, evalDoctorCheckFail, check.Status)
+}
+
+func TestEvalDoctor_OperatorHealthFailsOnInvalidResponse(t *testing.T) {
+	deps, cfg, _ := newEvalDoctorTestEnv(t)
+	fileSvc, err := deps.fileSvcFactory(cfg.ProjectRoot, nil)
+	require.NoError(t, err)
+	newDoctorOperatorClient(t, &deps, fileSvc, cfg, &mockAPIClient{getResp: []byte("not-json")})
+
+	check := checkEvalOperatorSession(deps, fileSvc, cfg)
+
+	assert.Equal(t, evalDoctorCheckFail, check.Status)
 }
 
 // Ensure the io.Discard import is used.

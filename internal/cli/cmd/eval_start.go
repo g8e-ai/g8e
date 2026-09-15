@@ -32,7 +32,7 @@ type evalLeaseStartVerificationRequest struct {
 	RepositoryRoot       string                `json:"repository_root"`
 	Candidate            evalCandidateIdentity `json:"candidate"`
 	ModelInventoryDigest string                `json:"model_inventory_digest"`
-	CommandFamily        string                `json:"command_family"`
+	CommandFamily        evalCommandFamily     `json:"command_family"`
 	CommandVersion       string                `json:"command_version"`
 }
 
@@ -109,7 +109,7 @@ func runEvalStart(
 	deps evalLeaseDeps,
 	configPath string,
 	operation models.EvalOperation,
-	commandFamily string,
+	commandFamily evalCommandFamily,
 	jsonOutput, verbose bool,
 	stdout, stderr io.Writer,
 ) (evalStartResult, error) {
@@ -161,10 +161,10 @@ func runEvalStart(
 	// The transition is best-effort: a transition failure is logged to
 	// stderr but does not override the engine result. Publication retry
 	// does not reactivate the terminal lease.
-	transition := "stop"
+	transition := evalLeaseTransitionStop
 	leaseStatus := "stopped"
 	if err == nil && engineResult.Status == string(models.EvalEngineStatusSucceeded) {
-		transition = "complete"
+		transition = evalLeaseTransitionComplete
 		leaseStatus = "completed"
 	}
 	transitionErr := transitionLeaseAfterRun(ctx, deps, env.InterpreterPath, env.ConfigPath, preflight.LeaseStoreDir, transition)
@@ -334,14 +334,19 @@ func invokeEngine(
 func transitionLeaseAfterRun(
 	ctx context.Context,
 	deps evalLeaseDeps,
-	interpreterPath, configPath, leaseStoreDir, transition string,
+	interpreterPath, configPath, leaseStoreDir string,
+	transition evalLeaseTransition,
 ) error {
-	req := map[string]any{
-		"operation": transition,
-		"transition": map[string]any{
-			"config_path":     configPath,
-			"lease_store_dir": leaseStoreDir,
-			"transition":      transition,
+	operation, err := leaseOperationForTransition(transition)
+	if err != nil {
+		return err
+	}
+	req := evalLeaseLifecycleRequest{
+		Operation: operation,
+		Transition: &evalLeaseTransitionRequest{
+			ConfigPath:    configPath,
+			LeaseStoreDir: leaseStoreDir,
+			Transition:    transition,
 		},
 	}
 	reqJSON, err := json.Marshal(req)
@@ -385,6 +390,7 @@ func evalStartDepsFromLeaseDeps() evalLeaseDeps {
 	return evalLeaseDeps{
 		configLoader:           config.Load,
 		fileSvcFactory:         newFileSvc,
+		clientFactory:          defaultAPIClientFactory,
 		stat:                   realEvalFileStat{},
 		runner:                 realEvalCommandRunner{},
 		tempFileWriter:         realEvalTempFileWriter{},

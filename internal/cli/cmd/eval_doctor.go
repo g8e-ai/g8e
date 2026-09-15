@@ -9,6 +9,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -29,6 +31,7 @@ import (
 type evalDoctorDeps struct {
 	configLoader   func(string) (*config.Config, error)
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)
+	clientFactory  apiClientFactory
 	stat           evalFileStat
 	runner         evalCommandRunner
 	httpClient     *http.Client
@@ -65,6 +68,7 @@ func evalDoctorCmd() *cobra.Command {
 	return evalDoctorCmdWithDeps(evalDoctorDeps{
 		configLoader:   config.Load,
 		fileSvcFactory: newFileSvc,
+		clientFactory:  defaultAPIClientFactory,
 		stat:           realEvalFileStat{},
 		runner:         realEvalCommandRunner{},
 		httpClient:     &http.Client{Timeout: 5 * time.Second},
@@ -147,7 +151,7 @@ func runEvalDoctor(ctx context.Context, deps evalDoctorDeps, projectRootOverride
 	checks := runEvalDoctorLocalChecks(ctx, deps, fileSvc, projectRoot)
 
 	if scope == "stack" || scope == "provider" {
-		checks = append(checks, runEvalDoctorStackChecks(ctx, deps, cfg)...)
+		checks = append(checks, runEvalDoctorStackChecks(ctx, deps, fileSvc, cfg)...)
 	}
 	if scope == "provider" {
 		checks = append(checks, runEvalDoctorProviderChecks(ctx, deps)...)
@@ -172,11 +176,15 @@ func runEvalDoctorLocalChecks(ctx context.Context, deps evalDoctorDeps, fileSvc 
 }
 
 // runEvalDoctorStackChecks performs Gateway/Operator/Ensemble health
-// checks without provider inference.
-func runEvalDoctorStackChecks(ctx context.Context, deps evalDoctorDeps, cfg *config.Config) []evalDoctorCheck {
+// checks without provider inference. Gateway and Ensemble expose
+// unauthenticated health endpoints on their published HTTP ports. The
+// Operator is outbound-only with no published inbound port, so its health
+// is determined by querying the Gateway's operator session registry over
+// the authenticated mTLS API.
+func runEvalDoctorStackChecks(ctx context.Context, deps evalDoctorDeps, fileSvc fs.RuntimeFileService, cfg *config.Config) []evalDoctorCheck {
 	var checks []evalDoctorCheck
 	checks = append(checks, checkEvalComponentHealth(ctx, deps.httpClient, "gateway", evalGatewayHealthURL(cfg)))
-	checks = append(checks, checkEvalComponentHealth(ctx, deps.httpClient, "operator", evalOperatorHealthURL(cfg)))
+	checks = append(checks, checkEvalOperatorSession(deps, fileSvc, cfg))
 	checks = append(checks, checkEvalComponentHealth(ctx, deps.httpClient, "ensemble", evalEnsembleHealthURL(cfg)))
 	return checks
 }
@@ -354,22 +362,57 @@ func checkEvalComponentHealth(ctx context.Context, client *http.Client, name, he
 	return evalDoctorCheck{ID: name + "_health", Status: evalDoctorCheckPass}
 }
 
-// evalGatewayHealthURL returns the Gateway health endpoint URL.
-func evalGatewayHealthURL(cfg *config.Config) string {
-	host := "localhost"
-	if cfg.Paths != nil && cfg.Paths.Host != "" {
-		host = cfg.Paths.Host
+// checkEvalOperatorSession determines Operator health through the
+// Gateway's operator session registry. The Operator is outbound-only and
+// publishes no inbound port, so there is no Operator health endpoint to
+// GET from the host; an Operator is healthy when the Gateway reports at
+// least one live (active or bound) session. Requires CLI credentials;
+// without them the check warns rather than fails because enrollment is
+// not a precondition for local eval operations.
+func checkEvalOperatorSession(deps evalDoctorDeps, fileSvc fs.RuntimeFileService, cfg *config.Config) evalDoctorCheck {
+	if deps.clientFactory == nil {
+		return evalDoctorCheck{ID: "operator_health", Status: evalDoctorCheckWarn, SafeDetail: "Operator session check not configured"}
 	}
-	return fmt.Sprintf("http://%s:8080/health", host)
+	creds, err := auth.LoadCredentials(fileSvc, cfg)
+	if err != nil {
+		return evalDoctorCheck{ID: "operator_health", Status: evalDoctorCheckFail, SafeDetail: "Unable to load CLI credentials"}
+	}
+	if creds == nil {
+		return evalDoctorCheck{
+			ID:               "operator_health",
+			Status:           evalDoctorCheckWarn,
+			SafeDetail:       "CLI not authenticated; operator session status unknown",
+			CorrectiveAction: "Run: ./g8e auth enroll user",
+		}
+	}
+	client, err := deps.clientFactory(fileSvc, cfg)
+	if err != nil {
+		return evalDoctorCheck{ID: "operator_health", Status: evalDoctorCheckFail, SafeDetail: "Unable to build platform API client"}
+	}
+	resp, err := client.Get(constants.APIPaths.Operators + "?user_id=" + creds.UserID)
+	if err != nil {
+		return evalDoctorCheck{ID: "operator_health", Status: evalDoctorCheckFail, SafeDetail: "Operator session status unreachable"}
+	}
+	var slotResp models.OperatorSlotResponse
+	if err := json.Unmarshal(resp, &slotResp); err != nil {
+		return evalDoctorCheck{ID: "operator_health", Status: evalDoctorCheckFail, SafeDetail: "Invalid operator session response"}
+	}
+	active := 0
+	for _, op := range slotResp.Operators {
+		if op.Status == constants.OperatorStatusActive || op.Status == constants.OperatorStatusBound {
+			active++
+		}
+	}
+	if active == 0 {
+		return evalDoctorCheck{ID: "operator_health", Status: evalDoctorCheckFail, SafeDetail: "No active operator session"}
+	}
+	return evalDoctorCheck{ID: "operator_health", Status: evalDoctorCheckPass, SafeDetail: fmt.Sprintf("%d operator session(s) active", active)}
 }
 
-// evalOperatorHealthURL returns the Operator health endpoint URL.
-func evalOperatorHealthURL(cfg *config.Config) string {
-	host := "localhost"
-	if cfg.Paths != nil && cfg.Paths.Host != "" {
-		host = cfg.Paths.Host
-	}
-	return fmt.Sprintf("http://%s:8080/health", host)
+// evalGatewayHealthURL returns the Gateway health endpoint URL on the
+// unauthenticated HTTP discovery surface.
+func evalGatewayHealthURL(cfg *config.Config) string {
+	return cfg.OperatorDiscoveryURL() + constants.APIPaths.Health
 }
 
 // evalEnsembleHealthURL returns the Ensemble health endpoint URL.
