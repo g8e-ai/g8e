@@ -53,20 +53,24 @@ func (s *stubInferenceBackend) Generate(_ context.Context, req models.GenerateRe
 	if s.err != nil {
 		return nil, s.err
 	}
-	response := s.resp
-	if response == nil {
-		response = &models.GenerateResponse{
-			Parts: []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "stub inference response"}}},
-			Model: req.Model, FinishReason: "stop",
+	var response models.GenerateResponse
+	if s.resp != nil {
+		response = *s.resp
+	} else {
+		response = models.GenerateResponse{
+			Parts:        []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "stub inference response"}}},
+			FinishReason: "stop",
 		}
 	}
+	// Echo the routed model so handler identity validation passes for every role.
+	response.Model = req.Model
 	response.NormalizedRequestHash = models.SHA256Hex([]byte("integration request"))
 	outputHash, err := models.ComputeInferenceOutputHash(response.Parts, response.FinishReason)
 	if err != nil {
 		return nil, err
 	}
 	response.OutputHash = outputHash
-	return response, nil
+	return &response, nil
 }
 
 func (s *stubInferenceBackend) Status(_ context.Context) (*models.BackendStatus, error) {

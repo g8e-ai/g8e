@@ -40,27 +40,27 @@ type EnsembleEvaluationContext struct {
 	EvaluationAttemptID     string                 `json:"evaluation_attempt_id"`
 	ScenarioID              string                 `json:"scenario_id"`
 	ModelRegistryDigest     string                 `json:"model_registry_digest"`
-	ModelRegistry           []EnsembleModelVariant   `json:"model_registry"`
+	ModelRegistry           []EnsembleModelVariant `json:"model_registry"`
 	TargetOperatorSessionID string                 `json:"target_operator_session_id"`
 	EvaluationLane          string                 `json:"evaluation_lane,omitempty"`
 	DesignatedModelRole     string                 `json:"designated_model_role,omitempty"`
 }
 
 type EnsembleChatRequest struct {
-	Context              EnsembleRequestContext    `json:"context"`
+	Context              EnsembleRequestContext     `json:"context"`
 	EvaluationContext    *EnsembleEvaluationContext `json:"evaluation_context,omitempty"`
-	Message              string                    `json:"message"`
-	SentinelMode         bool                      `json:"sentinel_mode"`
-	ResourceCreation     *EnsembleResourceCreation `json:"resource_creation,omitempty"`
-	LLMPrimaryProvider   string                    `json:"llm_primary_provider,omitempty"`
-	LLMPrimaryModel      string                    `json:"llm_primary_model,omitempty"`
-	LLMPrimaryEndpoint   string                    `json:"llm_primary_endpoint,omitempty"`
-	LLMAssistantProvider string                    `json:"llm_assistant_provider,omitempty"`
-	LLMAssistantModel    string                    `json:"llm_assistant_model,omitempty"`
-	LLMAssistantEndpoint string                    `json:"llm_assistant_endpoint,omitempty"`
-	LLMLiteProvider      string                    `json:"llm_lite_provider,omitempty"`
-	LLMLiteModel         string                    `json:"llm_lite_model,omitempty"`
-	LLMLiteEndpoint      string                    `json:"llm_lite_endpoint,omitempty"`
+	Message              string                     `json:"message"`
+	SentinelMode         bool                       `json:"sentinel_mode"`
+	ResourceCreation     *EnsembleResourceCreation  `json:"resource_creation,omitempty"`
+	LLMPrimaryProvider   string                     `json:"llm_primary_provider,omitempty"`
+	LLMPrimaryModel      string                     `json:"llm_primary_model,omitempty"`
+	LLMPrimaryEndpoint   string                     `json:"llm_primary_endpoint,omitempty"`
+	LLMAssistantProvider string                     `json:"llm_assistant_provider,omitempty"`
+	LLMAssistantModel    string                     `json:"llm_assistant_model,omitempty"`
+	LLMAssistantEndpoint string                     `json:"llm_assistant_endpoint,omitempty"`
+	LLMLiteProvider      string                     `json:"llm_lite_provider,omitempty"`
+	LLMLiteModel         string                     `json:"llm_lite_model,omitempty"`
+	LLMLiteEndpoint      string                     `json:"llm_lite_endpoint,omitempty"`
 }
 
 // EnsembleBoundOperator mirrors the Python BoundOperator model in the
@@ -77,16 +77,16 @@ type EnsembleBoundOperator struct {
 // requests; the validator requires user_id and either web_session_id or
 // cli_session_id for that source.
 type EnsembleRequestContext struct {
-	WebSessionID        string                  `json:"web_session_id,omitempty"`
-	CLISessionID        string                  `json:"cli_session_id,omitempty"`
-	UserID              string                  `json:"user_id,omitempty"`
-	OrganizationID      string                  `json:"organization_id,omitempty"`
-	CaseID              string                  `json:"case_id,omitempty"`
-	InvestigationID     string                  `json:"investigation_id,omitempty"`
-	OperatorID          string                  `json:"operator_id,omitempty"`
-	OperatorSessionID   string                  `json:"operator_session_id,omitempty"`
-	BoundOperators      []EnsembleBoundOperator `json:"bound_operators,omitempty"`
-	SourceComponent     string                  `json:"source_component"`
+	WebSessionID      string                  `json:"web_session_id,omitempty"`
+	CLISessionID      string                  `json:"cli_session_id,omitempty"`
+	UserID            string                  `json:"user_id,omitempty"`
+	OrganizationID    string                  `json:"organization_id,omitempty"`
+	CaseID            string                  `json:"case_id,omitempty"`
+	InvestigationID   string                  `json:"investigation_id,omitempty"`
+	OperatorID        string                  `json:"operator_id,omitempty"`
+	OperatorSessionID string                  `json:"operator_session_id,omitempty"`
+	BoundOperators    []EnsembleBoundOperator `json:"bound_operators,omitempty"`
+	SourceComponent   string                  `json:"source_component"`
 }
 
 // EnsembleResourceCreation controls inline case/investigation creation. When

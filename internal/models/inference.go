@@ -465,9 +465,7 @@ func IsSHA256Hex(value string) bool {
 // inference contract requires bare 64-character hex.
 func NormalizeProviderModelDigest(digest string) (string, error) {
 	digest = strings.TrimSpace(strings.ToLower(digest))
-	if strings.HasPrefix(digest, "sha256:") {
-		digest = digest[len("sha256:"):]
-	}
+	digest = strings.TrimPrefix(digest, "sha256:")
 	if !IsSHA256Hex(digest) {
 		return "", fmt.Errorf("models: normalize provider model digest: %w", constants.ErrInferenceModelRegistryInvalid)
 	}

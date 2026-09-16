@@ -53,8 +53,8 @@ func TestBuildInferenceProbeDispatchRequest_ToolContinuationPreservesHistory(t *
 	require.NoError(t, err)
 	base := InferenceProbeRequest{
 		ProviderAttemptID:       "attempt-1",
-		Role:                  models.InferenceModelRolePrimary,
-		Model:                 "probe-model",
+		Role:                    models.InferenceModelRolePrimary,
+		Model:                   "probe-model",
 		TargetOperatorSessionID: "sess-1",
 	}
 	probeReq := acceptanceCase.Apply(base)

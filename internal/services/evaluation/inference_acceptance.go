@@ -22,15 +22,15 @@ import (
 type InferenceAcceptanceCaseID string
 
 const (
-	InferenceAcceptanceCaseUnaryBasic         InferenceAcceptanceCaseID = "unary-basic"
-	InferenceAcceptanceCaseRolePrimary        InferenceAcceptanceCaseID = "role-primary"
-	InferenceAcceptanceCaseRoleAssistant      InferenceAcceptanceCaseID = "role-assistant"
-	InferenceAcceptanceCaseRoleLite           InferenceAcceptanceCaseID = "role-lite"
-	InferenceAcceptanceCaseDeterministicSeed  InferenceAcceptanceCaseID = "deterministic-seed"
-	InferenceAcceptanceCaseStreamingProgress  InferenceAcceptanceCaseID = "streaming-progress"
-	InferenceAcceptanceCaseStructuredJSON     InferenceAcceptanceCaseID = "structured-json"
-	InferenceAcceptanceCaseToolSelection      InferenceAcceptanceCaseID = "tool-selection"
-	InferenceAcceptanceCaseToolContinuation   InferenceAcceptanceCaseID = "tool-continuation"
+	InferenceAcceptanceCaseUnaryBasic        InferenceAcceptanceCaseID = "unary-basic"
+	InferenceAcceptanceCaseRolePrimary       InferenceAcceptanceCaseID = "role-primary"
+	InferenceAcceptanceCaseRoleAssistant     InferenceAcceptanceCaseID = "role-assistant"
+	InferenceAcceptanceCaseRoleLite          InferenceAcceptanceCaseID = "role-lite"
+	InferenceAcceptanceCaseDeterministicSeed InferenceAcceptanceCaseID = "deterministic-seed"
+	InferenceAcceptanceCaseStreamingProgress InferenceAcceptanceCaseID = "streaming-progress"
+	InferenceAcceptanceCaseStructuredJSON    InferenceAcceptanceCaseID = "structured-json"
+	InferenceAcceptanceCaseToolSelection     InferenceAcceptanceCaseID = "tool-selection"
+	InferenceAcceptanceCaseToolContinuation  InferenceAcceptanceCaseID = "tool-continuation"
 )
 
 // InferenceAcceptanceCase describes one Phase 1A vertical acceptance probe.
@@ -148,9 +148,9 @@ func DefaultInferenceAcceptanceCases() []InferenceAcceptanceCase {
 						Parts: []*operatorv1.InferenceMessagePart{{
 							Part: &operatorv1.InferenceMessagePart_ToolCall{
 								ToolCall: &operatorv1.InferenceToolCall{
-									CallId:         "probe-call-1",
-									Name:           "probe_echo",
-									ArgumentsJson:  `{"message":"hello"}`,
+									CallId:        "probe-call-1",
+									Name:          "probe_echo",
+									ArgumentsJson: `{"message":"hello"}`,
 								},
 							},
 						}},

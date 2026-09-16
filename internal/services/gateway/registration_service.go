@@ -132,7 +132,7 @@ func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, run
 	}
 	updateBytes, err := json.Marshal(map[string]any{
 		"runtime_config": runtimeConfig,
-		"updated_at":   time.Now().UTC(),
+		"updated_at":     time.Now().UTC(),
 	})
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)

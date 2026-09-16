@@ -48,8 +48,12 @@ func (m *campaignMemoryFileService) FileExists(_ context.Context, relPath string
 	return ok, nil
 }
 
-func (m *campaignMemoryFileService) Stat(context.Context, string) (os.FileInfo, error) { return nil, nil }
-func (m *campaignMemoryFileService) Lstat(context.Context, string) (os.FileInfo, error) { return nil, nil }
+func (m *campaignMemoryFileService) Stat(context.Context, string) (os.FileInfo, error) {
+	return nil, nil
+}
+func (m *campaignMemoryFileService) Lstat(context.Context, string) (os.FileInfo, error) {
+	return nil, nil
+}
 
 func (m *campaignMemoryFileService) WriteFile(_ context.Context, relPath string, data []byte, _ os.FileMode) error {
 	m.files[relPath] = append([]byte(nil), data...)
@@ -64,14 +68,20 @@ func (m *campaignMemoryFileService) OpenForRead(context.Context, string) (*os.Fi
 	return nil, os.ErrInvalid
 }
 
-func (m *campaignMemoryFileService) Resolve(relPath string) string { return relPath }
-func (m *campaignMemoryFileService) Remove(context.Context, string) error { return nil }
-func (m *campaignMemoryFileService) RemoveAll(context.Context, string) error { return nil }
+func (m *campaignMemoryFileService) Resolve(relPath string) string                { return relPath }
+func (m *campaignMemoryFileService) Remove(context.Context, string) error         { return nil }
+func (m *campaignMemoryFileService) RemoveAll(context.Context, string) error      { return nil }
 func (m *campaignMemoryFileService) Rename(context.Context, string, string) error { return nil }
-func (m *campaignMemoryFileService) ReadDir(context.Context, string) ([]os.DirEntry, error) { return nil, nil }
-func (m *campaignMemoryFileService) EnforceDirPermissions(context.Context, string, os.FileMode) error { return nil }
-func (m *campaignMemoryFileService) EnforceFilePermissions(context.Context, string, os.FileMode) error { return nil }
-func (m *campaignMemoryFileService) Rel(string) (string, error) { return "", nil }
+func (m *campaignMemoryFileService) ReadDir(context.Context, string) ([]os.DirEntry, error) {
+	return nil, nil
+}
+func (m *campaignMemoryFileService) EnforceDirPermissions(context.Context, string, os.FileMode) error {
+	return nil
+}
+func (m *campaignMemoryFileService) EnforceFilePermissions(context.Context, string, os.FileMode) error {
+	return nil
+}
+func (m *campaignMemoryFileService) Rel(string) (string, error)        { return "", nil }
 func (m *campaignMemoryFileService) RelFromAbs(string) (string, error) { return "", nil }
 
 func TestStoreSaveAndLoadCampaignSpec(t *testing.T) {

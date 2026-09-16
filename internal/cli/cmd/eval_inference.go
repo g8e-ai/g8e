@@ -32,24 +32,24 @@ import (
 )
 
 type inferenceEvalDeps struct {
-	configLoader   func(string) (*config.Config, error)
-	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)
-	authLoader     func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error)
-	clientFactory  func(harnessconfig.Config) (*harnessclient.Client, error)
+	configLoader     func(string) (*config.Config, error)
+	fileSvcFactory   func(string, *slog.Logger) (fs.RuntimeFileService, error)
+	authLoader       func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error)
+	clientFactory    func(harnessconfig.Config) (*harnessclient.Client, error)
 	appClientFactory func(harnessconfig.Config) (*harnessclient.Client, error)
-	now            func() time.Time
-	newID          func() string
+	now              func() time.Time
+	newID            func() string
 }
 
 func inferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	shared := inferenceEvalDeps{
-		configLoader:   deps.configLoader,
-		fileSvcFactory: deps.fileSvcFactory,
-		authLoader:     deps.authLoader,
-		clientFactory:  deps.clientFactory,
+		configLoader:     deps.configLoader,
+		fileSvcFactory:   deps.fileSvcFactory,
+		authLoader:       deps.authLoader,
+		clientFactory:    deps.clientFactory,
 		appClientFactory: deps.clientFactory,
-		now:            deps.now,
-		newID:          deps.newID,
+		now:              deps.now,
+		newID:            deps.newID,
 	}
 	cmd := &cobra.Command{Use: "inference", Short: "Inspect and probe the campaign Inference Operator"}
 	cmd.AddCommand(
@@ -502,8 +502,8 @@ func loadRegistryFreezeFile(path string) (*evaluation.ModelRegistryFreeze, error
 		return nil, fmt.Errorf("evaluation: read registry file: %w", err)
 	}
 	var payload struct {
-		CampaignID string                               `json:"campaign_id"`
-		Digest     string                               `json:"model_registry_digest"`
+		CampaignID string                              `json:"campaign_id"`
+		Digest     string                              `json:"model_registry_digest"`
 		Variants   []*operatorv1.InferenceModelVariant `json:"variants"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {

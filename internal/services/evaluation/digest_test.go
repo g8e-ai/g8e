@@ -49,18 +49,18 @@ func testScenarioCatalog() *evalv1.EvaluationScenarioCatalog {
 		CatalogRef:    &compliancev1.VersionedReference{Id: "north-star-25", Version: "1.0.0"},
 		Scenarios: []*evalv1.EvaluationScenarioDefinition{
 			{
-				ScenarioId:      "instruction-exact-1",
-				ScenarioVersion: "1.0.0",
-				Category:        evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
+				ScenarioId:        "instruction-exact-1",
+				ScenarioVersion:   "1.0.0",
+				Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
 				PublicDescription: "Reply exactly",
-				GradingMethod:   evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
+				GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 			},
 			{
-				ScenarioId:      "tool-select-1",
-				ScenarioVersion: "1.0.0",
-				Category:        evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
+				ScenarioId:        "tool-select-1",
+				ScenarioVersion:   "1.0.0",
+				Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
 				PublicDescription: "Select the probe tool",
-				GradingMethod:   evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
+				GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 			},
 		},
 	}
@@ -129,7 +129,7 @@ func TestComputeAssignmentDeterministicIdentity_DistinguishesHomogeneousBindings
 		Target: &evalv1.EvaluationAssignment_Homogeneous{
 			Homogeneous: &evalv1.HomogeneousAssignmentTarget{
 				CandidateVariant: testModelVariant(),
-				DesignatedRole: evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+				DesignatedRole:   evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
 			},
 		},
 	}
@@ -144,7 +144,7 @@ func TestComputeAssignmentDeterministicIdentity_DistinguishesHomogeneousBindings
 		Target: &evalv1.EvaluationAssignment_Homogeneous{
 			Homogeneous: &evalv1.HomogeneousAssignmentTarget{
 				CandidateVariant: testModelVariant(),
-				DesignatedRole: evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE,
+				DesignatedRole:   evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_LITE,
 			},
 		},
 	}

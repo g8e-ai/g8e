@@ -193,6 +193,23 @@ func (h *InferenceExecutionHandler) normalizeInferenceInput(req *models.Inferenc
 	if req.ModelDigest != "" && !models.IsSHA256Hex(req.ModelDigest) {
 		return constants.ErrInferenceEvidenceHashInvalid
 	}
+	if err := validateInferenceGenerationOptions(req); err != nil {
+		return err
+	}
+	if len(req.Messages) == 0 {
+		return constants.ErrInferenceMessagesRequired
+	}
+	scrubText := func(value string) string { return value }
+	if h.scrubbing != nil && h.scrubbing.IsEnabled() {
+		scrubText = h.scrubbing.ScrubText
+	}
+	if err := normalizeInferenceMessages(req.Messages, scrubText); err != nil {
+		return err
+	}
+	return validateInferenceToolDefinitions(req.Tools)
+}
+
+func validateInferenceGenerationOptions(req *models.InferenceRequestPayload) error {
 	if req.RequestSchemaVersion != constants.InferenceRequestSchemaVersion {
 		return fmt.Errorf("%w: request schema version", constants.ErrInferenceGenerationOptionsInvalid)
 	}
@@ -227,56 +244,66 @@ func (h *InferenceExecutionHandler) normalizeInferenceInput(req *models.Inferenc
 			return fmt.Errorf("%w: response schema: %w", constants.ErrInferenceGenerationOptionsInvalid, err)
 		}
 	}
-	if req.ToolChoice != nil {
-		if req.ToolChoice.GetMode() != operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO {
-			return fmt.Errorf("%w: tool choice mode", constants.ErrInferenceCapabilityUnsupported)
-		}
-		declared := make(map[string]struct{}, len(req.Tools))
-		for _, tool := range req.Tools {
-			if tool != nil {
-				declared[tool.GetName()] = struct{}{}
-			}
-		}
-		allowed := make(map[string]struct{}, len(req.ToolChoice.GetAllowedToolNames()))
-		for _, name := range req.ToolChoice.GetAllowedToolNames() {
-			if name == "" {
-				return fmt.Errorf("%w: empty allowed tool name", constants.ErrInferenceGenerationOptionsInvalid)
-			}
-			if _, exists := declared[name]; !exists {
-				return fmt.Errorf("%w: undeclared allowed tool", constants.ErrInferenceGenerationOptionsInvalid)
-			}
-			if _, exists := allowed[name]; exists {
-				return fmt.Errorf("%w: duplicate allowed tool", constants.ErrInferenceGenerationOptionsInvalid)
-			}
-			allowed[name] = struct{}{}
-		}
+	if err := validateInferenceToolChoice(req); err != nil {
+		return err
 	}
-	if req.Thinking != nil {
-		switch mode := req.Thinking.GetMode().(type) {
-		case *operatorv1.InferenceThinkingControl_Enabled:
-			if !mode.Enabled && req.Thinking.GetIncludeThoughts() {
-				return fmt.Errorf("%w: disabled thinking includes thoughts", constants.ErrInferenceGenerationOptionsInvalid)
-			}
-		case *operatorv1.InferenceThinkingControl_Level:
-			return fmt.Errorf("%w: thinking level %q", constants.ErrInferenceCapabilityUnsupported, mode.Level)
-		default:
-			return fmt.Errorf("%w: thinking mode", constants.ErrInferenceGenerationOptionsInvalid)
-		}
+	if err := validateInferenceThinking(req.Thinking); err != nil {
+		return err
 	}
 	if req.ContextLimit != nil && (*req.ContextLimit <= 0 || *req.ContextLimit > maxInferenceContextLimit) {
 		return fmt.Errorf("%w: context limit", constants.ErrInferenceGenerationOptionsInvalid)
 	}
-	if err := validateKeepAlive(req.KeepAlive); err != nil {
-		return err
+	return validateKeepAlive(req.KeepAlive)
+}
+
+func validateInferenceToolChoice(req *models.InferenceRequestPayload) error {
+	if req.ToolChoice == nil {
+		return nil
 	}
-	if len(req.Messages) == 0 {
-		return constants.ErrInferenceMessagesRequired
+	if req.ToolChoice.GetMode() != operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO {
+		return fmt.Errorf("%w: tool choice mode", constants.ErrInferenceCapabilityUnsupported)
 	}
-	scrubText := func(value string) string { return value }
-	if h.scrubbing != nil && h.scrubbing.IsEnabled() {
-		scrubText = h.scrubbing.ScrubText
+	declared := make(map[string]struct{}, len(req.Tools))
+	for _, tool := range req.Tools {
+		if tool != nil {
+			declared[tool.GetName()] = struct{}{}
+		}
 	}
-	for messageIndex, message := range req.Messages {
+	allowed := make(map[string]struct{}, len(req.ToolChoice.GetAllowedToolNames()))
+	for _, name := range req.ToolChoice.GetAllowedToolNames() {
+		if name == "" {
+			return fmt.Errorf("%w: empty allowed tool name", constants.ErrInferenceGenerationOptionsInvalid)
+		}
+		if _, exists := declared[name]; !exists {
+			return fmt.Errorf("%w: undeclared allowed tool", constants.ErrInferenceGenerationOptionsInvalid)
+		}
+		if _, exists := allowed[name]; exists {
+			return fmt.Errorf("%w: duplicate allowed tool", constants.ErrInferenceGenerationOptionsInvalid)
+		}
+		allowed[name] = struct{}{}
+	}
+	return nil
+}
+
+func validateInferenceThinking(thinking *operatorv1.InferenceThinkingControl) error {
+	if thinking == nil {
+		return nil
+	}
+	switch mode := thinking.GetMode().(type) {
+	case *operatorv1.InferenceThinkingControl_Enabled:
+		if !mode.Enabled && thinking.GetIncludeThoughts() {
+			return fmt.Errorf("%w: disabled thinking includes thoughts", constants.ErrInferenceGenerationOptionsInvalid)
+		}
+	case *operatorv1.InferenceThinkingControl_Level:
+		return fmt.Errorf("%w: thinking level %q", constants.ErrInferenceCapabilityUnsupported, mode.Level)
+	default:
+		return fmt.Errorf("%w: thinking mode", constants.ErrInferenceGenerationOptionsInvalid)
+	}
+	return nil
+}
+
+func normalizeInferenceMessages(messages []*operatorv1.InferenceMessage, scrubText func(string) string) error {
+	for messageIndex, message := range messages {
 		if message == nil || !validInferenceMessageRole(message.GetRole()) || len(message.GetParts()) == 0 {
 			return fmt.Errorf("%w: message %d", constants.ErrInferenceMessageInvalid, messageIndex)
 		}
@@ -284,36 +311,47 @@ func (h *InferenceExecutionHandler) normalizeInferenceInput(req *models.Inferenc
 			if part == nil || part.GetPart() == nil {
 				return fmt.Errorf("%w: message %d part %d", constants.ErrInferenceMessageInvalid, messageIndex, partIndex)
 			}
-			switch value := part.GetPart().(type) {
-			case *operatorv1.InferenceMessagePart_Text:
-				if message.GetRole() == operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL {
-					return fmt.Errorf("%w: message %d text part", constants.ErrInferenceMessageInvalid, messageIndex)
-				}
-				value.Text = scrubText(value.Text)
-			case *operatorv1.InferenceMessagePart_ToolCall:
-				if message.GetRole() != operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT || value.ToolCall == nil || value.ToolCall.GetName() == "" {
-					return fmt.Errorf("%w: message %d tool call", constants.ErrInferenceMessageInvalid, messageIndex)
-				}
-				normalized, err := normalizeCanonicalJSON(value.ToolCall.GetArgumentsJson(), true, scrubText)
-				if err != nil {
-					return fmt.Errorf("message %d tool call arguments: %w", messageIndex, err)
-				}
-				value.ToolCall.ArgumentsJson = normalized
-			case *operatorv1.InferenceMessagePart_ToolResult:
-				if message.GetRole() != operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL || value.ToolResult == nil || value.ToolResult.GetName() == "" {
-					return fmt.Errorf("%w: message %d tool result", constants.ErrInferenceMessageInvalid, messageIndex)
-				}
-				normalized, err := normalizeCanonicalJSON(value.ToolResult.GetResultJson(), false, scrubText)
-				if err != nil {
-					return fmt.Errorf("message %d tool result: %w", messageIndex, err)
-				}
-				value.ToolResult.ResultJson = normalized
-			default:
-				return fmt.Errorf("%w: message %d part %d", constants.ErrInferenceMessageInvalid, messageIndex, partIndex)
+			if err := normalizeInferenceMessagePart(message, part, messageIndex, partIndex, scrubText); err != nil {
+				return err
 			}
 		}
 	}
-	for toolIndex, tool := range req.Tools {
+	return nil
+}
+
+func normalizeInferenceMessagePart(message *operatorv1.InferenceMessage, part *operatorv1.InferenceMessagePart, messageIndex, partIndex int, scrubText func(string) string) error {
+	switch value := part.GetPart().(type) {
+	case *operatorv1.InferenceMessagePart_Text:
+		if message.GetRole() == operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL {
+			return fmt.Errorf("%w: message %d text part", constants.ErrInferenceMessageInvalid, messageIndex)
+		}
+		value.Text = scrubText(value.Text)
+	case *operatorv1.InferenceMessagePart_ToolCall:
+		if message.GetRole() != operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT || value.ToolCall == nil || value.ToolCall.GetName() == "" {
+			return fmt.Errorf("%w: message %d tool call", constants.ErrInferenceMessageInvalid, messageIndex)
+		}
+		normalized, err := normalizeCanonicalJSON(value.ToolCall.GetArgumentsJson(), true, scrubText)
+		if err != nil {
+			return fmt.Errorf("message %d tool call arguments: %w", messageIndex, err)
+		}
+		value.ToolCall.ArgumentsJson = normalized
+	case *operatorv1.InferenceMessagePart_ToolResult:
+		if message.GetRole() != operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL || value.ToolResult == nil || value.ToolResult.GetName() == "" {
+			return fmt.Errorf("%w: message %d tool result", constants.ErrInferenceMessageInvalid, messageIndex)
+		}
+		normalized, err := normalizeCanonicalJSON(value.ToolResult.GetResultJson(), false, scrubText)
+		if err != nil {
+			return fmt.Errorf("message %d tool result: %w", messageIndex, err)
+		}
+		value.ToolResult.ResultJson = normalized
+	default:
+		return fmt.Errorf("%w: message %d part %d", constants.ErrInferenceMessageInvalid, messageIndex, partIndex)
+	}
+	return nil
+}
+
+func validateInferenceToolDefinitions(tools []*operatorv1.InferenceToolDeclaration) error {
+	for toolIndex, tool := range tools {
 		if tool == nil || tool.GetName() == "" {
 			return fmt.Errorf("%w: tool %d", constants.ErrInferenceToolSchemaInvalid, toolIndex)
 		}

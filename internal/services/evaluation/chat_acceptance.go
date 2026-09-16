@@ -15,11 +15,11 @@ import (
 type ChatAcceptanceCaseID string
 
 const (
-	ChatAcceptanceCaseSystemBasic        ChatAcceptanceCaseID = "system-basic"
-	ChatAcceptanceCaseRolePrimary        ChatAcceptanceCaseID = "role-primary"
-	ChatAcceptanceCaseRoleAssistant      ChatAcceptanceCaseID = "role-assistant"
-	ChatAcceptanceCaseRoleLite           ChatAcceptanceCaseID = "role-lite"
-	ChatAcceptanceCaseBackgroundBarrier  ChatAcceptanceCaseID = "background-barrier"
+	ChatAcceptanceCaseSystemBasic       ChatAcceptanceCaseID = "system-basic"
+	ChatAcceptanceCaseRolePrimary       ChatAcceptanceCaseID = "role-primary"
+	ChatAcceptanceCaseRoleAssistant     ChatAcceptanceCaseID = "role-assistant"
+	ChatAcceptanceCaseRoleLite          ChatAcceptanceCaseID = "role-lite"
+	ChatAcceptanceCaseBackgroundBarrier ChatAcceptanceCaseID = "background-barrier"
 )
 
 // ChatAcceptanceCase describes one Phase 1A chat-path acceptance probe.
