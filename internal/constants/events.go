@@ -329,6 +329,7 @@ const EventAppMemoryUpdated EventType = "g8e.v1.app.memory.updated"
 const EventOperatorPortCheckRequested EventType = "g8e.v1.operator.port.check.requested"
 const EventOperatorReceiptRecorded EventType = "g8e.v1.operator.receipt.recorded"
 const EventOperatorInferenceRequested EventType = "g8e.v1.operator.inference.requested"
+const EventOperatorInferenceProgressUpdated EventType = "g8e.v1.operator.inference.progress.updated"
 const EventOperatorInferenceCompleted EventType = "g8e.v1.operator.inference.completed"
 const EventOperatorInferenceFailed EventType = "g8e.v1.operator.inference.failed"
 
@@ -483,9 +484,10 @@ type _EventOperatorFsRead struct {
 	Started   EventType
 }
 type _EventOperatorInference struct {
-	Completed EventType
-	Failed    EventType
-	Requested EventType
+	Completed       EventType
+	Failed          EventType
+	ProgressUpdated EventType
+	Requested       EventType
 }
 type _EventOperatorMcp struct {
 	CallRequested EventType
@@ -710,9 +712,10 @@ var Event = struct {
 			Revoked:           EventOperatorIntentRevoked,
 		},
 		Inference: _EventOperatorInference{
-			Completed: EventOperatorInferenceCompleted,
-			Failed:    EventOperatorInferenceFailed,
-			Requested: EventOperatorInferenceRequested,
+			Completed:       EventOperatorInferenceCompleted,
+			Failed:          EventOperatorInferenceFailed,
+			ProgressUpdated: EventOperatorInferenceProgressUpdated,
+			Requested:       EventOperatorInferenceRequested,
 		},
 		Mcp: _EventOperatorMcp{
 			CallRequested: EventOperatorMcpCallRequested,

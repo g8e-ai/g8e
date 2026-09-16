@@ -168,7 +168,7 @@ func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 
 	// Verify the request was constructed correctly
 	assert.Equal(t, "gemma3:4b", capturedBody.Model)
-	assert.False(t, capturedBody.Stream)
+	assert.True(t, capturedBody.Stream)
 	require.Len(t, capturedBody.Messages, 4)
 	assert.Equal(t, ollamaChatMessage{Role: "system", Content: "Be precise"}, capturedBody.Messages[0])
 	assert.Equal(t, ollamaChatMessage{Role: "user", Content: "Hello, world"}, capturedBody.Messages[1])
@@ -201,6 +201,128 @@ func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 	assert.Equal(t, "true", string(capturedBody.Think))
 	assert.JSONEq(t, `{"properties":{"answer":{"type":"string"}},"type":"object"}`, string(capturedBody.Format))
 	assert.Equal(t, "-1", capturedBody.KeepAlive)
+}
+
+func TestOllamaBackend_GeneratePreservesOrderedStreamPartsAndMeasuresFirstToken(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request ollamaChatRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		assert.True(t, request.Stream)
+		flusher, ok := w.(http.Flusher)
+		require.True(t, ok)
+		events := []string{
+			`{"model":"test-model","message":{"role":"assistant","thinking":"considering"},"done":false}`,
+			`{"model":"test-model","message":{"role":"assistant","content":"answer"},"done":false}`,
+			`{"model":"test-model","message":{"role":"assistant","tool_calls":[{"id":"call-1","function":{"name":"inspect","arguments":{"path":"target.txt"}}}]},"done":false}`,
+			`{"model":"test-model","message":{"role":"assistant","content":""},"done":true,"done_reason":"tool_calls","prompt_eval_count":4,"eval_count":3,"load_duration":1,"prompt_eval_duration":2,"eval_duration":3,"total_duration":6}`,
+		}
+		for _, event := range events {
+			time.Sleep(time.Millisecond)
+			_, err := io.WriteString(w, event+"\n")
+			require.NoError(t, err)
+			flusher.Flush()
+		}
+	}))
+	defer server.Close()
+	backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+	require.NoError(t, err)
+
+	response, err := backend.Generate(context.Background(), models.GenerateRequest{Model: "test-model"})
+
+	require.NoError(t, err)
+	require.Len(t, response.Parts, 3)
+	assert.Equal(t, "considering", response.Parts[0].GetThinking())
+	assert.Equal(t, "answer", response.Parts[1].GetText())
+	assert.Equal(t, "call-1", response.Parts[2].GetToolCall().GetCallId())
+	assert.Equal(t, `{"path":"target.txt"}`, response.Parts[2].GetToolCall().GetArgumentsJson())
+	require.NotNil(t, response.TimeToFirstTokenNS)
+	assert.Positive(t, *response.TimeToFirstTokenNS)
+	assert.Equal(t, operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_PROVIDER, response.TimingSource)
+	assert.Equal(t, "tool_calls", response.FinishReason)
+	assert.Equal(t, int32(7), response.TotalTokens)
+}
+
+func TestOllamaBackend_GenerateRejectsStreamWithoutOneTerminalEvent(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "missing terminal",
+			body: `{"model":"test-model","message":{"role":"assistant","content":"partial"},"done":false}` + "\n",
+		},
+		{
+			name: "event after terminal",
+			body: `{"model":"test-model","message":{"role":"assistant","content":"complete"},"done":true}` + "\n" +
+				`{"model":"test-model","message":{"role":"assistant","content":"extra"},"done":false}` + "\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, err := io.WriteString(w, tt.body)
+				require.NoError(t, err)
+			}))
+			defer server.Close()
+			backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+			require.NoError(t, err)
+
+			response, err := backend.Generate(context.Background(), models.GenerateRequest{Model: "test-model"})
+
+			require.Error(t, err)
+			assert.Nil(t, response)
+			assert.ErrorIs(t, err, constants.ErrInferenceProviderResponseInvalid)
+		})
+	}
+}
+
+func TestOllamaBackend_GenerateRejectsParallelToolCallsSplitAcrossEventsWhenDisabled(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		events := []string{
+			`{"model":"test-model","message":{"role":"assistant","tool_calls":[{"function":{"name":"inspect","arguments":{}}}]},"done":false}`,
+			`{"model":"test-model","message":{"role":"assistant","tool_calls":[{"function":{"name":"search","arguments":{}}}]},"done":true}`,
+		}
+		for _, event := range events {
+			_, err := io.WriteString(w, event+"\n")
+			require.NoError(t, err)
+		}
+	}))
+	defer server.Close()
+	backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+	require.NoError(t, err)
+	parallelToolCalls := false
+
+	response, err := backend.Generate(context.Background(), models.GenerateRequest{Model: "test-model", ParallelToolCalls: &parallelToolCalls})
+
+	require.Error(t, err)
+	assert.Nil(t, response)
+	assert.ErrorIs(t, err, constants.ErrInferenceProviderResponseInvalid)
+}
+
+func TestOllamaBackend_GenerateTimeoutDuringStreamReturnsBackendTimeout(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		require.True(t, ok)
+		_, err := io.WriteString(w, `{"model":"test-model","message":{"role":"assistant","content":"partial"},"done":false}`+"\n")
+		require.NoError(t, err)
+		flusher.Flush()
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	response, err := backend.Generate(ctx, models.GenerateRequest{Model: "test-model"})
+
+	require.Error(t, err)
+	assert.Nil(t, response)
+	assert.ErrorIs(t, err, constants.ErrInferenceBackendTimeout)
 }
 
 func TestOllamaBackend_GenerateAcceptsToolOnlyResponse(t *testing.T) {
@@ -615,8 +737,10 @@ func TestOllamaBackend_GenerateDistinguishesUnavailableUsageFromReportedZero(t *
 				assert.Equal(t, operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_PROVIDER, response.TimingSource)
 			} else {
 				assert.Nil(t, response.LoadDurationNS)
-				assert.Equal(t, operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_UNSPECIFIED, response.TimingSource)
+				assert.Equal(t, operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_PROVIDER, response.TimingSource)
 			}
+			require.NotNil(t, response.TimeToFirstTokenNS)
+			assert.GreaterOrEqual(t, *response.TimeToFirstTokenNS, int64(0))
 		})
 	}
 }
@@ -1017,4 +1141,52 @@ func TestOllamaBackend_EndpointPathPrefixPreserved(t *testing.T) {
 	_, err = backend.Status(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "/ollama/api/tags", capturedPath, "a path-prefixed endpoint must keep its prefix")
+}
+
+func TestOllamaBackend_GenerateStreamingPublishesProgressEvents(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		encoder := json.NewEncoder(w)
+		require.NoError(t, encoder.Encode(ollamaChatResponse{
+			Model:   "test-model",
+			Message: ollamaChatMessage{Role: "assistant", Content: "hel"},
+		}))
+		require.NoError(t, encoder.Encode(ollamaChatResponse{
+			Model:      "test-model",
+			Message:    ollamaChatMessage{Role: "assistant", Content: "lo"},
+			Done:       true,
+			DoneReason: "stop",
+		}))
+	}))
+	defer server.Close()
+
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
+
+	var progressEvents []*operatorv1.InferenceProgressEvent
+	ctx := WithProgressReporter(context.Background(), func(event *operatorv1.InferenceProgressEvent) error {
+		progressEvents = append(progressEvents, event)
+		return nil
+	})
+
+	resp, err := backend.Generate(ctx, models.GenerateRequest{
+		Role:              models.InferenceModelRolePrimary,
+		Model:             "test-model",
+		Stream:            true,
+		ProviderAttemptID: "attempt-1",
+		Messages: []*operatorv1.InferenceMessage{{
+			Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+			Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: "hi"}}},
+		}},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Len(t, progressEvents, 2)
+	assert.Equal(t, uint32(1), progressEvents[0].GetSequence())
+	assert.Equal(t, "hel", progressEvents[0].GetParts()[0].GetText())
+	assert.NotNil(t, progressEvents[0].TimeToFirstTokenNs)
+	assert.Equal(t, uint32(2), progressEvents[1].GetSequence())
+	assert.Equal(t, "lo", progressEvents[1].GetParts()[0].GetText())
 }

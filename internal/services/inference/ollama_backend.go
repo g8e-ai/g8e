@@ -39,7 +39,7 @@ const ProviderRequestTimeout = 5 * time.Minute
 const ProviderStatusTimeout = 30 * time.Second
 
 // defaultMaxResponseBytes bounds every response body read from the remote
-// provider. A non-streaming chat response contains the full generated text;
+// provider. A streaming chat response contains the full generated output;
 // the bound is generous enough for any configured num_predict while still
 // failing closed on a misbehaving or hostile endpoint.
 const defaultMaxResponseBytes int64 = 32 << 20
@@ -101,6 +101,7 @@ type ollamaChatRequest struct {
 type ollamaChatMessage struct {
 	Role       string           `json:"role"`
 	Content    string           `json:"content"`
+	Thinking   string           `json:"thinking,omitempty"`
 	ToolCalls  []ollamaToolCall `json:"tool_calls,omitempty"`
 	ToolName   string           `json:"tool_name,omitempty"`
 	ToolCallID string           `json:"tool_call_id,omitempty"`
@@ -133,8 +134,7 @@ type ollamaChatOptions struct {
 	NumCtx      *int32   `json:"num_ctx,omitempty"`
 }
 
-// ollamaChatResponse is the response body from Ollama's /api/chat endpoint
-// (non-streaming).
+// ollamaChatResponse is one response event from Ollama's /api/chat endpoint.
 type ollamaChatResponse struct {
 	Model              string            `json:"model"`
 	Message            ollamaChatMessage `json:"message"`
@@ -210,7 +210,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		Model:    req.Model,
 		Messages: messages,
 		Tools:    tools,
-		Stream:   false,
+		Stream:   true,
 		Think:    think,
 		Format:   format,
 		Options: ollamaChatOptions{
@@ -236,6 +236,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
+	requestStartedAt := time.Now()
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
 		return nil, transportError("generate", ctx, err)
@@ -257,17 +258,19 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		}
 	}
 
-	var chatResp ollamaChatResponse
-	if err := b.decodeResponse("generate", resp.Body, &chatResp); err != nil {
+	allowParallelToolCalls := req.ParallelToolCalls == nil || *req.ParallelToolCalls
+	var reporter ProgressReporter
+	if req.Stream {
+		reporter = ProgressReporterFromContext(ctx)
+	}
+	chatResp, parts, timeToFirstToken, err := b.decodeChatStream(ctx, resp.Body, allowParallelToolCalls, requestStartedAt, req.ProviderAttemptID, reporter)
+	if err != nil {
 		return nil, err
 	}
 
 	finishReason := chatResp.DoneReason
-	if finishReason == "" && chatResp.Done {
+	if finishReason == "" {
 		finishReason = "stop"
-	}
-	if chatResp.Model == "" {
-		return nil, fmt.Errorf("ollama_backend: generate: served model: %w", constants.ErrInferenceProviderResponseInvalid)
 	}
 	if (chatResp.PromptEvalCount == nil) != (chatResp.EvalCount == nil) {
 		return nil, fmt.Errorf("ollama_backend: generate: token usage: %w", constants.ErrInferenceProviderResponseInvalid)
@@ -281,7 +284,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 			return nil, fmt.Errorf("ollama_backend: generate: token usage: %w", constants.ErrInferenceProviderResponseInvalid)
 		}
 	}
-	timings := []*int64{chatResp.LoadDuration, chatResp.PromptEvalDuration, chatResp.EvalDuration, chatResp.TotalDuration}
+	timings := []*int64{chatResp.LoadDuration, chatResp.PromptEvalDuration, chatResp.EvalDuration, chatResp.TotalDuration, timeToFirstToken}
 	timingSource := operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_UNSPECIFIED
 	for _, duration := range timings {
 		if duration == nil {
@@ -293,11 +296,6 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		timingSource = operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_PROVIDER
 	}
 
-	allowParallelToolCalls := req.ParallelToolCalls == nil || *req.ParallelToolCalls
-	parts, err := ollamaResponseParts(chatResp.Message, allowParallelToolCalls)
-	if err != nil {
-		return nil, fmt.Errorf("ollama_backend: generate: response parts: %w", err)
-	}
 	outputHash, err := models.ComputeInferenceOutputHash(parts, finishReason)
 	if err != nil {
 		return nil, fmt.Errorf("ollama_backend: generate: %w", err)
@@ -322,6 +320,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		PromptEvalDurationNS:  chatResp.PromptEvalDuration,
 		GenerationDurationNS:  chatResp.EvalDuration,
 		TotalDurationNS:       chatResp.TotalDuration,
+		TimeToFirstTokenNS:    timeToFirstToken,
 		TimingSource:          timingSource,
 		FinishReason:          finishReason,
 		Model:                 chatResp.Model,
@@ -447,7 +446,10 @@ func ollamaResponseParts(message ollamaChatMessage, allowParallelToolCalls bool)
 	if !allowParallelToolCalls && len(message.ToolCalls) > 1 {
 		return nil, constants.ErrInferenceProviderResponseInvalid
 	}
-	parts := make([]*operatorv1.InferenceResponsePart, 0, len(message.ToolCalls)+1)
+	parts := make([]*operatorv1.InferenceResponsePart, 0, len(message.ToolCalls)+2)
+	if message.Thinking != "" {
+		parts = append(parts, &operatorv1.InferenceResponsePart{Part: &operatorv1.InferenceResponsePart_Thinking{Thinking: message.Thinking}})
+	}
 	if message.Content != "" {
 		parts = append(parts, &operatorv1.InferenceResponsePart{Part: &operatorv1.InferenceResponsePart_Text{Text: message.Content}})
 	}
@@ -467,10 +469,91 @@ func ollamaResponseParts(message ollamaChatMessage, allowParallelToolCalls bool)
 			}},
 		})
 	}
-	if len(parts) == 0 {
-		return nil, constants.ErrInferenceProviderResponseInvalid
-	}
 	return parts, nil
+}
+
+func (b *OllamaBackend) decodeChatStream(
+	ctx context.Context,
+	body io.Reader,
+	allowParallelToolCalls bool,
+	requestStartedAt time.Time,
+	providerAttemptID string,
+	reporter ProgressReporter,
+) (ollamaChatResponse, []*operatorv1.InferenceResponsePart, *int64, error) {
+	limited := &io.LimitedReader{R: body, N: b.maxResponseBytes + 1}
+	decoder := json.NewDecoder(limited)
+	parts := make([]*operatorv1.InferenceResponsePart, 0)
+	var terminal *ollamaChatResponse
+	var servedModel string
+	var timeToFirstToken *int64
+	toolCallCount := 0
+	var progressSequence uint32
+	for {
+		var event ollamaChatResponse
+		err := decoder.Decode(&event)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			if ctx.Err() != nil {
+				return ollamaChatResponse{}, nil, nil, transportError("generate", ctx, err)
+			}
+			return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: %w: %w", constants.ErrInferenceProviderResponseInvalid, err)
+		}
+		if limited.N == 0 {
+			return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: %w: response exceeds %d bytes", constants.ErrInferenceProviderResponseInvalid, b.maxResponseBytes)
+		}
+		if terminal != nil {
+			return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: terminal event: %w", constants.ErrInferenceProviderResponseInvalid)
+		}
+		if event.Model != "" {
+			if servedModel != "" && event.Model != servedModel {
+				return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: served model changed: %w", constants.ErrInferenceProviderResponseInvalid)
+			}
+			servedModel = event.Model
+		}
+		toolCallCount += len(event.Message.ToolCalls)
+		if !allowParallelToolCalls && toolCallCount > 1 {
+			return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: response parts: %w", constants.ErrInferenceProviderResponseInvalid)
+		}
+		eventParts, err := ollamaResponseParts(event.Message, allowParallelToolCalls)
+		if err != nil {
+			return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: response parts: %w", err)
+		}
+		if len(eventParts) > 0 {
+			if timeToFirstToken == nil {
+				duration := time.Since(requestStartedAt).Nanoseconds()
+				timeToFirstToken = &duration
+			}
+			if reporter != nil {
+				progressSequence++
+				progressEvent := &operatorv1.InferenceProgressEvent{
+					ProviderAttemptId: providerAttemptID,
+					Sequence:          progressSequence,
+					Parts:             eventParts,
+					ServedModel:       servedModel,
+				}
+				if timeToFirstToken != nil && progressSequence == 1 {
+					ttft := *timeToFirstToken
+					progressEvent.TimeToFirstTokenNs = &ttft
+				}
+				if err := reporter(progressEvent); err != nil {
+					return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: progress: %w", err)
+				}
+			}
+		}
+		parts = append(parts, eventParts...)
+		if event.Done {
+			terminal = &event
+		}
+	}
+	if limited.N == 0 {
+		return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: %w: response exceeds %d bytes", constants.ErrInferenceProviderResponseInvalid, b.maxResponseBytes)
+	}
+	if terminal == nil || terminal.Model == "" || servedModel != terminal.Model || len(parts) == 0 {
+		return ollamaChatResponse{}, nil, nil, fmt.Errorf("ollama_backend: generate: terminal event: %w", constants.ErrInferenceProviderResponseInvalid)
+	}
+	return *terminal, parts, timeToFirstToken, nil
 }
 
 func (b *OllamaBackend) modelDigest(ctx context.Context, model string) (string, error) {

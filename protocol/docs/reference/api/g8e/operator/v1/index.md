@@ -62,9 +62,11 @@
     - [InferenceCompletion](#g8e-operator-v1-InferenceCompletion)
     - [InferenceDispatchRequest](#g8e-operator-v1-InferenceDispatchRequest)
     - [InferenceDispatchResponse](#g8e-operator-v1-InferenceDispatchResponse)
+    - [InferenceDispatchStreamFrame](#g8e-operator-v1-InferenceDispatchStreamFrame)
     - [InferenceMessage](#g8e-operator-v1-InferenceMessage)
     - [InferenceMessagePart](#g8e-operator-v1-InferenceMessagePart)
     - [InferenceModelVariant](#g8e-operator-v1-InferenceModelVariant)
+    - [InferenceProgressEvent](#g8e-operator-v1-InferenceProgressEvent)
     - [InferenceRequested](#g8e-operator-v1-InferenceRequested)
     - [InferenceResponseFormat](#g8e-operator-v1-InferenceResponseFormat)
     - [InferenceResponsePart](#g8e-operator-v1-InferenceResponsePart)
@@ -1355,6 +1357,7 @@ inference request to the Inference Node.
 | scenario_id | [string](#string) |  |  |
 | model_registry | [InferenceModelVariant](#g8e-operator-v1-InferenceModelVariant) | repeated |  |
 | model_registry_digest | [string](#string) |  |  |
+| stream | [bool](#bool) |  | When true, the Gateway forwards live InferenceProgressEvent telemetry to the caller while waiting for the authoritative terminal completion. |
 
 
 
@@ -1376,6 +1379,24 @@ the gateway&#39;s standard typed error envelope with a public-safe code.
 | transaction_id | [string](#string) |  | Transaction ID correlating the dispatch with the audit chain. |
 | result | [InferenceResult](#g8e-operator-v1-InferenceResult) |  | The complete inference result whose result_digest is bound into the signed receipt. |
 | receipt | [ActionReceipt](#g8e-operator-v1-ActionReceipt) |  | The verified final signed ActionReceipt for the transaction. |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceDispatchStreamFrame"></a>
+
+### InferenceDispatchStreamFrame
+InferenceDispatchStreamFrame is one NDJSON line in a streaming dispatch
+response. Progress frames are delivery telemetry only; the completion
+frame carries the verified terminal result and signed receipt.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| progress | [InferenceProgressEvent](#g8e-operator-v1-InferenceProgressEvent) |  |  |
+| completion | [InferenceDispatchResponse](#g8e-operator-v1-InferenceDispatchResponse) |  |  |
 
 
 
@@ -1431,6 +1452,27 @@ InferenceMessagePart carries exactly one typed part of a conversation turn.
 
 
 
+<a name="g8e-operator-v1-InferenceProgressEvent"></a>
+
+### InferenceProgressEvent
+InferenceProgressEvent carries bounded incremental provider output for
+live cross-boundary delivery telemetry. It is not authoritative; the
+signed InferenceCompletion remains the sole terminal outcome.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| provider_attempt_id | [string](#string) |  | Stable provider-attempt identity copied from the governed request. |
+| sequence | [uint32](#uint32) |  | Monotonic sequence number for this attempt, starting at 1. |
+| parts | [InferenceResponsePart](#g8e-operator-v1-InferenceResponsePart) | repeated | Ordered response parts emitted by this provider stream event. |
+| time_to_first_token_ns | [int64](#int64) | optional | Measured time from immediately before the provider request to the first observable thinking, text, or tool-call event. Present only on the first progress event that carries observable output for the attempt. |
+| served_model | [string](#string) |  | Provider-served model tag when known from the stream event. |
+
+
+
+
+
+
 <a name="g8e-operator-v1-InferenceRequested"></a>
 
 ### InferenceRequested
@@ -1464,6 +1506,7 @@ Payload for g8e.v1.operator.inference.requested. The handler receives an ordered
 | scenario_id | [string](#string) |  |  |
 | model_registry | [InferenceModelVariant](#g8e-operator-v1-InferenceModelVariant) | repeated |  |
 | model_registry_digest | [string](#string) |  |  |
+| stream | [bool](#bool) |  | When true, the Inference Node publishes bounded InferenceProgressEvent telemetry on the results channel while the provider stream is active. Progress events are delivery telemetry only; the signed InferenceCompletion remains the sole authoritative terminal outcome. |
 
 
 
@@ -1496,6 +1539,7 @@ InferenceResponsePart carries exactly one typed model response part.
 | ----- | ---- | ----- | ----------- |
 | text | [string](#string) |  |  |
 | tool_call | [InferenceToolCall](#g8e-operator-v1-InferenceToolCall) |  |  |
+| thinking | [string](#string) |  |  |
 
 
 

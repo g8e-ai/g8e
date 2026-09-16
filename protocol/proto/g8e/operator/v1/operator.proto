@@ -1250,6 +1250,7 @@ message InferenceResponsePart {
   oneof part {
     string text = 1;
     InferenceToolCall tool_call = 2;
+    string thinking = 3;
   }
 }
 
@@ -1303,6 +1304,12 @@ message InferenceRequested {
   string scenario_id = 24;
   repeated InferenceModelVariant model_registry = 25;
   string model_registry_digest = 26;
+
+  // When true, the Inference Node publishes bounded InferenceProgressEvent
+  // telemetry on the results channel while the provider stream is active.
+  // Progress events are delivery telemetry only; the signed
+  // InferenceCompletion remains the sole authoritative terminal outcome.
+  bool stream = 27;
 }
 
 enum InferenceTimingSource {
@@ -1362,6 +1369,28 @@ message InferenceResult {
   string evaluation_attempt_id = 27;
   string scenario_id = 28;
   string model_registry_digest = 29;
+}
+
+// InferenceProgressEvent carries bounded incremental provider output for
+// live cross-boundary delivery telemetry. It is not authoritative; the
+// signed InferenceCompletion remains the sole terminal outcome.
+message InferenceProgressEvent {
+  // Stable provider-attempt identity copied from the governed request.
+  string provider_attempt_id = 1;
+
+  // Monotonic sequence number for this attempt, starting at 1.
+  uint32 sequence = 2;
+
+  // Ordered response parts emitted by this provider stream event.
+  repeated InferenceResponsePart parts = 3;
+
+  // Measured time from immediately before the provider request to the first
+  // observable thinking, text, or tool-call event. Present only on the first
+  // progress event that carries observable output for the attempt.
+  optional int64 time_to_first_token_ns = 4;
+
+  // Provider-served model tag when known from the stream event.
+  string served_model = 5;
 }
 
 // InferenceCompletion is the protocol-owned completion publication for a
@@ -1444,6 +1473,20 @@ message InferenceDispatchRequest {
   string scenario_id = 31;
   repeated InferenceModelVariant model_registry = 32;
   string model_registry_digest = 33;
+
+  // When true, the Gateway forwards live InferenceProgressEvent telemetry
+  // to the caller while waiting for the authoritative terminal completion.
+  bool stream = 34;
+}
+
+// InferenceDispatchStreamFrame is one NDJSON line in a streaming dispatch
+// response. Progress frames are delivery telemetry only; the completion
+// frame carries the verified terminal result and signed receipt.
+message InferenceDispatchStreamFrame {
+  oneof frame {
+    InferenceProgressEvent progress = 1;
+    InferenceDispatchResponse completion = 2;
+  }
 }
 
 // InferenceDispatchResponse is the protocol-owned success response for

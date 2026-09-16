@@ -191,6 +191,10 @@ type DispatchRequest struct {
 	// RequestDeadline from the inference dispatch package so the wait
 	// outlives an in-flight provider call.
 	Timeout time.Duration
+
+	// OnInferenceProgress receives bounded provider progress telemetry while
+	// waiting for the authoritative terminal completion.
+	OnInferenceProgress func(*operatorv1.InferenceProgressEvent) error
 }
 
 // DispatchResult is the output of a successful command dispatch. For
@@ -344,7 +348,11 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	// 6. Register an in-process handler on the operator's results channel to
 	//    correlate the result by transaction ID.
 	resultsChannel := pubsub.ResultsChannel(operatorID, operatorSessionID)
-	resultCh := make(chan *commonv1.GovernanceEnvelope, 1)
+	resultBuffer := 1
+	if req.OnInferenceProgress != nil {
+		resultBuffer = 64
+	}
+	resultCh := make(chan *commonv1.GovernanceEnvelope, resultBuffer)
 
 	handler := func(channel string, data []byte) {
 		resultEnv := &commonv1.GovernanceEnvelope{}
@@ -356,6 +364,9 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 			select {
 			case resultCh <- resultEnv:
 			default:
+				d.logger.Warn("dispatch: inference progress channel full, dropping event",
+					"transaction_id", txHash,
+					"event_type", resultEnv.GetEventType())
 			}
 		}
 	}
@@ -386,21 +397,42 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	timeoutCtx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 
-	select {
-	case resultEnv := <-resultCh:
-		if req.ActionType == string(constants.ActionTypeInference) {
-			return d.verifyInferenceCompletion(env, resultEnv)
+	for {
+		select {
+		case resultEnv := <-resultCh:
+			if req.ActionType == string(constants.ActionTypeInference) {
+				if progress, ok := decodeInferenceProgressEnvelope(resultEnv); ok {
+					if req.OnInferenceProgress != nil {
+						if err := req.OnInferenceProgress(progress); err != nil {
+							return nil, fmt.Errorf("dispatch: %w", err)
+						}
+					}
+					continue
+				}
+				return d.verifyInferenceCompletion(env, resultEnv)
+			}
+			return &DispatchResult{
+				TransactionID:  txHash,
+				ResultEnvelope: resultEnv,
+			}, nil
+		case <-timeoutCtx.Done():
+			if err := ctx.Err(); err != nil {
+				return nil, fmt.Errorf("dispatch: %w", err)
+			}
+			return nil, fmt.Errorf("dispatch: %w after %s (transaction %s)", constants.ErrDispatchResultTimeout, deadline, txHash)
 		}
-		return &DispatchResult{
-			TransactionID:  txHash,
-			ResultEnvelope: resultEnv,
-		}, nil
-	case <-timeoutCtx.Done():
-		if err := ctx.Err(); err != nil {
-			return nil, fmt.Errorf("dispatch: %w", err)
-		}
-		return nil, fmt.Errorf("dispatch: %w after %s (transaction %s)", constants.ErrDispatchResultTimeout, deadline, txHash)
 	}
+}
+
+func decodeInferenceProgressEnvelope(env *commonv1.GovernanceEnvelope) (*operatorv1.InferenceProgressEvent, bool) {
+	if env == nil || env.GetEventType() != string(constants.Event.Operator.Inference.ProgressUpdated) {
+		return nil, false
+	}
+	progress := &operatorv1.InferenceProgressEvent{}
+	if err := proto.Unmarshal(env.GetPayload(), progress); err != nil {
+		return nil, false
+	}
+	return progress, true
 }
 
 // verifyInferenceCompletion decodes the protocol-owned InferenceCompletion

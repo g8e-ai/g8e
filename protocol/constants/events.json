@@ -1280,6 +1280,10 @@
       "_go_const": "EventPublicFeedKeyRotated",
       "value": "g8e.v1.public.feed.key.rotated"
     },
+    "OperatorInferenceProgressUpdated": {
+      "_go_const": "EventOperatorInferenceProgressUpdated",
+      "value": "g8e.v1.operator.inference.progress.updated"
+    },
     "OperatorInferenceCompleted": {
       "_go_const": "EventOperatorInferenceCompleted",
       "value": "g8e.v1.operator.inference.completed"

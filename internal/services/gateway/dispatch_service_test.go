@@ -567,3 +567,27 @@ func TestDispatchController_HandleDispatch_ValidationFails(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
+
+func TestDecodeInferenceProgressEnvelope(t *testing.T) {
+	t.Parallel()
+	progress := &operatorv1.InferenceProgressEvent{
+		ProviderAttemptId: "attempt-1",
+		Sequence:          2,
+	}
+	payload, err := proto.Marshal(progress)
+	require.NoError(t, err)
+
+	decoded, ok := decodeInferenceProgressEnvelope(&commonv1.GovernanceEnvelope{
+		EventType: string(constants.Event.Operator.Inference.ProgressUpdated),
+		Payload:   payload,
+	})
+	require.True(t, ok)
+	assert.Equal(t, "attempt-1", decoded.GetProviderAttemptId())
+	assert.Equal(t, uint32(2), decoded.GetSequence())
+
+	_, ok = decodeInferenceProgressEnvelope(&commonv1.GovernanceEnvelope{
+		EventType: string(constants.Event.Operator.Inference.Completed),
+		Payload:   payload,
+	})
+	assert.False(t, ok)
+}

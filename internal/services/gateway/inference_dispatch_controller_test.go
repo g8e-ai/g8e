@@ -43,6 +43,17 @@ type stubInferenceCommandDispatcher struct {
 func (s *stubInferenceCommandDispatcher) Dispatch(_ context.Context, req dispatch.CommandDispatchRequest) (*dispatch.CommandDispatchResult, error) {
 	s.called = true
 	s.lastReq = req
+	if req.OnInferenceProgress != nil {
+		if err := req.OnInferenceProgress(&operatorv1.InferenceProgressEvent{
+			ProviderAttemptId: "provider-attempt-1",
+			Sequence:          1,
+			Parts: []*operatorv1.InferenceResponsePart{
+				{Part: &operatorv1.InferenceResponsePart_Text{Text: "partial"}},
+			},
+		}); err != nil {
+			return nil, err
+		}
+	}
 	return s.result, s.err
 }
 
@@ -517,6 +528,44 @@ func TestInferenceDispatchController_InternalErrorIsPublicSafe(t *testing.T) {
 	assert.NotContains(t, rr.Body.String(), "password authentication",
 		"the client-visible error must be a generic code, not the internal error chain")
 	assert.Contains(t, rr.Body.String(), constants.ErrInternal.Error())
+}
+
+func TestInferenceDispatchController_StreamingReturnsNDJSONProgressAndCompletion(t *testing.T) {
+	dispatcher := &stubInferenceCommandDispatcher{result: successDispatchResult(t)}
+	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
+	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
+
+	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
+		Role:              operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:          inferenceTextMessages("hi"),
+		ProviderAttemptId: "provider-attempt-1",
+		Stream:            true,
+	})
+	req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
+	rr := httptest.NewRecorder()
+	ctrl.HandleDispatch(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/x-ndjson", rr.Header().Get("Content-Type"))
+
+	lines := strings.Split(strings.TrimSpace(rr.Body.String()), "\n")
+	require.Len(t, lines, 2)
+
+	var progressFrame operatorv1.InferenceDispatchStreamFrame
+	require.NoError(t, protojson.Unmarshal([]byte(lines[0]), &progressFrame))
+	require.NotNil(t, progressFrame.GetProgress())
+	assert.Equal(t, uint32(1), progressFrame.GetProgress().GetSequence())
+	assert.Equal(t, "partial", progressFrame.GetProgress().GetParts()[0].GetText())
+
+	var completionFrame operatorv1.InferenceDispatchStreamFrame
+	require.NoError(t, protojson.Unmarshal([]byte(lines[1]), &completionFrame))
+	require.NotNil(t, completionFrame.GetCompletion())
+	assert.Equal(t, "tx-inference-001", completionFrame.GetCompletion().GetTransactionId())
+	assert.True(t, dispatcher.lastReq.OnInferenceProgress != nil)
+
+	var forwarded operatorv1.InferenceRequested
+	require.NoError(t, proto.Unmarshal(dispatcher.lastReq.Payload, &forwarded))
+	assert.True(t, forwarded.GetStream())
 }
 
 func TestInferenceDispatchController_ContextCanceledWritesNothing(t *testing.T) {

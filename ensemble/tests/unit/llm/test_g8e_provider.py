@@ -48,7 +48,7 @@ from app.llm.llm_types import (
 )
 from app.llm.providers.g8e import G8EProvider, _contents_to_messages
 from app.models.http_context import G8eHttpContext
-from app.models.internal_api import InferenceDispatchResponse
+from app.models.internal_api import InferenceDispatchRequest, InferenceDispatchResponse
 from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 from app.models.settings import G8eeUserSettings, LLMSettings
 from g8e.operator.v1.operator_pb2 import (
@@ -61,6 +61,8 @@ from g8e.operator.v1.operator_pb2 import (
     MODEL_ROLE_ASSISTANT,
     MODEL_ROLE_LITE,
     MODEL_ROLE_PRIMARY,
+    InferenceDispatchStreamFrame,
+    InferenceProgressEvent,
 )
 
 pytestmark = pytest.mark.unit
@@ -102,28 +104,58 @@ def _tool_call_response() -> InferenceDispatchResponse:
     return resp
 
 
+def _bind_response_identity(request: InferenceDispatchRequest, result: InferenceDispatchResponse) -> None:
+    result.result.provider_attempt_id = request.provider_attempt_id
+    result.result.requested_model = request.model
+    result.result.model = request.model
+    result.result.requested_model_digest = request.model_digest
+    result.result.served_model_digest = request.model_digest
+    result.result.campaign_id = request.campaign_id
+    result.result.run_id = request.run_id
+    result.result.assignment_id = request.assignment_id
+    result.result.evaluation_attempt_id = request.evaluation_attempt_id
+    result.result.scenario_id = request.scenario_id
+    result.result.model_registry_digest = request.model_registry_digest
+
+
 def _dispatch_response(response: InferenceDispatchResponse | None = None):
     async def dispatch(request):
         result = response or _response()
-        result.result.provider_attempt_id = request.provider_attempt_id
-        result.result.requested_model = request.model
-        result.result.model = request.model
-        result.result.requested_model_digest = request.model_digest
-        result.result.served_model_digest = request.model_digest
-        result.result.campaign_id = request.campaign_id
-        result.result.run_id = request.run_id
-        result.result.assignment_id = request.assignment_id
-        result.result.evaluation_attempt_id = request.evaluation_attempt_id
-        result.result.scenario_id = request.scenario_id
-        result.result.model_registry_digest = request.model_registry_digest
+        _bind_response_identity(request, result)
         return result
 
     return dispatch
 
 
+def _dispatch_stream_response(response: InferenceDispatchResponse | None = None):
+    async def dispatch_stream(request):
+        result = response or _response()
+        _bind_response_identity(request, result)
+        sequence = 0
+        for part in result.result.parts:
+            sequence += 1
+            progress = InferenceProgressEvent(
+                provider_attempt_id=request.provider_attempt_id,
+                sequence=sequence,
+            )
+            progress.parts.add().CopyFrom(part)
+            if sequence == 1 and result.result.HasField("time_to_first_token_ns"):
+                progress.time_to_first_token_ns = result.result.time_to_first_token_ns
+            yield InferenceDispatchStreamFrame(progress=progress)
+        completion = InferenceDispatchResponse(
+            transaction_id=result.transaction_id,
+            result=result.result,
+            receipt=result.receipt,
+        )
+        yield InferenceDispatchStreamFrame(completion=completion)
+
+    return dispatch_stream
+
+
 def _client() -> MagicMock:
     client = MagicMock()
     client.dispatch_inference = AsyncMock(side_effect=_dispatch_response())
+    client.dispatch_inference_stream = _dispatch_stream_response()
     return client
 
 
@@ -267,6 +299,29 @@ class TestG8EProviderDispatch:
         assert resp.usage_metadata.eval_duration_seconds == pytest.approx(0.04)
         assert resp.usage_metadata.total_duration_seconds == pytest.approx(0.052)
         assert resp.usage_metadata.time_to_first_token_seconds is None
+
+    @pytest.mark.asyncio
+    async def test_primary_stream_preserves_governed_thinking_parts(self):
+        client = _client()
+        response = _response("")
+        response.result.parts.add().thinking = "considering"
+        response.result.parts.add().text = "answer"
+        response.result.time_to_first_token_ns = 2_000_000
+        client.dispatch_inference_stream = _dispatch_stream_response(response)
+        provider = G8EProvider(internal_http_client=client)
+
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "gemma3:4b", _contents(), PrimaryLLMSettings()
+            )
+        ]
+
+        assert chunks[0].text == "considering"
+        assert chunks[0].thought is True
+        assert chunks[1].text == "answer"
+        assert chunks[1].thought is False
+        assert chunks[2].usage_metadata.time_to_first_token_seconds == pytest.approx(0.002)
 
     @pytest.mark.asyncio
     async def test_usage_availability_distinguishes_unavailable_from_reported_zero(self):

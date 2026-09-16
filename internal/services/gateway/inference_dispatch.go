@@ -49,6 +49,7 @@ func (a *gatewayDispatcherAdapter) Dispatch(ctx context.Context, req dispatch.Co
 		WebSessionID:            req.WebSessionID,
 		CliSessionID:            req.CliSessionID,
 		Timeout:                 req.Timeout,
+		OnInferenceProgress:     req.OnInferenceProgress,
 	})
 	if err != nil {
 		return nil, err
@@ -196,7 +197,7 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 		return
 	}
 
-	result, err := c.dispatchSvc.DispatchInference(r.Context(), dispatch.DispatchInferenceRequest{
+	dispatchReq := dispatch.DispatchInferenceRequest{
 		Role:                    role,
 		Messages:                req.GetMessages(),
 		Tools:                   req.GetTools(),
@@ -230,10 +231,34 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 		TaskID:                  req.GetTaskId(),
 		WebSessionID:            req.GetWebSessionId(),
 		CliSessionID:            req.GetCliSessionId(),
-	})
+		Stream:                  req.GetStream(),
+	}
+
+	if req.GetStream() {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.WriteHeader(http.StatusOK)
+		flusher.Flush()
+
+		dispatchReq.OnProgress = func(progress *operatorv1.InferenceProgressEvent) error {
+			return writeInferenceDispatchStreamFrame(w, flusher, &operatorv1.InferenceDispatchStreamFrame{
+				Frame: &operatorv1.InferenceDispatchStreamFrame_Progress{Progress: progress},
+			})
+		}
+	}
+
+	result, err := c.dispatchSvc.DispatchInference(r.Context(), dispatchReq)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			c.logger.Info("inference dispatch: caller canceled", "error", err)
+			return
+		}
+		if req.GetStream() {
+			c.logger.Error("inference dispatch: streaming dispatch failed after response started", "error", err)
 			return
 		}
 		status, publicErr := classifyInferenceDispatchError(err)
@@ -242,11 +267,37 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 		return
 	}
 
-	c.responder.ProtoJSONCanonical(w, http.StatusOK, &operatorv1.InferenceDispatchResponse{
+	completion := &operatorv1.InferenceDispatchResponse{
 		TransactionId: result.TransactionID,
 		Result:        result.Result,
 		Receipt:       result.Receipt,
-	})
+	}
+	if req.GetStream() {
+		flusher := w.(http.Flusher)
+		if err := writeInferenceDispatchStreamFrame(w, flusher, &operatorv1.InferenceDispatchStreamFrame{
+			Frame: &operatorv1.InferenceDispatchStreamFrame_Completion{Completion: completion},
+		}); err != nil {
+			c.logger.Error("inference dispatch: failed to write completion frame", "error", err)
+		}
+		return
+	}
+
+	c.responder.ProtoJSONCanonical(w, http.StatusOK, completion)
+}
+
+func writeInferenceDispatchStreamFrame(w http.ResponseWriter, flusher http.Flusher, frame *operatorv1.InferenceDispatchStreamFrame) error {
+	payload, err := (protojson.MarshalOptions{UseProtoNames: true}).Marshal(frame)
+	if err != nil {
+		return fmt.Errorf("marshal inference dispatch stream frame: %w", err)
+	}
+	if _, err := w.Write(payload); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte("\n")); err != nil {
+		return err
+	}
+	flusher.Flush()
+	return nil
 }
 
 // classifyInferenceDispatchError maps a dispatch failure to an HTTP status

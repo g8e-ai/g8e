@@ -326,6 +326,8 @@ def _response_parts(result: InferenceDispatchResponse) -> list[Part]:
         kind = response_part.WhichOneof("part")
         if kind == "text":
             parts.append(Part(text=response_part.text))
+        elif kind == "thinking":
+            parts.append(Part(text=response_part.thinking, thought=True))
         elif kind == "tool_call":
             try:
                 arguments = json.loads(response_part.tool_call.arguments_json)
@@ -404,15 +406,57 @@ def _response_to_generate_content(
     )
 
 
+def _part_to_stream_chunk(part: Part) -> StreamChunkFromModel:
+    if part.tool_call is not None:
+        return StreamChunkFromModel(tool_calls=[part.tool_call])
+    return StreamChunkFromModel(text=part.text, thought=part.thought)
+
+
+def _progress_parts_to_stream_chunks(progress) -> list[StreamChunkFromModel]:
+    from app.errors import ValidationError
+
+    chunks: list[StreamChunkFromModel] = []
+    for response_part in progress.parts:
+        kind = response_part.WhichOneof("part")
+        if kind == "text":
+            chunks.append(StreamChunkFromModel(text=response_part.text))
+        elif kind == "thinking":
+            chunks.append(StreamChunkFromModel(text=response_part.thinking, thought=True))
+        elif kind == "tool_call":
+            try:
+                arguments = json.loads(response_part.tool_call.arguments_json)
+            except json.JSONDecodeError as exc:
+                raise ValidationError(
+                    "Governed inference tool-call arguments are invalid JSON"
+                ) from exc
+            if (
+                not isinstance(arguments, dict)
+                or not response_part.tool_call.name
+                or _canonical_json(arguments) != response_part.tool_call.arguments_json
+            ):
+                raise ValidationError("Governed inference tool-call arguments are invalid")
+            chunks.append(
+                StreamChunkFromModel(
+                    tool_calls=[
+                        ToolCall(
+                            name=response_part.tool_call.name,
+                            args=arguments,
+                            id=response_part.tool_call.call_id or None,
+                        )
+                    ]
+                )
+            )
+        else:
+            raise ValidationError("Governed inference progress contains an unspecified part")
+    return chunks
+
+
 def _response_to_stream_chunks(
     result: InferenceDispatchResponse,
 ) -> list[StreamChunkFromModel]:
     chunks: list[StreamChunkFromModel] = []
     for part in _response_parts(result):
-        if part.text is not None:
-            chunks.append(StreamChunkFromModel(text=part.text))
-        elif part.tool_call is not None:
-            chunks.append(StreamChunkFromModel(tool_calls=[part.tool_call]))
+        chunks.append(_part_to_stream_chunk(part))
     chunks.append(
         StreamChunkFromModel(
             finish_reason=result.result.finish_reason if result.HasField("result") else "stop",
@@ -546,13 +590,110 @@ class G8EProvider(LLMProvider):
         )
         return response
 
+    async def _dispatch_stream(
+        self,
+        role: int,
+        model: str,
+        contents: list[Content],
+        system_instructions: str | None,
+        max_output_tokens: int,
+        top_p: float | None,
+        top_k: int | None,
+        stop_sequences: list[str] | None,
+        response_format: ResponseFormat | None,
+        tool_config: ToolConfig | None,
+        parallel_tool_calls: bool | None,
+        thinking_config: ThinkingConfig | None,
+        tools: list[ToolGroup] | None = None,
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        from app.errors import ValidationError
+
+        self._governed_dispatch_evidence.set(None)
+        context = self._g8e_context.get()
+        request = InferenceDispatchRequest(
+            role=role,
+            messages=_contents_to_messages(contents, system_instructions, model=model),
+            tools=_tools_to_declarations(tools),
+            model=model or "",
+            max_tokens=max_output_tokens,
+            stop_sequences=stop_sequences or [],
+            request_schema_version=_REQUEST_SCHEMA_VERSION,
+            context_limit=LLM_OLLAMA_DEFAULT_NUM_CTX,
+            provider_attempt_id=str(uuid4()),
+            stream=True,
+            case_id=(context.case_id or "") if context else "",
+            investigation_id=(context.investigation_id or "") if context else "",
+            task_id=(context.task_id or "") if context else "",
+            web_session_id=(context.web_session_id or "") if context else "",
+            cli_session_id=(context.cli_session_id or "") if context else "",
+        )
+        _apply_evaluation_context(request, context, model)
+        if top_p is not None:
+            request.top_p = top_p
+        if top_k is not None:
+            request.top_k = top_k
+        if parallel_tool_calls is not None:
+            request.parallel_tool_calls = parallel_tool_calls
+        normalized_tool_choice = _tool_choice(tool_config)
+        if normalized_tool_choice is not None:
+            request.tool_choice.CopyFrom(normalized_tool_choice)
+        normalized_thinking = _thinking_control(model, thinking_config)
+        if normalized_thinking is not None:
+            request.thinking.CopyFrom(normalized_thinking)
+        normalized_response_format = _response_format(response_format)
+        if normalized_response_format is not None:
+            request.response_format.CopyFrom(normalized_response_format)
+        self._record_model_boundary(request)
+
+        completion: InferenceDispatchResponse | None = None
+        async for frame in self._client.dispatch_inference_stream(request):
+            if frame.HasField("progress"):
+                for chunk in _progress_parts_to_stream_chunks(frame.progress):
+                    yield chunk
+            elif frame.HasField("completion"):
+                completion = frame.completion
+
+        if completion is None:
+            raise ValidationError("Governed inference stream ended without a completion frame")
+        _validate_response_identity(request, completion)
+        _response_parts(completion)
+        self._governed_dispatch_evidence.set(
+            GovernedDispatchEvidence(
+                transaction_id=completion.transaction_id,
+                result_digest=(
+                    completion.result.result_digest if completion.HasField("result") else ""
+                ),
+                receipt_status=(
+                    ExecutionStatus.Name(completion.receipt.status)
+                    if completion.HasField("receipt")
+                    else ""
+                ),
+                provider_attempt_id=completion.result.provider_attempt_id,
+                requested_model=completion.result.requested_model,
+                served_model=completion.result.model,
+                model_digest=completion.result.served_model_digest,
+                normalized_request_hash=completion.result.normalized_request_hash,
+                output_hash=completion.result.output_hash,
+                campaign_id=completion.result.campaign_id,
+                run_id=completion.result.run_id,
+                assignment_id=completion.result.assignment_id,
+                evaluation_attempt_id=completion.result.evaluation_attempt_id,
+                scenario_id=completion.result.scenario_id,
+                model_registry_digest=completion.result.model_registry_digest,
+            )
+        )
+        yield StreamChunkFromModel(
+            finish_reason=completion.result.finish_reason if completion.HasField("result") else "stop",
+            usage_metadata=_response_to_usage_metadata(completion),
+        )
+
     async def generate_content_stream_primary(
         self,
         model: str,
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        result = await self._dispatch(
+        async for chunk in self._dispatch_stream(
             _ROLE_PRIMARY,
             model,
             contents,
@@ -566,8 +707,7 @@ class G8EProvider(LLMProvider):
             primary_llm_settings.parallel_tool_calls,
             primary_llm_settings.thinking_config,
             primary_llm_settings.tools,
-        )
-        for chunk in _response_to_stream_chunks(result):
+        ):
             yield chunk
 
     async def generate_content_primary(
@@ -599,7 +739,7 @@ class G8EProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        result = await self._dispatch(
+        async for chunk in self._dispatch_stream(
             _ROLE_ASSISTANT,
             model,
             contents,
@@ -612,8 +752,7 @@ class G8EProvider(LLMProvider):
             None,
             None,
             None,
-        )
-        for chunk in _response_to_stream_chunks(result):
+        ):
             yield chunk
 
     async def generate_content_assistant(
@@ -644,7 +783,7 @@ class G8EProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        result = await self._dispatch(
+        async for chunk in self._dispatch_stream(
             _ROLE_LITE,
             model,
             contents,
@@ -657,8 +796,7 @@ class G8EProvider(LLMProvider):
             None,
             None,
             None,
-        )
-        for chunk in _response_to_stream_chunks(result):
+        ):
             yield chunk
 
     async def generate_content_lite(

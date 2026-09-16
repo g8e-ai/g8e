@@ -144,6 +144,7 @@ const (
 	HeaderValueNoCache             = "no-cache"
 	HeaderValueTextEvent           = "text/event-stream"
 	HeaderValueApplicationJSON     = "application/json"
+	HeaderValueApplicationNDJSON   = "application/x-ndjson"
 	HeaderValueXHTML               = "application/xhtml+xml"
 	HeaderValueXML                 = "application/xml"
 	HeaderValueOctetStream         = "application/octet-stream"

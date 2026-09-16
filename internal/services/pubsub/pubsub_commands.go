@@ -1104,6 +1104,20 @@ func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context,
 	if rs.inference == nil {
 		return "", fmt.Errorf("inference handler not configured: %w", constants.ErrInferenceBackendNotRegistered)
 	}
+	if len(msg.Payload) > 0 {
+		req := &operatorv1.InferenceRequested{}
+		if err := proto.Unmarshal(msg.Payload, req); err == nil && req.GetStream() && rs.results != nil {
+			ctx = inference.WithProgressReporter(ctx, func(event *operatorv1.InferenceProgressEvent) error {
+				if err := rs.results.PublishInferenceProgress(ctx, msg, event); err != nil {
+					rs.logger.Warn("Failed to publish inference progress telemetry",
+						"transaction_id", msg.ID,
+						"sequence", event.GetSequence(),
+						"error", err)
+				}
+				return nil
+			})
+		}
+	}
 	resp, err := rs.inference.ExecuteInference(ctx, msg)
 	if err != nil {
 		return "", err

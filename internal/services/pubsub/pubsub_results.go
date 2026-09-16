@@ -107,6 +107,42 @@ func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result 
 	return nil
 }
 
+// PublishInferenceProgress publishes bounded inference progress telemetry to
+// the results channel while a governed provider stream is active. Progress
+// events are delivery telemetry only; the signed InferenceCompletion remains
+// the sole authoritative terminal outcome.
+func (rr *PubSubResultsService) PublishInferenceProgress(ctx context.Context, originalMsg *PubSubCommandMessage, progress *operatorv1.InferenceProgressEvent) error {
+	if originalMsg == nil || progress == nil {
+		return fmt.Errorf("pubsub: publish inference progress: %w", constants.ErrMissingRequiredField)
+	}
+
+	resultEnv, err := BuildUniversalResultEnvelope(
+		rr.config,
+		constants.Event.Operator.Inference.ProgressUpdated,
+		progress,
+		originalMsg.ID,
+		rr.config.OperatorID,
+		originalMsg.CaseID,
+		originalMsg.InvestigationID,
+		originalMsg.TaskID,
+		originalMsg.WebSessionID,
+		originalMsg.CLISessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("pubsub: build inference progress envelope: %w", err)
+	}
+	resultEnv.OperatorSessionId = originalMsg.OperatorSessionID
+	operatorID := rr.config.OperatorID
+	if originalMsg.OperatorID != nil && *originalMsg.OperatorID != "" {
+		operatorID = *originalMsg.OperatorID
+	}
+
+	if err := rr.publishUniversal(ctx, resultEnv, operatorID, originalMsg.OperatorSessionID); err != nil {
+		return fmt.Errorf("pubsub: publish inference progress: %w", err)
+	}
+	return nil
+}
+
 // PublishInferenceCompletion publishes the protocol-owned InferenceCompletion
 // — the final signed ActionReceipt plus, on success, the complete
 // InferenceResult — via Operator pub/sub. The completion envelope is

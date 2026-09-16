@@ -88,6 +88,7 @@ type GenerateRequest struct {
 	ScenarioID           string
 	ModelRegistry        []*operatorv1.InferenceModelVariant
 	ModelRegistryDigest  string
+	Stream               bool
 }
 
 // GenerateResponse carries ordered model response parts, usage metadata, and finish reason returned by the backend.
@@ -155,6 +156,7 @@ type InferenceRequestPayload struct {
 	ScenarioID           string
 	ModelRegistry        []*operatorv1.InferenceModelVariant
 	ModelRegistryDigest  string
+	Stream               bool
 }
 
 // FromProtoInferenceRequested decodes a protobuf InferenceRequested message into an isolated typed payload.
@@ -230,6 +232,7 @@ func FromProtoInferenceRequested(req *operatorv1.InferenceRequested) InferenceRe
 		ScenarioID:           req.GetScenarioId(),
 		ModelRegistry:        cloneInferenceModelRegistry(req.GetModelRegistry()),
 		ModelRegistryDigest:  req.GetModelRegistryDigest(),
+		Stream:               req.GetStream(),
 	}
 }
 
@@ -267,6 +270,7 @@ func (p InferenceRequestPayload) ToGenerateRequest(defaultModel string) Generate
 		ScenarioID:           p.ScenarioID,
 		ModelRegistry:        cloneInferenceModelRegistry(p.ModelRegistry),
 		ModelRegistryDigest:  p.ModelRegistryDigest,
+		Stream:               p.Stream,
 	}
 }
 

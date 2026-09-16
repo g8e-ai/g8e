@@ -6,6 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 import logging
+from collections.abc import AsyncIterator
 
 from google.protobuf import json_format
 
@@ -37,6 +38,7 @@ from app.models.internal_api import (
     InferenceDispatchRequest,
     InferenceDispatchResponse,
 )
+from g8e.operator.v1.operator_pb2 import InferenceDispatchStreamFrame
 
 logger = logging.getLogger(__name__)
 
@@ -522,3 +524,43 @@ class InternalHttpClient:
         dispatch_response = InferenceDispatchResponse()
         json_format.ParseDict(response.json(), dispatch_response)
         return dispatch_response
+
+    async def dispatch_inference_stream(
+        self,
+        request: InferenceDispatchRequest,
+    ) -> AsyncIterator[InferenceDispatchStreamFrame]:
+        """POST a streaming governed inference dispatch and yield NDJSON frames."""
+        self._ensure_mtls()
+        request.stream = True
+        buffer = ""
+        try:
+            async for chunk in self._http.stream(
+                "POST",
+                GatewayAPIPaths.INFERENCE_DISPATCH,
+                headers={"Accept": "application/x-ndjson"},
+                json_data=json_format.MessageToDict(
+                    request,
+                    preserving_proto_field_name=True,
+                ),
+            ):
+                buffer += chunk.decode("utf-8")
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    if not line.strip():
+                        continue
+                    frame = InferenceDispatchStreamFrame()
+                    json_format.Parse(line, frame)
+                    yield frame
+        except NetworkError:
+            raise
+        except Exception as e:
+            raise NetworkError(
+                f"[HTTP-CLIENT] Inference dispatch stream failed: {e}",
+                component=G8EE_COMPONENT,
+                cause=e,
+            ) from e
+
+        if buffer.strip():
+            frame = InferenceDispatchStreamFrame()
+            json_format.Parse(buffer.strip(), frame)
+            yield frame

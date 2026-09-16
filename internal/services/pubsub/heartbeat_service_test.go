@@ -78,6 +78,10 @@ func (m *mockResultsPublisher) PublishInferenceCompletion(ctx context.Context, e
 	return m.inferenceCompletionErr
 }
 
+func (m *mockResultsPublisher) PublishInferenceProgress(ctx context.Context, originalMsg *PubSubCommandMessage, progress *operatorv1.InferenceProgressEvent) error {
+	return nil
+}
+
 func (m *mockResultsPublisher) PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg *PubSubCommandMessage) error {
 	return nil
 }

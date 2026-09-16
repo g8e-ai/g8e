@@ -79,6 +79,11 @@ type CommandDispatchRequest struct {
 	// the dispatcher's default applies. Inference dispatches always set
 	// RequestDeadline so the wait outlives an in-flight provider call.
 	Timeout time.Duration
+
+	// OnInferenceProgress receives bounded provider progress telemetry while
+	// waiting for the authoritative terminal completion. Nil disables live
+	// progress forwarding.
+	OnInferenceProgress func(*operatorv1.InferenceProgressEvent) error
 }
 
 // CommandDispatchResult is the gateway-agnostic dispatch result. The
@@ -188,6 +193,13 @@ type DispatchInferenceRequest struct {
 	TaskID          string
 	WebSessionID    string
 	CliSessionID    string
+
+	// Stream requests live InferenceProgressEvent telemetry while waiting for
+	// the authoritative terminal completion.
+	Stream bool
+
+	// OnProgress receives progress telemetry when Stream is true.
+	OnProgress func(*operatorv1.InferenceProgressEvent) error
 }
 
 // DispatchInferenceResult is the output of a successful inference dispatch.
@@ -265,6 +277,7 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 		ScenarioId:           req.ScenarioID,
 		ModelRegistry:        req.ModelRegistry,
 		ModelRegistryDigest:  req.ModelRegistryDigest,
+		Stream:               req.Stream,
 	}
 	payload, err := proto.Marshal(infReq)
 	if err != nil {
@@ -290,6 +303,7 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 		WebSessionID:            req.WebSessionID,
 		CliSessionID:            req.CliSessionID,
 		Timeout:                 RequestDeadline,
+		OnInferenceProgress:     req.OnProgress,
 	})
 	if err != nil {
 		if errors.Is(err, constants.ErrDispatchResultTimeout) {

@@ -1782,12 +1782,14 @@ class InferenceThinkingControl(_message.Message):
     def __init__(self, enabled: _Optional[bool] = ..., level: _Optional[str] = ..., include_thoughts: _Optional[bool] = ...) -> None: ...
 
 class InferenceResponsePart(_message.Message):
-    __slots__ = ("text", "tool_call")
+    __slots__ = ("text", "tool_call", "thinking")
     TEXT_FIELD_NUMBER: _ClassVar[int]
     TOOL_CALL_FIELD_NUMBER: _ClassVar[int]
+    THINKING_FIELD_NUMBER: _ClassVar[int]
     text: str
     tool_call: InferenceToolCall
-    def __init__(self, text: _Optional[str] = ..., tool_call: _Optional[_Union[InferenceToolCall, _Mapping]] = ...) -> None: ...
+    thinking: str
+    def __init__(self, text: _Optional[str] = ..., tool_call: _Optional[_Union[InferenceToolCall, _Mapping]] = ..., thinking: _Optional[str] = ...) -> None: ...
 
 class InferenceModelVariant(_message.Message):
     __slots__ = ("model", "digest")
@@ -1798,7 +1800,7 @@ class InferenceModelVariant(_message.Message):
     def __init__(self, model: _Optional[str] = ..., digest: _Optional[str] = ...) -> None: ...
 
 class InferenceRequested(_message.Message):
-    __slots__ = ("role", "model", "temperature", "max_tokens", "keep_alive", "messages", "tools", "top_p", "top_k", "stop_sequences", "response_format", "request_schema_version", "tool_choice", "parallel_tool_calls", "thinking", "context_limit", "provider_attempt_id", "model_digest", "campaign_id", "run_id", "assignment_id", "evaluation_attempt_id", "scenario_id", "model_registry", "model_registry_digest")
+    __slots__ = ("role", "model", "temperature", "max_tokens", "keep_alive", "messages", "tools", "top_p", "top_k", "stop_sequences", "response_format", "request_schema_version", "tool_choice", "parallel_tool_calls", "thinking", "context_limit", "provider_attempt_id", "model_digest", "campaign_id", "run_id", "assignment_id", "evaluation_attempt_id", "scenario_id", "model_registry", "model_registry_digest", "stream")
     ROLE_FIELD_NUMBER: _ClassVar[int]
     MODEL_FIELD_NUMBER: _ClassVar[int]
     TEMPERATURE_FIELD_NUMBER: _ClassVar[int]
@@ -1824,6 +1826,7 @@ class InferenceRequested(_message.Message):
     SCENARIO_ID_FIELD_NUMBER: _ClassVar[int]
     MODEL_REGISTRY_FIELD_NUMBER: _ClassVar[int]
     MODEL_REGISTRY_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    STREAM_FIELD_NUMBER: _ClassVar[int]
     role: ModelRole
     model: str
     temperature: float
@@ -1849,7 +1852,8 @@ class InferenceRequested(_message.Message):
     scenario_id: str
     model_registry: _containers.RepeatedCompositeFieldContainer[InferenceModelVariant]
     model_registry_digest: str
-    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., model: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ..., messages: _Optional[_Iterable[_Union[InferenceMessage, _Mapping]]] = ..., tools: _Optional[_Iterable[_Union[InferenceToolDeclaration, _Mapping]]] = ..., top_p: _Optional[float] = ..., top_k: _Optional[int] = ..., stop_sequences: _Optional[_Iterable[str]] = ..., response_format: _Optional[_Union[InferenceResponseFormat, _Mapping]] = ..., request_schema_version: _Optional[str] = ..., tool_choice: _Optional[_Union[InferenceToolChoice, _Mapping]] = ..., parallel_tool_calls: _Optional[bool] = ..., thinking: _Optional[_Union[InferenceThinkingControl, _Mapping]] = ..., context_limit: _Optional[int] = ..., provider_attempt_id: _Optional[str] = ..., model_digest: _Optional[str] = ..., campaign_id: _Optional[str] = ..., run_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., model_registry: _Optional[_Iterable[_Union[InferenceModelVariant, _Mapping]]] = ..., model_registry_digest: _Optional[str] = ...) -> None: ...
+    stream: bool
+    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., model: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ..., messages: _Optional[_Iterable[_Union[InferenceMessage, _Mapping]]] = ..., tools: _Optional[_Iterable[_Union[InferenceToolDeclaration, _Mapping]]] = ..., top_p: _Optional[float] = ..., top_k: _Optional[int] = ..., stop_sequences: _Optional[_Iterable[str]] = ..., response_format: _Optional[_Union[InferenceResponseFormat, _Mapping]] = ..., request_schema_version: _Optional[str] = ..., tool_choice: _Optional[_Union[InferenceToolChoice, _Mapping]] = ..., parallel_tool_calls: _Optional[bool] = ..., thinking: _Optional[_Union[InferenceThinkingControl, _Mapping]] = ..., context_limit: _Optional[int] = ..., provider_attempt_id: _Optional[str] = ..., model_digest: _Optional[str] = ..., campaign_id: _Optional[str] = ..., run_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., model_registry: _Optional[_Iterable[_Union[InferenceModelVariant, _Mapping]]] = ..., model_registry_digest: _Optional[str] = ..., stream: _Optional[bool] = ...) -> None: ...
 
 class InferenceResult(_message.Message):
     __slots__ = ("prompt_tokens", "completion_tokens", "total_tokens", "finish_reason", "model", "result_digest", "parts", "usage_reported", "thinking_tokens", "cache_tokens", "load_duration_ns", "prompt_eval_duration_ns", "generation_duration_ns", "total_duration_ns", "time_to_first_token_ns", "timing_source", "provider_attempt_id", "requested_model", "requested_model_digest", "served_model_digest", "normalized_request_hash", "output_hash", "campaign_id", "run_id", "assignment_id", "evaluation_attempt_id", "scenario_id", "model_registry_digest")
@@ -1911,6 +1915,20 @@ class InferenceResult(_message.Message):
     model_registry_digest: str
     def __init__(self, prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., total_tokens: _Optional[int] = ..., finish_reason: _Optional[str] = ..., model: _Optional[str] = ..., result_digest: _Optional[str] = ..., parts: _Optional[_Iterable[_Union[InferenceResponsePart, _Mapping]]] = ..., usage_reported: _Optional[bool] = ..., thinking_tokens: _Optional[int] = ..., cache_tokens: _Optional[int] = ..., load_duration_ns: _Optional[int] = ..., prompt_eval_duration_ns: _Optional[int] = ..., generation_duration_ns: _Optional[int] = ..., total_duration_ns: _Optional[int] = ..., time_to_first_token_ns: _Optional[int] = ..., timing_source: _Optional[_Union[InferenceTimingSource, str]] = ..., provider_attempt_id: _Optional[str] = ..., requested_model: _Optional[str] = ..., requested_model_digest: _Optional[str] = ..., served_model_digest: _Optional[str] = ..., normalized_request_hash: _Optional[str] = ..., output_hash: _Optional[str] = ..., campaign_id: _Optional[str] = ..., run_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., model_registry_digest: _Optional[str] = ...) -> None: ...
 
+class InferenceProgressEvent(_message.Message):
+    __slots__ = ("provider_attempt_id", "sequence", "parts", "time_to_first_token_ns", "served_model")
+    PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    PARTS_FIELD_NUMBER: _ClassVar[int]
+    TIME_TO_FIRST_TOKEN_NS_FIELD_NUMBER: _ClassVar[int]
+    SERVED_MODEL_FIELD_NUMBER: _ClassVar[int]
+    provider_attempt_id: str
+    sequence: int
+    parts: _containers.RepeatedCompositeFieldContainer[InferenceResponsePart]
+    time_to_first_token_ns: int
+    served_model: str
+    def __init__(self, provider_attempt_id: _Optional[str] = ..., sequence: _Optional[int] = ..., parts: _Optional[_Iterable[_Union[InferenceResponsePart, _Mapping]]] = ..., time_to_first_token_ns: _Optional[int] = ..., served_model: _Optional[str] = ...) -> None: ...
+
 class InferenceCompletion(_message.Message):
     __slots__ = ("receipt", "result")
     RECEIPT_FIELD_NUMBER: _ClassVar[int]
@@ -1920,7 +1938,7 @@ class InferenceCompletion(_message.Message):
     def __init__(self, receipt: _Optional[_Union[ActionReceipt, _Mapping]] = ..., result: _Optional[_Union[InferenceResult, _Mapping]] = ...) -> None: ...
 
 class InferenceDispatchRequest(_message.Message):
-    __slots__ = ("role", "model", "temperature", "max_tokens", "keep_alive", "target_operator_session_id", "acting_app_id", "case_id", "investigation_id", "task_id", "web_session_id", "cli_session_id", "messages", "tools", "top_p", "top_k", "stop_sequences", "response_format", "request_schema_version", "tool_choice", "parallel_tool_calls", "thinking", "context_limit", "provider_attempt_id", "model_digest", "campaign_id", "run_id", "assignment_id", "evaluation_attempt_id", "scenario_id", "model_registry", "model_registry_digest")
+    __slots__ = ("role", "model", "temperature", "max_tokens", "keep_alive", "target_operator_session_id", "acting_app_id", "case_id", "investigation_id", "task_id", "web_session_id", "cli_session_id", "messages", "tools", "top_p", "top_k", "stop_sequences", "response_format", "request_schema_version", "tool_choice", "parallel_tool_calls", "thinking", "context_limit", "provider_attempt_id", "model_digest", "campaign_id", "run_id", "assignment_id", "evaluation_attempt_id", "scenario_id", "model_registry", "model_registry_digest", "stream")
     ROLE_FIELD_NUMBER: _ClassVar[int]
     MODEL_FIELD_NUMBER: _ClassVar[int]
     TEMPERATURE_FIELD_NUMBER: _ClassVar[int]
@@ -1953,6 +1971,7 @@ class InferenceDispatchRequest(_message.Message):
     SCENARIO_ID_FIELD_NUMBER: _ClassVar[int]
     MODEL_REGISTRY_FIELD_NUMBER: _ClassVar[int]
     MODEL_REGISTRY_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    STREAM_FIELD_NUMBER: _ClassVar[int]
     role: ModelRole
     model: str
     temperature: float
@@ -1985,7 +2004,16 @@ class InferenceDispatchRequest(_message.Message):
     scenario_id: str
     model_registry: _containers.RepeatedCompositeFieldContainer[InferenceModelVariant]
     model_registry_digest: str
-    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., model: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ..., target_operator_session_id: _Optional[str] = ..., acting_app_id: _Optional[str] = ..., case_id: _Optional[str] = ..., investigation_id: _Optional[str] = ..., task_id: _Optional[str] = ..., web_session_id: _Optional[str] = ..., cli_session_id: _Optional[str] = ..., messages: _Optional[_Iterable[_Union[InferenceMessage, _Mapping]]] = ..., tools: _Optional[_Iterable[_Union[InferenceToolDeclaration, _Mapping]]] = ..., top_p: _Optional[float] = ..., top_k: _Optional[int] = ..., stop_sequences: _Optional[_Iterable[str]] = ..., response_format: _Optional[_Union[InferenceResponseFormat, _Mapping]] = ..., request_schema_version: _Optional[str] = ..., tool_choice: _Optional[_Union[InferenceToolChoice, _Mapping]] = ..., parallel_tool_calls: _Optional[bool] = ..., thinking: _Optional[_Union[InferenceThinkingControl, _Mapping]] = ..., context_limit: _Optional[int] = ..., provider_attempt_id: _Optional[str] = ..., model_digest: _Optional[str] = ..., campaign_id: _Optional[str] = ..., run_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., model_registry: _Optional[_Iterable[_Union[InferenceModelVariant, _Mapping]]] = ..., model_registry_digest: _Optional[str] = ...) -> None: ...
+    stream: bool
+    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., model: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ..., target_operator_session_id: _Optional[str] = ..., acting_app_id: _Optional[str] = ..., case_id: _Optional[str] = ..., investigation_id: _Optional[str] = ..., task_id: _Optional[str] = ..., web_session_id: _Optional[str] = ..., cli_session_id: _Optional[str] = ..., messages: _Optional[_Iterable[_Union[InferenceMessage, _Mapping]]] = ..., tools: _Optional[_Iterable[_Union[InferenceToolDeclaration, _Mapping]]] = ..., top_p: _Optional[float] = ..., top_k: _Optional[int] = ..., stop_sequences: _Optional[_Iterable[str]] = ..., response_format: _Optional[_Union[InferenceResponseFormat, _Mapping]] = ..., request_schema_version: _Optional[str] = ..., tool_choice: _Optional[_Union[InferenceToolChoice, _Mapping]] = ..., parallel_tool_calls: _Optional[bool] = ..., thinking: _Optional[_Union[InferenceThinkingControl, _Mapping]] = ..., context_limit: _Optional[int] = ..., provider_attempt_id: _Optional[str] = ..., model_digest: _Optional[str] = ..., campaign_id: _Optional[str] = ..., run_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., model_registry: _Optional[_Iterable[_Union[InferenceModelVariant, _Mapping]]] = ..., model_registry_digest: _Optional[str] = ..., stream: _Optional[bool] = ...) -> None: ...
+
+class InferenceDispatchStreamFrame(_message.Message):
+    __slots__ = ("progress", "completion")
+    PROGRESS_FIELD_NUMBER: _ClassVar[int]
+    COMPLETION_FIELD_NUMBER: _ClassVar[int]
+    progress: InferenceProgressEvent
+    completion: InferenceDispatchResponse
+    def __init__(self, progress: _Optional[_Union[InferenceProgressEvent, _Mapping]] = ..., completion: _Optional[_Union[InferenceDispatchResponse, _Mapping]] = ...) -> None: ...
 
 class InferenceDispatchResponse(_message.Message):
     __slots__ = ("transaction_id", "result", "receipt")
