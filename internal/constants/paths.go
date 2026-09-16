@@ -367,6 +367,7 @@ const (
 
 	// Operator-specific filenames
 	OperatorPIDFilename     = "operator.pid"
+	PublicMirrorPIDFilename = "public-mirror.pid"
 	OperatorPostureFilename = "operator.posture"
 	OperatorBinaryFilename  = "g8e-operator"
 

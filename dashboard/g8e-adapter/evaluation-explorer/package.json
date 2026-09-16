@@ -10,7 +10,6 @@
     "seed": "node scripts/seed.mjs",
     "replay": "node scripts/replay.mjs",
     "health": "node scripts/mirror-health.mjs",
-    "bridge": "python3 scripts/bridge.py",
     "build": "tsc --noEmit && vite build && node scripts/prepare-production-dist.mjs",
     "build:production": "npm run build",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",

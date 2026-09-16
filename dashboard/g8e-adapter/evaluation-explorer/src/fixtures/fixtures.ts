@@ -1,7 +1,7 @@
 // Deterministic fixtures for every snapshot record kind and live event kind.
 // These let every route render before the real projector or mirror is wired.
 // Fixtures exercise all quality states so the UX shell proves every state
-// renders. Worker 1's projector replaces these with real projected records
+// renders. Real campaign publication replaces these with live projected records
 // published through the mirror; the store treats both identically.
 
 import type {

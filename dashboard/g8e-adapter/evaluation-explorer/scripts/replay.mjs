@@ -1,6 +1,6 @@
 // Publish a deterministic scripted live evaluation through the real mirror
 // at a configurable speed. This is the Checkpoint A scripted-SSE producer:
-// it emits the same typed event records as the real bridge, generated from
+// it emits typed live event records generated from
 // the checked-in fixtures, and sends them through `g8e public publish` +
 // `g8e public push`. The browser receives them through the same SSE
 // transport as real events.

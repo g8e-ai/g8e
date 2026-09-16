@@ -1,5 +1,5 @@
 // Descriptor sync: the machine-readable descriptor.json (the cross-language
-// mirror Worker 1's Python projector and Worker 5's bridge consume) must
+// mirror Go publication and the frontend campaign adapter consume) must
 // exactly match the authoritative TypeScript enum constants in types.ts.
 // If this test fails, a worker changed one source without the other; bump the
 // contract version and update both together.

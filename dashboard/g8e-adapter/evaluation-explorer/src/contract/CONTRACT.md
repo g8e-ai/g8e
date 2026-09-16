@@ -2,13 +2,13 @@
 
 Status: frozen at schema_version 1.1.0 on 2026-09-14 by Worker 0 (Integration lead). Schema 1.1 producers emit benchmark observations, and the browser continues to read durable schema 1.0 records already accepted by the append-only local mirror.
 
-This is the single typed source of truth for the public-safe read model the browser renders. The historical projector (Worker 1), the live bridge (Worker 5), the replay producer, the deterministic fixtures, and the frontend validators all import from this contract. No consumer hand-defines enums or record shapes. A change to any enum value or required field is a contract revision: bump `VIEW_SCHEMA_VERSION` in `types.ts`, update `descriptor.json`, and notify all workers.
+This is the single typed source of truth for the public-safe read model the browser renders. The Go evaluation publication service, the frontend `campaign-adapter`, the mock replay producer, the deterministic fixtures, and the frontend validators all consume this contract. No consumer hand-defines enums or record shapes. A change to any enum value or required field is a contract revision: bump `VIEW_SCHEMA_VERSION` in `types.ts`, update `descriptor.json`, and update the Go projector plus frontend adapter together.
 
 ## Canonical sources
 
 - `src/contract/types.ts` is the authoritative TypeScript source. The frontend, fixtures, and validators import enums and interfaces from here.
 - `src/contract/validators.ts` is the strict runtime validation layer. Every guard fails closed: an unknown field, wrong type, or out-of-enum value throws a typed `ValidationError` that the store surfaces as a fail-closed error state rather than rendering partial data.
-- `src/contract/descriptor.json` is the machine-readable cross-language mirror. Worker 1's Python projector and Worker 5's bridge generate Python enums and pydantic models from these enum values and record kinds. `tests/descriptor-sync.test.ts` asserts that the descriptor's enum values exactly match `types.ts`, so the two never drift silently.
+- `src/contract/descriptor.json` is the machine-readable cross-language mirror for Go and TypeScript consumers. `tests/descriptor-sync.test.ts` asserts that the descriptor's enum values exactly match `types.ts`, so the two never drift silently.
 - `src/fixtures/fixtures.ts` is the deterministic fixture set. Every snapshot record kind and every live event kind has at least one fixture. `tests/contract-conformance.test.ts` validates every fixture against the guards and asserts full kind coverage.
 
 ## Frozen enums
@@ -70,18 +70,18 @@ Records are published as g8e public feed records. The JSONL input shape for `g8e
 - Snapshot records use `record_type: "projection"`; `record_bytes` is the serialized JSON of the record object.
 - Live events use `record_type: "event"`; `record_bytes` is the serialized JSON of the event object.
 
-The publisher rejects any record whose JSON contains a prohibited field. The prohibited field set is listed in `descriptor.json` and includes raw prompts, outputs, chain-of-thought, private evidence, identities, credentials, machine paths, private endpoints, Gateway URLs, PKI identities, audit internals, envelopes, and receipt internals. The projector and bridge must never emit these fields; the publisher is the last line of defense, not the first.
+The publisher rejects any record whose JSON contains a prohibited field. The prohibited field set is listed in `descriptor.json` and includes raw prompts, outputs, chain-of-thought, private evidence, identities, credentials, machine paths, private endpoints, Gateway URLs, PKI identities, audit internals, envelopes, and receipt internals. The Go publication coordinator must never emit these fields; the publisher is the last line of defense, not the first.
 
 ## File ownership
 
 Workers do not edit the same files concurrently. Worker 0 assigns concrete file ownership here. Cross-worker changes are proposed through a fixture or contract change and integrated by Worker 0.
 
 - Worker 0 (Integration lead): `src/contract/types.ts`, `src/contract/validators.ts`, `src/contract/descriptor.json`, `src/contract/CONTRACT.md`, `src/fixtures/fixtures.ts`, `tests/contract-conformance.test.ts`, `tests/descriptor-sync.test.ts`, `tests/setup.ts`.
-- Worker 1 (Data inventory and projector): projector/generator code and generator tests, emitted JSONL, and the final dataset id strings. Worker 1 updates `src/fixtures/fixtures.ts` only through Worker 0 when replacing placeholders with real projected records.
+- Go evaluation publication (`internal/services/evaluation/campaign_publication.go` and related projection builders): emits public-safe envelopes from canonical campaign state.
 - Worker 2 (Mirror and local runtime): `dev.mjs`, `scripts/seed.mjs`, `scripts/replay.mjs`, local mirror startup, and the runtime fixture. Worker 2 does not edit contract or fixture files.
 - Worker 3 (UX shell and navigation): `src/App.tsx`, `src/main.tsx`, `src/state/*`, `src/components/*`, `src/utils/*`, global styles, and the route shell. Worker 3 imports enums and types from `src/contract/types.ts` and never redefines them.
 - Worker 4 (Metrics and detail views): `src/views/*` (model, evaluation, assignment, comparison, methodology detail views). Worker 4 imports shared components from `src/components/*` and types from `src/contract/types.ts`.
-- Worker 5 (Live stream bridge): bridge code, cursor/outbox tests, and the committed-report watcher. Worker 5 reads `descriptor.json` for Python enum generation and emits records in the JSONL input shape above.
+- Frontend campaign adapter (`src/state/campaign-adapter.ts`): decodes Go publication envelopes from the mirror into frozen view records.
 - Worker 6 (Runtime and live eval): runtime recovery and the bounded real eval. Worker 6 does not edit frontend or contract files.
 - Worker 7 (UX QA and browser acceptance): `tests/*` (excluding the contract conformance and descriptor sync tests owned by Worker 0), `e2e/*`, and the accessibility harness. Worker 7 extends `tests/setup.ts` only through Worker 0.
 - Worker 8 (Junior runbook and handoff): the runbook document and handoff captures. Worker 8 does not edit source files.

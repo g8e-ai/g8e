@@ -84,9 +84,23 @@ func evalCmd() *cobra.Command {
 }
 
 func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
-	cmd := &cobra.Command{Use: "eval", Short: "Run and verify native g8e evaluations"}
+	cmd := &cobra.Command{
+		Use:     "eval",
+		Aliases: []string{"evals"},
+		Short:   "Run and verify native g8e evaluations",
+	}
 	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
-	cmd.AddCommand(nativeEvalRunCmd(deps), nativeEvalVerifyCmd(deps), nativeEvalShowCmd(deps), inferenceEvalCmd(deps), chatEvalCmd(deps), inventoryEvalCmd(deps), campaignEvalCmd(deps), providerObserverEvalCmd(deps))
+	cmd.AddCommand(
+		nativeEvalRunCmd(deps),
+		nativeEvalVerifyCmd(deps),
+		nativeEvalShowCmd(deps),
+		inferenceEvalCmd(deps),
+		chatEvalCmd(deps),
+		inventoryEvalCmd(deps),
+		campaignEvalCmd(deps),
+		providerObserverEvalCmd(deps),
+		evalMirrorCmd(deps),
+	)
 	return cmd
 }
 

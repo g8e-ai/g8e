@@ -34,37 +34,22 @@ cd /home/bob/g8e/dashboard/g8e-adapter/evaluation-explorer
 npm run dev:real
 ```
 
-This starts or reuses the mirror, verifies mirror health, and starts Vite without launching a native evaluation. Use `npm run health` to inspect publisher sequence, mirror sequence, freshness, route isolation, and the last accepted record.
+This starts or reuses the mirror via `./g8e eval mirror run --daemon`, verifies mirror health, and starts Vite without launching a native evaluation. Use `./g8e eval mirror status` or `npm run health` to inspect mirror state, publisher sequence, freshness, route isolation, and the last accepted record. Stop the mirror with `./g8e eval mirror stop`.
 
-Run three fresh native evaluations and project them into the public feed:
+Run a campaign evaluation with live publication to the public mirror:
 
 ```bash
 cd /home/bob/g8e
-G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 ./g8e eval run core-execution-boundary --json
-G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 ./g8e eval run core-execution-boundary --json
-G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 ./g8e eval run core-execution-boundary --json
+G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 ./g8e eval campaign execute --run-id <run-id> --publish --daemon
 ```
 
-Verify and inspect each run independently:
+Or catch up publication for an existing run:
 
 ```bash
-./g8e eval verify <run-id> --json
-./g8e eval show <run-id> --json
+./g8e eval campaign publish --run-id <run-id>
 ```
 
-Project the persisted native runs into public-safe records and publish them through the real publisher and mirror:
-
-```bash
-cd /home/bob/g8e/dashboard/g8e-adapter/evaluation-explorer
-python3 scripts/project.py \
-  --run-dir /home/bob/g8e/.g8e/data/eval/runs/<run-id-1> \
-  --run-dir /home/bob/g8e/.g8e/data/eval/runs/<run-id-2> \
-  --run-dir /home/bob/g8e/.g8e/data/eval/runs/<run-id-3> \
-  --out .local.dev/native-eval-records.jsonl
-./g8e public publish --records .local.dev/native-eval-records.jsonl
-```
-
-The projector reads only canonical `report.json` and `verification.json` from each run directory, verifies the report/run/verification bindings and content-addressed verification reference, reconciles attempts, assertions, verdicts, metrics, counts, posture, lane, and verification status, and emits deterministic mirror-ready JSONL. One invocation emits one shared `native-core-execution-boundary` live-run catalog plus one evaluation summary per supplied run. Each summary carries nested typed native scenario, invariant verdict, metric, and verification detail and emits no model, provider, assignment, campaign, principal, Operator, session, endpoint, target path, receipt, audit, envelope, or evidence body.
+The Go `CampaignPublicationCoordinator` in the evaluation service projects canonical campaign state into public-safe explorer records and publishes them through the real `g8e public` publisher. The explorer's TypeScript `campaign-adapter` decodes those envelopes from the mirror. No separate projector script is involved.
 
 ## Optional disposable public-feed reset
 
@@ -77,11 +62,9 @@ npm run dev:mock -- --reset
 
 Do not use a full Docker or gateway cleanup for a public-feed problem.
 
-## Publish native evaluation reports
+## Publish evaluation reports
 
-The native evaluation projector reads persisted canonical `report.json` and `verification.json` from `.g8e/data/eval/runs/<run-id>/` and emits only public-safe projections. Publication uses the real `g8e public publish` command, which signs batches, writes the durable outbox, and advances the publisher high-water sequence. The mirror ingests signed batches and serves anonymous reads and SSE.
-
-See the [Start the real native evaluation experience](#start-the-real-native-evaluation-experience) section for the exact projection and publication commands.
+Publication is owned by the Go evaluation service. Campaign runs project lifecycle events, assignment results, and aggregate records into the public feed as they execute (`--publish`) or on demand (`g8e eval campaign publish`). The publisher signs batches, writes the durable outbox, and advances the high-water sequence; the mirror ingests signed batches and serves anonymous reads and SSE.
 
 ## Expected browser states
 
@@ -96,7 +79,6 @@ npm run typecheck
 npm test
 npm run build
 npm run test:e2e
-python3 scripts/test_projector.py
 npm audit --audit-level=moderate
 npm run health
 ```
@@ -165,7 +147,7 @@ Stopping either service preserves publisher and mirror state. Disable the tunnel
 - **Ensemble unhealthy:** run `./g8e auth pending-platform-enrollments`, inspect `./g8e docker logs ensemble`, approve the exact pending request when appropriate, and recheck `./g8e docker status`.
 - **Mirror unreachable:** run `npm run health`; verify host listeners `8081` and `8082` separately. The browser uses only `8082` and publisher ingest uses only `8081`.
 - **Publisher retry:** run `./g8e public push`, then `npm run health`. A retained outbox retries in order without rerunning evaluation.
-- **Malformed projection:** run the projector, contract, and feed-transport tests. Do not bypass strict validation or publish a known-invalid corpus.
+- **Malformed projection:** run the contract and feed-transport tests plus `./g8e test unit --pkg ./internal/services/evaluation`. Do not bypass strict validation or publish a known-invalid corpus.
 - **No SSE:** verify `/stream` through `npm run health`, reload to reconstruct history, and confirm browser requests do not target `8081`, Gateway ports, report paths, or the provider.
 - **Terminal evaluation failure:** retain the report and failed public record, publish the actual exit disposition, reconcile attempt and metric counts, and use a fresh run directory only after fixing an offline defect. Never retry under the same run identity.
 

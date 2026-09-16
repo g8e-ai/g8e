@@ -1,8 +1,9 @@
-// Seed the local public mirror with historical projection records.
+// Seed the local public mirror with projection records for local development.
 //
-// Default behavior invokes Worker 1's projector (scripts/project.py), which
-// regenerates scripts/fixtures/projected-records.jsonl from the real report
-// artifacts. The records are then published through the real
+// Real campaign and native evaluation data is published by the Go evaluation
+// service through `g8e eval campaign execute --publish` or
+// `g8e eval campaign publish`. This script only loads pre-generated JSONL
+// (fixtures or an explicit --records file) and publishes it through the real
 // `g8e public publish` CLI in batches that fit the configured feed limits
 // (max 100 records / 4 MiB of record bytes per batch), followed by
 // `g8e public push` and `g8e public status`.
@@ -15,9 +16,8 @@
 //
 // Usage:  node scripts/seed.mjs [--reset] [--records <path>] [--fixtures] [--append-revision <version>]
 //   --reset      force reset of disposable local public-feed state first
-//   --records    publish a pre-generated JSONL file instead of the projector
-//   --fixtures   publish the deterministic TypeScript fixtures instead of the
-//                projector (contract-testing fallback)
+//   --records    publish a pre-generated JSONL file
+//   --fixtures   publish the deterministic TypeScript fixtures (mock dev only)
 //   --append-revision appends one exact schema revision without resetting prior history
 //
 // Environment:
@@ -40,8 +40,6 @@ const PRIVATE_PORT = process.env.G8E_PRIVATE_PORT ?? '8081';
 const PUBLIC_PORT = process.env.G8E_PUBLIC_PORT ?? '8082';
 const PUBLIC_ORIGIN = `http://127.0.0.1:${PUBLIC_PORT}`;
 const SOURCE_ID = 'opendevops-local';
-const PROJECTED_RECORDS = resolve(__dirname, 'fixtures/projected-records.jsonl');
-
 // Fallback limits; the actual limits are read from the export config.
 const DEFAULT_BATCH_MAX_RECORDS = 100;
 const DEFAULT_BATCH_MAX_BYTES = 4 << 20;
@@ -170,18 +168,6 @@ async function resetFeedState() {
   console.log('Reset disposable local public-feed and mirror state.');
   initFeed();
   await ensureMirror();
-}
-
-function runProjector() {
-  const result = spawnSync('python3', [resolve(__dirname, 'project.py')], {
-    cwd: projectRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  if (result.stdout) process.stdout.write(result.stdout);
-  if (result.stderr) process.stderr.write(result.stderr);
-  if (result.status !== 0) {
-    throw new Error(`projector exited with code ${result.status}`);
-  }
-  return PROJECTED_RECORDS;
 }
 
 function generateFixtureRecords() {
@@ -370,7 +356,10 @@ async function main() {
     throw new Error('--append-revision requires --records and cannot be combined with --reset or --fixtures');
   }
 
-  const recordsPath = records ?? (fixtures ? generateFixtureRecords() : runProjector());
+  if (!records && !fixtures) {
+    throw new Error('Specify --fixtures for mock fixture seeding or --records <path> for a pre-generated JSONL file. Real evaluations publish through g8e eval campaign publish.');
+  }
+  const recordsPath = records ?? generateFixtureRecords();
   if (!existsSync(recordsPath)) {
     throw new Error(`records file not found: ${recordsPath}`);
   }

@@ -1,5 +1,5 @@
-// Local development supervisor. Starts the mirror, seeds historical data,
-// optionally replays scripted live events, and runs the Vite dev server.
+// Local development supervisor. Starts the mirror, optionally seeds fixture
+// data in mock mode, optionally replays scripted live events, and runs Vite.
 // All child processes use argument arrays (no shell interpolation) and are
 // terminated on exit.
 //
@@ -124,6 +124,13 @@ function killAll() {
       proc.kill('SIGTERM');
     }
   }
+  try {
+    const bin = g8eBin();
+    const cwd = g8eCwd();
+    spawnSync(bin, ['eval', 'mirror', 'stop'], { cwd, encoding: 'utf8', stdio: 'inherit' });
+  } catch {
+    // Best effort during shutdown.
+  }
 }
 
 process.on('SIGINT', () => {
@@ -155,7 +162,7 @@ async function main() {
     const mirrorRunning = checkPort(PRIVATE_PORT) || checkPort(PUBLIC_PORT);
     if (mirrorRunning) {
       console.log('Stopping existing mirror...');
-      spawnSync('pkill', ['-f', 'g8e public mirror run'], { encoding: 'utf8' });
+      spawnSync(bin, ['eval', 'mirror', 'stop'], { cwd, encoding: 'utf8', stdio: 'inherit' });
       await waitForPortFree(PRIVATE_PORT, 10000);
       await waitForPortFree(PUBLIC_PORT, 10000);
     }
@@ -174,28 +181,28 @@ async function main() {
   const mirrorRunning = checkPort(PRIVATE_PORT) && checkPort(PUBLIC_PORT);
   if (!mirrorRunning) {
     console.log('\nStarting mirror...');
-    spawnChild('mirror', bin, [
-      'public', 'mirror', 'run',
+    spawnSync(bin, [
+      'eval', 'mirror', 'run', '--daemon',
       '--listen', `127.0.0.1:${PRIVATE_PORT}`,
       '--public-listen', `127.0.0.1:${PUBLIC_PORT}`,
-    ], cwd);
+    ], { cwd, encoding: 'utf8', stdio: 'inherit' });
     await waitForPort(PUBLIC_PORT, 'mirror public', 10000);
     console.log(`Mirror is up on ${PRIVATE_PORT} (private) and ${PUBLIC_PORT} (public).`);
   } else {
     console.log('\nMirror already running.');
   }
 
-  console.log('\n--- Seeding historical data ---');
-  const seedArgs = [resolve(__dirname, 'scripts/seed.mjs')];
-  if (mode === 'mock') seedArgs.push('--fixtures');
-  const seedResult = spawnSync('node', seedArgs, {
-    cwd: projectRoot,
-    encoding: 'utf8',
-    stdio: 'inherit',
-    env: { ...process.env, G8E_BIN: bin, G8E_CWD: cwd },
-  });
-  if (seedResult.status !== 0) {
-    console.error('Seed failed. Continuing with whatever data is available.');
+  if (mode === 'mock') {
+    console.log('\n--- Seeding fixture data ---');
+    const seedResult = spawnSync('node', [resolve(__dirname, 'scripts/seed.mjs'), '--fixtures'], {
+      cwd: projectRoot,
+      encoding: 'utf8',
+      stdio: 'inherit',
+      env: { ...process.env, G8E_BIN: bin, G8E_CWD: cwd },
+    });
+    if (seedResult.status !== 0) {
+      console.error('Fixture seed failed. Continuing with whatever data is available.');
+    }
   }
 
   if (mode === 'mock' && replay) {

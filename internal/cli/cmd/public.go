@@ -651,36 +651,15 @@ func publicMirrorRunCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 		Use:   "run",
 		Short: "Run the durable local public mirror",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := validatePublicMirrorListenAddresses(listenAddress, publicListenAddress); err != nil {
-				return err
-			}
 			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
 			if err != nil {
 				return err
 			}
-			ctx := commandContext(cmd)
-			key, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
+			runtime, err := newPublicMirrorRuntime(commandContext(cmd), fileSvc, exportConfig, listenAddress, publicListenAddress)
 			if err != nil {
 				return err
 			}
-			token, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
-			if err != nil {
-				return err
-			}
-			mirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc))
-			if err != nil {
-				return err
-			}
-			mirror.SetIngestAuthToken(hex.EncodeToString(token))
-			privateKey := ed25519.PrivateKey(key)
-			if err := mirror.RegisterSourceKey(ctx, exportConfig.SourceID, exportConfig.SigningKeyID, privateKey.Public().(ed25519.PublicKey)); err != nil {
-				return err
-			}
-			return runPublicMirrorServers(
-				ctx,
-				newPublicMirrorHTTPServer(listenAddress, mirror.Handler()),
-				newPublicMirrorHTTPServer(publicListenAddress, mirror.PublicHandler()),
-			)
+			return runtime.serve(commandContext(cmd))
 		},
 	}
 	cmd.Flags().StringVar(&listenAddress, "listen", "127.0.0.1:8081", "Private authenticated ingest listen address")

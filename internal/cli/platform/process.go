@@ -148,6 +148,26 @@ func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, er
 	return 0, fmt.Errorf("%w: starting from %d after %d attempts", constants.ErrPortUnavailable, startPort, MaxPortAttempts)
 }
 
+// ReadPIDFile reads a PID from the runtime pid directory.
+func (pm *ProcessManager) ReadPIDFile(filename string) (int, error) {
+	return pm.readPID(filename)
+}
+
+// WritePIDFile writes a PID into the runtime pid directory.
+func (pm *ProcessManager) WritePIDFile(filename string, pid int) error {
+	return pm.writePID(filename, pid)
+}
+
+// DeletePIDFile removes a PID file from the runtime pid directory.
+func (pm *ProcessManager) DeletePIDFile(filename string) error {
+	return pm.deletePID(filename)
+}
+
+// IsProcessRunning reports whether the given PID is alive.
+func (pm *ProcessManager) IsProcessRunning(pid int) bool {
+	return pm.isProcessRunning(pid)
+}
+
 func (pm *ProcessManager) readPID(filename string) (int, error) {
 	relPath := filepath.Join(constants.PidDirname, filename)
 	pidData, err := pm.fileSvc.ReadFile(context.Background(), relPath)
