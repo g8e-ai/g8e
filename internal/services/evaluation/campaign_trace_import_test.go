@@ -27,7 +27,9 @@ func TestImportAssignmentResultFromTrace_CompletedHomogeneousRole(t *testing.T) 
 	require.NoError(t, err)
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED, result.GetLifecycleStatus())
 	assert.Len(t, result.GetModelInferences(), 1)
-	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, result.GetDeterministicGrades()[0].GetStatus())
+	roleGrade := findDeterministicGrade(result.GetDeterministicGrades(), "role-invoked")
+	require.NotNil(t, roleGrade)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, roleGrade.GetStatus())
 	require.NoError(t, ValidateAssignmentResultDigest(result))
 }
 
@@ -70,6 +72,8 @@ func homogeneousAssignmentExecutionRequest(role string) AssignmentExecutionReque
 			ScenarioID: "instruction-exact-format",
 			UserPrompt: "Reply with exactly: NORTH-STAR-OK",
 		},
+		ScenarioGold:  loadScenarioGold("instruction-exact-format"),
+		GradingMethod: evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		Binding: CampaignExecutionBinding{
 			InferenceOperatorSessionID: "session-1",
 			DataOperatorID:             "data-op",

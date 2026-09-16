@@ -80,10 +80,26 @@ def test_trace_persist_finalize_and_load(trace_service):
     assert loaded.status == "completed"
     assert loaded.finish_reason == "stop"
     assert len(loaded.model_calls) == 1
+    assert loaded.designated_role_output is None
     assert loaded.trace_digest == finalized.trace_digest
     assert compute_trace_digest(
         loaded.model_copy(update={"trace_digest": ""})
     ) == loaded.trace_digest
+
+
+def test_trace_finalize_persists_designated_role_output(trace_service):
+    context = _context()
+    trace_service.begin(context)
+    finalized = trace_service.finalize(
+        context,
+        model_calls=[],
+        designated_role_output="READY",
+        finish_reason="stop",
+        status="completed",
+    )
+    assert finalized.designated_role_output == "READY"
+    loaded = trace_service.load("assignment-1", "attempt-1")
+    assert loaded.designated_role_output == "READY"
 
 
 def test_trace_digest_changes_when_model_calls_change():

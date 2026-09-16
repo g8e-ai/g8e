@@ -298,11 +298,29 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 	if err := json.Unmarshal(artifact.Input.Body, &scenarioInput); err != nil {
 		return nil, false, fmt.Errorf("evaluation: execute next assignment: decode scenario input: %w", err)
 	}
+	var scenarioGold ScenarioGoldCriteria
+	if err := json.Unmarshal(artifact.Gold.Body, &scenarioGold); err != nil {
+		return nil, false, fmt.Errorf("evaluation: execute next assignment: decode scenario gold: %w", err)
+	}
+	run, err := c.store.LoadRun(ctx, runID)
+	if err != nil {
+		return nil, false, err
+	}
+	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return nil, false, err
+	}
+	gradingMethod, err := scenarioGradingMethodForAssignment(catalog, assignment)
+	if err != nil {
+		return nil, false, err
+	}
 	attemptID := c.newID("attempt")
 	result, err := c.executor.ExecuteAssignment(ctx, AssignmentExecutionRequest{
 		Assignment:    assignment,
 		AttemptID:     attemptID,
 		ScenarioInput: scenarioInput,
+		ScenarioGold:  scenarioGold,
+		GradingMethod: gradingMethod,
 		Binding:       binding,
 	})
 	if err != nil {
@@ -326,6 +344,18 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 		return nil, false, err
 	}
 	return result, true, nil
+}
+
+func scenarioGradingMethodForAssignment(catalog *evalv1.EvaluationScenarioCatalog, assignment *evalv1.EvaluationAssignment) (evalv1.EvaluationGradingMethod, error) {
+	if catalog == nil || assignment == nil || assignment.GetScenarioId() == "" {
+		return evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_UNSPECIFIED, fmt.Errorf("evaluation: scenario grading method lookup: %w", constants.ErrMissingRequiredField)
+	}
+	for _, scenario := range catalog.GetScenarios() {
+		if scenario.GetScenarioId() == assignment.GetScenarioId() {
+			return scenario.GetGradingMethod(), nil
+		}
+	}
+	return evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_UNSPECIFIED, fmt.Errorf("evaluation: scenario grading method lookup: unknown scenario %s", assignment.GetScenarioId())
 }
 
 func (c *CampaignController) publishQueuedAssignments(ctx context.Context, runID string, assignments []*evalv1.EvaluationAssignment) error {

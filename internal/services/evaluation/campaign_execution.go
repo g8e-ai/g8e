@@ -77,10 +77,12 @@ func modelCampaignRoleLabel(role evalv1.ModelCampaignRole) (string, error) {
 
 // AssignmentExecutionRequest carries one resumable controller execution attempt.
 type AssignmentExecutionRequest struct {
-	Assignment  *evalv1.EvaluationAssignment
-	AttemptID   string
+	Assignment    *evalv1.EvaluationAssignment
+	AttemptID     string
 	ScenarioInput ScenarioInputFixture
-	Binding     CampaignExecutionBinding
+	ScenarioGold  ScenarioGoldCriteria
+	GradingMethod evalv1.EvaluationGradingMethod
+	Binding       CampaignExecutionBinding
 }
 
 // CampaignAssignmentExecutor submits one scored assignment through production chat

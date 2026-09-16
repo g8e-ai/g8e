@@ -46,8 +46,21 @@ func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace map[s
 	if err != nil {
 		return nil, err
 	}
-	lifecycle, roleGrade := classifyCampaignTraceOutcome(probeReq, trace)
+	lifecycle, _ := classifyCampaignTraceOutcome(probeReq, trace)
 	candidate := homogeneousCandidateVariant(req.Assignment)
+	grading, err := GradeHomogeneousScenario(ScenarioGradingRequest{
+		AssignmentID:   req.Assignment.GetAssignmentId(),
+		ScenarioID:     req.Assignment.GetScenarioId(),
+		DesignatedRole: probeReq.DesignatedModelRole,
+		GradingMethod:  req.GradingMethod,
+		ScenarioInput:  req.ScenarioInput,
+		ScenarioGold:   req.ScenarioGold,
+		Trace:          trace,
+		Lifecycle:      lifecycle,
+	})
+	if err != nil {
+		return nil, err
+	}
 	result := &evalv1.EvaluationAssignmentResult{
 		SchemaVersion:       CampaignSchemaVersion,
 		AssignmentId:        req.Assignment.GetAssignmentId(),
@@ -56,7 +69,9 @@ func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace map[s
 		Lane:                req.Assignment.GetLane(),
 		LifecycleStatus:     lifecycle,
 		ModelInferences:     modelInferenceRecordsFromTrace(req.Assignment, req.AttemptID, candidate, trace, newID),
-		DeterministicGrades: []*evalv1.DeterministicGrade{roleGrade},
+		DeterministicGrades: grading.DeterministicGrades,
+		SemanticGrades:      grading.SemanticGrades,
+		DecomposedScores:    grading.DecomposedScores,
 		CompletedAt:         timestamppb.New(now),
 	}
 	if traceEvidence != nil {

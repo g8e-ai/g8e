@@ -88,6 +88,7 @@ class EvaluationTraceService:
         triage_model_call: ModelCallTelemetry | None = None,
         controlled_role_assignment: EvaluationControlledRoleAssignment | None = None,
         role_outcome: EvaluationRoleOutcome | None = None,
+        designated_role_output: str | None = None,
         finish_reason: str | None,
         status: EvaluationTraceStatus,
     ) -> EvaluationAssignmentTrace:
@@ -104,6 +105,7 @@ class EvaluationTraceService:
             controlled_role_assignment=controlled_role_assignment,
             model_calls=list(model_calls),
             role_outcome=role_outcome,
+            designated_role_output=designated_role_output,
             finish_reason=finish_reason,
             completed_at=now().isoformat(),
         )

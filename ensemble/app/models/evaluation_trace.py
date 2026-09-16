@@ -41,6 +41,7 @@ class EvaluationAssignmentTrace(G8eBaseModel):
     controlled_role_assignment: EvaluationControlledRoleAssignment | None = None
     model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     role_outcome: EvaluationRoleOutcome | None = None
+    designated_role_output: str | None = None
     finish_reason: str | None = None
     trace_digest: str = Field(default="", pattern=r"^[0-9a-f]{64}$|^$")
     completed_at: str | None = None

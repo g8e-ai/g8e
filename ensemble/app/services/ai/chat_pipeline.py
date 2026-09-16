@@ -800,12 +800,17 @@ class ChatPipelineService:
                 model_calls,
             )
 
+        designated_role_output = None
+        if controlled_role_assignment is not None:
+            designated_role_output = (state.response_text or "").strip() or None
+
         self.evaluation_trace_service.finalize(
             g8e_context,
             model_calls=model_calls,
             triage_model_call=inputs.triage_result.model_call if inputs.triage_result else None,
             controlled_role_assignment=controlled_role_assignment,
             role_outcome=role_outcome,
+            designated_role_output=designated_role_output,
             finish_reason=state.finish_reason or "stop",
             status="failed" if state.stream_failed else "completed",
         )
