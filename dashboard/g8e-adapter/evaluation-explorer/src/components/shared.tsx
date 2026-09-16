@@ -3,6 +3,7 @@
 // to any color cue. No component depends on hover for essential information.
 
 import { type ReactNode, useId } from 'react';
+import { Link } from 'react-router-dom';
 import type { ConfidenceInterval, MetricValue, QualityState } from '../contract/types';
 import {
   classifyFreshness,

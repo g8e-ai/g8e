@@ -145,7 +145,8 @@ func (c *CampaignController) buildFailureAssignmentResult(ctx context.Context, r
 }
 
 func (c *CampaignController) persistTerminalAssignment(ctx context.Context, assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult) error {
-	if err := c.store.SaveAssignmentResult(ctx, result); err != nil {
+	persistCtx := assignmentPersistContext(ctx)
+	if err := c.store.SaveAssignmentResult(persistCtx, result); err != nil {
 		return err
 	}
 	assignment.LifecycleStatus = result.GetLifecycleStatus()
@@ -154,10 +155,19 @@ func (c *CampaignController) persistTerminalAssignment(ctx context.Context, assi
 	} else {
 		assignment.CompletedAt = timestamppb.New(c.now().UTC())
 	}
-	if err := c.store.SaveAssignment(ctx, assignment); err != nil {
+	if err := c.store.SaveAssignment(persistCtx, assignment); err != nil {
 		return err
 	}
-	return c.publishAssignmentTerminal(ctx, assignment, result)
+	return c.publishAssignmentTerminal(persistCtx, assignment, result)
+}
+
+// assignmentPersistContext keeps terminal writes alive when the assignment
+// execution context expired while waiting for a trace or provider response.
+func assignmentPersistContext(ctx context.Context) context.Context {
+	if ctx == nil || ctx.Err() == nil {
+		return ctx
+	}
+	return context.WithoutCancel(ctx)
 }
 
 // RepairAssignmentsWithoutResults backfills persisted terminal results for
