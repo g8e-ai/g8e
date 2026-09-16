@@ -38,6 +38,7 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		campaignEvalPublishCmd(deps),
 		campaignEvalVerifyCmd(deps),
 		campaignEvalAccountCmd(deps),
+		campaignEvalExportCmd(deps),
 		campaignEvalRepairResultsCmd(deps),
 		campaignEvalStatusCmd(deps),
 	)
@@ -700,6 +701,66 @@ func campaignEvalAccountCmd(deps nativeEvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
+	return cmd
+}
+
+func campaignEvalExportCmd(deps nativeEvalDeps) *cobra.Command {
+	var runID string
+	var outputDir string
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:   "export",
+		Short: "Generate disclosure-safe JSONL, CSV, and SQLite exports for one campaign run",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if runID == "" {
+				return fmt.Errorf("evaluation: campaign export: %w", constants.ErrMissingRequiredField)
+			}
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			store := evaluation.NewStore(fileSvc)
+			report, err := evaluation.NewCampaignExporter(deps.now).ExportRun(cmd.Context(), store, fileSvc, runID, outputDir)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign export: %w", err)
+			}
+			if jsonOutput {
+				payload, err := json.MarshalIndent(map[string]any{
+					"run_id":                report.RunID,
+					"campaign_id":           report.CampaignID,
+					"output_dir":            report.OutputDir,
+					"exported_at":           report.ExportedAt.Format(time.RFC3339),
+					"assignment_count":      report.AssignmentCount,
+					"terminal_result_count": report.TerminalResultCount,
+					"files":                 report.Files,
+				}, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Exported run %s to %s\nAssignments: %d scheduled, %d terminal results\n",
+				report.RunID,
+				report.OutputDir,
+				report.AssignmentCount,
+				report.TerminalResultCount,
+			)
+			if err != nil {
+				return err
+			}
+			for _, file := range report.Files {
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "- %s (%s, %d record(s))\n", file.Name, file.Format, file.RecordCount)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
+	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Export output directory (default: .g8e/data/eval/runs/<run-id>/export)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
