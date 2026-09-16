@@ -9,9 +9,13 @@ package evaluation
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"sort"
+
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
@@ -204,6 +208,34 @@ func (freeze *ModelInventoryFreeze) LookupModelVariant(servedModelTag string) (*
 		}
 	}
 	return nil, fmt.Errorf("evaluation: lookup model variant: %w: %s", constants.ErrInferenceModelNotFound, servedModelTag)
+}
+
+// LoadModelInventoryFreezeFile reads a Phase 3 inventory freeze JSON export.
+func LoadModelInventoryFreezeFile(path string) (*ModelInventoryFreeze, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: load model inventory freeze file: %w", err)
+	}
+	var payload struct {
+		CampaignID          string            `json:"campaign_id"`
+		ModelRegistryDigest string            `json:"model_registry_digest"`
+		Variants            []json.RawMessage `json:"variants"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, fmt.Errorf("evaluation: load model inventory freeze file: decode: %w", err)
+	}
+	if payload.ModelRegistryDigest == "" || len(payload.Variants) == 0 {
+		return nil, fmt.Errorf("evaluation: load model inventory freeze file: %w", constants.ErrMissingRequiredField)
+	}
+	variants := make([]*evalv1.ModelVariant, 0, len(payload.Variants))
+	for _, raw := range payload.Variants {
+		variant := &evalv1.ModelVariant{}
+		if err := protojson.Unmarshal(raw, variant); err != nil {
+			return nil, fmt.Errorf("evaluation: load model inventory freeze file: decode variant: %w", err)
+		}
+		variants = append(variants, variant)
+	}
+	return MaterializeNorthStarModelRegistry(payload.CampaignID, variants)
 }
 
 // ToModelRegistryFreeze converts the eval inventory into the inference registry

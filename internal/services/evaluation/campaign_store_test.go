@@ -9,7 +9,10 @@ package evaluation
 
 import (
 	"context"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -72,9 +75,40 @@ func (m *campaignMemoryFileService) Resolve(relPath string) string              
 func (m *campaignMemoryFileService) Remove(context.Context, string) error         { return nil }
 func (m *campaignMemoryFileService) RemoveAll(context.Context, string) error      { return nil }
 func (m *campaignMemoryFileService) Rename(context.Context, string, string) error { return nil }
-func (m *campaignMemoryFileService) ReadDir(context.Context, string) ([]os.DirEntry, error) {
-	return nil, nil
+func (m *campaignMemoryFileService) ReadDir(_ context.Context, relPath string) ([]os.DirEntry, error) {
+	prefix := relPath + string(filepath.Separator)
+	seen := make(map[string]struct{})
+	var entries []os.DirEntry
+	for path := range m.files {
+		if !strings.HasPrefix(path, prefix) {
+			continue
+		}
+		remainder := strings.TrimPrefix(path, prefix)
+		parts := strings.Split(remainder, string(filepath.Separator))
+		if len(parts) == 0 || parts[0] == "" {
+			continue
+		}
+		if _, ok := seen[parts[0]]; ok {
+			continue
+		}
+		seen[parts[0]] = struct{}{}
+		entries = append(entries, campaignMemoryDirEntry{name: parts[0], isDir: len(parts) > 1})
+	}
+	if len(entries) == 0 {
+		return nil, fs.ErrNotExist
+	}
+	return entries, nil
 }
+
+type campaignMemoryDirEntry struct {
+	name  string
+	isDir bool
+}
+
+func (e campaignMemoryDirEntry) Name() string               { return e.name }
+func (e campaignMemoryDirEntry) IsDir() bool                  { return e.isDir }
+func (e campaignMemoryDirEntry) Type() fs.FileMode            { return 0 }
+func (e campaignMemoryDirEntry) Info() (fs.FileInfo, error)   { return nil, fs.ErrInvalid }
 func (m *campaignMemoryFileService) EnforceDirPermissions(context.Context, string, os.FileMode) error {
 	return nil
 }

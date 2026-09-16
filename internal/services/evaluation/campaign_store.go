@@ -9,8 +9,12 @@ package evaluation
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
@@ -107,6 +111,97 @@ func (s *Store) LoadScenarioCatalog(ctx context.Context, campaignID string) (*ev
 		return nil, fmt.Errorf("%w: %v", constants.ErrEvidenceArtifactMalformed, err)
 	}
 	return catalog, nil
+}
+
+// SaveRun persists one canonical model-campaign run record.
+func (s *Store) SaveRun(ctx context.Context, run *evalv1.EvaluationRun) error {
+	if s == nil || s.files == nil || run == nil || !complianceevidence.ValidPathElement(run.GetRunId()) {
+		return fmt.Errorf("%w: run and run ID are required", constants.ErrEvaluationReportPersistFailed)
+	}
+	if run.GetSchemaVersion() != CampaignSchemaVersion {
+		return fmt.Errorf("%w: unsupported run schema version", constants.ErrEvaluationReportPersistFailed)
+	}
+	if run.GetCampaignBinding() == nil || run.GetCampaignBinding().GetCampaignId() == "" {
+		return fmt.Errorf("%w: model campaign binding is required", constants.ErrEvaluationReportPersistFailed)
+	}
+	body, err := evalv1.MarshalCanonical(run)
+	if err != nil {
+		return fmt.Errorf("%w: canonicalize run: %w", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	path := runStatePath(run.GetRunId())
+	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
+		return fmt.Errorf("%w: create run directory: %w", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	if err := s.files.WriteFile(ctx, path, body, constants.PermFileReadOnly); err != nil {
+		return fmt.Errorf("%w: write run: %w", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	return nil
+}
+
+// LoadRun reads one persisted model-campaign run record.
+func (s *Store) LoadRun(ctx context.Context, runID string) (*evalv1.EvaluationRun, error) {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
+		return nil, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
+	}
+	body, err := s.files.ReadFile(ctx, runStatePath(runID))
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: read run: %w", err)
+	}
+	run := &evalv1.EvaluationRun{}
+	if err := evalv1.UnmarshalCanonical(body, run); err != nil {
+		return nil, fmt.Errorf("%w: canonical run: %v", constants.ErrEvidenceArtifactMalformed, err)
+	}
+	if run.GetRunId() != runID {
+		return nil, fmt.Errorf("%w: run ID does not match requested run", constants.ErrEvidenceScopeMismatch)
+	}
+	return run, nil
+}
+
+// ListAssignments returns all persisted assignments for one run in deterministic order.
+func (s *Store) ListAssignments(ctx context.Context, runID string) ([]*evalv1.EvaluationAssignment, error) {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
+		return nil, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
+	}
+	dir := filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname)
+	entries, err := s.files.ReadDir(ctx, dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("evaluation: list assignments: %w", err)
+	}
+	assignments := make([]*evalv1.EvaluationAssignment, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-result"+constants.FileExtJSON) {
+			continue
+		}
+		assignmentID := strings.TrimSuffix(entry.Name(), constants.FileExtJSON)
+		assignment, err := s.LoadAssignment(ctx, runID, assignmentID)
+		if err != nil {
+			return nil, err
+		}
+		assignments = append(assignments, assignment)
+	}
+	sortAssignmentsDeterministic(assignments)
+	return assignments, nil
+}
+
+// AssignmentResultExists reports whether a terminal assignment result is persisted.
+func (s *Store) AssignmentResultExists(ctx context.Context, runID, assignmentID string) (bool, error) {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) || !complianceevidence.ValidPathElement(assignmentID) {
+		return false, fmt.Errorf("%w: file service, run ID, and assignment ID are required", constants.ErrEvidenceArtifactMalformed)
+	}
+	exists, err := s.files.FileExists(ctx, assignmentResultPath(runID, assignmentID))
+	if err != nil {
+		return false, fmt.Errorf("evaluation: assignment result exists: %w", err)
+	}
+	return exists, nil
+}
+
+func sortAssignmentsDeterministic(assignments []*evalv1.EvaluationAssignment) {
+	sort.Slice(assignments, func(i, j int) bool {
+		return assignments[i].GetDeterministicIdentity() < assignments[j].GetDeterministicIdentity()
+	})
 }
 
 // SaveAssignment persists one queued or running assignment record.
@@ -230,4 +325,8 @@ func assignmentPath(runID, assignmentID string) string {
 
 func assignmentResultPath(runID, assignmentID string) string {
 	return filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname, assignmentID+"-result"+constants.FileExtJSON)
+}
+
+func runStatePath(runID string) string {
+	return filepath.Join(evaluationRunDir(runID), constants.EvaluationRunStateFilename)
 }

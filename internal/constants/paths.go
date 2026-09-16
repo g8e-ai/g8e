@@ -734,6 +734,7 @@ const (
 	EvaluationVerificationFilename                = "verification.json"
 	EvaluationCampaignSpecFilename                = "campaign-spec.json"
 	EvaluationScenarioCatalogFilename             = "scenario-catalog.json"
+	EvaluationRunStateFilename                    = "run.json"
 	EvaluationEvidenceDirname                     = "evidence"
 	EvalRunVerifierID                             = "g8e-native-evaluation-verifier"
 	EvalRunVerifierVersion                        = "1.0.0"
