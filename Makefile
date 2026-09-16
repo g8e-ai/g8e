@@ -352,6 +352,16 @@ protoc-install:
 # BUILD
 # =============================================================================
 
+# Install a built binary over an existing path without stopping a running copy.
+# Direct cp fails with ETXTBSY when the target is executing; rename replaces the
+# directory entry while the old inode stays mapped for the running process.
+INSTALL_EXECUTABLE = \
+	if [ "$(HOST_OS)" = "windows" ]; then \
+		cp "$$INSTALL_SRC" "$$INSTALL_DST"; \
+	else \
+		cp "$$INSTALL_SRC" "$$INSTALL_DST.new" && chmod +x "$$INSTALL_DST.new" && mv -f "$$INSTALL_DST.new" "$$INSTALL_DST"; \
+	fi
+
 .PHONY: build
 build:
 	@echo "Building g8e Operator for current platform..."
@@ -366,13 +376,9 @@ build:
 	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$NODE_BINARY..."; \
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
 	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
-	if [ -f "./$$ROOT_COPY" ] && pgrep -f "$$ROOT_COPY --doctrine" > /dev/null 2>&1; then \
-		echo "Error: Unable to copy binary - g8e gateway is currently running. Please stop it first with: ./$$ROOT_COPY gw stop"; \
-		exit 1; \
-	fi; \
-	cp $$NODE_BINARY $$ROOT_COPY; \
+	INSTALL_SRC=$$NODE_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE); \
 	mkdir -p demos/bin; \
-	cp $$ROOT_COPY demos/bin/g8e
+	INSTALL_SRC=$$NODE_BINARY INSTALL_DST=demos/bin/g8e; $(INSTALL_EXECUTABLE)
 	@echo "Build complete. Binary: $(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH)$(if $(filter windows,$(HOST_OS)),.exe,)"
 	@echo "Demo binary: demos/bin/g8e"
 
@@ -420,13 +426,9 @@ build-all:
 	else \
 		ROOT_COPY=g8e; \
 	fi; \
-	if [ -f "./$$ROOT_COPY" ] && pgrep -f "$$ROOT_COPY --doctrine" > /dev/null 2>&1; then \
-		echo "Error: Unable to copy host binary - g8e gateway is currently running. Please stop it first with: ./$$ROOT_COPY gw stop"; \
-		exit 1; \
-	fi; \
-	cp $$HOST_NODE_BINARY $$ROOT_COPY; \
+	INSTALL_SRC=$$HOST_NODE_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE); \
 	mkdir -p demos/bin; \
-	cp $$ROOT_COPY demos/bin/g8e
+	INSTALL_SRC=$$HOST_NODE_BINARY INSTALL_DST=demos/bin/g8e; $(INSTALL_EXECUTABLE)
 	@echo "Multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
 	@echo "Host binary copied: ./g8e ($(HOST_OS)/$(HOST_ARCH))"
 	@echo "Demo binary: demos/bin/g8e"
@@ -485,7 +487,7 @@ build-fips:
 		-ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$(FIPS_GOOS)_$(FIPS_GOARCH)" \
 		-o $$NODE_BINARY $(MAIN_PKG); \
 	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
-	cp $$NODE_BINARY g8e-fips
+	INSTALL_SRC=$$NODE_BINARY INSTALL_DST=g8e-fips; $(INSTALL_EXECUTABLE)
 	@echo "FIPS build complete. Binary: $(BIN_DIR)/g8e-fips-$(FIPS_GOOS)-$(FIPS_GOARCH)"
 	@echo "Verify with: ./g8e-fips version --fips"
 
