@@ -29,11 +29,8 @@ from typing import Any
 from app.models.base import BaseModel, Field, field_validator
 
 from app.llm.llm_types import Content, GenerateContentResponse, Part, ResponseFormat, Role, LiteLLMSettings, UsageMetadata
-from app.llm.model_evidence import (
-    model_boundary_hash,
-    recorded_model_boundary_hash,
-    recorded_model_boundary_privacy,
-)
+from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import EvalJudgeSettings
@@ -259,6 +256,7 @@ class EvalJudge:
         if not self._model:
             raise EvalJudgeError("Model is not set", model_calls=model_calls)
         self._provider.clear_input_artifact_hash()
+        prepare_provider_call(self._provider, retry_count=retry_count)
         input_artifact_hash = model_boundary_hash({
             "model": self._model,
             "contents": contents,
@@ -271,9 +269,7 @@ class EvalJudge:
                 contents=contents,
                 lite_llm_settings=settings,
             )
-            input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
         except Exception as exc:
-            input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
             model_calls.append(self._model_call_telemetry(
                 response=None,
                 response_text="",
@@ -342,12 +338,13 @@ class EvalJudge:
     ) -> ModelCallTelemetry:
         usage = response.usage_metadata if response else UsageMetadata()
         finish_reason = response.candidates[0].finish_reason if response and response.candidates else None
-        return ModelCallTelemetry(
+        return build_model_call_telemetry(
+            provider=self._provider,
             agent_role="judge",
-            provider=type(self._provider).__name__,
+            model_role="lite",
             model=self._model or "",
             monotonic_start=monotonic_start,
-            monotonic_end=time.monotonic(),
+            input_artifact_hash=input_artifact_hash,
             input_tokens=usage.prompt_token_count,
             output_tokens=usage.candidates_token_count,
             thinking_tokens=usage.thinking_token_count,
@@ -362,7 +359,5 @@ class EvalJudge:
             retry_count=retry_count,
             succeeded=error is None,
             error_type=type(error).__name__ if error else None,
-            input_artifact_hash=input_artifact_hash,
             output_artifact_hash=model_boundary_hash(response_text),
-            model_boundary_privacy=recorded_model_boundary_privacy(self._provider),
         )

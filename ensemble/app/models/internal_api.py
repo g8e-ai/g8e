@@ -7,6 +7,7 @@
 
 from g8e.models.internal_api import ResourceCreationRequest as _G8eResourceCreationRequest
 from g8e.models.internal_api import ChatStartedResponse as _G8eChatStartedResponse
+from g8e.models.internal_api import EvaluationTraceResponse as _G8eEvaluationTraceResponse
 from g8e.models.internal_api import ChatMessageRequest as _G8eChatMessageRequest
 from g8e.models.observe_api import (
     ObserveProducerAgentStateRequest as _G8eObserveProducerAgentStateRequest,
@@ -116,6 +117,7 @@ class ChatMessageRequest(_G8eChatMessageRequest, RequestOverrides):
 
 
 ChatStartedResponse = _G8eChatStartedResponse
+EvaluationTraceResponse = _G8eEvaluationTraceResponse
 
 
 class StopAIResponse(G8eBaseModel):

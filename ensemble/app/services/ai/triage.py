@@ -20,9 +20,8 @@ from app.llm import Role, get_llm_provider
 from app.errors import OllamaEmptyResponseError
 from app.llm.model_evidence import (
     model_boundary_hash,
-    recorded_model_boundary_hash,
-    recorded_model_boundary_privacy,
 )
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.structured import parse_structured_response
 from app.constants import (
     TRIAGE_CONVERSATION_TAIL_LIMIT,
@@ -124,7 +123,7 @@ class TriageAgent:
             )
 
             try:
-                provider.clear_input_artifact_hash()
+                prepare_provider_call(provider, g8e_context=request.g8e_context)
                 contents = [types.Content(role=Role.USER, parts=[types.Part(text=prompt)])]
                 input_artifact_hash = model_boundary_hash({
                     "model": model,
@@ -137,17 +136,17 @@ class TriageAgent:
                     contents=contents,
                     lite_llm_settings=config,
                 )
-                input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
                 monotonic_end = time.monotonic()
                 usage = response.usage_metadata
                 finish_reason = response.candidates[0].finish_reason if response.candidates else None
-                model_call = ModelCallTelemetry(
+                model_call = build_model_call_telemetry(
+                    provider=provider,
                     agent_role="triage",
                     model_role="lite",
-                    provider=type(provider).__name__,
                     model=model,
                     monotonic_start=monotonic_start,
                     monotonic_end=monotonic_end,
+                    input_artifact_hash=input_artifact_hash,
                     input_tokens=usage.prompt_token_count,
                     output_tokens=usage.candidates_token_count,
                     thinking_tokens=usage.thinking_token_count,
@@ -159,9 +158,7 @@ class TriageAgent:
                     prompt_eval_duration_seconds=usage.prompt_eval_duration_seconds,
                     total_duration_seconds=usage.total_duration_seconds,
                     load_duration_seconds=usage.load_duration_seconds,
-                    input_artifact_hash=input_artifact_hash,
                     output_artifact_hash=model_boundary_hash(response.text or ""),
-                    model_boundary_privacy=recorded_model_boundary_privacy(provider),
                 )
                 if not response.text:
                     logger.warning(
@@ -177,21 +174,18 @@ class TriageAgent:
                     ).model_copy(update={"model_call": failed_call})
                 result = self._parse_response(response.text).model_copy(update={"model_call": model_call})
             except OllamaEmptyResponseError as exc:
-                input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
                 logger.warning(
                     "[TRIAGE] No response from lite model, defaulting to complex: %s", exc
                 )
-                failed_call = ModelCallTelemetry(
+                failed_call = build_model_call_telemetry(
+                    provider=provider,
                     agent_role="triage",
                     model_role="lite",
-                    provider=type(provider).__name__,
                     model=model,
                     monotonic_start=monotonic_start,
-                    monotonic_end=time.monotonic(),
+                    input_artifact_hash=input_artifact_hash,
                     succeeded=False,
                     error_type=type(exc).__name__,
-                    input_artifact_hash=input_artifact_hash,
-                    model_boundary_privacy=recorded_model_boundary_privacy(provider),
                 )
                 return self._escalation_result(
                     f"Triage unavailable: lite model returned empty response ({exc}). Check model availability and connectivity, then retry.",
@@ -200,19 +194,16 @@ class TriageAgent:
                     error_message=str(exc),
                 ).model_copy(update={"model_call": failed_call})
             except Exception as exc:
-                input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
                 logger.exception("[TRIAGE] Provider call failed, defaulting to complex")
-                failed_call = ModelCallTelemetry(
+                failed_call = build_model_call_telemetry(
+                    provider=provider,
                     agent_role="triage",
                     model_role="lite",
-                    provider=type(provider).__name__,
                     model=model,
                     monotonic_start=monotonic_start,
-                    monotonic_end=time.monotonic(),
+                    input_artifact_hash=input_artifact_hash,
                     succeeded=False,
                     error_type=type(exc).__name__,
-                    input_artifact_hash=input_artifact_hash,
-                    model_boundary_privacy=recorded_model_boundary_privacy(provider),
                 )
                 return self._escalation_result(
                     f"Triage unavailable: classification failed ({exc}). Escalating to full LLM for complexity classification. Check provider configuration and retry.",

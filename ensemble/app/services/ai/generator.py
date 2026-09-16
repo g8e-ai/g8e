@@ -31,6 +31,7 @@ from app.llm.prompts import (
     build_tribunal_prompt_fields,
 )
 from app.llm.factory import get_llm_provider
+from app.llm.model_call_attribution import prepare_provider_call
 from app.models.agents.tribunal import (
     CandidateCommand,
     CommandGenerationResult,
@@ -286,6 +287,8 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         lite_provider = request.settings.llm.lite_provider
         provider_name = lite_provider.value if lite_provider else "not_configured"
         raise ConfigurationError(f"Failed to initialize generation provider for {provider_name}")
+
+    prepare_provider_call(generation_provider, g8e_context=request.g8e_context)
 
     candidates = await _run_generation_stage(
         provider=generation_provider,

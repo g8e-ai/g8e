@@ -45,6 +45,7 @@ from app.models.events import (
 from app.utils.timestamp import now
 from app.errors import ValidationError
 from app.services.infra.event_service import EventService
+from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.observe.payloads import (
     build_agent_state_request,
     build_investigation_run_state_request,
@@ -60,6 +61,7 @@ async def deliver_via_sse(
     state: AgentStreamState,
     event_service: EventService,
     on_iteration_text: Callable[[str], Awaitable[None]] | None = None,
+    evaluation_trace_service: EvaluationTraceService | None = None,
 ) -> None:
     """
     Consume a StreamChunkFromModel async generator and deliver each event to
@@ -464,6 +466,19 @@ async def deliver_via_sse(
         if error_occurred:
             logger.info("[SSE] Skipping completion event due to prior error")
         else:
+            if (
+                evaluation_trace_service is not None
+                and inputs.g8e_context.evaluation_context is not None
+            ):
+                evaluation_trace_service.finalize(
+                    inputs.g8e_context,
+                    model_calls=state.model_calls,
+                    triage_model_call=inputs.triage_result.model_call
+                    if inputs.triage_result
+                    else None,
+                    finish_reason=state.finish_reason or DEFAULT_FINISH_REASON,
+                    status="completed",
+                )
             await _publish(
                 EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED,
                 ChatResponseCompletePayload(

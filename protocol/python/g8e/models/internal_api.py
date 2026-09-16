@@ -74,3 +74,9 @@ class ChatStartedResponse(G8eBaseModel):
     success: bool
     case_id: str
     investigation_id: str
+
+
+class EvaluationTraceResponse(G8eBaseModel):
+    """Read-only evaluation assignment trace lookup."""
+
+    trace: dict[str, Any]

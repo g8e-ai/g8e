@@ -56,6 +56,7 @@ from app.models.internal_api import (
     CaseResponse,
     ChatMessageRequest,
     ChatStartedResponse,
+    EvaluationTraceResponse,
     DirectCommandRequest,
     DirectCommandSentResponse,
     OperatorApprovalResponse,
@@ -135,6 +136,7 @@ from app.constants.message_sender import MessageSender
 if TYPE_CHECKING:
     from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
 
+from app.services.evaluation.trace_service import EvaluationTraceService
 from app.dependencies import (
     get_g8ee_app_settings,
     get_g8ee_approval_service,
@@ -1779,6 +1781,21 @@ async def get_investigation(
         )
 
     return investigation
+
+
+@router.get(
+    InternalAPIPaths.G8EE_EVALUATION_TRACE,
+    response_model=EvaluationTraceResponse,
+)
+async def get_evaluation_trace(
+    assignment_id: str,
+    evaluation_attempt_id: str,
+    _: G8eHttpContext = Depends(require_authenticated_context),
+):
+    """Authenticated read-only lookup for a persisted evaluation assignment trace."""
+    trace_service = EvaluationTraceService()
+    trace = trace_service.load(assignment_id, evaluation_attempt_id)
+    return EvaluationTraceResponse(trace=trace.model_dump(mode="json"))
 
 
 @router.get(InternalAPIPaths.G8EE_HEALTH)

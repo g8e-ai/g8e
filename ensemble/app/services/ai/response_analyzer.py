@@ -17,14 +17,13 @@ from app.models.settings import G8eeUserSettings
 from app.errors import OllamaEmptyResponseError
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
 from app.llm import get_llm_provider, Role
-from app.llm.model_evidence import (
-    model_boundary_hash,
-    recorded_model_boundary_hash,
-    recorded_model_boundary_privacy,
-)
+from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.structured import parse_structured_response
 from app.models.base import G8eBaseModel
-from app.models.model_telemetry import ModelBoundaryPrivacyAttestation, ModelCallTelemetry
+from app.llm.provider import LLMProvider
+from app.models.http_context import G8eHttpContext
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.tool_results import (
     CommandRiskAnalysis,
     CommandRiskContext,
@@ -196,6 +195,7 @@ class AIResponseAnalyzer:
         log_context: str,
         agent_role: str,
         post_process: Callable[[T], None] | None = None,
+        g8e_context: G8eHttpContext | None = None,
     ) -> T:
         if not lite_model:
             logger.warning("%s: no lite_model configured", log_context)
@@ -212,7 +212,7 @@ class AIResponseAnalyzer:
                 response_format=types.ResponseFormat.from_pydantic_schema(response_schema),
             )
             contents = [types.Content(role=Role.USER, parts=[types.Part(text=prompt)])]
-            client.clear_input_artifact_hash()
+            prepare_provider_call(client, g8e_context=g8e_context)
             input_artifact_hash = model_boundary_hash({
                 "model": lite_model,
                 "contents": contents,
@@ -231,7 +231,6 @@ class AIResponseAnalyzer:
                 contents=contents,
                 lite_llm_settings=config,
             )
-            input_artifact_hash = recorded_model_boundary_hash(client, input_artifact_hash)
             monotonic_end = time.monotonic()
             logger.info(
                 "[WARDEN-LLM] %s LLM call duration_ms=%.2f",
@@ -241,16 +240,14 @@ class AIResponseAnalyzer:
             response_text = response.text or ""
             analysis = parse_structured_response(response_text, response_model)
         except Exception as exc:
-            input_artifact_hash = recorded_model_boundary_hash(client, input_artifact_hash)
             monotonic_end = time.monotonic()
-            telemetry = self._model_call_telemetry(
+            telemetry = AIResponseAnalyzer._model_call_telemetry(
+                provider=client,
                 agent_role=agent_role,
-                provider=type(client).__name__,
                 model=lite_model,
                 monotonic_start=monotonic_start,
                 monotonic_end=monotonic_end,
                 input_artifact_hash=input_artifact_hash,
-                model_boundary_privacy=recorded_model_boundary_privacy(client),
                 response=response,
                 response_text=response_text,
                 error=exc,
@@ -262,13 +259,12 @@ class AIResponseAnalyzer:
             return fallback_exception(exc).model_copy(update={"model_call": telemetry})
 
         telemetry = self._model_call_telemetry(
+            provider=client,
             agent_role=agent_role,
-            provider=type(client).__name__,
             model=lite_model,
             monotonic_start=monotonic_start,
             monotonic_end=monotonic_end,
             input_artifact_hash=input_artifact_hash,
-            model_boundary_privacy=recorded_model_boundary_privacy(client),
             response=response,
             response_text=response_text,
         )
@@ -280,25 +276,27 @@ class AIResponseAnalyzer:
 
     @staticmethod
     def _model_call_telemetry(
+        *,
+        provider: LLMProvider,
         agent_role: str,
-        provider: str,
         model: str,
         monotonic_start: float,
         monotonic_end: float,
         input_artifact_hash: str,
-        model_boundary_privacy: ModelBoundaryPrivacyAttestation | None,
         response: types.GenerateContentResponse | None,
         response_text: str,
         error: Exception | None = None,
     ) -> ModelCallTelemetry:
         usage = response.usage_metadata if response else types.UsageMetadata()
         finish_reason = response.candidates[0].finish_reason if response and response.candidates else None
-        return ModelCallTelemetry(
-            agent_role=agent_role,
+        return build_model_call_telemetry(
             provider=provider,
+            agent_role=agent_role,
+            model_role="lite",
             model=model,
             monotonic_start=monotonic_start,
             monotonic_end=monotonic_end,
+            input_artifact_hash=input_artifact_hash,
             input_tokens=usage.prompt_token_count,
             output_tokens=usage.candidates_token_count,
             thinking_tokens=usage.thinking_token_count,
@@ -312,9 +310,7 @@ class AIResponseAnalyzer:
             load_duration_seconds=usage.load_duration_seconds,
             succeeded=error is None,
             error_type=type(error).__name__ if error else None,
-            input_artifact_hash=input_artifact_hash,
             output_artifact_hash=model_boundary_hash(response_text),
-            model_boundary_privacy=model_boundary_privacy,
         )
 
     async def analyze_command_risk(

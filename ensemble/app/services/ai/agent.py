@@ -39,23 +39,19 @@ from app.constants import (
     DEFAULT_FINISH_REASON,
     ReasoningAgent,
 )
-from app.llm.model_evidence import (
-    model_boundary_hash,
-    recorded_governed_dispatch_evidence,
-    recorded_model_boundary_hash,
-    recorded_model_boundary_privacy,
-)
+from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.provider import LLMProvider
 from app.models.agent import (
     AgentInputs,
     AgentStreamState,
-    ModelCallTelemetry,
     ToolCallResponse,
     StreamChunkData,
     StreamChunkFromModel,
     StreamChunkFromModelType,
     TokenUsage,
 )
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.grounding import GroundingMetadata
 from app.models.operators import AgentContinueApprovalRequest
 from app.services.ai.agent_tool_loop import (
@@ -63,6 +59,7 @@ from app.services.ai.agent_tool_loop import (
     merge_grounding,
 )
 from app.services.ai.agent_sse import deliver_via_sse
+from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.ai.agent_turn import (
     GatedTurnResult,
     consolidate_model_parts,
@@ -202,6 +199,7 @@ class g8eEnsemble:
         event_service: EventService,
         llm_provider: LLMProvider,
         on_iteration_text: Callable[[str], Awaitable[None]] | None = None,
+        evaluation_trace_service: EvaluationTraceService | None = None,
     ) -> None:
         """
         SSE chat path - runs stream_response and delivers events to the browser.
@@ -259,6 +257,7 @@ class g8eEnsemble:
             state=state,
             event_service=event_service,
             on_iteration_text=on_iteration_text,
+            evaluation_trace_service=evaluation_trace_service,
         )
 
     async def _stream_with_tool_loop(
@@ -355,9 +354,11 @@ class g8eEnsemble:
                     investigation_id,
                 )
 
-                llm_provider.clear_input_artifact_hash()
-                llm_provider.set_g8e_context(inputs.g8e_context)
-                llm_provider.set_provider_retry_count(retry_count)
+                prepare_provider_call(
+                    llm_provider,
+                    g8e_context=inputs.g8e_context,
+                    retry_count=retry_count,
+                )
                 input_artifact_hash = model_boundary_hash(
                     {
                         "model": model_name,
@@ -380,90 +381,38 @@ class g8eEnsemble:
                         yield chunk
 
                     gated = gated_result_out[0]
-                    input_artifact_hash = recorded_model_boundary_hash(
-                        llm_provider, input_artifact_hash
-                    )
                 except Exception as exc:
-                    input_artifact_hash = recorded_model_boundary_hash(
-                        llm_provider, input_artifact_hash
-                    )
-                    governed_evidence = recorded_governed_dispatch_evidence(llm_provider)
                     model_calls.append(
-                        ModelCallTelemetry(
+                        build_model_call_telemetry(
+                            provider=llm_provider,
                             agent_role=inputs.active_agent.value
                             if inputs.active_agent
                             else "unknown",
                             model_role="assistant"
                             if inputs.active_agent == ReasoningAgent.DASH
                             else "primary",
-                            provider=type(llm_provider).__name__,
                             model=model_name,
                             monotonic_start=monotonic_start,
-                            monotonic_end=time.monotonic(),
+                            input_artifact_hash=input_artifact_hash,
                             retry_count=retry_count,
                             succeeded=False,
                             error_type=type(exc).__name__,
-                            input_artifact_hash=input_artifact_hash,
-                            model_boundary_privacy=recorded_model_boundary_privacy(llm_provider),
-                            governed_transaction_id=governed_evidence.transaction_id
-                            if governed_evidence
-                            else None,
-                            governed_result_digest=governed_evidence.result_digest
-                            if governed_evidence
-                            else None,
-                            governed_receipt_status=governed_evidence.receipt_status
-                            if governed_evidence
-                            else None,
-                            provider_attempt_id=governed_evidence.provider_attempt_id
-                            if governed_evidence
-                            else None,
-                            requested_model=governed_evidence.requested_model
-                            if governed_evidence
-                            else None,
-                            served_model=governed_evidence.served_model
-                            if governed_evidence
-                            else None,
-                            model_digest=governed_evidence.model_digest
-                            if governed_evidence
-                            else None,
-                            normalized_request_hash=governed_evidence.normalized_request_hash
-                            if governed_evidence
-                            else None,
-                            governed_output_hash=governed_evidence.output_hash
-                            if governed_evidence
-                            else None,
-                            campaign_id=governed_evidence.campaign_id
-                            if governed_evidence
-                            else None,
-                            run_id=governed_evidence.run_id if governed_evidence else None,
-                            assignment_id=governed_evidence.assignment_id
-                            if governed_evidence
-                            else None,
-                            evaluation_attempt_id=governed_evidence.evaluation_attempt_id
-                            if governed_evidence
-                            else None,
-                            scenario_id=governed_evidence.scenario_id
-                            if governed_evidence
-                            else None,
-                            model_registry_digest=governed_evidence.model_registry_digest
-                            if governed_evidence
-                            else None,
                         )
                     )
                     raise
                 turn_result = gated.turn_result
                 monotonic_end = time.monotonic()
-                governed_evidence = recorded_governed_dispatch_evidence(llm_provider)
                 model_calls.append(
-                    ModelCallTelemetry(
+                    build_model_call_telemetry(
+                        provider=llm_provider,
                         agent_role=inputs.active_agent.value if inputs.active_agent else "unknown",
                         model_role="assistant"
                         if inputs.active_agent == ReasoningAgent.DASH
                         else "primary",
-                        provider=type(llm_provider).__name__,
                         model=model_name,
                         monotonic_start=monotonic_start,
                         monotonic_end=monotonic_end,
+                        input_artifact_hash=input_artifact_hash,
                         input_tokens=turn_result.input_tokens,
                         output_tokens=turn_result.output_tokens,
                         thinking_tokens=turn_result.thinking_tokens,
@@ -477,44 +426,7 @@ class g8eEnsemble:
                         total_duration_seconds=turn_result.total_duration_seconds,
                         load_duration_seconds=turn_result.load_duration_seconds,
                         retry_count=retry_count,
-                        input_artifact_hash=input_artifact_hash,
                         output_artifact_hash=model_boundary_hash(turn_result.model_response_parts),
-                        model_boundary_privacy=recorded_model_boundary_privacy(llm_provider),
-                        governed_transaction_id=governed_evidence.transaction_id
-                        if governed_evidence
-                        else None,
-                        governed_result_digest=governed_evidence.result_digest
-                        if governed_evidence
-                        else None,
-                        governed_receipt_status=governed_evidence.receipt_status
-                        if governed_evidence
-                        else None,
-                        provider_attempt_id=governed_evidence.provider_attempt_id
-                        if governed_evidence
-                        else None,
-                        requested_model=governed_evidence.requested_model
-                        if governed_evidence
-                        else None,
-                        served_model=governed_evidence.served_model if governed_evidence else None,
-                        model_digest=governed_evidence.model_digest if governed_evidence else None,
-                        normalized_request_hash=governed_evidence.normalized_request_hash
-                        if governed_evidence
-                        else None,
-                        governed_output_hash=governed_evidence.output_hash
-                        if governed_evidence
-                        else None,
-                        campaign_id=governed_evidence.campaign_id if governed_evidence else None,
-                        run_id=governed_evidence.run_id if governed_evidence else None,
-                        assignment_id=governed_evidence.assignment_id
-                        if governed_evidence
-                        else None,
-                        evaluation_attempt_id=governed_evidence.evaluation_attempt_id
-                        if governed_evidence
-                        else None,
-                        scenario_id=governed_evidence.scenario_id if governed_evidence else None,
-                        model_registry_digest=governed_evidence.model_registry_digest
-                        if governed_evidence
-                        else None,
                     )
                 )
 

@@ -58,6 +58,7 @@ from app.llm.utils import resolve_model, ModelOverrideResolver
 
 from app.services.infra.event_service import EventService
 from .agent import g8eEnsemble
+from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.investigation.investigation_service import (
     extract_all_operators_context,
     InvestigationService,
@@ -93,6 +94,7 @@ class ChatPipelineService:
         memory_service: MemoryDataService,
         memory_generation_service: MemoryGenerationService,
         agent_activity_data_service: AgentActivityDataService,
+        evaluation_trace_service: EvaluationTraceService | None = None,
     ) -> None:
         self.event_service = event_service
         self.investigation_service = investigation_service
@@ -101,6 +103,7 @@ class ChatPipelineService:
         self.memory_service = memory_service
         self.memory_generation_service = memory_generation_service
         self.agent_activity_data_service = agent_activity_data_service
+        self.evaluation_trace_service = evaluation_trace_service or EvaluationTraceService()
         self.triage_agent = TriageAgent()
 
         logger.info("ChatPipelineService initialized")
@@ -321,8 +324,15 @@ class ChatPipelineService:
             attachments=attachments,
             settings=request_settings,
             model_override=model_overrides.for_triage(),
+            g8e_context=g8e_context,
         )
         triage_result = await self.triage_agent.triage(triage_request)
+
+        if g8e_context.evaluation_context is not None:
+            self.evaluation_trace_service.begin(
+                g8e_context,
+                triage_model_call=triage_result.model_call,
+            )
 
         needs_main_model = triage_result.complexity == TriageComplexityClassification.COMPLEX
 
@@ -1018,6 +1028,7 @@ class ChatPipelineService:
                 event_service=self.event_service,
                 llm_provider=llm_provider,
                 on_iteration_text=_persist_iteration_text,
+                evaluation_trace_service=self.evaluation_trace_service,
             )
             logger.info("[SSE-CHAT] Agent execution completed")
 
