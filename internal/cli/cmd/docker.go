@@ -186,6 +186,20 @@ func resolveDockerProfile(full bool, profile string) string {
 	return ""
 }
 
+// dockerTeardownProfiles returns compose profiles for stop/clean/reset down
+// operations that must remove every optional unified-stack service. The
+// evaluation profile carries g8e-inference-operator; omitting it leaves that
+// container running and its volumes in use.
+func dockerTeardownProfiles(explicit string) []string {
+	if explicit != "" {
+		return []string{explicit}
+	}
+	return []string{
+		constants.DockerBootstrappedProfile,
+		constants.DockerEvaluationProfile,
+	}
+}
+
 func dockerStartCmd() *cobra.Command {
 	return dockerStartCmdWithConfig(loadConfig, newFileSvc, defaultAPIClientFactory, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 }
@@ -475,7 +489,7 @@ func dockerStopCmd() *cobra.Command {
 				return err
 			}
 			cmd.Println("Stopping Docker Compose stack...")
-			if err := runDockerCompose([]string{"down"}, resolveDockerProfile(true, profile)); err != nil {
+			if err := runDockerCompose([]string{"down"}, dockerTeardownProfiles(profile)...); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 			}
 			cmd.Println("\nDocker Compose stack stopped successfully.")
@@ -570,9 +584,9 @@ func dockerCleanCmd() *cobra.Command {
 This is a destructive operation that removes all associated Docker volumes and
 networks, including the gateway data volume. Use --yes=false to confirm first.
 
-Clean always targets the bootstrapped profile so that operator, ensemble, and
-dashboard containers are removed alongside the gateway, not just the
-default-profile gateway container.`,
+Clean always targets the bootstrapped and evaluation profiles so that operator,
+ensemble, dashboard, and inference-operator containers are removed alongside
+the gateway, not just the default-profile gateway container.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
@@ -589,12 +603,12 @@ default-profile gateway container.`,
 				return nil
 			}
 			cmd.Println("Cleaning Docker Compose stack...")
-			// Always pass the bootstrapped profile so operator, ensemble, and
-			// dashboard containers are removed together with the gateway.
-			// Without it, down only touches default-profile services and the
-			// bootstrapped-profile containers keep running, holding their volumes
-			// and the shared network open.
-			if err := runDockerCompose([]string{"down", "-v", "--remove-orphans", "-t", "0"}, constants.DockerBootstrappedProfile); err != nil {
+			// Always pass the bootstrapped and evaluation profiles so operator,
+			// ensemble, dashboard, and inference-operator containers are removed
+			// together with the gateway. Without them, down only touches
+			// default-profile services and profile-gated containers keep running,
+			// holding their volumes and the shared network open.
+			if err := runDockerCompose([]string{"down", "-v", "--remove-orphans", "-t", "0"}, dockerTeardownProfiles("")...); err != nil {
 				cmd.Printf("Warning: compose down had issues: %v\n", err)
 			}
 			forceRemoveLeftovers(cmd, constants.DockerProjectPrefix)
@@ -619,7 +633,7 @@ func dockerResetCmd() *cobra.Command {
 				return err
 			}
 			cmd.Println("Cleaning Docker Compose stack...")
-			if err := runDockerCompose([]string{"down", "-v", "--remove-orphans", "-t", "0"}, profile); err != nil {
+			if err := runDockerCompose([]string{"down", "-v", "--remove-orphans", "-t", "0"}, dockerTeardownProfiles(profile)...); err != nil {
 				cmd.Printf("Warning: compose down had issues: %v\n", err)
 			}
 			forceRemoveLeftovers(cmd, constants.DockerProjectPrefix)
@@ -657,7 +671,7 @@ Use --no-cache=false to reuse the Docker build cache.`,
 				return err
 			}
 			cmd.Println("Stopping Docker Compose stack...")
-			if err := runDockerCompose([]string{"down"}, profile); err != nil {
+			if err := runDockerCompose([]string{"down"}, dockerTeardownProfiles(profile)...); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 			}
 			buildArgs := []string{"build"}

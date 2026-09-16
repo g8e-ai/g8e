@@ -311,6 +311,14 @@ func TestResolveDockerProfile(t *testing.T) {
 	assert.Equal(t, "custom", resolveDockerProfile(true, "custom"), "explicit profile overrides --full")
 }
 
+func TestDockerTeardownProfiles(t *testing.T) {
+	assert.Equal(t, []string{"custom"}, dockerTeardownProfiles("custom"))
+	assert.Equal(t, []string{
+		constants.DockerBootstrappedProfile,
+		constants.DockerEvaluationProfile,
+	}, dockerTeardownProfiles(""))
+}
+
 func TestDockerBuildArgs_IncludesSourceProvenance(t *testing.T) {
 	vi := serve.VersionInfo{
 		BuildID:             "abc123",
