@@ -134,7 +134,7 @@ The following never cross the projection boundary:
 - Mutation, approval, eval-launch, pub/sub, MCP, A2A, and tool route surfaces.
 - Any field not in the explicit allowlist above.
 
-The public publisher and mirror enforce the transport allowlist and reject unknown fields, prohibited patterns, non-finite values, path traversal, and symlinks. The preserved evaluation explorer adapter is not connected to Go-native evaluation output, so no active evaluation projector currently supplies native reports to this public surface.
+The public publisher and mirror enforce the transport allowlist and reject unknown fields, prohibited patterns, non-finite values, path traversal, and symlinks. The evaluation explorer is connected to Go-native evaluation output through a minimal public-safe projector that reads canonical `report.json` and `verification.json` from persisted native runs and emits only the public-safe typed records required by the existing explorer contract.
 
 ## Export Binding
 
@@ -291,8 +291,8 @@ The public spectator architecture extends the existing observe and SSE infrastru
 - The owner-local observe API (`GET /api/v1/observe/*`) remains credentialed and user-scoped. The public spectator surface does not add anonymous routes to the Gateway.
 - The SSE event bridge (`GET /api/v1/sse/stream`, `GET /api/v1/sse/events`) remains session-scoped. The public SSE stream is served by the mirror, not by the Gateway.
 - The remaining observe producer endpoints (`POST /api/v1/observe/producer/*`) remain mTLS-authenticated and ensemble-only. The CLI-local public publisher consumes only reviewed public-safe records, signs durable batches, and exports them through the private mirror listener; it does not expose a producer route to browsers.
-- The checked-in evaluation explorer in `dashboard/g8e-adapter/evaluation-explorer/` preserves its adapter contract pack, fixtures, projector scripts, and UI. It is not connected to the Go-native evaluator, and no current Gateway producer route or public-feed projector supplies native `EvaluationReport` records to it.
-- Native evaluation verification is owned by `g8e eval verify` over the persisted report and content-addressed evidence. A future adapter hookup must define a separate privacy-safe projection before native results can enter the public feed.
+- The checked-in evaluation explorer in `dashboard/g8e-adapter/evaluation-explorer/` is connected to Go-native evaluation output. A minimal public-safe projector reads canonical `report.json` and `verification.json` from persisted native runs under `.g8e/data/eval/runs/<run-id>/` and emits only the public-safe typed records required by the existing explorer contract. The projected records pass disclosure and contract validation, enter the real `g8e public` publisher, advance its durable high-water sequence, reach the local mirror, appear under the exact run ID in anonymous mirror history, and are delivered over the real SSE stream.
+- Native evaluation verification is owned by `g8e eval verify` over the persisted report and content-addressed evidence. The public-safe projection omits all principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields.
 
 See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](./dashboard.md) for the owner-local browser interface, [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) for the audited adapter and contract pack, [Public Spectator Operations Guide](../guides/public_spectator.md) for the host-backed deployment procedure, and [Network Architecture](./network.md) for private platform PKI and transport boundaries.
 
@@ -316,4 +316,4 @@ This document is accepted when:
 - [Public Spectator Operations Guide](../guides/public_spectator.md): Private ingest, anonymous public listener, tunnel, restart, and publication procedure.
 - [Network Architecture](./network.md): PKI, mTLS, and transport surfaces.
 - [Gateway Architecture](./gateway.md): Gateway services, protocol surfaces, and trust boundaries.
-- [Native Evaluations](../ensemble/evals.md): Go-native execution-boundary commands, verification, evidence, and the deferred explorer hookup.
+- [Native Evaluations](../ensemble/evals.md): Go-native execution-boundary commands, verification, evidence, and the connected evaluation explorer projection.

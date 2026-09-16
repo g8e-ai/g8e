@@ -631,6 +631,9 @@ class AppEnrollmentService:
 
         # Step 2: Load persisted pending attempt if it exists.
         pending = self._load_pending_state(pending_path)
+        if pending and pending.get("expires_at"):
+            if _parse_iso_deadline(pending["expires_at"]) <= datetime.now(UTC):
+                pending = None
 
         token: str
         request_id: str

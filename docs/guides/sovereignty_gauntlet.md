@@ -30,7 +30,7 @@ The current repository supports four complementary evidence lanes. Demo evidence
 | --- | --- | --- | --- |
 | Unified-stack proof | Developer, AI, security, and product posts | Real or fake model-driven governed mutations, signed receipt export, CSV store exports, and integrity verification | Publish measured scenario outcomes and passing checks with the provider clearly identified |
 | FedRAMP and DHS demos | Compliance, public-sector, defense, and event demonstrations | Concise or verbose typed scenario results, persisted manifests, content-addressed receipts, persistence attestations and state observations, independent demo-run verification, bound KSI evidence when supplied with the required assessment context, and tactical TUI output | Publish as a labeled demonstration; state that target resources and data are synthetic |
-| Evidence-grade evals | Engineering diagnostics, model comparison, and future campaign input | Real-provider `ifeval_subset` reports and deterministic synthetic suites with immutable manifests, typed tasks, attempts, metrics, observations, receipts where applicable, and compatibility summaries | State whether the run used real providers or a synthetic local system; do not use either as the unimplemented flagship matrix |
+| Evidence-grade evals | Engineering diagnostics and future campaign input | Go-native `core-execution-boundary` reports with canonical `report.json`, `verification.json`, content-addressed evidence, 10 required invariants, and independent `g8e eval verify` | State that the run used the native execution-boundary suite; do not use it as the unimplemented flagship matrix |
 | Signed compliance report bundle | Point-in-time, scope-bound offline review | Canonical analysis, framework profiles, deterministic JSON, OSCAL, Markdown, HTML, and CLI renderers, protected source inventories, a signed bundle, and a canonical offline verification report | Publish the exact verified bundle scope and external trust inputs; do not relabel point-in-time report integrity as certification, recurring effectiveness, or eval-native verification |
 
 The Go-native `g8e eval run core-execution-boundary` command exercises the authenticated Gateway ingress, one exact remote Operator, and an independent networkless target observer. `g8e eval verify` independently verifies the complete persisted report and content-addressed evidence without executing another mutation.
@@ -217,9 +217,8 @@ Verify every exported receipt's canonical signature and final persistence attest
 mkdir -p "${CAMPAIGN_DIR}/unified/verifier-pki"
 docker cp g8e-gateway:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem"
 docker cp g8e-operator:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem"
-cd "${REPO_ROOT}/ensemble/evals"
-uv sync --locked
-uv run python - "${CAMPAIGN_DIR}/unified/receipts-export.json" "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem" "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem" <<'PY' | tee "${CAMPAIGN_DIR}/unified/receipt-verification.txt"
+cd "${REPO_ROOT}"
+ensemble/.venv/bin/python - "${CAMPAIGN_DIR}/unified/receipts-export.json" "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem" "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem" <<'PY' | tee "${CAMPAIGN_DIR}/unified/receipt-verification.txt"
 import binascii
 import json
 import sys
@@ -405,7 +404,7 @@ Use this order when choosing screenshots, excerpts, and post material:
 | 6 | `${CAMPAIGN_DIR}/fedramp/scenarios-verbose.txt` | Authorized provision/revert success and unauthorized evidence-destruction rejection | Compliance/security video |
 | 7 | `${CAMPAIGN_DIR}/fedramp/ksi-result.json` and `demo-run-verification.json` | Measured KSI counts plus the typed independent verification result for the persisted FedRAMP demo evidence | Compliance post or article |
 | 8 | `${CAMPAIGN_DIR}/dhs/scenarios-verbose.txt` and `demo-run-verification.json` | Disconnected continuity, blocked wipe, governed purge, and the typed independent verification result | Defense/edge video |
-| 9 | `${EVAL_REPORT_DIR}/manifest.json`, `attempts.jsonl`, `stages.jsonl`, and `metrics.jsonl` | Exact configuration, denominators, grader outcomes, usage, latency, and evidence linkage | Technical appendix |
+| 9 | `${REPO_ROOT}/.g8e/data/eval/runs/<run-id>/report.json` and `verification.json` | Suite and version, active posture, lane, allowed and prohibited scenario results, 10 required invariant verdicts, verification validity and failure count, and content-addressed evidence bindings | Technical appendix |
 | 10 | `<verified-report-bundle>` and its retained canonical `ComplianceVerificationReport` | Signed bundle scope, protected source inventory, reproduced analysis and renderers, external trust identities, verification time, and exact failures | Point-in-time compliance evidence appendix |
 | 11 | `${CAMPAIGN_DIR}/metadata/` | Binary version and digest, source-provenance status or approved provenance artifact, FIPS and Docker versions, provider classification, and campaign capability boundary | Methodology footer |
 
@@ -575,37 +574,13 @@ Recommended post
 
 The agent also calls out any `FAIL`, `SKIPPED`, empty report, missing observer, fake-provider role, missing source provenance, synthetic target, unavailable KSI binding, or incomplete verification before presenting positive claims.
 
-## README evidence refresh
+## README evidence
 
-The root `README.md` is generated by `scripts/generate_readme.py` from `docs/templates/README.md.tmpl` and the public proof snapshot in `docs/evidence/readme/current/`. Refreshing the public snapshot is a reviewed publication operation, not a routine build step. The generator itself is offline, deterministic, and credential-free; it does not start services, run evals, spend provider budget, read `.g8e/` runtime state, or decrypt restricted evidence.
-
-The Stage 1 release profile and exact attended sequence live in [Release Process](../devs/release_process.md#stage-1-real-agent-readme-evidence). Use this guide for full-stack startup, workload enrollment, authenticated context, and health checks, then return to that fixed profile for evidence collection. Stage 1 runs the five pinned `ifeval_subset` tasks exactly once through `doctrine` with real primary, assistant, and lite providers, no task limit, no judge, and a 180-second idle timeout. Preserve every failure and timeout.
-
-The release-owner v2.1.5 profile uses Ollama tags `gemma4:12b`, `gemma4:e4b`, and `gemma4:e2b`. Reproducing operators supply an endpoint reachable from the eval process and may substitute model tags only when the reproduction manifest records those substitutions. Never copy the release owner's or a reproducing operator's exact endpoint, inventory response, local paths, evidence key, raw prompts, or raw outputs into public evidence.
-
-Stage 1 publication proceeds in two separate operations:
-
-1. Local attended collection starts the real stack and provider, creates a new immutable private campaign directory and owner-only evidence key, retains the Ollama inventory privately, executes all five tasks once, and validates complete typed task, attempt, stage, and metric relationships. Zero receipts are recorded as unavailable and support no receipt, mutation, persistence, state, governance, or compliance claim.
-2. Offline candidate projection runs `scripts/project_readme_evidence.py` against the completed private report. It emits only safe manifest, task, attempt, stage, metric, summary, evidence-index, reproduction-manifest, empty receipt, receipt-unavailable, and checksum index projections into a new candidate directory. It rejects fake providers, incomplete populations, checksum failures, raw or restricted fields, exact private topology, machine-specific paths, and undeclared artifacts.
-
-The release owner reviews the candidate before promotion. Do not write directly into `docs/evidence/readme/current/`, do not promote automatically after collection, and do not regenerate `README.md` until the candidate is explicitly approved. After promotion, run `make readme`, `make readme-test`, and `make readme-check` plus the relevant eval, lint, platform, and release verification lanes. CI performs only offline validation and drift checks; it never calls Ollama, runs real agents, owns private evidence, or selects evidence.
-
-Stage 2 for v2.1.6 uses this same stack setup for one fresh, separately invoked complete run. Before the run, the release owner binds the versioned profile to an explicit deterministic source inclusion manifest, component and image digests, and public operating system, architecture, hardware, Python, and container-runtime identities. Projection preserves the v2.1.5 run as Stage 1 and compares both complete populations without causal or statistical attribution. Promotion requires explicit release-owner approval of the exact canonical candidate tree digest; a mismatch leaves the current snapshot unchanged. See [Stage 2 Reproduction and Provenance](../devs/release_process.md#stage-2-reproduction-and-provenance) for the commands and approval boundary.
-
-Later README evidence stages may publish governed-action receipts and state proof, eval-native complete-bundle verification, statistical comparisons, and compliance analysis. Those stages do not retroactively strengthen or relabel a Stage 1 claim. Repository publication of actuator verification keys does not independently establish an external trust root.
-
-### Publication ownership and approvals
-
-The README evidence refresh is a reviewed publication operation with four distinct approval roles. No single person holds all four; the roles may be staffed by the same individual only in solo-development contexts where that individual explicitly self-attests to each role separately.
-
-1. **Narrative and template review** — Approves changes to `docs/templates/README.md.tmpl` and the closed claim-label and caveat vocabularies. This role owns product prose, diagram accuracy, quick-start instructions, and the marker set. It does not approve evidence content.
-2. **Eval evidence review** — Approves the selection of eval runs, the eligibility and verification status of every displayed metric row, the receipt verification result, and the preservation of failed and invalid attempts in the analytical population. This role confirms that no cherry-picking occurred and that every displayed metric is reproducible from eligible typed rows.
-3. **Compliance verification review** — Approves the selection of demo runs and the canonical `ComplianceVerificationReport` records. This role confirms that every selected report has `"valid": true` with zero failures, that scenario outcomes match expected allow/block results, and that demo resources and data are labeled synthetic or simulated.
-4. **Final publication and security review** — Approves the complete `docs/evidence/readme/current/` snapshot before `make readme` regenerates the root README. This role confirms that SHA-256 checksums match, that no private keys, credential fields, raw canary values, absolute paths, or undeclared artifacts are present, that restricted evidence remains encrypted and out of the snapshot, and that every displayed claim links to its source artifact. This is the gate that merges the evidence snapshot; the other three approvals are prerequisites.
+The root `README.md` is hand-maintained. It states the current native evaluation boundary and links to [Native Evaluations](../ensemble/evals.md) for acceptance invariants, trust boundaries, and JSON output. The native evaluation proof table row reflects the Go-native `core-execution-boundary` suite result against the unified Docker stack. Update the README directly when its current behavior or evidence summary changes, then review it end to end and validate its links.
 
 ## Related documentation
 
-- [Evals](../ensemble/evals.md) — current evidence schema, real-provider benchmark, experiment arms, run command, and receipt-verifier scope.
+- [Evals](../ensemble/evals.md) — Go-native execution-boundary commands, verification, evidence, and the connected evaluation explorer projection.
 - [Headless End-to-End UX Smoke Test](ux_smoke_test.md) — authoritative unified-stack enrollment, scenario, report, and troubleshooting sequence.
 - [Unified Docker Stack](unified_stack.md) — component topology, identity, storage, and lifecycle.
 - [Demo Environments](../../demos/README.md) — per-demo architecture, commands, scenarios, and real-versus-display boundaries.

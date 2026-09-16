@@ -432,7 +432,7 @@ Do not maintain a hard-coded list of versioned documents here. The [Documentatio
 - [ ] **11. Release owner commits and opens PR**: `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub. CI runs lint, tests, and version sync checks.
 - [ ] **12. Release owner merges and releases**: After the PR is merged and CI on `main` passes, the release owner pulls main and runs `make release` to re-sync the Python package files (no-op if already synced), tag, and push; GitHub Actions workflows create the release and upload assets.
 
-Five files need manual release-version edits during PR prep: `VERSION`, `CHANGELOG.md`, `protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and `protocol/python/uv.lock`. Run `make proto` to regenerate the downstream `ensemble/uv.lock` and `ensemble/evals/uv.lock`. Run `make readme` when its template or reviewed evidence inputs change. `make release` re-syncs the three `protocol/python` version files after merge as a no-op safety net and handles tagging and pushing; the release owner runs it, never the agent. Documentation reconciliation remains content-driven and is complete only when the catalog mapping and full-document audits are complete.
+Five files need manual release-version edits during PR prep: `VERSION`, `CHANGELOG.md`, `protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and `protocol/python/uv.lock`. Run `make proto` to regenerate the downstream `ensemble/uv.lock`. `make release` re-syncs the three `protocol/python` version files after merge as a no-op safety net and handles tagging and pushing; the release owner runs it, never the agent. Documentation reconciliation remains content-driven and is complete only when the catalog mapping and full-document audits are complete.
 
 > **Workflow note:** All release prep (steps 1-10) happens on a feature branch. The agent does steps 1-9 and stops; it does not commit, push, or open the PR. The release owner does steps 11-12 (commit, push, open PR, merge, wait for CI, pull main, run `make release`). GitHub Actions workflows handle release creation and asset uploads.
 
@@ -464,19 +464,11 @@ grep -n '__version__' protocol/python/g8e/__init__.py
 grep -A1 '^name = "g8e"' protocol/python/uv.lock
 # All three should show X.Y.Z matching RELEASE_NUM.
 
-# 4b. Verify downstream uv.lock files are in sync. `make proto` regenerates these
-#     during PR prep (step 6). Both must show X.Y.Z matching RELEASE_NUM under the
-#     g8e package entry. If either is stale, `uv sync --locked` fails in CI.
+# 4b. Verify downstream uv.lock is in sync. `make proto` regenerates this
+#     during PR prep (step 6). It must show X.Y.Z matching RELEASE_NUM under the
+#     g8e package entry. If it is stale, `uv sync --locked` fails in CI.
 grep -A1 '^name = "g8e"' ensemble/uv.lock
-grep -A1 '^name = "g8e"' ensemble/evals/uv.lock
-# Both should show X.Y.Z matching RELEASE_NUM.
-
-# 4c. Verify README.md is in sync with its template. `make readme` regenerates
-#     README.md from docs/templates/README.md.tmpl during PR prep (step 2). If
-#     this fails, the template was updated but `make readme` was not run (or vice
-#     versa). Run `make readme` to regenerate.
-make readme-check
-# Should print "README.md is up to date" and exit 0.
+# Should show X.Y.Z matching RELEASE_NUM.
 
 # 5. Find any doc version header (plain, bold, or "Document Version") NOT on the new
 #    version; should return nothing for docs modified in this release. Docs NOT modified
@@ -507,7 +499,7 @@ grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" do
   | grep -viE "v?${RELEASE_NUM}([^0-9]|$)"
 ```
 
-If step 4 shows a mismatch, sync all three Python version entries to `VERSION` before handoff. If step 4b shows a mismatch, run `make proto` to regenerate the downstream lockfiles. If step 4c fails, regenerate `README.md` from its canonical inputs with `make readme`. Steps 5 and 6 intentionally show older metadata for untouched documents; compare only the release owner's complete edited-document list, and confirm metadata was updated after each document's audit. Replace the step 7 placeholder identifiers with every renamed or removed identifier from the change inventory and resolve all current-state matches. Classify step 8 matches before changing them so historical and evidence versions remain intact. None of these searches replaces the documented catalog walk, source verification, related-document reconciliation, or final end-to-end read.
+If step 4 shows a mismatch, sync all three Python version entries to `VERSION` before handoff. If step 4b shows a mismatch, run `make proto` to regenerate the downstream lockfile. Steps 5 and 6 intentionally show older metadata for untouched documents; compare only the release owner's complete edited-document list, and confirm metadata was updated after each document's audit. Replace the step 7 placeholder identifiers with every renamed or removed identifier from the change inventory and resolve all current-state matches. Classify step 8 matches before changing them so historical and evidence versions remain intact. None of these searches replaces the documented catalog walk, source verification, related-document reconciliation, or final end-to-end read.
 
 ---
 
@@ -519,7 +511,7 @@ The `make release` target handles version syncing, tagging, and pushing in a sin
 
 > **Run this on the merged main branch**, not on a feature branch. The tags must point at the merge commit on main. **`make release` is run by the release owner, not by the agent preparing the PR.** The agent's work ends at opening the PR; the release owner merges, waits for CI on main to pass, pulls main locally, and then runs `make release`.
 
-1. Syncs `protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock` from `VERSION` (if already in sync, no changes are made). It does NOT regenerate the downstream `ensemble/uv.lock` or `ensemble/evals/uv.lock` — those are regenerated by `make proto` during PR prep.
+1. Syncs `protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock` from `VERSION` (if already in sync, no changes are made). It does NOT regenerate the downstream `ensemble/uv.lock` — that is regenerated by `make proto` during PR prep.
 2. Verifies working tree is clean (fails if Python files were out of sync; commit synced files and go through the PR process first)
 3. Verifies release notes file exists at `docs/release_notes/vX.Y.x/vX.Y.Z.md`
 4. Verifies tags `vX.Y.Z` and `protocol/vX.Y.Z` don't already exist
@@ -528,7 +520,7 @@ The `make release` target handles version syncing, tagging, and pushing in a sin
 
 The `vX.Y.Z` tag triggers the `release-binary.yml` workflow, which builds all platforms, signs binaries, creates the GitHub release, and uploads assets. The `protocol/vX.Y.Z` tag triggers the `release-python-protocol.yml` workflow, which publishes the Python package to PyPI.
 
-> **Lint and tests are handled by CI** (`.github/workflows/build-and-test.yml`) on pull requests, not by `make release`. The CI workflow includes a version sync check that fails if `pyproject.toml`, `__init__.py`, or the editable `g8e` entry in `protocol/python/uv.lock` doesn't match `VERSION`. It also runs `uv sync --locked` in `ensemble/evals`, which fails if the downstream `uv.lock` still pins the old `g8e` version — `make proto` regenerates these during PR prep to prevent this.
+> **Lint and tests are handled by CI** (`.github/workflows/build-and-test.yml`) on pull requests, not by `make release`. The CI workflow includes a version sync check that fails if `pyproject.toml`, `__init__.py`, or the editable `g8e` entry in `protocol/python/uv.lock` doesn't match `VERSION`. It also runs `uv sync --locked` in `ensemble`, which fails if the downstream `uv.lock` still pins the old `g8e` version — `make proto` regenerates this during PR prep to prevent this.
 
 ### CI Workflows Triggered by Tags
 
