@@ -71,10 +71,17 @@ func buildChatProbeGoldSummary(input ScenarioInputFixture, grading CampaignChatG
 	return &ChatProbeGoldSummary{
 		UserPrompt:       input.UserPrompt,
 		ExpectedBehavior: grading.ScenarioGold.ExpectedBehavior,
-		RequiredConcepts: append([]string(nil), grading.RequiredConcepts...),
-		ExpectedTools:    append([]string(nil), grading.ScenarioTools.ExpectedTools...),
-		ForbiddenTools:   append([]string(nil), grading.ScenarioTools.ForbiddenTools...),
+		RequiredConcepts: nonNullStringSlice(grading.RequiredConcepts),
+		ExpectedTools:    nonNullStringSlice(grading.ScenarioTools.ExpectedTools),
+		ForbiddenTools:   nonNullStringSlice(grading.ScenarioTools.ForbiddenTools),
 	}
+}
+
+func nonNullStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	return append([]string(nil), values...)
 }
 
 func modelCampaignRoleLabel(role evalv1.ModelCampaignRole) (string, error) {

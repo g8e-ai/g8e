@@ -133,12 +133,12 @@ function LiveStreamPanel({
   events: LiveEvent[];
   connection: FeedConnectionState;
 }) {
-  const [agentFilter, setAgentFilter] = useState('all');
+  const [modelFilter, setModelFilter] = useState('all');
   const [kindFilter, setKindFilter] = useState('all');
 
   const models = useStoreState((state) => state.models);
 
-  const agentOptions = useMemo(
+  const modelOptions = useMemo(
     () =>
       Array.from(new Set(events.map((e) => e.variant_id).filter((v): v is string => Boolean(v)))).sort(),
     [events],
@@ -146,7 +146,7 @@ function LiveStreamPanel({
   const kindOptions = useMemo(() => Array.from(new Set(events.map((e) => e.kind))).sort(), [events]);
 
   const visible = events
-    .filter((e) => agentFilter === 'all' || e.variant_id === agentFilter)
+    .filter((e) => modelFilter === 'all' || e.variant_id === modelFilter)
     .filter((e) => kindFilter === 'all' || e.kind === kindFilter)
     .slice(-15)
     .reverse();
@@ -163,12 +163,12 @@ function LiveStreamPanel({
         </h2>
         <div className="stream-controls">
           <select
-            aria-label="Filter by agent"
-            value={agentFilter}
-            onChange={(e) => setAgentFilter(e.target.value)}
+            aria-label="Filter by model"
+            value={modelFilter}
+            onChange={(e) => setModelFilter(e.target.value)}
           >
-            <option value="all">All agents</option>
-            {agentOptions.map((id) => (
+            <option value="all">All models</option>
+            {modelOptions.map((id) => (
               <option key={id} value={id}>
                 {id}
               </option>
@@ -189,14 +189,14 @@ function LiveStreamPanel({
         </div>
       </div>
       {visible.length === 0 ? (
-        <EmptyState hasRecords={events.length > 0} hasFilters={agentFilter !== 'all' || kindFilter !== 'all'} connection={connection} />
+        <EmptyState hasRecords={events.length > 0} hasFilters={modelFilter !== 'all' || kindFilter !== 'all'} connection={connection} />
       ) : (
         <div className="table-scroll">
           <table className="stream-table">
             <thead>
               <tr>
                 <th>Time</th>
-                <th>Agent</th>
+                <th>Model</th>
                 <th>Event</th>
                 <th>Model / Tool</th>
                 <th>Progress</th>
@@ -208,18 +208,33 @@ function LiveStreamPanel({
                   ? resolveModelSummary(models, event.dataset_id, event.variant_id)
                   : undefined;
                 const tool = model?.served_model_tag ?? event.variant_id ?? event.kind.split('_')[0];
+                const eventLabel = `${event.kind.replace(/_/g, ' ')}${event.stage_label ? ` · ${event.stage_label}` : ''}`;
+                const eventHref = event.assignment_id
+                  ? `/evaluations/${event.dataset_id}/${event.run_id}/assignments/${event.assignment_id}`
+                  : `/evaluations/${event.dataset_id}/${event.run_id}`;
+                const modelHref = event.variant_id
+                  ? `/models/${event.dataset_id}/${event.variant_id}${model?.role ? `?role=${model.role}` : ''}`
+                  : undefined;
+                const modelLabel = model?.display_name ?? event.variant_id ?? 'platform';
                 return (
                   <tr key={event.event_id}>
                     <td className="stream-time">{eventTime(event.observed_at)}</td>
                     <td>
-                      <span className={`stream-agent status-${event.lifecycle_status}`}>
+                      <span className={`stream-model status-${event.lifecycle_status}`}>
                         <span className="status-dot" aria-hidden="true" />
-                        {event.variant_id ?? 'platform'}
+                        {modelHref ? (
+                          <Link to={modelHref} className="stream-model-link">
+                            {modelLabel}
+                          </Link>
+                        ) : (
+                          modelLabel
+                        )}
                       </span>
                     </td>
                     <td className="stream-event">
-                      {event.kind.replace(/_/g, ' ')}
-                      {event.stage_label ? ` · ${event.stage_label}` : ''}
+                      <Link to={eventHref} className="stream-event-link">
+                        {eventLabel}
+                      </Link>
                     </td>
                     <td>
                       <code className="stream-chip">{tool}</code>

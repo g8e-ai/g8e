@@ -298,6 +298,7 @@
         "privacy_attested",
         "prompt_tokens",
         "provider_attempt_id",
+        "provider_boundary_observation_ref",
         "request_started_at_unix_nanos",
         "result_digest",
         "retry_count",

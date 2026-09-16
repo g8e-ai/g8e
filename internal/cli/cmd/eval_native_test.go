@@ -60,8 +60,10 @@ func TestEvalCmd_ContainsOnlyNativeCommands(t *testing.T) {
 	for _, child := range command.Commands() {
 		names = append(names, child.Name())
 	}
-	assert.ElementsMatch(t, []string{"run", "verify", "show", "inference", "chat"}, names)
-	assert.Len(t, names, 5)
+	assert.ElementsMatch(t, []string{
+		"run", "verify", "show", "inference", "chat", "inventory", "campaign", "provider-observer",
+	}, names)
+	assert.Len(t, names, 8)
 
 	var inference *cobra.Command
 	for _, child := range command.Commands() {

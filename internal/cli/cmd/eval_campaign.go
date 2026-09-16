@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -21,6 +22,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
@@ -286,9 +288,14 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	var inferenceSessionID string
 	var dataSessionID string
 	var ensembleURL string
+	var ollamaEndpoint string
 	var jsonOutput bool
 	var noAutoRefresh bool
 	var publish bool
+	var daemon bool
+	var waitForProviderIdle bool
+	var providerIdlePoll time.Duration
+	var providerSettle time.Duration
 	cmd := &cobra.Command{
 		Use:   "execute",
 		Short: "Execute one or more queued North Star campaign assignments through production POST /api/v1/chat",
@@ -296,7 +303,9 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 			if runID == "" {
 				return fmt.Errorf("evaluation: campaign execute: %w", constants.ErrMissingRequiredField)
 			}
-			if limit == 0 {
+			if daemon {
+				limit = ^uint32(0)
+			} else if limit == 0 {
 				limit = 1
 			}
 			cfg, fileSvc, authContext, err := chatEvalEnvironment(cmd, chatEvalDeps{
@@ -413,9 +422,33 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 				ModelRegistryDigest:        spec.GetModelRegistryDigest(),
 				ModelRegistry:              evaluation.InferenceVariantsFromEvalRegistry(spec.GetModelRegistry()),
 			}
-			results := make([]map[string]any, 0, limit)
+			resultsCap := limit
+			if daemon {
+				resultsCap = 1
+			}
+			results := make([]map[string]any, 0, resultsCap)
 			executed := 0
-			for i := 0; i < int(limit); i++ {
+			resolvedOllamaEndpoint := resolveCampaignOllamaEndpoint(ollamaEndpoint)
+			iterations := int(limit)
+			if daemon {
+				iterations = 1<<31 - 1
+			}
+			for i := 0; i < iterations; i++ {
+				if waitForProviderIdle {
+					idleCtx, idleCancel := context.WithTimeout(cmd.Context(), 15*time.Minute)
+					err := inference.WaitForProviderIdle(idleCtx, inference.ProviderIdleOptions{
+						Endpoint:       resolvedOllamaEndpoint,
+						PollInterval:   providerIdlePoll,
+						SettleDuration: providerSettle,
+					})
+					idleCancel()
+					if err != nil {
+						return fmt.Errorf("evaluation: campaign execute: %w", err)
+					}
+					if !jsonOutput {
+						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Provider idle at %s\n", resolvedOllamaEndpoint)
+					}
+				}
 				ctx, cancel := context.WithTimeout(cmd.Context(), 8*time.Minute)
 				result, ok, err := controller.ExecuteNextAssignment(ctx, runID, executionBinding, artifacts)
 				cancel()
@@ -426,12 +459,14 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 					break
 				}
 				executed++
-				entry := map[string]any{
-					"assignment_id": result.GetAssignmentId(),
-					"status":        result.GetLifecycleStatus().String(),
-					"result_digest": result.GetResultDigest(),
+				if jsonOutput && !daemon {
+					entry := map[string]any{
+						"assignment_id": result.GetAssignmentId(),
+						"status":        result.GetLifecycleStatus().String(),
+						"result_digest": result.GetResultDigest(),
+					}
+					results = append(results, entry)
 				}
-				results = append(results, entry)
 				if !jsonOutput {
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Executed %s: %s\n", result.GetAssignmentId(), result.GetLifecycleStatus().String())
 				}
@@ -458,6 +493,11 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Exact inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
+	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for provider-idle gating (default: G8E_OLLAMA_ENDPOINT or http://127.0.0.1:11434)")
+	cmd.Flags().BoolVar(&daemon, "daemon", false, "Run continuously until the queued matrix is exhausted")
+	cmd.Flags().BoolVar(&waitForProviderIdle, "wait-for-provider-idle", true, "Wait for Ollama to become idle before each assignment")
+	cmd.Flags().DurationVar(&providerIdlePoll, "provider-idle-poll", 2*time.Second, "Poll interval while waiting for Ollama idle")
+	cmd.Flags().DurationVar(&providerSettle, "provider-settle", 5*time.Second, "Required stable /api/ps window before starting the next assignment")
 	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
 	cmd.Flags().BoolVar(&publish, "publish", false, "Publish assignment lifecycle and terminal result projections to the public mirror")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
@@ -855,4 +895,14 @@ func campaignEvalStatusCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
+}
+
+func resolveCampaignOllamaEndpoint(flag string) string {
+	if flag != "" {
+		return flag
+	}
+	if env := os.Getenv("G8E_OLLAMA_ENDPOINT"); env != "" {
+		return env
+	}
+	return fmt.Sprintf("http://127.0.0.1:%d", constants.InferenceOllamaDefaultPort)
 }

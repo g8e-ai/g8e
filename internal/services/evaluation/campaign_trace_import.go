@@ -97,11 +97,17 @@ func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace map[s
 
 func classifyCampaignTraceOutcome(req ChatProbeRequest, trace map[string]any) (evalv1.EvaluationAssignmentLifecycleStatus, *evalv1.DeterministicGrade) {
 	status, _ := trace["status"].(string)
+	roleOutcome, _ := trace["role_outcome"].(string)
 	grade := &evalv1.DeterministicGrade{
 		GradeId:     req.AssignmentID + ":role-invoked",
 		CriterionId: "role-invoked",
 		Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
 		Detail:      "designated model role was not invoked",
+	}
+	// Homogeneous model-role evaluation treats "could not invoke designated role"
+	// as a scored capability outcome, not an infrastructure/provider failure.
+	if roleOutcome == "role_not_invoked" {
+		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL, grade
 	}
 	switch status {
 	case "failed":
@@ -110,7 +116,6 @@ func classifyCampaignTraceOutcome(req ChatProbeRequest, trace map[string]any) (e
 	case "completed":
 		if err := ValidateHomogeneousCampaignTrace(req, trace); err != nil {
 			if strings.Contains(err.Error(), "role_outcome not invoked") || strings.Contains(err.Error(), "role_not_invoked") {
-				grade.Detail = "designated model role was not invoked"
 				return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL, grade
 			}
 			grade.Detail = err.Error()

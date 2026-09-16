@@ -100,10 +100,10 @@ func BuildChatProbeRequest(req ChatProbeRequest, dataOperatorID, dataOperatorSes
 	if req.GoldSummary != nil {
 		evalContext.GoldSummary = &harnessclient.EnsembleEvaluationGoldSummary{
 			UserPrompt:       req.GoldSummary.UserPrompt,
-			ExpectedBehavior:   req.GoldSummary.ExpectedBehavior,
-			RequiredConcepts:   append([]string(nil), req.GoldSummary.RequiredConcepts...),
-			ExpectedTools:      append([]string(nil), req.GoldSummary.ExpectedTools...),
-			ForbiddenTools:     append([]string(nil), req.GoldSummary.ForbiddenTools...),
+			ExpectedBehavior: req.GoldSummary.ExpectedBehavior,
+			RequiredConcepts:   nonNullStringSlice(req.GoldSummary.RequiredConcepts),
+			ExpectedTools:      nonNullStringSlice(req.GoldSummary.ExpectedTools),
+			ForbiddenTools:     nonNullStringSlice(req.GoldSummary.ForbiddenTools),
 		}
 	}
 	return harnessclient.EnsembleChatRequest{

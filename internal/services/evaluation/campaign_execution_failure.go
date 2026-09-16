@@ -101,11 +101,15 @@ func BuildRecoveredTerminalAssignmentResult(assignment *evalv1.EvaluationAssignm
 func classifyExecutorFailureLifecycle(execErr error) evalv1.EvaluationAssignmentLifecycleStatus {
 	message := strings.ToLower(execErr.Error())
 	switch {
+	case strings.Contains(message, "status 422"),
+		strings.Contains(message, "status 400"):
+		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED
 	case strings.Contains(message, "wait for trace"),
-		strings.Contains(message, "submit chat"),
 		strings.Contains(message, "trace status"),
 		strings.Contains(message, "provider"),
 		strings.Contains(message, "inference"):
+		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED
+	case strings.Contains(message, "submit chat"):
 		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED
 	default:
 		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED

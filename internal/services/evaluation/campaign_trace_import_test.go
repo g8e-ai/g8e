@@ -46,6 +46,20 @@ func TestImportAssignmentResultFromTrace_RoleNotInvokedIsPartial(t *testing.T) {
 	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL, result.GetLifecycleStatus())
 }
 
+func TestImportAssignmentResultFromTrace_FailedRoleNotInvokedIsPartial(t *testing.T) {
+	t.Parallel()
+	trace := completedHomogeneousTrace("primary")
+	trace["status"] = "failed"
+	trace["role_outcome"] = "role_not_invoked"
+	digest, err := computeTraceDigest(trace)
+	require.NoError(t, err)
+	trace["trace_digest"] = digest
+	req := homogeneousAssignmentExecutionRequest("primary")
+	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL, result.GetLifecycleStatus())
+}
+
 func homogeneousAssignmentExecutionRequest(role string) AssignmentExecutionRequest {
 	assignment := &evalv1.EvaluationAssignment{
 		AssignmentId: "assignment-1",

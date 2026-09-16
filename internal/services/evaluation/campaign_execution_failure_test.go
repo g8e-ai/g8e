@@ -37,6 +37,14 @@ func TestBuildExecutorFailureAssignmentResult_ClassifiesProviderFailures(t *test
 	assert.NotEmpty(t, result.GetResultDigest())
 }
 
+func TestBuildExecutorFailureAssignmentResult_ClassifiesValidationFailures(t *testing.T) {
+	t.Parallel()
+	req := homogeneousAssignmentExecutionRequest("primary")
+	result, err := BuildExecutorFailureAssignmentResult(req, errors.New(`evaluation: execute assignment: submit chat: ensemble chat: status 422: {"detail":[{"loc":["body","evaluation_context","gold_summary","expected_tools"]}]}`), time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	assert.Equal(t, evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED, result.GetLifecycleStatus())
+}
+
 func TestExecuteNextAssignment_PersistsResultOnRecoverableExecutorFailure(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
