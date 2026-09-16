@@ -10,6 +10,7 @@ package gateway
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -95,7 +96,14 @@ func publicMirrorURL(listenAddress string) string {
 	if strings.HasPrefix(listenAddress, "http://") || strings.HasPrefix(listenAddress, "https://") {
 		return listenAddress
 	}
-	return "http://" + listenAddress
+	host, port, err := net.SplitHostPort(listenAddress)
+	if err != nil {
+		return "http://" + listenAddress
+	}
+	if host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return fmt.Sprintf("http://%s:%s", host, port)
 }
 
 func writeEvalExplorerRuntime(w http.ResponseWriter, mirrorOrigin string) {

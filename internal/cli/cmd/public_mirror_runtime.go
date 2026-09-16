@@ -10,9 +10,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
-	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -52,29 +49,4 @@ func (runtime *publicMirrorRuntime) serve(ctx context.Context) error {
 		return fmt.Errorf("public mirror: %w", constants.ErrMissingRequiredField)
 	}
 	return runtime.runtime.Serve(ctx)
-}
-
-func startPublicMirrorDaemon(listenAddress, publicListenAddress, sourceID, mirrorOrigin string) (int, error) {
-	executable, err := os.Executable()
-	if err != nil {
-		return 0, fmt.Errorf("public mirror: resolve executable: %w", err)
-	}
-	args := []string{
-		"eval", "mirror", "run",
-		"--listen", listenAddress,
-		"--public-listen", publicListenAddress,
-	}
-	if strings.TrimSpace(sourceID) != "" {
-		args = append(args, "--source-id", sourceID)
-	}
-	if strings.TrimSpace(mirrorOrigin) != "" {
-		args = append(args, "--mirror-origin", mirrorOrigin)
-	}
-	command := exec.Command(executable, args...)
-	command.Stdout = os.Stdout
-	command.Stderr = os.Stderr
-	if err := command.Start(); err != nil {
-		return 0, fmt.Errorf("public mirror: start daemon: %w", err)
-	}
-	return command.Process.Pid, nil
 }

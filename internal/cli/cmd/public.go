@@ -230,7 +230,12 @@ func publicCmd() *cobra.Command {
 	configCmd := &cobra.Command{Use: "config", Short: "Manage public-feed configuration"}
 	configCmd.AddCommand(publicConfigSetCmdWithConfig(loadConfig, newFileSvc))
 	mirrorCmd := &cobra.Command{Use: "mirror", Short: "Manage the local public mirror"}
-	mirrorCmd.AddCommand(publicMirrorRunCmdWithConfig(loadConfig, newFileSvc))
+	mirrorCmd.AddCommand(
+		publicMirrorRunCmdWithConfig(loadConfig, newFileSvc),
+		publicMirrorStopCmdWithConfig(loadConfig, newFileSvc),
+		publicMirrorRestartCmdWithConfig(loadConfig, newFileSvc),
+		publicMirrorStatusCmdWithConfig(loadConfig, newFileSvc),
+	)
 	cmd.AddCommand(
 		publicInitCmdWithConfig(loadConfig, newFileSvc),
 		configCmd,
@@ -240,6 +245,8 @@ func publicCmd() *cobra.Command {
 		publicRepairOutboxCmdWithConfig(loadConfig, newFileSvc),
 		publicStatusCmdWithConfig(loadConfig, newFileSvc),
 		publicRotateKeyCmdWithConfig(loadConfig, newFileSvc),
+		publicStopCmdWithConfig(loadConfig, newFileSvc),
+		publicRestartCmdWithConfig(loadConfig, newFileSvc),
 	)
 	return cmd
 }
@@ -641,6 +648,7 @@ func publicRotateKeyCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 func publicMirrorRunCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
 	var listenAddress string
 	var publicListenAddress string
+	var daemon bool
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run the durable local public mirror",
@@ -649,20 +657,168 @@ func publicMirrorRunCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 			if err != nil {
 				return err
 			}
-			runtime, err := newPublicMirrorRuntime(commandContext(cmd), fileSvc, exportConfig, listenAddress, publicListenAddress)
+			ctx := commandContext(cmd)
+			if err := fileSvc.CreateRuntimeTree(ctx); err != nil {
+				return err
+			}
+			pm, err := newPublicMirrorProcessManager(fileSvc)
 			if err != nil {
 				return err
 			}
-			return runtime.serve(commandContext(cmd))
+			if publicMirrorBootstrapHealthy(publicListenAddress) {
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public mirror already available at %s (gateway-owned or existing listener)\n", publicListenAddress)
+				return err
+			}
+			runningPID, err := pm.ReadPIDFile(constants.PublicMirrorPIDFilename)
+			if err != nil {
+				return err
+			}
+			if runningPID > 0 && pm.IsProcessRunning(runningPID) {
+				return fmt.Errorf("public mirror: already running with pid %d; run `./g8e public mirror stop` first", runningPID)
+			}
+			if runningPID > 0 {
+				_ = pm.DeletePIDFile(constants.PublicMirrorPIDFilename)
+			}
+			if daemon {
+				pid, err := startPublicMirrorDaemon(listenAddress, publicListenAddress)
+				if err != nil {
+					return err
+				}
+				if err := pm.WritePIDFile(constants.PublicMirrorPIDFilename, pid); err != nil {
+					return err
+				}
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public mirror started on %s (private) and %s (public) with pid %d\n", listenAddress, publicListenAddress, pid)
+				return err
+			}
+			if err := pm.WritePIDFile(constants.PublicMirrorPIDFilename, os.Getpid()); err != nil {
+				return err
+			}
+			defer func() { _ = pm.DeletePIDFile(constants.PublicMirrorPIDFilename) }()
+			runtime, err := newPublicMirrorRuntime(ctx, fileSvc, exportConfig, listenAddress, publicListenAddress)
+			if err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public mirror listening on %s (private ingest) and %s (public read/SSE)\n", listenAddress, publicListenAddress)
+			if err != nil {
+				return err
+			}
+			return runtime.serve(ctx)
 		},
 	}
-	cmd.Flags().StringVar(&listenAddress, "listen", "127.0.0.1:8081", "Private authenticated ingest listen address")
-	cmd.Flags().StringVar(&publicListenAddress, "public-listen", "127.0.0.1:8082", "Public anonymous read-only listen address")
+	cmd.Flags().StringVar(&listenAddress, "listen", defaultPublicMirrorPrivateListen, "Private authenticated ingest listen address")
+	cmd.Flags().StringVar(&publicListenAddress, "public-listen", defaultPublicMirrorPublicListen, "Public anonymous read-only listen address")
+	cmd.Flags().BoolVar(&daemon, "daemon", false, "Start the mirror in the background and write a pid file")
 	return cmd
 }
 
+func publicMirrorStopCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop",
+		Short: "Stop the background public mirror",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory(cfg.ProjectRoot, slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			pm, err := newPublicMirrorProcessManager(fileSvc)
+			if err != nil {
+				return err
+			}
+			return stopPublicMirrorProcess(cmd.OutOrStdout(), pm)
+		},
+	}
+}
+
+func publicMirrorRestartCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	var listenAddress string
+	var publicListenAddress string
+	cmd := &cobra.Command{
+		Use:   "restart",
+		Short: "Restart the background public mirror",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory(cfg.ProjectRoot, slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			if _, _, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory); err != nil {
+				return err
+			}
+			pm, err := newPublicMirrorProcessManager(fileSvc)
+			if err != nil {
+				return err
+			}
+			_, err = restartPublicMirrorDaemon(commandContext(cmd), cmd.OutOrStdout(), pm, fileSvc, listenAddress, publicListenAddress)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&listenAddress, "listen", defaultPublicMirrorPrivateListen, "Private authenticated ingest listen address")
+	cmd.Flags().StringVar(&publicListenAddress, "public-listen", defaultPublicMirrorPublicListen, "Public anonymous read-only listen address")
+	return cmd
+}
+
+func publicMirrorStatusCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show whether the local public mirror is running",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory(cfg.ProjectRoot, slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			pm, err := newPublicMirrorProcessManager(fileSvc)
+			if err != nil {
+				return err
+			}
+			pid, err := pm.ReadPIDFile(constants.PublicMirrorPIDFilename)
+			if err != nil {
+				return err
+			}
+			if pid == 0 || !pm.IsProcessRunning(pid) {
+				_ = pm.DeletePIDFile(constants.PublicMirrorPIDFilename)
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), "Public mirror is not running.")
+				return err
+			}
+			healthy := publicMirrorBootstrapHealthy(defaultPublicMirrorPublicListen)
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public mirror running (pid %d, public bootstrap %s)\n", pid, mirrorHealthLabel(healthy))
+			return err
+		},
+	}
+}
+
+func publicStopCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop",
+		Short: "Stop the local public mirror",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return publicMirrorStopCmdWithConfig(configLoader, fileSvcFactory).RunE(cmd, nil)
+		},
+	}
+}
+
+func publicRestartCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	return &cobra.Command{
+		Use:   "restart",
+		Short: "Restart the local public mirror",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return publicMirrorRestartCmdWithConfig(configLoader, fileSvcFactory).RunE(cmd, nil)
+		},
+	}
+}
+
 func validatePublicMirrorListenAddresses(privateAddress, publicAddress string) error {
-	return gateway.ValidatePublicMirrorListenAddresses(privateAddress, publicAddress)
+	return gateway.ValidatePublicMirrorListenAddresses(privateAddress, publicAddress, false)
 }
 
 func newPublicMirrorHTTPServer(address string, handler http.Handler) *http.Server {

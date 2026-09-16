@@ -110,7 +110,7 @@ export function FailuresView() {
       />
 
       <div className="view-toolbar">
-        <DatasetSelector />
+        <DatasetSelector activeId={activeDatasetId} />
         <label className="filter-control">
           <span>Failure class</span>
           <select value={statusFilter} onChange={(event) => setFilter(event.target.value)}>
@@ -126,7 +126,7 @@ export function FailuresView() {
       {failures.length === 0 ? (
         <EmptyState hasRecords={assignments.length > 0} hasFilters={statusFilter !== 'all'} connection={connection} />
       ) : (
-        <DataTable columns={columns} data={failures} ariaLabel="Terminal failures" />
+        <DataTable columns={columns} data={failures} caption="Terminal failures" />
       )}
     </div>
   );

@@ -16,6 +16,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -76,7 +78,7 @@ func NewPublicSpectatorRuntime(cfg PublicSpectatorConfig, fileSvc fs.RuntimeFile
 	if cfg.ExplorerListenAddress == "" {
 		cfg.ExplorerListenAddress = DefaultPublicSpectatorConfig().ExplorerListenAddress
 	}
-	if err := ValidatePublicMirrorListenAddresses(cfg.PrivateListenAddress, cfg.PublicListenAddress); err != nil {
+	if err := ValidatePublicMirrorListenAddresses(cfg.PrivateListenAddress, cfg.PublicListenAddress, allowContainerMirrorBind()); err != nil {
 		return nil, err
 	}
 	return &PublicSpectatorRuntime{
@@ -247,6 +249,10 @@ func (runtime *PublicSpectatorRuntime) PublicListenAddress() string {
 		return ""
 	}
 	return runtime.cfg.PublicListenAddress
+}
+
+func allowContainerMirrorBind() bool {
+	return strings.TrimSpace(os.Getenv("G8E_DOCKER_COMPOSE")) == "1"
 }
 
 func (runtime *PublicSpectatorRuntime) runPublisherRetransmitLoop(ctx context.Context) {

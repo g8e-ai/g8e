@@ -78,8 +78,9 @@ func ValidatePublicMirrorOrigin(origin string) error {
 }
 
 // ValidatePublicMirrorListenAddresses enforces loopback-only private/public
-// mirror listeners with distinct addresses.
-func ValidatePublicMirrorListenAddresses(privateAddress, publicAddress string) error {
+// mirror listeners with distinct addresses. When allowContainerBind is true,
+// 0.0.0.0 is also accepted so Docker port publishing can reach the listener.
+func ValidatePublicMirrorListenAddresses(privateAddress, publicAddress string, allowContainerBind bool) error {
 	if privateAddress == publicAddress {
 		return fmt.Errorf("%w: duplicate address %q", constants.ErrPublicFeedListenAddress, privateAddress)
 	}
@@ -88,12 +89,22 @@ func ValidatePublicMirrorListenAddresses(privateAddress, publicAddress string) e
 		if err != nil {
 			return fmt.Errorf("%w: %q: %v", constants.ErrPublicFeedListenAddress, address, err)
 		}
-		ip := net.ParseIP(host)
-		if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+		if !isAllowedPublicMirrorListenHost(host, allowContainerBind) {
 			return fmt.Errorf("%w: %q", constants.ErrPublicFeedListenAddress, address)
 		}
 	}
 	return nil
+}
+
+func isAllowedPublicMirrorListenHost(host string, allowContainerBind bool) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip != nil && ip.IsLoopback() {
+		return true
+	}
+	return allowContainerBind && host == "0.0.0.0"
 }
 
 // EnsureLocalPublicFeed initializes export config and signing material when

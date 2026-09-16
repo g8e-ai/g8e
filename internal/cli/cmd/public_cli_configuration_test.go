@@ -58,7 +58,7 @@ func publicTestListenAddress(t *testing.T) string {
 
 func TestPublicCmd_ExposesProductionSurface(t *testing.T) {
 	cmd := publicCmd()
-	expected := []string{"config", "init", "mirror", "publish", "push", "rotate-key", "status"}
+	expected := []string{"config", "init", "mirror", "publish", "push", "repair-outbox", "restart", "rotate-key", "status", "stop"}
 	require.Len(t, cmd.Commands(), len(expected))
 	for _, name := range expected {
 		child, _, err := cmd.Find([]string{name})
@@ -67,8 +67,13 @@ func TestPublicCmd_ExposesProductionSurface(t *testing.T) {
 	}
 	mirror, _, err := cmd.Find([]string{"mirror"})
 	require.NoError(t, err)
-	require.NotNil(t, mirror.Commands())
-	assert.Equal(t, "run", mirror.Commands()[0].Name())
+	mirrorCommands := mirror.Commands()
+	require.NotEmpty(t, mirrorCommands)
+	mirrorNames := make([]string, len(mirrorCommands))
+	for index, child := range mirrorCommands {
+		mirrorNames[index] = child.Name()
+	}
+	assert.ElementsMatch(t, []string{"restart", "run", "status", "stop"}, mirrorNames)
 }
 
 func TestPublicInitCmd_PersistsPrivateConfigurationAndSecrets(t *testing.T) {

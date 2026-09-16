@@ -46,7 +46,14 @@ func TestPublicSpectatorRuntime_StartsMirrorListeners(t *testing.T) {
 }
 
 func TestValidatePublicMirrorListenAddresses_RejectsDuplicate(t *testing.T) {
-	err := ValidatePublicMirrorListenAddresses("127.0.0.1:8081", "127.0.0.1:8081")
+	err := ValidatePublicMirrorListenAddresses("127.0.0.1:8081", "127.0.0.1:8081", false)
+	assert.ErrorIs(t, err, constants.ErrPublicFeedListenAddress)
+}
+
+func TestValidatePublicMirrorListenAddresses_AllowsContainerBind(t *testing.T) {
+	err := ValidatePublicMirrorListenAddresses("0.0.0.0:8081", "0.0.0.0:8082", true)
+	assert.NoError(t, err)
+	err = ValidatePublicMirrorListenAddresses("0.0.0.0:8081", "0.0.0.0:8082", false)
 	assert.ErrorIs(t, err, constants.ErrPublicFeedListenAddress)
 }
 

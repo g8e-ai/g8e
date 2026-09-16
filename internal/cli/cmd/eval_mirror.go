@@ -12,8 +12,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -65,7 +63,7 @@ func evalMirrorRunCmd(deps nativeEvalDeps) *cobra.Command {
 				return err
 			}
 			if runningPID > 0 && pm.IsProcessRunning(runningPID) {
-				return fmt.Errorf("public mirror: already running with pid %d; run `./g8e eval mirror stop` first", runningPID)
+				return fmt.Errorf("public mirror: already running with pid %d; run `./g8e public mirror stop` first", runningPID)
 			}
 			if runningPID > 0 {
 				_ = pm.DeletePIDFile(constants.PublicMirrorPIDFilename)
@@ -75,7 +73,7 @@ func evalMirrorRunCmd(deps nativeEvalDeps) *cobra.Command {
 				return err
 			}
 			if daemon {
-				pid, err := startPublicMirrorDaemon(listenAddress, publicListenAddress, exportConfig.SourceID, exportConfig.MirrorOrigin)
+				pid, err := startPublicMirrorDaemon(listenAddress, publicListenAddress)
 				if err != nil {
 					return err
 				}
@@ -121,39 +119,7 @@ func evalMirrorStopCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pid, err := pm.ReadPIDFile(constants.PublicMirrorPIDFilename)
-			if err != nil {
-				return err
-			}
-			if pid == 0 || !pm.IsProcessRunning(pid) {
-				_ = pm.DeletePIDFile(constants.PublicMirrorPIDFilename)
-				_, err = fmt.Fprintln(cmd.OutOrStdout(), "Public mirror is not running.")
-				return err
-			}
-			process, err := os.FindProcess(pid)
-			if err != nil {
-				_ = pm.DeletePIDFile(constants.PublicMirrorPIDFilename)
-				return fmt.Errorf("public mirror: find pid %d: %w", pid, err)
-			}
-			if err := process.Signal(syscall.SIGTERM); err != nil {
-				_ = pm.DeletePIDFile(constants.PublicMirrorPIDFilename)
-				return fmt.Errorf("public mirror: stop pid %d: %w", pid, err)
-			}
-			deadline := time.Now().Add(platform.ShutdownTimeout)
-			for time.Now().Before(deadline) {
-				if !pm.IsProcessRunning(pid) {
-					_ = pm.DeletePIDFile(constants.PublicMirrorPIDFilename)
-					_, err = fmt.Fprintf(cmd.OutOrStdout(), "Stopped public mirror (pid %d)\n", pid)
-					return err
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
-			if err := process.Kill(); err != nil {
-				return fmt.Errorf("public mirror: kill pid %d: %w", pid, err)
-			}
-			_ = pm.DeletePIDFile(constants.PublicMirrorPIDFilename)
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Stopped public mirror (pid %d)\n", pid)
-			return err
+			return stopPublicMirrorProcess(cmd.OutOrStdout(), pm)
 		},
 	}
 	return cmd

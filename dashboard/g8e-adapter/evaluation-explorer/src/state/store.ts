@@ -57,7 +57,7 @@ export function resolveModelSummary(
   modelId: string,
 ): ModelSummary | undefined {
   const roleMatch = MODEL_COMPARISON_ID.exec(modelId);
-  if (roleMatch) {
+  if (roleMatch?.[1] && roleMatch[2]) {
     return models.get(modelRecordKey(datasetId, roleMatch[1], roleMatch[2] as ModelRole));
   }
   let fallback: ModelSummary | undefined;
