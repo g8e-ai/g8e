@@ -68,23 +68,23 @@ function shortRunId(runId: string): string {
 
 /** Evaluated models as role agents: name, role duty, status, throughput. */
 function AgentsStrip({ models, datasetId }: { models: ModelSummary[]; datasetId: string }) {
-  const agents = useMemo(
+  const evaluatedModels = useMemo(
     () =>
       models
         .filter((m) => !m.inventory_only && m.pass_rate)
         .sort(
           (a, b) =>
             (b.output_throughput_p50?.value ?? 0) - (a.output_throughput_p50?.value ?? 0),
-        )
-        .slice(0, 8),
+        ),
     [models],
   );
+  const agents = evaluatedModels.slice(0, 4);
 
   return (
     <section className="panel" aria-label="Models">
       <div className="panel-head">
         <h2>
-          Models <span className="panel-sub">· {agents.length} evaluated</span>
+          Models <span className="panel-sub">· {evaluatedModels.length} evaluated</span>
         </h2>
         <Link to={`/models?dataset=${datasetId}`} className="panel-link">
           View all models →

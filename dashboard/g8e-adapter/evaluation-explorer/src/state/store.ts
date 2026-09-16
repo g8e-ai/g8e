@@ -148,6 +148,7 @@ export class EvalStore {
     recentProjections: ProjectionRecord[],
     proofCount: number,
   ): void {
+    this.campaignContext = createCampaignAdaptContext();
     const state = emptyState();
     state.connection = 'live';
     state.sourceId = snapshot.source_id;

@@ -39,6 +39,7 @@ export interface CampaignAdaptContext {
   assignmentMeta: Map<string, AssignmentMeta>;
   runTotals: Map<string, RunProgress>;
   scheduledAssignments: Map<string, Set<string>>;
+  terminalAssignments: Map<string, Set<string>>;
   variantRoleStats: Map<string, VariantRoleBucket>;
 }
 
@@ -68,6 +69,7 @@ export function createCampaignAdaptContext(): CampaignAdaptContext {
     assignmentMeta: new Map(),
     runTotals: new Map(),
     scheduledAssignments: new Map(),
+    terminalAssignments: new Map(),
     variantRoleStats: new Map(),
   };
 }
@@ -90,6 +92,31 @@ function trackScheduledAssignment(context: CampaignAdaptContext, runId: string, 
   const progress = ensureRunProgress(context, runId);
   progress.scheduled = seen.size;
   return progress;
+}
+
+function markTerminalAssignment(
+  context: CampaignAdaptContext,
+  runId: string,
+  assignmentId: string,
+  terminalStatus: TerminalStatus,
+): { progress: RunProgress; isNew: boolean } {
+  const progress = trackScheduledAssignment(context, runId, assignmentId);
+  let seen = context.terminalAssignments.get(runId);
+  if (!seen) {
+    seen = new Set();
+    context.terminalAssignments.set(runId, seen);
+  }
+  if (seen.has(assignmentId)) {
+    return { progress, isNew: false };
+  }
+  seen.add(assignmentId);
+  progress.terminal += 1;
+  if (terminalStatus === 'completed') {
+    progress.passed += 1;
+  } else {
+    progress.failed += 1;
+  }
+  return { progress, isNew: true };
 }
 
 /** Live-event progress: terminal assignments done vs scheduled matrix size. */
@@ -216,15 +243,7 @@ function adaptResultProjection(
   const role = meta?.role ?? mapModelRole(optionalString(record.designated_role)) ?? 'primary';
 
   const hadRunProgress = context.runTotals.has(runId);
-  trackScheduledAssignment(context, runId, assignmentId);
-  const progress = ensureRunProgress(context, runId);
-  progress.terminal += 1;
-  if (terminalStatus === 'completed') {
-    progress.passed += 1;
-  } else {
-    progress.failed += 1;
-  }
-  context.runTotals.set(runId, progress);
+  const { progress, isNew } = markTerminalAssignment(context, runId, assignmentId, terminalStatus);
   const { completed, total } = campaignProgressCounts(progress);
 
   const assignment: AssignmentResult = {
@@ -278,7 +297,7 @@ function adaptResultProjection(
 
   records.push(buildUpdatedEvaluationSummary(runId, datasetId, observedAt, progress, assignment.evaluation_unit));
 
-  if (variantId !== 'unknown') {
+  if (isNew && variantId !== 'unknown') {
     recordVariantRoleTerminal(
       context.variantRoleStats,
       runId,

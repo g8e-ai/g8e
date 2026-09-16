@@ -77,6 +77,30 @@ describe('adaptCampaignProjectionEnvelope', () => {
     });
   });
 
+  it('does not inflate terminal progress when the same result is adapted twice', () => {
+    const context = createCampaignAdaptContext();
+    const envelope = {
+      schema_version: '1.0.0',
+      message_type: 'PublicAssignmentResultProjection' as const,
+      idempotency_key: 'run-1:assign-1:result',
+      record: {
+        assignment_id: 'assign-1',
+        run_id: 'run-1',
+        scenario_id: 'instruction-exact-format',
+        lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+        summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+        completed_at: '2026-09-16T14:00:05Z',
+      },
+    };
+
+    adaptCampaignProjectionEnvelope(envelope, context);
+    const secondPass = adaptCampaignProjectionEnvelope(envelope, context);
+
+    expect(campaignProgressCounts(context.runTotals.get('run-1')!)).toEqual({ completed: 1, total: 1 });
+    const failEvent = secondPass.find((record) => record.kind === 'assignment_failed');
+    expect(failEvent).toMatchObject({ completed: 1, total: 1 });
+  });
+
   it('tracks terminal progress separately from passing verdicts', () => {
     const context = createCampaignAdaptContext();
     for (const assignmentId of ['assign-1', 'assign-2', 'assign-3', 'assign-4']) {
