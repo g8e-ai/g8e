@@ -102,6 +102,70 @@ func ComputeModelVariantRegistryDigest(campaignID string, variants []*evalv1.Mod
 	return models.ComputeInferenceModelRegistryDigest(campaignID, inferenceVariants)
 }
 
+// ComputeHeterogeneousStackDigest returns the immutable digest for one stack
+// definition with stack_digest cleared.
+func ComputeHeterogeneousStackDigest(stack *evalv1.HeterogeneousStackDefinition) (string, error) {
+	if stack == nil || stack.GetStackId() == "" || stack.GetPrimarySlot() == nil || stack.GetAssistantSlot() == nil || stack.GetLiteSlot() == nil {
+		return "", fmt.Errorf("evaluation: compute heterogeneous stack digest: %w", constants.ErrMissingRequiredField)
+	}
+	clone, ok := proto.Clone(stack).(*evalv1.HeterogeneousStackDefinition)
+	if !ok {
+		return "", fmt.Errorf("evaluation: compute heterogeneous stack digest: invalid clone")
+	}
+	clone.StackDigest = ""
+	return digestProto(clone)
+}
+
+// ValidateHeterogeneousStackDigest verifies the declared stack_digest binding.
+func ValidateHeterogeneousStackDigest(stack *evalv1.HeterogeneousStackDefinition) error {
+	if stack == nil {
+		return fmt.Errorf("evaluation: validate heterogeneous stack digest: %w", constants.ErrMissingRequiredField)
+	}
+	expected, err := ComputeHeterogeneousStackDigest(stack)
+	if err != nil {
+		return err
+	}
+	if stack.GetStackDigest() != expected {
+		return fmt.Errorf("evaluation: validate heterogeneous stack digest: digest mismatch")
+	}
+	return nil
+}
+
+// ComputeHeterogeneousStackSetDigest returns the immutable digest for one stack
+// set with set_digest cleared.
+func ComputeHeterogeneousStackSetDigest(set *HeterogeneousStackSet) (string, error) {
+	if set == nil || set.CampaignID == "" || set.GenerationRule == "" || len(set.Stacks) == 0 || len(set.VariantIDs) == 0 {
+		return "", fmt.Errorf("evaluation: compute heterogeneous stack set digest: %w", constants.ErrMissingRequiredField)
+	}
+	stackDigests := make([]string, 0, len(set.Stacks))
+	for _, stack := range set.Stacks {
+		if stack == nil {
+			return "", fmt.Errorf("evaluation: compute heterogeneous stack set digest: %w", constants.ErrMissingRequiredField)
+		}
+		digest := stack.GetStackDigest()
+		if digest == "" {
+			digest, err := ComputeHeterogeneousStackDigest(stack)
+			if err != nil {
+				return "", err
+			}
+			stackDigests = append(stackDigests, digest)
+			continue
+		}
+		stackDigests = append(stackDigests, digest)
+	}
+	sort.Strings(stackDigests)
+	variantIDs := append([]string(nil), set.VariantIDs...)
+	sort.Strings(variantIDs)
+	parts := []string{
+		set.GenerationRule,
+		set.CampaignID,
+		fmt.Sprintf("%d", set.Seed),
+		strings.Join(variantIDs, "\x1f"),
+		strings.Join(stackDigests, "\x1f"),
+	}
+	return models.SHA256Hex([]byte(strings.Join(parts, "\x1e"))), nil
+}
+
 // ComputeAssignmentDeterministicIdentity derives the stable assignment cell
 // identity from campaign, scenario, lane, repetition, and target binding.
 func ComputeAssignmentDeterministicIdentity(assignment *evalv1.EvaluationAssignment) (string, error) {

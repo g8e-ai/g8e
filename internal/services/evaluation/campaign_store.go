@@ -9,6 +9,7 @@ package evaluation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -337,8 +338,117 @@ func campaignDir(campaignID string) string {
 	return filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationCampaignsDirname, campaignID)
 }
 
+// SaveHeterogeneousStackSet persists one frozen heterogeneous stack set for a campaign.
+func (s *Store) SaveHeterogeneousStackSet(ctx context.Context, campaignID string, stackSet *HeterogeneousStackSet) error {
+	if s == nil || s.files == nil || stackSet == nil || !complianceevidence.ValidPathElement(campaignID) {
+		return fmt.Errorf("%w: heterogeneous stack set and campaign ID are required", constants.ErrEvaluationReportPersistFailed)
+	}
+	if err := ValidateHeterogeneousStackSet(stackSet); err != nil {
+		return fmt.Errorf("%w: %v", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	body, err := marshalHeterogeneousStackSet(stackSet)
+	if err != nil {
+		return fmt.Errorf("%w: canonicalize heterogeneous stack set: %w", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	path := heterogeneousStackSetPath(campaignID)
+	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
+		return fmt.Errorf("%w: create campaign directory: %w", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	if err := s.files.WriteFile(ctx, path, body, constants.PermFileReadOnly); err != nil {
+		return fmt.Errorf("%w: write heterogeneous stack set: %w", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	return nil
+}
+
+// LoadHeterogeneousStackSet reads one persisted heterogeneous stack set.
+func (s *Store) LoadHeterogeneousStackSet(ctx context.Context, campaignID string) (*HeterogeneousStackSet, error) {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(campaignID) {
+		return nil, fmt.Errorf("%w: file service and campaign ID are required", constants.ErrEvidenceArtifactMalformed)
+	}
+	body, err := s.files.ReadFile(ctx, heterogeneousStackSetPath(campaignID))
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: read heterogeneous stack set: %w", err)
+	}
+	stackSet, err := unmarshalHeterogeneousStackSet(body)
+	if err != nil {
+		return nil, fmt.Errorf("%w: canonical heterogeneous stack set: %v", constants.ErrEvidenceArtifactMalformed, err)
+	}
+	if stackSet.CampaignID != campaignID {
+		return nil, fmt.Errorf("%w: heterogeneous stack set campaign ID does not match requested campaign", constants.ErrEvidenceScopeMismatch)
+	}
+	if err := ValidateHeterogeneousStackSet(stackSet); err != nil {
+		return nil, fmt.Errorf("%w: %v", constants.ErrEvidenceArtifactMalformed, err)
+	}
+	return stackSet, nil
+}
+
+func marshalHeterogeneousStackSet(stackSet *HeterogeneousStackSet) ([]byte, error) {
+	stackPayloads := make([]json.RawMessage, 0, len(stackSet.Stacks))
+	for _, stack := range stackSet.Stacks {
+		raw, err := evalv1.MarshalCanonical(stack)
+		if err != nil {
+			return nil, err
+		}
+		stackPayloads = append(stackPayloads, json.RawMessage(raw))
+	}
+	payload := struct {
+		CampaignID     string                       `json:"campaign_id"`
+		GenerationRule string                       `json:"generation_rule"`
+		Seed           uint64                       `json:"seed"`
+		SetDigest      string                       `json:"set_digest"`
+		VariantIDs     []string                     `json:"variant_ids"`
+		Stacks         []json.RawMessage            `json:"stacks"`
+		Coverage       *HeterogeneousCoverageMatrix   `json:"coverage"`
+	}{
+		CampaignID:     stackSet.CampaignID,
+		GenerationRule: stackSet.GenerationRule,
+		Seed:           stackSet.Seed,
+		SetDigest:      stackSet.SetDigest,
+		VariantIDs:     stackSet.VariantIDs,
+		Stacks:         stackPayloads,
+		Coverage:       stackSet.Coverage,
+	}
+	return json.Marshal(payload)
+}
+
+func unmarshalHeterogeneousStackSet(body []byte) (*HeterogeneousStackSet, error) {
+	var payload struct {
+		CampaignID     string                     `json:"campaign_id"`
+		GenerationRule string                     `json:"generation_rule"`
+		Seed           uint64                     `json:"seed"`
+		SetDigest      string                     `json:"set_digest"`
+		VariantIDs     []string                   `json:"variant_ids"`
+		Stacks         []json.RawMessage          `json:"stacks"`
+		Coverage       *HeterogeneousCoverageMatrix `json:"coverage"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+	stacks := make([]*evalv1.HeterogeneousStackDefinition, 0, len(payload.Stacks))
+	for _, raw := range payload.Stacks {
+		stack := &evalv1.HeterogeneousStackDefinition{}
+		if err := evalv1.UnmarshalCanonical(raw, stack); err != nil {
+			return nil, err
+		}
+		stacks = append(stacks, stack)
+	}
+	return &HeterogeneousStackSet{
+		CampaignID:     payload.CampaignID,
+		GenerationRule: payload.GenerationRule,
+		Seed:           payload.Seed,
+		SetDigest:      payload.SetDigest,
+		VariantIDs:     payload.VariantIDs,
+		Stacks:         stacks,
+		Coverage:       payload.Coverage,
+	}, nil
+}
+
 func campaignSpecPath(campaignID string) string {
 	return filepath.Join(campaignDir(campaignID), constants.EvaluationCampaignSpecFilename)
+}
+
+func heterogeneousStackSetPath(campaignID string) string {
+	return filepath.Join(campaignDir(campaignID), constants.EvaluationHeterogeneousStackSetFilename)
 }
 
 func scenarioCatalogPath(campaignID string) string {

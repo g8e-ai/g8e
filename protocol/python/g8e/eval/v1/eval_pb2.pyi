@@ -81,6 +81,12 @@ class EvaluationUsageAvailability(int, metaclass=_enum_type_wrapper.EnumTypeWrap
     EVALUATION_USAGE_AVAILABILITY_REPORTED: _ClassVar[EvaluationUsageAvailability]
     EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE: _ClassVar[EvaluationUsageAvailability]
 
+class ProviderHardwareMetricAvailability(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNSPECIFIED: _ClassVar[ProviderHardwareMetricAvailability]
+    PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED: _ClassVar[ProviderHardwareMetricAvailability]
+    PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE: _ClassVar[ProviderHardwareMetricAvailability]
+
 class EvaluationGovernancePosture(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     EVALUATION_GOVERNANCE_POSTURE_UNSPECIFIED: _ClassVar[EvaluationGovernancePosture]
@@ -207,6 +213,9 @@ EVALUATION_LOAD_STATE_UNAVAILABLE: EvaluationLoadState
 EVALUATION_USAGE_AVAILABILITY_UNSPECIFIED: EvaluationUsageAvailability
 EVALUATION_USAGE_AVAILABILITY_REPORTED: EvaluationUsageAvailability
 EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE: EvaluationUsageAvailability
+PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNSPECIFIED: ProviderHardwareMetricAvailability
+PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED: ProviderHardwareMetricAvailability
+PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE: ProviderHardwareMetricAvailability
 EVALUATION_GOVERNANCE_POSTURE_UNSPECIFIED: EvaluationGovernancePosture
 EVALUATION_GOVERNANCE_POSTURE_DOCTRINE: EvaluationGovernancePosture
 EVALUATION_GOVERNANCE_POSTURE_CONSENSUS: EvaluationGovernancePosture
@@ -683,8 +692,70 @@ class HeterogeneousAssignmentTarget(_message.Message):
     stack: HeterogeneousStackDefinition
     def __init__(self, stack: _Optional[_Union[HeterogeneousStackDefinition, _Mapping]] = ...) -> None: ...
 
+class ProviderBoundaryHardwareSample(_message.Message):
+    __slots__ = ("observed_at_unix_nanos", "device_pseudonym", "vram_bytes_availability", "vram_used_bytes", "vram_total_bytes", "gpu_utilization_availability", "gpu_utilization_percent", "temperature_availability", "temperature_celsius", "power_availability", "power_watts", "clock_availability", "clock_mhz", "host_ram_availability", "host_ram_used_bytes", "host_ram_total_bytes")
+    OBSERVED_AT_UNIX_NANOS_FIELD_NUMBER: _ClassVar[int]
+    DEVICE_PSEUDONYM_FIELD_NUMBER: _ClassVar[int]
+    VRAM_BYTES_AVAILABILITY_FIELD_NUMBER: _ClassVar[int]
+    VRAM_USED_BYTES_FIELD_NUMBER: _ClassVar[int]
+    VRAM_TOTAL_BYTES_FIELD_NUMBER: _ClassVar[int]
+    GPU_UTILIZATION_AVAILABILITY_FIELD_NUMBER: _ClassVar[int]
+    GPU_UTILIZATION_PERCENT_FIELD_NUMBER: _ClassVar[int]
+    TEMPERATURE_AVAILABILITY_FIELD_NUMBER: _ClassVar[int]
+    TEMPERATURE_CELSIUS_FIELD_NUMBER: _ClassVar[int]
+    POWER_AVAILABILITY_FIELD_NUMBER: _ClassVar[int]
+    POWER_WATTS_FIELD_NUMBER: _ClassVar[int]
+    CLOCK_AVAILABILITY_FIELD_NUMBER: _ClassVar[int]
+    CLOCK_MHZ_FIELD_NUMBER: _ClassVar[int]
+    HOST_RAM_AVAILABILITY_FIELD_NUMBER: _ClassVar[int]
+    HOST_RAM_USED_BYTES_FIELD_NUMBER: _ClassVar[int]
+    HOST_RAM_TOTAL_BYTES_FIELD_NUMBER: _ClassVar[int]
+    observed_at_unix_nanos: int
+    device_pseudonym: str
+    vram_bytes_availability: ProviderHardwareMetricAvailability
+    vram_used_bytes: int
+    vram_total_bytes: int
+    gpu_utilization_availability: ProviderHardwareMetricAvailability
+    gpu_utilization_percent: float
+    temperature_availability: ProviderHardwareMetricAvailability
+    temperature_celsius: float
+    power_availability: ProviderHardwareMetricAvailability
+    power_watts: float
+    clock_availability: ProviderHardwareMetricAvailability
+    clock_mhz: int
+    host_ram_availability: ProviderHardwareMetricAvailability
+    host_ram_used_bytes: int
+    host_ram_total_bytes: int
+    def __init__(self, observed_at_unix_nanos: _Optional[int] = ..., device_pseudonym: _Optional[str] = ..., vram_bytes_availability: _Optional[_Union[ProviderHardwareMetricAvailability, str]] = ..., vram_used_bytes: _Optional[int] = ..., vram_total_bytes: _Optional[int] = ..., gpu_utilization_availability: _Optional[_Union[ProviderHardwareMetricAvailability, str]] = ..., gpu_utilization_percent: _Optional[float] = ..., temperature_availability: _Optional[_Union[ProviderHardwareMetricAvailability, str]] = ..., temperature_celsius: _Optional[float] = ..., power_availability: _Optional[_Union[ProviderHardwareMetricAvailability, str]] = ..., power_watts: _Optional[float] = ..., clock_availability: _Optional[_Union[ProviderHardwareMetricAvailability, str]] = ..., clock_mhz: _Optional[int] = ..., host_ram_availability: _Optional[_Union[ProviderHardwareMetricAvailability, str]] = ..., host_ram_used_bytes: _Optional[int] = ..., host_ram_total_bytes: _Optional[int] = ...) -> None: ...
+
+class ProviderBoundaryObservationWindow(_message.Message):
+    __slots__ = ("schema_version", "provider_attempt_id", "observer_id", "observer_clock_source", "window_started_at_unix_nanos", "window_completed_at_unix_nanos", "attempt_started_at_unix_ms", "attempt_completed_at_unix_ms", "clock_skew_nanos", "samples", "observation_digest")
+    SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
+    PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    OBSERVER_ID_FIELD_NUMBER: _ClassVar[int]
+    OBSERVER_CLOCK_SOURCE_FIELD_NUMBER: _ClassVar[int]
+    WINDOW_STARTED_AT_UNIX_NANOS_FIELD_NUMBER: _ClassVar[int]
+    WINDOW_COMPLETED_AT_UNIX_NANOS_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_STARTED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_COMPLETED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    CLOCK_SKEW_NANOS_FIELD_NUMBER: _ClassVar[int]
+    SAMPLES_FIELD_NUMBER: _ClassVar[int]
+    OBSERVATION_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    schema_version: str
+    provider_attempt_id: str
+    observer_id: str
+    observer_clock_source: str
+    window_started_at_unix_nanos: int
+    window_completed_at_unix_nanos: int
+    attempt_started_at_unix_ms: int
+    attempt_completed_at_unix_ms: int
+    clock_skew_nanos: int
+    samples: _containers.RepeatedCompositeFieldContainer[ProviderBoundaryHardwareSample]
+    observation_digest: str
+    def __init__(self, schema_version: _Optional[str] = ..., provider_attempt_id: _Optional[str] = ..., observer_id: _Optional[str] = ..., observer_clock_source: _Optional[str] = ..., window_started_at_unix_nanos: _Optional[int] = ..., window_completed_at_unix_nanos: _Optional[int] = ..., attempt_started_at_unix_ms: _Optional[int] = ..., attempt_completed_at_unix_ms: _Optional[int] = ..., clock_skew_nanos: _Optional[int] = ..., samples: _Optional[_Iterable[_Union[ProviderBoundaryHardwareSample, _Mapping]]] = ..., observation_digest: _Optional[str] = ...) -> None: ...
+
 class ModelInferenceRecord(_message.Message):
-    __slots__ = ("inference_record_id", "provider_attempt_id", "assignment_id", "evaluation_attempt_id", "model_role", "agent_persona", "call_site", "model_variant", "temperature", "top_p", "top_k", "seed", "max_output_tokens", "input_hash", "output_hash", "usage_availability", "prompt_tokens", "completion_tokens", "thinking_tokens", "cache_tokens", "request_started_at_unix_nanos", "first_token_at_unix_nanos", "generation_duration_nanos", "total_duration_nanos", "load_duration_nanos", "load_state", "retry_count", "finish_reason", "privacy_attested", "governed_receipt_ref", "result_digest")
+    __slots__ = ("inference_record_id", "provider_attempt_id", "assignment_id", "evaluation_attempt_id", "model_role", "agent_persona", "call_site", "model_variant", "temperature", "top_p", "top_k", "seed", "max_output_tokens", "input_hash", "output_hash", "usage_availability", "prompt_tokens", "completion_tokens", "thinking_tokens", "cache_tokens", "request_started_at_unix_nanos", "first_token_at_unix_nanos", "generation_duration_nanos", "total_duration_nanos", "load_duration_nanos", "load_state", "retry_count", "finish_reason", "privacy_attested", "governed_receipt_ref", "result_digest", "provider_boundary_observation_ref")
     INFERENCE_RECORD_ID_FIELD_NUMBER: _ClassVar[int]
     PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
     ASSIGNMENT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -716,6 +787,7 @@ class ModelInferenceRecord(_message.Message):
     PRIVACY_ATTESTED_FIELD_NUMBER: _ClassVar[int]
     GOVERNED_RECEIPT_REF_FIELD_NUMBER: _ClassVar[int]
     RESULT_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    PROVIDER_BOUNDARY_OBSERVATION_REF_FIELD_NUMBER: _ClassVar[int]
     inference_record_id: str
     provider_attempt_id: str
     assignment_id: str
@@ -747,7 +819,8 @@ class ModelInferenceRecord(_message.Message):
     privacy_attested: bool
     governed_receipt_ref: _compliance_pb2.ComplianceEvidenceReference
     result_digest: str
-    def __init__(self, inference_record_id: _Optional[str] = ..., provider_attempt_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., model_role: _Optional[_Union[ModelCampaignRole, str]] = ..., agent_persona: _Optional[str] = ..., call_site: _Optional[str] = ..., model_variant: _Optional[_Union[ModelVariant, _Mapping]] = ..., temperature: _Optional[float] = ..., top_p: _Optional[float] = ..., top_k: _Optional[int] = ..., seed: _Optional[int] = ..., max_output_tokens: _Optional[int] = ..., input_hash: _Optional[str] = ..., output_hash: _Optional[str] = ..., usage_availability: _Optional[_Union[EvaluationUsageAvailability, str]] = ..., prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., thinking_tokens: _Optional[int] = ..., cache_tokens: _Optional[int] = ..., request_started_at_unix_nanos: _Optional[int] = ..., first_token_at_unix_nanos: _Optional[int] = ..., generation_duration_nanos: _Optional[int] = ..., total_duration_nanos: _Optional[int] = ..., load_duration_nanos: _Optional[int] = ..., load_state: _Optional[_Union[EvaluationLoadState, str]] = ..., retry_count: _Optional[int] = ..., finish_reason: _Optional[str] = ..., privacy_attested: _Optional[bool] = ..., governed_receipt_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., result_digest: _Optional[str] = ...) -> None: ...
+    provider_boundary_observation_ref: _compliance_pb2.ComplianceEvidenceReference
+    def __init__(self, inference_record_id: _Optional[str] = ..., provider_attempt_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., model_role: _Optional[_Union[ModelCampaignRole, str]] = ..., agent_persona: _Optional[str] = ..., call_site: _Optional[str] = ..., model_variant: _Optional[_Union[ModelVariant, _Mapping]] = ..., temperature: _Optional[float] = ..., top_p: _Optional[float] = ..., top_k: _Optional[int] = ..., seed: _Optional[int] = ..., max_output_tokens: _Optional[int] = ..., input_hash: _Optional[str] = ..., output_hash: _Optional[str] = ..., usage_availability: _Optional[_Union[EvaluationUsageAvailability, str]] = ..., prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., thinking_tokens: _Optional[int] = ..., cache_tokens: _Optional[int] = ..., request_started_at_unix_nanos: _Optional[int] = ..., first_token_at_unix_nanos: _Optional[int] = ..., generation_duration_nanos: _Optional[int] = ..., total_duration_nanos: _Optional[int] = ..., load_duration_nanos: _Optional[int] = ..., load_state: _Optional[_Union[EvaluationLoadState, str]] = ..., retry_count: _Optional[int] = ..., finish_reason: _Optional[str] = ..., privacy_attested: _Optional[bool] = ..., governed_receipt_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ..., result_digest: _Optional[str] = ..., provider_boundary_observation_ref: _Optional[_Union[_compliance_pb2.ComplianceEvidenceReference, _Mapping]] = ...) -> None: ...
 
 class ToolDecisionRecord(_message.Message):
     __slots__ = ("decision_id", "assignment_id", "tool_name", "recognized", "selected", "permission_compliant", "unnecessary", "outcome")

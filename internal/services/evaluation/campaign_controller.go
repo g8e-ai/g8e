@@ -30,6 +30,7 @@ type CampaignInitRequest struct {
 	InferenceOperatorSessionID string
 	DataOperatorSessionID      string
 	Deployment                 *evalv1.EvaluationDeploymentIdentity
+	Lane                       evalv1.EvaluationLane
 }
 
 // CampaignRunSummary reports resumable controller state for one run.
@@ -58,6 +59,8 @@ type CampaignStore interface {
 	LoadAssignmentTrace(ctx context.Context, runID, assignmentID string) (map[string]any, error)
 	SaveAssignmentResult(ctx context.Context, result *evalv1.EvaluationAssignmentResult) error
 	LoadAssignmentResult(ctx context.Context, runID, assignmentID string) (*evalv1.EvaluationAssignmentResult, error)
+	SaveHeterogeneousStackSet(ctx context.Context, campaignID string, stackSet *HeterogeneousStackSet) error
+	LoadHeterogeneousStackSet(ctx context.Context, campaignID string) (*HeterogeneousStackSet, error)
 }
 
 // CampaignController owns deterministic scheduling, canonical assignment
@@ -107,13 +110,17 @@ func (c *CampaignController) InitializeCampaign(ctx context.Context, req Campaig
 	if err := c.store.SaveScenarioCatalog(ctx, req.CampaignID, req.Catalog); err != nil {
 		return nil, err
 	}
+	lane := req.Lane
+	if lane == evalv1.EvaluationLane_EVALUATION_LANE_UNSPECIFIED {
+		lane = evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE
+	}
 	run := &evalv1.EvaluationRun{
 		SchemaVersion:            CampaignSchemaVersion,
 		RunId:                    req.RunID,
 		SuiteRef:                 req.Catalog.GetCatalogRef(),
 		Deployment:               req.Deployment,
 		ActivePosture:            spec.GetGovernancePosture(),
-		Lane:                     evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
+		Lane:                     lane,
 		StartedAt:                timestamppb.New(c.now().UTC()),
 		CampaignBinding: &evalv1.ModelCampaignBinding{
 			CampaignId:                  req.CampaignID,
@@ -187,6 +194,86 @@ func (c *CampaignController) ScheduleHomogeneousRun(ctx context.Context, runID s
 	return len(assignments), nil
 }
 
+// GenerateHeterogeneousStackSet materializes and persists the preregistered
+// heterogeneous stack set for one frozen campaign registry.
+func (c *CampaignController) GenerateHeterogeneousStackSet(ctx context.Context, campaignID string, seed uint64) (*HeterogeneousStackSet, error) {
+	if c == nil || c.store == nil {
+		return nil, fmt.Errorf("evaluation: generate heterogeneous stack set: %w", constants.ErrMissingRequiredField)
+	}
+	spec, err := c.store.LoadCampaignSpec(ctx, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	stackSet, err := GenerateNorthStarHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
+		CampaignID: campaignID,
+		Seed:       seed,
+		Variants:   spec.GetModelRegistry(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := c.store.SaveHeterogeneousStackSet(ctx, campaignID, stackSet); err != nil {
+		return nil, err
+	}
+	return stackSet, nil
+}
+
+// ScheduleHeterogeneousRun materializes and persists the complete heterogeneous
+// system-lane assignment matrix before any scored call begins.
+func (c *CampaignController) ScheduleHeterogeneousRun(ctx context.Context, runID string) (int, error) {
+	if c == nil || c.store == nil {
+		return 0, fmt.Errorf("evaluation: schedule heterogeneous run: %w", constants.ErrMissingRequiredField)
+	}
+	run, err := c.store.LoadRun(ctx, runID)
+	if err != nil {
+		return 0, err
+	}
+	if run.GetLane() != evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM {
+		return 0, fmt.Errorf("evaluation: schedule heterogeneous run: run %s is not a system lane run", runID)
+	}
+	spec, err := c.store.LoadCampaignSpec(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return 0, err
+	}
+	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return 0, err
+	}
+	stackSet, err := c.store.LoadHeterogeneousStackSet(ctx, spec.GetCampaignId())
+	if err != nil {
+		return 0, err
+	}
+	assignments, err := BuildHeterogeneousAssignmentMatrix(HeterogeneousScheduleRequest{
+		CampaignID: spec.GetCampaignId(),
+		RunID:      runID,
+		Catalog:    catalog,
+		StackSet:   stackSet,
+		QueuedAt:   c.now().UTC(),
+	})
+	if err != nil {
+		return 0, err
+	}
+	if err := ValidateHeterogeneousAssignmentMatrix(catalog, stackSet, assignments); err != nil {
+		return 0, err
+	}
+	existing, err := c.store.ListAssignments(ctx, runID)
+	if err != nil {
+		return 0, err
+	}
+	if len(existing) > 0 {
+		return 0, fmt.Errorf("evaluation: schedule heterogeneous run: assignments already materialized for run %s", runID)
+	}
+	for _, assignment := range assignments {
+		if err := c.store.SaveAssignment(ctx, assignment); err != nil {
+			return 0, err
+		}
+	}
+	if err := c.publishQueuedAssignments(ctx, runID, assignments); err != nil {
+		return 0, err
+	}
+	return len(assignments), nil
+}
+
 // RunSummary returns resumable controller state derived from canonical records.
 func (c *CampaignController) RunSummary(ctx context.Context, runID string) (*CampaignRunSummary, error) {
 	if c == nil || c.store == nil {
@@ -208,7 +295,17 @@ func (c *CampaignController) RunSummary(ctx context.Context, runID string) (*Cam
 	if repetition == 0 {
 		repetition = 1
 	}
-	expected := ComputeNorthStarHomogeneousMatrixSize(uint64(len(spec.GetModelRegistry()))) * uint64(repetition)
+	var expected uint64
+	switch run.GetLane() {
+	case evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM:
+		stackSet, err := c.store.LoadHeterogeneousStackSet(ctx, run.GetCampaignBinding().GetCampaignId())
+		if err != nil {
+			return nil, err
+		}
+		expected = ComputeNorthStarHeterogeneousMatrixSize(uint64(len(stackSet.Stacks)))
+	default:
+		expected = ComputeNorthStarHomogeneousMatrixSize(uint64(len(spec.GetModelRegistry()))) * uint64(repetition)
+	}
 	summary := &CampaignRunSummary{
 		Run:                run,
 		ExpectedAssignment: expected,

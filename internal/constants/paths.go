@@ -401,8 +401,10 @@ const (
 	// DefaultModelsDir are governed data assets (.gguf files that Ollama
 	// reads); the directory is the canonical path for staged models in
 	// air-gapped deployments.
-	InferenceDirname           = "inference"
-	InferenceAttemptsDirname   = "attempts"
+	InferenceDirname                        = "inference"
+	InferenceAttemptsDirname                = "attempts"
+	InferenceProviderObserverDirname        = "provider-observer"
+	InferenceProviderObserverWindowsDirname = "windows"
 	ModelsDirname              = "models"
 	InferenceStateFilename     = "inference-state.json"
 	InferenceModelfilesDirname = "modelfiles"
@@ -733,6 +735,7 @@ const (
 	EvaluationReportFilename                      = "report.json"
 	EvaluationVerificationFilename                = "verification.json"
 	EvaluationCampaignSpecFilename                = "campaign-spec.json"
+	EvaluationHeterogeneousStackSetFilename       = "heterogeneous-stack-set.json"
 	EvaluationScenarioCatalogFilename             = "scenario-catalog.json"
 	EvaluationRunStateFilename                    = "run.json"
 	EvaluationPublicationStateFilename            = "public-projection-state.json"

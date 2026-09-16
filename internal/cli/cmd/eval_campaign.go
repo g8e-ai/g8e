@@ -32,6 +32,8 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.AddCommand(
 		campaignEvalInitCmd(deps),
 		campaignEvalScheduleCmd(deps),
+		campaignEvalStacksGenerateCmd(deps),
+		campaignEvalScheduleHeterogeneousCmd(deps),
 		campaignEvalExecuteCmd(deps),
 		campaignEvalPublishCmd(deps),
 		campaignEvalVerifyCmd(deps),
@@ -129,6 +131,105 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Exact inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID")
 	cmd.Flags().Uint32Var(&repetitionCount, "repetition-count", 1, "Homogeneous repetition count")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
+	return cmd
+}
+
+func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
+	var campaignID string
+	var seed uint64
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:   "stacks-generate",
+		Short: "Generate and persist the preregistered heterogeneous stack set for one campaign",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if campaignID == "" {
+				return fmt.Errorf("evaluation: campaign stacks-generate: %w", constants.ErrMissingRequiredField)
+			}
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			stackSet, err := controller.GenerateHeterogeneousStackSet(cmd.Context(), campaignID, seed)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign stacks-generate: %w", err)
+			}
+			if jsonOutput {
+				payload, err := json.MarshalIndent(map[string]any{
+					"campaign_id":            campaignID,
+					"generation_rule":        stackSet.GenerationRule,
+					"seed":                   stackSet.Seed,
+					"set_digest":             stackSet.SetDigest,
+					"stack_count":            len(stackSet.Stacks),
+					"hypothesis_stack_count": stackSet.Coverage.HypothesisStackCount,
+					"coverage_stack_count":   stackSet.Coverage.CoverageStackCount,
+				}, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Generated %d heterogeneous stacks for campaign %s\nGeneration rule: %s\nSeed: %d\nSet digest: %s\nHypothesis stacks: %d\nCoverage stacks: %d\n",
+				len(stackSet.Stacks),
+				campaignID,
+				stackSet.GenerationRule,
+				stackSet.Seed,
+				stackSet.SetDigest,
+				stackSet.Coverage.HypothesisStackCount,
+				stackSet.Coverage.CoverageStackCount,
+			)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID")
+	cmd.Flags().Uint64Var(&seed, "seed", 0, "Deterministic heterogeneous stack generation seed")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
+	return cmd
+}
+
+func campaignEvalScheduleHeterogeneousCmd(deps nativeEvalDeps) *cobra.Command {
+	var runID string
+	var jsonOutput bool
+	var publish bool
+	cmd := &cobra.Command{
+		Use:   "schedule-heterogeneous",
+		Short: "Materialize and persist the heterogeneous system-lane assignment matrix for one run",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if runID == "" {
+				return fmt.Errorf("evaluation: campaign schedule-heterogeneous: %w", constants.ErrMissingRequiredField)
+			}
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			if publish {
+				publication, err := newCampaignPublicationCoordinator(cmd, fileSvc)
+				if err != nil {
+					return fmt.Errorf("evaluation: campaign schedule-heterogeneous: %w", err)
+				}
+				controller = controller.WithPublication(publication)
+			}
+			count, err := controller.ScheduleHeterogeneousRun(cmd.Context(), runID)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign schedule-heterogeneous: %w", err)
+			}
+			if jsonOutput {
+				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "assignment_count": count}, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Scheduled %d heterogeneous assignments for run %s\n", count, runID)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
+	cmd.Flags().BoolVar(&publish, "publish", false, "Publish queued assignment lifecycle projections to the public mirror")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }

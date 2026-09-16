@@ -84,6 +84,12 @@ enum EvaluationUsageAvailability {
   EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE = 2;
 }
 
+enum ProviderHardwareMetricAvailability {
+  PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNSPECIFIED = 0;
+  PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED = 1;
+  PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE = 2;
+}
+
 enum EvaluationGovernancePosture {
   EVALUATION_GOVERNANCE_POSTURE_UNSPECIFIED = 0;
   EVALUATION_GOVERNANCE_POSTURE_DOCTRINE = 1;
@@ -415,6 +421,43 @@ message HeterogeneousAssignmentTarget {
   HeterogeneousStackDefinition stack = 1;
 }
 
+// ProviderBoundaryHardwareSample is one timestamped read-only hardware
+// observation from the external provider execution boundary.
+message ProviderBoundaryHardwareSample {
+  uint64 observed_at_unix_nanos = 1;
+  string device_pseudonym = 2;
+  ProviderHardwareMetricAvailability vram_bytes_availability = 3;
+  uint64 vram_used_bytes = 4;
+  uint64 vram_total_bytes = 5;
+  ProviderHardwareMetricAvailability gpu_utilization_availability = 6;
+  float gpu_utilization_percent = 7;
+  ProviderHardwareMetricAvailability temperature_availability = 8;
+  float temperature_celsius = 9;
+  ProviderHardwareMetricAvailability power_availability = 10;
+  float power_watts = 11;
+  ProviderHardwareMetricAvailability clock_availability = 12;
+  uint32 clock_mhz = 13;
+  ProviderHardwareMetricAvailability host_ram_availability = 14;
+  uint64 host_ram_used_bytes = 15;
+  uint64 host_ram_total_bytes = 16;
+}
+
+// ProviderBoundaryObservationWindow binds provider-boundary hardware samples
+// to one governed inference provider attempt.
+message ProviderBoundaryObservationWindow {
+  string schema_version = 1;
+  string provider_attempt_id = 2;
+  string observer_id = 3;
+  string observer_clock_source = 4;
+  uint64 window_started_at_unix_nanos = 5;
+  uint64 window_completed_at_unix_nanos = 6;
+  int64 attempt_started_at_unix_ms = 7;
+  int64 attempt_completed_at_unix_ms = 8;
+  int64 clock_skew_nanos = 9;
+  repeated ProviderBoundaryHardwareSample samples = 10;
+  string observation_digest = 11;
+}
+
 // ModelInferenceRecord captures one governed scored inference call.
 message ModelInferenceRecord {
   string inference_record_id = 1;
@@ -448,6 +491,7 @@ message ModelInferenceRecord {
   bool privacy_attested = 29;
   g8e.compliance.v1.ComplianceEvidenceReference governed_receipt_ref = 30;
   string result_digest = 31;
+  g8e.compliance.v1.ComplianceEvidenceReference provider_boundary_observation_ref = 32;
 }
 
 message ToolDecisionRecord {

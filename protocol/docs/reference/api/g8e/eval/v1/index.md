@@ -34,6 +34,8 @@
     - [ModelCapabilityObservation](#g8e-eval-v1-ModelCapabilityObservation)
     - [ModelInferenceRecord](#g8e-eval-v1-ModelInferenceRecord)
     - [ModelVariant](#g8e-eval-v1-ModelVariant)
+    - [ProviderBoundaryHardwareSample](#g8e-eval-v1-ProviderBoundaryHardwareSample)
+    - [ProviderBoundaryObservationWindow](#g8e-eval-v1-ProviderBoundaryObservationWindow)
     - [PublicAssignmentLifecycleRecord](#g8e-eval-v1-PublicAssignmentLifecycleRecord)
     - [PublicAssignmentResultProjection](#g8e-eval-v1-PublicAssignmentResultProjection)
     - [PublicCampaignIdentity](#g8e-eval-v1-PublicCampaignIdentity)
@@ -63,6 +65,7 @@
     - [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus)
     - [ModelCampaignRole](#g8e-eval-v1-ModelCampaignRole)
     - [ModelCapabilityKind](#g8e-eval-v1-ModelCapabilityKind)
+    - [ProviderHardwareMetricAvailability](#g8e-eval-v1-ProviderHardwareMetricAvailability)
   
 - [Scalar Value Types](#scalar-value-types)
 
@@ -728,6 +731,7 @@ ModelInferenceRecord captures one governed scored inference call.
 | privacy_attested | [bool](#bool) |  |  |
 | governed_receipt_ref | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) |  |  |
 | result_digest | [string](#string) |  |  |
+| provider_boundary_observation_ref | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) |  |  |
 
 
 
@@ -751,6 +755,63 @@ ModelVariant is one frozen provider-backed model identity in a campaign.
 | quantization | [string](#string) |  |  |
 | context_limit | [uint32](#uint32) |  |  |
 | capability_observations | [ModelCapabilityObservation](#g8e-eval-v1-ModelCapabilityObservation) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-ProviderBoundaryHardwareSample"></a>
+
+### ProviderBoundaryHardwareSample
+ProviderBoundaryHardwareSample is one timestamped read-only hardware
+observation from the external provider execution boundary.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| observed_at_unix_nanos | [uint64](#uint64) |  |  |
+| device_pseudonym | [string](#string) |  |  |
+| vram_bytes_availability | [ProviderHardwareMetricAvailability](#g8e-eval-v1-ProviderHardwareMetricAvailability) |  |  |
+| vram_used_bytes | [uint64](#uint64) |  |  |
+| vram_total_bytes | [uint64](#uint64) |  |  |
+| gpu_utilization_availability | [ProviderHardwareMetricAvailability](#g8e-eval-v1-ProviderHardwareMetricAvailability) |  |  |
+| gpu_utilization_percent | [float](#float) |  |  |
+| temperature_availability | [ProviderHardwareMetricAvailability](#g8e-eval-v1-ProviderHardwareMetricAvailability) |  |  |
+| temperature_celsius | [float](#float) |  |  |
+| power_availability | [ProviderHardwareMetricAvailability](#g8e-eval-v1-ProviderHardwareMetricAvailability) |  |  |
+| power_watts | [float](#float) |  |  |
+| clock_availability | [ProviderHardwareMetricAvailability](#g8e-eval-v1-ProviderHardwareMetricAvailability) |  |  |
+| clock_mhz | [uint32](#uint32) |  |  |
+| host_ram_availability | [ProviderHardwareMetricAvailability](#g8e-eval-v1-ProviderHardwareMetricAvailability) |  |  |
+| host_ram_used_bytes | [uint64](#uint64) |  |  |
+| host_ram_total_bytes | [uint64](#uint64) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-ProviderBoundaryObservationWindow"></a>
+
+### ProviderBoundaryObservationWindow
+ProviderBoundaryObservationWindow binds provider-boundary hardware samples
+to one governed inference provider attempt.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| schema_version | [string](#string) |  |  |
+| provider_attempt_id | [string](#string) |  |  |
+| observer_id | [string](#string) |  |  |
+| observer_clock_source | [string](#string) |  |  |
+| window_started_at_unix_nanos | [uint64](#uint64) |  |  |
+| window_completed_at_unix_nanos | [uint64](#uint64) |  |  |
+| attempt_started_at_unix_ms | [int64](#int64) |  |  |
+| attempt_completed_at_unix_ms | [int64](#int64) |  |  |
+| clock_skew_nanos | [int64](#int64) |  |  |
+| samples | [ProviderBoundaryHardwareSample](#g8e-eval-v1-ProviderBoundaryHardwareSample) | repeated |  |
+| observation_digest | [string](#string) |  |  |
 
 
 
@@ -1252,6 +1313,19 @@ RoleAssignment binds one designated responsibility to one frozen variant.
 | MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT | 3 |  |
 | MODEL_CAPABILITY_KIND_THINKING | 4 |  |
 | MODEL_CAPABILITY_KIND_CONTEXT_LIMIT | 5 |  |
+
+
+
+<a name="g8e-eval-v1-ProviderHardwareMetricAvailability"></a>
+
+### ProviderHardwareMetricAvailability
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNSPECIFIED | 0 |  |
+| PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED | 1 |  |
+| PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE | 2 |  |
 
 
  
