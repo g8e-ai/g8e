@@ -454,6 +454,7 @@ async def deliver_via_sse(
                 )
                 # Agent enters failed state on a terminal model error.
                 await _push_agent_state("failed")
+                state.stream_failed = True
                 error_occurred = True
                 break  # Break instead of return to ensure post-loop code executes
 
@@ -466,19 +467,6 @@ async def deliver_via_sse(
         if error_occurred:
             logger.info("[SSE] Skipping completion event due to prior error")
         else:
-            if (
-                evaluation_trace_service is not None
-                and inputs.g8e_context.evaluation_context is not None
-            ):
-                evaluation_trace_service.finalize(
-                    inputs.g8e_context,
-                    model_calls=state.model_calls,
-                    triage_model_call=inputs.triage_result.model_call
-                    if inputs.triage_result
-                    else None,
-                    finish_reason=state.finish_reason or DEFAULT_FINISH_REASON,
-                    status="completed",
-                )
             await _publish(
                 EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED,
                 ChatResponseCompletePayload(
@@ -531,4 +519,5 @@ async def deliver_via_sse(
             ChatErrorPayload(error=str(e)),
         )
         # Agent enters failed on an unexpected terminal exception.
+        state.stream_failed = True
         await _push_agent_state("failed")

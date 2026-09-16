@@ -37,12 +37,10 @@ from app.llm.prompts import (
     build_tribunal_prompt_fields,
 )
 from app.llm.llm_types import Content, Part, Role, ResponseFormat
-from app.llm.model_evidence import (
-    model_boundary_hash,
-    recorded_model_boundary_hash,
-    recorded_model_boundary_privacy,
-)
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.llm.model_evidence import model_boundary_hash
 from app.llm.provider import LLMProvider
+from app.models.http_context import G8eHttpContext
 from app.models.agents.tribunal import (
     CandidateCommand,
     AuditorClusterInfo,
@@ -220,6 +218,7 @@ async def call_auditor_llm(
     prompt: str,
     auditor_persona: AgentPersona,
     attempt: int = 0,
+    g8e_context: G8eHttpContext | None = None,
 ) -> AuditorLLMCallResult:
     """Execute the LLM call for the Auditor."""
     model_config = get_model_config(model)
@@ -245,7 +244,7 @@ async def call_auditor_llm(
         current_prompt += "\n\nIMPORTANT: Your previous response was not valid JSON. Respond with ONLY a valid JSON object. No Markdown fences, no prose, no preamble."
 
     contents = [Content(role=Role.USER, parts=[Part.from_text(current_prompt)])]
-    provider.clear_input_artifact_hash()
+    prepare_provider_call(provider, g8e_context=g8e_context, retry_count=attempt)
     input_artifact_hash = model_boundary_hash({
         "model": model,
         "contents": contents,
@@ -258,22 +257,19 @@ async def call_auditor_llm(
             contents=contents,
             lite_llm_settings=settings,
         )
-        input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
     except Exception as exc:
-        input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
         return AuditorLLMCallResult(
             raw_text="",
-            telemetry=ModelCallTelemetry(
+            telemetry=build_model_call_telemetry(
+                provider=provider,
                 agent_role="auditor",
-                provider=type(provider).__name__,
+                model_role="lite",
                 model=model,
                 monotonic_start=monotonic_start,
-                monotonic_end=time.monotonic(),
+                input_artifact_hash=input_artifact_hash,
                 retry_count=attempt,
                 succeeded=False,
                 error_type=type(exc).__name__,
-                input_artifact_hash=input_artifact_hash,
-                model_boundary_privacy=recorded_model_boundary_privacy(provider),
             ),
             error=exc,
         )
@@ -281,12 +277,8 @@ async def call_auditor_llm(
 
     raw_text = (response.text or "").strip()
     usage = response.usage_metadata
-    input_tokens = getattr(usage, "prompt_token_count", 0)
-    output_tokens = getattr(usage, "candidates_token_count", 0)
-    thinking_tokens = getattr(usage, "thinking_token_count", 0)
-    cache_tokens = getattr(usage, "cache_token_count", 0)
-    total_tokens = getattr(usage, "total_token_count", 0)
-    finish_reason = response.candidates[0].finish_reason if response.candidates else None
+    raw_finish_reason = response.candidates[0].finish_reason if response.candidates else None
+    finish_reason = raw_finish_reason if isinstance(raw_finish_reason, str) else None
     error = None
     if not raw_text:
         error = OllamaEmptyResponseError(
@@ -304,29 +296,29 @@ async def call_auditor_llm(
         )
     return AuditorLLMCallResult(
         raw_text=raw_text,
-        telemetry=ModelCallTelemetry(
+        telemetry=build_model_call_telemetry(
+            provider=provider,
             agent_role="auditor",
-            provider=type(provider).__name__,
+            model_role="lite",
             model=model,
             monotonic_start=monotonic_start,
             monotonic_end=monotonic_end,
-            input_tokens=input_tokens if isinstance(input_tokens, int) else 0,
-            output_tokens=output_tokens if isinstance(output_tokens, int) else 0,
-            thinking_tokens=thinking_tokens if isinstance(thinking_tokens, int) else 0,
-            cache_tokens=cache_tokens if isinstance(cache_tokens, int) else 0,
-            total_tokens=total_tokens if isinstance(total_tokens, int) else 0,
+            input_artifact_hash=input_artifact_hash,
+            input_tokens=usage.prompt_token_count,
+            output_tokens=usage.candidates_token_count,
+            thinking_tokens=usage.thinking_token_count,
+            cache_tokens=usage.cache_token_count,
+            total_tokens=usage.total_token_count,
             usage_reported=usage.usage_reported,
-            finish_reason=finish_reason if isinstance(finish_reason, str) else None,
-            generation_duration_seconds=getattr(usage, "eval_duration_seconds", None),
-            prompt_eval_duration_seconds=getattr(usage, "prompt_eval_duration_seconds", None),
-            total_duration_seconds=getattr(usage, "total_duration_seconds", None),
-            load_duration_seconds=getattr(usage, "load_duration_seconds", None),
+            finish_reason=finish_reason,
+            generation_duration_seconds=usage.eval_duration_seconds,
+            prompt_eval_duration_seconds=usage.prompt_eval_duration_seconds,
+            total_duration_seconds=usage.total_duration_seconds,
+            load_duration_seconds=usage.load_duration_seconds,
             retry_count=attempt,
             succeeded=error is None,
             error_type=type(error).__name__ if error else None,
-            input_artifact_hash=input_artifact_hash,
             output_artifact_hash=model_boundary_hash(response.text or ""),
-            model_boundary_privacy=recorded_model_boundary_privacy(provider),
         ),
         error=error,
     )

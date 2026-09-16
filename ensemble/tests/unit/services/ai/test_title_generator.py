@@ -9,13 +9,15 @@
 Unit tests for the Title Generator service.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
 from app.models.agents.title_generator import CaseTitleResult
+from app.models.http_context import G8eHttpContext
 from app.services.ai.title_generator import _create_fallback_title, generate_case_title
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 pytestmark = [pytest.mark.unit]
 
@@ -44,6 +46,12 @@ def mock_provider():
     provider.__aenter__ = AsyncMock(return_value=provider)
     provider.__aexit__ = AsyncMock(return_value=False)
     provider.generate_content_lite = AsyncMock()
+    provider.clear_input_artifact_hash = MagicMock()
+    provider.set_g8e_context = MagicMock()
+    provider.set_provider_retry_count = MagicMock()
+    provider.input_artifact_hash = ""
+    provider.model_boundary_privacy = None
+    provider.governed_dispatch_evidence = None
     with patch("app.services.ai.title_generator.get_llm_provider", return_value=provider):
         yield provider
 
@@ -70,6 +78,38 @@ async def test_generate_title_returns_default_for_empty_description(mock_setting
     assert isinstance(result, CaseTitleResult)
     assert result.generated_title == "New Technical Support Case"
     assert result.fallback is True
+
+
+def _evaluation_context() -> EvaluationInferenceContext:
+    return EvaluationInferenceContext(
+        campaign_id="campaign-1",
+        run_id="run-1",
+        assignment_id="assignment-1",
+        evaluation_attempt_id="attempt-1",
+        scenario_id="scenario-1",
+        model_registry_digest="d" * 64,
+        model_registry=[InferenceModelVariant(model="lite-model", digest="a" * 64)],
+        target_operator_session_id="session-1",
+    )
+
+
+@pytest.mark.asyncio
+async def test_generate_title_binds_g8e_context(mock_provider, mock_settings):
+    mock_provider.generate_content_lite.return_value = create_real_llm_response("Bound Title")
+    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+
+    result = await generate_case_title(
+        description="bind context please",
+        settings=mock_settings,
+        g8e_context=context,
+    )
+
+    assert result.generated_title == "Bound Title"
+    assert mock_provider.set_g8e_context.called
+    assert mock_provider.set_g8e_context.call_args.args[0] == context
+    assert result.model_call is not None
+    assert result.model_call.agent_role == "scribe"
+    assert result.model_call.model_role == "lite"
 
 
 @pytest.mark.asyncio

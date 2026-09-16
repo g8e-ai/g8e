@@ -31,6 +31,7 @@ from app.models.base import BaseModel, Field, field_validator
 from app.llm.llm_types import Content, GenerateContentResponse, Part, ResponseFormat, Role, LiteLLMSettings, UsageMetadata
 from app.llm.model_evidence import model_boundary_hash
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.models.http_context import G8eHttpContext
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import EvalJudgeSettings
@@ -158,11 +159,13 @@ class EvalJudge:
         provider: LLMProviderBase | None = None,
         model: str | None = None,
         settings: EvalJudgeSettings | None = None,
+        g8e_context: G8eHttpContext | None = None,
     ):
         if provider is None:
             raise EvalJudgeError("EvalJudge requires a configured LLM provider instance")
 
         self._provider = provider
+        self._g8e_context = g8e_context
         self._settings = settings or EvalJudgeSettings(
             eval_judge_model=None,
             eval_judge_max_tokens=4096,
@@ -255,8 +258,11 @@ class EvalJudge:
         """Make the LLM call and parse the response into an EvalGrade."""
         if not self._model:
             raise EvalJudgeError("Model is not set", model_calls=model_calls)
-        self._provider.clear_input_artifact_hash()
-        prepare_provider_call(self._provider, retry_count=retry_count)
+        prepare_provider_call(
+            self._provider,
+            g8e_context=self._g8e_context,
+            retry_count=retry_count,
+        )
         input_artifact_hash = model_boundary_hash({
             "model": self._model,
             "contents": contents,

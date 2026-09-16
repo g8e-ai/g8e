@@ -439,6 +439,7 @@ class TribunalPassCompletedPayload(G8eBaseModel):
     model_boundary_privacy: ModelBoundaryPrivacyAttestation | None = None
     succeeded: bool = True
     error_type: str | None = None
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     correlation_id: str | None = Field(
         default=None, description="Correlation ID for the Tribunal session"
     )

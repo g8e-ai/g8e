@@ -141,7 +141,7 @@ class TestMemoryGenerationServiceIntegration:
         ]
 
         # Test memory generation
-        result_memory = await memory_service.update_memory_from_conversation(
+        result_memory, _model_call = await memory_service.update_memory_from_conversation(
             conversation_history=conversation_history,
             investigation=created_investigation,
             settings=user_settings,
@@ -255,7 +255,7 @@ class TestMemoryGenerationServiceIntegration:
         assert "RPM" in all_text, "Conversation content missing from LLM payload"
 
         # Test memory update
-        updated_memory = await memory_service.update_memory_from_conversation(
+        updated_memory, _model_call = await memory_service.update_memory_from_conversation(
             conversation_history=conversation_history,
             investigation=created_investigation,
             settings=user_settings,
@@ -351,7 +351,7 @@ class TestMemoryGenerationServiceIntegration:
         created_investigation = await investigation_data_service.create_investigation(investigation)
 
         # Test with empty conversation
-        result_memory = await memory_service.update_memory_from_conversation(
+        result_memory, _model_call = await memory_service.update_memory_from_conversation(
             conversation_history=[],
             investigation=created_investigation,
             settings=user_settings,

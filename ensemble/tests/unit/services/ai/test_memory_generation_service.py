@@ -61,7 +61,7 @@ class TestUpdateMemoryFromConversation:
             )
         )
 
-        result = await service.update_memory_from_conversation(
+        memory, model_call = await service.update_memory_from_conversation(
             conversation_history=[],
             investigation=investigation,
             settings=settings,
@@ -72,10 +72,11 @@ class TestUpdateMemoryFromConversation:
             ),
         )
 
-        assert isinstance(result, InvestigationMemory)
-        assert result.investigation_id == "inv-1"
-        assert result.case_id == "case-1"
-        assert result.user_id == "user-1"
+        assert model_call is None
+        assert isinstance(memory, InvestigationMemory)
+        assert memory.investigation_id == "inv-1"
+        assert memory.case_id == "case-1"
+        assert memory.user_id == "user-1"
         assert len(fake_memory_crud.create_calls) == 1
         assert len(fake_memory_crud.save_calls) == 0
 
@@ -107,7 +108,7 @@ class TestUpdateMemoryFromConversation:
             )
         )
 
-        result = await service.update_memory_from_conversation(
+        memory, model_call = await service.update_memory_from_conversation(
             conversation_history=[],
             investigation=investigation,
             settings=settings,
@@ -118,7 +119,8 @@ class TestUpdateMemoryFromConversation:
             ),
         )
 
-        assert result.investigation_summary == "Existing summary"
+        assert model_call is None
+        assert memory.investigation_summary == "Existing summary"
         assert len(fake_memory_crud.create_calls) == 0
         assert len(fake_memory_crud.save_calls) == 0
 
@@ -156,8 +158,8 @@ class TestUpdateMemoryFromConversation:
         )
 
         # Mock _ai_update_memory to prevent actual LLM call
-        async def mock_ai_update(memory, history, settings):
-            pass
+        async def mock_ai_update(memory, history, settings, **kwargs):
+            return None
 
         service._ai_update_memory = mock_ai_update
 
@@ -749,7 +751,7 @@ class TestMemoryMergeLogic:
             interaction_style="New interaction",
         )
 
-        async def mock_ai_update(memory, history, settings):
+        async def mock_ai_update(memory, history, settings, **kwargs):
             memory.investigation_summary = (
                 ai_response.investigation_summary or memory.investigation_summary
             )
@@ -764,6 +766,7 @@ class TestMemoryMergeLogic:
                 ai_response.problem_solving_approach or memory.problem_solving_approach
             )
             memory.interaction_style = ai_response.interaction_style or memory.interaction_style
+            return None
 
         service._ai_update_memory = mock_ai_update
 
@@ -779,7 +782,7 @@ class TestMemoryMergeLogic:
             llm=LLMSettings(provider="ollama", lite_provider="ollama", lite_model="test")
         )
 
-        result = await service.update_memory_from_conversation(
+        memory, model_call = await service.update_memory_from_conversation(
             conversation_history=[
                 ConversationHistoryMessage(
                     id="msg-1",
@@ -799,9 +802,10 @@ class TestMemoryMergeLogic:
             ),
         )
 
-        assert result.investigation_summary == "New summary with fan controller"
-        assert result.technical_background == "Hardware + cooling systems expert"
-        assert result.communication_preferences == "New prefs"
+        assert model_call is None
+        assert memory.investigation_summary == "New summary with fan controller"
+        assert memory.technical_background == "Hardware + cooling systems expert"
+        assert memory.communication_preferences == "New prefs"
 
     @pytest.mark.asyncio
     async def test_partial_response_preserves_unmentioned_fields(self):
@@ -825,7 +829,7 @@ class TestMemoryMergeLogic:
             technical_background="",  # LLM returned empty
         )
 
-        async def mock_ai_update(memory, history, settings):
+        async def mock_ai_update(memory, history, settings, **kwargs):
             memory.investigation_summary = (
                 ai_response.investigation_summary or memory.investigation_summary
             )
@@ -840,6 +844,7 @@ class TestMemoryMergeLogic:
                 ai_response.problem_solving_approach or memory.problem_solving_approach
             )
             memory.interaction_style = ai_response.interaction_style or memory.interaction_style
+            return None
 
         service._ai_update_memory = mock_ai_update
 
@@ -855,7 +860,7 @@ class TestMemoryMergeLogic:
             llm=LLMSettings(provider="ollama", lite_provider="ollama", lite_model="test")
         )
 
-        result = await service.update_memory_from_conversation(
+        memory, model_call = await service.update_memory_from_conversation(
             conversation_history=[
                 ConversationHistoryMessage(
                     id="msg-1",
@@ -875,12 +880,13 @@ class TestMemoryMergeLogic:
             ),
         )
 
-        assert result.investigation_summary == "Updated summary"
-        assert result.technical_background == "Old background", (
+        assert model_call is None
+        assert memory.investigation_summary == "Updated summary"
+        assert memory.technical_background == "Old background", (
             "Empty LLM field must not erase existing data"
         )
-        assert result.communication_preferences == "Old prefs"
-        assert result.response_style == "Old style"
+        assert memory.communication_preferences == "Old prefs"
+        assert memory.response_style == "Old style"
 
     @pytest.mark.asyncio
     async def test_empty_llm_response_preserves_all_existing_fields(self):
@@ -897,8 +903,8 @@ class TestMemoryMergeLogic:
         fake_crud.set_memory_to_return(existing)
         service = MemoryGenerationService(fake_crud)
 
-        async def mock_ai_update(memory, history, settings):
-            pass  # Simulate empty/unparseable LLM response (no fields updated)
+        async def mock_ai_update(memory, history, settings, **kwargs):
+            return None  # Simulate empty/unparseable LLM response (no fields updated)
 
         service._ai_update_memory = mock_ai_update
 
@@ -914,7 +920,7 @@ class TestMemoryMergeLogic:
             llm=LLMSettings(provider="ollama", lite_provider="ollama", lite_model="test")
         )
 
-        result = await service.update_memory_from_conversation(
+        memory, model_call = await service.update_memory_from_conversation(
             conversation_history=[
                 ConversationHistoryMessage(
                     id="msg-1",
@@ -934,8 +940,9 @@ class TestMemoryMergeLogic:
             ),
         )
 
-        assert result.investigation_summary == "Preserved summary"
-        assert result.technical_background == "Preserved background"
+        assert model_call is None
+        assert memory.investigation_summary == "Preserved summary"
+        assert memory.technical_background == "Preserved background"
 
 
 class TestConstants:

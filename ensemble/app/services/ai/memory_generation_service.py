@@ -7,17 +7,21 @@
 
 import logging
 import re
+import time
 
 import app.llm.llm_types as types
 from app.constants.message_sender import MessageSender
 from app.errors import OllamaEmptyResponseError
 from app.llm import get_llm_provider, Role
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.llm.model_evidence import model_boundary_hash
 from app.llm.structured import parse_structured_response
 from app.utils.agent_persona_loader import get_agent_persona
 from app.models.settings import G8eeUserSettings
 from app.models.investigations import ConversationHistoryMessage, InvestigationModel
 from app.models.memory import InvestigationMemory, MemoryAnalysis
-from app.models.http_context import RequestContext
+from app.models.http_context import G8eHttpContext, RequestContext
+from app.models.model_telemetry import ModelCallTelemetry
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.services.protocols import MemoryDataServiceProtocol
 
@@ -62,7 +66,8 @@ class MemoryGenerationService:
         investigation: InvestigationModel,
         settings: G8eeUserSettings,
         context: RequestContext,
-    ) -> InvestigationMemory:
+        g8e_context: G8eHttpContext | None = None,
+    ) -> tuple[InvestigationMemory, ModelCallTelemetry | None]:
         investigation_id = investigation.id
 
         logger.info(
@@ -85,8 +90,9 @@ class MemoryGenerationService:
                 extra={"investigation_id": investigation_id, "operation": "memory_update_skipped"},
             )
             if existing is not None:
-                return existing
-            return await self._memory_crud.create_memory(investigation, context)
+                return existing, None
+            memory = await self._memory_crud.create_memory(investigation, context)
+            return memory, None
 
         if is_new:
             memory = InvestigationMemory(
@@ -108,7 +114,12 @@ class MemoryGenerationService:
             )
             memory = existing
 
-        await self._ai_update_memory(memory, conversation_history, settings)
+        model_call = await self._ai_update_memory(
+            memory,
+            conversation_history,
+            settings,
+            g8e_context=g8e_context,
+        )
         memory.status = investigation.status
         memory.update_timestamp()
 
@@ -129,14 +140,16 @@ class MemoryGenerationService:
             },
         )
 
-        return memory
+        return memory, model_call
 
     async def _ai_update_memory(
         self,
         memory: InvestigationMemory,
         conversation_history: list[ConversationHistoryMessage],
         settings: G8eeUserSettings,
-    ) -> None:
+        *,
+        g8e_context: G8eHttpContext | None = None,
+    ) -> ModelCallTelemetry | None:
         contents = self._conversation_to_contents(conversation_history, memory)
 
         memory_persona = get_agent_persona("codex")
@@ -149,9 +162,10 @@ class MemoryGenerationService:
             logger.warning(
                 "[MEMORY-GEN] No lite_model or assistant_model configured, skipping AI memory update"
             )
-            return
+            return None
 
         provider = get_llm_provider(settings.llm, is_lite=True)
+        prepare_provider_call(provider, g8e_context=g8e_context)
 
         config = AIGenerationConfigBuilder.build_lite_settings(
             model=lite_model,
@@ -161,11 +175,41 @@ class MemoryGenerationService:
                 MemoryAnalysis.model_json_schema()
             ),
         )
+        input_artifact_hash = model_boundary_hash({
+            "model": lite_model,
+            "contents": contents,
+            "settings": config,
+        })
+        monotonic_start = time.monotonic()
         try:
             response = await provider.generate_content_lite(
                 model=lite_model,
                 contents=contents,
                 lite_llm_settings=config,
+            )
+            monotonic_end = time.monotonic()
+            usage = response.usage_metadata
+            finish_reason = response.candidates[0].finish_reason if response.candidates else None
+            model_call = build_model_call_telemetry(
+                provider=provider,
+                agent_role="codex",
+                model_role="lite",
+                model=lite_model,
+                monotonic_start=monotonic_start,
+                monotonic_end=monotonic_end,
+                input_artifact_hash=input_artifact_hash,
+                input_tokens=usage.prompt_token_count,
+                output_tokens=usage.candidates_token_count,
+                thinking_tokens=usage.thinking_token_count,
+                cache_tokens=usage.cache_token_count,
+                total_tokens=usage.total_token_count,
+                usage_reported=usage.usage_reported,
+                finish_reason=finish_reason,
+                generation_duration_seconds=usage.eval_duration_seconds,
+                prompt_eval_duration_seconds=usage.prompt_eval_duration_seconds,
+                total_duration_seconds=usage.total_duration_seconds,
+                load_duration_seconds=usage.load_duration_seconds,
+                output_artifact_hash=model_boundary_hash(response.text or ""),
             )
             if response.text is None:
                 raise OllamaEmptyResponseError(
@@ -188,7 +232,16 @@ class MemoryGenerationService:
                 memory.investigation_id,
                 exc,
             )
-            return
+            return build_model_call_telemetry(
+                provider=provider,
+                agent_role="codex",
+                model_role="lite",
+                model=lite_model,
+                monotonic_start=monotonic_start,
+                input_artifact_hash=input_artifact_hash,
+                succeeded=False,
+                error_type=type(exc).__name__,
+            )
 
         if not any(
             [
@@ -204,7 +257,7 @@ class MemoryGenerationService:
                 "AI response for memory update contained no extractable data for %s",
                 memory.investigation_id,
             )
-            return
+            return model_call
 
         memory.investigation_summary = (
             ai_analysis.investigation_summary or memory.investigation_summary
@@ -222,6 +275,7 @@ class MemoryGenerationService:
         memory.interaction_style = ai_analysis.interaction_style or memory.interaction_style
 
         logger.info("AI preference analysis successful for %s", memory.investigation_id)
+        return model_call
 
     @staticmethod
     def _conversation_to_contents(

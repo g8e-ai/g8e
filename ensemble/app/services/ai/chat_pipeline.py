@@ -29,12 +29,14 @@ from app.errors import BusinessLogicError, ConfigurationError
 from app.constants import (
     ReasoningAgent,
     AITaskId,
+    EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
     EventType,
     LLMProvider,
     TriageComplexityClassification,
     AgentMode,
     OperatorStatus,
 )
+from app.models.model_telemetry import ModelCallTelemetry
 from app.constants.message_sender import MessageSender
 from app.llm import get_llm_provider
 from app.llm.providers.open_ai import OpenAIProvider
@@ -466,6 +468,7 @@ class ChatPipelineService:
         state: AgentStreamState,
         user_settings: G8eeUserSettings,
         task_manager: BackgroundTaskManager | None = None,
+        memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] | None = None,
     ) -> None:
         """Persist the final AI response and schedule memory update off the response path.
 
@@ -507,6 +510,8 @@ class ChatPipelineService:
                 user_settings=user_settings,
                 task_manager=task_manager,
                 context=RequestContext.from_app_context(g8e_context),
+                g8e_context=g8e_context,
+                memory_holder=memory_holder,
             )
 
     async def _detect_and_publish_interrogation(
@@ -655,6 +660,8 @@ class ChatPipelineService:
         user_settings: G8eeUserSettings,
         task_manager: BackgroundTaskManager | None,
         context: RequestContext,
+        g8e_context: G8eHttpContext | None = None,
+        memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] | None = None,
     ) -> None:
         """Schedule memory generation as a background task so it never blocks persistence.
 
@@ -668,12 +675,15 @@ class ChatPipelineService:
 
         async def _run_memory_update() -> None:
             try:
-                await self.memory_generation_service.update_memory_from_conversation(
+                _, model_call = await self.memory_generation_service.update_memory_from_conversation(
                     conversation_history=conversation_history,
                     investigation=investigation,
                     settings=user_settings,
                     context=context,
+                    g8e_context=g8e_context,
                 )
+                if memory_holder is not None:
+                    memory_holder["model_call"] = model_call
                 logger.info(
                     "Background memory update completed for investigation %s",
                     investigation_id,
@@ -696,6 +706,8 @@ class ChatPipelineService:
                 )
 
         task = asyncio.create_task(_run_memory_update())
+        if memory_holder is not None:
+            memory_holder["task"] = task
         if task_manager is not None:
             task_manager.track_detached(f"memory:{investigation_id}", task)
         else:
@@ -713,6 +725,49 @@ class ChatPipelineService:
                     )
 
             task.add_done_callback(_log_uncaught)
+
+    async def _finalize_evaluation_assignment(
+        self,
+        g8e_context: G8eHttpContext,
+        inputs: AgentInputs,
+        state: AgentStreamState,
+        memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] | None,
+    ) -> None:
+        if g8e_context.evaluation_context is None:
+            return
+
+        background_calls: list[ModelCallTelemetry] = []
+        memory_task = memory_holder.get("task") if memory_holder else None
+        if memory_task is not None:
+            try:
+                async with asyncio.timeout(EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS):
+                    await memory_task
+            except TimeoutError:
+                logger.warning(
+                    "Evaluation background memory barrier timed out after %.0fs for assignment %s",
+                    EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
+                    g8e_context.evaluation_context.assignment_id,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Evaluation background memory barrier failed for assignment %s: %s",
+                    g8e_context.evaluation_context.assignment_id,
+                    exc,
+                    exc_info=True,
+                )
+            model_call = memory_holder.get("model_call") if memory_holder else None
+            if isinstance(model_call, ModelCallTelemetry):
+                background_calls.append(model_call)
+
+        model_calls = list(state.model_calls)
+        model_calls.extend(background_calls)
+        self.evaluation_trace_service.finalize(
+            g8e_context,
+            model_calls=model_calls,
+            triage_model_call=inputs.triage_result.model_call if inputs.triage_result else None,
+            finish_reason=state.finish_reason or "stop",
+            status="failed" if state.stream_failed else "completed",
+        )
 
     async def run_chat(
         self,
@@ -986,6 +1041,7 @@ class ChatPipelineService:
         logger.info("[SSE-CHAT] _prepare_chat_context completed successfully")
 
         state = AgentStreamState()
+        memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] = {}
 
         is_lite = (
             inputs.triage_result.complexity == TriageComplexityClassification.SIMPLE
@@ -1041,6 +1097,14 @@ class ChatPipelineService:
             state=state,
             user_settings=user_settings,
             task_manager=task_manager,
+            memory_holder=memory_holder,
+        )
+
+        await self._finalize_evaluation_assignment(
+            g8e_context=g8e_context,
+            inputs=inputs,
+            state=state,
+            memory_holder=memory_holder,
         )
 
         await self._record_agent_activity_metadata(

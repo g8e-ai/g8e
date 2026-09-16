@@ -234,6 +234,7 @@ class AgentStreamState(G8eBaseModel):
     tool_response_sizes: list[int] = Field(
         default_factory=list, description="Character sizes of individual tool responses"
     )
+    stream_failed: bool = False
 
 
 class StreamChunkData(G8eBaseModel):
