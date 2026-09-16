@@ -81,8 +81,23 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentResult(ctx context.Con
 	if err != nil {
 		return err
 	}
+	benchmark, err := c.buildAssignmentBenchmarkObservations(ctx, result)
+	if err != nil {
+		return err
+	}
 	idempotencyKey := AssignmentResultIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId())
-	return c.publishEnvelope(ctx, assignment.GetRunId(), idempotencyKey, publicMessageTypeAssignmentResult, projection)
+	return c.publishAssignmentResultEnvelope(ctx, assignment.GetRunId(), idempotencyKey, projection, benchmark)
+}
+
+func (c *CampaignPublicationCoordinator) buildAssignmentBenchmarkObservations(ctx context.Context, result *evalv1.EvaluationAssignmentResult) (*PublicBenchmarkObservations, error) {
+	if c == nil || c.files == nil || result == nil {
+		return nil, fmt.Errorf("evaluation: build assignment benchmark observations: %w", constants.ErrMissingRequiredField)
+	}
+	reader, err := NewCampaignProviderObservationReader(c.files)
+	if err != nil {
+		return nil, err
+	}
+	return reader.BuildPublicBenchmarkObservations(ctx, result)
 }
 
 // PublishRunAggregates emits explorer catalog, model, and methodology snapshot
@@ -187,6 +202,33 @@ func (c *CampaignPublicationCoordinator) publishViewRecord(ctx context.Context, 
 	}
 	if containsString(state.PublishedIdempotency, idempotencyKey) {
 		return nil
+	}
+	nextSequence, err := c.exporter.HighWaterSequence(ctx)
+	if err != nil {
+		return err
+	}
+	nextSequence++
+	feedRecord := buildCampaignPublicFeedRecord(nextSequence, body)
+	if err := c.exporter.ExportBatch(ctx, []CampaignPublicFeedRecord{feedRecord}); err != nil {
+		return err
+	}
+	state.PublishedIdempotency = append(state.PublishedIdempotency, idempotencyKey)
+	sort.Strings(state.PublishedIdempotency)
+	state.LastPublishedSequence = nextSequence
+	return c.savePublicationState(ctx, state)
+}
+
+func (c *CampaignPublicationCoordinator) publishAssignmentResultEnvelope(ctx context.Context, runID, idempotencyKey string, projection *evalv1.PublicAssignmentResultProjection, benchmark *PublicBenchmarkObservations) error {
+	state, err := c.loadPublicationState(ctx, runID)
+	if err != nil {
+		return err
+	}
+	if containsString(state.PublishedIdempotency, idempotencyKey) {
+		return nil
+	}
+	body, err := MarshalAssignmentResultProjectionEnvelope(idempotencyKey, projection, benchmark)
+	if err != nil {
+		return err
 	}
 	nextSequence, err := c.exporter.HighWaterSequence(ctx)
 	if err != nil {

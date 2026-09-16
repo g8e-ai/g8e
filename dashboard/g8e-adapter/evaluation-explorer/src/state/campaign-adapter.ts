@@ -11,6 +11,7 @@ import {
 import {
   VIEW_SCHEMA_VERSION,
   type AssignmentResult,
+  type BenchmarkObservations,
   type EvaluationSummary,
   type EvaluationUnit,
   type LifecycleStatus,
@@ -245,6 +246,7 @@ function adaptResultProjection(
     terminal_status: terminalStatus,
     metric_values: mapDecomposedScores(record.decomposed_scores),
     missingness_reason: unavailableMetricReason(record.unavailable_metric_reasons),
+    benchmark_observations: mapBenchmarkObservations(record.benchmark_observations),
     stage_summary: [],
     verification_disposition: mapVerificationDisposition(optionalString(record.verification_status)),
   };
@@ -386,6 +388,73 @@ function buildStageLabel(
   if (scenarioCategory) parts.push(scenarioCategory.replace(/_/g, ' '));
   if (scenarioId) parts.push(scenarioId);
   return parts.join(' · ');
+}
+
+function mapBenchmarkObservations(value: unknown): BenchmarkObservations | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const observations = value as Record<string, unknown>;
+  const unavailableReasons = Array.isArray(observations.unavailable_reasons)
+    ? observations.unavailable_reasons.filter((reason): reason is string => typeof reason === 'string')
+    : [];
+  const timing = mapBenchmarkTiming(observations.timing);
+  const gpu = mapGPUObservation(observations.gpu);
+  if (!timing && !gpu && unavailableReasons.length === 0) {
+    return undefined;
+  }
+  return {
+    timing,
+    gpu,
+    unavailable_reasons: unavailableReasons,
+  };
+}
+
+function mapBenchmarkTiming(value: unknown): BenchmarkObservations['timing'] {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const timing = value as Record<string, unknown>;
+  const mapped = compactMetricRecord({
+    model_load_ms: mapMetricValue(timing.model_load_ms),
+    time_to_first_token_ms: mapMetricValue(timing.time_to_first_token_ms),
+    generation_ms: mapMetricValue(timing.generation_ms),
+    whole_task_ms: mapMetricValue(timing.whole_task_ms),
+  });
+  return Object.keys(mapped).length > 0 ? mapped : undefined;
+}
+
+function mapGPUObservation(value: unknown): BenchmarkObservations['gpu'] {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const gpu = value as Record<string, unknown>;
+  const mapped = compactMetricRecord({
+    vram_before_bytes: mapMetricValue(gpu.vram_before_bytes),
+    vram_peak_bytes: mapMetricValue(gpu.vram_peak_bytes),
+    system_ram_peak_bytes: mapMetricValue(gpu.system_ram_peak_bytes),
+    utilization_percent: mapMetricValue(gpu.utilization_percent),
+    temperature_celsius: mapMetricValue(gpu.temperature_celsius),
+    power_watts: mapMetricValue(gpu.power_watts),
+    clock_mhz: mapMetricValue(gpu.clock_mhz),
+  });
+  return Object.keys(mapped).length > 0 ? mapped : undefined;
+}
+
+function compactMetricRecord<T extends Record<string, MetricValue | undefined>>(value: T): Partial<Record<keyof T, MetricValue>> {
+  const mapped: Partial<Record<keyof T, MetricValue>> = {};
+  for (const [key, metric] of Object.entries(value)) {
+    if (metric !== undefined) {
+      mapped[key as keyof T] = metric;
+    }
+  }
+  return mapped;
+}
+
+function mapMetricValue(value: unknown): MetricValue | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const metric = value as Record<string, unknown>;
+  if (typeof metric.value === 'number' && Number.isFinite(metric.value)) {
+    return { value: metric.value };
+  }
+  if (typeof metric.unavailable_reason === 'string') {
+    return { unavailable_reason: metric.unavailable_reason };
+  }
+  return undefined;
 }
 
 function mapDecomposedScores(value: unknown): Record<string, MetricValue> {

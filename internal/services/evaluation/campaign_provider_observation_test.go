@@ -1,0 +1,169 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
+package evaluation
+
+import (
+	"context"
+	"encoding/json"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+)
+
+func TestCampaignProviderObservationReader_BuildPublicBenchmarkObservations(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	attempt := &operatorv1.InferenceProviderAttemptRecord{
+		ProviderAttemptId: "attempt-1",
+		Status:            operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED,
+		StartedAtUnixMs:   time.Unix(1_700_000_000, 0).UnixMilli(),
+		CompletedAtUnixMs: time.Unix(1_700_000_010, 0).UnixMilli(),
+	}
+	require.NoError(t, writeProviderAttemptRecord(ctx, fileSvc, attempt))
+	window := &evalv1.ProviderBoundaryObservationWindow{
+		SchemaVersion:              provider_observer.SchemaVersion,
+		ProviderAttemptId:          "attempt-1",
+		ObserverId:                 "observer-test",
+		ObserverClockSource:        provider_observer.DefaultObserverClockSource,
+		WindowStartedAtUnixNanos:   uint64(time.Unix(1_700_000_000, 0).UnixNano()),
+		WindowCompletedAtUnixNanos: uint64(time.Unix(1_700_000_010, 0).UnixNano()),
+		AttemptStartedAtUnixMs:     attempt.GetStartedAtUnixMs(),
+		AttemptCompletedAtUnixMs:   attempt.GetCompletedAtUnixMs(),
+		Samples: []*evalv1.ProviderBoundaryHardwareSample{
+			{
+				ObservedAtUnixNanos:       uint64(time.Unix(1_700_000_001, 0).UnixNano()),
+				VramBytesAvailability:     evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+				VramUsedBytes:             1000,
+				GpuUtilizationAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+				GpuUtilizationPercent:     42,
+				HostRamAvailability:       evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+				HostRamUsedBytes:          2000,
+			},
+			{
+				ObservedAtUnixNanos:   uint64(time.Unix(1_700_000_005, 0).UnixNano()),
+				VramBytesAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+				VramUsedBytes:         3000,
+				HostRamAvailability:   evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+				HostRamUsedBytes:      4000,
+			},
+		},
+	}
+	digest, err := provider_observer.ComputeObservationDigest(window)
+	require.NoError(t, err)
+	window.ObservationDigest = digest
+	windowStore, err := provider_observer.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, windowStore.Save(ctx, window))
+
+	reader, err := NewCampaignProviderObservationReader(fileSvc)
+	require.NoError(t, err)
+	result := &evalv1.EvaluationAssignmentResult{
+		ModelInferences: []*evalv1.ModelInferenceRecord{{
+			InferenceRecordId:       "inference-1",
+			ProviderAttemptId:       "attempt-1",
+			LoadDurationNanos:       2_000_000,
+			GenerationDurationNanos: 40_000_000,
+			TotalDurationNanos:      52_000_000,
+		}},
+	}
+	benchmark, err := reader.BuildPublicBenchmarkObservations(ctx, result)
+	require.NoError(t, err)
+	require.NotNil(t, benchmark)
+	require.NotNil(t, benchmark.Timing)
+	assert.Equal(t, 2.0, benchmark.Timing.ModelLoadMS.Value)
+	assert.Equal(t, 40.0, benchmark.Timing.GenerationMS.Value)
+	require.NotNil(t, benchmark.GPU)
+	assert.Equal(t, 1000.0, benchmark.GPU.VRAMBeforeBytes.Value)
+	assert.Equal(t, 3000.0, benchmark.GPU.VRAMPeakBytes.Value)
+	assert.Equal(t, 4000.0, benchmark.GPU.SystemRAMPeakBytes.Value)
+	assert.Equal(t, 42.0, benchmark.GPU.UtilizationPercent.Value)
+}
+
+func TestCampaignProviderObservationReader_VerifyAssignmentProviderObservations_InterimMissingWindow(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	reader, err := NewCampaignProviderObservationReader(fileSvc)
+	require.NoError(t, err)
+	result := &evalv1.EvaluationAssignmentResult{
+		ModelInferences: []*evalv1.ModelInferenceRecord{{
+			InferenceRecordId: "inference-1",
+			ProviderAttemptId: "attempt-missing",
+		}},
+	}
+	failures, unavailable := reader.VerifyAssignmentProviderObservations(ctx, result, ProviderObservationPolicyInterim)
+	assert.Empty(t, failures)
+	assert.Equal(t, []string{"provider_boundary_observation_missing:attempt-missing"}, unavailable)
+}
+
+func TestCampaignProviderObservationReader_VerifyAssignmentProviderObservations_StrictMissingWindow(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	reader, err := NewCampaignProviderObservationReader(fileSvc)
+	require.NoError(t, err)
+	result := &evalv1.EvaluationAssignmentResult{
+		ModelInferences: []*evalv1.ModelInferenceRecord{{
+			InferenceRecordId: "inference-1",
+			ProviderAttemptId: "attempt-missing",
+		}},
+	}
+	failures, unavailable := reader.VerifyAssignmentProviderObservations(ctx, result, ProviderObservationPolicyStrict)
+	assert.NotEmpty(t, failures)
+	assert.Equal(t, []string{"provider_boundary_observation_missing:attempt-missing"}, unavailable)
+}
+
+func TestMarshalAssignmentResultProjectionEnvelope_IncludesBenchmarkObservations(t *testing.T) {
+	t.Parallel()
+	projection := &evalv1.PublicAssignmentResultProjection{
+		AssignmentId: "assign-1",
+		RunId:        "run-1",
+	}
+	body, err := MarshalAssignmentResultProjectionEnvelope("run-1:assign-1:result", projection, &PublicBenchmarkObservations{
+		GPU: &PublicGPUObservation{
+			VRAMPeakBytes: &PublicMetricValue{Value: 4096},
+		},
+		UnavailableReasons: []string{"provider_boundary_observation_missing:attempt-1"},
+	})
+	require.NoError(t, err)
+	envelope := CampaignProjectionEnvelope{}
+	require.NoError(t, json.Unmarshal(body, &envelope))
+	record := map[string]any{}
+	require.NoError(t, json.Unmarshal(envelope.Record, &record))
+	benchmark, ok := record["benchmark_observations"].(map[string]any)
+	require.True(t, ok)
+	gpu, ok := benchmark["gpu"].(map[string]any)
+	require.True(t, ok)
+	peak, ok := gpu["vram_peak_bytes"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, 4096.0, peak["value"])
+}
+
+func writeProviderAttemptRecord(ctx context.Context, fileSvc fs.RuntimeFileService, record *operatorv1.InferenceProviderAttemptRecord) error {
+	dir := filepath.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname)
+	if err := fileSvc.MkdirAll(ctx, dir, constants.PermDirStandard); err != nil {
+		return err
+	}
+	body, err := protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(record)
+	if err != nil {
+		return err
+	}
+	return fileSvc.WriteFile(ctx, filepath.Join(dir, record.GetProviderAttemptId()+constants.FileExtJSON), body, constants.PermFilePrivate)
+}

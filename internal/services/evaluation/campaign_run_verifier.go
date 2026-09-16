@@ -26,8 +26,10 @@ const campaignRunVerificationFilename = "campaign-verification.json"
 // CampaignRunVerifier independently verifies all persisted terminal assignment
 // results for one campaign run.
 type CampaignRunVerifier struct {
-	assignmentVerifier *CampaignAssignmentVerifier
-	now                func() time.Time
+	assignmentVerifier        *CampaignAssignmentVerifier
+	providerObservationReader *CampaignProviderObservationReader
+	providerObservationPolicy ProviderObservationPolicy
+	now                       func() time.Time
 }
 
 func NewCampaignRunVerifier(now func() time.Time) *CampaignRunVerifier {
@@ -38,6 +40,17 @@ func NewCampaignRunVerifier(now func() time.Time) *CampaignRunVerifier {
 		assignmentVerifier: NewCampaignAssignmentVerifier(now),
 		now:                now,
 	}
+}
+
+// WithProviderObservationReader enables provider-boundary observation coverage
+// checks during run verification.
+func (v *CampaignRunVerifier) WithProviderObservationReader(reader *CampaignProviderObservationReader, policy ProviderObservationPolicy) *CampaignRunVerifier {
+	if v == nil {
+		return v
+	}
+	v.providerObservationReader = reader
+	v.providerObservationPolicy = policy
+	return v
 }
 
 // VerifyRun recomputes assignment verification for every terminal assignment
@@ -107,13 +120,15 @@ func (v *CampaignRunVerifier) VerifyRun(ctx context.Context, store *Store, runID
 			continue
 		}
 		assignmentReport, err := v.assignmentVerifier.Verify(ctx, CampaignAssignmentVerificationRequest{
-			Assignment:    assignment,
-			Result:        result,
-			ScenarioInput: scenarioInput,
-			ScenarioGold:  scenarioGold,
-			ScenarioTools: scenarioTools,
-			GradingMethod: gradingMethod,
-			Trace:         trace,
+			Assignment:                assignment,
+			Result:                    result,
+			ScenarioInput:             scenarioInput,
+			ScenarioGold:              scenarioGold,
+			ScenarioTools:             scenarioTools,
+			GradingMethod:             gradingMethod,
+			Trace:                     trace,
+			ProviderObservationReader: v.providerObservationReader,
+			ProviderObservationPolicy: v.providerObservationPolicy,
 		})
 		if err != nil {
 			return nil, err

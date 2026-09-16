@@ -28,13 +28,15 @@ const (
 // CampaignAssignmentVerificationRequest carries persisted assignment state for
 // read-only independent verification.
 type CampaignAssignmentVerificationRequest struct {
-	Assignment    *evalv1.EvaluationAssignment
-	Result        *evalv1.EvaluationAssignmentResult
-	ScenarioInput ScenarioInputFixture
-	ScenarioGold  ScenarioGoldCriteria
-	ScenarioTools ScenarioToolExpectations
-	GradingMethod evalv1.EvaluationGradingMethod
-	Trace         map[string]any
+	Assignment                 *evalv1.EvaluationAssignment
+	Result                     *evalv1.EvaluationAssignmentResult
+	ScenarioInput              ScenarioInputFixture
+	ScenarioGold               ScenarioGoldCriteria
+	ScenarioTools              ScenarioToolExpectations
+	GradingMethod              evalv1.EvaluationGradingMethod
+	Trace                      map[string]any
+	ProviderObservationReader  *CampaignProviderObservationReader
+	ProviderObservationPolicy  ProviderObservationPolicy
 }
 
 // CampaignAssignmentVerifier independently verifies one persisted assignment
@@ -103,6 +105,10 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 		} else if !gradesEquivalent(req.Result.GetDeterministicGrades(), recomputed.DeterministicGrades) {
 			failures = append(failures, "stored deterministic grades do not match recomputation")
 		}
+	}
+	if req.ProviderObservationReader != nil && len(scoredModelInferences(req.Result)) > 0 {
+		observationFailures, _ := req.ProviderObservationReader.VerifyAssignmentProviderObservations(ctx, req.Result, req.ProviderObservationPolicy)
+		failures = append(failures, observationFailures...)
 	}
 	return finalizeCampaignVerificationReport(report, failures), nil
 }

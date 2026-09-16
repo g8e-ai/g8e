@@ -179,6 +179,63 @@ describe('adaptCampaignProjectionEnvelope', () => {
       verification_disposition: 'passed',
     });
   });
+
+  it('maps published benchmark_observations onto assignment_result records', () => {
+    const context = createCampaignAdaptContext();
+    adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: 'run-1:assign-1:lifecycle:running',
+        record: {
+          assignment_id: 'assign-1',
+          run_id: 'run-1',
+          scenario_id: 'instruction-exact-format',
+          scenario_category: 'EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE',
+          lane: 'EVALUATION_LANE_MODEL_ROLE',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING',
+          repetition: 1,
+          designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
+          variant_id: 'qwen3-4b',
+          observed_at: '2026-09-16T14:00:01Z',
+        },
+      },
+      context,
+    );
+    const resultRecord = JSON.parse(publicResultVector.canonical_json) as Record<string, unknown>;
+    const records = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: 'run-1:assign-1:result',
+        record: {
+          ...resultRecord,
+          benchmark_observations: {
+            timing: {
+              generation_ms: { value: 1200 },
+            },
+            gpu: {
+              vram_peak_bytes: { value: 8192 },
+              utilization_percent: { value: 77.5 },
+            },
+            unavailable_reasons: ['provider_boundary_observation_missing:attempt-2'],
+          },
+        },
+      },
+      context,
+    );
+
+    const assignment = records.find((record) => record.kind === 'assignment_result');
+    expect(assignment?.benchmark_observations).toMatchObject({
+      timing: { generation_ms: { value: 1200 } },
+      gpu: {
+        vram_peak_bytes: { value: 8192 },
+        utilization_percent: { value: 77.5 },
+      },
+      unavailable_reasons: ['provider_boundary_observation_missing:attempt-2'],
+    });
+    expect(() => decodeViewRecord('assignment_result', assignment)).not.toThrow();
+  });
 });
 
 describe('EvalStore campaign ingest', () => {

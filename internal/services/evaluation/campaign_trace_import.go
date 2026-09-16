@@ -324,6 +324,21 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 			ResultDigest:        stringValue(call["governed_result_digest"]),
 			PrivacyAttested:     true,
 		}
+		if loadDuration := durationSecondsToNanos(call["load_duration_seconds"]); loadDuration > 0 {
+			record.LoadDurationNanos = loadDuration
+		}
+		if generationDuration := durationSecondsToNanos(call["generation_duration_seconds"]); generationDuration > 0 {
+			record.GenerationDurationNanos = generationDuration
+		}
+		if totalDuration := durationSecondsToNanos(call["total_duration_seconds"]); totalDuration > 0 {
+			record.TotalDurationNanos = totalDuration
+		}
+		if ttft := durationSecondsToNanos(call["time_to_first_token_seconds"]); ttft > 0 {
+			if monotonicStart := floatSeconds(call["monotonic_start"]); monotonicStart > 0 {
+				record.RequestStartedAtUnixNanos = uint64(monotonicStart * 1_000_000_000)
+				record.FirstTokenAtUnixNanos = record.RequestStartedAtUnixNanos + ttft
+			}
+		}
 		if transactionID, _ := call["governed_transaction_id"].(string); transactionID != "" {
 			record.GovernedReceiptRef = &compliancev1.ComplianceEvidenceReference{
 				ArtifactId:   transactionID,
@@ -353,6 +368,29 @@ func parseModelCampaignRole(raw any) evalv1.ModelCampaignRole {
 func stringValue(raw any) string {
 	value, _ := raw.(string)
 	return value
+}
+
+func floatSeconds(raw any) float64 {
+	switch value := raw.(type) {
+	case float64:
+		return value
+	case float32:
+		return float64(value)
+	case int:
+		return float64(value)
+	case int64:
+		return float64(value)
+	default:
+		return 0
+	}
+}
+
+func durationSecondsToNanos(raw any) uint64 {
+	seconds := floatSeconds(raw)
+	if seconds <= 0 {
+		return 0
+	}
+	return uint64(seconds * 1_000_000_000)
 }
 
 // BuildAssignmentTraceEvidenceReference returns a content-addressed evidence

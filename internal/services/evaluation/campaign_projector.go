@@ -120,6 +120,16 @@ func AssignmentResultIdempotencyKey(runID, assignmentID string) string {
 // MarshalCampaignProjectionEnvelope canonicalizes one typed projection record
 // into a public-feed payload envelope.
 func MarshalCampaignProjectionEnvelope(messageType, idempotencyKey string, record proto.Message) ([]byte, error) {
+	return marshalCampaignProjectionEnvelope(messageType, idempotencyKey, record, nil)
+}
+
+// MarshalAssignmentResultProjectionEnvelope canonicalizes one terminal assignment
+// projection and merges disclosure-safe benchmark observations when present.
+func MarshalAssignmentResultProjectionEnvelope(idempotencyKey string, projection *evalv1.PublicAssignmentResultProjection, benchmark *PublicBenchmarkObservations) ([]byte, error) {
+	return marshalCampaignProjectionEnvelope(publicMessageTypeAssignmentResult, idempotencyKey, projection, benchmark)
+}
+
+func marshalCampaignProjectionEnvelope(messageType, idempotencyKey string, record proto.Message, benchmark *PublicBenchmarkObservations) ([]byte, error) {
 	if messageType == "" || idempotencyKey == "" || record == nil {
 		return nil, fmt.Errorf("evaluation: marshal campaign projection envelope: %w", constants.ErrMissingRequiredField)
 	}
@@ -127,11 +137,28 @@ func MarshalCampaignProjectionEnvelope(messageType, idempotencyKey string, recor
 	if err != nil {
 		return nil, err
 	}
+	recordBody := json.RawMessage(canonical)
+	if benchmark != nil {
+		recordMap := map[string]json.RawMessage{}
+		if err := json.Unmarshal(canonical, &recordMap); err != nil {
+			return nil, fmt.Errorf("evaluation: marshal campaign projection envelope: %w", err)
+		}
+		benchmarkBody, err := json.Marshal(benchmark)
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: marshal campaign projection envelope: %w", err)
+		}
+		recordMap["benchmark_observations"] = benchmarkBody
+		merged, err := json.Marshal(recordMap)
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: marshal campaign projection envelope: %w", err)
+		}
+		recordBody = merged
+	}
 	envelope := CampaignProjectionEnvelope{
 		SchemaVersion:  campaignProjectionEnvelopeSchemaVersion,
 		MessageType:    messageType,
 		IdempotencyKey: idempotencyKey,
-		Record:         json.RawMessage(canonical),
+		Record:         recordBody,
 	}
 	body, err := json.Marshal(envelope)
 	if err != nil {

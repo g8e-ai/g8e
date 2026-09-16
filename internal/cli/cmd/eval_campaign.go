@@ -555,6 +555,7 @@ func newCampaignPublicationCoordinator(cmd *cobra.Command, fileSvc fs.RuntimeFil
 func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
 	var jsonOutput bool
+	var requireProviderObservation bool
 	cmd := &cobra.Command{
 		Use:   "verify",
 		Short: "Independently verify persisted campaign assignment results for one run",
@@ -579,7 +580,17 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign verify: %w", err)
 			}
-			report, err := evaluation.NewCampaignRunVerifier(deps.now).VerifyRun(cmd.Context(), store, runID, catalog, artifacts)
+			verifier := evaluation.NewCampaignRunVerifier(deps.now)
+			observationReader, err := evaluation.NewCampaignProviderObservationReader(fileSvc)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign verify: %w", err)
+			}
+			policy := evaluation.ProviderObservationPolicyInterim
+			if requireProviderObservation {
+				policy = evaluation.ProviderObservationPolicyStrict
+			}
+			verifier = verifier.WithProviderObservationReader(observationReader, policy)
+			report, err := verifier.VerifyRun(cmd.Context(), store, runID, catalog, artifacts)
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign verify: %w", err)
 			}
@@ -610,6 +621,7 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
+	cmd.Flags().BoolVar(&requireProviderObservation, "require-provider-observation", false, "Fail verification when provider-boundary observation windows are missing or incomplete")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
