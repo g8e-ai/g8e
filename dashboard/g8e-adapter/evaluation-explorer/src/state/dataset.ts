@@ -8,7 +8,7 @@
 // selectable as soon as its catalog record lands.
 
 import { useCallback, useMemo, useState } from 'react';
-import type { CatalogSnapshot, DatasetKind } from '../contract/types';
+import type { CatalogSnapshot, DatasetKind, EvaluationSummary } from '../contract/types';
 import { evalStore, useStoreState } from './store';
 
 const PREF_KEYS = {
@@ -32,12 +32,38 @@ const KIND_LABELS: Record<DatasetKind, string> = {
   live_run: 'Live run',
 };
 
-function buildOptions(catalogs: CatalogSnapshot[]): DatasetOption[] {
+function liveDatasetIdsFromEvaluations(evaluations: Iterable<EvaluationSummary>): string[] {
+  const latestByDataset = new Map<string, string>();
+  for (const summary of evaluations) {
+    if (!summary.dataset_id.startsWith('ds-live-')) continue;
+    const observedAt = summary.observed_at ?? '';
+    const existing = latestByDataset.get(summary.dataset_id);
+    if (!existing || observedAt.localeCompare(existing) > 0) {
+      latestByDataset.set(summary.dataset_id, observedAt);
+    }
+  }
+  return Array.from(latestByDataset.entries())
+    .sort((a, b) => b[1].localeCompare(a[1]))
+    .map(([datasetId]) => datasetId);
+}
+
+function buildOptions(catalogs: CatalogSnapshot[], liveDatasetIds: string[]): DatasetOption[] {
   const options: DatasetOption[] = [];
   for (const kind of KIND_ORDER) {
     const matches = catalogs
       .filter((c) => c.dataset_kind === kind)
       .sort((a, b) => b.generated_at.localeCompare(a.generated_at));
+    if (kind === 'live_run' && matches.length === 0 && liveDatasetIds.length > 0) {
+      liveDatasetIds.forEach((datasetId, index) => {
+        options.push({
+          id: datasetId,
+          kind,
+          label: index === 0 ? KIND_LABELS[kind] : `${KIND_LABELS[kind]} · ${datasetId}`,
+          available: true,
+        });
+      });
+      continue;
+    }
     if (matches.length === 0) {
       options.push({ id: `__empty_${kind}`, kind, label: KIND_LABELS[kind], available: false });
       continue;
@@ -54,16 +80,37 @@ function buildOptions(catalogs: CatalogSnapshot[]): DatasetOption[] {
   return options;
 }
 
+function defaultDatasetId(options: DatasetOption[], liveDatasetIds: string[]): string {
+  const firstAvailable = options.find((o) => o.available)?.id;
+  if (firstAvailable) return firstAvailable;
+  return liveDatasetIds[0] ?? '';
+}
+
 export function useDatasetOptions(): DatasetOption[] {
   const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
-  return useMemo(() => buildOptions(catalogs), [catalogs]);
+  const evaluations = useStoreState((state) => state.evaluations);
+  return useMemo(
+    () => buildOptions(catalogs, liveDatasetIdsFromEvaluations(evaluations.values())),
+    [catalogs, evaluations],
+  );
 }
 
 export function useActiveDatasetId(routeDatasetId: string | undefined): string {
   const options = useDatasetOptions();
-  const firstAvailable = options.find((o) => o.available)?.id ?? '';
-  if (routeDatasetId && options.some((o) => o.id === routeDatasetId)) return routeDatasetId;
-  return firstAvailable;
+  const evaluations = useStoreState((state) => state.evaluations);
+  const liveDatasetIds = liveDatasetIdsFromEvaluations(evaluations.values());
+  const fallbackDatasetId = defaultDatasetId(options, liveDatasetIds);
+  if (routeDatasetId) {
+    if (options.some((o) => o.id === routeDatasetId)) return routeDatasetId;
+    // Live campaign datasets are synthesized from publication envelopes and may
+    // not have a catalog_snapshot yet; honor explicit route ids and any run
+    // summaries already indexed for that dataset.
+    if (routeDatasetId.startsWith('ds-live-')) return routeDatasetId;
+    for (const summary of evaluations.values()) {
+      if (summary.dataset_id === routeDatasetId) return routeDatasetId;
+    }
+  }
+  return fallbackDatasetId;
 }
 
 export function useUserPref<T>(key: string, initial: T): [T, (value: T) => void] {

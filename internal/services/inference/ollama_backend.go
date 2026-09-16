@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -270,15 +271,17 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// Drain a bounded slice of the error body for connection reuse.
-		// Provider error text is never returned or logged: it can echo
-		// prompt material and provider internals.
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBodyBytes))
-		switch resp.StatusCode {
-		case http.StatusRequestTimeout:
+		// Read a bounded slice of the error body for connection reuse and
+		// capability classification. Provider error text is never returned
+		// or logged: it can echo prompt material and provider internals.
+		errorBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+		switch {
+		case resp.StatusCode == http.StatusRequestTimeout:
 			return nil, fmt.Errorf("ollama_backend: generate: %w", constants.ErrInferenceBackendTimeout)
-		case http.StatusNotFound:
+		case resp.StatusCode == http.StatusNotFound:
 			return nil, fmt.Errorf("ollama_backend: generate: %w: model %q", constants.ErrInferenceModelNotFound, req.Model)
+		case ollamaErrorIndicatesCapabilityUnsupported(resp.StatusCode, errorBody):
+			return nil, fmt.Errorf("ollama_backend: generate: %w", constants.ErrInferenceCapabilityUnsupported)
 		default:
 			return nil, fmt.Errorf("ollama_backend: generate: %w: status %d", constants.ErrInferenceGenerateFailed, resp.StatusCode)
 		}
@@ -706,6 +709,17 @@ func (b *OllamaBackend) decodeResponse(op string, body io.Reader, out any) error
 		return fmt.Errorf("ollama_backend: %s: %w: %w", op, constants.ErrInferenceProviderResponseInvalid, err)
 	}
 	return nil
+}
+
+func ollamaErrorIndicatesCapabilityUnsupported(statusCode int, body []byte) bool {
+	if statusCode != http.StatusBadRequest || len(body) == 0 {
+		return false
+	}
+	message := strings.ToLower(string(body))
+	return strings.Contains(message, "does not support tools") ||
+		strings.Contains(message, "tools not supported") ||
+		strings.Contains(message, "tool use not supported") ||
+		strings.Contains(message, "function calling not supported")
 }
 
 // transportError classifies a failed provider call. Caller cancellation

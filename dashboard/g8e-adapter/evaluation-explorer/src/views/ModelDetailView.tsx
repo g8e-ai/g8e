@@ -6,7 +6,7 @@
 
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
-import { recordKey, useStoreState } from '../state/store';
+import { modelRecordKey, useStoreState } from '../state/store';
 import {
   DetailRow,
   EmptyState,
@@ -33,10 +33,22 @@ export function ModelDetailView() {
   const variantId = routeVariant ?? routeDataset;
   const datasetParam = routeVariant ? routeDataset : undefined;
   const activeDatasetId = useActiveDatasetId(datasetParam ?? params.get('dataset') ?? undefined);
+  const roleFilter = params.get('role');
 
-  const model = useStoreState((state) =>
-    variantId ? state.models.get(recordKey(activeDatasetId, variantId)) : undefined,
-  );
+  const model = useStoreState((state) => {
+    if (!variantId) return undefined;
+    if (roleFilter === 'primary' || roleFilter === 'assistant' || roleFilter === 'lite') {
+      return state.models.get(modelRecordKey(activeDatasetId, variantId, roleFilter));
+    }
+    for (const candidate of state.models.values()) {
+      if (candidate.dataset_id !== activeDatasetId || candidate.variant_id !== variantId) continue;
+      if (candidate.pass_rate) return candidate;
+    }
+    for (const candidate of state.models.values()) {
+      if (candidate.dataset_id === activeDatasetId && candidate.variant_id === variantId) return candidate;
+    }
+    return undefined;
+  });
   const suites = useStoreState((state) =>
     Array.from(state.suites.values()).filter((s) => s.dataset_id === activeDatasetId),
   );

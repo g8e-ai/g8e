@@ -222,9 +222,8 @@ func TestExportBatch_RetriesOnMirrorFailure(t *testing.T) {
 	assert.GreaterOrEqual(t, accepted.Load(), int32(2), "must have retried at least once")
 }
 
-// TestExportBatch_IdempotentRetransmit verifies that a retransmitted batch
-// with the same content hash is accepted idempotently by the mirror (same
-// hash, idempotent accept).
+// TestExportBatch_IdempotentRetransmit verifies that an unacknowledged outbox
+// tail batch is retransmitted with the same content hash.
 func TestExportBatch_IdempotentRetransmit(t *testing.T) {
 	publisher, _, _, _ := newPublicPublisherTestEnv(t)
 
@@ -241,16 +240,141 @@ func TestExportBatch_IdempotentRetransmit(t *testing.T) {
 	publisher.SetMirrorOrigin(mirror.URL)
 
 	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
-	err := publisher.ExportBatch(context.Background(), records)
+	batch, err := publisher.BuildBatch(records)
 	require.NoError(t, err)
+	require.NoError(t, publisher.writeOutboxEntry(context.Background(), batch))
+	require.NoError(t, publisher.updateOutboxStatus(context.Background(), batch.LastSequence, models.PublicFeedOutboxStatusSent, true))
 
-	// Retransmit the same batch manually.
 	err = publisher.RetransmitOutbox(context.Background())
 	require.NoError(t, err)
 
-	// Both transmissions have the same content hash (idempotent).
-	require.Len(t, receivedHashes, 2)
-	assert.Equal(t, receivedHashes[0], receivedHashes[1])
+	require.Len(t, receivedHashes, 1)
+}
+
+// TestLoadSnapshotFromOutbox_IgnoresUnacknowledgedTail verifies that only
+// mirror-acknowledged outbox entries advance the publisher high-water mark.
+func TestLoadSnapshotFromOutbox_IgnoresUnacknowledgedTail(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req models.PublicIngestRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		resp := models.PublicIngestResponse{Accepted: true, HighWaterSequence: req.Batch.LastSequence, FeedChainHash: req.Batch.ContentHash}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(mirror.Close)
+	publisher.SetMirrorOrigin(mirror.URL)
+
+	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	require.NoError(t, publisher.ExportBatch(context.Background(), records1))
+
+	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 2, map[string]any{"campaign_id": "c2"})}
+	batch2, err := publisher.BuildBatch(records2)
+	require.NoError(t, err)
+	require.NoError(t, publisher.writeOutboxEntry(context.Background(), batch2))
+	require.NoError(t, publisher.updateOutboxStatus(context.Background(), batch2.LastSequence, models.PublicFeedOutboxStatusSent, true))
+
+	publisher.mu.Lock()
+	publisher.highWaterSeq = batch2.LastSequence
+	publisher.feedChainHash = batch2.ContentHash
+	publisher.batchCount = 2
+	publisher.mu.Unlock()
+
+	require.NoError(t, publisher.loadSnapshotFromOutbox(context.Background()))
+
+	publisher.mu.Lock()
+	highWater := publisher.highWaterSeq
+	publisher.mu.Unlock()
+	assert.Equal(t, int64(1), highWater)
+}
+
+// TestExportBatch_RetriesUnacknowledgedBeforeNewBatch verifies that a sent
+// but unacknowledged outbox tail is retransmitted before appending a new batch.
+func TestExportBatch_RetriesUnacknowledgedBeforeNewBatch(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+
+	var receivedSequences []int64
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req models.PublicIngestRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		receivedSequences = append(receivedSequences, req.Batch.FirstSequence)
+		resp := models.PublicIngestResponse{Accepted: true, HighWaterSequence: req.Batch.LastSequence, FeedChainHash: req.Batch.ContentHash}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(mirror.Close)
+	publisher.SetMirrorOrigin(mirror.URL)
+
+	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	require.NoError(t, publisher.ExportBatch(context.Background(), records1))
+
+	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 2, map[string]any{"campaign_id": "c2"})}
+	batch2, err := publisher.BuildBatch(records2)
+	require.NoError(t, err)
+	require.NoError(t, publisher.writeOutboxEntry(context.Background(), batch2))
+	require.NoError(t, publisher.updateOutboxStatus(context.Background(), batch2.LastSequence, models.PublicFeedOutboxStatusSent, true))
+
+	records3 := []models.PublicFeedRecord{makeProjectionRecord(t, 3, map[string]any{"campaign_id": "c3"})}
+	receivedSequences = nil
+	require.NoError(t, publisher.ExportBatch(context.Background(), records3))
+
+	assert.Equal(t, []int64{2, 3}, receivedSequences)
+
+	snap, err := publisher.GetSnapshot(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), snap.HighWaterSequence)
+}
+
+// TestRepairOutboxFromSnapshot_CompactsPrefixGap verifies that a non-contiguous
+// outbox prefix is compacted back to the mirror-acknowledged snapshot tip.
+func TestRepairOutboxFromSnapshot_CompactsPrefixGap(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req models.PublicIngestRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		resp := models.PublicIngestResponse{Accepted: true, HighWaterSequence: req.Batch.LastSequence, FeedChainHash: req.Batch.ContentHash}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(mirror.Close)
+	publisher.SetMirrorOrigin(mirror.URL)
+
+	records1 := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "c1"})}
+	require.NoError(t, publisher.ExportBatch(context.Background(), records1))
+
+	records2 := []models.PublicFeedRecord{makeProjectionRecord(t, 2, map[string]any{"campaign_id": "c2"})}
+	require.NoError(t, publisher.ExportBatch(context.Background(), records2))
+
+	entries, err := publisher.outbox.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+
+	orphanRecord := makeProjectionRecord(t, 1, map[string]any{"campaign_id": "orphan"})
+	orphanBatch, err := publisher.BuildBatch([]models.PublicFeedRecord{orphanRecord})
+	require.NoError(t, err)
+	orphanBytes, err := json.Marshal(orphanBatch)
+	require.NoError(t, err)
+	orphanEntry := models.PublicOutboxEntry{
+		Sequence:   orphanBatch.LastSequence,
+		BatchHash:  orphanBatch.ContentHash,
+		BatchBytes: string(orphanBytes),
+		Status:     models.PublicFeedOutboxStatusFailed,
+		CreatedAt:  entries[0].CreatedAt,
+	}
+
+	rawStore := publisher.outbox.(*runtimePublicOutboxStore)
+	require.NoError(t, rawStore.Replace(context.Background(), []models.PublicOutboxEntry{orphanEntry, entries[1]}))
+
+	_, err = publisher.outbox.List(context.Background())
+	require.ErrorIs(t, err, constants.ErrPublicFeedHashChainMismatch)
+
+	require.NoError(t, publisher.RepairOutboxFromSnapshot(context.Background()))
+
+	repaired, err := publisher.outbox.List(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, repaired)
 }
 
 // TestExportBatch_RejectsMirrorRejection verifies that a mirror rejection

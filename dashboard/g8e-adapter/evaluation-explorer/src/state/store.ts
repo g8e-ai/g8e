@@ -17,6 +17,7 @@ import type {
   FeedSnapshot,
   LiveEvent,
   MethodologySnapshot,
+  ModelRole,
   ModelSummary,
   ProjectionRecord,
   SnapshotRecord,
@@ -34,6 +35,35 @@ import {
 /** Composite index key: dataset first so the same identity can coexist. */
 export function recordKey(datasetId: string, id: string): string {
   return `${datasetId}${id}`;
+}
+
+/** Model summaries are unique per dataset, variant, and designated role. */
+export function modelRecordKey(datasetId: string, variantId: string, role: ModelRole): string {
+  return recordKey(datasetId, `${variantId}:${role}`);
+}
+
+export function modelComparisonId(model: ModelSummary): string {
+  return `${model.variant_id}:${model.role}`;
+}
+
+const MODEL_COMPARISON_ID = /^(.+):(primary|assistant|lite)$/;
+
+export function resolveModelSummary(
+  models: Map<string, ModelSummary>,
+  datasetId: string,
+  modelId: string,
+): ModelSummary | undefined {
+  const roleMatch = MODEL_COMPARISON_ID.exec(modelId);
+  if (roleMatch) {
+    return models.get(modelRecordKey(datasetId, roleMatch[1], roleMatch[2] as ModelRole));
+  }
+  let fallback: ModelSummary | undefined;
+  for (const model of models.values()) {
+    if (model.dataset_id !== datasetId || model.variant_id !== modelId) continue;
+    if (model.pass_rate) return model;
+    fallback = fallback ?? model;
+  }
+  return fallback;
 }
 
 export interface StoreState {
@@ -245,7 +275,7 @@ export class EvalStore {
         state.catalogs.set(record.dataset_id, record);
         break;
       case 'model_summary':
-        state.models.set(recordKey(record.dataset_id, record.variant_id), record);
+        state.models.set(modelRecordKey(record.dataset_id, record.variant_id, record.role), record);
         break;
       case 'suite_summary':
         state.suites.set(recordKey(record.dataset_id, record.suite_id), record);
@@ -281,7 +311,6 @@ export class EvalStore {
     state.evaluations.set(key, {
       ...existing,
       lifecycle_state: event.lifecycle_status,
-      assignment_completed: event.completed,
       assignment_total: event.total > 0 ? event.total : existing.assignment_total,
       quality_state: event.quality_state,
       headline_metrics: event.metric_delta
@@ -353,8 +382,17 @@ export class EvalStore {
     return Array.from(this.state.models.values()).filter((m) => m.dataset_id === datasetId);
   }
 
-  getModel(datasetId: string, variantId: string): ModelSummary | undefined {
-    return this.state.models.get(recordKey(datasetId, variantId));
+  getModel(datasetId: string, variantId: string, role?: ModelRole): ModelSummary | undefined {
+    if (role) {
+      return this.state.models.get(modelRecordKey(datasetId, variantId, role));
+    }
+    let fallback: ModelSummary | undefined;
+    for (const model of this.state.models.values()) {
+      if (model.dataset_id !== datasetId || model.variant_id !== variantId) continue;
+      if (model.pass_rate) return model;
+      fallback = fallback ?? model;
+    }
+    return fallback;
   }
 
   getSuites(datasetId: string): SuiteSummary[] {

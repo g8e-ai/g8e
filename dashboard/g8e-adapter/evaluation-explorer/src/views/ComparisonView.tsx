@@ -4,7 +4,7 @@
 
 import { useSearchParams, Link } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
-import { recordKey, useStoreState } from '../state/store';
+import { resolveModelSummary, useStoreState } from '../state/store';
 import {
   EmptyState,
   ErrorState,
@@ -25,7 +25,7 @@ export function ComparisonView() {
 
   const models = useStoreState((state) =>
     modelIds
-      .map((id) => state.models.get(recordKey(activeDatasetId, id)))
+      .map((id) => resolveModelSummary(state.models, activeDatasetId, id))
       .filter((m): m is NonNullable<typeof m> => m !== undefined),
   );
 

@@ -551,7 +551,7 @@ class g8eEnsemble:
                 for r in fc_responses:
                     response_str = str(r.flattened_response)
                     tool_response_sizes.append(len(response_str))
-                contents.append(types.Content(role=types.Role.USER, parts=tool_response_parts))
+                contents.append(types.Content(role=types.Role.TOOL, parts=tool_response_parts))
                 logger.info("[AGENT] Added %d tool responses, looping...", len(tool_response_parts))
         except asyncio.CancelledError:
             logger.info(

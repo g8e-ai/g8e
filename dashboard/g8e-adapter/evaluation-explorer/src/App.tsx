@@ -10,6 +10,7 @@ import { EvaluationsView } from './views/EvaluationsView';
 import { EvaluationDetailView } from './views/EvaluationDetailView';
 import { AssignmentDetailView } from './views/AssignmentDetailView';
 import { ComparisonView } from './views/ComparisonView';
+import { FailuresView } from './views/FailuresView';
 import { MethodologyView } from './views/MethodologyView';
 
 function NavItem({ to, label }: { to: string; label: string }) {
@@ -55,6 +56,7 @@ function Shell() {
         <nav className="app-nav" aria-label="Primary navigation">
           <NavItem to="/" label="Live" />
           <NavItem to="/evaluations" label="Evals" />
+          <NavItem to="/failures" label="Failures" />
           <NavItem to="/models" label="Models" />
           <NavItem to="/compare" label="Compare" />
           <NavItem to="/methodology" label="Docs" />
@@ -72,6 +74,7 @@ function Shell() {
           <Route path="/evaluations" element={<EvaluationsView />} />
           <Route path="/evaluations/:datasetId?/:runId" element={<EvaluationDetailView />} />
           <Route path="/evaluations/:datasetId?/:runId/assignments/:assignmentId" element={<AssignmentDetailView />} />
+          <Route path="/failures" element={<FailuresView />} />
           <Route path="/compare" element={<ComparisonView />} />
           <Route path="/methodology" element={<MethodologyView />} />
         </Routes>

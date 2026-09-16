@@ -30,6 +30,7 @@ import {
   formatNumber,
 } from '../components/shared';
 import type { AssignmentResult } from '../contract/types';
+import { campaignTerminalProgress } from './derived';
 
 export function EvaluationDetailView() {
   const { runId: routeRun, datasetId: routeDataset } = useParams();
@@ -155,8 +156,14 @@ export function EvaluationDetailView() {
       <section className="run-progress">
         <h2>{run.native_result ? 'Invariant summary' : 'Assignment progress'}</h2>
         <ProgressBar
-          completed={run.native_result?.passed_verdict_count ?? run.assignment_completed}
-          total={run.native_result?.required_verdict_count ?? run.assignment_total}
+          completed={
+            run.native_result?.passed_verdict_count ??
+            campaignTerminalProgress(run).done
+          }
+          total={
+            run.native_result?.required_verdict_count ??
+            campaignTerminalProgress(run).total
+          }
           label={run.native_result ? 'Required invariants' : 'Assignments'}
         />
         {run.native_result ? <p>{run.native_result.summary}</p> : <OutcomeCounts outcomes={run.terminal_outcomes} />}

@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
-import { recordKey, useStoreState, useFeedStatus } from '../state/store';
+import { recordKey, resolveModelSummary, useStoreState, useFeedStatus } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
 import { DatasetSelector } from '../components/DatasetSelector';
 import {
@@ -21,6 +21,7 @@ import {
 } from '../components/shared';
 import { formatCompact, formatRelativeTime } from '../utils/format';
 import { qualityStateLabel, qualityStateTone, type FeedConnectionState } from '../utils/feed-state';
+import { campaignTerminalProgress } from './derived';
 import descriptorUrl from '../contract/descriptor.json?url';
 import type {
   CatalogSnapshot,
@@ -66,10 +67,6 @@ function shortRunId(runId: string): string {
   return runId.length > 14 ? `…${runId.slice(-12)}` : runId;
 }
 
-function scrollTo(id: string): void {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
 /** Evaluated models as role agents: name, role duty, status, throughput. */
 function AgentsStrip({ models, datasetId }: { models: ModelSummary[]; datasetId: string }) {
   const agents = useMemo(
@@ -108,7 +105,7 @@ function AgentsStrip({ models, datasetId }: { models: ModelSummary[]; datasetId:
                 </div>
                 <div className="agent-body">
                   <Link
-                    to={`/models/${datasetId}/${model.variant_id}`}
+                    to={`/models/${datasetId}/${model.variant_id}?role=${model.role}`}
                     className="agent-name"
                   >
                     {model.display_name}
@@ -229,7 +226,7 @@ function LiveStreamPanel({
             <tbody>
               {visible.map((event) => {
                 const model = event.variant_id
-                  ? models.get(recordKey(event.dataset_id, event.variant_id))
+                  ? resolveModelSummary(models, event.dataset_id, event.variant_id)
                   : undefined;
                 const tool = model?.served_model_tag ?? event.variant_id ?? event.kind.split('_')[0];
                 return (
@@ -303,7 +300,10 @@ function SystemOverviewPanel({
     0,
   );
   const completedRuns = evaluations.filter((e) => e.lifecycle_state === 'completed').length;
-  const assignmentDone = evaluations.reduce((sum, e) => sum + e.assignment_completed, 0);
+  const assignmentDone = evaluations.reduce(
+    (sum, e) => sum + e.assignment_completed + e.assignment_failed,
+    0,
+  );
   const assignmentTotal = evaluations.reduce((sum, e) => sum + e.assignment_total, 0);
   const verifierTotal = catalog
     ? catalog.verifier_passed_count + catalog.verifier_failed_count
@@ -379,8 +379,8 @@ function SystemOverviewPanel({
               {shortRunId(currentRun.run_id)} · {currentRun.lifecycle_state}
             </p>
             <ProgressBar
-              completed={latestEvent.completed}
-              total={latestEvent.total}
+              completed={campaignTerminalProgress(currentRun).done}
+              total={campaignTerminalProgress(currentRun).total}
               label="Assignment progress"
             />
             <div className="task-chips">
@@ -441,7 +441,7 @@ function ModelLab({ models, datasetId }: { models: ModelSummary[]; datasetId: st
               {measured.map((model) => (
                 <tr key={model.variant_id}>
                   <td>
-                    <Link to={`/models/${datasetId}/${model.variant_id}`}>
+                    <Link to={`/models/${datasetId}/${model.variant_id}?role=${model.role}`}>
                       {model.display_name}
                     </Link>
                   </td>
@@ -586,54 +586,6 @@ export function OverviewView() {
 
   return (
     <div className="overview">
-      <section className="od-hero">
-        <div className="od-hero-copy">
-          <h1>
-            AI agents. <span>Working in public.</span>
-          </h1>
-          <p className="od-hero-sub">
-            Watch autonomous agents build, test, audit and operate a real system.
-            Every tool call. Every model. Every token. Every failure.
-          </p>
-          <div className="od-hero-actions">
-            <button type="button" className="btn-primary" onClick={() => scrollTo('live-stream')}>
-              ▶ Watch live
-            </button>
-            <button type="button" className="btn-ghost" onClick={() => scrollTo('downloads')}>
-              ↓ Download &amp; run it yourself
-            </button>
-          </div>
-          <ul className="od-hero-facts" aria-label="Public evaluation properties">
-            <li>Live agent stream</li>
-            <li>Real workloads</li>
-            <li>Full audit trail</li>
-            <li>Open data</li>
-            <li>Privacy first</li>
-          </ul>
-        </div>
-        <div className="od-hero-card">
-          <p className="od-hero-card-title">Running on a local machine.</p>
-          <div className="mc-diagram" role="img" aria-label="Your machine holds state and data; the cloud model is a stateless processor">
-            <div className="mc-node">
-              <strong>Your machine</strong>
-              <small>State &amp; data</small>
-            </div>
-            <div className="mc-arrows">
-              <span>Ephemeral request →</span>
-              <span>← Response (no state)</span>
-            </div>
-            <div className="mc-node">
-              <strong>Cloud model</strong>
-              <small>Stateless processor</small>
-            </div>
-          </div>
-          <p className="mc-note">
-            Your data stays on your machine. Models are stateless.{' '}
-            <Link to="/methodology">Learn more →</Link>
-          </p>
-        </div>
-      </section>
-
       {feedStatus ? (
         <section className="feed-status-bar" aria-label="Feed status">
           <span className="feed-message">{feedStatus.message}</span>

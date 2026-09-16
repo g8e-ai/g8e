@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import {
   adaptCampaignProjectionEnvelope,
   campaignDatasetId,
+  campaignProgressCounts,
   createCampaignAdaptContext,
   isCampaignProjectionEnvelope,
 } from '../src/state/campaign-adapter';
@@ -64,7 +65,62 @@ describe('adaptCampaignProjectionEnvelope', () => {
       run_id: 'run-1',
       assignment_id: 'assign-1',
       lifecycle_status: 'queued',
+      completed: 0,
+      total: 1,
       stage_label: expect.stringContaining('instruction-exact-format'),
+    });
+    const summary = records.find((record) => record.kind === 'evaluation_summary');
+    expect(summary).toMatchObject({
+      assignment_total: 1,
+      assignment_completed: 0,
+      assignment_failed: 0,
+    });
+  });
+
+  it('tracks terminal progress separately from passing verdicts', () => {
+    const context = createCampaignAdaptContext();
+    for (const assignmentId of ['assign-1', 'assign-2', 'assign-3', 'assign-4']) {
+      adaptCampaignProjectionEnvelope(
+        {
+          schema_version: '1.0.0',
+          message_type: 'PublicAssignmentLifecycleRecord',
+          idempotency_key: `run-1:${assignmentId}:lifecycle:queued`,
+          record: {
+            assignment_id: assignmentId,
+            run_id: 'run-1',
+            scenario_id: 'instruction-exact-format',
+            lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
+            observed_at: '2026-09-16T14:00:00Z',
+          },
+        },
+        context,
+      );
+    }
+    expect(campaignProgressCounts(context.runTotals.get('run-1')!)).toEqual({ completed: 0, total: 4 });
+
+    const failRecords = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: 'run-1:assign-1:result',
+        record: {
+          assignment_id: 'assign-1',
+          run_id: 'run-1',
+          scenario_id: 'instruction-exact-format',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+          summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+          completed_at: '2026-09-16T14:00:05Z',
+        },
+      },
+      context,
+    );
+    const failEvent = failRecords.find((record) => record.kind === 'assignment_failed');
+    expect(failEvent).toMatchObject({ completed: 1, total: 4 });
+    expect(context.runTotals.get('run-1')).toMatchObject({
+      scheduled: 4,
+      terminal: 1,
+      passed: 0,
+      failed: 1,
     });
   });
 
@@ -126,6 +182,99 @@ describe('adaptCampaignProjectionEnvelope', () => {
 });
 
 describe('EvalStore campaign ingest', () => {
+  it('indexes model summaries separately for each designated role', () => {
+    const store = new EvalStore();
+    const runId = 'run-role-matrix';
+    const datasetId = campaignDatasetId(runId);
+    const enqueue = (assignmentId: string, role: string) => {
+      store.acceptProjection({
+        sequence: store.getState().observedSequence + 1,
+        record_type: 'projection',
+        record_bytes: JSON.stringify({
+          schema_version: '1.0.0',
+          message_type: 'PublicAssignmentLifecycleRecord',
+          idempotency_key: `${runId}:${assignmentId}:lifecycle:queued`,
+          record: {
+            assignment_id: assignmentId,
+            run_id: runId,
+            scenario_id: 'instruction-exact-format',
+            lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
+            designated_role: role,
+            variant_id: 'qwen3-4b',
+            observed_at: '2026-09-16T14:00:00Z',
+          },
+        }),
+      });
+    };
+    enqueue('assign-primary', 'MODEL_CAMPAIGN_ROLE_PRIMARY');
+    enqueue('assign-assistant', 'MODEL_CAMPAIGN_ROLE_ASSISTANT');
+    enqueue('assign-lite', 'MODEL_CAMPAIGN_ROLE_LITE');
+
+    const models = store.getModels(datasetId).filter((model) => model.variant_id === 'qwen3-4b');
+    expect(models.map((model) => model.role).sort()).toEqual(['assistant', 'lite', 'primary']);
+  });
+
+  it('materializes catalog and model aggregates from campaign envelopes', () => {
+    const context = createCampaignAdaptContext();
+    adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: 'run-1:assign-1:lifecycle:queued',
+        record: {
+          assignment_id: 'assign-1',
+          run_id: 'run-1',
+          scenario_id: 'instruction-exact-format',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
+          designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
+          variant_id: 'qwen3-4b',
+          observed_at: '2026-09-16T14:00:00Z',
+        },
+      },
+      context,
+    );
+
+    const resultRecords = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: 'run-1:assign-1:result',
+        record: {
+          assignment_id: 'assign-1',
+          run_id: 'run-1',
+          scenario_id: 'instruction-exact-format',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+          summary_status: 'EVALUATION_VERDICT_STATUS_PASS',
+          designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
+          variant_id: 'qwen3-4b',
+          completed_at: '2026-09-16T14:00:05Z',
+          decomposed_scores: [{ score_id: 'task_score', value: 1 }],
+        },
+      },
+      context,
+    );
+
+    const catalog = resultRecords.find((record) => record.kind === 'catalog_snapshot');
+    const model = resultRecords.find((record) => record.kind === 'model_summary');
+    const methodology = resultRecords.find((record) => record.kind === 'methodology_snapshot');
+    expect(catalog).toMatchObject({
+      dataset_kind: 'live_run',
+      assignment_count: 1,
+      model_count: 1,
+      evaluated_count: 1,
+    });
+    expect(model).toMatchObject({
+      variant_id: 'qwen3-4b',
+      role: 'primary',
+      inventory_only: false,
+      pass_rate: { estimate: 1, denominator: 1 },
+    });
+    expect(methodology?.kind).toBe('methodology_snapshot');
+    expect(() => decodeViewRecord('catalog_snapshot', catalog)).not.toThrow();
+    expect(() => decodeViewRecord('model_summary', model)).not.toThrow();
+    expect(() => decodeViewRecord('methodology_snapshot', methodology)).not.toThrow();
+  });
+
   it('indexes campaign envelopes without validation errors', () => {
     const store = new EvalStore();
     store.acceptProjection({
@@ -153,5 +302,8 @@ describe('EvalStore campaign ingest', () => {
     expect(store.getState().errors).toEqual([]);
     expect(store.getEvaluations(campaignDatasetId('run-live')).length).toBe(1);
     expect(store.getEvents('run-live', campaignDatasetId('run-live')).length).toBe(1);
+    expect(store.getCatalog(campaignDatasetId('run-live'))?.dataset_kind).toBe('live_run');
+    expect(store.getModels(campaignDatasetId('run-live')).length).toBeGreaterThan(0);
+    expect(store.getState().methodology?.kind).toBe('methodology_snapshot');
   });
 });

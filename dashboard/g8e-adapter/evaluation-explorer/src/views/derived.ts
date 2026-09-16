@@ -18,11 +18,42 @@ import type {
   AssignmentResult,
   CatalogSnapshot,
   EvaluationSummary,
+  LiveEvent,
   ModelRole,
   QualityState,
   SuiteSummary,
+  TerminalStatus,
   VerifierState,
 } from '../contract/types';
+
+const FAILURE_TERMINAL_STATUSES = new Set<TerminalStatus>([
+  'model_failed',
+  'grader_failed',
+  'invalid_evidence',
+  'stopped',
+]);
+
+/** True when the assignment ended in a preserved failure outcome. */
+export function isFailureTerminalStatus(status: TerminalStatus | 'running' | 'queued'): boolean {
+  return FAILURE_TERMINAL_STATUSES.has(status as TerminalStatus);
+}
+
+/** Terminal assignment progress for live campaign runs. */
+export function campaignTerminalProgress(run: EvaluationSummary): { done: number; total: number } {
+  const done = run.assignment_completed + run.assignment_failed;
+  const total = run.assignment_total > 0 ? run.assignment_total : done;
+  return { done, total };
+}
+
+/** Lifecycle events for one assignment, oldest first. */
+export function assignmentLifecycleEvents(
+  assignmentId: string,
+  events: LiveEvent[],
+): LiveEvent[] {
+  return events
+    .filter((event) => event.assignment_id === assignmentId)
+    .sort((a, b) => a.observed_at.localeCompare(b.observed_at));
+}
 
 /** Linear-interpolation percentile over an unsorted list of observed values. */
 export function percentile(values: number[], p: number): number | undefined {

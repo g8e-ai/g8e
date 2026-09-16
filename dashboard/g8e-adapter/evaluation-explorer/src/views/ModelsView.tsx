@@ -6,8 +6,8 @@
 import { useMemo } from 'react';
 import { type CellContext, type ColumnDef } from '@tanstack/react-table';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useActiveDatasetId, useUserPref, PREF } from '../state/dataset';
-import { useStoreState } from '../state/store';
+import { getCatalogForDataset, useActiveDatasetId, useUserPref, PREF } from '../state/dataset';
+import { modelComparisonId, useStoreState } from '../state/store';
 import { DataTable } from '../components/DataTable';
 import { DatasetSelector } from '../components/DatasetSelector';
 import {
@@ -52,6 +52,14 @@ export function ModelsView() {
     Array.from(state.models.values()).filter((m) => m.dataset_id === activeDatasetId),
   );
   const connection = useStoreState((state) => state.connection);
+  const catalog = getCatalogForDataset(activeDatasetId);
+  const evaluatedFilter =
+    filters.evaluated === 'evaluated' &&
+    catalog?.dataset_kind === 'live_run' &&
+    models.length > 0 &&
+    models.every((model) => !model.pass_rate)
+      ? 'all'
+      : filters.evaluated;
 
   const filtered = useMemo(() => {
     return models.filter((m) => {
@@ -59,8 +67,8 @@ export function ModelsView() {
         return false;
       }
       if (filters.role !== 'all' && m.role !== filters.role) return false;
-      if (filters.evaluated === 'evaluated' && !m.pass_rate) return false;
-      if (filters.evaluated === 'not_evaluated' && m.pass_rate) return false;
+      if (evaluatedFilter === 'evaluated' && !m.pass_rate) return false;
+      if (evaluatedFilter === 'not_evaluated' && m.pass_rate) return false;
       if (filters.quality !== 'all' && m.quality_state !== filters.quality) return false;
       return true;
     }).sort((a, b) => {
@@ -69,7 +77,7 @@ export function ModelsView() {
       const passRate = (b.pass_rate?.estimate ?? -1) - (a.pass_rate?.estimate ?? -1);
       return passRate || a.display_name.localeCompare(b.display_name);
     });
-  }, [models, filters]);
+  }, [models, filters, evaluatedFilter]);
 
   const columns = useMemo<ColumnDef<ModelSummary, unknown>[]>(
     () => [
@@ -80,12 +88,13 @@ export function ModelsView() {
           <input
             type="checkbox"
             aria-label={`Select ${row.original.display_name} for comparison`}
-            checked={comparison.includes(row.original.variant_id)}
-            disabled={!comparison.includes(row.original.variant_id) && comparison.length >= 4}
+            checked={comparison.includes(modelComparisonId(row.original))}
+            disabled={!comparison.includes(modelComparisonId(row.original)) && comparison.length >= 4}
             onChange={(e) => {
+              const comparisonId = modelComparisonId(row.original);
               const next = e.target.checked
-                ? [...comparison, row.original.variant_id].slice(0, 4)
-                : comparison.filter((id) => id !== row.original.variant_id);
+                ? [...comparison, comparisonId].slice(0, 4)
+                : comparison.filter((id) => id !== comparisonId);
               setComparison(next);
             }}
           />
@@ -97,7 +106,10 @@ export function ModelsView() {
         header: 'Model',
         accessorKey: 'display_name',
         cell: ({ row }: CellContext<ModelSummary, unknown>) => (
-          <Link to={`/models/${activeDatasetId}/${row.original.variant_id}`} className="model-link">
+          <Link
+            to={`/models/${activeDatasetId}/${row.original.variant_id}?role=${row.original.role}`}
+            className="model-link"
+          >
             {row.original.display_name}
             {row.original.inventory_only ? <span className="inv-tag"> inventory</span> : null}
           </Link>

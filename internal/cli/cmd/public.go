@@ -243,6 +243,7 @@ func publicCmd() *cobra.Command {
 		mirrorCmd,
 		publicPublishCmdWithConfig(loadConfig, newFileSvc),
 		publicPushCmdWithConfig(loadConfig, newFileSvc),
+		publicRepairOutboxCmdWithConfig(loadConfig, newFileSvc),
 		publicStatusCmdWithConfig(loadConfig, newFileSvc),
 		publicRotateKeyCmdWithConfig(loadConfig, newFileSvc),
 	)
@@ -387,6 +388,28 @@ func readPublicRecordInputs(filename string, maxRecords, maxBytes int) ([]models
 		return nil, constants.ErrPublicFeedBatchEmpty
 	}
 	return inputs, nil
+}
+
+func publicRepairOutboxCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {
+	return &cobra.Command{
+		Use:   "repair-outbox",
+		Short: "Compact a prefix-pruned public-feed outbox back to the mirror snapshot tip",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
+			if err != nil {
+				return err
+			}
+			publisher, err := newPublicPublisherForCommand(commandContext(cmd), fileSvc, exportConfig)
+			if err != nil {
+				return err
+			}
+			if err := publisher.RepairOutboxFromSnapshot(commandContext(cmd)); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Public outbox repaired against snapshot")
+			return err
+		},
+	}
 }
 
 func publicPushCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory publicFileSvcFactory) *cobra.Command {

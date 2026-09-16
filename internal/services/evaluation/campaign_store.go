@@ -165,7 +165,7 @@ func (s *Store) ListAssignments(ctx context.Context, runID string) ([]*evalv1.Ev
 	dir := filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname)
 	entries, err := s.files.ReadDir(ctx, dir)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, constants.ErrNotFound) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("evaluation: list assignments: %w", err)

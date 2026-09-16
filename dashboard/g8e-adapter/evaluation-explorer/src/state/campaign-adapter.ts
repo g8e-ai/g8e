@@ -3,6 +3,12 @@
 // record_bytes; this adapter is the only decode path for those envelopes.
 
 import {
+  buildCampaignAggregateRecords,
+  ensureVariantRoleBucket,
+  recordVariantRoleTerminal,
+  type VariantRoleBucket,
+} from './campaign-aggregates';
+import {
   VIEW_SCHEMA_VERSION,
   type AssignmentResult,
   type EvaluationSummary,
@@ -31,6 +37,8 @@ export interface CampaignProjectionEnvelope {
 export interface CampaignAdaptContext {
   assignmentMeta: Map<string, AssignmentMeta>;
   runTotals: Map<string, RunProgress>;
+  scheduledAssignments: Map<string, Set<string>>;
+  variantRoleStats: Map<string, VariantRoleBucket>;
 }
 
 interface AssignmentMeta {
@@ -44,8 +52,13 @@ interface AssignmentMeta {
 }
 
 interface RunProgress {
-  total: number;
-  completed: number;
+  /** Distinct assignments observed in lifecycle (scheduled matrix size). */
+  scheduled: number;
+  /** Assignments with a terminal public result projection. */
+  terminal: number;
+  /** Terminal assignments with a passing verdict. */
+  passed: number;
+  /** Terminal assignments with a failing verdict or provider failure. */
   failed: number;
 }
 
@@ -53,7 +66,35 @@ export function createCampaignAdaptContext(): CampaignAdaptContext {
   return {
     assignmentMeta: new Map(),
     runTotals: new Map(),
+    scheduledAssignments: new Map(),
+    variantRoleStats: new Map(),
   };
+}
+
+function ensureRunProgress(context: CampaignAdaptContext, runId: string): RunProgress {
+  const existing = context.runTotals.get(runId);
+  if (existing) return existing;
+  const progress: RunProgress = { scheduled: 0, terminal: 0, passed: 0, failed: 0 };
+  context.runTotals.set(runId, progress);
+  return progress;
+}
+
+function trackScheduledAssignment(context: CampaignAdaptContext, runId: string, assignmentId: string): RunProgress {
+  let seen = context.scheduledAssignments.get(runId);
+  if (!seen) {
+    seen = new Set();
+    context.scheduledAssignments.set(runId, seen);
+  }
+  seen.add(assignmentId);
+  const progress = ensureRunProgress(context, runId);
+  progress.scheduled = seen.size;
+  return progress;
+}
+
+/** Live-event progress: terminal assignments done vs scheduled matrix size. */
+export function campaignProgressCounts(progress: RunProgress): { completed: number; total: number } {
+  const total = progress.scheduled > 0 ? progress.scheduled : progress.terminal;
+  return { completed: progress.terminal, total };
 }
 
 export function isCampaignProjectionEnvelope(value: unknown): value is CampaignProjectionEnvelope {
@@ -97,6 +138,7 @@ function adaptLifecycleRecord(
   const observedAt = timestampString(record.observed_at) ?? new Date().toISOString();
   const lifecycle = mapLifecycleStatus(requiredString(record, 'lifecycle_status'));
   const scenarioCategory = mapScenarioCategory(optionalString(record.scenario_category));
+  const variantId = optionalString(record.variant_id);
   const role = mapModelRole(optionalString(record.designated_role));
   const evaluationUnit = mapEvaluationUnit(optionalString(record.lane));
   const repetition = optionalInteger(record.repetition) ?? 1;
@@ -112,11 +154,17 @@ function adaptLifecycleRecord(
   });
 
   const records: Array<SnapshotRecord | LiveEvent> = [];
-  if (!context.runTotals.has(runId)) {
+  const hadRun = context.runTotals.has(runId);
+  let progress = ensureRunProgress(context, runId);
+  if (lifecycle === 'queued') {
+    progress = trackScheduledAssignment(context, runId, assignmentId);
+  }
+  if (!hadRun && progress.scheduled === 0) {
     records.push(buildInitialEvaluationSummary(runId, datasetId, observedAt, evaluationUnit));
   }
 
   const eventKind = lifecycleEventKind(lifecycle);
+  const { completed, total } = campaignProgressCounts(progress);
   if (eventKind) {
     records.push({
       schema_version: VIEW_SCHEMA_VERSION,
@@ -131,11 +179,20 @@ function adaptLifecycleRecord(
       task_id: optionalString(record.scenario_id),
       variant_id: optionalString(record.variant_id),
       lifecycle_status: lifecycle,
-      completed: context.runTotals.get(runId)?.completed ?? 0,
-      total: context.runTotals.get(runId)?.total ?? 0,
+      completed,
+      total,
       stage_label: buildStageLabel(lifecycle, scenarioCategory, optionalString(record.scenario_id)),
     });
   }
+
+  if (progress.scheduled > 0) {
+    records.push(buildUpdatedEvaluationSummary(runId, datasetId, observedAt, progress, evaluationUnit));
+  }
+
+  if (variantId && role) {
+    ensureVariantRoleBucket(context.variantRoleStats, runId, assignmentId, variantId, role);
+  }
+  records.push(...buildCampaignAggregateRecords(context.variantRoleStats, context.runTotals, runId, datasetId, observedAt));
 
   return records;
 }
@@ -154,16 +211,20 @@ function adaptResultProjection(
   const summaryStatus = optionalString(record.summary_status);
   const terminalStatus = mapTerminalStatus(lifecycle, summaryStatus);
   const qualityState: QualityState = terminalStatus === 'completed' ? 'live_in_progress' : 'terminal_failed';
+  const variantId = optionalString(record.variant_id) ?? meta?.variantId ?? 'unknown';
+  const role = meta?.role ?? mapModelRole(optionalString(record.designated_role)) ?? 'primary';
 
   const hadRunProgress = context.runTotals.has(runId);
-  const progress = context.runTotals.get(runId) ?? { total: 0, completed: 0, failed: 0 };
+  trackScheduledAssignment(context, runId, assignmentId);
+  const progress = ensureRunProgress(context, runId);
+  progress.terminal += 1;
   if (terminalStatus === 'completed') {
-    progress.completed += 1;
+    progress.passed += 1;
   } else {
     progress.failed += 1;
   }
-  progress.total = Math.max(progress.total, progress.completed + progress.failed);
   context.runTotals.set(runId, progress);
+  const { completed, total } = campaignProgressCounts(progress);
 
   const assignment: AssignmentResult = {
     schema_version: VIEW_SCHEMA_VERSION,
@@ -175,8 +236,8 @@ function adaptResultProjection(
     assignment_id: assignmentId,
     run_id: runId,
     task_id: meta?.scenarioId ?? optionalString(record.scenario_id) ?? assignmentId,
-    variant_id: optionalString(record.variant_id) ?? meta?.variantId ?? 'unknown',
-    role: meta?.role ?? mapModelRole(optionalString(record.designated_role)) ?? 'primary',
+    variant_id: variantId,
+    role,
     repetition: meta?.repetition ?? 1,
     scenario_category: meta?.scenarioCategory ?? mapScenarioCategory(optionalString(record.scenario_category)),
     evaluation_unit: meta?.evaluationUnit ?? mapEvaluationUnit(optionalString(record.lane)),
@@ -207,13 +268,27 @@ function adaptResultProjection(
     task_id: assignment.task_id,
     variant_id: assignment.variant_id,
     lifecycle_status: lifecycle === 'completed' ? 'completed' : 'failed',
-    completed: progress.completed,
-    total: progress.total,
+    completed,
+    total,
     stage_label: buildStageLabel(lifecycle, assignment.scenario_category, assignment.task_id),
     metric_delta: assignment.metric_values.pass ? { pass_rate: assignment.metric_values.pass } : undefined,
   });
 
   records.push(buildUpdatedEvaluationSummary(runId, datasetId, observedAt, progress, assignment.evaluation_unit));
+
+  if (variantId !== 'unknown') {
+    recordVariantRoleTerminal(
+      context.variantRoleStats,
+      runId,
+      assignmentId,
+      variantId,
+      role,
+      terminalStatus === 'completed',
+      terminalStatus,
+    );
+  }
+  records.push(...buildCampaignAggregateRecords(context.variantRoleStats, context.runTotals, runId, datasetId, observedAt));
+
   return records;
 }
 
@@ -258,9 +333,8 @@ function buildUpdatedEvaluationSummary(
   evaluationUnit?: EvaluationUnit,
 ): EvaluationSummary {
   const passRate: MetricValue<number> | undefined =
-    progress.completed + progress.failed > 0
-      ? { value: progress.completed / (progress.completed + progress.failed) }
-      : undefined;
+    progress.terminal > 0 ? { value: progress.passed / progress.terminal } : undefined;
+  const assignmentTotal = progress.scheduled > 0 ? progress.scheduled : progress.terminal;
   return {
     schema_version: VIEW_SCHEMA_VERSION,
     kind: 'evaluation_summary',
@@ -273,11 +347,11 @@ function buildUpdatedEvaluationSummary(
     arm: evaluationUnit === 'system' ? 'heterogeneous-system' : 'homogeneous-model-role',
     evaluation_unit: evaluationUnit ?? 'model',
     lifecycle_state: 'running',
-    assignment_total: progress.total,
-    assignment_completed: progress.completed,
+    assignment_total: assignmentTotal,
+    assignment_completed: progress.passed,
     assignment_failed: progress.failed,
     terminal_outcomes: {
-      completed: progress.completed,
+      completed: progress.passed,
       model_failed: progress.failed,
       grader_failed: 0,
       invalid_evidence: 0,

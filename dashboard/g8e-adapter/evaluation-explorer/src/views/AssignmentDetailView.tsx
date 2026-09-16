@@ -13,12 +13,14 @@ import {
   MetricCard,
   QualityBadge,
   SectionHeading,
+  Timeline,
   UnavailableValue,
   formatDuration,
   formatLatency,
   formatTokens,
   formatNumber,
 } from '../components/shared';
+import { assignmentLifecycleEvents } from './derived';
 
 function observationLabel(value: string): string {
   return value.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
@@ -37,6 +39,14 @@ export function AssignmentDetailView() {
 
   const assignment = useStoreState((state) =>
     assignmentId ? state.assignments.get(recordKey(activeDatasetId, assignmentId)) : undefined,
+  );
+  const lifecycleEvents = useStoreState((state) =>
+    assignmentId
+      ? assignmentLifecycleEvents(
+          assignmentId,
+          state.events.filter((event) => event.dataset_id === activeDatasetId && event.run_id === runId),
+        )
+      : [],
   );
   const connection = useStoreState((state) => state.connection);
 
@@ -156,6 +166,13 @@ export function AssignmentDetailView() {
           <p className="missingness-detail">Missingness: {assignment.missingness_reason}</p>
         ) : null}
       </section>
+
+      {lifecycleEvents.length > 0 ? (
+        <section className="assignment-lifecycle">
+          <h2>Lifecycle timeline</h2>
+          <Timeline events={lifecycleEvents} />
+        </section>
+      ) : null}
 
       <section className="assignment-stages">
         <h2>Stages</h2>
