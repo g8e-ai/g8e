@@ -8,13 +8,16 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
 func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
@@ -25,6 +28,7 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.AddCommand(
 		campaignEvalInitCmd(deps),
 		campaignEvalScheduleCmd(deps),
+		campaignEvalExecuteCmd(deps),
 		campaignEvalStatusCmd(deps),
 	)
 	return cmd
@@ -153,6 +157,181 @@ func campaignEvalScheduleCmd(deps nativeEvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
+	return cmd
+}
+
+func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
+	var runID string
+	var limit uint32
+	var inferenceSessionID string
+	var dataSessionID string
+	var ensembleURL string
+	var jsonOutput bool
+	var noAutoRefresh bool
+	cmd := &cobra.Command{
+		Use:   "execute",
+		Short: "Execute one or more queued North Star campaign assignments through production POST /api/v1/chat",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if runID == "" {
+				return fmt.Errorf("evaluation: campaign execute: %w", constants.ErrMissingRequiredField)
+			}
+			if limit == 0 {
+				limit = 1
+			}
+			cfg, fileSvc, authContext, err := chatEvalEnvironment(cmd, chatEvalDeps{
+				configLoader:         deps.configLoader,
+				fileSvcFactory:       deps.fileSvcFactory,
+				authLoader:           deps.authLoader,
+				clientFactory:        deps.clientFactory,
+				refreshClientFactory: defaultRefreshClientFactory,
+				now:                  deps.now,
+				newID:                deps.newID,
+			})
+			if err != nil {
+				return err
+			}
+			store := evaluation.NewStore(fileSvc)
+			summary, err := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() }).RunSummary(cmd.Context(), runID)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign execute: %w", err)
+			}
+			binding := summary.Run.GetCampaignBinding()
+			if binding == nil {
+				return fmt.Errorf("evaluation: campaign execute: missing campaign binding")
+			}
+			if inferenceSessionID == "" {
+				inferenceSessionID = binding.GetInferenceOperatorSessionId()
+			}
+			if dataSessionID == "" {
+				dataSessionID = binding.GetDataOperatorSessionId()
+			}
+			operators, err := chatEvalListOperators(cmd, chatEvalDeps{
+				configLoader:   deps.configLoader,
+				fileSvcFactory: deps.fileSvcFactory,
+				authLoader:     deps.authLoader,
+				clientFactory:  deps.clientFactory,
+				now:            deps.now,
+				newID:          deps.newID,
+			}, cfg, authContext)
+			if err != nil {
+				return err
+			}
+			if !noAutoRefresh {
+				authContext, err = chatEvalEnsureOperatorBinding(cmd, chatEvalDeps{
+					configLoader:         deps.configLoader,
+					fileSvcFactory:       deps.fileSvcFactory,
+					authLoader:           deps.authLoader,
+					clientFactory:        deps.clientFactory,
+					refreshClientFactory: defaultRefreshClientFactory,
+					now:                  deps.now,
+					newID:                deps.newID,
+				}, cfg, fileSvc, authContext, operators, dataSessionID)
+				if err != nil {
+					return fmt.Errorf("evaluation: campaign execute: %w", err)
+				}
+			}
+			selected, err := evaluation.SelectInferenceOperator(operators, inferenceSessionID)
+			if err != nil {
+				return err
+			}
+			dataOperator, err := chatEvalResolveDataOperator(operators, authContext, dataSessionID)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign execute: %w", err)
+			}
+			spec, err := store.LoadCampaignSpec(cmd.Context(), binding.GetCampaignId())
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign execute: %w", err)
+			}
+			_, artifacts, err := evaluation.LoadNorthStarScenarioCatalog()
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign execute: %w", err)
+			}
+			ensembleClient, err := chatEvalEnsembleClient(cfg, authContext, resolveChatEvalEnsembleURL(ensembleURL), chatEvalDeps{
+				configLoader:   deps.configLoader,
+				fileSvcFactory: deps.fileSvcFactory,
+				authLoader:     deps.authLoader,
+				clientFactory:  deps.clientFactory,
+				now:            deps.now,
+				newID:          deps.newID,
+			})
+			if err != nil {
+				return err
+			}
+			persona := harnessclient.Persona{
+				ID:                "g8e-campaign-controller",
+				UserAgent:         "g8e-eval-campaign",
+				UserID:            authContext.UserID,
+				CLISessionID:      authContext.CLISessionID,
+				OperatorID:        dataOperator.OperatorID,
+				OperatorSessionID: dataOperator.OperatorSessionID,
+			}
+			executor := evaluation.NewCampaignChatExecutor(
+				ensembleClient,
+				persona,
+				dataOperator.OperatorID,
+				dataOperator.OperatorSessionID,
+				store,
+				func(ctx context.Context, fetch func(context.Context) (map[string]any, error)) (map[string]any, error) {
+					return chatEvalWaitForTrace(ctx, fetch, newChatAcceptReporter(cmd.OutOrStdout(), jsonOutput))
+				},
+				deps.now,
+				func(prefix string) string { return prefix + "-" + deps.newID() },
+			)
+			controller := evaluation.NewCampaignController(store, executor, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			executionBinding := evaluation.CampaignExecutionBinding{
+				InferenceOperatorSessionID: selected.OperatorSessionID,
+				DataOperatorID:             dataOperator.OperatorID,
+				DataOperatorSessionID:      dataOperator.OperatorSessionID,
+				ModelRegistryDigest:        spec.GetModelRegistryDigest(),
+				ModelRegistry:              evaluation.InferenceVariantsFromEvalRegistry(spec.GetModelRegistry()),
+			}
+			results := make([]map[string]any, 0, limit)
+			executed := 0
+			for i := 0; i < int(limit); i++ {
+				ctx, cancel := context.WithTimeout(cmd.Context(), 8*time.Minute)
+				result, ok, err := controller.ExecuteNextAssignment(ctx, runID, executionBinding, artifacts)
+				cancel()
+				if err != nil {
+					return fmt.Errorf("evaluation: campaign execute: %w", err)
+				}
+				if !ok {
+					break
+				}
+				executed++
+				entry := map[string]any{
+					"assignment_id": result.GetAssignmentId(),
+					"status":        result.GetLifecycleStatus().String(),
+					"result_digest": result.GetResultDigest(),
+				}
+				results = append(results, entry)
+				if !jsonOutput {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Executed %s: %s\n", result.GetAssignmentId(), result.GetLifecycleStatus().String())
+				}
+			}
+			if jsonOutput {
+				payload, err := json.MarshalIndent(map[string]any{
+					"run_id":    runID,
+					"executed":  executed,
+					"remaining": int64(summary.ExpectedAssignment) - int64(summary.TerminalCount) - int64(executed),
+					"results":   results,
+				}, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Executed %d assignment(s) for run %s\n", executed, runID)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
+	cmd.Flags().Uint32Var(&limit, "limit", 1, "Maximum queued assignments to execute in this invocation")
+	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Exact inference Operator session ID")
+	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID")
+	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
+	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }

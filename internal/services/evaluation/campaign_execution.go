@@ -88,3 +88,19 @@ type AssignmentExecutionRequest struct {
 type CampaignAssignmentExecutor interface {
 	ExecuteAssignment(ctx context.Context, req AssignmentExecutionRequest) (*evalv1.EvaluationAssignmentResult, error)
 }
+
+// InferenceVariantsFromEvalRegistry converts frozen eval model variants into the
+// governed inference registry shape used by production chat requests.
+func InferenceVariantsFromEvalRegistry(variants []*evalv1.ModelVariant) []*operatorv1.InferenceModelVariant {
+	out := make([]*operatorv1.InferenceModelVariant, 0, len(variants))
+	for _, variant := range variants {
+		if variant == nil {
+			continue
+		}
+		out = append(out, &operatorv1.InferenceModelVariant{
+			Model:  variant.GetServedModelTag(),
+			Digest: variant.GetModelDigest(),
+		})
+	}
+	return out
+}

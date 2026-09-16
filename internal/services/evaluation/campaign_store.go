@@ -260,6 +260,24 @@ func (s *Store) LoadAssignment(ctx context.Context, runID, assignmentID string) 
 	return assignment, nil
 }
 
+// SaveAssignmentTrace persists one imported g8ee assignment trace body.
+func (s *Store) SaveAssignmentTrace(ctx context.Context, runID, assignmentID string, body []byte) error {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) || !complianceevidence.ValidPathElement(assignmentID) || len(body) == 0 {
+		return fmt.Errorf("%w: assignment trace, run ID, assignment ID, and body are required", constants.ErrEvaluationReportPersistFailed)
+	}
+	if err := complianceevidence.ValidateCanonicalJSON(body); err != nil {
+		return fmt.Errorf("%w: assignment trace is not canonical JSON: %v", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	path := assignmentTracePath(runID, assignmentID)
+	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
+		return fmt.Errorf("%w: create assignment trace directory: %w", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	if err := s.files.WriteFile(ctx, path, body, constants.PermFileReadOnly); err != nil {
+		return fmt.Errorf("%w: write assignment trace: %w", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	return nil
+}
+
 // SaveAssignmentResult persists one terminal assignment result.
 func (s *Store) SaveAssignmentResult(ctx context.Context, result *evalv1.EvaluationAssignmentResult) error {
 	if s == nil || s.files == nil || result == nil || !complianceevidence.ValidPathElement(result.GetRunId()) || !complianceevidence.ValidPathElement(result.GetAssignmentId()) {
@@ -325,6 +343,10 @@ func assignmentPath(runID, assignmentID string) string {
 
 func assignmentResultPath(runID, assignmentID string) string {
 	return filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname, assignmentID+"-result"+constants.FileExtJSON)
+}
+
+func assignmentTracePath(runID, assignmentID string) string {
+	return filepath.Join(evaluationRunDir(runID), constants.EvaluationAssignmentsDirname, assignmentID+"-trace"+constants.FileExtJSON)
 }
 
 func runStatePath(runID string) string {
