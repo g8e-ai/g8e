@@ -22,6 +22,7 @@ import {
   formatNumber,
 } from '../components/shared';
 import type { ModelSummary, ModelRole } from '../contract/types';
+import { roleLabel } from './derived';
 
 interface ModelFilters {
   search: string;
@@ -125,7 +126,7 @@ export function ModelsView() {
         id: 'role',
         header: 'Role',
         accessorKey: 'role',
-        cell: ({ row }: CellContext<ModelSummary, unknown>) => row.original.role === 'lite' ? 'Light' : row.original.role,
+        cell: ({ row }: CellContext<ModelSummary, unknown>) => roleLabel(row.original.role),
       },
       {
         id: 'coverage',

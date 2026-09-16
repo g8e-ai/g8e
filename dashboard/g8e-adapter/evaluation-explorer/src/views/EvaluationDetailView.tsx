@@ -30,7 +30,7 @@ import {
   formatNumber,
 } from '../components/shared';
 import type { AssignmentResult } from '../contract/types';
-import { campaignTerminalProgress } from './derived';
+import { campaignTerminalProgress, roleLabel } from './derived';
 
 export function EvaluationDetailView() {
   const { runId: routeRun, datasetId: routeDataset } = useParams();
@@ -82,7 +82,12 @@ export function EvaluationDetailView() {
       },
       { id: 'task', header: 'Task', accessorKey: 'task_id' },
       { id: 'variant', header: 'Variant', accessorKey: 'variant_id' },
-      { id: 'role', header: 'Role', accessorKey: 'role' },
+      {
+        id: 'role',
+        header: 'Role',
+        accessorKey: 'role',
+        cell: ({ row }: CellContext<AssignmentResult, unknown>) => roleLabel(row.original.role),
+      },
       { id: 'rep', header: 'Rep', accessorKey: 'repetition' },
       { id: 'status', header: 'Status', accessorKey: 'terminal_status' },
       {
@@ -145,7 +150,7 @@ export function EvaluationDetailView() {
           <ul className="role-mapping">
             {Object.entries(run.model_role_mapping).map(([role, variantId]) => (
               <li key={role}>
-                <span className="role-label">{role === 'lite' ? 'Light' : role}</span>
+                <span className="role-label">{roleLabel(role)}</span>
                 <Link to={`/models/${activeDatasetId}/${variantId}`}>{variantId}</Link>
               </li>
             ))}

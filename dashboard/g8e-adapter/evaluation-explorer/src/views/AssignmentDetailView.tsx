@@ -20,7 +20,7 @@ import {
   formatTokens,
   formatNumber,
 } from '../components/shared';
-import { assignmentLifecycleEvents } from './derived';
+import { assignmentLifecycleEvents, roleLabel } from './derived';
 
 function observationLabel(value: string): string {
   return value.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
@@ -82,7 +82,7 @@ export function AssignmentDetailView() {
           <DetailRow label="Variant">
             <Link to={`/models/${activeDatasetId}/${assignment.variant_id}`}>{assignment.variant_id}</Link>
           </DetailRow>
-          <DetailRow label="Role">{assignment.role}</DetailRow>
+          <DetailRow label="Role">{roleLabel(assignment.role)}</DetailRow>
           <DetailRow label="Repetition">{assignment.repetition}</DetailRow>
           <DetailRow label="Terminal status">{assignment.terminal_status}</DetailRow>
           <DetailRow label="Verification">{assignment.verification_disposition ?? <UnavailableValue />}</DetailRow>

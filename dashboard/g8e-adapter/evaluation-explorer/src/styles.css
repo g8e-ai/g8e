@@ -409,11 +409,6 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   background: var(--bg-elev2); color: var(--fg); border: 1px solid var(--border);
   border-radius: 6px; padding: 5px 8px; font-size: 12.5px;
 }
-.stream-btn {
-  background: var(--bg-elev2); color: var(--fg-muted); border: 1px solid var(--border);
-  border-radius: 6px; padding: 5px 10px; font-size: 12.5px;
-}
-.stream-btn:hover { color: var(--fg); }
 .stream-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
 .stream-table, .lab-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .stream-table th, .stream-table td, .lab-table th, .lab-table td {

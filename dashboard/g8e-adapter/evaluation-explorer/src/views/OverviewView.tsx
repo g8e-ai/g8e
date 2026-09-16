@@ -21,7 +21,7 @@ import {
 } from '../components/shared';
 import { formatCompact, formatRelativeTime } from '../utils/format';
 import { qualityStateLabel, qualityStateTone, type FeedConnectionState } from '../utils/feed-state';
-import { campaignTerminalProgress } from './derived';
+import { campaignTerminalProgress, roleLabel } from './derived';
 import descriptorUrl from '../contract/descriptor.json?url';
 import type {
   CatalogSnapshot,
@@ -136,8 +136,6 @@ function LiveStreamPanel({
 }) {
   const [agentFilter, setAgentFilter] = useState('all');
   const [kindFilter, setKindFilter] = useState('all');
-  const [pausedRows, setPausedRows] = useState<LiveEvent[] | null>(null);
-  const [clearedAt, setClearedAt] = useState(0);
 
   const models = useStoreState((state) => state.models);
 
@@ -148,7 +146,7 @@ function LiveStreamPanel({
   );
   const kindOptions = useMemo(() => Array.from(new Set(events.map((e) => e.kind))).sort(), [events]);
 
-  const visible = (pausedRows ?? events.slice(clearedAt))
+  const visible = events
     .filter((e) => agentFilter === 'all' || e.variant_id === agentFilter)
     .filter((e) => kindFilter === 'all' || e.kind === kindFilter)
     .slice(-15)
@@ -189,24 +187,6 @@ function LiveStreamPanel({
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            className="stream-btn"
-            aria-label={pausedRows ? 'Resume stream' : 'Pause stream'}
-            onClick={() => setPausedRows(pausedRows ? null : events.slice(clearedAt))}
-          >
-            {pausedRows ? '▶' : '❚❚'}
-          </button>
-          <button
-            type="button"
-            className="stream-btn"
-            onClick={() => {
-              setClearedAt(events.length);
-              setPausedRows(null);
-            }}
-          >
-            Clear
-          </button>
         </div>
       </div>
       {visible.length === 0 ? (
@@ -445,7 +425,7 @@ function ModelLab({ models, datasetId }: { models: ModelSummary[]; datasetId: st
                       {model.display_name}
                     </Link>
                   </td>
-                  <td>{model.role === 'lite' ? 'Light' : model.role}</td>
+                  <td>{roleLabel(model.role)}</td>
                   <td>{model.quantization_weight_class?.toUpperCase() ?? '—'}</td>
                   <td>
                     {model.output_throughput_p50?.value !== undefined

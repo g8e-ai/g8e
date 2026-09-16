@@ -20,6 +20,7 @@ import type {
   EvaluationSummary,
   LiveEvent,
   ModelRole,
+  ModelSummary,
   QualityState,
   SuiteSummary,
   TerminalStatus,
@@ -429,7 +430,92 @@ export function modelRetries(variantId: string, assignments: AssignmentResult[])
 
 /** Display label for a catalog role key. */
 export function roleLabel(role: string): string {
+  if (role === 'lite') return 'Light';
   return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+export interface ModelRoleLeaderboardRow {
+  rank: number;
+  model: ModelSummary;
+  terminal: number;
+  passed: number;
+  failed: number;
+  pass_rate?: number;
+  coverage: number;
+  latency_p50_ms?: number;
+  throughput_p50?: number;
+}
+
+/** Homogeneous model-role leaderboard rows from measured model summaries.
+ *  Inventory-only entries and variants without terminal assignments are excluded. */
+export function modelRoleLeaderboardRows(
+  models: ModelSummary[],
+  role: ModelRole | 'all' = 'all',
+): ModelRoleLeaderboardRow[] {
+  const measured = models.filter((model) => {
+    if (model.inventory_only || !model.pass_rate) return false;
+    if (role !== 'all' && model.role !== role) return false;
+    return true;
+  });
+  measured.sort(
+    (a, b) =>
+      (b.pass_rate?.estimate ?? -1) - (a.pass_rate?.estimate ?? -1) ||
+      a.display_name.localeCompare(b.display_name) ||
+      a.variant_id.localeCompare(b.variant_id),
+  );
+  return measured.map((model, index) => {
+    const terminal = model.pass_rate?.denominator ?? 0;
+    const passed = terminal > 0 ? Math.round((model.pass_rate?.estimate ?? 0) * terminal) : 0;
+    const failed = Math.max(0, terminal - passed);
+    return {
+      rank: index + 1,
+      model,
+      terminal,
+      passed,
+      failed,
+      pass_rate: model.pass_rate?.estimate,
+      coverage: model.evaluation_coverage,
+      latency_p50_ms: model.latency_p50_ms?.value,
+      throughput_p50: model.output_throughput_p50?.value,
+    };
+  });
+}
+
+export interface SystemLeaderboardRow {
+  rank: number;
+  run: EvaluationSummary;
+  stack_id: string;
+  pass_rate?: number;
+  primary_invocation_share?: number;
+  correlated_failure_rate?: number;
+  terminal: number;
+  scheduled: number;
+}
+
+/** Heterogeneous system leaderboard rows from system evaluation summaries.
+ *  Homogeneous model-role runs are excluded so denominators never mix. */
+export function systemLeaderboardRows(evaluations: EvaluationSummary[]): SystemLeaderboardRow[] {
+  const systemRuns = evaluations.filter(
+    (run) =>
+      run.evaluation_unit === 'system' ||
+      run.arm.includes('heterogeneous') ||
+      Boolean(run.stack_id),
+  );
+  systemRuns.sort(
+    (a, b) =>
+      (b.headline_metrics.pass_rate?.value ?? -1) - (a.headline_metrics.pass_rate?.value ?? -1) ||
+      (a.stack_id ?? a.run_id).localeCompare(b.stack_id ?? b.run_id),
+  );
+  return systemRuns.map((run, index) => ({
+    rank: index + 1,
+    run,
+    stack_id: run.stack_id ?? run.run_id,
+    pass_rate: run.headline_metrics.pass_rate?.value,
+    primary_invocation_share: run.primary_invocation_share?.value,
+    correlated_failure_rate: run.correlated_failure_rate?.value,
+    terminal: run.assignment_completed + run.assignment_failed,
+    scheduled: run.assignment_total,
+  }));
 }
 
 /** The distinct start dates (YYYY-MM-DD) across runs, for the date filter. */

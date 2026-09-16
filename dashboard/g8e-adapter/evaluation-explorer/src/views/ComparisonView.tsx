@@ -5,6 +5,7 @@
 import { useSearchParams, Link } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
 import { resolveModelSummary, useStoreState } from '../state/store';
+import { roleLabel } from './derived';
 import {
   EmptyState,
   ErrorState,
@@ -80,7 +81,7 @@ export function ComparisonView() {
           <tbody>
             <tr>
               <th scope="row">Role</th>
-              {models.map((m) => <td key={m.variant_id}>{m.role}</td>)}
+              {models.map((m) => <td key={m.variant_id}>{roleLabel(m.role)}</td>)}
             </tr>
             <tr>
               <th scope="row">Coverage</th>

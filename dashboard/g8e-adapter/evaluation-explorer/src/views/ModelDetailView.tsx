@@ -23,7 +23,7 @@ import {
   formatTokens,
   formatNumber,
 } from '../components/shared';
-import { modelSuiteRows, runsForVariant } from './derived';
+import { modelSuiteRows, roleLabel, runsForVariant } from './derived';
 
 export function ModelDetailView() {
   const { variantId: routeVariant, datasetId: routeDataset } = useParams();
@@ -101,7 +101,7 @@ export function ModelDetailView() {
           <DetailRow label="Variant ID">{model.variant_id}</DetailRow>
           <DetailRow label="Display name">{model.display_name}</DetailRow>
           <DetailRow label="Served tag">{model.served_model_tag ?? <UnavailableValue />}</DetailRow>
-          <DetailRow label="Role">{model.role === 'lite' ? 'Light' : model.role}</DetailRow>
+          <DetailRow label="Role">{roleLabel(model.role)}</DetailRow>
           <DetailRow label="Backend / provider">{model.backend_provider_class ?? <UnavailableValue />}</DetailRow>
           <DetailRow label="Quantization / weight">{model.quantization_weight_class ?? <UnavailableValue />}</DetailRow>
           <DetailRow label="Inventory only">{model.inventory_only ? 'Yes' : 'No'}</DetailRow>

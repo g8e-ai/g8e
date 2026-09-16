@@ -17,7 +17,7 @@ The enum values are reconciled against the real source data in `.local.dev/campa
 
 - `QualityState`: `verified_public`, `exploratory_verified`, `exploratory_partial`, `live_in_progress`, `terminal_failed`, `dead_evidence`, `not_evaluated`, `unavailable`. Matches the plan's data quality model table exactly. Inventory-only models use the `inventory_only` boolean flag on `ModelSummary` plus `quality_state: not_evaluated`; `inventory_only` is not a quality state.
 - `DatasetKind`: `exploratory_baseline`, `verified_public_snapshot`, `live_run`. The site never averages across datasets.
-- `ModelRole`: `primary`, `assistant`, `lite`. The browser labels `lite` as Light; the wire value remains unchanged.
+- `ModelRole`: `primary`, `assistant`, `lite`. The browser displays Primary, Assistant, and Light; wire values remain unchanged.
 - `ScenarioCategory`: `instruction_adherence`, `tool_selection`, `tool_arguments`, `technical_analysis`, `routing_delegation`, `verification`, `security_policy`, `recovery`, `final_response`.
 - `EvaluationUnit`: `model`, `system`. Model evaluation compares a candidate in one role; system evaluation compares a complete role stack.
 - `EscalationDisposition`: `correct_autonomous_completion`, `correct_escalation`, `false_escalation`, `missed_escalation`.

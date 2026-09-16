@@ -15,7 +15,7 @@ import {
   formatTimestamp,
 } from '../components/shared';
 import type { AssignmentResult, TerminalStatus } from '../contract/types';
-import { isFailureTerminalStatus } from './derived';
+import { isFailureTerminalStatus, roleLabel } from './derived';
 
 function observationLabel(value: string): string {
   return value.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
@@ -63,7 +63,12 @@ export function FailuresView() {
       { id: 'run', header: 'Run', accessorKey: 'run_id' },
       { id: 'task', header: 'Task', accessorKey: 'task_id' },
       { id: 'variant', header: 'Variant', accessorKey: 'variant_id' },
-      { id: 'role', header: 'Role', accessorKey: 'role' },
+      {
+        id: 'role',
+        header: 'Role',
+        accessorKey: 'role',
+        cell: ({ row }: CellContext<AssignmentResult, unknown>) => roleLabel(row.original.role),
+      },
       {
         id: 'status',
         header: 'Failure class',
