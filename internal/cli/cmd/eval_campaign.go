@@ -10,13 +10,17 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
@@ -29,6 +33,7 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		campaignEvalInitCmd(deps),
 		campaignEvalScheduleCmd(deps),
 		campaignEvalExecuteCmd(deps),
+		campaignEvalPublishCmd(deps),
 		campaignEvalStatusCmd(deps),
 	)
 	return cmd
@@ -128,6 +133,7 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 func campaignEvalScheduleCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
 	var jsonOutput bool
+	var publish bool
 	cmd := &cobra.Command{
 		Use:   "schedule",
 		Short: "Materialize and persist the homogeneous assignment matrix for one run",
@@ -140,6 +146,13 @@ func campaignEvalScheduleCmd(deps nativeEvalDeps) *cobra.Command {
 				return err
 			}
 			controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			if publish {
+				publication, err := newCampaignPublicationCoordinator(cmd, fileSvc)
+				if err != nil {
+					return fmt.Errorf("evaluation: campaign schedule: %w", err)
+				}
+				controller = controller.WithPublication(publication)
+			}
 			count, err := controller.ScheduleHomogeneousRun(cmd.Context(), runID)
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign schedule: %w", err)
@@ -157,6 +170,7 @@ func campaignEvalScheduleCmd(deps nativeEvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
+	cmd.Flags().BoolVar(&publish, "publish", false, "Publish queued assignment lifecycle projections to the public mirror")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
@@ -169,6 +183,7 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	var ensembleURL string
 	var jsonOutput bool
 	var noAutoRefresh bool
+	var publish bool
 	cmd := &cobra.Command{
 		Use:   "execute",
 		Short: "Execute one or more queued North Star campaign assignments through production POST /api/v1/chat",
@@ -279,6 +294,13 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 				func(prefix string) string { return prefix + "-" + deps.newID() },
 			)
 			controller := evaluation.NewCampaignController(store, executor, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			if publish {
+				publication, err := newCampaignPublicationCoordinator(cmd, fileSvc)
+				if err != nil {
+					return fmt.Errorf("evaluation: campaign execute: %w", err)
+				}
+				controller = controller.WithPublication(publication)
+			}
 			executionBinding := evaluation.CampaignExecutionBinding{
 				InferenceOperatorSessionID: selected.OperatorSessionID,
 				DataOperatorID:             dataOperator.OperatorID,
@@ -332,8 +354,98 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
 	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
+	cmd.Flags().BoolVar(&publish, "publish", false, "Publish assignment lifecycle and terminal result projections to the public mirror")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
+}
+
+func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
+	var runID string
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:   "publish",
+		Short: "Publish missing public lifecycle projections for one campaign run",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if runID == "" {
+				return fmt.Errorf("evaluation: campaign publish: %w", constants.ErrMissingRequiredField)
+			}
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			publication, err := newCampaignPublicationCoordinator(cmd, fileSvc)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign publish: %w", err)
+			}
+			count, err := publication.PublishRunCatchUp(cmd.Context(), runID)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign publish: %w", err)
+			}
+			if jsonOutput {
+				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "published_records": count}, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Published %d public projection record(s) for run %s\n", count, runID)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
+	return cmd
+}
+
+type gatewayCampaignFeedExporter struct {
+	publisher *gateway.PublicPublisherService
+}
+
+func (e *gatewayCampaignFeedExporter) HighWaterSequence(ctx context.Context) (int64, error) {
+	snapshot, err := e.publisher.GetSnapshot(ctx)
+	if err == nil {
+		return snapshot.HighWaterSequence, nil
+	}
+	if errors.Is(err, constants.ErrPublicFeedSnapshotNotFound) {
+		return 0, nil
+	}
+	return 0, err
+}
+
+func (e *gatewayCampaignFeedExporter) ExportBatch(ctx context.Context, records []evaluation.CampaignPublicFeedRecord) error {
+	batch := make([]models.PublicFeedRecord, len(records))
+	for index, record := range records {
+		batch[index] = models.PublicFeedRecord{
+			Sequence:    record.Sequence,
+			RecordType:  models.PublicFeedRecordTypeProjection,
+			RecordHash:  record.RecordHash,
+			RecordBytes: record.RecordBytes,
+		}
+	}
+	return e.publisher.ExportBatch(ctx, batch)
+}
+
+func newCampaignPublicationCoordinator(cmd *cobra.Command, fileSvc fs.RuntimeFileService) (*evaluation.CampaignPublicationCoordinator, error) {
+	exportConfig, err := readPublicExportConfig(commandContext(cmd), fileSvc)
+	if err != nil {
+		return nil, err
+	}
+	if !exportConfig.Enabled {
+		return nil, constants.ErrPublicFeedDisabled
+	}
+	publisher, err := newPublicPublisherForCommand(commandContext(cmd), fileSvc, exportConfig)
+	if err != nil {
+		return nil, err
+	}
+	if exportConfig.MirrorOrigin != "" {
+		publisher.SetMirrorOrigin(exportConfig.MirrorOrigin)
+	}
+	return evaluation.NewCampaignPublicationCoordinator(
+		evaluation.NewStore(fileSvc),
+		fileSvc,
+		&gatewayCampaignFeedExporter{publisher: publisher},
+	), nil
 }
 
 func campaignEvalStatusCmd(deps nativeEvalDeps) *cobra.Command {

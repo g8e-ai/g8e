@@ -55,15 +55,17 @@ type CampaignStore interface {
 	ListAssignments(ctx context.Context, runID string) ([]*evalv1.EvaluationAssignment, error)
 	AssignmentResultExists(ctx context.Context, runID, assignmentID string) (bool, error)
 	SaveAssignmentResult(ctx context.Context, result *evalv1.EvaluationAssignmentResult) error
+	LoadAssignmentResult(ctx context.Context, runID, assignmentID string) (*evalv1.EvaluationAssignmentResult, error)
 }
 
 // CampaignController owns deterministic scheduling, canonical assignment
 // persistence, and resumable execution coordination for North Star model campaigns.
 type CampaignController struct {
-	store    CampaignStore
-	executor CampaignAssignmentExecutor
-	now      func() time.Time
-	newID    func(string) string
+	store       CampaignStore
+	executor    CampaignAssignmentExecutor
+	publication *CampaignPublicationCoordinator
+	now         func() time.Time
+	newID       func(string) string
 }
 
 func NewCampaignController(store CampaignStore, executor CampaignAssignmentExecutor, now func() time.Time, newID func(string) string) *CampaignController {
@@ -74,6 +76,15 @@ func NewCampaignController(store CampaignStore, executor CampaignAssignmentExecu
 		newID = func(prefix string) string { return prefix }
 	}
 	return &CampaignController{store: store, executor: executor, now: now, newID: newID}
+}
+
+// WithPublication attaches an optional publication coordinator used to emit
+// typed public lifecycle projections after canonical state is persisted.
+func (c *CampaignController) WithPublication(publication *CampaignPublicationCoordinator) *CampaignController {
+	if c != nil {
+		c.publication = publication
+	}
+	return c
 }
 
 // InitializeCampaign persists the frozen campaign spec, catalog, and run record.
@@ -167,6 +178,9 @@ func (c *CampaignController) ScheduleHomogeneousRun(ctx context.Context, runID s
 		if err := c.store.SaveAssignment(ctx, assignment); err != nil {
 			return 0, err
 		}
+	}
+	if err := c.publishQueuedAssignments(ctx, runID, assignments); err != nil {
+		return 0, err
 	}
 	return len(assignments), nil
 }
@@ -273,6 +287,9 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 	if err := c.store.SaveAssignment(ctx, assignment); err != nil {
 		return nil, false, err
 	}
+	if err := c.publishAssignmentLifecycle(ctx, assignment); err != nil {
+		return nil, false, err
+	}
 	artifact, found := artifacts[assignment.GetScenarioId()]
 	if !found {
 		return nil, false, fmt.Errorf("evaluation: execute next assignment: missing scenario artifacts for %s", assignment.GetScenarioId())
@@ -305,5 +322,73 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 	if err := c.store.SaveAssignment(ctx, assignment); err != nil {
 		return nil, false, err
 	}
+	if err := c.publishAssignmentTerminal(ctx, assignment, result); err != nil {
+		return nil, false, err
+	}
 	return result, true, nil
+}
+
+func (c *CampaignController) publishQueuedAssignments(ctx context.Context, runID string, assignments []*evalv1.EvaluationAssignment) error {
+	if c == nil || c.publication == nil {
+		return nil
+	}
+	run, err := c.store.LoadRun(ctx, runID)
+	if err != nil {
+		return err
+	}
+	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return err
+	}
+	for _, assignment := range assignments {
+		category, err := ScenarioCategoryForAssignment(catalog, assignment)
+		if err != nil {
+			return err
+		}
+		if err := c.publication.PublishAssignmentLifecycle(ctx, assignment, category, assignmentLifecycleObservedAt(assignment)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *CampaignController) publishAssignmentLifecycle(ctx context.Context, assignment *evalv1.EvaluationAssignment) error {
+	if c == nil || c.publication == nil || assignment == nil {
+		return nil
+	}
+	run, err := c.store.LoadRun(ctx, assignment.GetRunId())
+	if err != nil {
+		return err
+	}
+	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return err
+	}
+	category, err := ScenarioCategoryForAssignment(catalog, assignment)
+	if err != nil {
+		return err
+	}
+	return c.publication.PublishAssignmentLifecycle(ctx, assignment, category, assignmentLifecycleObservedAt(assignment))
+}
+
+func (c *CampaignController) publishAssignmentTerminal(ctx context.Context, assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult) error {
+	if c == nil || c.publication == nil || assignment == nil || result == nil {
+		return nil
+	}
+	if err := c.publishAssignmentLifecycle(ctx, assignment); err != nil {
+		return err
+	}
+	run, err := c.store.LoadRun(ctx, assignment.GetRunId())
+	if err != nil {
+		return err
+	}
+	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return err
+	}
+	category, err := ScenarioCategoryForAssignment(catalog, assignment)
+	if err != nil {
+		return err
+	}
+	return c.publication.PublishAssignmentResult(ctx, assignment, result, category, "unverified")
 }
