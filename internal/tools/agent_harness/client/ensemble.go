@@ -43,7 +43,19 @@ type EnsembleEvaluationContext struct {
 	ModelRegistry           []EnsembleModelVariant `json:"model_registry"`
 	TargetOperatorSessionID string                 `json:"target_operator_session_id"`
 	EvaluationLane          string                 `json:"evaluation_lane,omitempty"`
-	DesignatedModelRole     string                 `json:"designated_model_role,omitempty"`
+	DesignatedModelRole     string                         `json:"designated_model_role,omitempty"`
+	GradingMethod           string                         `json:"grading_method,omitempty"`
+	GoldSummary             *EnsembleEvaluationGoldSummary `json:"gold_summary,omitempty"`
+}
+
+// EnsembleEvaluationGoldSummary mirrors the private gold summary carried with
+// scored semantic-judge campaign assignments.
+type EnsembleEvaluationGoldSummary struct {
+	UserPrompt       string   `json:"user_prompt"`
+	ExpectedBehavior string   `json:"expected_behavior"`
+	RequiredConcepts []string `json:"required_concepts"`
+	ExpectedTools    []string `json:"expected_tools"`
+	ForbiddenTools   []string `json:"forbidden_tools"`
 }
 
 type EnsembleChatRequest struct {

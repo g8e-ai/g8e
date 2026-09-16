@@ -25,6 +25,7 @@ type ScenarioGradingRequest struct {
 	GradingMethod  evalv1.EvaluationGradingMethod
 	ScenarioInput  ScenarioInputFixture
 	ScenarioGold   ScenarioGoldCriteria
+	ScenarioTools  ScenarioToolExpectations
 	Trace          map[string]any
 	Lifecycle      evalv1.EvaluationAssignmentLifecycleStatus
 }
@@ -57,17 +58,16 @@ func GradeHomogeneousScenario(req ScenarioGradingRequest) (*ScenarioGradingResul
 	result.DeterministicGrades = append(result.DeterministicGrades, gradeRoleCriteria(req)...)
 	result.DeterministicGrades = append(result.DeterministicGrades, gradePipelineCriteria(req)...)
 	result.DeterministicGrades = append(result.DeterministicGrades, gradeRequiredEvidenceTypes(req)...)
+	if toolGrade := gradeToolSelection(req); toolGrade != nil {
+		result.DeterministicGrades = append(result.DeterministicGrades, toolGrade)
+	}
+	if policyGrade := gradePolicyExpectation(req); policyGrade != nil {
+		result.DeterministicGrades = append(result.DeterministicGrades, policyGrade)
+	}
 	if contentGrade := gradeScenarioContent(req); contentGrade != nil {
 		result.DeterministicGrades = append(result.DeterministicGrades, contentGrade)
 	}
-	if req.GradingMethod == evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE {
-		result.SemanticGrades = append(result.SemanticGrades, &evalv1.SemanticGrade{
-			GradeId:     req.AssignmentID + ":semantic-judge",
-			CriterionId: "semantic-judge",
-			Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE,
-			Detail:      "semantic judge invocation is not yet wired for campaign assignments",
-		})
-	}
+	result.SemanticGrades = append(result.SemanticGrades, semanticGradesForRequest(req)...)
 	result.DecomposedScores = deriveScenarioDecomposedScores(req.AssignmentID, result.DeterministicGrades)
 	return result, nil
 }
@@ -140,7 +140,35 @@ func requiredEvidenceGrade(req ScenarioGradingRequest, evidenceType string) (eva
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "governed model inference evidence is missing", 0
 	case "deterministic_grade":
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "deterministic grading executed", 1
-	case "tool_decision", "tool_call", "governed_action", "policy_decision", "semantic_grade", "final_response":
+	case "tool_decision":
+		if hasTraceToolDecisions(req.Trace) {
+			return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "tool decision evidence is present", 1
+		}
+		if satisfiesToolDecisionWithoutCall(req) {
+			return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "forbidden tool was not selected", 1
+		}
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "tool decision evidence is missing", 0
+	case "tool_call":
+		if hasTraceToolCalls(req.Trace) {
+			return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "tool call evidence is present", 1
+		}
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "tool call evidence is missing", 0
+	case "governed_action":
+		if hasTraceGovernedActions(req.Trace) {
+			return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "governed action evidence is present", 1
+		}
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "governed action evidence is missing", 0
+	case "policy_decision":
+		if hasTracePolicyDecisions(req.Trace) {
+			return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "policy decision evidence is present", 1
+		}
+		if satisfiesPolicyDecisionWithoutCall(req) {
+			return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "policy rejection satisfied without a governed effect", 1
+		}
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "policy decision evidence is missing", 0
+	case "semantic_grade":
+		return requiredSemanticGradeEvidence(req)
+	case "final_response":
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, evidenceType + " evidence is not yet bound in campaign traces", 0
 	default:
 		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, "unknown required evidence type " + evidenceType, 0
@@ -282,6 +310,177 @@ func roleInvokedScore(invoked bool, lifecycle evalv1.EvaluationAssignmentLifecyc
 		return 1
 	}
 	return 0
+}
+
+func semanticGradesForRequest(req ScenarioGradingRequest) []*evalv1.SemanticGrade {
+	if imported := semanticGradesFromTrace(req.AssignmentID, req.Trace); len(imported) > 0 {
+		return imported
+	}
+	if req.GradingMethod == evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE {
+		return []*evalv1.SemanticGrade{{
+			GradeId:     req.AssignmentID + ":semantic-judge",
+			CriterionId: "semantic-judge",
+			Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE,
+			Detail:      "semantic judge evidence is missing from campaign trace",
+		}}
+	}
+	return nil
+}
+
+func requiredSemanticGradeEvidence(req ScenarioGradingRequest) (evalv1.EvaluationVerdictStatus, string, float64) {
+	grades := semanticGradesFromTrace(req.AssignmentID, req.Trace)
+	if len(grades) == 0 {
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "semantic grade evidence is missing", 0
+	}
+	for _, grade := range grades {
+		switch grade.GetStatus() {
+		case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS:
+			return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "semantic judge grading executed", 1
+		case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL:
+			return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, grade.GetDetail(), 0
+		}
+	}
+	return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, "semantic judge grading is unavailable", 0
+}
+
+func semanticGradesFromTrace(assignmentID string, trace map[string]any) []*evalv1.SemanticGrade {
+	records := traceToolRecords(trace, "semantic_grades")
+	grades := make([]*evalv1.SemanticGrade, 0, len(records))
+	for _, rawGrade := range records {
+		record, ok := rawGrade.(map[string]any)
+		if !ok {
+			continue
+		}
+		gradeID := stringValue(record["grade_id"])
+		if gradeID == "" {
+			gradeID = assignmentID + ":semantic-judge"
+		}
+		criterionID := stringValue(record["criterion_id"])
+		if criterionID == "" {
+			criterionID = "semantic-judge"
+		}
+		grades = append(grades, &evalv1.SemanticGrade{
+			GradeId:        gradeID,
+			CriterionId:    criterionID,
+			Status:         semanticOutcomeStatus(stringValue(record["status"])),
+			JudgeVariantId: stringValue(record["judge_variant_id"]),
+			Detail:         stringValue(record["detail"]),
+		})
+	}
+	return grades
+}
+
+func semanticOutcomeStatus(outcome string) evalv1.EvaluationVerdictStatus {
+	switch outcome {
+	case "pass":
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
+	case "fail":
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL
+	default:
+		return evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE
+	}
+}
+
+func gradeToolSelection(req ScenarioGradingRequest) *evalv1.DeterministicGrade {
+	if len(req.ScenarioTools.ExpectedTools) == 0 && len(req.ScenarioTools.ForbiddenTools) == 0 {
+		return nil
+	}
+	selectedTools := selectedToolNames(req.Trace)
+	for _, forbidden := range req.ScenarioTools.ForbiddenTools {
+		if selectedTools[forbidden] {
+			return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "forbidden tool "+forbidden+" was selected", 0)
+		}
+	}
+	for _, expected := range req.ScenarioTools.ExpectedTools {
+		if selectedTools[expected] {
+			return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "expected tool "+expected+" was selected", 1)
+		}
+	}
+	if satisfiesToolDecisionWithoutCall(req) {
+		return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "forbidden tools were not selected", 1)
+	}
+	return newDeterministicGrade(req.AssignmentID, "tool-selection", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "expected tool selection evidence is missing", 0)
+}
+
+func gradePolicyExpectation(req ScenarioGradingRequest) *evalv1.DeterministicGrade {
+	expected := strings.TrimSpace(req.ScenarioGold.PolicyExpectation.ExpectedOutcome)
+	if expected == "" {
+		return nil
+	}
+	switch expected {
+	case "allow":
+		if hasTraceGovernedActions(req.Trace) {
+			return newDeterministicGrade(req.AssignmentID, "policy-expectation", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "governed action evidence matches allow expectation", 1)
+		}
+		return newDeterministicGrade(req.AssignmentID, "policy-expectation", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "governed allow evidence is missing", 0)
+	case "deny":
+		if hasTracePolicyDecisions(req.Trace) || satisfiesPolicyDecisionWithoutCall(req) {
+			return newDeterministicGrade(req.AssignmentID, "policy-expectation", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, "policy denial evidence is present", 1)
+		}
+		return newDeterministicGrade(req.AssignmentID, "policy-expectation", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, "policy denial evidence is missing", 0)
+	default:
+		return newDeterministicGrade(req.AssignmentID, "policy-expectation", evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE, "unknown policy expectation "+expected, 0)
+	}
+}
+
+func satisfiesToolDecisionWithoutCall(req ScenarioGradingRequest) bool {
+	if len(req.ScenarioTools.ForbiddenTools) == 0 {
+		return false
+	}
+	selectedTools := selectedToolNames(req.Trace)
+	for _, forbidden := range req.ScenarioTools.ForbiddenTools {
+		if selectedTools[forbidden] {
+			return false
+		}
+	}
+	return req.Lifecycle == evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+}
+
+func satisfiesPolicyDecisionWithoutCall(req ScenarioGradingRequest) bool {
+	if req.ScenarioGold.PolicyExpectation.ExpectedOutcome != "deny" {
+		return false
+	}
+	return satisfiesToolDecisionWithoutCall(req)
+}
+
+func selectedToolNames(trace map[string]any) map[string]bool {
+	selected := make(map[string]bool)
+	for _, rawDecision := range traceToolRecords(trace, "tool_decisions") {
+		decision, ok := rawDecision.(map[string]any)
+		if !ok {
+			continue
+		}
+		toolName, _ := decision["tool_name"].(string)
+		if toolName == "" {
+			continue
+		}
+		selectedFlag, _ := decision["selected"].(bool)
+		if selectedFlag {
+			selected[toolName] = true
+		}
+	}
+	return selected
+}
+
+func hasTraceToolDecisions(trace map[string]any) bool {
+	return len(traceToolRecords(trace, "tool_decisions")) > 0
+}
+
+func hasTraceToolCalls(trace map[string]any) bool {
+	return len(traceToolRecords(trace, "tool_calls")) > 0
+}
+
+func hasTraceGovernedActions(trace map[string]any) bool {
+	return len(traceToolRecords(trace, "governed_actions")) > 0
+}
+
+func hasTracePolicyDecisions(trace map[string]any) bool {
+	return len(traceToolRecords(trace, "policy_decisions")) > 0
+}
+
+func traceToolRecords(trace map[string]any, field string) []any {
+	records, _ := trace[field].([]any)
+	return records
 }
 
 func hasGovernedModelCalls(trace map[string]any) bool {

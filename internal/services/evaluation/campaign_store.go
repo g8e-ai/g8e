@@ -172,7 +172,7 @@ func (s *Store) ListAssignments(ctx context.Context, runID string) ([]*evalv1.Ev
 	}
 	assignments := make([]*evalv1.EvaluationAssignment, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-result"+constants.FileExtJSON) {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-result"+constants.FileExtJSON) || strings.HasSuffix(entry.Name(), "-trace"+constants.FileExtJSON) {
 			continue
 		}
 		assignmentID := strings.TrimSuffix(entry.Name(), constants.FileExtJSON)

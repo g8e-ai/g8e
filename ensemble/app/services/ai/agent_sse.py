@@ -45,6 +45,10 @@ from app.models.events import (
 from app.utils.timestamp import now
 from app.errors import ValidationError
 from app.services.infra.event_service import EventService
+from app.services.evaluation.tool_evidence import (
+    record_tool_call_completed,
+    record_tool_call_started,
+)
 from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.observe.payloads import (
     build_agent_state_request,
@@ -292,6 +296,8 @@ async def deliver_via_sse(
                 state.tool_call_count += 1
                 if fn and fn not in state.tool_types_used:
                     state.tool_types_used.append(fn)
+                if inputs.g8e_context is not None:
+                    record_tool_call_started(state, inputs.g8e_context, chunk.data)
 
                 # For universal tools, emit the new native lifecycle event.
                 # Operator-gated tools are handled by their respective services.
@@ -337,6 +343,8 @@ async def deliver_via_sse(
             elif chunk.type == StreamChunkFromModelType.TOOL_RESULT:
                 exec_id = chunk.data.execution_id
                 fn = chunk.data.tool_name or ""
+                if inputs.g8e_context is not None:
+                    record_tool_call_completed(state, inputs.g8e_context, chunk.data)
 
                 # For universal tools, emit the new native lifecycle event.
                 if fn in AI_UNIVERSAL_TOOLS:

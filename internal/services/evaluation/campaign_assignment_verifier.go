@@ -32,6 +32,7 @@ type CampaignAssignmentVerificationRequest struct {
 	Result        *evalv1.EvaluationAssignmentResult
 	ScenarioInput ScenarioInputFixture
 	ScenarioGold  ScenarioGoldCriteria
+	ScenarioTools ScenarioToolExpectations
 	GradingMethod evalv1.EvaluationGradingMethod
 	Trace         map[string]any
 }
@@ -93,6 +94,7 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 			GradingMethod:  req.GradingMethod,
 			ScenarioInput:  req.ScenarioInput,
 			ScenarioGold:   req.ScenarioGold,
+			ScenarioTools:  req.ScenarioTools,
 			Trace:          req.Trace,
 			Lifecycle:      req.Result.GetLifecycleStatus(),
 		})

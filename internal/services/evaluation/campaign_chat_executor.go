@@ -70,7 +70,12 @@ func (e *CampaignChatExecutor) ExecuteAssignment(ctx context.Context, req Assign
 	if e == nil || e.client == nil {
 		return nil, fmt.Errorf("evaluation: execute assignment: chat executor is required")
 	}
-	probeReq, err := BuildCampaignChatRequest(req.Assignment, req.AttemptID, req.ScenarioInput, req.Binding)
+	probeReq, err := BuildCampaignChatRequest(req.Assignment, req.AttemptID, req.ScenarioInput, req.Binding, CampaignChatGradingContext{
+		GradingMethod:    req.GradingMethod,
+		ScenarioGold:     req.ScenarioGold,
+		ScenarioTools:    req.ScenarioTools,
+		RequiredConcepts: req.RequiredConcepts,
+	})
 	if err != nil {
 		return nil, err
 	}

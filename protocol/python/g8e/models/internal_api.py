@@ -11,6 +11,17 @@ from .context import RequestContext
 
 EvaluationLane = Literal["model_role", "system"]
 DesignatedModelRole = Literal["primary", "assistant", "lite"]
+EvaluationGradingMethod = Literal["deterministic", "semantic_judge"]
+
+
+class EvaluationGoldSummary(G8eBaseModel):
+    """Private gold summary carried with scored chat assignments."""
+
+    user_prompt: str = Field(default="")
+    expected_behavior: str = Field(default="")
+    required_concepts: list[str] = Field(default_factory=list)
+    expected_tools: list[str] = Field(default_factory=list)
+    forbidden_tools: list[str] = Field(default_factory=list)
 
 
 class ResourceCreationRequest(G8eBaseModel):
@@ -53,6 +64,8 @@ class EvaluationInferenceContext(G8eBaseModel):
     target_operator_session_id: str = Field(..., min_length=1)
     evaluation_lane: EvaluationLane = Field(default="system")
     designated_model_role: DesignatedModelRole | None = Field(default=None)
+    grading_method: EvaluationGradingMethod = Field(default="deterministic")
+    gold_summary: EvaluationGoldSummary | None = Field(default=None)
 
     @model_validator(mode="after")
     def validate_unique_models(self):
@@ -71,6 +84,8 @@ class EvaluationInferenceContext(G8eBaseModel):
             raise ValueError(
                 "designated_model_role is only permitted for model_role evaluation lane"
             )
+        if self.grading_method == "semantic_judge" and self.gold_summary is None:
+            raise ValueError("gold_summary is required when grading_method is semantic_judge")
         return self
 
 

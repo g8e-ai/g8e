@@ -32,7 +32,13 @@ from app.models.events import ScrubbingTelemetry
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import G8eeUserSettings
 from app.models.agents import TriageResult
-from app.models.evaluation_trace import EvaluationControlledRoleAssignment
+from app.models.evaluation_trace import (
+    EvaluationControlledRoleAssignment,
+    EvaluationGovernedActionRecord,
+    EvaluationPolicyDecisionRecord,
+    EvaluationToolCallRecord,
+    EvaluationToolDecisionRecord,
+)
 from app.models.command_request_payloads import TargetedOperatorBase
 from app.models.tool_results import (
     TokenUsage,
@@ -234,6 +240,10 @@ class AgentStreamState(G8eBaseModel):
     grounding_metadata: GroundingMetadata | None = None
     tool_call_count: int = 0
     tool_types_used: list[str] = Field(default_factory=list)
+    tool_decisions: list[EvaluationToolDecisionRecord] = Field(default_factory=list)
+    tool_calls: list[EvaluationToolCallRecord] = Field(default_factory=list)
+    governed_actions: list[EvaluationGovernedActionRecord] = Field(default_factory=list)
+    policy_decisions: list[EvaluationPolicyDecisionRecord] = Field(default_factory=list)
     tool_response_sizes: list[int] = Field(
         default_factory=list, description="Character sizes of individual tool responses"
     )

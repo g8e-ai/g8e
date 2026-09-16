@@ -28,7 +28,7 @@ type CampaignExecutionBinding struct {
 
 // BuildCampaignChatRequest constructs the production chat request for one
 // homogeneous model-role assignment using the frozen scenario input fixture.
-func BuildCampaignChatRequest(assignment *evalv1.EvaluationAssignment, attemptID string, input ScenarioInputFixture, binding CampaignExecutionBinding) (ChatProbeRequest, error) {
+func BuildCampaignChatRequest(assignment *evalv1.EvaluationAssignment, attemptID string, input ScenarioInputFixture, binding CampaignExecutionBinding, grading CampaignChatGradingContext) (ChatProbeRequest, error) {
 	if assignment == nil || attemptID == "" || binding.InferenceOperatorSessionID == "" || binding.DataOperatorID == "" || binding.DataOperatorSessionID == "" {
 		return ChatProbeRequest{}, fmt.Errorf("evaluation: build campaign chat request: %w", constants.ErrMissingRequiredField)
 	}
@@ -59,7 +59,22 @@ func BuildCampaignChatRequest(assignment *evalv1.EvaluationAssignment, attemptID
 		EvaluationLane:          "model_role",
 		DesignatedModelRole:     role,
 		Message:                 message,
+		GradingMethod:           grading.GradingMethod,
+		GoldSummary:             buildChatProbeGoldSummary(input, grading),
 	}, nil
+}
+
+func buildChatProbeGoldSummary(input ScenarioInputFixture, grading CampaignChatGradingContext) *ChatProbeGoldSummary {
+	if grading.GradingMethod != evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE {
+		return nil
+	}
+	return &ChatProbeGoldSummary{
+		UserPrompt:       input.UserPrompt,
+		ExpectedBehavior: grading.ScenarioGold.ExpectedBehavior,
+		RequiredConcepts: append([]string(nil), grading.RequiredConcepts...),
+		ExpectedTools:    append([]string(nil), grading.ScenarioTools.ExpectedTools...),
+		ForbiddenTools:   append([]string(nil), grading.ScenarioTools.ForbiddenTools...),
+	}
 }
 
 func modelCampaignRoleLabel(role evalv1.ModelCampaignRole) (string, error) {
@@ -75,14 +90,30 @@ func modelCampaignRoleLabel(role evalv1.ModelCampaignRole) (string, error) {
 	}
 }
 
+// ScenarioToolExpectations carries frozen scenario tool constraints for grading.
+type ScenarioToolExpectations struct {
+	ExpectedTools  []string
+	ForbiddenTools []string
+}
+
+// CampaignChatGradingContext carries private grading inputs for one chat assignment.
+type CampaignChatGradingContext struct {
+	GradingMethod    evalv1.EvaluationGradingMethod
+	ScenarioGold     ScenarioGoldCriteria
+	ScenarioTools    ScenarioToolExpectations
+	RequiredConcepts []string
+}
+
 // AssignmentExecutionRequest carries one resumable controller execution attempt.
 type AssignmentExecutionRequest struct {
-	Assignment    *evalv1.EvaluationAssignment
-	AttemptID     string
-	ScenarioInput ScenarioInputFixture
-	ScenarioGold  ScenarioGoldCriteria
-	GradingMethod evalv1.EvaluationGradingMethod
-	Binding       CampaignExecutionBinding
+	Assignment     *evalv1.EvaluationAssignment
+	AttemptID      string
+	ScenarioInput  ScenarioInputFixture
+	ScenarioGold     ScenarioGoldCriteria
+	ScenarioTools    ScenarioToolExpectations
+	RequiredConcepts []string
+	GradingMethod    evalv1.EvaluationGradingMethod
+	Binding          CampaignExecutionBinding
 }
 
 // CampaignAssignmentExecutor submits one scored assignment through production chat

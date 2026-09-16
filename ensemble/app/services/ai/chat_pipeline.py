@@ -60,6 +60,7 @@ from app.llm.utils import resolve_model, ModelOverrideResolver
 
 from app.services.infra.event_service import EventService
 from .agent import g8eEnsemble
+from app.services.evaluation.semantic_grader import grade_campaign_assignment_semantically
 from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.evaluation.role_control import (
     apply_homogeneous_role_control,
@@ -804,6 +805,23 @@ class ChatPipelineService:
         if controlled_role_assignment is not None:
             designated_role_output = (state.response_text or "").strip() or None
 
+        semantic_grades = []
+        grader_calls = []
+        evaluation_context = g8e_context.evaluation_context
+        if (
+            evaluation_context is not None
+            and evaluation_context.grading_method == "semantic_judge"
+            and evaluation_context.gold_summary is not None
+        ):
+            semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
+                evaluation_context=evaluation_context,
+                g8e_context=g8e_context,
+                request_settings=inputs.request_settings,
+                gold_summary=evaluation_context.gold_summary,
+                designated_role_output=designated_role_output,
+                tool_calls=state.tool_calls,
+            )
+
         self.evaluation_trace_service.finalize(
             g8e_context,
             model_calls=model_calls,
@@ -811,6 +829,12 @@ class ChatPipelineService:
             controlled_role_assignment=controlled_role_assignment,
             role_outcome=role_outcome,
             designated_role_output=designated_role_output,
+            tool_decisions=state.tool_decisions,
+            tool_calls=state.tool_calls,
+            governed_actions=state.governed_actions,
+            policy_decisions=state.policy_decisions,
+            semantic_grades=semantic_grades,
+            grader_calls=grader_calls,
             finish_reason=state.finish_reason or "stop",
             status="failed" if state.stream_failed else "completed",
         )

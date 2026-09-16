@@ -34,6 +34,7 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		campaignEvalScheduleCmd(deps),
 		campaignEvalExecuteCmd(deps),
 		campaignEvalPublishCmd(deps),
+		campaignEvalVerifyCmd(deps),
 		campaignEvalStatusCmd(deps),
 	)
 	return cmd
@@ -446,6 +447,68 @@ func newCampaignPublicationCoordinator(cmd *cobra.Command, fileSvc fs.RuntimeFil
 		fileSvc,
 		&gatewayCampaignFeedExporter{publisher: publisher},
 	), nil
+}
+
+func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
+	var runID string
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:   "verify",
+		Short: "Independently verify persisted campaign assignment results for one run",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if runID == "" {
+				return fmt.Errorf("evaluation: campaign verify: %w", constants.ErrMissingRequiredField)
+			}
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			store := evaluation.NewStore(fileSvc)
+			run, err := store.LoadRun(cmd.Context(), runID)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign verify: %w", err)
+			}
+			catalog, err := store.LoadScenarioCatalog(cmd.Context(), run.GetCampaignBinding().GetCampaignId())
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign verify: %w", err)
+			}
+			_, artifacts, err := evaluation.LoadNorthStarScenarioCatalog()
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign verify: %w", err)
+			}
+			report, err := evaluation.NewCampaignRunVerifier(deps.now).VerifyRun(cmd.Context(), store, runID, catalog, artifacts)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign verify: %w", err)
+			}
+			if err := store.SaveCampaignVerification(cmd.Context(), runID, report); err != nil {
+				return fmt.Errorf("evaluation: campaign verify: %w", err)
+			}
+			if jsonOutput {
+				payload, err := json.MarshalIndent(map[string]any{
+					"run_id":          runID,
+					"status":          report.GetStatus().String(),
+					"failure_count":   report.GetFailureCount(),
+					"failure_reasons": report.GetFailureReasons(),
+				}, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Run %s verification: %s (%d failure(s))\n", runID, report.GetStatus().String(), report.GetFailureCount())
+			if report.GetFailureCount() > 0 {
+				for _, reason := range report.GetFailureReasons() {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "- %s\n", reason)
+				}
+				return constants.ErrEvalRunVerificationFailed
+			}
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
+	return cmd
 }
 
 func campaignEvalStatusCmd(deps nativeEvalDeps) *cobra.Command {

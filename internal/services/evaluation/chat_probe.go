@@ -18,8 +18,16 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
+
+func chatGradingMethodLabel(method evalv1.EvaluationGradingMethod) string {
+	if method == evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE {
+		return "semantic_judge"
+	}
+	return "deterministic"
+}
 
 // ChatProbeRequest carries a non-scored production chat probe through
 // POST /api/v1/chat. It is not a North Star evaluation.
@@ -37,6 +45,17 @@ type ChatProbeRequest struct {
 	EvaluationLane          string
 	DesignatedModelRole     string
 	Message                 string
+	GradingMethod           evalv1.EvaluationGradingMethod
+	GoldSummary             *ChatProbeGoldSummary
+}
+
+// ChatProbeGoldSummary carries private gold criteria for semantic judge grading.
+type ChatProbeGoldSummary struct {
+	UserPrompt       string
+	ExpectedBehavior string
+	RequiredConcepts []string
+	ExpectedTools    []string
+	ForbiddenTools   []string
 }
 
 // BuildChatProbeRequest constructs the canonical ensemble chat request for a
@@ -76,6 +95,16 @@ func BuildChatProbeRequest(req ChatProbeRequest, dataOperatorID, dataOperatorSes
 			return harnessclient.EnsembleChatRequest{}, fmt.Errorf("evaluation: build chat probe request: designated model role required for model_role lane")
 		}
 		evalContext.DesignatedModelRole = req.DesignatedModelRole
+	}
+	evalContext.GradingMethod = chatGradingMethodLabel(req.GradingMethod)
+	if req.GoldSummary != nil {
+		evalContext.GoldSummary = &harnessclient.EnsembleEvaluationGoldSummary{
+			UserPrompt:       req.GoldSummary.UserPrompt,
+			ExpectedBehavior:   req.GoldSummary.ExpectedBehavior,
+			RequiredConcepts:   append([]string(nil), req.GoldSummary.RequiredConcepts...),
+			ExpectedTools:      append([]string(nil), req.GoldSummary.ExpectedTools...),
+			ForbiddenTools:     append([]string(nil), req.GoldSummary.ForbiddenTools...),
+		}
 	}
 	return harnessclient.EnsembleChatRequest{
 		Context: harnessclient.EnsembleRequestContext{

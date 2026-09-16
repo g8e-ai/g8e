@@ -84,6 +84,48 @@ func homogeneousAssignmentExecutionRequest(role string) AssignmentExecutionReque
 	}
 }
 
+func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) {
+	t.Parallel()
+	trace := completedHomogeneousTrace("primary")
+	trace["tool_decisions"] = []any{
+		map[string]any{
+			"decision_id": "exec-1",
+			"tool_name":   "recursive_grep_search",
+			"selected":    true,
+			"outcome":     "pass",
+		},
+	}
+	trace["tool_calls"] = []any{
+		map[string]any{
+			"call_id":          "exec-1",
+			"tool_name":        "recursive_grep_search",
+			"arguments_hash":   "a" + repeatHex('a', 63),
+			"success":          true,
+			"is_operator_tool": true,
+			"execution_id":     "exec-1",
+		},
+	}
+	trace["governed_actions"] = []any{
+		map[string]any{
+			"binding_id":          "exec-1",
+			"transaction_id":      "exec-1",
+			"operator_id":         "operator-1",
+			"operator_session_id": "session-1",
+			"policy_decision":     "allow",
+		},
+	}
+	digest, err := computeTraceDigest(trace)
+	require.NoError(t, err)
+	trace["trace_digest"] = digest
+	req := homogeneousAssignmentExecutionRequest("primary")
+	req.ScenarioTools = ScenarioToolExpectations{ExpectedTools: []string{"recursive_grep_search"}}
+	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Now().UTC(), func(prefix string) string { return prefix })
+	require.NoError(t, err)
+	require.Len(t, result.GetToolDecisions(), 1)
+	require.Len(t, result.GetToolCalls(), 1)
+	require.Len(t, result.GetGovernedActions(), 1)
+}
+
 func completedHomogeneousTrace(role string) map[string]any {
 	trace := map[string]any{
 		"schema_version":    "1",

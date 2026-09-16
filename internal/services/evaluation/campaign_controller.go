@@ -314,14 +314,24 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 	if err != nil {
 		return nil, false, err
 	}
+	scenarioTools, err := scenarioToolsForAssignment(catalog, assignment)
+	if err != nil {
+		return nil, false, err
+	}
+	requiredConcepts, err := scenarioRequiredConceptsForAssignment(catalog, assignment)
+	if err != nil {
+		return nil, false, err
+	}
 	attemptID := c.newID("attempt")
 	result, err := c.executor.ExecuteAssignment(ctx, AssignmentExecutionRequest{
-		Assignment:    assignment,
-		AttemptID:     attemptID,
-		ScenarioInput: scenarioInput,
-		ScenarioGold:  scenarioGold,
-		GradingMethod: gradingMethod,
-		Binding:       binding,
+		Assignment:       assignment,
+		AttemptID:        attemptID,
+		ScenarioInput:    scenarioInput,
+		ScenarioGold:     scenarioGold,
+		ScenarioTools:    scenarioTools,
+		RequiredConcepts: requiredConcepts,
+		GradingMethod:    gradingMethod,
+		Binding:          binding,
 	})
 	if err != nil {
 		assignment.LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED
@@ -356,6 +366,33 @@ func scenarioGradingMethodForAssignment(catalog *evalv1.EvaluationScenarioCatalo
 		}
 	}
 	return evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_UNSPECIFIED, fmt.Errorf("evaluation: scenario grading method lookup: unknown scenario %s", assignment.GetScenarioId())
+}
+
+func scenarioRequiredConceptsForAssignment(catalog *evalv1.EvaluationScenarioCatalog, assignment *evalv1.EvaluationAssignment) ([]string, error) {
+	if catalog == nil || assignment == nil || assignment.GetScenarioId() == "" {
+		return nil, fmt.Errorf("evaluation: scenario concept lookup: %w", constants.ErrMissingRequiredField)
+	}
+	for _, scenario := range catalog.GetScenarios() {
+		if scenario.GetScenarioId() == assignment.GetScenarioId() {
+			return append([]string(nil), scenario.GetRequiredConcepts()...), nil
+		}
+	}
+	return nil, fmt.Errorf("evaluation: scenario concept lookup: unknown scenario %s", assignment.GetScenarioId())
+}
+
+func scenarioToolsForAssignment(catalog *evalv1.EvaluationScenarioCatalog, assignment *evalv1.EvaluationAssignment) (ScenarioToolExpectations, error) {
+	if catalog == nil || assignment == nil || assignment.GetScenarioId() == "" {
+		return ScenarioToolExpectations{}, fmt.Errorf("evaluation: scenario tool lookup: %w", constants.ErrMissingRequiredField)
+	}
+	for _, scenario := range catalog.GetScenarios() {
+		if scenario.GetScenarioId() == assignment.GetScenarioId() {
+			return ScenarioToolExpectations{
+				ExpectedTools:  append([]string(nil), scenario.GetExpectedTools()...),
+				ForbiddenTools: append([]string(nil), scenario.GetForbiddenTools()...),
+			}, nil
+		}
+	}
+	return ScenarioToolExpectations{}, fmt.Errorf("evaluation: scenario tool lookup: unknown scenario %s", assignment.GetScenarioId())
 }
 
 func (c *CampaignController) publishQueuedAssignments(ctx context.Context, runID string, assignments []*evalv1.EvaluationAssignment) error {

@@ -17,7 +17,13 @@ from app.constants.env_vars import EnvVar
 from app.models.evaluation_trace import (
     EvaluationAssignmentTrace,
     EvaluationControlledRoleAssignment,
+    EvaluationGovernedActionRecord,
+    EvaluationGraderCallRecord,
+    EvaluationPolicyDecisionRecord,
     EvaluationRoleOutcome,
+    EvaluationSemanticGradeRecord,
+    EvaluationToolCallRecord,
+    EvaluationToolDecisionRecord,
     EvaluationTraceStatus,
 )
 from app.models.http_context import G8eHttpContext
@@ -89,6 +95,12 @@ class EvaluationTraceService:
         controlled_role_assignment: EvaluationControlledRoleAssignment | None = None,
         role_outcome: EvaluationRoleOutcome | None = None,
         designated_role_output: str | None = None,
+        tool_decisions: list[EvaluationToolDecisionRecord] | None = None,
+        tool_calls: list[EvaluationToolCallRecord] | None = None,
+        governed_actions: list[EvaluationGovernedActionRecord] | None = None,
+        policy_decisions: list[EvaluationPolicyDecisionRecord] | None = None,
+        semantic_grades: list[EvaluationSemanticGradeRecord] | None = None,
+        grader_calls: list[EvaluationGraderCallRecord] | None = None,
         finish_reason: str | None,
         status: EvaluationTraceStatus,
     ) -> EvaluationAssignmentTrace:
@@ -106,6 +118,12 @@ class EvaluationTraceService:
             model_calls=list(model_calls),
             role_outcome=role_outcome,
             designated_role_output=designated_role_output,
+            tool_decisions=list(tool_decisions or []),
+            tool_calls=list(tool_calls or []),
+            governed_actions=list(governed_actions or []),
+            policy_decisions=list(policy_decisions or []),
+            semantic_grades=list(semantic_grades or []),
+            grader_calls=list(grader_calls or []),
             finish_reason=finish_reason,
             completed_at=now().isoformat(),
         )
