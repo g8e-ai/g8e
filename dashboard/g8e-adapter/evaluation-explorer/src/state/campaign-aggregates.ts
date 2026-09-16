@@ -77,6 +77,7 @@ export function recordVariantRoleTerminal(
 
 interface RunProgressCounts {
   scheduled: number;
+  matrixTotal: number;
   terminal: number;
   passed: number;
   failed: number;
@@ -90,7 +91,7 @@ export function buildCampaignAggregateRecords(
   observedAt: string,
 ): SnapshotRecord[] {
   const progress = runTotals.get(runId);
-  if (!progress || progress.scheduled === 0) {
+  if (!progress || (progress.matrixTotal === 0 && progress.scheduled === 0 && progress.terminal === 0)) {
     return [];
   }
 
@@ -146,7 +147,7 @@ function buildCatalogSnapshot(
     evaluated_count: uniqueEvaluatedModels.size,
     suite_count: 1,
     run_count: 1,
-    assignment_count: progress.scheduled,
+    assignment_count: progress.matrixTotal > 0 ? progress.matrixTotal : progress.scheduled,
     provider_request_count: progress.terminal,
     provider_token_count: 0,
     retry_count: 0,

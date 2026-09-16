@@ -101,6 +101,63 @@ describe('adaptCampaignProjectionEnvelope', () => {
     expect(failEvent).toMatchObject({ completed: 1, total: 1 });
   });
 
+  it('reports finished assignments against the full queued matrix size', () => {
+    const context = createCampaignAdaptContext();
+    for (const assignmentId of ['assign-1', 'assign-2', 'assign-3', 'assign-4']) {
+      adaptCampaignProjectionEnvelope(
+        {
+          schema_version: '1.0.0',
+          message_type: 'PublicAssignmentLifecycleRecord',
+          idempotency_key: `run-1:${assignmentId}:lifecycle:queued`,
+          record: {
+            assignment_id: assignmentId,
+            run_id: 'run-1',
+            scenario_id: 'instruction-exact-format',
+            lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
+            observed_at: '2026-09-16T14:00:00Z',
+          },
+        },
+        context,
+      );
+    }
+
+    adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: 'run-1:assign-1:result',
+        record: {
+          assignment_id: 'assign-1',
+          run_id: 'run-1',
+          scenario_id: 'instruction-exact-format',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+          summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+          completed_at: '2026-09-16T14:00:05Z',
+        },
+      },
+      context,
+    );
+
+    const runningRecords = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: 'run-1:assign-2:lifecycle:running',
+        record: {
+          assignment_id: 'assign-2',
+          run_id: 'run-1',
+          scenario_id: 'instruction-exact-format',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING',
+          observed_at: '2026-09-16T14:00:06Z',
+        },
+      },
+      context,
+    );
+
+    const started = runningRecords.find((record) => record.kind === 'assignment_started');
+    expect(started).toMatchObject({ completed: 1, total: 4 });
+  });
+
   it('tracks terminal progress separately from passing verdicts', () => {
     const context = createCampaignAdaptContext();
     for (const assignmentId of ['assign-1', 'assign-2', 'assign-3', 'assign-4']) {
@@ -354,6 +411,63 @@ describe('EvalStore campaign ingest', () => {
     expect(() => decodeViewRecord('catalog_snapshot', catalog)).not.toThrow();
     expect(() => decodeViewRecord('model_summary', model)).not.toThrow();
     expect(() => decodeViewRecord('methodology_snapshot', methodology)).not.toThrow();
+  });
+
+  it('uses catalog assignment_count as the campaign matrix total', () => {
+    const store = new EvalStore();
+    const runId = 'run-catalog-total';
+    const datasetId = campaignDatasetId(runId);
+
+    store.acceptProjection({
+      sequence: 1,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        schema_version: '1.3.0',
+        kind: 'catalog_snapshot',
+        dataset_id: datasetId,
+        dataset_kind: 'live_run',
+        quality_state: 'live_in_progress',
+        observed_at: '2026-09-16T14:00:00Z',
+        source_revision_label: 'g8e-eval-campaign',
+        title: 'Live smoke run',
+        description: 'test',
+        limitations: [],
+        model_count: 1,
+        evaluated_count: 0,
+        suite_count: 1,
+        run_count: 1,
+        assignment_count: 4,
+        provider_request_count: 0,
+        provider_token_count: 0,
+        retry_count: 0,
+        verifier_passed_count: 0,
+        verifier_failed_count: 0,
+        generated_at: '2026-09-16T14:00:00Z',
+      }),
+    });
+
+    store.acceptProjection({
+      sequence: 2,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: `${runId}:assign-1:result`,
+        record: {
+          assignment_id: 'assign-1',
+          run_id: runId,
+          scenario_id: 'instruction-exact-format',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+          summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+          completed_at: '2026-09-16T14:00:05Z',
+        },
+      }),
+    });
+
+    const run = store.getEvaluation(datasetId, runId);
+    const failEvent = store.getEvents(runId, datasetId).find((event) => event.kind === 'assignment_failed');
+    expect(run).toMatchObject({ assignment_total: 4, assignment_failed: 1 });
+    expect(failEvent).toMatchObject({ completed: 1, total: 4 });
   });
 
   it('indexes campaign envelopes without validation errors', () => {

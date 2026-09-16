@@ -928,7 +928,7 @@ const (
 	PublicFeedFreshnessDelayedSeconds = 60
 	PublicFeedFreshnessStaleSeconds   = 300
 	PublicFeedFreshnessOfflineSeconds = 900
-	PublicFeedAnonymousRatePerWindow  = 60
+	PublicFeedAnonymousRatePerWindow  = 600
 	PublicFeedAnonymousRateWindowSecs = 60
 	PublicFeedAnonymousRateMaxClients = 10000
 	PublicFeedSSEMaxSubscribers       = 1000

@@ -54,8 +54,10 @@ interface AssignmentMeta {
 }
 
 interface RunProgress {
-  /** Distinct assignments observed in lifecycle (scheduled matrix size). */
+  /** Distinct assignments observed in queued lifecycle projections. */
   scheduled: number;
+  /** Full campaign matrix size once known from queued lifecycle or catalog snapshots. */
+  matrixTotal: number;
   /** Assignments with a terminal public result projection. */
   terminal: number;
   /** Terminal assignments with a passing verdict. */
@@ -77,7 +79,7 @@ export function createCampaignAdaptContext(): CampaignAdaptContext {
 function ensureRunProgress(context: CampaignAdaptContext, runId: string): RunProgress {
   const existing = context.runTotals.get(runId);
   if (existing) return existing;
-  const progress: RunProgress = { scheduled: 0, terminal: 0, passed: 0, failed: 0 };
+  const progress: RunProgress = { scheduled: 0, matrixTotal: 0, terminal: 0, passed: 0, failed: 0 };
   context.runTotals.set(runId, progress);
   return progress;
 }
@@ -94,13 +96,33 @@ function trackScheduledAssignment(context: CampaignAdaptContext, runId: string, 
   return progress;
 }
 
+function recordMatrixTotal(context: CampaignAdaptContext, runId: string, candidate: number): RunProgress {
+  const progress = ensureRunProgress(context, runId);
+  if (candidate > progress.matrixTotal) {
+    progress.matrixTotal = candidate;
+  }
+  return progress;
+}
+
+/** Records the authoritative campaign matrix size from a published catalog snapshot. */
+export function recordCampaignMatrixTotal(context: CampaignAdaptContext, runId: string, assignmentCount: number): void {
+  if (assignmentCount > 0) {
+    recordMatrixTotal(context, runId, assignmentCount);
+  }
+}
+
+export function campaignRunIdFromDatasetId(datasetId: string): string | undefined {
+  const prefix = 'ds-live-';
+  return datasetId.startsWith(prefix) ? datasetId.slice(prefix.length) : undefined;
+}
+
 function markTerminalAssignment(
   context: CampaignAdaptContext,
   runId: string,
   assignmentId: string,
   terminalStatus: TerminalStatus,
 ): { progress: RunProgress; isNew: boolean } {
-  const progress = trackScheduledAssignment(context, runId, assignmentId);
+  const progress = ensureRunProgress(context, runId);
   let seen = context.terminalAssignments.get(runId);
   if (!seen) {
     seen = new Set();
@@ -119,9 +141,14 @@ function markTerminalAssignment(
   return { progress, isNew: true };
 }
 
-/** Live-event progress: terminal assignments done vs scheduled matrix size. */
+/** Live-event progress: terminal assignments finished vs the full campaign matrix size. */
 export function campaignProgressCounts(progress: RunProgress): { completed: number; total: number } {
-  const total = progress.scheduled > 0 ? progress.scheduled : progress.terminal;
+  const total =
+    progress.matrixTotal > 0
+      ? progress.matrixTotal
+      : progress.scheduled > 0
+        ? progress.scheduled
+        : progress.terminal;
   return { completed: progress.terminal, total };
 }
 
@@ -186,6 +213,7 @@ function adaptLifecycleRecord(
   let progress = ensureRunProgress(context, runId);
   if (lifecycle === 'queued') {
     progress = trackScheduledAssignment(context, runId, assignmentId);
+    recordMatrixTotal(context, runId, progress.scheduled);
   }
   if (!hadRun && progress.scheduled === 0) {
     records.push(buildInitialEvaluationSummary(runId, datasetId, observedAt, evaluationUnit));
@@ -355,7 +383,7 @@ function buildUpdatedEvaluationSummary(
 ): EvaluationSummary {
   const passRate: MetricValue<number> | undefined =
     progress.terminal > 0 ? { value: progress.passed / progress.terminal } : undefined;
-  const assignmentTotal = progress.scheduled > 0 ? progress.scheduled : progress.terminal;
+  const { total: assignmentTotal } = campaignProgressCounts(progress);
   return {
     schema_version: VIEW_SCHEMA_VERSION,
     kind: 'evaluation_summary',

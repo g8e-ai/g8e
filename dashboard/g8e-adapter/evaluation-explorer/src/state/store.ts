@@ -27,8 +27,11 @@ import { decodeViewRecord, isProjectionRecord, ValidationError } from '../contra
 import { type FeedConnectionState, type FeedStatus } from '../utils/feed-state';
 import {
   adaptCampaignProjectionEnvelope,
+  campaignProgressCounts,
+  campaignRunIdFromDatasetId,
   createCampaignAdaptContext,
   isCampaignProjectionEnvelope,
+  recordCampaignMatrixTotal,
   type CampaignAdaptContext,
 } from './campaign-adapter';
 
@@ -274,6 +277,13 @@ export class EvalStore {
     switch (record.kind) {
       case 'catalog_snapshot':
         state.catalogs.set(record.dataset_id, record);
+        if (record.assignment_count > 0) {
+          const runId = campaignRunIdFromDatasetId(record.dataset_id);
+          if (runId) {
+            recordCampaignMatrixTotal(this.campaignContext, runId, record.assignment_count);
+            this.refreshRunProgressTotals(state, record.dataset_id, runId);
+          }
+        }
         break;
       case 'model_summary':
         state.models.set(modelRecordKey(record.dataset_id, record.variant_id, record.role), record);
@@ -301,6 +311,23 @@ export class EvalStore {
         }
         break;
     }
+  }
+
+  /** Reconcile assignment_total on summaries and live events after the matrix size is known. */
+  private refreshRunProgressTotals(state: StoreState, datasetId: string, runId: string): void {
+    const progress = this.campaignContext.runTotals.get(runId);
+    if (!progress) return;
+    const { total } = campaignProgressCounts(progress);
+    if (total <= 0) return;
+
+    const evalKey = recordKey(datasetId, runId);
+    const existing = state.evaluations.get(evalKey);
+    if (existing) {
+      state.evaluations.set(evalKey, { ...existing, assignment_total: total });
+    }
+    state.events = state.events.map((event) =>
+      event.run_id === runId && event.dataset_id === datasetId ? { ...event, total } : event,
+    );
   }
 
   /** A committed live event updates its run's summary so detail pages

@@ -11,6 +11,7 @@ import {
   normalizeRecentProjection,
   normalizeStreamRecord,
 } from '../src/state/feed';
+import { campaignDatasetId } from '../src/state/campaign-adapter';
 import { EvalStore, recordKey } from '../src/state/store';
 import {
   fixtureCatalogExploratory,
@@ -163,6 +164,54 @@ describe('history backfill', () => {
     store.initBootstrap(snapshot, recent, 0);
     expect(store.getState().catalogs.size).toBe(1);
     expect(store.getState().observedSequence).toBe(0);
+  });
+
+  it('does not inflate campaign progress when bootstrap and history overlap', () => {
+    const runId = 'run-overlap';
+    const datasetId = campaignDatasetId(runId);
+    const queuedEnvelope = {
+      schema_version: '1.0.0',
+      message_type: 'PublicAssignmentLifecycleRecord',
+      idempotency_key: `${runId}:assign-1:lifecycle:queued`,
+      record: {
+        assignment_id: 'assign-1',
+        run_id: runId,
+        scenario_id: 'instruction-exact-format',
+        lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
+        observed_at: '2026-09-16T14:00:00Z',
+      },
+    };
+    const resultEnvelope = {
+      schema_version: '1.0.0',
+      message_type: 'PublicAssignmentResultProjection',
+      idempotency_key: `${runId}:assign-1:result`,
+      record: {
+        assignment_id: 'assign-1',
+        run_id: runId,
+        scenario_id: 'instruction-exact-format',
+        lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+        summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+        completed_at: '2026-09-16T14:00:05Z',
+      },
+    };
+    const recent = [
+      snapshotRecord(queuedEnvelope, 1),
+      snapshotRecord(resultEnvelope, 2),
+    ];
+    const snapshot: FeedSnapshot = { ...SNAP, high_water_sequence: 2, batch_count: 1 };
+
+    store.initBootstrap(snapshot, recent, 0);
+    store.acceptProjection(snapshotRecord(queuedEnvelope, 1));
+    store.acceptProjection(snapshotRecord(resultEnvelope, 2));
+
+    const run = store.getEvaluation(datasetId, runId);
+    expect(run).toMatchObject({
+      assignment_total: 1,
+      assignment_completed: 0,
+      assignment_failed: 1,
+    });
+    const failEvent = store.getEvents(runId, datasetId).find((event) => event.kind === 'assignment_failed');
+    expect(failEvent).toMatchObject({ completed: 1, total: 1 });
   });
 
   it('accepts the first retained sequence even when above 1', () => {
