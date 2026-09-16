@@ -12,6 +12,7 @@ from pydantic import Field
 from .base import G8eBaseModel, UTCDatetime
 from g8e.enums import EventType
 
+
 class _SSEEventBody(G8eBaseModel):
     type: EventType
     data: dict[str, Any]
@@ -57,10 +58,13 @@ class BackgroundEventWire(G8eBaseModel):
             user_id=user_id or "",
             event=_SSEEventBody(type=event_type, data=data),
         )
+
+
 # AI SSE event payloads (Wire shapes)
 class AiProcessingStoppedPayload(G8eBaseModel):
     reason: str
     timestamp: UTCDatetime
+
 
 class AIToolLifecyclePayload(G8eBaseModel):
     tool_name: str
@@ -79,21 +83,26 @@ class AIToolLifecyclePayload(G8eBaseModel):
     is_open: bool | None = None
     timestamp: str | None = None
 
+
 class ChatCitationsReadyPayload(G8eBaseModel):
     grounding_metadata: dict[str, Any]
     timestamp: str | None = None
+
 
 class ChatErrorPayload(G8eBaseModel):
     error: str
     timestamp: str | None = None
 
+
 class ChatProcessingStartedPayload(G8eBaseModel):
     agent_mode: str
     timestamp: str | None = None
 
+
 class ChatResponseChunkPayload(G8eBaseModel):
     content: str
     timestamp: str | None = None
+
 
 class ScrubbingTelemetry(G8eBaseModel):
     source: str
@@ -105,6 +114,7 @@ class ScrubbingTelemetry(G8eBaseModel):
     monotonic_end: float
     input_artifact_hash: str
     output_artifact_hash: str
+
 
 class ModelBoundaryPrivacyAttestation(G8eBaseModel):
     scanner_version: str
@@ -141,6 +151,18 @@ class ModelCallTelemetry(G8eBaseModel):
     governed_transaction_id: str | None = None
     governed_result_digest: str | None = None
     governed_receipt_status: str | None = None
+    provider_attempt_id: str | None = None
+    requested_model: str | None = None
+    served_model: str | None = None
+    model_digest: str | None = None
+    normalized_request_hash: str | None = None
+    governed_output_hash: str | None = None
+    campaign_id: str | None = None
+    run_id: str | None = None
+    assignment_id: str | None = None
+    evaluation_attempt_id: str | None = None
+    scenario_id: str | None = None
+    model_registry_digest: str | None = None
 
 
 class ChatResponseCompletePayload(G8eBaseModel):
@@ -154,19 +176,23 @@ class ChatResponseCompletePayload(G8eBaseModel):
     scrubbing_observations: list[ScrubbingTelemetry] = Field(default_factory=list)
     timestamp: str | None = None
 
+
 class ChatRetryPayload(G8eBaseModel):
     attempt: int
     max_attempts: int
     timestamp: str | None = None
+
 
 class ChatThinkingPayload(G8eBaseModel):
     thinking: str | None
     action_type: str
     timestamp: str | None = None
 
+
 class ChatTurnCompletePayload(G8eBaseModel):
     turn: int
     timestamp: str | None = None
+
 
 class TriageClarificationQuestionsPayload(G8eBaseModel):
     questions: list[str]

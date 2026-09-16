@@ -749,6 +749,8 @@ func TestClassifyReceiptFailure_MapsTypedSentinelsToCodes(t *testing.T) {
 		{name: "identity mismatch", execErr: constants.ErrInferenceIdentityMismatch, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH},
 		{name: "model digest mismatch", execErr: constants.ErrInferenceModelDigestMismatch, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH},
 		{name: "evidence hash invalid", execErr: constants.ErrInferenceEvidenceHashInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID},
+		{name: "model registry invalid", execErr: constants.ErrInferenceModelRegistryInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID},
+		{name: "campaign binding invalid", execErr: constants.ErrInferenceCampaignBindingInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID},
 		{name: "untyped error is generic execution failure", execErr: errors.New("boom"), want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED},
 		{name: "wrapped sentinel still classifies", execErr: fmt.Errorf("inference handler: %w", constants.ErrInferenceModelNotFound), want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND},
 	}

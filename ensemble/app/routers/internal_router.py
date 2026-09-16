@@ -234,6 +234,11 @@ async def internal_chat(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
+    if request.evaluation_context is not None:
+        g8e_context = g8e_context.model_copy(
+            update={"evaluation_context": request.evaluation_context}
+        )
+
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,

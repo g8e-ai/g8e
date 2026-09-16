@@ -141,6 +141,7 @@ func successDispatchResultForRequest(t *testing.T, req *operatorv1.InferenceDisp
 		AssignmentId:          req.GetAssignmentId(),
 		EvaluationAttemptId:   req.GetEvaluationAttemptId(),
 		ScenarioId:            req.GetScenarioId(),
+		ModelRegistryDigest:   req.GetModelRegistryDigest(),
 	}
 	digest, err := models.ComputeInferenceResultDigest(result)
 	require.NoError(t, err)
@@ -303,6 +304,10 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 	topK := int32(40)
 	parallelToolCalls := false
 	contextLimit := int32(8192)
+	modelDigest := strings.Repeat("a", 64)
+	modelRegistry := []*operatorv1.InferenceModelVariant{{Model: "gemma3:4b", Digest: modelDigest}}
+	modelRegistryDigest, err := models.ComputeInferenceModelRegistryDigest("campaign-1", modelRegistry)
+	require.NoError(t, err)
 
 	dispatchRequest := &operatorv1.InferenceDispatchRequest{
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
@@ -350,11 +355,14 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 		Thinking:                &operatorv1.InferenceThinkingControl{Mode: &operatorv1.InferenceThinkingControl_Enabled{Enabled: true}, IncludeThoughts: true},
 		ContextLimit:            &contextLimit,
 		ProviderAttemptId:       "provider-attempt-1",
+		ModelDigest:             modelDigest,
 		CampaignId:              "campaign-1",
 		RunId:                   "run-1",
 		AssignmentId:            "assignment-1",
 		EvaluationAttemptId:     "evaluation-attempt-1",
 		ScenarioId:              "scenario-1",
+		ModelRegistry:           modelRegistry,
+		ModelRegistryDigest:     modelRegistryDigest,
 		CaseId:                  "case-1",
 		InvestigationId:         "inv-1",
 		TaskId:                  "task-1",
@@ -417,6 +425,8 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 		AssignmentId:         dispatchRequest.AssignmentId,
 		EvaluationAttemptId:  dispatchRequest.EvaluationAttemptId,
 		ScenarioId:           dispatchRequest.ScenarioId,
+		ModelRegistry:        dispatchRequest.ModelRegistry,
+		ModelRegistryDigest:  dispatchRequest.ModelRegistryDigest,
 	}
 	assert.True(t, proto.Equal(expected, &forwarded), "canonical protojson and governed protobuf forwarding must preserve the typed request exactly")
 }
@@ -452,6 +462,8 @@ func TestInferenceDispatchController_ErrorStatusMapping(t *testing.T) {
 		{name: "ambiguous inference operators", dispatchErr: constants.ErrInferenceOperatorAmbiguous, wantStatus: http.StatusConflict},
 		{name: "target not inference capable", dispatchErr: constants.ErrInferenceOperatorNotCapable, wantStatus: http.StatusUnprocessableEntity},
 		{name: "model override denied", dispatchErr: constants.ErrInferenceModelOverrideDenied, wantStatus: http.StatusForbidden},
+		{name: "model registry invalid", dispatchErr: constants.ErrInferenceModelRegistryInvalid, wantStatus: http.StatusForbidden},
+		{name: "campaign binding invalid", dispatchErr: constants.ErrInferenceCampaignBindingInvalid, wantStatus: http.StatusForbidden},
 		{name: "governance rejected receipt", dispatchErr: constants.ErrInferenceGovernanceRejected, wantStatus: http.StatusForbidden},
 		{name: "l1 doctrine rejection", dispatchErr: constants.ErrTxL1ValidationFailed, wantStatus: http.StatusForbidden},
 		{name: "l3 proof unmintable under posture", dispatchErr: constants.ErrTxL3ProofUnmintable, wantStatus: http.StatusForbidden},

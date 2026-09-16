@@ -78,6 +78,7 @@ from g8e.operator.v1.operator_pb2 import (
     ExecutionStatus,
     InferenceMessage,
     InferenceMessagePart,
+    InferenceModelVariant,
     InferenceResponseFormat,
     InferenceThinkingControl,
     InferenceToolCall,
@@ -244,6 +245,33 @@ def _thinking_control(model: str, config: ThinkingConfig | None) -> InferenceThi
     )
 
 
+def _apply_evaluation_context(
+    request: InferenceDispatchRequest, context: G8eHttpContext | None, model: str
+) -> None:
+    if context is None or context.evaluation_context is None:
+        return
+    from app.errors import ValidationError
+
+    evaluation = context.evaluation_context
+    matches = [variant for variant in evaluation.model_registry if variant.model == model]
+    if len(matches) != 1:
+        raise ValidationError(
+            "Governed inference model is not uniquely bound in the evaluation registry"
+        )
+    request.model_digest = matches[0].digest
+    request.campaign_id = evaluation.campaign_id
+    request.run_id = evaluation.run_id
+    request.assignment_id = evaluation.assignment_id
+    request.evaluation_attempt_id = evaluation.evaluation_attempt_id
+    request.scenario_id = evaluation.scenario_id
+    request.model_registry_digest = evaluation.model_registry_digest
+    request.target_operator_session_id = evaluation.target_operator_session_id
+    request.model_registry.extend(
+        InferenceModelVariant(model=variant.model, digest=variant.digest)
+        for variant in evaluation.model_registry
+    )
+
+
 def _response_to_usage_metadata(result: InferenceDispatchResponse) -> UsageMetadata:
     """Build UsageMetadata from the dispatch response result."""
     if not result.HasField("result"):
@@ -353,6 +381,7 @@ def _validate_response_identity(
         or result.assignment_id != request.assignment_id
         or result.evaluation_attempt_id != request.evaluation_attempt_id
         or result.scenario_id != request.scenario_id
+        or result.model_registry_digest != request.model_registry_digest
         or any(len(value) != 64 or value.lower() != value for value in hashes)
         or any(any(char not in "0123456789abcdef" for char in value) for value in hashes)
         or (request.model_digest and result.served_model_digest != request.model_digest)
@@ -470,6 +499,7 @@ class G8EProvider(LLMProvider):
             web_session_id=(context.web_session_id or "") if context else "",
             cli_session_id=(context.cli_session_id or "") if context else "",
         )
+        _apply_evaluation_context(request, context, model)
         if top_p is not None:
             request.top_p = top_p
         if top_k is not None:
@@ -506,6 +536,12 @@ class G8EProvider(LLMProvider):
                 model_digest=response.result.served_model_digest,
                 normalized_request_hash=response.result.normalized_request_hash,
                 output_hash=response.result.output_hash,
+                campaign_id=response.result.campaign_id,
+                run_id=response.result.run_id,
+                assignment_id=response.result.assignment_id,
+                evaluation_attempt_id=response.result.evaluation_attempt_id,
+                scenario_id=response.result.scenario_id,
+                model_registry_digest=response.result.model_registry_digest,
             )
         )
         return response

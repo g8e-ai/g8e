@@ -64,6 +64,7 @@
     - [InferenceDispatchResponse](#g8e-operator-v1-InferenceDispatchResponse)
     - [InferenceMessage](#g8e-operator-v1-InferenceMessage)
     - [InferenceMessagePart](#g8e-operator-v1-InferenceMessagePart)
+    - [InferenceModelVariant](#g8e-operator-v1-InferenceModelVariant)
     - [InferenceRequested](#g8e-operator-v1-InferenceRequested)
     - [InferenceResponseFormat](#g8e-operator-v1-InferenceResponseFormat)
     - [InferenceResponsePart](#g8e-operator-v1-InferenceResponsePart)
@@ -1323,7 +1324,7 @@ inference request to the Inference Node.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | role | [ModelRole](#g8e-operator-v1-ModelRole) |  | Chat-tier role for this request (primary, assistant, lite). |
-| model | [string](#string) |  | Optional model override. Accepted only when it matches the Inference Node&#39;s configured model for the role; any other value is rejected as an unauthorized override. |
+| model | [string](#string) |  | Requested provider model. A campaign Inference Operator accepts it only when the exact model and digest occur in the frozen registry committed by model_registry_digest; standard inference uses the configured role model. |
 | temperature | [float](#float) |  | Generation temperature override (0 = use backend default). |
 | max_tokens | [int32](#int32) |  | Maximum tokens to generate (0 = use backend default). |
 | keep_alive | [string](#string) |  | Ollama keep-alive duration override (empty = use config default). |
@@ -1352,6 +1353,8 @@ inference request to the Inference Node.
 | assignment_id | [string](#string) |  |  |
 | evaluation_attempt_id | [string](#string) |  |  |
 | scenario_id | [string](#string) |  |  |
+| model_registry | [InferenceModelVariant](#g8e-operator-v1-InferenceModelVariant) | repeated |  |
+| model_registry_digest | [string](#string) |  |  |
 
 
 
@@ -1412,6 +1415,22 @@ InferenceMessagePart carries exactly one typed part of a conversation turn.
 
 
 
+<a name="g8e-operator-v1-InferenceModelVariant"></a>
+
+### InferenceModelVariant
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| model | [string](#string) |  |  |
+| digest | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="g8e-operator-v1-InferenceRequested"></a>
 
 ### InferenceRequested
@@ -1443,6 +1462,8 @@ Payload for g8e.v1.operator.inference.requested. The handler receives an ordered
 | assignment_id | [string](#string) |  |  |
 | evaluation_attempt_id | [string](#string) |  |  |
 | scenario_id | [string](#string) |  |  |
+| model_registry | [InferenceModelVariant](#g8e-operator-v1-InferenceModelVariant) | repeated |  |
+| model_registry_digest | [string](#string) |  |  |
 
 
 
@@ -1516,6 +1537,7 @@ InferenceResult carries ordered response parts, usage metadata, and the finish r
 | assignment_id | [string](#string) |  |  |
 | evaluation_attempt_id | [string](#string) |  |  |
 | scenario_id | [string](#string) |  |  |
+| model_registry_digest | [string](#string) |  |  |
 
 
 
@@ -2709,6 +2731,8 @@ string-matching the result_summary. It is bound into the receipt signature.
 | RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH | 14 |  |
 | RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH | 15 |  |
 | RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID | 16 |  |
+| RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID | 17 |  |
+| RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID | 18 |  |
 
 
  

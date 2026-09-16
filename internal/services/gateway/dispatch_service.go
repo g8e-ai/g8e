@@ -468,7 +468,8 @@ func (d *DispatchService) verifyInferenceCompletion(cmdEnv, resultEnv *commonv1.
 		result.GetRunId() != request.GetRunId() ||
 		result.GetAssignmentId() != request.GetAssignmentId() ||
 		result.GetEvaluationAttemptId() != request.GetEvaluationAttemptId() ||
-		result.GetScenarioId() != request.GetScenarioId() {
+		result.GetScenarioId() != request.GetScenarioId() ||
+		result.GetModelRegistryDigest() != request.GetModelRegistryDigest() {
 		return nil, fmt.Errorf("dispatch: %w", constants.ErrInferenceIdentityMismatch)
 	}
 	if request.GetProviderAttemptId() == "" || !models.IsSHA256Hex(result.GetNormalizedRequestHash()) || !models.IsSHA256Hex(result.GetOutputHash()) {
@@ -524,6 +525,10 @@ func inferenceReceiptFailureError(receipt *operatorv1.ActionReceipt) error {
 		return constants.ErrInferenceModelDigestMismatch
 	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID:
 		return constants.ErrInferenceEvidenceHashInvalid
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID:
+		return constants.ErrInferenceModelRegistryInvalid
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID:
+		return constants.ErrInferenceCampaignBindingInvalid
 	default:
 		return constants.ErrInferenceReceiptFailed
 	}

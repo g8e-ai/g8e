@@ -73,7 +73,8 @@ func TestOperatorStartCmdFlags(t *testing.T) {
 			"lattice-sandboxes-token", "lattice-entity-name", "lattice-posture-floor",
 			"inference-enabled", "inference-ollama-endpoint",
 			"inference-primary-model", "inference-assistant-model",
-			"inference-lite-model", "inference-keep-alive",
+			"inference-lite-model", "inference-keep-alive", "inference-campaign-id",
+			"inference-model-registry-digest",
 		}
 		for _, flagName := range expectedFlags {
 			flag := cmd.Flags().Lookup(flagName)

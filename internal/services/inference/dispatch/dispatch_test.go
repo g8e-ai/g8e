@@ -86,6 +86,7 @@ func successDispatchResultFor(t *testing.T, req DispatchInferenceRequest) *Comma
 		AssignmentId:          req.AssignmentID,
 		EvaluationAttemptId:   req.EvaluationAttemptID,
 		ScenarioId:            req.ScenarioID,
+		ModelRegistryDigest:   req.ModelRegistryDigest,
 	})
 	require.NoError(t, err)
 	return &CommandDispatchResult{
@@ -112,6 +113,52 @@ func baseRequest() DispatchInferenceRequest {
 		ProviderAttemptID:    "provider-attempt-1",
 		RequestorUserID:      "user-1",
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+	}
+}
+
+func configureCampaignRequest(t *testing.T, req *DispatchInferenceRequest) {
+	t.Helper()
+	req.ModelDigest = strings.Repeat("a", 64)
+	req.CampaignID = "campaign-1"
+	req.RunID = "run-1"
+	req.AssignmentID = "assignment-1"
+	req.EvaluationAttemptID = "evaluation-attempt-1"
+	req.ScenarioID = "scenario-1"
+	req.ModelRegistry = []*operatorv1.InferenceModelVariant{{Model: req.Model, Digest: req.ModelDigest}}
+	registryDigest, err := models.ComputeInferenceModelRegistryDigest(req.CampaignID, req.ModelRegistry)
+	require.NoError(t, err)
+	req.ModelRegistryDigest = registryDigest
+}
+
+func TestValidateCampaignModelRegistry_FailsClosedOnInvalidAuthority(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		mutate    func(*DispatchInferenceRequest)
+		wantError error
+	}{
+		{name: "valid authority", mutate: func(*DispatchInferenceRequest) {}},
+		{name: "missing assignment binding", mutate: func(req *DispatchInferenceRequest) { req.AssignmentID = "" }, wantError: constants.ErrInferenceCampaignBindingInvalid},
+		{name: "changed registry digest", mutate: func(req *DispatchInferenceRequest) { req.ModelRegistryDigest = strings.Repeat("b", 64) }, wantError: constants.ErrInferenceModelRegistryInvalid},
+		{name: "model absent", mutate: func(req *DispatchInferenceRequest) { req.Model = "absent:1" }, wantError: constants.ErrInferenceModelOverrideDenied},
+		{name: "duplicate model", mutate: func(req *DispatchInferenceRequest) {
+			req.ModelRegistry = append(req.ModelRegistry, proto.Clone(req.ModelRegistry[0]).(*operatorv1.InferenceModelVariant))
+		}, wantError: constants.ErrInferenceModelRegistryInvalid},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := baseRequest()
+			configureCampaignRequest(t, &req)
+			tt.mutate(&req)
+
+			err := validateCampaignModelRegistry(req)
+
+			if tt.wantError == nil {
+				require.NoError(t, err)
+				return
+			}
+			assert.ErrorIs(t, err, tt.wantError)
+		})
 	}
 }
 
@@ -391,28 +438,33 @@ func TestDispatchInference_ResultIdentityMismatchFailsClosed(t *testing.T) {
 		{name: "requested model", mutate: func(result *operatorv1.InferenceResult) { result.RequestedModel = "other-model" }},
 		{name: "campaign", mutate: func(result *operatorv1.InferenceResult) { result.CampaignId = "other-campaign" }},
 		{name: "model digest", mutate: func(result *operatorv1.InferenceResult) { result.RequestedModelDigest = "bb" + strings.Repeat("0", 62) }},
+		{name: "model registry digest", mutate: func(result *operatorv1.InferenceResult) { result.ModelRegistryDigest = strings.Repeat("b", 64) }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			req := baseRequest()
+			configureCampaignRequest(t, &req)
 			result := &operatorv1.InferenceResult{
 				Parts:                 []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "answer"}}},
-				Model:                 "gemma3:4b",
-				RequestedModel:        "gemma3:4b",
-				ProviderAttemptId:     "provider-attempt-1",
+				Model:                 req.Model,
+				RequestedModel:        req.Model,
+				ProviderAttemptId:     req.ProviderAttemptID,
 				NormalizedRequestHash: strings.Repeat("1", 64),
 				OutputHash:            strings.Repeat("2", 64),
-				CampaignId:            "campaign-1",
-				RequestedModelDigest:  strings.Repeat("a", 64),
-				ServedModelDigest:     strings.Repeat("a", 64),
+				CampaignId:            req.CampaignID,
+				RunId:                 req.RunID,
+				AssignmentId:          req.AssignmentID,
+				EvaluationAttemptId:   req.EvaluationAttemptID,
+				ScenarioId:            req.ScenarioID,
+				RequestedModelDigest:  req.ModelDigest,
+				ServedModelDigest:     req.ModelDigest,
+				ModelRegistryDigest:   req.ModelRegistryDigest,
 			}
 			tt.mutate(result)
 			payload, err := proto.Marshal(result)
 			require.NoError(t, err)
 			dispatcher := &stubCommandDispatcher{result: &CommandDispatchResult{TransactionID: "tx-1", ResultPayload: payload}}
 			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{capableOp("sess-a")}}, testLogger())
-			req := baseRequest()
-			req.CampaignID = "campaign-1"
-			req.ModelDigest = strings.Repeat("a", 64)
 
 			out, err := svc.DispatchInference(context.Background(), req)
 
@@ -482,12 +534,7 @@ func TestDispatchInference_PayloadCarriesRequestFields(t *testing.T) {
 	req.ParallelToolCalls = &parallelToolCalls
 	req.Thinking = &operatorv1.InferenceThinkingControl{Mode: &operatorv1.InferenceThinkingControl_Enabled{Enabled: true}, IncludeThoughts: true}
 	req.ContextLimit = &contextLimit
-	req.ModelDigest = strings.Repeat("a", 64)
-	req.CampaignID = "campaign-1"
-	req.RunID = "run-1"
-	req.AssignmentID = "assignment-1"
-	req.EvaluationAttemptID = "evaluation-attempt-1"
-	req.ScenarioID = "scenario-1"
+	configureCampaignRequest(t, &req)
 	req.Tools = []*operatorv1.InferenceToolDeclaration{{
 		Name:        "inspect",
 		Description: "Inspect a target",
@@ -523,6 +570,8 @@ func TestDispatchInference_PayloadCarriesRequestFields(t *testing.T) {
 		AssignmentId:         req.AssignmentID,
 		EvaluationAttemptId:  req.EvaluationAttemptID,
 		ScenarioId:           req.ScenarioID,
+		ModelRegistry:        req.ModelRegistry,
+		ModelRegistryDigest:  req.ModelRegistryDigest,
 	}
 	assert.True(t, proto.Equal(expected, infReq), "forwarded governed payload must preserve every ordered message and tool field")
 }

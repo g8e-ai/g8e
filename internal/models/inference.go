@@ -11,6 +11,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
@@ -85,6 +86,8 @@ type GenerateRequest struct {
 	AssignmentID         string
 	EvaluationAttemptID  string
 	ScenarioID           string
+	ModelRegistry        []*operatorv1.InferenceModelVariant
+	ModelRegistryDigest  string
 }
 
 // GenerateResponse carries ordered model response parts, usage metadata, and finish reason returned by the backend.
@@ -115,6 +118,7 @@ type GenerateResponse struct {
 	AssignmentID          string
 	EvaluationAttemptID   string
 	ScenarioID            string
+	ModelRegistryDigest   string
 }
 
 // BackendStatus reports the backend's readiness and the models available in
@@ -149,6 +153,8 @@ type InferenceRequestPayload struct {
 	AssignmentID         string
 	EvaluationAttemptID  string
 	ScenarioID           string
+	ModelRegistry        []*operatorv1.InferenceModelVariant
+	ModelRegistryDigest  string
 }
 
 // FromProtoInferenceRequested decodes a protobuf InferenceRequested message into an isolated typed payload.
@@ -222,6 +228,8 @@ func FromProtoInferenceRequested(req *operatorv1.InferenceRequested) InferenceRe
 		AssignmentID:         req.GetAssignmentId(),
 		EvaluationAttemptID:  req.GetEvaluationAttemptId(),
 		ScenarioID:           req.GetScenarioId(),
+		ModelRegistry:        cloneInferenceModelRegistry(req.GetModelRegistry()),
+		ModelRegistryDigest:  req.GetModelRegistryDigest(),
 	}
 }
 
@@ -257,6 +265,8 @@ func (p InferenceRequestPayload) ToGenerateRequest(defaultModel string) Generate
 		AssignmentID:         p.AssignmentID,
 		EvaluationAttemptID:  p.EvaluationAttemptID,
 		ScenarioID:           p.ScenarioID,
+		ModelRegistry:        cloneInferenceModelRegistry(p.ModelRegistry),
+		ModelRegistryDigest:  p.ModelRegistryDigest,
 	}
 }
 
@@ -290,6 +300,7 @@ func (r GenerateResponse) ToProtoInferenceResult() *operatorv1.InferenceResult {
 		AssignmentId:          r.AssignmentID,
 		EvaluationAttemptId:   r.EvaluationAttemptID,
 		ScenarioId:            r.ScenarioID,
+		ModelRegistryDigest:   r.ModelRegistryDigest,
 	}
 }
 
@@ -313,6 +324,38 @@ func ComputeInferenceResultDigest(result *operatorv1.InferenceResult) (string, e
 		return "", fmt.Errorf("models: compute inference result digest: marshal: %w", err)
 	}
 	return SHA256Hex(data), nil
+}
+
+func ComputeInferenceModelRegistryDigest(campaignID string, variants []*operatorv1.InferenceModelVariant) (string, error) {
+	if campaignID == "" || len(variants) == 0 {
+		return "", fmt.Errorf("models: compute inference model registry digest: %w", constants.ErrMissingRequiredField)
+	}
+	registry := cloneInferenceModelRegistry(variants)
+	sort.Slice(registry, func(i, j int) bool {
+		if registry[i].GetModel() == registry[j].GetModel() {
+			return registry[i].GetDigest() < registry[j].GetDigest()
+		}
+		return registry[i].GetModel() < registry[j].GetModel()
+	})
+	data, err := proto.MarshalOptions{Deterministic: true}.Marshal(&operatorv1.InferenceRequested{
+		CampaignId:    campaignID,
+		ModelRegistry: registry,
+	})
+	if err != nil {
+		return "", fmt.Errorf("models: compute inference model registry digest: marshal: %w", err)
+	}
+	return SHA256Hex(data), nil
+}
+
+func cloneInferenceModelRegistry(variants []*operatorv1.InferenceModelVariant) []*operatorv1.InferenceModelVariant {
+	clones := make([]*operatorv1.InferenceModelVariant, len(variants))
+	for i, variant := range variants {
+		if variant == nil {
+			continue
+		}
+		clones[i] = proto.Clone(variant).(*operatorv1.InferenceModelVariant)
+	}
+	return clones
 }
 
 func ComputeInferenceOutputHash(parts []*operatorv1.InferenceResponsePart, finishReason string) (string, error) {

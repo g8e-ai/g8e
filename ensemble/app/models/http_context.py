@@ -12,6 +12,7 @@ from typing import Any
 
 from g8e.models.context import BoundOperator as _G8eBoundOperator
 from g8e.models.context import RequestContext as _G8eRequestContext
+from g8e.models.internal_api import EvaluationInferenceContext
 
 from app.constants import (
     ComponentName,
@@ -43,6 +44,9 @@ class RequestContext(_G8eRequestContext):
     source_component: str = Field(
         default=G8EE_COMPONENT, description="Component that created this context"
     )
+    evaluation_context: EvaluationInferenceContext | None = Field(
+        default=None, description="Immutable evaluation inference correlation and model registry"
+    )
 
     @model_validator(mode="after")
     def validate_session_identity(self):
@@ -66,6 +70,7 @@ class RequestContext(_G8eRequestContext):
             system_fingerprint=context.system_fingerprint,
             operator_id=context.operator_id,
             operator_session_id=context.operator_session_id,
+            evaluation_context=context.evaluation_context,
         )
 
 
@@ -111,6 +116,9 @@ class G8eHttpContext(G8eBaseModel):
     )
     operator_session_id: str | None = Field(
         default=None, description="Operator session ID for governance envelope routing"
+    )
+    evaluation_context: EvaluationInferenceContext | None = Field(
+        default=None, description="Immutable evaluation inference correlation and model registry"
     )
     is_operator_auth_relay: bool = Field(
         default=False,
@@ -270,5 +278,6 @@ class G8eHttpContext(G8eBaseModel):
             system_fingerprint=request_context.system_fingerprint,
             operator_id=request_context.operator_id,
             operator_session_id=request_context.operator_session_id,
+            evaluation_context=request_context.evaluation_context,
             is_operator_auth_relay=is_exempt_path,
         )

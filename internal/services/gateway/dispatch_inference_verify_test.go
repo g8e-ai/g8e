@@ -358,6 +358,8 @@ func TestVerifyInferenceCompletion_FailureCodeMapping(t *testing.T) {
 		{name: "identity mismatch", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH, want: constants.ErrInferenceIdentityMismatch},
 		{name: "model digest mismatch", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH, want: constants.ErrInferenceModelDigestMismatch},
 		{name: "evidence hash invalid", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID, want: constants.ErrInferenceEvidenceHashInvalid},
+		{name: "model registry invalid", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID, want: constants.ErrInferenceModelRegistryInvalid},
+		{name: "campaign binding invalid", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID, want: constants.ErrInferenceCampaignBindingInvalid},
 		{name: "generic execution failure", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED, want: constants.ErrInferenceReceiptFailed},
 		{name: "unspecified code falls back to generic failure", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED, want: constants.ErrInferenceReceiptFailed},
 	}

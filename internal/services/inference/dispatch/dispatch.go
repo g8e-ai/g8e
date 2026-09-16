@@ -133,8 +133,8 @@ type DispatchInferenceRequest struct {
 	Messages []*operatorv1.InferenceMessage
 	Tools    []*operatorv1.InferenceToolDeclaration
 
-	// Model overrides the Inference Node's configured default model for the
-	// role. Empty means use the config default.
+	// Model selects an exact frozen registry entry in campaign mode. Standard
+	// inference accepts only the configured model for the role.
 	Model string
 
 	// Temperature overrides the backend's default temperature. Zero means
@@ -165,6 +165,8 @@ type DispatchInferenceRequest struct {
 	AssignmentID         string
 	EvaluationAttemptID  string
 	ScenarioID           string
+	ModelRegistry        []*operatorv1.InferenceModelVariant
+	ModelRegistryDigest  string
 
 	// TargetOperatorSessionID pins the dispatch to a specific Inference Node
 	// session. When empty, exactly one inference-capable operator session
@@ -223,6 +225,9 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	if req.ModelDigest != "" && !models.IsSHA256Hex(req.ModelDigest) {
 		return nil, fmt.Errorf("inference dispatch: %w", constants.ErrInferenceEvidenceHashInvalid)
 	}
+	if err := validateCampaignModelRegistry(req); err != nil {
+		return nil, fmt.Errorf("inference dispatch: %w", err)
+	}
 
 	// Resolve the Inference Node's operator session from the requestor's
 	// enrolled operators. The Inference Node stamps
@@ -258,6 +263,8 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 		AssignmentId:         req.AssignmentID,
 		EvaluationAttemptId:  req.EvaluationAttemptID,
 		ScenarioId:           req.ScenarioID,
+		ModelRegistry:        req.ModelRegistry,
+		ModelRegistryDigest:  req.ModelRegistryDigest,
 	}
 	payload, err := proto.Marshal(infReq)
 	if err != nil {
@@ -325,6 +332,39 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	}, nil
 }
 
+func validateCampaignModelRegistry(req DispatchInferenceRequest) error {
+	hasCampaignAuthority := req.CampaignID != "" || req.ModelRegistryDigest != "" || len(req.ModelRegistry) != 0
+	if !hasCampaignAuthority {
+		return nil
+	}
+	if req.CampaignID == "" || req.RunID == "" || req.AssignmentID == "" || req.EvaluationAttemptID == "" || req.ScenarioID == "" ||
+		req.Model == "" || !models.IsSHA256Hex(req.ModelDigest) || !models.IsSHA256Hex(req.ModelRegistryDigest) || len(req.ModelRegistry) == 0 {
+		return constants.ErrInferenceCampaignBindingInvalid
+	}
+	seen := make(map[string]struct{}, len(req.ModelRegistry))
+	matched := false
+	for _, variant := range req.ModelRegistry {
+		if variant == nil || variant.GetModel() == "" || !models.IsSHA256Hex(variant.GetDigest()) {
+			return constants.ErrInferenceModelRegistryInvalid
+		}
+		if _, exists := seen[variant.GetModel()]; exists {
+			return constants.ErrInferenceModelRegistryInvalid
+		}
+		seen[variant.GetModel()] = struct{}{}
+		if variant.GetModel() == req.Model && variant.GetDigest() == req.ModelDigest {
+			matched = true
+		}
+	}
+	digest, err := models.ComputeInferenceModelRegistryDigest(req.CampaignID, req.ModelRegistry)
+	if err != nil || digest != req.ModelRegistryDigest {
+		return constants.ErrInferenceModelRegistryInvalid
+	}
+	if !matched {
+		return constants.ErrInferenceModelOverrideDenied
+	}
+	return nil
+}
+
 // resolveInferenceOperator resolves the Inference Node's operator session
 // from the requestor's enrolled operators. With an explicit
 // TargetOperatorSessionID the target must appear in the requestor's
@@ -345,7 +385,8 @@ func validateInferenceResult(result *operatorv1.InferenceResult, req DispatchInf
 		result.GetAssignmentId() != req.AssignmentID ||
 		result.GetEvaluationAttemptId() != req.EvaluationAttemptID ||
 		result.GetScenarioId() != req.ScenarioID ||
-		result.GetRequestedModelDigest() != req.ModelDigest {
+		result.GetRequestedModelDigest() != req.ModelDigest ||
+		result.GetModelRegistryDigest() != req.ModelRegistryDigest {
 		return constants.ErrInferenceIdentityMismatch
 	}
 	if !models.IsSHA256Hex(result.GetNormalizedRequestHash()) || !models.IsSHA256Hex(result.GetOutputHash()) {

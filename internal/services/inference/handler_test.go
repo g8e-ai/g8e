@@ -9,6 +9,7 @@ package inference
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
@@ -269,6 +270,142 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_MissingProviderAttemptIDRej
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInferenceProviderAttemptRequired)
 	assert.Zero(t, backend.calls)
+}
+
+func TestComputeInferenceModelRegistryDigest_IsOrderIndependentAndIdentitySensitive(t *testing.T) {
+	t.Parallel()
+	variants := []*operatorv1.InferenceModelVariant{
+		{Model: "model-b:1", Digest: strings.Repeat("b", 64)},
+		{Model: "model-a:1", Digest: strings.Repeat("a", 64)},
+	}
+
+	digest, err := models.ComputeInferenceModelRegistryDigest("campaign-1", variants)
+	require.NoError(t, err)
+	reversed, err := models.ComputeInferenceModelRegistryDigest("campaign-1", []*operatorv1.InferenceModelVariant{variants[1], variants[0]})
+	require.NoError(t, err)
+	changedCampaign, err := models.ComputeInferenceModelRegistryDigest("campaign-2", variants)
+	require.NoError(t, err)
+	changedVariant, err := models.ComputeInferenceModelRegistryDigest("campaign-1", []*operatorv1.InferenceModelVariant{
+		{Model: "model-b:1", Digest: strings.Repeat("c", 64)},
+		variants[1],
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, digest, reversed)
+	assert.NotEqual(t, digest, changedCampaign)
+	assert.NotEqual(t, digest, changedVariant)
+}
+
+func TestInferenceHandler_ExecuteVerifiedTransaction_CampaignRegistryAuthorizesEveryRole(t *testing.T) {
+	t.Parallel()
+	const model = "frozen-model:1"
+	const campaignID = "campaign-1"
+	modelDigest := strings.Repeat("a", 64)
+	registry := []*operatorv1.InferenceModelVariant{{Model: model, Digest: modelDigest}}
+	registryDigest, err := models.ComputeInferenceModelRegistryDigest(campaignID, registry)
+	require.NoError(t, err)
+
+	for _, role := range []operatorv1.ModelRole{
+		operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
+		operatorv1.ModelRole_MODEL_ROLE_LITE,
+	} {
+		t.Run(role.String(), func(t *testing.T) {
+			backend := &stubBackend{generateResp: &models.GenerateResponse{
+				Parts:             textInferenceResponseParts("response"),
+				FinishReason:      "stop",
+				Model:             model,
+				ServedModelDigest: modelDigest,
+			}}
+			handler := NewInferenceExecutionHandler(backend, &config.Config{Inference: config.InferenceConfig{
+				Enabled:             true,
+				CampaignID:          campaignID,
+				ModelRegistryDigest: registryDigest,
+			}}, nil, testutil.NewTestLogger())
+			payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 role,
+				Model:                model,
+				ModelDigest:          modelDigest,
+				Messages:             textInferenceMessages("test"),
+				CampaignId:           campaignID,
+				RunId:                "run-1",
+				AssignmentId:         "assignment-1",
+				EvaluationAttemptId:  "attempt-1",
+				ScenarioId:           "scenario-1",
+				ModelRegistry:        registry,
+				ModelRegistryDigest:  registryDigest,
+			})
+
+			_, err := handler.ExecuteInference(context.Background(), &testCommandMessage{payload: payload})
+
+			require.NoError(t, err)
+			assert.Equal(t, model, backend.lastReq.Model)
+			assert.Equal(t, registryDigest, backend.generateResp.ModelRegistryDigest)
+		})
+	}
+}
+
+func TestInferenceHandler_ExecuteVerifiedTransaction_CampaignRegistryRejectsInvalidAuthority(t *testing.T) {
+	t.Parallel()
+	const campaignID = "campaign-1"
+	modelDigest := strings.Repeat("a", 64)
+	registry := []*operatorv1.InferenceModelVariant{{Model: "frozen-model:1", Digest: modelDigest}}
+	registryDigest, err := models.ComputeInferenceModelRegistryDigest(campaignID, registry)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		mutate    func(*operatorv1.InferenceRequested)
+		wantError error
+	}{
+		{name: "missing assignment binding", mutate: func(req *operatorv1.InferenceRequested) { req.AssignmentId = "" }, wantError: constants.ErrInferenceCampaignBindingInvalid},
+		{name: "changed campaign", mutate: func(req *operatorv1.InferenceRequested) { req.CampaignId = "campaign-2" }, wantError: constants.ErrInferenceCampaignBindingInvalid},
+		{name: "changed registry digest", mutate: func(req *operatorv1.InferenceRequested) { req.ModelRegistryDigest = strings.Repeat("b", 64) }, wantError: constants.ErrInferenceCampaignBindingInvalid},
+		{name: "model absent", mutate: func(req *operatorv1.InferenceRequested) { req.Model = "absent:1" }, wantError: constants.ErrInferenceModelOverrideDenied},
+		{name: "model digest mismatch", mutate: func(req *operatorv1.InferenceRequested) { req.ModelDigest = strings.Repeat("b", 64) }, wantError: constants.ErrInferenceModelOverrideDenied},
+		{name: "duplicate model", mutate: func(req *operatorv1.InferenceRequested) {
+			req.ModelRegistry = append(req.ModelRegistry, proto.Clone(req.ModelRegistry[0]).(*operatorv1.InferenceModelVariant))
+		}, wantError: constants.ErrInferenceModelRegistryInvalid},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			backend := &stubBackend{}
+			handler := NewInferenceExecutionHandler(backend, &config.Config{Inference: config.InferenceConfig{
+				Enabled:             true,
+				CampaignID:          campaignID,
+				ModelRegistryDigest: registryDigest,
+			}}, nil, testutil.NewTestLogger())
+			req := &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Model:                "frozen-model:1",
+				ModelDigest:          modelDigest,
+				Messages:             textInferenceMessages("test"),
+				CampaignId:           campaignID,
+				RunId:                "run-1",
+				AssignmentId:         "assignment-1",
+				EvaluationAttemptId:  "attempt-1",
+				ScenarioId:           "scenario-1",
+				ModelRegistry:        cloneInferenceModelVariants(registry),
+				ModelRegistryDigest:  registryDigest,
+			}
+			tt.mutate(req)
+
+			_, err := handler.ExecuteInference(context.Background(), &testCommandMessage{payload: mustMarshalInferenceRequested(t, req)})
+
+			assert.ErrorIs(t, err, tt.wantError)
+			assert.Zero(t, backend.calls)
+		})
+	}
+}
+
+func cloneInferenceModelVariants(variants []*operatorv1.InferenceModelVariant) []*operatorv1.InferenceModelVariant {
+	clones := make([]*operatorv1.InferenceModelVariant, len(variants))
+	for i, variant := range variants {
+		clones[i] = proto.Clone(variant).(*operatorv1.InferenceModelVariant)
+	}
+	return clones
 }
 
 func TestInferenceHandler_ExecuteVerifiedTransaction_UnspecifiedRoleRejected(t *testing.T) {
@@ -536,6 +673,7 @@ func TestFromProtoInferenceRequested_ClonesRequestControls(t *testing.T) {
 		ParallelToolCalls: &parallelToolCalls,
 		Thinking:          &operatorv1.InferenceThinkingControl{Mode: &operatorv1.InferenceThinkingControl_Enabled{Enabled: false}},
 		ContextLimit:      &contextLimit,
+		ModelRegistry:     []*operatorv1.InferenceModelVariant{{Model: "model:1", Digest: strings.Repeat("a", 64)}},
 	}
 
 	cloned := models.FromProtoInferenceRequested(source)
@@ -545,6 +683,7 @@ func TestFromProtoInferenceRequested_ClonesRequestControls(t *testing.T) {
 	source.ParallelToolCalls = nil
 	source.Thinking.Mode = &operatorv1.InferenceThinkingControl_Enabled{Enabled: true}
 	source.ContextLimit = nil
+	source.ModelRegistry[0].Model = "changed"
 
 	assert.Equal(t, "test", cloned.Messages[0].Parts[0].GetText())
 	assert.Equal(t, "inspect", cloned.Tools[0].GetName())
@@ -554,6 +693,7 @@ func TestFromProtoInferenceRequested_ClonesRequestControls(t *testing.T) {
 	assert.False(t, cloned.Thinking.GetEnabled())
 	require.NotNil(t, cloned.ContextLimit)
 	assert.Equal(t, int32(8192), *cloned.ContextLimit)
+	assert.Equal(t, "model:1", cloned.ModelRegistry[0].GetModel())
 }
 
 func TestInferenceHandler_ExecuteVerifiedTransaction_AcceptsDisabledThinkingAndParallelTools(t *testing.T) {

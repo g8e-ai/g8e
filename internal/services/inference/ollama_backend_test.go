@@ -655,13 +655,17 @@ func TestOllamaBackend_GenerateVerifiesFrozenModelDigestBeforeAndAfterProviderCa
 	t.Parallel()
 	modelDigest := strings.Repeat("a", 64)
 	tagsCalls := 0
+	var providerRequest []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/tags":
 			tagsCalls++
 			require.NoError(t, json.NewEncoder(w).Encode(ollamaTagsResponse{Models: []ollamaTagModel{{Name: "test-model", Digest: modelDigest}}}))
 		case "/api/chat":
-			_, err := w.Write([]byte(`{"model":"test-model","message":{"role":"assistant","content":"ok"},"done":true,"done_reason":"stop"}`))
+			var err error
+			providerRequest, err = io.ReadAll(r.Body)
+			require.NoError(t, err)
+			_, err = w.Write([]byte(`{"model":"test-model","message":{"role":"assistant","content":"ok"},"done":true,"done_reason":"stop"}`))
 			require.NoError(t, err)
 		default:
 			t.Fatalf("unexpected provider path %s", r.URL.Path)
@@ -676,8 +680,10 @@ func TestOllamaBackend_GenerateVerifiesFrozenModelDigestBeforeAndAfterProviderCa
 	require.NoError(t, err)
 	assert.Equal(t, 2, tagsCalls)
 	assert.Equal(t, modelDigest, response.ServedModelDigest)
-	assert.True(t, models.IsSHA256Hex(response.NormalizedRequestHash))
-	assert.True(t, models.IsSHA256Hex(response.OutputHash))
+	assert.Equal(t, models.SHA256Hex(providerRequest), response.NormalizedRequestHash)
+	wantOutputHash, err := models.ComputeInferenceOutputHash(response.Parts, response.FinishReason)
+	require.NoError(t, err)
+	assert.Equal(t, wantOutputHash, response.OutputHash)
 }
 
 func TestOllamaBackend_GenerateRejectsModelDigestDriftAfterProviderCall(t *testing.T) {

@@ -136,6 +136,10 @@ The current worker path applies these options:
 | `-G, --no-git` | Disables the git-backed file ledger while retaining the encrypted audit store. |
 | `-l, --log <level>` | Sets `info`, `error`, or `debug` logging. |
 | `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds. |
+| `--inference-campaign-id <id>` | Selects dedicated campaign authorization mode and requires every governed inference request to carry this exact campaign identity and complete assignment correlation. |
+| `--inference-model-registry-digest <sha256>` | Commits the dedicated campaign Operator to one immutable model registry. The Operator recomputes the digest over the request registry and rejects malformed registries, absent models, digest changes, and incomplete campaign bindings. |
+
+Campaign registry digests are lowercase hexadecimal SHA-256 over deterministic protobuf serialization of an `InferenceRequested` containing only the campaign ID and model registry, with registry entries sorted by model and digest. Each entry binds an exact provider tag to its immutable provider digest. Both campaign flags are required together; ordinary inference omits both and retains the configured role-model authority.
 
 Use `./g8e operator start --help` as the command-surface reference. The Lattice-named flags currently appear in Cobra help but are not copied into `ServeOperatorOptions` by `operatorStartCmd`; setting those flags does not enable the adapter. The adapter's environment-variable path exists in the service layer, but its task handler currently records receipt of a task without dispatching it. Do not treat the Lattice path as an implemented Operator execution integration.
 

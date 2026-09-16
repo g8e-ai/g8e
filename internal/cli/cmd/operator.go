@@ -131,6 +131,8 @@ func operatorStartCmd() *cobra.Command {
 	var inferenceAssistantModel string
 	var inferenceLiteModel string
 	var inferenceKeepAlive string
+	var inferenceCampaignID string
+	var inferenceModelRegistryDigest string
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -139,24 +141,26 @@ func operatorStartCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			endpoint, _ := cmd.Flags().GetString("endpoint")
 			opts := serve.ServeOperatorOptions{
-				LogLevel:                logLevel,
-				Endpoint:                endpoint,
-				TrustBundlePath:         trustBundle,
-				PrivateKey:              key,
-				ClientCert:              clientCert,
-				WorkingDir:              workingDir,
-				LaunchDir:               workingDir,
-				CloudMode:               cloud,
-				CloudProvider:           provider,
-				ExecutionVault:          executionVault,
-				NoGit:                   noGit,
-				HeartbeatInterval:       time.Duration(heartbeatInterval) * time.Second,
-				InferenceEnabled:        inferenceEnabled,
-				InferenceOllamaEndpoint: inferenceOllamaEndpoint,
-				InferencePrimaryModel:   inferencePrimaryModel,
-				InferenceAssistantModel: inferenceAssistantModel,
-				InferenceLiteModel:      inferenceLiteModel,
-				InferenceKeepAlive:      inferenceKeepAlive,
+				LogLevel:                     logLevel,
+				Endpoint:                     endpoint,
+				TrustBundlePath:              trustBundle,
+				PrivateKey:                   key,
+				ClientCert:                   clientCert,
+				WorkingDir:                   workingDir,
+				LaunchDir:                    workingDir,
+				CloudMode:                    cloud,
+				CloudProvider:                provider,
+				ExecutionVault:               executionVault,
+				NoGit:                        noGit,
+				HeartbeatInterval:            time.Duration(heartbeatInterval) * time.Second,
+				InferenceEnabled:             inferenceEnabled,
+				InferenceOllamaEndpoint:      inferenceOllamaEndpoint,
+				InferencePrimaryModel:        inferencePrimaryModel,
+				InferenceAssistantModel:      inferenceAssistantModel,
+				InferenceLiteModel:           inferenceLiteModel,
+				InferenceKeepAlive:           inferenceKeepAlive,
+				InferenceCampaignID:          inferenceCampaignID,
+				InferenceModelRegistryDigest: inferenceModelRegistryDigest,
 			}
 
 			// Run operator (this blocks until shutdown)
@@ -190,6 +194,8 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&inferenceAssistantModel, "inference-assistant-model", "", "Ollama model name for the Assistant chat tier")
 	cmd.Flags().StringVar(&inferenceLiteModel, "inference-lite-model", "", "Ollama model name for the Lite chat tier")
 	cmd.Flags().StringVar(&inferenceKeepAlive, "inference-keep-alive", "", "Ollama keep-alive duration (default: -1 for infinite)")
+	cmd.Flags().StringVar(&inferenceCampaignID, "inference-campaign-id", "", "Frozen evaluation campaign authorized by this inference operator")
+	cmd.Flags().StringVar(&inferenceModelRegistryDigest, "inference-model-registry-digest", "", "SHA-256 digest of the frozen campaign model registry")
 
 	return cmd
 }

@@ -533,6 +533,10 @@ func classifyReceiptFailure(execErr error) operatorv1.ReceiptFailureCode {
 		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH
 	case errors.Is(execErr, constants.ErrInferenceEvidenceHashInvalid):
 		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID
+	case errors.Is(execErr, constants.ErrInferenceModelRegistryInvalid):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID
+	case errors.Is(execErr, constants.ErrInferenceCampaignBindingInvalid):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID
 	default:
 		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED
 	}

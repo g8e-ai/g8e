@@ -49,6 +49,7 @@ from app.llm.llm_types import (
 from app.llm.providers.g8e import G8EProvider, _contents_to_messages
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import InferenceDispatchResponse
+from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 from app.models.settings import G8eeUserSettings, LLMSettings
 from g8e.operator.v1.operator_pb2 import (
     EXECUTION_STATUS_COMPLETED,
@@ -114,6 +115,7 @@ def _dispatch_response(response: InferenceDispatchResponse | None = None):
         result.result.assignment_id = request.assignment_id
         result.result.evaluation_attempt_id = request.evaluation_attempt_id
         result.result.scenario_id = request.scenario_id
+        result.result.model_registry_digest = request.model_registry_digest
         return result
 
     return dispatch
@@ -582,6 +584,48 @@ class TestG8EProviderDispatch:
         assert request.cli_session_id == "cli-1"
 
     @pytest.mark.asyncio
+    async def test_evaluation_context_propagates_frozen_registry_and_model_digest(self):
+        client = _client()
+        provider = G8EProvider(internal_http_client=client)
+        model_digest = "ab" * 32
+        registry_digest = "cd" * 32
+        context = G8eHttpContext(
+            user_id="user-1",
+            web_session_id="web-1",
+            evaluation_context=EvaluationInferenceContext(
+                campaign_id="campaign-1",
+                run_id="run-1",
+                assignment_id="assignment-1",
+                evaluation_attempt_id="attempt-1",
+                scenario_id="scenario-1",
+                model_registry_digest=registry_digest,
+                model_registry=[InferenceModelVariant(model="gemma3:4b", digest=model_digest)],
+                target_operator_session_id="inference-session-1",
+            ),
+        )
+
+        provider.set_g8e_context(context)
+        await provider.generate_content_primary("gemma3:4b", _contents(), PrimaryLLMSettings())
+
+        request = client.dispatch_inference.await_args.args[0]
+        assert request.model_digest == model_digest
+        assert request.model_registry_digest == registry_digest
+        assert request.target_operator_session_id == "inference-session-1"
+        assert request.campaign_id == "campaign-1"
+        assert request.run_id == "run-1"
+        assert request.assignment_id == "assignment-1"
+        assert request.evaluation_attempt_id == "attempt-1"
+        assert request.scenario_id == "scenario-1"
+        assert [(variant.model, variant.digest) for variant in request.model_registry] == [
+            ("gemma3:4b", model_digest)
+        ]
+        evidence = provider.governed_dispatch_evidence
+        assert evidence is not None
+        assert evidence.campaign_id == "campaign-1"
+        assert evidence.assignment_id == "assignment-1"
+        assert evidence.model_registry_digest == registry_digest
+
+    @pytest.mark.asyncio
     async def test_missing_context_sends_empty_identities(self):
         client = _client()
         provider = G8EProvider(internal_http_client=client)
@@ -591,6 +635,23 @@ class TestG8EProviderDispatch:
         request = client.dispatch_inference.await_args.args[0]
         assert request.case_id == ""
         assert request.investigation_id == ""
+
+
+class TestEvaluationInferenceContextValidation:
+    def test_duplicate_model_tags_are_rejected(self):
+        variant = InferenceModelVariant(model="gemma3:4b", digest="ab" * 32)
+
+        with pytest.raises(ValueError, match="duplicate model tags"):
+            EvaluationInferenceContext(
+                campaign_id="campaign-1",
+                run_id="run-1",
+                assignment_id="assignment-1",
+                evaluation_attempt_id="attempt-1",
+                scenario_id="scenario-1",
+                model_registry_digest="cd" * 32,
+                model_registry=[variant, variant],
+                target_operator_session_id="inference-session-1",
+            )
 
 
 class TestG8EProviderUnsupportedContent:

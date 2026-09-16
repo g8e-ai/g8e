@@ -92,13 +92,15 @@ type LoadOptions struct {
 	Lattice *latticeconfig.LatticeConfig
 
 	// Inference backend (g8ellama). Disabled when InferenceEnabled is false.
-	InferenceEnabled        bool
-	InferenceBackend        string
-	InferenceOllamaEndpoint string
-	InferencePrimaryModel   string
-	InferenceAssistantModel string
-	InferenceLiteModel      string
-	InferenceKeepAlive      string
+	InferenceEnabled             bool
+	InferenceBackend             string
+	InferenceOllamaEndpoint      string
+	InferencePrimaryModel        string
+	InferenceAssistantModel      string
+	InferenceLiteModel           string
+	InferenceKeepAlive           string
+	InferenceCampaignID          string
+	InferenceModelRegistryDigest string
 }
 
 // GatewayConfig holds configuration for gateway mode.
@@ -188,6 +190,9 @@ type InferenceConfig struct {
 	PrimaryModel   string
 	AssistantModel string
 	LiteModel      string
+
+	CampaignID          string
+	ModelRegistryDigest string
 
 	// MaxContextTokens bounds the prompt context window (0 = backend default).
 	MaxContextTokens int
@@ -674,14 +679,16 @@ func newInferenceConfig(opts LoadOptions) InferenceConfig {
 		keepAlive = "-1"
 	}
 	return InferenceConfig{
-		Enabled:        opts.InferenceEnabled,
-		Backend:        backend,
-		OllamaEndpoint: endpoint,
-		ModelsDir:      constants.DefaultModelsDir,
-		PrimaryModel:   opts.InferencePrimaryModel,
-		AssistantModel: opts.InferenceAssistantModel,
-		LiteModel:      opts.InferenceLiteModel,
-		KeepAlive:      keepAlive,
+		Enabled:             opts.InferenceEnabled,
+		Backend:             backend,
+		OllamaEndpoint:      endpoint,
+		ModelsDir:           constants.DefaultModelsDir,
+		PrimaryModel:        opts.InferencePrimaryModel,
+		AssistantModel:      opts.InferenceAssistantModel,
+		LiteModel:           opts.InferenceLiteModel,
+		KeepAlive:           keepAlive,
+		CampaignID:          opts.InferenceCampaignID,
+		ModelRegistryDigest: opts.InferenceModelRegistryDigest,
 	}
 }
 

@@ -393,12 +393,14 @@ func TestServeOperatorOptions_Equality_AllFieldsEqual(t *testing.T) {
 
 func TestBuildOperatorLoadOptions_BasicMapping(t *testing.T) {
 	opts := ServeOperatorOptions{
-		LogLevel:          "debug",
-		CloudMode:         true,
-		CloudProvider:     "aws",
-		ExecutionVault:    true,
-		NoGit:             true,
-		HeartbeatInterval: 45 * time.Second,
+		LogLevel:                     "debug",
+		CloudMode:                    true,
+		CloudProvider:                "aws",
+		ExecutionVault:               true,
+		NoGit:                        true,
+		HeartbeatInterval:            45 * time.Second,
+		InferenceCampaignID:          "campaign-1",
+		InferenceModelRegistryDigest: strings.Repeat("a", 64),
 	}
 
 	loadOpts := buildOperatorLoadOptions(opts, "10.0.0.1", "/work/dir")
@@ -413,6 +415,8 @@ func TestBuildOperatorLoadOptions_BasicMapping(t *testing.T) {
 	assert.Equal(t, "debug", loadOpts.LogLevel)
 	assert.Equal(t, "/work/dir", loadOpts.WorkDir)
 	assert.Equal(t, 45*time.Second, loadOpts.HeartbeatInterval)
+	assert.Equal(t, "campaign-1", loadOpts.InferenceCampaignID)
+	assert.Equal(t, strings.Repeat("a", 64), loadOpts.InferenceModelRegistryDigest)
 }
 
 func TestBuildOperatorLoadOptions_EmptyEndpoint(t *testing.T) {

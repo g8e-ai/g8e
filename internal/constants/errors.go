@@ -1454,6 +1454,8 @@ var (
 	ErrInferenceIdentityMismatch         = errors.New("inference: request and result identity mismatch")
 	ErrInferenceModelDigestMismatch      = errors.New("inference: model digest mismatch")
 	ErrInferenceEvidenceHashInvalid      = errors.New("inference: evidence hash invalid")
+	ErrInferenceModelRegistryInvalid     = errors.New("inference: model registry invalid")
+	ErrInferenceCampaignBindingInvalid   = errors.New("inference: campaign binding invalid")
 
 	// Dispatch transport errors. Zero delivery and a missing correlated
 	// result are terminal transport outcomes, not log-and-continue events.

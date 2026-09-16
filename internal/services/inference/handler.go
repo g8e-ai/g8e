@@ -69,7 +69,7 @@ func (h *InferenceExecutionHandler) ExecuteVerifiedTransaction(ctx context.Conte
 	return digest, nil
 }
 
-// ExecuteInference decodes the protobuf InferenceRequested payload, validates and scrubs its typed conversation, resolves the approved role model, and calls Backend.Generate.
+// ExecuteInference decodes the protobuf InferenceRequested payload, validates and scrubs its typed conversation, authorizes its model against the active standard or campaign authority, and calls Backend.Generate.
 func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg governance.CommandMessage) (*models.GenerateResponse, error) {
 	if h.backend == nil {
 		return nil, fmt.Errorf("inference handler: %w", constants.ErrInferenceBackendNotRegistered)
@@ -90,19 +90,12 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 		return nil, fmt.Errorf("inference handler: normalize request: %w", err)
 	}
 
-	// Resolve the approved model for the role. The configured role-to-model
-	// mapping is the active typed authority: a request model is accepted
-	// only when it names the configured model for the requested role; any
-	// other value is an unauthorized override.
 	if infReq.Role == models.InferenceModelRoleUnspecified {
 		return nil, fmt.Errorf("inference handler: %w", constants.ErrInferenceRoleInvalid)
 	}
-	approved := h.defaultModelForRole(infReq.Role)
-	if approved == "" {
-		return nil, fmt.Errorf("inference handler: %w: role %d", constants.ErrInferenceModelRefInvalid, infReq.Role)
-	}
-	if infReq.Model != "" && infReq.Model != approved {
-		return nil, fmt.Errorf("inference handler: %w: role %d", constants.ErrInferenceModelOverrideDenied, infReq.Role)
+	approved, err := h.authorizeInferenceModel(infReq)
+	if err != nil {
+		return nil, fmt.Errorf("inference handler: authorize model: %w", err)
 	}
 	genReq := infReq.ToGenerateRequest(approved)
 	// Apply config default keep-alive when the request does not override it.
@@ -137,8 +130,57 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 	resp.AssignmentID = genReq.AssignmentID
 	resp.EvaluationAttemptID = genReq.EvaluationAttemptID
 	resp.ScenarioID = genReq.ScenarioID
+	resp.ModelRegistryDigest = genReq.ModelRegistryDigest
 
 	return resp, nil
+}
+
+func (h *InferenceExecutionHandler) authorizeInferenceModel(req models.InferenceRequestPayload) (string, error) {
+	campaignMode := h.cfg.Inference.CampaignID != "" || h.cfg.Inference.ModelRegistryDigest != ""
+	requestHasCampaignAuthority := req.CampaignID != "" || req.ModelRegistryDigest != "" || len(req.ModelRegistry) != 0
+	if !campaignMode {
+		if requestHasCampaignAuthority {
+			return "", constants.ErrInferenceCampaignBindingInvalid
+		}
+		approved := h.defaultModelForRole(req.Role)
+		if approved == "" {
+			return "", constants.ErrInferenceModelRefInvalid
+		}
+		if req.Model != "" && req.Model != approved {
+			return "", constants.ErrInferenceModelOverrideDenied
+		}
+		return approved, nil
+	}
+	if h.cfg.Inference.CampaignID == "" || !models.IsSHA256Hex(h.cfg.Inference.ModelRegistryDigest) ||
+		req.CampaignID != h.cfg.Inference.CampaignID || req.ModelRegistryDigest != h.cfg.Inference.ModelRegistryDigest ||
+		req.RunID == "" || req.AssignmentID == "" || req.EvaluationAttemptID == "" || req.ScenarioID == "" {
+		return "", constants.ErrInferenceCampaignBindingInvalid
+	}
+	if req.Model == "" || !models.IsSHA256Hex(req.ModelDigest) || len(req.ModelRegistry) == 0 {
+		return "", constants.ErrInferenceModelRegistryInvalid
+	}
+	seen := make(map[string]struct{}, len(req.ModelRegistry))
+	matched := false
+	for _, variant := range req.ModelRegistry {
+		if variant == nil || variant.GetModel() == "" || !models.IsSHA256Hex(variant.GetDigest()) {
+			return "", constants.ErrInferenceModelRegistryInvalid
+		}
+		if _, exists := seen[variant.GetModel()]; exists {
+			return "", constants.ErrInferenceModelRegistryInvalid
+		}
+		seen[variant.GetModel()] = struct{}{}
+		if variant.GetModel() == req.Model && variant.GetDigest() == req.ModelDigest {
+			matched = true
+		}
+	}
+	digest, err := models.ComputeInferenceModelRegistryDigest(req.CampaignID, req.ModelRegistry)
+	if err != nil || digest != req.ModelRegistryDigest {
+		return "", constants.ErrInferenceModelRegistryInvalid
+	}
+	if !matched {
+		return "", constants.ErrInferenceModelOverrideDenied
+	}
+	return req.Model, nil
 }
 
 func (h *InferenceExecutionHandler) normalizeInferenceInput(req *models.InferenceRequestPayload) error {

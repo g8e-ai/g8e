@@ -565,6 +565,8 @@ enum ReceiptFailureCode {
   RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH = 14;
   RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH = 15;
   RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID = 16;
+  RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID = 17;
+  RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID = 18;
 }
 
 // ActionReceipt is the signed proof of an executing, completed, or failed mutation. L5 emits and persists it before execution, then updates and attests it after execution.
@@ -1251,6 +1253,11 @@ message InferenceResponsePart {
   }
 }
 
+message InferenceModelVariant {
+  string model = 1;
+  string digest = 2;
+}
+
 // Payload for g8e.v1.operator.inference.requested. The handler receives an ordered typed conversation, validates and scrubs every data-bearing part, and sends only the normalized request across the provider boundary.
 message InferenceRequested {
   // Chat-tier role for this request (primary, assistant, lite).
@@ -1294,6 +1301,8 @@ message InferenceRequested {
   string assignment_id = 22;
   string evaluation_attempt_id = 23;
   string scenario_id = 24;
+  repeated InferenceModelVariant model_registry = 25;
+  string model_registry_digest = 26;
 }
 
 enum InferenceTimingSource {
@@ -1352,6 +1361,7 @@ message InferenceResult {
   string assignment_id = 26;
   string evaluation_attempt_id = 27;
   string scenario_id = 28;
+  string model_registry_digest = 29;
 }
 
 // InferenceCompletion is the protocol-owned completion publication for a
@@ -1381,9 +1391,9 @@ message InferenceDispatchRequest {
   reserved 2;
   reserved "prompt";
 
-  // Optional model override. Accepted only when it matches the Inference
-  // Node's configured model for the role; any other value is rejected as an
-  // unauthorized override.
+  // Requested provider model. A campaign Inference Operator accepts it only
+  // when the exact model and digest occur in the frozen registry committed by
+  // model_registry_digest; standard inference uses the configured role model.
   string model = 3;
 
   // Generation temperature override (0 = use backend default).
@@ -1432,6 +1442,8 @@ message InferenceDispatchRequest {
   string assignment_id = 29;
   string evaluation_attempt_id = 30;
   string scenario_id = 31;
+  repeated InferenceModelVariant model_registry = 32;
+  string model_registry_digest = 33;
 }
 
 // InferenceDispatchResponse is the protocol-owned success response for
