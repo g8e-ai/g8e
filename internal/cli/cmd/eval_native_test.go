@@ -60,8 +60,8 @@ func TestEvalCmd_ContainsOnlyNativeCommands(t *testing.T) {
 	for _, child := range command.Commands() {
 		names = append(names, child.Name())
 	}
-	assert.ElementsMatch(t, []string{"run", "verify", "show", "inference"}, names)
-	assert.Len(t, names, 4)
+	assert.ElementsMatch(t, []string{"run", "verify", "show", "inference", "chat"}, names)
+	assert.Len(t, names, 5)
 
 	var inference *cobra.Command
 	for _, child := range command.Commands() {
@@ -76,6 +76,20 @@ func TestEvalCmd_ContainsOnlyNativeCommands(t *testing.T) {
 		inferenceNames = append(inferenceNames, child.Name())
 	}
 	assert.ElementsMatch(t, []string{"status", "freeze-registry", "probe", "accept"}, inferenceNames)
+
+	var chat *cobra.Command
+	for _, child := range command.Commands() {
+		if child.Name() == "chat" {
+			chat = child
+			break
+		}
+	}
+	require.NotNil(t, chat)
+	chatNames := make([]string, 0, len(chat.Commands()))
+	for _, child := range chat.Commands() {
+		chatNames = append(chatNames, child.Name())
+	}
+	assert.ElementsMatch(t, []string{"accept"}, chatNames)
 }
 
 func TestEvalRun_RejectsUnsupportedSuiteBeforeDependencies(t *testing.T) {

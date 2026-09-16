@@ -24,8 +24,31 @@ import (
 // RequestContext, the user message, optional resource_creation, and LLM
 // overrides. The harness fills the context from the persona and GovKit so
 // scenarios do not construct it by hand.
+// EnsembleModelVariant mirrors the frozen campaign model registry entry carried
+// through production chat evaluation context.
+type EnsembleModelVariant struct {
+	Model  string `json:"model"`
+	Digest string `json:"digest"`
+}
+
+// EnsembleEvaluationContext mirrors the Python EvaluationInferenceContext
+// attached to POST /api/v1/chat for scored evaluation assignments.
+type EnsembleEvaluationContext struct {
+	CampaignID              string                 `json:"campaign_id"`
+	RunID                   string                 `json:"run_id"`
+	AssignmentID            string                 `json:"assignment_id"`
+	EvaluationAttemptID     string                 `json:"evaluation_attempt_id"`
+	ScenarioID              string                 `json:"scenario_id"`
+	ModelRegistryDigest     string                 `json:"model_registry_digest"`
+	ModelRegistry           []EnsembleModelVariant   `json:"model_registry"`
+	TargetOperatorSessionID string                 `json:"target_operator_session_id"`
+	EvaluationLane          string                 `json:"evaluation_lane,omitempty"`
+	DesignatedModelRole     string                 `json:"designated_model_role,omitempty"`
+}
+
 type EnsembleChatRequest struct {
 	Context              EnsembleRequestContext    `json:"context"`
+	EvaluationContext    *EnsembleEvaluationContext `json:"evaluation_context,omitempty"`
 	Message              string                    `json:"message"`
 	SentinelMode         bool                      `json:"sentinel_mode"`
 	ResourceCreation     *EnsembleResourceCreation `json:"resource_creation,omitempty"`
@@ -54,14 +77,16 @@ type EnsembleBoundOperator struct {
 // requests; the validator requires user_id and either web_session_id or
 // cli_session_id for that source.
 type EnsembleRequestContext struct {
-	WebSessionID    string                  `json:"web_session_id,omitempty"`
-	CLISessionID    string                  `json:"cli_session_id,omitempty"`
-	UserID          string                  `json:"user_id,omitempty"`
-	OrganizationID  string                  `json:"organization_id,omitempty"`
-	CaseID          string                  `json:"case_id,omitempty"`
-	InvestigationID string                  `json:"investigation_id,omitempty"`
-	BoundOperators  []EnsembleBoundOperator `json:"bound_operators,omitempty"`
-	SourceComponent string                  `json:"source_component"`
+	WebSessionID        string                  `json:"web_session_id,omitempty"`
+	CLISessionID        string                  `json:"cli_session_id,omitempty"`
+	UserID              string                  `json:"user_id,omitempty"`
+	OrganizationID      string                  `json:"organization_id,omitempty"`
+	CaseID              string                  `json:"case_id,omitempty"`
+	InvestigationID     string                  `json:"investigation_id,omitempty"`
+	OperatorID          string                  `json:"operator_id,omitempty"`
+	OperatorSessionID   string                  `json:"operator_session_id,omitempty"`
+	BoundOperators      []EnsembleBoundOperator `json:"bound_operators,omitempty"`
+	SourceComponent     string                  `json:"source_component"`
 }
 
 // EnsembleResourceCreation controls inline case/investigation creation. When
@@ -115,18 +140,11 @@ func (c *Client) EnsembleChat(ctx context.Context, p Persona, req EnsembleChatRe
 		httpReq.Header.Set("User-Agent", p.UserAgent)
 		httpReq.Header.Set("X-G8E-Client-Persona", p.ID)
 	}
-	if p.UserID != "" {
+	if p.OperatorSessionID != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+p.OperatorSessionID)
+	}
+	if p.OperatorSessionID == "" && p.UserID != "" {
 		httpReq.Header.Set(HeaderProxyUserID, p.UserID)
-		// The ensemble auth service (auth_service.py:59) requires BOTH
-		// X-Proxy-User-Id AND X-Proxy-User-Email with AND logic for proxy
-		// auth — without the email header it falls through to Bearer token
-		// auth, which the harness does not send for ensemble calls, and
-		// returns 401 G8E-1200. The harness has no real email (headless
-		// enrollment produces no browser-registered email), so derive a
-		// synthetic one from the user id. The ensemble only stores the
-		// email on the AuthenticatedUser record; it does not validate the
-		// email against the gateway, so a synthetic value is safe and
-		// matches the headless enrollment pattern.
 		httpReq.Header.Set(HeaderProxyUserEmail, p.UserID+ProxyUserEmailSyntheticDomain)
 	}
 	if p.CLISessionID != "" {
@@ -164,6 +182,72 @@ func (c *Client) EnsembleChat(ctx context.Context, p Persona, req EnsembleChatRe
 // InternalAPIPaths.G8EE_CHAT in the ensemble (api_paths.json: g8ee.chat under
 // the /api/v1 prefix).
 const EnsembleChatPath = "/api/v1/chat"
+
+// EnsembleEvaluationTracePath is the authenticated read-only evaluation trace
+// lookup exposed by g8ee after chat completion.
+const EnsembleEvaluationTracePath = "/api/v1/evaluation/trace/%s/%s"
+
+// EnsembleEvaluationTraceResponse mirrors the Python EvaluationTraceResponse.
+type EnsembleEvaluationTraceResponse struct {
+	Trace map[string]any `json:"trace"`
+}
+
+// GetEvaluationTrace loads one persisted evaluation assignment trace from g8ee.
+func (c *Client) GetEvaluationTrace(ctx context.Context, p Persona, assignmentID, evaluationAttemptID string) (map[string]any, error) {
+	if c.cfg.EnsembleBaseURL == "" {
+		return nil, fmt.Errorf("ensemble evaluation trace: %w", constants.ErrEnsembleURLNotConfigured)
+	}
+	if assignmentID == "" || evaluationAttemptID == "" {
+		return nil, fmt.Errorf("ensemble evaluation trace: %w", constants.ErrMissingRequiredField)
+	}
+	path := fmt.Sprintf(EnsembleEvaluationTracePath, assignmentID, evaluationAttemptID)
+	start := time.Now()
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.EnsembleBaseURL+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("ensemble evaluation trace: build request: %w", err)
+	}
+	if p.UserAgent != "" {
+		httpReq.Header.Set("User-Agent", p.UserAgent)
+		httpReq.Header.Set("X-G8E-Client-Persona", p.ID)
+	}
+	if p.OperatorSessionID != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+p.OperatorSessionID)
+	}
+	if p.OperatorSessionID == "" && p.UserID != "" {
+		httpReq.Header.Set(HeaderProxyUserID, p.UserID)
+		httpReq.Header.Set(HeaderProxyUserEmail, p.UserID+ProxyUserEmailSyntheticDomain)
+	}
+	if p.CLISessionID != "" {
+		httpReq.Header.Set(HeaderProxyCLISessionID, p.CLISessionID)
+	}
+
+	resp, err := c.http.Do(httpReq)
+	ex := Exchange{Persona: p.ID, Method: http.MethodGet, URL: c.cfg.EnsembleBaseURL + path, At: start}
+	if err != nil {
+		ex.Err = err.Error()
+		ex.LatencyMS = time.Since(start).Milliseconds()
+		c.append(ex, c.cfg.Verbose)
+		return nil, fmt.Errorf("ensemble evaluation trace: execute request: %w", err)
+	}
+	defer resp.Body.Close()
+	out, _ := io.ReadAll(resp.Body)
+	ex.Status = resp.StatusCode
+	ex.LatencyMS = time.Since(start).Milliseconds()
+	attachBody(&ex.RespBody, &ex.RespRaw, out)
+	c.append(ex, c.cfg.Verbose)
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("ensemble evaluation trace: status %d: %s", resp.StatusCode, truncateResp(out))
+	}
+	var traceResp EnsembleEvaluationTraceResponse
+	if err := json.Unmarshal(out, &traceResp); err != nil {
+		return nil, fmt.Errorf("ensemble evaluation trace: decode response: %w", err)
+	}
+	if len(traceResp.Trace) == 0 {
+		return nil, fmt.Errorf("ensemble evaluation trace: %w", constants.ErrMissingRequiredField)
+	}
+	return traceResp.Trace, nil
+}
 
 // HeaderProxyUserID is the X-Proxy-User-Id header the ensemble auth
 // dependency reads as a fallback when no authenticated user is in request
