@@ -136,20 +136,7 @@ func (c *Client) EnsembleChat(ctx context.Context, p Persona, req EnsembleChatRe
 		return nil, fmt.Errorf("ensemble chat: build request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	if p.UserAgent != "" {
-		httpReq.Header.Set("User-Agent", p.UserAgent)
-		httpReq.Header.Set("X-G8E-Client-Persona", p.ID)
-	}
-	if p.OperatorSessionID != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+p.OperatorSessionID)
-	}
-	if p.OperatorSessionID == "" && p.UserID != "" {
-		httpReq.Header.Set(HeaderProxyUserID, p.UserID)
-		httpReq.Header.Set(HeaderProxyUserEmail, p.UserID+ProxyUserEmailSyntheticDomain)
-	}
-	if p.CLISessionID != "" {
-		httpReq.Header.Set(HeaderProxyCLISessionID, p.CLISessionID)
-	}
+	applyEnsemblePersonaHeaders(httpReq, p)
 
 	resp, err := c.http.Do(httpReq)
 	ex := Exchange{Persona: p.ID, Method: http.MethodPost, URL: c.cfg.EnsembleBaseURL + EnsembleChatPath, At: start}
@@ -206,20 +193,7 @@ func (c *Client) GetEvaluationTrace(ctx context.Context, p Persona, assignmentID
 	if err != nil {
 		return nil, fmt.Errorf("ensemble evaluation trace: build request: %w", err)
 	}
-	if p.UserAgent != "" {
-		httpReq.Header.Set("User-Agent", p.UserAgent)
-		httpReq.Header.Set("X-G8E-Client-Persona", p.ID)
-	}
-	if p.OperatorSessionID != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+p.OperatorSessionID)
-	}
-	if p.OperatorSessionID == "" && p.UserID != "" {
-		httpReq.Header.Set(HeaderProxyUserID, p.UserID)
-		httpReq.Header.Set(HeaderProxyUserEmail, p.UserID+ProxyUserEmailSyntheticDomain)
-	}
-	if p.CLISessionID != "" {
-		httpReq.Header.Set(HeaderProxyCLISessionID, p.CLISessionID)
-	}
+	applyEnsemblePersonaHeaders(httpReq, p)
 
 	resp, err := c.http.Do(httpReq)
 	ex := Exchange{Persona: p.ID, Method: http.MethodGet, URL: c.cfg.EnsembleBaseURL + path, At: start}
@@ -247,6 +221,27 @@ func (c *Client) GetEvaluationTrace(ctx context.Context, p Persona, assignmentID
 		return nil, fmt.Errorf("ensemble evaluation trace: %w", constants.ErrMissingRequiredField)
 	}
 	return traceResp.Trace, nil
+}
+
+// applyEnsemblePersonaHeaders attaches the identity headers g8ee uses to bind
+// Bearer operator sessions to a user and CLI session. GET endpoints such as
+// evaluation trace lookup have no JSON body, so these headers must be sent even
+// when Authorization is present.
+func applyEnsemblePersonaHeaders(httpReq *http.Request, p Persona) {
+	if p.UserAgent != "" {
+		httpReq.Header.Set("User-Agent", p.UserAgent)
+		httpReq.Header.Set("X-G8E-Client-Persona", p.ID)
+	}
+	if p.OperatorSessionID != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+p.OperatorSessionID)
+	}
+	if p.UserID != "" {
+		httpReq.Header.Set(HeaderProxyUserID, p.UserID)
+		httpReq.Header.Set(HeaderProxyUserEmail, p.UserID+ProxyUserEmailSyntheticDomain)
+	}
+	if p.CLISessionID != "" {
+		httpReq.Header.Set(HeaderProxyCLISessionID, p.CLISessionID)
+	}
 }
 
 // HeaderProxyUserID is the X-Proxy-User-Id header the ensemble auth

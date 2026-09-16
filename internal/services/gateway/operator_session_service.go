@@ -129,3 +129,59 @@ func (s *OperatorSessionService) GetActiveSessionForUser(userID string) (*models
 	session.ID = selected.ID
 	return &session, nil
 }
+
+// GetActiveDataOperatorSessionForUser returns the operator session binding for
+// the user's active governed tool Operator as recorded in the operator
+// registry. Registry state wins over stale operator_sessions rows after stack
+// rebuilds or remote Operator re-enrollment.
+func (s *OperatorSessionService) GetActiveDataOperatorSessionForUser(userID string) (*models.OperatorSession, error) {
+	if userID == "" {
+		return nil, nil
+	}
+	userIDVal, err := json.Marshal(userID)
+	if err != nil {
+		return nil, fmt.Errorf("marshal user_id filter: %w", err)
+	}
+	activeStatus, err := json.Marshal(string(constants.OperatorStatusActive))
+	if err != nil {
+		return nil, fmt.Errorf("marshal status filter: %w", err)
+	}
+	docs, err := s.db.DocQuery(
+		marshaler.CollectionName(constants.CollectionOperators),
+		[]models.DocFilter{
+			{Field: "user_id", Op: "==", Value: userIDVal},
+			{Field: "status", Op: "==", Value: activeStatus},
+		},
+		"created_at DESC",
+		0,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query active operators for user %s: %w", userID, err)
+	}
+	for _, doc := range docs {
+		dataBytes, err := json.Marshal(doc.Data)
+		if err != nil {
+			return nil, fmt.Errorf("marshal operator document: %w", err)
+		}
+		var operator models.OperatorDocumentGo
+		if err := json.Unmarshal(dataBytes, &operator); err != nil {
+			return nil, fmt.Errorf("unmarshal operator document: %w", err)
+		}
+		if operator.OperatorType != constants.OperatorTypeRemote {
+			continue
+		}
+		if operator.RuntimeConfig != nil && operator.RuntimeConfig.InferenceEnabled {
+			continue
+		}
+		if operator.OperatorSessionID == "" {
+			continue
+		}
+		return &models.OperatorSession{
+			ID:         operator.OperatorSessionID,
+			UserID:     operator.UserID,
+			OperatorID: operator.ID,
+			IsActive:   true,
+		}, nil
+	}
+	return nil, nil
+}

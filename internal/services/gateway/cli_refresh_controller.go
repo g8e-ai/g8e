@@ -27,6 +27,7 @@ type CLIRefreshControllerDeps struct {
 	Logger             *slog.Logger
 	CLISessionSvc      *CLISessionService
 	OperatorSessionSvc *OperatorSessionService
+	Reg                *RegistrationService
 	UserSvc            *UserService
 	Responder          *response.Writer
 }
@@ -51,6 +52,7 @@ type CLIRefreshController struct {
 	logger             *slog.Logger
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
+	reg                *RegistrationService
 	userSvc            *UserService
 	responder          *response.Writer
 }
@@ -61,6 +63,7 @@ func newCLIRefreshController(deps CLIRefreshControllerDeps) *CLIRefreshControlle
 		logger:             deps.Logger,
 		cliSessionSvc:      deps.CLISessionSvc,
 		operatorSessionSvc: deps.OperatorSessionSvc,
+		reg:                deps.Reg,
 		userSvc:            deps.UserSvc,
 		responder:          deps.Responder,
 	}
@@ -151,13 +154,25 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 	// error — the caller must re-enroll to establish a fresh operator binding.
 	var operatorSessionID, operatorID, systemFingerprint, certFingerprint, certSerial, loginMethod string
 	if oldSession != nil {
-		operatorSessionID = oldSession.OperatorSessionID
 		systemFingerprint = oldSession.SystemFingerprint
 		certFingerprint = oldSession.CertFingerprint
 		certSerial = oldSession.CertSerial
 		loginMethod = oldSession.LoginMethod
 	}
-	if operatorSessionID != "" && c.operatorSessionSvc != nil {
+	if sessionID, opID, ok, regErr := c.registryDataOperatorBinding(userID); regErr != nil {
+		c.logger.Error("CLI refresh: failed to look up active data operator binding",
+			"error", regErr,
+			"user_id", userID,
+		)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to look up operator session")
+		return
+	} else if ok {
+		operatorSessionID = sessionID
+		operatorID = opID
+	} else if oldSession != nil {
+		operatorSessionID = oldSession.OperatorSessionID
+	}
+	if operatorSessionID != "" && operatorID == "" && c.operatorSessionSvc != nil {
 		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(userID)
 		if opErr != nil {
 			c.logger.Error("CLI refresh: failed to verify active operator session",
@@ -237,6 +252,29 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		OperatorSessionID: operatorSessionID,
 		OperatorID:        operatorID,
 	})
+}
+
+func (c *CLIRefreshController) registryDataOperatorBinding(userID string) (sessionID, operatorID string, ok bool, err error) {
+	if c.reg == nil {
+		return "", "", false, nil
+	}
+	operators, err := c.reg.ListUserOperators(userID)
+	if err != nil {
+		return "", "", false, err
+	}
+	for _, op := range operators {
+		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
+			continue
+		}
+		if op.RuntimeConfig != nil && op.RuntimeConfig.InferenceEnabled {
+			continue
+		}
+		if op.OperatorSessionID == "" {
+			continue
+		}
+		return op.OperatorSessionID, op.ID, true, nil
+	}
+	return "", "", false, nil
 }
 
 // writeRefreshError maps a typed refresh/session error to the appropriate

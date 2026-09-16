@@ -127,6 +127,61 @@ class TestAuthServiceOperatorSessionAuthentication:
         )
 
     @pytest.mark.asyncio
+    async def test_bearer_auth_takes_precedence_over_proxy_headers(
+        self, auth_service, mock_internal_http_client
+    ):
+        request = MagicMock(spec=Request)
+        request.headers = {
+            AUTHORIZATION: "Bearer operator-session-123",
+            X_PROXY_USER_ID: "user-123",
+            X_PROXY_USER_EMAIL: "user-123@g8e.local",
+            X_PROXY_CLI_SESSION_ID: "cli-session-789",
+        }
+        request.state = MagicMock()
+        request.state.g8e_context = None
+        mock_internal_http_client.validate_operator_session.return_value = (
+            OperatorSessionValidationResponse(
+                valid=True,
+                operator_id="operator-456",
+                user_id="user-123",
+            )
+        )
+
+        user = await auth_service.authenticate_request(request, MagicMock())
+
+        assert user.auth_method == AuthMethod.OPERATOR_SESSION
+        assert user.operator_session_id == "operator-session-123"
+
+    @pytest.mark.asyncio
+    async def test_bearer_auth_uses_proxy_headers_when_body_context_absent(
+        self, auth_service, mock_internal_http_client
+    ):
+        request = MagicMock(spec=Request)
+        request.headers = {
+            AUTHORIZATION: "Bearer operator-session-123",
+            X_PROXY_USER_ID: "user-123",
+            X_PROXY_CLI_SESSION_ID: "cli-session-789",
+        }
+        request.state = MagicMock()
+        request.state.g8e_context = None
+        mock_internal_http_client.validate_operator_session.return_value = (
+            OperatorSessionValidationResponse(
+                valid=True,
+                operator_id="operator-456",
+                user_id="user-123",
+            )
+        )
+
+        user = await auth_service.authenticate_request(request, MagicMock())
+
+        assert user.user_id == "user-123"
+        assert user.operator_session_id == "operator-session-123"
+        assert user.cli_session_id == "cli-session-789"
+        mock_internal_http_client.validate_operator_session.assert_awaited_once_with(
+            "operator-session-123", "cli-session-789", "user-123"
+        )
+
+    @pytest.mark.asyncio
     async def test_mismatched_authoritative_binding_is_rejected(
         self, auth_service, mock_internal_http_client
     ):

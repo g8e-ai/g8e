@@ -193,6 +193,9 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	if deps.CLIRefreshControllerDeps.UserSvc == nil {
 		deps.CLIRefreshControllerDeps.UserSvc = deps.BootstrapControllerDeps.UserSvc
 	}
+	if deps.CLIRefreshControllerDeps.Reg == nil {
+		deps.CLIRefreshControllerDeps.Reg = deps.OperatorControllerDeps.Reg
+	}
 	if deps.CLIRefreshControllerDeps.Responder == nil {
 		deps.CLIRefreshControllerDeps.Responder = responder
 	}

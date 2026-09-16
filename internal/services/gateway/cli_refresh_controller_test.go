@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,6 +39,7 @@ func setupTestCLIRefreshController(t *testing.T) (*CLIRefreshController, *models
 		Logger:             infra.Logger,
 		CLISessionSvc:      infra.CLISessionSvc,
 		OperatorSessionSvc: infra.OperatorSessionSvc,
+		Reg:                infra.Reg,
 		UserSvc:            infra.UserSvc,
 		Responder:          infra.Responder,
 	})
@@ -239,6 +241,56 @@ func TestCLIRefreshController_Refresh_StaleOperatorSession_FallsBackToActive(t *
 	assert.Equal(t, user.ID, newSession.UserID)
 	assert.Equal(t, "op-refresh-active", newSession.OperatorSessionID,
 		"new session must bind to the active operator session, not the stale one")
+}
+
+// TestCLIRefreshController_Refresh_PrefersRegistryActiveDataOperator verifies
+// that refresh binds to the active governed tool Operator recorded in the
+// operator registry even when a stale operator_sessions row still matches the
+// old CLI session binding.
+func TestCLIRefreshController_Refresh_PrefersRegistryActiveDataOperator(t *testing.T) {
+	c, user := setupTestCLIRefreshController(t)
+
+	staleSessionID := "op-refresh-stale-registry"
+	activeSessionID := "op-refresh-registry-active"
+	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(
+		staleSessionID, user.ID, "org-1", "op-id-stale", "mTLS",
+	))
+
+	now := time.Now().UTC()
+	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID:                "op-id-registry-active",
+		UserID:            user.ID,
+		Status:            constants.OperatorStatusActive,
+		OperatorType:      constants.OperatorTypeRemote,
+		OperatorSessionID: activeSessionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	})
+	require.NoError(t, err)
+	require.NoError(t, c.cliSessionSvc.db.DocSet(
+		marshaler.CollectionName(constants.CollectionOperators), "op-id-registry-active", opBytes,
+	))
+
+	oldSessionID := "refresh-ctrl-registry-stale"
+	persistCLISessionForController(t, c, user.ID, oldSessionID, staleSessionID)
+
+	req := refreshRequestWithContext(t, user.ID, oldSessionID)
+	rr := httptest.NewRecorder()
+	c.handleRefresh(rr, req)
+
+	resp := parseRefreshResponse(t, rr)
+	newDoc, err := c.cliSessionSvc.db.DocGet(
+		marshaler.CollectionName(constants.CollectionCLISessions), resp.CLISessionID)
+	require.NoError(t, err)
+	require.NotNil(t, newDoc)
+	var newSession models.CLISession
+	dataBytes, err := json.Marshal(newDoc.Data)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(dataBytes, &newSession))
+	assert.Equal(t, activeSessionID, newSession.OperatorSessionID,
+		"new CLI session must bind to registry-active data operator")
+	assert.Equal(t, activeSessionID, resp.OperatorSessionID)
+	assert.Equal(t, "op-id-registry-active", resp.OperatorID)
 }
 
 // ---------------------------------------------------------------------------

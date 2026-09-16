@@ -686,6 +686,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Logger:             logger,
 			CLISessionSvc:      cliSessionSvc,
 			OperatorSessionSvc: operatorSessionSvc,
+			Reg:                ls.reg,
 			UserSvc:            userSvc,
 			Responder:          ls.responder,
 		},

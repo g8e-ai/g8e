@@ -78,6 +78,36 @@ func TestValidateInferenceAcceptanceCase_StructuredJSON(t *testing.T) {
 	require.NoError(t, ValidateInferenceAcceptanceCase(InferenceAcceptanceCaseStructuredJSON, resp))
 }
 
+func TestValidateInferenceAcceptanceCase_StructuredJSONAcceptsFencedPayload(t *testing.T) {
+	t.Parallel()
+	resp := &operatorv1.InferenceDispatchResponse{
+		Result: &operatorv1.InferenceResult{
+			Parts: []*operatorv1.InferenceResponsePart{{
+				Part: &operatorv1.InferenceResponsePart_Text{Text: "```json\n{\"answer\":\"structured-ok\"}\n```"},
+			}},
+		},
+	}
+	require.NoError(t, ValidateInferenceAcceptanceCase(InferenceAcceptanceCaseStructuredJSON, resp))
+}
+
+func TestStructuredJSONCase_UsesSystemAndUserMessages(t *testing.T) {
+	t.Parallel()
+	acceptanceCase, err := LookupInferenceAcceptanceCase(InferenceAcceptanceCaseStructuredJSON)
+	require.NoError(t, err)
+	probeReq := acceptanceCase.Apply(InferenceProbeRequest{
+		ProviderAttemptID:       "attempt-1",
+		Role:                    models.InferenceModelRolePrimary,
+		Model:                   "probe-model",
+		TargetOperatorSessionID: "sess-1",
+	})
+	req, err := BuildInferenceProbeDispatchRequest(probeReq)
+	require.NoError(t, err)
+	require.Len(t, req.GetMessages(), 2)
+	assert.Equal(t, operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_SYSTEM, req.GetMessages()[0].GetRole())
+	assert.Equal(t, operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER, req.GetMessages()[1].GetRole())
+	assert.Contains(t, req.GetMessages()[1].GetParts()[0].GetText(), "structured-ok")
+}
+
 func TestValidateInferenceAcceptanceCase_ToolSelectionRequiresCall(t *testing.T) {
 	t.Parallel()
 	resp := &operatorv1.InferenceDispatchResponse{

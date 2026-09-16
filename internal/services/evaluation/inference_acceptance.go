@@ -10,6 +10,7 @@ package evaluation
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -96,7 +97,24 @@ func DefaultInferenceAcceptanceCases() []InferenceAcceptanceCase {
 		{
 			ID: InferenceAcceptanceCaseStructuredJSON,
 			Apply: func(base InferenceProbeRequest) InferenceProbeRequest {
-				base.Prompt = "Return only JSON matching the schema. Set answer to the exact string structured-ok and nothing else."
+				base.Messages = []*operatorv1.InferenceMessage{
+					{
+						Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_SYSTEM,
+						Parts: []*operatorv1.InferenceMessagePart{{
+							Part: &operatorv1.InferenceMessagePart_Text{
+								Text: "Respond with JSON only. The answer field must be exactly the string structured-ok.",
+							},
+						}},
+					},
+					{
+						Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+						Parts: []*operatorv1.InferenceMessagePart{{
+							Part: &operatorv1.InferenceMessagePart_Text{
+								Text: "Return JSON matching the schema with {\"answer\":\"structured-ok\"}. No markdown and no explanation.",
+							},
+						}},
+					},
+				}
 				base.ResponseFormat = ProbeStructuredResponseFormat()
 				return base
 			},
@@ -230,8 +248,10 @@ func collectResponseText(result *operatorv1.InferenceResult) string {
 	return builder.String()
 }
 
+var structuredJSONFencePattern = regexp.MustCompile("(?s)```(?:json)?\\s*(\\{.*\\})\\s*```")
+
 func validateStructuredAnswer(result *operatorv1.InferenceResult, want string) error {
-	text := strings.TrimSpace(collectResponseText(result))
+	text := extractStructuredJSONPayload(collectResponseText(result))
 	if text == "" {
 		return fmt.Errorf("evaluation: structured acceptance missing JSON text: %w", constants.ErrInferenceProviderResponseInvalid)
 	}
@@ -245,6 +265,22 @@ func validateStructuredAnswer(result *operatorv1.InferenceResult, want string) e
 		return fmt.Errorf("evaluation: structured acceptance answer %q, want %q: %w", payload.Answer, want, constants.ErrInferenceProviderResponseInvalid)
 	}
 	return nil
+}
+
+func extractStructuredJSONPayload(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	if match := structuredJSONFencePattern.FindStringSubmatch(text); len(match) == 2 {
+		return strings.TrimSpace(match[1])
+	}
+	start := strings.Index(text, "{")
+	end := strings.LastIndex(text, "}")
+	if start >= 0 && end > start {
+		return strings.TrimSpace(text[start : end+1])
+	}
+	return text
 }
 
 func requireToolCallNamed(result *operatorv1.InferenceResult, name string) error {
