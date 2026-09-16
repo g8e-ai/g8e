@@ -36,6 +36,7 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		campaignEvalPublishCmd(deps),
 		campaignEvalVerifyCmd(deps),
 		campaignEvalAccountCmd(deps),
+		campaignEvalRepairResultsCmd(deps),
 		campaignEvalStatusCmd(deps),
 	)
 	return cmd
@@ -582,6 +583,46 @@ func campaignEvalAccountCmd(deps nativeEvalDeps) *cobra.Command {
 			if !report.Complete {
 				return constants.ErrEvalRunVerificationFailed
 			}
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
+	return cmd
+}
+
+func campaignEvalRepairResultsCmd(deps nativeEvalDeps) *cobra.Command {
+	var runID string
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:   "repair-results",
+		Short: "Backfill persisted terminal results for assignments missing result records",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if runID == "" {
+				return fmt.Errorf("evaluation: campaign repair-results: %w", constants.ErrMissingRequiredField)
+			}
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			_, artifacts, err := evaluation.LoadNorthStarScenarioCatalog()
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign repair-results: %w", err)
+			}
+			controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			repaired, err := controller.RepairAssignmentsWithoutResults(cmd.Context(), runID, artifacts)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign repair-results: %w", err)
+			}
+			if jsonOutput {
+				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "repaired_results": repaired}, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Repaired %d terminal assignment result(s) for run %s\n", repaired, runID)
 			return err
 		},
 	}

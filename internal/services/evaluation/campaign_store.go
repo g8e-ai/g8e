@@ -303,6 +303,14 @@ func (s *Store) SaveAssignmentResult(ctx context.Context, result *evalv1.Evaluat
 	return nil
 }
 
+// LoadAssignmentTrace reads one persisted imported assignment trace.
+func (s *Store) LoadAssignmentTrace(ctx context.Context, runID, assignmentID string) (map[string]any, error) {
+	if s == nil || s.files == nil {
+		return nil, fmt.Errorf("evaluation: load assignment trace: %w", constants.ErrMissingRequiredField)
+	}
+	return LoadAssignmentTraceEvidence(ctx, s.files, runID, assignmentID)
+}
+
 // LoadAssignmentResult reads one persisted terminal assignment result.
 func (s *Store) LoadAssignmentResult(ctx context.Context, runID, assignmentID string) (*evalv1.EvaluationAssignmentResult, error) {
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) || !complianceevidence.ValidPathElement(assignmentID) {

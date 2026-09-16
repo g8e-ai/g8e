@@ -54,6 +54,8 @@ type CampaignStore interface {
 	LoadAssignment(ctx context.Context, runID, assignmentID string) (*evalv1.EvaluationAssignment, error)
 	ListAssignments(ctx context.Context, runID string) ([]*evalv1.EvaluationAssignment, error)
 	AssignmentResultExists(ctx context.Context, runID, assignmentID string) (bool, error)
+	SaveAssignmentTrace(ctx context.Context, runID, assignmentID string, body []byte) error
+	LoadAssignmentTrace(ctx context.Context, runID, assignmentID string) (map[string]any, error)
 	SaveAssignmentResult(ctx context.Context, result *evalv1.EvaluationAssignmentResult) error
 	LoadAssignmentResult(ctx context.Context, runID, assignmentID string) (*evalv1.EvaluationAssignmentResult, error)
 }
@@ -323,7 +325,7 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 		return nil, false, err
 	}
 	attemptID := c.newID("attempt")
-	result, err := c.executor.ExecuteAssignment(ctx, AssignmentExecutionRequest{
+	execReq := AssignmentExecutionRequest{
 		Assignment:       assignment,
 		AttemptID:        attemptID,
 		ScenarioInput:    scenarioInput,
@@ -332,25 +334,25 @@ func (c *CampaignController) ExecuteNextAssignment(ctx context.Context, runID st
 		RequiredConcepts: requiredConcepts,
 		GradingMethod:    gradingMethod,
 		Binding:          binding,
-	})
+	}
+	result, err := c.executor.ExecuteAssignment(ctx, execReq)
 	if err != nil {
-		assignment.LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED
-		assignment.CompletedAt = timestamppb.New(c.now().UTC())
-		_ = c.store.SaveAssignment(ctx, assignment)
-		return nil, false, err
+		if !isRecoverableAssignmentExecutionError(err) {
+			return nil, false, fmt.Errorf("evaluation: execute next assignment: %w", err)
+		}
+		failureResult, buildErr := c.buildFailureAssignmentResult(ctx, execReq, err)
+		if buildErr != nil {
+			return nil, false, fmt.Errorf("evaluation: execute next assignment: %w", buildErr)
+		}
+		if err := c.persistTerminalAssignment(ctx, assignment, failureResult); err != nil {
+			return nil, false, err
+		}
+		return failureResult, true, nil
 	}
 	if result == nil {
 		return nil, false, fmt.Errorf("evaluation: execute next assignment: executor returned nil result")
 	}
-	if err := c.store.SaveAssignmentResult(ctx, result); err != nil {
-		return nil, false, err
-	}
-	assignment.LifecycleStatus = result.GetLifecycleStatus()
-	assignment.CompletedAt = result.GetCompletedAt()
-	if err := c.store.SaveAssignment(ctx, assignment); err != nil {
-		return nil, false, err
-	}
-	if err := c.publishAssignmentTerminal(ctx, assignment, result); err != nil {
+	if err := c.persistTerminalAssignment(ctx, assignment, result); err != nil {
 		return nil, false, err
 	}
 	return result, true, nil
