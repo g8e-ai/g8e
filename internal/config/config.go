@@ -101,6 +101,11 @@ type LoadOptions struct {
 	InferenceKeepAlive           string
 	InferenceCampaignID          string
 	InferenceModelRegistryDigest string
+
+	// ProviderBoundaryObserverEnabled marks the operator as the remote
+	// read-only provider-boundary hardware observer.
+	ProviderBoundaryObserverEnabled bool
+	ProviderBoundaryObserverID      string
 }
 
 // GatewayConfig holds configuration for gateway mode.
@@ -203,6 +208,13 @@ type InferenceConfig struct {
 	KeepAlive string
 }
 
+// ProviderBoundaryObserverConfig holds configuration for the remote
+// provider-boundary hardware observer operator.
+type ProviderBoundaryObserverConfig struct {
+	Enabled    bool
+	ObserverID string
+}
+
 // Config holds all configuration for g8eo
 type Config struct {
 	// Basic configuration
@@ -284,6 +296,10 @@ type Config struct {
 	// Disabled by default; enabled when the operator runs as an Inference
 	// Node calling the configured remote Ollama provider.
 	Inference InferenceConfig
+
+	// ProviderBoundaryObserver configuration for the remote read-only
+	// hardware observer on the approved provider host.
+	ProviderBoundaryObserver ProviderBoundaryObserverConfig
 }
 
 // FindProjectRoot returns the current working directory.
@@ -622,7 +638,8 @@ func Load(opts LoadOptions) (*Config, error) {
 		// remote Ollama provider. The model store directory is resolved at the boundary via
 		// fileSvc.Resolve(constants.DefaultModelsDir), not stored as an
 		// absolute path here.
-		Inference: newInferenceConfig(opts),
+		Inference:                newInferenceConfig(opts),
+		ProviderBoundaryObserver: newProviderBoundaryObserverConfig(opts),
 	}
 
 	// Default PKIDir to .g8e/pki if not explicitly set
@@ -689,6 +706,17 @@ func newInferenceConfig(opts LoadOptions) InferenceConfig {
 		KeepAlive:           keepAlive,
 		CampaignID:          opts.InferenceCampaignID,
 		ModelRegistryDigest: opts.InferenceModelRegistryDigest,
+	}
+}
+
+func newProviderBoundaryObserverConfig(opts LoadOptions) ProviderBoundaryObserverConfig {
+	observerID := opts.ProviderBoundaryObserverID
+	if observerID == "" {
+		observerID = "g8e-provider-boundary-observer"
+	}
+	return ProviderBoundaryObserverConfig{
+		Enabled:    opts.ProviderBoundaryObserverEnabled,
+		ObserverID: observerID,
 	}
 }
 

@@ -332,6 +332,8 @@ const EventOperatorInferenceRequested EventType = "g8e.v1.operator.inference.req
 const EventOperatorInferenceProgressUpdated EventType = "g8e.v1.operator.inference.progress.updated"
 const EventOperatorInferenceCompleted EventType = "g8e.v1.operator.inference.completed"
 const EventOperatorInferenceFailed EventType = "g8e.v1.operator.inference.failed"
+const EventOperatorProviderBoundaryObservationRequested EventType = "g8e.v1.operator.provider.boundary.observation.requested"
+const EventOperatorProviderBoundaryObservationCompleted EventType = "g8e.v1.operator.provider.boundary.observation.completed"
 
 // Observability dashboard events. These carry protocol-owned typed payloads
 // (see protocol/models/observe_event_payloads.json) and are emitted by real
@@ -489,6 +491,10 @@ type _EventOperatorInference struct {
 	ProgressUpdated EventType
 	Requested       EventType
 }
+type _EventOperatorProviderBoundaryObservation struct {
+	Completed EventType
+	Requested EventType
+}
 type _EventOperatorMcp struct {
 	CallRequested EventType
 }
@@ -568,6 +574,7 @@ type _EventOperator struct {
 	HeartbeatRequested       EventType
 	Intent                   _EventOperatorIntent
 	Inference                _EventOperatorInference
+	ProviderBoundaryObservation _EventOperatorProviderBoundaryObservation
 	Mcp                      _EventOperatorMcp
 	NetworkPing              _EventOperatorNetworkPing
 	Notary                   _EventOperatorNotary
@@ -716,6 +723,10 @@ var Event = struct {
 			Failed:          EventOperatorInferenceFailed,
 			ProgressUpdated: EventOperatorInferenceProgressUpdated,
 			Requested:       EventOperatorInferenceRequested,
+		},
+		ProviderBoundaryObservation: _EventOperatorProviderBoundaryObservation{
+			Completed: EventOperatorProviderBoundaryObservationCompleted,
+			Requested: EventOperatorProviderBoundaryObservationRequested,
 		},
 		Mcp: _EventOperatorMcp{
 			CallRequested: EventOperatorMcpCallRequested,

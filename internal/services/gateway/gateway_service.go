@@ -39,6 +39,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
@@ -83,9 +84,10 @@ type GatewayModeService struct {
 	envProc               governance.EnvelopeProcessor
 	platformEnrollmentSvc *PlatformEnrollmentService
 	consensusSvc          *consensus.ConsensusService
-	dispatchSvc           *DispatchService
-	inferenceDispatchSvc  *dispatch.DispatchService
-	observeProducer       *ObserveProducerService
+	dispatchSvc              *DispatchService
+	inferenceDispatchSvc     *dispatch.DispatchService
+	providerObservationCoord *ProviderBoundaryObservationCoordinator
+	observeProducer          *ObserveProducerService
 	responder             *response.Writer
 	server                *http.Server
 	publicServer          *http.Server
@@ -444,6 +446,13 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		&gatewayOperatorListerAdapter{svc: reg},
 		logger,
 	)
+	providerObservationCoord := NewProviderBoundaryObservationCoordinator(dispatchSvc, reg, wsHandler, nil, logger)
+	if windowStore, err := provider_observer.NewWindowStore(b.fileSvc); err == nil {
+		providerObservationCoord = NewProviderBoundaryObservationCoordinator(dispatchSvc, reg, wsHandler, windowStore, logger)
+		inferenceDispatchSvc.SetProviderObservationNotifier(providerObservationCoord)
+	} else {
+		logger.Warn("Provider-boundary observation window store unavailable", "error", err)
+	}
 
 	ls := &GatewayModeService{
 		cfg:                   cfg,
@@ -477,9 +486,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		envProc:               cmdSvc,
 		platformEnrollmentSvc: platformEnrollmentSvc,
 		consensusSvc:          consensusSvc,
-		dispatchSvc:           dispatchSvc,
-		inferenceDispatchSvc:  inferenceDispatchSvc,
-		observeProducer:       NewObserveProducerService(docStore, sseStore, wsHandler, b.fileSvc, logger),
+		dispatchSvc:              dispatchSvc,
+		inferenceDispatchSvc:     inferenceDispatchSvc,
+		providerObservationCoord: providerObservationCoord,
+		observeProducer:          NewObserveProducerService(docStore, sseStore, wsHandler, b.fileSvc, logger),
 		responder:             res,
 	}
 
@@ -1221,6 +1231,9 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 // All close methods are idempotent, so this is safe to call even if some
 // resources have already been closed.
 func (ls *GatewayModeService) closeResources() {
+	if ls.providerObservationCoord != nil {
+		ls.providerObservationCoord.Stop()
+	}
 	if ls.platformEnrollmentSvc != nil {
 		ls.platformEnrollmentSvc.StopCleanup()
 	}

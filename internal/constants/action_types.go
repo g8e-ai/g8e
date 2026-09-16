@@ -49,6 +49,7 @@ const (
 	ActionTypePlatformEnrollmentPersistPolicy ActionType = "PLATFORM_ENROLLMENT_PERSIST_POLICY"
 	ActionTypePlatformEnrollmentCreateSession ActionType = "PLATFORM_ENROLLMENT_CREATE_SESSION"
 	ActionTypePortCheck                       ActionType = "PORT_CHECK"
+	ActionTypeProviderBoundaryObservation     ActionType = "PROVIDER_BOUNDARY_OBSERVATION"
 	ActionTypeRestoreFile                     ActionType = "RESTORE_FILE"
 	ActionTypeShutdown                        ActionType = "SHUTDOWN"
 )
@@ -83,6 +84,7 @@ var AllActionTypes = []ActionType{
 	ActionTypePlatformEnrollmentPersistPolicy,
 	ActionTypePlatformEnrollmentCreateSession,
 	ActionTypePortCheck,
+	ActionTypeProviderBoundaryObservation,
 	ActionTypeRestoreFile,
 	ActionTypeShutdown,
 }

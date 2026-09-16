@@ -19,6 +19,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -178,6 +179,42 @@ func (rr *PubSubResultsService) PublishInferenceCompletion(ctx context.Context, 
 		"operator_session_id", env.OperatorSessionId,
 		"event_type", eventType,
 		"transaction_id", completion.Receipt.TransactionId)
+	return nil
+}
+
+// PublishProviderBoundaryObservationCompleted publishes a completed
+// provider-boundary observation window on the observer operator results
+// channel. The completion is correlated with the originating command by
+// transaction ID.
+func (rr *PubSubResultsService) PublishProviderBoundaryObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ProviderBoundaryObservationCompleted) error {
+	if originalMsgID == "" || completion == nil || completion.GetWindow() == nil {
+		return fmt.Errorf("pubsub: publish provider boundary observation completion: %w", constants.ErrMissingRequiredField)
+	}
+
+	resultEnv, err := BuildUniversalResultEnvelope(
+		rr.config,
+		constants.Event.Operator.ProviderBoundaryObservation.Completed,
+		completion,
+		originalMsgID,
+		rr.config.OperatorID,
+		"",
+		"",
+		nil,
+		"",
+		"",
+	)
+	if err != nil {
+		return fmt.Errorf("pubsub: build provider boundary observation completion envelope: %w", err)
+	}
+
+	if err := rr.publishUniversal(ctx, resultEnv, rr.config.OperatorID, rr.config.OperatorSessionId); err != nil {
+		return fmt.Errorf("pubsub: publish provider boundary observation completion: %w", err)
+	}
+
+	rr.logger.Info("Provider-boundary observation completion transmitted",
+		"operator_session_id", rr.config.OperatorSessionId,
+		"provider_attempt_id", completion.GetWindow().GetProviderAttemptId(),
+		"transaction_id", originalMsgID)
 	return nil
 }
 

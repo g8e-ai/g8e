@@ -167,6 +167,19 @@ class EvaluationMetricUnit(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     EVALUATION_METRIC_UNIT_UNSPECIFIED: _ClassVar[EvaluationMetricUnit]
     EVALUATION_METRIC_UNIT_COUNT: _ClassVar[EvaluationMetricUnit]
     EVALUATION_METRIC_UNIT_RATIO: _ClassVar[EvaluationMetricUnit]
+
+class ProviderBoundaryObservationPhase(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    PROVIDER_BOUNDARY_OBSERVATION_PHASE_UNSPECIFIED: _ClassVar[ProviderBoundaryObservationPhase]
+    PROVIDER_BOUNDARY_OBSERVATION_PHASE_BEGIN: _ClassVar[ProviderBoundaryObservationPhase]
+    PROVIDER_BOUNDARY_OBSERVATION_PHASE_FINALIZE: _ClassVar[ProviderBoundaryObservationPhase]
+
+class ProviderBoundaryObservationAttemptStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_UNSPECIFIED: _ClassVar[ProviderBoundaryObservationAttemptStatus]
+    PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_IN_PROGRESS: _ClassVar[ProviderBoundaryObservationAttemptStatus]
+    PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_COMPLETED: _ClassVar[ProviderBoundaryObservationAttemptStatus]
+    PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_FAILED: _ClassVar[ProviderBoundaryObservationAttemptStatus]
 EVALUATION_LANE_UNSPECIFIED: EvaluationLane
 EVALUATION_LANE_PLATFORM: EvaluationLane
 EVALUATION_LANE_MODEL_ROLE: EvaluationLane
@@ -267,6 +280,13 @@ EVALUATION_MISSING_DATA_POLICY_UNAVAILABLE: EvaluationMissingDataPolicy
 EVALUATION_METRIC_UNIT_UNSPECIFIED: EvaluationMetricUnit
 EVALUATION_METRIC_UNIT_COUNT: EvaluationMetricUnit
 EVALUATION_METRIC_UNIT_RATIO: EvaluationMetricUnit
+PROVIDER_BOUNDARY_OBSERVATION_PHASE_UNSPECIFIED: ProviderBoundaryObservationPhase
+PROVIDER_BOUNDARY_OBSERVATION_PHASE_BEGIN: ProviderBoundaryObservationPhase
+PROVIDER_BOUNDARY_OBSERVATION_PHASE_FINALIZE: ProviderBoundaryObservationPhase
+PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_UNSPECIFIED: ProviderBoundaryObservationAttemptStatus
+PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_IN_PROGRESS: ProviderBoundaryObservationAttemptStatus
+PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_COMPLETED: ProviderBoundaryObservationAttemptStatus
+PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_FAILED: ProviderBoundaryObservationAttemptStatus
 
 class EvaluationRuntimeBoundary(_message.Message):
     __slots__ = ("component", "process_identity", "runtime_namespace", "mounted_filesystems", "persistent_store", "endpoint", "authenticated_identity", "execution_owner_operator_id")
@@ -753,6 +773,30 @@ class ProviderBoundaryObservationWindow(_message.Message):
     samples: _containers.RepeatedCompositeFieldContainer[ProviderBoundaryHardwareSample]
     observation_digest: str
     def __init__(self, schema_version: _Optional[str] = ..., provider_attempt_id: _Optional[str] = ..., observer_id: _Optional[str] = ..., observer_clock_source: _Optional[str] = ..., window_started_at_unix_nanos: _Optional[int] = ..., window_completed_at_unix_nanos: _Optional[int] = ..., attempt_started_at_unix_ms: _Optional[int] = ..., attempt_completed_at_unix_ms: _Optional[int] = ..., clock_skew_nanos: _Optional[int] = ..., samples: _Optional[_Iterable[_Union[ProviderBoundaryHardwareSample, _Mapping]]] = ..., observation_digest: _Optional[str] = ...) -> None: ...
+
+class ProviderBoundaryObservationCommand(_message.Message):
+    __slots__ = ("provider_attempt_id", "inference_transaction_id", "phase", "attempt_started_at_unix_ms", "attempt_completed_at_unix_ms", "attempt_status", "retry_count")
+    PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    INFERENCE_TRANSACTION_ID_FIELD_NUMBER: _ClassVar[int]
+    PHASE_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_STARTED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_COMPLETED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_STATUS_FIELD_NUMBER: _ClassVar[int]
+    RETRY_COUNT_FIELD_NUMBER: _ClassVar[int]
+    provider_attempt_id: str
+    inference_transaction_id: str
+    phase: ProviderBoundaryObservationPhase
+    attempt_started_at_unix_ms: int
+    attempt_completed_at_unix_ms: int
+    attempt_status: ProviderBoundaryObservationAttemptStatus
+    retry_count: int
+    def __init__(self, provider_attempt_id: _Optional[str] = ..., inference_transaction_id: _Optional[str] = ..., phase: _Optional[_Union[ProviderBoundaryObservationPhase, str]] = ..., attempt_started_at_unix_ms: _Optional[int] = ..., attempt_completed_at_unix_ms: _Optional[int] = ..., attempt_status: _Optional[_Union[ProviderBoundaryObservationAttemptStatus, str]] = ..., retry_count: _Optional[int] = ...) -> None: ...
+
+class ProviderBoundaryObservationCompleted(_message.Message):
+    __slots__ = ("window",)
+    WINDOW_FIELD_NUMBER: _ClassVar[int]
+    window: ProviderBoundaryObservationWindow
+    def __init__(self, window: _Optional[_Union[ProviderBoundaryObservationWindow, _Mapping]] = ...) -> None: ...
 
 class ModelInferenceRecord(_message.Message):
     __slots__ = ("inference_record_id", "provider_attempt_id", "assignment_id", "evaluation_attempt_id", "model_role", "agent_persona", "call_site", "model_variant", "temperature", "top_p", "top_k", "seed", "max_output_tokens", "input_hash", "output_hash", "usage_availability", "prompt_tokens", "completion_tokens", "thinking_tokens", "cache_tokens", "request_started_at_unix_nanos", "first_token_at_unix_nanos", "generation_duration_nanos", "total_duration_nanos", "load_duration_nanos", "load_state", "retry_count", "finish_reason", "privacy_attested", "governed_receipt_ref", "result_digest", "provider_boundary_observation_ref")

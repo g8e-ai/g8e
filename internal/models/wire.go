@@ -33,4 +33,9 @@ type RuntimeConfig struct {
 	// Inference Node's operator session by querying for operators with this
 	// field set.
 	InferenceEnabled bool `json:"inference_enabled"`
+
+	// ProviderBoundaryObserverEnabled is true when the Operator started with
+	// --provider-boundary-observer-enabled, marking it as the read-only
+	// remote hardware observer on the approved provider host.
+	ProviderBoundaryObserverEnabled bool `json:"provider_boundary_observer_enabled"`
 }

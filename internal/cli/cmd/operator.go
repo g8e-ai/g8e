@@ -133,6 +133,8 @@ func operatorStartCmd() *cobra.Command {
 	var inferenceKeepAlive string
 	var inferenceCampaignID string
 	var inferenceModelRegistryDigest string
+	var providerBoundaryObserverEnabled bool
+	var providerBoundaryObserverID string
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -161,6 +163,8 @@ func operatorStartCmd() *cobra.Command {
 				InferenceKeepAlive:           inferenceKeepAlive,
 				InferenceCampaignID:          inferenceCampaignID,
 				InferenceModelRegistryDigest: inferenceModelRegistryDigest,
+				ProviderBoundaryObserverEnabled: providerBoundaryObserverEnabled,
+				ProviderBoundaryObserverID:      providerBoundaryObserverID,
 			}
 
 			// Run operator (this blocks until shutdown)
@@ -196,6 +200,8 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&inferenceKeepAlive, "inference-keep-alive", "", "Ollama keep-alive duration (default: -1 for infinite)")
 	cmd.Flags().StringVar(&inferenceCampaignID, "inference-campaign-id", "", "Frozen evaluation campaign authorized by this inference operator")
 	cmd.Flags().StringVar(&inferenceModelRegistryDigest, "inference-model-registry-digest", "", "SHA-256 digest of the frozen campaign model registry")
+	cmd.Flags().BoolVar(&providerBoundaryObserverEnabled, "provider-boundary-observer-enabled", false, "Enable read-only provider-boundary hardware observation on the approved provider host")
+	cmd.Flags().StringVar(&providerBoundaryObserverID, "provider-boundary-observer-id", "", "Stable observer identity pseudonym")
 
 	return cmd
 }

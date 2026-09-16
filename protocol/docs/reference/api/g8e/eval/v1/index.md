@@ -35,6 +35,8 @@
     - [ModelInferenceRecord](#g8e-eval-v1-ModelInferenceRecord)
     - [ModelVariant](#g8e-eval-v1-ModelVariant)
     - [ProviderBoundaryHardwareSample](#g8e-eval-v1-ProviderBoundaryHardwareSample)
+    - [ProviderBoundaryObservationCommand](#g8e-eval-v1-ProviderBoundaryObservationCommand)
+    - [ProviderBoundaryObservationCompleted](#g8e-eval-v1-ProviderBoundaryObservationCompleted)
     - [ProviderBoundaryObservationWindow](#g8e-eval-v1-ProviderBoundaryObservationWindow)
     - [PublicAssignmentLifecycleRecord](#g8e-eval-v1-PublicAssignmentLifecycleRecord)
     - [PublicAssignmentResultProjection](#g8e-eval-v1-PublicAssignmentResultProjection)
@@ -65,6 +67,8 @@
     - [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus)
     - [ModelCampaignRole](#g8e-eval-v1-ModelCampaignRole)
     - [ModelCapabilityKind](#g8e-eval-v1-ModelCapabilityKind)
+    - [ProviderBoundaryObservationAttemptStatus](#g8e-eval-v1-ProviderBoundaryObservationAttemptStatus)
+    - [ProviderBoundaryObservationPhase](#g8e-eval-v1-ProviderBoundaryObservationPhase)
     - [ProviderHardwareMetricAvailability](#g8e-eval-v1-ProviderHardwareMetricAvailability)
   
 - [Scalar Value Types](#scalar-value-types)
@@ -792,6 +796,44 @@ observation from the external provider execution boundary.
 
 
 
+<a name="g8e-eval-v1-ProviderBoundaryObservationCommand"></a>
+
+### ProviderBoundaryObservationCommand
+ProviderBoundaryObservationCommand is the pubsub cmd-channel payload the
+campaign Gateway sends to the remote provider-boundary observer operator.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| provider_attempt_id | [string](#string) |  |  |
+| inference_transaction_id | [string](#string) |  |  |
+| phase | [ProviderBoundaryObservationPhase](#g8e-eval-v1-ProviderBoundaryObservationPhase) |  |  |
+| attempt_started_at_unix_ms | [int64](#int64) |  |  |
+| attempt_completed_at_unix_ms | [int64](#int64) |  |  |
+| attempt_status | [ProviderBoundaryObservationAttemptStatus](#g8e-eval-v1-ProviderBoundaryObservationAttemptStatus) |  |  |
+| retry_count | [uint32](#uint32) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-ProviderBoundaryObservationCompleted"></a>
+
+### ProviderBoundaryObservationCompleted
+ProviderBoundaryObservationCompleted is the pubsub results-channel payload
+published by the remote observer operator after FINALIZE sampling completes.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| window | [ProviderBoundaryObservationWindow](#g8e-eval-v1-ProviderBoundaryObservationWindow) |  |  |
+
+
+
+
+
+
 <a name="g8e-eval-v1-ProviderBoundaryObservationWindow"></a>
 
 ### ProviderBoundaryObservationWindow
@@ -1313,6 +1355,35 @@ RoleAssignment binds one designated responsibility to one frozen variant.
 | MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT | 3 |  |
 | MODEL_CAPABILITY_KIND_THINKING | 4 |  |
 | MODEL_CAPABILITY_KIND_CONTEXT_LIMIT | 5 |  |
+
+
+
+<a name="g8e-eval-v1-ProviderBoundaryObservationAttemptStatus"></a>
+
+### ProviderBoundaryObservationAttemptStatus
+ProviderBoundaryObservationAttemptStatus mirrors the terminal provider-attempt
+disposition carried in FINALIZE commands without importing operator.proto.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_UNSPECIFIED | 0 |  |
+| PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_IN_PROGRESS | 1 |  |
+| PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_COMPLETED | 2 |  |
+| PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_FAILED | 3 |  |
+
+
+
+<a name="g8e-eval-v1-ProviderBoundaryObservationPhase"></a>
+
+### ProviderBoundaryObservationPhase
+ProviderBoundaryObservationPhase identifies one lifecycle transition for a
+governed provider attempt on the remote observer operator.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PROVIDER_BOUNDARY_OBSERVATION_PHASE_UNSPECIFIED | 0 |  |
+| PROVIDER_BOUNDARY_OBSERVATION_PHASE_BEGIN | 1 |  |
+| PROVIDER_BOUNDARY_OBSERVATION_PHASE_FINALIZE | 2 |  |
 
 
 

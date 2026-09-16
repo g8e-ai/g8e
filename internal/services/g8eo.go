@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
@@ -347,6 +348,23 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 			"lite_model", vs.config.Inference.LiteModel)
 	}
 
+	var providerBoundaryObserver *provider_observer.Handler
+	if vs.config.ProviderBoundaryObserver.Enabled {
+		tracker, err := provider_observer.NewTracker(provider_observer.TrackerConfig{
+			ObserverID: vs.config.ProviderBoundaryObserver.ObserverID,
+			Collector:  provider_observer.DefaultCollector(),
+		})
+		if err != nil {
+			return fmt.Errorf("g8eo: provider boundary observer tracker: %w", err)
+		}
+		providerBoundaryObserver, err = provider_observer.NewHandler(tracker, vs.pubSubResults, vs.logger)
+		if err != nil {
+			return fmt.Errorf("g8eo: provider boundary observer handler: %w", err)
+		}
+		vs.logger.Info("Provider-boundary observer enabled",
+			"observer_id", vs.config.ProviderBoundaryObserver.ObserverID)
+	}
+
 	// OperatorPubSubService Construction
 	psConfig := pubsub.CommandServiceConfig{
 		Config:                vs.config,
@@ -360,9 +378,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		Ledger:                vs.ledger,
 		HistoryHandler:        vs.historyHandler,
 		Scrubbing:             scrubbingService,
-		Inference:             inferenceHandler,
-		InferenceAttemptStore: inferenceAttemptStore,
-		ActuatorSigningKey:    actuatorPriv,
+		Inference:                inferenceHandler,
+		InferenceAttemptStore:    inferenceAttemptStore,
+		ProviderBoundaryObserver: providerBoundaryObserver,
+		ActuatorSigningKey:       actuatorPriv,
 		ActuatorKeyID:         actuatorKeyID,
 		AuditorSigningKey:     auditorPriv,
 		AuditorKeyID:          auditorKeyID,

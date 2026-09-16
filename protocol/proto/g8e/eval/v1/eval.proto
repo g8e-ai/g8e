@@ -458,6 +458,41 @@ message ProviderBoundaryObservationWindow {
   string observation_digest = 11;
 }
 
+// ProviderBoundaryObservationPhase identifies one lifecycle transition for a
+// governed provider attempt on the remote observer operator.
+enum ProviderBoundaryObservationPhase {
+  PROVIDER_BOUNDARY_OBSERVATION_PHASE_UNSPECIFIED = 0;
+  PROVIDER_BOUNDARY_OBSERVATION_PHASE_BEGIN = 1;
+  PROVIDER_BOUNDARY_OBSERVATION_PHASE_FINALIZE = 2;
+}
+
+// ProviderBoundaryObservationAttemptStatus mirrors the terminal provider-attempt
+// disposition carried in FINALIZE commands without importing operator.proto.
+enum ProviderBoundaryObservationAttemptStatus {
+  PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_UNSPECIFIED = 0;
+  PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_IN_PROGRESS = 1;
+  PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_COMPLETED = 2;
+  PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_FAILED = 3;
+}
+
+// ProviderBoundaryObservationCommand is the pubsub cmd-channel payload the
+// campaign Gateway sends to the remote provider-boundary observer operator.
+message ProviderBoundaryObservationCommand {
+  string provider_attempt_id = 1;
+  string inference_transaction_id = 2;
+  ProviderBoundaryObservationPhase phase = 3;
+  int64 attempt_started_at_unix_ms = 4;
+  int64 attempt_completed_at_unix_ms = 5;
+  ProviderBoundaryObservationAttemptStatus attempt_status = 6;
+  uint32 retry_count = 7;
+}
+
+// ProviderBoundaryObservationCompleted is the pubsub results-channel payload
+// published by the remote observer operator after FINALIZE sampling completes.
+message ProviderBoundaryObservationCompleted {
+  ProviderBoundaryObservationWindow window = 1;
+}
+
 // ModelInferenceRecord captures one governed scored inference call.
 message ModelInferenceRecord {
   string inference_record_id = 1;

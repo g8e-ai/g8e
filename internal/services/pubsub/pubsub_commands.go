@@ -24,6 +24,7 @@ import (
 	execution "github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/v2/internal/services/storage"
@@ -71,8 +72,9 @@ type OperatorPubSubService struct {
 	// inference is the governed execution handler for local LLM inference
 	// (g8ellama). Nil when cfg.Inference.Enabled is false; the event-type
 	// dispatch still fails closed with ErrInferenceBackendNotRegistered.
-	inference             *inference.InferenceExecutionHandler
-	inferenceAttemptStore inference.AttemptStore
+	inference                  *inference.InferenceExecutionHandler
+	inferenceAttemptStore      inference.AttemptStore
+	providerBoundaryObserver   *provider_observer.Handler
 
 	ShutdownChan chan string
 
@@ -130,6 +132,10 @@ type CommandServiceConfig struct {
 	// InferenceAttemptStore persists durable provider-attempt records on the
 	// Inference Operator. Nil when inference is disabled.
 	InferenceAttemptStore inference.AttemptStore
+
+	// ProviderBoundaryObserver handles pubsub observation commands on the
+	// remote provider host. Nil when provider-boundary observation is disabled.
+	ProviderBoundaryObserver *provider_observer.Handler
 
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey
@@ -201,6 +207,7 @@ func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCor
 
 	rs.inference = c.Inference
 	rs.inferenceAttemptStore = c.InferenceAttemptStore
+	rs.providerBoundaryObserver = c.ProviderBoundaryObserver
 
 	rs.buildHandlers()
 	if gatewayMode {
@@ -407,6 +414,11 @@ func (rs *OperatorPubSubService) buildHandlers() {
 	rs.handlers[constants.Event.Operator.Inference.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
 		if _, err := rs.handleInferenceRequestSync(ctx, msg); err != nil {
 			rs.logger.Error("Inference handler failed", "error", err)
+		}
+	}
+	rs.handlers[constants.Event.Operator.ProviderBoundaryObservation.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
+		if _, err := rs.handleProviderBoundaryObservationSync(ctx, msg); err != nil {
+			rs.logger.Error("Provider boundary observation handler failed", "error", err)
 		}
 	}
 }
@@ -857,6 +869,9 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 	if eventType == constants.Event.Operator.Inference.Requested {
 		return rs.handleInferenceRequestSync(ctx, pubsubMsg)
 	}
+	if eventType == constants.Event.Operator.ProviderBoundaryObservation.Requested {
+		return rs.handleProviderBoundaryObservationSync(ctx, pubsubMsg)
+	}
 
 	handler(ctx, pubsubMsg)
 	return "", nil
@@ -1106,6 +1121,13 @@ func (rs *OperatorPubSubService) handleEvalAnswerRequestSync(ctx context.Context
 // publication, and returns the digest as the receipt summary so the signed
 // ActionReceipt binds the complete result (see operator.proto
 // InferenceResult.result_digest).
+func (rs *OperatorPubSubService) handleProviderBoundaryObservationSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	if rs.providerBoundaryObserver == nil {
+		return "", fmt.Errorf("provider boundary observer handler not configured: %w", constants.ErrMissingRequiredField)
+	}
+	return rs.providerBoundaryObserver.HandleCommand(ctx, msg.ID, msg.Payload)
+}
+
 func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.inference == nil {
 		return "", fmt.Errorf("inference handler not configured: %w", constants.ErrInferenceBackendNotRegistered)

@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -200,6 +201,8 @@ func unmarshalPayload(eventType constants.EventType, payload []byte) (proto.Mess
 		m = &operatorv1.EvalAnswerRequested{}
 	case constants.Event.Operator.Inference.Requested:
 		m = &operatorv1.InferenceRequested{}
+	case constants.Event.Operator.ProviderBoundaryObservation.Requested:
+		m = &evalv1.ProviderBoundaryObservationCommand{}
 	case constants.EventPlatformEnrollmentCreateRequested,
 		constants.EventPlatformEnrollmentDecideRequested,
 		constants.EventPlatformEnrollmentIssueRequested,

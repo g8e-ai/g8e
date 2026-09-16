@@ -12,6 +12,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -73,6 +74,8 @@ func DecodePayloadForAction(actionType constants.ActionType, payload []byte) (pr
 		msg = &operatorv1.DocumentDeleteRequested{}
 	case constants.ActionTypeInference:
 		msg = &operatorv1.InferenceRequested{}
+	case constants.ActionTypeProviderBoundaryObservation:
+		msg = &evalv1.ProviderBoundaryObservationCommand{}
 	case constants.ActionTypePlatformEnrollmentCreate,
 		constants.ActionTypePlatformEnrollmentDecide,
 		constants.ActionTypePlatformEnrollmentIssue,

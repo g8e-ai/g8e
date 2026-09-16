@@ -108,15 +108,23 @@ type OperatorLister interface {
 	ListUserOperators(userID string) ([]models.OperatorDocumentGo, error)
 }
 
+// ProviderObservationNotifier coordinates remote provider-boundary observation
+// for scored inference attempts. Implementations must be non-blocking.
+type ProviderObservationNotifier interface {
+	NotifyAttemptBegin(ctx context.Context, requestorUserID, providerAttemptID string, startedAtUnixMs int64, retryCount uint32)
+	NotifyAttemptFinalize(ctx context.Context, requestorUserID, providerAttemptID, inferenceTransactionID string, startedAtUnixMs, completedAtUnixMs int64, failed bool, retryCount uint32)
+}
+
 // DispatchService is the platform-internal inference dispatch service on
 // the User Gateway. It is not a NativeTool and is not registered in the MCP
 // ToolRegistry. The ensemble chat pipeline calls DispatchInference to route
 // a governed inference request to the Inference Node through the full
 // L1–L5 gauntlet.
 type DispatchService struct {
-	dispatcher   CommandDispatcher
-	operatorList OperatorLister
-	logger       *slog.Logger
+	dispatcher            CommandDispatcher
+	operatorList          OperatorLister
+	observationNotifier   ProviderObservationNotifier
+	logger                *slog.Logger
 }
 
 // NewDispatchService constructs a DispatchService wired to the gateway's
@@ -127,6 +135,15 @@ func NewDispatchService(dispatcher CommandDispatcher, operatorList OperatorListe
 		operatorList: operatorList,
 		logger:       logger,
 	}
+}
+
+// SetProviderObservationNotifier wires the optional remote provider-boundary
+// observation coordinator for scored inference attempts.
+func (s *DispatchService) SetProviderObservationNotifier(notifier ProviderObservationNotifier) {
+	if s == nil {
+		return
+	}
+	s.observationNotifier = notifier
 }
 
 // DispatchInferenceRequest is the input to DispatchInference. Role and ordered messages are required; optional fields override the Inference Node's config defaults when non-zero/non-empty.
@@ -290,6 +307,11 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 		return nil, fmt.Errorf("inference dispatch: marshal payload: %w", err)
 	}
 
+	attemptStartedAt := time.Now().UTC().UnixMilli()
+	if s.observationNotifier != nil {
+		s.observationNotifier.NotifyAttemptBegin(ctx, req.RequestorUserID, req.ProviderAttemptID, attemptStartedAt, req.RetryCount)
+	}
+
 	// Dispatch through the gateway's CommandDispatcher. The dispatcher
 	// constructs the GovernanceEnvelope with the gateway's state root and
 	// posture, publishes to the Inference Node's cmd channel, and
@@ -312,6 +334,9 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 		OnInferenceProgress:     req.OnProgress,
 	})
 	if err != nil {
+		if s.observationNotifier != nil {
+			s.observationNotifier.NotifyAttemptFinalize(ctx, req.RequestorUserID, req.ProviderAttemptID, "", attemptStartedAt, time.Now().UTC().UnixMilli(), true, req.RetryCount)
+		}
 		if errors.Is(err, constants.ErrDispatchResultTimeout) {
 			// The dispatch deadline expired while the provider call may
 			// still be running remotely. Record the unknown outcome and
@@ -336,7 +361,15 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 		return nil, fmt.Errorf("inference dispatch: %w: %v", constants.ErrInferenceResultDecode, err)
 	}
 	if err := validateInferenceResult(infResult, req); err != nil {
+		if s.observationNotifier != nil {
+			s.observationNotifier.NotifyAttemptFinalize(ctx, req.RequestorUserID, req.ProviderAttemptID, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), true, req.RetryCount)
+		}
 		return nil, fmt.Errorf("inference dispatch: %w", err)
+	}
+
+	failed := result.Receipt != nil && result.Receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
+	if s.observationNotifier != nil {
+		s.observationNotifier.NotifyAttemptFinalize(ctx, req.RequestorUserID, req.ProviderAttemptID, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), failed, req.RetryCount)
 	}
 
 	s.logger.Info("Governed inference dispatch completed",

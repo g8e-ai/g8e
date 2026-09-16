@@ -60,6 +60,7 @@ func TestActionTypeIsMutation_ReadTypesReturnFalse(t *testing.T) {
 		ActionTypeMcpResourceRead,
 		ActionTypePlatformEnrollmentCreate,
 		ActionTypePortCheck,
+		ActionTypeProviderBoundaryObservation,
 	}
 
 	for _, at := range readTypes {
@@ -117,6 +118,7 @@ func TestAllActionTypes_ContainsAllConstants(t *testing.T) {
 		ActionTypeRestoreFile,
 		ActionTypeShutdown,
 		ActionTypeInference,
+		ActionTypeProviderBoundaryObservation,
 	}
 
 	assert.Len(t, AllActionTypes, len(allConsts))

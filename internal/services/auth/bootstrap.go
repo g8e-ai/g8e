@@ -153,7 +153,8 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 
 		HTTPPort: bs.config.HTTPPort,
 
-		InferenceEnabled: bs.config.Inference.Enabled,
+		InferenceEnabled:                bs.config.Inference.Enabled,
+		ProviderBoundaryObserverEnabled: bs.config.ProviderBoundaryObserver.Enabled,
 	}
 
 	reqBody := operatorAuthRequest{
