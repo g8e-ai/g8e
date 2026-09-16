@@ -14,6 +14,7 @@ from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.evaluation.role_control import (
     apply_homogeneous_role_control,
     resolve_role_outcome,
+    resolve_scored_provider_is_lite,
 )
 from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
@@ -124,6 +125,31 @@ def test_apply_homogeneous_role_control_skips_system_lane():
             request_settings=_settings(),
         )
         is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("designated", "complexity", "expected"),
+    [
+        ("lite", TriageComplexityClassification.COMPLEX, True),
+        ("lite", TriageComplexityClassification.SIMPLE, True),
+        ("assistant", TriageComplexityClassification.SIMPLE, True),
+        ("assistant", TriageComplexityClassification.COMPLEX, False),
+        ("primary", TriageComplexityClassification.SIMPLE, True),
+        ("primary", TriageComplexityClassification.COMPLEX, False),
+        (None, TriageComplexityClassification.SIMPLE, True),
+        (None, TriageComplexityClassification.COMPLEX, False),
+    ],
+)
+def test_resolve_scored_provider_is_lite_follows_designated_role(
+    designated, complexity, expected
+):
+    assert (
+        resolve_scored_provider_is_lite(
+            designated_model_role=designated,
+            triage_complexity=complexity,
+        )
+        is expected
     )
 
 

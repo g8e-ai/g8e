@@ -208,9 +208,13 @@ def _tools_to_declarations(tools: list[ToolGroup] | None) -> list[InferenceToolD
 def _response_format(format_value: ResponseFormat | None) -> InferenceResponseFormat | None:
     if format_value is None:
         return None
+    from app.llm.llm_schema import inline_json_schema_refs
+
     return InferenceResponseFormat(
         media_type="application/json",
-        json_schema=_canonical_json(format_value.json_schema.json_schema_dict),
+        json_schema=_canonical_json(
+            inline_json_schema_refs(format_value.json_schema.json_schema_dict)
+        ),
     )
 
 

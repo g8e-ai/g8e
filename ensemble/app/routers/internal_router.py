@@ -240,6 +240,7 @@ async def internal_chat(
         g8e_context = g8e_context.model_copy(
             update={"evaluation_context": request.evaluation_context}
         )
+        chat_pipeline.evaluation_trace_service.begin(g8e_context)
 
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
@@ -1794,7 +1795,15 @@ async def get_evaluation_trace(
 ):
     """Authenticated read-only lookup for a persisted evaluation assignment trace."""
     trace_service = EvaluationTraceService()
-    trace = trace_service.load(assignment_id, evaluation_attempt_id)
+    try:
+        trace = trace_service.load(assignment_id, evaluation_attempt_id)
+    except FileNotFoundError:
+        raise ResourceNotFoundError(
+            f"Evaluation trace not found for assignment {assignment_id}",
+            resource_type="evaluation_trace",
+            resource_id=f"{assignment_id}/{evaluation_attempt_id}",
+            component="g8ee",
+        )
     return EvaluationTraceResponse(trace=trace.model_dump(mode="json"))
 
 

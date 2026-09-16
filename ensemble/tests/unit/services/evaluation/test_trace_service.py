@@ -37,6 +37,16 @@ def _context() -> G8eHttpContext:
     return G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
 
 
+def test_trace_begin_persists_running_state_before_triage(trace_service):
+    context = _context()
+    trace = trace_service.begin(context)
+
+    assert trace.status == "running"
+    loaded = trace_service.load("assignment-1", "attempt-1")
+    assert loaded.status == "running"
+    assert loaded.triage_model_call is None
+
+
 def test_trace_persist_finalize_and_load(trace_service):
     context = _context()
     triage_call = ModelCallTelemetry(

@@ -61,7 +61,11 @@ from app.llm.utils import resolve_model, ModelOverrideResolver
 from app.services.infra.event_service import EventService
 from .agent import g8eEnsemble
 from app.services.evaluation.trace_service import EvaluationTraceService
-from app.services.evaluation.role_control import apply_homogeneous_role_control, resolve_role_outcome
+from app.services.evaluation.role_control import (
+    apply_homogeneous_role_control,
+    resolve_role_outcome,
+    resolve_scored_provider_is_lite,
+)
 from app.services.investigation.investigation_service import (
     extract_all_operators_context,
     InvestigationService,
@@ -349,26 +353,21 @@ class ChatPipelineService:
                 ),
             )
 
-        needs_main_model = triage_result.complexity == TriageComplexityClassification.COMPLEX
-
-        if controlled_routing is not None:
-            needs_main_model = (
-                controlled_routing.controlled_role_assignment.designated_model_role
-                == "primary"
-            )
-
-        model_to_use = resolve_model(
-            tier="primary" if needs_main_model else "assistant",
-            primary_override=model_overrides.for_main_generation(needs_primary=True),
-            assistant_override=model_overrides.for_main_generation(needs_primary=False),
-            lite_override=None,
-            settings_primary_model=request_settings.llm.resolved_primary_model,
-            settings_assistant_model=request_settings.llm.resolved_assistant_model,
-            settings_lite_model=request_settings.llm.resolved_lite_model,
-        )
-
         if controlled_routing is not None:
             model_to_use = controlled_routing.model_to_use
+            active_agent = controlled_routing.active_agent
+        else:
+            needs_main_model = triage_result.complexity == TriageComplexityClassification.COMPLEX
+            model_to_use = resolve_model(
+                tier="primary" if needs_main_model else "assistant",
+                primary_override=model_overrides.for_main_generation(needs_primary=True),
+                assistant_override=model_overrides.for_main_generation(needs_primary=False),
+                lite_override=None,
+                settings_primary_model=request_settings.llm.resolved_primary_model,
+                settings_assistant_model=request_settings.llm.resolved_assistant_model,
+                settings_lite_model=request_settings.llm.resolved_lite_model,
+            )
+            active_agent = ReasoningAgent.SAGE if needs_main_model else ReasoningAgent.DASH
 
         if not model_to_use:
             raise ConfigurationError(
@@ -420,9 +419,6 @@ class ChatPipelineService:
             logger.warning("Failed to retrieve memories for chat context: %s", e, exc_info=True)
 
         all_operator_contexts = extract_all_operators_context(investigation)
-        active_agent = ReasoningAgent.SAGE if needs_main_model else ReasoningAgent.DASH
-        if controlled_routing is not None:
-            active_agent = controlled_routing.active_agent
         system_instructions, context_sizes = build_modular_system_prompt(
             operator_bound=operator_bound,
             system_context=all_operator_contexts,
@@ -1088,10 +1084,14 @@ class ChatPipelineService:
         state = AgentStreamState()
         memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] = {}
 
-        is_lite = (
-            inputs.triage_result.complexity == TriageComplexityClassification.SIMPLE
+        triage_complexity = (
+            inputs.triage_result.complexity
             if inputs.triage_result
-            else False
+            else TriageComplexityClassification.COMPLEX
+        )
+        is_lite = resolve_scored_provider_is_lite(
+            designated_model_role=inputs.designated_model_role,
+            triage_complexity=triage_complexity,
         )
         llm_provider = get_llm_provider(resolved_settings.llm, is_lite=is_lite)
         logger.info(
@@ -1140,7 +1140,7 @@ class ChatPipelineService:
             g8e_context=g8e_context,
             inputs=inputs,
             state=state,
-            user_settings=user_settings,
+            user_settings=resolved_settings,
             task_manager=task_manager,
             memory_holder=memory_holder,
         )

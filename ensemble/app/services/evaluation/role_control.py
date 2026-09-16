@@ -25,6 +25,22 @@ EvaluationRoleOutcome = Literal["invoked", "role_not_invoked"]
 _SCORED_AGENT_ROLES = frozenset({"sage", "dash"})
 
 
+def resolve_scored_provider_is_lite(
+    *,
+    designated_model_role: str | None,
+    triage_complexity: TriageComplexityClassification,
+) -> bool:
+    """Return whether the scored chat provider should use the lite tier.
+
+    Homogeneous role control binds any campaign model to primary, assistant,
+    or lite slots. Provider selection must follow the designated scored role,
+    not triage complexity alone.
+    """
+    if designated_model_role == "lite":
+        return True
+    return triage_complexity == TriageComplexityClassification.SIMPLE
+
+
 class ControlledRoleRouting(G8eBaseModel):
     """Resolved chat routing for one homogeneous model-role assignment."""
 

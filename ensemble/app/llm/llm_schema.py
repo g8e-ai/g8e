@@ -37,6 +37,44 @@ def _resolve_ref(ref: str, defs: dict) -> dict:
     return defs.get(name, {})
 
 
+def inline_json_schema_refs(schema: dict[str, Any]) -> dict[str, Any]:
+    """Return a self-contained JSON Schema with ``$defs`` refs expanded in place.
+
+    Governed inference validates response schemas strictly and rejects unresolved
+    ``#/$defs/...`` references produced by Pydantic model schemas.
+    """
+    root = deepcopy(schema)
+    defs = dict(root.get("$defs") or {})
+
+    def inline_node(node: Any, active_refs: frozenset[str]) -> Any:
+        if not isinstance(node, dict):
+            return node
+        ref = node.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/$defs/"):
+            def_name = ref[len("#/$defs/") :]
+            if def_name in active_refs or def_name not in defs:
+                return {key: value for key, value in node.items() if key != "$ref"}
+            target = deepcopy(defs[def_name])
+            inlined = inline_node(target, active_refs | {def_name})
+            extras = {key: value for key, value in node.items() if key != "$ref"}
+            if isinstance(inlined, dict):
+                merged = dict(inlined)
+                merged.update(extras)
+                return merged
+            return extras or inlined
+        return {
+            key: (
+                [inline_node(item, active_refs) for item in value]
+                if isinstance(value, list)
+                else inline_node(value, active_refs)
+            )
+            for key, value in node.items()
+            if key != "$defs"
+        }
+
+    return inline_node(root, frozenset())
+
+
 def _json_schema_to_schema(node: dict, defs: dict) -> Schema:
     if "$ref" in node:
         node = _resolve_ref(node["$ref"], defs)
