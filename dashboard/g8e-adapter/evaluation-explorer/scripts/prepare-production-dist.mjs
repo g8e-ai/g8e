@@ -3,7 +3,7 @@ import { extname, relative } from 'node:path';
 
 const projectRoot = new URL('../', import.meta.url);
 const distRoot = new URL('dist/', projectRoot);
-const expectedRuntime = '{\n  "schema_version": "1.0.0",\n  "mirror_origin": "https://feed.opendevops.ai"\n}\n';
+const expectedRuntime = '{\n  "schema_version": "1.0.0",\n  "mirror_origin": "https://opendevops.ai"\n}\n';
 const allowedRootFiles = new Set(['_headers', 'index.html', 'runtime.json']);
 const allowedAssetExtensions = new Set(['.css', '.js']);
 const prohibited = [

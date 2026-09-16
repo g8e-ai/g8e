@@ -362,8 +362,17 @@ INSTALL_EXECUTABLE = \
 		cp "$$INSTALL_SRC" "$$INSTALL_DST.new" && chmod +x "$$INSTALL_DST.new" && mv -f "$$INSTALL_DST.new" "$$INSTALL_DST"; \
 	fi
 
+EXPLORER_DIST := dashboard/g8e-adapter/evaluation-explorer/dist
+EXPLORER_EMBED := internal/services/gateway/explorer/static
+
+.PHONY: embed-explorer
+embed-explorer:
+	@test -f $(EXPLORER_DIST)/index.html || { echo "ERROR: build evaluation explorer first: cd $(EXPLORER_DIST)/.. && npm run build"; exit 1; }
+	@rm -rf $(EXPLORER_EMBED)
+	@cp -a $(EXPLORER_DIST) $(EXPLORER_EMBED)
+
 .PHONY: build
-build:
+build: embed-explorer
 	@echo "Building g8e Operator for current platform..."
 	@mkdir -p $(BIN_DIR)
 	@NODE_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \

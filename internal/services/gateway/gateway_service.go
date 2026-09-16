@@ -513,6 +513,9 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		if cfg.Gateway.EvalExplorerRoot != "" {
 			spectatorCfg.ExplorerRoot = cfg.Gateway.EvalExplorerRoot
 		}
+		if cfg.Gateway.PublicBaseURL != "" {
+			spectatorCfg.PublicBaseURL = cfg.Gateway.PublicBaseURL
+		}
 		spectator, err := NewPublicSpectatorRuntime(spectatorCfg, b.fileSvc, logger)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: initialize public spectator: %w", err)
@@ -1103,7 +1106,7 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 		ls.logger.Info("Public spectator stack started",
 			"mirror_private", ls.publicSpectator.cfg.PrivateListenAddress,
 			"mirror_public", ls.publicSpectator.cfg.PublicListenAddress,
-			"explorer", ls.publicSpectator.cfg.ExplorerListenAddress)
+			"public_base_url", ls.publicSpectator.cfg.PublicBaseURL)
 	}
 
 	// Start background maintenance for MCP gateway

@@ -16,7 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:production": "npm run build && G8E_PUBLIC_MIRROR_ORIGIN=https://feed.opendevops.ai playwright test --config playwright.production.config.ts",
+    "test:e2e:production": "npm run build && G8E_PUBLIC_MIRROR_ORIGIN=https://opendevops.ai playwright test --config playwright.production.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0"
   },

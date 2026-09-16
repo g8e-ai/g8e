@@ -4,7 +4,7 @@
 
 The host-backed public spectator runs one `g8e public mirror run` process in the Docker-host namespace with two distinct loopback listeners over one durable mirror store. The private listener defaults to `127.0.0.1:8081` and serves authenticated publisher ingest, proof ingest, replacement-key registration, and anonymous reads for local diagnostics. The public listener defaults to `127.0.0.1:8082` and mounts only anonymous bootstrap, snapshot, history, SSE, proof catalog, proof manifest, and content-addressed proof download routes. Both addresses must be unique and loopback-only.
 
-The mirror process opens the host `.g8e/` runtime tree through `RuntimeFileService`. Its durable source, key, revocation, batch, proof, catalog, and manifest state resides in the public-mirror state path in that tree. The local publisher uses the private listener and authenticates with the private ingest token. Cloudflared uses the public listener as its plain-HTTP origin. A public browser reaches `https://feed.opendevops.ai` through Cloudflare and never reaches the Gateway, the private mirror listener, a component volume, or an Operator execution boundary.
+The mirror process opens the host `.g8e/` runtime tree through `RuntimeFileService`. Its durable source, key, revocation, batch, proof, catalog, and manifest state resides in the public-mirror state path in that tree. The local publisher uses the private listener and authenticates with the private ingest token. Cloudflared uses the public listener as its plain-HTTP origin. A public browser reaches `https://opendevops.ai` through Cloudflare and never reaches the Gateway console, the private mirror ingest listener, a component volume, or an Operator execution boundary. The gateway-owned public listener serves the embedded evaluation explorer SPA and anonymous mirror reads from one origin.
 
 The mirror is a visibility and publication boundary, not a Policy Decision Point or Policy Execution Point. It does not authorize a governed mutation, and its availability is not execution evidence. The Operator whose L4/L5 boundary produced an underlying governed result retains authoritative local execution evidence.
 
@@ -55,11 +55,11 @@ A bounded SSE client connects to `/stream`, supplies the source pseudonym and op
 Tunnel creation changes Cloudflare tunnel and DNS state and remains a release-owner operation. The tunnel origin is the read-only public listener, never the private listener and never the Gateway:
 
 ```bash
-./g8e gw tunnel create --name opendevops-feed --hostname feed.opendevops.ai --service http://127.0.0.1:8082
+./g8e gw tunnel create --name opendevops-feed --hostname opendevops.ai --service http://127.0.0.1:8082
 ./g8e gw tunnel run
 ```
 
-The explicit plain-HTTP service prevents Gateway HTTPS origin settings from being inherited. The generated cloudflared ingress terminates at the loopback-only read adapter. Do not configure `feed.opendevops.ai` to target port 8081, Gateway ports 8080 or 8443, the Ensemble, the Dashboard, a container bridge address, or a component-local volume.
+The explicit plain-HTTP service prevents Gateway HTTPS origin settings from being inherited. The generated cloudflared ingress terminates at the loopback-only read adapter. Start the gateway with `--public-base-url https://opendevops.ai` so the embedded explorer runtime points at the public origin. Do not configure `opendevops.ai` to target port 8081, Gateway ports 8080 or 8443, the Ensemble, the Dashboard, a component bridge address, or a component-local volume.
 
 ## External acceptance
 

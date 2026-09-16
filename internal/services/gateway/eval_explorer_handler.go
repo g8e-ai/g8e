@@ -10,6 +10,7 @@ package gateway
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -17,56 +18,100 @@ import (
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	gwexplorer "github.com/g8e-ai/g8e/v2/internal/services/gateway/explorer"
 )
 
 const evalExplorerRelativeRoot = "dashboard/g8e-adapter/evaluation-explorer/dist"
 
-// NewEvalExplorerHandler serves the built evaluation explorer SPA with a
-// runtime.json that points at the gateway-owned public mirror listener.
-func NewEvalExplorerHandler(rootOverride, publicMirrorListenAddress string) (http.Handler, error) {
-	root := resolveEvalExplorerRoot(rootOverride)
-	if root == "" {
-		return nil, fmt.Errorf("evaluation explorer: dist directory not found")
+// NewEvalExplorerHandler serves the evaluation explorer SPA with a runtime.json
+// that points at the public mirror origin exposed to browsers.
+func NewEvalExplorerHandler(rootOverride, mirrorOrigin string) (http.Handler, error) {
+	contentFS, err := resolveEvalExplorerFS(rootOverride)
+	if err != nil {
+		return nil, err
 	}
-	indexPath := filepath.Join(root, "index.html")
-	if _, err := os.Stat(indexPath); err != nil {
+	if _, err := fs.Stat(contentFS, "index.html"); err != nil {
 		return nil, fmt.Errorf("evaluation explorer: missing index.html: %w", err)
 	}
-	publicMirrorOrigin := publicMirrorURL(publicMirrorListenAddress)
+	if strings.TrimSpace(mirrorOrigin) == "" {
+		mirrorOrigin = fmt.Sprintf("http://127.0.0.1:%d", constants.PublicSpectatorPublicPort)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/runtime.json" || strings.HasSuffix(r.URL.Path, "/runtime.json") {
-			writeEvalExplorerRuntime(w, publicMirrorOrigin)
+			writeEvalExplorerRuntime(w, mirrorOrigin)
 			return
 		}
 		path := strings.TrimPrefix(r.URL.Path, "/")
 		if path == "" {
-			path = "index.html"
+			serveEvalExplorerFile(w, r, contentFS, "index.html")
+			return
 		}
-		clean := filepath.Clean(path)
-		if clean == "." || strings.HasPrefix(clean, "..") {
+		if strings.Contains(path, "..") {
 			http.NotFound(w, r)
 			return
 		}
-		fullPath := filepath.Join(root, clean)
-		if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
-			http.ServeFile(w, r, fullPath)
+		if _, err := fs.Stat(contentFS, path); err == nil {
+			serveEvalExplorerFile(w, r, contentFS, path)
 			return
 		}
-		http.ServeFile(w, r, indexPath)
+		serveEvalExplorerFile(w, r, contentFS, "index.html")
 	}), nil
 }
 
-func resolveEvalExplorerRoot(rootOverride string) string {
-	if strings.TrimSpace(rootOverride) != "" {
-		if info, err := os.Stat(rootOverride); err == nil && info.IsDir() {
-			return rootOverride
+func serveEvalExplorerFile(w http.ResponseWriter, r *http.Request, contentFS fs.FS, name string) {
+	http.ServeFileFS(w, r, contentFS, name)
+}
+
+// combinePublicSpectatorHandler serves anonymous mirror reads and the evaluation
+// explorer SPA from one public origin.
+func combinePublicSpectatorHandler(mirrorPublic, explorer http.Handler) http.Handler {
+	if mirrorPublic == nil {
+		return explorer
+	}
+	if explorer == nil {
+		return mirrorPublic
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if publicMirrorAnonymousReadPath(r.URL.Path) {
+			mirrorPublic.ServeHTTP(w, r)
+			return
+		}
+		explorer.ServeHTTP(w, r)
+	})
+}
+
+func resolveEvalExplorerMirrorOrigin(publicBaseURL, publicListenAddress string) string {
+	if origin := strings.TrimSpace(publicBaseURL); origin != "" {
+		return strings.TrimRight(origin, "/")
+	}
+	return publicMirrorURL(publicListenAddress)
+}
+
+func resolveEvalExplorerFS(rootOverride string) (fs.FS, error) {
+	if root := strings.TrimSpace(rootOverride); root != "" {
+		if info, err := os.Stat(root); err == nil && info.IsDir() {
+			return os.DirFS(root), nil
 		}
 	}
 	if envRoot := strings.TrimSpace(os.Getenv("G8E_EVAL_EXPLORER_ROOT")); envRoot != "" {
 		if info, err := os.Stat(envRoot); err == nil && info.IsDir() {
-			return envRoot
+			return os.DirFS(envRoot), nil
 		}
 	}
+	if embedded, err := gwexplorer.StaticFS(); err == nil {
+		if _, err := fs.Stat(embedded, "index.html"); err == nil {
+			return embedded, nil
+		}
+	}
+	for _, candidate := range evalExplorerDiskCandidates() {
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return os.DirFS(candidate), nil
+		}
+	}
+	return nil, fmt.Errorf("evaluation explorer: dist directory not found")
+}
+
+func evalExplorerDiskCandidates() []string {
 	candidates := []string{
 		evalExplorerRelativeRoot,
 		filepath.Join("..", evalExplorerRelativeRoot),
@@ -81,12 +126,7 @@ func resolveEvalExplorerRoot(rootOverride string) string {
 			cwd = parent
 		}
 	}
-	for _, candidate := range candidates {
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return candidate
-		}
-	}
-	return ""
+	return candidates
 }
 
 func publicMirrorURL(listenAddress string) string {

@@ -32,6 +32,7 @@ type PublicSpectatorConfig struct {
 	PrivateListenAddress  string
 	PublicListenAddress   string
 	ExplorerListenAddress string
+	PublicBaseURL         string
 	SourceID              string
 	ExplorerRoot          string
 }
@@ -56,9 +57,8 @@ type PublicSpectatorRuntime struct {
 	publisher *PublicPublisherService
 	mirror    *PublicMirrorServer
 
-	privateServer  *http.Server
-	publicServer   *http.Server
-	explorerServer *http.Server
+	privateServer *http.Server
+	publicServer  *http.Server
 
 	mu      sync.Mutex
 	running bool
@@ -142,16 +142,17 @@ func (runtime *PublicSpectatorRuntime) Start(ctx context.Context) error {
 	publisher.SetMirrorOrigin("http://" + runtime.cfg.PrivateListenAddress)
 
 	runtime.privateServer = newPublicMirrorHTTPServer(runtime.cfg.PrivateListenAddress, mirror.Handler())
-	runtime.publicServer = newPublicMirrorHTTPServer(runtime.cfg.PublicListenAddress, mirror.PublicHandler())
-	runtime.mirror = mirror
-	runtime.publisher = publisher
-
-	explorerHandler, explorerErr := NewEvalExplorerHandler(runtime.cfg.ExplorerRoot, runtime.cfg.PublicListenAddress)
+	mirrorOrigin := resolveEvalExplorerMirrorOrigin(runtime.cfg.PublicBaseURL, runtime.cfg.PublicListenAddress)
+	publicHandler := mirror.PublicHandler()
+	explorerHandler, explorerErr := NewEvalExplorerHandler(runtime.cfg.ExplorerRoot, mirrorOrigin)
 	if explorerErr == nil {
-		runtime.explorerServer = newPublicMirrorHTTPServer(runtime.cfg.ExplorerListenAddress, explorerHandler)
+		publicHandler = combinePublicSpectatorHandler(publicHandler, explorerHandler)
 	} else {
 		runtime.logger.Warn("Evaluation explorer static assets unavailable", "error", explorerErr)
 	}
+	runtime.publicServer = newPublicMirrorHTTPServer(runtime.cfg.PublicListenAddress, publicHandler)
+	runtime.mirror = mirror
+	runtime.publisher = publisher
 
 	errCh := make(chan error, 3)
 	startServer := func(server *http.Server, label string) {
@@ -167,7 +168,6 @@ func (runtime *PublicSpectatorRuntime) Start(ctx context.Context) error {
 	}
 	startServer(runtime.privateServer, "mirror-private")
 	startServer(runtime.publicServer, "mirror-public")
-	startServer(runtime.explorerServer, "eval-explorer")
 
 	runtime.mu.Lock()
 	runtime.running = true
@@ -214,7 +214,7 @@ func (runtime *PublicSpectatorRuntime) Stop(ctx context.Context) error {
 
 	shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	for _, server := range []*http.Server{runtime.privateServer, runtime.publicServer, runtime.explorerServer} {
+	for _, server := range []*http.Server{runtime.privateServer, runtime.publicServer} {
 		if server == nil {
 			continue
 		}
