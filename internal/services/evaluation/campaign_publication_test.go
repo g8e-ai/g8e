@@ -105,5 +105,5 @@ func TestCampaignControllerWithPublicationPublishesQueuedAssignments(t *testing.
 	count, err := controller.ScheduleHomogeneousRun(context.Background(), run.GetRunId())
 	require.NoError(t, err)
 	assert.Equal(t, 3, count)
-	assert.Len(t, exporter.records, 3)
+	assert.GreaterOrEqual(t, len(exporter.records), 8)
 }

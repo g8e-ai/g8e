@@ -85,6 +85,52 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentResult(ctx context.Con
 	return c.publishEnvelope(ctx, assignment.GetRunId(), idempotencyKey, publicMessageTypeAssignmentResult, projection)
 }
 
+// PublishRunAggregates emits explorer catalog, model, and methodology snapshot
+// records derived from canonical assignment and result state.
+func (c *CampaignPublicationCoordinator) PublishRunAggregates(ctx context.Context, runID string, observedAt time.Time) (int, error) {
+	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || runID == "" {
+		return 0, fmt.Errorf("evaluation: publish run aggregates: %w", constants.ErrMissingRequiredField)
+	}
+	assignments, err := c.store.ListAssignments(ctx, runID)
+	if err != nil {
+		return 0, err
+	}
+	if len(assignments) == 0 {
+		return 0, nil
+	}
+	results := make(map[string]*evalv1.EvaluationAssignmentResult, len(assignments))
+	for _, assignment := range assignments {
+		exists, err := c.store.AssignmentResultExists(ctx, runID, assignment.GetAssignmentId())
+		if err != nil {
+			return 0, err
+		}
+		if !exists {
+			continue
+		}
+		result, err := c.store.LoadAssignmentResult(ctx, runID, assignment.GetAssignmentId())
+		if err != nil {
+			return 0, err
+		}
+		results[assignment.GetAssignmentId()] = result
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	if err != nil {
+		return 0, err
+	}
+	records, err := BuildRunAggregateViewRecords(runID, state, observedAt)
+	if err != nil {
+		return 0, err
+	}
+	published := 0
+	for _, record := range records {
+		if err := c.publishViewRecord(ctx, runID, record.IdempotencyKey, record.Body); err != nil {
+			return published, err
+		}
+		published++
+	}
+	return published, nil
+}
+
 // PublishRunCatchUp scans one run and publishes any missing lifecycle and
 // terminal result projections derived from canonical records.
 func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, runID string) (int, error) {
@@ -127,7 +173,34 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 		}
 		published++
 	}
-	return published, nil
+	aggregateCount, err := c.PublishRunAggregates(ctx, runID, time.Now().UTC())
+	if err != nil {
+		return published, err
+	}
+	return published + aggregateCount, nil
+}
+
+func (c *CampaignPublicationCoordinator) publishViewRecord(ctx context.Context, runID, idempotencyKey string, body []byte) error {
+	state, err := c.loadPublicationState(ctx, runID)
+	if err != nil {
+		return err
+	}
+	if containsString(state.PublishedIdempotency, idempotencyKey) {
+		return nil
+	}
+	nextSequence, err := c.exporter.HighWaterSequence(ctx)
+	if err != nil {
+		return err
+	}
+	nextSequence++
+	feedRecord := buildCampaignPublicFeedRecord(nextSequence, body)
+	if err := c.exporter.ExportBatch(ctx, []CampaignPublicFeedRecord{feedRecord}); err != nil {
+		return err
+	}
+	state.PublishedIdempotency = append(state.PublishedIdempotency, idempotencyKey)
+	sort.Strings(state.PublishedIdempotency)
+	state.LastPublishedSequence = nextSequence
+	return c.savePublicationState(ctx, state)
 }
 
 func (c *CampaignPublicationCoordinator) publishEnvelope(ctx context.Context, runID, idempotencyKey, messageType string, record proto.Message) error {

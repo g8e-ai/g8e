@@ -416,7 +416,8 @@ func (c *CampaignController) publishQueuedAssignments(ctx context.Context, runID
 			return err
 		}
 	}
-	return nil
+	_, err = c.publication.PublishRunAggregates(ctx, runID, c.now().UTC())
+	return err
 }
 
 func (c *CampaignController) publishAssignmentLifecycle(ctx context.Context, assignment *evalv1.EvaluationAssignment) error {
@@ -457,5 +458,9 @@ func (c *CampaignController) publishAssignmentTerminal(ctx context.Context, assi
 	if err != nil {
 		return err
 	}
-	return c.publication.PublishAssignmentResult(ctx, assignment, result, category, "unverified")
+	if err := c.publication.PublishAssignmentResult(ctx, assignment, result, category, "unverified"); err != nil {
+		return err
+	}
+	_, err = c.publication.PublishRunAggregates(ctx, assignment.GetRunId(), c.now().UTC())
+	return err
 }

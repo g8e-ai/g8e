@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
-import { recordKey, resolveModelSummary, useStoreState, useFeedStatus } from '../state/store';
+import { modelComparisonId, recordKey, resolveModelSummary, useStoreState, useFeedStatus } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
 import { DatasetSelector } from '../components/DatasetSelector';
 import {
@@ -99,7 +99,7 @@ function AgentsStrip({ models, datasetId }: { models: ModelSummary[]; datasetId:
             const status = agentStatus(model.quality_state);
             const tps = model.output_throughput_p50?.value;
             return (
-              <li key={model.variant_id} className="agent-card">
+              <li key={modelComparisonId(model)} className="agent-card">
                 <div className="agent-icon" aria-hidden="true">
                   {model.display_name.slice(0, 1)}
                 </div>
@@ -439,7 +439,7 @@ function ModelLab({ models, datasetId }: { models: ModelSummary[]; datasetId: st
             </thead>
             <tbody>
               {measured.map((model) => (
-                <tr key={model.variant_id}>
+                <tr key={modelComparisonId(model)}>
                   <td>
                     <Link to={`/models/${datasetId}/${model.variant_id}?role=${model.role}`}>
                       {model.display_name}
