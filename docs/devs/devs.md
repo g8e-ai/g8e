@@ -60,7 +60,7 @@ This guide owns repository-wide invariants and Go platform conventions. Componen
 - Do not hardcode `.g8e/` runtime paths or bypass `RuntimeFileService` with direct `os` file operations outside the file-service implementation.
 - Do not invoke `go test` directly for platform suites; use `./g8e test ...` or the owning Makefile target.
 - Do not use `t.Parallel()` in integration or E2E tests.
-- Do not hand-edit generated README, protobuf reference, or OpenAPI output.
+- Do not hand-edit generated protobuf reference or OpenAPI output.
 - Do not leave current-state documentation stale or broaden a security or evidence claim beyond the path and artifacts that support it.
 
 ## Errors
@@ -171,11 +171,11 @@ Generated output is changed through its owner:
 | Root `README.md` | Handwritten product overview | Re-read changed sections, validate links, and run commands whose behavior the prose documents |
 | Go, Python, TypeScript, and Markdown protobuf output | Schemas and comments under `protocol/proto/g8e/` | `make proto` (`make generate` is an alias) plus affected conformance tests |
 | Gateway OpenAPI | Swagger annotations in the Go owners | `make swagger-generate` plus route and contract tests |
-| Website | Generated root `README.md` | `make website-test` and `make website-build` when rendering is affected |
+| Website | Handwritten root `README.md` | `make website-test` and `make website-build` when rendering is affected |
 | Doctrine references | JSON under `protocol/constants/doctrine/` and demo doctrine inputs | `make validate-doctrines` |
 | COSAiS overlays | Canonical overlay and doctrine references | `make validate-cosais` |
 
-Do not edit generated protobuf API reference or OpenAPI files as the source change. The [Documentation Guide](docs.md#generated-and-machine-readable-documentation) defines complete ownership and validation, and the [Release Process](release_process.md) defines attended evidence promotion.
+Do not edit generated protobuf API reference or OpenAPI files as the source change. The [Documentation Guide](docs.md#generated-and-machine-readable-documentation) defines complete ownership and validation, and the [Release Process](release_process.md) defines native evaluation and signed compliance evidence acceptance.
 
 ## Doctrine Changes
 

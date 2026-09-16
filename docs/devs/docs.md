@@ -71,7 +71,7 @@ Release notes preserve the behavior and scope of their release. Evidence documen
 - Do not rewrite historical documents as current-state guides.
 - Do not silently correct an old claim by changing its scope. Add a clearly dated correction or update the current canonical documentation.
 - Never promote architecture, catalog coverage, CI status, or a bounded test result into certification, operating effectiveness, broad model quality, zero-leakage, or production-suitability claims.
-- Keep public README evidence checksum-bound and release-owner-approved through the projection and promotion process in the [Release Process](release_process.md).
+- Keep native evaluation and compliance claims bound to their exact reports, verification results, release scope, and external trust inputs documented in the [Release Process](release_process.md).
 
 ## Source-of-Truth Matrix
 
@@ -138,7 +138,7 @@ This catalog covers every first-party documentation surface in the repository. I
 - [Build Gateway](../guides/build_gateway.md), [Build Operator](../guides/build_operator.md), [Connect Operator](../guides/connect_operator_to_gateway.md), and [Air Gap](../guides/air_gap.md): Core component deployment and disconnected operation.
 - [Build Apps](../guides/build_apps.md), [Connect Apps](../guides/connect_apps_to_gateway.md), [Build Frontend](../guides/build_frontend.md), and [Connect Frontend](../guides/connect_frontend_to_gateway.md): Public client and browser integration paths.
 - [Lovable](../guides/lovable.md): One-command local browser frontend connection via `gw connect`. [Cloudflare Tunnel](../guides/cloudflare_tunnel.md): Optional public tunnel integration for remote access.
-- [Sovereignty Gauntlet](../guides/sovereignty_gauntlet.md): Evidence-oriented demonstration and README evidence collection workflow.
+- [Sovereignty Gauntlet](../guides/sovereignty_gauntlet.md): Evidence-oriented demonstration, native evaluation, and claim-scoping workflow.
 - [UX Smoke Test](../guides/ux_smoke_test.md): Manual product-surface verification.
 
 ### Developer documentation
@@ -146,7 +146,7 @@ This catalog covers every first-party documentation surface in the repository. I
 - [Developer Guidelines](devs.md): Coding, error, path, runtime file, testing, and contribution rules.
 - [Code Map](codemap.md): Current repository ownership by runtime entry point and package.
 - [Testing](tests.md): Four-tier test model, fixtures, commands, and CI scope.
-- [Release Process](release_process.md): Versioning, release evidence, README evidence projection and promotion, and publication procedure.
+- [Release Process](release_process.md): Versioning, native evaluation acceptance, signed compliance evidence, and publication procedure.
 - [Troubleshooting](troubleshooting.md): Maintainer diagnosis and recovery.
 - This [Documentation Guide](docs.md): Documentation ownership, audit process, catalog, style, generation, and validation.
 
@@ -177,7 +177,7 @@ The [g8ee index](../ensemble/index.md) owns the component documentation map. Its
 
 - `docs/release_notes/` stores immutable per-release notes grouped by minor release. [CHANGELOG.md](../../CHANGELOG.md) is their current index. Compliance-evidence and offline-acceptance companions remain scoped to the named release and assessment.
 - `internal/services/gateway/docs/swagger.json` and `swagger.yaml` are generated OpenAPI outputs. `docs.go` embeds the JSON output in the binary.
-- `website/` renders the generated root README into the public static site and packages its Cloudflare Worker.
+- `website/` renders the handwritten root README into the public static site and packages its Cloudflare Worker.
 
 ## Cross-Linking Rules
 
@@ -231,7 +231,7 @@ Run the checks owned by the changed surface. The repository does not currently d
 | Deployment documentation | Validate Compose configuration, help output, health checks, profiles, ports, and the narrow startup or command tests owned by the workflow |
 | Release or evidence documentation | Follow [Release Process](release_process.md), including version synchronization and exact artifact verification |
 
-The primary CI workflow regenerates protobuf and OpenAPI outputs, validates doctrine and COSAiS data, runs README generator tests and drift checks, and exercises component test jobs. CI does not replace the end-to-end factual and link audit.
+The primary CI workflow regenerates protobuf and OpenAPI outputs, validates doctrine and COSAiS data, and exercises component test jobs. CI does not replace the end-to-end factual and link audit.
 
 ## Completion Checklist
 

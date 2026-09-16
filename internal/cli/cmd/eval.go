@@ -8,6 +8,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -30,17 +31,56 @@ import (
 type nativeEvalClientFactory func(harnessconfig.Config) (*harnessclient.Client, error)
 type nativeEvalAuthLoader func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error)
 
+type nativeEvalRunner interface {
+	Run(context.Context, evaluation.RunRequest) (*evalv1.EvaluationReport, error)
+}
+
+type nativeEvalVerifier interface {
+	Verify(context.Context, string) (*compliancev1.ComplianceVerificationReport, error)
+}
+
+type nativeEvalStore interface {
+	evaluation.ReportStore
+	SaveVerification(context.Context, string, *compliancev1.ComplianceVerificationReport) (*compliancev1.ComplianceEvidenceReference, error)
+	LoadReport(context.Context, string) (*evalv1.EvaluationReport, error)
+}
+
 type nativeEvalDeps struct {
-	configLoader   func(string) (*config.Config, error)
-	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)
-	clientFactory  nativeEvalClientFactory
-	authLoader     nativeEvalAuthLoader
-	now            func() time.Time
-	newID          func() string
+	configLoader      func(string) (*config.Config, error)
+	fileSvcFactory    func(string, *slog.Logger) (fs.RuntimeFileService, error)
+	createRuntimeTree func(context.Context, fs.RuntimeFileService) error
+	clientFactory     nativeEvalClientFactory
+	authLoader        nativeEvalAuthLoader
+	laneFactory       func(*harnessclient.Client, fs.RuntimeFileService, harnessclient.Persona) evaluation.PlatformLane
+	observerFactory   func(string) evaluation.TargetObserver
+	runnerFactory     func(evaluation.PlatformLane, evaluation.TargetObserver, evaluation.ReportStore, func() time.Time, func(string) string) nativeEvalRunner
+	storeFactory      func(fs.RuntimeFileService) nativeEvalStore
+	verifierFactory   func(fs.RuntimeFileService, func() time.Time) nativeEvalVerifier
+	now               func() time.Time
+	newID             func() string
 }
 
 func evalCmd() *cobra.Command {
-	return evalCmdWithConfig(nativeEvalDeps{configLoader: config.Load, fileSvcFactory: newFileSvc, clientFactory: harnessclient.New, authLoader: auth.LoadClientAuthContext, now: time.Now, newID: uuid.NewString})
+	return evalCmdWithConfig(nativeEvalDeps{
+		configLoader:      config.Load,
+		fileSvcFactory:    newFileSvc,
+		createRuntimeTree: func(ctx context.Context, fileSvc fs.RuntimeFileService) error { return fileSvc.CreateRuntimeTree(ctx) },
+		clientFactory:     harnessclient.New,
+		authLoader:        auth.LoadClientAuthContext,
+		laneFactory: func(client *harnessclient.Client, fileSvc fs.RuntimeFileService, persona harnessclient.Persona) evaluation.PlatformLane {
+			return evaluation.NewCommandLane(client, evaluation.NewStore(fileSvc), persona, 0, 0)
+		},
+		observerFactory: evaluation.NewComposeTargetObserver,
+		runnerFactory: func(lane evaluation.PlatformLane, observer evaluation.TargetObserver, store evaluation.ReportStore, now func() time.Time, newID func(string) string) nativeEvalRunner {
+			return evaluation.NewRunner(evaluation.NewRegistry(), lane, observer, store, now, newID)
+		},
+		storeFactory: func(fileSvc fs.RuntimeFileService) nativeEvalStore { return evaluation.NewStore(fileSvc) },
+		verifierFactory: func(fileSvc fs.RuntimeFileService, now func() time.Time) nativeEvalVerifier {
+			return evaluation.NewVerifier(fileSvc, evaluation.NewRegistry(), now)
+		},
+		now:   time.Now,
+		newID: uuid.NewString,
+	})
 }
 
 func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
@@ -77,14 +117,14 @@ func nativeEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 			runID := deps.newID()
 			target := filepath.Join(constants.EvaluationTargetContainerDir, constants.EvaluationTargetFilenamePrefix+runID+constants.FileExtText)
 			marker := constants.EvaluationTargetFilenamePrefix + runID
-			store := evaluation.NewStore(fileSvc)
-			lane := evaluation.NewCommandLane(gatewayClient, store, harnessclient.Persona{ID: "g8e-native-evaluator", CLISessionID: authContext.CLISessionID, UserID: authContext.UserID}, 0, 0)
-			runner := evaluation.NewRunner(evaluation.NewRegistry(), lane, evaluation.NewComposeTargetObserver(cfg.ProjectRoot), store, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			store := deps.storeFactory(fileSvc)
+			lane := deps.laneFactory(gatewayClient, fileSvc, harnessclient.Persona{ID: "g8e-native-evaluator", CLISessionID: authContext.CLISessionID, UserID: authContext.UserID})
+			runner := deps.runnerFactory(lane, deps.observerFactory(cfg.ProjectRoot), store, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
 			report, runErr := runner.Run(cmd.Context(), evaluation.RunRequest{RunID: runID, PinnedOperatorSessionID: operatorSessionID, TargetResource: target, Marker: marker, Deployment: nativeEvalDeployment(cfg, authContext, runID, target)})
 			if report == nil {
 				return runErr
 			}
-			verification, verifyErr := evaluation.NewVerifier(fileSvc, evaluation.NewRegistry(), deps.now).Verify(cmd.Context(), runID)
+			verification, verifyErr := deps.verifierFactory(fileSvc, deps.now).Verify(cmd.Context(), runID)
 			if verifyErr != nil {
 				return fmt.Errorf("evaluation: verify persisted run: %w", verifyErr)
 			}
@@ -124,7 +164,7 @@ func nativeEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			report, err := evaluation.NewVerifier(fileSvc, evaluation.NewRegistry(), deps.now).Verify(cmd.Context(), args[0])
+			report, err := deps.verifierFactory(fileSvc, deps.now).Verify(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
@@ -152,7 +192,7 @@ func nativeEvalShowCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			report, err := evaluation.NewStore(fileSvc).LoadReport(cmd.Context(), args[0])
+			report, err := deps.storeFactory(fileSvc).LoadReport(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
@@ -196,7 +236,7 @@ func nativeEvalEnvironment(cmd *cobra.Command, deps nativeEvalDeps) (*config.Con
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
-	if err := fileSvc.CreateRuntimeTree(cmd.Context()); err != nil {
+	if err := deps.createRuntimeTree(cmd.Context(), fileSvc); err != nil {
 		return nil, nil, fmt.Errorf("evaluation: create runtime tree: %w", err)
 	}
 	return cfg, fileSvc, nil

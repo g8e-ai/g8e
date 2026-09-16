@@ -5,7 +5,7 @@ parent: Architecture
 
 # Public Spectator Architecture and Threat Model
 
-Last Updated: 2026-09-10
+Last Updated: 2026-09-15
 Version: v2.1.8
 
 ## Purpose
@@ -134,7 +134,7 @@ The following never cross the projection boundary:
 - Mutation, approval, eval-launch, pub/sub, MCP, A2A, and tool route surfaces.
 - Any field not in the explicit allowlist above.
 
-The projection function in `ensemble/evals/g8e_evals/projection.py` enforces this allowlist at the eval layer. The outbound publisher and mirror enforce it at the transport layer. Unknown fields, prohibited patterns, non-finite values, path traversal, and symlinks fail closed at every layer.
+The public publisher and mirror enforce the transport allowlist and reject unknown fields, prohibited patterns, non-finite values, path traversal, and symlinks. The preserved evaluation explorer adapter is not connected to Go-native evaluation output, so no active evaluation projector currently supplies native reports to this public surface.
 
 ## Export Binding
 
@@ -206,7 +206,7 @@ An attacker replaces a proof artifact at a given URL with a different file. Miti
 
 ### Path traversal
 
-An attacker crafts a projection or proof path containing `..` or absolute path segments to escape the public artifact root. Mitigation: the projection function rejects traversal in evidence links. The mirror normalizes paths and rejects any path containing `..` or absolute segments. Proof catalog entries are validated against the public artifact root. The `project_to_public` function in `ensemble/evals/g8e_evals/projection.py` checks traversal using `PurePosixPath` normalization.
+An attacker crafts a projection or proof path containing `..` or absolute path segments to escape the public artifact root. Mitigation: the publisher rejects traversal in evidence links. The mirror normalizes paths and rejects any path containing `..` or absolute segments. Proof catalog entries are validated against the public artifact root.
 
 ### Symlinks
 
@@ -226,7 +226,7 @@ A public visitor attempts to correlate campaign projections or proof metadata wi
 
 ### Restricted-field publication
 
-A projection or proof accidentally includes a prohibited field. Mitigation: the projection function enforces a closed allowlist and rejects unknown fields. The outbound publisher validates every record against the allowlist before signing. The mirror validates every record against the allowlist before serving. A restricted-field publication fails closed at the first layer that detects it. The `PublicProjection` model in `ensemble/evals/g8e_evals/projection.py` uses `extra="forbid"` and a prohibited-pattern check.
+A projection or proof accidentally includes a prohibited field. Mitigation: the outbound publisher validates every record against the closed allowlist before signing. The mirror validates every record against the allowlist before serving. A restricted-field publication fails closed at the first layer that detects it.
 
 ## Anonymous Read Limits, Retention, and Availability
 
@@ -290,10 +290,9 @@ The public spectator architecture extends the existing observe and SSE infrastru
 
 - The owner-local observe API (`GET /api/v1/observe/*`) remains credentialed and user-scoped. The public spectator surface does not add anonymous routes to the Gateway.
 - The SSE event bridge (`GET /api/v1/sse/stream`, `GET /api/v1/sse/events`) remains session-scoped. The public SSE stream is served by the mirror, not by the Gateway.
-- The observe producer endpoints (`POST /api/v1/observe/producer/*`) remain mTLS-authenticated and ensemble-only. The CLI-local public publisher consumes only reviewed public-safe records, signs durable batches, and exports them through the private mirror listener; it does not expose a producer route to browsers.
-- The `PublicProjection` model in `ensemble/evals/g8e_evals/projection.py` defines the eval-layer allowlist. The outbound publisher and mirror enforce the same allowlist at the transport layer.
-- The checked-in evaluation explorer in `dashboard/g8e-adapter/evaluation-explorer/` uses the audited anonymous runtime parser, endpoint allowlist, credential-omitting fetch, and SSE client from `dashboard/g8e-adapter/src/public/`. Its typed evaluation store reconstructs complete paginated history before resuming SSE and never falls back to the private Gateway or production fixture data.
-- The campaign verifier (`ensemble/evals/g8e_evals/campaign_verify.py`) and source provenance verifier (`ensemble/evals/g8e_evals/provenance.py`) produce the verification reports and provenance records that public proofs carry. A public proof is built only from a passing verification report and exact index generation.
+- The remaining observe producer endpoints (`POST /api/v1/observe/producer/*`) remain mTLS-authenticated and ensemble-only. The CLI-local public publisher consumes only reviewed public-safe records, signs durable batches, and exports them through the private mirror listener; it does not expose a producer route to browsers.
+- The checked-in evaluation explorer in `dashboard/g8e-adapter/evaluation-explorer/` preserves its adapter contract pack, fixtures, projector scripts, and UI. It is not connected to the Go-native evaluator, and no current Gateway producer route or public-feed projector supplies native `EvaluationReport` records to it.
+- Native evaluation verification is owned by `g8e eval verify` over the persisted report and content-addressed evidence. A future adapter hookup must define a separate privacy-safe projection before native results can enter the public feed.
 
 See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](./dashboard.md) for the owner-local browser interface, [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) for the audited adapter and contract pack, [Public Spectator Operations Guide](../guides/public_spectator.md) for the host-backed deployment procedure, and [Network Architecture](./network.md) for private platform PKI and transport boundaries.
 
@@ -317,4 +316,4 @@ This document is accepted when:
 - [Public Spectator Operations Guide](../guides/public_spectator.md): Private ingest, anonymous public listener, tunnel, restart, and publication procedure.
 - [Network Architecture](./network.md): PKI, mTLS, and transport surfaces.
 - [Gateway Architecture](./gateway.md): Gateway services, protocol surfaces, and trust boundaries.
-- [Ensemble Evaluation](../ensemble/evals.md): Campaign commands, verification, and evidence semantics.
+- [Native Evaluations](../ensemble/evals.md): Go-native execution-boundary commands, verification, evidence, and the deferred explorer hookup.
