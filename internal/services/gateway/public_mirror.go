@@ -1335,6 +1335,7 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 	}
 
 	sourceID := r.URL.Query().Get("source")
+	explicitSource := sourceID != ""
 	sinceIDStr := r.URL.Query().Get("since_id")
 	if sinceIDStr == "" {
 		sinceIDStr = r.Header.Get("Last-Event-ID")
@@ -1375,6 +1376,18 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 	}
 	m.mu.RUnlock()
 
+	var sub *mirrorSSESubscriber
+	if stateExists || explicitSource {
+		var accepted bool
+		sub, accepted = m.addSSESubscriber(sourceID)
+		if !accepted {
+			sseWriteSentinel(w, flusher, "error", "stream capacity reached")
+			flusher.Flush()
+			return
+		}
+		defer m.removeSSESubscriber(sub)
+	}
+
 	// Send snapshot event first.
 	snapshot := m.getSnapshotForSSE(sourceID)
 	sseWriteEvent(w, flusher, "snapshot", snapshot)
@@ -1384,20 +1397,11 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 		sseWriteRecord(w, flusher, rec)
 	}
 
-	if !stateExists {
+	if sub == nil {
 		sseWriteSentinel(w, flusher, "error", "source not found")
 		flusher.Flush()
 		return
 	}
-
-	// Subscribe to live updates.
-	sub, accepted := m.addSSESubscriber(sourceID)
-	if !accepted {
-		sseWriteSentinel(w, flusher, "error", "stream capacity reached")
-		flusher.Flush()
-		return
-	}
-	defer m.removeSSESubscriber(sub)
 
 	ctx := r.Context()
 	for {

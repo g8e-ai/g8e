@@ -854,20 +854,17 @@ func TestMirror_SSE_DeliversFirstBatchToExplicitSourceSubscriber(t *testing.T) {
 	defer streamResponse.Body.Close()
 
 	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}, constants.PublicFeedZeroHashHex)
-	_, ingestResponse := env.sendIngest(batch)
-	require.True(t, ingestResponse.Accepted)
+	require.NoError(t, env.mirror.acceptBatch(ctx, batch))
 
 	scanner := bufio.NewScanner(streamResponse.Body)
-	dataLines := 0
+	receivedRecord := false
 	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), "data: ") {
-			dataLines++
-		}
-		if dataLines >= 2 {
+		if scanner.Text() == "event: projection" {
+			receivedRecord = true
 			break
 		}
 	}
-	assert.GreaterOrEqual(t, dataLines, 2)
+	assert.True(t, receivedRecord)
 }
 
 // TestMirror_SSEAllowsConcurrentConnectionsBehindOneProxyUntilGlobalLimit verifies

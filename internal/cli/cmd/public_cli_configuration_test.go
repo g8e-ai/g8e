@@ -28,6 +28,11 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 )
 
+func TestNewPublicMirrorHTTPServer_DisablesWriteTimeoutForLongLivedSSE(t *testing.T) {
+	server := newPublicMirrorHTTPServer("127.0.0.1:8082", http.NotFoundHandler())
+	assert.Zero(t, server.WriteTimeout)
+}
+
 type publicFailOnceFileSvc struct {
 	fs.RuntimeFileService
 	path      string
