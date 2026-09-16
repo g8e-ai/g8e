@@ -86,7 +86,7 @@ func evalCmd() *cobra.Command {
 func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{Use: "eval", Short: "Run and verify native g8e evaluations"}
 	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
-	cmd.AddCommand(nativeEvalRunCmd(deps), nativeEvalVerifyCmd(deps), nativeEvalShowCmd(deps))
+	cmd.AddCommand(nativeEvalRunCmd(deps), nativeEvalVerifyCmd(deps), nativeEvalShowCmd(deps), inferenceEvalCmd(deps))
 	return cmd
 }
 

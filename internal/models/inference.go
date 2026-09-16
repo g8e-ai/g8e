@@ -459,3 +459,17 @@ func IsSHA256Hex(value string) bool {
 	decoded, err := hex.DecodeString(value)
 	return err == nil && len(decoded) == sha256.Size
 }
+
+// NormalizeProviderModelDigest converts a provider-reported model digest into
+// lowercase hexadecimal SHA-256 form. Ollama returns "sha256:<hex>"; the governed
+// inference contract requires bare 64-character hex.
+func NormalizeProviderModelDigest(digest string) (string, error) {
+	digest = strings.TrimSpace(strings.ToLower(digest))
+	if strings.HasPrefix(digest, "sha256:") {
+		digest = digest[len("sha256:"):]
+	}
+	if !IsSHA256Hex(digest) {
+		return "", fmt.Errorf("models: normalize provider model digest: %w", constants.ErrInferenceModelRegistryInvalid)
+	}
+	return digest, nil
+}

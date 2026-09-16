@@ -120,6 +120,29 @@ func (s *RegistrationService) ListUserOperators(userID string) ([]models.Operato
 	return operators, nil
 }
 
+// UpdateOperatorRuntimeConfig persists the operator-reported runtime config on
+// the operator document so owner discovery and inference dispatch can resolve
+// capability flags such as inference_enabled.
+func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, runtimeConfig *models.RuntimeConfig) error {
+	if operatorID == "" {
+		return constants.ErrRegistrationOperatorIDRequired
+	}
+	if runtimeConfig == nil {
+		return constants.ErrMissingRequiredField
+	}
+	updateBytes, err := json.Marshal(map[string]any{
+		"runtime_config": runtimeConfig,
+		"updated_at":   time.Now().UTC(),
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
+	}
+	if _, err := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
+		return fmt.Errorf("%w: update operator runtime config: %w", constants.ErrDocumentStoreMarshalDocument, err)
+	}
+	return nil
+}
+
 func (s *RegistrationService) TerminateOperator(operatorID, userID, reason string) error {
 	if operatorID == "" {
 		return constants.ErrRegistrationOperatorIDRequired

@@ -204,7 +204,17 @@ func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 	assert.Equal(t, contextLimit, *capturedBody.Options.NumCtx)
 	assert.Equal(t, "true", string(capturedBody.Think))
 	assert.JSONEq(t, `{"properties":{"answer":{"type":"string"}},"type":"object"}`, string(capturedBody.Format))
-	assert.Equal(t, "-1", capturedBody.KeepAlive)
+	assert.Equal(t, json.RawMessage("-1"), capturedBody.KeepAlive)
+}
+
+func TestEncodeOllamaKeepAlive(t *testing.T) {
+	t.Parallel()
+	encoded, err := encodeOllamaKeepAlive("-1")
+	require.NoError(t, err)
+	assert.Equal(t, json.RawMessage("-1"), encoded)
+	encoded, err = encodeOllamaKeepAlive("5m")
+	require.NoError(t, err)
+	assert.Equal(t, json.RawMessage(`"5m"`), encoded)
 }
 
 func TestOllamaBackend_GeneratePreservesOrderedStreamPartsAndMeasuresFirstToken(t *testing.T) {
@@ -874,6 +884,25 @@ func TestOllamaBackend_StatusReturnsAvailableAndModels(t *testing.T) {
 	assert.Contains(t, status.Models, "gemma3:4b")
 	assert.Contains(t, status.Models, "llama3.2:3b")
 	assert.Contains(t, status.Models, "qwen3:1.5b")
+}
+
+func TestOllamaBackend_ListModelVariantsNormalizesOllamaDigests(t *testing.T) {
+	t.Parallel()
+	digest := strings.Repeat("c", 64)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/api/tags", r.URL.Path)
+		require.NoError(t, json.NewEncoder(w).Encode(ollamaTagsResponse{
+			Models: []ollamaTagModel{{Name: "probe-model", Digest: "sha256:" + digest}},
+		}))
+	}))
+	defer server.Close()
+	backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+	require.NoError(t, err)
+	variants, err := backend.ListModelVariants(context.Background())
+	require.NoError(t, err)
+	require.Len(t, variants, 1)
+	assert.Equal(t, "probe-model", variants[0].GetModel())
+	assert.Equal(t, digest, variants[0].GetDigest())
 }
 
 func TestOllamaBackend_StatusUnavailableReturnsErrInferenceBackendUnavailable(t *testing.T) {

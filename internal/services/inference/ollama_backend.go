@@ -95,7 +95,27 @@ type ollamaChatRequest struct {
 	Think     json.RawMessage     `json:"think,omitempty"`
 	Format    json.RawMessage     `json:"format,omitempty"`
 	Options   ollamaChatOptions   `json:"options,omitempty"`
-	KeepAlive string              `json:"keep_alive,omitempty"`
+	KeepAlive json.RawMessage     `json:"keep_alive,omitempty"`
+}
+
+func encodeOllamaKeepAlive(value string) (json.RawMessage, error) {
+	switch value {
+	case "":
+		return nil, nil
+	case "-1":
+		return json.RawMessage("-1"), nil
+	case "0":
+		return json.RawMessage("0"), nil
+	default:
+		if _, err := time.ParseDuration(value); err != nil {
+			return nil, fmt.Errorf("ollama_backend: keep_alive: %w", constants.ErrInferenceGenerationOptionsInvalid)
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, fmt.Errorf("ollama_backend: keep_alive: %w", err)
+		}
+		return json.RawMessage(encoded), nil
+	}
 }
 
 type ollamaChatMessage struct {
@@ -207,6 +227,10 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		}
 		format = json.RawMessage(req.ResponseFormat.GetJsonSchema())
 	}
+	keepAlive, err := encodeOllamaKeepAlive(req.KeepAlive)
+	if err != nil {
+		return nil, fmt.Errorf("ollama_backend: generate: %w", err)
+	}
 	chatReq := ollamaChatRequest{
 		Model:    req.Model,
 		Messages: messages,
@@ -223,7 +247,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 			Stop:        req.StopSequences,
 			NumCtx:      req.ContextLimit,
 		},
-		KeepAlive: req.KeepAlive,
+		KeepAlive: keepAlive,
 	}
 
 	body, err := json.Marshal(chatReq)
@@ -580,10 +604,11 @@ func (b *OllamaBackend) modelDigest(ctx context.Context, model string) (string, 
 		if candidate.Name != model {
 			continue
 		}
-		if !models.IsSHA256Hex(candidate.Digest) {
-			return "", fmt.Errorf("ollama_backend: model digest: %w", constants.ErrInferenceProviderResponseInvalid)
+		digest, err := models.NormalizeProviderModelDigest(candidate.Digest)
+		if err != nil {
+			return "", fmt.Errorf("ollama_backend: model digest: %w", err)
 		}
-		return candidate.Digest, nil
+		return digest, nil
 	}
 	return "", fmt.Errorf("ollama_backend: model digest: %w", constants.ErrInferenceModelNotFound)
 }
@@ -621,6 +646,43 @@ func (b *OllamaBackend) Status(ctx context.Context) (*models.BackendStatus, erro
 		Available: true,
 		Models:    modelsList,
 	}, nil
+}
+
+// ListModelVariants queries Ollama's /api/tags endpoint and returns every
+// installed model as a typed registry variant with normalized digests.
+func (b *OllamaBackend) ListModelVariants(ctx context.Context) ([]*operatorv1.InferenceModelVariant, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, b.apiURL("api", "tags"), nil)
+	if err != nil {
+		return nil, fmt.Errorf("ollama_backend: list model variants: build request: %w", err)
+	}
+	resp, err := b.client.Do(httpReq)
+	if err != nil {
+		return nil, transportError("list model variants", ctx, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBodyBytes))
+		return nil, fmt.Errorf("ollama_backend: list model variants: %w: status %d", constants.ErrInferenceBackendUnavailable, resp.StatusCode)
+	}
+	var tagsResp ollamaTagsResponse
+	if err := b.decodeResponse("list model variants", resp.Body, &tagsResp); err != nil {
+		return nil, err
+	}
+	variants := make([]*operatorv1.InferenceModelVariant, 0, len(tagsResp.Models))
+	for _, candidate := range tagsResp.Models {
+		if candidate.Name == "" {
+			continue
+		}
+		digest, err := models.NormalizeProviderModelDigest(candidate.Digest)
+		if err != nil {
+			return nil, fmt.Errorf("ollama_backend: list model variants: model %q: %w", candidate.Name, err)
+		}
+		variants = append(variants, &operatorv1.InferenceModelVariant{Model: candidate.Name, Digest: digest})
+	}
+	if len(variants) == 0 {
+		return nil, fmt.Errorf("ollama_backend: list model variants: %w", constants.ErrInferenceModelNotFound)
+	}
+	return variants, nil
 }
 
 // apiURL resolves a provider API path against the validated base endpoint.

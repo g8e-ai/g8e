@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -59,8 +60,22 @@ func TestEvalCmd_ContainsOnlyNativeCommands(t *testing.T) {
 	for _, child := range command.Commands() {
 		names = append(names, child.Name())
 	}
-	assert.ElementsMatch(t, []string{"run", "verify", "show"}, names)
-	assert.Len(t, names, 3)
+	assert.ElementsMatch(t, []string{"run", "verify", "show", "inference"}, names)
+	assert.Len(t, names, 4)
+
+	var inference *cobra.Command
+	for _, child := range command.Commands() {
+		if child.Name() == "inference" {
+			inference = child
+			break
+		}
+	}
+	require.NotNil(t, inference)
+	inferenceNames := make([]string, 0, len(inference.Commands()))
+	for _, child := range inference.Commands() {
+		inferenceNames = append(inferenceNames, child.Name())
+	}
+	assert.ElementsMatch(t, []string{"status", "freeze-registry", "probe", "accept"}, inferenceNames)
 }
 
 func TestEvalRun_RejectsUnsupportedSuiteBeforeDependencies(t *testing.T) {
