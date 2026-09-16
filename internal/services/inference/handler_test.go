@@ -45,6 +45,21 @@ func mustMarshalInferenceRequested(t *testing.T, req *operatorv1.InferenceReques
 	return data
 }
 
+func textInferenceMessages(text string) []*operatorv1.InferenceMessage {
+	return []*operatorv1.InferenceMessage{{
+		Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+		Parts: []*operatorv1.InferenceMessagePart{{
+			Part: &operatorv1.InferenceMessagePart_Text{Text: text},
+		}},
+	}}
+}
+
+func textInferenceResponseParts(text string) []*operatorv1.InferenceResponsePart {
+	return []*operatorv1.InferenceResponsePart{{
+		Part: &operatorv1.InferenceResponsePart_Text{Text: text},
+	}}
+}
+
 // wantDigest returns the canonical result digest the handler must return as
 // the receipt summary for the given backend response.
 func wantDigest(t *testing.T, resp *models.GenerateResponse) string {
@@ -58,7 +73,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_PrimaryRole(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	backend := &stubBackend{generateResp: &models.GenerateResponse{
-		Text:         "primary response",
+		Parts:        textInferenceResponseParts("primary response"),
 		FinishReason: "stop",
 		Model:        "gemma3:4b",
 	}}
@@ -71,8 +86,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_PrimaryRole(t *testing.T) {
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt: "What is 2+2?",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: textInferenceMessages("What is 2+2?"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -81,7 +96,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_PrimaryRole(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, wantDigest(t, backend.generateResp), summary, "summary must be the canonical result digest binding the complete result")
 	assert.Equal(t, "gemma3:4b", backend.lastReq.Model, "should use primary model config default")
-	assert.Equal(t, "What is 2+2?", backend.lastReq.Prompt)
+	require.Len(t, backend.lastReq.Messages, 1)
+	assert.Equal(t, "What is 2+2?", backend.lastReq.Messages[0].Parts[0].GetText())
 	assert.Equal(t, "-1", backend.lastReq.KeepAlive)
 }
 
@@ -89,7 +105,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AssistantRole(t *testing.T)
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	backend := &stubBackend{generateResp: &models.GenerateResponse{
-		Text:         "assistant response",
+		Parts:        textInferenceResponseParts("assistant response"),
 		FinishReason: "stop",
 		Model:        "llama3.2:3b",
 	}}
@@ -102,8 +118,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AssistantRole(t *testing.T)
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
-		Prompt: "Summarize this",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
+		Messages: textInferenceMessages("Summarize this"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -118,7 +134,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_LiteRole(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	backend := &stubBackend{generateResp: &models.GenerateResponse{
-		Text:         "lite response",
+		Parts:        textInferenceResponseParts("lite response"),
 		FinishReason: "stop",
 		Model:        "qwen3:1.5b",
 	}}
@@ -131,8 +147,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_LiteRole(t *testing.T) {
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_LITE,
-		Prompt: "triage",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_LITE,
+		Messages: textInferenceMessages("triage"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -147,7 +163,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_MatchingModelOverrideAccept
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	backend := &stubBackend{generateResp: &models.GenerateResponse{
-		Text:         "primary response",
+		Parts:        textInferenceResponseParts("primary response"),
 		FinishReason: "stop",
 		Model:        "gemma3:4b",
 	}}
@@ -160,9 +176,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_MatchingModelOverrideAccept
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Model:  "gemma3:4b",
-		Prompt: "test",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Model:    "gemma3:4b",
+		Messages: textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -186,9 +202,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_UnauthorizedModelOverrideDe
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Model:  "custom-model:latest",
-		Prompt: "test",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Model:    "custom-model:latest",
+		Messages: textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -213,9 +229,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_CrossRoleModelDenied(t *tes
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Model:  "qwen3:1.5b",
-		Prompt: "test",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Model:    "qwen3:1.5b",
+		Messages: textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -236,8 +252,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_UnspecifiedRoleRejected(t *
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_UNSPECIFIED,
-		Prompt: "test",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_UNSPECIFIED,
+		Messages: textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -287,8 +303,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_NilBackendReturnsErrInferen
 	handler := NewInferenceExecutionHandler(nil, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt: "test",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -307,8 +323,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_BackendErrorReturnsErrInfer
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt: "test",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -327,8 +343,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_NoDefaultModelReturnsErrInf
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt: "test",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -342,7 +358,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_ScrubsPromptBeforeBackend(t
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	backend := &stubBackend{generateResp: &models.GenerateResponse{
-		Text:         "response",
+		Parts:        textInferenceResponseParts("response"),
 		FinishReason: "stop",
 		Model:        "test-model",
 	}}
@@ -356,22 +372,169 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_ScrubsPromptBeforeBackend(t
 
 	// Include an email-like pattern that scrubbing should redact
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt: "Contact me at user@example.com please",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: textInferenceMessages("Contact me at user@example.com please"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
 	_, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, cmdMsg)
 
 	require.NoError(t, err)
-	// The scrubbed prompt should not contain the raw email
-	assert.NotContains(t, backend.lastReq.Prompt, "user@example.com")
+	assert.NotContains(t, backend.lastReq.Messages[0].Parts[0].GetText(), "user@example.com")
 }
 
 // TestInferenceHandler_ExecuteVerifiedTransaction_LongOutputStillBindsDigest
 // proves that an output larger than ReceiptSummaryMaxBytes still produces a
 // fixed-width canonical digest as the receipt summary — the digest binds the
 // complete result rather than a truncated text prefix.
+func TestInferenceHandler_ExecuteVerifiedTransaction_ScrubsTypedMessagesAndCanonicalJSONLeaves(t *testing.T) {
+	t.Parallel()
+	backend := &stubBackend{generateResp: &models.GenerateResponse{
+		Parts:        textInferenceResponseParts("response"),
+		FinishReason: "stop",
+		Model:        "test-model",
+	}}
+	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "test-model"}}
+	handler := NewInferenceExecutionHandler(backend, cfg, mustNewScrubbingSvc(t), testutil.NewTestLogger())
+	schema := `{"properties":{"email":{"type":"string"}},"type":"object"}`
+	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
+		Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: []*operatorv1.InferenceMessage{
+			{
+				Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+				Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: "contact user@example.com"}}},
+			},
+			{
+				Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT,
+				Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_ToolCall{ToolCall: &operatorv1.InferenceToolCall{
+					CallId:        "call-1",
+					Name:          "inspect",
+					ArgumentsJson: `{"count":2,"nested":{"email":"tool@example.com"}}`,
+				}}}},
+			},
+			{
+				Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL,
+				Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_ToolResult{ToolResult: &operatorv1.InferenceToolResult{
+					CallId:     "call-1",
+					Name:       "inspect",
+					ResultJson: `{"items":["result@example.com",3],"ok":true}`,
+				}}}},
+			},
+		},
+		Tools: []*operatorv1.InferenceToolDeclaration{{Name: "inspect", Description: "Inspect", JsonSchema: schema}},
+	})
+
+	_, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, &testCommandMessage{payload: payload})
+
+	require.NoError(t, err)
+	require.Len(t, backend.lastReq.Messages, 3)
+	assert.NotContains(t, backend.lastReq.Messages[0].Parts[0].GetText(), "user@example.com")
+	arguments := backend.lastReq.Messages[1].Parts[0].GetToolCall().GetArgumentsJson()
+	assert.Equal(t, `{"count":2,"nested":{"email":"[EMAIL]"}}`, arguments)
+	result := backend.lastReq.Messages[2].Parts[0].GetToolResult().GetResultJson()
+	assert.Equal(t, `{"items":["[EMAIL]",3],"ok":true}`, result)
+	require.Len(t, backend.lastReq.Tools, 1)
+	assert.Equal(t, schema, backend.lastReq.Tools[0].GetJsonSchema())
+}
+
+func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidTypedInputRejectedBeforeBackend(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		req  *operatorv1.InferenceRequested
+		err  error
+	}{
+		{
+			name: "malformed tool call arguments",
+			req: &operatorv1.InferenceRequested{
+				Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages: []*operatorv1.InferenceMessage{{
+					Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT,
+					Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_ToolCall{ToolCall: &operatorv1.InferenceToolCall{Name: "inspect", ArgumentsJson: "{"}}}},
+				}},
+			},
+			err: constants.ErrInferenceJSONInvalid,
+		},
+		{
+			name: "noncanonical tool result",
+			req: &operatorv1.InferenceRequested{
+				Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages: []*operatorv1.InferenceMessage{{
+					Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL,
+					Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_ToolResult{ToolResult: &operatorv1.InferenceToolResult{Name: "inspect", ResultJson: `{ "ok": true }`}}}},
+				}},
+			},
+			err: constants.ErrInferenceJSONNonCanonical,
+		},
+		{
+			name: "unspecified message role",
+			req: &operatorv1.InferenceRequested{
+				Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages: []*operatorv1.InferenceMessage{{
+					Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_UNSPECIFIED,
+					Parts: textInferenceMessages("test")[0].Parts,
+				}},
+			},
+			err: constants.ErrInferenceMessageInvalid,
+		},
+		{
+			name: "message without parts",
+			req: &operatorv1.InferenceRequested{
+				Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages: []*operatorv1.InferenceMessage{{Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER}},
+			},
+			err: constants.ErrInferenceMessageInvalid,
+		},
+		{
+			name: "tool role with text part",
+			req: &operatorv1.InferenceRequested{
+				Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages: []*operatorv1.InferenceMessage{{
+					Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL,
+					Parts: textInferenceMessages("test")[0].Parts,
+				}},
+			},
+			err: constants.ErrInferenceMessageInvalid,
+		},
+		{
+			name: "duplicate tool argument key",
+			req: &operatorv1.InferenceRequested{
+				Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages: []*operatorv1.InferenceMessage{{
+					Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT,
+					Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_ToolCall{ToolCall: &operatorv1.InferenceToolCall{
+						Name: "inspect", ArgumentsJson: `{"path":"a","path":"b"}`,
+					}}}},
+				}},
+			},
+			err: constants.ErrInferenceJSONInvalid,
+		},
+		{
+			name: "semantically invalid tool schema",
+			req: &operatorv1.InferenceRequested{
+				Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages: textInferenceMessages("test"),
+				Tools:    []*operatorv1.InferenceToolDeclaration{{Name: "inspect", JsonSchema: `{"type":7}`}},
+			},
+			err: constants.ErrInferenceToolSchemaInvalid,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			backend := &stubBackend{}
+			cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "test-model"}}
+			handler := NewInferenceExecutionHandler(backend, cfg, mustNewScrubbingSvc(t), testutil.NewTestLogger())
+			payload := mustMarshalInferenceRequested(t, tt.req)
+
+			_, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, &testCommandMessage{payload: payload})
+
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tt.err)
+			assert.Equal(t, 0, backend.calls)
+		})
+	}
+}
+
 func TestInferenceHandler_ExecuteVerifiedTransaction_LongOutputStillBindsDigest(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
@@ -380,7 +543,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_LongOutputStillBindsDigest(
 		longText[i] = 'a'
 	}
 	backend := &stubBackend{generateResp: &models.GenerateResponse{
-		Text:         string(longText),
+		Parts:        textInferenceResponseParts(string(longText)),
 		FinishReason: "stop",
 		Model:        "test-model",
 	}}
@@ -393,8 +556,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_LongOutputStillBindsDigest(
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt: "test",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -409,7 +572,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AppliesConfigKeepAliveDefau
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	backend := &stubBackend{generateResp: &models.GenerateResponse{
-		Text:         "response",
+		Parts:        textInferenceResponseParts("response"),
 		FinishReason: "stop",
 		Model:        "test-model",
 	}}
@@ -423,8 +586,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AppliesConfigKeepAliveDefau
 
 	// Request does not set keep_alive, so config default should be used
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt: "test",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -438,7 +601,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_RequestKeepAliveOverridesCo
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	backend := &stubBackend{generateResp: &models.GenerateResponse{
-		Text:         "response",
+		Parts:        textInferenceResponseParts("response"),
 		FinishReason: "stop",
 		Model:        "test-model",
 	}}
@@ -452,7 +615,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_RequestKeepAliveOverridesCo
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 		Role:      operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt:    "test",
+		Messages:  textInferenceMessages("test"),
 		KeepAlive: "5m",
 	})
 	cmdMsg := &testCommandMessage{payload: payload}

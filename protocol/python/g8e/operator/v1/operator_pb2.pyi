@@ -77,6 +77,14 @@ class ModelRole(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     MODEL_ROLE_PRIMARY: _ClassVar[ModelRole]
     MODEL_ROLE_ASSISTANT: _ClassVar[ModelRole]
     MODEL_ROLE_LITE: _ClassVar[ModelRole]
+
+class InferenceMessageRole(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    INFERENCE_MESSAGE_ROLE_UNSPECIFIED: _ClassVar[InferenceMessageRole]
+    INFERENCE_MESSAGE_ROLE_SYSTEM: _ClassVar[InferenceMessageRole]
+    INFERENCE_MESSAGE_ROLE_USER: _ClassVar[InferenceMessageRole]
+    INFERENCE_MESSAGE_ROLE_ASSISTANT: _ClassVar[InferenceMessageRole]
+    INFERENCE_MESSAGE_ROLE_TOOL: _ClassVar[InferenceMessageRole]
 EXECUTION_STATUS_UNSPECIFIED: ExecutionStatus
 EXECUTION_STATUS_EXECUTING: ExecutionStatus
 EXECUTION_STATUS_COMPLETED: ExecutionStatus
@@ -122,6 +130,11 @@ MODEL_ROLE_UNSPECIFIED: ModelRole
 MODEL_ROLE_PRIMARY: ModelRole
 MODEL_ROLE_ASSISTANT: ModelRole
 MODEL_ROLE_LITE: ModelRole
+INFERENCE_MESSAGE_ROLE_UNSPECIFIED: InferenceMessageRole
+INFERENCE_MESSAGE_ROLE_SYSTEM: InferenceMessageRole
+INFERENCE_MESSAGE_ROLE_USER: InferenceMessageRole
+INFERENCE_MESSAGE_ROLE_ASSISTANT: InferenceMessageRole
+INFERENCE_MESSAGE_ROLE_TOOL: InferenceMessageRole
 
 class CommandRequested(_message.Message):
     __slots__ = ("command", "execution_id", "justification", "vault_mode", "timeout_seconds", "intent", "environment", "working_directory")
@@ -1660,39 +1673,97 @@ class RevokePasskeyCredentialResult(_message.Message):
     remaining: int
     def __init__(self, success: _Optional[bool] = ..., error: _Optional[str] = ..., found: _Optional[bool] = ..., remaining: _Optional[int] = ...) -> None: ...
 
+class InferenceToolCall(_message.Message):
+    __slots__ = ("call_id", "name", "arguments_json")
+    CALL_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    ARGUMENTS_JSON_FIELD_NUMBER: _ClassVar[int]
+    call_id: str
+    name: str
+    arguments_json: str
+    def __init__(self, call_id: _Optional[str] = ..., name: _Optional[str] = ..., arguments_json: _Optional[str] = ...) -> None: ...
+
+class InferenceToolResult(_message.Message):
+    __slots__ = ("call_id", "name", "result_json")
+    CALL_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    RESULT_JSON_FIELD_NUMBER: _ClassVar[int]
+    call_id: str
+    name: str
+    result_json: str
+    def __init__(self, call_id: _Optional[str] = ..., name: _Optional[str] = ..., result_json: _Optional[str] = ...) -> None: ...
+
+class InferenceMessagePart(_message.Message):
+    __slots__ = ("text", "tool_call", "tool_result")
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    TOOL_CALL_FIELD_NUMBER: _ClassVar[int]
+    TOOL_RESULT_FIELD_NUMBER: _ClassVar[int]
+    text: str
+    tool_call: InferenceToolCall
+    tool_result: InferenceToolResult
+    def __init__(self, text: _Optional[str] = ..., tool_call: _Optional[_Union[InferenceToolCall, _Mapping]] = ..., tool_result: _Optional[_Union[InferenceToolResult, _Mapping]] = ...) -> None: ...
+
+class InferenceMessage(_message.Message):
+    __slots__ = ("role", "parts")
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    PARTS_FIELD_NUMBER: _ClassVar[int]
+    role: InferenceMessageRole
+    parts: _containers.RepeatedCompositeFieldContainer[InferenceMessagePart]
+    def __init__(self, role: _Optional[_Union[InferenceMessageRole, str]] = ..., parts: _Optional[_Iterable[_Union[InferenceMessagePart, _Mapping]]] = ...) -> None: ...
+
+class InferenceToolDeclaration(_message.Message):
+    __slots__ = ("name", "description", "json_schema")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    JSON_SCHEMA_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    description: str
+    json_schema: str
+    def __init__(self, name: _Optional[str] = ..., description: _Optional[str] = ..., json_schema: _Optional[str] = ...) -> None: ...
+
+class InferenceResponsePart(_message.Message):
+    __slots__ = ("text", "tool_call")
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    TOOL_CALL_FIELD_NUMBER: _ClassVar[int]
+    text: str
+    tool_call: InferenceToolCall
+    def __init__(self, text: _Optional[str] = ..., tool_call: _Optional[_Union[InferenceToolCall, _Mapping]] = ...) -> None: ...
+
 class InferenceRequested(_message.Message):
-    __slots__ = ("role", "model", "prompt", "temperature", "max_tokens", "keep_alive")
+    __slots__ = ("role", "model", "temperature", "max_tokens", "keep_alive", "messages", "tools")
     ROLE_FIELD_NUMBER: _ClassVar[int]
     MODEL_FIELD_NUMBER: _ClassVar[int]
-    PROMPT_FIELD_NUMBER: _ClassVar[int]
     TEMPERATURE_FIELD_NUMBER: _ClassVar[int]
     MAX_TOKENS_FIELD_NUMBER: _ClassVar[int]
     KEEP_ALIVE_FIELD_NUMBER: _ClassVar[int]
+    MESSAGES_FIELD_NUMBER: _ClassVar[int]
+    TOOLS_FIELD_NUMBER: _ClassVar[int]
     role: ModelRole
     model: str
-    prompt: str
     temperature: float
     max_tokens: int
     keep_alive: str
-    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., model: _Optional[str] = ..., prompt: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ...) -> None: ...
+    messages: _containers.RepeatedCompositeFieldContainer[InferenceMessage]
+    tools: _containers.RepeatedCompositeFieldContainer[InferenceToolDeclaration]
+    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., model: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ..., messages: _Optional[_Iterable[_Union[InferenceMessage, _Mapping]]] = ..., tools: _Optional[_Iterable[_Union[InferenceToolDeclaration, _Mapping]]] = ...) -> None: ...
 
 class InferenceResult(_message.Message):
-    __slots__ = ("text", "prompt_tokens", "completion_tokens", "total_tokens", "finish_reason", "model", "result_digest")
-    TEXT_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("prompt_tokens", "completion_tokens", "total_tokens", "finish_reason", "model", "result_digest", "parts")
     PROMPT_TOKENS_FIELD_NUMBER: _ClassVar[int]
     COMPLETION_TOKENS_FIELD_NUMBER: _ClassVar[int]
     TOTAL_TOKENS_FIELD_NUMBER: _ClassVar[int]
     FINISH_REASON_FIELD_NUMBER: _ClassVar[int]
     MODEL_FIELD_NUMBER: _ClassVar[int]
     RESULT_DIGEST_FIELD_NUMBER: _ClassVar[int]
-    text: str
+    PARTS_FIELD_NUMBER: _ClassVar[int]
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
     finish_reason: str
     model: str
     result_digest: str
-    def __init__(self, text: _Optional[str] = ..., prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., total_tokens: _Optional[int] = ..., finish_reason: _Optional[str] = ..., model: _Optional[str] = ..., result_digest: _Optional[str] = ...) -> None: ...
+    parts: _containers.RepeatedCompositeFieldContainer[InferenceResponsePart]
+    def __init__(self, prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., total_tokens: _Optional[int] = ..., finish_reason: _Optional[str] = ..., model: _Optional[str] = ..., result_digest: _Optional[str] = ..., parts: _Optional[_Iterable[_Union[InferenceResponsePart, _Mapping]]] = ...) -> None: ...
 
 class InferenceCompletion(_message.Message):
     __slots__ = ("receipt", "result")
@@ -1703,9 +1774,8 @@ class InferenceCompletion(_message.Message):
     def __init__(self, receipt: _Optional[_Union[ActionReceipt, _Mapping]] = ..., result: _Optional[_Union[InferenceResult, _Mapping]] = ...) -> None: ...
 
 class InferenceDispatchRequest(_message.Message):
-    __slots__ = ("role", "prompt", "model", "temperature", "max_tokens", "keep_alive", "target_operator_session_id", "acting_app_id", "case_id", "investigation_id", "task_id", "web_session_id", "cli_session_id")
+    __slots__ = ("role", "model", "temperature", "max_tokens", "keep_alive", "target_operator_session_id", "acting_app_id", "case_id", "investigation_id", "task_id", "web_session_id", "cli_session_id", "messages", "tools")
     ROLE_FIELD_NUMBER: _ClassVar[int]
-    PROMPT_FIELD_NUMBER: _ClassVar[int]
     MODEL_FIELD_NUMBER: _ClassVar[int]
     TEMPERATURE_FIELD_NUMBER: _ClassVar[int]
     MAX_TOKENS_FIELD_NUMBER: _ClassVar[int]
@@ -1717,8 +1787,9 @@ class InferenceDispatchRequest(_message.Message):
     TASK_ID_FIELD_NUMBER: _ClassVar[int]
     WEB_SESSION_ID_FIELD_NUMBER: _ClassVar[int]
     CLI_SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    MESSAGES_FIELD_NUMBER: _ClassVar[int]
+    TOOLS_FIELD_NUMBER: _ClassVar[int]
     role: ModelRole
-    prompt: str
     model: str
     temperature: float
     max_tokens: int
@@ -1730,7 +1801,9 @@ class InferenceDispatchRequest(_message.Message):
     task_id: str
     web_session_id: str
     cli_session_id: str
-    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., prompt: _Optional[str] = ..., model: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ..., target_operator_session_id: _Optional[str] = ..., acting_app_id: _Optional[str] = ..., case_id: _Optional[str] = ..., investigation_id: _Optional[str] = ..., task_id: _Optional[str] = ..., web_session_id: _Optional[str] = ..., cli_session_id: _Optional[str] = ...) -> None: ...
+    messages: _containers.RepeatedCompositeFieldContainer[InferenceMessage]
+    tools: _containers.RepeatedCompositeFieldContainer[InferenceToolDeclaration]
+    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., model: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ..., target_operator_session_id: _Optional[str] = ..., acting_app_id: _Optional[str] = ..., case_id: _Optional[str] = ..., investigation_id: _Optional[str] = ..., task_id: _Optional[str] = ..., web_session_id: _Optional[str] = ..., cli_session_id: _Optional[str] = ..., messages: _Optional[_Iterable[_Union[InferenceMessage, _Mapping]]] = ..., tools: _Optional[_Iterable[_Union[InferenceToolDeclaration, _Mapping]]] = ...) -> None: ...
 
 class InferenceDispatchResponse(_message.Message):
     __slots__ = ("transaction_id", "result", "receipt")

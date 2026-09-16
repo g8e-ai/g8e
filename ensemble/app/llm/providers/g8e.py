@@ -22,17 +22,12 @@ and selected via the per-role provider settings (``primary_provider=g8e``,
 ``InternalHttpClient`` (injected via the factory singleton) for mTLS
 authentication to the gateway; no endpoint or API key is configured directly.
 
-The dispatch endpoint is non-streaming: it returns the complete
-``InferenceResult`` after the Inference Node finishes generation. The
-stream methods yield the complete text as a single chunk followed by a
-finish chunk; no token stream traverses the governed path in this
-release. The provider is text-only: tool call/response and inline-data
-parts in the conversation contents fail closed with a typed
-``ModelCapabilityError`` rather than being silently dropped.
+The dispatch endpoint returns the complete ``InferenceResult`` after the Inference Node finishes generation. Ordered conversation turns, tool declarations, tool calls, and tool results cross the governed path without prompt flattening. Inline-data parts remain unsupported and fail closed with a typed ``ModelCapabilityError``.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import AsyncGenerator
 from contextvars import ContextVar
@@ -43,6 +38,8 @@ from app.llm.llm_dataclasses import (
     GenerateContentResponse,
     Part,
     StreamChunkFromModel,
+    ToolCall,
+    ToolGroup,
     UsageMetadata,
 )
 from app.llm.llm_types import (
@@ -51,6 +48,7 @@ from app.llm.llm_types import (
     PrimaryLLMSettings,
 )
 from app.llm.provider import LLMProvider
+from app.llm.utils import schema_to_dict
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import (
     InferenceDispatchRequest,
@@ -58,10 +56,19 @@ from app.models.internal_api import (
 )
 from app.models.model_telemetry import GovernedDispatchEvidence
 from g8e.operator.v1.operator_pb2 import (
+    INFERENCE_MESSAGE_ROLE_ASSISTANT,
+    INFERENCE_MESSAGE_ROLE_SYSTEM,
+    INFERENCE_MESSAGE_ROLE_TOOL,
+    INFERENCE_MESSAGE_ROLE_USER,
     MODEL_ROLE_ASSISTANT,
     MODEL_ROLE_LITE,
     MODEL_ROLE_PRIMARY,
     ExecutionStatus,
+    InferenceMessage,
+    InferenceMessagePart,
+    InferenceToolCall,
+    InferenceToolDeclaration,
+    InferenceToolResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,38 +78,55 @@ _ROLE_ASSISTANT = MODEL_ROLE_ASSISTANT
 _ROLE_LITE = MODEL_ROLE_LITE
 
 
-def _contents_to_prompt(
+def _canonical_json(value: object) -> str:
+    from app.errors import ValidationError
+
+    try:
+        return json.dumps(
+            value,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValidationError("Governed inference content is not canonical JSON") from exc
+
+
+def _contents_to_messages(
     contents: list[Content],
     system_instructions: str | None,
     model: str = "",
-) -> str:
-    """Flatten the conversation contents into a single prompt string.
+) -> list[InferenceMessage]:
+    from app.errors import ModelCapabilityError, ValidationError
 
-    The dispatch endpoint carries a single prompt string (not a list of
-    messages). The Inference Node's handler sends this prompt as a single
-    user message to Ollama's ``/api/chat`` endpoint. The flattening
-    preserves the conversation structure by formatting each turn with its
-    role label so the model sees the full chat context.
-
-    The provider is text-only this release: non-text parts fail closed
-    with a typed capability error instead of being silently dropped.
-    """
-    # Lazy import to avoid circular dependency: app.errors -> app.models ->
-    # app.llm -> providers -> this module (same convention as _capability.py).
-    from app.errors import ModelCapabilityError, ToolsNotSupportedError
-
-    lines: list[str] = []
-    if system_instructions:
-        lines.append(f"System: {system_instructions}")
+    messages: list[InferenceMessage] = []
+    if system_instructions is not None:
+        messages.append(
+            InferenceMessage(
+                role=INFERENCE_MESSAGE_ROLE_SYSTEM,
+                parts=[InferenceMessagePart(text=system_instructions)],
+            )
+        )
+    roles = {
+        "system": INFERENCE_MESSAGE_ROLE_SYSTEM,
+        "user": INFERENCE_MESSAGE_ROLE_USER,
+        "model": INFERENCE_MESSAGE_ROLE_ASSISTANT,
+        "assistant": INFERENCE_MESSAGE_ROLE_ASSISTANT,
+        "tool": INFERENCE_MESSAGE_ROLE_TOOL,
+    }
     for content in contents:
-        role = "Assistant" if content.role == "model" else content.role.capitalize()
-        texts: list[str] = []
+        if content.role not in roles:
+            raise ValidationError(f"Unsupported governed inference message role: {content.role}")
+        parts: list[InferenceMessagePart] = []
         for part in content.parts:
-            if part.tool_call is not None or part.tool_response is not None:
-                raise ToolsNotSupportedError(
-                    "G8E governed dispatch does not support tool call/response content parts",
-                    model=model,
-                    service_name="g8e",
+            kinds = sum(
+                value is not None
+                for value in (part.text, part.tool_call, part.tool_response, part.inline_data)
+            )
+            if kinds != 1:
+                raise ValidationError(
+                    "Governed inference message parts must contain exactly one value"
                 )
             if part.inline_data is not None:
                 raise ModelCapabilityError(
@@ -111,11 +135,57 @@ def _contents_to_prompt(
                     capability="multimodal",
                     service_name="g8e",
                 )
-            if part.text:
-                texts.append(part.text)
-        if texts:
-            lines.append(f"{role}: {' '.join(texts)}")
-    return "\n\n".join(lines)
+            if part.tool_call is not None:
+                if content.role not in ("model", "assistant") or not part.tool_call.name:
+                    raise ValidationError(
+                        "Governed inference tool calls require an assistant role and name"
+                    )
+                parts.append(
+                    InferenceMessagePart(
+                        tool_call=InferenceToolCall(
+                            call_id=part.tool_call.id or "",
+                            name=part.tool_call.name,
+                            arguments_json=_canonical_json(part.tool_call.args),
+                        )
+                    )
+                )
+            elif part.tool_response is not None:
+                if content.role != "tool" or not part.tool_response.name:
+                    raise ValidationError(
+                        "Governed inference tool results require a tool role and name"
+                    )
+                parts.append(
+                    InferenceMessagePart(
+                        tool_result=InferenceToolResult(
+                            call_id=part.tool_response.id or "",
+                            name=part.tool_response.name,
+                            result_json=_canonical_json(part.tool_response.response),
+                        )
+                    )
+                )
+            elif part.text is not None:
+                if content.role == "tool":
+                    raise ValidationError("Governed inference tool messages require a tool result")
+                parts.append(InferenceMessagePart(text=part.text))
+        if not parts:
+            raise ValidationError("Governed inference messages require at least one part")
+        messages.append(InferenceMessage(role=roles[content.role], parts=parts))
+    return messages
+
+
+def _tools_to_declarations(tools: list[ToolGroup] | None) -> list[InferenceToolDeclaration]:
+    declarations: list[InferenceToolDeclaration] = []
+    for group in tools or []:
+        for tool in group.tools:
+            schema = schema_to_dict(tool.parameters) if tool.parameters else {}
+            declarations.append(
+                InferenceToolDeclaration(
+                    name=tool.name,
+                    description=tool.description,
+                    json_schema=_canonical_json(schema),
+                )
+            )
+    return declarations
 
 
 def _response_to_usage_metadata(result: InferenceDispatchResponse) -> UsageMetadata:
@@ -130,21 +200,76 @@ def _response_to_usage_metadata(result: InferenceDispatchResponse) -> UsageMetad
     )
 
 
+def _response_parts(result: InferenceDispatchResponse) -> list[Part]:
+    from app.errors import ValidationError
+
+    if not result.HasField("result"):
+        raise ValidationError("Governed inference response is missing its result")
+    parts: list[Part] = []
+    for response_part in result.result.parts:
+        kind = response_part.WhichOneof("part")
+        if kind == "text":
+            parts.append(Part(text=response_part.text))
+        elif kind == "tool_call":
+            try:
+                arguments = json.loads(response_part.tool_call.arguments_json)
+            except json.JSONDecodeError as exc:
+                raise ValidationError(
+                    "Governed inference tool-call arguments are invalid JSON"
+                ) from exc
+            if (
+                not isinstance(arguments, dict)
+                or not response_part.tool_call.name
+                or _canonical_json(arguments) != response_part.tool_call.arguments_json
+            ):
+                raise ValidationError("Governed inference tool-call arguments are invalid")
+            parts.append(
+                Part(
+                    tool_call=ToolCall(
+                        name=response_part.tool_call.name,
+                        args=arguments,
+                        id=response_part.tool_call.call_id or None,
+                    )
+                )
+            )
+        else:
+            raise ValidationError("Governed inference response contains an unspecified part")
+    if not parts:
+        raise ValidationError("Governed inference response contains no parts")
+    return parts
+
+
 def _response_to_generate_content(
     result: InferenceDispatchResponse,
 ) -> GenerateContentResponse:
-    """Build a GenerateContentResponse from the dispatch response."""
-    text = result.result.text if result.HasField("result") else ""
     finish_reason = result.result.finish_reason if result.HasField("result") else "stop"
     return GenerateContentResponse(
         candidates=[
             Candidate(
-                content=Content(role="model", parts=[Part(text=text)]),
+                content=Content(role="model", parts=_response_parts(result)),
                 finish_reason=finish_reason or "stop",
             )
         ],
         usage_metadata=_response_to_usage_metadata(result),
     )
+
+
+def _response_to_stream_chunks(
+    result: InferenceDispatchResponse,
+) -> list[StreamChunkFromModel]:
+    chunks: list[StreamChunkFromModel] = []
+    for part in _response_parts(result):
+        if part.text is not None:
+            chunks.append(StreamChunkFromModel(text=part.text))
+        elif part.tool_call is not None:
+            chunks.append(StreamChunkFromModel(tool_calls=[part.tool_call]))
+    chunks.append(
+        StreamChunkFromModel(
+            finish_reason=result.result.finish_reason if result.HasField("result") else "stop",
+            usage_metadata=_response_to_usage_metadata(result),
+        )
+    )
+    return chunks
 
 
 class G8EProvider(LLMProvider):
@@ -196,13 +321,15 @@ class G8EProvider(LLMProvider):
         contents: list[Content],
         system_instructions: str | None,
         max_output_tokens: int,
+        tools: list[ToolGroup] | None = None,
     ) -> InferenceDispatchResponse:
         """Dispatch a governed inference request and return the response."""
-        prompt = _contents_to_prompt(contents, system_instructions, model=model)
+        self._governed_dispatch_evidence.set(None)
         context = self._g8e_context.get()
         request = InferenceDispatchRequest(
             role=role,
-            prompt=prompt,
+            messages=_contents_to_messages(contents, system_instructions, model=model),
+            tools=_tools_to_declarations(tools),
             model=model or "",
             max_tokens=max_output_tokens,
             case_id=(context.case_id or "") if context else "",
@@ -212,8 +339,8 @@ class G8EProvider(LLMProvider):
             cli_session_id=(context.cli_session_id or "") if context else "",
         )
         self._record_model_boundary(request)
-        self._governed_dispatch_evidence.set(None)
         response = await self._client.dispatch_inference(request)
+        _response_parts(response)
         self._governed_dispatch_evidence.set(
             GovernedDispatchEvidence(
                 transaction_id=response.transaction_id,
@@ -241,14 +368,10 @@ class G8EProvider(LLMProvider):
             contents,
             primary_llm_settings.system_instructions,
             primary_llm_settings.max_output_tokens,
+            primary_llm_settings.tools,
         )
-        text = result.result.text if result.HasField("result") else ""
-        if text:
-            yield StreamChunkFromModel(text=text)
-        yield StreamChunkFromModel(
-            finish_reason=result.result.finish_reason if result.HasField("result") else "stop",
-            usage_metadata=_response_to_usage_metadata(result),
-        )
+        for chunk in _response_to_stream_chunks(result):
+            yield chunk
 
     async def generate_content_primary(
         self,
@@ -262,6 +385,7 @@ class G8EProvider(LLMProvider):
             contents,
             primary_llm_settings.system_instructions,
             primary_llm_settings.max_output_tokens,
+            primary_llm_settings.tools,
         )
         return _response_to_generate_content(result)
 
@@ -278,13 +402,8 @@ class G8EProvider(LLMProvider):
             assistant_llm_settings.system_instructions,
             assistant_llm_settings.max_output_tokens,
         )
-        text = result.result.text if result.HasField("result") else ""
-        if text:
-            yield StreamChunkFromModel(text=text)
-        yield StreamChunkFromModel(
-            finish_reason=result.result.finish_reason if result.HasField("result") else "stop",
-            usage_metadata=_response_to_usage_metadata(result),
-        )
+        for chunk in _response_to_stream_chunks(result):
+            yield chunk
 
     async def generate_content_assistant(
         self,
@@ -314,13 +433,8 @@ class G8EProvider(LLMProvider):
             lite_llm_settings.system_instructions,
             lite_llm_settings.max_output_tokens,
         )
-        text = result.result.text if result.HasField("result") else ""
-        if text:
-            yield StreamChunkFromModel(text=text)
-        yield StreamChunkFromModel(
-            finish_reason=result.result.finish_reason if result.HasField("result") else "stop",
-            usage_metadata=_response_to_usage_metadata(result),
-        )
+        for chunk in _response_to_stream_chunks(result):
+            yield chunk
 
     async def generate_content_lite(
         self,

@@ -124,17 +124,14 @@ func NewDispatchService(dispatcher CommandDispatcher, operatorList OperatorListe
 	}
 }
 
-// DispatchInferenceRequest is the input to DispatchInference. The Role and
-// Prompt are required; the optional fields override the Inference Node's
-// config defaults when non-zero/non-empty.
+// DispatchInferenceRequest is the input to DispatchInference. Role and ordered messages are required; optional fields override the Inference Node's config defaults when non-zero/non-empty.
 type DispatchInferenceRequest struct {
 	// Role is the chat-tier role for this request (primary, assistant, lite).
 	Role models.InferenceModelRole
 
-	// Prompt is the scrubbed prompt text sent to the Inference Node. The
-	// Inference Node re-scrubs through its own ScrubbingService before
-	// crossing the execution boundary.
-	Prompt string
+	// Messages and Tools preserve the typed request sent to the Inference Node. The node validates and re-scrubs every data-bearing part before crossing the provider boundary.
+	Messages []*operatorv1.InferenceMessage
+	Tools    []*operatorv1.InferenceToolDeclaration
 
 	// Model overrides the Inference Node's configured default model for the
 	// role. Empty means use the config default.
@@ -175,7 +172,7 @@ type DispatchInferenceRequest struct {
 }
 
 // DispatchInferenceResult is the output of a successful inference dispatch.
-// The InferenceResult carries the generated text, usage metadata, and
+// The InferenceResult carries ordered response parts, usage metadata, and
 // finish reason. The TransactionID correlates the dispatch with the signed
 // ActionReceipt recorded in the User Gateway's audit chain. Receipt carries
 // the verified final signed ActionReceipt whose result_summary binds the
@@ -200,6 +197,9 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	if req.Role == models.InferenceModelRoleUnspecified {
 		return nil, fmt.Errorf("inference dispatch: %w", constants.ErrInferenceRoleInvalid)
 	}
+	if len(req.Messages) == 0 {
+		return nil, fmt.Errorf("inference dispatch: %w", constants.ErrInferenceMessagesRequired)
+	}
 
 	// Resolve the Inference Node's operator session from the requestor's
 	// enrolled operators. The Inference Node stamps
@@ -214,7 +214,8 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	infReq := &operatorv1.InferenceRequested{
 		Role:        req.Role.ToProto(),
 		Model:       req.Model,
-		Prompt:      req.Prompt,
+		Messages:    req.Messages,
+		Tools:       req.Tools,
 		Temperature: req.Temperature,
 		MaxTokens:   req.MaxTokens,
 		KeepAlive:   req.KeepAlive,

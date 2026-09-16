@@ -8,12 +8,15 @@
 package inference
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/jsonschema"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
@@ -21,13 +24,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// InferenceExecutionHandler implements governance.ExecutionHandler. It
-// decodes the governed InferenceRequestPayload from the protobuf
-// InferenceRequested message, scrubs the prompt through the existing
-// scrubbing.ScrubbingService, calls Backend.Generate, and returns the
-// summary string the L5 actuator records in the receipt. The handler
-// receives only scrubbed, tokenized prompts; it never receives raw vault
-// material.
+// InferenceExecutionHandler implements governance.ExecutionHandler. It decodes and validates the governed typed conversation, recursively scrubs data-bearing values, calls Backend.Generate, and returns the digest the L5 actuator records in the receipt.
 type InferenceExecutionHandler struct {
 	backend   Backend
 	cfg       *config.Config
@@ -63,13 +60,7 @@ func (h *InferenceExecutionHandler) ExecuteVerifiedTransaction(ctx context.Conte
 	return digest, nil
 }
 
-// ExecuteInference decodes the protobuf InferenceRequested payload, scrubs the
-// prompt through the existing scrubbing.ScrubbingService, resolves the
-// default model for the role, calls Backend.Generate, and returns the full
-// GenerateResponse. The caller (handleInferenceRequestSync) constructs and
-// publishes the InferenceResult proto from this response. The handler
-// receives only scrubbed, tokenized prompts; it never receives raw vault
-// material.
+// ExecuteInference decodes the protobuf InferenceRequested payload, validates and scrubs its typed conversation, resolves the approved role model, and calls Backend.Generate.
 func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg governance.CommandMessage) (*models.GenerateResponse, error) {
 	if h.backend == nil {
 		return nil, fmt.Errorf("inference handler: %w", constants.ErrInferenceBackendNotRegistered)
@@ -86,13 +77,8 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 	}
 
 	infReq := models.FromProtoInferenceRequested(req)
-
-	// Scrub the prompt before it crosses the execution boundary. The
-	// handler receives only scrubbed, tokenized prompts; it never receives
-	// raw vault material. This matches the existing scrubbing contract for
-	// every other governed execution path.
-	if h.scrubbing != nil && h.scrubbing.IsEnabled() {
-		infReq.Prompt = h.scrubbing.ScrubText(infReq.Prompt)
+	if err := h.normalizeInferenceInput(&infReq); err != nil {
+		return nil, fmt.Errorf("inference handler: normalize request: %w", err)
 	}
 
 	// Resolve the approved model for the role. The configured role-to-model
@@ -118,7 +104,8 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 	h.logger.Info("Dispatching governed inference request",
 		"role", infReq.Role,
 		"model", genReq.Model,
-		"prompt_length", len(genReq.Prompt))
+		"message_count", len(genReq.Messages),
+		"tool_count", len(genReq.Tools))
 
 	resp, err := h.backend.Generate(ctx, genReq)
 	if err != nil {
@@ -126,6 +113,177 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 	}
 
 	return resp, nil
+}
+
+func (h *InferenceExecutionHandler) normalizeInferenceInput(req *models.InferenceRequestPayload) error {
+	if len(req.Messages) == 0 {
+		return constants.ErrInferenceMessagesRequired
+	}
+	scrubText := func(value string) string { return value }
+	if h.scrubbing != nil && h.scrubbing.IsEnabled() {
+		scrubText = h.scrubbing.ScrubText
+	}
+	for messageIndex, message := range req.Messages {
+		if message == nil || !validInferenceMessageRole(message.GetRole()) || len(message.GetParts()) == 0 {
+			return fmt.Errorf("%w: message %d", constants.ErrInferenceMessageInvalid, messageIndex)
+		}
+		for partIndex, part := range message.GetParts() {
+			if part == nil || part.GetPart() == nil {
+				return fmt.Errorf("%w: message %d part %d", constants.ErrInferenceMessageInvalid, messageIndex, partIndex)
+			}
+			switch value := part.GetPart().(type) {
+			case *operatorv1.InferenceMessagePart_Text:
+				if message.GetRole() == operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL {
+					return fmt.Errorf("%w: message %d text part", constants.ErrInferenceMessageInvalid, messageIndex)
+				}
+				value.Text = scrubText(value.Text)
+			case *operatorv1.InferenceMessagePart_ToolCall:
+				if message.GetRole() != operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT || value.ToolCall == nil || value.ToolCall.GetName() == "" {
+					return fmt.Errorf("%w: message %d tool call", constants.ErrInferenceMessageInvalid, messageIndex)
+				}
+				normalized, err := normalizeCanonicalJSON(value.ToolCall.GetArgumentsJson(), true, scrubText)
+				if err != nil {
+					return fmt.Errorf("message %d tool call arguments: %w", messageIndex, err)
+				}
+				value.ToolCall.ArgumentsJson = normalized
+			case *operatorv1.InferenceMessagePart_ToolResult:
+				if message.GetRole() != operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL || value.ToolResult == nil || value.ToolResult.GetName() == "" {
+					return fmt.Errorf("%w: message %d tool result", constants.ErrInferenceMessageInvalid, messageIndex)
+				}
+				normalized, err := normalizeCanonicalJSON(value.ToolResult.GetResultJson(), false, scrubText)
+				if err != nil {
+					return fmt.Errorf("message %d tool result: %w", messageIndex, err)
+				}
+				value.ToolResult.ResultJson = normalized
+			default:
+				return fmt.Errorf("%w: message %d part %d", constants.ErrInferenceMessageInvalid, messageIndex, partIndex)
+			}
+		}
+	}
+	for toolIndex, tool := range req.Tools {
+		if tool == nil || tool.GetName() == "" {
+			return fmt.Errorf("%w: tool %d", constants.ErrInferenceToolSchemaInvalid, toolIndex)
+		}
+		if err := validateInferenceToolSchema(tool.GetJsonSchema()); err != nil {
+			return fmt.Errorf("%w: tool %d: %w", constants.ErrInferenceToolSchemaInvalid, toolIndex, err)
+		}
+	}
+	return nil
+}
+
+func validateInferenceToolSchema(value string) error {
+	if _, err := normalizeCanonicalJSON(value, true, nil); err != nil {
+		return err
+	}
+	if _, err := jsonschema.NewCompiler().Compile([]byte(value)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validInferenceMessageRole(role operatorv1.InferenceMessageRole) bool {
+	switch role {
+	case operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_SYSTEM,
+		operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+		operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT,
+		operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL:
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeCanonicalJSON(value string, requireObject bool, scrubText func(string) string) (string, error) {
+	canonical, err := canonicalizeJSON(value, requireObject, nil)
+	if err != nil {
+		return "", err
+	}
+	if canonical != value {
+		return "", constants.ErrInferenceJSONNonCanonical
+	}
+	if scrubText == nil {
+		return canonical, nil
+	}
+	return canonicalizeJSON(value, requireObject, scrubText)
+}
+
+func canonicalizeJSON(value string, requireObject bool, scrubText func(string) string) (string, error) {
+	if value == "" {
+		return "", constants.ErrInferenceJSONInvalid
+	}
+	acceptAll := true
+	if failures := jsonschema.NewValidator().Validate(&jsonschema.Schema{Boolean: &acceptAll}, []byte(value)); len(failures) > 0 {
+		return "", fmt.Errorf("%w: %s", constants.ErrInferenceJSONInvalid, failures.Error())
+	}
+	canonical, err := normalizeJSONValue(json.RawMessage(value), scrubText)
+	if err != nil {
+		return "", err
+	}
+	if requireObject && (len(canonical) == 0 || canonical[0] != '{') {
+		return "", constants.ErrInferenceJSONInvalid
+	}
+	return string(canonical), nil
+}
+
+func normalizeJSONValue(raw json.RawMessage, scrubText func(string) string) (json.RawMessage, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return nil, constants.ErrInferenceJSONInvalid
+	}
+	switch trimmed[0] {
+	case '{':
+		values := map[string]json.RawMessage{}
+		if err := json.Unmarshal(trimmed, &values); err != nil {
+			return nil, fmt.Errorf("%w: %v", constants.ErrInferenceJSONInvalid, err)
+		}
+		for key, value := range values {
+			normalized, err := normalizeJSONValue(value, scrubText)
+			if err != nil {
+				return nil, err
+			}
+			values[key] = normalized
+		}
+		encoded, err := json.Marshal(values)
+		if err != nil {
+			return nil, fmt.Errorf("normalize JSON object: %w", err)
+		}
+		return encoded, nil
+	case '[':
+		var values []json.RawMessage
+		if err := json.Unmarshal(trimmed, &values); err != nil {
+			return nil, fmt.Errorf("%w: %v", constants.ErrInferenceJSONInvalid, err)
+		}
+		for i, value := range values {
+			normalized, err := normalizeJSONValue(value, scrubText)
+			if err != nil {
+				return nil, err
+			}
+			values[i] = normalized
+		}
+		encoded, err := json.Marshal(values)
+		if err != nil {
+			return nil, fmt.Errorf("normalize JSON array: %w", err)
+		}
+		return encoded, nil
+	case '"':
+		var value string
+		if err := json.Unmarshal(trimmed, &value); err != nil {
+			return nil, fmt.Errorf("%w: %v", constants.ErrInferenceJSONInvalid, err)
+		}
+		if scrubText != nil {
+			value = scrubText(value)
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, fmt.Errorf("normalize JSON string: %w", err)
+		}
+		return encoded, nil
+	default:
+		if !json.Valid(trimmed) {
+			return nil, constants.ErrInferenceJSONInvalid
+		}
+		return append(json.RawMessage(nil), trimmed...), nil
+	}
 }
 
 // defaultModelForRole returns the configured default Ollama model name for

@@ -51,9 +51,12 @@ func (failingL2Deliberator) Deliberate(_ context.Context, _ []byte) ([]byte, err
 func inferencePayload(t *testing.T) []byte {
 	t.Helper()
 	msg := &operatorv1.InferenceRequested{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Model:  "gemma3:4b",
-		Prompt: "summarize the doctrine",
+		Role:  operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Model: "gemma3:4b",
+		Messages: []*operatorv1.InferenceMessage{{
+			Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+			Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: "summarize the doctrine"}}},
+		}},
 	}
 	b, err := proto.Marshal(msg)
 	require.NoError(t, err)

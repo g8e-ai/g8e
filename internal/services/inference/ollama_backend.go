@@ -21,6 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // ProviderRequestTimeout is the single request deadline authority for calls
@@ -89,14 +90,36 @@ func NewOllamaBackend(endpoint string, logger *slog.Logger) (*OllamaBackend, err
 type ollamaChatRequest struct {
 	Model     string              `json:"model"`
 	Messages  []ollamaChatMessage `json:"messages"`
+	Tools     []ollamaTool        `json:"tools,omitempty"`
 	Stream    bool                `json:"stream"`
 	Options   ollamaChatOptions   `json:"options,omitempty"`
 	KeepAlive string              `json:"keep_alive,omitempty"`
 }
 
 type ollamaChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string           `json:"role"`
+	Content    string           `json:"content"`
+	ToolCalls  []ollamaToolCall `json:"tool_calls,omitempty"`
+	ToolName   string           `json:"tool_name,omitempty"`
+	ToolCallID string           `json:"tool_call_id,omitempty"`
+}
+
+type ollamaTool struct {
+	Type     string             `json:"type"`
+	Function ollamaToolFunction `json:"function"`
+}
+
+type ollamaToolCall struct {
+	ID       string             `json:"id,omitempty"`
+	Type     string             `json:"type,omitempty"`
+	Function ollamaToolFunction `json:"function"`
+}
+
+type ollamaToolFunction struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Arguments   json.RawMessage `json:"arguments,omitempty"`
+	Parameters  json.RawMessage `json:"parameters,omitempty"`
 }
 
 type ollamaChatOptions struct {
@@ -131,12 +154,19 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		return nil, fmt.Errorf("ollama_backend: generate: %w", constants.ErrInferenceModelRefInvalid)
 	}
 
+	messages, err := inferenceMessagesToOllama(req.Messages)
+	if err != nil {
+		return nil, fmt.Errorf("ollama_backend: generate: messages: %w", err)
+	}
+	tools, err := inferenceToolsToOllama(req.Tools)
+	if err != nil {
+		return nil, fmt.Errorf("ollama_backend: generate: tools: %w", err)
+	}
 	chatReq := ollamaChatRequest{
-		Model: req.Model,
-		Messages: []ollamaChatMessage{
-			{Role: "user", Content: req.Prompt},
-		},
-		Stream: false,
+		Model:    req.Model,
+		Messages: messages,
+		Tools:    tools,
+		Stream:   false,
 		Options: ollamaChatOptions{
 			Temperature: req.Temperature,
 			NumPredict:  req.MaxTokens,
@@ -186,14 +216,143 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 		finishReason = "stop"
 	}
 
+	parts, err := ollamaResponseParts(chatResp.Message)
+	if err != nil {
+		return nil, fmt.Errorf("ollama_backend: generate: response parts: %w", err)
+	}
 	return &models.GenerateResponse{
-		Text:             chatResp.Message.Content,
+		Parts:            parts,
 		PromptTokens:     chatResp.PromptEvalCount,
 		CompletionTokens: chatResp.EvalCount,
 		TotalTokens:      chatResp.PromptEvalCount + chatResp.EvalCount,
 		FinishReason:     finishReason,
 		Model:            chatResp.Model,
 	}, nil
+}
+
+func inferenceMessagesToOllama(messages []*operatorv1.InferenceMessage) ([]ollamaChatMessage, error) {
+	result := make([]ollamaChatMessage, 0, len(messages))
+	for messageIndex, message := range messages {
+		if message == nil || len(message.GetParts()) == 0 {
+			return nil, fmt.Errorf("%w: message %d", constants.ErrInferenceMessageInvalid, messageIndex)
+		}
+		role, err := inferenceMessageRoleToOllama(message.GetRole())
+		if err != nil {
+			return nil, fmt.Errorf("message %d: %w", messageIndex, err)
+		}
+		mapped := ollamaChatMessage{Role: role}
+		for partIndex, part := range message.GetParts() {
+			if part == nil || part.GetPart() == nil {
+				return nil, fmt.Errorf("%w: message %d part %d", constants.ErrInferenceMessageInvalid, messageIndex, partIndex)
+			}
+			switch value := part.GetPart().(type) {
+			case *operatorv1.InferenceMessagePart_Text:
+				if message.GetRole() == operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL {
+					return nil, fmt.Errorf("%w: message %d text part", constants.ErrInferenceMessageInvalid, messageIndex)
+				}
+				mapped.Content += value.Text
+			case *operatorv1.InferenceMessagePart_ToolCall:
+				if message.GetRole() != operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT || value.ToolCall == nil || value.ToolCall.GetName() == "" {
+					return nil, fmt.Errorf("%w: message %d tool call", constants.ErrInferenceMessageInvalid, messageIndex)
+				}
+				arguments, err := canonicalizeJSON(value.ToolCall.GetArgumentsJson(), true, nil)
+				if err != nil {
+					return nil, fmt.Errorf("%w: message %d tool call arguments", constants.ErrInferenceMessageInvalid, messageIndex)
+				}
+				mapped.ToolCalls = append(mapped.ToolCalls, ollamaToolCall{
+					ID:   value.ToolCall.GetCallId(),
+					Type: "function",
+					Function: ollamaToolFunction{
+						Name:      value.ToolCall.GetName(),
+						Arguments: json.RawMessage(arguments),
+					},
+				})
+			case *operatorv1.InferenceMessagePart_ToolResult:
+				if message.GetRole() != operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL || value.ToolResult == nil || value.ToolResult.GetName() == "" {
+					return nil, fmt.Errorf("%w: message %d tool result", constants.ErrInferenceMessageInvalid, messageIndex)
+				}
+				resultJSON, err := canonicalizeJSON(value.ToolResult.GetResultJson(), false, nil)
+				if err != nil {
+					return nil, fmt.Errorf("%w: message %d tool result JSON", constants.ErrInferenceMessageInvalid, messageIndex)
+				}
+				result = append(result, ollamaChatMessage{
+					Role:       "tool",
+					Content:    resultJSON,
+					ToolName:   value.ToolResult.GetName(),
+					ToolCallID: value.ToolResult.GetCallId(),
+				})
+			default:
+				return nil, fmt.Errorf("%w: message %d part %d", constants.ErrInferenceMessageInvalid, messageIndex, partIndex)
+			}
+		}
+		if message.GetRole() != operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL {
+			result = append(result, mapped)
+		}
+	}
+	return result, nil
+}
+
+func inferenceMessageRoleToOllama(role operatorv1.InferenceMessageRole) (string, error) {
+	switch role {
+	case operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_SYSTEM:
+		return "system", nil
+	case operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER:
+		return "user", nil
+	case operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT:
+		return "assistant", nil
+	case operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL:
+		return "tool", nil
+	default:
+		return "", constants.ErrInferenceMessageInvalid
+	}
+}
+
+func inferenceToolsToOllama(tools []*operatorv1.InferenceToolDeclaration) ([]ollamaTool, error) {
+	result := make([]ollamaTool, 0, len(tools))
+	for toolIndex, tool := range tools {
+		if tool == nil || tool.GetName() == "" {
+			return nil, fmt.Errorf("%w: tool %d", constants.ErrInferenceToolSchemaInvalid, toolIndex)
+		}
+		if err := validateInferenceToolSchema(tool.GetJsonSchema()); err != nil {
+			return nil, fmt.Errorf("%w: tool %d: %w", constants.ErrInferenceToolSchemaInvalid, toolIndex, err)
+		}
+		result = append(result, ollamaTool{
+			Type: "function",
+			Function: ollamaToolFunction{
+				Name:        tool.GetName(),
+				Description: tool.GetDescription(),
+				Parameters:  json.RawMessage(tool.GetJsonSchema()),
+			},
+		})
+	}
+	return result, nil
+}
+
+func ollamaResponseParts(message ollamaChatMessage) ([]*operatorv1.InferenceResponsePart, error) {
+	parts := make([]*operatorv1.InferenceResponsePart, 0, len(message.ToolCalls)+1)
+	if message.Content != "" {
+		parts = append(parts, &operatorv1.InferenceResponsePart{Part: &operatorv1.InferenceResponsePart_Text{Text: message.Content}})
+	}
+	for callIndex, call := range message.ToolCalls {
+		if call.Function.Name == "" || len(call.Function.Arguments) == 0 {
+			return nil, fmt.Errorf("%w: tool call %d", constants.ErrInferenceProviderResponseInvalid, callIndex)
+		}
+		arguments, err := canonicalizeJSON(string(call.Function.Arguments), true, nil)
+		if err != nil {
+			return nil, fmt.Errorf("%w: tool call %d arguments", constants.ErrInferenceProviderResponseInvalid, callIndex)
+		}
+		parts = append(parts, &operatorv1.InferenceResponsePart{
+			Part: &operatorv1.InferenceResponsePart_ToolCall{ToolCall: &operatorv1.InferenceToolCall{
+				CallId:        call.ID,
+				Name:          call.Function.Name,
+				ArgumentsJson: arguments,
+			}},
+		})
+	}
+	if len(parts) == 0 {
+		return nil, constants.ErrInferenceProviderResponseInvalid
+	}
+	return parts, nil
 }
 
 // Status queries Ollama's /api/tags endpoint to verify the daemon is

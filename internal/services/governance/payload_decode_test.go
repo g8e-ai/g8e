@@ -27,9 +27,12 @@ func TestDecodePayloadForAction_Inference(t *testing.T) {
 	t.Parallel()
 
 	infReq := &operatorv1.InferenceRequested{
-		Role:        operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Model:       "gemma3:4b",
-		Prompt:      "summarize the doctrine",
+		Role:  operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Model: "gemma3:4b",
+		Messages: []*operatorv1.InferenceMessage{{
+			Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+			Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: "summarize the doctrine"}}},
+		}},
 		Temperature: 0.7,
 		MaxTokens:   256,
 		KeepAlive:   "5m",
@@ -43,12 +46,7 @@ func TestDecodePayloadForAction_Inference(t *testing.T) {
 
 	got, ok := decoded.(*operatorv1.InferenceRequested)
 	require.True(t, ok, "decoded payload must be *operatorv1.InferenceRequested, got %T", decoded)
-	assert.Equal(t, infReq.Role, got.Role)
-	assert.Equal(t, infReq.Model, got.Model)
-	assert.Equal(t, infReq.Prompt, got.Prompt)
-	assert.Equal(t, infReq.Temperature, got.Temperature)
-	assert.Equal(t, infReq.MaxTokens, got.MaxTokens)
-	assert.Equal(t, infReq.KeepAlive, got.KeepAlive)
+	assert.True(t, proto.Equal(infReq, got))
 }
 
 // TestDecodePayloadForAction_Inference_MalformedFails verifies that a malformed

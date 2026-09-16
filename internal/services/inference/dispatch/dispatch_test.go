@@ -66,7 +66,10 @@ func capableOp(sessionID string) models.OperatorDocumentGo {
 
 func successDispatchResult(t *testing.T) *CommandDispatchResult {
 	t.Helper()
-	payload, err := proto.Marshal(&operatorv1.InferenceResult{Text: "ok", Model: "gemma3:4b"})
+	payload, err := proto.Marshal(&operatorv1.InferenceResult{
+		Parts: []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "ok"}}},
+		Model: "gemma3:4b",
+	})
 	require.NoError(t, err)
 	return &CommandDispatchResult{
 		TransactionID: "tx-1",
@@ -75,10 +78,19 @@ func successDispatchResult(t *testing.T) *CommandDispatchResult {
 	}
 }
 
+func baseMessages() []*operatorv1.InferenceMessage {
+	return []*operatorv1.InferenceMessage{{
+		Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+		Parts: []*operatorv1.InferenceMessagePart{{
+			Part: &operatorv1.InferenceMessagePart_Text{Text: "hello"},
+		}},
+	}}
+}
+
 func baseRequest() DispatchInferenceRequest {
 	return DispatchInferenceRequest{
 		Role:            models.InferenceModelRolePrimary,
-		Prompt:          "hello",
+		Messages:        baseMessages(),
 		RequestorUserID: "user-1",
 	}
 }
@@ -274,7 +286,10 @@ func TestDispatchInference_MalformedResultPayloadFailsClosed(t *testing.T) {
 
 func TestDispatchInference_SuccessReturnsResultAndReceipt(t *testing.T) {
 	receipt := &operatorv1.ActionReceipt{TransactionId: "tx-9", Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED}
-	resultPayload, err := proto.Marshal(&operatorv1.InferenceResult{Text: "answer", Model: "gemma3:4b"})
+	resultPayload, err := proto.Marshal(&operatorv1.InferenceResult{
+		Parts: []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "answer"}}},
+		Model: "gemma3:4b",
+	})
 	require.NoError(t, err)
 	dispatcher := &stubCommandDispatcher{result: &CommandDispatchResult{
 		TransactionID: "tx-9",
@@ -292,7 +307,8 @@ func TestDispatchInference_SuccessReturnsResultAndReceipt(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "tx-9", out.TransactionID)
 	require.NotNil(t, out.Result)
-	assert.Equal(t, "answer", out.Result.GetText())
+	require.Len(t, out.Result.GetParts(), 1)
+	assert.Equal(t, "answer", out.Result.GetParts()[0].GetText())
 	assert.Same(t, receipt, out.Receipt)
 	assert.Equal(t, "case-1", dispatcher.lastReq.CaseID)
 	assert.Equal(t, "spiffe://g8e.local/app/g8ee", dispatcher.lastReq.ActingAppID)
@@ -310,15 +326,24 @@ func TestDispatchInference_PayloadCarriesRequestFields(t *testing.T) {
 	req.Temperature = 0.2
 	req.MaxTokens = 64
 	req.KeepAlive = "5m"
+	req.Tools = []*operatorv1.InferenceToolDeclaration{{
+		Name:        "inspect",
+		Description: "Inspect a target",
+		JsonSchema:  `{"properties":{"path":{"type":"string"}},"type":"object"}`,
+	}}
 	_, err := svc.DispatchInference(context.Background(), req)
 	require.NoError(t, err)
 
 	infReq := &operatorv1.InferenceRequested{}
 	require.NoError(t, proto.Unmarshal(dispatcher.lastReq.Payload, infReq))
-	assert.Equal(t, operatorv1.ModelRole_MODEL_ROLE_LITE, infReq.GetRole())
-	assert.Equal(t, "qwen3:1.5b", infReq.GetModel())
-	assert.Equal(t, "hello", infReq.GetPrompt())
-	assert.InDelta(t, 0.2, infReq.GetTemperature(), 0.0001)
-	assert.Equal(t, int32(64), infReq.GetMaxTokens())
-	assert.Equal(t, "5m", infReq.GetKeepAlive())
+	expected := &operatorv1.InferenceRequested{
+		Role:        operatorv1.ModelRole_MODEL_ROLE_LITE,
+		Model:       "qwen3:1.5b",
+		Temperature: 0.2,
+		MaxTokens:   64,
+		KeepAlive:   "5m",
+		Messages:    baseMessages(),
+		Tools:       req.Tools,
+	}
+	assert.True(t, proto.Equal(expected, infReq), "forwarded governed payload must preserve every ordered message and tool field")
 }

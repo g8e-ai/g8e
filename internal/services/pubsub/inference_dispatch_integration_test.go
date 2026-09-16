@@ -56,7 +56,10 @@ func (s *stubInferenceBackend) Generate(_ context.Context, req models.GenerateRe
 	if s.resp != nil {
 		return s.resp, nil
 	}
-	return &models.GenerateResponse{Text: "stub inference response", Model: req.Model, FinishReason: "stop"}, nil
+	return &models.GenerateResponse{
+		Parts: []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "stub inference response"}}},
+		Model: req.Model, FinishReason: "stop",
+	}, nil
 }
 
 func (s *stubInferenceBackend) Status(_ context.Context) (*models.BackendStatus, error) {
@@ -113,7 +116,7 @@ func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stub
 
 	backend := &stubInferenceBackend{
 		resp: &models.GenerateResponse{
-			Text:             "governed inference output",
+			Parts:            []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "governed inference output"}}},
 			PromptTokens:     12,
 			CompletionTokens: 8,
 			TotalTokens:      20,
@@ -171,9 +174,12 @@ func buildInferenceEnvelope(t *testing.T, role operatorv1.ModelRole, model, prom
 	t.Helper()
 
 	infReq := &operatorv1.InferenceRequested{
-		Role:   role,
-		Model:  model,
-		Prompt: prompt,
+		Role:  role,
+		Model: model,
+		Messages: []*operatorv1.InferenceMessage{{
+			Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+			Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: prompt}}},
+		}},
 	}
 	payloadBytes, err := proto.Marshal(infReq)
 	require.NoError(t, err)
@@ -231,7 +237,8 @@ func TestInferenceDispatch_ProcessEnvelope_PrimaryRole_PersistsReceiptAndAudit(t
 
 	require.True(t, backend.called, "stub backend must be invoked by the inference handler")
 	assert.Equal(t, "gemma3:4b", backend.lastReq.Model, "backend must receive the primary model name")
-	assert.Equal(t, "What is 2+2?", backend.lastReq.Prompt, "backend must receive the prompt text")
+	require.Len(t, backend.lastReq.Messages, 1)
+	assert.Equal(t, "What is 2+2?", backend.lastReq.Messages[0].GetParts()[0].GetText(), "backend must receive the user message text")
 
 	// The signed receipt's result_summary is the canonical digest of the
 	// complete InferenceResult — not the (possibly truncated) text.
@@ -239,7 +246,8 @@ func TestInferenceDispatch_ProcessEnvelope_PrimaryRole_PersistsReceiptAndAudit(t
 	completion := results.inferenceCompletions[0]
 	require.NotNil(t, completion.Receipt, "completion must carry the final signed receipt")
 	require.NotNil(t, completion.Result, "completed receipt must carry the full result")
-	assert.Equal(t, "governed inference output", completion.Result.Text)
+	require.Len(t, completion.Result.GetParts(), 1)
+	assert.Equal(t, "governed inference output", completion.Result.GetParts()[0].GetText())
 	assert.Equal(t, receipt.TransactionId, completion.Receipt.TransactionId, "completion receipt must correlate to the executed transaction")
 	assert.Equal(t, receipt.Signature, completion.Receipt.Signature, "completion receipt must be the signed final receipt")
 

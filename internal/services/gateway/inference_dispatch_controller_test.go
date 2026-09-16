@@ -103,10 +103,19 @@ func marshalInferenceDispatchRequest(t *testing.T, req *operatorv1.InferenceDisp
 	return body
 }
 
+func inferenceTextMessages(text string) []*operatorv1.InferenceMessage {
+	return []*operatorv1.InferenceMessage{{
+		Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+		Parts: []*operatorv1.InferenceMessagePart{{
+			Part: &operatorv1.InferenceMessagePart_Text{Text: text},
+		}},
+	}}
+}
+
 func successDispatchResult(t *testing.T) *dispatch.CommandDispatchResult {
 	t.Helper()
 	result := &operatorv1.InferenceResult{
-		Text:             "generated output",
+		Parts:            []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "generated output"}}},
 		PromptTokens:     7,
 		CompletionTokens: 11,
 		TotalTokens:      18,
@@ -146,8 +155,8 @@ func TestInferenceDispatchController_MissingAppIdentity(t *testing.T) {
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, &stubInferenceOperatorLister{}, 1024)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt: "hello",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: inferenceTextMessages("hello"),
 	})
 	req := inferenceDispatchHTTPRequest(t, body, "", "user-001")
 	rr := httptest.NewRecorder()
@@ -162,8 +171,8 @@ func TestInferenceDispatchController_MissingUserIdentity(t *testing.T) {
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, &stubInferenceOperatorLister{}, 1024)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt: "hello",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: inferenceTextMessages("hello"),
 	})
 	req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "")
 	rr := httptest.NewRecorder()
@@ -186,7 +195,7 @@ func TestInferenceDispatchController_MalformedJSON(t *testing.T) {
 func TestInferenceDispatchController_UnknownFieldRejected(t *testing.T) {
 	ctrl := newInferenceDispatchControllerForTest(t, &stubInferenceCommandDispatcher{}, &stubInferenceOperatorLister{}, 1024)
 
-	req := inferenceDispatchHTTPRequest(t, []byte(`{"role":"MODEL_ROLE_PRIMARY","prompt":"hi","not_a_field":1}`), "ensemble-app", "user-001")
+	req := inferenceDispatchHTTPRequest(t, []byte(`{"role":"MODEL_ROLE_PRIMARY","messages":[{"role":"INFERENCE_MESSAGE_ROLE_USER","parts":[{"text":"hi"}]}],"not_a_field":1}`), "ensemble-app", "user-001")
 	rr := httptest.NewRecorder()
 	ctrl.HandleDispatch(rr, req)
 
@@ -196,7 +205,7 @@ func TestInferenceDispatchController_UnknownFieldRejected(t *testing.T) {
 func TestInferenceDispatchController_TrailingJSONRejected(t *testing.T) {
 	ctrl := newInferenceDispatchControllerForTest(t, &stubInferenceCommandDispatcher{}, &stubInferenceOperatorLister{}, 1024)
 
-	req := inferenceDispatchHTTPRequest(t, []byte(`{"role":"MODEL_ROLE_PRIMARY","prompt":"hi"}{"extra":true}`), "ensemble-app", "user-001")
+	req := inferenceDispatchHTTPRequest(t, []byte(`{"role":"MODEL_ROLE_PRIMARY","messages":[{"role":"INFERENCE_MESSAGE_ROLE_USER","parts":[{"text":"hi"}]}]}{"extra":true}`), "ensemble-app", "user-001")
 	rr := httptest.NewRecorder()
 	ctrl.HandleDispatch(rr, req)
 
@@ -207,8 +216,8 @@ func TestInferenceDispatchController_OversizedBodyRejected(t *testing.T) {
 	ctrl := newInferenceDispatchControllerForTest(t, &stubInferenceCommandDispatcher{}, &stubInferenceOperatorLister{}, 64)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt: strings.Repeat("x", 256),
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: inferenceTextMessages(strings.Repeat("x", 256)),
 	})
 	req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
 	rr := httptest.NewRecorder()
@@ -217,7 +226,7 @@ func TestInferenceDispatchController_OversizedBodyRejected(t *testing.T) {
 	assert.Equal(t, http.StatusRequestEntityTooLarge, rr.Code, "oversized bodies map to 413 like the auth middleware")
 }
 
-func TestInferenceDispatchController_EmptyPromptRejected(t *testing.T) {
+func TestInferenceDispatchController_EmptyMessagesRejected(t *testing.T) {
 	dispatcher := &stubInferenceCommandDispatcher{}
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}, 1024)
 
@@ -237,9 +246,9 @@ func TestInferenceDispatchController_InvalidRoleRejected(t *testing.T) {
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}, 1024)
 
 	for _, body := range [][]byte{
-		marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{Prompt: "hi"}),
-		[]byte(`{"role":99,"prompt":"hi"}`),
-		[]byte(`{"role":"MODEL_ROLE_UNSPECIFIED","prompt":"hi"}`),
+		marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{Messages: inferenceTextMessages("hi")}),
+		[]byte(`{"role":99,"messages":[{"role":"INFERENCE_MESSAGE_ROLE_USER","parts":[{"text":"hi"}]}]}`),
+		[]byte(`{"role":"MODEL_ROLE_UNSPECIFIED","messages":[{"role":"INFERENCE_MESSAGE_ROLE_USER","parts":[{"text":"hi"}]}]}`),
 	} {
 		req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
 		rr := httptest.NewRecorder()
@@ -255,7 +264,7 @@ func TestInferenceDispatchController_ActingAppIDMismatchRejected(t *testing.T) {
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
 		Role:        operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt:      "hi",
+		Messages:    inferenceTextMessages("hi"),
 		ActingAppId: "other-app",
 	})
 	req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
@@ -271,16 +280,49 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
-	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
-		Role:                    operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
-		Prompt:                  "summarize this",
-		Model:                   "gemma3:4b",
+	dispatchRequest := &operatorv1.InferenceDispatchRequest{
+		Role:  operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
+		Model: "gemma3:4b",
+		Messages: []*operatorv1.InferenceMessage{
+			{
+				Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_SYSTEM,
+				Parts: []*operatorv1.InferenceMessagePart{{
+					Part: &operatorv1.InferenceMessagePart_Text{Text: "use tools precisely"},
+				}},
+			},
+			{
+				Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT,
+				Parts: []*operatorv1.InferenceMessagePart{{
+					Part: &operatorv1.InferenceMessagePart_ToolCall{ToolCall: &operatorv1.InferenceToolCall{
+						CallId:        "call-1",
+						Name:          "inspect",
+						ArgumentsJson: `{"path":"target.txt"}`,
+					}},
+				}},
+			},
+			{
+				Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL,
+				Parts: []*operatorv1.InferenceMessagePart{{
+					Part: &operatorv1.InferenceMessagePart_ToolResult{ToolResult: &operatorv1.InferenceToolResult{
+						CallId:     "call-1",
+						Name:       "inspect",
+						ResultJson: `{"ok":true}`,
+					}},
+				}},
+			},
+		},
+		Tools: []*operatorv1.InferenceToolDeclaration{{
+			Name:        "inspect",
+			Description: "Inspect a target",
+			JsonSchema:  `{"properties":{"path":{"type":"string"}},"type":"object"}`,
+		}},
 		CaseId:                  "case-1",
 		InvestigationId:         "inv-1",
 		TaskId:                  "task-1",
 		WebSessionId:            "web-1",
 		TargetOperatorSessionId: "sess-inf-1",
-	})
+	}
+	body := marshalInferenceDispatchRequest(t, dispatchRequest)
 	req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
 	rr := httptest.NewRecorder()
 	ctrl.HandleDispatch(rr, req)
@@ -293,7 +335,8 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 	require.NoError(t, protojson.Unmarshal(rr.Body.Bytes(), &resp))
 	assert.Equal(t, "tx-inference-001", resp.TransactionId)
 	require.NotNil(t, resp.Result)
-	assert.Equal(t, "generated output", resp.Result.Text)
+	require.Len(t, resp.Result.Parts, 1)
+	assert.Equal(t, "generated output", resp.Result.Parts[0].GetText())
 	require.NotNil(t, resp.Receipt, "the verified final signed receipt must be returned to the caller")
 	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, resp.Receipt.Status)
 
@@ -313,9 +356,13 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 
 	var forwarded operatorv1.InferenceRequested
 	require.NoError(t, proto.Unmarshal(dispatcher.lastReq.Payload, &forwarded))
-	assert.Equal(t, operatorv1.ModelRole_MODEL_ROLE_ASSISTANT, forwarded.Role)
-	assert.Equal(t, "summarize this", forwarded.Prompt)
-	assert.Equal(t, "gemma3:4b", forwarded.Model)
+	expected := &operatorv1.InferenceRequested{
+		Role:     dispatchRequest.Role,
+		Model:    dispatchRequest.Model,
+		Messages: dispatchRequest.Messages,
+		Tools:    dispatchRequest.Tools,
+	}
+	assert.True(t, proto.Equal(expected, &forwarded), "canonical protojson and governed protobuf forwarding must preserve the typed request exactly")
 }
 
 func TestInferenceDispatchController_ActingAppIDDerivedFromIdentity(t *testing.T) {
@@ -328,7 +375,7 @@ func TestInferenceDispatchController_ActingAppIDDerivedFromIdentity(t *testing.T
 	for _, actingAppID := range []string{"", "ensemble-app"} {
 		body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
 			Role:        operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-			Prompt:      "hi",
+			Messages:    inferenceTextMessages("hi"),
 			ActingAppId: actingAppID,
 		})
 		req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
@@ -371,8 +418,8 @@ func TestInferenceDispatchController_ErrorStatusMapping(t *testing.T) {
 			ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
 			body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
-				Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-				Prompt: "hi",
+				Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages: inferenceTextMessages("hi"),
 			})
 			req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
 			rr := httptest.NewRecorder()
@@ -391,8 +438,8 @@ func TestInferenceDispatchController_InternalErrorIsPublicSafe(t *testing.T) {
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt: "hi",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: inferenceTextMessages("hi"),
 	})
 	req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
 	rr := httptest.NewRecorder()
@@ -410,8 +457,8 @@ func TestInferenceDispatchController_ContextCanceledWritesNothing(t *testing.T) 
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 
 	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
-		Role:   operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Prompt: "hi",
+		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages: inferenceTextMessages("hi"),
 	})
 	req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
 	rr := httptest.NewRecorder()

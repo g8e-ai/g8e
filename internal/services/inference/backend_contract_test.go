@@ -37,7 +37,7 @@ func (s *stubBackend) Generate(ctx context.Context, req models.GenerateRequest) 
 	if s.generateResp != nil {
 		return s.generateResp, nil
 	}
-	return &models.GenerateResponse{Text: "stub response", Model: req.Model}, nil
+	return &models.GenerateResponse{Parts: textInferenceResponseParts("stub response"), Model: req.Model}, nil
 }
 
 func (s *stubBackend) Status(ctx context.Context) (*models.BackendStatus, error) {
@@ -54,7 +54,7 @@ func TestBackendContract_GenerateReturnsResponse(t *testing.T) {
 	t.Parallel()
 	backend := &stubBackend{
 		generateResp: &models.GenerateResponse{
-			Text:             "hello world",
+			Parts:            textInferenceResponseParts("hello world"),
 			PromptTokens:     10,
 			CompletionTokens: 5,
 			TotalTokens:      15,
@@ -64,14 +64,15 @@ func TestBackendContract_GenerateReturnsResponse(t *testing.T) {
 	}
 
 	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
-		Role:   models.InferenceModelRolePrimary,
-		Model:  "test-model",
-		Prompt: "hi",
+		Role:     models.InferenceModelRolePrimary,
+		Model:    "test-model",
+		Messages: textInferenceMessages("hi"),
 	})
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	assert.Equal(t, "hello world", resp.Text)
+	require.Len(t, resp.Parts, 1)
+	assert.Equal(t, "hello world", resp.Parts[0].GetText())
 	assert.Equal(t, int32(10), resp.PromptTokens)
 	assert.Equal(t, int32(5), resp.CompletionTokens)
 	assert.Equal(t, int32(15), resp.TotalTokens)

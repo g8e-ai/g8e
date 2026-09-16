@@ -21,6 +21,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,8 +41,18 @@ func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 		require.NoError(t, json.Unmarshal(body, &capturedBody))
 
 		resp := ollamaChatResponse{
-			Model:           capturedBody.Model,
-			Message:         ollamaChatMessage{Role: "assistant", Content: "generated text"},
+			Model: capturedBody.Model,
+			Message: ollamaChatMessage{
+				Role:    "assistant",
+				Content: "generated text",
+				ToolCalls: []ollamaToolCall{{
+					ID: "call-2",
+					Function: ollamaToolFunction{
+						Name:      "inspect",
+						Arguments: json.RawMessage(`{"path":"next.txt"}`),
+					},
+				}},
+			},
 			Done:            true,
 			DoneReason:      "stop",
 			PromptEvalCount: 12,
@@ -55,9 +66,47 @@ func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 	backend, err := NewOllamaBackend(server.URL, logger)
 	require.NoError(t, err)
 	resp, err := backend.Generate(context.Background(), models.GenerateRequest{
-		Role:        models.InferenceModelRolePrimary,
-		Model:       "gemma3:4b",
-		Prompt:      "Hello, world",
+		Role:  models.InferenceModelRolePrimary,
+		Model: "gemma3:4b",
+		Messages: []*operatorv1.InferenceMessage{
+			{
+				Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_SYSTEM,
+				Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: "Be precise"}}},
+			},
+			{
+				Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+				Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: "Hello, world"}}},
+			},
+			{
+				Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT,
+				Parts: []*operatorv1.InferenceMessagePart{
+					{Part: &operatorv1.InferenceMessagePart_Text{Text: "Checking both targets"}},
+					{Part: &operatorv1.InferenceMessagePart_ToolCall{ToolCall: &operatorv1.InferenceToolCall{
+						CallId:        "call-1",
+						Name:          "inspect",
+						ArgumentsJson: `{"path":"target.txt"}`,
+					}}},
+					{Part: &operatorv1.InferenceMessagePart_ToolCall{ToolCall: &operatorv1.InferenceToolCall{
+						CallId:        "call-2",
+						Name:          "inspect",
+						ArgumentsJson: `{"path":"second.txt"}`,
+					}}},
+				},
+			},
+			{
+				Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL,
+				Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_ToolResult{ToolResult: &operatorv1.InferenceToolResult{
+					CallId:     "call-1",
+					Name:       "inspect",
+					ResultJson: `{"ok":true}`,
+				}}}},
+			},
+		},
+		Tools: []*operatorv1.InferenceToolDeclaration{{
+			Name:        "inspect",
+			Description: "Inspect a target",
+			JsonSchema:  `{"properties":{"path":{"type":"string"}},"type":"object"}`,
+		}},
 		Temperature: 0.7,
 		MaxTokens:   100,
 		KeepAlive:   "-1",
@@ -65,7 +114,11 @@ func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	assert.Equal(t, "generated text", resp.Text)
+	require.Len(t, resp.Parts, 2)
+	assert.Equal(t, "generated text", resp.Parts[0].GetText())
+	assert.Equal(t, "call-2", resp.Parts[1].GetToolCall().GetCallId())
+	assert.Equal(t, "inspect", resp.Parts[1].GetToolCall().GetName())
+	assert.Equal(t, `{"path":"next.txt"}`, resp.Parts[1].GetToolCall().GetArgumentsJson())
 	assert.Equal(t, "gemma3:4b", resp.Model)
 	assert.Equal(t, int32(12), resp.PromptTokens)
 	assert.Equal(t, int32(8), resp.CompletionTokens)
@@ -75,12 +128,95 @@ func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 	// Verify the request was constructed correctly
 	assert.Equal(t, "gemma3:4b", capturedBody.Model)
 	assert.False(t, capturedBody.Stream)
-	assert.Len(t, capturedBody.Messages, 1)
-	assert.Equal(t, "user", capturedBody.Messages[0].Role)
-	assert.Equal(t, "Hello, world", capturedBody.Messages[0].Content)
+	require.Len(t, capturedBody.Messages, 4)
+	assert.Equal(t, ollamaChatMessage{Role: "system", Content: "Be precise"}, capturedBody.Messages[0])
+	assert.Equal(t, ollamaChatMessage{Role: "user", Content: "Hello, world"}, capturedBody.Messages[1])
+	require.Len(t, capturedBody.Messages[2].ToolCalls, 2)
+	assert.Equal(t, "assistant", capturedBody.Messages[2].Role)
+	assert.Equal(t, "Checking both targets", capturedBody.Messages[2].Content)
+	assert.Equal(t, "call-1", capturedBody.Messages[2].ToolCalls[0].ID)
+	assert.Equal(t, "inspect", capturedBody.Messages[2].ToolCalls[0].Function.Name)
+	assert.JSONEq(t, `{"path":"target.txt"}`, string(capturedBody.Messages[2].ToolCalls[0].Function.Arguments))
+	assert.Equal(t, "call-2", capturedBody.Messages[2].ToolCalls[1].ID)
+	assert.JSONEq(t, `{"path":"second.txt"}`, string(capturedBody.Messages[2].ToolCalls[1].Function.Arguments))
+	assert.Equal(t, "tool", capturedBody.Messages[3].Role)
+	assert.Equal(t, "call-1", capturedBody.Messages[3].ToolCallID)
+	assert.Equal(t, "inspect", capturedBody.Messages[3].ToolName)
+	assert.Equal(t, `{"ok":true}`, capturedBody.Messages[3].Content)
+	require.Len(t, capturedBody.Tools, 1)
+	assert.Equal(t, "function", capturedBody.Tools[0].Type)
+	assert.Equal(t, "inspect", capturedBody.Tools[0].Function.Name)
+	assert.Equal(t, "Inspect a target", capturedBody.Tools[0].Function.Description)
+	assert.JSONEq(t, `{"properties":{"path":{"type":"string"}},"type":"object"}`, string(capturedBody.Tools[0].Function.Parameters))
 	assert.Equal(t, float32(0.7), capturedBody.Options.Temperature)
 	assert.Equal(t, int32(100), capturedBody.Options.NumPredict)
 	assert.Equal(t, "-1", capturedBody.KeepAlive)
+}
+
+func TestOllamaBackend_GenerateAcceptsToolOnlyResponse(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := ollamaChatResponse{
+			Model: "test-model",
+			Message: ollamaChatMessage{Role: "assistant", ToolCalls: []ollamaToolCall{{
+				ID: "call-1",
+				Function: ollamaToolFunction{
+					Name:      "inspect",
+					Arguments: json.RawMessage(`{"path":"target.txt"}`),
+				},
+			}}},
+			Done:       true,
+			DoneReason: "tool_calls",
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(response))
+	}))
+	defer server.Close()
+	backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+	require.NoError(t, err)
+
+	response, err := backend.Generate(context.Background(), models.GenerateRequest{Model: "test-model"})
+
+	require.NoError(t, err)
+	require.Len(t, response.Parts, 1)
+	assert.Empty(t, response.Parts[0].GetText())
+	assert.Equal(t, "inspect", response.Parts[0].GetToolCall().GetName())
+	assert.Equal(t, "tool_calls", response.FinishReason)
+}
+
+func TestOllamaBackend_GenerateRejectsInvalidToolCallsAndEmptyOutput(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		message      ollamaChatMessage
+		responseBody []byte
+	}{
+		{name: "malformed arguments", responseBody: []byte(`{"model":"test-model","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"inspect","arguments":"{"}}]},"done":true}`)},
+		{name: "duplicate argument key", message: ollamaChatMessage{Role: "assistant", ToolCalls: []ollamaToolCall{{Function: ollamaToolFunction{Name: "inspect", Arguments: json.RawMessage(`{"path":"a","path":"b"}`)}}}}},
+		{name: "non-object arguments", message: ollamaChatMessage{Role: "assistant", ToolCalls: []ollamaToolCall{{Function: ollamaToolFunction{Name: "inspect", Arguments: json.RawMessage(`[]`)}}}}},
+		{name: "missing tool name", message: ollamaChatMessage{Role: "assistant", ToolCalls: []ollamaToolCall{{Function: ollamaToolFunction{Arguments: json.RawMessage(`{}`)}}}}},
+		{name: "empty output", message: ollamaChatMessage{Role: "assistant"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if tt.responseBody != nil {
+					_, err := w.Write(tt.responseBody)
+					require.NoError(t, err)
+					return
+				}
+				require.NoError(t, json.NewEncoder(w).Encode(ollamaChatResponse{Model: "test-model", Message: tt.message, Done: true}))
+			}))
+			defer server.Close()
+			backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+			require.NoError(t, err)
+
+			response, err := backend.Generate(context.Background(), models.GenerateRequest{Model: "test-model"})
+
+			require.Error(t, err)
+			assert.Nil(t, response)
+			assert.ErrorIs(t, err, constants.ErrInferenceProviderResponseInvalid)
+		})
+	}
 }
 
 func TestOllamaBackend_GenerateHandlesAllThreeRoles(t *testing.T) {
@@ -245,7 +381,8 @@ func TestOllamaBackend_GenerateParsesResponseWithoutDoneReason(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, "result", resp.Text)
+	require.Len(t, resp.Parts, 1)
+	assert.Equal(t, "result", resp.Parts[0].GetText())
 	assert.Equal(t, "stop", resp.FinishReason, "empty done_reason with done=true should default to stop")
 }
 

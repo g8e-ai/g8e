@@ -135,7 +135,7 @@ func newInferenceDispatchController(d InferenceDispatchControllerDeps) *Inferenc
 // @Produce		json
 // @Param			request	body		operatorv1.InferenceDispatchRequest	true	"Governed inference dispatch request"
 // @Success		200		{object}	operatorv1.InferenceDispatchResponse	"Verified inference result and final signed receipt"
-// @Failure		400		{string}	string								"Bad Request — malformed body, unknown field, empty prompt, invalid role, or acting_app_id identity mismatch"
+// @Failure		400		{string}	string								"Bad Request — malformed body, unknown field, missing messages, invalid role, or acting_app_id identity mismatch"
 // @Failure		401		{string}	string								"Unauthorized — missing delegated user identity"
 // @Failure		403		{string}	string								"Forbidden — not an app workload, model override denied, or governance rejection"
 // @Failure		404		{string}	string								"Not Found — no inference-capable operator session"
@@ -175,8 +175,8 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 		return
 	}
 
-	if req.GetPrompt() == "" {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrInferencePromptRequired.Error())
+	if len(req.GetMessages()) == 0 {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInferenceMessagesRequired.Error())
 		return
 	}
 	role := models.InferenceModelRoleFromProto(req.GetRole())
@@ -194,7 +194,8 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 
 	result, err := c.dispatchSvc.DispatchInference(r.Context(), dispatch.DispatchInferenceRequest{
 		Role:                    role,
-		Prompt:                  req.GetPrompt(),
+		Messages:                req.GetMessages(),
+		Tools:                   req.GetTools(),
 		Model:                   req.GetModel(),
 		Temperature:             req.GetTemperature(),
 		MaxTokens:               req.GetMaxTokens(),
@@ -249,7 +250,11 @@ func classifyInferenceDispatchError(err error) (int, error) {
 		{constants.ErrInferenceOperatorAmbiguous, http.StatusConflict},
 		{constants.ErrInferenceOperatorNotCapable, http.StatusUnprocessableEntity},
 		{constants.ErrInferenceRoleInvalid, http.StatusBadRequest},
-		{constants.ErrInferencePromptRequired, http.StatusBadRequest},
+		{constants.ErrInferenceMessagesRequired, http.StatusBadRequest},
+		{constants.ErrInferenceMessageInvalid, http.StatusBadRequest},
+		{constants.ErrInferenceJSONInvalid, http.StatusBadRequest},
+		{constants.ErrInferenceJSONNonCanonical, http.StatusBadRequest},
+		{constants.ErrInferenceToolSchemaInvalid, http.StatusBadRequest},
 		{constants.ErrInferenceModelRefInvalid, http.StatusBadRequest},
 		{constants.ErrInferenceModelOverrideDenied, http.StatusForbidden},
 		{constants.ErrInferenceGovernanceRejected, http.StatusForbidden},

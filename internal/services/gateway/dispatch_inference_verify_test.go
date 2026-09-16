@@ -56,7 +56,7 @@ func signTestReceipt(t *testing.T, receipt *operatorv1.ActionReceipt, signerPriv
 func inferenceTestResult(t *testing.T) *operatorv1.InferenceResult {
 	t.Helper()
 	result := &operatorv1.InferenceResult{
-		Text:             "generated output",
+		Parts:            []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "generated output"}}},
 		PromptTokens:     7,
 		CompletionTokens: 11,
 		TotalTokens:      18,
@@ -141,7 +141,7 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		assert.Equal(t, receipt.Signature, out.Receipt.Signature)
 		assert.Equal(t, receipt.ResultSummary, out.Receipt.ResultSummary)
 		require.NotNil(t, out.InferenceResult)
-		assert.Equal(t, result.Text, out.InferenceResult.Text)
+		assert.True(t, proto.Equal(result, out.InferenceResult))
 		assert.Equal(t, result.ResultDigest, out.InferenceResult.ResultDigest)
 	})
 
@@ -271,13 +271,13 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 		assert.ErrorIs(t, err, constants.ErrInferenceCompletionNoResult)
 	})
 
-	t.Run("result text substitution after digest fails closed", func(t *testing.T) {
+	t.Run("result part substitution after digest fails closed", func(t *testing.T) {
 		svc := newInferenceDispatchService(t, &stubSignerStore{keys: map[string]ed25519.PublicKey{keyID: pub}})
 		result := inferenceTestResult(t)
 		receipt := completedReceipt(t, result)
 		// Substitute the text after the digest was computed: the recomputed
 		// digest no longer matches the stamped digest or the receipt summary.
-		result.Text = "substituted output"
+		result.Parts[0].Part = &operatorv1.InferenceResponsePart_Text{Text: "substituted output"}
 		resultEnv := resultEnvelopeFor(t, &operatorv1.InferenceCompletion{Receipt: receipt, Result: result})
 
 		_, err := svc.verifyInferenceCompletion(cmdEnv, resultEnv)

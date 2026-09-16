@@ -62,8 +62,14 @@
     - [InferenceCompletion](#g8e-operator-v1-InferenceCompletion)
     - [InferenceDispatchRequest](#g8e-operator-v1-InferenceDispatchRequest)
     - [InferenceDispatchResponse](#g8e-operator-v1-InferenceDispatchResponse)
+    - [InferenceMessage](#g8e-operator-v1-InferenceMessage)
+    - [InferenceMessagePart](#g8e-operator-v1-InferenceMessagePart)
     - [InferenceRequested](#g8e-operator-v1-InferenceRequested)
+    - [InferenceResponsePart](#g8e-operator-v1-InferenceResponsePart)
     - [InferenceResult](#g8e-operator-v1-InferenceResult)
+    - [InferenceToolCall](#g8e-operator-v1-InferenceToolCall)
+    - [InferenceToolDeclaration](#g8e-operator-v1-InferenceToolDeclaration)
+    - [InferenceToolResult](#g8e-operator-v1-InferenceToolResult)
     - [ListDeviceLinksRequested](#g8e-operator-v1-ListDeviceLinksRequested)
     - [ListDeviceLinksResult](#g8e-operator-v1-ListDeviceLinksResult)
     - [ListOperatorSlotsRequested](#g8e-operator-v1-ListOperatorSlotsRequested)
@@ -121,6 +127,7 @@
     - [DeterministicStageOutcome](#g8e-operator-v1-DeterministicStageOutcome)
     - [ExecutionStatus](#g8e-operator-v1-ExecutionStatus)
     - [HeartbeatType](#g8e-operator-v1-HeartbeatType)
+    - [InferenceMessageRole](#g8e-operator-v1-InferenceMessageRole)
     - [L2Status](#g8e-operator-v1-L2Status)
     - [L3Status](#g8e-operator-v1-L3Status)
     - [ModelRole](#g8e-operator-v1-ModelRole)
@@ -1311,7 +1318,6 @@ inference request to the Inference Node.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | role | [ModelRole](#g8e-operator-v1-ModelRole) |  | Chat-tier role for this request (primary, assistant, lite). |
-| prompt | [string](#string) |  | Prompt text sent to the Inference Node. The node re-scrubs it through its own ScrubbingService before crossing the execution boundary. |
 | model | [string](#string) |  | Optional model override. Accepted only when it matches the Inference Node&#39;s configured model for the role; any other value is rejected as an unauthorized override. |
 | temperature | [float](#float) |  | Generation temperature override (0 = use backend default). |
 | max_tokens | [int32](#int32) |  | Maximum tokens to generate (0 = use backend default). |
@@ -1323,6 +1329,8 @@ inference request to the Inference Node.
 | task_id | [string](#string) |  |  |
 | web_session_id | [string](#string) |  |  |
 | cli_session_id | [string](#string) |  |  |
+| messages | [InferenceMessage](#g8e-operator-v1-InferenceMessage) | repeated | Ordered conversation turns sent to the Inference Node. The node validates and re-scrubs every data-bearing part before crossing the provider boundary. |
+| tools | [InferenceToolDeclaration](#g8e-operator-v1-InferenceToolDeclaration) | repeated | Ordered callable function declarations available to the model. |
 
 
 
@@ -1350,23 +1358,70 @@ the gateway&#39;s standard typed error envelope with a public-safe code.
 
 
 
+<a name="g8e-operator-v1-InferenceMessage"></a>
+
+### InferenceMessage
+InferenceMessage preserves one ordered conversation turn without prompt flattening.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| role | [InferenceMessageRole](#g8e-operator-v1-InferenceMessageRole) |  |  |
+| parts | [InferenceMessagePart](#g8e-operator-v1-InferenceMessagePart) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceMessagePart"></a>
+
+### InferenceMessagePart
+InferenceMessagePart carries exactly one typed part of a conversation turn.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| text | [string](#string) |  |  |
+| tool_call | [InferenceToolCall](#g8e-operator-v1-InferenceToolCall) |  |  |
+| tool_result | [InferenceToolResult](#g8e-operator-v1-InferenceToolResult) |  |  |
+
+
+
+
+
+
 <a name="g8e-operator-v1-InferenceRequested"></a>
 
 ### InferenceRequested
-Payload for g8e.v1.operator.inference.requested. Carries the scrubbed prompt,
-the Ollama model name (which encodes the role), and generation parameters.
-The handler receives only scrubbed, tokenized prompts; it never receives
-raw vault material.
+Payload for g8e.v1.operator.inference.requested. The handler receives an ordered typed conversation, validates and scrubs every data-bearing part, and sends only the normalized request across the provider boundary.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | role | [ModelRole](#g8e-operator-v1-ModelRole) |  | Chat-tier role for this request (primary, assistant, lite). |
 | model | [string](#string) |  | Ollama model name (e.g., &#34;gemma3:4b&#34;). Encodes the role; Ollama routes by model name in the API call. |
-| prompt | [string](#string) |  | Scrubbed prompt text sent to the backend. |
 | temperature | [float](#float) |  | Generation temperature override (0 = use backend default). |
 | max_tokens | [int32](#int32) |  | Maximum tokens to generate (0 = use backend default). |
 | keep_alive | [string](#string) |  | Ollama keep-alive duration override (empty = use config default). |
+| messages | [InferenceMessage](#g8e-operator-v1-InferenceMessage) | repeated | Ordered conversation turns sent to the backend. |
+| tools | [InferenceToolDeclaration](#g8e-operator-v1-InferenceToolDeclaration) | repeated | Ordered callable function declarations available to the model. |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceResponsePart"></a>
+
+### InferenceResponsePart
+InferenceResponsePart carries exactly one typed model response part.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| text | [string](#string) |  |  |
+| tool_call | [InferenceToolCall](#g8e-operator-v1-InferenceToolCall) |  |  |
 
 
 
@@ -1376,20 +1431,69 @@ raw vault material.
 <a name="g8e-operator-v1-InferenceResult"></a>
 
 ### InferenceResult
-InferenceResult carries the generated text, usage metadata, and finish
-reason returned by the backend. The governed envelope carries this for the
-receipt and audit chain.
+InferenceResult carries ordered response parts, usage metadata, and the finish reason returned by the backend. The governed envelope carries this for the receipt and audit chain.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| text | [string](#string) |  | Generated text from the model. |
 | prompt_tokens | [int32](#int32) |  | Number of prompt tokens consumed. |
 | completion_tokens | [int32](#int32) |  | Number of completion tokens generated. |
 | total_tokens | [int32](#int32) |  | Total tokens (prompt &#43; completion). |
 | finish_reason | [string](#string) |  | Finish reason (e.g., &#34;stop&#34;, &#34;length&#34;). |
 | model | [string](#string) |  | Model that produced the result (echoed from the request or resolved by the backend). |
 | result_digest | [string](#string) |  | Canonical digest of the complete result: lowercase hex SHA-256 over the deterministic protobuf serialization of this message with result_digest cleared. The Inference Node computes it at execution time; the signed ActionReceipt&#39;s result_summary binds it, and the User Gateway verifies digest equality before returning success to the caller. |
+| parts | [InferenceResponsePart](#g8e-operator-v1-InferenceResponsePart) | repeated | Ordered model response parts covered by result_digest. |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceToolCall"></a>
+
+### InferenceToolCall
+InferenceToolCall carries a model-requested function invocation. arguments_json is a canonical JSON object.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| call_id | [string](#string) |  |  |
+| name | [string](#string) |  |  |
+| arguments_json | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceToolDeclaration"></a>
+
+### InferenceToolDeclaration
+InferenceToolDeclaration defines one callable function. json_schema is a canonical strict JSON Schema object.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| name | [string](#string) |  |  |
+| description | [string](#string) |  |  |
+| json_schema | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceToolResult"></a>
+
+### InferenceToolResult
+InferenceToolResult carries a tool continuation value. result_json is a canonical JSON value.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| call_id | [string](#string) |  |  |
+| name | [string](#string) |  |  |
+| result_json | [string](#string) |  |  |
 
 
 
@@ -2383,6 +2487,21 @@ Heartbeat type enum
 | HEARTBEAT_TYPE_UNSPECIFIED | 0 |  |
 | HEARTBEAT_TYPE_AUTOMATIC | 1 |  |
 | HEARTBEAT_TYPE_MANUAL | 2 |  |
+
+
+
+<a name="g8e-operator-v1-InferenceMessageRole"></a>
+
+### InferenceMessageRole
+InferenceMessageRole identifies the semantic role of one ordered conversation turn.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| INFERENCE_MESSAGE_ROLE_UNSPECIFIED | 0 |  |
+| INFERENCE_MESSAGE_ROLE_SYSTEM | 1 |  |
+| INFERENCE_MESSAGE_ROLE_USER | 2 |  |
+| INFERENCE_MESSAGE_ROLE_ASSISTANT | 3 |  |
+| INFERENCE_MESSAGE_ROLE_TOOL | 4 |  |
 
 
 

@@ -59,22 +59,20 @@ func InferenceModelRoleFromProto(r operatorv1.ModelRole) InferenceModelRole {
 	}
 }
 
-// GenerateRequest carries the Ollama model name (which encodes the role), the
-// scrubbed prompt, and generation parameters. The handler receives only
-// scrubbed, tokenized prompts; it never receives raw vault material.
+// GenerateRequest carries the Ollama model name, ordered scrubbed conversation, callable tools, and generation parameters.
 type GenerateRequest struct {
 	Role        InferenceModelRole
 	Model       string
-	Prompt      string
+	Messages    []*operatorv1.InferenceMessage
+	Tools       []*operatorv1.InferenceToolDeclaration
 	Temperature float32
 	MaxTokens   int32
 	KeepAlive   string
 }
 
-// GenerateResponse carries the generated text, usage metadata, and finish
-// reason returned by the backend.
+// GenerateResponse carries ordered model response parts, usage metadata, and finish reason returned by the backend.
 type GenerateResponse struct {
-	Text             string
+	Parts            []*operatorv1.InferenceResponsePart
 	PromptTokens     int32
 	CompletionTokens int32
 	TotalTokens      int32
@@ -89,25 +87,34 @@ type BackendStatus struct {
 	Models    []string
 }
 
-// InferenceRequestPayload is the typed governed inference payload decoded from
-// the protobuf InferenceRequested message. The handler decodes this from the
-// governed envelope, scrubs the prompt, and calls Backend.Generate.
+// InferenceRequestPayload is the typed governed inference payload decoded from the protobuf InferenceRequested message.
 type InferenceRequestPayload struct {
 	Role        InferenceModelRole
 	Model       string
-	Prompt      string
+	Messages    []*operatorv1.InferenceMessage
+	Tools       []*operatorv1.InferenceToolDeclaration
 	Temperature float32
 	MaxTokens   int32
 	KeepAlive   string
 }
 
-// FromProtoInferenceRequested decodes a protobuf InferenceRequested message
-// into the typed InferenceRequestPayload.
+// FromProtoInferenceRequested decodes a protobuf InferenceRequested message into an isolated typed payload.
 func FromProtoInferenceRequested(req *operatorv1.InferenceRequested) InferenceRequestPayload {
+	messages := make([]*operatorv1.InferenceMessage, len(req.GetMessages()))
+	for i, message := range req.GetMessages() {
+		messages[i] = &operatorv1.InferenceMessage{}
+		proto.Merge(messages[i], message)
+	}
+	tools := make([]*operatorv1.InferenceToolDeclaration, len(req.GetTools()))
+	for i, tool := range req.GetTools() {
+		tools[i] = &operatorv1.InferenceToolDeclaration{}
+		proto.Merge(tools[i], tool)
+	}
 	return InferenceRequestPayload{
 		Role:        InferenceModelRoleFromProto(req.GetRole()),
 		Model:       req.GetModel(),
-		Prompt:      req.GetPrompt(),
+		Messages:    messages,
+		Tools:       tools,
 		Temperature: req.GetTemperature(),
 		MaxTokens:   req.GetMaxTokens(),
 		KeepAlive:   req.GetKeepAlive(),
@@ -125,7 +132,8 @@ func (p InferenceRequestPayload) ToGenerateRequest(defaultModel string) Generate
 	return GenerateRequest{
 		Role:        p.Role,
 		Model:       model,
-		Prompt:      p.Prompt,
+		Messages:    p.Messages,
+		Tools:       p.Tools,
 		Temperature: p.Temperature,
 		MaxTokens:   p.MaxTokens,
 		KeepAlive:   p.KeepAlive,
@@ -136,7 +144,7 @@ func (p InferenceRequestPayload) ToGenerateRequest(defaultModel string) Generate
 // InferenceResult message for result envelope publishing.
 func (r GenerateResponse) ToProtoInferenceResult() *operatorv1.InferenceResult {
 	return &operatorv1.InferenceResult{
-		Text:             r.Text,
+		Parts:            r.Parts,
 		PromptTokens:     r.PromptTokens,
 		CompletionTokens: r.CompletionTokens,
 		TotalTokens:      r.TotalTokens,

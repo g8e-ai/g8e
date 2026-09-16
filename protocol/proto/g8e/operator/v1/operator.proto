@@ -1167,10 +1167,60 @@ enum ModelRole {
   MODEL_ROLE_LITE = 3;
 }
 
-// Payload for g8e.v1.operator.inference.requested. Carries the scrubbed prompt,
-// the Ollama model name (which encodes the role), and generation parameters.
-// The handler receives only scrubbed, tokenized prompts; it never receives
-// raw vault material.
+// InferenceMessageRole identifies the semantic role of one ordered conversation turn.
+enum InferenceMessageRole {
+  INFERENCE_MESSAGE_ROLE_UNSPECIFIED = 0;
+  INFERENCE_MESSAGE_ROLE_SYSTEM = 1;
+  INFERENCE_MESSAGE_ROLE_USER = 2;
+  INFERENCE_MESSAGE_ROLE_ASSISTANT = 3;
+  INFERENCE_MESSAGE_ROLE_TOOL = 4;
+}
+
+// InferenceToolCall carries a model-requested function invocation. arguments_json is a canonical JSON object.
+message InferenceToolCall {
+  string call_id = 1;
+  string name = 2;
+  string arguments_json = 3;
+}
+
+// InferenceToolResult carries a tool continuation value. result_json is a canonical JSON value.
+message InferenceToolResult {
+  string call_id = 1;
+  string name = 2;
+  string result_json = 3;
+}
+
+// InferenceMessagePart carries exactly one typed part of a conversation turn.
+message InferenceMessagePart {
+  oneof part {
+    string text = 1;
+    InferenceToolCall tool_call = 2;
+    InferenceToolResult tool_result = 3;
+  }
+}
+
+// InferenceMessage preserves one ordered conversation turn without prompt flattening.
+message InferenceMessage {
+  InferenceMessageRole role = 1;
+  repeated InferenceMessagePart parts = 2;
+}
+
+// InferenceToolDeclaration defines one callable function. json_schema is a canonical strict JSON Schema object.
+message InferenceToolDeclaration {
+  string name = 1;
+  string description = 2;
+  string json_schema = 3;
+}
+
+// InferenceResponsePart carries exactly one typed model response part.
+message InferenceResponsePart {
+  oneof part {
+    string text = 1;
+    InferenceToolCall tool_call = 2;
+  }
+}
+
+// Payload for g8e.v1.operator.inference.requested. The handler receives an ordered typed conversation, validates and scrubs every data-bearing part, and sends only the normalized request across the provider boundary.
 message InferenceRequested {
   // Chat-tier role for this request (primary, assistant, lite).
   ModelRole role = 1;
@@ -1179,8 +1229,8 @@ message InferenceRequested {
   // model name in the API call.
   string model = 2;
 
-  // Scrubbed prompt text sent to the backend.
-  string prompt = 3;
+  reserved 3;
+  reserved "prompt";
 
   // Generation temperature override (0 = use backend default).
   float temperature = 4;
@@ -1190,14 +1240,18 @@ message InferenceRequested {
 
   // Ollama keep-alive duration override (empty = use config default).
   string keep_alive = 6;
+
+  // Ordered conversation turns sent to the backend.
+  repeated InferenceMessage messages = 7;
+
+  // Ordered callable function declarations available to the model.
+  repeated InferenceToolDeclaration tools = 8;
 }
 
-// InferenceResult carries the generated text, usage metadata, and finish
-// reason returned by the backend. The governed envelope carries this for the
-// receipt and audit chain.
+// InferenceResult carries ordered response parts, usage metadata, and the finish reason returned by the backend. The governed envelope carries this for the receipt and audit chain.
 message InferenceResult {
-  // Generated text from the model.
-  string text = 1;
+  reserved 1;
+  reserved "text";
 
   // Number of prompt tokens consumed.
   int32 prompt_tokens = 2;
@@ -1221,6 +1275,9 @@ message InferenceResult {
   // ActionReceipt's result_summary binds it, and the User Gateway verifies
   // digest equality before returning success to the caller.
   string result_digest = 7;
+
+  // Ordered model response parts covered by result_digest.
+  repeated InferenceResponsePart parts = 8;
 }
 
 // InferenceCompletion is the protocol-owned completion publication for a
@@ -1247,9 +1304,8 @@ message InferenceDispatchRequest {
   // Chat-tier role for this request (primary, assistant, lite).
   ModelRole role = 1;
 
-  // Prompt text sent to the Inference Node. The node re-scrubs it through
-  // its own ScrubbingService before crossing the execution boundary.
-  string prompt = 2;
+  reserved 2;
+  reserved "prompt";
 
   // Optional model override. Accepted only when it matches the Inference
   // Node's configured model for the role; any other value is rejected as an
@@ -1279,6 +1335,12 @@ message InferenceDispatchRequest {
   string task_id = 11;
   string web_session_id = 12;
   string cli_session_id = 13;
+
+  // Ordered conversation turns sent to the Inference Node. The node validates and re-scrubs every data-bearing part before crossing the provider boundary.
+  repeated InferenceMessage messages = 14;
+
+  // Ordered callable function declarations available to the model.
+  repeated InferenceToolDeclaration tools = 15;
 }
 
 // InferenceDispatchResponse is the protocol-owned success response for

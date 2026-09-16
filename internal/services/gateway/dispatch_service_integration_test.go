@@ -286,7 +286,7 @@ func (b *boundaryInferenceBackend) Generate(ctx context.Context, req models.Gene
 		}
 	}
 	return &models.GenerateResponse{
-		Text:             "governed boundary response",
+		Parts:            []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "governed boundary response"}}},
 		PromptTokens:     4,
 		CompletionTokens: 3,
 		TotalTokens:      7,
@@ -303,6 +303,27 @@ func (b *boundaryInferenceBackend) snapshot() (int, models.GenerateRequest) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.calls, b.lastReq
+}
+
+func boundaryInferenceMessages(text string) []*operatorv1.InferenceMessage {
+	return []*operatorv1.InferenceMessage{{
+		Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+		Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: text}}},
+	}}
+}
+
+func boundaryInferenceText(t *testing.T, messages []*operatorv1.InferenceMessage) string {
+	t.Helper()
+	require.Len(t, messages, 1)
+	require.Len(t, messages[0].GetParts(), 1)
+	return messages[0].GetParts()[0].GetText()
+}
+
+func boundaryInferenceResultText(t *testing.T, result *operatorv1.InferenceResult) string {
+	t.Helper()
+	require.NotNil(t, result)
+	require.Len(t, result.GetParts(), 1)
+	return result.GetParts()[0].GetText()
 }
 
 func seedInferenceOperator(t *testing.T, infra *TestInfrastructure, userID, operatorID, sessionID string, capable bool) {
@@ -330,8 +351,8 @@ type boundaryTamperingResultsService struct {
 
 func (s *boundaryTamperingResultsService) PublishInferenceCompletion(ctx context.Context, envelope *commonv1.GovernanceEnvelope, completion *operatorv1.InferenceCompletion) error {
 	tampered := proto.Clone(completion).(*operatorv1.InferenceCompletion)
-	if tampered.Result != nil {
-		tampered.Result.Text += " tampered"
+	if tampered.Result != nil && len(tampered.Result.GetParts()) > 0 {
+		tampered.Result.GetParts()[0].Part = &operatorv1.InferenceResponsePart_Text{Text: "tampered"}
 	}
 	return s.PubSubResultsService.PublishInferenceCompletion(ctx, envelope, tampered)
 }
@@ -689,7 +710,7 @@ func TestInferenceDispatch_RealBrokerAndOutboundOperator_VerifiesReceiptAuditAnd
 	dispatchSvc := newInferenceBoundaryDispatchService(infra, config.PostureDoctrine)
 	result, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
 		Role:                    models.InferenceModelRolePrimary,
-		Prompt:                  "boundary prompt",
+		Messages:                boundaryInferenceMessages("boundary prompt"),
 		TargetOperatorSessionID: "session-inference-boundary",
 		RequestorUserID:         userID,
 		ActingAppID:             protocol.EnsembleAppID,
@@ -702,7 +723,7 @@ func TestInferenceDispatch_RealBrokerAndOutboundOperator_VerifiesReceiptAuditAnd
 	require.NotNil(t, result)
 	require.NotNil(t, result.Result)
 	require.NotNil(t, result.Receipt)
-	assert.Equal(t, "governed boundary response", result.Result.Text)
+	assert.Equal(t, "governed boundary response", boundaryInferenceResultText(t, result.Result))
 	assert.Equal(t, result.TransactionID, result.Receipt.TransactionId)
 	assert.Equal(t, result.Result.ResultDigest, result.Receipt.ResultSummary)
 	assert.NotEmpty(t, result.Receipt.Signature)
@@ -711,7 +732,7 @@ func TestInferenceDispatch_RealBrokerAndOutboundOperator_VerifiesReceiptAuditAnd
 	calls, request := backend.snapshot()
 	assert.Equal(t, 1, calls)
 	assert.Equal(t, "primary-boundary", request.Model)
-	assert.Equal(t, "boundary prompt", request.Prompt)
+	assert.Equal(t, "boundary prompt", boundaryInferenceText(t, request.Messages))
 
 	receipt, err := infra.AuditStore.GetActionReceipt(result.TransactionID)
 	require.NoError(t, err)
@@ -751,7 +772,7 @@ func TestInferenceDispatch_HTTPRouterAppMTLSIdentityTraversesRealBrokerAndOutbou
 
 	body, err := protojson.Marshal(&operatorv1.InferenceDispatchRequest{
 		Role:                    operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
-		Prompt:                  "HTTP mTLS boundary",
+		Messages:                boundaryInferenceMessages("HTTP mTLS boundary"),
 		TargetOperatorSessionId: sessionID,
 	})
 	require.NoError(t, err)
@@ -765,7 +786,7 @@ func TestInferenceDispatch_HTTPRouterAppMTLSIdentityTraversesRealBrokerAndOutbou
 	require.Equal(t, http.StatusOK, rr.Code, "response body: %s", rr.Body.String())
 	response := &operatorv1.InferenceDispatchResponse{}
 	require.NoError(t, protojson.Unmarshal(rr.Body.Bytes(), response))
-	assert.Equal(t, "governed boundary response", response.Result.Text)
+	assert.Equal(t, "governed boundary response", boundaryInferenceResultText(t, response.Result))
 	assert.Equal(t, response.Result.ResultDigest, response.Receipt.ResultSummary)
 	calls, backendRequest := backend.snapshot()
 	assert.Equal(t, 1, calls)
@@ -795,7 +816,7 @@ func TestInferenceDispatch_RealBrokerAndOutboundOperator_RoutesAllModelRoles(t *
 		t.Run(test.name, func(t *testing.T) {
 			result, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
 				Role:                    test.role,
-				Prompt:                  test.name,
+				Messages:                boundaryInferenceMessages(test.name),
 				TargetOperatorSessionID: sessionID,
 				RequestorUserID:         userID,
 				ActingAppID:             protocol.EnsembleAppID,
@@ -806,7 +827,7 @@ func TestInferenceDispatch_RealBrokerAndOutboundOperator_RoutesAllModelRoles(t *
 			calls, request := backend.snapshot()
 			assert.Equal(t, index+1, calls)
 			assert.Equal(t, test.wantModel, request.Model)
-			assert.Equal(t, test.name, request.Prompt)
+			assert.Equal(t, test.name, boundaryInferenceText(t, request.Messages))
 		})
 	}
 }
@@ -823,7 +844,7 @@ func TestInferenceDispatch_TwoActiveSessions_ExplicitTargetReceivesOnlySelectedR
 
 	result, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
 		Role:                    models.InferenceModelRolePrimary,
-		Prompt:                  "selected operator only",
+		Messages:                boundaryInferenceMessages("selected operator only"),
 		TargetOperatorSessionID: "session-inference-b",
 		RequestorUserID:         userID,
 		ActingAppID:             protocol.EnsembleAppID,
@@ -835,7 +856,7 @@ func TestInferenceDispatch_TwoActiveSessions_ExplicitTargetReceivesOnlySelectedR
 	callsB, requestB := backendB.snapshot()
 	assert.Zero(t, callsA)
 	assert.Equal(t, 1, callsB)
-	assert.Equal(t, "selected operator only", requestB.Prompt)
+	assert.Equal(t, "selected operator only", boundaryInferenceText(t, requestB.Messages))
 }
 
 func TestInferenceDispatch_RealStoresRejectInvalidSessionSelectionBeforeBackendInvocation(t *testing.T) {
@@ -890,7 +911,7 @@ func TestInferenceDispatch_RealStoresRejectInvalidSessionSelectionBeforeBackendI
 			dispatchSvc := newInferenceBoundaryDispatchService(infra, config.PostureDoctrine)
 			_, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
 				Role:                    models.InferenceModelRolePrimary,
-				Prompt:                  "must not reach backend",
+				Messages:                boundaryInferenceMessages("must not reach backend"),
 				TargetOperatorSessionID: test.target,
 				RequestorUserID:         userID,
 				ActingAppID:             protocol.EnsembleAppID,
@@ -934,7 +955,7 @@ func TestInferenceDispatch_CallerCancellationRemovesHandlerWhileRemoteExecutionC
 	go func() {
 		_, err := dispatchSvc.DispatchInference(ctx, inferdispatch.DispatchInferenceRequest{
 			Role:                    models.InferenceModelRolePrimary,
-			Prompt:                  "complete after caller cancellation",
+			Messages:                boundaryInferenceMessages("complete after caller cancellation"),
 			TargetOperatorSessionID: sessionID,
 			RequestorUserID:         userID,
 			ActingAppID:             protocol.EnsembleAppID,
@@ -985,7 +1006,7 @@ func TestInferenceDispatch_ResultMutatedAfterDigestComputationFailsClosed(t *tes
 
 	_, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
 		Role:                    models.InferenceModelRolePrimary,
-		Prompt:                  "digest substitution boundary",
+		Messages:                boundaryInferenceMessages("digest substitution boundary"),
 		TargetOperatorSessionID: sessionID,
 		RequestorUserID:         userID,
 		ActingAppID:             protocol.EnsembleAppID,
@@ -1031,7 +1052,7 @@ func TestInferenceDispatch_ReplayedEnvelopeIsRejectedWithoutSecondBackendInvocat
 
 	result, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
 		Role:                    models.InferenceModelRolePrimary,
-		Prompt:                  "invoke exactly once",
+		Messages:                boundaryInferenceMessages("invoke exactly once"),
 		TargetOperatorSessionID: sessionID,
 		RequestorUserID:         userID,
 		ActingAppID:             protocol.EnsembleAppID,
@@ -1079,7 +1100,7 @@ func TestInferenceDispatch_NotaryPostureRejectsMutationBeforeBackendInvocation(t
 
 	_, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
 		Role:                    models.InferenceModelRolePrimary,
-		Prompt:                  "notary must reject",
+		Messages:                boundaryInferenceMessages("notary must reject"),
 		TargetOperatorSessionID: sessionID,
 		RequestorUserID:         userID,
 		ActingAppID:             protocol.EnsembleAppID,

@@ -30,6 +30,7 @@ from app.models.internal_api import (
 from app.services.infra.internal_http_client import InternalHttpClient
 from g8e.operator.v1.operator_pb2 import (
     EXECUTION_STATUS_COMPLETED,
+    INFERENCE_MESSAGE_ROLE_USER,
     MODEL_ROLE_ASSISTANT,
     RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED,
 )
@@ -49,9 +50,8 @@ def _make_client() -> InternalHttpClient:
 
 
 def _dispatch_request() -> InferenceDispatchRequest:
-    return InferenceDispatchRequest(
+    request = InferenceDispatchRequest(
         role=MODEL_ROLE_ASSISTANT,
-        prompt="summarize this",
         model="gemma3:4b",
         max_tokens=128,
         case_id="case-1",
@@ -60,6 +60,9 @@ def _dispatch_request() -> InferenceDispatchRequest:
         web_session_id="web-1",
         target_operator_session_id="sess-inf-1",
     )
+    message = request.messages.add(role=INFERENCE_MESSAGE_ROLE_USER)
+    message.parts.add(text="summarize this")
+    return request
 
 
 @pytest.mark.asyncio
@@ -70,7 +73,7 @@ async def test_dispatch_inference_posts_protojson_request_and_parses_proto_respo
     response.json.return_value = {
         "transaction_id": "tx-inference-001",
         "result": {
-            "text": "generated output",
+            "parts": [{"text": "generated output"}],
             "prompt_tokens": 7,
             "completion_tokens": 11,
             "total_tokens": 18,
@@ -92,7 +95,7 @@ async def test_dispatch_inference_posts_protojson_request_and_parses_proto_respo
     assert isinstance(result, InferenceDispatchResponse)
     assert result.transaction_id == "tx-inference-001"
     assert result.HasField("result")
-    assert result.result.text == "generated output"
+    assert result.result.parts[0].text == "generated output"
     assert result.result.total_tokens == 18
     assert result.HasField("receipt")
     assert result.receipt.status == EXECUTION_STATUS_COMPLETED
@@ -106,7 +109,6 @@ async def test_dispatch_inference_posts_protojson_request_and_parses_proto_respo
     # strict protojson.
     assert sent == {
         "role": "MODEL_ROLE_ASSISTANT",
-        "prompt": "summarize this",
         "model": "gemma3:4b",
         "max_tokens": 128,
         "target_operator_session_id": "sess-inf-1",
@@ -114,6 +116,12 @@ async def test_dispatch_inference_posts_protojson_request_and_parses_proto_respo
         "investigation_id": "inv-1",
         "task_id": "task-1",
         "web_session_id": "web-1",
+        "messages": [
+            {
+                "role": "INFERENCE_MESSAGE_ROLE_USER",
+                "parts": [{"text": "summarize this"}],
+            }
+        ],
     }
 
 

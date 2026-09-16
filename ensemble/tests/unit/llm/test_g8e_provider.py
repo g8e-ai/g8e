@@ -21,25 +21,37 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.constants import LLMProvider
-from app.errors import ConfigurationError, ModelCapabilityError, NetworkError
+from app.errors import ConfigurationError, ModelCapabilityError, NetworkError, ValidationError
 from app.llm.factory import (
     clear_provider_cache,
     get_llm_provider,
     reset_settings,
     set_internal_http_client,
 )
-from app.llm.llm_dataclasses import Content, InlineData, Part, ToolCall
+from app.llm.llm_dataclasses import (
+    Content,
+    InlineData,
+    Part,
+    ToolCall,
+    ToolDeclaration,
+    ToolGroup,
+    ToolResponse,
+)
 from app.llm.llm_types import (
     AssistantLLMSettings,
     LiteLLMSettings,
     PrimaryLLMSettings,
 )
-from app.llm.providers.g8e import G8EProvider, _contents_to_prompt
+from app.llm.providers.g8e import G8EProvider, _contents_to_messages
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import InferenceDispatchResponse
 from app.models.settings import G8eeUserSettings, LLMSettings
 from g8e.operator.v1.operator_pb2 import (
     EXECUTION_STATUS_COMPLETED,
+    INFERENCE_MESSAGE_ROLE_ASSISTANT,
+    INFERENCE_MESSAGE_ROLE_SYSTEM,
+    INFERENCE_MESSAGE_ROLE_TOOL,
+    INFERENCE_MESSAGE_ROLE_USER,
     MODEL_ROLE_ASSISTANT,
     MODEL_ROLE_LITE,
     MODEL_ROLE_PRIMARY,
@@ -50,7 +62,8 @@ pytestmark = pytest.mark.unit
 
 def _response(text: str = "generated output") -> InferenceDispatchResponse:
     resp = InferenceDispatchResponse(transaction_id="tx-test-001")
-    resp.result.text = text
+    if text:
+        resp.result.parts.add().text = text
     resp.result.prompt_tokens = 7
     resp.result.completion_tokens = 11
     resp.result.total_tokens = 18
@@ -65,6 +78,16 @@ def _response(text: str = "generated output") -> InferenceDispatchResponse:
     return resp
 
 
+def _tool_call_response() -> InferenceDispatchResponse:
+    resp = _response("")
+    tool_call = resp.result.parts.add().tool_call
+    tool_call.call_id = "call-2"
+    tool_call.name = "inspect"
+    tool_call.arguments_json = '{"path":"target.txt"}'
+    resp.result.finish_reason = "tool_calls"
+    return resp
+
+
 def _client() -> MagicMock:
     client = MagicMock()
     client.dispatch_inference = AsyncMock(return_value=_response())
@@ -74,7 +97,25 @@ def _client() -> MagicMock:
 def _contents() -> list[Content]:
     return [
         Content(role="user", parts=[Part(text="first question")]),
-        Content(role="model", parts=[Part(text="first answer")]),
+        Content(
+            role="model",
+            parts=[
+                Part(text="first answer"),
+                Part(tool_call=ToolCall(name="inspect", args={"z": 2, "a": "value"}, id="call-1")),
+            ],
+        ),
+        Content(
+            role="tool",
+            parts=[
+                Part(
+                    tool_response=ToolResponse(
+                        name="inspect",
+                        response={"ok": True, "detail": "done"},
+                        id="call-1",
+                    )
+                )
+            ],
+        ),
         Content(role="user", parts=[Part(text="follow up")]),
     ]
 
@@ -189,13 +230,28 @@ class TestG8EProviderDispatch:
         assert resp.usage_metadata.usage_reported is True
 
     @pytest.mark.asyncio
+    async def test_tool_only_result_normalizes_without_empty_response_failure(self):
+        client = _client()
+        client.dispatch_inference = AsyncMock(return_value=_tool_call_response())
+        provider = G8EProvider(internal_http_client=client)
+
+        resp = await provider.generate_content_primary(
+            "gemma3:4b", _contents(), PrimaryLLMSettings()
+        )
+
+        assert resp.text is None
+        assert len(resp.tool_calls) == 1
+        assert resp.tool_calls[0] == ToolCall(
+            name="inspect", args={"path": "target.txt"}, id="call-2"
+        )
+        assert resp.candidates[0].finish_reason == "tool_calls"
+
+    @pytest.mark.asyncio
     async def test_assistant_dispatches_assistant_role(self):
         client = _client()
         provider = G8EProvider(internal_http_client=client)
 
-        await provider.generate_content_assistant(
-            "gemma3:4b", _contents(), AssistantLLMSettings()
-        )
+        await provider.generate_content_assistant("gemma3:4b", _contents(), AssistantLLMSettings())
 
         request = client.dispatch_inference.await_args.args[0]
         assert request.role == MODEL_ROLE_ASSISTANT
@@ -205,9 +261,7 @@ class TestG8EProviderDispatch:
         client = _client()
         provider = G8EProvider(internal_http_client=client)
 
-        await provider.generate_content_lite(
-            "gemma3:4b", _contents(), LiteLLMSettings()
-        )
+        await provider.generate_content_lite("gemma3:4b", _contents(), LiteLLMSettings())
 
         request = client.dispatch_inference.await_args.args[0]
         assert request.role == MODEL_ROLE_LITE
@@ -223,21 +277,60 @@ class TestG8EProviderDispatch:
         assert request.model == ""
 
     @pytest.mark.asyncio
-    async def test_prompt_flattens_turns_and_system_instructions(self):
+    async def test_dispatch_preserves_ordered_typed_conversation_and_tools(self):
         client = _client()
         provider = G8EProvider(internal_http_client=client)
-
-        await provider.generate_content_primary(
-            "gemma3:4b",
-            _contents(),
-            PrimaryLLMSettings(system_instructions="be brief"),
+        settings = PrimaryLLMSettings(
+            system_instructions="be brief",
+            tools=[
+                ToolGroup(
+                    tools=[
+                        ToolDeclaration(
+                            name="inspect",
+                            description="Inspect a target",
+                            parameters={
+                                "required": ["path"],
+                                "properties": {"path": {"type": "string"}},
+                                "type": "object",
+                            },
+                        )
+                    ]
+                )
+            ],
         )
 
+        await provider.generate_content_primary("gemma3:4b", _contents(), settings)
+
         request = client.dispatch_inference.await_args.args[0]
-        assert request.prompt.startswith("System: be brief")
-        assert "User: first question" in request.prompt
-        assert "Assistant: first answer" in request.prompt
-        assert "User: follow up" in request.prompt
+        assert [message.role for message in request.messages] == [
+            INFERENCE_MESSAGE_ROLE_SYSTEM,
+            INFERENCE_MESSAGE_ROLE_USER,
+            INFERENCE_MESSAGE_ROLE_ASSISTANT,
+            INFERENCE_MESSAGE_ROLE_TOOL,
+            INFERENCE_MESSAGE_ROLE_USER,
+        ]
+        assert request.messages[0].parts[0].text == "be brief"
+        assert request.messages[1].parts[0].text == "first question"
+        assert request.messages[2].parts[0].text == "first answer"
+        tool_call = request.messages[2].parts[1].tool_call
+        assert (tool_call.call_id, tool_call.name, tool_call.arguments_json) == (
+            "call-1",
+            "inspect",
+            '{"a":"value","z":2}',
+        )
+        tool_result = request.messages[3].parts[0].tool_result
+        assert (tool_result.call_id, tool_result.name, tool_result.result_json) == (
+            "call-1",
+            "inspect",
+            '{"detail":"done","ok":true}',
+        )
+        assert request.messages[4].parts[0].text == "follow up"
+        assert len(request.tools) == 1
+        assert request.tools[0].name == "inspect"
+        assert request.tools[0].description == "Inspect a target"
+        assert request.tools[0].json_schema == (
+            '{"properties":{"path":{"type":"string"}},"required":["path"],"type":"object"}'
+        )
 
     @pytest.mark.asyncio
     async def test_stream_primary_yields_single_text_chunk_then_finish(self):
@@ -264,9 +357,35 @@ class TestG8EProviderDispatch:
         provider = G8EProvider(internal_http_client=client)
 
         with pytest.raises(NetworkError):
-            await provider.generate_content_primary(
-                "gemma3:4b", _contents(), PrimaryLLMSettings()
-            )
+            await provider.generate_content_primary("gemma3:4b", _contents(), PrimaryLLMSettings())
+
+    @pytest.mark.asyncio
+    async def test_dispatch_failure_clears_prior_governed_evidence(self):
+        client = _client()
+        provider = G8EProvider(internal_http_client=client)
+        await provider.generate_content_primary("gemma3:4b", _contents(), PrimaryLLMSettings())
+        assert provider.governed_dispatch_evidence is not None
+        client.dispatch_inference = AsyncMock(side_effect=NetworkError("dispatch failed"))
+
+        with pytest.raises(NetworkError):
+            await provider.generate_content_primary("gemma3:4b", _contents(), PrimaryLLMSettings())
+
+        assert provider.governed_dispatch_evidence is None
+
+    @pytest.mark.asyncio
+    async def test_malformed_response_clears_prior_governed_evidence(self):
+        client = _client()
+        provider = G8EProvider(internal_http_client=client)
+        await provider.generate_content_primary("gemma3:4b", _contents(), PrimaryLLMSettings())
+        assert provider.governed_dispatch_evidence is not None
+        malformed = _tool_call_response()
+        malformed.result.parts[0].tool_call.arguments_json = '{"path":"a","path":"b"}'
+        client.dispatch_inference = AsyncMock(return_value=malformed)
+
+        with pytest.raises(ValidationError):
+            await provider.generate_content_primary("gemma3:4b", _contents(), PrimaryLLMSettings())
+
+        assert provider.governed_dispatch_evidence is None
 
     @pytest.mark.asyncio
     async def test_cancellation_propagates(self):
@@ -275,9 +394,7 @@ class TestG8EProviderDispatch:
         provider = G8EProvider(internal_http_client=client)
 
         with pytest.raises(TimeoutError):
-            await provider.generate_content_primary(
-                "gemma3:4b", _contents(), PrimaryLLMSettings()
-            )
+            await provider.generate_content_primary("gemma3:4b", _contents(), PrimaryLLMSettings())
 
     @pytest.mark.asyncio
     async def test_g8e_context_is_propagated_to_dispatch_request(self):
@@ -293,9 +410,7 @@ class TestG8EProviderDispatch:
         )
 
         provider.set_g8e_context(context)
-        await provider.generate_content_primary(
-            "gemma3:4b", _contents(), PrimaryLLMSettings()
-        )
+        await provider.generate_content_primary("gemma3:4b", _contents(), PrimaryLLMSettings())
 
         request = client.dispatch_inference.await_args.args[0]
         assert request.case_id == "case-1"
@@ -316,19 +431,7 @@ class TestG8EProviderDispatch:
         assert request.investigation_id == ""
 
 
-class TestG8EProviderTextOnlyScope:
-    """The provider is text-only this release; non-text parts fail closed."""
-
-    def test_tool_call_part_rejected(self):
-        contents = [
-            Content(
-                role="model",
-                parts=[Part(tool_call=ToolCall(name="run", args={}))],
-            )
-        ]
-        with pytest.raises(ModelCapabilityError):
-            _contents_to_prompt(contents, None)
-
+class TestG8EProviderUnsupportedContent:
     def test_inline_data_part_rejected(self):
         contents = [
             Content(
@@ -337,14 +440,19 @@ class TestG8EProviderTextOnlyScope:
             )
         ]
         with pytest.raises(ModelCapabilityError):
-            _contents_to_prompt(contents, None)
+            _contents_to_messages(contents, None)
 
-    def test_mixed_text_and_tool_parts_rejected(self):
-        contents = [
+    @pytest.mark.parametrize(
+        "content",
+        [
+            Content(role="user", parts=[]),
             Content(
-                role="model",
-                parts=[Part(text="let me run that"), Part(tool_call=ToolCall(name="run", args={}))],
-            )
-        ]
-        with pytest.raises(ModelCapabilityError):
-            _contents_to_prompt(contents, None)
+                role="user", parts=[Part(text="x", tool_call=ToolCall(name="inspect", args={}))]
+            ),
+            Content(role="user", parts=[Part(tool_call=ToolCall(name="inspect", args={}))]),
+            Content(role="tool", parts=[Part(text="not a tool result")]),
+        ],
+    )
+    def test_invalid_part_shape_or_role_rejected(self, content: Content):
+        with pytest.raises(ValidationError):
+            _contents_to_messages([content], None)

@@ -1441,7 +1441,11 @@ var (
 	ErrInferenceModelOverrideDenied     = errors.New("inference: model override not permitted by role authority")
 	ErrInferenceOutcomeUnknown          = errors.New("inference: dispatch deadline exceeded; remote provider outcome unknown")
 	ErrInferenceGovernanceRejected      = errors.New("inference: governance rejected the transaction")
-	ErrInferencePromptRequired          = errors.New("inference: prompt required")
+	ErrInferenceMessagesRequired        = errors.New("inference: messages required")
+	ErrInferenceMessageInvalid          = errors.New("inference: message invalid")
+	ErrInferenceJSONInvalid             = errors.New("inference: JSON value invalid")
+	ErrInferenceJSONNonCanonical        = errors.New("inference: JSON value is not canonical")
+	ErrInferenceToolSchemaInvalid       = errors.New("inference: tool schema invalid")
 	ErrInferenceEndpointInvalid         = errors.New("inference: provider endpoint invalid")
 	ErrInferenceProviderResponseInvalid = errors.New("inference: provider response invalid")
 
