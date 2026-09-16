@@ -727,9 +727,13 @@ const (
 	DemoRunMaxResults                             = 1024
 	DemoRunMaxArtifactsPerDirectory               = 4096
 	EvaluationDirname                             = "eval"
+	EvaluationCampaignsDirname                    = "campaigns"
 	EvaluationRunsDirname                         = "runs"
+	EvaluationAssignmentsDirname                  = "assignments"
 	EvaluationReportFilename                      = "report.json"
 	EvaluationVerificationFilename                = "verification.json"
+	EvaluationCampaignSpecFilename                = "campaign-spec.json"
+	EvaluationScenarioCatalogFilename             = "scenario-catalog.json"
 	EvaluationEvidenceDirname                     = "evidence"
 	EvalRunVerifierID                             = "g8e-native-evaluation-verifier"
 	EvalRunVerifierVersion                        = "1.0.0"

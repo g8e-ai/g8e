@@ -17,6 +17,71 @@ import "google/protobuf/timestamp.proto";
 enum EvaluationLane {
   EVALUATION_LANE_UNSPECIFIED = 0;
   EVALUATION_LANE_PLATFORM = 1;
+  EVALUATION_LANE_MODEL_ROLE = 2;
+  EVALUATION_LANE_SYSTEM = 3;
+}
+
+enum ModelCampaignRole {
+  MODEL_CAMPAIGN_ROLE_UNSPECIFIED = 0;
+  MODEL_CAMPAIGN_ROLE_PRIMARY = 1;
+  MODEL_CAMPAIGN_ROLE_ASSISTANT = 2;
+  MODEL_CAMPAIGN_ROLE_LITE = 3;
+}
+
+enum EvaluationScenarioCategory {
+  EVALUATION_SCENARIO_CATEGORY_UNSPECIFIED = 0;
+  EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE = 1;
+  EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION = 2;
+  EVALUATION_SCENARIO_CATEGORY_TOOL_ARGUMENT = 3;
+  EVALUATION_SCENARIO_CATEGORY_TECHNICAL_ANALYSIS = 4;
+  EVALUATION_SCENARIO_CATEGORY_ROUTING_DELEGATION = 5;
+  EVALUATION_SCENARIO_CATEGORY_VERIFICATION = 6;
+  EVALUATION_SCENARIO_CATEGORY_SECURITY_POLICY = 7;
+  EVALUATION_SCENARIO_CATEGORY_RECOVERY = 8;
+  EVALUATION_SCENARIO_CATEGORY_FINAL_RESPONSE = 9;
+}
+
+enum EvaluationAssignmentLifecycleStatus {
+  EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_UNSPECIFIED = 0;
+  EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED = 1;
+  EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING = 2;
+  EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED = 3;
+  EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED = 4;
+  EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL = 5;
+  EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_ESCALATED = 6;
+  EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_STOPPED = 7;
+  EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED = 8;
+  EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED = 9;
+  EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_POLICY_REJECTED = 10;
+  EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_UNAVAILABLE = 11;
+}
+
+enum EvaluationGradingMethod {
+  EVALUATION_GRADING_METHOD_UNSPECIFIED = 0;
+  EVALUATION_GRADING_METHOD_DETERMINISTIC = 1;
+  EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE = 2;
+}
+
+enum ModelCapabilityKind {
+  MODEL_CAPABILITY_KIND_UNSPECIFIED = 0;
+  MODEL_CAPABILITY_KIND_COMPLETION = 1;
+  MODEL_CAPABILITY_KIND_TOOL_CALLING = 2;
+  MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT = 3;
+  MODEL_CAPABILITY_KIND_THINKING = 4;
+  MODEL_CAPABILITY_KIND_CONTEXT_LIMIT = 5;
+}
+
+enum EvaluationLoadState {
+  EVALUATION_LOAD_STATE_UNSPECIFIED = 0;
+  EVALUATION_LOAD_STATE_COLD = 1;
+  EVALUATION_LOAD_STATE_WARM = 2;
+  EVALUATION_LOAD_STATE_UNAVAILABLE = 3;
+}
+
+enum EvaluationUsageAvailability {
+  EVALUATION_USAGE_AVAILABILITY_UNSPECIFIED = 0;
+  EVALUATION_USAGE_AVAILABILITY_REPORTED = 1;
+  EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE = 2;
 }
 
 enum EvaluationGovernancePosture {
@@ -141,6 +206,7 @@ message EvaluationRun {
   google.protobuf.Timestamp completed_at = 10;
   repeated string attempt_refs = 11;
   g8e.compliance.v1.ComplianceEvidenceReference final_verification_report_ref = 12;
+  ModelCampaignBinding campaign_binding = 13;
 }
 
 message EvaluationAttempt {
@@ -231,4 +297,351 @@ message EvaluationReport {
   uint32 required_verdict_count = 11;
   uint32 passed_verdict_count = 12;
   string summary = 13;
+  repeated EvaluationAssignmentResult assignment_results = 14;
+  EvaluationVerificationReport campaign_verification_report = 15;
+}
+
+// ModelCampaignBinding pins immutable North Star campaign identity on a run.
+message ModelCampaignBinding {
+  string campaign_id = 1;
+  string campaign_digest = 2;
+  g8e.compliance.v1.VersionedReference catalog_ref = 3;
+  string catalog_digest = 4;
+  string model_registry_digest = 5;
+  string inference_operator_session_id = 6;
+  string data_operator_session_id = 7;
+}
+
+// EvaluationCampaignSpec is the frozen private campaign definition.
+message EvaluationCampaignSpec {
+  string schema_version = 1;
+  string campaign_id = 2;
+  g8e.compliance.v1.VersionedReference catalog_ref = 3;
+  string catalog_digest = 4;
+  repeated ModelVariant model_registry = 5;
+  string model_registry_digest = 6;
+  string campaign_digest = 7;
+  EvaluationGovernancePosture governance_posture = 8;
+  uint32 scenario_count = 9;
+  uint32 repetition_count = 10;
+}
+
+// EvaluationScenarioCatalog is the immutable 25-scenario private catalog.
+message EvaluationScenarioCatalog {
+  string schema_version = 1;
+  g8e.compliance.v1.VersionedReference catalog_ref = 2;
+  string catalog_digest = 3;
+  repeated EvaluationScenarioDefinition scenarios = 4;
+}
+
+// EvaluationScenarioDefinition describes one frozen typed scenario.
+message EvaluationScenarioDefinition {
+  string scenario_id = 1;
+  string scenario_version = 2;
+  EvaluationScenarioCategory category = 3;
+  string public_description = 4;
+  EvaluationGradingMethod grading_method = 5;
+  repeated string allowed_tools = 6;
+  repeated string expected_tools = 7;
+  repeated string forbidden_tools = 8;
+  g8e.compliance.v1.ComplianceEvidenceReference input_fixture_ref = 9;
+  repeated string required_concepts = 10;
+  g8e.compliance.v1.ComplianceEvidenceReference gold_criteria_ref = 11;
+}
+
+// ModelVariant is one frozen provider-backed model identity in a campaign.
+message ModelVariant {
+  string variant_id = 1;
+  string provider_class = 2;
+  string served_model_tag = 3;
+  string model_digest = 4;
+  string model_family = 5;
+  uint64 parameter_count = 6;
+  string quantization = 7;
+  uint32 context_limit = 8;
+  repeated ModelCapabilityObservation capability_observations = 9;
+}
+
+// ModelCapabilityObservation records a descriptive probe result. It never
+// authorizes assignment exclusion.
+message ModelCapabilityObservation {
+  ModelCapabilityKind capability = 1;
+  EvaluationVerdictStatus outcome = 2;
+  string observation_detail = 3;
+}
+
+// RoleAssignment binds one designated responsibility to one frozen variant.
+message RoleAssignment {
+  ModelCampaignRole designated_role = 1;
+  string variant_id = 2;
+}
+
+// HeterogeneousStackDefinition binds Primary, Assistant, and Light slots.
+message HeterogeneousStackDefinition {
+  string stack_id = 1;
+  string stack_digest = 2;
+  RoleAssignment primary_slot = 3;
+  RoleAssignment assistant_slot = 4;
+  RoleAssignment lite_slot = 5;
+}
+
+// EvaluationAssignment is one scheduled model-role or system-lane cell.
+message EvaluationAssignment {
+  string schema_version = 1;
+  string assignment_id = 2;
+  string deterministic_identity = 3;
+  string campaign_id = 4;
+  string run_id = 5;
+  g8e.compliance.v1.VersionedReference scenario_ref = 6;
+  string scenario_id = 7;
+  EvaluationLane lane = 8;
+  EvaluationAssignmentLifecycleStatus lifecycle_status = 9;
+  uint32 repetition = 10;
+  google.protobuf.Timestamp queued_at = 11;
+  google.protobuf.Timestamp started_at = 12;
+  google.protobuf.Timestamp completed_at = 13;
+  oneof target {
+    HomogeneousAssignmentTarget homogeneous = 14;
+    HeterogeneousAssignmentTarget heterogeneous = 15;
+  }
+}
+
+message HomogeneousAssignmentTarget {
+  ModelVariant candidate_variant = 1;
+  ModelCampaignRole designated_role = 2;
+}
+
+message HeterogeneousAssignmentTarget {
+  HeterogeneousStackDefinition stack = 1;
+}
+
+// ModelInferenceRecord captures one governed scored inference call.
+message ModelInferenceRecord {
+  string inference_record_id = 1;
+  string provider_attempt_id = 2;
+  string assignment_id = 3;
+  string evaluation_attempt_id = 4;
+  ModelCampaignRole model_role = 5;
+  string agent_persona = 6;
+  string call_site = 7;
+  ModelVariant model_variant = 8;
+  float temperature = 9;
+  optional float top_p = 10;
+  optional int32 top_k = 11;
+  optional int32 seed = 12;
+  uint32 max_output_tokens = 13;
+  string input_hash = 14;
+  string output_hash = 15;
+  EvaluationUsageAvailability usage_availability = 16;
+  uint32 prompt_tokens = 17;
+  uint32 completion_tokens = 18;
+  uint32 thinking_tokens = 19;
+  uint32 cache_tokens = 20;
+  uint64 request_started_at_unix_nanos = 21;
+  uint64 first_token_at_unix_nanos = 22;
+  uint64 generation_duration_nanos = 23;
+  uint64 total_duration_nanos = 24;
+  uint64 load_duration_nanos = 25;
+  EvaluationLoadState load_state = 26;
+  uint32 retry_count = 27;
+  string finish_reason = 28;
+  bool privacy_attested = 29;
+  g8e.compliance.v1.ComplianceEvidenceReference governed_receipt_ref = 30;
+  string result_digest = 31;
+}
+
+message ToolDecisionRecord {
+  string decision_id = 1;
+  string assignment_id = 2;
+  string tool_name = 3;
+  bool recognized = 4;
+  bool selected = 5;
+  bool permission_compliant = 6;
+  bool unnecessary = 7;
+  EvaluationVerdictStatus outcome = 8;
+}
+
+message ToolCallRecord {
+  string call_id = 1;
+  string assignment_id = 2;
+  string tool_name = 3;
+  string arguments_hash = 4;
+  EvaluationVerdictStatus schema_outcome = 5;
+  EvaluationVerdictStatus semantic_outcome = 6;
+  g8e.compliance.v1.ComplianceEvidenceReference governed_binding_ref = 7;
+}
+
+message EscalationRecord {
+  string escalation_id = 1;
+  string assignment_id = 2;
+  ModelCampaignRole from_role = 3;
+  ModelCampaignRole to_role = 4;
+  bool justified = 5;
+  string reason_code = 6;
+}
+
+message HandoffRecord {
+  string handoff_id = 1;
+  string assignment_id = 2;
+  ModelCampaignRole from_role = 3;
+  ModelCampaignRole to_role = 4;
+  string reason_code = 5;
+}
+
+message RecoveryRecord {
+  string recovery_id = 1;
+  string assignment_id = 2;
+  string recovery_kind = 3;
+  EvaluationVerdictStatus outcome = 4;
+  string detail = 5;
+}
+
+message GovernedActionBinding {
+  string binding_id = 1;
+  string assignment_id = 2;
+  string transaction_id = 3;
+  string operator_id = 4;
+  string operator_session_id = 5;
+  g8e.compliance.v1.ComplianceEvidenceReference receipt_ref = 6;
+  g8e.compliance.v1.ComplianceEvidenceReference persistence_attestation_ref = 7;
+  string policy_decision = 8;
+  g8e.compliance.v1.ComplianceEvidenceReference effect_observation_ref = 9;
+}
+
+message DeterministicGrade {
+  string grade_id = 1;
+  string criterion_id = 2;
+  EvaluationVerdictStatus status = 3;
+  double score = 4;
+  string detail = 5;
+}
+
+message SemanticGrade {
+  string grade_id = 1;
+  string criterion_id = 2;
+  EvaluationVerdictStatus status = 3;
+  string judge_variant_id = 4;
+  g8e.compliance.v1.ComplianceEvidenceReference grader_call_ref = 5;
+  string detail = 6;
+}
+
+message DecomposedScoreRecord {
+  string score_id = 1;
+  string dimension = 2;
+  double value = 3;
+  EvaluationMetricUnit unit = 4;
+  EvaluationMetricDirection direction = 5;
+  EvaluationMissingDataPolicy missing_data_policy = 6;
+}
+
+message GraderModelCallRecord {
+  string grader_call_id = 1;
+  string assignment_id = 2;
+  string judge_variant_id = 3;
+  g8e.compliance.v1.ComplianceEvidenceReference inference_record_ref = 4;
+}
+
+// EvaluationAssignmentResult is the private terminal result for one assignment.
+message EvaluationAssignmentResult {
+  string schema_version = 1;
+  string assignment_id = 2;
+  string run_id = 3;
+  string campaign_id = 4;
+  EvaluationLane lane = 5;
+  EvaluationAssignmentLifecycleStatus lifecycle_status = 6;
+  string result_digest = 7;
+  repeated ModelInferenceRecord model_inferences = 8;
+  repeated ToolDecisionRecord tool_decisions = 9;
+  repeated ToolCallRecord tool_calls = 10;
+  repeated EscalationRecord escalations = 11;
+  repeated HandoffRecord handoffs = 12;
+  repeated RecoveryRecord recoveries = 13;
+  repeated GovernedActionBinding governed_actions = 14;
+  repeated DeterministicGrade deterministic_grades = 15;
+  repeated SemanticGrade semantic_grades = 16;
+  repeated DecomposedScoreRecord decomposed_scores = 17;
+  repeated GraderModelCallRecord grader_calls = 18;
+  repeated g8e.compliance.v1.ComplianceEvidenceReference evidence_refs = 19;
+  google.protobuf.Timestamp completed_at = 20;
+}
+
+// EvaluationVerificationReport independently verifies one run or assignment.
+message EvaluationVerificationReport {
+  string schema_version = 1;
+  string report_id = 2;
+  string run_id = 3;
+  string assignment_id = 4;
+  EvaluationVerdictStatus status = 5;
+  uint32 failure_count = 6;
+  repeated string failure_reasons = 7;
+  g8e.compliance.v1.ComplianceEvidenceReference report_digest_ref = 8;
+  google.protobuf.Timestamp verified_at = 9;
+}
+
+// Public projection records expose only disclosure-approved fields.
+
+message PublicCampaignIdentity {
+  string campaign_id = 1;
+  string campaign_digest = 2;
+  string catalog_id = 3;
+  string catalog_version = 4;
+  string catalog_digest = 5;
+  string model_registry_digest = 6;
+  EvaluationLane lane = 7;
+}
+
+message PublicModelVariantIdentity {
+  string variant_id = 1;
+  string served_model_tag = 2;
+  string model_digest = 3;
+  string model_family = 4;
+  string quantization = 5;
+}
+
+message PublicAssignmentLifecycleRecord {
+  string assignment_id = 1;
+  string run_id = 2;
+  string scenario_id = 3;
+  EvaluationScenarioCategory scenario_category = 4;
+  EvaluationLane lane = 5;
+  ModelCampaignRole designated_role = 6;
+  string variant_id = 7;
+  string stack_id = 8;
+  EvaluationAssignmentLifecycleStatus lifecycle_status = 9;
+  uint32 repetition = 10;
+  google.protobuf.Timestamp observed_at = 11;
+}
+
+message PublicModelCallSummary {
+  string assignment_id = 1;
+  string inference_record_id = 2;
+  ModelCampaignRole model_role = 3;
+  string agent_persona = 4;
+  string variant_id = 5;
+  EvaluationUsageAvailability usage_availability = 6;
+  uint32 prompt_tokens = 7;
+  uint32 completion_tokens = 8;
+  uint64 first_token_at_unix_nanos = 9;
+  uint64 generation_duration_nanos = 10;
+  EvaluationLoadState load_state = 11;
+  string finish_reason = 12;
+  string input_hash = 13;
+  string output_hash = 14;
+}
+
+message PublicAssignmentResultProjection {
+  string assignment_id = 1;
+  string run_id = 2;
+  string scenario_id = 3;
+  EvaluationScenarioCategory scenario_category = 4;
+  EvaluationLane lane = 5;
+  ModelCampaignRole designated_role = 6;
+  string variant_id = 7;
+  EvaluationAssignmentLifecycleStatus lifecycle_status = 8;
+  EvaluationVerdictStatus summary_status = 9;
+  repeated DecomposedScoreRecord decomposed_scores = 10;
+  string result_digest = 11;
+  string verification_status = 12;
+  repeated string unavailable_metric_reasons = 13;
+  google.protobuf.Timestamp completed_at = 14;
 }

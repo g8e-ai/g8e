@@ -30,6 +30,15 @@ type evaluationCanonicalizationVector struct {
 //go:embed vectors/eval/phase1_report.json
 var evaluationCanonicalizationVectorJSON []byte
 
+//go:embed vectors/eval/model_campaign_spec.json
+var modelCampaignSpecVectorJSON []byte
+
+//go:embed vectors/eval/model_assignment_result.json
+var modelAssignmentResultVectorJSON []byte
+
+//go:embed vectors/eval/public_assignment_result.json
+var publicAssignmentResultVectorJSON []byte
+
 func TestEvaluationReportCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
 	var vector evaluationCanonicalizationVector
 	require.NoError(t, json.Unmarshal(evaluationCanonicalizationVectorJSON, &vector))
@@ -64,6 +73,53 @@ func TestEvaluationCanonicalParserRejectsUnknownAndNoncanonicalJSON(t *testing.T
 	}
 }
 
+func TestEvaluationCampaignSpecCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
+	var vector evaluationCanonicalizationVector
+	require.NoError(t, json.Unmarshal(modelCampaignSpecVectorJSON, &vector))
+	assert.Equal(t, "EvaluationCampaignSpec", vector.MessageType)
+
+	spec := &evalv1.EvaluationCampaignSpec{}
+	encoded := []byte(vector.CanonicalJSON)
+	require.NoError(t, evalv1.UnmarshalCanonical(encoded, spec))
+
+	canonical, err := evalv1.MarshalCanonical(spec)
+	require.NoError(t, err)
+	assert.Equal(t, encoded, canonical)
+	assert.Equal(t, "phase1a-smoke", spec.GetCampaignId())
+	assert.Equal(t, uint32(25), spec.GetScenarioCount())
+}
+
+func TestEvaluationAssignmentResultCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
+	var vector evaluationCanonicalizationVector
+	require.NoError(t, json.Unmarshal(modelAssignmentResultVectorJSON, &vector))
+	assert.Equal(t, "EvaluationAssignmentResult", vector.MessageType)
+
+	result := &evalv1.EvaluationAssignmentResult{}
+	encoded := []byte(vector.CanonicalJSON)
+	require.NoError(t, evalv1.UnmarshalCanonical(encoded, result))
+
+	canonical, err := evalv1.MarshalCanonical(result)
+	require.NoError(t, err)
+	assert.Equal(t, encoded, canonical)
+	assert.Equal(t, evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE, result.GetLane())
+	assert.Len(t, result.GetModelInferences(), 1)
+}
+
+func TestPublicAssignmentResultProjectionCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
+	var vector evaluationCanonicalizationVector
+	require.NoError(t, json.Unmarshal(publicAssignmentResultVectorJSON, &vector))
+	assert.Equal(t, "PublicAssignmentResultProjection", vector.MessageType)
+
+	projection := &evalv1.PublicAssignmentResultProjection{}
+	encoded := []byte(vector.CanonicalJSON)
+	require.NoError(t, evalv1.UnmarshalCanonical(encoded, projection))
+
+	canonical, err := evalv1.MarshalCanonical(projection)
+	require.NoError(t, err)
+	assert.Equal(t, encoded, canonical)
+	assert.Equal(t, "assign-1", projection.GetAssignmentId())
+}
+
 func TestEvaluationProtocolRegistersNativeRecordSet(t *testing.T) {
 	requiredMessages := []string{
 		"EvaluationRun",
@@ -73,6 +129,16 @@ func TestEvaluationProtocolRegistersNativeRecordSet(t *testing.T) {
 		"EvaluationVerdict",
 		"EvaluationMetric",
 		"EvaluationReport",
+		"EvaluationCampaignSpec",
+		"EvaluationScenarioCatalog",
+		"EvaluationScenarioDefinition",
+		"ModelVariant",
+		"EvaluationAssignment",
+		"EvaluationAssignmentResult",
+		"ModelInferenceRecord",
+		"GovernedActionBinding",
+		"EvaluationVerificationReport",
+		"PublicAssignmentResultProjection",
 	}
 	for _, name := range requiredMessages {
 		t.Run(name, func(t *testing.T) {
@@ -96,6 +162,38 @@ func TestEvaluationProtocolUsesExternalVerificationArtifactAndTypedRegistryField
 	metricFields := (&evalv1.EvaluationMetric{}).ProtoReflect().Descriptor().Fields()
 	assert.Equal(t, protoreflect.EnumKind, metricFields.ByName("unit").Kind())
 	assert.Equal(t, protoreflect.MessageKind, metricFields.ByName("eligible_population_ref").Kind())
+}
+
+func TestEvaluationLaneIncludesModelCampaignLanes(t *testing.T) {
+	assert.Equal(t, evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE, evalv1.EvaluationLane(2))
+	assert.Equal(t, evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM, evalv1.EvaluationLane(3))
+}
+
+func TestPublicAssignmentProjectionOmitsPrivateEvidenceFields(t *testing.T) {
+	forbidden := []string{
+		"prompt",
+		"output",
+		"thinking",
+		"receipt",
+		"transaction_id",
+		"operator_session_id",
+		"operator_id",
+		"governed_receipt_ref",
+		"model_inferences",
+		"tool_calls",
+		"governed_actions",
+	}
+	fields := (&evalv1.PublicAssignmentResultProjection{}).ProtoReflect().Descriptor().Fields()
+	for _, name := range forbidden {
+		assert.Nil(t, fields.ByName(protoreflect.Name(name)), "public projection must not expose %q", name)
+	}
+}
+
+func TestEvaluationAssignmentResultRetainsPrivateInferenceBindings(t *testing.T) {
+	fields := (&evalv1.EvaluationAssignmentResult{}).ProtoReflect().Descriptor().Fields()
+	assert.NotNil(t, fields.ByName("model_inferences"))
+	assert.NotNil(t, fields.ByName("governed_actions"))
+	assert.NotNil(t, fields.ByName("result_digest"))
 }
 
 func TestEvaluationValuePreservesTypedArtifactReference(t *testing.T) {
