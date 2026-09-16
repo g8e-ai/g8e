@@ -196,9 +196,9 @@ function LiveStreamPanel({
             <thead>
               <tr>
                 <th>Time</th>
-                <th>Model</th>
+                <th>Role</th>
                 <th>Event</th>
-                <th>Model / Tool</th>
+                <th>Model</th>
                 <th>Progress</th>
               </tr>
             </thead>
@@ -207,7 +207,7 @@ function LiveStreamPanel({
                 const model = event.variant_id
                   ? resolveModelSummary(models, event.dataset_id, event.variant_id)
                   : undefined;
-                const tool = model?.served_model_tag ?? event.variant_id ?? event.kind.split('_')[0];
+                const servedTag = model?.served_model_tag ?? event.variant_id ?? event.kind.split('_')[0];
                 const eventLabel = `${event.kind.replace(/_/g, ' ')}${event.stage_label ? ` · ${event.stage_label}` : ''}`;
                 const eventHref = event.assignment_id
                   ? `/evaluations/${event.dataset_id}/${event.run_id}/assignments/${event.assignment_id}`
@@ -215,20 +215,14 @@ function LiveStreamPanel({
                 const modelHref = event.variant_id
                   ? `/models/${event.dataset_id}/${event.variant_id}${model?.role ? `?role=${model.role}` : ''}`
                   : undefined;
-                const modelLabel = model?.display_name ?? event.variant_id ?? 'platform';
+                const roleLabelText = model ? roleLabel(model.role) : event.variant_id ?? 'Platform';
                 return (
                   <tr key={event.event_id}>
                     <td className="stream-time">{eventTime(event.observed_at)}</td>
                     <td>
-                      <span className={`stream-model status-${event.lifecycle_status}`}>
+                      <span className={`stream-role status-${event.lifecycle_status}`}>
                         <span className="status-dot" aria-hidden="true" />
-                        {modelHref ? (
-                          <Link to={modelHref} className="stream-model-link">
-                            {modelLabel}
-                          </Link>
-                        ) : (
-                          modelLabel
-                        )}
+                        {roleLabelText}
                       </span>
                     </td>
                     <td className="stream-event">
@@ -237,7 +231,13 @@ function LiveStreamPanel({
                       </Link>
                     </td>
                     <td>
-                      <code className="stream-chip">{tool}</code>
+                      {modelHref ? (
+                        <Link to={modelHref} className="stream-chip stream-chip-link">
+                          {servedTag}
+                        </Link>
+                      ) : (
+                        <code className="stream-chip">{servedTag}</code>
+                      )}
                     </td>
                     <td className="stream-progress">
                       {event.total > 0 ? `${event.completed}/${event.total}` : '—'}
