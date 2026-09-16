@@ -35,6 +35,7 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		campaignEvalExecuteCmd(deps),
 		campaignEvalPublishCmd(deps),
 		campaignEvalVerifyCmd(deps),
+		campaignEvalAccountCmd(deps),
 		campaignEvalStatusCmd(deps),
 	)
 	return cmd
@@ -501,6 +502,84 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 				for _, reason := range report.GetFailureReasons() {
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "- %s\n", reason)
 				}
+				return constants.ErrEvalRunVerificationFailed
+			}
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
+	return cmd
+}
+
+func campaignEvalAccountCmd(deps nativeEvalDeps) *cobra.Command {
+	var runID string
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:   "account",
+		Short: "Verify homogeneous matrix population accounting for one campaign run",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if runID == "" {
+				return fmt.Errorf("evaluation: campaign account: %w", constants.ErrMissingRequiredField)
+			}
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			store := evaluation.NewStore(fileSvc)
+			run, err := store.LoadRun(cmd.Context(), runID)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign account: %w", err)
+			}
+			catalog, err := store.LoadScenarioCatalog(cmd.Context(), run.GetCampaignBinding().GetCampaignId())
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign account: %w", err)
+			}
+			report, err := evaluation.NewCampaignPopulationAccountant(deps.now).AccountRun(cmd.Context(), store, runID, catalog)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign account: %w", err)
+			}
+			if jsonOutput {
+				payload, err := json.MarshalIndent(map[string]any{
+					"run_id":                  runID,
+					"complete":                report.Complete,
+					"expected_cells":          report.ExpectedCells,
+					"scheduled_assignments":   report.ScheduledAssignments,
+					"queued":                  report.QueuedCount,
+					"running":                 report.RunningCount,
+					"terminal":                report.TerminalCount,
+					"stopped":                 report.StoppedCount,
+					"disposition_counts":      report.DispositionCounts,
+					"missing_cells":           report.MissingCells,
+					"duplicate_identities":    report.DuplicateIdentities,
+					"extra_assignments":       report.ExtraAssignments,
+					"terminal_without_result": report.TerminalWithoutResult,
+					"result_without_terminal": report.ResultWithoutTerminal,
+					"failure_reasons":         report.FailureReasons,
+					"accounted_at":            report.AccountedAt.Format(time.RFC3339),
+				}, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Run %s population accounting: %s\nExpected cells: %d\nScheduled: %d\nQueued: %d\nRunning: %d\nTerminal: %d\nStopped: %d\n",
+				runID,
+				map[bool]string{true: "complete", false: "incomplete"}[report.Complete],
+				report.ExpectedCells,
+				report.ScheduledAssignments,
+				report.QueuedCount,
+				report.RunningCount,
+				report.TerminalCount,
+				report.StoppedCount,
+			)
+			if len(report.FailureReasons) > 0 {
+				for _, reason := range report.FailureReasons {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "- %s\n", reason)
+				}
+			}
+			if !report.Complete {
 				return constants.ErrEvalRunVerificationFailed
 			}
 			return err
