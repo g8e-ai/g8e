@@ -146,6 +146,7 @@ class PrimaryLLMSettings:
     system_instructions: str | None = None
     thinking_config: ThinkingConfig = field(default_factory=ThinkingConfig)
     tool_config: ToolConfig = field(default_factory=ToolConfig)
+    parallel_tool_calls: bool = True
 
 
 @dataclass

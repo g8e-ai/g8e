@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants import LLMProvider
+from app.constants import LLMProvider, ThinkingLevel
 from app.errors import ConfigurationError, ModelCapabilityError, NetworkError, ValidationError
 from app.llm.factory import (
     clear_provider_cache,
@@ -32,7 +32,10 @@ from app.llm.llm_dataclasses import (
     Content,
     InlineData,
     Part,
+    ResponseFormat,
     ToolCall,
+    ToolCallingConfig,
+    ToolConfig,
     ToolDeclaration,
     ToolGroup,
     ToolResponse,
@@ -41,6 +44,7 @@ from app.llm.llm_types import (
     AssistantLLMSettings,
     LiteLLMSettings,
     PrimaryLLMSettings,
+    ThinkingConfig,
 )
 from app.llm.providers.g8e import G8EProvider, _contents_to_messages
 from app.models.http_context import G8eHttpContext
@@ -52,6 +56,7 @@ from g8e.operator.v1.operator_pb2 import (
     INFERENCE_MESSAGE_ROLE_SYSTEM,
     INFERENCE_MESSAGE_ROLE_TOOL,
     INFERENCE_MESSAGE_ROLE_USER,
+    INFERENCE_TOOL_CHOICE_MODE_AUTO,
     MODEL_ROLE_ASSISTANT,
     MODEL_ROLE_LITE,
     MODEL_ROLE_PRIMARY,
@@ -67,8 +72,16 @@ def _response(text: str = "generated output") -> InferenceDispatchResponse:
     resp.result.prompt_tokens = 7
     resp.result.completion_tokens = 11
     resp.result.total_tokens = 18
+    resp.result.usage_reported = True
+    resp.result.load_duration_ns = 2_000_000
+    resp.result.prompt_eval_duration_ns = 10_000_000
+    resp.result.generation_duration_ns = 40_000_000
+    resp.result.total_duration_ns = 52_000_000
     resp.result.finish_reason = "stop"
     resp.result.model = "gemma3:4b"
+    resp.result.requested_model = "gemma3:4b"
+    resp.result.normalized_request_hash = "12" * 32
+    resp.result.output_hash = "34" * 32
     resp.result.result_digest = "cd" * 32
     resp.receipt.transaction_id = "tx-test-001"
     resp.receipt.status = EXECUTION_STATUS_COMPLETED
@@ -88,9 +101,27 @@ def _tool_call_response() -> InferenceDispatchResponse:
     return resp
 
 
+def _dispatch_response(response: InferenceDispatchResponse | None = None):
+    async def dispatch(request):
+        result = response or _response()
+        result.result.provider_attempt_id = request.provider_attempt_id
+        result.result.requested_model = request.model
+        result.result.model = request.model
+        result.result.requested_model_digest = request.model_digest
+        result.result.served_model_digest = request.model_digest
+        result.result.campaign_id = request.campaign_id
+        result.result.run_id = request.run_id
+        result.result.assignment_id = request.assignment_id
+        result.result.evaluation_attempt_id = request.evaluation_attempt_id
+        result.result.scenario_id = request.scenario_id
+        return result
+
+    return dispatch
+
+
 def _client() -> MagicMock:
     client = MagicMock()
-    client.dispatch_inference = AsyncMock(return_value=_response())
+    client.dispatch_inference = AsyncMock(side_effect=_dispatch_response())
     return client
 
 
@@ -224,15 +255,133 @@ class TestG8EProviderDispatch:
         request = client.dispatch_inference.await_args.args[0]
         assert request.role == MODEL_ROLE_PRIMARY
         assert request.model == "gemma3:4b"
+        assert request.provider_attempt_id
         assert request.max_tokens == PrimaryLLMSettings().max_output_tokens
         assert resp.candidates[0].content.parts[0].text == "generated output"
         assert resp.usage_metadata.total_token_count == 18
         assert resp.usage_metadata.usage_reported is True
+        assert resp.usage_metadata.load_duration_seconds == pytest.approx(0.002)
+        assert resp.usage_metadata.prompt_eval_duration_seconds == pytest.approx(0.01)
+        assert resp.usage_metadata.eval_duration_seconds == pytest.approx(0.04)
+        assert resp.usage_metadata.total_duration_seconds == pytest.approx(0.052)
+        assert resp.usage_metadata.time_to_first_token_seconds is None
+
+    @pytest.mark.asyncio
+    async def test_usage_availability_distinguishes_unavailable_from_reported_zero(self):
+        for usage_reported in (False, True):
+            client = _client()
+            response = _response()
+            response.result.prompt_tokens = 0
+            response.result.completion_tokens = 0
+            response.result.total_tokens = 0
+            response.result.usage_reported = usage_reported
+            response.result.ClearField("load_duration_ns")
+            response.result.ClearField("prompt_eval_duration_ns")
+            response.result.ClearField("generation_duration_ns")
+            response.result.ClearField("total_duration_ns")
+            client.dispatch_inference = AsyncMock(side_effect=_dispatch_response(response))
+            provider = G8EProvider(internal_http_client=client)
+
+            result = await provider.generate_content_primary(
+                "gemma3:4b", _contents(), PrimaryLLMSettings()
+            )
+
+            assert result.usage_metadata.total_token_count == 0
+            assert result.usage_metadata.usage_reported is usage_reported
+            assert result.usage_metadata.load_duration_seconds is None
+
+    @pytest.mark.asyncio
+    async def test_primary_dispatch_preserves_sampling_and_stop_controls(self):
+        client = _client()
+        provider = G8EProvider(internal_http_client=client)
+        settings = PrimaryLLMSettings(
+            max_output_tokens=321,
+            top_p_nucleus_sampling=0.75,
+            top_k_filtering=42,
+            stop_sequences=["END", "STOP"],
+        )
+
+        await provider.generate_content_primary("gemma3:4b", _contents(), settings)
+
+        request = client.dispatch_inference.await_args.args[0]
+        assert request.request_schema_version == "1.0"
+        assert request.HasField("top_p")
+        assert request.top_p == pytest.approx(0.75)
+        assert request.HasField("top_k")
+        assert request.top_k == 42
+        assert list(request.stop_sequences) == ["END", "STOP"]
+
+    @pytest.mark.asyncio
+    async def test_primary_dispatch_preserves_tool_parallel_thinking_and_context_controls(self):
+        client = _client()
+        provider = G8EProvider(internal_http_client=client)
+        settings = PrimaryLLMSettings(
+            thinking_config=ThinkingConfig(
+                thinking_level=ThinkingLevel.HIGH,
+                include_thoughts=True,
+            ),
+            tool_config=ToolConfig(
+                tool_calling_config=ToolCallingConfig(
+                    mode="AUTO",
+                    allowed_tool_names=["inspect"],
+                )
+            ),
+            parallel_tool_calls=False,
+            tools=[
+                ToolGroup(
+                    tools=[
+                        ToolDeclaration(
+                            name="inspect",
+                            description="Inspect a target",
+                            parameters={"type": "object"},
+                        )
+                    ]
+                )
+            ],
+        )
+
+        await provider.generate_content_primary("qwen3.5:2b", _contents(), settings)
+
+        request = client.dispatch_inference.await_args.args[0]
+        assert request.tool_choice.mode == INFERENCE_TOOL_CHOICE_MODE_AUTO
+        assert list(request.tool_choice.allowed_tool_names) == ["inspect"]
+        assert request.HasField("parallel_tool_calls")
+        assert request.parallel_tool_calls is False
+        assert request.thinking.WhichOneof("mode") == "enabled"
+        assert request.thinking.enabled is True
+        assert request.thinking.include_thoughts is True
+        assert request.HasField("context_limit")
+        assert request.context_limit > 0
+
+    @pytest.mark.asyncio
+    async def test_assistant_dispatch_preserves_structured_response_format(self):
+        client = _client()
+        provider = G8EProvider(internal_http_client=client)
+        settings = AssistantLLMSettings(
+            response_format=ResponseFormat.from_pydantic_schema(
+                {
+                    "additionalProperties": False,
+                    "properties": {"answer": {"type": "string"}},
+                    "required": ["answer"],
+                    "type": "object",
+                },
+                name="answer",
+            )
+        )
+
+        await provider.generate_content_assistant("gemma3:4b", _contents(), settings)
+
+        request = client.dispatch_inference.await_args.args[0]
+        assert request.response_format.media_type == "application/json"
+        assert request.response_format.json_schema == (
+            '{"additionalProperties":false,"properties":{"answer":{"type":"string"}},'
+            '"required":["answer"],"type":"object"}'
+        )
 
     @pytest.mark.asyncio
     async def test_tool_only_result_normalizes_without_empty_response_failure(self):
         client = _client()
-        client.dispatch_inference = AsyncMock(return_value=_tool_call_response())
+        client.dispatch_inference = AsyncMock(side_effect=_dispatch_response(_tool_call_response()))
         provider = G8EProvider(internal_http_client=client)
 
         resp = await provider.generate_content_primary(
@@ -349,6 +498,19 @@ class TestG8EProviderDispatch:
         assert chunks[-1].usage_metadata.total_token_count == 18
 
     @pytest.mark.asyncio
+    async def test_response_provider_attempt_mismatch_fails_closed(self):
+        client = _client()
+        response = _response()
+        response.result.provider_attempt_id = "different-attempt"
+        client.dispatch_inference = AsyncMock(return_value=response)
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(ValidationError):
+            await provider.generate_content_primary("gemma3:4b", _contents(), PrimaryLLMSettings())
+
+        assert provider.governed_dispatch_evidence is None
+
+    @pytest.mark.asyncio
     async def test_dispatch_failure_propagates(self):
         client = _client()
         client.dispatch_inference = AsyncMock(
@@ -380,7 +542,7 @@ class TestG8EProviderDispatch:
         assert provider.governed_dispatch_evidence is not None
         malformed = _tool_call_response()
         malformed.result.parts[0].tool_call.arguments_json = '{"path":"a","path":"b"}'
-        client.dispatch_inference = AsyncMock(return_value=malformed)
+        client.dispatch_inference = AsyncMock(side_effect=_dispatch_response(malformed))
 
         with pytest.raises(ValidationError):
             await provider.generate_content_primary("gemma3:4b", _contents(), PrimaryLLMSettings())

@@ -8,10 +8,12 @@
 package platform
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
 	"testing"
+	"time"
 )
 
 // TestMain detects when the test binary is re-executed by StartOperator as a
@@ -30,13 +32,19 @@ import (
 //     successful StartOperator (profile-write failure, restart rollback,
 //     resolved-port persistence, stopped-gateway manual trust, IDNA RP
 //     override).
+//   - "hold": the subprocess stays alive without serving health. This lets
+//     tests prove that a foreign health response on the selected port is
+//     rejected even while the child process is still running.
 //
 // During normal test runs TestMain delegates to the default test runner.
 func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == "gw" {
 		mode := os.Getenv("G8E_TEST_REEXEC")
-		if mode == "serve" {
+		switch mode {
+		case "serve":
 			serveHealth()
+		case "hold":
+			time.Sleep(30 * time.Second)
 		}
 		os.Exit(0)
 	}
@@ -55,7 +63,7 @@ func serveHealth() {
 	mux.HandleFunc("/api/v1/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok","mode":"gateway","posture":"doctrine"}`))
+		_, _ = fmt.Fprintf(w, `{"status":"ok","mode":"gateway","posture":"doctrine","pid":%d}`, os.Getpid())
 	})
 	_ = http.ListenAndServe("127.0.0.1:"+strconv.Itoa(port), mux)
 }

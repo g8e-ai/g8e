@@ -457,6 +457,26 @@ func (d *DispatchService) verifyInferenceCompletion(cmdEnv, resultEnv *commonv1.
 	if result.ResultDigest != digest || receipt.ResultSummary != digest {
 		return nil, fmt.Errorf("dispatch: %w", constants.ErrInferenceResultDigestMismatch)
 	}
+	request := &operatorv1.InferenceRequested{}
+	if err := proto.Unmarshal(cmdEnv.Payload, request); err != nil {
+		return nil, fmt.Errorf("dispatch: %w: %v", constants.ErrInferenceResultDecode, err)
+	}
+	if result.GetProviderAttemptId() != request.GetProviderAttemptId() ||
+		(request.GetModel() != "" && result.GetRequestedModel() != request.GetModel()) ||
+		result.GetRequestedModelDigest() != request.GetModelDigest() ||
+		result.GetCampaignId() != request.GetCampaignId() ||
+		result.GetRunId() != request.GetRunId() ||
+		result.GetAssignmentId() != request.GetAssignmentId() ||
+		result.GetEvaluationAttemptId() != request.GetEvaluationAttemptId() ||
+		result.GetScenarioId() != request.GetScenarioId() {
+		return nil, fmt.Errorf("dispatch: %w", constants.ErrInferenceIdentityMismatch)
+	}
+	if request.GetProviderAttemptId() == "" || !models.IsSHA256Hex(result.GetNormalizedRequestHash()) || !models.IsSHA256Hex(result.GetOutputHash()) {
+		return nil, fmt.Errorf("dispatch: %w", constants.ErrInferenceEvidenceHashInvalid)
+	}
+	if request.GetModelDigest() != "" && result.GetServedModelDigest() != request.GetModelDigest() {
+		return nil, fmt.Errorf("dispatch: %w", constants.ErrInferenceModelDigestMismatch)
+	}
 
 	return &DispatchResult{
 		TransactionID:   cmdEnv.Id,
@@ -492,6 +512,18 @@ func inferenceReceiptFailureError(receipt *operatorv1.ActionReceipt) error {
 		return constants.ErrInferenceModelNotFound
 	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID:
 		return constants.ErrInferenceProviderResponseInvalid
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID:
+		return constants.ErrInferenceGenerationOptionsInvalid
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED:
+		return constants.ErrInferenceCapabilityUnsupported
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED:
+		return constants.ErrInferenceProviderAttemptRequired
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH:
+		return constants.ErrInferenceIdentityMismatch
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH:
+		return constants.ErrInferenceModelDigestMismatch
+	case operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID:
+		return constants.ErrInferenceEvidenceHashInvalid
 	default:
 		return constants.ErrInferenceReceiptFailed
 	}

@@ -285,13 +285,21 @@ func (b *boundaryInferenceBackend) Generate(ctx context.Context, req models.Gene
 			return nil, ctx.Err()
 		}
 	}
+	parts := []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "governed boundary response"}}}
+	outputHash, err := models.ComputeInferenceOutputHash(parts, "stop")
+	if err != nil {
+		return nil, err
+	}
 	return &models.GenerateResponse{
-		Parts:            []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "governed boundary response"}}},
-		PromptTokens:     4,
-		CompletionTokens: 3,
-		TotalTokens:      7,
-		FinishReason:     "stop",
-		Model:            req.Model,
+		Parts:                 parts,
+		PromptTokens:          4,
+		CompletionTokens:      3,
+		TotalTokens:           7,
+		UsageReported:         true,
+		FinishReason:          "stop",
+		Model:                 req.Model,
+		NormalizedRequestHash: models.SHA256Hex([]byte("boundary request")),
+		OutputHash:            outputHash,
 	}, nil
 }
 
@@ -709,6 +717,8 @@ func TestInferenceDispatch_RealBrokerAndOutboundOperator_VerifiesReceiptAuditAnd
 
 	dispatchSvc := newInferenceBoundaryDispatchService(infra, config.PostureDoctrine)
 	result, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
+		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
+		ProviderAttemptID:       "provider-attempt-integration",
 		Role:                    models.InferenceModelRolePrimary,
 		Messages:                boundaryInferenceMessages("boundary prompt"),
 		TargetOperatorSessionID: "session-inference-boundary",
@@ -771,8 +781,10 @@ func TestInferenceDispatch_HTTPRouterAppMTLSIdentityTraversesRealBrokerAndOutbou
 	h.router = h.buildPublicRouter()
 
 	body, err := protojson.Marshal(&operatorv1.InferenceDispatchRequest{
+		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
 		Role:                    operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
 		Messages:                boundaryInferenceMessages("HTTP mTLS boundary"),
+		ProviderAttemptId:       "provider-attempt-http",
 		TargetOperatorSessionId: sessionID,
 	})
 	require.NoError(t, err)
@@ -815,6 +827,8 @@ func TestInferenceDispatch_RealBrokerAndOutboundOperator_RoutesAllModelRoles(t *
 	for index, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			result, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
+				RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
+				ProviderAttemptID:       "provider-attempt-integration",
 				Role:                    test.role,
 				Messages:                boundaryInferenceMessages(test.name),
 				TargetOperatorSessionID: sessionID,
@@ -843,6 +857,8 @@ func TestInferenceDispatch_TwoActiveSessions_ExplicitTargetReceivesOnlySelectedR
 	dispatchSvc := newInferenceBoundaryDispatchService(infra, config.PostureDoctrine)
 
 	result, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
+		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
+		ProviderAttemptID:       "provider-attempt-integration",
 		Role:                    models.InferenceModelRolePrimary,
 		Messages:                boundaryInferenceMessages("selected operator only"),
 		TargetOperatorSessionID: "session-inference-b",
@@ -910,6 +926,8 @@ func TestInferenceDispatch_RealStoresRejectInvalidSessionSelectionBeforeBackendI
 			test.seed(t, infra, userID)
 			dispatchSvc := newInferenceBoundaryDispatchService(infra, config.PostureDoctrine)
 			_, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
+				RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
+				ProviderAttemptID:       "provider-attempt-integration",
 				Role:                    models.InferenceModelRolePrimary,
 				Messages:                boundaryInferenceMessages("must not reach backend"),
 				TargetOperatorSessionID: test.target,
@@ -954,6 +972,8 @@ func TestInferenceDispatch_CallerCancellationRemovesHandlerWhileRemoteExecutionC
 	dispatchErr := make(chan error, 1)
 	go func() {
 		_, err := dispatchSvc.DispatchInference(ctx, inferdispatch.DispatchInferenceRequest{
+			RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
+			ProviderAttemptID:       "provider-attempt-integration",
 			Role:                    models.InferenceModelRolePrimary,
 			Messages:                boundaryInferenceMessages("complete after caller cancellation"),
 			TargetOperatorSessionID: sessionID,
@@ -1005,6 +1025,8 @@ func TestInferenceDispatch_ResultMutatedAfterDigestComputationFailsClosed(t *tes
 	dispatchSvc := newInferenceBoundaryDispatchService(infra, config.PostureDoctrine)
 
 	_, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
+		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
+		ProviderAttemptID:       "provider-attempt-integration",
 		Role:                    models.InferenceModelRolePrimary,
 		Messages:                boundaryInferenceMessages("digest substitution boundary"),
 		TargetOperatorSessionID: sessionID,
@@ -1051,6 +1073,8 @@ func TestInferenceDispatch_ReplayedEnvelopeIsRejectedWithoutSecondBackendInvocat
 	t.Cleanup(unregisterCompletionCapture)
 
 	result, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
+		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
+		ProviderAttemptID:       "provider-attempt-integration",
 		Role:                    models.InferenceModelRolePrimary,
 		Messages:                boundaryInferenceMessages("invoke exactly once"),
 		TargetOperatorSessionID: sessionID,
@@ -1099,6 +1123,8 @@ func TestInferenceDispatch_NotaryPostureRejectsMutationBeforeBackendInvocation(t
 	dispatchSvc := newInferenceBoundaryDispatchService(infra, config.PostureNotary)
 
 	_, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
+		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
+		ProviderAttemptID:       "provider-attempt-integration",
 		Role:                    models.InferenceModelRolePrimary,
 		Messages:                boundaryInferenceMessages("notary must reject"),
 		TargetOperatorSessionID: sessionID,

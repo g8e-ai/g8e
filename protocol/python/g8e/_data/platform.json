@@ -1,5 +1,9 @@
 {
   "platform": {
+    "InferenceRequestSchemaVersion": {
+      "_go_const": "InferenceRequestSchemaVersion",
+      "value": "1.0"
+    },
     "AuthLoginFailed": {
       "_go_const": "PlatformAuthLoginFailed",
       "value": "g8e.v1.platform.auth.login.failed"

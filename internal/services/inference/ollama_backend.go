@@ -92,6 +92,8 @@ type ollamaChatRequest struct {
 	Messages  []ollamaChatMessage `json:"messages"`
 	Tools     []ollamaTool        `json:"tools,omitempty"`
 	Stream    bool                `json:"stream"`
+	Think     json.RawMessage     `json:"think,omitempty"`
+	Format    json.RawMessage     `json:"format,omitempty"`
 	Options   ollamaChatOptions   `json:"options,omitempty"`
 	KeepAlive string              `json:"keep_alive,omitempty"`
 }
@@ -123,19 +125,27 @@ type ollamaToolFunction struct {
 }
 
 type ollamaChatOptions struct {
-	Temperature float32 `json:"temperature,omitempty"`
-	NumPredict  int32   `json:"num_predict,omitempty"`
+	Temperature float32  `json:"temperature,omitempty"`
+	NumPredict  int32    `json:"num_predict,omitempty"`
+	TopP        *float32 `json:"top_p,omitempty"`
+	TopK        *int32   `json:"top_k,omitempty"`
+	Stop        []string `json:"stop,omitempty"`
+	NumCtx      *int32   `json:"num_ctx,omitempty"`
 }
 
 // ollamaChatResponse is the response body from Ollama's /api/chat endpoint
 // (non-streaming).
 type ollamaChatResponse struct {
-	Model           string            `json:"model"`
-	Message         ollamaChatMessage `json:"message"`
-	Done            bool              `json:"done"`
-	DoneReason      string            `json:"done_reason"`
-	PromptEvalCount int32             `json:"prompt_eval_count"`
-	EvalCount       int32             `json:"eval_count"`
+	Model              string            `json:"model"`
+	Message            ollamaChatMessage `json:"message"`
+	Done               bool              `json:"done"`
+	DoneReason         string            `json:"done_reason"`
+	PromptEvalCount    *int32            `json:"prompt_eval_count"`
+	EvalCount          *int32            `json:"eval_count"`
+	LoadDuration       *int64            `json:"load_duration"`
+	PromptEvalDuration *int64            `json:"prompt_eval_duration"`
+	EvalDuration       *int64            `json:"eval_duration"`
+	TotalDuration      *int64            `json:"total_duration"`
 }
 
 // ollamaTagsResponse is the response body from Ollama's /api/tags endpoint.
@@ -144,7 +154,8 @@ type ollamaTagsResponse struct {
 }
 
 type ollamaTagModel struct {
-	Name string `json:"name"`
+	Name   string `json:"name"`
+	Digest string `json:"digest"`
 }
 
 // Generate sends a generation request to Ollama's /api/chat endpoint and
@@ -153,23 +164,62 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 	if req.Model == "" {
 		return nil, fmt.Errorf("ollama_backend: generate: %w", constants.ErrInferenceModelRefInvalid)
 	}
+	if req.ModelDigest != "" {
+		digest, err := b.modelDigest(ctx, req.Model)
+		if err != nil {
+			return nil, err
+		}
+		if digest != req.ModelDigest {
+			return nil, fmt.Errorf("ollama_backend: generate: %w", constants.ErrInferenceModelDigestMismatch)
+		}
+	}
 
 	messages, err := inferenceMessagesToOllama(req.Messages)
 	if err != nil {
 		return nil, fmt.Errorf("ollama_backend: generate: messages: %w", err)
 	}
-	tools, err := inferenceToolsToOllama(req.Tools)
+	tools, err := inferenceToolsToOllama(req.Tools, req.ToolChoice)
 	if err != nil {
 		return nil, fmt.Errorf("ollama_backend: generate: tools: %w", err)
+	}
+	var think json.RawMessage
+	if req.Thinking != nil {
+		switch mode := req.Thinking.GetMode().(type) {
+		case *operatorv1.InferenceThinkingControl_Enabled:
+			think = json.RawMessage("false")
+			if mode.Enabled {
+				think = json.RawMessage("true")
+			}
+		case *operatorv1.InferenceThinkingControl_Level:
+			return nil, fmt.Errorf("ollama_backend: generate: thinking level %q: %w", mode.Level, constants.ErrInferenceCapabilityUnsupported)
+		default:
+			return nil, fmt.Errorf("ollama_backend: generate: thinking: %w", constants.ErrInferenceGenerationOptionsInvalid)
+		}
+	}
+	var format json.RawMessage
+	if req.ResponseFormat != nil {
+		if req.ResponseFormat.GetMediaType() != inferenceJSONMediaType {
+			return nil, fmt.Errorf("ollama_backend: generate: response format: %w", constants.ErrInferenceCapabilityUnsupported)
+		}
+		if err := validateInferenceToolSchema(req.ResponseFormat.GetJsonSchema()); err != nil {
+			return nil, fmt.Errorf("ollama_backend: generate: response format: %w", err)
+		}
+		format = json.RawMessage(req.ResponseFormat.GetJsonSchema())
 	}
 	chatReq := ollamaChatRequest{
 		Model:    req.Model,
 		Messages: messages,
 		Tools:    tools,
 		Stream:   false,
+		Think:    think,
+		Format:   format,
 		Options: ollamaChatOptions{
 			Temperature: req.Temperature,
 			NumPredict:  req.MaxTokens,
+			TopP:        req.TopP,
+			TopK:        req.TopK,
+			Stop:        req.StopSequences,
+			NumCtx:      req.ContextLimit,
 		},
 		KeepAlive: req.KeepAlive,
 	}
@@ -178,6 +228,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 	if err != nil {
 		return nil, fmt.Errorf("ollama_backend: marshal request: %w", err)
 	}
+	normalizedRequestHash := models.SHA256Hex(body)
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, b.apiURL("api", "chat"), bytes.NewReader(body))
 	if err != nil {
@@ -215,18 +266,68 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 	if finishReason == "" && chatResp.Done {
 		finishReason = "stop"
 	}
+	if chatResp.Model == "" {
+		return nil, fmt.Errorf("ollama_backend: generate: served model: %w", constants.ErrInferenceProviderResponseInvalid)
+	}
+	if (chatResp.PromptEvalCount == nil) != (chatResp.EvalCount == nil) {
+		return nil, fmt.Errorf("ollama_backend: generate: token usage: %w", constants.ErrInferenceProviderResponseInvalid)
+	}
+	promptTokens, completionTokens := int32(0), int32(0)
+	usageReported := chatResp.PromptEvalCount != nil
+	if usageReported {
+		promptTokens = *chatResp.PromptEvalCount
+		completionTokens = *chatResp.EvalCount
+		if promptTokens < 0 || completionTokens < 0 {
+			return nil, fmt.Errorf("ollama_backend: generate: token usage: %w", constants.ErrInferenceProviderResponseInvalid)
+		}
+	}
+	timings := []*int64{chatResp.LoadDuration, chatResp.PromptEvalDuration, chatResp.EvalDuration, chatResp.TotalDuration}
+	timingSource := operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_UNSPECIFIED
+	for _, duration := range timings {
+		if duration == nil {
+			continue
+		}
+		if *duration < 0 {
+			return nil, fmt.Errorf("ollama_backend: generate: timing: %w", constants.ErrInferenceProviderResponseInvalid)
+		}
+		timingSource = operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_PROVIDER
+	}
 
-	parts, err := ollamaResponseParts(chatResp.Message)
+	allowParallelToolCalls := req.ParallelToolCalls == nil || *req.ParallelToolCalls
+	parts, err := ollamaResponseParts(chatResp.Message, allowParallelToolCalls)
 	if err != nil {
 		return nil, fmt.Errorf("ollama_backend: generate: response parts: %w", err)
 	}
+	outputHash, err := models.ComputeInferenceOutputHash(parts, finishReason)
+	if err != nil {
+		return nil, fmt.Errorf("ollama_backend: generate: %w", err)
+	}
+	servedModelDigest := ""
+	if req.ModelDigest != "" {
+		servedModelDigest, err = b.modelDigest(ctx, chatResp.Model)
+		if err != nil {
+			return nil, err
+		}
+		if servedModelDigest != req.ModelDigest {
+			return nil, fmt.Errorf("ollama_backend: generate: %w", constants.ErrInferenceModelDigestMismatch)
+		}
+	}
 	return &models.GenerateResponse{
-		Parts:            parts,
-		PromptTokens:     chatResp.PromptEvalCount,
-		CompletionTokens: chatResp.EvalCount,
-		TotalTokens:      chatResp.PromptEvalCount + chatResp.EvalCount,
-		FinishReason:     finishReason,
-		Model:            chatResp.Model,
+		Parts:                 parts,
+		PromptTokens:          promptTokens,
+		CompletionTokens:      completionTokens,
+		TotalTokens:           promptTokens + completionTokens,
+		UsageReported:         usageReported,
+		LoadDurationNS:        chatResp.LoadDuration,
+		PromptEvalDurationNS:  chatResp.PromptEvalDuration,
+		GenerationDurationNS:  chatResp.EvalDuration,
+		TotalDurationNS:       chatResp.TotalDuration,
+		TimingSource:          timingSource,
+		FinishReason:          finishReason,
+		Model:                 chatResp.Model,
+		ServedModelDigest:     servedModelDigest,
+		NormalizedRequestHash: normalizedRequestHash,
+		OutputHash:            outputHash,
 	}, nil
 }
 
@@ -307,7 +408,16 @@ func inferenceMessageRoleToOllama(role operatorv1.InferenceMessageRole) (string,
 	}
 }
 
-func inferenceToolsToOllama(tools []*operatorv1.InferenceToolDeclaration) ([]ollamaTool, error) {
+func inferenceToolsToOllama(tools []*operatorv1.InferenceToolDeclaration, choice *operatorv1.InferenceToolChoice) ([]ollamaTool, error) {
+	allowed := make(map[string]struct{})
+	if choice != nil {
+		if choice.GetMode() != operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO {
+			return nil, constants.ErrInferenceCapabilityUnsupported
+		}
+		for _, name := range choice.GetAllowedToolNames() {
+			allowed[name] = struct{}{}
+		}
+	}
 	result := make([]ollamaTool, 0, len(tools))
 	for toolIndex, tool := range tools {
 		if tool == nil || tool.GetName() == "" {
@@ -315,6 +425,11 @@ func inferenceToolsToOllama(tools []*operatorv1.InferenceToolDeclaration) ([]oll
 		}
 		if err := validateInferenceToolSchema(tool.GetJsonSchema()); err != nil {
 			return nil, fmt.Errorf("%w: tool %d: %w", constants.ErrInferenceToolSchemaInvalid, toolIndex, err)
+		}
+		if len(allowed) > 0 {
+			if _, ok := allowed[tool.GetName()]; !ok {
+				continue
+			}
 		}
 		result = append(result, ollamaTool{
 			Type: "function",
@@ -328,7 +443,10 @@ func inferenceToolsToOllama(tools []*operatorv1.InferenceToolDeclaration) ([]oll
 	return result, nil
 }
 
-func ollamaResponseParts(message ollamaChatMessage) ([]*operatorv1.InferenceResponsePart, error) {
+func ollamaResponseParts(message ollamaChatMessage, allowParallelToolCalls bool) ([]*operatorv1.InferenceResponsePart, error) {
+	if !allowParallelToolCalls && len(message.ToolCalls) > 1 {
+		return nil, constants.ErrInferenceProviderResponseInvalid
+	}
 	parts := make([]*operatorv1.InferenceResponsePart, 0, len(message.ToolCalls)+1)
 	if message.Content != "" {
 		parts = append(parts, &operatorv1.InferenceResponsePart{Part: &operatorv1.InferenceResponsePart_Text{Text: message.Content}})
@@ -353,6 +471,36 @@ func ollamaResponseParts(message ollamaChatMessage) ([]*operatorv1.InferenceResp
 		return nil, constants.ErrInferenceProviderResponseInvalid
 	}
 	return parts, nil
+}
+
+func (b *OllamaBackend) modelDigest(ctx context.Context, model string) (string, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, b.apiURL("api", "tags"), nil)
+	if err != nil {
+		return "", fmt.Errorf("ollama_backend: model digest: build request: %w", err)
+	}
+	resp, err := b.client.Do(httpReq)
+	if err != nil {
+		return "", transportError("model digest", ctx, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBodyBytes))
+		return "", fmt.Errorf("ollama_backend: model digest: %w: status %d", constants.ErrInferenceBackendUnavailable, resp.StatusCode)
+	}
+	var tagsResp ollamaTagsResponse
+	if err := b.decodeResponse("model digest", resp.Body, &tagsResp); err != nil {
+		return "", err
+	}
+	for _, candidate := range tagsResp.Models {
+		if candidate.Name != model {
+			continue
+		}
+		if !models.IsSHA256Hex(candidate.Digest) {
+			return "", fmt.Errorf("ollama_backend: model digest: %w", constants.ErrInferenceProviderResponseInvalid)
+		}
+		return candidate.Digest, nil
+	}
+	return "", fmt.Errorf("ollama_backend: model digest: %w", constants.ErrInferenceModelNotFound)
 }
 
 // Status queries Ollama's /api/tags endpoint to verify the daemon is

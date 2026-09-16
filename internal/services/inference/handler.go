@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -22,6 +23,14 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
+)
+
+const (
+	inferenceJSONMediaType        = "application/json"
+	maxInferenceTopK              = 1000
+	maxInferenceStopSequences     = 16
+	maxInferenceStopSequenceBytes = 256
+	maxInferenceContextLimit      = 1 << 20
 )
 
 // InferenceExecutionHandler implements governance.ExecutionHandler. It decodes and validates the governed typed conversation, recursively scrubs data-bearing values, calls Backend.Generate, and returns the digest the L5 actuator records in the receipt.
@@ -111,11 +120,104 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 	if err != nil {
 		return nil, fmt.Errorf("inference handler: %w", err)
 	}
+	if resp == nil || resp.Model != genReq.Model {
+		return nil, fmt.Errorf("inference handler: %w", constants.ErrInferenceIdentityMismatch)
+	}
+	if !models.IsSHA256Hex(resp.NormalizedRequestHash) || !models.IsSHA256Hex(resp.OutputHash) {
+		return nil, fmt.Errorf("inference handler: %w", constants.ErrInferenceEvidenceHashInvalid)
+	}
+	if genReq.ModelDigest != "" && resp.ServedModelDigest != genReq.ModelDigest {
+		return nil, fmt.Errorf("inference handler: %w", constants.ErrInferenceModelDigestMismatch)
+	}
+	resp.ProviderAttemptID = genReq.ProviderAttemptID
+	resp.RequestedModel = genReq.Model
+	resp.RequestedModelDigest = genReq.ModelDigest
+	resp.CampaignID = genReq.CampaignID
+	resp.RunID = genReq.RunID
+	resp.AssignmentID = genReq.AssignmentID
+	resp.EvaluationAttemptID = genReq.EvaluationAttemptID
+	resp.ScenarioID = genReq.ScenarioID
 
 	return resp, nil
 }
 
 func (h *InferenceExecutionHandler) normalizeInferenceInput(req *models.InferenceRequestPayload) error {
+	if req.ProviderAttemptID == "" {
+		return constants.ErrInferenceProviderAttemptRequired
+	}
+	if req.ModelDigest != "" && !models.IsSHA256Hex(req.ModelDigest) {
+		return constants.ErrInferenceEvidenceHashInvalid
+	}
+	if req.RequestSchemaVersion != constants.InferenceRequestSchemaVersion {
+		return fmt.Errorf("%w: request schema version", constants.ErrInferenceGenerationOptionsInvalid)
+	}
+	if math.IsNaN(float64(req.Temperature)) || math.IsInf(float64(req.Temperature), 0) || req.Temperature < 0 || req.Temperature > 2 {
+		return fmt.Errorf("%w: temperature", constants.ErrInferenceGenerationOptionsInvalid)
+	}
+	if req.MaxTokens < 0 {
+		return fmt.Errorf("%w: max tokens", constants.ErrInferenceGenerationOptionsInvalid)
+	}
+	if req.TopP != nil && (math.IsNaN(float64(*req.TopP)) || math.IsInf(float64(*req.TopP), 0) || *req.TopP < 0 || *req.TopP > 1) {
+		return fmt.Errorf("%w: top_p", constants.ErrInferenceGenerationOptionsInvalid)
+	}
+	if req.TopK != nil && (*req.TopK <= 0 || *req.TopK > maxInferenceTopK) {
+		return fmt.Errorf("%w: top_k", constants.ErrInferenceGenerationOptionsInvalid)
+	}
+	if len(req.StopSequences) > maxInferenceStopSequences {
+		return fmt.Errorf("%w: stop sequences", constants.ErrInferenceGenerationOptionsInvalid)
+	}
+	for i, stop := range req.StopSequences {
+		if stop == "" || len(stop) > maxInferenceStopSequenceBytes {
+			return fmt.Errorf("%w: stop sequence %d", constants.ErrInferenceGenerationOptionsInvalid, i)
+		}
+	}
+	if req.ResponseFormat != nil {
+		if req.ResponseFormat.GetMediaType() != inferenceJSONMediaType {
+			return fmt.Errorf("%w: response media type", constants.ErrInferenceCapabilityUnsupported)
+		}
+		if err := validateInferenceToolSchema(req.ResponseFormat.GetJsonSchema()); err != nil {
+			return fmt.Errorf("%w: response schema: %w", constants.ErrInferenceGenerationOptionsInvalid, err)
+		}
+	}
+	if req.ToolChoice != nil {
+		if req.ToolChoice.GetMode() != operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO {
+			return fmt.Errorf("%w: tool choice mode", constants.ErrInferenceCapabilityUnsupported)
+		}
+		declared := make(map[string]struct{}, len(req.Tools))
+		for _, tool := range req.Tools {
+			if tool != nil {
+				declared[tool.GetName()] = struct{}{}
+			}
+		}
+		allowed := make(map[string]struct{}, len(req.ToolChoice.GetAllowedToolNames()))
+		for _, name := range req.ToolChoice.GetAllowedToolNames() {
+			if name == "" {
+				return fmt.Errorf("%w: empty allowed tool name", constants.ErrInferenceGenerationOptionsInvalid)
+			}
+			if _, exists := declared[name]; !exists {
+				return fmt.Errorf("%w: undeclared allowed tool", constants.ErrInferenceGenerationOptionsInvalid)
+			}
+			if _, exists := allowed[name]; exists {
+				return fmt.Errorf("%w: duplicate allowed tool", constants.ErrInferenceGenerationOptionsInvalid)
+			}
+			allowed[name] = struct{}{}
+		}
+	}
+	if req.Thinking != nil {
+		switch mode := req.Thinking.GetMode().(type) {
+		case *operatorv1.InferenceThinkingControl_Enabled:
+			if !mode.Enabled && req.Thinking.GetIncludeThoughts() {
+				return fmt.Errorf("%w: disabled thinking includes thoughts", constants.ErrInferenceGenerationOptionsInvalid)
+			}
+		case *operatorv1.InferenceThinkingControl_Level:
+			return fmt.Errorf("%w: thinking level %q", constants.ErrInferenceCapabilityUnsupported, mode.Level)
+		default:
+			return fmt.Errorf("%w: thinking mode", constants.ErrInferenceGenerationOptionsInvalid)
+		}
+	}
+	if req.ContextLimit != nil && (*req.ContextLimit <= 0 || *req.ContextLimit > maxInferenceContextLimit) {
+		return fmt.Errorf("%w: context limit", constants.ErrInferenceGenerationOptionsInvalid)
+	}
 	if len(req.Messages) == 0 {
 		return constants.ErrInferenceMessagesRequired
 	}

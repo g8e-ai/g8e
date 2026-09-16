@@ -98,6 +98,9 @@ func inferenceDispatchHTTPRequest(t *testing.T, body []byte, appID, userID strin
 
 func marshalInferenceDispatchRequest(t *testing.T, req *operatorv1.InferenceDispatchRequest) []byte {
 	t.Helper()
+	if req.ProviderAttemptId == "" {
+		req.ProviderAttemptId = "provider-attempt-1"
+	}
 	body, err := (protojson.MarshalOptions{UseProtoNames: true}).Marshal(req)
 	require.NoError(t, err)
 	return body
@@ -114,13 +117,30 @@ func inferenceTextMessages(text string) []*operatorv1.InferenceMessage {
 
 func successDispatchResult(t *testing.T) *dispatch.CommandDispatchResult {
 	t.Helper()
+	return successDispatchResultForRequest(t, &operatorv1.InferenceDispatchRequest{Model: "gemma3:4b", ProviderAttemptId: "provider-attempt-1"})
+}
+
+func successDispatchResultForRequest(t *testing.T, req *operatorv1.InferenceDispatchRequest) *dispatch.CommandDispatchResult {
+	t.Helper()
 	result := &operatorv1.InferenceResult{
-		Parts:            []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "generated output"}}},
-		PromptTokens:     7,
-		CompletionTokens: 11,
-		TotalTokens:      18,
-		FinishReason:     "stop",
-		Model:            "gemma3:4b",
+		Parts:                 []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "generated output"}}},
+		PromptTokens:          7,
+		CompletionTokens:      11,
+		TotalTokens:           18,
+		UsageReported:         true,
+		FinishReason:          "stop",
+		Model:                 req.GetModel(),
+		RequestedModel:        req.GetModel(),
+		ProviderAttemptId:     req.GetProviderAttemptId(),
+		RequestedModelDigest:  req.GetModelDigest(),
+		ServedModelDigest:     req.GetModelDigest(),
+		NormalizedRequestHash: strings.Repeat("1", 64),
+		OutputHash:            strings.Repeat("2", 64),
+		CampaignId:            req.GetCampaignId(),
+		RunId:                 req.GetRunId(),
+		AssignmentId:          req.GetAssignmentId(),
+		EvaluationAttemptId:   req.GetEvaluationAttemptId(),
+		ScenarioId:            req.GetScenarioId(),
 	}
 	digest, err := models.ComputeInferenceResultDigest(result)
 	require.NoError(t, err)
@@ -276,13 +296,18 @@ func TestInferenceDispatchController_ActingAppIDMismatchRejected(t *testing.T) {
 }
 
 func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *testing.T) {
-	dispatcher := &stubInferenceCommandDispatcher{result: successDispatchResult(t)}
+	dispatcher := &stubInferenceCommandDispatcher{}
 	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
+	topP := float32(0.8)
+	topK := int32(40)
+	parallelToolCalls := false
+	contextLimit := int32(8192)
 
 	dispatchRequest := &operatorv1.InferenceDispatchRequest{
-		Role:  operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
-		Model: "gemma3:4b",
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
+		Model:                "gemma3:4b",
 		Messages: []*operatorv1.InferenceMessage{
 			{
 				Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_SYSTEM,
@@ -316,12 +341,27 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 			Description: "Inspect a target",
 			JsonSchema:  `{"properties":{"path":{"type":"string"}},"type":"object"}`,
 		}},
+		TopP:                    &topP,
+		TopK:                    &topK,
+		StopSequences:           []string{"END"},
+		ResponseFormat:          &operatorv1.InferenceResponseFormat{MediaType: "application/json", JsonSchema: `{"type":"object"}`},
+		ToolChoice:              &operatorv1.InferenceToolChoice{Mode: operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO, AllowedToolNames: []string{"inspect"}},
+		ParallelToolCalls:       &parallelToolCalls,
+		Thinking:                &operatorv1.InferenceThinkingControl{Mode: &operatorv1.InferenceThinkingControl_Enabled{Enabled: true}, IncludeThoughts: true},
+		ContextLimit:            &contextLimit,
+		ProviderAttemptId:       "provider-attempt-1",
+		CampaignId:              "campaign-1",
+		RunId:                   "run-1",
+		AssignmentId:            "assignment-1",
+		EvaluationAttemptId:     "evaluation-attempt-1",
+		ScenarioId:              "scenario-1",
 		CaseId:                  "case-1",
 		InvestigationId:         "inv-1",
 		TaskId:                  "task-1",
 		WebSessionId:            "web-1",
 		TargetOperatorSessionId: "sess-inf-1",
 	}
+	dispatcher.result = successDispatchResultForRequest(t, dispatchRequest)
 	body := marshalInferenceDispatchRequest(t, dispatchRequest)
 	req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
 	rr := httptest.NewRecorder()
@@ -357,10 +397,26 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 	var forwarded operatorv1.InferenceRequested
 	require.NoError(t, proto.Unmarshal(dispatcher.lastReq.Payload, &forwarded))
 	expected := &operatorv1.InferenceRequested{
-		Role:     dispatchRequest.Role,
-		Model:    dispatchRequest.Model,
-		Messages: dispatchRequest.Messages,
-		Tools:    dispatchRequest.Tools,
+		Role:                 dispatchRequest.Role,
+		Model:                dispatchRequest.Model,
+		Messages:             dispatchRequest.Messages,
+		Tools:                dispatchRequest.Tools,
+		TopP:                 dispatchRequest.TopP,
+		TopK:                 dispatchRequest.TopK,
+		StopSequences:        dispatchRequest.StopSequences,
+		ResponseFormat:       dispatchRequest.ResponseFormat,
+		RequestSchemaVersion: dispatchRequest.RequestSchemaVersion,
+		ToolChoice:           dispatchRequest.ToolChoice,
+		ParallelToolCalls:    dispatchRequest.ParallelToolCalls,
+		Thinking:             dispatchRequest.Thinking,
+		ContextLimit:         dispatchRequest.ContextLimit,
+		ProviderAttemptId:    dispatchRequest.ProviderAttemptId,
+		ModelDigest:          dispatchRequest.ModelDigest,
+		CampaignId:           dispatchRequest.CampaignId,
+		RunId:                dispatchRequest.RunId,
+		AssignmentId:         dispatchRequest.AssignmentId,
+		EvaluationAttemptId:  dispatchRequest.EvaluationAttemptId,
+		ScenarioId:           dispatchRequest.ScenarioId,
 	}
 	assert.True(t, proto.Equal(expected, &forwarded), "canonical protojson and governed protobuf forwarding must preserve the typed request exactly")
 }

@@ -12,6 +12,7 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,12 +57,17 @@ func signTestReceipt(t *testing.T, receipt *operatorv1.ActionReceipt, signerPriv
 func inferenceTestResult(t *testing.T) *operatorv1.InferenceResult {
 	t.Helper()
 	result := &operatorv1.InferenceResult{
-		Parts:            []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "generated output"}}},
-		PromptTokens:     7,
-		CompletionTokens: 11,
-		TotalTokens:      18,
-		FinishReason:     "stop",
-		Model:            "gemma3:4b",
+		Parts:                 []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "generated output"}}},
+		PromptTokens:          7,
+		CompletionTokens:      11,
+		TotalTokens:           18,
+		UsageReported:         true,
+		FinishReason:          "stop",
+		Model:                 "gemma3:4b",
+		RequestedModel:        "gemma3:4b",
+		ProviderAttemptId:     "provider-attempt-1",
+		NormalizedRequestHash: strings.Repeat("1", 64),
+		OutputHash:            strings.Repeat("2", 64),
 	}
 	digest, err := models.ComputeInferenceResultDigest(result)
 	require.NoError(t, err)
@@ -97,7 +103,12 @@ func TestVerifyInferenceCompletion(t *testing.T) {
 	const txID = "tx-inference-001"
 	const txHash = "hash-inference-001"
 
-	cmdEnv := &commonv1.GovernanceEnvelope{Id: txID, TransactionHash: txHash}
+	requestPayload, err := proto.Marshal(&operatorv1.InferenceRequested{
+		Model:             "gemma3:4b",
+		ProviderAttemptId: "provider-attempt-1",
+	})
+	require.NoError(t, err)
+	cmdEnv := &commonv1.GovernanceEnvelope{Id: txID, TransactionHash: txHash, Payload: requestPayload}
 
 	// resultEnvelopeFor marshals a completion into a result envelope payload.
 	resultEnvelopeFor := func(t *testing.T, completion *operatorv1.InferenceCompletion) *commonv1.GovernanceEnvelope {
@@ -341,6 +352,12 @@ func TestVerifyInferenceCompletion_FailureCodeMapping(t *testing.T) {
 		{name: "generate failed", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATE_FAILED, want: constants.ErrInferenceGenerateFailed},
 		{name: "model not found", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND, want: constants.ErrInferenceModelNotFound},
 		{name: "provider response invalid", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID, want: constants.ErrInferenceProviderResponseInvalid},
+		{name: "generation options invalid", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID, want: constants.ErrInferenceGenerationOptionsInvalid},
+		{name: "capability unsupported", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED, want: constants.ErrInferenceCapabilityUnsupported},
+		{name: "provider attempt required", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED, want: constants.ErrInferenceProviderAttemptRequired},
+		{name: "identity mismatch", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH, want: constants.ErrInferenceIdentityMismatch},
+		{name: "model digest mismatch", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH, want: constants.ErrInferenceModelDigestMismatch},
+		{name: "evidence hash invalid", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID, want: constants.ErrInferenceEvidenceHashInvalid},
 		{name: "generic execution failure", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED, want: constants.ErrInferenceReceiptFailed},
 		{name: "unspecified code falls back to generic failure", code: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED, want: constants.ErrInferenceReceiptFailed},
 	}

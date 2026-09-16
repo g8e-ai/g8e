@@ -11,6 +11,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -61,23 +62,59 @@ func InferenceModelRoleFromProto(r operatorv1.ModelRole) InferenceModelRole {
 
 // GenerateRequest carries the Ollama model name, ordered scrubbed conversation, callable tools, and generation parameters.
 type GenerateRequest struct {
-	Role        InferenceModelRole
-	Model       string
-	Messages    []*operatorv1.InferenceMessage
-	Tools       []*operatorv1.InferenceToolDeclaration
-	Temperature float32
-	MaxTokens   int32
-	KeepAlive   string
+	Role                 InferenceModelRole
+	Model                string
+	Messages             []*operatorv1.InferenceMessage
+	Tools                []*operatorv1.InferenceToolDeclaration
+	Temperature          float32
+	MaxTokens            int32
+	KeepAlive            string
+	TopP                 *float32
+	TopK                 *int32
+	StopSequences        []string
+	ResponseFormat       *operatorv1.InferenceResponseFormat
+	RequestSchemaVersion string
+	ToolChoice           *operatorv1.InferenceToolChoice
+	ParallelToolCalls    *bool
+	Thinking             *operatorv1.InferenceThinkingControl
+	ContextLimit         *int32
+	ProviderAttemptID    string
+	ModelDigest          string
+	CampaignID           string
+	RunID                string
+	AssignmentID         string
+	EvaluationAttemptID  string
+	ScenarioID           string
 }
 
 // GenerateResponse carries ordered model response parts, usage metadata, and finish reason returned by the backend.
 type GenerateResponse struct {
-	Parts            []*operatorv1.InferenceResponsePart
-	PromptTokens     int32
-	CompletionTokens int32
-	TotalTokens      int32
-	FinishReason     string
-	Model            string
+	Parts                 []*operatorv1.InferenceResponsePart
+	PromptTokens          int32
+	CompletionTokens      int32
+	TotalTokens           int32
+	UsageReported         bool
+	ThinkingTokens        *int32
+	CacheTokens           *int32
+	LoadDurationNS        *int64
+	PromptEvalDurationNS  *int64
+	GenerationDurationNS  *int64
+	TotalDurationNS       *int64
+	TimeToFirstTokenNS    *int64
+	TimingSource          operatorv1.InferenceTimingSource
+	FinishReason          string
+	Model                 string
+	ProviderAttemptID     string
+	RequestedModel        string
+	RequestedModelDigest  string
+	ServedModelDigest     string
+	NormalizedRequestHash string
+	OutputHash            string
+	CampaignID            string
+	RunID                 string
+	AssignmentID          string
+	EvaluationAttemptID   string
+	ScenarioID            string
 }
 
 // BackendStatus reports the backend's readiness and the models available in
@@ -89,13 +126,29 @@ type BackendStatus struct {
 
 // InferenceRequestPayload is the typed governed inference payload decoded from the protobuf InferenceRequested message.
 type InferenceRequestPayload struct {
-	Role        InferenceModelRole
-	Model       string
-	Messages    []*operatorv1.InferenceMessage
-	Tools       []*operatorv1.InferenceToolDeclaration
-	Temperature float32
-	MaxTokens   int32
-	KeepAlive   string
+	Role                 InferenceModelRole
+	Model                string
+	Messages             []*operatorv1.InferenceMessage
+	Tools                []*operatorv1.InferenceToolDeclaration
+	Temperature          float32
+	MaxTokens            int32
+	KeepAlive            string
+	TopP                 *float32
+	TopK                 *int32
+	StopSequences        []string
+	ResponseFormat       *operatorv1.InferenceResponseFormat
+	RequestSchemaVersion string
+	ToolChoice           *operatorv1.InferenceToolChoice
+	ParallelToolCalls    *bool
+	Thinking             *operatorv1.InferenceThinkingControl
+	ContextLimit         *int32
+	ProviderAttemptID    string
+	ModelDigest          string
+	CampaignID           string
+	RunID                string
+	AssignmentID         string
+	EvaluationAttemptID  string
+	ScenarioID           string
 }
 
 // FromProtoInferenceRequested decodes a protobuf InferenceRequested message into an isolated typed payload.
@@ -110,14 +163,65 @@ func FromProtoInferenceRequested(req *operatorv1.InferenceRequested) InferenceRe
 		tools[i] = &operatorv1.InferenceToolDeclaration{}
 		proto.Merge(tools[i], tool)
 	}
+	var topP *float32
+	if req.TopP != nil {
+		value := req.GetTopP()
+		topP = &value
+	}
+	var topK *int32
+	if req.TopK != nil {
+		value := req.GetTopK()
+		topK = &value
+	}
+	var responseFormat *operatorv1.InferenceResponseFormat
+	if req.GetResponseFormat() != nil {
+		responseFormat = &operatorv1.InferenceResponseFormat{}
+		proto.Merge(responseFormat, req.GetResponseFormat())
+	}
+	var toolChoice *operatorv1.InferenceToolChoice
+	if req.GetToolChoice() != nil {
+		toolChoice = &operatorv1.InferenceToolChoice{}
+		proto.Merge(toolChoice, req.GetToolChoice())
+	}
+	var parallelToolCalls *bool
+	if req.ParallelToolCalls != nil {
+		value := req.GetParallelToolCalls()
+		parallelToolCalls = &value
+	}
+	var thinking *operatorv1.InferenceThinkingControl
+	if req.GetThinking() != nil {
+		thinking = &operatorv1.InferenceThinkingControl{}
+		proto.Merge(thinking, req.GetThinking())
+	}
+	var contextLimit *int32
+	if req.ContextLimit != nil {
+		value := req.GetContextLimit()
+		contextLimit = &value
+	}
 	return InferenceRequestPayload{
-		Role:        InferenceModelRoleFromProto(req.GetRole()),
-		Model:       req.GetModel(),
-		Messages:    messages,
-		Tools:       tools,
-		Temperature: req.GetTemperature(),
-		MaxTokens:   req.GetMaxTokens(),
-		KeepAlive:   req.GetKeepAlive(),
+		Role:                 InferenceModelRoleFromProto(req.GetRole()),
+		Model:                req.GetModel(),
+		Messages:             messages,
+		Tools:                tools,
+		Temperature:          req.GetTemperature(),
+		MaxTokens:            req.GetMaxTokens(),
+		KeepAlive:            req.GetKeepAlive(),
+		TopP:                 topP,
+		TopK:                 topK,
+		StopSequences:        append([]string(nil), req.GetStopSequences()...),
+		ResponseFormat:       responseFormat,
+		RequestSchemaVersion: req.GetRequestSchemaVersion(),
+		ToolChoice:           toolChoice,
+		ParallelToolCalls:    parallelToolCalls,
+		Thinking:             thinking,
+		ContextLimit:         contextLimit,
+		ProviderAttemptID:    req.GetProviderAttemptId(),
+		ModelDigest:          req.GetModelDigest(),
+		CampaignID:           req.GetCampaignId(),
+		RunID:                req.GetRunId(),
+		AssignmentID:         req.GetAssignmentId(),
+		EvaluationAttemptID:  req.GetEvaluationAttemptId(),
+		ScenarioID:           req.GetScenarioId(),
 	}
 }
 
@@ -130,13 +234,29 @@ func (p InferenceRequestPayload) ToGenerateRequest(defaultModel string) Generate
 		model = defaultModel
 	}
 	return GenerateRequest{
-		Role:        p.Role,
-		Model:       model,
-		Messages:    p.Messages,
-		Tools:       p.Tools,
-		Temperature: p.Temperature,
-		MaxTokens:   p.MaxTokens,
-		KeepAlive:   p.KeepAlive,
+		Role:                 p.Role,
+		Model:                model,
+		Messages:             p.Messages,
+		Tools:                p.Tools,
+		Temperature:          p.Temperature,
+		MaxTokens:            p.MaxTokens,
+		KeepAlive:            p.KeepAlive,
+		TopP:                 p.TopP,
+		TopK:                 p.TopK,
+		StopSequences:        append([]string(nil), p.StopSequences...),
+		ResponseFormat:       p.ResponseFormat,
+		RequestSchemaVersion: p.RequestSchemaVersion,
+		ToolChoice:           p.ToolChoice,
+		ParallelToolCalls:    p.ParallelToolCalls,
+		Thinking:             p.Thinking,
+		ContextLimit:         p.ContextLimit,
+		ProviderAttemptID:    p.ProviderAttemptID,
+		ModelDigest:          p.ModelDigest,
+		CampaignID:           p.CampaignID,
+		RunID:                p.RunID,
+		AssignmentID:         p.AssignmentID,
+		EvaluationAttemptID:  p.EvaluationAttemptID,
+		ScenarioID:           p.ScenarioID,
 	}
 }
 
@@ -144,12 +264,32 @@ func (p InferenceRequestPayload) ToGenerateRequest(defaultModel string) Generate
 // InferenceResult message for result envelope publishing.
 func (r GenerateResponse) ToProtoInferenceResult() *operatorv1.InferenceResult {
 	return &operatorv1.InferenceResult{
-		Parts:            r.Parts,
-		PromptTokens:     r.PromptTokens,
-		CompletionTokens: r.CompletionTokens,
-		TotalTokens:      r.TotalTokens,
-		FinishReason:     r.FinishReason,
-		Model:            r.Model,
+		Parts:                 r.Parts,
+		PromptTokens:          r.PromptTokens,
+		CompletionTokens:      r.CompletionTokens,
+		TotalTokens:           r.TotalTokens,
+		UsageReported:         r.UsageReported,
+		ThinkingTokens:        r.ThinkingTokens,
+		CacheTokens:           r.CacheTokens,
+		LoadDurationNs:        r.LoadDurationNS,
+		PromptEvalDurationNs:  r.PromptEvalDurationNS,
+		GenerationDurationNs:  r.GenerationDurationNS,
+		TotalDurationNs:       r.TotalDurationNS,
+		TimeToFirstTokenNs:    r.TimeToFirstTokenNS,
+		TimingSource:          r.TimingSource,
+		FinishReason:          r.FinishReason,
+		Model:                 r.Model,
+		ProviderAttemptId:     r.ProviderAttemptID,
+		RequestedModel:        r.RequestedModel,
+		RequestedModelDigest:  r.RequestedModelDigest,
+		ServedModelDigest:     r.ServedModelDigest,
+		NormalizedRequestHash: r.NormalizedRequestHash,
+		OutputHash:            r.OutputHash,
+		CampaignId:            r.CampaignID,
+		RunId:                 r.RunID,
+		AssignmentId:          r.AssignmentID,
+		EvaluationAttemptId:   r.EvaluationAttemptID,
+		ScenarioId:            r.ScenarioID,
 	}
 }
 
@@ -172,6 +312,27 @@ func ComputeInferenceResultDigest(result *operatorv1.InferenceResult) (string, e
 	if err != nil {
 		return "", fmt.Errorf("models: compute inference result digest: marshal: %w", err)
 	}
+	return SHA256Hex(data), nil
+}
+
+func ComputeInferenceOutputHash(parts []*operatorv1.InferenceResponsePart, finishReason string) (string, error) {
+	output := &operatorv1.InferenceResult{Parts: parts, FinishReason: finishReason}
+	data, err := proto.MarshalOptions{Deterministic: true}.Marshal(output)
+	if err != nil {
+		return "", fmt.Errorf("models: compute inference output hash: %w", err)
+	}
+	return SHA256Hex(data), nil
+}
+
+func SHA256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:]), nil
+	return hex.EncodeToString(sum[:])
+}
+
+func IsSHA256Hex(value string) bool {
+	if len(value) != sha256.Size*2 || value != strings.ToLower(value) {
+		return false
+	}
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size
 }

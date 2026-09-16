@@ -521,6 +521,18 @@ func classifyReceiptFailure(execErr error) operatorv1.ReceiptFailureCode {
 		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND
 	case errors.Is(execErr, constants.ErrInferenceProviderResponseInvalid):
 		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID
+	case errors.Is(execErr, constants.ErrInferenceGenerationOptionsInvalid):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID
+	case errors.Is(execErr, constants.ErrInferenceCapabilityUnsupported):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED
+	case errors.Is(execErr, constants.ErrInferenceProviderAttemptRequired):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED
+	case errors.Is(execErr, constants.ErrInferenceIdentityMismatch):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH
+	case errors.Is(execErr, constants.ErrInferenceModelDigestMismatch):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH
+	case errors.Is(execErr, constants.ErrInferenceEvidenceHashInvalid):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID
 	default:
 		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED
 	}

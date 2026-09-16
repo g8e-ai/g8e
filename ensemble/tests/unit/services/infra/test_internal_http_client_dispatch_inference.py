@@ -59,6 +59,7 @@ def _dispatch_request() -> InferenceDispatchRequest:
         task_id="task-1",
         web_session_id="web-1",
         target_operator_session_id="sess-inf-1",
+        provider_attempt_id="provider-attempt-1",
     )
     message = request.messages.add(role=INFERENCE_MESSAGE_ROLE_USER)
     message.parts.add(text="summarize this")
@@ -116,6 +117,7 @@ async def test_dispatch_inference_posts_protojson_request_and_parses_proto_respo
         "investigation_id": "inv-1",
         "task_id": "task-1",
         "web_session_id": "web-1",
+        "provider_attempt_id": "provider-attempt-1",
         "messages": [
             {
                 "role": "INFERENCE_MESSAGE_ROLE_USER",

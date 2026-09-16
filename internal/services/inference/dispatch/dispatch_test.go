@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,9 +67,25 @@ func capableOp(sessionID string) models.OperatorDocumentGo {
 
 func successDispatchResult(t *testing.T) *CommandDispatchResult {
 	t.Helper()
+	return successDispatchResultFor(t, baseRequest())
+}
+
+func successDispatchResultFor(t *testing.T, req DispatchInferenceRequest) *CommandDispatchResult {
+	t.Helper()
 	payload, err := proto.Marshal(&operatorv1.InferenceResult{
-		Parts: []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "ok"}}},
-		Model: "gemma3:4b",
+		Parts:                 []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "ok"}}},
+		Model:                 req.Model,
+		RequestedModel:        req.Model,
+		ProviderAttemptId:     req.ProviderAttemptID,
+		RequestedModelDigest:  req.ModelDigest,
+		ServedModelDigest:     req.ModelDigest,
+		NormalizedRequestHash: "11aa22bb33cc44dd55ee66ff7788990011aa22bb33cc44dd55ee66ff77889900",
+		OutputHash:            "00aa11bb22cc33dd44ee55ff6677889900aa11bb22cc33dd44ee55ff66778899",
+		CampaignId:            req.CampaignID,
+		RunId:                 req.RunID,
+		AssignmentId:          req.AssignmentID,
+		EvaluationAttemptId:   req.EvaluationAttemptID,
+		ScenarioId:            req.ScenarioID,
 	})
 	require.NoError(t, err)
 	return &CommandDispatchResult{
@@ -89,9 +106,12 @@ func baseMessages() []*operatorv1.InferenceMessage {
 
 func baseRequest() DispatchInferenceRequest {
 	return DispatchInferenceRequest{
-		Role:            models.InferenceModelRolePrimary,
-		Messages:        baseMessages(),
-		RequestorUserID: "user-1",
+		Role:                 models.InferenceModelRolePrimary,
+		Model:                "gemma3:4b",
+		Messages:             baseMessages(),
+		ProviderAttemptID:    "provider-attempt-1",
+		RequestorUserID:      "user-1",
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
 	}
 }
 
@@ -223,6 +243,19 @@ func TestDispatchInference_MissingRequestorRejected(t *testing.T) {
 	assert.Equal(t, 0, dispatcher.calls)
 }
 
+func TestDispatchInference_MissingProviderAttemptIDRejected(t *testing.T) {
+	dispatcher := &stubCommandDispatcher{}
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{capableOp("sess-a")}}, testLogger())
+
+	req := baseRequest()
+	req.ProviderAttemptID = ""
+	_, err := svc.DispatchInference(context.Background(), req)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInferenceProviderAttemptRequired)
+	assert.Equal(t, 0, dispatcher.calls)
+}
+
 func TestDispatchInference_OperatorListerErrorPropagates(t *testing.T) {
 	dispatcher := &stubCommandDispatcher{}
 	svc := NewDispatchService(dispatcher, &stubOperatorLister{err: errors.New("doc store down")}, testLogger())
@@ -284,11 +317,121 @@ func TestDispatchInference_MalformedResultPayloadFailsClosed(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrInferenceResultDecode)
 }
 
+func TestDispatchInference_ContradictoryResultMetadataFailsClosed(t *testing.T) {
+	tests := []struct {
+		name   string
+		result *operatorv1.InferenceResult
+	}{
+		{
+			name: "unreported nonzero usage",
+			result: &operatorv1.InferenceResult{
+				Parts:        []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "answer"}}},
+				Model:        "test-model",
+				PromptTokens: 1,
+			},
+		},
+		{
+			name: "reported usage arithmetic mismatch",
+			result: &operatorv1.InferenceResult{
+				Parts:            []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "answer"}}},
+				Model:            "test-model",
+				PromptTokens:     1,
+				CompletionTokens: 1,
+				TotalTokens:      3,
+				UsageReported:    true,
+			},
+		},
+		{
+			name: "timing missing source",
+			result: &operatorv1.InferenceResult{
+				Parts:          []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "answer"}}},
+				Model:          "test-model",
+				LoadDurationNs: func() *int64 { value := int64(1); return &value }(),
+			},
+		},
+		{
+			name: "source missing timing",
+			result: &operatorv1.InferenceResult{
+				Parts:        []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "answer"}}},
+				Model:        "test-model",
+				TimingSource: operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_PROVIDER,
+			},
+		},
+		{
+			name: "unknown timing source",
+			result: &operatorv1.InferenceResult{
+				Parts:        []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "answer"}}},
+				Model:        "test-model",
+				TimingSource: operatorv1.InferenceTimingSource(99),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload, err := proto.Marshal(tt.result)
+			require.NoError(t, err)
+			dispatcher := &stubCommandDispatcher{result: &CommandDispatchResult{TransactionID: "tx-1", ResultPayload: payload}}
+			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{capableOp("sess-a")}}, testLogger())
+
+			result, err := svc.DispatchInference(context.Background(), baseRequest())
+
+			require.Error(t, err)
+			assert.Nil(t, result)
+			assert.ErrorIs(t, err, constants.ErrInferenceProviderResponseInvalid)
+		})
+	}
+}
+
+func TestDispatchInference_ResultIdentityMismatchFailsClosed(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*operatorv1.InferenceResult)
+	}{
+		{name: "provider attempt", mutate: func(result *operatorv1.InferenceResult) { result.ProviderAttemptId = "other-attempt" }},
+		{name: "requested model", mutate: func(result *operatorv1.InferenceResult) { result.RequestedModel = "other-model" }},
+		{name: "campaign", mutate: func(result *operatorv1.InferenceResult) { result.CampaignId = "other-campaign" }},
+		{name: "model digest", mutate: func(result *operatorv1.InferenceResult) { result.RequestedModelDigest = "bb" + strings.Repeat("0", 62) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := &operatorv1.InferenceResult{
+				Parts:                 []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "answer"}}},
+				Model:                 "gemma3:4b",
+				RequestedModel:        "gemma3:4b",
+				ProviderAttemptId:     "provider-attempt-1",
+				NormalizedRequestHash: strings.Repeat("1", 64),
+				OutputHash:            strings.Repeat("2", 64),
+				CampaignId:            "campaign-1",
+				RequestedModelDigest:  strings.Repeat("a", 64),
+				ServedModelDigest:     strings.Repeat("a", 64),
+			}
+			tt.mutate(result)
+			payload, err := proto.Marshal(result)
+			require.NoError(t, err)
+			dispatcher := &stubCommandDispatcher{result: &CommandDispatchResult{TransactionID: "tx-1", ResultPayload: payload}}
+			svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{capableOp("sess-a")}}, testLogger())
+			req := baseRequest()
+			req.CampaignID = "campaign-1"
+			req.ModelDigest = strings.Repeat("a", 64)
+
+			out, err := svc.DispatchInference(context.Background(), req)
+
+			require.Error(t, err)
+			assert.Nil(t, out)
+			assert.ErrorIs(t, err, constants.ErrInferenceIdentityMismatch)
+		})
+	}
+}
+
 func TestDispatchInference_SuccessReturnsResultAndReceipt(t *testing.T) {
 	receipt := &operatorv1.ActionReceipt{TransactionId: "tx-9", Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED}
 	resultPayload, err := proto.Marshal(&operatorv1.InferenceResult{
-		Parts: []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "answer"}}},
-		Model: "gemma3:4b",
+		Parts:                 []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "answer"}}},
+		Model:                 "gemma3:4b",
+		RequestedModel:        "gemma3:4b",
+		ProviderAttemptId:     "provider-attempt-1",
+		NormalizedRequestHash: strings.Repeat("1", 64),
+		OutputHash:            strings.Repeat("2", 64),
 	})
 	require.NoError(t, err)
 	dispatcher := &stubCommandDispatcher{result: &CommandDispatchResult{
@@ -322,28 +465,64 @@ func TestDispatchInference_PayloadCarriesRequestFields(t *testing.T) {
 
 	req := baseRequest()
 	req.Role = models.InferenceModelRoleLite
-	req.Model = "qwen3:1.5b"
+	req.Model = "gemma3:4b"
 	req.Temperature = 0.2
 	req.MaxTokens = 64
 	req.KeepAlive = "5m"
+	topP := float32(0.8)
+	topK := int32(40)
+	req.TopP = &topP
+	req.TopK = &topK
+	req.StopSequences = []string{"END", "STOP"}
+	req.ResponseFormat = &operatorv1.InferenceResponseFormat{MediaType: "application/json", JsonSchema: `{"properties":{"answer":{"type":"string"}},"type":"object"}`}
+	req.RequestSchemaVersion = constants.InferenceRequestSchemaVersion
+	parallelToolCalls := false
+	contextLimit := int32(8192)
+	req.ToolChoice = &operatorv1.InferenceToolChoice{Mode: operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO, AllowedToolNames: []string{"inspect"}}
+	req.ParallelToolCalls = &parallelToolCalls
+	req.Thinking = &operatorv1.InferenceThinkingControl{Mode: &operatorv1.InferenceThinkingControl_Enabled{Enabled: true}, IncludeThoughts: true}
+	req.ContextLimit = &contextLimit
+	req.ModelDigest = strings.Repeat("a", 64)
+	req.CampaignID = "campaign-1"
+	req.RunID = "run-1"
+	req.AssignmentID = "assignment-1"
+	req.EvaluationAttemptID = "evaluation-attempt-1"
+	req.ScenarioID = "scenario-1"
 	req.Tools = []*operatorv1.InferenceToolDeclaration{{
 		Name:        "inspect",
 		Description: "Inspect a target",
 		JsonSchema:  `{"properties":{"path":{"type":"string"}},"type":"object"}`,
 	}}
+	dispatcher.result = successDispatchResultFor(t, req)
 	_, err := svc.DispatchInference(context.Background(), req)
 	require.NoError(t, err)
 
 	infReq := &operatorv1.InferenceRequested{}
 	require.NoError(t, proto.Unmarshal(dispatcher.lastReq.Payload, infReq))
 	expected := &operatorv1.InferenceRequested{
-		Role:        operatorv1.ModelRole_MODEL_ROLE_LITE,
-		Model:       "qwen3:1.5b",
-		Temperature: 0.2,
-		MaxTokens:   64,
-		KeepAlive:   "5m",
-		Messages:    baseMessages(),
-		Tools:       req.Tools,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_LITE,
+		Model:                "gemma3:4b",
+		Temperature:          0.2,
+		MaxTokens:            64,
+		KeepAlive:            "5m",
+		Messages:             baseMessages(),
+		Tools:                req.Tools,
+		TopP:                 &topP,
+		TopK:                 &topK,
+		StopSequences:        req.StopSequences,
+		ResponseFormat:       req.ResponseFormat,
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		ToolChoice:           req.ToolChoice,
+		ParallelToolCalls:    req.ParallelToolCalls,
+		Thinking:             req.Thinking,
+		ContextLimit:         req.ContextLimit,
+		ProviderAttemptId:    req.ProviderAttemptID,
+		ModelDigest:          req.ModelDigest,
+		CampaignId:           req.CampaignID,
+		RunId:                req.RunID,
+		AssignmentId:         req.AssignmentID,
+		EvaluationAttemptId:  req.EvaluationAttemptID,
+		ScenarioId:           req.ScenarioID,
 	}
 	assert.True(t, proto.Equal(expected, infReq), "forwarded governed payload must preserve every ordered message and tool field")
 }

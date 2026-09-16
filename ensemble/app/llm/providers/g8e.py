@@ -31,14 +31,18 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 from contextvars import ContextVar
+from uuid import uuid4
 
+from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, ThinkingLevel
 from app.llm.llm_dataclasses import (
     Candidate,
     Content,
     GenerateContentResponse,
     Part,
+    ResponseFormat,
     StreamChunkFromModel,
     ToolCall,
+    ToolConfig,
     ToolGroup,
     UsageMetadata,
 )
@@ -46,27 +50,38 @@ from app.llm.llm_types import (
     AssistantLLMSettings,
     LiteLLMSettings,
     PrimaryLLMSettings,
+    ThinkingConfig,
 )
 from app.llm.provider import LLMProvider
+from app.llm.thinking import translate_for_ollama
 from app.llm.utils import schema_to_dict
+from app.models.model_configs import get_model_config
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import (
     InferenceDispatchRequest,
     InferenceDispatchResponse,
 )
 from app.models.model_telemetry import GovernedDispatchEvidence
+from g8e.constants import PLATFORM
 from g8e.operator.v1.operator_pb2 import (
+    EXECUTION_STATUS_COMPLETED,
     INFERENCE_MESSAGE_ROLE_ASSISTANT,
     INFERENCE_MESSAGE_ROLE_SYSTEM,
     INFERENCE_MESSAGE_ROLE_TOOL,
     INFERENCE_MESSAGE_ROLE_USER,
+    INFERENCE_TOOL_CHOICE_MODE_AUTO,
+    INFERENCE_TOOL_CHOICE_MODE_NONE,
+    INFERENCE_TOOL_CHOICE_MODE_REQUIRED,
     MODEL_ROLE_ASSISTANT,
     MODEL_ROLE_LITE,
     MODEL_ROLE_PRIMARY,
     ExecutionStatus,
     InferenceMessage,
     InferenceMessagePart,
+    InferenceResponseFormat,
+    InferenceThinkingControl,
     InferenceToolCall,
+    InferenceToolChoice,
     InferenceToolDeclaration,
     InferenceToolResult,
 )
@@ -76,6 +91,7 @@ logger = logging.getLogger(__name__)
 _ROLE_PRIMARY = MODEL_ROLE_PRIMARY
 _ROLE_ASSISTANT = MODEL_ROLE_ASSISTANT
 _ROLE_LITE = MODEL_ROLE_LITE
+_REQUEST_SCHEMA_VERSION = PLATFORM["platform"]["InferenceRequestSchemaVersion"]["value"]
 
 
 def _canonical_json(value: object) -> str:
@@ -188,15 +204,87 @@ def _tools_to_declarations(tools: list[ToolGroup] | None) -> list[InferenceToolD
     return declarations
 
 
+def _response_format(format_value: ResponseFormat | None) -> InferenceResponseFormat | None:
+    if format_value is None:
+        return None
+    return InferenceResponseFormat(
+        media_type="application/json",
+        json_schema=_canonical_json(format_value.json_schema.json_schema_dict),
+    )
+
+
+def _tool_choice(config: ToolConfig | None) -> InferenceToolChoice | None:
+    if config is None:
+        return None
+    from app.errors import ValidationError
+
+    mode_name = config.tool_calling_config.mode.upper()
+    modes = {
+        "AUTO": INFERENCE_TOOL_CHOICE_MODE_AUTO,
+        "NONE": INFERENCE_TOOL_CHOICE_MODE_NONE,
+        "ANY": INFERENCE_TOOL_CHOICE_MODE_REQUIRED,
+        "REQUIRED": INFERENCE_TOOL_CHOICE_MODE_REQUIRED,
+    }
+    if mode_name not in modes:
+        raise ValidationError(f"Unsupported governed inference tool-choice mode: {mode_name}")
+    return InferenceToolChoice(
+        mode=modes[mode_name],
+        allowed_tool_names=config.tool_calling_config.allowed_tool_names,
+    )
+
+
+def _thinking_control(model: str, config: ThinkingConfig | None) -> InferenceThinkingControl | None:
+    level = config.thinking_level if config is not None else ThinkingLevel.OFF
+    translation = translate_for_ollama(level, get_model_config(model))
+    if translation.think is None:
+        return None
+    return InferenceThinkingControl(
+        enabled=translation.think,
+        include_thoughts=config.include_thoughts if config is not None else False,
+    )
+
+
 def _response_to_usage_metadata(result: InferenceDispatchResponse) -> UsageMetadata:
     """Build UsageMetadata from the dispatch response result."""
     if not result.HasField("result"):
         return UsageMetadata()
+    inference_result = result.result
     return UsageMetadata(
-        prompt_token_count=result.result.prompt_tokens,
-        candidates_token_count=result.result.completion_tokens,
-        total_token_count=result.result.total_tokens,
-        usage_reported=result.result.total_tokens > 0,
+        prompt_token_count=inference_result.prompt_tokens,
+        candidates_token_count=inference_result.completion_tokens,
+        total_token_count=inference_result.total_tokens,
+        thinking_token_count=(
+            inference_result.thinking_tokens if inference_result.HasField("thinking_tokens") else 0
+        ),
+        cache_token_count=(
+            inference_result.cache_tokens if inference_result.HasField("cache_tokens") else 0
+        ),
+        usage_reported=inference_result.usage_reported,
+        time_to_first_token_seconds=(
+            inference_result.time_to_first_token_ns / 1_000_000_000
+            if inference_result.HasField("time_to_first_token_ns")
+            else None
+        ),
+        prompt_eval_duration_seconds=(
+            inference_result.prompt_eval_duration_ns / 1_000_000_000
+            if inference_result.HasField("prompt_eval_duration_ns")
+            else None
+        ),
+        eval_duration_seconds=(
+            inference_result.generation_duration_ns / 1_000_000_000
+            if inference_result.HasField("generation_duration_ns")
+            else None
+        ),
+        total_duration_seconds=(
+            inference_result.total_duration_ns / 1_000_000_000
+            if inference_result.HasField("total_duration_ns")
+            else None
+        ),
+        load_duration_seconds=(
+            inference_result.load_duration_ns / 1_000_000_000
+            if inference_result.HasField("load_duration_ns")
+            else None
+        ),
     )
 
 
@@ -237,6 +325,39 @@ def _response_parts(result: InferenceDispatchResponse) -> list[Part]:
     if not parts:
         raise ValidationError("Governed inference response contains no parts")
     return parts
+
+
+def _validate_response_identity(
+    request: InferenceDispatchRequest, response: InferenceDispatchResponse
+) -> None:
+    from app.errors import ValidationError
+
+    if not response.HasField("result"):
+        raise ValidationError("Governed inference response is missing its result")
+    result = response.result
+    hashes = (result.normalized_request_hash, result.output_hash, result.result_digest)
+    if (
+        not response.HasField("receipt")
+        or response.receipt.status != EXECUTION_STATUS_COMPLETED
+        or response.transaction_id != response.receipt.transaction_id
+        or response.receipt.result_summary != result.result_digest
+        or result.provider_attempt_id != request.provider_attempt_id
+        or (
+            request.model
+            and (result.requested_model != request.model or result.model != request.model)
+        )
+        or result.requested_model_digest != request.model_digest
+        or result.served_model_digest != request.model_digest
+        or result.campaign_id != request.campaign_id
+        or result.run_id != request.run_id
+        or result.assignment_id != request.assignment_id
+        or result.evaluation_attempt_id != request.evaluation_attempt_id
+        or result.scenario_id != request.scenario_id
+        or any(len(value) != 64 or value.lower() != value for value in hashes)
+        or any(any(char not in "0123456789abcdef" for char in value) for value in hashes)
+        or (request.model_digest and result.served_model_digest != request.model_digest)
+    ):
+        raise ValidationError("Governed inference response identity binding is invalid")
 
 
 def _response_to_generate_content(
@@ -321,6 +442,13 @@ class G8EProvider(LLMProvider):
         contents: list[Content],
         system_instructions: str | None,
         max_output_tokens: int,
+        top_p: float | None,
+        top_k: int | None,
+        stop_sequences: list[str] | None,
+        response_format: ResponseFormat | None,
+        tool_config: ToolConfig | None,
+        parallel_tool_calls: bool | None,
+        thinking_config: ThinkingConfig | None,
         tools: list[ToolGroup] | None = None,
     ) -> InferenceDispatchResponse:
         """Dispatch a governed inference request and return the response."""
@@ -332,14 +460,34 @@ class G8EProvider(LLMProvider):
             tools=_tools_to_declarations(tools),
             model=model or "",
             max_tokens=max_output_tokens,
+            stop_sequences=stop_sequences or [],
+            request_schema_version=_REQUEST_SCHEMA_VERSION,
+            context_limit=LLM_OLLAMA_DEFAULT_NUM_CTX,
+            provider_attempt_id=str(uuid4()),
             case_id=(context.case_id or "") if context else "",
             investigation_id=(context.investigation_id or "") if context else "",
             task_id=(context.task_id or "") if context else "",
             web_session_id=(context.web_session_id or "") if context else "",
             cli_session_id=(context.cli_session_id or "") if context else "",
         )
+        if top_p is not None:
+            request.top_p = top_p
+        if top_k is not None:
+            request.top_k = top_k
+        if parallel_tool_calls is not None:
+            request.parallel_tool_calls = parallel_tool_calls
+        normalized_tool_choice = _tool_choice(tool_config)
+        if normalized_tool_choice is not None:
+            request.tool_choice.CopyFrom(normalized_tool_choice)
+        normalized_thinking = _thinking_control(model, thinking_config)
+        if normalized_thinking is not None:
+            request.thinking.CopyFrom(normalized_thinking)
+        normalized_response_format = _response_format(response_format)
+        if normalized_response_format is not None:
+            request.response_format.CopyFrom(normalized_response_format)
         self._record_model_boundary(request)
         response = await self._client.dispatch_inference(request)
+        _validate_response_identity(request, response)
         _response_parts(response)
         self._governed_dispatch_evidence.set(
             GovernedDispatchEvidence(
@@ -352,6 +500,12 @@ class G8EProvider(LLMProvider):
                     if response.HasField("receipt")
                     else ""
                 ),
+                provider_attempt_id=response.result.provider_attempt_id,
+                requested_model=response.result.requested_model,
+                served_model=response.result.model,
+                model_digest=response.result.served_model_digest,
+                normalized_request_hash=response.result.normalized_request_hash,
+                output_hash=response.result.output_hash,
             )
         )
         return response
@@ -368,6 +522,13 @@ class G8EProvider(LLMProvider):
             contents,
             primary_llm_settings.system_instructions,
             primary_llm_settings.max_output_tokens,
+            primary_llm_settings.top_p_nucleus_sampling,
+            primary_llm_settings.top_k_filtering,
+            primary_llm_settings.stop_sequences,
+            None,
+            primary_llm_settings.tool_config,
+            primary_llm_settings.parallel_tool_calls,
+            primary_llm_settings.thinking_config,
             primary_llm_settings.tools,
         )
         for chunk in _response_to_stream_chunks(result):
@@ -385,6 +546,13 @@ class G8EProvider(LLMProvider):
             contents,
             primary_llm_settings.system_instructions,
             primary_llm_settings.max_output_tokens,
+            primary_llm_settings.top_p_nucleus_sampling,
+            primary_llm_settings.top_k_filtering,
+            primary_llm_settings.stop_sequences,
+            None,
+            primary_llm_settings.tool_config,
+            primary_llm_settings.parallel_tool_calls,
+            primary_llm_settings.thinking_config,
             primary_llm_settings.tools,
         )
         return _response_to_generate_content(result)
@@ -401,6 +569,13 @@ class G8EProvider(LLMProvider):
             contents,
             assistant_llm_settings.system_instructions,
             assistant_llm_settings.max_output_tokens,
+            assistant_llm_settings.top_p_nucleus_sampling,
+            assistant_llm_settings.top_k_filtering,
+            assistant_llm_settings.stop_sequences,
+            assistant_llm_settings.response_format,
+            None,
+            None,
+            None,
         )
         for chunk in _response_to_stream_chunks(result):
             yield chunk
@@ -417,6 +592,13 @@ class G8EProvider(LLMProvider):
             contents,
             assistant_llm_settings.system_instructions,
             assistant_llm_settings.max_output_tokens,
+            assistant_llm_settings.top_p_nucleus_sampling,
+            assistant_llm_settings.top_k_filtering,
+            assistant_llm_settings.stop_sequences,
+            assistant_llm_settings.response_format,
+            None,
+            None,
+            None,
         )
         return _response_to_generate_content(result)
 
@@ -432,6 +614,13 @@ class G8EProvider(LLMProvider):
             contents,
             lite_llm_settings.system_instructions,
             lite_llm_settings.max_output_tokens,
+            lite_llm_settings.top_p_nucleus_sampling,
+            lite_llm_settings.top_k_filtering,
+            lite_llm_settings.stop_sequences,
+            lite_llm_settings.response_format,
+            None,
+            None,
+            None,
         )
         for chunk in _response_to_stream_chunks(result):
             yield chunk
@@ -448,5 +637,12 @@ class G8EProvider(LLMProvider):
             contents,
             lite_llm_settings.system_instructions,
             lite_llm_settings.max_output_tokens,
+            lite_llm_settings.top_p_nucleus_sampling,
+            lite_llm_settings.top_k_filtering,
+            lite_llm_settings.stop_sequences,
+            lite_llm_settings.response_format,
+            None,
+            None,
+            None,
         )
         return _response_to_generate_content(result)

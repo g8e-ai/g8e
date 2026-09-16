@@ -10,6 +10,7 @@ package platform
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/logging"
 )
@@ -316,10 +318,26 @@ func stopFailedStart(cmd *exec.Cmd) error {
 		return fmt.Errorf("kill process: %w", killErr)
 	}
 	var exitErr *exec.ExitError
-	if waitErr != nil && !errors.As(waitErr, &exitErr) {
+	if waitErr != nil && !errors.As(waitErr, &exitErr) && !errors.Is(waitErr, os.ErrProcessDone) {
 		return fmt.Errorf("wait for process: %w", waitErr)
 	}
 	return nil
+}
+
+// maxHealthResponseBytes bounds the health-check response body read during
+// start verification.
+const maxHealthResponseBytes = 8192
+
+// healthResponseIsFromChild reports whether a 200 health response was
+// produced by the just-started child process. The gateway reports its own
+// PID in the health body; a foreign listener on the same port must not
+// satisfy the check.
+func healthResponseIsFromChild(body io.Reader, childPID int) bool {
+	var hr models.HealthResponse
+	if err := json.NewDecoder(io.LimitReader(body, maxHealthResponseBytes)).Decode(&hr); err != nil {
+		return false
+	}
+	return hr.PID != 0 && hr.PID == childPID
 }
 
 func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
@@ -448,24 +466,41 @@ func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 		return fmt.Errorf("%w: close log: %w", constants.ErrPathValidation, err)
 	}
 
+	// Reap and observe the child directly: an exited child stays a zombie
+	// until waited on, and signal-0 liveness checks report zombies as running.
+	waitCh := make(chan error, 1)
+	go func() { waitCh <- cmd.Wait() }()
+
+	failStart := func() error {
+		cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))
+		if cleanupErr != nil {
+			return fmt.Errorf("%w: check %s: cleanup: %w", constants.ErrProcessStartFailed, logPath, cleanupErr)
+		}
+		return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, logPath)
+	}
+
 	healthURL := fmt.Sprintf("http://%s:%d%s", constants.LocalhostIP, availableHTTPPort, constants.APIPaths.Health)
 	client := &http.Client{Timeout: HealthCheckInterval}
 	for i := 0; i < MaxHealthChecks; i++ {
-		if !pm.isProcessRunning(cmd.Process.Pid) {
-			cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))
-			if cleanupErr != nil {
-				return fmt.Errorf("%w: check %s: cleanup: %w", constants.ErrProcessStartFailed, logPath, cleanupErr)
-			}
-			return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, logPath)
+		select {
+		case <-waitCh:
+			return failStart()
+		default:
 		}
 		resp, err := client.Get(healthURL)
 		if err == nil {
+			healthy := resp.StatusCode == http.StatusOK &&
+				healthResponseIsFromChild(resp.Body, cmd.Process.Pid)
 			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
+			if healthy {
 				return nil
 			}
 		}
-		time.Sleep(HealthCheckInterval)
+		select {
+		case <-waitCh:
+			return failStart()
+		case <-time.After(HealthCheckInterval):
+		}
 	}
 
 	cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))

@@ -149,6 +149,23 @@ type DispatchInferenceRequest struct {
 	// means use the config default.
 	KeepAlive string
 
+	TopP                 *float32
+	TopK                 *int32
+	StopSequences        []string
+	ResponseFormat       *operatorv1.InferenceResponseFormat
+	RequestSchemaVersion string
+	ToolChoice           *operatorv1.InferenceToolChoice
+	ParallelToolCalls    *bool
+	Thinking             *operatorv1.InferenceThinkingControl
+	ContextLimit         *int32
+	ProviderAttemptID    string
+	ModelDigest          string
+	CampaignID           string
+	RunID                string
+	AssignmentID         string
+	EvaluationAttemptID  string
+	ScenarioID           string
+
 	// TargetOperatorSessionID pins the dispatch to a specific Inference Node
 	// session. When empty, exactly one inference-capable operator session
 	// must be enrolled for the requestor; zero or multiple matches are
@@ -200,6 +217,12 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	if len(req.Messages) == 0 {
 		return nil, fmt.Errorf("inference dispatch: %w", constants.ErrInferenceMessagesRequired)
 	}
+	if req.ProviderAttemptID == "" {
+		return nil, fmt.Errorf("inference dispatch: %w", constants.ErrInferenceProviderAttemptRequired)
+	}
+	if req.ModelDigest != "" && !models.IsSHA256Hex(req.ModelDigest) {
+		return nil, fmt.Errorf("inference dispatch: %w", constants.ErrInferenceEvidenceHashInvalid)
+	}
 
 	// Resolve the Inference Node's operator session from the requestor's
 	// enrolled operators. The Inference Node stamps
@@ -212,13 +235,29 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 
 	// Construct the InferenceRequested proto payload.
 	infReq := &operatorv1.InferenceRequested{
-		Role:        req.Role.ToProto(),
-		Model:       req.Model,
-		Messages:    req.Messages,
-		Tools:       req.Tools,
-		Temperature: req.Temperature,
-		MaxTokens:   req.MaxTokens,
-		KeepAlive:   req.KeepAlive,
+		Role:                 req.Role.ToProto(),
+		Model:                req.Model,
+		Messages:             req.Messages,
+		Tools:                req.Tools,
+		Temperature:          req.Temperature,
+		MaxTokens:            req.MaxTokens,
+		KeepAlive:            req.KeepAlive,
+		TopP:                 req.TopP,
+		TopK:                 req.TopK,
+		StopSequences:        req.StopSequences,
+		ResponseFormat:       req.ResponseFormat,
+		RequestSchemaVersion: req.RequestSchemaVersion,
+		ToolChoice:           req.ToolChoice,
+		ParallelToolCalls:    req.ParallelToolCalls,
+		Thinking:             req.Thinking,
+		ContextLimit:         req.ContextLimit,
+		ProviderAttemptId:    req.ProviderAttemptID,
+		ModelDigest:          req.ModelDigest,
+		CampaignId:           req.CampaignID,
+		RunId:                req.RunID,
+		AssignmentId:         req.AssignmentID,
+		EvaluationAttemptId:  req.EvaluationAttemptID,
+		ScenarioId:           req.ScenarioID,
 	}
 	payload, err := proto.Marshal(infReq)
 	if err != nil {
@@ -269,6 +308,9 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	if err := proto.Unmarshal(result.ResultPayload, infResult); err != nil {
 		return nil, fmt.Errorf("inference dispatch: %w: %v", constants.ErrInferenceResultDecode, err)
 	}
+	if err := validateInferenceResult(infResult, req); err != nil {
+		return nil, fmt.Errorf("inference dispatch: %w", err)
+	}
 
 	s.logger.Info("Governed inference dispatch completed",
 		"transaction_id", result.TransactionID,
@@ -292,6 +334,72 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 // ErrInferenceOperatorNotCapable for an explicit target that lacks the
 // capability, and ErrInferenceOperatorAmbiguous for multiple matches with
 // no explicit target.
+func validateInferenceResult(result *operatorv1.InferenceResult, req DispatchInferenceRequest) error {
+	if result.GetModel() == "" || result.GetRequestedModel() == "" || len(result.GetParts()) == 0 {
+		return constants.ErrInferenceProviderResponseInvalid
+	}
+	if result.GetProviderAttemptId() != req.ProviderAttemptID ||
+		(req.Model != "" && result.GetRequestedModel() != req.Model) ||
+		result.GetCampaignId() != req.CampaignID ||
+		result.GetRunId() != req.RunID ||
+		result.GetAssignmentId() != req.AssignmentID ||
+		result.GetEvaluationAttemptId() != req.EvaluationAttemptID ||
+		result.GetScenarioId() != req.ScenarioID ||
+		result.GetRequestedModelDigest() != req.ModelDigest {
+		return constants.ErrInferenceIdentityMismatch
+	}
+	if !models.IsSHA256Hex(result.GetNormalizedRequestHash()) || !models.IsSHA256Hex(result.GetOutputHash()) {
+		return constants.ErrInferenceEvidenceHashInvalid
+	}
+	if req.ModelDigest != "" && result.GetServedModelDigest() != req.ModelDigest {
+		return constants.ErrInferenceIdentityMismatch
+	}
+	if result.GetServedModelDigest() != "" && !models.IsSHA256Hex(result.GetServedModelDigest()) {
+		return constants.ErrInferenceEvidenceHashInvalid
+	}
+	if result.GetPromptTokens() < 0 || result.GetCompletionTokens() < 0 || result.GetTotalTokens() < 0 {
+		return constants.ErrInferenceProviderResponseInvalid
+	}
+	if result.GetUsageReported() {
+		if result.GetTotalTokens() != result.GetPromptTokens()+result.GetCompletionTokens() {
+			return constants.ErrInferenceProviderResponseInvalid
+		}
+	} else if result.GetPromptTokens() != 0 || result.GetCompletionTokens() != 0 || result.GetTotalTokens() != 0 || result.ThinkingTokens != nil || result.CacheTokens != nil {
+		return constants.ErrInferenceProviderResponseInvalid
+	}
+	if result.ThinkingTokens != nil && result.GetThinkingTokens() < 0 {
+		return constants.ErrInferenceProviderResponseInvalid
+	}
+	if result.CacheTokens != nil && result.GetCacheTokens() < 0 {
+		return constants.ErrInferenceProviderResponseInvalid
+	}
+	durations := []*int64{
+		result.LoadDurationNs,
+		result.PromptEvalDurationNs,
+		result.GenerationDurationNs,
+		result.TotalDurationNs,
+		result.TimeToFirstTokenNs,
+	}
+	hasTiming := false
+	for _, duration := range durations {
+		if duration == nil {
+			continue
+		}
+		hasTiming = true
+		if *duration < 0 {
+			return constants.ErrInferenceProviderResponseInvalid
+		}
+	}
+	if hasTiming {
+		if result.GetTimingSource() != operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_PROVIDER {
+			return constants.ErrInferenceProviderResponseInvalid
+		}
+	} else if result.GetTimingSource() != operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_UNSPECIFIED {
+		return constants.ErrInferenceProviderResponseInvalid
+	}
+	return nil
+}
+
 func (s *DispatchService) resolveInferenceOperator(req DispatchInferenceRequest) (string, error) {
 	operators, err := s.operatorList.ListUserOperators(req.RequestorUserID)
 	if err != nil {

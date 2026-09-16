@@ -8,6 +8,7 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -54,7 +55,7 @@ func serveHealth() {
 	mux.HandleFunc("/api/v1/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok","mode":"gateway","posture":"doctrine"}`))
+		_, _ = fmt.Fprintf(w, `{"status":"ok","mode":"gateway","posture":"doctrine","pid":%d}`, os.Getpid())
 	})
 	_ = http.ListenAndServe("127.0.0.1:"+strconv.Itoa(port), mux)
 }

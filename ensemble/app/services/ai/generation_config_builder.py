@@ -133,6 +133,7 @@ class AIGenerationConfigBuilder:
         max_tokens: int | None,
         system_instructions: str,
         tools: list[types.ToolGroup],
+        parallel_tool_calls: bool = True,
     ) -> PrimaryLLMSettings:
         """Build PrimaryLLMSettings for main-model calls."""
         thinking_config = AIGenerationConfigBuilder._build_thinking_config(model_name=model)
@@ -152,6 +153,7 @@ class AIGenerationConfigBuilder:
             stop_sequences=stop_sequences,
             response_modalities=["TEXT"],
             tool_config=types.ToolConfig(tool_calling_config=types.ToolCallingConfig(mode="AUTO")),
+            parallel_tool_calls=parallel_tool_calls,
         )
 
         thinking_level = getattr(thinking_config, "thinking_level", None)

@@ -34,10 +34,22 @@ func (s *stubBackend) Generate(ctx context.Context, req models.GenerateRequest) 
 	if s.generateErr != nil {
 		return nil, s.generateErr
 	}
-	if s.generateResp != nil {
-		return s.generateResp, nil
+	response := s.generateResp
+	if response == nil {
+		response = &models.GenerateResponse{Parts: textInferenceResponseParts("stub response"), Model: req.Model}
 	}
-	return &models.GenerateResponse{Parts: textInferenceResponseParts("stub response"), Model: req.Model}, nil
+	if response.NormalizedRequestHash == "" {
+		response.NormalizedRequestHash = models.SHA256Hex([]byte("normalized test request"))
+	}
+	if response.OutputHash == "" {
+		outputHash, err := models.ComputeInferenceOutputHash(response.Parts, response.FinishReason)
+		if err != nil {
+			return nil, err
+		}
+		response.OutputHash = outputHash
+	}
+	response.ServedModelDigest = req.ModelDigest
+	return response, nil
 }
 
 func (s *stubBackend) Status(ctx context.Context) (*models.BackendStatus, error) {
@@ -58,6 +70,7 @@ func TestBackendContract_GenerateReturnsResponse(t *testing.T) {
 			PromptTokens:     10,
 			CompletionTokens: 5,
 			TotalTokens:      15,
+			UsageReported:    true,
 			FinishReason:     "stop",
 			Model:            "test-model",
 		},

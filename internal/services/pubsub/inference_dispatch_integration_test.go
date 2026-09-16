@@ -53,13 +53,20 @@ func (s *stubInferenceBackend) Generate(_ context.Context, req models.GenerateRe
 	if s.err != nil {
 		return nil, s.err
 	}
-	if s.resp != nil {
-		return s.resp, nil
+	response := s.resp
+	if response == nil {
+		response = &models.GenerateResponse{
+			Parts: []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "stub inference response"}}},
+			Model: req.Model, FinishReason: "stop",
+		}
 	}
-	return &models.GenerateResponse{
-		Parts: []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "stub inference response"}}},
-		Model: req.Model, FinishReason: "stop",
-	}, nil
+	response.NormalizedRequestHash = models.SHA256Hex([]byte("integration request"))
+	outputHash, err := models.ComputeInferenceOutputHash(response.Parts, response.FinishReason)
+	if err != nil {
+		return nil, err
+	}
+	response.OutputHash = outputHash
+	return response, nil
 }
 
 func (s *stubInferenceBackend) Status(_ context.Context) (*models.BackendStatus, error) {
@@ -120,6 +127,7 @@ func newInferenceIntegrationFixture(t *testing.T) (*OperatorPubSubService, *stub
 			PromptTokens:     12,
 			CompletionTokens: 8,
 			TotalTokens:      20,
+			UsageReported:    true,
 			FinishReason:     "stop",
 			Model:            "gemma3:4b",
 		},
@@ -174,8 +182,10 @@ func buildInferenceEnvelope(t *testing.T, role operatorv1.ModelRole, model, prom
 	t.Helper()
 
 	infReq := &operatorv1.InferenceRequested{
-		Role:  role,
-		Model: model,
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 role,
+		Model:                model,
+		ProviderAttemptId:    fmt.Sprintf("provider-attempt-%d", inferenceEnvelopeNonce.Load()+1),
 		Messages: []*operatorv1.InferenceMessage{{
 			Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
 			Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: prompt}}},

@@ -40,6 +40,9 @@ func mustNewScrubbingSvc(t *testing.T) *scrubbing.ScrubbingService {
 
 func mustMarshalInferenceRequested(t *testing.T, req *operatorv1.InferenceRequested) []byte {
 	t.Helper()
+	if req.ProviderAttemptId == "" {
+		req.ProviderAttemptId = "provider-attempt-1"
+	}
 	data, err := proto.Marshal(req)
 	require.NoError(t, err)
 	return data
@@ -86,8 +89,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_PrimaryRole(t *testing.T) {
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Messages: textInferenceMessages("What is 2+2?"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:             textInferenceMessages("What is 2+2?"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -118,8 +122,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AssistantRole(t *testing.T)
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
-		Messages: textInferenceMessages("Summarize this"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_ASSISTANT,
+		Messages:             textInferenceMessages("Summarize this"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -147,8 +152,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_LiteRole(t *testing.T) {
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_LITE,
-		Messages: textInferenceMessages("triage"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_LITE,
+		Messages:             textInferenceMessages("triage"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -176,9 +182,10 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_MatchingModelOverrideAccept
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Model:    "gemma3:4b",
-		Messages: textInferenceMessages("test"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Model:                "gemma3:4b",
+		Messages:             textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -202,9 +209,10 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_UnauthorizedModelOverrideDe
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Model:    "custom-model:latest",
-		Messages: textInferenceMessages("test"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Model:                "custom-model:latest",
+		Messages:             textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -229,9 +237,10 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_CrossRoleModelDenied(t *tes
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Model:    "qwen3:1.5b",
-		Messages: textInferenceMessages("test"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Model:                "qwen3:1.5b",
+		Messages:             textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -243,6 +252,25 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_CrossRoleModelDenied(t *tes
 	assert.Equal(t, 0, backend.calls)
 }
 
+func TestInferenceHandler_ExecuteVerifiedTransaction_MissingProviderAttemptIDRejected(t *testing.T) {
+	t.Parallel()
+	backend := &stubBackend{}
+	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "gemma3:4b"}}
+	handler := NewInferenceExecutionHandler(backend, cfg, mustNewScrubbingSvc(t), testutil.NewTestLogger())
+	payload, err := proto.Marshal(&operatorv1.InferenceRequested{
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:             textInferenceMessages("test"),
+	})
+	require.NoError(t, err)
+
+	_, err = handler.ExecuteInference(context.Background(), &testCommandMessage{payload: payload})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInferenceProviderAttemptRequired)
+	assert.Zero(t, backend.calls)
+}
+
 func TestInferenceHandler_ExecuteVerifiedTransaction_UnspecifiedRoleRejected(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
@@ -252,8 +280,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_UnspecifiedRoleRejected(t *
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_UNSPECIFIED,
-		Messages: textInferenceMessages("test"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_UNSPECIFIED,
+		Messages:             textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -303,8 +332,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_NilBackendReturnsErrInferen
 	handler := NewInferenceExecutionHandler(nil, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Messages: textInferenceMessages("test"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:             textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -323,8 +353,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_BackendErrorReturnsErrInfer
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Messages: textInferenceMessages("test"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:             textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -343,8 +374,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_NoDefaultModelReturnsErrInf
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Messages: textInferenceMessages("test"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:             textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -372,8 +404,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_ScrubsPromptBeforeBackend(t
 
 	// Include an email-like pattern that scrubbing should redact
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Messages: textInferenceMessages("Contact me at user@example.com please"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:             textInferenceMessages("Contact me at user@example.com please"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -398,7 +431,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_ScrubsTypedMessagesAndCanon
 	handler := NewInferenceExecutionHandler(backend, cfg, mustNewScrubbingSvc(t), testutil.NewTestLogger())
 	schema := `{"properties":{"email":{"type":"string"}},"type":"object"}`
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
 		Messages: []*operatorv1.InferenceMessage{
 			{
 				Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
@@ -437,17 +471,273 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_ScrubsTypedMessagesAndCanon
 	assert.Equal(t, schema, backend.lastReq.Tools[0].GetJsonSchema())
 }
 
+func TestInferenceHandler_ExecuteVerifiedTransaction_PreservesValidatedGenerationControls(t *testing.T) {
+	t.Parallel()
+	backend := &stubBackend{}
+	cfg := &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "test-model"}}
+	handler := NewInferenceExecutionHandler(backend, cfg, nil, testutil.NewTestLogger())
+	topP := float32(0.75)
+	topK := int32(42)
+	responseFormat := &operatorv1.InferenceResponseFormat{
+		MediaType:  "application/json",
+		JsonSchema: `{"properties":{"answer":{"type":"string"}},"type":"object"}`,
+	}
+	toolChoice := &operatorv1.InferenceToolChoice{
+		Mode:             operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO,
+		AllowedToolNames: []string{"inspect"},
+	}
+	parallelToolCalls := false
+	thinking := &operatorv1.InferenceThinkingControl{
+		Mode:            &operatorv1.InferenceThinkingControl_Enabled{Enabled: true},
+		IncludeThoughts: true,
+	}
+	contextLimit := int32(8192)
+	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:             textInferenceMessages("test"),
+		TopP:                 &topP,
+		TopK:                 &topK,
+		StopSequences:        []string{"END", "STOP"},
+		ResponseFormat:       responseFormat,
+		Tools:                []*operatorv1.InferenceToolDeclaration{{Name: "inspect", JsonSchema: `{"type":"object"}`}},
+		ToolChoice:           toolChoice,
+		ParallelToolCalls:    &parallelToolCalls,
+		Thinking:             thinking,
+		ContextLimit:         &contextLimit,
+	})
+
+	_, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, &testCommandMessage{payload: payload})
+
+	require.NoError(t, err)
+	require.NotNil(t, backend.lastReq.TopP)
+	assert.Equal(t, topP, *backend.lastReq.TopP)
+	require.NotNil(t, backend.lastReq.TopK)
+	assert.Equal(t, topK, *backend.lastReq.TopK)
+	assert.Equal(t, []string{"END", "STOP"}, backend.lastReq.StopSequences)
+	assert.True(t, proto.Equal(responseFormat, backend.lastReq.ResponseFormat))
+	assert.True(t, proto.Equal(toolChoice, backend.lastReq.ToolChoice))
+	require.NotNil(t, backend.lastReq.ParallelToolCalls)
+	assert.False(t, *backend.lastReq.ParallelToolCalls)
+	assert.True(t, proto.Equal(thinking, backend.lastReq.Thinking))
+	require.NotNil(t, backend.lastReq.ContextLimit)
+	assert.Equal(t, contextLimit, *backend.lastReq.ContextLimit)
+	assert.Equal(t, constants.InferenceRequestSchemaVersion, backend.lastReq.RequestSchemaVersion)
+}
+
+func TestFromProtoInferenceRequested_ClonesRequestControls(t *testing.T) {
+	t.Parallel()
+	parallelToolCalls := false
+	contextLimit := int32(8192)
+	source := &operatorv1.InferenceRequested{
+		Messages:          textInferenceMessages("test"),
+		Tools:             []*operatorv1.InferenceToolDeclaration{{Name: "inspect", JsonSchema: `{"type":"object"}`}},
+		ToolChoice:        &operatorv1.InferenceToolChoice{Mode: operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO, AllowedToolNames: []string{"inspect"}},
+		ParallelToolCalls: &parallelToolCalls,
+		Thinking:          &operatorv1.InferenceThinkingControl{Mode: &operatorv1.InferenceThinkingControl_Enabled{Enabled: false}},
+		ContextLimit:      &contextLimit,
+	}
+
+	cloned := models.FromProtoInferenceRequested(source)
+	source.Messages[0].Parts[0].Part = &operatorv1.InferenceMessagePart_Text{Text: "changed"}
+	source.Tools[0].Name = "changed"
+	source.ToolChoice.AllowedToolNames[0] = "changed"
+	source.ParallelToolCalls = nil
+	source.Thinking.Mode = &operatorv1.InferenceThinkingControl_Enabled{Enabled: true}
+	source.ContextLimit = nil
+
+	assert.Equal(t, "test", cloned.Messages[0].Parts[0].GetText())
+	assert.Equal(t, "inspect", cloned.Tools[0].GetName())
+	assert.Equal(t, []string{"inspect"}, cloned.ToolChoice.GetAllowedToolNames())
+	require.NotNil(t, cloned.ParallelToolCalls)
+	assert.False(t, *cloned.ParallelToolCalls)
+	assert.False(t, cloned.Thinking.GetEnabled())
+	require.NotNil(t, cloned.ContextLimit)
+	assert.Equal(t, int32(8192), *cloned.ContextLimit)
+}
+
+func TestInferenceHandler_ExecuteVerifiedTransaction_AcceptsDisabledThinkingAndParallelTools(t *testing.T) {
+	t.Parallel()
+	backend := &stubBackend{}
+	handler := NewInferenceExecutionHandler(backend, &config.Config{Inference: config.InferenceConfig{Enabled: true, PrimaryModel: "test-model"}}, nil, testutil.NewTestLogger())
+	parallelToolCalls := true
+	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:             textInferenceMessages("test"),
+		ParallelToolCalls:    &parallelToolCalls,
+		Thinking:             &operatorv1.InferenceThinkingControl{Mode: &operatorv1.InferenceThinkingControl_Enabled{Enabled: false}},
+	})
+
+	_, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Inference.Requested, &testCommandMessage{payload: payload})
+
+	require.NoError(t, err)
+	require.NotNil(t, backend.lastReq.ParallelToolCalls)
+	assert.True(t, *backend.lastReq.ParallelToolCalls)
+	require.NotNil(t, backend.lastReq.Thinking)
+	assert.False(t, backend.lastReq.Thinking.GetEnabled())
+}
+
 func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidTypedInputRejectedBeforeBackend(t *testing.T) {
 	t.Parallel()
+	invalidTopP := float32(1.1)
+	invalidTopK := int32(maxInferenceTopK + 1)
+	invalidContextLow := int32(0)
+	invalidContextHigh := int32(maxInferenceContextLimit + 1)
+	declaredTool := []*operatorv1.InferenceToolDeclaration{{Name: "inspect", JsonSchema: `{"type":"object"}`}}
 	tests := []struct {
 		name string
 		req  *operatorv1.InferenceRequested
 		err  error
 	}{
 		{
+			name: "missing request schema version",
+			req: &operatorv1.InferenceRequested{
+				Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages: textInferenceMessages("test"),
+			},
+			err: constants.ErrInferenceGenerationOptionsInvalid,
+		},
+		{
+			name: "top p exceeds supported bound",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				TopP:                 &invalidTopP,
+			},
+			err: constants.ErrInferenceGenerationOptionsInvalid,
+		},
+		{
+			name: "top k exceeds supported bound",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				TopK:                 &invalidTopK,
+			},
+			err: constants.ErrInferenceGenerationOptionsInvalid,
+		},
+		{
+			name: "unsupported response media type",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				ResponseFormat:       &operatorv1.InferenceResponseFormat{MediaType: "text/plain", JsonSchema: `{"type":"object"}`},
+			},
+			err: constants.ErrInferenceCapabilityUnsupported,
+		},
+		{
+			name: "invalid response schema",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				ResponseFormat:       &operatorv1.InferenceResponseFormat{MediaType: "application/json", JsonSchema: `{"type":7}`},
+			},
+			err: constants.ErrInferenceGenerationOptionsInvalid,
+		},
+		{
+			name: "unsupported none tool choice",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				Tools:                declaredTool,
+				ToolChoice:           &operatorv1.InferenceToolChoice{Mode: operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_NONE},
+			},
+			err: constants.ErrInferenceCapabilityUnsupported,
+		},
+		{
+			name: "unsupported required tool choice",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				Tools:                declaredTool,
+				ToolChoice:           &operatorv1.InferenceToolChoice{Mode: operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_REQUIRED},
+			},
+			err: constants.ErrInferenceCapabilityUnsupported,
+		},
+		{
+			name: "duplicate allowed tool name",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				Tools:                declaredTool,
+				ToolChoice: &operatorv1.InferenceToolChoice{
+					Mode:             operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO,
+					AllowedToolNames: []string{"inspect", "inspect"},
+				},
+			},
+			err: constants.ErrInferenceGenerationOptionsInvalid,
+		},
+		{
+			name: "unknown allowed tool name",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				Tools:                declaredTool,
+				ToolChoice: &operatorv1.InferenceToolChoice{
+					Mode:             operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO,
+					AllowedToolNames: []string{"search"},
+				},
+			},
+			err: constants.ErrInferenceGenerationOptionsInvalid,
+		},
+		{
+			name: "disabled thinking includes thoughts",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				Thinking: &operatorv1.InferenceThinkingControl{
+					Mode:            &operatorv1.InferenceThinkingControl_Enabled{Enabled: false},
+					IncludeThoughts: true,
+				},
+			},
+			err: constants.ErrInferenceGenerationOptionsInvalid,
+		},
+		{
+			name: "unsupported thinking level",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				Thinking: &operatorv1.InferenceThinkingControl{
+					Mode: &operatorv1.InferenceThinkingControl_Level{Level: "high"},
+				},
+			},
+			err: constants.ErrInferenceCapabilityUnsupported,
+		},
+		{
+			name: "context limit is zero",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				ContextLimit:         &invalidContextLow,
+			},
+			err: constants.ErrInferenceGenerationOptionsInvalid,
+		},
+		{
+			name: "context limit exceeds supported bound",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				ContextLimit:         &invalidContextHigh,
+			},
+			err: constants.ErrInferenceGenerationOptionsInvalid,
+		},
+		{
 			name: "malformed tool call arguments",
 			req: &operatorv1.InferenceRequested{
-				Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
 				Messages: []*operatorv1.InferenceMessage{{
 					Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT,
 					Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_ToolCall{ToolCall: &operatorv1.InferenceToolCall{Name: "inspect", ArgumentsJson: "{"}}}},
@@ -458,7 +748,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidTypedInputRejectedBe
 		{
 			name: "noncanonical tool result",
 			req: &operatorv1.InferenceRequested{
-				Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
 				Messages: []*operatorv1.InferenceMessage{{
 					Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL,
 					Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_ToolResult{ToolResult: &operatorv1.InferenceToolResult{Name: "inspect", ResultJson: `{ "ok": true }`}}}},
@@ -469,7 +760,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidTypedInputRejectedBe
 		{
 			name: "unspecified message role",
 			req: &operatorv1.InferenceRequested{
-				Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
 				Messages: []*operatorv1.InferenceMessage{{
 					Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_UNSPECIFIED,
 					Parts: textInferenceMessages("test")[0].Parts,
@@ -480,15 +772,17 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidTypedInputRejectedBe
 		{
 			name: "message without parts",
 			req: &operatorv1.InferenceRequested{
-				Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-				Messages: []*operatorv1.InferenceMessage{{Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER}},
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             []*operatorv1.InferenceMessage{{Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER}},
 			},
 			err: constants.ErrInferenceMessageInvalid,
 		},
 		{
 			name: "tool role with text part",
 			req: &operatorv1.InferenceRequested{
-				Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
 				Messages: []*operatorv1.InferenceMessage{{
 					Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL,
 					Parts: textInferenceMessages("test")[0].Parts,
@@ -499,7 +793,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidTypedInputRejectedBe
 		{
 			name: "duplicate tool argument key",
 			req: &operatorv1.InferenceRequested{
-				Role: operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
 				Messages: []*operatorv1.InferenceMessage{{
 					Role: operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT,
 					Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_ToolCall{ToolCall: &operatorv1.InferenceToolCall{
@@ -512,9 +807,10 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidTypedInputRejectedBe
 		{
 			name: "semantically invalid tool schema",
 			req: &operatorv1.InferenceRequested{
-				Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-				Messages: textInferenceMessages("test"),
-				Tools:    []*operatorv1.InferenceToolDeclaration{{Name: "inspect", JsonSchema: `{"type":7}`}},
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				Tools:                []*operatorv1.InferenceToolDeclaration{{Name: "inspect", JsonSchema: `{"type":7}`}},
 			},
 			err: constants.ErrInferenceToolSchemaInvalid,
 		},
@@ -533,6 +829,27 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidTypedInputRejectedBe
 			assert.Equal(t, 0, backend.calls)
 		})
 	}
+}
+
+func TestComputeInferenceResultDigest_CoversUsageAndTimingEvidence(t *testing.T) {
+	t.Parallel()
+	loadDuration := int64(2_000_000)
+	base := (&models.GenerateResponse{
+		Parts:          textInferenceResponseParts("response"),
+		UsageReported:  true,
+		LoadDurationNS: &loadDuration,
+		TimingSource:   operatorv1.InferenceTimingSource_INFERENCE_TIMING_SOURCE_PROVIDER,
+		Model:          "test-model",
+	}).ToProtoInferenceResult()
+	baseDigest, err := models.ComputeInferenceResultDigest(base)
+	require.NoError(t, err)
+	changed := proto.Clone(base).(*operatorv1.InferenceResult)
+	changed.LoadDurationNs = func() *int64 { value := int64(3_000_000); return &value }()
+
+	changedDigest, err := models.ComputeInferenceResultDigest(changed)
+
+	require.NoError(t, err)
+	assert.NotEqual(t, baseDigest, changedDigest)
 }
 
 func TestInferenceHandler_ExecuteVerifiedTransaction_LongOutputStillBindsDigest(t *testing.T) {
@@ -556,8 +873,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_LongOutputStillBindsDigest(
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Messages: textInferenceMessages("test"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:             textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -586,8 +904,9 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AppliesConfigKeepAliveDefau
 
 	// Request does not set keep_alive, so config default should be used
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:     operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Messages: textInferenceMessages("test"),
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:             textInferenceMessages("test"),
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 
@@ -614,9 +933,10 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_RequestKeepAliveOverridesCo
 	handler := NewInferenceExecutionHandler(backend, cfg, scrubbingSvc, logger)
 
 	payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
-		Role:      operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
-		Messages:  textInferenceMessages("test"),
-		KeepAlive: "5m",
+		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+		Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:             textInferenceMessages("test"),
+		KeepAlive:            "5m",
 	})
 	cmdMsg := &testCommandMessage{payload: payload}
 

@@ -179,6 +179,10 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrInferenceMessagesRequired.Error())
 		return
 	}
+	if req.GetProviderAttemptId() == "" {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInferenceProviderAttemptRequired.Error())
+		return
+	}
 	role := models.InferenceModelRoleFromProto(req.GetRole())
 	if role == models.InferenceModelRoleUnspecified {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrInferenceRoleInvalid.Error())
@@ -200,6 +204,22 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 		Temperature:             req.GetTemperature(),
 		MaxTokens:               req.GetMaxTokens(),
 		KeepAlive:               req.GetKeepAlive(),
+		TopP:                    req.TopP,
+		TopK:                    req.TopK,
+		StopSequences:           req.GetStopSequences(),
+		ResponseFormat:          req.GetResponseFormat(),
+		RequestSchemaVersion:    req.GetRequestSchemaVersion(),
+		ToolChoice:              req.GetToolChoice(),
+		ParallelToolCalls:       req.ParallelToolCalls,
+		Thinking:                req.GetThinking(),
+		ContextLimit:            req.ContextLimit,
+		ProviderAttemptID:       req.GetProviderAttemptId(),
+		ModelDigest:             req.GetModelDigest(),
+		CampaignID:              req.GetCampaignId(),
+		RunID:                   req.GetRunId(),
+		AssignmentID:            req.GetAssignmentId(),
+		EvaluationAttemptID:     req.GetEvaluationAttemptId(),
+		ScenarioID:              req.GetScenarioId(),
 		TargetOperatorSessionID: req.GetTargetOperatorSessionId(),
 		RequestorUserID:         userID,
 		ActingAppID:             appID,
@@ -251,10 +271,13 @@ func classifyInferenceDispatchError(err error) (int, error) {
 		{constants.ErrInferenceOperatorNotCapable, http.StatusUnprocessableEntity},
 		{constants.ErrInferenceRoleInvalid, http.StatusBadRequest},
 		{constants.ErrInferenceMessagesRequired, http.StatusBadRequest},
+		{constants.ErrInferenceProviderAttemptRequired, http.StatusBadRequest},
 		{constants.ErrInferenceMessageInvalid, http.StatusBadRequest},
 		{constants.ErrInferenceJSONInvalid, http.StatusBadRequest},
 		{constants.ErrInferenceJSONNonCanonical, http.StatusBadRequest},
 		{constants.ErrInferenceToolSchemaInvalid, http.StatusBadRequest},
+		{constants.ErrInferenceGenerationOptionsInvalid, http.StatusBadRequest},
+		{constants.ErrInferenceCapabilityUnsupported, http.StatusUnprocessableEntity},
 		{constants.ErrInferenceModelRefInvalid, http.StatusBadRequest},
 		{constants.ErrInferenceModelOverrideDenied, http.StatusForbidden},
 		{constants.ErrInferenceGovernanceRejected, http.StatusForbidden},
@@ -263,6 +286,9 @@ func classifyInferenceDispatchError(err error) (int, error) {
 		{constants.ErrInferenceReceiptVerify, http.StatusBadGateway},
 		{constants.ErrInferenceResultDigestMismatch, http.StatusBadGateway},
 		{constants.ErrInferenceResultDigest, http.StatusBadGateway},
+		{constants.ErrInferenceIdentityMismatch, http.StatusBadGateway},
+		{constants.ErrInferenceModelDigestMismatch, http.StatusBadGateway},
+		{constants.ErrInferenceEvidenceHashInvalid, http.StatusBadGateway},
 		{constants.ErrInferenceResultDecode, http.StatusBadGateway},
 		{constants.ErrInferenceCompletionNoReceipt, http.StatusBadGateway},
 		{constants.ErrInferenceCompletionNoResult, http.StatusBadGateway},
