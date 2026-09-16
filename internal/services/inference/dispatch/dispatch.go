@@ -200,6 +200,9 @@ type DispatchInferenceRequest struct {
 
 	// OnProgress receives progress telemetry when Stream is true.
 	OnProgress func(*operatorv1.InferenceProgressEvent) error
+
+	// RetryCount is the zero-based retry ordinal for this provider attempt.
+	RetryCount uint32
 }
 
 // DispatchInferenceResult is the output of a successful inference dispatch.
@@ -278,6 +281,7 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 		ModelRegistry:        req.ModelRegistry,
 		ModelRegistryDigest:  req.ModelRegistryDigest,
 		Stream:               req.Stream,
+		RetryCount:           req.RetryCount,
 	}
 	payload, err := proto.Marshal(infReq)
 	if err != nil {
@@ -400,7 +404,14 @@ func validateInferenceResult(result *operatorv1.InferenceResult, req DispatchInf
 		result.GetEvaluationAttemptId() != req.EvaluationAttemptID ||
 		result.GetScenarioId() != req.ScenarioID ||
 		result.GetRequestedModelDigest() != req.ModelDigest ||
-		result.GetModelRegistryDigest() != req.ModelRegistryDigest {
+		result.GetModelRegistryDigest() != req.ModelRegistryDigest ||
+		result.GetRetryCount() != req.RetryCount {
+		return constants.ErrInferenceIdentityMismatch
+	}
+	if result.GetRetryClassification() != models.ClassifyRetry(req.RetryCount) {
+		return constants.ErrInferenceIdentityMismatch
+	}
+	if result.GetLoadState() != models.ClassifyLoadState(result.LoadDurationNs) {
 		return constants.ErrInferenceIdentityMismatch
 	}
 	if !models.IsSHA256Hex(result.GetNormalizedRequestHash()) || !models.IsSHA256Hex(result.GetOutputHash()) {

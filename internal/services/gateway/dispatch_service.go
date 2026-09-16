@@ -501,7 +501,10 @@ func (d *DispatchService) verifyInferenceCompletion(cmdEnv, resultEnv *commonv1.
 		result.GetAssignmentId() != request.GetAssignmentId() ||
 		result.GetEvaluationAttemptId() != request.GetEvaluationAttemptId() ||
 		result.GetScenarioId() != request.GetScenarioId() ||
-		result.GetModelRegistryDigest() != request.GetModelRegistryDigest() {
+		result.GetModelRegistryDigest() != request.GetModelRegistryDigest() ||
+		result.GetRetryCount() != request.GetRetryCount() ||
+		result.GetRetryClassification() != models.ClassifyRetry(request.GetRetryCount()) ||
+		result.GetLoadState() != models.ClassifyLoadState(result.LoadDurationNs) {
 		return nil, fmt.Errorf("dispatch: %w", constants.ErrInferenceIdentityMismatch)
 	}
 	if request.GetProviderAttemptId() == "" || !models.IsSHA256Hex(result.GetNormalizedRequestHash()) || !models.IsSHA256Hex(result.GetOutputHash()) {

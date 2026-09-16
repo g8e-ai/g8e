@@ -67,6 +67,7 @@
     - [InferenceMessagePart](#g8e-operator-v1-InferenceMessagePart)
     - [InferenceModelVariant](#g8e-operator-v1-InferenceModelVariant)
     - [InferenceProgressEvent](#g8e-operator-v1-InferenceProgressEvent)
+    - [InferenceProviderAttemptRecord](#g8e-operator-v1-InferenceProviderAttemptRecord)
     - [InferenceRequested](#g8e-operator-v1-InferenceRequested)
     - [InferenceResponseFormat](#g8e-operator-v1-InferenceResponseFormat)
     - [InferenceResponsePart](#g8e-operator-v1-InferenceResponsePart)
@@ -133,7 +134,10 @@
     - [DeterministicStageOutcome](#g8e-operator-v1-DeterministicStageOutcome)
     - [ExecutionStatus](#g8e-operator-v1-ExecutionStatus)
     - [HeartbeatType](#g8e-operator-v1-HeartbeatType)
+    - [InferenceLoadState](#g8e-operator-v1-InferenceLoadState)
     - [InferenceMessageRole](#g8e-operator-v1-InferenceMessageRole)
+    - [InferenceProviderAttemptStatus](#g8e-operator-v1-InferenceProviderAttemptStatus)
+    - [InferenceRetryClassification](#g8e-operator-v1-InferenceRetryClassification)
     - [InferenceTimingSource](#g8e-operator-v1-InferenceTimingSource)
     - [InferenceToolChoiceMode](#g8e-operator-v1-InferenceToolChoiceMode)
     - [L2Status](#g8e-operator-v1-L2Status)
@@ -1358,6 +1362,7 @@ inference request to the Inference Node.
 | model_registry | [InferenceModelVariant](#g8e-operator-v1-InferenceModelVariant) | repeated |  |
 | model_registry_digest | [string](#string) |  |  |
 | stream | [bool](#bool) |  | When true, the Gateway forwards live InferenceProgressEvent telemetry to the caller while waiting for the authoritative terminal completion. |
+| retry_count | [uint32](#uint32) |  | Zero-based retry ordinal for this provider attempt. |
 
 
 
@@ -1473,6 +1478,31 @@ signed InferenceCompletion remains the sole terminal outcome.
 
 
 
+<a name="g8e-operator-v1-InferenceProviderAttemptRecord"></a>
+
+### InferenceProviderAttemptRecord
+InferenceProviderAttemptRecord is the durable operator-local record for one
+governed provider attempt. It is written before provider contact and
+finalized only after terminal receipt/result evidence is available.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| provider_attempt_id | [string](#string) |  |  |
+| transaction_id | [string](#string) |  |  |
+| retry_count | [uint32](#uint32) |  |  |
+| retry_classification | [InferenceRetryClassification](#g8e-operator-v1-InferenceRetryClassification) |  |  |
+| status | [InferenceProviderAttemptStatus](#g8e-operator-v1-InferenceProviderAttemptStatus) |  |  |
+| started_at_unix_ms | [int64](#int64) |  |  |
+| completed_at_unix_ms | [int64](#int64) |  |  |
+| result_digest | [string](#string) |  |  |
+| failure_summary | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="g8e-operator-v1-InferenceRequested"></a>
 
 ### InferenceRequested
@@ -1507,6 +1537,7 @@ Payload for g8e.v1.operator.inference.requested. The handler receives an ordered
 | model_registry | [InferenceModelVariant](#g8e-operator-v1-InferenceModelVariant) | repeated |  |
 | model_registry_digest | [string](#string) |  |  |
 | stream | [bool](#bool) |  | When true, the Inference Node publishes bounded InferenceProgressEvent telemetry on the results channel while the provider stream is active. Progress events are delivery telemetry only; the signed InferenceCompletion remains the sole authoritative terminal outcome. |
+| retry_count | [uint32](#uint32) |  | Zero-based retry ordinal for this provider attempt. Each retry uses a distinct provider_attempt_id and is durably retained. |
 
 
 
@@ -1582,6 +1613,9 @@ InferenceResult carries ordered response parts, usage metadata, and the finish r
 | evaluation_attempt_id | [string](#string) |  |  |
 | scenario_id | [string](#string) |  |  |
 | model_registry_digest | [string](#string) |  |  |
+| retry_count | [uint32](#uint32) |  |  |
+| load_state | [InferenceLoadState](#g8e-operator-v1-InferenceLoadState) |  |  |
+| retry_classification | [InferenceRetryClassification](#g8e-operator-v1-InferenceRetryClassification) |  |  |
 
 
 
@@ -2662,6 +2696,20 @@ Heartbeat type enum
 
 
 
+<a name="g8e-operator-v1-InferenceLoadState"></a>
+
+### InferenceLoadState
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| INFERENCE_LOAD_STATE_UNSPECIFIED | 0 |  |
+| INFERENCE_LOAD_STATE_COLD | 1 |  |
+| INFERENCE_LOAD_STATE_WARM | 2 |  |
+| INFERENCE_LOAD_STATE_UNAVAILABLE | 3 |  |
+
+
+
 <a name="g8e-operator-v1-InferenceMessageRole"></a>
 
 ### InferenceMessageRole
@@ -2674,6 +2722,33 @@ InferenceMessageRole identifies the semantic role of one ordered conversation tu
 | INFERENCE_MESSAGE_ROLE_USER | 2 |  |
 | INFERENCE_MESSAGE_ROLE_ASSISTANT | 3 |  |
 | INFERENCE_MESSAGE_ROLE_TOOL | 4 |  |
+
+
+
+<a name="g8e-operator-v1-InferenceProviderAttemptStatus"></a>
+
+### InferenceProviderAttemptStatus
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED | 0 |  |
+| INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS | 1 |  |
+| INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED | 2 |  |
+| INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED | 3 |  |
+
+
+
+<a name="g8e-operator-v1-InferenceRetryClassification"></a>
+
+### InferenceRetryClassification
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED | 0 |  |
+| INFERENCE_RETRY_CLASSIFICATION_NONE | 1 |  |
+| INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT | 2 |  |
 
 
 

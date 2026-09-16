@@ -65,6 +65,9 @@ class LLMProvider(ABC):
         override this to store the context on a request-scoped ContextVar.
         """
 
+    def set_provider_retry_count(self, retry_count: int) -> None:  # noqa: B027
+        """Record the zero-based retry ordinal for the next provider call."""
+
     def _record_model_boundary(self, payload: object) -> str:
         attestation = model_boundary_privacy_attestation(payload)
         self._input_artifact_hash.set(attestation.input_artifact_hash)

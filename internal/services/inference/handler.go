@@ -25,13 +25,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	inferenceJSONMediaType        = "application/json"
-	maxInferenceTopK              = 1000
-	maxInferenceStopSequences     = 16
-	maxInferenceStopSequenceBytes = 256
-	maxInferenceContextLimit      = 1 << 20
-)
+const inferenceJSONMediaType = "application/json"
 
 // InferenceExecutionHandler implements governance.ExecutionHandler. It decodes and validates the governed typed conversation, recursively scrubs data-bearing values, calls Backend.Generate, and returns the digest the L5 actuator records in the receipt.
 type InferenceExecutionHandler struct {
@@ -79,6 +73,9 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 	if len(payloadBytes) == 0 {
 		return nil, fmt.Errorf("inference handler: empty payload: %w", constants.ErrPubSubEmptyPayload)
 	}
+	if len(payloadBytes) > maxInferenceGovernedPayloadBytes {
+		return nil, fmt.Errorf("inference handler: %w", constants.ErrInferenceRequestTooLarge)
+	}
 
 	req := &operatorv1.InferenceRequested{}
 	if err := proto.Unmarshal(payloadBytes, req); err != nil {
@@ -86,6 +83,9 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 	}
 
 	infReq := models.FromProtoInferenceRequested(req)
+	if err := validateInferenceRequestBounds(req); err != nil {
+		return nil, fmt.Errorf("inference handler: %w", err)
+	}
 	if err := h.normalizeInferenceInput(&infReq); err != nil {
 		return nil, fmt.Errorf("inference handler: normalize request: %w", err)
 	}
@@ -131,6 +131,9 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 	resp.EvaluationAttemptID = genReq.EvaluationAttemptID
 	resp.ScenarioID = genReq.ScenarioID
 	resp.ModelRegistryDigest = genReq.ModelRegistryDigest
+	resp.RetryCount = infReq.RetryCount
+	resp.RetryClassification = models.ClassifyRetry(infReq.RetryCount)
+	resp.LoadState = models.ClassifyLoadState(resp.LoadDurationNS)
 
 	return resp, nil
 }
@@ -259,6 +262,9 @@ func (h *InferenceExecutionHandler) normalizeInferenceInput(req *models.Inferenc
 	}
 	if req.ContextLimit != nil && (*req.ContextLimit <= 0 || *req.ContextLimit > maxInferenceContextLimit) {
 		return fmt.Errorf("%w: context limit", constants.ErrInferenceGenerationOptionsInvalid)
+	}
+	if err := validateKeepAlive(req.KeepAlive); err != nil {
+		return err
 	}
 	if len(req.Messages) == 0 {
 		return constants.ErrInferenceMessagesRequired

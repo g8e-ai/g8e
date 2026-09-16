@@ -68,6 +68,8 @@ func inferenceTestResult(t *testing.T) *operatorv1.InferenceResult {
 		ProviderAttemptId:     "provider-attempt-1",
 		NormalizedRequestHash: strings.Repeat("1", 64),
 		OutputHash:            strings.Repeat("2", 64),
+		RetryClassification:   models.ClassifyRetry(0),
+		LoadState:             models.ClassifyLoadState(nil),
 	}
 	digest, err := models.ComputeInferenceResultDigest(result)
 	require.NoError(t, err)

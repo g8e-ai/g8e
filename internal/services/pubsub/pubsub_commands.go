@@ -71,7 +71,8 @@ type OperatorPubSubService struct {
 	// inference is the governed execution handler for local LLM inference
 	// (g8ellama). Nil when cfg.Inference.Enabled is false; the event-type
 	// dispatch still fails closed with ErrInferenceBackendNotRegistered.
-	inference *inference.InferenceExecutionHandler
+	inference             *inference.InferenceExecutionHandler
+	inferenceAttemptStore inference.AttemptStore
 
 	ShutdownChan chan string
 
@@ -125,6 +126,10 @@ type CommandServiceConfig struct {
 	// (g8ellama). Nil when inference is disabled; the inference event type
 	// remains registered and fails closed at execution.
 	Inference *inference.InferenceExecutionHandler
+
+	// InferenceAttemptStore persists durable provider-attempt records on the
+	// Inference Operator. Nil when inference is disabled.
+	InferenceAttemptStore inference.AttemptStore
 
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey
@@ -195,6 +200,7 @@ func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCor
 	rs.history.auditStore = c.AuditStore
 
 	rs.inference = c.Inference
+	rs.inferenceAttemptStore = c.InferenceAttemptStore
 
 	rs.buildHandlers()
 	if gatewayMode {
@@ -1104,9 +1110,13 @@ func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context,
 	if rs.inference == nil {
 		return "", fmt.Errorf("inference handler not configured: %w", constants.ErrInferenceBackendNotRegistered)
 	}
+	var governedReq *operatorv1.InferenceRequested
 	if len(msg.Payload) > 0 {
-		req := &operatorv1.InferenceRequested{}
-		if err := proto.Unmarshal(msg.Payload, req); err == nil && req.GetStream() && rs.results != nil {
+		governedReq = &operatorv1.InferenceRequested{}
+		if err := proto.Unmarshal(msg.Payload, governedReq); err != nil {
+			return "", fmt.Errorf("inference handler: unmarshal payload: %w", err)
+		}
+		if governedReq.GetStream() && rs.results != nil {
 			ctx = inference.WithProgressReporter(ctx, func(event *operatorv1.InferenceProgressEvent) error {
 				if err := rs.results.PublishInferenceProgress(ctx, msg, event); err != nil {
 					rs.logger.Warn("Failed to publish inference progress telemetry",
@@ -1118,17 +1128,38 @@ func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context,
 			})
 		}
 	}
+	if rs.inferenceAttemptStore != nil && governedReq != nil && governedReq.GetProviderAttemptId() != "" {
+		if err := rs.inferenceAttemptStore.Begin(ctx, &operatorv1.InferenceProviderAttemptRecord{
+			ProviderAttemptId:   governedReq.GetProviderAttemptId(),
+			TransactionId:       msg.ID,
+			RetryCount:          governedReq.GetRetryCount(),
+			RetryClassification: models.ClassifyRetry(governedReq.GetRetryCount()),
+		}); err != nil {
+			return "", fmt.Errorf("inference handler: begin attempt: %w", err)
+		}
+	}
 	resp, err := rs.inference.ExecuteInference(ctx, msg)
 	if err != nil {
+		if rs.inferenceAttemptStore != nil && governedReq != nil {
+			_ = rs.inferenceAttemptStore.Fail(ctx, governedReq.GetProviderAttemptId(), err.Error())
+		}
 		return "", err
 	}
 
 	result := resp.ToProtoInferenceResult()
 	digest, err := models.ComputeInferenceResultDigest(result)
 	if err != nil {
+		if rs.inferenceAttemptStore != nil && governedReq != nil {
+			_ = rs.inferenceAttemptStore.Fail(ctx, governedReq.GetProviderAttemptId(), err.Error())
+		}
 		return "", err
 	}
 	result.ResultDigest = digest
+	if rs.inferenceAttemptStore != nil && governedReq != nil {
+		if err := rs.inferenceAttemptStore.Complete(ctx, governedReq.GetProviderAttemptId(), digest); err != nil {
+			return "", fmt.Errorf("inference handler: complete attempt: %w", err)
+		}
+	}
 	msg.InferenceResult = result
 	return digest, nil
 }

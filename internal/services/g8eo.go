@@ -325,6 +325,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// is unreachable, responds with a malformed status, or lacks a
 	// configured role model.
 	var inferenceHandler *inference.InferenceExecutionHandler
+	var inferenceAttemptStore inference.AttemptStore
 	if vs.config.Inference.Enabled {
 		ollamaBackend, err := inference.NewOllamaBackend(vs.config.Inference.OllamaEndpoint, vs.logger)
 		if err != nil {
@@ -334,6 +335,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 			return fmt.Errorf("g8eo: %w", err)
 		}
 		inferenceHandler = inference.NewInferenceExecutionHandler(ollamaBackend, vs.config, scrubbingService, vs.logger)
+		inferenceAttemptStore, err = inference.NewAttemptStore(vs.fileSvc)
+		if err != nil {
+			return fmt.Errorf("g8eo: inference attempt store: %w", err)
+		}
 		vs.logger.Info("Inference backend initialized",
 			"backend", vs.config.Inference.Backend,
 			"endpoint", vs.config.Inference.OllamaEndpoint,
@@ -344,22 +349,23 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// OperatorPubSubService Construction
 	psConfig := pubsub.CommandServiceConfig{
-		Config:             vs.config,
-		Logger:             vs.logger,
-		Execution:          vs.execution,
-		FileEdit:           vs.fileEdit,
-		PubSubClient:       vs.pubSubClient,
-		ResultsService:     vs.pubSubResults,
-		ExecutionVault:     vs.executionVault,
-		AuditStore:         auditStore,
-		Ledger:             vs.ledger,
-		HistoryHandler:     vs.historyHandler,
-		Scrubbing:          scrubbingService,
-		Inference:          inferenceHandler,
-		ActuatorSigningKey: actuatorPriv,
-		ActuatorKeyID:      actuatorKeyID,
-		AuditorSigningKey:  auditorPriv,
-		AuditorKeyID:       auditorKeyID,
+		Config:                vs.config,
+		Logger:                vs.logger,
+		Execution:             vs.execution,
+		FileEdit:              vs.fileEdit,
+		PubSubClient:          vs.pubSubClient,
+		ResultsService:        vs.pubSubResults,
+		ExecutionVault:        vs.executionVault,
+		AuditStore:            auditStore,
+		Ledger:                vs.ledger,
+		HistoryHandler:        vs.historyHandler,
+		Scrubbing:             scrubbingService,
+		Inference:             inferenceHandler,
+		InferenceAttemptStore: inferenceAttemptStore,
+		ActuatorSigningKey:    actuatorPriv,
+		ActuatorKeyID:         actuatorKeyID,
+		AuditorSigningKey:     auditorPriv,
+		AuditorKeyID:          auditorKeyID,
 	}
 
 	outboundDeps, err := pubsub.NewOutboundModeDeps(pubsub.OutboundModeDeps{

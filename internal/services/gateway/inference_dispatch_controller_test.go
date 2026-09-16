@@ -153,6 +153,9 @@ func successDispatchResultForRequest(t *testing.T, req *operatorv1.InferenceDisp
 		EvaluationAttemptId:   req.GetEvaluationAttemptId(),
 		ScenarioId:            req.GetScenarioId(),
 		ModelRegistryDigest:   req.GetModelRegistryDigest(),
+		RetryCount:            req.GetRetryCount(),
+		RetryClassification:   models.ClassifyRetry(req.GetRetryCount()),
+		LoadState:             models.ClassifyLoadState(nil),
 	}
 	digest, err := models.ComputeInferenceResultDigest(result)
 	require.NoError(t, err)

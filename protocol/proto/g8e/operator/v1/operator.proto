@@ -1310,11 +1310,50 @@ message InferenceRequested {
   // Progress events are delivery telemetry only; the signed
   // InferenceCompletion remains the sole authoritative terminal outcome.
   bool stream = 27;
+
+  // Zero-based retry ordinal for this provider attempt. Each retry uses a
+  // distinct provider_attempt_id and is durably retained.
+  uint32 retry_count = 28;
 }
 
 enum InferenceTimingSource {
   INFERENCE_TIMING_SOURCE_UNSPECIFIED = 0;
   INFERENCE_TIMING_SOURCE_PROVIDER = 1;
+}
+
+enum InferenceLoadState {
+  INFERENCE_LOAD_STATE_UNSPECIFIED = 0;
+  INFERENCE_LOAD_STATE_COLD = 1;
+  INFERENCE_LOAD_STATE_WARM = 2;
+  INFERENCE_LOAD_STATE_UNAVAILABLE = 3;
+}
+
+enum InferenceRetryClassification {
+  INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED = 0;
+  INFERENCE_RETRY_CLASSIFICATION_NONE = 1;
+  INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT = 2;
+}
+
+enum InferenceProviderAttemptStatus {
+  INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED = 0;
+  INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS = 1;
+  INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED = 2;
+  INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED = 3;
+}
+
+// InferenceProviderAttemptRecord is the durable operator-local record for one
+// governed provider attempt. It is written before provider contact and
+// finalized only after terminal receipt/result evidence is available.
+message InferenceProviderAttemptRecord {
+  string provider_attempt_id = 1;
+  string transaction_id = 2;
+  uint32 retry_count = 3;
+  InferenceRetryClassification retry_classification = 4;
+  InferenceProviderAttemptStatus status = 5;
+  int64 started_at_unix_ms = 6;
+  int64 completed_at_unix_ms = 7;
+  string result_digest = 8;
+  string failure_summary = 9;
 }
 
 // InferenceResult carries ordered response parts, usage metadata, and the finish reason returned by the backend. The governed envelope carries this for the receipt and audit chain.
@@ -1369,6 +1408,9 @@ message InferenceResult {
   string evaluation_attempt_id = 27;
   string scenario_id = 28;
   string model_registry_digest = 29;
+  uint32 retry_count = 30;
+  InferenceLoadState load_state = 31;
+  InferenceRetryClassification retry_classification = 32;
 }
 
 // InferenceProgressEvent carries bounded incremental provider output for
@@ -1477,6 +1519,9 @@ message InferenceDispatchRequest {
   // When true, the Gateway forwards live InferenceProgressEvent telemetry
   // to the caller while waiting for the authoritative terminal completion.
   bool stream = 34;
+
+  // Zero-based retry ordinal for this provider attempt.
+  uint32 retry_count = 35;
 }
 
 // InferenceDispatchStreamFrame is one NDJSON line in a streaming dispatch

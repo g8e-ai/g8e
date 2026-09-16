@@ -1456,6 +1456,8 @@ var (
 	ErrInferenceEvidenceHashInvalid      = errors.New("inference: evidence hash invalid")
 	ErrInferenceModelRegistryInvalid     = errors.New("inference: model registry invalid")
 	ErrInferenceCampaignBindingInvalid   = errors.New("inference: campaign binding invalid")
+	ErrInferenceProviderAttemptConflict  = errors.New("inference: provider attempt already recorded")
+	ErrInferenceRequestTooLarge          = errors.New("inference: request exceeds size bound")
 
 	// Dispatch transport errors. Zero delivery and a missing correlated
 	// result are terminal transport outcomes, not log-and-continue events.

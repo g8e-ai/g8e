@@ -70,24 +70,32 @@ func successDispatchResult(t *testing.T) *CommandDispatchResult {
 	return successDispatchResultFor(t, baseRequest())
 }
 
+func stampResultIdentity(result *operatorv1.InferenceResult, req DispatchInferenceRequest) {
+	result.ProviderAttemptId = req.ProviderAttemptID
+	result.RequestedModelDigest = req.ModelDigest
+	result.ServedModelDigest = req.ModelDigest
+	result.CampaignId = req.CampaignID
+	result.RunId = req.RunID
+	result.AssignmentId = req.AssignmentID
+	result.EvaluationAttemptId = req.EvaluationAttemptID
+	result.ScenarioId = req.ScenarioID
+	result.ModelRegistryDigest = req.ModelRegistryDigest
+	result.RetryCount = req.RetryCount
+	result.RetryClassification = models.ClassifyRetry(req.RetryCount)
+	result.LoadState = models.ClassifyLoadState(result.LoadDurationNs)
+}
+
 func successDispatchResultFor(t *testing.T, req DispatchInferenceRequest) *CommandDispatchResult {
 	t.Helper()
-	payload, err := proto.Marshal(&operatorv1.InferenceResult{
+	result := &operatorv1.InferenceResult{
 		Parts:                 []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "ok"}}},
 		Model:                 req.Model,
 		RequestedModel:        req.Model,
-		ProviderAttemptId:     req.ProviderAttemptID,
-		RequestedModelDigest:  req.ModelDigest,
-		ServedModelDigest:     req.ModelDigest,
 		NormalizedRequestHash: "11aa22bb33cc44dd55ee66ff7788990011aa22bb33cc44dd55ee66ff77889900",
 		OutputHash:            "00aa11bb22cc33dd44ee55ff6677889900aa11bb22cc33dd44ee55ff66778899",
-		CampaignId:            req.CampaignID,
-		RunId:                 req.RunID,
-		AssignmentId:          req.AssignmentID,
-		EvaluationAttemptId:   req.EvaluationAttemptID,
-		ScenarioId:            req.ScenarioID,
-		ModelRegistryDigest:   req.ModelRegistryDigest,
-	})
+	}
+	stampResultIdentity(result, req)
+	payload, err := proto.Marshal(result)
 	require.NoError(t, err)
 	return &CommandDispatchResult{
 		TransactionID: "tx-1",
@@ -448,18 +456,10 @@ func TestDispatchInference_ResultIdentityMismatchFailsClosed(t *testing.T) {
 				Parts:                 []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "answer"}}},
 				Model:                 req.Model,
 				RequestedModel:        req.Model,
-				ProviderAttemptId:     req.ProviderAttemptID,
 				NormalizedRequestHash: strings.Repeat("1", 64),
 				OutputHash:            strings.Repeat("2", 64),
-				CampaignId:            req.CampaignID,
-				RunId:                 req.RunID,
-				AssignmentId:          req.AssignmentID,
-				EvaluationAttemptId:   req.EvaluationAttemptID,
-				ScenarioId:            req.ScenarioID,
-				RequestedModelDigest:  req.ModelDigest,
-				ServedModelDigest:     req.ModelDigest,
-				ModelRegistryDigest:   req.ModelRegistryDigest,
 			}
+			stampResultIdentity(result, req)
 			tt.mutate(result)
 			payload, err := proto.Marshal(result)
 			require.NoError(t, err)
@@ -477,14 +477,16 @@ func TestDispatchInference_ResultIdentityMismatchFailsClosed(t *testing.T) {
 
 func TestDispatchInference_SuccessReturnsResultAndReceipt(t *testing.T) {
 	receipt := &operatorv1.ActionReceipt{TransactionId: "tx-9", Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED}
-	resultPayload, err := proto.Marshal(&operatorv1.InferenceResult{
+	req := baseRequest()
+	successResult := &operatorv1.InferenceResult{
 		Parts:                 []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "answer"}}},
-		Model:                 "gemma3:4b",
-		RequestedModel:        "gemma3:4b",
-		ProviderAttemptId:     "provider-attempt-1",
+		Model:                 req.Model,
+		RequestedModel:        req.Model,
 		NormalizedRequestHash: strings.Repeat("1", 64),
 		OutputHash:            strings.Repeat("2", 64),
-	})
+	}
+	stampResultIdentity(successResult, req)
+	resultPayload, err := proto.Marshal(successResult)
 	require.NoError(t, err)
 	dispatcher := &stubCommandDispatcher{result: &CommandDispatchResult{
 		TransactionID: "tx-9",
@@ -495,7 +497,6 @@ func TestDispatchInference_SuccessReturnsResultAndReceipt(t *testing.T) {
 		capableOp("sess-a"),
 	}}, testLogger())
 
-	req := baseRequest()
 	req.ActingAppID = "spiffe://g8e.local/app/g8ee"
 	req.CaseID = "case-1"
 	out, err := svc.DispatchInference(context.Background(), req)

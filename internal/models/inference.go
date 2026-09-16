@@ -89,6 +89,7 @@ type GenerateRequest struct {
 	ModelRegistry        []*operatorv1.InferenceModelVariant
 	ModelRegistryDigest  string
 	Stream               bool
+	RetryCount           uint32
 }
 
 // GenerateResponse carries ordered model response parts, usage metadata, and finish reason returned by the backend.
@@ -120,6 +121,9 @@ type GenerateResponse struct {
 	EvaluationAttemptID   string
 	ScenarioID            string
 	ModelRegistryDigest   string
+	RetryCount            uint32
+	RetryClassification   operatorv1.InferenceRetryClassification
+	LoadState             operatorv1.InferenceLoadState
 }
 
 // BackendStatus reports the backend's readiness and the models available in
@@ -157,6 +161,7 @@ type InferenceRequestPayload struct {
 	ModelRegistry        []*operatorv1.InferenceModelVariant
 	ModelRegistryDigest  string
 	Stream               bool
+	RetryCount           uint32
 }
 
 // FromProtoInferenceRequested decodes a protobuf InferenceRequested message into an isolated typed payload.
@@ -233,6 +238,7 @@ func FromProtoInferenceRequested(req *operatorv1.InferenceRequested) InferenceRe
 		ModelRegistry:        cloneInferenceModelRegistry(req.GetModelRegistry()),
 		ModelRegistryDigest:  req.GetModelRegistryDigest(),
 		Stream:               req.GetStream(),
+		RetryCount:           req.GetRetryCount(),
 	}
 }
 
@@ -271,6 +277,7 @@ func (p InferenceRequestPayload) ToGenerateRequest(defaultModel string) Generate
 		ModelRegistry:        cloneInferenceModelRegistry(p.ModelRegistry),
 		ModelRegistryDigest:  p.ModelRegistryDigest,
 		Stream:               p.Stream,
+		RetryCount:           p.RetryCount,
 	}
 }
 
@@ -305,6 +312,9 @@ func (r GenerateResponse) ToProtoInferenceResult() *operatorv1.InferenceResult {
 		EvaluationAttemptId:   r.EvaluationAttemptID,
 		ScenarioId:            r.ScenarioID,
 		ModelRegistryDigest:   r.ModelRegistryDigest,
+		RetryCount:            r.RetryCount,
+		RetryClassification:   r.RetryClassification,
+		LoadState:             r.LoadState,
 	}
 }
 
@@ -374,6 +384,29 @@ func ComputeInferenceOutputHash(parts []*operatorv1.InferenceResponsePart, finis
 func SHA256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+// ClassifyRetry maps the zero-based retry ordinal to a typed classification.
+func ClassifyRetry(retryCount uint32) operatorv1.InferenceRetryClassification {
+	if retryCount == 0 {
+		return operatorv1.InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_NONE
+	}
+	return operatorv1.InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT
+}
+
+// ClassifyLoadState derives cold/warm classification from provider-reported
+// load duration. Missing load duration is explicitly unavailable.
+func ClassifyLoadState(loadDurationNS *int64) operatorv1.InferenceLoadState {
+	if loadDurationNS == nil {
+		return operatorv1.InferenceLoadState_INFERENCE_LOAD_STATE_UNAVAILABLE
+	}
+	if *loadDurationNS == 0 {
+		return operatorv1.InferenceLoadState_INFERENCE_LOAD_STATE_WARM
+	}
+	if *loadDurationNS < 0 {
+		return operatorv1.InferenceLoadState_INFERENCE_LOAD_STATE_UNAVAILABLE
+	}
+	return operatorv1.InferenceLoadState_INFERENCE_LOAD_STATE_COLD
 }
 
 func IsSHA256Hex(value string) bool {

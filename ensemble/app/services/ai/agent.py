@@ -357,6 +357,7 @@ class g8eEnsemble:
 
                 llm_provider.clear_input_artifact_hash()
                 llm_provider.set_g8e_context(inputs.g8e_context)
+                llm_provider.set_provider_retry_count(retry_count)
                 input_artifact_hash = model_boundary_hash(
                     {
                         "model": model_name,

@@ -384,6 +384,7 @@ def _validate_response_identity(
         or result.evaluation_attempt_id != request.evaluation_attempt_id
         or result.scenario_id != request.scenario_id
         or result.model_registry_digest != request.model_registry_digest
+        or result.retry_count != request.retry_count
         or any(len(value) != 64 or value.lower() != value for value in hashes)
         or any(any(char not in "0123456789abcdef" for char in value) for value in hashes)
         or (request.model_digest and result.served_model_digest != request.model_digest)
@@ -484,6 +485,9 @@ class G8EProvider(LLMProvider):
         self._governed_dispatch_evidence: ContextVar[GovernedDispatchEvidence | None] = ContextVar(
             f"{type(self).__name__}_governed_dispatch_evidence_{id(self)}", default=None
         )
+        self._provider_retry_count: ContextVar[int] = ContextVar(
+            f"{type(self).__name__}_provider_retry_count_{id(self)}", default=0
+        )
 
     @property
     def governed_dispatch_evidence(self) -> GovernedDispatchEvidence | None:
@@ -494,6 +498,9 @@ class G8EProvider(LLMProvider):
         the case, investigation, task, and session identities onto the
         ``InferenceDispatchRequest``."""
         self._g8e_context.set(context)
+
+    def set_provider_retry_count(self, retry_count: int) -> None:
+        self._provider_retry_count.set(retry_count)
 
     async def _close_resources(self):
         """Clean up provider resources. The HTTP client is owned by the
@@ -527,6 +534,7 @@ class G8EProvider(LLMProvider):
         """Dispatch a governed inference request and return the response."""
         self._governed_dispatch_evidence.set(None)
         context = self._g8e_context.get()
+        retry_count = self._provider_retry_count.get()
         request = InferenceDispatchRequest(
             role=role,
             messages=_contents_to_messages(contents, system_instructions, model=model),
@@ -537,6 +545,7 @@ class G8EProvider(LLMProvider):
             request_schema_version=_REQUEST_SCHEMA_VERSION,
             context_limit=LLM_OLLAMA_DEFAULT_NUM_CTX,
             provider_attempt_id=str(uuid4()),
+            retry_count=retry_count,
             case_id=(context.case_id or "") if context else "",
             investigation_id=(context.investigation_id or "") if context else "",
             task_id=(context.task_id or "") if context else "",
@@ -610,6 +619,7 @@ class G8EProvider(LLMProvider):
 
         self._governed_dispatch_evidence.set(None)
         context = self._g8e_context.get()
+        retry_count = self._provider_retry_count.get()
         request = InferenceDispatchRequest(
             role=role,
             messages=_contents_to_messages(contents, system_instructions, model=model),
@@ -620,6 +630,7 @@ class G8EProvider(LLMProvider):
             request_schema_version=_REQUEST_SCHEMA_VERSION,
             context_limit=LLM_OLLAMA_DEFAULT_NUM_CTX,
             provider_attempt_id=str(uuid4()),
+            retry_count=retry_count,
             stream=True,
             case_id=(context.case_id or "") if context else "",
             investigation_id=(context.investigation_id or "") if context else "",

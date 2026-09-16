@@ -402,6 +402,7 @@ const (
 	// reads); the directory is the canonical path for staged models in
 	// air-gapped deployments.
 	InferenceDirname           = "inference"
+	InferenceAttemptsDirname   = "attempts"
 	ModelsDirname              = "models"
 	InferenceStateFilename     = "inference-state.json"
 	InferenceModelfilesDirname = "modelfiles"

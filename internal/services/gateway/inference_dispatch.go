@@ -232,6 +232,7 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 		WebSessionID:            req.GetWebSessionId(),
 		CliSessionID:            req.GetCliSessionId(),
 		Stream:                  req.GetStream(),
+		RetryCount:              req.GetRetryCount(),
 	}
 
 	if req.GetStream() {
