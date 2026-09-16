@@ -59,6 +59,12 @@ type GatewayConfig struct {
 	PublicBaseURL       string                `json:"public_base_url,omitempty"`
 	AllowedOrigins      []string              `json:"allowed_origins,omitempty"`
 	DoctrineDir         string                `json:"doctrine_dir,omitempty"`
+
+	PublicSpectatorEnabled      bool   `json:"public_spectator_enabled"`
+	PublicSpectatorPrivateAddr  string `json:"public_spectator_private_addr,omitempty"`
+	PublicSpectatorPublicAddr   string `json:"public_spectator_public_addr,omitempty"`
+	EvalExplorerAddr            string `json:"eval_explorer_addr,omitempty"`
+	EvalExplorerRoot            string `json:"eval_explorer_root,omitempty"`
 }
 
 // RunGateway starts the Operator in gateway mode - the platform's central
@@ -137,6 +143,11 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	if err != nil {
 		return fmt.Errorf("gateway: load configuration: %w", err)
 	}
+	gatewayCfg.Gateway.PublicSpectatorEnabled = cfg.PublicSpectatorEnabled
+	gatewayCfg.Gateway.PublicSpectatorPrivateAddr = cfg.PublicSpectatorPrivateAddr
+	gatewayCfg.Gateway.PublicSpectatorPublicAddr = cfg.PublicSpectatorPublicAddr
+	gatewayCfg.Gateway.EvalExplorerAddr = cfg.EvalExplorerAddr
+	gatewayCfg.Gateway.EvalExplorerRoot = cfg.EvalExplorerRoot
 	gatewayCfg.Version = vi.Version
 
 	// Git for ledger (embedded go-git)

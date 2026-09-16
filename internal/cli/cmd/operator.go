@@ -53,6 +53,7 @@ func operatorListCmd() *cobra.Command {
 }
 
 func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
+	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all Operator instances",
@@ -90,8 +91,43 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 
 			operators := slotResp.Operators
 			if len(operators) == 0 {
+				if jsonOutput {
+					payload, err := json.MarshalIndent(map[string]any{"operators": []any{}}, "", "  ")
+					if err != nil {
+						return err
+					}
+					_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+					return err
+				}
 				cmd.Println("No operators found")
 				return nil
+			}
+
+			if jsonOutput {
+				entries := make([]map[string]any, 0, len(operators))
+				for _, op := range operators {
+					entry := map[string]any{
+						"operator_id":         op.ID,
+						"operator_session_id": op.OperatorSessionID,
+						"operator_type":       op.OperatorType,
+						"status":              op.Status,
+						"component":           op.Component,
+					}
+					if op.Name != "" {
+						entry["name"] = op.Name
+					}
+					if op.RuntimeConfig != nil {
+						entry["inference_enabled"] = op.RuntimeConfig.InferenceEnabled
+						entry["provider_boundary_observer_enabled"] = op.RuntimeConfig.ProviderBoundaryObserverEnabled
+					}
+					entries = append(entries, entry)
+				}
+				payload, err := json.MarshalIndent(map[string]any{"operators": entries}, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
 			}
 
 			cmd.Printf("Operators (%d total)\n", len(operators))
@@ -105,6 +141,7 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON operator list")
 	return cmd
 }
 

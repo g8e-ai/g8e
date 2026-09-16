@@ -1,5 +1,10 @@
-// Local development supervisor. Starts the mirror, optionally seeds fixture
-// data in mock mode, optionally replays scripted live events, and runs Vite.
+// Legacy local development supervisor. Prefer gateway-owned spectator instead:
+//   ./g8e gw start -f --public-spectator
+// or docker compose up -d g8e-gateway
+// which serves mirror 8081/8082 and explorer 5173 without Node/Vite.
+//
+// This script starts the mirror, optionally seeds fixture data in mock mode,
+// optionally replays scripted live events, and runs Vite.
 // All child processes use argument arrays (no shell interpolation) and are
 // terminated on exit.
 //

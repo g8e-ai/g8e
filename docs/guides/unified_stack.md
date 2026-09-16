@@ -1,292 +1,422 @@
 # Unified Docker Stack Guide
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-16  
+Version: v2.1.8
 
-This guide explains how to run the gateway, operator, ensemble (g8ee), and dashboard (g8ed) from the repository root as one Docker Compose stack. You can manage the stack with Docker Compose directly or with the `./g8e docker` commands.
+This guide explains how to run the g8e platform from the repository root as one Docker Compose stack: Gateway, Data Operator, Inference Operator, ensemble (g8ee), and dashboard (g8ed). It also documents the evaluation campaign topology used for governed model scoring, the remote Ollama provider boundary, and the provider-boundary Observer Operator that enrolls from the Windows Ollama host.
+
+Run all commands from the repository root unless noted otherwise.
 
 ## Prerequisites
 
-The unified stack requires:
-
 - Docker Engine with the Docker Compose v2 plugin.
-- The g8e repository and `./g8e` binary on the host.
-- Ports 8080, 8443, 8000, and 3000 available when using the defaults.
-- A browser with WebAuthn support for interactive owner enrollment. Headless enrollment is available when no browser is present.
-- `G8E_OLLAMA_ENDPOINT` set in a repository-root `.env` (copy `.env.example`) or exported in the environment. The `g8ellama` profile's Inference Node declares it with fail-fast interpolation, so every `docker compose` command errors when it is unset, even when the `g8ellama` profile is inactive.
+- Built `./g8e` binary (`make build`).
+- Ports available on the campaign host (defaults): **8080**, **8443**, **8000**, **3000**, **8081**, **8082**, **5173**.
+- Repository-root `.env` (copy from `.env.example`).
+- `G8E_OLLAMA_ENDPOINT` set to the **approved remote Ollama provider** (not loopback on the campaign host when Ollama runs elsewhere). Compose fails fast when this variable is unset because the evaluation profile's Inference Operator interpolates it.
+- Remote Ollama reachable from the Docker network, for example: `curl -fsS http://192.168.1.2:11434/api/version`.
 
-Run all commands in this guide from the repository root. The `./g8e docker` commands require `docker-compose.yml` in the current directory.
+For interactive owner enrollment you need a browser with WebAuthn support. For headless campaign operation use `./g8e auth enroll user --headless -e localhost`.
 
-The start and reset commands run `docker compose up -d` without `--build`. Build the images after source changes or when you want to guarantee a fresh local image:
+After source changes, rebuild images before restarting containers:
 
 ```bash
+make build
 ./g8e docker build
 ```
 
-You can also use `docker compose up -d --build` in the manual workflow.
+## Compose profiles and services
 
-## Stack Services
+The root `docker-compose.yml` defines platform services on the `g8e-net` bridge network. Profiles control which containers start; they do not bypass owner enrollment.
 
-The root `docker-compose.yml` defines the four long-running platform services on the `g8e-net` bridge network and one profile-gated evaluation observer with no network attachment:
-
-| Service | Build | Published ports | Role |
+| Service | Profile | Published ports | Role |
 | --- | --- | --- | --- |
-| `g8e-gateway` | Root `Dockerfile` | 8080 HTTP, 8443 HTTPS | Policy Decision Point. It admits transactions, manages PKI, enforces gateway governance, brokers pub/sub, and serves the console, MCP, and A2A surfaces. |
-| `g8e-operator` | Root `Dockerfile` | None | Policy Execution Point. It connects outbound to the gateway over mTLS, receives work, re-verifies proofs, and performs L4 and L5 execution. |
-| `ensemble` | `ensemble/Dockerfile` with the repository root as its build context | 8000 | First-party agentic ensemble. It runs the AI reasoning flow, submits governed transactions, and publishes events. See the [g8ee documentation](../ensemble/index.md). |
-| `dashboard` | `dashboard/Dockerfile` with the repository root as its build context | 3000 | First-party browser interface for chat, operator management, audit, and settings. See the [g8ed documentation](../dashboard/index.md). |
-| `g8e-eval-observer` | Existing `g8e-gateway` image | None | Short-lived independent target-state reader for native evaluation. It mounts only `g8e-shared-tmp` read-only at `/observe`, has no network or workload identity, and returns raw controlled-fixture bytes to the host-side evaluator. |
+| `g8e-gateway` | default | 8080 HTTP, 8443 HTTPS | Policy Decision Point (PDP). PKI, governance, pub/sub, console, MCP, A2A. |
+| `g8e-operator` | `bootstrapped` | none | **Data Operator** — governed tool/filesystem/process boundary. |
+| `g8e-inference-operator` | `evaluation` | none | **Inference Operator** — governed inference to the remote Ollama provider. Requires `G8E_OLLAMA_ENDPOINT` and campaign registry bindings. |
+| `ensemble` | `bootstrapped` | 8000 | g8ee chat pipeline (`POST /api/v1/chat`). |
+| `dashboard` | `bootstrapped` | 3000 | Legacy dashboard (not the evaluation acceptance UI). |
+| `g8e-eval-observer` | `evaluation` | none | Short-lived networkless target observer for the native execution-boundary suite only. Not the provider-boundary Observer Operator. |
 
-The gateway and operator use the same Go image and binary. The Linux AMD64 binary includes the Go FIPS 140-3 cryptographic module. Strict runtime enforcement is off by default because the platform uses cryptographic primitives that strict mode rejects. See the [Docker Gateway Guide](./docker_gateway.md) for the supported operating environment and verification details.
+The Gateway and Operator containers use the same Go image. The evaluation acceptance topology requires **both** `bootstrapped` and `evaluation` profiles. The legacy `g8ellama` profile (separate User Gateway) is **not** used for model campaigns.
 
-## Startup Model
+### Evaluation campaign topology
 
-Only `g8e-gateway` belongs to the default Compose profile. The operator, ensemble, and dashboard belong to the `bootstrapped` profile. The `g8e-eval-observer` service belongs to the `evaluation` profile and runs only as a short-lived `docker compose run --rm` process when the host-side native evaluator requests an independent fixture observation. A fresh gateway initializes its PKI immediately, but it starts with no users and does not issue workload credentials until the first owner enrolls and approves each platform enrollment request.
+Scored assignments use one campaign Gateway with two distinct remote Operator sessions:
 
-The profile controls which containers Compose starts; it does not bypass enrollment. The three workload containers remain not ready while they wait for owner approval. The evaluation observer does not enroll: it has no `.g8e` runtime mount, certificate, session, or network path, and it does not participate in governance or execution.
+```text
+Campaign host (Linux + Docker)
+  g8e-gateway ........................ PDP, pub/sub, inference dispatch fan-out
+  g8e-operator ......................... Data Operator (governed tools)
+  g8e-inference-operator ............. Inference Operator → remote Ollama
+  ensemble ........................... g8ee ChatPipelineService
 
-## Automated Workflow
-
-The interactive helper starts all four services and walks through enrollment using the default host ports:
-
-```bash
-./g8e docker start --full
+Provider host (Windows + Ollama)
+  Ollama ............................. approved provider (192.168.1.2:11434)
+  g8e operator (Observer) ............ provider-boundary hardware observer
+                                       (--provider-boundary-observer-enabled)
 ```
 
-On a fresh deployment, the command:
+- Scored inference never calls Ollama directly from the campaign host CLI or ensemble.
+- The Inference Operator is the only scored path to the provider.
+- The Observer Operator has **no** inference backend and **no** access to Inference Operator attempt files. It samples GPU/RAM locally and receives BEGIN/FINALIZE commands over Gateway pub/sub.
 
-1. Starts the `bootstrapped` Compose profile in the background.
-2. Polls `http://127.0.0.1:8080/api/v1/health` until the gateway responds.
-3. Enrolls the local CLI identity. The first enrollment creates the owner and registers a WebAuthn passkey; an existing valid identity is reused.
-4. Checks for pending enrollment requests in ensemble, dashboard, then operator order and prompts before approving each request.
+## Campaign and run naming
 
-Each approval prompt accepts `y` or `yes`; any other response skips that component. The walkthrough checks each component only once. If a container has not submitted its request by the time it is checked, the command reports that no request was found and continues. Use the manual approval commands below for any request that appears later.
+Keep internal plan vocabulary separate from public campaign branding.
 
-The helper assumes the default gateway host ports, 8080 and 8443. Use the manual workflow when the gateway is published on different ports.
+| Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (3 roles × 25 scenarios) |
+| --- | --- | --- | --- | --- |
+| **Mini smoke** (pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.local.dev/smoke-mini-inventory.json` | 3 models → **225** |
+| **Dev full smoke** (private, all frozen models) | `phase1a-smoke` | `smoke-dev-<unix>` | `.local.dev/north-star-inventory.json` | 35 models → **2625** |
+| **First public homogeneous run** | `eval-genesis-homogeneous` | `genesis-homogeneous-01` (or `-<seq>`) | fresh provider freeze at launch | all discovered models |
 
-To start all workload containers without running owner enrollment or approval prompts:
+Rules:
+
+- **Do not** use `north-star` in public run IDs or campaign IDs. *North Star* remains the internal scenario catalog name (`north-star-25@1.0.0`).
+- Use **Genesis** for the first public homogeneous release (`eval-genesis-homogeneous`).
+- Every cold start gets a **new run ID**. Never resume abandoned runs after a volume wipe.
+- Set `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` in `.env` **before** starting `g8e-inference-operator`. Without them, dispatch returns HTTP 403 / `campaign binding invalid`.
+
+### Mini smoke inventory (current)
+
+Generated from the full freeze; three models spanning lite/mid/large:
+
+| Model | Role in smoke |
+| --- | --- |
+| `qwen3:0.6b` | smallest |
+| `qwen3:4b` | mid |
+| `gemma3:4b` | larger |
 
 ```bash
-./g8e docker start --full --skip-enroll
+# Regenerate after a full inventory re-freeze:
+go run ./.local.dev/tools/gen-smoke-mini-inventory
 ```
 
-The workloads remain pending until an enrolled owner approves them.
+Current bindings (2026-09-16):
 
-## Manual Workflow
+- Campaign ID: `eval-smoke-mini`
+- Registry digest: `ce4ce367289752cb39f5b34c431696ea5fa685825ac4392c493fc564e0be8854`
+- Matrix size: **225** assignments
 
-### 1. Start the gateway
+## Environment configuration
+
+Copy `.env.example` to `.env` and set at minimum:
 
 ```bash
-docker compose up -d --build
-until curl -fsS http://localhost:8080/api/v1/health >/dev/null 2>&1; do sleep 2; done
+G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
+
+# Mini smoke (change before starting inference operator):
+G8E_INFERENCE_CAMPAIGN_ID=eval-smoke-mini
+G8E_INFERENCE_MODEL_REGISTRY_DIGEST=ce4ce367289752cb39f5b34c431696ea5fa685825ac4392c493fc564e0be8854
 ```
 
-This starts only `g8e-gateway` because the other services are in the `bootstrapped` profile.
+For the dev full matrix, use `phase1a-smoke` and digest `bf99592643c56dc78a10c0ee5de59cf4d740fae0684cda6f9f9e40363959c50c` instead.
 
-### 2. Enroll the first owner
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `G8E_PREFIX` | `g8e` | Container name prefix |
+| `G8E_HTTP_PORT` | `8080` | Gateway discovery / enrollment HTTP |
+| `G8E_HTTPS_PORT` | `8443` | Gateway mTLS API and pub/sub |
+| `G8E_ENSEMBLE_PORT` | `8000` | Ensemble API |
+| `G8E_DASHBOARD_PORT` | `3000` | Dashboard |
+| `G8E_HOSTNAME` | `localhost` | Browser-visible gateway hostname (CORS, WebAuthn) |
+| `G8E_OLLAMA_ENDPOINT` | — | Remote Ollama URL for Inference Operator |
+| `G8E_INFERENCE_CAMPAIGN_ID` | — | Frozen campaign ID bound at Inference Operator enrollment |
+| `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` | — | SHA-256 of frozen model registry |
+
+## Standard bootstrap workflow
+
+### 1. Start the Gateway
+
+```bash
+docker compose up -d
+until curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null; do sleep 2; done
+```
+
+### 2. Enroll the owner
+
+Interactive (console access):
 
 ```bash
 ./g8e auth enroll user -e localhost
 ```
 
-The discovery endpoint uses HTTP port 8080 and the authenticated API uses HTTPS port 8443 by default. Interactive enrollment installs the gateway root CA into system trust before opening the browser for passkey registration. The command prompts before operations that require user action.
-
-If local credentials remain from a gateway whose volumes were removed, the enrollment coordinator checks the new gateway state and performs initial bootstrap when no owner exists.
-
-### 3. Start the workload containers
+Headless (CLI-only owner):
 
 ```bash
-docker compose --profile bootstrapped up -d
+./g8e auth enroll user --headless -e localhost
 ```
 
-Each workload submits its own enrollment request and waits for a decision. Requests can appear at different times.
+### 3. Start evaluation workloads
 
-### 4. Approve the workload requests
+Ensure `.env` campaign bindings match the inventory you will schedule **before** this step.
+
+```bash
+docker compose --profile bootstrapped --profile evaluation up -d
+```
+
+Wait ~5s, then list pending enrollments:
 
 ```bash
 ./g8e auth pending-platform-enrollments
 ```
 
-Approve each exact request ID. Approving the operator first makes its transport identity available before the ensemble begins governed submissions:
+Approve in this order (Data Operator first):
 
 ```bash
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
+./g8e auth approve-platform-enrollment <data-operator-request-id> --yes
 ./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
 ./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+./g8e auth approve-platform-enrollment <inference-operator-request-id> --yes
 ```
 
-Without `--yes`, each command displays request metadata and asks for confirmation. Re-run `pending-platform-enrollments` if a component has not submitted its request yet. You can deny a request with `--deny` and optionally include `--reason`.
+Identify requests by instance ID: `operator-<container-id>` is the **Data** Operator; `operator-inference-operator` is the **Inference** Operator.
 
-You can also approve pending requests in the gateway console at `https://localhost:8443/console/`. Console authentication uses the owner's WebAuthn passkey.
-
-### 5. Verify readiness
+### 4. Verify readiness
 
 ```bash
-docker compose --profile bootstrapped ps
+until curl -fsS http://127.0.0.1:8000/health >/dev/null; do sleep 3; done
+./g8e operator list
+./g8e eval inference status --json
 ```
 
-When all enrollment flows complete, the following surfaces are available:
+Expect **two** remote Operators (data + inference) plus one embedded Gateway operator, and an active inference session ID.
 
-- Gateway discovery and CA bundle: `http://localhost:8080`
-- Gateway HTTPS API: `https://localhost:8443`
-- Gateway console: `https://localhost:8443/console/`
-- Ensemble API: `http://localhost:8000`
-- Dashboard: `http://localhost:3000`
+Session IDs change on every volume wipe. Rediscover them after any `docker compose down -v` or `./g8e docker clean`.
 
-The gateway starts in `doctrine` posture. Compose configures the dashboard origin for CORS and WebAuthn, so the browser SPA can establish a passkey-backed gateway session and call the gateway directly.
-
-## Non-Default Ports and Hostnames
-
-The compose file reads six optional environment variables. The repository root `.env.example` contains the same defaults.
-
-| Variable | Default | Effect |
-| --- | --- | --- |
-| `G8E_PREFIX` | `g8e` | Prefixes container names such as `${G8E_PREFIX}-gateway`. It does not rename the Compose network or named volumes. |
-| `G8E_HTTP_PORT` | `8080` | Host port for gateway discovery, health, CA bundle retrieval, and enrollment submission. |
-| `G8E_HTTPS_PORT` | `8443` | Host port for the gateway HTTPS and mTLS API. |
-| `G8E_ENSEMBLE_PORT` | `8000` | Host port for the ensemble API. |
-| `G8E_DASHBOARD_PORT` | `3000` | Host port for the dashboard. |
-| `G8E_HOSTNAME` | `localhost` | Browser-visible gateway hostname used in the public URL, CORS origin, and WebAuthn relying-party configuration. |
-
-Export overrides so they apply to every Compose command in the workflow:
+### Automated alternative
 
 ```bash
-export G8E_HTTP_PORT=18080
-export G8E_HTTPS_PORT=18443
-export G8E_ENSEMBLE_PORT=18000
-export G8E_DASHBOARD_PORT=13000
-docker compose up -d --build
+./g8e docker start --profile bootstrapped --profile evaluation --full
 ```
 
-Pass both gateway ports to host-side authentication commands:
+Use `--skip-enroll` to start containers without the enrollment walkthrough. The evaluation profile is not included in plain `--full`; pass `--profile evaluation` explicitly.
+
+## Provider-boundary Observer Operator (Windows Ollama host)
+
+Deploy this **on the machine that runs Ollama** (for example `192.168.1.2`), not on the Linux campaign host.
+
+### Prerequisites on the provider host
+
+- `g8e.exe` built for Windows (`make build-windows` or copy `bin/g8e-windows-amd64.exe`).
+- Outbound TCP to the campaign Gateway on **8080** and **8443**.
+- `nvidia-smi` on PATH (GPU telemetry). Host RAM via Windows-equivalent collection in the observer collector.
+- A hosts-file mapping so the Gateway certificate SAN matches, for example:
+
+```text
+192.168.1.10 g8e.local
+```
+
+Replace `192.168.1.10` with the Linux campaign host's LAN address.
+
+### Start and enroll the Observer
+
+In a dedicated working directory on the Windows provider host:
+
+```powershell
+.\g8e.exe operator start `
+  --endpoint g8e.local `
+  --provider-boundary-observer-enabled `
+  --provider-boundary-observer-id g8e-provider-boundary-observer
+```
+
+The process submits a platform enrollment request. **Do not** pass `--inference-enabled`; this Operator is read-only hardware observation only.
+
+From the campaign host owner CLI:
 
 ```bash
-./g8e auth enroll user -e localhost:18080 --port 18443
-docker compose --profile bootstrapped up -d
-./g8e auth pending-platform-enrollments -e localhost:18080 --port 18443
-./g8e auth approve-platform-enrollment <request-id> --yes -e localhost:18080 --port 18443
+./g8e auth pending-platform-enrollments
+./g8e auth approve-platform-enrollment <observer-request-id> --yes
 ```
 
-Set `G8E_HOSTNAME` to the hostname used by the browser when accessing the gateway from another machine. The hostname must resolve to the Docker host, and the published ports must be reachable. WebAuthn relying-party IDs are hostnames, not URLs or host-and-port strings.
+After approval, confirm the observer appears in `./g8e operator list` with `provider_boundary_observer_enabled` in its runtime config.
 
-## CLI Management
+### What the Observer does
+
+1. Gateway sends `ProviderBoundaryObservationCommand` (BEGIN/FINALIZE) on the observer's pub/sub cmd channel when scored inference starts and ends.
+2. Observer samples GPU VRAM, utilization, temperature, power, clocks, and system RAM between BEGIN and FINALIZE.
+3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
+4. Gateway ingests windows for `g8e eval campaign verify --require-provider-observation`.
+
+The legacy filesystem runner `g8e eval provider-observer run` is for co-located dev tests only. Production uses the enrolled Observer Operator.
+
+## Mini smoke campaign workflow
+
+Use this to validate the full pipeline (schedule → execute → publish → explorer) in hours instead of days.
+
+### Phase A — Reset public feed (cold start)
+
+The gateway owns the public mirror (`8081` private ingest, `8082` public read/SSE) and the evaluation explorer (`5173`) when started with `--public-spectator` (default). Docker Compose enables this automatically.
+
+```bash
+./g8e eval mirror stop    # stops legacy daemon mirror only; gateway-owned listeners restart with gw
+rm -rf .g8e/public-feed .g8e/public-mirror
+./g8e public init --source-id opendevops-local --mirror-origin http://127.0.0.1:8081
+docker compose up -d g8e-gateway    # or: ./g8e gw start -f --public-spectator
+```
+
+Explorer (acceptance UI): open `http://127.0.0.1:5173/#/` after the gateway is up. Build static assets once with `cd dashboard/g8e-adapter/evaluation-explorer && npm run build` if the explorer listener logs that dist is missing. Do **not** run `npm run dev:real` for North Star acceptance — that path is legacy local supervisor only.
+
+### Phase B — Initialize and schedule
+
+```bash
+RUN_ID=smoke-mini-$(date +%s)
+INFERENCE_SESSION=$(./g8e eval inference status --json | jq -r .operator_session_id)
+DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true) | .operator_session_id' | head -1)
+
+./g8e eval campaign init \
+  --campaign-id eval-smoke-mini \
+  --run-id "$RUN_ID" \
+  --inventory-file .local.dev/smoke-mini-inventory.json \
+  --inference-session "$INFERENCE_SESSION" \
+  --data-session "$DATA_SESSION"
+
+./g8e eval campaign schedule --run-id "$RUN_ID" --publish
+```
+
+Wait for schedule publish to finish (~1 min for 225 cells). **Do not** start execute until schedule exits successfully.
+
+### Phase C — Execute (serial daemon)
+
+```bash
+G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 \
+  ./g8e eval campaign execute \
+  --run-id "$RUN_ID" \
+  --ollama-endpoint http://192.168.1.2:11434 \
+  --publish --daemon --provider-settle 8s
+```
+
+- `--daemon` runs the full matrix in one process.
+- `--provider-settle 8s` waits after each assignment for Ollama to go idle.
+- **Never** run `g8e eval campaign publish` concurrently with `execute --publish`.
+
+### Phase D — Monitor
+
+| Surface | URL |
+| --- | --- |
+| Explorer | `http://127.0.0.1:5173/#/` |
+| Live dataset | `ds-live-<run-id>` |
+| Public mirror bootstrap | `http://127.0.0.1:8082/bootstrap?source=opendevops-local` |
+
+```bash
+./g8e eval campaign status --run-id "$RUN_ID"
+./g8e eval campaign account --run-id "$RUN_ID" --json
+cd dashboard/g8e-adapter/evaluation-explorer && npm run health
+```
+
+After the Observer Operator is enrolled, verify hardware coverage:
+
+```bash
+./g8e eval campaign verify --run-id "$RUN_ID" --require-provider-observation
+```
+
+### Hard rules
+
+1. **Never** call Ollama at `127.0.0.1:11434` on the campaign host for scored work when the approved provider is remote.
+2. **Always** rediscover Operator session IDs after a volume wipe.
+3. **Always** match `.env` campaign/registry digest to the inventory file used at `campaign init`.
+4. **Never** resume archived or abandoned run IDs from prior checkpoints.
+
+## Public spectator feed
+
+Campaign data publishes through Go (`CampaignPublicationCoordinator` → `PublicPublisherService` outbox → mirror ingest). No Python bridge or host systemd publisher.
+
+**Gateway-owned (landed):** `g8e gw start --public-spectator` (default) and `docker compose up -d g8e-gateway` start the in-process mirror on `8081`/`8082` and evaluation explorer on `5173`.  
+**Legacy fallback:** `./g8e eval mirror {run|stop|status}` for host-only dev without a running gateway.
+
+Do not install `deploy/systemd/opendevops-eval-publisher.service` (deleted) or rely on `g8e public mirror run` as the long-term ops interface.
+
+## CLI stack management
 
 | Command | Behavior |
 | --- | --- |
-| `./g8e docker start` | Starts the default profile, which contains only the gateway. |
-| `./g8e docker start --full` | Starts the `bootstrapped` profile and runs the interactive enrollment walkthrough. |
-| `./g8e docker start --full --skip-enroll` | Starts all services without the enrollment walkthrough. |
-| `./g8e docker start --profile <name>` | Starts an explicit Compose profile. A non-empty profile also runs the walkthrough unless `--skip-enroll` is set. |
-| `./g8e docker stop` | Runs `docker compose down` for all unified-stack services. It removes containers and the Compose network but preserves named volumes. |
-| `./g8e docker status` | Runs `docker compose ps`. |
-| `./g8e docker build` | Builds the images used by all four services. `--no-cache` disables the build cache. |
-| `./g8e docker logs [service] [-f]` | Prints logs for the stack or one Compose service and optionally follows them. |
-| `./g8e docker rebuild [--full]` | Stops and rebuilds the explicit `--profile`, or the default profile when none is given, then restarts the profile selected by `--profile` or `--full`. It preserves volumes and does not run enrollment. The build bypasses the cache by default; pass `--no-cache=false` to reuse it. |
-| `./g8e docker reset [--full]` | Runs destructive cleanup and restarts the selected scope without rebuilding images or running enrollment. It does not ask for confirmation. `--full` selects the restart profile but does not select that profile for the cleanup step. |
-| `./g8e docker clean` | Removes containers, volumes, networks, and orphans across the unified stack. It skips confirmation by default; pass `--yes=false` to require a prompt. |
+| `./g8e docker start` | Starts default profile (Gateway only). |
+| `./g8e docker start --full` | Starts `bootstrapped` profile with enrollment walkthrough. |
+| `./g8e docker start --profile bootstrapped --profile evaluation` | Starts full evaluation stack. |
+| `./g8e docker stop` | `docker compose down` — preserves volumes. |
+| `./g8e docker status` | `docker compose ps`. |
+| `./g8e docker build` | Build all stack images. |
+| `./g8e docker rebuild [--full]` | Stop, rebuild, restart selected profile. |
+| `./g8e docker clean` | Destructive wipe of containers, volumes, networks. |
 
-Use `--profile bootstrapped` with `rebuild` or `reset` when the operation must target the full profile during both shutdown and restart. A successful reset destroys state in the volumes it removes. `clean` always targets the full profile and destroys the gateway PKI, owner records, audit data, operator identity, and app identities. Use these destructive commands only when a fresh trust domain is intended.
+Destructive cleanup destroys the trust domain (PKI, owner, Operator identities, campaign state). After `./g8e docker clean`, repeat owner enrollment and platform approvals.
 
-## Dependencies, Health Checks, and Resources
+## Health checks and resources
 
-The operator, ensemble, and dashboard wait for the gateway container to become healthy. The ensemble also waits for the operator container to start, but not for operator enrollment to complete.
+| Service | Health check |
+| --- | --- |
+| `g8e-gateway` | HTTP `GET /api/v1/health` :8080 |
+| `g8e-operator` | enrolled operator certificate present |
+| `g8e-inference-operator` | enrolled operator certificate present |
+| `ensemble` | HTTP `GET /health` :8000 (after enrollment completes) |
+| `dashboard` | HTTP `GET /` :3000 (after enrollment completes) |
 
-Compose uses these health checks:
+Workloads remain unhealthy while enrollment is pending.
 
-- `g8e-gateway`: HTTP `GET /api/v1/health` on port 8080.
-- `g8e-operator`: presence of the enrolled operator certificate.
-- `ensemble`: HTTP `GET /health` on port 8000. FastAPI does not accept this request until startup enrollment and service initialization complete.
-- `dashboard`: HTTP `GET /` on port 3000. Express starts listening only after dashboard app enrollment completes.
-
-The workload health checks therefore remain unhealthy or in their startup period while enrollment is pending.
-
-| Service | CPU limit | Memory limit | CPU reservation | Memory reservation |
-| --- | --- | --- | --- | --- |
-| `g8e-gateway` | 2 | 1G | 0.5 | 256M |
-| `g8e-operator` | 2 | 1G | 0.5 | 256M |
-| `ensemble` | 2 | 2G | 0.5 | 512M |
-| `dashboard` | 1 | 512M | 0.25 | 128M |
-
-## PKI and Workload Identity
-
-The gateway creates its CA hierarchy, serving certificate, and canonical trust bundle in the `g8e-gateway-data` volume. It serves the CA bundle from `http://<gateway>:8080/.well-known/g8e/pki/ca-bundle`. Read-only host identity mounts allow the gateway to include detected host addresses and names in its serving certificate and regenerate that certificate when its SAN set changes.
-
-The operator, ensemble, and dashboard each complete the owner-approved platform enrollment protocol and persist their credentials in separate named volumes. Pending enrollment state also persists, so a restarted workload resumes its existing request instead of generating a new key and request.
-
-The dashboard has two separate identities. Its container enrolls an app mTLS identity before Express starts, while the browser authenticates directly to the gateway with the owner's WebAuthn passkey.
-
-The ensemble submits governance envelopes with its enrolled app certificate. The gateway binds AGENT and CLIENT transport identity to `acting_app_id`, while `operator_id` and `operator_session_id` carry the delegated human authority. The unified compose mounts operator state read-only only for bootstrap secrets; it never uses the Operator certificate for ensemble governance transport.
-
-See [Authentication and Identity](../architecture/auth.md) for the enrollment protocol and trust model.
-
-## Headless Gateway-Only Deployment
-
-Start only the default profile and enroll a CLI-only owner identity without opening a browser:
-
-```bash
-docker compose up -d --build
-./g8e auth enroll user --headless -e localhost
-```
-
-Headless enrollment skips passkey registration and OS trust installation. The resulting mTLS identity can approve workload enrollment requests from the CLI but cannot sign in to the gateway console. On an already bootstrapped gateway, headless recovery requires approval from another enrolled CLI identity.
+| Service | CPU limit | Memory limit |
+| --- | --- | --- |
+| `g8e-gateway` | 2 | 1G |
+| `g8e-operator` | 2 | 1G |
+| `g8e-inference-operator` | 4 | 4G |
+| `ensemble` | 2 | 2G |
+| `dashboard` | 1 | 512M |
 
 ## Troubleshooting
 
-### A workload remains unhealthy
-
-List pending requests and inspect the affected service logs:
+### Workload stays unhealthy
 
 ```bash
 ./g8e auth pending-platform-enrollments
 ./g8e docker logs <service>
 ```
 
-Approve the request, then run `./g8e docker status`. Use Compose service names such as `g8e-operator`, `ensemble`, or `dashboard` with the logs command.
+### Inference dispatch returns 403 / campaign binding invalid
 
-### The automated walkthrough reports no pending request
-
-The walkthrough does not wait for each workload request. List pending requests again after the container has had time to submit, then approve the exact request ID manually.
-
-### Browser authentication or TLS fails
-
-Confirm that the browser uses the same hostname configured by `G8E_HOSTNAME`, that the gateway root CA is trusted by the host, and that the HTTPS port is reachable. Re-run interactive owner enrollment if passkey registration did not complete.
-
-### A fresh gateway conflicts with old local credentials
-
-If the Docker volumes were removed but host-side CLI credentials remain, run `./g8e auth enroll user` against the fresh gateway. The coordinator detects that the gateway has no owner and performs initial bootstrap.
-
-## Relationship to Demo Stacks
-
-The unified stack is separate from the Healthcare, Finance, DHS, and FedRAMP compose projects under `demos/`. Those deployments use organization-specific network segmentation and scenarios and are managed through `./g8e demos`. They do not include the ensemble or dashboard. See the [Demos README](../../demos/README.md).
-
-## Stopping and Removing the Stack
-
-Stop containers while keeping named-volume state:
+Set `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` in `.env` to match the inventory used at `campaign init`, then recreate the inference operator container:
 
 ```bash
-docker compose --profile bootstrapped down
-# or
-./g8e docker stop
+docker compose --profile evaluation up -d --force-recreate g8e-inference-operator
 ```
 
-Remove containers and named volumes only when you intend to destroy the trust domain and all persisted platform state:
+### Observer not receiving commands
+
+- Confirm Observer enrolled with `--provider-boundary-observer-enabled` (not the filesystem `eval provider-observer run` path).
+- Confirm Gateway can reach the Observer session (`./g8e operator list`).
+- Confirm Windows host can reach Gateway ports 8080/8443 and `g8e.local` resolves to the campaign host.
+
+### Public feed drift or out-of-order batches
+
+- Stop execute and any concurrent `campaign publish`.
+- Do not run `campaign publish` and `execute --publish` at the same time.
+- Reset public feed (Phase A above) before a new run.
+
+### Browser TLS or WebAuthn failures
+
+Confirm `G8E_HOSTNAME` matches the browser URL, the gateway root CA is trusted, and HTTPS port 8443 is reachable.
+
+## Stopping safely
 
 ```bash
-docker compose --profile bootstrapped down -v
-# or, without a confirmation prompt by default
+# Stop execute: Ctrl-C or kill the execute daemon PID
+./g8e eval mirror stop
+./g8e docker stop
+docker compose --profile bootstrapped --profile evaluation down -v   # destroys trust domain
 ./g8e docker clean
 ```
 
-After volume removal, the next gateway startup creates a new PKI. Enroll the first owner again and approve new workload requests.
+## Relationship to other stacks
 
-## Related Documentation
+- **Demos** (`demos/`, `./g8e demos`): organization-specific scenarios; no ensemble/dashboard.
+- **g8ellama profile**: legacy separate User Gateway; not used for North Star / Genesis campaigns.
+- **Native execution-boundary eval** (`g8e eval run core-execution-boundary`): platform lane only; not a model campaign.
 
-- [Platform Architecture Overview](../architecture/overview.md): Component roles and the five-layer governance pipeline.
-- [Gateway Architecture](../architecture/gateway.md): Gateway services, protocol surfaces, and policy enforcement.
-- [Operator Architecture](../architecture/operator.md): Operator execution boundary and L4-L5 lifecycle.
-- [Ensemble Architecture](../architecture/ensemble.md): Ensemble role, agent models, and event flow.
-- [Dashboard Architecture](../architecture/dashboard.md): Browser and container boundaries.
-- [g8ee Documentation](../ensemble/index.md): Ensemble configuration, agents, providers, storage, and testing.
-- [g8ed Documentation](../dashboard/index.md): Dashboard authentication, gateway integration, and development.
-- [Docker Gateway Guide](./docker_gateway.md): Standalone gateway image operation.
-- [Authentication and Identity](../architecture/auth.md): mTLS, WebAuthn, PKI, and platform enrollment.
+## Related documentation
+
+- [Build Operator](./build_operator.md) — build `g8e.exe` for the Windows Observer host.
+- [Connect Operator to Gateway](./connect_operator_to_gateway.md) — enrollment protocol details.
+- [Docker Gateway Guide](./docker_gateway.md) — standalone gateway operation.
+- [g8ee Documentation](../ensemble/index.md) — ensemble configuration and providers.
+- [g8ed Documentation](../dashboard/index.md) — dashboard development.
+- [Authentication and Identity](../architecture/auth.md) — mTLS, WebAuthn, PKI.
+- Implementation plan: `.local.dev/docs/plans/in-progress/2026-09-15-g8e-evals-north-star-implementation.md`

@@ -69,6 +69,12 @@ type GatewayFlags struct {
 	PublicBaseURL      string
 	AllowedOrigins     []string
 	DoctrineDir        string
+
+	PublicSpectatorEnabled     bool
+	PublicSpectatorPrivateAddr string
+	PublicSpectatorPublicAddr  string
+	EvalExplorerAddr           string
+	EvalExplorerRoot           string
 }
 
 // addGatewayFlags registers all shared gateway flags on the given cobra command,
@@ -97,6 +103,11 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 	cmd.Flags().StringVar(&f.PublicBaseURL, "public-base-url", "", "Public base URL for approval links and host validation (e.g., https://demo.g8e.ai)")
 	cmd.Flags().StringArrayVar(&f.AllowedOrigins, "cors-origin", nil, "Allowed CORS origin for cross-origin browser access (repeatable, e.g. https://lovable.dev)")
 	cmd.Flags().StringVar(&f.DoctrineDir, "doctrine-dir", "", "Directory containing doctrine JSON files for L1 threat detection (default: hardcoded MITRE patterns only)")
+	cmd.Flags().BoolVar(&f.PublicSpectatorEnabled, "public-spectator", true, "Start the in-process public mirror and evaluation explorer listeners")
+	cmd.Flags().StringVar(&f.PublicSpectatorPrivateAddr, "public-spectator-private-listen", "", fmt.Sprintf("Loopback address for authenticated public mirror ingest (default: 127.0.0.1:%d)", constants.PublicSpectatorPrivatePort))
+	cmd.Flags().StringVar(&f.PublicSpectatorPublicAddr, "public-spectator-public-listen", "", fmt.Sprintf("Loopback address for anonymous public mirror reads (default: 127.0.0.1:%d)", constants.PublicSpectatorPublicPort))
+	cmd.Flags().StringVar(&f.EvalExplorerAddr, "eval-explorer-listen", "", fmt.Sprintf("Loopback address for the evaluation explorer SPA (default: 127.0.0.1:%d)", constants.EvalExplorerDefaultPort))
+	cmd.Flags().StringVar(&f.EvalExplorerRoot, "eval-explorer-root", "", "Directory containing the built evaluation explorer dist assets")
 }
 
 // resolveGatewayFlags applies environment variable overrides for vault and
@@ -168,8 +179,13 @@ func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 		MCPDownstreamURL:   f.MCPDownstreamURL,
 		A2ADownstreamURL:   f.A2ADownstreamURL,
 		PublicBaseURL:      f.PublicBaseURL,
-		AllowedOrigins:     f.AllowedOrigins,
-		DoctrineDir:        f.DoctrineDir,
+		AllowedOrigins:             f.AllowedOrigins,
+		DoctrineDir:                f.DoctrineDir,
+		PublicSpectatorEnabled:     f.PublicSpectatorEnabled,
+		PublicSpectatorPrivateAddr: f.PublicSpectatorPrivateAddr,
+		PublicSpectatorPublicAddr:  f.PublicSpectatorPublicAddr,
+		EvalExplorerAddr:           f.EvalExplorerAddr,
+		EvalExplorerRoot:           f.EvalExplorerRoot,
 	}
 }
 

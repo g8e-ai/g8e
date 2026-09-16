@@ -160,6 +160,18 @@ type GatewayConfig struct {
 	// Empty means hardcoded MITRE patterns only.
 	DoctrineDir string
 
+	// PublicSpectatorEnabled starts the in-process public mirror and evaluation
+	// explorer static host when the gateway boots.
+	PublicSpectatorEnabled bool
+	// PublicSpectatorPrivateAddr is the authenticated mirror ingest listener.
+	PublicSpectatorPrivateAddr string
+	// PublicSpectatorPublicAddr is the anonymous mirror read/SSE listener.
+	PublicSpectatorPublicAddr string
+	// EvalExplorerAddr is the loopback listener for the evaluation explorer SPA.
+	EvalExplorerAddr string
+	// EvalExplorerRoot overrides the built explorer dist directory.
+	EvalExplorerRoot string
+
 	// Distributed lock retry configuration
 	LockMaxRetries int           // Maximum retry attempts for distributed lock acquisition (default: 30)
 	LockRetryDelay time.Duration // Base delay for lock retry backoff (default: 50ms)

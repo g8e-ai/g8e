@@ -91,6 +91,7 @@ type GatewayModeService struct {
 	responder             *response.Writer
 	server                *http.Server
 	publicServer          *http.Server
+	publicSpectator       *PublicSpectatorRuntime
 
 	handler *HTTPHandler
 
@@ -496,6 +497,27 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	// Build the HTTP handler and servers now that all dependencies are constructed.
 	if err := ls.initHTTPHandler(); err != nil {
 		return nil, fmt.Errorf("gateway: initialize HTTP handler: %w", err)
+	}
+
+	if cfg.Gateway.PublicSpectatorEnabled {
+		spectatorCfg := DefaultPublicSpectatorConfig()
+		if cfg.Gateway.PublicSpectatorPrivateAddr != "" {
+			spectatorCfg.PrivateListenAddress = cfg.Gateway.PublicSpectatorPrivateAddr
+		}
+		if cfg.Gateway.PublicSpectatorPublicAddr != "" {
+			spectatorCfg.PublicListenAddress = cfg.Gateway.PublicSpectatorPublicAddr
+		}
+		if cfg.Gateway.EvalExplorerAddr != "" {
+			spectatorCfg.ExplorerListenAddress = cfg.Gateway.EvalExplorerAddr
+		}
+		if cfg.Gateway.EvalExplorerRoot != "" {
+			spectatorCfg.ExplorerRoot = cfg.Gateway.EvalExplorerRoot
+		}
+		spectator, err := NewPublicSpectatorRuntime(spectatorCfg, b.fileSvc, logger)
+		if err != nil {
+			return nil, fmt.Errorf("gateway: initialize public spectator: %w", err)
+		}
+		ls.publicSpectator = spectator
 	}
 
 	return ls, nil
@@ -1074,6 +1096,16 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 
 	ls.logger.Info("Gateway servers starting", "http_port", ls.cfg.Gateway.HTTPPort, "https_port", ls.cfg.Gateway.HTTPSPort)
 
+	if ls.publicSpectator != nil {
+		if err := ls.publicSpectator.Start(ctx); err != nil {
+			return fmt.Errorf("gateway: start public spectator: %w", err)
+		}
+		ls.logger.Info("Public spectator stack started",
+			"mirror_private", ls.publicSpectator.cfg.PrivateListenAddress,
+			"mirror_public", ls.publicSpectator.cfg.PublicListenAddress,
+			"explorer", ls.publicSpectator.cfg.ExplorerListenAddress)
+	}
+
 	// Start background maintenance for MCP gateway
 	go ls.mcpGateway.RunMaintenance(ctx)
 
@@ -1174,6 +1206,11 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 				ls.logger.Error("Failed to shutdown public server", "error", err)
 			}
 		}
+		if ls.publicSpectator != nil {
+			if err := ls.publicSpectator.Stop(shutdownCtx); err != nil {
+				ls.logger.Error("Failed to shutdown public spectator", "error", err)
+			}
+		}
 	}()
 
 	return <-errChan
@@ -1203,6 +1240,12 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 	// Enforce strict 30-second timeout for graceful shutdown
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	if ls.publicSpectator != nil {
+		if err := ls.publicSpectator.Stop(shutdownCtx); err != nil {
+			ls.logger.Error("Public spectator shutdown error", "error", err)
+		}
+	}
 
 	if err := ls.server.Shutdown(shutdownCtx); err != nil {
 		if shutdownCtx.Err() == context.DeadlineExceeded {

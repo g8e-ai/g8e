@@ -9,14 +9,7 @@ package cmd
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
-	"errors"
 	"fmt"
-	"log/slog"
-	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -33,97 +26,32 @@ const (
 )
 
 type publicMirrorRuntime struct {
-	privateServer *http.Server
-	publicServer  *http.Server
+	runtime *gateway.PublicSpectatorRuntime
 }
 
 func ensureLocalPublicFeed(ctx context.Context, fileSvc fs.RuntimeFileService, sourceID, mirrorOrigin string) (models.PublicExportConfig, error) {
-	exportConfig, err := readPublicExportConfig(ctx, fileSvc)
-	if err == nil {
-		return exportConfig, nil
-	}
-	if !errors.Is(err, constants.ErrPublicFeedConfigRequired) {
-		return models.PublicExportConfig{}, err
-	}
-	if strings.TrimSpace(sourceID) == "" {
-		sourceID = defaultPublicMirrorSourceID
-	}
-	if strings.TrimSpace(mirrorOrigin) == "" {
-		mirrorOrigin = defaultPublicMirrorPrivateURL
-	}
-	if err := validatePublicMirrorOrigin(mirrorOrigin); err != nil {
-		return models.PublicExportConfig{}, err
-	}
-	for _, relPath := range []string{constants.PublicFeedExportConfigPath, constants.PublicFeedSigningKeyPath, constants.PublicFeedIngestTokenPath} {
-		exists, existsErr := fileSvc.FileExists(ctx, relPath)
-		if existsErr != nil {
-			return models.PublicExportConfig{}, fmt.Errorf("public-feed: inspect initialization path: %w", existsErr)
-		}
-		if exists {
-			return models.PublicExportConfig{}, constants.ErrPublicFeedConfigExists
-		}
-	}
-	if err := fileSvc.MkdirAll(ctx, constants.PublicFeedDirname, constants.PermDirPrivate); err != nil {
-		return models.PublicExportConfig{}, fmt.Errorf("public-feed: create runtime directory: %w", err)
-	}
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return models.PublicExportConfig{}, fmt.Errorf("%w: %v", constants.ErrPublicFeedKeyGenFailed, err)
-	}
-	token := make([]byte, constants.PublicFeedIngestTokenBytes)
-	if _, err := rand.Read(token); err != nil {
-		return models.PublicExportConfig{}, fmt.Errorf("public-feed: generate ingest token: %w", err)
-	}
-	keyDigest := sha256.Sum256(publicKey)
-	exportConfig = models.DefaultPublicExportConfig()
-	exportConfig.Enabled = true
-	exportConfig.SourceID = sourceID
-	exportConfig.MirrorOrigin = mirrorOrigin
-	exportConfig.SigningKeyID = hex.EncodeToString(keyDigest[:])
-	if err := fileSvc.WriteFile(ctx, constants.PublicFeedSigningKeyPath, []byte(hex.EncodeToString(privateKey)), constants.PermFilePrivate); err != nil {
-		return models.PublicExportConfig{}, fmt.Errorf("public-feed: write signing key: %w", err)
-	}
-	if err := fileSvc.WriteFile(ctx, constants.PublicFeedIngestTokenPath, []byte(hex.EncodeToString(token)), constants.PermFilePrivate); err != nil {
-		return models.PublicExportConfig{}, fmt.Errorf("public-feed: write ingest token: %w", err)
-	}
-	if err := writePublicExportConfig(ctx, fileSvc, exportConfig); err != nil {
-		return models.PublicExportConfig{}, err
-	}
-	return exportConfig, nil
+	return gateway.EnsureLocalPublicFeed(ctx, fileSvc, sourceID, mirrorOrigin)
 }
 
 func newPublicMirrorRuntime(ctx context.Context, fileSvc fs.RuntimeFileService, exportConfig models.PublicExportConfig, listenAddress, publicListenAddress string) (*publicMirrorRuntime, error) {
-	if err := validatePublicMirrorListenAddresses(listenAddress, publicListenAddress); err != nil {
-		return nil, err
+	cfg := gateway.PublicSpectatorConfig{
+		Enabled:              true,
+		PrivateListenAddress: listenAddress,
+		PublicListenAddress:  publicListenAddress,
+		SourceID:             exportConfig.SourceID,
 	}
-	key, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired)
+	runtime, err := gateway.NewPublicSpectatorRuntime(cfg, fileSvc, nil)
 	if err != nil {
 		return nil, err
 	}
-	token, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired)
-	if err != nil {
-		return nil, err
-	}
-	mirror, err := gateway.NewPublicMirrorServer(slog.Default(), gateway.NewRuntimePublicMirrorStore(fileSvc))
-	if err != nil {
-		return nil, err
-	}
-	mirror.SetIngestAuthToken(hex.EncodeToString(token))
-	privateKey := ed25519.PrivateKey(key)
-	if err := mirror.RegisterSourceKey(ctx, exportConfig.SourceID, exportConfig.SigningKeyID, privateKey.Public().(ed25519.PublicKey)); err != nil {
-		return nil, err
-	}
-	return &publicMirrorRuntime{
-		privateServer: newPublicMirrorHTTPServer(listenAddress, mirror.Handler()),
-		publicServer:  newPublicMirrorHTTPServer(publicListenAddress, mirror.PublicHandler()),
-	}, nil
+	return &publicMirrorRuntime{runtime: runtime}, nil
 }
 
 func (runtime *publicMirrorRuntime) serve(ctx context.Context) error {
-	if runtime == nil {
+	if runtime == nil || runtime.runtime == nil {
 		return fmt.Errorf("public mirror: %w", constants.ErrMissingRequiredField)
 	}
-	return runPublicMirrorServers(ctx, runtime.privateServer, runtime.publicServer)
+	return runtime.runtime.Serve(ctx)
 }
 
 func startPublicMirrorDaemon(listenAddress, publicListenAddress, sourceID, mirrorOrigin string) (int, error) {

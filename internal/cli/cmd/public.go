@@ -13,9 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -216,11 +214,7 @@ func validatePublicExportConfig(exportConfig models.PublicExportConfig) error {
 }
 
 func validatePublicMirrorOrigin(origin string) error {
-	parsed, err := url.Parse(origin)
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "" {
-		return constants.ErrPublicFeedMirrorOriginRequired
-	}
-	return nil
+	return gateway.ValidatePublicMirrorOrigin(origin)
 }
 
 func rejectTrailingPublicJSON(decoder *json.Decoder) error {
@@ -668,20 +662,7 @@ func publicMirrorRunCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 }
 
 func validatePublicMirrorListenAddresses(privateAddress, publicAddress string) error {
-	if privateAddress == publicAddress {
-		return fmt.Errorf("%w: duplicate address %q", constants.ErrPublicFeedListenAddress, privateAddress)
-	}
-	for _, address := range []string{privateAddress, publicAddress} {
-		host, _, err := net.SplitHostPort(address)
-		if err != nil {
-			return fmt.Errorf("%w: %q: %v", constants.ErrPublicFeedListenAddress, address, err)
-		}
-		ip := net.ParseIP(host)
-		if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
-			return fmt.Errorf("%w: %q", constants.ErrPublicFeedListenAddress, address)
-		}
-	}
-	return nil
+	return gateway.ValidatePublicMirrorListenAddresses(privateAddress, publicAddress)
 }
 
 func newPublicMirrorHTTPServer(address string, handler http.Handler) *http.Server {

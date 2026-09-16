@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 
@@ -53,6 +54,10 @@ func evalMirrorRunCmd(deps nativeEvalDeps) *cobra.Command {
 			}
 			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {
+				return err
+			}
+			if publicMirrorBootstrapHealthy(publicListenAddress) {
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public mirror already available at %s (gateway-owned or existing listener)\n", publicListenAddress)
 				return err
 			}
 			runningPID, err := pm.ReadPIDFile(constants.PublicMirrorPIDFilename)
@@ -176,12 +181,7 @@ func evalMirrorStatusCmd(deps nativeEvalDeps) *cobra.Command {
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), "Public mirror is not running.")
 				return err
 			}
-			healthy := false
-			response, err := http.Get("http://127.0.0.1:8082/bootstrap")
-			if err == nil {
-				response.Body.Close()
-				healthy = response.StatusCode == http.StatusOK
-			}
+			healthy := publicMirrorBootstrapHealthy("127.0.0.1:8082")
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Public mirror running (pid %d, public bootstrap %s)\n", pid, mirrorHealthLabel(healthy))
 			return err
 		},
@@ -194,4 +194,20 @@ func mirrorHealthLabel(healthy bool) string {
 		return "ok"
 	}
 	return "unreachable"
+}
+
+func publicMirrorBootstrapHealthy(publicListenAddress string) bool {
+	address := strings.TrimSpace(publicListenAddress)
+	if address == "" {
+		address = "127.0.0.1:8082"
+	}
+	if !strings.HasPrefix(address, "http://") && !strings.HasPrefix(address, "https://") {
+		address = "http://" + address
+	}
+	response, err := http.Get(address + "/bootstrap")
+	if err != nil {
+		return false
+	}
+	response.Body.Close()
+	return response.StatusCode == http.StatusOK
 }
