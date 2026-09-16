@@ -704,8 +704,32 @@ class G8EProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
+        async for chunk in self.generate_content_stream_scored_role(
+            "primary",
+            model,
+            contents,
+            primary_llm_settings,
+        ):
+            yield chunk
+
+    async def generate_content_stream_scored_role(
+        self,
+        model_role: str,
+        model: str,
+        contents: list[Content],
+        primary_llm_settings: PrimaryLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        role_map = {
+            "primary": _ROLE_PRIMARY,
+            "assistant": _ROLE_ASSISTANT,
+            "lite": _ROLE_LITE,
+        }
+        if model_role not in role_map:
+            from app.errors import ValidationError
+
+            raise ValidationError(f"Unsupported scored model role: {model_role}")
         async for chunk in self._dispatch_stream(
-            _ROLE_PRIMARY,
+            role_map[model_role],
             model,
             contents,
             primary_llm_settings.system_instructions,

@@ -145,6 +145,66 @@ services:
           cpus: '0.5'
           memory: 256M
 
+  g8e-inference-operator:
+    # Campaign Inference Operator: enrolls to the primary campaign Gateway
+    # (g8e.local) as a distinct inference-capable remote Operator with its own
+    # runtime volume and session identity. This satisfies the single-PDP,
+    # exact-two-Operator evaluation topology without reusing the Data Operator
+    # or the separate g8e-gateway-user / g8ellama profile.
+    # Activate with:
+    #   G8E_OLLAMA_ENDPOINT=http://<approved-remote>:11434 \
+    #     docker compose --profile bootstrapped --profile evaluation up -d
+    profiles: [evaluation]
+    image: g8e-gateway
+    container_name: ${G8E_PREFIX:-g8e}-inference-operator
+    hostname: inference-operator
+    working_dir: /root
+    networks:
+      g8e-net:
+        aliases:
+          - g8e-inference-operator
+    volumes:
+      - g8e-inference-data:/root/.g8e
+      - g8e-shared-tmp:/tmp
+    depends_on:
+      g8e-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command:
+      - "operator"
+      - "start"
+      - "-e"
+      - "g8e.local"
+      - "--inference-enabled"
+      - "--inference-ollama-endpoint"
+      - "${G8E_OLLAMA_ENDPOINT:?set G8E_OLLAMA_ENDPOINT to the approved remote Ollama provider}"
+      - "--inference-primary-model"
+      - "${G8E_INFERENCE_PRIMARY_MODEL:-qwen3:4b}"
+      - "--inference-assistant-model"
+      - "${G8E_INFERENCE_ASSISTANT_MODEL:-qwen3:1.7b}"
+      - "--inference-lite-model"
+      - "${G8E_INFERENCE_LITE_MODEL:-qwen3:0.6b}"
+      - "--inference-keep-alive"
+      - "${G8E_INFERENCE_KEEP_ALIVE:--1}"
+      - "--inference-campaign-id"
+      - "${G8E_INFERENCE_CAMPAIGN_ID:-}"
+      - "--inference-model-registry-digest"
+      - "${G8E_INFERENCE_MODEL_REGISTRY_DIGEST:-}"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
   g8e-gateway-secondary:
     # Cross-enrollment secondary gateway: runs the same image in operator mode
     # (-e g8e.local) so its in-process operator substrate enrolls against the

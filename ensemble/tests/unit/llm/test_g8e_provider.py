@@ -708,6 +708,35 @@ class TestEvaluationInferenceContextValidation:
                 target_operator_session_id="inference-session-1",
             )
 
+    def test_model_role_lane_requires_designated_role(self):
+        with pytest.raises(ValueError, match="designated_model_role is required"):
+            EvaluationInferenceContext(
+                campaign_id="campaign-1",
+                run_id="run-1",
+                assignment_id="assignment-1",
+                evaluation_attempt_id="attempt-1",
+                scenario_id="scenario-1",
+                model_registry_digest="cd" * 32,
+                model_registry=[InferenceModelVariant(model="gemma3:4b", digest="ab" * 32)],
+                target_operator_session_id="inference-session-1",
+                evaluation_lane="model_role",
+            )
+
+    def test_system_lane_rejects_designated_role(self):
+        with pytest.raises(ValueError, match="only permitted for model_role"):
+            EvaluationInferenceContext(
+                campaign_id="campaign-1",
+                run_id="run-1",
+                assignment_id="assignment-1",
+                evaluation_attempt_id="attempt-1",
+                scenario_id="scenario-1",
+                model_registry_digest="cd" * 32,
+                model_registry=[InferenceModelVariant(model="gemma3:4b", digest="ab" * 32)],
+                target_operator_session_id="inference-session-1",
+                evaluation_lane="system",
+                designated_model_role="primary",
+            )
+
 
 class TestG8EProviderUnsupportedContent:
     def test_inline_data_part_rejected(self):

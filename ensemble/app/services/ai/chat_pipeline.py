@@ -61,6 +61,7 @@ from app.llm.utils import resolve_model, ModelOverrideResolver
 from app.services.infra.event_service import EventService
 from .agent import g8eEnsemble
 from app.services.evaluation.trace_service import EvaluationTraceService
+from app.services.evaluation.role_control import apply_homogeneous_role_control, resolve_role_outcome
 from app.services.investigation.investigation_service import (
     extract_all_operators_context,
     InvestigationService,
@@ -330,13 +331,31 @@ class ChatPipelineService:
         )
         triage_result = await self.triage_agent.triage(triage_request)
 
+        controlled_routing = None
         if g8e_context.evaluation_context is not None:
+            controlled_routing = apply_homogeneous_role_control(
+                evaluation_context=g8e_context.evaluation_context,
+                triage_complexity=triage_result.complexity,
+                model_overrides=model_overrides,
+                request_settings=request_settings,
+            )
             self.evaluation_trace_service.begin(
                 g8e_context,
                 triage_model_call=triage_result.model_call,
+                controlled_role_assignment=(
+                    controlled_routing.controlled_role_assignment
+                    if controlled_routing is not None
+                    else None
+                ),
             )
 
         needs_main_model = triage_result.complexity == TriageComplexityClassification.COMPLEX
+
+        if controlled_routing is not None:
+            needs_main_model = (
+                controlled_routing.controlled_role_assignment.designated_model_role
+                == "primary"
+            )
 
         model_to_use = resolve_model(
             tier="primary" if needs_main_model else "assistant",
@@ -347,6 +366,9 @@ class ChatPipelineService:
             settings_assistant_model=request_settings.llm.resolved_assistant_model,
             settings_lite_model=request_settings.llm.resolved_lite_model,
         )
+
+        if controlled_routing is not None:
+            model_to_use = controlled_routing.model_to_use
 
         if not model_to_use:
             raise ConfigurationError(
@@ -399,6 +421,8 @@ class ChatPipelineService:
 
         all_operator_contexts = extract_all_operators_context(investigation)
         active_agent = ReasoningAgent.SAGE if needs_main_model else ReasoningAgent.DASH
+        if controlled_routing is not None:
+            active_agent = controlled_routing.active_agent
         system_instructions, context_sizes = build_modular_system_prompt(
             operator_bound=operator_bound,
             system_context=all_operator_contexts,
@@ -459,6 +483,16 @@ class ChatPipelineService:
             case_memories=case_memories,
             triage_result=triage_result,
             context_sizes=context_sizes,
+            designated_model_role=(
+                controlled_routing.controlled_role_assignment.designated_model_role
+                if controlled_routing is not None
+                else None
+            ),
+            controlled_role_assignment=(
+                controlled_routing.controlled_role_assignment
+                if controlled_routing is not None
+                else None
+            ),
         )
 
     async def _persist_ai_response(
@@ -761,10 +795,21 @@ class ChatPipelineService:
 
         model_calls = list(state.model_calls)
         model_calls.extend(background_calls)
+
+        role_outcome = None
+        controlled_role_assignment = inputs.controlled_role_assignment
+        if controlled_role_assignment is not None:
+            role_outcome = resolve_role_outcome(
+                controlled_role_assignment.designated_model_role,
+                model_calls,
+            )
+
         self.evaluation_trace_service.finalize(
             g8e_context,
             model_calls=model_calls,
             triage_model_call=inputs.triage_result.model_call if inputs.triage_result else None,
+            controlled_role_assignment=controlled_role_assignment,
+            role_outcome=role_outcome,
             finish_reason=state.finish_reason or "stop",
             status="failed" if state.stream_failed else "completed",
         )

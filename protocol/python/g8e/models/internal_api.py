@@ -5,9 +5,12 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from typing import Any
+from typing import Any, Literal
 from .base import G8eBaseModel, Field, model_validator
 from .context import RequestContext
+
+EvaluationLane = Literal["model_role", "system"]
+DesignatedModelRole = Literal["primary", "assistant", "lite"]
 
 
 class ResourceCreationRequest(G8eBaseModel):
@@ -48,12 +51,26 @@ class EvaluationInferenceContext(G8eBaseModel):
     model_registry_digest: str = Field(..., pattern=r"^[0-9a-f]{64}$")
     model_registry: list[InferenceModelVariant] = Field(..., min_length=1)
     target_operator_session_id: str = Field(..., min_length=1)
+    evaluation_lane: EvaluationLane = Field(default="system")
+    designated_model_role: DesignatedModelRole | None = Field(default=None)
 
     @model_validator(mode="after")
     def validate_unique_models(self):
         models = [variant.model for variant in self.model_registry]
         if len(models) != len(set(models)):
             raise ValueError("evaluation model registry contains duplicate model tags")
+        return self
+
+    @model_validator(mode="after")
+    def validate_lane_binding(self):
+        if self.evaluation_lane == "model_role" and self.designated_model_role is None:
+            raise ValueError(
+                "designated_model_role is required when evaluation_lane is model_role"
+            )
+        if self.evaluation_lane == "system" and self.designated_model_role is not None:
+            raise ValueError(
+                "designated_model_role is only permitted for model_role evaluation lane"
+            )
         return self
 
 

@@ -14,7 +14,12 @@ import os
 from pathlib import Path
 
 from app.constants.env_vars import EnvVar
-from app.models.evaluation_trace import EvaluationAssignmentTrace, EvaluationTraceStatus
+from app.models.evaluation_trace import (
+    EvaluationAssignmentTrace,
+    EvaluationControlledRoleAssignment,
+    EvaluationRoleOutcome,
+    EvaluationTraceStatus,
+)
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
 from app.utils.path import resolve_project_root
@@ -57,6 +62,7 @@ class EvaluationTraceService:
         g8e_context: G8eHttpContext,
         *,
         triage_model_call: ModelCallTelemetry | None = None,
+        controlled_role_assignment: EvaluationControlledRoleAssignment | None = None,
     ) -> EvaluationAssignmentTrace:
         evaluation = g8e_context.evaluation_context
         if evaluation is None:
@@ -68,6 +74,7 @@ class EvaluationTraceService:
             chat_execution_id=g8e_context.execution_id,
             status="running",
             triage_model_call=triage_model_call,
+            controlled_role_assignment=controlled_role_assignment,
         )
         trace = trace.model_copy(update={"trace_digest": compute_trace_digest(trace)})
         self._write(trace)
@@ -79,6 +86,8 @@ class EvaluationTraceService:
         *,
         model_calls: list[ModelCallTelemetry],
         triage_model_call: ModelCallTelemetry | None = None,
+        controlled_role_assignment: EvaluationControlledRoleAssignment | None = None,
+        role_outcome: EvaluationRoleOutcome | None = None,
         finish_reason: str | None,
         status: EvaluationTraceStatus,
     ) -> EvaluationAssignmentTrace:
@@ -92,7 +101,9 @@ class EvaluationTraceService:
             chat_execution_id=g8e_context.execution_id,
             status=status,
             triage_model_call=triage_model_call,
+            controlled_role_assignment=controlled_role_assignment,
             model_calls=list(model_calls),
+            role_outcome=role_outcome,
             finish_reason=finish_reason,
             completed_at=now().isoformat(),
         )

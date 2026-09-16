@@ -24,6 +24,7 @@ def test_call_site_inventory_covers_required_personas():
         "triage",
         "active_agent_primary",
         "active_agent_assistant",
+        "active_agent_lite",
         "title_generation",
         "memory_codex",
         "tribunal_generation",

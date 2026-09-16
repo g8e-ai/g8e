@@ -32,6 +32,7 @@ from app.models.events import ScrubbingTelemetry
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import G8eeUserSettings
 from app.models.agents import TriageResult
+from app.models.evaluation_trace import EvaluationControlledRoleAssignment
 from app.models.command_request_payloads import TargetedOperatorBase
 from app.models.tool_results import (
     TokenUsage,
@@ -198,6 +199,8 @@ class AgentInputs(G8eBaseModel):
     user_memories: list[InvestigationMemory] = Field(default_factory=list)
     case_memories: list[InvestigationMemory] = Field(default_factory=list)
     triage_result: TriageResult | None = None
+    designated_model_role: str | None = None
+    controlled_role_assignment: EvaluationControlledRoleAssignment | None = None
     sentinel_mode: bool = True
     scrubbing_observations: list[ScrubbingTelemetry] = Field(default_factory=list)
     context_sizes: dict[str, int] = Field(default_factory=dict)

@@ -39,14 +39,21 @@ CHAT_MODEL_CALL_SITES: tuple[ChatModelCallSite, ...] = (
         module="app.services.ai.agent",
         agent_role="sage",
         model_role="primary",
-        provider_method="generate_content_stream_primary",
+        provider_method="generate_content_stream_scored_role",
     ),
     ChatModelCallSite(
         call_site="active_agent_assistant",
         module="app.services.ai.agent",
         agent_role="dash",
         model_role="assistant",
-        provider_method="generate_content_stream_primary",
+        provider_method="generate_content_stream_scored_role",
+    ),
+    ChatModelCallSite(
+        call_site="active_agent_lite",
+        module="app.services.ai.agent",
+        agent_role="dash",
+        model_role="lite",
+        provider_method="generate_content_stream_scored_role",
     ),
     ChatModelCallSite(
         call_site="title_generation",

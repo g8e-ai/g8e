@@ -42,6 +42,7 @@ from app.constants import (
 from app.llm.model_evidence import model_boundary_hash
 from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.provider import LLMProvider
+from app.llm.providers.g8e import G8EProvider
 from app.models.agent import (
     AgentInputs,
     AgentStreamState,
@@ -73,6 +74,65 @@ from app.services.protocols import ApprovalServiceProtocol
 from app.utils.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_agent_model_role(inputs: AgentInputs) -> str:
+    if inputs.designated_model_role:
+        return inputs.designated_model_role
+    return (
+        "assistant"
+        if inputs.active_agent == ReasoningAgent.DASH
+        else "primary"
+    )
+
+
+def _agent_generation_stream(
+    llm_provider: LLMProvider,
+    *,
+    inputs: AgentInputs,
+    model_name: str,
+    contents: list[types.Content],
+    generation_config: types.PrimaryLLMSettings,
+):
+    model_role = _resolve_agent_model_role(inputs)
+    if isinstance(llm_provider, G8EProvider):
+        return llm_provider.generate_content_stream_scored_role(
+            model_role,
+            model_name,
+            contents,
+            generation_config,
+        )
+    if model_role == "assistant":
+        assistant_settings = types.AssistantLLMSettings(
+            max_output_tokens=generation_config.max_output_tokens,
+            top_p_nucleus_sampling=generation_config.top_p_nucleus_sampling,
+            top_k_filtering=generation_config.top_k_filtering,
+            stop_sequences=generation_config.stop_sequences,
+            system_instructions=generation_config.system_instructions,
+        )
+        return llm_provider.generate_content_stream_assistant(
+            model=model_name,
+            contents=contents,
+            assistant_llm_settings=assistant_settings,
+        )
+    if model_role == "lite":
+        lite_settings = types.LiteLLMSettings(
+            max_output_tokens=generation_config.max_output_tokens,
+            top_p_nucleus_sampling=generation_config.top_p_nucleus_sampling,
+            top_k_filtering=generation_config.top_k_filtering,
+            stop_sequences=generation_config.stop_sequences,
+            system_instructions=generation_config.system_instructions,
+        )
+        return llm_provider.generate_content_stream_lite(
+            model=model_name,
+            contents=contents,
+            lite_llm_settings=lite_settings,
+        )
+    return llm_provider.generate_content_stream_primary(
+        model=model_name,
+        contents=contents,
+        primary_llm_settings=generation_config,
+    )
 
 
 class g8eEnsemble:
@@ -367,11 +427,14 @@ class g8eEnsemble:
                     }
                 )
                 monotonic_start = time.monotonic()
+                model_role = _resolve_agent_model_role(inputs)
                 try:
-                    stream_response = llm_provider.generate_content_stream_primary(
-                        model=model_name,
+                    stream_response = _agent_generation_stream(
+                        llm_provider,
+                        inputs=inputs,
+                        model_name=model_name,
                         contents=contents,
-                        primary_llm_settings=generation_config,
+                        generation_config=generation_config,
                     )
 
                     gated_result_out: list[GatedTurnResult] = []
@@ -388,9 +451,7 @@ class g8eEnsemble:
                             agent_role=inputs.active_agent.value
                             if inputs.active_agent
                             else "unknown",
-                            model_role="assistant"
-                            if inputs.active_agent == ReasoningAgent.DASH
-                            else "primary",
+                            model_role=model_role,
                             model=model_name,
                             monotonic_start=monotonic_start,
                             input_artifact_hash=input_artifact_hash,
@@ -406,9 +467,7 @@ class g8eEnsemble:
                     build_model_call_telemetry(
                         provider=llm_provider,
                         agent_role=inputs.active_agent.value if inputs.active_agent else "unknown",
-                        model_role="assistant"
-                        if inputs.active_agent == ReasoningAgent.DASH
-                        else "primary",
+                        model_role=model_role,
                         model=model_name,
                         monotonic_start=monotonic_start,
                         monotonic_end=monotonic_end,
