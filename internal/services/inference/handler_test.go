@@ -615,6 +615,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_PreservesValidatedGeneratio
 	handler := NewInferenceExecutionHandler(backend, cfg, nil, testutil.NewTestLogger())
 	topP := float32(0.75)
 	topK := int32(42)
+	seed := int32(424242)
 	responseFormat := &operatorv1.InferenceResponseFormat{
 		MediaType:  "application/json",
 		JsonSchema: `{"properties":{"answer":{"type":"string"}},"type":"object"}`,
@@ -635,6 +636,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_PreservesValidatedGeneratio
 		Messages:             textInferenceMessages("test"),
 		TopP:                 &topP,
 		TopK:                 &topK,
+		Seed:                 &seed,
 		StopSequences:        []string{"END", "STOP"},
 		ResponseFormat:       responseFormat,
 		Tools:                []*operatorv1.InferenceToolDeclaration{{Name: "inspect", JsonSchema: `{"type":"object"}`}},
@@ -651,6 +653,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_PreservesValidatedGeneratio
 	assert.Equal(t, topP, *backend.lastReq.TopP)
 	require.NotNil(t, backend.lastReq.TopK)
 	assert.Equal(t, topK, *backend.lastReq.TopK)
+	require.NotNil(t, backend.lastReq.Seed)
+	assert.Equal(t, seed, *backend.lastReq.Seed)
 	assert.Equal(t, []string{"END", "STOP"}, backend.lastReq.StopSequences)
 	assert.True(t, proto.Equal(responseFormat, backend.lastReq.ResponseFormat))
 	assert.True(t, proto.Equal(toolChoice, backend.lastReq.ToolChoice))
@@ -666,6 +670,7 @@ func TestFromProtoInferenceRequested_ClonesRequestControls(t *testing.T) {
 	t.Parallel()
 	parallelToolCalls := false
 	contextLimit := int32(8192)
+	seed := int32(424242)
 	source := &operatorv1.InferenceRequested{
 		Messages:          textInferenceMessages("test"),
 		Tools:             []*operatorv1.InferenceToolDeclaration{{Name: "inspect", JsonSchema: `{"type":"object"}`}},
@@ -673,6 +678,7 @@ func TestFromProtoInferenceRequested_ClonesRequestControls(t *testing.T) {
 		ParallelToolCalls: &parallelToolCalls,
 		Thinking:          &operatorv1.InferenceThinkingControl{Mode: &operatorv1.InferenceThinkingControl_Enabled{Enabled: false}},
 		ContextLimit:      &contextLimit,
+		Seed:              &seed,
 		ModelRegistry:     []*operatorv1.InferenceModelVariant{{Model: "model:1", Digest: strings.Repeat("a", 64)}},
 	}
 
@@ -683,6 +689,7 @@ func TestFromProtoInferenceRequested_ClonesRequestControls(t *testing.T) {
 	source.ParallelToolCalls = nil
 	source.Thinking.Mode = &operatorv1.InferenceThinkingControl_Enabled{Enabled: true}
 	source.ContextLimit = nil
+	source.Seed = nil
 	source.ModelRegistry[0].Model = "changed"
 
 	assert.Equal(t, "test", cloned.Messages[0].Parts[0].GetText())
@@ -693,6 +700,8 @@ func TestFromProtoInferenceRequested_ClonesRequestControls(t *testing.T) {
 	assert.False(t, cloned.Thinking.GetEnabled())
 	require.NotNil(t, cloned.ContextLimit)
 	assert.Equal(t, int32(8192), *cloned.ContextLimit)
+	require.NotNil(t, cloned.Seed)
+	assert.Equal(t, int32(424242), *cloned.Seed)
 	assert.Equal(t, "model:1", cloned.ModelRegistry[0].GetModel())
 }
 
@@ -722,6 +731,7 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidTypedInputRejectedBe
 	t.Parallel()
 	invalidTopP := float32(1.1)
 	invalidTopK := int32(maxInferenceTopK + 1)
+	invalidSeed := int32(-1)
 	invalidContextLow := int32(0)
 	invalidContextHigh := int32(maxInferenceContextLimit + 1)
 	declaredTool := []*operatorv1.InferenceToolDeclaration{{Name: "inspect", JsonSchema: `{"type":"object"}`}}
@@ -755,6 +765,16 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_InvalidTypedInputRejectedBe
 				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
 				Messages:             textInferenceMessages("test"),
 				TopK:                 &invalidTopK,
+			},
+			err: constants.ErrInferenceGenerationOptionsInvalid,
+		},
+		{
+			name: "negative seed rejected",
+			req: &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Messages:             textInferenceMessages("test"),
+				Seed:                 &invalidSeed,
 			},
 			err: constants.ErrInferenceGenerationOptionsInvalid,
 		},

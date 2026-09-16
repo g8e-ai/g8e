@@ -347,9 +347,56 @@ func TestDispatchService_Dispatch_CallerCancelReturnsCtxErr(t *testing.T) {
 		Timeout:                 30 * time.Second,
 	})
 	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInferenceCanceled)
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.NotErrorIs(t, err, constants.ErrDispatchResultTimeout,
 		"caller cancellation must not be reported as a dispatch timeout")
+}
+
+func TestDispatchService_Dispatch_StreamingProgressOverflowFailsClosed(t *testing.T) {
+	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	svc, broker := newTestDispatchService(t, "root-abc", op)
+
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, data []byte) {
+		cmdEnv := &commonv1.GovernanceEnvelope{}
+		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
+			return
+		}
+		resultsChannel := pubsub.ResultsChannel(op.ID, op.OperatorSessionID)
+		for i := 0; i < InferenceProgressResultBuffer+1; i++ {
+			progress, err := proto.Marshal(&operatorv1.InferenceProgressEvent{
+				ProviderAttemptId: "attempt-1",
+				Sequence:          uint32(i + 1),
+				Parts: []*operatorv1.InferenceResponsePart{
+					{Part: &operatorv1.InferenceResponsePart_Text{Text: "x"}},
+				},
+			})
+			if err != nil {
+				return
+			}
+			wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
+				Id:        cmdEnv.Id,
+				EventType: string(constants.Event.Operator.Inference.ProgressUpdated),
+				Payload:   progress,
+			})
+			if err != nil {
+				return
+			}
+			broker.Publish(resultsChannel, wire)
+		}
+	})
+	defer unreg()
+
+	_, err := svc.Dispatch(context.Background(), DispatchRequest{
+		TargetOperatorSessionID: op.OperatorSessionID,
+		ActionType:              string(constants.ActionTypeInference),
+		Payload:                 inferencePayload(t),
+		Timeout:                 2 * time.Second,
+		OnInferenceProgress:     func(*operatorv1.InferenceProgressEvent) error { return nil },
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInferenceProgressBackpressure)
+	assert.NotErrorIs(t, err, constants.ErrDispatchResultTimeout)
 }
 
 // resultHandlerCount returns the number of registered in-process handlers on

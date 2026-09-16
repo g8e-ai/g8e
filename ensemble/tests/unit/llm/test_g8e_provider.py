@@ -61,6 +61,7 @@ from g8e.operator.v1.operator_pb2 import (
     MODEL_ROLE_ASSISTANT,
     MODEL_ROLE_LITE,
     MODEL_ROLE_PRIMARY,
+    InferenceDispatchStreamFailure,
     InferenceDispatchStreamFrame,
     InferenceProgressEvent,
 )
@@ -104,7 +105,9 @@ def _tool_call_response() -> InferenceDispatchResponse:
     return resp
 
 
-def _bind_response_identity(request: InferenceDispatchRequest, result: InferenceDispatchResponse) -> None:
+def _bind_response_identity(
+    request: InferenceDispatchRequest, result: InferenceDispatchResponse
+) -> None:
     result.result.provider_attempt_id = request.provider_attempt_id
     result.result.requested_model = request.model
     result.result.model = request.model
@@ -355,6 +358,7 @@ class TestG8EProviderDispatch:
             max_output_tokens=321,
             top_p_nucleus_sampling=0.75,
             top_k_filtering=42,
+            random_seed=424242,
             stop_sequences=["END", "STOP"],
         )
 
@@ -366,6 +370,8 @@ class TestG8EProviderDispatch:
         assert request.top_p == pytest.approx(0.75)
         assert request.HasField("top_k")
         assert request.top_k == 42
+        assert request.HasField("seed")
+        assert request.seed == 424242
         assert list(request.stop_sequences) == ["END", "STOP"]
 
     @pytest.mark.asyncio
@@ -553,6 +559,25 @@ class TestG8EProviderDispatch:
         assert chunks[0].text == "generated output"
         assert chunks[-1].finish_reason == "stop"
         assert chunks[-1].usage_metadata.total_token_count == 18
+
+    @pytest.mark.asyncio
+    async def test_stream_failure_frame_fails_closed(self):
+        async def dispatch_stream(_request):
+            yield InferenceDispatchStreamFrame(
+                failure=InferenceDispatchStreamFailure(reason="inference: progress backpressure")
+            )
+
+        client = _client()
+        client.dispatch_inference_stream = dispatch_stream
+        provider = G8EProvider(internal_http_client=client)
+
+        with pytest.raises(ValidationError, match="inference: progress backpressure"):
+            async for _ in provider.generate_content_stream_primary(
+                "gemma3:4b", _contents(), PrimaryLLMSettings()
+            ):
+                pass
+
+        assert provider.governed_dispatch_evidence is None
 
     @pytest.mark.asyncio
     async def test_response_provider_attempt_mismatch_fails_closed(self):

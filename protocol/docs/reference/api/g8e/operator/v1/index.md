@@ -62,6 +62,7 @@
     - [InferenceCompletion](#g8e-operator-v1-InferenceCompletion)
     - [InferenceDispatchRequest](#g8e-operator-v1-InferenceDispatchRequest)
     - [InferenceDispatchResponse](#g8e-operator-v1-InferenceDispatchResponse)
+    - [InferenceDispatchStreamFailure](#g8e-operator-v1-InferenceDispatchStreamFailure)
     - [InferenceDispatchStreamFrame](#g8e-operator-v1-InferenceDispatchStreamFrame)
     - [InferenceMessage](#g8e-operator-v1-InferenceMessage)
     - [InferenceMessagePart](#g8e-operator-v1-InferenceMessagePart)
@@ -1363,6 +1364,7 @@ inference request to the Inference Node.
 | model_registry_digest | [string](#string) |  |  |
 | stream | [bool](#bool) |  | When true, the Gateway forwards live InferenceProgressEvent telemetry to the caller while waiting for the authoritative terminal completion. |
 | retry_count | [uint32](#uint32) |  | Zero-based retry ordinal for this provider attempt. |
+| seed | [int32](#int32) | optional | Optional deterministic generation seed forwarded to the provider when supported. Absent means use the provider default. |
 
 
 
@@ -1390,18 +1392,40 @@ the gateway&#39;s standard typed error envelope with a public-safe code.
 
 
 
+<a name="g8e-operator-v1-InferenceDispatchStreamFailure"></a>
+
+### InferenceDispatchStreamFailure
+InferenceDispatchStreamFailure is the protocol-owned terminal failure
+frame for a streaming dispatch that already started NDJSON delivery.
+Reason is a public-safe centralized sentinel; it never carries raw
+prompts, model output, or receipt bodies.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| reason | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="g8e-operator-v1-InferenceDispatchStreamFrame"></a>
 
 ### InferenceDispatchStreamFrame
 InferenceDispatchStreamFrame is one NDJSON line in a streaming dispatch
-response. Progress frames are delivery telemetry only; the completion
-frame carries the verified terminal result and signed receipt.
+response. Progress frames are delivery telemetry only. The completion
+frame carries the verified terminal result and signed receipt. A failure
+frame is the explicit terminal outcome when cancellation, disconnect,
+backpressure, or event-to-terminal hash reconciliation prevents a
+verified completion after the HTTP response has started.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | progress | [InferenceProgressEvent](#g8e-operator-v1-InferenceProgressEvent) |  |  |
 | completion | [InferenceDispatchResponse](#g8e-operator-v1-InferenceDispatchResponse) |  |  |
+| failure | [InferenceDispatchStreamFailure](#g8e-operator-v1-InferenceDispatchStreamFailure) |  |  |
 
 
 
@@ -1538,6 +1562,7 @@ Payload for g8e.v1.operator.inference.requested. The handler receives an ordered
 | model_registry_digest | [string](#string) |  |  |
 | stream | [bool](#bool) |  | When true, the Inference Node publishes bounded InferenceProgressEvent telemetry on the results channel while the provider stream is active. Progress events are delivery telemetry only; the signed InferenceCompletion remains the sole authoritative terminal outcome. |
 | retry_count | [uint32](#uint32) |  | Zero-based retry ordinal for this provider attempt. Each retry uses a distinct provider_attempt_id and is durably retained. |
+| seed | [int32](#int32) | optional | Optional deterministic generation seed forwarded to the provider when supported. Absent means use the provider default. |
 
 
 

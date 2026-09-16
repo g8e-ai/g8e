@@ -1118,13 +1118,7 @@ func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context,
 		}
 		if governedReq.GetStream() && rs.results != nil {
 			ctx = inference.WithProgressReporter(ctx, func(event *operatorv1.InferenceProgressEvent) error {
-				if err := rs.results.PublishInferenceProgress(ctx, msg, event); err != nil {
-					rs.logger.Warn("Failed to publish inference progress telemetry",
-						"transaction_id", msg.ID,
-						"sequence", event.GetSequence(),
-						"error", err)
-				}
-				return nil
+				return rs.results.PublishInferenceProgress(ctx, msg, event)
 			})
 		}
 	}

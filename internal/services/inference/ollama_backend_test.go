@@ -31,6 +31,7 @@ func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	topP := float32(0.8)
 	topK := int32(40)
+	seed := int32(424242)
 	contextLimit := int32(8192)
 	parallelToolCalls := true
 
@@ -126,6 +127,7 @@ func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 		KeepAlive:     "-1",
 		TopP:          &topP,
 		TopK:          &topK,
+		Seed:          &seed,
 		StopSequences: []string{"END", "STOP"},
 		ResponseFormat: &operatorv1.InferenceResponseFormat{
 			MediaType:  "application/json",
@@ -195,6 +197,8 @@ func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 	assert.Equal(t, topP, *capturedBody.Options.TopP)
 	require.NotNil(t, capturedBody.Options.TopK)
 	assert.Equal(t, topK, *capturedBody.Options.TopK)
+	require.NotNil(t, capturedBody.Options.Seed)
+	assert.Equal(t, seed, *capturedBody.Options.Seed)
 	assert.Equal(t, []string{"END", "STOP"}, capturedBody.Options.Stop)
 	require.NotNil(t, capturedBody.Options.NumCtx)
 	assert.Equal(t, contextLimit, *capturedBody.Options.NumCtx)
@@ -1189,4 +1193,39 @@ func TestOllamaBackend_GenerateStreamingPublishesProgressEvents(t *testing.T) {
 	assert.NotNil(t, progressEvents[0].TimeToFirstTokenNs)
 	assert.Equal(t, uint32(2), progressEvents[1].GetSequence())
 	assert.Equal(t, "lo", progressEvents[1].GetParts()[0].GetText())
+}
+
+func TestOllamaBackend_GenerateStreamingReporterErrorFailsClosed(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(ollamaChatResponse{
+			Model:      "test-model",
+			Message:    ollamaChatMessage{Role: "assistant", Content: "hello"},
+			Done:       true,
+			DoneReason: "stop",
+		}))
+	}))
+	defer server.Close()
+
+	backend, err := NewOllamaBackend(server.URL, logger)
+	require.NoError(t, err)
+
+	ctx := WithProgressReporter(context.Background(), func(event *operatorv1.InferenceProgressEvent) error {
+		return constants.ErrInferenceProgressBackpressure
+	})
+	resp, err := backend.Generate(ctx, models.GenerateRequest{
+		Role:              models.InferenceModelRolePrimary,
+		Model:             "test-model",
+		Stream:            true,
+		ProviderAttemptID: "attempt-1",
+		Messages: []*operatorv1.InferenceMessage{{
+			Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+			Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: "hi"}}},
+		}},
+	})
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, constants.ErrInferenceProgressBackpressure)
 }

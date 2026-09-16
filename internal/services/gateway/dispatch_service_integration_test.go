@@ -261,11 +261,12 @@ func TestDispatchController_HandleDispatch_UnknownSession(t *testing.T) {
 }
 
 type boundaryInferenceBackend struct {
-	mu      sync.Mutex
-	calls   int
-	lastReq models.GenerateRequest
-	started chan struct{}
-	release chan struct{}
+	mu           sync.Mutex
+	calls        int
+	lastReq      models.GenerateRequest
+	started      chan struct{}
+	release      chan struct{}
+	progressText string
 }
 
 func (b *boundaryInferenceBackend) Generate(ctx context.Context, req models.GenerateRequest) (*models.GenerateResponse, error) {
@@ -274,6 +275,7 @@ func (b *boundaryInferenceBackend) Generate(ctx context.Context, req models.Gene
 	b.lastReq = req
 	started := b.started
 	release := b.release
+	progressText := b.progressText
 	b.mu.Unlock()
 	if started != nil {
 		close(started)
@@ -286,6 +288,22 @@ func (b *boundaryInferenceBackend) Generate(ctx context.Context, req models.Gene
 		}
 	}
 	parts := []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: "governed boundary response"}}}
+	if req.Stream {
+		progressParts := parts
+		if progressText != "" {
+			progressParts = []*operatorv1.InferenceResponsePart{{Part: &operatorv1.InferenceResponsePart_Text{Text: progressText}}}
+		}
+		if reporter := inference.ProgressReporterFromContext(ctx); reporter != nil {
+			if err := reporter(&operatorv1.InferenceProgressEvent{
+				ProviderAttemptId: req.ProviderAttemptID,
+				Sequence:          1,
+				Parts:             progressParts,
+				ServedModel:       req.Model,
+			}); err != nil {
+				return nil, err
+			}
+		}
+	}
 	outputHash, err := models.ComputeInferenceOutputHash(parts, "stop")
 	if err != nil {
 		return nil, err
@@ -998,6 +1016,7 @@ func TestInferenceDispatch_CallerCancellationRemovesHandlerWhileRemoteExecutionC
 	select {
 	case err := <-dispatchErr:
 		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrInferenceCanceled)
 		assert.ErrorIs(t, err, context.Canceled)
 	case <-time.After(time.Second):
 		t.Fatal("dispatch did not return after caller cancellation")
@@ -1012,6 +1031,67 @@ func TestInferenceDispatch_CallerCancellationRemovesHandlerWhileRemoteExecutionC
 	assert.Zero(t, resultHandlerCount(infra.Pubsub, &models.OperatorDocumentGo{ID: operatorID, OperatorSessionID: sessionID}))
 	calls, _ := backend.snapshot()
 	assert.Equal(t, 1, calls)
+}
+
+func TestInferenceDispatch_StreamingProgressReconcilesToTerminalOutputHash(t *testing.T) {
+	infra := setupTestInfrastructure(t, false)
+	userID := "user-inference-progress"
+	operatorID := "operator-inference-progress"
+	sessionID := "session-inference-progress"
+	seedActiveUser(t, infra, userID)
+	seedInferenceOperator(t, infra, userID, operatorID, sessionID, true)
+	startInferenceOperator(t, infra, infra.StateRootSvc, operatorID, sessionID)
+	dispatchSvc := newInferenceBoundaryDispatchService(infra, config.PostureDoctrine)
+
+	var progressEvents []*operatorv1.InferenceProgressEvent
+	result, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
+		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
+		ProviderAttemptID:       "provider-attempt-integration",
+		Role:                    models.InferenceModelRolePrimary,
+		Messages:                boundaryInferenceMessages("streaming progress reconciliation"),
+		TargetOperatorSessionID: sessionID,
+		RequestorUserID:         userID,
+		ActingAppID:             protocol.EnsembleAppID,
+		Stream:                  true,
+		OnProgress: func(event *operatorv1.InferenceProgressEvent) error {
+			progressEvents = append(progressEvents, proto.Clone(event).(*operatorv1.InferenceProgressEvent))
+			return nil
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Result)
+	require.Len(t, progressEvents, 1)
+	assert.Equal(t, uint32(1), progressEvents[0].GetSequence())
+	assert.NoError(t, models.ReconcileInferenceProgress(progressEvents, result.Result))
+}
+
+func TestInferenceDispatch_StreamingProgressHashMismatchFailsClosed(t *testing.T) {
+	infra := setupTestInfrastructure(t, false)
+	userID := "user-inference-progress-mismatch"
+	operatorID := "operator-inference-progress-mismatch"
+	sessionID := "session-inference-progress-mismatch"
+	seedActiveUser(t, infra, userID)
+	seedInferenceOperator(t, infra, userID, operatorID, sessionID, true)
+	backend, _ := startInferenceOperator(t, infra, infra.StateRootSvc, operatorID, sessionID)
+	backend.mu.Lock()
+	backend.progressText = "progress that does not match terminal output"
+	backend.mu.Unlock()
+	dispatchSvc := newInferenceBoundaryDispatchService(infra, config.PostureDoctrine)
+
+	_, err := dispatchSvc.DispatchInference(context.Background(), inferdispatch.DispatchInferenceRequest{
+		RequestSchemaVersion:    constants.InferenceRequestSchemaVersion,
+		ProviderAttemptID:       "provider-attempt-integration",
+		Role:                    models.InferenceModelRolePrimary,
+		Messages:                boundaryInferenceMessages("streaming progress mismatch"),
+		TargetOperatorSessionID: sessionID,
+		RequestorUserID:         userID,
+		ActingAppID:             protocol.EnsembleAppID,
+		Stream:                  true,
+		OnProgress:              func(*operatorv1.InferenceProgressEvent) error { return nil },
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInferenceProgressHashMismatch)
 }
 
 func TestInferenceDispatch_ResultMutatedAfterDigestComputationFailsClosed(t *testing.T) {

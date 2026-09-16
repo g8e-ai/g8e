@@ -1458,6 +1458,10 @@ var (
 	ErrInferenceCampaignBindingInvalid   = errors.New("inference: campaign binding invalid")
 	ErrInferenceProviderAttemptConflict  = errors.New("inference: provider attempt already recorded")
 	ErrInferenceRequestTooLarge          = errors.New("inference: request exceeds size bound")
+	ErrInferenceCanceled                 = errors.New("inference: canceled")
+	ErrInferenceCallerDisconnected       = errors.New("inference: caller disconnected")
+	ErrInferenceProgressBackpressure     = errors.New("inference: progress backpressure")
+	ErrInferenceProgressHashMismatch     = errors.New("inference: progress does not reconcile to terminal output hash")
 
 	// Dispatch transport errors. Zero delivery and a missing correlated
 	// result are terminal transport outcomes, not log-and-continue events.

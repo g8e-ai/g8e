@@ -34,10 +34,11 @@ import (
 // stubInferenceCommandDispatcher implements dispatch.CommandDispatcher for
 // controller unit tests. It returns a canned result or sentinel error.
 type stubInferenceCommandDispatcher struct {
-	result  *dispatch.CommandDispatchResult
-	err     error
-	lastReq dispatch.CommandDispatchRequest
-	called  bool
+	result      *dispatch.CommandDispatchResult
+	err         error
+	dispatchErr error
+	lastReq     dispatch.CommandDispatchRequest
+	called      bool
 }
 
 func (s *stubInferenceCommandDispatcher) Dispatch(_ context.Context, req dispatch.CommandDispatchRequest) (*dispatch.CommandDispatchResult, error) {
@@ -51,9 +52,11 @@ func (s *stubInferenceCommandDispatcher) Dispatch(_ context.Context, req dispatc
 				{Part: &operatorv1.InferenceResponsePart_Text{Text: "partial"}},
 			},
 		}); err != nil {
+			s.dispatchErr = err
 			return nil, err
 		}
 	}
+	s.dispatchErr = s.err
 	return s.result, s.err
 }
 
@@ -316,6 +319,7 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
 	topP := float32(0.8)
 	topK := int32(40)
+	seed := int32(424242)
 	parallelToolCalls := false
 	contextLimit := int32(8192)
 	modelDigest := strings.Repeat("a", 64)
@@ -362,6 +366,7 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 		}},
 		TopP:                    &topP,
 		TopK:                    &topK,
+		Seed:                    &seed,
 		StopSequences:           []string{"END"},
 		ResponseFormat:          &operatorv1.InferenceResponseFormat{MediaType: "application/json", JsonSchema: `{"type":"object"}`},
 		ToolChoice:              &operatorv1.InferenceToolChoice{Mode: operatorv1.InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO, AllowedToolNames: []string{"inspect"}},
@@ -425,6 +430,7 @@ func TestInferenceDispatchController_SuccessReturnsVerifiedProtoContract(t *test
 		Tools:                dispatchRequest.Tools,
 		TopP:                 dispatchRequest.TopP,
 		TopK:                 dispatchRequest.TopK,
+		Seed:                 dispatchRequest.Seed,
 		StopSequences:        dispatchRequest.StopSequences,
 		ResponseFormat:       dispatchRequest.ResponseFormat,
 		RequestSchemaVersion: dispatchRequest.RequestSchemaVersion,
@@ -569,6 +575,74 @@ func TestInferenceDispatchController_StreamingReturnsNDJSONProgressAndCompletion
 	var forwarded operatorv1.InferenceRequested
 	require.NoError(t, proto.Unmarshal(dispatcher.lastReq.Payload, &forwarded))
 	assert.True(t, forwarded.GetStream())
+}
+
+func TestInferenceDispatchController_StreamingDispatchFailureWritesFailureFrame(t *testing.T) {
+	dispatcher := &stubInferenceCommandDispatcher{err: constants.ErrInferenceProgressBackpressure}
+	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
+	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
+
+	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
+		Role:              operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:          inferenceTextMessages("hi"),
+		ProviderAttemptId: "provider-attempt-1",
+		Stream:            true,
+	})
+	req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
+	rr := httptest.NewRecorder()
+	ctrl.HandleDispatch(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/x-ndjson", rr.Header().Get("Content-Type"))
+
+	lines := strings.Split(strings.TrimSpace(rr.Body.String()), "\n")
+	require.GreaterOrEqual(t, len(lines), 2)
+
+	var progressFrame operatorv1.InferenceDispatchStreamFrame
+	require.NoError(t, protojson.Unmarshal([]byte(lines[0]), &progressFrame))
+	require.NotNil(t, progressFrame.GetProgress())
+
+	var failureFrame operatorv1.InferenceDispatchStreamFrame
+	require.NoError(t, protojson.Unmarshal([]byte(lines[len(lines)-1]), &failureFrame))
+	require.NotNil(t, failureFrame.GetFailure())
+	assert.Equal(t, constants.ErrInferenceProgressBackpressure.Error(), failureFrame.GetFailure().GetReason())
+}
+
+type failingFlushWriter struct {
+	http.ResponseWriter
+	failOnWrite bool
+}
+
+func (w *failingFlushWriter) Write(p []byte) (int, error) {
+	if w.failOnWrite {
+		return 0, errors.New("client disconnected")
+	}
+	return w.ResponseWriter.Write(p)
+}
+
+func (w *failingFlushWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func TestInferenceDispatchController_StreamingWriteFailureIsCallerDisconnect(t *testing.T) {
+	dispatcher := &stubInferenceCommandDispatcher{result: successDispatchResult(t)}
+	lister := &stubInferenceOperatorLister{ops: []models.OperatorDocumentGo{inferenceCapableOperator("sess-inf-1")}}
+	ctrl := newInferenceDispatchControllerForTest(t, dispatcher, lister, 4096)
+
+	body := marshalInferenceDispatchRequest(t, &operatorv1.InferenceDispatchRequest{
+		Role:              operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+		Messages:          inferenceTextMessages("hi"),
+		ProviderAttemptId: "provider-attempt-1",
+		Stream:            true,
+	})
+	req := inferenceDispatchHTTPRequest(t, body, "ensemble-app", "user-001")
+	rr := httptest.NewRecorder()
+	ctrl.HandleDispatch(&failingFlushWriter{ResponseWriter: rr, failOnWrite: true}, req)
+
+	require.True(t, dispatcher.called)
+	assert.ErrorIs(t, dispatcher.dispatchErr, constants.ErrInferenceCallerDisconnected)
 }
 
 func TestInferenceDispatchController_ContextCanceledWritesNothing(t *testing.T) {

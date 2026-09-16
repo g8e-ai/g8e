@@ -524,6 +524,7 @@ class G8EProvider(LLMProvider):
         max_output_tokens: int,
         top_p: float | None,
         top_k: int | None,
+        random_seed: int | None,
         stop_sequences: list[str] | None,
         response_format: ResponseFormat | None,
         tool_config: ToolConfig | None,
@@ -557,6 +558,8 @@ class G8EProvider(LLMProvider):
             request.top_p = top_p
         if top_k is not None:
             request.top_k = top_k
+        if random_seed is not None:
+            request.seed = random_seed
         if parallel_tool_calls is not None:
             request.parallel_tool_calls = parallel_tool_calls
         normalized_tool_choice = _tool_choice(tool_config)
@@ -608,6 +611,7 @@ class G8EProvider(LLMProvider):
         max_output_tokens: int,
         top_p: float | None,
         top_k: int | None,
+        random_seed: int | None,
         stop_sequences: list[str] | None,
         response_format: ResponseFormat | None,
         tool_config: ToolConfig | None,
@@ -643,6 +647,8 @@ class G8EProvider(LLMProvider):
             request.top_p = top_p
         if top_k is not None:
             request.top_k = top_k
+        if random_seed is not None:
+            request.seed = random_seed
         if parallel_tool_calls is not None:
             request.parallel_tool_calls = parallel_tool_calls
         normalized_tool_choice = _tool_choice(tool_config)
@@ -658,6 +664,8 @@ class G8EProvider(LLMProvider):
 
         completion: InferenceDispatchResponse | None = None
         async for frame in self._client.dispatch_inference_stream(request):
+            if frame.HasField("failure"):
+                raise ValidationError(frame.failure.reason)
             if frame.HasField("progress"):
                 for chunk in _progress_parts_to_stream_chunks(frame.progress):
                     yield chunk
@@ -694,7 +702,9 @@ class G8EProvider(LLMProvider):
             )
         )
         yield StreamChunkFromModel(
-            finish_reason=completion.result.finish_reason if completion.HasField("result") else "stop",
+            finish_reason=completion.result.finish_reason
+            if completion.HasField("result")
+            else "stop",
             usage_metadata=_response_to_usage_metadata(completion),
         )
 
@@ -736,6 +746,7 @@ class G8EProvider(LLMProvider):
             primary_llm_settings.max_output_tokens,
             primary_llm_settings.top_p_nucleus_sampling,
             primary_llm_settings.top_k_filtering,
+            primary_llm_settings.random_seed,
             primary_llm_settings.stop_sequences,
             None,
             primary_llm_settings.tool_config,
@@ -759,6 +770,7 @@ class G8EProvider(LLMProvider):
             primary_llm_settings.max_output_tokens,
             primary_llm_settings.top_p_nucleus_sampling,
             primary_llm_settings.top_k_filtering,
+            primary_llm_settings.random_seed,
             primary_llm_settings.stop_sequences,
             None,
             primary_llm_settings.tool_config,
@@ -782,6 +794,7 @@ class G8EProvider(LLMProvider):
             assistant_llm_settings.max_output_tokens,
             assistant_llm_settings.top_p_nucleus_sampling,
             assistant_llm_settings.top_k_filtering,
+            assistant_llm_settings.random_seed,
             assistant_llm_settings.stop_sequences,
             assistant_llm_settings.response_format,
             None,
@@ -804,6 +817,7 @@ class G8EProvider(LLMProvider):
             assistant_llm_settings.max_output_tokens,
             assistant_llm_settings.top_p_nucleus_sampling,
             assistant_llm_settings.top_k_filtering,
+            assistant_llm_settings.random_seed,
             assistant_llm_settings.stop_sequences,
             assistant_llm_settings.response_format,
             None,
@@ -826,6 +840,7 @@ class G8EProvider(LLMProvider):
             lite_llm_settings.max_output_tokens,
             lite_llm_settings.top_p_nucleus_sampling,
             lite_llm_settings.top_k_filtering,
+            lite_llm_settings.random_seed,
             lite_llm_settings.stop_sequences,
             lite_llm_settings.response_format,
             None,
@@ -848,6 +863,7 @@ class G8EProvider(LLMProvider):
             lite_llm_settings.max_output_tokens,
             lite_llm_settings.top_p_nucleus_sampling,
             lite_llm_settings.top_k_filtering,
+            lite_llm_settings.random_seed,
             lite_llm_settings.stop_sequences,
             lite_llm_settings.response_format,
             None,

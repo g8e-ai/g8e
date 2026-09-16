@@ -524,8 +524,10 @@ func TestDispatchInference_PayloadCarriesRequestFields(t *testing.T) {
 	req.KeepAlive = "5m"
 	topP := float32(0.8)
 	topK := int32(40)
+	seed := int32(424242)
 	req.TopP = &topP
 	req.TopK = &topK
+	req.Seed = &seed
 	req.StopSequences = []string{"END", "STOP"}
 	req.ResponseFormat = &operatorv1.InferenceResponseFormat{MediaType: "application/json", JsonSchema: `{"properties":{"answer":{"type":"string"}},"type":"object"}`}
 	req.RequestSchemaVersion = constants.InferenceRequestSchemaVersion
@@ -557,6 +559,7 @@ func TestDispatchInference_PayloadCarriesRequestFields(t *testing.T) {
 		Tools:                req.Tools,
 		TopP:                 &topP,
 		TopK:                 &topK,
+		Seed:                 &seed,
 		StopSequences:        req.StopSequences,
 		ResponseFormat:       req.ResponseFormat,
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,

@@ -72,6 +72,7 @@ type GenerateRequest struct {
 	KeepAlive            string
 	TopP                 *float32
 	TopK                 *int32
+	Seed                 *int32
 	StopSequences        []string
 	ResponseFormat       *operatorv1.InferenceResponseFormat
 	RequestSchemaVersion string
@@ -144,6 +145,7 @@ type InferenceRequestPayload struct {
 	KeepAlive            string
 	TopP                 *float32
 	TopK                 *int32
+	Seed                 *int32
 	StopSequences        []string
 	ResponseFormat       *operatorv1.InferenceResponseFormat
 	RequestSchemaVersion string
@@ -211,6 +213,11 @@ func FromProtoInferenceRequested(req *operatorv1.InferenceRequested) InferenceRe
 		value := req.GetContextLimit()
 		contextLimit = &value
 	}
+	var seed *int32
+	if req.Seed != nil {
+		value := req.GetSeed()
+		seed = &value
+	}
 	return InferenceRequestPayload{
 		Role:                 InferenceModelRoleFromProto(req.GetRole()),
 		Model:                req.GetModel(),
@@ -221,6 +228,7 @@ func FromProtoInferenceRequested(req *operatorv1.InferenceRequested) InferenceRe
 		KeepAlive:            req.GetKeepAlive(),
 		TopP:                 topP,
 		TopK:                 topK,
+		Seed:                 seed,
 		StopSequences:        append([]string(nil), req.GetStopSequences()...),
 		ResponseFormat:       responseFormat,
 		RequestSchemaVersion: req.GetRequestSchemaVersion(),
@@ -260,6 +268,7 @@ func (p InferenceRequestPayload) ToGenerateRequest(defaultModel string) Generate
 		KeepAlive:            p.KeepAlive,
 		TopP:                 p.TopP,
 		TopK:                 p.TopK,
+		Seed:                 p.Seed,
 		StopSequences:        append([]string(nil), p.StopSequences...),
 		ResponseFormat:       p.ResponseFormat,
 		RequestSchemaVersion: p.RequestSchemaVersion,
@@ -379,6 +388,40 @@ func ComputeInferenceOutputHash(parts []*operatorv1.InferenceResponsePart, finis
 		return "", fmt.Errorf("models: compute inference output hash: %w", err)
 	}
 	return SHA256Hex(data), nil
+}
+
+// ReconcileInferenceProgress verifies that live progress events bind to the
+// verified terminal result: sequences are contiguous from 1, provider-attempt
+// identity matches, and the concatenated delta parts hash to output_hash.
+func ReconcileInferenceProgress(events []*operatorv1.InferenceProgressEvent, result *operatorv1.InferenceResult) error {
+	if result == nil {
+		return fmt.Errorf("%w: missing result", constants.ErrInferenceProgressHashMismatch)
+	}
+	parts := make([]*operatorv1.InferenceResponsePart, 0)
+	for i, event := range events {
+		if event == nil {
+			return fmt.Errorf("%w: missing progress event %d", constants.ErrInferenceProgressHashMismatch, i+1)
+		}
+		wantSeq := uint32(i + 1)
+		if event.GetSequence() != wantSeq {
+			return fmt.Errorf("%w: progress sequence %d, want %d", constants.ErrInferenceProgressHashMismatch, event.GetSequence(), wantSeq)
+		}
+		if event.GetProviderAttemptId() != result.GetProviderAttemptId() {
+			return fmt.Errorf("%w: progress provider attempt mismatch", constants.ErrInferenceProgressHashMismatch)
+		}
+		parts = append(parts, event.GetParts()...)
+	}
+	if len(parts) == 0 && len(result.GetParts()) > 0 {
+		return fmt.Errorf("%w: no progress events for terminal parts", constants.ErrInferenceProgressHashMismatch)
+	}
+	gotHash, err := ComputeInferenceOutputHash(parts, result.GetFinishReason())
+	if err != nil {
+		return fmt.Errorf("%w: %v", constants.ErrInferenceProgressHashMismatch, err)
+	}
+	if gotHash != result.GetOutputHash() {
+		return fmt.Errorf("%w: concatenated progress hash mismatch", constants.ErrInferenceProgressHashMismatch)
+	}
+	return nil
 }
 
 func SHA256Hex(data []byte) string {

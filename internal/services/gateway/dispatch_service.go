@@ -12,6 +12,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -37,6 +38,11 @@ import (
 // operator L4/L5 verification and execution, WS publish back, and in-process
 // handler delivery.
 const DispatchTimeout = 30 * time.Second
+
+// InferenceProgressResultBuffer is the in-process results-channel capacity
+// while streaming inference progress. Overflow is a typed backpressure
+// failure, not a dropped event.
+const InferenceProgressResultBuffer = 64
 
 // EnvelopeExpiry is the lifetime of a dispatched GovernanceEnvelope from
 // construction to operator expiry rejection.
@@ -350,9 +356,10 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	resultsChannel := pubsub.ResultsChannel(operatorID, operatorSessionID)
 	resultBuffer := 1
 	if req.OnInferenceProgress != nil {
-		resultBuffer = 64
+		resultBuffer = InferenceProgressResultBuffer
 	}
 	resultCh := make(chan *commonv1.GovernanceEnvelope, resultBuffer)
+	overflow := make(chan error, 1)
 
 	handler := func(channel string, data []byte) {
 		resultEnv := &commonv1.GovernanceEnvelope{}
@@ -364,7 +371,17 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 			select {
 			case resultCh <- resultEnv:
 			default:
-				d.logger.Warn("dispatch: inference progress channel full, dropping event",
+				if req.OnInferenceProgress != nil {
+					select {
+					case overflow <- constants.ErrInferenceProgressBackpressure:
+					default:
+					}
+					d.logger.Warn("dispatch: inference progress channel full, failing closed",
+						"transaction_id", txHash,
+						"event_type", resultEnv.GetEventType())
+					return
+				}
+				d.logger.Warn("dispatch: result channel full, dropping event",
 					"transaction_id", txHash,
 					"event_type", resultEnv.GetEventType())
 			}
@@ -397,8 +414,11 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	timeoutCtx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 
+	var progressEvents []*operatorv1.InferenceProgressEvent
 	for {
 		select {
+		case overflowErr := <-overflow:
+			return nil, fmt.Errorf("dispatch: %w", overflowErr)
 		case resultEnv := <-resultCh:
 			if req.ActionType == string(constants.ActionTypeInference) {
 				if progress, ok := decodeInferenceProgressEnvelope(resultEnv); ok {
@@ -406,10 +426,20 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 						if err := req.OnInferenceProgress(progress); err != nil {
 							return nil, fmt.Errorf("dispatch: %w", err)
 						}
+						progressEvents = append(progressEvents, progress)
 					}
 					continue
 				}
-				return d.verifyInferenceCompletion(env, resultEnv)
+				result, err := d.verifyInferenceCompletion(env, resultEnv)
+				if err != nil {
+					return nil, err
+				}
+				if req.OnInferenceProgress != nil {
+					if err := models.ReconcileInferenceProgress(progressEvents, result.InferenceResult); err != nil {
+						return nil, fmt.Errorf("dispatch: %w", err)
+					}
+				}
+				return result, nil
 			}
 			return &DispatchResult{
 				TransactionID:  txHash,
@@ -417,6 +447,9 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 			}, nil
 		case <-timeoutCtx.Done():
 			if err := ctx.Err(); err != nil {
+				if errors.Is(err, context.Canceled) {
+					return nil, fmt.Errorf("dispatch: %w: %w", constants.ErrInferenceCanceled, err)
+				}
 				return nil, fmt.Errorf("dispatch: %w", err)
 			}
 			return nil, fmt.Errorf("dispatch: %w after %s (transaction %s)", constants.ErrDispatchResultTimeout, deadline, txHash)

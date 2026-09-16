@@ -208,6 +208,9 @@ func (h *InferenceExecutionHandler) normalizeInferenceInput(req *models.Inferenc
 	if req.TopK != nil && (*req.TopK <= 0 || *req.TopK > maxInferenceTopK) {
 		return fmt.Errorf("%w: top_k", constants.ErrInferenceGenerationOptionsInvalid)
 	}
+	if req.Seed != nil && *req.Seed < 0 {
+		return fmt.Errorf("%w: seed", constants.ErrInferenceGenerationOptionsInvalid)
+	}
 	if len(req.StopSequences) > maxInferenceStopSequences {
 		return fmt.Errorf("%w: stop sequences", constants.ErrInferenceGenerationOptionsInvalid)
 	}

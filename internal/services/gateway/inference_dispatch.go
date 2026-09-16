@@ -207,6 +207,7 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 		KeepAlive:               req.GetKeepAlive(),
 		TopP:                    req.TopP,
 		TopK:                    req.TopK,
+		Seed:                    req.Seed,
 		StopSequences:           req.GetStopSequences(),
 		ResponseFormat:          req.GetResponseFormat(),
 		RequestSchemaVersion:    req.GetRequestSchemaVersion(),
@@ -250,16 +251,28 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 				Frame: &operatorv1.InferenceDispatchStreamFrame_Progress{Progress: progress},
 			})
 		}
+
+		result, err := c.dispatchSvc.DispatchInference(r.Context(), dispatchReq)
+		if err != nil {
+			writeInferenceDispatchStreamFailure(c, w, flusher, err)
+			return
+		}
+		if err := writeInferenceDispatchStreamFrame(w, flusher, &operatorv1.InferenceDispatchStreamFrame{
+			Frame: &operatorv1.InferenceDispatchStreamFrame_Completion{Completion: &operatorv1.InferenceDispatchResponse{
+				TransactionId: result.TransactionID,
+				Result:        result.Result,
+				Receipt:       result.Receipt,
+			}},
+		}); err != nil {
+			c.logger.Error("inference dispatch: failed to write completion frame", "error", err)
+		}
+		return
 	}
 
 	result, err := c.dispatchSvc.DispatchInference(r.Context(), dispatchReq)
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.Canceled) || errors.Is(err, constants.ErrInferenceCanceled) {
 			c.logger.Info("inference dispatch: caller canceled", "error", err)
-			return
-		}
-		if req.GetStream() {
-			c.logger.Error("inference dispatch: streaming dispatch failed after response started", "error", err)
 			return
 		}
 		status, publicErr := classifyInferenceDispatchError(err)
@@ -268,22 +281,30 @@ func (c *InferenceDispatchController) HandleDispatch(w http.ResponseWriter, r *h
 		return
 	}
 
-	completion := &operatorv1.InferenceDispatchResponse{
+	c.responder.ProtoJSONCanonical(w, http.StatusOK, &operatorv1.InferenceDispatchResponse{
 		TransactionId: result.TransactionID,
 		Result:        result.Result,
 		Receipt:       result.Receipt,
-	}
-	if req.GetStream() {
-		flusher := w.(http.Flusher)
-		if err := writeInferenceDispatchStreamFrame(w, flusher, &operatorv1.InferenceDispatchStreamFrame{
-			Frame: &operatorv1.InferenceDispatchStreamFrame_Completion{Completion: completion},
-		}); err != nil {
-			c.logger.Error("inference dispatch: failed to write completion frame", "error", err)
-		}
-		return
-	}
+	})
+}
 
-	c.responder.ProtoJSONCanonical(w, http.StatusOK, completion)
+func writeInferenceDispatchStreamFailure(c *InferenceDispatchController, w http.ResponseWriter, flusher http.Flusher, err error) {
+	if errors.Is(err, context.Canceled) {
+		err = fmt.Errorf("%w: %w", constants.ErrInferenceCanceled, err)
+	}
+	if errors.Is(err, constants.ErrInferenceCanceled) || errors.Is(err, constants.ErrInferenceCallerDisconnected) {
+		c.logger.Info("inference dispatch: streaming caller left", "error", err)
+	} else {
+		c.logger.Error("inference dispatch: streaming dispatch failed after response started", "error", err)
+	}
+	_, publicErr := classifyInferenceDispatchError(err)
+	if writeErr := writeInferenceDispatchStreamFrame(w, flusher, &operatorv1.InferenceDispatchStreamFrame{
+		Frame: &operatorv1.InferenceDispatchStreamFrame_Failure{
+			Failure: &operatorv1.InferenceDispatchStreamFailure{Reason: publicErr.Error()},
+		},
+	}); writeErr != nil {
+		c.logger.Info("inference dispatch: failed to write streaming failure frame", "error", writeErr)
+	}
 }
 
 func writeInferenceDispatchStreamFrame(w http.ResponseWriter, flusher http.Flusher, frame *operatorv1.InferenceDispatchStreamFrame) error {
@@ -292,10 +313,10 @@ func writeInferenceDispatchStreamFrame(w http.ResponseWriter, flusher http.Flush
 		return fmt.Errorf("marshal inference dispatch stream frame: %w", err)
 	}
 	if _, err := w.Write(payload); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", constants.ErrInferenceCallerDisconnected, err)
 	}
 	if _, err := w.Write([]byte("\n")); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", constants.ErrInferenceCallerDisconnected, err)
 	}
 	flusher.Flush()
 	return nil
@@ -354,6 +375,10 @@ func classifyInferenceDispatchError(err error) (int, error) {
 		{constants.ErrInferenceGenerateFailed, http.StatusBadGateway},
 		{constants.ErrInferenceModelNotFound, http.StatusBadGateway},
 		{constants.ErrInferenceProviderResponseInvalid, http.StatusBadGateway},
+		{constants.ErrInferenceCanceled, http.StatusRequestTimeout},
+		{constants.ErrInferenceCallerDisconnected, http.StatusRequestTimeout},
+		{constants.ErrInferenceProgressBackpressure, http.StatusServiceUnavailable},
+		{constants.ErrInferenceProgressHashMismatch, http.StatusBadGateway},
 	}
 	for _, entry := range sentinels {
 		if errors.Is(err, entry.sentinel) {

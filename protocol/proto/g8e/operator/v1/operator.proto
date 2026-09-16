@@ -1314,6 +1314,10 @@ message InferenceRequested {
   // Zero-based retry ordinal for this provider attempt. Each retry uses a
   // distinct provider_attempt_id and is durably retained.
   uint32 retry_count = 28;
+
+  // Optional deterministic generation seed forwarded to the provider when
+  // supported. Absent means use the provider default.
+  optional int32 seed = 29;
 }
 
 enum InferenceTimingSource {
@@ -1522,15 +1526,31 @@ message InferenceDispatchRequest {
 
   // Zero-based retry ordinal for this provider attempt.
   uint32 retry_count = 35;
+
+  // Optional deterministic generation seed forwarded to the provider when
+  // supported. Absent means use the provider default.
+  optional int32 seed = 36;
+}
+
+// InferenceDispatchStreamFailure is the protocol-owned terminal failure
+// frame for a streaming dispatch that already started NDJSON delivery.
+// Reason is a public-safe centralized sentinel; it never carries raw
+// prompts, model output, or receipt bodies.
+message InferenceDispatchStreamFailure {
+  string reason = 1;
 }
 
 // InferenceDispatchStreamFrame is one NDJSON line in a streaming dispatch
-// response. Progress frames are delivery telemetry only; the completion
-// frame carries the verified terminal result and signed receipt.
+// response. Progress frames are delivery telemetry only. The completion
+// frame carries the verified terminal result and signed receipt. A failure
+// frame is the explicit terminal outcome when cancellation, disconnect,
+// backpressure, or event-to-terminal hash reconciliation prevents a
+// verified completion after the HTTP response has started.
 message InferenceDispatchStreamFrame {
   oneof frame {
     InferenceProgressEvent progress = 1;
     InferenceDispatchResponse completion = 2;
+    InferenceDispatchStreamFailure failure = 3;
   }
 }
 

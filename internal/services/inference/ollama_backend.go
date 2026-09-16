@@ -130,6 +130,7 @@ type ollamaChatOptions struct {
 	NumPredict  int32    `json:"num_predict,omitempty"`
 	TopP        *float32 `json:"top_p,omitempty"`
 	TopK        *int32   `json:"top_k,omitempty"`
+	Seed        *int32   `json:"seed,omitempty"`
 	Stop        []string `json:"stop,omitempty"`
 	NumCtx      *int32   `json:"num_ctx,omitempty"`
 }
@@ -218,6 +219,7 @@ func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest
 			NumPredict:  req.MaxTokens,
 			TopP:        req.TopP,
 			TopK:        req.TopK,
+			Seed:        req.Seed,
 			Stop:        req.StopSequences,
 			NumCtx:      req.ContextLimit,
 		},

@@ -156,6 +156,7 @@ type DispatchInferenceRequest struct {
 
 	TopP                 *float32
 	TopK                 *int32
+	Seed                 *int32
 	StopSequences        []string
 	ResponseFormat       *operatorv1.InferenceResponseFormat
 	RequestSchemaVersion string
@@ -264,6 +265,7 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 		KeepAlive:            req.KeepAlive,
 		TopP:                 req.TopP,
 		TopK:                 req.TopK,
+		Seed:                 req.Seed,
 		StopSequences:        req.StopSequences,
 		ResponseFormat:       req.ResponseFormat,
 		RequestSchemaVersion: req.RequestSchemaVersion,
