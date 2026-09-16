@@ -842,6 +842,34 @@ func TestMirror_SSE_ReplaysExistingRecords(t *testing.T) {
 	assert.GreaterOrEqual(t, eventCount, 3)
 }
 
+func TestMirror_SSE_DeliversFirstBatchToExplicitSourceSubscriber(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, env.server.URL+"/stream?source="+env.sourceID+"&since_id=0", nil)
+	require.NoError(t, err)
+	streamResponse, err := env.client.Do(req)
+	require.NoError(t, err)
+	defer streamResponse.Body.Close()
+
+	batch := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}, constants.PublicFeedZeroHashHex)
+	_, ingestResponse := env.sendIngest(batch)
+	require.True(t, ingestResponse.Accepted)
+
+	scanner := bufio.NewScanner(streamResponse.Body)
+	dataLines := 0
+	for scanner.Scan() {
+		if strings.HasPrefix(scanner.Text(), "data: ") {
+			dataLines++
+		}
+		if dataLines >= 2 {
+			break
+		}
+	}
+	assert.GreaterOrEqual(t, dataLines, 2)
+}
+
 // TestMirror_SSEAllowsConcurrentConnectionsBehindOneProxyUntilGlobalLimit verifies
 // that tunnel topology does not collapse independent streams into one client.
 func TestMirror_SSEAllowsConcurrentConnectionsBehindOneProxyUntilGlobalLimit(t *testing.T) {

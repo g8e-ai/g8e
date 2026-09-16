@@ -249,3 +249,81 @@ describe('decodeViewRecord', () => {
     expect(() => decodeViewRecord('unknown_kind', {})).toThrow(ValidationError);
   });
 });
+
+const nativeEvaluation = {
+  schema_version: '1.3.0',
+  kind: 'evaluation_summary',
+  dataset_id: 'native-core-execution-boundary',
+  quality_state: 'verified_public',
+  observed_at: '2026-09-15T23:38:22Z',
+  run_id: 'native-run-1',
+  suite_id: 'core-execution-boundary@1.0.0',
+  arm: 'platform',
+  evaluation_unit: 'system',
+  model_role_mapping: {},
+  lifecycle_state: 'completed',
+  assignment_total: 2,
+  assignment_completed: 2,
+  assignment_failed: 0,
+  terminal_outcomes: { completed: 1, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+  started_at: '2026-09-15T23:38:21Z',
+  ended_at: '2026-09-15T23:38:22Z',
+  elapsed_seconds: 1,
+  verifier_state: 'passed',
+  headline_metrics: { pass_rate: { value: 1 } },
+  native_result: {
+    active_posture: 'doctrine',
+    lane: 'platform',
+    summary_status: 'pass',
+    summary: '2/2 required invariants passed',
+    required_verdict_count: 2,
+    passed_verdict_count: 2,
+    verification_valid: true,
+    verification_failure_count: 0,
+    scenarios: [
+      {
+        scenario_id: 'allowed-execution-occurs-once',
+        scenario_version: '1.0.0',
+        status: 'completed',
+        verdicts: [{ assertion_id: 'allowed-effect-count', assertion_version: '1.0.0', status: 'pass' }],
+      },
+      {
+        scenario_id: 'prohibited-equivalent-causes-no-additional-effect',
+        scenario_version: '1.0.0',
+        status: 'rejected',
+        verdicts: [{ assertion_id: 'prohibited-no-additional-effect', assertion_version: '1.0.0', status: 'pass' }],
+      },
+    ],
+    metrics: [{ metric_id: 'required-verdict-pass-rate', metric_version: '1.0.0', numerator: 2, denominator: 2, value: 1, unit: 'ratio' }],
+  },
+};
+
+describe('native evaluation contract', () => {
+  it('accepts a coherent native evaluation summary', () => {
+    expect(() => decodeViewRecord('evaluation_summary', nativeEvaluation)).not.toThrow();
+  });
+
+  it('rejects inconsistent native verdict counts', () => {
+    const bad = {
+      ...nativeEvaluation,
+      native_result: { ...nativeEvaluation.native_result, passed_verdict_count: 1 },
+    };
+    expect(() => decodeViewRecord('evaluation_summary', bad)).toThrow(ValidationError);
+  });
+
+  it('rejects private identity fields inside native results', () => {
+    const bad = {
+      ...nativeEvaluation,
+      native_result: { ...nativeEvaluation.native_result, operator_session_id: 'private' },
+    };
+    expect(() => decodeViewRecord('evaluation_summary', bad)).toThrow(ValidationError);
+  });
+
+  it('rejects invalid native enum values', () => {
+    const bad = {
+      ...nativeEvaluation,
+      native_result: { ...nativeEvaluation.native_result, active_posture: 'bypass' },
+    };
+    expect(() => decodeViewRecord('evaluation_summary', bad)).toThrow(ValidationError);
+  });
+});

@@ -54,6 +54,23 @@ var prohibitedRecordFields = []string{
 	"machine_path",
 	"filesystem_path",
 	"local_path",
+	"user_id",
+	"user_identity",
+	"cli_session_id",
+	"web_session_id",
+	"session_identity",
+	"operator_id",
+	"operator_session_id",
+	"authenticated_identity",
+	"endpoint",
+	"gateway_url",
+	"target_resource",
+	"controlled_target",
+	"transaction_id",
+	"governance_envelope",
+	"audit_record",
+	"receipt_body",
+	"evidence_body",
 }
 
 // ProofArtifactInput is the input type for the proof package builder. Each

@@ -112,4 +112,27 @@ describe('EvalStore', () => {
     const assignments = store.getAssignments('run-verified-ifeval-1', 'ds-verified-public-20260914');
     expect(assignments.length).toBe(5);
   });
+
+  it('indexes native scenario and verdict detail without fake assignments', () => {
+    const native = {
+      schema_version: '1.3.0', kind: 'evaluation_summary', dataset_id: 'native-core-execution-boundary', quality_state: 'verified_public', observed_at: '2026-09-15T23:38:22Z',
+      run_id: 'native-run-1', suite_id: 'core-execution-boundary@1.0.0', arm: 'platform', evaluation_unit: 'system', model_role_mapping: {}, lifecycle_state: 'completed',
+      assignment_total: 2, assignment_completed: 2, assignment_failed: 0, terminal_outcomes: { completed: 1, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+      verifier_state: 'passed', headline_metrics: { pass_rate: { value: 1 } },
+      native_result: {
+        active_posture: 'doctrine', lane: 'platform', summary_status: 'pass', summary: '2/2 required invariants passed', required_verdict_count: 2, passed_verdict_count: 2,
+        verification_valid: true, verification_failure_count: 0,
+        scenarios: [
+          { scenario_id: 'allowed-execution-occurs-once', scenario_version: '1.0.0', status: 'completed', verdicts: [{ assertion_id: 'allowed-effect-count', assertion_version: '1.0.0', status: 'pass' }] },
+          { scenario_id: 'prohibited-equivalent-causes-no-additional-effect', scenario_version: '1.0.0', status: 'rejected', verdicts: [{ assertion_id: 'prohibited-no-additional-effect', assertion_version: '1.0.0', status: 'pass' }] },
+        ],
+        metrics: [{ metric_id: 'required-verdict-pass-rate', metric_version: '1.0.0', numerator: 2, denominator: 2, value: 1, unit: 'ratio' }],
+      },
+    };
+    store.acceptProjection({ sequence: 1, record_type: 'projection', record_bytes: JSON.stringify(native) });
+    const indexed = store.getEvaluation('native-core-execution-boundary', 'native-run-1');
+    expect(indexed?.native_result?.scenarios).toHaveLength(2);
+    expect(indexed?.native_result?.scenarios.flatMap((scenario) => scenario.verdicts)).toHaveLength(2);
+    expect(store.getAssignments('native-run-1', 'native-core-execution-boundary')).toHaveLength(0);
+  });
 });

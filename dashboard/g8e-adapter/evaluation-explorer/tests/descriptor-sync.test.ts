@@ -15,6 +15,11 @@ import {
   FRESHNESS_STATES,
   LIVE_EVENT_KINDS,
   MODEL_ROLES,
+  NATIVE_LANES,
+  NATIVE_METRIC_UNITS,
+  NATIVE_POSTURES,
+  NATIVE_RESULT_STATUSES,
+  NATIVE_SCENARIO_STATUSES,
   QUALITY_STATES,
   REPEATABILITY_CLASSES,
   SCENARIO_CATEGORIES,
@@ -40,6 +45,11 @@ type EnumName =
   | 'LifecycleStatus'
   | 'RepeatabilityClass'
   | 'VerifierState'
+  | 'NativePosture'
+  | 'NativeLane'
+  | 'NativeResultStatus'
+  | 'NativeScenarioStatus'
+  | 'NativeMetricUnit'
   | 'SnapshotKind'
   | 'LiveEventKind'
   | 'FeedRecordType'
@@ -59,6 +69,11 @@ const tsEnums: Record<EnumName, readonly string[]> = {
   LifecycleStatus: LIFECYCLE_STATUSES,
   RepeatabilityClass: REPEATABILITY_CLASSES,
   VerifierState: VERIFIER_STATES,
+  NativePosture: NATIVE_POSTURES,
+  NativeLane: NATIVE_LANES,
+  NativeResultStatus: NATIVE_RESULT_STATUSES,
+  NativeScenarioStatus: NATIVE_SCENARIO_STATUSES,
+  NativeMetricUnit: NATIVE_METRIC_UNITS,
   SnapshotKind: SNAPSHOT_KINDS,
   LiveEventKind: LIVE_EVENT_KINDS,
   FeedRecordType: FEED_RECORD_TYPES,
@@ -67,7 +82,7 @@ const tsEnums: Record<EnumName, readonly string[]> = {
 
 describe('descriptor.json stays in sync with types.ts', () => {
   it('exposes the frozen schema version', () => {
-    expect(descriptor.schema_version).toBe('1.2.0');
+    expect(descriptor.schema_version).toBe('1.3.0');
   });
 
   for (const [name, tsValues] of Object.entries(tsEnums) as Array<[EnumName, readonly string[]]>) {

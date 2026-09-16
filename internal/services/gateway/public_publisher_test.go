@@ -493,6 +493,20 @@ func TestBuildBatch_RejectsNestedProhibitedField(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrPublicFeedRestrictedField)
 }
 
+func TestBuildBatch_RejectsPrivateIdentityAndRuntimeFields(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	fields := []string{"user_id", "cli_session_id", "operator_id", "operator_session_id", "authenticated_identity", "endpoint", "filesystem_path", "target_resource"}
+	for _, field := range fields {
+		t.Run(field, func(t *testing.T) {
+			body := []byte(`{"kind":"evaluation_summary","native_result":{"` + field + `":"restricted"}}`)
+			digest := sha256.Sum256(body)
+			_, err := publisher.BuildBatch([]models.PublicFeedRecord{{Sequence: 1, RecordType: models.PublicFeedRecordTypeProjection, RecordHash: hex.EncodeToString(digest[:]), RecordBytes: string(body)}})
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrPublicFeedRestrictedField)
+		})
+	}
+}
+
 func TestExportBatch_RecordHashMismatch(t *testing.T) {
 	publisher, _, _, _ := newPublicPublisherTestEnv(t)
 

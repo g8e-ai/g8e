@@ -133,25 +133,33 @@ export function EvaluationDetailView() {
           <DetailRow label="Ended">{run.ended_at ? formatTimestamp(run.ended_at) : '—'}</DetailRow>
           <DetailRow label="Elapsed">{run.elapsed_seconds ? formatDuration(run.elapsed_seconds) : '—'}</DetailRow>
           <DetailRow label="Verifier state">{run.verifier_state}</DetailRow>
+          {run.native_result ? <DetailRow label="Active posture">{run.native_result.active_posture}</DetailRow> : null}
+          {run.native_result ? <DetailRow label="Lane">{run.native_result.lane}</DetailRow> : null}
         </dl>
       </section>
 
-      <section className="run-roles">
-        <h2>Model-role mapping</h2>
-        <ul className="role-mapping">
-          {Object.entries(run.model_role_mapping).map(([role, variantId]) => (
-            <li key={role}>
-              <span className="role-label">{role === 'lite' ? 'Light' : role}</span>
-              <Link to={`/models/${activeDatasetId}/${variantId}`}>{variantId}</Link>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {run.model_role_mapping && Object.keys(run.model_role_mapping).length > 0 ? (
+        <section className="run-roles">
+          <h2>Model-role mapping</h2>
+          <ul className="role-mapping">
+            {Object.entries(run.model_role_mapping).map(([role, variantId]) => (
+              <li key={role}>
+                <span className="role-label">{role === 'lite' ? 'Light' : role}</span>
+                <Link to={`/models/${activeDatasetId}/${variantId}`}>{variantId}</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="run-progress">
-        <h2>Assignment progress</h2>
-        <ProgressBar completed={run.assignment_completed} total={run.assignment_total} label="Assignments" />
-        <OutcomeCounts outcomes={run.terminal_outcomes} />
+        <h2>{run.native_result ? 'Invariant summary' : 'Assignment progress'}</h2>
+        <ProgressBar
+          completed={run.native_result?.passed_verdict_count ?? run.assignment_completed}
+          total={run.native_result?.required_verdict_count ?? run.assignment_total}
+          label={run.native_result ? 'Required invariants' : 'Assignments'}
+        />
+        {run.native_result ? <p>{run.native_result.summary}</p> : <OutcomeCounts outcomes={run.terminal_outcomes} />}
       </section>
 
       {isActive ? (
@@ -165,10 +173,10 @@ export function EvaluationDetailView() {
         <h2>Headline metrics</h2>
         <div className="metric-grid">
           <MetricCard label="Pass rate" metric={run.headline_metrics.pass_rate} formatter={formatPercent} />
-          <MetricCard label="Latency p50" metric={run.headline_metrics.latency_p50_ms} formatter={formatLatency} />
-          <MetricCard label="Throughput" metric={run.headline_metrics.throughput} formatter={formatThroughput} />
-          <MetricCard label="Primary invocation share" metric={run.primary_invocation_share} formatter={formatPercent} />
-          <MetricCard label="Correlated failure rate" metric={run.correlated_failure_rate} formatter={formatPercent} />
+          {!run.native_result ? <MetricCard label="Latency p50" metric={run.headline_metrics.latency_p50_ms} formatter={formatLatency} /> : null}
+          {!run.native_result ? <MetricCard label="Throughput" metric={run.headline_metrics.throughput} formatter={formatThroughput} /> : null}
+          {!run.native_result ? <MetricCard label="Primary invocation share" metric={run.primary_invocation_share} formatter={formatPercent} /> : null}
+          {!run.native_result ? <MetricCard label="Correlated failure rate" metric={run.correlated_failure_rate} formatter={formatPercent} /> : null}
         </div>
         {run.benchmark_unavailable_reasons?.length ? (
           <ul className="catalog-limitations">
@@ -181,33 +189,57 @@ export function EvaluationDetailView() {
         <h2>Verification summary</h2>
         <dl>
           <DetailRow label="Verifier state">{run.verifier_state}</DetailRow>
+          {run.native_result ? (
+            <DetailRow label="Independent verification">
+              {run.native_result.verification_valid ? 'Valid' : 'Invalid'} ({run.native_result.verification_failure_count} failures)
+            </DetailRow>
+          ) : null}
           {run.verifier_failure_summary ? <DetailRow label="Failure summary">{run.verifier_failure_summary}</DetailRow> : null}
         </dl>
       </section>
 
-      <section className="run-assignments">
-        <h2>Assignments ({formatNumber(assignments.length)})</h2>
-        {assignments.length === 0 ? (
-          <p>No assignment results for this run.</p>
-        ) : (
-          <>
-            <input
-              type="search"
-              placeholder="Search assignments..."
-              value={assignmentSearch}
-              aria-label="Search assignments"
-              onChange={(e) => setAssignmentSearch(e.target.value)}
-            />
-            <DataTable
-              data={filteredAssignments}
-              columns={assignmentColumns}
-              pageSize={50}
-              caption={`Assignments for ${run.run_id}`}
-              empty={<p>No assignments match the search.</p>}
-            />
-          </>
-        )}
-      </section>
+      {run.native_result ? (
+        <section className="run-native-scenarios">
+          <h2>Scenario and invariant results</h2>
+          {run.native_result.scenarios.map((scenario) => (
+            <article key={scenario.scenario_id} className="native-scenario">
+              <h3>{scenario.scenario_id}@{scenario.scenario_version}</h3>
+              <p>Status: {scenario.status}</p>
+              <ul>
+                {scenario.verdicts.map((verdict) => (
+                  <li key={verdict.assertion_id}>
+                    <strong>{verdict.assertion_id}@{verdict.assertion_version}</strong>: {verdict.status}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </section>
+      ) : (
+        <section className="run-assignments">
+          <h2>Assignments ({formatNumber(assignments.length)})</h2>
+          {assignments.length === 0 ? (
+            <p>No assignment results for this run.</p>
+          ) : (
+            <>
+              <input
+                type="search"
+                placeholder="Search assignments..."
+                value={assignmentSearch}
+                aria-label="Search assignments"
+                onChange={(e) => setAssignmentSearch(e.target.value)}
+              />
+              <DataTable
+                data={filteredAssignments}
+                columns={assignmentColumns}
+                pageSize={50}
+                caption={`Assignments for ${run.run_id}`}
+                empty={<p>No assignments match the search.</p>}
+              />
+            </>
+          )}
+        </section>
+      )}
 
       {run.evidence_link ? (
         <section className="run-evidence">

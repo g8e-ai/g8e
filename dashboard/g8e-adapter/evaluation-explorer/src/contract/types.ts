@@ -8,11 +8,11 @@
 // projector can emit faithful records without remapping. See
 // src/contract/CONTRACT.md for the ownership map and integration decisions.
 //
-// FROZEN at schema_version 1.2.0 on 2026-09-14 by Worker 0. A change to any
-// enum value or required field is a contract revision: bump VIEW_SCHEMA_VERSION,
-// update descriptor.json, regenerate validators, and notify all workers.
+// FROZEN at schema_version 1.3.0 on 2026-09-15. A change to any enum value
+// or required field is a contract revision: bump VIEW_SCHEMA_VERSION and
+// update descriptor.json and validators.
 
-export const VIEW_SCHEMA_VERSION = '1.2.0' as const;
+export const VIEW_SCHEMA_VERSION = '1.3.0' as const;
 
 /** Quality state for every dataset, run, metric, and task shown in the site. */
 export const QUALITY_STATES = [
@@ -140,6 +140,21 @@ export const VERIFIER_STATES = [
   'not_applicable',
 ] as const;
 export type VerifierState = (typeof VERIFIER_STATES)[number];
+
+export const NATIVE_POSTURES = ['doctrine', 'consensus', 'ratify', 'notary'] as const;
+export type NativePosture = (typeof NATIVE_POSTURES)[number];
+
+export const NATIVE_LANES = ['platform'] as const;
+export type NativeLane = (typeof NATIVE_LANES)[number];
+
+export const NATIVE_RESULT_STATUSES = ['pass', 'fail', 'unavailable', 'unsupported', 'invalid_evidence'] as const;
+export type NativeResultStatus = (typeof NATIVE_RESULT_STATUSES)[number];
+
+export const NATIVE_SCENARIO_STATUSES = ['completed', 'rejected', 'failed', 'unavailable', 'unsupported', 'invalid_evidence'] as const;
+export type NativeScenarioStatus = (typeof NATIVE_SCENARIO_STATUSES)[number];
+
+export const NATIVE_METRIC_UNITS = ['count', 'ratio'] as const;
+export type NativeMetricUnit = (typeof NATIVE_METRIC_UNITS)[number];
 
 /** Snapshot record kinds (durable view records). */
 export const SNAPSHOT_KINDS = [
@@ -326,6 +341,41 @@ export interface SuiteSummary extends ViewRecordEnvelope {
   limitations: string[];
 }
 
+export interface NativeVerdict {
+  assertion_id: string;
+  assertion_version: string;
+  status: NativeResultStatus;
+}
+
+export interface NativeScenarioResult {
+  scenario_id: string;
+  scenario_version: string;
+  status: NativeScenarioStatus;
+  verdicts: NativeVerdict[];
+}
+
+export interface NativeMetric {
+  metric_id: string;
+  metric_version: string;
+  numerator: number;
+  denominator: number;
+  value: number;
+  unit: NativeMetricUnit;
+}
+
+export interface NativeEvaluationResult {
+  active_posture: NativePosture;
+  lane: NativeLane;
+  summary_status: NativeResultStatus;
+  summary: string;
+  required_verdict_count: number;
+  passed_verdict_count: number;
+  verification_valid: boolean;
+  verification_failure_count: number;
+  scenarios: NativeScenarioResult[];
+  metrics: NativeMetric[];
+}
+
 /** 4. evaluation_summary: per-run identity, lifecycle, and headline metrics. */
 export interface EvaluationSummary extends ViewRecordEnvelope {
   kind: 'evaluation_summary';
@@ -338,7 +388,7 @@ export interface EvaluationSummary extends ViewRecordEnvelope {
   primary_invocation_share?: MetricValue<number>;
   correlated_failure_rate?: MetricValue<number>;
   benchmark_unavailable_reasons?: string[];
-  model_role_mapping: Record<ModelRole, string>;
+  model_role_mapping?: Record<ModelRole, string>;
   lifecycle_state: LifecycleStatus;
   assignment_total: number;
   assignment_completed: number;
@@ -351,6 +401,7 @@ export interface EvaluationSummary extends ViewRecordEnvelope {
   verifier_failure_summary?: string;
   headline_metrics: Record<string, MetricValue>;
   evidence_link?: string;
+  native_result?: NativeEvaluationResult;
 }
 
 /** 5. assignment_result: public assignment identity and safe summaries. */

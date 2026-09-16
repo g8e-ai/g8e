@@ -71,8 +71,8 @@ export function EvaluationsView() {
         header: 'Progress',
         cell: ({ row }: CellContext<EvaluationSummary, unknown>) => (
           <ProgressBar
-            completed={row.original.assignment_completed}
-            total={row.original.assignment_total}
+            completed={row.original.native_result?.passed_verdict_count ?? row.original.assignment_completed}
+            total={row.original.native_result?.required_verdict_count ?? row.original.assignment_total}
             label={`${row.original.run_id} progress`}
           />
         ),
@@ -81,7 +81,7 @@ export function EvaluationsView() {
       {
         id: 'outcomes',
         header: 'Outcomes',
-        cell: ({ row }: CellContext<EvaluationSummary, unknown>) => <OutcomeCounts outcomes={row.original.terminal_outcomes} />,
+        cell: ({ row }: CellContext<EvaluationSummary, unknown>) => row.original.native_result ? row.original.native_result.summary_status : <OutcomeCounts outcomes={row.original.terminal_outcomes} />,
         enableSorting: false,
       },
       {

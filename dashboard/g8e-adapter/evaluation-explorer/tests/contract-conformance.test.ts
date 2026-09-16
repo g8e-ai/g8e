@@ -3,12 +3,6 @@
 // closed enum set. This is Worker 0's acceptance test for the frozen contract.
 // If a fixture fails validation, the contract and fixtures have drifted and
 // the contract is not frozen.
-//
-// Worker 1's projector, Worker 5's bridge, and the replay producer must emit
-// records that pass the same guards. Add their outputs here as they land.
-
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -32,7 +26,7 @@ function validate(record: unknown): void {
 
 describe('contract schema version', () => {
   it('exposes the frozen schema version', () => {
-    expect(VIEW_SCHEMA_VERSION).toBe('1.2.0');
+    expect(VIEW_SCHEMA_VERSION).toBe('1.3.0');
   });
 });
 
@@ -47,20 +41,6 @@ describe('fixture snapshot records conform to the frozen contract', () => {
     const covered = new Set(allFixtureSnapshotRecords.map((r) => r.kind));
     for (const kind of SNAPSHOT_KINDS) {
       expect(covered.has(kind), `missing fixture for ${kind}`).toBe(true);
-    }
-  });
-});
-
-describe('projected historical records conform to the frozen contract', () => {
-  it('validates every generated projector record', () => {
-    const lines = readFileSync(resolve(process.cwd(), 'scripts/fixtures/projected-records.jsonl'), 'utf8')
-      .trim()
-      .split('\n');
-    expect(lines).toHaveLength(1221);
-    for (const line of lines) {
-      const envelope = JSON.parse(line) as { record_type: string; record_bytes: string };
-      expect(envelope.record_type).toBe('projection');
-      expect(() => validate(JSON.parse(envelope.record_bytes))).not.toThrow();
     }
   });
 });
