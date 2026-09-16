@@ -10,10 +10,9 @@ import {
   qualityStateLabel,
   qualityStateTone,
   type FeedConnectionState,
+  type FeedStatus,
 } from '../utils/feed-state';
 import { metricDisplay, formatPercent, formatNumber, formatLatency, formatThroughput, formatTokens, formatDuration, formatTimestamp, formatRelativeTime } from '../utils/format';
-import type { FreshnessState } from '../contract/types';
-
 const toneClass: Record<string, string> = {
   ok: 'tone-ok',
   info: 'tone-info',
@@ -32,16 +31,31 @@ export function QualityBadge({ state }: { state: QualityState }) {
   );
 }
 
-export function FreshnessBadge({ freshness }: { freshness: FreshnessState | 'unknown' }) {
-  const { label, tone, description } = classifyFreshness(freshness);
+export function FreshnessBadge({ feedStatus }: { feedStatus: FeedStatus }) {
+  const { label, tone } = classifyFreshness(feedStatus.freshness);
+  const tooltipId = useId();
   return (
-    <span
-      className={`freshness-badge ${toneClass[tone]}`}
-      title={description}
-      data-testid={`freshness-${freshness}`}
-    >
-      <span className="freshness-dot" aria-hidden="true" />
-      {label}
+    <span className="freshness-badge-anchor">
+      <span
+        className={`freshness-badge ${toneClass[tone]}`}
+        tabIndex={0}
+        aria-describedby={tooltipId}
+        data-testid={`freshness-${feedStatus.freshness}`}
+      >
+        <span className="freshness-dot" aria-hidden="true" />
+        {label}
+      </span>
+      <div className="freshness-tooltip" id={tooltipId} role="tooltip">
+        <p className="freshness-tooltip-message">{feedStatus.message}</p>
+        {feedStatus.lastAcceptedAt ? (
+          <p className="freshness-tooltip-detail">
+            Last accepted: {formatTimestamp(feedStatus.lastAcceptedAt)}
+          </p>
+        ) : null}
+        <p className="freshness-tooltip-detail">
+          High-water sequence: {formatNumber(feedStatus.highWaterSequence)}
+        </p>
+      </div>
     </span>
   );
 }

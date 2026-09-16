@@ -62,7 +62,7 @@ function Shell() {
           <NavItem to="/methodology" label="Docs" />
         </nav>
         <div className="header-right">
-          {feedStatus ? <FreshnessBadge freshness={feedStatus.freshness} /> : null}
+          {feedStatus ? <FreshnessBadge feedStatus={feedStatus} /> : null}
         </div>
       </header>
       <ErrorBanner errors={errors} onDismiss={() => evalStore.clearErrors()} />

@@ -110,6 +110,23 @@ button { font-family: inherit; cursor: pointer; }
 .freshness-badge.tone-ok { color: var(--tone-ok); }
 .freshness-badge.tone-warn { color: var(--tone-warn); }
 .freshness-badge.tone-critical { color: var(--tone-critical); }
+.freshness-badge-anchor { position: relative; display: inline-flex; }
+.freshness-badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.freshness-tooltip {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
+  min-width: 260px; padding: 10px 12px; background: var(--bg-elev);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  font-size: 12px; font-weight: 400; color: var(--fg-muted);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+.freshness-badge-anchor:hover .freshness-tooltip,
+.freshness-badge-anchor:focus-within .freshness-tooltip {
+  opacity: 1; visibility: visible;
+}
+.freshness-tooltip-message { margin: 0 0 6px; color: var(--fg-muted); font-weight: 500; }
+.freshness-tooltip-detail { margin: 0; color: var(--fg-dim); line-height: 1.5; }
 .freshness-dot, .status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; flex-shrink: 0; }
 
 /* Status tones */
@@ -118,15 +135,6 @@ button { font-family: inherit; cursor: pointer; }
 .status-warn, .status-stopped { color: var(--tone-warn); }
 .status-critical, .status-failed { color: var(--tone-critical); }
 .status-neutral, .status-queued { color: var(--tone-neutral); }
-
-/* Feed status bar */
-.feed-status-bar {
-  display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
-  padding: 10px 14px; background: var(--bg-elev); border: 1px solid var(--border);
-  border-radius: var(--radius); margin-bottom: 20px; font-size: 13px;
-}
-.feed-message { color: var(--fg-muted); }
-.feed-last, .feed-seq { color: var(--fg-dim); }
 
 /* Stat tiles */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 16px; }
@@ -365,9 +373,6 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .benchmark-event-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .disclosure { color: var(--fg-dim); font-size: 13px; }
 .methodology-link { display: inline-block; margin-top: 12px; }
-
-/* Connection state */
-.connection-error .feed-status-bar { border-color: var(--tone-critical); }
 
 /* ===== Overview (landing) ===== */
 

@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
-import { modelComparisonId, recordKey, resolveModelSummary, useStoreState, useFeedStatus } from '../state/store';
+import { modelComparisonId, recordKey, resolveModelSummary, useStoreState } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
 import { DatasetSelector } from '../components/DatasetSelector';
 import {
@@ -15,7 +15,6 @@ import {
   ProgressBar,
   formatNumber,
   formatPercent,
-  formatTimestamp,
   formatLatency,
   formatThroughput,
 } from '../components/shared';
@@ -549,8 +548,6 @@ export function OverviewView() {
   const [params] = useSearchParams();
   const routeDataset = params.get('dataset') ?? undefined;
   const activeDatasetId = useActiveDatasetId(routeDataset);
-  const feedStatus = useFeedStatus();
-
   const catalog = useStoreState((state) => state.catalogs.get(activeDatasetId));
   const models = useStoreState((state) =>
     Array.from(state.models.values()).filter((m) => m.dataset_id === activeDatasetId),
@@ -566,16 +563,6 @@ export function OverviewView() {
 
   return (
     <div className="overview">
-      {feedStatus ? (
-        <section className="feed-status-bar" aria-label="Feed status">
-          <span className="feed-message">{feedStatus.message}</span>
-          {feedStatus.lastAcceptedAt ? (
-            <span className="feed-last">Last accepted: {formatTimestamp(feedStatus.lastAcceptedAt)}</span>
-          ) : null}
-          <span className="feed-seq">High-water sequence: {formatNumber(feedStatus.highWaterSequence)}</span>
-        </section>
-      ) : null}
-
       <AgentsStrip models={models} datasetId={activeDatasetId} />
 
       <div className="ov-grid-main">
