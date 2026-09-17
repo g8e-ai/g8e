@@ -33,7 +33,7 @@ export function classifyFreshness(freshness: FreshnessState | 'unknown'): {
     case 'delayed':
       return { label: 'Delayed', tone: 'warn', description: 'Records are arriving but slower than expected.' };
     case 'stale':
-      return { label: 'Stale', tone: 'warn', description: 'No recent updates; last accepted data remains visible.' };
+      return { label: 'Inactive', tone: 'warn', description: 'No recent updates; last accepted data remains visible.' };
     case 'intentionally_stopped':
       return { label: 'Intentionally stopped', tone: 'warn', description: 'The feed was stopped by the source.' };
     case 'safety_stopped':

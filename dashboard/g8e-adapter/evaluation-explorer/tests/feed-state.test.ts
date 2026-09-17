@@ -21,6 +21,12 @@ describe('classifyFreshness', () => {
     expect(result.tone).toBe('warn');
     expect(result.label).toBe('Connecting');
   });
+
+  it('classifies stale as warn with Inactive label', () => {
+    const result = classifyFreshness('stale');
+    expect(result.tone).toBe('warn');
+    expect(result.label).toBe('Inactive');
+  });
 });
 
 describe('isTerminalFailure', () => {
