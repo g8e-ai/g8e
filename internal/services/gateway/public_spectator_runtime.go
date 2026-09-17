@@ -106,6 +106,9 @@ func (runtime *PublicSpectatorRuntime) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("public spectator: ensure feed: %w", err)
 	}
+	if err := fs.RepairSharedRuntimeOwnership(ctx, runtime.fileSvc); err != nil {
+		return fmt.Errorf("public spectator: repair bind mount ownership: %w", err)
+	}
 	if exportConfig.MirrorOrigin == "" {
 		exportConfig.MirrorOrigin = "http://" + runtime.cfg.PrivateListenAddress
 	} else if _, port, splitErr := net.SplitHostPort(runtime.cfg.PrivateListenAddress); splitErr == nil {

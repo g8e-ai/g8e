@@ -933,7 +933,10 @@ const (
 	PublicFeedAnonymousRateWindowSecs = 60
 	PublicFeedAnonymousRateMaxClients = 10000
 	PublicFeedSSEMaxSubscribers       = 1000
-	PublicFeedMirrorRetainedBatches   = 1000
+	// Retain enough batches for a full homogeneous smoke matrix (~2.6k cells
+	// plus lifecycle, result, and aggregate projections) without pruning the
+	// prefix the evaluation explorer replays on cold load.
+	PublicFeedMirrorRetainedBatches = 25000
 	PublicFeedIngestTokenBytes        = 32
 	PublicFeedZeroHashHex             = "0000000000000000000000000000000000000000000000000000000000000000"
 )

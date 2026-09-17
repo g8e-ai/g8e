@@ -77,8 +77,7 @@ func (m *campaignMemoryFileService) RemoveAll(context.Context, string) error    
 func (m *campaignMemoryFileService) Rename(context.Context, string, string) error { return nil }
 func (m *campaignMemoryFileService) ReadDir(_ context.Context, relPath string) ([]os.DirEntry, error) {
 	prefix := relPath + string(filepath.Separator)
-	seen := make(map[string]struct{})
-	var entries []os.DirEntry
+	seen := make(map[string]bool)
 	for path := range m.files {
 		if !strings.HasPrefix(path, prefix) {
 			continue
@@ -88,14 +87,18 @@ func (m *campaignMemoryFileService) ReadDir(_ context.Context, relPath string) (
 		if len(parts) == 0 || parts[0] == "" {
 			continue
 		}
-		if _, ok := seen[parts[0]]; ok {
-			continue
+		if len(parts) > 1 {
+			seen[parts[0]] = true
+		} else if _, ok := seen[parts[0]]; !ok {
+			seen[parts[0]] = false
 		}
-		seen[parts[0]] = struct{}{}
-		entries = append(entries, campaignMemoryDirEntry{name: parts[0], isDir: len(parts) > 1})
 	}
-	if len(entries) == 0 {
+	if len(seen) == 0 {
 		return nil, fs.ErrNotExist
+	}
+	entries := make([]os.DirEntry, 0, len(seen))
+	for name, isDir := range seen {
+		entries = append(entries, campaignMemoryDirEntry{name: name, isDir: isDir})
 	}
 	return entries, nil
 }

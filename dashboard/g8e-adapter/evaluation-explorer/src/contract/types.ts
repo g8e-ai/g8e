@@ -388,7 +388,7 @@ export interface EvaluationSummary extends ViewRecordEnvelope {
   primary_invocation_share?: MetricValue<number>;
   correlated_failure_rate?: MetricValue<number>;
   benchmark_unavailable_reasons?: string[];
-  model_role_mapping?: Record<ModelRole, string>;
+  model_role_mapping?: Partial<Record<ModelRole, string>>;
   lifecycle_state: LifecycleStatus;
   assignment_total: number;
   assignment_completed: number;

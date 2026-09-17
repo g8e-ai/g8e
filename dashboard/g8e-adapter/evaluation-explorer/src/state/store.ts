@@ -258,6 +258,13 @@ export class EvalStore {
       isProjectionRecord(record);
       if (record.record_type !== 'projection' && record.record_type !== 'event') return;
       const payload = JSON.parse(record.record_bytes);
+      if (
+        payload.kind === 'evaluation_summary' &&
+        payload.native_result === undefined &&
+        (payload.model_role_mapping === undefined || payload.model_role_mapping === null)
+      ) {
+        payload.model_role_mapping = {};
+      }
       if (isCampaignProjectionEnvelope(payload)) {
         const adapted = adaptCampaignProjectionEnvelope(payload, this.campaignContext);
         for (const decoded of adapted) {

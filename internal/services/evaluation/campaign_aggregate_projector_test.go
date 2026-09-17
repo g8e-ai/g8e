@@ -89,6 +89,66 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 	assert.Equal(t, "methodology_snapshot", methodology["kind"])
 }
 
+func TestBuildRunCompletionViewRecords(t *testing.T) {
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+		homogeneousAssignment("assign-2", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT),
+	}
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": {
+			AssignmentId:    "assign-1",
+			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+			DeterministicGrades: []*evalv1.DeterministicGrade{{
+				Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+			}},
+		},
+		"assign-2": {
+			AssignmentId:    "assign-2",
+			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL,
+		},
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	require.True(t, RunAggregateComplete(assignments, results, state))
+	run := &evalv1.EvaluationRun{
+		RunId:     "run-1",
+		StartedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: "eval-smoke-mini",
+		},
+	}
+	records, err := BuildRunCompletionViewRecords(run, assignments, results, state, time.Unix(1_700_000_100, 0).UTC())
+	require.NoError(t, err)
+	require.Len(t, records, 5)
+
+	summary := map[string]any{}
+	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
+	assert.Equal(t, "evaluation_summary", summary["kind"])
+	assert.IsType(t, map[string]any{}, summary["model_role_mapping"])
+	assert.Equal(t, "completed", summary["lifecycle_state"])
+	assert.Equal(t, float64(2), summary["assignment_total"])
+	assert.Equal(t, float64(1), summary["assignment_completed"])
+	assert.Equal(t, float64(1), summary["assignment_failed"])
+	assert.Equal(t, "exploratory_partial", summary["quality_state"])
+
+	catalog := map[string]any{}
+	require.NoError(t, json.Unmarshal(records[1].Body, &catalog))
+	assert.Equal(t, "catalog_snapshot", catalog["kind"])
+	assert.Equal(t, "exploratory_partial", catalog["quality_state"])
+}
+
+func TestRunAggregateCompleteLifecycleWithoutPersistedResult(t *testing.T) {
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED
+	results := map[string]*evalv1.EvaluationAssignmentResult{}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	require.True(t, RunAggregateComplete(assignments, results, state))
+	assert.Equal(t, uint32(1), state.Terminal)
+}
+
 func TestCampaignPublicationCoordinatorPublishRunAggregates(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)

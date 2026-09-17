@@ -74,6 +74,33 @@ func MethodologySnapshotIdempotencyKey(runID string, terminal uint32) string {
 	return fmt.Sprintf("%s:aggregate:methodology:t%d", runID, terminal)
 }
 
+// RunCompletionIdempotencyKey returns the publication key for the terminal
+// evaluation_summary and completion aggregate revision for one run.
+func RunCompletionIdempotencyKey(runID string) string {
+	return runID + ":completion:final"
+}
+
+// RunAggregateComplete reports whether every scheduled assignment is settled:
+// either a persisted result exists or the assignment lifecycle is terminal.
+func RunAggregateComplete(assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult, state *runAggregateState) bool {
+	if state == nil || state.Scheduled == 0 || len(assignments) != int(state.Scheduled) {
+		return false
+	}
+	for _, assignment := range assignments {
+		if !assignmentIsSettled(assignment, results[assignment.GetAssignmentId()] != nil) {
+			return false
+		}
+	}
+	return true
+}
+
+func assignmentIsSettled(assignment *evalv1.EvaluationAssignment, hasResult bool) bool {
+	if hasResult {
+		return true
+	}
+	return assignmentLifecycleIsTerminal(assignment.GetLifecycleStatus())
+}
+
 // CollectRunAggregateState derives explorer aggregate counters from canonical
 // assignments and terminal results for one homogeneous model-role run.
 func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult) (*runAggregateState, error) {
@@ -96,6 +123,22 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 		bucket.Scheduled++
 		result := results[assignment.GetAssignmentId()]
 		if result == nil {
+			if !assignmentLifecycleIsTerminal(assignment.GetLifecycleStatus()) {
+				continue
+			}
+			terminalStatus := lifecycleTerminalOutcome(assignment.GetLifecycleStatus())
+			state.Terminal++
+			passed := terminalStatus == "completed"
+			if passed {
+				state.Passed++
+				bucket.Passed++
+			} else {
+				state.Failed++
+				bucket.Failed++
+			}
+			bucket.Terminal++
+			bucket.Outcomes[terminalStatus]++
+			evaluatedVariants[variantID] = struct{}{}
 			continue
 		}
 		state.Terminal++
@@ -167,6 +210,67 @@ func BuildRunAggregateViewRecords(runID string, state *runAggregateState, observ
 	return records, nil
 }
 
+// BuildRunCompletionViewRecords materializes the terminal evaluation_summary
+// plus completion catalog, model, and methodology snapshots for one finished
+// campaign run.
+func BuildRunCompletionViewRecords(run *evalv1.EvaluationRun, assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult, state *runAggregateState, observedAt time.Time) ([]CampaignViewRecord, error) {
+	if run == nil || state == nil || !RunAggregateComplete(assignments, results, state) {
+		return nil, fmt.Errorf("evaluation: build run completion view records: %w", constants.ErrMissingRequiredField)
+	}
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	observed := observedAt.UTC().Format(time.RFC3339Nano)
+	runID := run.GetRunId()
+	datasetID := CampaignDatasetID(runID)
+	records := make([]CampaignViewRecord, 0, 2+len(state.VariantRoles))
+
+	summaryBody, err := marshalCanonicalViewRecord(buildEvaluationSummaryRecord(run, datasetID, observed, state))
+	if err != nil {
+		return nil, err
+	}
+	records = append(records, CampaignViewRecord{
+		IdempotencyKey: RunCompletionIdempotencyKey(runID) + ":evaluation_summary:v2",
+		Body:           summaryBody,
+	})
+
+	catalogBody, err := marshalCanonicalViewRecord(buildCompletedCatalogSnapshotRecord(datasetID, runID, observed, state))
+	if err != nil {
+		return nil, err
+	}
+	records = append(records, CampaignViewRecord{
+		IdempotencyKey: RunCompletionIdempotencyKey(runID) + ":catalog",
+		Body:           catalogBody,
+	})
+
+	keys := make([]string, 0, len(state.VariantRoles))
+	for key := range state.VariantRoles {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		bucket := state.VariantRoles[key]
+		modelBody, err := marshalCanonicalViewRecord(buildCompletedModelSummaryRecord(datasetID, observed, bucket))
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, CampaignViewRecord{
+			IdempotencyKey: RunCompletionIdempotencyKey(runID) + ":model:" + bucket.VariantID + ":" + bucket.Role,
+			Body:           modelBody,
+		})
+	}
+
+	methodologyBody, err := marshalCanonicalViewRecord(buildCompletedMethodologySnapshotRecord(datasetID, observed))
+	if err != nil {
+		return nil, err
+	}
+	records = append(records, CampaignViewRecord{
+		IdempotencyKey: RunCompletionIdempotencyKey(runID) + ":methodology",
+		Body:           methodologyBody,
+	})
+	return records, nil
+}
+
 func buildCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) map[string]any {
 	return map[string]any{
 		"schema_version":         explorerViewSchemaVersion,
@@ -228,6 +332,108 @@ func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAg
 		record["unavailable_reasons"] = []string{"awaiting terminal assignments"}
 	}
 	return record
+}
+
+func buildCompletedCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) map[string]any {
+	record := buildCatalogSnapshotRecord(datasetID, runID, observedAt, state)
+	record["quality_state"] = qualityStateForCompletedAggregate(state)
+	record["description"] = "Homogeneous full-pipeline model-role evaluation over the frozen north-star-25 catalog. The campaign matrix is complete; values remain provisional until verification runs."
+	record["limitations"] = []string{
+		"Campaign execution is complete; values remain provisional until verification runs.",
+		"Model aggregates reflect designated role responsibility inside the production chat pipeline, not a provider-only benchmark.",
+		"Resource telemetry remains unavailable until provider-boundary observation is published.",
+	}
+	return record
+}
+
+func buildCompletedModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate) map[string]any {
+	record := buildModelSummaryRecord(datasetID, observedAt, bucket)
+	if bucket.Scheduled > 0 && bucket.Terminal >= bucket.Scheduled {
+		record["quality_state"] = "exploratory_partial"
+	}
+	return record
+}
+
+func buildCompletedMethodologySnapshotRecord(datasetID, observedAt string) map[string]any {
+	record := buildMethodologySnapshotRecord(datasetID, observedAt)
+	record["quality_state"] = "exploratory_partial"
+	record["limitations"] = []string{
+		"Campaign execution is complete; values remain provisional until verification runs.",
+		"Homogeneous model-role and heterogeneous system leaderboards remain separate datasets.",
+		"GPU and system efficiency metrics remain unavailable until provider-boundary observation is published.",
+	}
+	return record
+}
+
+func buildEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observedAt string, state *runAggregateState) map[string]any {
+	startedAt := ""
+	if run.GetStartedAt() != nil {
+		startedAt = run.GetStartedAt().AsTime().UTC().Format(time.RFC3339Nano)
+	}
+	passRate := 0.0
+	if state.Terminal > 0 {
+		passRate = float64(state.Passed) / float64(state.Terminal)
+	}
+	record := map[string]any{
+		"schema_version":        explorerViewSchemaVersion,
+		"kind":                  "evaluation_summary",
+		"dataset_id":            datasetID,
+		"quality_state":         qualityStateForCompletedAggregate(state),
+		"observed_at":           observedAt,
+		"source_revision_label": campaignSourceRevision,
+		"run_id":                run.GetRunId(),
+		"campaign_id":           run.GetCampaignBinding().GetCampaignId(),
+		"suite_id":              northStarSuiteID,
+		"arm":                   armForRun(run),
+		"evaluation_unit":       evaluationUnitForRun(run),
+		"model_role_mapping":    buildModelRoleMapping(state),
+		"lifecycle_state":       "completed",
+		"assignment_total":      state.Scheduled,
+		"assignment_completed":  state.Passed,
+		"assignment_failed":     state.Failed,
+		"terminal_outcomes":     aggregateTerminalOutcomes(state),
+		"verifier_state":        "not_applicable",
+		"headline_metrics":      map[string]any{},
+	}
+	if startedAt != "" {
+		record["started_at"] = startedAt
+		record["ended_at"] = observedAt
+	}
+	if state.Terminal > 0 {
+		record["headline_metrics"] = map[string]any{
+			"pass_rate": map[string]any{"value": passRate},
+		}
+	}
+	return record
+}
+
+// buildModelRoleMapping declares one variant per role when the run matrix
+// uses a single variant in that role; otherwise it stays empty because
+// homogeneous smoke matrices evaluate many variants per role independently.
+func buildModelRoleMapping(state *runAggregateState) map[string]string {
+	mapping := map[string]string{}
+	if state == nil {
+		return mapping
+	}
+	roleVariants := map[string]map[string]struct{}{}
+	for _, bucket := range state.VariantRoles {
+		if bucket == nil || bucket.Role == "" || bucket.VariantID == "" {
+			continue
+		}
+		if roleVariants[bucket.Role] == nil {
+			roleVariants[bucket.Role] = map[string]struct{}{}
+		}
+		roleVariants[bucket.Role][bucket.VariantID] = struct{}{}
+	}
+	for role, variants := range roleVariants {
+		if len(variants) != 1 {
+			continue
+		}
+		for variantID := range variants {
+			mapping[role] = variantID
+		}
+	}
+	return mapping
 }
 
 func buildMethodologySnapshotRecord(datasetID, observedAt string) map[string]any {
@@ -313,6 +519,67 @@ func qualityStateForModelSummary(terminal uint32) string {
 		return "live_in_progress"
 	}
 	return "not_evaluated"
+}
+
+func assignmentLifecycleIsTerminal(status evalv1.EvaluationAssignmentLifecycleStatus) bool {
+	switch status {
+	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_UNSPECIFIED,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING:
+		return false
+	default:
+		return true
+	}
+}
+
+func lifecycleTerminalOutcome(status evalv1.EvaluationAssignmentLifecycleStatus) string {
+	switch status {
+	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED:
+		return "completed"
+	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL,
+		evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED:
+		return "grader_failed"
+	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_POLICY_REJECTED:
+		return "invalid_evidence"
+	case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_STOPPED:
+		return "stopped"
+	default:
+		return "model_failed"
+	}
+}
+
+func qualityStateForCompletedAggregate(state *runAggregateState) string {
+	if state != nil && state.Scheduled > 0 && state.Terminal >= state.Scheduled {
+		return "exploratory_partial"
+	}
+	if state.Terminal > 0 {
+		return "live_in_progress"
+	}
+	return "not_evaluated"
+}
+
+func aggregateTerminalOutcomes(state *runAggregateState) map[string]uint32 {
+	record := terminalOutcomesRecord(nil)
+	for _, bucket := range state.VariantRoles {
+		for key, count := range bucket.Outcomes {
+			record[key] += count
+		}
+	}
+	return record
+}
+
+func armForRun(run *evalv1.EvaluationRun) string {
+	if run.GetLane() == evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM {
+		return "heterogeneous-system"
+	}
+	return "homogeneous-model-role"
+}
+
+func evaluationUnitForRun(run *evalv1.EvaluationRun) string {
+	if run.GetLane() == evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM {
+		return "system"
+	}
+	return "model"
 }
 
 func displayNameForVariant(variantID string) string {

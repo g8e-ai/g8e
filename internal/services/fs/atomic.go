@@ -64,5 +64,9 @@ func (fs *localFS) WriteFile(ctx context.Context, relPath string, data []byte, m
 		return fmt.Errorf("%w: %w", constants.ErrFileRenameFailed, err)
 	}
 
+	if isBindMountedRuntimePath(relPath) {
+		_ = alignBindMountOwnership(absPath)
+	}
+
 	return nil
 }
