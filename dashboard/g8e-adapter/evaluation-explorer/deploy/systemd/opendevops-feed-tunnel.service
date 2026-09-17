@@ -1,7 +1,7 @@
 [Unit]
 Description=OpenDevOps.ai public feed Cloudflare Tunnel
-Wants=network-online.target g8e-public-mirror.service
-After=network-online.target g8e-public-mirror.service
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=simple

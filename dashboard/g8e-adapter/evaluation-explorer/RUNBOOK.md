@@ -34,7 +34,7 @@ cd /home/bob/g8e/dashboard/g8e-adapter/evaluation-explorer
 npm run dev:real
 ```
 
-This starts or reuses the mirror via `./g8e eval mirror run --daemon`, verifies mirror health, and starts Vite without launching a native evaluation. Use `./g8e eval mirror status` or `npm run health` to inspect mirror state, publisher sequence, freshness, route isolation, and the last accepted record. Stop the mirror with `./g8e eval mirror stop`.
+This starts or reuses a host mirror via `./g8e eval mirror run --daemon` for legacy local dev only. Prefer the gateway-owned mirror (`docker compose up -d g8e-gateway` or `./g8e gw start --public-spectator`) for North Star acceptance. Use `./g8e eval mirror status` or `npm run health` to inspect mirror state, publisher sequence, freshness, route isolation, and the last accepted record. Stop a legacy host mirror with `./g8e eval mirror stop`.
 
 Run a campaign evaluation with live publication to the public mirror:
 
@@ -104,7 +104,7 @@ curl -fsS http://127.0.0.1:8000/health
 
 ## Production build and packaging
 
-The checked-in local runtime remains loopback-only for development. `npm run build` replaces the emitted runtime with the exact bytes from `runtime.production.json`, disables source maps, scans the complete asset tree for prohibited content, and fails on any unexpected file. The Cloudflare Worker configuration in this directory packages only `dist/`.
+The checked-in local runtime remains loopback-only for development. `npm run build` replaces the emitted runtime with the exact bytes from `runtime.production.json`, disables source maps, scans the complete asset tree for prohibited content, and fails on any unexpected file. Production does **not** use Cloudflare Workers or Pages; the gateway-owned public listener on `8082` serves `dist/` and the anonymous mirror API from one origin.
 
 ```bash
 cd /home/bob/g8e/dashboard/g8e-adapter/evaluation-explorer
@@ -114,33 +114,32 @@ npm run typecheck
 npm test
 npm run build
 npm audit --audit-level=moderate
-wrangler deploy --dry-run
 ```
 
-The production runtime names only `https://feed.opendevops.ai`. A real `wrangler deploy` remains an explicit release-owner action and runs only after external feed acceptance and rollback capture.
+After `npm run build`, restart or recreate `g8e-gateway` so Docker remounts `dist/`. The production runtime names only `https://opendevops.ai`. External browsers reach that origin through the dedicated `opendevops-feed` Cloudflare Tunnel, which terminates at loopback `http://127.0.0.1:8082`.
 
 ## Host service supervision
 
-The checked-in user service units run the mirror and dedicated Cloudflare Tunnel in the Docker-host namespace. The mirror continues to use host `.g8e/` durable state and loopback listeners. The tunnel reads its generated configuration and credentials from the owner-protected `/home/bob/.cloudflared` directory; neither unit contains a token, key, or ingest credential.
+The gateway owns the in-process public mirror (`8081` private ingest, `8082` public read/SSE) and evaluation explorer when started with `--public-spectator` (default in Compose). Do not run a separate `g8e public mirror run` or install a host mirror systemd unit for production.
 
-After the release owner creates the dedicated `opendevops-feed` tunnel and DNS route, install the units in a controlled window when no foreground mirror or tunnel owns the same ports or tunnel session:
+The checked-in `deploy/systemd/opendevops-feed-tunnel.service` runs only the Cloudflare Tunnel in the Docker-host namespace. It reads generated configuration and credentials from the owner-protected `/home/bob/.cloudflared` directory and forwards `https://opendevops.ai` to `http://127.0.0.1:8082`. Neither the tunnel unit nor the gateway image contains a token, key, or ingest credential in source control.
+
+After the release owner creates the dedicated `opendevops-feed` tunnel and DNS route, install the tunnel unit when no other process owns the same tunnel session:
 
 ```bash
-install -Dm600 deploy/systemd/g8e-public-mirror.service /home/bob/.config/systemd/user/g8e-public-mirror.service
 install -Dm600 deploy/systemd/opendevops-feed-tunnel.service /home/bob/.config/systemd/user/opendevops-feed-tunnel.service
 systemctl --user daemon-reload
-systemctl --user enable --now g8e-public-mirror.service
 systemctl --user enable --now opendevops-feed-tunnel.service
-systemctl --user status g8e-public-mirror.service opendevops-feed-tunnel.service
+systemctl --user status opendevops-feed-tunnel.service
 ```
 
-User lingering must be enabled for restart-on-boot before login. This host currently reports lingering disabled. Enabling it is an owner/admin action:
+User lingering must be enabled for restart-on-boot before login:
 
 ```bash
 sudo loginctl enable-linger bob
 ```
 
-Stopping either service preserves publisher and mirror state. Disable the tunnel service first if external route isolation or disclosure acceptance fails; do not reset feed state, rotate keys, or delete the tunnel as an ordinary rollback.
+Stopping the tunnel preserves publisher and mirror state. Disable the tunnel service first if external route isolation or disclosure acceptance fails; do not reset feed state, rotate keys, or delete the tunnel as an ordinary rollback.
 
 ## Focused troubleshooting
 

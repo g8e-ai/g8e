@@ -338,6 +338,101 @@ func campaignDir(campaignID string) string {
 	return filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationCampaignsDirname, campaignID)
 }
 
+func campaignsRootDir() string {
+	return filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationCampaignsDirname)
+}
+
+func evaluationRunsRootDir() string {
+	return filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname)
+}
+
+// CampaignListEntry summarizes one persisted North Star campaign.
+type CampaignListEntry struct {
+	CampaignID             string
+	ModelCount             int
+	ScenarioCount          uint32
+	RepetitionCount        uint32
+	ModelRegistryDigest    string
+	CatalogDigest          string
+	HasHeterogeneousStacks bool
+	RunIDs                 []string
+}
+
+// ListCampaigns returns all persisted campaign specs in deterministic order.
+func (s *Store) ListCampaigns(ctx context.Context) ([]CampaignListEntry, error) {
+	if s == nil || s.files == nil {
+		return nil, fmt.Errorf("%w: file service is required", constants.ErrEvidenceArtifactMalformed)
+	}
+	runIDsByCampaign, err := s.listRunIDsByCampaign(ctx)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := s.files.ReadDir(ctx, campaignsRootDir())
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, constants.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("evaluation: list campaigns: %w", err)
+	}
+	campaigns := make([]CampaignListEntry, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() || !complianceevidence.ValidPathElement(entry.Name()) {
+			continue
+		}
+		spec, err := s.LoadCampaignSpec(ctx, entry.Name())
+		if err != nil {
+			continue
+		}
+		hasStacks, err := s.files.FileExists(ctx, heterogeneousStackSetPath(entry.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: list campaigns: %w", err)
+		}
+		campaigns = append(campaigns, CampaignListEntry{
+			CampaignID:             spec.GetCampaignId(),
+			ModelCount:             len(spec.GetModelRegistry()),
+			ScenarioCount:          spec.GetScenarioCount(),
+			RepetitionCount:        spec.GetRepetitionCount(),
+			ModelRegistryDigest:    spec.GetModelRegistryDigest(),
+			CatalogDigest:          spec.GetCatalogDigest(),
+			HasHeterogeneousStacks: hasStacks,
+			RunIDs:                 runIDsByCampaign[spec.GetCampaignId()],
+		})
+	}
+	sort.Slice(campaigns, func(i, j int) bool {
+		return campaigns[i].CampaignID < campaigns[j].CampaignID
+	})
+	return campaigns, nil
+}
+
+func (s *Store) listRunIDsByCampaign(ctx context.Context) (map[string][]string, error) {
+	entries, err := s.files.ReadDir(ctx, evaluationRunsRootDir())
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, constants.ErrNotFound) {
+			return map[string][]string{}, nil
+		}
+		return nil, fmt.Errorf("evaluation: list campaign runs: %w", err)
+	}
+	byCampaign := make(map[string][]string)
+	for _, entry := range entries {
+		if !entry.IsDir() || !complianceevidence.ValidPathElement(entry.Name()) {
+			continue
+		}
+		run, err := s.LoadRun(ctx, entry.Name())
+		if err != nil {
+			continue
+		}
+		campaignID := run.GetCampaignBinding().GetCampaignId()
+		if campaignID == "" {
+			continue
+		}
+		byCampaign[campaignID] = append(byCampaign[campaignID], run.GetRunId())
+	}
+	for campaignID := range byCampaign {
+		sort.Strings(byCampaign[campaignID])
+	}
+	return byCampaign, nil
+}
+
 // SaveHeterogeneousStackSet persists one frozen heterogeneous stack set for a campaign.
 func (s *Store) SaveHeterogeneousStackSet(ctx context.Context, campaignID string, stackSet *HeterogeneousStackSet) error {
 	if s == nil || s.files == nil || stackSet == nil || !complianceevidence.ValidPathElement(campaignID) {

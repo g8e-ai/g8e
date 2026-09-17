@@ -718,6 +718,22 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 	return receipt, execErr
 }
 
+// gatewayDispatchedVerificationContext returns a verification context for
+// envelopes issued by the Gateway DispatchService on the operator cmd channel.
+// The PDP binds state_merkle_root at construction; concurrent ledger
+// advancement must not invalidate that binding before the operator executes
+// the command. External callers that submit through ProcessEnvelope without
+// this context still re-fetch the live root.
+func gatewayDispatchedVerificationContext(parent context.Context, env *govpkg.GovernanceEnvelope) context.Context {
+	if parent == nil {
+		parent = context.Background()
+	}
+	if env == nil || env.StateMerkleRoot == "" {
+		return parent
+	}
+	return context.WithValue(parent, constants.ContextKeyStateMerkleRoot, env.StateMerkleRoot)
+}
+
 // handleGovernanceEnvelope processes a GovernanceEnvelope using the TransactionVerifier, Consensus and Actuator services.
 func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.GovernanceEnvelope) {
 	var verified *governance.VerifiedTransaction
@@ -725,7 +741,8 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 	// Strict transaction verification (P0: fail-closed gate before any dispatch)
 	if rs.l4warden != nil {
 		var err error
-		verified, err = rs.l4warden.VerifyEnvelope(context.Background(), env)
+		verifyCtx := gatewayDispatchedVerificationContext(rs.ctx, env)
+		verified, err = rs.l4warden.VerifyEnvelope(verifyCtx, env)
 		if err != nil {
 			rs.logger.Error("Transaction verification failed - command rejected",
 				string(constants.ConnectionStateError), err,

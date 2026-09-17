@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 
+from app.errors import ConfigurationError
 from app.llm import get_llm_provider
 from app.models.evaluation_trace import (
     EvaluationGraderCallRecord,
@@ -21,6 +22,14 @@ from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
 from g8e.models.internal_api import EvaluationGoldSummary, EvaluationInferenceContext
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_eval_judge_model(request_settings: G8eeUserSettings) -> str | None:
+    """Return the judge model, falling back to the configured lite model chain."""
+    configured = (request_settings.eval_judge.model or "").strip()
+    if configured:
+        return configured
+    return request_settings.llm.resolved_lite_model
 
 
 def _build_interaction_trace(
@@ -49,13 +58,15 @@ async def grade_campaign_assignment_semantically(
     tool_calls: list[EvaluationToolCallRecord],
 ) -> tuple[list[EvaluationSemanticGradeRecord], list[EvaluationGraderCallRecord]]:
     grade_id = f"{evaluation_context.assignment_id}:semantic-judge"
-    provider = get_llm_provider(request_settings.llm)
-    judge = EvalJudge(
-        provider=provider,
-        settings=request_settings.eval_judge,
-        g8e_context=g8e_context,
-    )
+    judge_model = _resolve_eval_judge_model(request_settings)
     try:
+        provider = get_llm_provider(request_settings.llm, is_lite=True)
+        judge = EvalJudge(
+            provider=provider,
+            model=judge_model,
+            settings=request_settings.eval_judge,
+            g8e_context=g8e_context,
+        )
         grade = await judge.grade_turn(
             user_query=gold_summary.user_prompt,
             interaction_trace=_build_interaction_trace(designated_role_output, tool_calls),
@@ -64,7 +75,7 @@ async def grade_campaign_assignment_semantically(
             expected_tools=list(gold_summary.expected_tools),
             forbidden_tools=list(gold_summary.forbidden_tools),
         )
-    except EvalJudgeError as exc:
+    except (EvalJudgeError, ConfigurationError) as exc:
         logger.warning(
             "Semantic judge failed for assignment %s: %s",
             evaluation_context.assignment_id,
@@ -75,7 +86,7 @@ async def grade_campaign_assignment_semantically(
                 EvaluationSemanticGradeRecord(
                     grade_id=grade_id,
                     status="unavailable",
-                    judge_variant_id=request_settings.eval_judge.model or "",
+                    judge_variant_id=judge_model or "",
                     detail=str(exc),
                 )
             ],
@@ -85,14 +96,14 @@ async def grade_campaign_assignment_semantically(
     semantic_grade = EvaluationSemanticGradeRecord(
         grade_id=grade_id,
         status="pass" if grade.passed else "fail",
-        judge_variant_id=request_settings.eval_judge.model or "",
+        judge_variant_id=judge_model or "",
         detail=grade.reasoning,
         score=grade.score,
     )
     grader_calls = [
         EvaluationGraderCallRecord(
             grader_call_id=f"{grade_id}:call-{index + 1}",
-            judge_variant_id=call.model or request_settings.eval_judge.model or "",
+            judge_variant_id=call.model or judge_model or "",
             provider_attempt_id=call.provider_attempt_id or "",
         )
         for index, call in enumerate(grade.model_calls)

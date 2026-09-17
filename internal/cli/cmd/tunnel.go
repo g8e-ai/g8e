@@ -42,14 +42,16 @@ Prerequisites:
   - A Cloudflare account with a registered domain
 
 Subcommands:
-  create   Create a named tunnel, route DNS, and generate config.yml
-  run      Start the tunnel (foreground, blocks until interrupted)
-  status   Check tunnel connectivity and gateway health through the tunnel
+  create    Create a named tunnel, route DNS, and generate config.yml
+  route-dns Route a hostname to a tunnel in the correct Cloudflare DNS zone
+  run       Start the tunnel (foreground, blocks until interrupted)
+  status    Check tunnel connectivity and gateway health through the tunnel
 `,
 	}
 
 	cmd.AddCommand(
 		tunnelCreateCmd(),
+		tunnelRouteDNSCmd(),
 		tunnelRunCmd(),
 		tunnelStatusCmd(),
 	)

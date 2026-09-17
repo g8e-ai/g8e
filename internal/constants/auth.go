@@ -212,8 +212,9 @@ const (
 	ContextKeyCLISessionID ContextKey = "cli_session_id"
 	// ContextKeyStateMerkleRoot stores a pre-fetched state merkle root so the
 	// in-process gateway build-verify window sees the same root for the same
-	// transaction. Operator-side verification (without this key in context)
-	// still re-fetches the current root from the provider.
+	// transaction. Gateway-dispatched cmd-channel envelopes bind the PDP-issued
+	// root the same way. External ProcessEnvelope callers without this key
+	// still re-fetch the current root from the provider.
 	ContextKeyStateMerkleRoot ContextKey = "state_merkle_root"
 )
 

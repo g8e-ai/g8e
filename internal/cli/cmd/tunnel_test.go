@@ -29,7 +29,7 @@ func TestTunnelCmdStructure(t *testing.T) {
 		cmd := tunnelCmd()
 		require.NotNil(t, cmd)
 
-		expectedSubcommands := []string{"create", "run", "status"}
+		expectedSubcommands := []string{"create", "route-dns", "run", "status"}
 		for _, subcmd := range expectedSubcommands {
 			found := false
 			for _, c := range cmd.Commands() {

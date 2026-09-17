@@ -208,6 +208,117 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 	})
 }
 
+func TestGatewayDispatchedVerificationContext_AcceptsPDPBoundRootDespiteLiveDrift(t *testing.T) {
+	t.Parallel()
+
+	const gatewayRoot = "gateway-root-at-construction"
+	const liveRoot = "live-root-after-concurrent-tx"
+
+	cfg := testutil.NewTestConfig(t)
+	svc, err := NewOperatorPubSubService(CommandServiceConfig{
+		Config:       cfg,
+		Logger:       testutil.NewTestLogger(),
+		PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+	}, OutboundModeDeps{
+		GovernanceCoreDeps: GovernanceCoreDeps{
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider(liveRoot),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+			SignerStore:       &governance.FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{}},
+			Doctrine:          governance.NewL1Doctrine(),
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, svc.l4warden)
+
+	env := buildGatewayDispatchedDoctrineEnvelope(t, gatewayRoot, "nonce-gateway-dispatch-root")
+	_, err = svc.l4warden.VerifyEnvelope(context.Background(), env)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, governance.ErrStateRootMismatch)
+
+	_, err = svc.l4warden.VerifyEnvelope(gatewayDispatchedVerificationContext(context.Background(), env), env)
+	require.NoError(t, err)
+}
+
+func TestOperatorPubSubService_handleGovernanceEnvelope_AcceptsPDPBoundRootDespiteLiveDrift(t *testing.T) {
+	t.Parallel()
+
+	const gatewayRoot = "gateway-root-at-construction"
+	const liveRoot = "live-root-after-concurrent-tx"
+
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	svc, err := NewOperatorPubSubService(CommandServiceConfig{
+		Config:             cfg,
+		Logger:             logger,
+		PubSubClient:       pubsubtest.NewMockOperatorPubSubClient(),
+		ActuatorSigningKey: priv,
+		ActuatorKeyID:      "actuator-key",
+	}, OutboundModeDeps{
+		GovernanceCoreDeps: GovernanceCoreDeps{
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider(liveRoot),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+			SignerStore: &governance.FailClosedSignerStore{
+				Signers: map[string]ed25519.PublicKey{"test-key": pub},
+			},
+			Doctrine: governance.NewL1Doctrine(),
+		},
+	})
+	require.NoError(t, err)
+	svc.ctx = context.Background()
+
+	var executed bool
+	svc.SetActuator(&governance.L5Actuator{
+		Logger: logger,
+		ExecutionHandler: &mockExecutionHandler{
+			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
+				executed = true
+				return "ok", nil
+			},
+		},
+		SigningKey: priv,
+		KeyID:      "actuator-key",
+	})
+
+	env := buildGatewayDispatchedDoctrineEnvelope(t, gatewayRoot, "nonce-handle-governance-root")
+	svc.handleGovernanceEnvelope(env)
+	assert.True(t, executed, "gateway-dispatched envelope must execute despite live state-root drift")
+}
+
+func buildGatewayDispatchedDoctrineEnvelope(t *testing.T, stateRoot, nonce string) *govpkg.GovernanceEnvelope {
+	t.Helper()
+	env := &govpkg.GovernanceEnvelope{
+		ProtocolVersion:   "1.0",
+		Timestamp:         timestamppb.Now(),
+		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
+		OperatorId:        "operator-1",
+		OperatorSessionId: "session-1",
+		ActionType: string(constants.ActionTypeFsList),
+		TargetResource: "localhost",
+		Payload: mustMarshalProto(t, &operatorv1.FsListRequested{
+			Path:        ".",
+			ExecutionId: "exec-gateway-dispatch",
+		}),
+		StateMerkleRoot:   stateRoot,
+		Nonce:             nonce,
+		Posture:           constants.PostureDoctrine,
+	}
+	hash, err := govpkg.GenerateMessageID(env)
+	require.NoError(t, err)
+	env.Id = hash
+	env.TransactionHash = hash
+	env.Governance = &commonv1.GovernanceMetadata{
+		L1: &commonv1.L1Metadata{Validated: true},
+	}
+	return env
+}
+
 func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 	// §4.2: Receipt-coverage test - drive each action type through ProcessEnvelope
 	// and assert a receipt is written EXECUTING before and terminal status after.

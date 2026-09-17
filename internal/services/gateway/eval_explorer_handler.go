@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +39,7 @@ func NewEvalExplorerHandler(rootOverride, mirrorOrigin string) (http.Handler, er
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/runtime.json" || strings.HasSuffix(r.URL.Path, "/runtime.json") {
-			writeEvalExplorerRuntime(w, mirrorOrigin)
+			writeEvalExplorerRuntime(w, r, mirrorOrigin)
 			return
 		}
 		path := strings.TrimPrefix(r.URL.Path, "/")
@@ -150,11 +151,85 @@ func publicMirrorURL(listenAddress string) string {
 	return fmt.Sprintf("http://%s:%s", host, port)
 }
 
-func writeEvalExplorerRuntime(w http.ResponseWriter, mirrorOrigin string) {
+func writeEvalExplorerRuntime(w http.ResponseWriter, r *http.Request, configuredOrigin string) {
 	payload := map[string]string{
 		"schema_version": "1.0.0",
-		"mirror_origin":  mirrorOrigin,
+		"mirror_origin":  resolveRequestMirrorOrigin(r, configuredOrigin),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+// resolveRequestMirrorOrigin returns the mirror API origin the browser should
+// call. Loopback and same-host requests use the request origin so local
+// http://127.0.0.1:8082 works while https://opendevops.ai still resolves
+// through the tunnel with the configured public base URL.
+func resolveRequestMirrorOrigin(r *http.Request, configuredOrigin string) string {
+	configuredOrigin = strings.TrimRight(strings.TrimSpace(configuredOrigin), "/")
+	if r == nil {
+		return fallbackMirrorOrigin(configuredOrigin)
+	}
+	requestOrigin := requestOriginURL(r)
+	if isLoopbackRequestHost(r.Host) {
+		return requestOrigin
+	}
+	if configuredOrigin != "" {
+		if configuredHost := publicURLHost(configuredOrigin); configuredHost != "" {
+			if requestHost := requestHostname(r.Host); strings.EqualFold(requestHost, configuredHost) {
+				return configuredOrigin
+			}
+		}
+	}
+	return requestOrigin
+}
+
+func fallbackMirrorOrigin(configuredOrigin string) string {
+	if configuredOrigin != "" {
+		return configuredOrigin
+	}
+	return fmt.Sprintf("http://127.0.0.1:%d", constants.PublicSpectatorPublicPort)
+}
+
+func requestOriginURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); forwarded != "" {
+		scheme = strings.TrimSpace(strings.Split(forwarded, ",")[0])
+	}
+	host := strings.TrimSpace(r.Host)
+	if forwardedHost := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); forwardedHost != "" {
+		host = strings.TrimSpace(strings.Split(forwardedHost, ",")[0])
+	}
+	return fmt.Sprintf("%s://%s", scheme, host)
+}
+
+func requestHostname(host string) string {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return ""
+	}
+	hostname, _, err := net.SplitHostPort(host)
+	if err != nil {
+		return host
+	}
+	return hostname
+}
+
+func isLoopbackRequestHost(host string) bool {
+	switch strings.ToLower(requestHostname(host)) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return strings.HasPrefix(strings.ToLower(requestHostname(host)), "127.")
+	}
+}
+
+func publicURLHost(origin string) string {
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" {
+		return ""
+	}
+	return requestHostname(parsed.Host)
 }

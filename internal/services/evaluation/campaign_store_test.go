@@ -197,3 +197,54 @@ func TestCampaignImporterLoadsAssignmentResultEvidence(t *testing.T) {
 	assert.Equal(t, contentDigest, node.SHA256)
 	assert.NotEqual(t, digest, node.SHA256)
 }
+
+func TestStoreListCampaigns_ReturnsPersistedCampaignsWithRuns(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	specA := testCampaignSpec()
+	digestA, err := ComputeCampaignSpecDigest(specA)
+	require.NoError(t, err)
+	specA.CampaignDigest = digestA
+	require.NoError(t, store.SaveCampaignSpec(context.Background(), specA))
+
+	specB := testCampaignSpec()
+	specB.CampaignId = "phase2-full"
+	digestB, err := ComputeCampaignSpecDigest(specB)
+	require.NoError(t, err)
+	specB.CampaignDigest = digestB
+	require.NoError(t, store.SaveCampaignSpec(context.Background(), specB))
+
+	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
+		SchemaVersion: CampaignSchemaVersion,
+		RunId:         "run-a",
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: specA.GetCampaignId(),
+		},
+		StartedAt: timestamppb.Now(),
+	}))
+	require.NoError(t, store.SaveRun(context.Background(), &evalv1.EvaluationRun{
+		SchemaVersion: CampaignSchemaVersion,
+		RunId:         "run-b",
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: specB.GetCampaignId(),
+		},
+		StartedAt: timestamppb.Now(),
+	}))
+
+	campaigns, err := store.ListCampaigns(context.Background())
+	require.NoError(t, err)
+	require.Len(t, campaigns, 2)
+	assert.Equal(t, "phase1a-smoke", campaigns[0].CampaignID)
+	assert.Equal(t, 1, campaigns[0].ModelCount)
+	assert.Equal(t, uint32(25), campaigns[0].ScenarioCount)
+	assert.Equal(t, []string{"run-a"}, campaigns[0].RunIDs)
+	assert.Equal(t, "phase2-full", campaigns[1].CampaignID)
+	assert.Equal(t, []string{"run-b"}, campaigns[1].RunIDs)
+}
+
+func TestStoreListCampaigns_ReturnsEmptyWhenNoCampaignsExist(t *testing.T) {
+	store := NewStore(newCampaignMemoryFileService())
+	campaigns, err := store.ListCampaigns(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, campaigns)
+}

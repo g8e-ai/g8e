@@ -42,7 +42,7 @@ The fixtures currently use `ds-exploratory-baseline-20260914-r2`, `ds-verified-p
 
 ## Routes
 
-The application uses a hash router so local static serving and future Cloudflare static assets require no server-side route rewriting.
+The application uses a hash router so local static serving and the gateway-owned public origin require no server-side route rewriting.
 
 - `#/` overview: feed state, live panel, dataset selector, aggregate counts, role leaders, recent runs.
 - `#/models` models: model catalog with search, filters, sorting, and comparison.

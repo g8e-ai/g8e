@@ -33,6 +33,7 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.AddCommand(
 		campaignEvalInitCmd(deps),
+		campaignEvalListCmd(deps),
 		campaignEvalScheduleCmd(deps),
 		campaignEvalStacksGenerateCmd(deps),
 		campaignEvalScheduleHeterogeneousCmd(deps),
@@ -134,6 +135,75 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Exact inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID")
 	cmd.Flags().Uint32Var(&repetitionCount, "repetition-count", 1, "Homogeneous repetition count")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
+	return cmd
+}
+
+func campaignEvalListCmd(deps nativeEvalDeps) *cobra.Command {
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List persisted North Star evaluation campaigns",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			campaigns, err := evaluation.NewStore(fileSvc).ListCampaigns(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign list: %w", err)
+			}
+			if jsonOutput {
+				entries := make([]map[string]any, 0, len(campaigns))
+				for _, campaign := range campaigns {
+					entries = append(entries, map[string]any{
+						"campaign_id":              campaign.CampaignID,
+						"model_count":              campaign.ModelCount,
+						"scenario_count":           campaign.ScenarioCount,
+						"repetition_count":         campaign.RepetitionCount,
+						"model_registry_digest":    campaign.ModelRegistryDigest,
+						"catalog_digest":           campaign.CatalogDigest,
+						"has_heterogeneous_stacks": campaign.HasHeterogeneousStacks,
+						"run_ids":                  campaign.RunIDs,
+					})
+				}
+				payload, err := json.MarshalIndent(map[string]any{"campaigns": entries}, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+			if len(campaigns) == 0 {
+				cmd.Println("No campaigns found")
+				return nil
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Campaigns (%d total)\n", len(campaigns))
+			if err != nil {
+				return err
+			}
+			for _, campaign := range campaigns {
+				runCount := len(campaign.RunIDs)
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "- %s  models=%d  scenarios=%d  repetitions=%d  runs=%d\n",
+					campaign.CampaignID,
+					campaign.ModelCount,
+					campaign.ScenarioCount,
+					campaign.RepetitionCount,
+					runCount,
+				)
+				if err != nil {
+					return err
+				}
+				for _, runID := range campaign.RunIDs {
+					_, err = fmt.Fprintf(cmd.OutOrStdout(), "  run: %s\n", runID)
+					if err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		},
+	}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }

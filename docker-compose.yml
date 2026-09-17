@@ -70,7 +70,7 @@ services:
       retries: 5
       start_period: 5s
     environment:
-      - G8E_PUBLIC_BASE_URL=https://${G8E_HOSTNAME:-localhost}:${G8E_HTTPS_PORT:-8443}
+      - G8E_PUBLIC_BASE_URL=${G8E_PUBLIC_BASE_URL:-https://${G8E_HOSTNAME:-localhost}:${G8E_HTTPS_PORT:-8443}}
       - G8E_DOCKER_COMPOSE=1
       - G8E_EVAL_EXPLORER_ROOT=/eval-explorer
     command:

@@ -12,9 +12,13 @@ import pytest
 from app.models.evaluation_trace import EvaluationToolCallRecord
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
-from app.models.settings import EvalJudgeSettings, G8eeUserSettings
-from app.services.ai.eval_judge import EvalGrade
-from app.services.evaluation.semantic_grader import grade_campaign_assignment_semantically
+from app.constants import LLMProvider
+from app.models.settings import EvalJudgeSettings, G8eeUserSettings, LLMSettings
+from app.services.ai.eval_judge import EvalGrade, EvalJudgeError
+from app.services.evaluation.semantic_grader import (
+    _resolve_eval_judge_model,
+    grade_campaign_assignment_semantically,
+)
 from g8e.models.internal_api import (
     EvaluationGoldSummary,
     EvaluationInferenceContext,
@@ -88,3 +92,60 @@ async def test_grade_campaign_assignment_semantically_records_passing_grade():
     assert semantic_grades[0].score == 4
     assert len(grader_calls) == 1
     assert grader_calls[0].provider_attempt_id == "judge-attempt-1"
+
+
+def test_resolve_eval_judge_model_prefers_explicit_setting():
+    settings = G8eeUserSettings(
+        llm=LLMSettings(lite_model="qwen3:0.6b"),
+        eval_judge=EvalJudgeSettings(eval_judge_model="judge-model"),
+    )
+    assert _resolve_eval_judge_model(settings) == "judge-model"
+
+
+def test_resolve_eval_judge_model_falls_back_to_lite_model():
+    settings = G8eeUserSettings(llm=LLMSettings(lite_model="qwen3:0.6b"))
+    assert _resolve_eval_judge_model(settings) == "qwen3:0.6b"
+
+
+@pytest.mark.asyncio
+async def test_grade_campaign_assignment_semantically_uses_lite_model_fallback():
+    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+    settings = G8eeUserSettings(llm=LLMSettings(lite_provider=LLMProvider.OLLAMA, lite_model="qwen3:0.6b"))
+    judge_grade = EvalGrade(score=3, reasoning="partial handoff", passed=False, model_calls=[])
+    with patch("app.services.evaluation.semantic_grader.get_llm_provider", return_value=object()) as provider_fn, patch(
+        "app.services.evaluation.semantic_grader.EvalJudge"
+    ) as judge_cls:
+        judge_cls.return_value.grade_turn = AsyncMock(return_value=judge_grade)
+        semantic_grades, _ = await grade_campaign_assignment_semantically(
+            evaluation_context=context.evaluation_context,
+            g8e_context=context,
+            request_settings=settings,
+            gold_summary=context.evaluation_context.gold_summary,
+            designated_role_output="delegating to assistant",
+            tool_calls=[],
+        )
+
+    provider_fn.assert_called_once()
+    assert provider_fn.call_args.kwargs.get("is_lite") is True
+    judge_cls.assert_called_once()
+    assert judge_cls.call_args.kwargs["model"] == "qwen3:0.6b"
+    assert semantic_grades[0].judge_variant_id == "qwen3:0.6b"
+
+
+@pytest.mark.asyncio
+async def test_grade_campaign_assignment_semantically_returns_unavailable_when_judge_missing():
+    context = G8eHttpContext(user_id="user-1", evaluation_context=_evaluation_context())
+    settings = G8eeUserSettings()
+    semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
+        evaluation_context=context.evaluation_context,
+        g8e_context=context,
+        request_settings=settings,
+        gold_summary=context.evaluation_context.gold_summary,
+        designated_role_output="delegating to assistant",
+        tool_calls=[],
+    )
+
+    assert grader_calls == []
+    assert len(semantic_grades) == 1
+    assert semantic_grades[0].status == "unavailable"
+    assert semantic_grades[0].detail
