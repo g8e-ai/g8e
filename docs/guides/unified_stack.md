@@ -201,6 +201,7 @@ Useful flags:
 - `--skip-build` — reuse existing images.
 - `--skip-enroll` — reuse an already-enrolled CLI identity.
 - `--skip-approvals` — start workloads without auto-approving enrollments.
+- `--headless` — mTLS-only owner enrollment without the browser passkey ceremony (default runs passkey enrollment).
 
 For a gateway-only automated start with interactive enrollment prompts, use:
 

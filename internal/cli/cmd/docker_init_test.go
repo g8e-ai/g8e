@@ -141,6 +141,19 @@ func TestPlatformEnrollmentApprovalRank(t *testing.T) {
 	}
 }
 
+func TestDockerOwnerEnrollmentOptions(t *testing.T) {
+	t.Run("default uses passkey ceremony", func(t *testing.T) {
+		opts := dockerOwnerEnrollmentOptions(false)
+		assert.False(t, opts.Headless)
+		assert.False(t, opts.NoSystemTrust)
+	})
+	t.Run("headless skips passkey and OS trust", func(t *testing.T) {
+		opts := dockerOwnerEnrollmentOptions(true)
+		assert.True(t, opts.Headless)
+		assert.True(t, opts.NoSystemTrust)
+	})
+}
+
 func TestDockerFullStackProfiles(t *testing.T) {
 	assert.Equal(t, []string{
 		constants.DockerBootstrappedProfile,

@@ -253,9 +253,13 @@ docs/guides/unified_stack.md:
 Use --clean to wipe containers, volumes, and networks before init.
 That destroys the trust domain and repeats owner enrollment from scratch.
 
-Use --headless during owner enrollment only when the gateway is already
-bootstrapped and another enrolled CLI can approve recovery; on a cold start
-leave headless unset so the first owner can complete the passkey ceremony.`,
+By default, owner enrollment runs the browser passkey ceremony (same as
+'g8e auth enroll user'). Pass --headless to opt into an mTLS-only CLI identity
+without passkey registration or OS trust installation (same as
+'g8e auth enroll user --headless'). On a cold start that bootstraps a fresh
+gateway, headless completes immediately; on an already-bootstrapped gateway it
+prints 'g8e auth approve-recovery <token>' and waits for approval from an
+already-enrolled CLI.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
@@ -316,14 +320,15 @@ leave headless unset so the first owner can complete the passkey ceremony.`,
 				coordinator := enrollerFactory(func(format string, a ...any) {
 					cmd.Printf(format+"\n", a...)
 				}, fileSvc, cfg)
-				result, err := coordinator.Enroll(cmd.Context(), auth.EnrollmentOptions{
-					Headless: headlessEnroll,
-				})
+				result, err := coordinator.Enroll(cmd.Context(), dockerOwnerEnrollmentOptions(headlessEnroll))
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrDockerInitEnrollmentFailed, err)
 				}
 				if result.Reused {
 					cmd.Printf("Reusing existing CLI identity (User ID: %s)\n", result.UserID)
+				} else if headlessEnroll {
+					cmd.Printf("Headless CLI enrollment complete (User ID: %s, Session: %s)\n", result.UserID, result.CLISessionID)
+					cmd.Println("Identity is mTLS-only; no passkey was registered.")
 				} else {
 					cmd.Printf("CLI enrollment complete (User ID: %s, Session: %s)\n", result.UserID, result.CLISessionID)
 				}
@@ -372,8 +377,19 @@ leave headless unset so the first owner can complete the passkey ceremony.`,
 	cmd.Flags().BoolVar(&skipApprovals, "skip-approvals", false, "Start workloads without auto-approving platform enrollment requests")
 	cmd.Flags().BoolVar(&noCache, "no-cache", false, "Build Docker images without using the cache")
 	cmd.Flags().BoolVar(&clean, "clean", false, "Remove containers, volumes, and networks before init (destructive)")
-	cmd.Flags().BoolVar(&headlessEnroll, "headless", false, "Use headless CLI owner enrollment (recovery path only; not for cold bootstrap)")
+	cmd.Flags().BoolVar(&headlessEnroll, "headless", false, "Enroll an mTLS-only CLI owner without the browser passkey ceremony (same as 'g8e auth enroll user --headless')")
 	return cmd
+}
+
+// dockerOwnerEnrollmentOptions returns EnrollmentOptions for docker init/start
+// owner enrollment. Default (headless=false) runs the browser passkey ceremony.
+// Headless opts into mTLS-only identity and skips OS trust installation, matching
+// 'g8e auth enroll user --headless'.
+func dockerOwnerEnrollmentOptions(headless bool) auth.EnrollmentOptions {
+	return auth.EnrollmentOptions{
+		NoSystemTrust: headless,
+		Headless:      headless,
+	}
 }
 
 // checkDockerInitEnv verifies repository-root .env contains the settings required
