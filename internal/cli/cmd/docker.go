@@ -364,8 +364,14 @@ already-enrolled CLI.`,
 				return err
 			}
 
+			if err := reportDockerPublicSpectatorReady(cmd); err != nil {
+				cmd.Printf("Warning: public spectator bootstrap check failed: %v\n", err)
+				cmd.Println("Campaign publish may still work once the gateway exports the first batch.")
+			}
+
 			cmd.Println()
 			cmd.Println("Unified stack init complete.")
+			printDockerSpectatorEndpoints(cmd)
 			cmd.Println("Run 'g8e docker status' to check service status.")
 			cmd.Println("Run 'g8e operator list' and 'g8e eval inference status --json' to verify operators.")
 			return nil
@@ -650,6 +656,27 @@ func runDockerStartWalkthrough(cmd *cobra.Command, deps dockerStartDeps) error {
 	cmd.Println("Run 'g8e docker status' to check service status.")
 	cmd.Println("Run 'g8e docker logs' to follow logs.")
 	return nil
+}
+
+// reportDockerPublicSpectatorReady verifies the gateway-owned public mirror
+// bootstrap endpoint responds after init. Host campaigns do not require
+// `g8e public init`; the gateway initializes feed state on startup.
+func reportDockerPublicSpectatorReady(cmd *cobra.Command) error {
+	bootstrap, err := fetchPublicMirrorBootstrap(cmd.Context())
+	if err != nil {
+		return err
+	}
+	cmd.Printf("Public mirror bootstrap ready (high_water_sequence=%d).\n", bootstrap.Snapshot.HighWaterSequence)
+	return nil
+}
+
+// printDockerSpectatorEndpoints prints the acceptance URLs for the embedded
+// evaluation explorer and public mirror after docker init.
+func printDockerSpectatorEndpoints(cmd *cobra.Command) {
+	cmd.Printf("Evaluation explorer: http://127.0.0.1:%d/#/\n", constants.EvalExplorerDefaultPort)
+	cmd.Printf("Public mirror bootstrap: http://127.0.0.1:%d/bootstrap\n", constants.PublicSpectatorPublicPort)
+	cmd.Println("Host `g8e public *` commands target a host-local publisher for bare-metal dev only.")
+	cmd.Println("Docker campaigns publish through the gateway-owned public spectator automatically.")
 }
 
 // waitForDockerGatewayHealthy polls the gateway HTTP health endpoint until it

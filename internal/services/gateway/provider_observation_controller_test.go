@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
@@ -132,10 +133,7 @@ func TestProviderObservationControllerHandleProviderObservation_ReturnsBundle(t 
 	assert.Equal(t, "attempt-1", loadedAttempt.GetProviderAttemptId())
 }
 
-func writeProviderAttemptRecord(ctx context.Context, fileSvc interface {
-	MkdirAll(ctx context.Context, path string, perm uint32) error
-	WriteFile(ctx context.Context, path string, data []byte, perm uint32) error
-}, record *operatorv1.InferenceProviderAttemptRecord) error {
+func writeProviderAttemptRecord(ctx context.Context, fileSvc fs.RuntimeFileService, record *operatorv1.InferenceProviderAttemptRecord) error {
 	dir := filepath.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname)
 	if err := fileSvc.MkdirAll(ctx, dir, constants.PermDirStandard); err != nil {
 		return err

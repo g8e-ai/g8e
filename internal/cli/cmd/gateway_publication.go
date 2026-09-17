@@ -74,10 +74,14 @@ func shouldUseGatewayPublication(fileSvc fs.RuntimeFileService) bool {
 	case "0", "false", "no":
 		return false
 	}
-	if hostPublicFeedConfigured(fileSvc) {
-		return false
+	// When the Docker gateway is healthy, always publish through the
+	// gateway-owned spectator API. Leftover host export-config from the
+	// pre-bind-mount era uses different signing keys and will be rejected
+	// by the gateway mirror (signature_invalid).
+	if isGatewayHealthy() {
+		return true
 	}
-	return isGatewayHealthy()
+	return !hostPublicFeedConfigured(fileSvc)
 }
 
 func hostPublicFeedConfigured(fileSvc fs.RuntimeFileService) bool {
@@ -96,8 +100,14 @@ func isGatewayHealthy() bool {
 	return resp.StatusCode == http.StatusOK
 }
 
+// publicMirrorBootstrapURL overrides the default mirror bootstrap URL in tests.
+var publicMirrorBootstrapURL string
+
 func fetchPublicMirrorBootstrap(ctx context.Context) (models.PublicFeedBootstrap, error) {
-	bootstrapURL := fmt.Sprintf("http://127.0.0.1:%d/bootstrap", constants.PublicSpectatorPublicPort)
+	bootstrapURL := publicMirrorBootstrapURL
+	if bootstrapURL == "" {
+		bootstrapURL = fmt.Sprintf("http://127.0.0.1:%d/bootstrap", constants.PublicSpectatorPublicPort)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, bootstrapURL, nil)
 	if err != nil {
 		return models.PublicFeedBootstrap{}, err
