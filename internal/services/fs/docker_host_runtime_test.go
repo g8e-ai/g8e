@@ -20,7 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
-func TestEnsureDockerHostRuntimeLayout_CreatesBindMountDirs(t *testing.T) {
+func TestEnsureDockerHostRuntimeLayout_CreatesRuntimeTree(t *testing.T) {
 	baseDir := t.TempDir()
 	svc, err := NewRuntimeFileService(baseDir, testutil.NewTestLogger())
 	require.NoError(t, err)
@@ -28,11 +28,9 @@ func TestEnsureDockerHostRuntimeLayout_CreatesBindMountDirs(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, EnsureDockerHostRuntimeLayout(ctx, svc))
 
-	for _, dir := range []string{constants.PublicFeedDirname, constants.PublicMirrorDirname, constants.PkiDirname} {
-		info, statErr := os.Stat(filepath.Join(baseDir, constants.RuntimeDirname, dir))
-		require.NoError(t, statErr, dir)
-		assert.True(t, info.IsDir())
-	}
+	info, statErr := os.Stat(filepath.Join(baseDir, constants.RuntimeDirname, constants.PkiDirname))
+	require.NoError(t, statErr)
+	assert.True(t, info.IsDir())
 }
 
 func TestVerifyRuntimeDirWritable_AllowsMissingRuntimeDir(t *testing.T) {

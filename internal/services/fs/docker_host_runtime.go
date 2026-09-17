@@ -17,18 +17,11 @@ import (
 )
 
 // EnsureDockerHostRuntimeLayout prepares the host-side .g8e tree before Docker
-// Compose starts the gateway. The gateway bind-mounts public-feed and
-// public-mirror from the repository; when those paths are missing Docker
-// creates them as root, which blocks host CLI enrollment from writing
-// credentials into .g8e/.
+// Compose starts the gateway. Host CLI identity lives in .g8e/pki/; gateway
+// spectator and observation state live in the g8e-gateway-data volume.
 func EnsureDockerHostRuntimeLayout(ctx context.Context, fileSvc RuntimeFileService) error {
 	if err := verifyRuntimeDirWritable(fileSvc); err != nil {
 		return err
-	}
-	for _, dir := range []string{constants.PublicFeedDirname, constants.PublicMirrorDirname} {
-		if err := fileSvc.MkdirAll(ctx, dir, constants.PermDirPrivate); err != nil {
-			return fmt.Errorf("prepare docker host runtime: create %s: %w", dir, err)
-		}
 	}
 	if err := fileSvc.CreateRuntimeTree(ctx); err != nil {
 		return fmt.Errorf("prepare docker host runtime: create runtime tree: %w", err)

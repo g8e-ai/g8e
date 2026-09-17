@@ -122,6 +122,13 @@ type PublicFeedCursorPage struct {
 	Limit           int              `json:"limit"`
 }
 
+// PublicFeedExportBatchResponse is returned after the gateway accepts a
+// host-CLI campaign publication batch via mTLS.
+type PublicFeedExportBatchResponse struct {
+	HighWaterSequence int64  `json:"high_water_sequence"`
+	FeedChainHash     string `json:"feed_chain_hash"`
+}
+
 // PublicIngestRequest is the authenticated ingest request from the Gateway
 // outbound publisher to the hosted mirror.
 type PublicIngestRequest struct {

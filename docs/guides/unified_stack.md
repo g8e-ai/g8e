@@ -263,13 +263,12 @@ Use this to validate the full pipeline (schedule → execute → publish → exp
 
 ### Phase A — Reset public feed (cold start)
 
-The gateway owns the public mirror (`8081` private ingest, `8082` public read/SSE) and the evaluation explorer (`5173`) when started with `--public-spectator` (default). Docker Compose enables this automatically.
+The gateway owns the public feed, mirror (`8081` private ingest, `8082` public read/SSE), and evaluation explorer (`5173`) in the `g8e-gateway-data` volume when started with `--public-spectator` (default). Docker Compose enables this automatically. Host `g8e public *` commands target a **host-local** publisher for bare-metal dev only; Docker campaigns use gateway-mediated publish (no shared directories).
 
 ```bash
 ./g8e eval mirror stop    # stops legacy daemon mirror only; gateway-owned listeners restart with gw
-rm -rf .g8e/public-feed .g8e/public-mirror
-./g8e public init --source-id opendevops-local --mirror-origin http://127.0.0.1:8081
 docker compose up -d g8e-gateway    # or: ./g8e gw start -f --public-spectator
+# To wipe spectator state: docker compose down -v && docker compose up -d g8e-gateway
 ```
 
 Explorer (acceptance UI): open `http://127.0.0.1:5173/#/` after the gateway is up. Build static assets once with `cd dashboard/g8e-adapter/evaluation-explorer && npm run build` if the explorer listener logs that dist is missing. Do **not** run `npm run dev:real` for North Star acceptance — that path is legacy local supervisor only.

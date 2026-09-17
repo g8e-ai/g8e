@@ -830,6 +830,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Responder:    ls.responder,
 			MaxBodyBytes: cfg.Gateway.MaxPayloadBytes,
 		},
+		PublicFeedControllerDeps: PublicFeedControllerDeps{
+			Logger:    logger,
+			Responder: ls.responder,
+			Spectator: func() *PublicSpectatorRuntime { return ls.publicSpectator },
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)

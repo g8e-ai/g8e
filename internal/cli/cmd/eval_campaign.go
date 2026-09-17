@@ -666,24 +666,22 @@ func (e *gatewayCampaignFeedExporter) ExportBatch(ctx context.Context, records [
 }
 
 func newCampaignPublicationCoordinator(cmd *cobra.Command, fileSvc fs.RuntimeFileService) (*evaluation.CampaignPublicationCoordinator, error) {
-	exportConfig, err := readPublicExportConfig(commandContext(cmd), fileSvc)
+	projectRoot, err := cmd.Flags().GetString("project-root")
+	if err != nil {
+		return nil, fmt.Errorf("campaign publication: read project root: %w", err)
+	}
+	cfg, err := loadConfig(projectRoot)
+	if err != nil {
+		return nil, fmt.Errorf("campaign publication: load config: %w", err)
+	}
+	exporter, err := newCampaignFeedExporter(commandContext(cmd), fileSvc, cfg)
 	if err != nil {
 		return nil, err
-	}
-	if !exportConfig.Enabled {
-		return nil, constants.ErrPublicFeedDisabled
-	}
-	publisher, err := newPublicPublisherForCommand(commandContext(cmd), fileSvc, exportConfig)
-	if err != nil {
-		return nil, err
-	}
-	if exportConfig.MirrorOrigin != "" {
-		publisher.SetMirrorOrigin(exportConfig.MirrorOrigin)
 	}
 	return evaluation.NewCampaignPublicationCoordinator(
 		evaluation.NewStore(fileSvc),
 		fileSvc,
-		&gatewayCampaignFeedExporter{publisher: publisher},
+		exporter,
 	), nil
 }
 

@@ -58,9 +58,8 @@ func checkDockerComposeFileExists() error {
 	return nil
 }
 
-// prepareDockerHostRuntime ensures the host-side .g8e tree exists with the
-// current user's ownership before Docker Compose bind-mounts public-feed and
-// public-mirror paths (Docker creates missing paths as root).
+// prepareDockerHostRuntime ensures the host-side .g8e tree exists and is
+// writable before Docker Compose starts the gateway container.
 func prepareDockerHostRuntime(ctx context.Context, fileSvc fs.RuntimeFileService) error {
 	if err := fs.EnsureDockerHostRuntimeLayout(ctx, fileSvc); err != nil {
 		return fmt.Errorf("docker: prepare host runtime: %w", err)
@@ -239,7 +238,7 @@ This command performs the standard bootstrap workflow documented in
 docs/guides/unified_stack.md:
 
   1. Validate repository-root .env evaluation settings.
-  2. Prepare the host .g8e runtime tree so Docker bind mounts do not create it as root.
+  2. Prepare the host .g8e runtime tree for CLI enrollment (PKI lives on host).
   3. Build Docker images for the unified stack (unless --skip-build).
   4. Start the gateway and wait for it to become healthy.
   5. Enroll the CLI owner (unless --skip-enroll).

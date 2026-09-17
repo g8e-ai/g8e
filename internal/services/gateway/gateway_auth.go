@@ -91,6 +91,7 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// and CLI identities; the caller does not yet have a validated session,
 	// so the route is RouteAuthNone and the handler enforces mTLS directly
 	// (requires a client certificate and extracts the user ID from it).
+	r.addExact(constants.APIPaths.PublicFeedBatches, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.PKICSRSign, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.PKIDevicesEnroll, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthBootstrap, RouteAuthNone)
