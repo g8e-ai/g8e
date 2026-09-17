@@ -175,10 +175,25 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: 6px; padding: 6px 10px; font-size: 14px;
 }
 .result-count { color: var(--fg-dim); font-size: 13px; margin-left: auto; }
-.compare-btn {
-  background: var(--accent); color: #fff; padding: 6px 12px;
-  border-radius: 6px; font-weight: 600; font-size: 13px;
+.comparison-clear-btn {
+  background: var(--bg-elev); color: var(--fg-muted); border: 1px solid var(--border);
+  padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 13px;
 }
+.comparison-clear-btn:hover { color: var(--fg); border-color: var(--fg-dim); }
+.comparison-hint {
+  margin: 0 0 16px; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg-elev2); color: var(--fg-muted); font-size: 14px;
+}
+.comparison-panel {
+  margin-bottom: 24px; padding: 16px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--bg-elev);
+}
+.comparison-panel-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 16px;
+}
+.comparison-panel-header h2 { margin: 0 0 4px; font-size: 18px; }
+.comparison-panel-lede { margin: 0; color: var(--fg-muted); font-size: 14px; }
 
 /* Data table */
 .data-table-wrap { overflow-x: auto; }

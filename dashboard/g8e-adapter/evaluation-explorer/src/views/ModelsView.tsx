@@ -3,15 +3,17 @@
 // search, role/provider/evaluated/quality-state/suite filters, sorting,
 // table and card views, and multi-select comparison.
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { type CellContext, type ColumnDef } from '@tanstack/react-table';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getCatalogForDataset, useActiveDatasetId, useUserPref, PREF } from '../state/dataset';
-import { modelComparisonId, useStoreState } from '../state/store';
+import { modelComparisonId, resolveModelSummary, useStoreState } from '../state/store';
 import { DataTable } from '../components/DataTable';
 import { DatasetSelector } from '../components/DatasetSelector';
+import { ModelComparisonPanel } from '../components/ModelComparisonPanel';
 import {
   EmptyState,
+  ErrorState,
   IntervalDisplay,
   QualityBadge,
   SectionHeading,
@@ -43,11 +45,23 @@ function filtersActive(filters: ModelFilters): boolean {
 }
 
 export function ModelsView() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const routeDataset = params.get('dataset') ?? undefined;
   const activeDatasetId = useActiveDatasetId(routeDataset);
   const [filters, setFilters] = useUserPref<ModelFilters>(PREF.filters, DEFAULT_FILTERS);
   const [comparison, setComparison] = useUserPref<string[]>(PREF.comparison, []);
+
+  useEffect(() => {
+    const modelsParam = params.get('models');
+    if (!modelsParam) return;
+    const ids = modelsParam.split(',').filter(Boolean).slice(0, 4);
+    if (ids.length > 0) {
+      setComparison(ids);
+      const next = new URLSearchParams(params);
+      next.delete('models');
+      setParams(next, { replace: true });
+    }
+  }, [params, setComparison, setParams]);
 
   const models = useStoreState((state) =>
     Array.from(state.models.values()).filter((m) => m.dataset_id === activeDatasetId),
@@ -61,6 +75,15 @@ export function ModelsView() {
     models.every((model) => !model.pass_rate)
       ? 'all'
       : filters.evaluated;
+
+  const comparedModels = useStoreState((state) =>
+    comparison
+      .map((id) => resolveModelSummary(state.models, activeDatasetId, id))
+      .filter((m): m is NonNullable<typeof m> => m !== undefined),
+  );
+
+  const comparisonDatasetMismatch =
+    comparedModels.length >= 2 && new Set(comparedModels.map((m) => m.dataset_id)).size > 1;
 
   const filtered = useMemo(() => {
     return models.filter((m) => {
@@ -221,12 +244,32 @@ export function ModelsView() {
           <option value="not_evaluated">Not evaluated</option>
         </select>
         <span className="result-count">{formatNumber(models.filter((model) => Boolean(model.pass_rate)).length)} measured · {formatNumber(models.length)} total</span>
-        {comparison.length >= 2 ? (
-          <Link to={`/compare?dataset=${activeDatasetId}&models=${comparison.join(',')}`} className="compare-btn">
-            Compare {comparison.length}
-          </Link>
+        {comparison.length > 0 ? (
+          <button type="button" className="comparison-clear-btn" onClick={() => setComparison([])}>
+            Clear {comparison.length} selected
+          </button>
         ) : null}
       </div>
+
+      {comparison.length > 0 && comparison.length < 2 ? (
+        <p className="comparison-hint">Select at least one more model to compare side by side (up to four).</p>
+      ) : null}
+
+      {comparison.length >= 2 && comparedModels.length < 2 ? (
+        <ErrorState message="Some selected models were not found in the active dataset." />
+      ) : null}
+
+      {comparisonDatasetMismatch ? (
+        <ErrorState message="Selected models come from different datasets. Comparison never combines incompatible datasets." />
+      ) : null}
+
+      {comparedModels.length >= 2 && !comparisonDatasetMismatch ? (
+        <ModelComparisonPanel
+          models={comparedModels}
+          datasetId={activeDatasetId}
+          onClear={() => setComparison([])}
+        />
+      ) : null}
 
       {filtered.length === 0 ? (
         <EmptyState hasRecords={models.length > 0} hasFilters={filtersActive(filters)} connection={connection} />

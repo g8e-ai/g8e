@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { HashRouter, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import { HashRouter, Navigate, NavLink, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
 import { useFeedStatus, useConnection, useStoreState, evalStore } from './state/store';
 import { startFeed, stopFeed } from './state/startup';
 import { ErrorBanner, FreshnessBadge } from './components/shared';
@@ -9,9 +9,14 @@ import { ModelDetailView } from './views/ModelDetailView';
 import { EvaluationsView } from './views/EvaluationsView';
 import { EvaluationDetailView } from './views/EvaluationDetailView';
 import { AssignmentDetailView } from './views/AssignmentDetailView';
-import { ComparisonView } from './views/ComparisonView';
 import { FailuresView } from './views/FailuresView';
 import { MethodologyView } from './views/MethodologyView';
+
+function CompareRedirect() {
+  const [params] = useSearchParams();
+  const dest = params.toString() ? `/models?${params.toString()}` : '/models';
+  return <Navigate to={dest} replace />;
+}
 
 function NavItem({ to, label }: { to: string; label: string }) {
   return (
@@ -58,7 +63,6 @@ function Shell() {
           <NavItem to="/evaluations" label="Evals" />
           <NavItem to="/failures" label="Failures" />
           <NavItem to="/models" label="Models" />
-          <NavItem to="/compare" label="Compare" />
           <NavItem to="/methodology" label="Docs" />
         </nav>
         <div className="header-right">
@@ -75,7 +79,7 @@ function Shell() {
           <Route path="/evaluations/:datasetId?/:runId" element={<EvaluationDetailView />} />
           <Route path="/evaluations/:datasetId?/:runId/assignments/:assignmentId" element={<AssignmentDetailView />} />
           <Route path="/failures" element={<FailuresView />} />
-          <Route path="/compare" element={<ComparisonView />} />
+          <Route path="/compare" element={<CompareRedirect />} />
           <Route path="/methodology" element={<MethodologyView />} />
         </Routes>
       </main>
