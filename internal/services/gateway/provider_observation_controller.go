@@ -107,11 +107,15 @@ func (c *ProviderObservationController) handleProviderObservation(w http.Respons
 	attempt, err := c.attempts.Get(r.Context(), providerAttemptID)
 	if err != nil {
 		if errors.Is(err, constants.ErrNotFound) {
-			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
+			attempt = provider_observer.AttemptRecordFromObservationWindow(window)
+			if attempt == nil {
+				c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
+				return
+			}
+		} else {
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("provider observation: load attempt: %w", err).Error())
 			return
 		}
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("provider observation: load attempt: %w", err).Error())
-		return
 	}
 
 	windowBytes, err := evalv1.MarshalCanonical(window)

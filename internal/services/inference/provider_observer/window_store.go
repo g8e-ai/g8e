@@ -18,6 +18,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // WindowStore persists provider-boundary observation windows.
@@ -100,6 +101,25 @@ func ComputeObservationDigest(window *evalv1.ProviderBoundaryObservationWindow) 
 }
 
 // ValidateObservationWindow verifies digest binding and required fields.
+// AttemptRecordFromObservationWindow synthesizes a provider-attempt record
+// from a durable observation window when the gateway does not have a local
+// operator attempt file (attempts are written on the inference operator host).
+func AttemptRecordFromObservationWindow(window *evalv1.ProviderBoundaryObservationWindow) *operatorv1.InferenceProviderAttemptRecord {
+	if window == nil || window.GetProviderAttemptId() == "" {
+		return nil
+	}
+	status := operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED
+	if window.GetAttemptCompletedAtUnixMs() == 0 {
+		status = operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS
+	}
+	return &operatorv1.InferenceProviderAttemptRecord{
+		ProviderAttemptId: window.GetProviderAttemptId(),
+		StartedAtUnixMs:   window.GetAttemptStartedAtUnixMs(),
+		CompletedAtUnixMs: window.GetAttemptCompletedAtUnixMs(),
+		Status:            status,
+	}
+}
+
 func ValidateObservationWindow(window *evalv1.ProviderBoundaryObservationWindow) error {
 	if window == nil || window.GetProviderAttemptId() == "" || window.GetObserverId() == "" {
 		return fmt.Errorf("provider observer: validate observation window: %w", constants.ErrMissingRequiredField)

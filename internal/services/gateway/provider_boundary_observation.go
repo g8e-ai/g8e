@@ -128,7 +128,9 @@ func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Cont
 
 	resultsChannel := pubsub.ResultsChannel(observer.OperatorID, observer.OperatorSessionID)
 	handler := func(_ string, data []byte) {
-		c.ingestResult(ctx, data)
+		// Observer completions arrive asynchronously after inference dispatch
+		// returns; never tie durable ingest to the ephemeral dispatch context.
+		c.ingestResult(context.Background(), data)
 	}
 	unregister := c.pubsub.RegisterHandler(resultsChannel, handler)
 

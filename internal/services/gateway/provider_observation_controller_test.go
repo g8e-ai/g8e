@@ -68,6 +68,59 @@ func TestProviderObservationControllerHandleProviderObservation_NotFound(t *test
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
+func TestProviderObservationControllerHandleProviderObservation_SynthesizesAttemptFromWindow(t *testing.T) {
+	ctx := context.Background()
+	logger := testutil.NewTestLogger()
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	windows, err := provider_observer.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	attempts, err := inference.NewAttemptStore(fileSvc)
+	require.NoError(t, err)
+
+	started := time.Unix(1_700_000_000, 0).UnixMilli()
+	completed := time.Unix(1_700_000_010, 0).UnixMilli()
+	window := &evalv1.ProviderBoundaryObservationWindow{
+		SchemaVersion:              provider_observer.SchemaVersion,
+		ProviderAttemptId:          "attempt-window-only",
+		ObserverId:                 "observer-test",
+		ObserverClockSource:        provider_observer.DefaultObserverClockSource,
+		WindowStartedAtUnixNanos:   uint64(time.Unix(1_700_000_000, 0).UnixNano()),
+		WindowCompletedAtUnixNanos: uint64(time.Unix(1_700_000_010, 0).UnixNano()),
+		AttemptStartedAtUnixMs:     started,
+		AttemptCompletedAtUnixMs:   completed,
+		Samples: []*evalv1.ProviderBoundaryHardwareSample{{
+			ObservedAtUnixNanos:   uint64(time.Unix(1_700_000_001, 0).UnixNano()),
+			HostRamAvailability:     evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+			HostRamUsedBytes:        1,
+			HostRamTotalBytes:       2,
+		}},
+	}
+	digest, err := provider_observer.ComputeObservationDigest(window)
+	require.NoError(t, err)
+	window.ObservationDigest = digest
+	require.NoError(t, windows.Save(ctx, window))
+
+	controller := newProviderObservationController(ProviderObservationControllerDeps{
+		Logger:    logger,
+		Responder: response.NewWriter(logger),
+		Windows:   windows,
+		Attempts:  attempts,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.InferenceProviderObservations+"attempt-window-only", nil)
+	rr := httptest.NewRecorder()
+	controller.handleProviderObservation(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	var resp models.ProviderObservationResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	loadedAttempt := &operatorv1.InferenceProviderAttemptRecord{}
+	require.NoError(t, protojson.Unmarshal(resp.ProviderAttempt, loadedAttempt))
+	assert.Equal(t, "attempt-window-only", loadedAttempt.GetProviderAttemptId())
+	assert.Equal(t, started, loadedAttempt.GetStartedAtUnixMs())
+	assert.Equal(t, completed, loadedAttempt.GetCompletedAtUnixMs())
+}
+
 func TestProviderObservationControllerHandleProviderObservation_ReturnsBundle(t *testing.T) {
 	ctx := context.Background()
 	logger := testutil.NewTestLogger()
