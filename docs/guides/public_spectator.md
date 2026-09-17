@@ -2,31 +2,17 @@
 
 ## Runtime boundaries
 
-The host-backed public spectator runs one `g8e public mirror run` process in the Docker-host namespace with two distinct loopback listeners over one durable mirror store. The private listener defaults to `127.0.0.1:8081` and serves authenticated publisher ingest, proof ingest, replacement-key registration, and anonymous reads for local diagnostics. The public listener defaults to `127.0.0.1:8082` and mounts only anonymous bootstrap, snapshot, history, SSE, proof catalog, proof manifest, and content-addressed proof download routes. Both addresses must be unique and loopback-only.
+The gateway-owned public spectator runs inside the Gateway process when started with `--public-spectator` (Docker Compose default). One in-process `PublicSpectatorRuntime` owns:
 
-The mirror process opens the host `.g8e/` runtime tree through `RuntimeFileService`. Its durable source, key, revocation, batch, proof, catalog, and manifest state resides in the public-mirror state path in that tree. The local publisher uses the private listener and authenticates with the private ingest token. Cloudflared uses the public listener as its plain-HTTP origin. A public browser reaches `https://opendevops.ai` through Cloudflare and never reaches the Gateway console, the private mirror ingest listener, a component volume, or an Operator execution boundary. The gateway-owned public listener serves the embedded evaluation explorer SPA and anonymous mirror reads from one origin.
+- **Private ingest** (`127.0.0.1:8081` by default): authenticated publisher ingest, proof ingest, replacement-key registration
+- **Public read/SSE** (`127.0.0.1:8082` by default): anonymous bootstrap, snapshot, history, SSE, proof catalog/manifest, content-addressed proof downloads
+- **Evaluation explorer** (`127.0.0.1:5173` by default): embedded acceptance UI
+
+Durable feed, mirror, signing keys, and outbox state live in the gateway volume (`g8e-gateway-data`). Docker stacks do **not** bind-mount host `.g8e/public-feed` or `.g8e/public-mirror`.
+
+Campaign publication from the host CLI uses owner mTLS and `POST /api/v1/public-feed/batches`. Host `g8e public init` is not required for Docker or evaluation campaigns.
 
 The mirror is a visibility and publication boundary, not a Policy Decision Point or Policy Execution Point. It does not authorize a governed mutation, and its availability is not execution evidence. The Operator whose L4/L5 boundary produced an underlying governed result retains authoritative local execution evidence.
-
-## Initialize publication state
-
-Run initialization once with a public-safe deployment pseudonym and the private loopback mirror origin:
-
-```bash
-./g8e public init --source-id <public-source-pseudonym> --mirror-origin http://127.0.0.1:8081
-```
-
-Initialization creates the private signing key, ingest token, and export configuration under the host runtime tree. It refuses to overwrite existing state. Do not print, copy, or place these secrets in Cloudflare configuration, site assets, reports, proof packages, or logs.
-
-## Start the mirror
-
-Start both loopback listeners from one process:
-
-```bash
-./g8e public mirror run --listen 127.0.0.1:8081 --public-listen 127.0.0.1:8082
-```
-
-The process loads and validates the complete durable mirror state before listening. Corrupt, equivocal, incomplete, oversized, unsafe, or signature-invalid state fails closed. Restart the same command to recover accepted batches, high-water sequence, feed-chain hash, keys, revocations, proofs, catalog, and manifest. SSE subscriber queues and anonymous rate windows are bounded delivery-only memory and are not durable governance or evidence state.
 
 ## Verify listener separation
 
@@ -52,7 +38,7 @@ A bounded SSE client connects to `/stream`, supplies the source pseudonym and op
 
 ## Create the Cloudflare tunnel
 
-Tunnel creation changes Cloudflare tunnel and DNS state and remains a release-owner operation. The tunnel origin is the read-only public listener, never the private listener and never the Gateway:
+Tunnel creation changes Cloudflare tunnel and DNS state and remains a release-owner operation. The tunnel origin is the read-only public listener, never the private listener and never the Gateway console:
 
 ```bash
 ./g8e gw tunnel create --name opendevops-feed --hostname opendevops.ai --service http://127.0.0.1:8082
@@ -65,11 +51,11 @@ The explicit plain-HTTP service prevents Gateway HTTPS origin settings from bein
 
 After the owner starts the tunnel, verify HTTPS, CORS, bounded reads, rate limiting, replayable SSE, proof catalog, proof manifest, and content-addressed proof download from an external client. Confirm `/ingest`, `/keys/register`, `/proof-ingest`, Gateway, MCP, A2A, approval, audit, filesystem, eval-launch, and arbitrary paths are absent from the public origin. Scan public responses and proof bytes for credentials, private endpoints, machine paths, SPIFFE identities, provider topology, raw prompts, model outputs, reasoning traces, and restricted canaries; any match blocks publication.
 
-Restart the mirror and tunnel independently. The mirror must recover the same accepted high-water sequence, feed-chain hash, key revocations, catalog, manifest, and proof bytes. Tunnel or mirror unavailability must produce an honest stale or source-offline storefront state and must not trigger inference or mutate accepted evidence.
+Restart the gateway and tunnel independently. The mirror must recover the same accepted high-water sequence, feed-chain hash, key revocations, catalog, manifest, and proof bytes. Tunnel or mirror unavailability must produce an honest stale or source-offline storefront state and must not trigger inference or mutate accepted evidence.
 
-## Publish and retry
+## Manual record publish (advanced)
 
-Publish only verifier-clean, disclosure-approved public records and proofs:
+`g8e public publish`, `g8e public push`, and `g8e public status` remain available for pushing pre-built JSONL record files through a **configured remote mirror origin**. They do not start a local mirror process. Evaluation campaigns use gateway-mediated publication instead.
 
 ```bash
 ./g8e public publish <public-records.jsonl>
@@ -77,10 +63,11 @@ Publish only verifier-clean, disclosure-approved public records and proofs:
 ./g8e public status
 ```
 
-`public publish` durably appends before transmission. `public push` retries ordered outbox and proof delivery without running inference. A failed transmission remains retryable. Key rotation pre-registers the replacement key through the private authenticated listener, publishes the old-key-signed revocation, switches local signing state, and persists recovery state so restart cannot emit a second revocation.
+`public publish` durably appends before transmission. `public push` retries ordered outbox and proof delivery without running inference. A failed transmission remains retryable.
 
 ## Related documentation
 
 - [Public Spectator Architecture and Threat Model](../architecture/public_spectator.md)
+- [Docker Gateway Guide](docker_gateway.md#evaluation-publish-and-verify-split-host-and-container)
 - [Unified Docker Stack Guide](unified_stack.md)
 - [Generator-Neutral Builder Guide](build_observe_frontend.md)

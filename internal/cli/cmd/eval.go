@@ -99,7 +99,6 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 		inventoryEvalCmd(deps),
 		campaignEvalCmd(deps),
 		providerObserverEvalCmd(deps),
-		evalMirrorCmd(deps),
 	)
 	return cmd
 }

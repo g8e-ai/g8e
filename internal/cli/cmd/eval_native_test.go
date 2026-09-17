@@ -61,9 +61,9 @@ func TestEvalCmd_ContainsOnlyNativeCommands(t *testing.T) {
 		names = append(names, child.Name())
 	}
 	assert.ElementsMatch(t, []string{
-		"run", "verify", "show", "inference", "chat", "inventory", "campaign", "provider-observer", "mirror",
+		"run", "verify", "show", "inference", "chat", "inventory", "campaign", "provider-observer",
 	}, names)
-	assert.Len(t, names, 9)
+	assert.Len(t, names, 8)
 	assert.Contains(t, command.Aliases, "evals")
 
 	var inference *cobra.Command

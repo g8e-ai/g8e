@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -67,28 +66,6 @@ func (e *remoteGatewayCampaignFeedExporter) ExportBatch(ctx context.Context, rec
 	return nil
 }
 
-func shouldUseGatewayPublication(fileSvc fs.RuntimeFileService) bool {
-	switch os.Getenv("G8E_GATEWAY_PUBLISH") {
-	case "1", "true", "yes":
-		return true
-	case "0", "false", "no":
-		return false
-	}
-	// When the Docker gateway is healthy, always publish through the
-	// gateway-owned spectator API. Leftover host export-config from the
-	// pre-bind-mount era uses different signing keys and will be rejected
-	// by the gateway mirror (signature_invalid).
-	if isGatewayHealthy() {
-		return true
-	}
-	return !hostPublicFeedConfigured(fileSvc)
-}
-
-func hostPublicFeedConfigured(fileSvc fs.RuntimeFileService) bool {
-	exportConfig, err := readPublicExportConfig(context.Background(), fileSvc)
-	return err == nil && exportConfig.Enabled
-}
-
 func isGatewayHealthy() bool {
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
 	client := &http.Client{Timeout: 2 * time.Second} //nolint:gosec
@@ -129,24 +106,9 @@ func fetchPublicMirrorBootstrap(ctx context.Context) (models.PublicFeedBootstrap
 }
 
 func newCampaignFeedExporter(cmd context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config) (evaluation.CampaignFeedExporter, error) {
-	if !shouldUseGatewayPublication(fileSvc) {
-		exportConfig, err := readPublicExportConfig(cmd, fileSvc)
-		if err != nil {
-			return nil, err
-		}
-		if !exportConfig.Enabled {
-			return nil, constants.ErrPublicFeedDisabled
-		}
-		publisher, err := newPublicPublisherForCommand(cmd, fileSvc, exportConfig)
-		if err != nil {
-			return nil, err
-		}
-		if exportConfig.MirrorOrigin != "" {
-			publisher.SetMirrorOrigin(exportConfig.MirrorOrigin)
-		}
-		return &gatewayCampaignFeedExporter{publisher: publisher}, nil
+	if !isGatewayHealthy() {
+		return nil, fmt.Errorf("campaign publication: gateway is not healthy; start g8e-gateway with --public-spectator")
 	}
-
 	client, err := defaultAPIClientFactory(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("campaign publication: create gateway client: %w", err)

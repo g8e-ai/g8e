@@ -257,16 +257,17 @@ After approval, confirm the observer appears in `./g8e operator list` with `prov
 
 The legacy filesystem runner `g8e eval provider-observer run` is for co-located dev tests only. Production uses the enrolled Observer Operator.
 
+**Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. That is expected. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
+
 ## Mini smoke campaign workflow
 
 Use this to validate the full pipeline (schedule → execute → publish → explorer) in hours instead of days.
 
 ### Phase A — Reset public feed (cold start)
 
-The gateway owns the public feed, mirror (`8081` private ingest, `8082` public read/SSE), and evaluation explorer (`5173`) in the `g8e-gateway-data` volume when started with `--public-spectator` (default). Docker Compose enables this automatically. Host `g8e public *` commands target a **host-local** publisher for bare-metal dev only; Docker campaigns use gateway-mediated publish (no shared directories).
+The gateway owns the public feed, mirror (`8081` private ingest, `8082` public read/SSE), and evaluation explorer (`5173`) in the `g8e-gateway-data` volume when started with `--public-spectator` (default). Docker Compose enables this automatically. Campaign `schedule --publish` and `execute --publish` post signed batches through the gateway API (`POST /api/v1/public-feed/batches`).
 
 ```bash
-./g8e eval mirror stop    # stops legacy daemon mirror only; gateway-owned listeners restart with gw
 docker compose up -d g8e-gateway    # or: ./g8e gw start -f --public-spectator
 # To wipe spectator state: docker compose down -v && docker compose up -d g8e-gateway
 ```
@@ -337,10 +338,7 @@ After the Observer Operator is enrolled, verify hardware coverage:
 
 Campaign data publishes through Go (`CampaignPublicationCoordinator` → `PublicPublisherService` outbox → mirror ingest). No Python bridge or host systemd publisher.
 
-**Gateway-owned (landed):** `g8e gw start --public-spectator` (default) and `docker compose up -d g8e-gateway` start the in-process mirror on `8081`/`8082` and evaluation explorer on `5173`.  
-**Legacy fallback:** `./g8e eval mirror {run|stop|status}` for host-only dev without a running gateway.
-
-Do not install `deploy/systemd/opendevops-eval-publisher.service` (deleted) or rely on `g8e public mirror run` as the long-term ops interface.
+`g8e gw start --public-spectator` (default) and `docker compose up -d g8e-gateway` start the in-process mirror on `8081`/`8082` and evaluation explorer on `5173`. Do not install `deploy/systemd/opendevops-eval-publisher.service` (deleted).
 
 ## CLI stack management
 
@@ -415,7 +413,7 @@ Confirm `G8E_HOSTNAME` matches the browser URL, the gateway root CA is trusted, 
 
 ```bash
 # Stop execute: Ctrl-C or kill the execute daemon PID
-./g8e eval mirror stop
+docker compose restart g8e-gateway
 ./g8e docker stop
 docker compose --profile bootstrapped --profile evaluation down -v   # destroys trust domain
 ./g8e docker clean

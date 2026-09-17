@@ -117,7 +117,6 @@ function mirrorRunning() {
 }
 
 function stopMirror() {
-  spawnSync('pkill', ['-f', 'g8e public mirror run'], { encoding: 'utf8' });
 }
 
 function startMirrorDetached() {

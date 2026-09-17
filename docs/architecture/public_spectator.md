@@ -280,9 +280,9 @@ Mirror availability is not verification evidence. A mirror outage does not inval
 
 The mirror is a read-only data plane. It does not participate in governance, execution, or campaign decisions. A mirror outage pauses public visibility but does not stop the private campaign. The CLI-local publisher writes to a durable ordered outbox and retries idempotently when the mirror recovers. A prolonged mirror outage pauses before the next cycle (O1-supervisor safety stop) while the outbox retains exports. Mirror retry never reruns valid eval work.
 
-### Host-backed listener separation
+### Gateway-owned listener separation
 
-The host-backed production mirror runs as one `g8e public mirror run` process with two unique loopback-only listeners over the same durable state. The private listener serves authenticated batch ingest, proof ingest, replacement-key registration, and local read diagnostics. The public listener mounts only bootstrap, snapshot, history, SSE, proof catalog, proof manifest, and content-addressed proof downloads. Cloudflared targets only the public listener through an explicit plain-HTTP service URL, so the public hostname has no route to ingest, key registration, proof ingest, the Gateway, or another private service. See the [Public Spectator Operations Guide](../guides/public_spectator.md) for the exact runtime and tunnel procedure.
+The production mirror runs inside the Gateway process (`--public-spectator`) with two unique loopback-only listeners over the same durable state in the gateway volume. The private listener serves authenticated batch ingest, proof ingest, replacement-key registration, and local read diagnostics. The public listener mounts only bootstrap, snapshot, history, SSE, proof catalog, proof manifest, and content-addressed proof downloads. Cloudflared targets only the public listener through an explicit plain-HTTP service URL, so the public hostname has no route to ingest, key registration, proof ingest, the Gateway console, or another private service. See the [Public Spectator Operations Guide](../guides/public_spectator.md) for verification and tunnel procedure.
 
 ## Relationship to Existing Architecture
 
@@ -294,7 +294,7 @@ The public spectator architecture extends the existing observe and SSE infrastru
 - The checked-in evaluation explorer in `dashboard/g8e-adapter/evaluation-explorer/` is connected to Go-native evaluation output. A minimal public-safe projector reads canonical `report.json` and `verification.json` from persisted native runs under `.g8e/data/eval/runs/<run-id>/` and emits only the public-safe typed records required by the existing explorer contract. The projected records pass disclosure and contract validation, enter the real `g8e public` publisher, advance its durable high-water sequence, reach the local mirror, appear under the exact run ID in anonymous mirror history, and are delivered over the real SSE stream.
 - Native evaluation verification is owned by `g8e eval verify` over the persisted report and content-addressed evidence. The public-safe projection omits all principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields.
 
-See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](./dashboard.md) for the owner-local browser interface, [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) for the audited adapter and contract pack, [Public Spectator Operations Guide](../guides/public_spectator.md) for the host-backed deployment procedure, and [Network Architecture](./network.md) for private platform PKI and transport boundaries.
+See [SSE Streaming](./sse.md) for the existing event bridge, [Dashboard (g8ed)](./dashboard.md) for the owner-local browser interface, [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) for the audited adapter and contract pack, [Public Spectator Operations Guide](../guides/public_spectator.md) for gateway-owned deployment procedure, and [Network Architecture](./network.md) for private platform PKI and transport boundaries.
 
 ## Acceptance Criteria
 

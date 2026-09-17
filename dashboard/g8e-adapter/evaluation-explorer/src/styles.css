@@ -241,6 +241,7 @@ button { font-family: inherit; cursor: pointer; }
 /* Progress */
 .progress { margin: 8px 0; }
 .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--fg-muted); margin-bottom: 4px; }
+.progress-counts { font-variant-numeric: tabular-nums; min-width: 5.5em; text-align: right; white-space: nowrap; }
 .progress-track { height: 8px; background: var(--bg-elev2); border-radius: 4px; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s; }
 
@@ -419,6 +420,38 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .agent-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; margin-top: 4px; }
 
 /* Live stream */
+.stream-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+@media (min-width: 1001px) {
+  .ov-grid-main .stream-panel {
+    height: var(--stream-panel-height, auto);
+  }
+}
+.stream-panel .stream-body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.stream-panel .table-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+  scrollbar-gutter: stable;
+}
+.stream-panel .stream-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-elev);
+}
 .stream-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .stream-controls select {
   background: var(--bg-elev2); color: var(--fg); border: 1px solid var(--border);
@@ -444,7 +477,10 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 }
 .stream-chip-link { text-decoration: none; }
 .stream-chip-link:hover { color: var(--accent); border-color: var(--accent); }
-.stream-progress { font-family: var(--mono); font-size: 12px; color: var(--fg-muted); }
+.stream-progress {
+  font-family: var(--mono); font-size: 12px; color: var(--fg-muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
 
 /* System overview */
 .sys-stats {
@@ -459,7 +495,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .usage-list h3 { margin: 0 0 10px; font-size: 12px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 .usage-row { margin-bottom: 10px; }
 .usage-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--fg-muted); margin-bottom: 4px; }
-.usage-label span:last-child { font-family: var(--mono); }
+.usage-label span:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; min-width: 6.5em; text-align: right; white-space: nowrap; }
 .usage-track { height: 7px; background: var(--bg-elev2); border-radius: 4px; overflow: hidden; }
 .usage-fill { height: 100%; background: var(--accent); border-radius: 4px; }
 .task-card { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }

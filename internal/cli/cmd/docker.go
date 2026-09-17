@@ -675,8 +675,7 @@ func reportDockerPublicSpectatorReady(cmd *cobra.Command) error {
 func printDockerSpectatorEndpoints(cmd *cobra.Command) {
 	cmd.Printf("Evaluation explorer: http://127.0.0.1:%d/#/\n", constants.EvalExplorerDefaultPort)
 	cmd.Printf("Public mirror bootstrap: http://127.0.0.1:%d/bootstrap\n", constants.PublicSpectatorPublicPort)
-	cmd.Println("Host `g8e public *` commands target a host-local publisher for bare-metal dev only.")
-	cmd.Println("Docker campaigns publish through the gateway-owned public spectator automatically.")
+	cmd.Println("Campaigns publish through the gateway-owned public spectator automatically.")
 }
 
 // waitForDockerGatewayHealthy polls the gateway HTTP health endpoint until it

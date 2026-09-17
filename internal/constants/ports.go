@@ -26,10 +26,10 @@ const (
 	DashboardDefaultPort = 3000
 
 	// PublicSpectatorPrivatePort is the loopback-only authenticated ingest
-	// listener for the host-backed public mirror.
+	// listener for the gateway-owned public mirror.
 	PublicSpectatorPrivatePort = 8081
 	// PublicSpectatorPublicPort is the loopback-only anonymous read/SSE
-	// listener for the host-backed public mirror.
+	// listener for the gateway-owned public mirror.
 	PublicSpectatorPublicPort = 8082
 	// EvalExplorerDefaultPort serves the embedded evaluation explorer SPA.
 	EvalExplorerDefaultPort = 5173

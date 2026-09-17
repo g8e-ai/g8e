@@ -4,7 +4,7 @@
 // public mirror download endpoints. Every panel renders real store data;
 // nothing on this page is decorative.
 
-import { useEffect, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
 import { modelComparisonId, recordKey, resolveModelSummary, useStoreState } from '../state/store';
@@ -15,6 +15,8 @@ import {
   ProgressBar,
   formatNumber,
   formatPercent,
+  formatLatency,
+  formatThroughput,
 } from '../components/shared';
 import { formatCompact, formatRelativeTime } from '../utils/format';
 import { qualityStateLabel, qualityStateTone, type FeedConnectionState } from '../utils/feed-state';
@@ -64,8 +66,8 @@ function shortRunId(runId: string): string {
   return runId.length > 14 ? `…${runId.slice(-12)}` : runId;
 }
 
-/** Evaluated models as role agents: name, role duty, status, throughput. */
-function AgentsStrip({ models, datasetId }: { models: ModelSummary[]; datasetId: string }) {
+/** Measured role candidates in the active dataset. */
+function RoleLeadersPanel({ models, datasetId }: { models: ModelSummary[]; datasetId: string }) {
   const evaluatedModels = useMemo(
     () =>
       models
@@ -76,48 +78,74 @@ function AgentsStrip({ models, datasetId }: { models: ModelSummary[]; datasetId:
         ),
     [models],
   );
-  const agents = evaluatedModels.slice(0, 4);
 
   return (
-    <section className="panel ov-models-strip" aria-label="Models">
+    <section className="panel ov-models-strip" aria-label="Role leaders">
       <div className="panel-head">
         <h2>
-          Models <span className="panel-sub">· {evaluatedModels.length} evaluated</span>
+          Role leaders <span className="panel-sub">· {evaluatedModels.length} evaluated</span>
         </h2>
         <Link to={`/models?dataset=${datasetId}`} className="panel-link">
           View all models →
         </Link>
       </div>
-      {agents.length === 0 ? (
+      {evaluatedModels.length === 0 ? (
         <p className="panel-empty">No evaluated models in the active dataset.</p>
       ) : (
-        <ul className="agents-grid">
-          {agents.map((model) => {
-            const status = agentStatus(model.quality_state);
-            const tps = model.output_throughput_p50?.value;
-            return (
-              <li key={modelComparisonId(model)} className="agent-card">
-                <div className="agent-icon" aria-hidden="true">
-                  {model.display_name.slice(0, 1)}
-                </div>
-                <div className="agent-body">
-                  <Link
-                    to={`/models/${datasetId}/${model.variant_id}?role=${model.role}`}
-                    className="agent-name"
-                  >
-                    {model.display_name}
-                  </Link>
-                  <span className="agent-role">{ROLE_LABELS[model.role]}</span>
-                  <span className={`agent-status status-${status.tone}`}>
-                    <span className="status-dot" aria-hidden="true" />
-                    {status.label}
-                    {tps !== undefined ? ` · ${formatCompact(tps)} t/s` : ''}
-                  </span>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="table-scroll">
+          <table className="lab-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Quant</th>
+                <th>Tokens/s</th>
+                <th>Agreement</th>
+                <th>Pass rate</th>
+                <th>Latency p50</th>
+              </tr>
+            </thead>
+            <tbody>
+              {evaluatedModels.map((model) => {
+                const status = agentStatus(model.quality_state);
+                return (
+                  <tr key={modelComparisonId(model)}>
+                    <td>
+                      <Link to={`/models/${datasetId}/${model.variant_id}?role=${model.role}`}>
+                        {model.display_name}
+                      </Link>
+                    </td>
+                    <td>{ROLE_LABELS[model.role]}</td>
+                    <td>
+                      <span className={`stream-role status-${status.tone}`}>
+                        <span className="status-dot" aria-hidden="true" />
+                        {status.label}
+                      </span>
+                    </td>
+                    <td>{model.quantization_weight_class?.toUpperCase() ?? '—'}</td>
+                    <td>
+                      {model.output_throughput_p50?.value !== undefined
+                        ? formatThroughput(model.output_throughput_p50.value)
+                        : '—'}
+                    </td>
+                    <td>
+                      {model.agreement_pairwise?.value !== undefined
+                        ? formatPercent(model.agreement_pairwise.value, 0)
+                        : '—'}
+                    </td>
+                    <td>{model.pass_rate ? formatPercent(model.pass_rate.estimate, 0) : '—'}</td>
+                    <td>
+                      {model.latency_p50_ms?.value !== undefined
+                        ? formatLatency(model.latency_p50_ms.value)
+                        : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );
@@ -186,11 +214,12 @@ function LiveStreamPanel({
           </select>
         </div>
       </div>
-      {visible.length === 0 ? (
-        <EmptyState hasRecords={events.length > 0} hasFilters={modelFilter !== 'all' || kindFilter !== 'all'} connection={connection} />
-      ) : (
-        <div className="table-scroll">
-          <table className="stream-table">
+      <div className="stream-body">
+        {visible.length === 0 ? (
+          <EmptyState hasRecords={events.length > 0} hasFilters={modelFilter !== 'all' || kindFilter !== 'all'} connection={connection} />
+        ) : (
+          <div className="table-scroll">
+            <table className="stream-table">
             <thead>
               <tr>
                 <th>Time</th>
@@ -246,7 +275,8 @@ function LiveStreamPanel({
             </tbody>
           </table>
         </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }
@@ -268,16 +298,7 @@ function CoverageBar({ label, done, total }: { label: string; done: number; tota
   );
 }
 
-/** System overview: headline counts, dataset coverage bars, current run. */
-function SystemOverviewPanel({
-  catalog,
-  models,
-  evaluations,
-  suites,
-  events,
-  activeDatasetId,
-  connection,
-}: {
+type SystemOverviewPanelProps = {
   catalog: CatalogSnapshot | undefined;
   models: ModelSummary[];
   evaluations: EvaluationSummary[];
@@ -285,7 +306,21 @@ function SystemOverviewPanel({
   events: LiveEvent[];
   activeDatasetId: string;
   connection: FeedConnectionState;
-}) {
+};
+
+/** System overview: headline counts, dataset coverage bars, current run. */
+const SystemOverviewPanel = forwardRef<HTMLElement, SystemOverviewPanelProps>(function SystemOverviewPanel(
+  {
+    catalog,
+    models,
+    evaluations,
+    suites,
+    events,
+    activeDatasetId,
+    connection,
+  },
+  ref,
+) {
   const evaluatedCount = models.filter((m) => m.pass_rate).length;
   const totalThroughput = models.reduce(
     (sum, m) => sum + (m.output_throughput_p50?.value ?? 0),
@@ -310,7 +345,7 @@ function SystemOverviewPanel({
     : undefined;
 
   return (
-    <section className="panel sys-panel" aria-label="System overview">
+    <section ref={ref} className="panel sys-panel" aria-label="System overview">
       <div className="panel-head">
         <h2>System overview</h2>
         <span className={`stream-state ${connection === 'live' ? 'status-ok' : 'status-warn'}`}>
@@ -389,7 +424,7 @@ function SystemOverviewPanel({
       </div>
     </section>
   );
-}
+});
 
 /** Most recent runs for the active dataset. */
 function RecentRuns({ evaluations }: { evaluations: EvaluationSummary[] }) {
@@ -484,6 +519,8 @@ function DownloadsPanel() {
 }
 
 export function OverviewView() {
+  const gridRef = useRef<HTMLDivElement>(null);
+  const sysPanelRef = useRef<HTMLElement>(null);
   const [params] = useSearchParams();
   const routeDataset = params.get('dataset') ?? undefined;
   const activeDatasetId = useActiveDatasetId(routeDataset);
@@ -500,11 +537,36 @@ export function OverviewView() {
   const events = useStoreState((state) => state.events);
   const connection = useStoreState((state) => state.connection);
 
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    const sysPanel = sysPanelRef.current;
+    if (!grid || !sysPanel) return;
+
+    const syncStreamPanelHeight = () => {
+      const stacked = window.matchMedia('(max-width: 1000px)').matches;
+      if (stacked) {
+        grid.style.removeProperty('--stream-panel-height');
+        return;
+      }
+      grid.style.setProperty('--stream-panel-height', `${sysPanel.getBoundingClientRect().height}px`);
+    };
+
+    syncStreamPanelHeight();
+    const resizeObserver = new ResizeObserver(syncStreamPanelHeight);
+    resizeObserver.observe(sysPanel);
+    window.addEventListener('resize', syncStreamPanelHeight);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', syncStreamPanelHeight);
+    };
+  }, []);
+
   return (
     <div className="overview">
-      <div className="ov-grid-main">
+      <div className="ov-grid-main" ref={gridRef}>
         <LiveStreamPanel events={events} connection={connection} />
         <SystemOverviewPanel
+          ref={sysPanelRef}
           catalog={catalog}
           models={models}
           evaluations={evaluations}
@@ -516,7 +578,7 @@ export function OverviewView() {
       </div>
 
       <div className="ov-grid-bottom">
-        <AgentsStrip models={models} datasetId={activeDatasetId} />
+        <RoleLeadersPanel models={models} datasetId={activeDatasetId} />
         <RecentRuns evaluations={evaluations} />
         <DownloadsPanel />
       </div>

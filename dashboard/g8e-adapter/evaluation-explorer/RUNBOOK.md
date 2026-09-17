@@ -34,7 +34,7 @@ cd /home/bob/g8e/dashboard/g8e-adapter/evaluation-explorer
 npm run dev:real
 ```
 
-This starts or reuses a host mirror via `./g8e eval mirror run --daemon` for legacy local dev only. Prefer the gateway-owned mirror (`docker compose up -d g8e-gateway` or `./g8e gw start --public-spectator`) for North Star acceptance. Use `./g8e eval mirror status` or `npm run health` to inspect mirror state, publisher sequence, freshness, route isolation, and the last accepted record. Stop a legacy host mirror with `./g8e eval mirror stop`.
+Requires the gateway-owned mirror (`docker compose up -d g8e-gateway` or `./g8e gw start --public-spectator`). Use `npm run health` to inspect mirror state, publisher sequence, freshness, route isolation, and the last accepted record.
 
 Run a campaign evaluation with live publication to the public mirror:
 
@@ -120,7 +120,7 @@ After `npm run build`, restart or recreate `g8e-gateway` so Docker remounts `dis
 
 ## Host service supervision
 
-The gateway owns the in-process public mirror (`8081` private ingest, `8082` public read/SSE) and evaluation explorer when started with `--public-spectator` (default in Compose). Do not run a separate `g8e public mirror run` or install a host mirror systemd unit for production.
+The gateway owns the in-process public mirror (`8081` private ingest, `8082` public read/SSE) and evaluation explorer when started with `--public-spectator` (default in Compose). Do not install a host mirror systemd unit for production.
 
 The checked-in `deploy/systemd/opendevops-feed-tunnel.service` runs only the Cloudflare Tunnel in the Docker-host namespace. It reads generated configuration and credentials from the owner-protected `/home/bob/.cloudflared` directory and forwards `https://opendevops.ai` to `http://127.0.0.1:8082`. Neither the tunnel unit nor the gateway image contains a token, key, or ingest credential in source control.
 

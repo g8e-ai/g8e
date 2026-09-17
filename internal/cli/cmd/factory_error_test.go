@@ -123,16 +123,6 @@ func TestPublicRotateKeyCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
-func TestPublicMirrorRunCmdWithConfig_FileSvcFactoryError(t *testing.T) {
-	_, cfg := newCmdTestEnv(t)
-	cmd := publicMirrorRunCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
-
-	err := cmd.Execute()
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
-	assert.ErrorIs(t, err, errFactory)
-}
-
 func TestApproveCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 

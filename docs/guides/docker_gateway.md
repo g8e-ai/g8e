@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-17
+Version: v2.1.8
 
 This guide covers building the shared Gateway/Operator image, running a gateway-only container, and managing the repository's Docker Compose deployments. For the complete four-service product workflow, see the [Unified Docker Stack Guide](./unified_stack.md).
 
@@ -180,6 +180,26 @@ The gateway runtime volume is mounted at `/root/.g8e` and includes:
 - `vault/` for encrypted vault state and the default vault key at `vault/key`
 
 Removing `g8e-gateway-data` destroys the gateway PKI, owner records, and audit state. The next startup creates a new authority and requires owner and workload enrollment again.
+
+The host CLI identity under `<cwd>/.g8e/pki/` is separate from the gateway volume. Compose does **not** bind-mount host `public-feed`, `public-mirror`, or provider-observation paths into the gateway container. Cross-boundary campaign operations use enrollment and mTLS APIs instead of shared filesystems.
+
+## Evaluation publish and verify (split host and container)
+
+Docker evaluation runs the Gateway in a container while the campaign controller CLI stays on the host. Spectator and provider-observation state are gateway-owned; the host never shares directories with the container for those paths.
+
+| Concern | Owner | Host CLI access |
+| --- | --- | --- |
+| Public feed signing keys and outbox | Gateway volume (`g8e-gateway-data`) | `POST /api/v1/public-feed/batches` (owner mTLS) when gateway is healthy |
+| Public mirror (`8081`/`8082`) and explorer (`5173`) | Gateway `PublicSpectatorRuntime` (`--public-spectator`, Compose default) | Read-only HTTP to published ports |
+| Provider-boundary observation windows | Gateway volume under `data/inference/provider-observer/windows/` | `GET /api/v1/inference/provider-observations/{provider_attempt_id}` (owner mTLS) via `g8e eval campaign verify --require-provider-observation` |
+
+**Campaign publication.** When `execute --publish` or `campaign schedule --publish` runs from the host, the CLI posts signed batches through the gateway API. Publication requires a healthy gateway with `--public-spectator` enabled.
+
+**Campaign verify.** Provider observation windows ingested by the gateway are not visible on the host filesystem. Verify uses the gateway read API when local evidence is missing. Assignments that completed before the Observer Operator enrolled fail `--require-provider-observation` honestly; re-run or accept partial coverage.
+
+**Observer Operator.** Enroll on the provider host with platform enrollment (`g8e operator start --provider-boundary-observer-enabled` → `g8e auth approve-platform-enrollment`). The gateway fans out BEGIN/FINALIZE over pub/sub; do not bind-mount inference state for verify.
+
+See [Unified Docker Stack Guide](./unified_stack.md) for the mini-smoke workflow and [Public Spectator Operations Guide](./public_spectator.md) for mirror verification and tunnel setup.
 
 ## Host Identity and Certificates
 
