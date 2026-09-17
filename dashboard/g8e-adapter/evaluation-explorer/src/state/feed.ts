@@ -8,6 +8,7 @@ import {
   createPublicClient,
   parsePublicRuntimeConfig,
   type PublicRuntimeConfig,
+  type PublicSseConnectionState,
 } from '../../../src/public';
 import type {
   FeedBootstrap,
@@ -115,6 +116,7 @@ export interface StreamHandlers {
   onProjection: (record: ProjectionRecord) => void;
   onTruncated: () => void;
   onError: () => void;
+  onStateChange?: (state: PublicSseConnectionState) => void;
 }
 
 export interface StreamHandle {
@@ -149,6 +151,7 @@ export function openStream(
       },
       onTruncated: handlers.onTruncated,
       onError: handlers.onError,
+      onStateChange: handlers.onStateChange,
     },
   });
   stream.connect();

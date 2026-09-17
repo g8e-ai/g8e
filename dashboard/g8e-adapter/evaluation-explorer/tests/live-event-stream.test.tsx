@@ -32,7 +32,7 @@ describe('LiveEventStream', () => {
 
     render(
       <MemoryRouter>
-        <LiveEventStream events={events} connection="live" />
+        <LiveEventStream events={events} connection="live" streamConnection="connected" />
       </MemoryRouter>,
     );
 

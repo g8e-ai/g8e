@@ -101,6 +101,13 @@ function connectStream(mirrorOrigin: string, sourceId: string, sinceId: number, 
     onError: () => {
       evalStore.setOffline('The mirror stream is unreachable. Last accepted data remains visible.');
     },
+    onStateChange: (streamState) => {
+      if (gen !== generation) return;
+      evalStore.setStreamConnection(streamState);
+      if (streamState === 'connected') {
+        evalStore.setConnection('live', 'Streaming live updates via SSE.');
+      }
+    },
   });
 }
 

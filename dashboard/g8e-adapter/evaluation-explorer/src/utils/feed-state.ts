@@ -14,12 +14,97 @@ export type FeedConnectionState =
   | 'offline'
   | 'error';
 
+/** SSE transport state from the public mirror stream. */
+export type StreamConnectionState =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting';
+
+/** Mirror freshness windows — kept in sync with PublicFeedFreshness*Seconds. */
+export const FRESHNESS_DELAYED_MS = 60_000;
+export const FRESHNESS_STALE_MS = 300_000;
+export const FRESHNESS_OFFLINE_MS = 900_000;
+
 export interface FeedStatus {
   connection: FeedConnectionState;
   freshness: FreshnessState | 'unknown';
+  /** Snapshot-pinned freshness that must not be overridden by age heuristics. */
+  pinnedFreshness?: FreshnessState;
   highWaterSequence: number;
   lastAcceptedAt: string | undefined;
   message: string;
+}
+
+/** Derive mirror freshness from the last accepted record timestamp. */
+export function deriveFreshness(
+  lastAcceptedAt: string | undefined,
+  pinnedFreshness?: FreshnessState,
+  nowMs: number = Date.now(),
+): FreshnessState | 'unknown' {
+  if (pinnedFreshness === 'intentionally_stopped' || pinnedFreshness === 'safety_stopped') {
+    return pinnedFreshness;
+  }
+  if (!lastAcceptedAt) return 'unknown';
+  const acceptedAt = new Date(lastAcceptedAt).getTime();
+  if (!Number.isFinite(acceptedAt)) return 'unknown';
+  const age = nowMs - acceptedAt;
+  if (age >= FRESHNESS_OFFLINE_MS) return 'source_offline';
+  if (age >= FRESHNESS_STALE_MS) return 'stale';
+  if (age >= FRESHNESS_DELAYED_MS) return 'delayed';
+  return 'active';
+}
+
+export function effectiveFeedFreshness(
+  feedStatus: FeedStatus,
+  nowMs: number = Date.now(),
+): FreshnessState | 'unknown' {
+  return deriveFreshness(feedStatus.lastAcceptedAt, feedStatus.pinnedFreshness, nowMs);
+}
+
+export function classifyStreamConnection(
+  streamConnection: StreamConnectionState,
+  feedConnection: FeedConnectionState,
+): { label: string; tone: 'ok' | 'warn' | 'critical'; description: string } {
+  if (feedConnection === 'offline' || feedConnection === 'error') {
+    return {
+      label: 'Offline',
+      tone: 'warn',
+      description: 'The mirror stream is unreachable. Last accepted data remains visible.',
+    };
+  }
+  switch (streamConnection) {
+    case 'connected':
+      return {
+        label: 'Live',
+        tone: 'ok',
+        description: 'Streaming live updates via SSE.',
+      };
+    case 'connecting':
+      return {
+        label: 'Connecting',
+        tone: 'warn',
+        description: 'Opening the SSE stream.',
+      };
+    case 'reconnecting':
+      return {
+        label: 'Reconnecting',
+        tone: 'warn',
+        description: 'The SSE stream is reconnecting.',
+      };
+    case 'disconnected':
+      return feedConnection === 'connecting' || feedConnection === 'live'
+        ? {
+            label: 'Connecting',
+            tone: 'warn',
+            description: 'Opening the SSE stream.',
+          }
+        : {
+            label: 'Offline',
+            tone: 'warn',
+            description: 'The SSE stream is not connected.',
+          };
+  }
 }
 
 export function classifyFreshness(freshness: FreshnessState | 'unknown'): {

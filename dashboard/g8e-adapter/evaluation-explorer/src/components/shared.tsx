@@ -2,16 +2,20 @@
 // accessible, keyboard-navigable, and renders a real text label in addition
 // to any color cue. No component depends on hover for essential information.
 
-import { type ReactNode, useId } from 'react';
+import { type ReactNode, useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ConfidenceInterval, MetricValue, QualityState } from '../contract/types';
 import {
   classifyFreshness,
+  classifyStreamConnection,
+  effectiveFeedFreshness,
   emptyStateReason,
+  FRESHNESS_DELAYED_MS,
   qualityStateLabel,
   qualityStateTone,
   type FeedConnectionState,
   type FeedStatus,
+  type StreamConnectionState,
 } from '../utils/feed-state';
 import { metricDisplay, formatPercent, formatNumber, formatLatency, formatThroughput, formatTokens, formatDuration, formatTimestamp, formatRelativeTime } from '../utils/format';
 const toneClass: Record<string, string> = {
@@ -32,8 +36,44 @@ export function QualityBadge({ state }: { state: QualityState }) {
   );
 }
 
+/** Re-render freshness badges as mirror age crosses delayed/stale/offline windows. */
+export function useFreshnessClock(intervalMs = FRESHNESS_DELAYED_MS): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => window.clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+export function StreamStatusIndicator({
+  streamConnection,
+  feedConnection,
+  detail,
+}: {
+  streamConnection: StreamConnectionState;
+  feedConnection: FeedConnectionState;
+  detail?: 'short' | 'long';
+}) {
+  const { label, tone, description } = classifyStreamConnection(streamConnection, feedConnection);
+  const text =
+    detail === 'long'
+      ? streamConnection === 'connected' && feedConnection === 'live'
+        ? 'Streaming via SSE'
+        : description
+      : label;
+  return (
+    <span className={`stream-state status-${tone === 'ok' ? 'ok' : tone}`} data-testid="stream-status">
+      <span className="status-dot" aria-hidden="true" />
+      {text}
+    </span>
+  );
+}
+
 export function FreshnessBadge({ feedStatus }: { feedStatus: FeedStatus }) {
-  const { label, tone } = classifyFreshness(feedStatus.freshness);
+  const now = useFreshnessClock();
+  const freshness = effectiveFeedFreshness(feedStatus, now);
+  const { label, tone } = classifyFreshness(freshness);
   const tooltipId = useId();
   return (
     <span className="freshness-badge-anchor">
@@ -41,7 +81,7 @@ export function FreshnessBadge({ feedStatus }: { feedStatus: FeedStatus }) {
         className={`freshness-badge ${toneClass[tone]}`}
         tabIndex={0}
         aria-describedby={tooltipId}
-        data-testid={`freshness-${feedStatus.freshness}`}
+        data-testid={`freshness-${freshness}`}
       >
         <span className="freshness-dot" aria-hidden="true" />
         {label}

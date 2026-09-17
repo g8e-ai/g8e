@@ -3,10 +3,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { FeedConnectionState } from '../utils/feed-state';
+import type { FeedConnectionState, StreamConnectionState } from '../utils/feed-state';
 import { resolveModelSummary, useStoreState } from '../state/store';
 import { roleLabel, visibleStreamEvents } from '../views/derived';
-import { EmptyState } from './shared';
+import { EmptyState, StreamStatusIndicator } from './shared';
 import type { LiveEvent } from '../contract/types';
 
 const STREAM_PAGE_SIZE = 25;
@@ -20,9 +20,11 @@ function eventTime(iso: string): string {
 export function LiveEventStream({
   events,
   connection,
+  streamConnection,
 }: {
   events: LiveEvent[];
   connection: FeedConnectionState;
+  streamConnection: StreamConnectionState;
 }) {
   const [modelFilter, setModelFilter] = useState('all');
   const [kindFilter, setKindFilter] = useState('all');
@@ -63,10 +65,11 @@ export function LiveEventStream({
       <div className="panel-head">
         <h2>
           Live event stream{' '}
-          <span className={`stream-state ${connection === 'live' ? 'status-ok' : 'status-warn'}`}>
-            <span className="status-dot" aria-hidden="true" />
-            {connection === 'live' ? 'Streaming via SSE' : 'Mirror offline — last accepted data'}
-          </span>
+          <StreamStatusIndicator
+            streamConnection={streamConnection}
+            feedConnection={connection}
+            detail="long"
+          />
         </h2>
         <div className="stream-controls">
           <select

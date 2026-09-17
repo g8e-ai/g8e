@@ -15,6 +15,7 @@ import type {
   CatalogSnapshot,
   EvaluationSummary,
   FeedSnapshot,
+  FreshnessState,
   LiveEvent,
   MethodologySnapshot,
   ModelRole,
@@ -24,7 +25,12 @@ import type {
   SuiteSummary,
 } from '../contract/types';
 import { decodeViewRecord, isProjectionRecord, ValidationError } from '../contract/validators';
-import { type FeedConnectionState, type FeedStatus } from '../utils/feed-state';
+import {
+  deriveFreshness,
+  type FeedConnectionState,
+  type FeedStatus,
+  type StreamConnectionState,
+} from '../utils/feed-state';
 import {
   adaptCampaignProjectionEnvelope,
   campaignProgressCounts,
@@ -71,6 +77,7 @@ export function resolveModelSummary(
 
 export interface StoreState {
   connection: FeedConnectionState;
+  streamConnection: StreamConnectionState;
   feedStatus: FeedStatus | null;
   sourceId: string | null;
   observedSequence: number;
@@ -88,9 +95,33 @@ export interface StoreState {
   lastAcceptedAt: string | undefined;
 }
 
+function snapshotPinnedFreshness(freshness: FeedSnapshot['freshness']): FreshnessState | undefined {
+  return freshness === 'intentionally_stopped' || freshness === 'safety_stopped' ? freshness : undefined;
+}
+
+function withFeedSnapshot(state: StoreState, snapshot: FeedSnapshot, message: string): FeedStatus {
+  const pinnedFreshness = snapshotPinnedFreshness(snapshot.freshness);
+  const lastAcceptedAt = state.lastAcceptedAt ?? snapshot.generated_at;
+  return {
+    connection: state.connection,
+    freshness: deriveFreshness(lastAcceptedAt, pinnedFreshness),
+    pinnedFreshness,
+    highWaterSequence: snapshot.high_water_sequence,
+    lastAcceptedAt,
+    message,
+  };
+}
+
+function withAcceptedRecord(state: StoreState): FeedStatus | null {
+  if (!state.feedStatus) return null;
+  const freshness = deriveFreshness(state.lastAcceptedAt, state.feedStatus.pinnedFreshness);
+  return { ...state.feedStatus, freshness, lastAcceptedAt: state.lastAcceptedAt };
+}
+
 function emptyState(): StoreState {
   return {
     connection: 'connecting',
+    streamConnection: 'disconnected',
     feedStatus: null,
     sourceId: null,
     observedSequence: 0,
@@ -142,6 +173,10 @@ export class EvalStore {
     }));
   }
 
+  setStreamConnection(streamConnection: StreamConnectionState): void {
+    this.setState((state) => ({ ...state, streamConnection }));
+  }
+
   /** Initialize from a mirror bootstrap. The snapshot is the seal target:
    *  it stays pending until reconciled history reaches its high-water
    *  sequence. Recent projections are indexed immediately for first paint;
@@ -161,13 +196,8 @@ export class EvalStore {
     } else {
       state.pendingSnapshot = snapshot;
     }
-    state.feedStatus = {
-      connection: 'live',
-      freshness: snapshot.freshness,
-      highWaterSequence: snapshot.high_water_sequence,
-      lastAcceptedAt: snapshot.generated_at,
-      message: 'Reconciling feed history.',
-    };
+    state.feedStatus = withFeedSnapshot(state, snapshot, 'Reconciling feed history.');
+    state.feedStatus.connection = 'live';
     void proofCount;
     for (const record of recentProjections) {
       this.ingestProjection(state, record);
@@ -199,7 +229,13 @@ export class EvalStore {
       return;
     }
     if (snapshot.high_water_sequence > this.state.observedSequence) {
-      this.setState((state) => ({ ...state, pendingSnapshot: snapshot }));
+      this.setState((state) => ({
+        ...state,
+        pendingSnapshot: snapshot,
+        feedStatus: state.feedStatus
+          ? { ...withFeedSnapshot(state, snapshot, 'Reconciling feed history.'), connection: state.connection }
+          : null,
+      }));
       return;
     }
     this.setState((state) => ({
@@ -207,13 +243,7 @@ export class EvalStore {
       currentSnapshot: snapshot,
       pendingSnapshot: null,
       connection: 'live',
-      feedStatus: {
-        connection: 'live',
-        freshness: snapshot.freshness,
-        highWaterSequence: snapshot.high_water_sequence,
-        lastAcceptedAt: snapshot.generated_at,
-        message: 'Snapshot sealed.',
-      },
+      feedStatus: { ...withFeedSnapshot(state, snapshot, 'Snapshot sealed.'), connection: 'live' },
     }));
   }
 
@@ -239,15 +269,10 @@ export class EvalStore {
       state.currentSnapshot = sealed;
       state.pendingSnapshot = null;
       state.connection = 'live';
-      state.feedStatus = {
-        connection: 'live',
-        freshness: sealed.freshness,
-        highWaterSequence: sealed.high_water_sequence,
-        lastAcceptedAt: sealed.generated_at,
-        message: 'Snapshot sealed.',
-      };
-    } else if (state.feedStatus) {
-      state.feedStatus = { ...state.feedStatus, lastAcceptedAt: state.lastAcceptedAt };
+      state.feedStatus = { ...withFeedSnapshot(state, sealed, 'Snapshot sealed.'), connection: 'live' };
+    } else {
+      const nextFeedStatus = withAcceptedRecord(state);
+      if (nextFeedStatus) state.feedStatus = nextFeedStatus;
     }
     this.state = state;
     this.emit();
@@ -367,8 +392,9 @@ export class EvalStore {
     this.setState((state) => ({
       ...state,
       connection: 'offline',
+      streamConnection: 'disconnected',
       feedStatus: state.feedStatus
-        ? { ...state.feedStatus, connection: 'offline', message }
+        ? { ...state.feedStatus, connection: 'offline', freshness: 'source_offline', message }
         : {
             connection: 'offline',
             freshness: 'source_offline',
@@ -508,5 +534,13 @@ export function useConnection(): FeedConnectionState {
     evalStore.subscribe,
     () => evalStore.getState().connection,
     () => evalStore.getState().connection,
+  );
+}
+
+export function useStreamConnection(): StreamConnectionState {
+  return useSyncExternalStore(
+    evalStore.subscribe,
+    () => evalStore.getState().streamConnection,
+    () => evalStore.getState().streamConnection,
   );
 }

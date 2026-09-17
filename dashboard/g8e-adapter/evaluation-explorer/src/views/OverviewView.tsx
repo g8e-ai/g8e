@@ -20,6 +20,7 @@ import { DatasetSelector } from '../components/DatasetSelector';
 import { LiveEventStream } from '../components/LiveEventStream';
 import {
   ProgressBar,
+  StreamStatusIndicator,
   UnavailableValue,
   formatNumber,
   formatPercent,
@@ -27,7 +28,12 @@ import {
   formatThroughput,
 } from '../components/shared';
 import { formatRelativeTime } from '../utils/format';
-import { qualityStateLabel, qualityStateTone, type FeedConnectionState } from '../utils/feed-state';
+import {
+  qualityStateLabel,
+  qualityStateTone,
+  type FeedConnectionState,
+  type StreamConnectionState,
+} from '../utils/feed-state';
 import { campaignTerminalProgress, roleLabel, roleLeaderRows } from './derived';
 import descriptorUrl from '../contract/descriptor.json?url';
 import type {
@@ -249,6 +255,7 @@ type SystemOverviewPanelProps = {
   events: LiveEvent[];
   activeDatasetId: string;
   connection: FeedConnectionState;
+  streamConnection: StreamConnectionState;
 };
 
 /** System overview: platform context, active campaign progress, and current run. */
@@ -259,6 +266,7 @@ function SystemOverviewPanel({
   events,
   activeDatasetId,
   connection,
+  streamConnection,
 }: SystemOverviewPanelProps) {
   const completedRuns = evaluations.filter((e) => e.lifecycle_state === 'completed').length;
   const assignmentDone = evaluations.reduce(
@@ -279,10 +287,10 @@ function SystemOverviewPanel({
     <section className="panel sys-panel" aria-label="System overview">
       <div className="panel-head">
         <h2>System overview</h2>
-        <span className={`stream-state ${connection === 'live' ? 'status-ok' : 'status-warn'}`}>
-          <span className="status-dot" aria-hidden="true" />
-          {connection === 'live' ? 'Live' : 'Offline'}
-        </span>
+        <StreamStatusIndicator
+          streamConnection={streamConnection}
+          feedConnection={connection}
+        />
       </div>
 
       <div className="sys-platform">
@@ -454,11 +462,12 @@ export function OverviewView() {
   );
   const events = useStoreState((state) => state.events);
   const connection = useStoreState((state) => state.connection);
+  const streamConnection = useStoreState((state) => state.streamConnection);
 
   return (
     <div className="overview">
       <div className="ov-grid-main">
-        <LiveEventStream events={events} connection={connection} />
+        <LiveEventStream events={events} connection={connection} streamConnection={streamConnection} />
         <SystemOverviewPanel
           catalog={catalog}
           evaluations={evaluations}
@@ -466,6 +475,7 @@ export function OverviewView() {
           events={events}
           activeDatasetId={activeDatasetId}
           connection={connection}
+          streamConnection={streamConnection}
         />
       </div>
 

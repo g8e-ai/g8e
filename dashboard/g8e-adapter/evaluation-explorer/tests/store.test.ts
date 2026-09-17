@@ -16,6 +16,7 @@ describe('EvalStore', () => {
   it('starts empty with connecting state', () => {
     const state = store.getState();
     expect(state.connection).toBe('connecting');
+    expect(state.streamConnection).toBe('disconnected');
     expect(state.catalogs.size).toBe(0);
     expect(state.models.size).toBe(0);
   });
@@ -69,7 +70,50 @@ describe('EvalStore', () => {
   it('setOffline sets connection to offline with a message', () => {
     store.setOffline('mirror unreachable');
     expect(store.getState().connection).toBe('offline');
+    expect(store.getState().streamConnection).toBe('disconnected');
     expect(store.getState().feedStatus?.message).toBe('mirror unreachable');
+    expect(store.getState().feedStatus?.freshness).toBe('source_offline');
+  });
+
+  it('acceptProjection refreshes freshness from the last accepted timestamp', () => {
+    const snapshot = {
+      protocol_version: '1.0.0',
+      source_id: 'opendevops-local',
+      high_water_sequence: 0,
+      feed_chain_hash: '0'.repeat(64),
+      batch_count: 0,
+      generated_at: '2026-09-14T08:00:00Z',
+      freshness: 'stale' as const,
+    };
+    store.initBootstrap(snapshot, [], 0);
+    store.setStreamConnection('connected');
+    store.acceptProjection({
+      sequence: 1,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        schema_version: '1.3.0',
+        kind: 'catalog_snapshot',
+        dataset_id: 'ds-test',
+        quality_state: 'live_in_progress',
+        observed_at: new Date().toISOString(),
+        dataset_kind: 'live_run',
+        title: 'Test',
+        description: 'Test',
+        limitations: [],
+        model_count: 1,
+        evaluated_count: 0,
+        suite_count: 1,
+        run_count: 1,
+        assignment_count: 1,
+        provider_request_count: 0,
+        provider_token_count: 0,
+        retry_count: 0,
+        verifier_passed_count: 0,
+        verifier_failed_count: 0,
+        generated_at: new Date().toISOString(),
+      }),
+    });
+    expect(store.getState().feedStatus?.freshness).toBe('active');
   });
 
   it('pushError appends errors without losing prior errors', () => {
