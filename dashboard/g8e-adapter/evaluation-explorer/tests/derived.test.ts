@@ -115,6 +115,20 @@ describe('visibleStreamEvents', () => {
     const visible = visibleStreamEvents(events, { modelFilter: 'gemma4-e4b', kindFilter: 'assignment_completed' });
     expect(visible.map((event) => event.event_id)).toEqual(['evt-2']);
   });
+
+  it('shows all matching events when no limit is set', () => {
+    const many = Array.from({ length: 30 }, (_, index) =>
+      liveEvent({
+        event_id: `evt-${index}`,
+        kind: 'assignment_completed',
+        observed_at: `2026-09-17T08:${String(index).padStart(2, '0')}:00Z`,
+      }),
+    );
+    const visible = visibleStreamEvents(many, { modelFilter: 'all', kindFilter: 'all' });
+    expect(visible).toHaveLength(30);
+    expect(visible[0]?.event_id).toBe('evt-29');
+    expect(visible[29]?.event_id).toBe('evt-0');
+  });
 });
 
 function div(n: number, d: number): number {

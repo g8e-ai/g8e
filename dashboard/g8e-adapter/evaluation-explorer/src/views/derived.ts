@@ -57,17 +57,16 @@ export function assignmentLifecycleEvents(
     .sort((a, b) => a.observed_at.localeCompare(b.observed_at));
 }
 
-/** Recent live stream rows, newest first. */
+/** Live stream rows, newest first. Optional limit for tests or compact previews. */
 export function visibleStreamEvents(
   events: LiveEvent[],
   options: { modelFilter: string; kindFilter: string; limit?: number },
 ): LiveEvent[] {
-  const limit = options.limit ?? 15;
-  return events
+  const filtered = events
     .filter((event) => options.modelFilter === 'all' || event.variant_id === options.modelFilter)
-    .filter((event) => options.kindFilter === 'all' || event.kind === options.kindFilter)
-    .slice(-limit)
-    .reverse();
+    .filter((event) => options.kindFilter === 'all' || event.kind === options.kindFilter);
+  const recent = options.limit !== undefined ? filtered.slice(-options.limit) : filtered;
+  return recent.reverse();
 }
 
 /** Linear-interpolation percentile over an unsorted list of observed values. */

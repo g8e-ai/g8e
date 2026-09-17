@@ -4,7 +4,7 @@
 // public mirror download endpoints. Every panel renders real store data;
 // nothing on this page is decorative.
 
-import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   G8E_REPO_URL,
@@ -252,17 +252,14 @@ type SystemOverviewPanelProps = {
 };
 
 /** System overview: platform context, active campaign progress, and current run. */
-const SystemOverviewPanel = forwardRef<HTMLElement, SystemOverviewPanelProps>(function SystemOverviewPanel(
-  {
-    catalog,
-    evaluations,
-    suites,
-    events,
-    activeDatasetId,
-    connection,
-  },
-  ref,
-) {
+function SystemOverviewPanel({
+  catalog,
+  evaluations,
+  suites,
+  events,
+  activeDatasetId,
+  connection,
+}: SystemOverviewPanelProps) {
   const completedRuns = evaluations.filter((e) => e.lifecycle_state === 'completed').length;
   const assignmentDone = evaluations.reduce(
     (sum, e) => sum + e.assignment_completed + e.assignment_failed,
@@ -279,7 +276,7 @@ const SystemOverviewPanel = forwardRef<HTMLElement, SystemOverviewPanelProps>(fu
     : undefined;
 
   return (
-    <section ref={ref} className="panel sys-panel" aria-label="System overview">
+    <section className="panel sys-panel" aria-label="System overview">
       <div className="panel-head">
         <h2>System overview</h2>
         <span className={`stream-state ${connection === 'live' ? 'status-ok' : 'status-warn'}`}>
@@ -347,7 +344,7 @@ const SystemOverviewPanel = forwardRef<HTMLElement, SystemOverviewPanelProps>(fu
       </div>
     </section>
   );
-});
+}
 
 /** Most recent runs for the active dataset. */
 function RecentRuns({ evaluations }: { evaluations: EvaluationSummary[] }) {
@@ -442,8 +439,6 @@ function DownloadsPanel() {
 }
 
 export function OverviewView() {
-  const gridRef = useRef<HTMLDivElement>(null);
-  const sysPanelRef = useRef<HTMLElement>(null);
   const [params] = useSearchParams();
   const routeDataset = params.get('dataset') ?? undefined;
   const activeDatasetId = useActiveDatasetId(routeDataset);
@@ -460,36 +455,11 @@ export function OverviewView() {
   const events = useStoreState((state) => state.events);
   const connection = useStoreState((state) => state.connection);
 
-  useLayoutEffect(() => {
-    const grid = gridRef.current;
-    const sysPanel = sysPanelRef.current;
-    if (!grid || !sysPanel) return;
-
-    const syncStreamPanelHeight = () => {
-      const stacked = window.matchMedia('(max-width: 1000px)').matches;
-      if (stacked) {
-        grid.style.removeProperty('--stream-panel-height');
-        return;
-      }
-      grid.style.setProperty('--stream-panel-height', `${sysPanel.getBoundingClientRect().height}px`);
-    };
-
-    syncStreamPanelHeight();
-    const resizeObserver = new ResizeObserver(syncStreamPanelHeight);
-    resizeObserver.observe(sysPanel);
-    window.addEventListener('resize', syncStreamPanelHeight);
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', syncStreamPanelHeight);
-    };
-  }, [catalog?.dataset_id, catalog?.title, evaluations.length, suites.length, connection]);
-
   return (
     <div className="overview">
-      <div className="ov-grid-main" ref={gridRef}>
+      <div className="ov-grid-main">
         <LiveEventStream events={events} connection={connection} />
         <SystemOverviewPanel
-          ref={sysPanelRef}
           catalog={catalog}
           evaluations={evaluations}
           suites={suites}
