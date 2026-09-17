@@ -598,6 +598,7 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
 	var jsonOutput bool
+	var force bool
 	cmd := &cobra.Command{
 		Use:   "publish [run-id]",
 		Short: "Publish missing public lifecycle projections for one campaign run",
@@ -616,16 +617,29 @@ func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign publish: %w", err)
 			}
+			if force {
+				if err := publication.ResetPublicationIdempotency(cmd.Context(), runID); err != nil {
+					return fmt.Errorf("evaluation: campaign publish: %w", err)
+				}
+			}
 			count, err := publication.PublishRunCatchUp(cmd.Context(), runID)
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign publish: %w", err)
 			}
 			if jsonOutput {
-				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "published_records": count}, "", "  ")
+				payload, err := json.MarshalIndent(map[string]any{
+					"run_id":            runID,
+					"published_records": count,
+					"force":             force,
+				}, "", "  ")
 				if err != nil {
 					return err
 				}
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+			if force {
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Published %d public projection record(s) for run %s (forced republish)\n", count, runID)
 				return err
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Published %d public projection record(s) for run %s\n", count, runID)
@@ -633,6 +647,7 @@ func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
+	cmd.Flags().BoolVar(&force, "force", false, "Clear host publication idempotency and republish all projections (use after gateway mirror volume wipe)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }

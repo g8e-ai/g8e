@@ -124,6 +124,48 @@ func TestCampaignPublicationCoordinatorPublishRunCompletion(t *testing.T) {
 	assert.Equal(t, 0, count)
 }
 
+func TestCampaignPublicationCoordinatorForceRepublish(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(store, files, exporter)
+	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" }).WithPublication(coordinator)
+	req := testCampaignInitRequest(t)
+	catalog := req.Catalog
+	truncated := &evalv1.EvaluationScenarioCatalog{
+		SchemaVersion: catalog.GetSchemaVersion(),
+		CatalogRef:    catalog.GetCatalogRef(),
+		Scenarios:     catalog.GetScenarios()[:1],
+	}
+	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
+	require.NoError(t, err)
+	truncated.CatalogDigest = truncatedDigest
+	req.Catalog = truncated
+	run, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	_, _, err = controller.ExecuteNextAssignment(context.Background(), run.GetRunId(), CampaignExecutionBinding{
+		InferenceOperatorSessionID: "inf-session",
+		DataOperatorID:             "data-op",
+		DataOperatorSessionID:      "data-session",
+		ModelRegistryDigest:        req.Inventory.RegistryDigest,
+		ModelRegistry:              InferenceVariantsFromEvalRegistry(req.Inventory.Variants),
+	}, req.ScenarioArtifacts)
+	require.NoError(t, err)
+	_, err = coordinator.PublishRunCatchUp(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	before := len(exporter.records)
+	assert.Greater(t, before, 0)
+	_, err = coordinator.PublishRunCatchUp(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	assert.Len(t, exporter.records, before)
+	require.NoError(t, coordinator.ResetPublicationIdempotency(context.Background(), run.GetRunId()))
+	_, err = coordinator.PublishRunCatchUp(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	assert.Greater(t, len(exporter.records), before)
+}
+
 func TestCampaignControllerWithPublicationPublishesQueuedAssignments(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)

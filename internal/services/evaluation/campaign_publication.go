@@ -160,6 +160,22 @@ func (c *CampaignPublicationCoordinator) PublishRunCompletion(ctx context.Contex
 	return published, nil
 }
 
+// ResetPublicationIdempotency clears host-side publication idempotency so a run
+// can be republished after the gateway mirror volume was wiped. Gateway
+// high-water sequence is authoritative for the next export batch.
+func (c *CampaignPublicationCoordinator) ResetPublicationIdempotency(ctx context.Context, runID string) error {
+	if c == nil || c.files == nil || runID == "" {
+		return fmt.Errorf("evaluation: reset publication idempotency: %w", constants.ErrMissingRequiredField)
+	}
+	state, err := c.loadPublicationState(ctx, runID)
+	if err != nil {
+		return err
+	}
+	state.PublishedIdempotency = []string{}
+	state.LastPublishedSequence = 0
+	return c.savePublicationState(ctx, state)
+}
+
 // PublishRunCatchUp scans one run and publishes any missing lifecycle and
 // terminal result projections derived from canonical records.
 func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, runID string) (int, error) {

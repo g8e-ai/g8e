@@ -432,6 +432,18 @@ docker compose --profile evaluation up -d --force-recreate g8e-inference-operato
 - Do not run `campaign publish` and `execute --publish` at the same time.
 - Reset public feed (Phase A above) before a new run.
 
+### Mirror empty after `docker init --clean` but host run artifacts remain
+
+`docker init --clean` wipes the gateway mirror volume only. Host `public-projection-state.json` under `.g8e/data/eval/runs/<run-id>/` still lists `published_idempotency_keys`, so a plain `campaign publish` exports zero new records while the explorer mirror stays empty.
+
+Republish without editing JSON:
+
+```bash
+./g8e eval campaign publish --run-id <run-id> --force
+```
+
+`--force` clears host idempotency keys and republishes all lifecycle, result, and aggregate projections to the gateway-owned mirror. Use only when the gateway mirror was wiped or is known to be missing records for that run.
+
 ### Browser TLS or WebAuthn failures
 
 Confirm `G8E_HOSTNAME` matches the browser URL, the gateway root CA is trusted, and HTTPS port 8443 is reachable.
