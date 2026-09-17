@@ -174,7 +174,7 @@ Every demo boots the gateway with zero users. The operator (and any service that
 ./g8e auth enroll user -e localhost:<demo-http-port> --port <demo-https-port>
 
 # 2. List pending platform enrollment requests.
-./g8e auth pending-platform-enrollments -e localhost:<demo-http-port> --port <demo-https-port>
+./g8e auth pending -e localhost:<demo-http-port> --port <demo-https-port>
 
 # 3. Approve the operator's request by exact request ID.
 ./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:<demo-http-port> --port <demo-https-port>
@@ -248,7 +248,7 @@ docker compose up -d g8e-gateway
 docker compose --profile bootstrapped up -d
 
 # 4. Approve the workload enrollment requests.
-./g8e auth pending-platform-enrollments
+./g8e auth pending
 ./g8e auth approve-platform-enrollment <operator-request-id> --yes
 ./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
 ./g8e auth approve-platform-enrollment <dashboard-request-id> --yes

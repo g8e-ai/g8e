@@ -186,7 +186,7 @@ docker compose --profile bootstrapped --profile evaluation up -d
 Wait ~5s, then list pending enrollments:
 
 ```bash
-./g8e auth pending-platform-enrollments
+./g8e auth pending
 ```
 
 Approve in this order (Data Operator first):
@@ -269,7 +269,7 @@ The process submits a platform enrollment request. **Do not** pass `--inference-
 From the campaign host owner CLI:
 
 ```bash
-./g8e auth pending-platform-enrollments
+./g8e auth pending
 ./g8e auth approve-platform-enrollment <observer-request-id> --yes
 ```
 
@@ -408,7 +408,7 @@ Workloads remain unhealthy while enrollment is pending.
 ### Workload stays unhealthy
 
 ```bash
-./g8e auth pending-platform-enrollments
+./g8e auth pending
 ./g8e docker logs <service>
 ```
 

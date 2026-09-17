@@ -122,7 +122,7 @@ docker compose up -d --no-build --pull never
 
 # Start the enrolled workloads, then approve their pending requests.
 docker compose --profile bootstrapped up -d --no-build --pull never
-./g8e auth pending-platform-enrollments
+./g8e auth pending
 ./g8e auth approve-platform-enrollment <operator-request-id> --yes
 ./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
 ./g8e auth approve-platform-enrollment <dashboard-request-id> --yes

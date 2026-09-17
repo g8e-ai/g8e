@@ -379,7 +379,7 @@ func TestPrintPlatformEnrollmentInstructions_UsesSplitDemoPorts(t *testing.T) {
 			output := buf.String()
 			endpointFlags := " -e localhost:" + tt.httpPort + " --port " + tt.httpsPort
 			assert.Contains(t, output, "./g8e auth enroll user"+endpointFlags)
-			assert.Contains(t, output, "./g8e auth pending-platform-enrollments"+endpointFlags)
+			assert.Contains(t, output, "./g8e auth pending"+endpointFlags)
 			assert.Contains(t, output, "./g8e auth approve-platform-enrollment <request-id> --yes"+endpointFlags)
 		})
 	}

@@ -125,7 +125,7 @@ Leave this process running while the owner approves the request. If the process 
 From the enrolled owner CLI, list pending platform enrollment requests:
 
 ```bash
-./g8e auth pending-platform-enrollments --endpoint <gateway-host>
+./g8e auth pending --endpoint <gateway-host>
 ```
 
 Compare the displayed component, hostname, system fingerprint, and Operator and CLI key fingerprints with the requesting Operator's output. Approve the matching request:
@@ -236,7 +236,7 @@ The Gateway is running but has not been bootstrapped with its first owner. The O
 List requests from the owner CLI:
 
 ```bash
-./g8e auth pending-platform-enrollments --endpoint <gateway-host>
+./g8e auth pending --endpoint <gateway-host>
 ```
 
 Approve the matching request ID after comparing its fingerprints. Restarting the requesting Operator from the same launch directory resumes the persisted request; starting it from another directory creates or uses a different `.g8e/` runtime tree.

@@ -378,7 +378,7 @@ func TestApprovePlatformEnrollmentCmd_ReasonTooLongReturnsError(t *testing.T) {
 	assert.Empty(t, mockClient.postCalls, "decision must not be posted when reason validation fails")
 }
 
-// --- pending-platform-enrollments command tests ---
+// --- pending command tests ---
 
 // TestPendingPlatformEnrollmentCmd_ListsRequests verifies that the command
 // fetches the pending list and prints request metadata for each entry.
@@ -662,7 +662,7 @@ func TestApprovePlatformEnrollmentCmd_CommandStructure(t *testing.T) {
 func TestPendingPlatformEnrollmentCmd_CommandStructure(t *testing.T) {
 	cmd := pendingPlatformEnrollmentCmdWithConfig(
 		configLoaderFor(nil), panickingClientFactory(), fileSvcFactoryFor(nil))
-	assert.Equal(t, "pending-platform-enrollments", cmd.Use)
+	assert.Equal(t, "pending", cmd.Use)
 	assert.NotNil(t, cmd.RunE)
 }
 

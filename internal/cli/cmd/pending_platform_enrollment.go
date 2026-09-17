@@ -30,7 +30,7 @@ func pendingPlatformEnrollmentCmdWithConfig(
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "pending-platform-enrollments",
+		Use:   "pending",
 		Short: "List pending platform workload enrollment requests via mTLS",
 		Long: `List pending platform workload enrollment requests (dashboard, ensemble, or
 operator) awaiting an owner decision.
@@ -56,17 +56,17 @@ approve or deny a specific request.`,
 
 			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
-				return fmt.Errorf("pending-platform-enrollments: create API client: %w", err)
+				return fmt.Errorf("pending: create API client: %w", err)
 			}
 
 			respBody, err := client.Get(constants.APIPaths.AuthPlatformEnrollmentPending)
 			if err != nil {
-				return fmt.Errorf("pending-platform-enrollments: fetch pending list: %w", err)
+				return fmt.Errorf("pending: fetch pending list: %w", err)
 			}
 
 			var resp models.PlatformEnrollmentPendingResponse
 			if err := json.Unmarshal(respBody, &resp); err != nil {
-				return fmt.Errorf("pending-platform-enrollments: parse response: %w", err)
+				return fmt.Errorf("pending: parse response: %w", err)
 			}
 
 			if len(resp.Requests) == 0 {

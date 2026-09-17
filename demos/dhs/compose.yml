@@ -102,7 +102,7 @@ services:
     # bootstrap flow is:
     #   docker compose up -d
     #   ./g8e auth enroll user -e <gateway>
-    #   ./g8e auth pending-platform-enrollments
+    #   ./g8e auth pending
     #   ./g8e auth approve-platform-enrollment <request-id> --yes
     build:
       context: ../..

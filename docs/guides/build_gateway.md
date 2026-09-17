@@ -403,7 +403,7 @@ This command validates local state; it does not authenticate to a remote gateway
 ./g8e auth enroll user -e <gateway-host>
 ```
 
-Operators and other platform workloads submit platform enrollment requests at startup. An enrolled owner reviews and decides those requests with `./g8e auth pending-platform-enrollments` and `./g8e auth approve-platform-enrollment <request-id>`.
+Operators and other platform workloads submit platform enrollment requests at startup. An enrolled owner reviews and decides those requests with `./g8e auth pending` and `./g8e auth approve-platform-enrollment <request-id>`.
 
 ---
 

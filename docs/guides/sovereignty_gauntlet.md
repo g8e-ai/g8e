@@ -121,7 +121,7 @@ Start the gateway, enroll the owner, then start the remaining workloads:
 docker exec g8e-gateway /g8e version --fips | tee "${CAMPAIGN_DIR}/metadata/gateway-fips.txt"
 ./g8e auth enroll user --headless -e localhost 2>&1 | tee "${CAMPAIGN_DIR}/logs/owner-enrollment.log"
 ./g8e docker start --profile bootstrapped --skip-enroll 2>&1 | tee "${CAMPAIGN_DIR}/logs/docker-start-workloads.log"
-./g8e auth pending-platform-enrollments | tee "${CAMPAIGN_DIR}/logs/pending-platform-enrollments.txt"
+./g8e auth pending | tee "${CAMPAIGN_DIR}/logs/pending.txt"
 ```
 
 Approve the operator, ensemble, and dashboard requests using the exact request IDs printed by the pending-enrollments command:

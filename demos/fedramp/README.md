@@ -118,7 +118,7 @@ After `g8e demos start fedramp`, the gateway is healthy but the operator and its
 ./g8e auth enroll user -e localhost:8088 --port 8451
 
 # 2. List pending platform enrollment requests.
-./g8e auth pending-platform-enrollments -e localhost:8088 --port 8451
+./g8e auth pending -e localhost:8088 --port 8451
 
 # 3. Approve the operator's request by exact request ID.
 ./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:8088 --port 8451

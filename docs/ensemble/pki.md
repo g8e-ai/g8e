@@ -83,7 +83,7 @@ Operators, the dashboard, and the ensemble enroll through the owner-approved pla
 
 An enrolled owner uses these commands to review and decide requests:
 
-1. Run `g8e auth pending-platform-enrollments` to list pending requests.
+1. Run `g8e auth pending` to list pending requests.
 2. Inspect the component, instance, and fingerprints.
 3. Run `g8e auth approve-platform-enrollment <request-id>` to approve, or add `--deny` to deny it.
 

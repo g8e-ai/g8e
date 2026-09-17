@@ -635,7 +635,7 @@ func printPlatformEnrollmentInstructions(cmd *cobra.Command, org string) {
 	cmd.Printf("     ./g8e auth enroll user -e localhost:%s --port %s\n", ports.http, ports.https)
 	cmd.Println()
 	cmd.Println("  2. List pending platform enrollment requests:")
-	cmd.Printf("     ./g8e auth pending-platform-enrollments -e localhost:%s --port %s\n", ports.http, ports.https)
+	cmd.Printf("     ./g8e auth pending -e localhost:%s --port %s\n", ports.http, ports.https)
 	cmd.Println()
 	cmd.Println("  3. Approve each request by ID (operator first, then dependents):")
 	cmd.Printf("     ./g8e auth approve-platform-enrollment <request-id> --yes -e localhost:%s --port %s\n", ports.http, ports.https)

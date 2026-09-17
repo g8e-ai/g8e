@@ -281,7 +281,7 @@ until curl -fsS http://localhost:8081/api/v1/health >/dev/null 2>&1; do sleep 2;
 ./g8e auth enroll user -e localhost:8081 --port 8444
 
 # 3. List pending platform enrollment requests.
-./g8e auth pending-platform-enrollments -e localhost:8081 --port 8444
+./g8e auth pending -e localhost:8081 --port 8444
 
 # 4. Approve the operator's request by exact request ID.
 ./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:8081 --port 8444

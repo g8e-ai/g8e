@@ -343,7 +343,7 @@ already-enrolled CLI.`,
 				cmd.Println()
 				cmd.Println("--skip-approvals set: workloads are started but will block waiting")
 				cmd.Println("for manual platform enrollment approval. Run:")
-				cmd.Println("  g8e auth pending-platform-enrollments")
+				cmd.Println("  g8e auth pending")
 				cmd.Println("  g8e auth approve-platform-enrollment <request-id> --yes")
 				return nil
 			}
@@ -571,7 +571,7 @@ walkthrough (the workloads will block waiting for manual approval).`,
 				cmd.Println()
 				cmd.Println("--skip-enroll set: workloads are started but will block waiting")
 				cmd.Println("for manual platform enrollment approval. Run:")
-				cmd.Println("  g8e auth pending-platform-enrollments")
+				cmd.Println("  g8e auth pending")
 				cmd.Println("  g8e auth approve-platform-enrollment <request-id>")
 				return nil
 			}

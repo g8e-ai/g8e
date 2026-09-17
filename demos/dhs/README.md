@@ -116,7 +116,7 @@ After `g8e demos start dhs`, the gateway is healthy but the operator and its dep
 ./g8e auth enroll user -e localhost:8087 --port 8450
 
 # 2. List pending platform enrollment requests.
-./g8e auth pending-platform-enrollments -e localhost:8087 --port 8450
+./g8e auth pending -e localhost:8087 --port 8450
 
 # 3. Approve the operator's request by exact request ID.
 ./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:8087 --port 8450

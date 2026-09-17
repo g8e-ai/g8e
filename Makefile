@@ -803,7 +803,7 @@ up:
 	@docker compose up -d --build
 	@echo "Stack started. The gateway is healthy; workloads remain not-ready until bootstrapped."
 	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
-	@echo "Then: ./g8e auth pending-platform-enrollments && ./g8e auth approve-platform-enrollment <id> --yes"
+	@echo "Then: ./g8e auth pending && ./g8e auth approve-platform-enrollment <id> --yes"
 
 .PHONY: down
 down:

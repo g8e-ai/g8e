@@ -86,7 +86,7 @@ curl -fsS http://localhost:8080/api/v1/health
 docker compose --profile bootstrapped up -d
 
 # Discover the requests submitted by the workloads.
-./g8e auth pending-platform-enrollments
+./g8e auth pending
 
 # Approve each exact request ID. Approving the operator first makes its shared transport credentials available before the ensemble finishes startup.
 ./g8e auth approve-platform-enrollment <operator-request-id> --yes
@@ -113,7 +113,7 @@ The walkthrough currently assumes the default host gateway ports, 8080 and 8443.
 
 ```bash
 ./g8e auth enroll user -e localhost:18080 --port 18443
-./g8e auth pending-platform-enrollments -e localhost:18080 --port 18443
+./g8e auth pending -e localhost:18080 --port 18443
 ./g8e auth approve-platform-enrollment <request-id> --yes -e localhost:18080 --port 18443
 ```
 

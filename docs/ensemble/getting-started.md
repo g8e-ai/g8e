@@ -25,7 +25,7 @@ The start command launches the Gateway, Operator, ensemble, and dashboard. On a 
 The automated walkthrough checks each workload once. If the ensemble request is not available when checked, list and approve it manually:
 
 ```bash
-./g8e auth pending-platform-enrollments
+./g8e auth pending
 ./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
 ```
 
