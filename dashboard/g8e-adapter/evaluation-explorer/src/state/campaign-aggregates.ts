@@ -24,7 +24,7 @@ export interface VariantRoleBucket {
   outcomes: Partial<Record<TerminalStatus, number>>;
 }
 
-const NORTH_STAR_SUITE_ID = 'north-star-25';
+const BENCHMARK_SUITE_ID = 'north-star-25';
 
 export function variantRoleStatsKey(runId: string, variantId: string, role: ModelRole): string {
   return `${runId}:${variantId}:${role}`;
@@ -137,7 +137,7 @@ function buildCatalogSnapshot(
     source_revision_label: CAMPAIGN_SOURCE_REVISION,
     title: `Live smoke run (${runId})`,
     description:
-      'Homogeneous full-pipeline model-role evaluation over the frozen north-star-25 catalog. Values are provisional while assignments are still executing.',
+      'Homogeneous full-pipeline model-role evaluation over the frozen 25-scenario agent benchmark catalog. Values are provisional while assignments are still executing.',
     limitations: [
       'Live values are provisional and update as assignments complete.',
       'Model aggregates reflect designated role responsibility inside the production chat pipeline, not a provider-only benchmark.',
@@ -235,8 +235,8 @@ function buildMethodologySnapshot(datasetId: string, observedAt: string): Method
     ],
     suite_definitions: [
       {
-        suite_id: NORTH_STAR_SUITE_ID,
-        display_name: 'North Star 25',
+        suite_id: BENCHMARK_SUITE_ID,
+        display_name: 'Agent benchmark (25 scenarios)',
         task_count: 25,
         description:
           'Frozen 25-scenario catalog covering instruction adherence, tool use, analysis, routing, verification, security, recovery, and final response.',

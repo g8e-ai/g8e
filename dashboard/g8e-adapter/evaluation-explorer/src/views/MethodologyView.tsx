@@ -1,10 +1,11 @@
-// Docs view — contract reference for engineers. Scannable tables, pipeline
-// diagram, and live methodology snapshot data. No marketing copy.
+// Docs view — what's shipped, where this is headed, and how to read the feed.
+// Static copy for first-time visitors; live methodology data for metrics,
+// datasets, suites, and active limitations.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStoreState } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
-import { EmptyState, QualityBadge, SectionHeading, StatTile } from '../components/shared';
+import { EmptyState, QualityBadge, StatTile } from '../components/shared';
 import { qualityStateLabel } from '../utils/feed-state';
 import descriptorUrl from '../contract/descriptor.json?url';
 import {
@@ -63,6 +64,40 @@ const ENGINEERING_RULES = [
   ['Inventory models', 'inventory_only flag — not a quality state'],
 ] as const;
 
+const SHIPPED_TODAY = [
+  'A public Evaluation Explorer over a signed mirror feed — live campaign progress, historical runs, per-model results, and role-scoped comparison, all reconstructed from bootstrap, paginated history, and SSE.',
+  'Model campaign benchmarks that run models through the production g8ee chat path: governed inference dispatch, tool and filesystem boundaries, and the Primary / Assistant / Light role stack used in real workloads.',
+  'A frozen 25-scenario agent benchmark catalog across nine behavior categories, graded on a real host boundary with rubric-based pass/fail, tool scorecards, escalation disposition, and timing telemetry when observed.',
+  'Explicit quality-state labeling on every record — verified, exploratory, live-in-progress, or failed — so you can see what has passed integrity checks and what is still provisional.',
+] as const;
+
+const BUILDING_TOWARD = [
+  'Checksum-bound verified public snapshots: publication-eligible results when a campaign completes and passes full verification.',
+  'Independent provider-boundary observation for GPU and system-efficiency metrics, bound to inference attempts rather than inferred from latency.',
+  'Heterogeneous system leaderboards that compare complete role stacks, separate from single-role model swaps.',
+  'Broader model catalog coverage as campaigns scale — inventory-only entries today, measured candidates as runs complete.',
+] as const;
+
+const HOW_TO_INTERPRET = [
+  ['Quality badges are the source of truth', 'Check the quality state on any row before drawing conclusions. verified_public means publication-eligible; exploratory_partial means measured but not yet verified; live_in_progress means still running.'],
+  ['Metrics are scoped on purpose', 'Comparisons stay inside one dataset, one designated role, and one denominator. Model evaluations swap a single role candidate; system evaluations compare complete stacks.'],
+  ['Missing telemetry is disclosed', 'When a metric was not observed, the UI shows Unavailable with a reason instead of a zero that would look like a measurement.'],
+  ['Confidence intervals describe uncertainty', 'Bootstrap bounds express sampling variance over tasks. Overlapping intervals mean the data cannot separate the candidates — that is a feature, not a bug.'],
+  ['Reproducibility lives in the report bundle', 'This mirror publishes aggregate results safe for anonymous reading. Signed operator evidence for full reproduction sits behind the evaluation pipeline, not in the browser.'],
+] as const;
+
+const SCENARIO_CATEGORY_BLURBS: Record<(typeof SCENARIO_CATEGORIES)[number], string> = {
+  instruction_adherence: 'Follow constraints, formats, and stop conditions',
+  tool_selection: 'Pick the right tool for the intent',
+  tool_arguments: 'Populate schemas and semantic arguments correctly',
+  technical_analysis: 'Interpret host and log evidence accurately',
+  routing_delegation: 'Route work to the correct role or escalate',
+  verification: 'Validate outputs before committing',
+  security_policy: 'Respect authorization and data-handling policy',
+  recovery: 'Recover from tool or execution failures',
+  final_response: 'Synthesize a correct user-facing answer',
+};
+
 function formatEnum(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -71,53 +106,100 @@ function scenarioLabel(category: (typeof SCENARIO_CATEGORIES)[number]): string {
   return formatEnum(category);
 }
 
-function PipelineDiagram() {
-  const nodes = [
-    { id: 'campaign', label: 'Campaign', sub: 'g8e eval campaign' },
+function ArchitectureDiagram() {
+  const edgeNodes = [
     { id: 'publish', label: 'Publication', sub: 'public-safe projection' },
     { id: 'mirror', label: 'Mirror', sub: 'JSONL feed + SSE' },
-    { id: 'explorer', label: 'Explorer', sub: 'read-only browser' },
+    { id: 'cloudflare', label: 'Cloudflare', sub: 'tunnel to opendevops.ai' },
+    { id: 'explorer', label: 'Explorer', sub: 'this browser' },
   ];
 
   return (
-    <div className="docs-pipeline" aria-label="Data flow from campaign to browser">
-      <svg className="docs-pipeline-svg" viewBox="0 0 720 88" role="img" aria-hidden="true">
+    <div className="docs-architecture" aria-label="g8e architecture from home workstation to browser">
+      <svg className="docs-architecture-svg" viewBox="0 0 900 300" role="img" aria-hidden="true">
         <defs>
-          <marker id="docs-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+          <marker id="docs-arch-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
             <path d="M0,0 L8,4 L0,8 Z" fill="var(--accent)" />
           </marker>
         </defs>
+
+        <rect x="20" y="16" width="860" height="132" rx="12" fill="none" stroke="var(--border)" strokeWidth="2" strokeDasharray="6 4" />
+        <text x="36" y="38" fill="var(--fg-dim)" fontSize="12" fontWeight="700" letterSpacing="0.4">
+          HOME WORKSTATION · WINDOWS · DOCKER
+        </text>
+
+        <g transform="translate(40, 52)">
+          <rect width="150" height="78" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
+          <text x="75" y="30" textAnchor="middle" fill="var(--fg)" fontSize="15" fontWeight="700">Ollama</text>
+          <text x="75" y="50" textAnchor="middle" fill="var(--fg-dim)" fontSize="12">local model inference</text>
+        </g>
+
+        <g transform="translate(210, 52)">
+          <rect width="500" height="78" rx="8" fill="var(--navy)" stroke="var(--accent)" strokeWidth="2" />
+          <text x="250" y="28" textAnchor="middle" fill="var(--accent)" fontSize="16" fontWeight="800">g8e unified stack</text>
+          <text x="250" y="48" textAnchor="middle" fill="var(--fg)" fontSize="12">
+            Gateway · Operator · Ensemble · native eval
+          </text>
+          <text x="250" y="64" textAnchor="middle" fill="var(--fg-dim)" fontSize="11">
+            governed execution, campaigns, and publication
+          </text>
+        </g>
+
+        <g transform="translate(730, 52)">
+          <rect width="130" height="78" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
+          <text x="65" y="30" textAnchor="middle" fill="var(--fg)" fontSize="15" fontWeight="700">Campaigns</text>
+          <text x="65" y="50" textAnchor="middle" fill="var(--fg-dim)" fontSize="12">live + historical</text>
+        </g>
+
+        <line x1="450" y1="148" x2="450" y2="178" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#docs-arch-arrow)" />
+
         {[0, 1, 2].map((i) => (
           <line
             key={i}
-            x1={150 + i * 180}
-            y1="44"
-            x2={210 + i * 180}
-            y2="44"
+            x1={170 + i * 210}
+            y1="224"
+            x2={230 + i * 210}
+            y2="224"
             stroke="var(--accent)"
             strokeWidth="2"
-            markerEnd="url(#docs-arrow)"
+            markerEnd="url(#docs-arch-arrow)"
           />
         ))}
-        {nodes.map((node, i) => (
-          <g key={node.id} transform={`translate(${24 + i * 180}, 12)`}>
-            <rect width="132" height="64" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
-            <text x="66" y="28" textAnchor="middle" fill="var(--fg)" fontSize="13" fontWeight="700">
+
+        {edgeNodes.map((node, i) => (
+          <g key={node.id} transform={`translate(${36 + i * 210}, 188)`}>
+            <rect width="156" height="72" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
+            <text x="78" y="30" textAnchor="middle" fill="var(--fg)" fontSize="14" fontWeight="700">
               {node.label}
             </text>
-            <text x="66" y="48" textAnchor="middle" fill="var(--fg-dim)" fontSize="10">
+            <text x="78" y="50" textAnchor="middle" fill="var(--fg-dim)" fontSize="11">
               {node.sub}
             </text>
           </g>
         ))}
       </svg>
-      <ol className="docs-pipeline-steps">
-        {nodes.map((node) => (
-          <li key={node.id}>
-            <strong>{node.label}</strong>
-            <span>{node.sub}</span>
-          </li>
-        ))}
+
+      <ol className="docs-architecture-steps">
+        <li>
+          <strong>Home workstation</strong>
+          <span>Windows host running the full g8e Docker stack and Ollama for on-prem model inference.</span>
+        </li>
+        <li>
+          <strong>g8e unified stack</strong>
+          <span>Gateway, Operator, Ensemble, and native eval campaigns execute and grade every benchmark locally.</span>
+        </li>
+        <li>
+          <strong>Publication + mirror</strong>
+          <span>Campaign evidence is projected to public-safe fields and streamed as JSONL plus SSE from the gateway.</span>
+        </li>
+        <li>
+          <strong>Cloudflare tunnel</strong>
+          <span>The gateway public listener is exposed at opendevops.ai — you are reading live results from this PC.</span>
+        </li>
+        <li>
+          <strong>Evaluation Explorer</strong>
+          <span>This read-only browser validates every record against a frozen schema before rendering.</span>
+        </li>
       </ol>
     </div>
   );
@@ -134,7 +216,10 @@ function ScenarioChart() {
           const count = SCENARIO_COUNTS[category];
           return (
             <li key={category}>
-              <span className="docs-bar-label">{scenarioLabel(category)}</span>
+              <span className="docs-bar-label">
+                <span className="docs-bar-name">{scenarioLabel(category)}</span>
+                <span className="docs-bar-blurb">{SCENARIO_CATEGORY_BLURBS[category]}</span>
+              </span>
               <span className="docs-bar-track" aria-hidden="true">
                 <span className="docs-bar-fill" style={{ width: `${(count / max) * 100}%` }} />
               </span>
@@ -144,7 +229,7 @@ function ScenarioChart() {
         })}
       </ul>
       <p className="docs-chart-foot">
-        <strong>{total}</strong> frozen scenarios · North Star catalog
+        <strong>{total}</strong> frozen scenarios · versioned agent benchmark catalog
       </p>
     </div>
   );
@@ -253,6 +338,82 @@ function EnumChipTable({ title, values }: { title: string; values: readonly stri
   );
 }
 
+const DOC_NAV = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'benchmark', label: 'Benchmark' },
+  { id: 'architecture', label: 'Architecture' },
+  { id: 'feed', label: 'Current feed' },
+  { id: 'guarantees', label: 'Guarantees' },
+  { id: 'reference', label: 'Reference' },
+] as const;
+
+const MODEL_ROLES = [
+  { name: 'Primary', wire: 'primary', scope: 'Task owner · plans · delegates · synthesizes' },
+  { name: 'Assistant', wire: 'assistant', scope: 'Bounded technical work for Primary' },
+  { name: 'Light', wire: 'lite', scope: 'Constrained decisions or escalate' },
+] as const;
+
+const G8E_REPO_URL = 'https://github.com/g8e-ai/g8e';
+
+const G8E_STACK_COMPONENTS = [
+  {
+    id: 'gateway',
+    label: 'g8eg · Gateway',
+    detail: 'Policy admission, routing, public mirror, and the Cloudflare tunnel origin on this workstation.',
+  },
+  {
+    id: 'operator',
+    label: 'g8eo · Operator',
+    detail: 'Host-bound execution boundary — tools, filesystem, and signed evidence on the managed host.',
+  },
+  {
+    id: 'ensemble',
+    label: 'g8ee · Ensemble',
+    detail: 'Production multi-agent chat path that turns evaluation scenarios into governed inference and tool calls.',
+  },
+  {
+    id: 'eval',
+    label: 'g8e eval',
+    detail: 'Native campaign orchestration, rubric grading, and signed report bundles for every run you see here.',
+  },
+] as const;
+
+const WORKSTATION_SPECS = [
+  { label: 'CPU', value: 'Intel Core i9-13900K' },
+  { label: 'Memory', value: '64 GB RAM' },
+  { label: 'GPU', value: 'NVIDIA GeForce RTX 4070 Ti SUPER · 16 GB VRAM' },
+  { label: 'Runtime', value: 'Docker on Windows · Ollama for local model inference' },
+] as const;
+
+function DocsSection({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+  return (
+    <section id={id} className="docs-section" aria-labelledby={`${id}-title`}>
+      <h2 id={`${id}-title`} className="docs-section-title">{title}</h2>
+      <div className="docs-section-body">{children}</div>
+    </section>
+  );
+}
+
+function DocsCard({
+  title,
+  lede,
+  children,
+  variant,
+}: {
+  title?: string;
+  lede?: string;
+  children: ReactNode;
+  variant?: 'roadmap';
+}) {
+  return (
+    <article className={`panel docs-card${variant ? ` docs-card-${variant}` : ''}`}>
+      {title ? <h3 className="docs-card-title">{title}</h3> : null}
+      {lede ? <p className="docs-card-lede">{lede}</p> : null}
+      {children}
+    </article>
+  );
+}
+
 function DownloadsStrip() {
   const [origin, setOrigin] = useState<string | null>(null);
 
@@ -298,203 +459,261 @@ export function MethodologyView() {
   const methodology = useStoreState((state) => state.methodology);
   const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
   const connection = useStoreState((state) => state.connection);
-
-  if (!methodology) {
-    return (
-      <div className="docs-view">
-        <SectionHeading kicker="DOCS" title="Evaluation contract" />
-        <EmptyState hasRecords={false} hasFilters={false} connection={connection} />
-      </div>
-    );
-  }
+  const scenarioTotal = Object.values(SCENARIO_COUNTS).reduce((sum, n) => sum + n, 0);
 
   return (
-    <div className="docs-view">
-      <SectionHeading
-        kicker="DOCS"
-        title="Evaluation contract"
-        description={`Public read model for OpenDevOps.ai model campaigns. Schema ${VIEW_SCHEMA_VERSION} · mirror-only · no provider calls from the browser.`}
-      />
-
-      <div className="stat-grid docs-stat-grid">
-        <StatTile label="Schema" value={VIEW_SCHEMA_VERSION} hint="Frozen view contract" />
-        <StatTile label="Snapshots" value={SNAPSHOT_KINDS.length} hint="Durable record kinds" />
-        <StatTile label="Live events" value={LIVE_EVENT_KINDS.length} hint="SSE lifecycle kinds" />
-        <StatTile label="Feed types" value={FEED_RECORD_TYPES.length} hint="Mirror transport envelope" />
-      </div>
-
-      <section className="panel docs-panel">
-        <div className="panel-head">
-          <h2>Publication pipeline</h2>
-          <p className="panel-note">Campaign evidence → public projection → anonymous mirror</p>
-        </div>
-        <PipelineDiagram />
-      </section>
-
-      <div className="docs-grid">
-        <section className="panel docs-panel">
-          <div className="panel-head">
-            <h2>Metric spec</h2>
-            <p className="panel-note">From active methodology snapshot</p>
-          </div>
-          <MetricSpecTable metrics={methodology.metric_definitions} />
-        </section>
-
-        <section className="panel docs-panel">
-          <div className="panel-head">
-            <h2>Datasets</h2>
-            <p className="panel-note">Never mixed in compare or aggregates</p>
-          </div>
-          <DatasetTable catalogs={catalogs} />
-        </section>
-      </div>
-
-      <div className="docs-grid docs-grid-wide">
-        <section className="panel docs-panel">
-          <div className="panel-head">
-            <h2>Scenario catalog</h2>
-            <p className="panel-note">Frozen North Star matrix by category</p>
-          </div>
-          <ScenarioChart />
-        </section>
-
-        <section className="panel docs-panel">
-          <div className="panel-head">
-            <h2>Roles</h2>
-            <p className="panel-note">Candidates compete per role — not by parameter count</p>
-          </div>
-          <div className="table-scroll">
-            <table className="docs-table docs-compact-table">
-              <thead>
-                <tr>
-                  <th scope="col">Role</th>
-                  <th scope="col">Wire</th>
-                  <th scope="col">Scope</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <th scope="row">Primary</th>
-                  <td><code>primary</code></td>
-                  <td>Task owner · plans · delegates · synthesizes</td>
-                </tr>
-                <tr>
-                  <th scope="row">Assistant</th>
-                  <td><code>assistant</code></td>
-                  <td>Bounded technical work for Primary</td>
-                </tr>
-                <tr>
-                  <th scope="row">Light</th>
-                  <td><code>lite</code></td>
-                  <td>Constrained decisions or escalate</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-
-      <section className="panel docs-panel">
-        <div className="panel-head">
-          <h2>Engineering rules</h2>
-          <p className="panel-note">Fail-closed behaviors enforced in validators and UI</p>
-        </div>
-        <div className="table-scroll">
-          <table className="docs-table docs-compact-table">
-            <thead>
-              <tr>
-                <th scope="col">Rule</th>
-                <th scope="col">Behavior</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ENGINEERING_RULES.map(([rule, behavior]) => (
-                <tr key={rule}>
-                  <th scope="row">{rule}</th>
-                  <td>{behavior}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <div className="docs-enum-grid">
-        <section className="panel docs-panel">
-          <div className="panel-head">
-            <h2>Quality states</h2>
-          </div>
-          <ul className="docs-quality-list">
-            {QUALITY_STATES.map((state) => (
-              <li key={state}>
-                <QualityBadge state={state} />
-                <code>{state}</code>
-                <span>{qualityStateLabel(state)}</span>
+    <div className="docs-layout">
+      <aside className="docs-sidebar" aria-label="Documentation navigation">
+        <p className="docs-sidebar-label">On this page</p>
+        <nav>
+          <ul className="docs-sidebar-nav">
+            {DOC_NAV.map((item) => (
+              <li key={item.id}>
+                <a href={`#${item.id}`}>{item.label}</a>
               </li>
             ))}
           </ul>
-        </section>
+        </nav>
+      </aside>
 
-        <section className="panel docs-panel">
-          <EnumChipTable title="Snapshot kinds" values={SNAPSHOT_KINDS} />
-        </section>
+      <div className="docs-main">
+        <header className="panel docs-hero">
+          <h1 className="docs-hero-title">Evaluation Explorer</h1>
+          <p className="docs-hero-lede">
+            Public benchmarks for models running through OpenDevOps.ai — a live deployment of the{' '}
+            <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">g8e</a> AI governance suite.
+            Evaluations execute on a home workstation over Docker and Ollama, publish through the gateway
+            mirror, and stream here over Cloudflare. Quality labels tell you exactly which stage each result
+            is in: live, exploratory, or verified.
+          </p>
+        </header>
 
-        <section className="panel docs-panel">
-          <EnumChipTable title="Live event kinds" values={LIVE_EVENT_KINDS} />
-        </section>
-      </div>
-
-      {methodology.suite_definitions.length > 0 ? (
-        <section className="panel docs-panel">
-          <div className="panel-head">
-            <h2>Suites</h2>
-          </div>
-          <div className="table-scroll">
-            <table className="docs-table docs-compact-table">
-              <thead>
-                <tr>
-                  <th scope="col">Suite</th>
-                  <th scope="col">ID</th>
-                  <th scope="col">Tasks</th>
-                  <th scope="col">Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {methodology.suite_definitions.map((suite) => (
-                  <tr key={suite.suite_id}>
-                    <th scope="row">{suite.display_name}</th>
-                    <td><code>{suite.suite_id}</code></td>
-                    <td>{suite.task_count}</td>
-                    <td>{suite.description}</td>
-                  </tr>
+        <DocsSection id="overview" title="Overview">
+          <div className="docs-split">
+            <DocsCard title="Shipped today" lede="What you can use in this browser right now.">
+              <ul className="docs-feature-list">
+                {SHIPPED_TODAY.map((item) => (
+                  <li key={item}>{item}</li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+            </DocsCard>
+            <DocsCard
+              title="Building toward"
+              lede="The evaluation program this Explorer surfaces as campaigns mature."
+              variant="roadmap"
+            >
+              <ul className="docs-feature-list">
+                {BUILDING_TOWARD.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </DocsCard>
           </div>
-        </section>
-      ) : null}
+          <DocsCard title="How to interpret what you see" lede="Straight answers for careful readers.">
+            <ul className="docs-trust-list">
+              {HOW_TO_INTERPRET.map(([headline, detail]) => (
+                <li key={headline}>
+                  <strong>{headline}</strong>
+                  <span>{detail}</span>
+                </li>
+              ))}
+            </ul>
+          </DocsCard>
+        </DocsSection>
 
-      {methodology.limitations.length > 0 ? (
-        <section className="panel docs-panel docs-limitations">
-          <div className="panel-head">
-            <h2>Active limitations</h2>
-            <p className="panel-note">From methodology snapshot · {methodology.observed_at}</p>
+        <DocsSection id="benchmark" title="What we benchmark">
+          <div className="docs-split">
+            <DocsCard
+              title="Scenario catalog"
+              lede={`${scenarioTotal} frozen scenarios across ${SCENARIO_CATEGORIES.length} categories on a real host boundary through the production inference and tool stack.`}
+            >
+              <ScenarioChart />
+            </DocsCard>
+            <DocsCard title="Model roles" lede="Candidates compete per role — not by parameter count.">
+              <ul className="docs-role-cards">
+                {MODEL_ROLES.map((role) => (
+                  <li key={role.wire}>
+                    <strong>{role.name}</strong>
+                    <code>{role.wire}</code>
+                    <span>{role.scope}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="docs-card-foot">
+                Each scenario grades pass/fail against rubric criteria. Escalation disposition, tool
+                scorecards, security events, and timing telemetry publish when observed — otherwise they stay
+                explicitly unavailable.
+              </p>
+            </DocsCard>
           </div>
-          <ul className="docs-limitation-list">
-            {methodology.limitations.map((lim, i) => (
-              <li key={i}>{lim}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+        </DocsSection>
 
-      <section className="panel docs-panel">
-        <div className="panel-head">
-          <h2>Machine-readable contract</h2>
-          <p className="panel-note">descriptor.json · mirror endpoints</p>
-        </div>
-        <DownloadsStrip />
-      </section>
+        <DocsSection id="architecture" title="Architecture — powered by g8e">
+          <DocsCard
+            title="OpenDevOps.ai is a live g8e deployment"
+            lede="This site is one working example of the g8e AI governance suite — not a separate benchmark product. Evaluations run on a home workstation, publish through the built-in gateway mirror, and reach your browser over Cloudflare. The results you see are live."
+          >
+            <p className="docs-architecture-intro">
+              <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">
+                g8e
+              </a>{' '}
+              governs AI data and execution at the edge: policy admission, host-bound operator execution,
+              multi-agent reasoning, native evaluations, and a public mirror for anonymous read-only spectators.
+              OpenDevOps.ai uses that stack end-to-end — Docker on a Windows workstation, Ollama for local models,
+              and the gateway&apos;s Cloudflare tunnel to serve this explorer at{' '}
+              <a href="https://opendevops.ai" target="_blank" rel="noopener noreferrer">opendevops.ai</a>.
+              The suite&apos;s scope is much broader than this one surface; see the{' '}
+              <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">g8e repository</a> for the full
+              platform.
+            </p>
+            <ArchitectureDiagram />
+            <p className="docs-card-foot">
+              The publication layer projects only public-safe fields — aggregate metrics, quality states, and
+              assignment outcomes. Prompts, outputs, and credentials stay in the signed report bundle behind
+              the evaluation pipeline.
+            </p>
+          </DocsCard>
+
+          <div className="docs-split">
+            <DocsCard title="g8e components in this deployment" lede="Four platform surfaces, one governance boundary on the workstation.">
+              <ul className="docs-stack-list">
+                {G8E_STACK_COMPONENTS.map((component) => (
+                  <li key={component.id}>
+                    <strong>{component.label}</strong>
+                    <span>{component.detail}</span>
+                  </li>
+                ))}
+              </ul>
+            </DocsCard>
+            <DocsCard title="Evaluation host" lede="Hardware running the Docker stack and Ollama today.">
+              <ul className="docs-spec-list">
+                {WORKSTATION_SPECS.map((spec) => (
+                  <li key={spec.label}>
+                    <span className="docs-spec-label">{spec.label}</span>
+                    <span className="docs-spec-value">{spec.value}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="docs-card-foot">
+                Model campaigns execute against this host boundary through the production g8ee chat path — the same
+                governed inference, tool, and filesystem stack used for real workloads, not a synthetic API shim.
+              </p>
+            </DocsCard>
+          </div>
+        </DocsSection>
+
+        <DocsSection id="feed" title="Current feed">
+          {methodology ? (
+            <>
+              <DocsCard title="Datasets" lede="Exploratory, verified, and live runs are labeled and compared separately.">
+                <DatasetTable catalogs={catalogs} />
+              </DocsCard>
+
+              <DocsCard title="Metric definitions" lede={`Active methodology snapshot · ${methodology.observed_at}`}>
+                <MetricSpecTable metrics={methodology.metric_definitions} />
+              </DocsCard>
+
+              {methodology.suite_definitions.length > 0 ? (
+                <DocsCard title="Active suites" lede="Suites scheduled in the current feed.">
+                  <div className="table-scroll">
+                    <table className="docs-table docs-compact-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">Suite</th>
+                          <th scope="col">ID</th>
+                          <th scope="col">Tasks</th>
+                          <th scope="col">Description</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {methodology.suite_definitions.map((suite) => (
+                          <tr key={suite.suite_id}>
+                            <th scope="row">{suite.display_name}</th>
+                            <td><code>{suite.suite_id}</code></td>
+                            <td>{suite.task_count}</td>
+                            <td>{suite.description}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </DocsCard>
+              ) : null}
+
+              {methodology.limitations.length > 0 ? (
+                <DocsCard title="Active limitations" lede="Known gaps in the current feed.">
+                  <ul className="docs-limitation-list">
+                    {methodology.limitations.map((lim, i) => (
+                      <li key={i}>{lim}</li>
+                    ))}
+                  </ul>
+                </DocsCard>
+              ) : null}
+            </>
+          ) : (
+            <DocsCard>
+              <EmptyState hasRecords={false} hasFilters={false} connection={connection} />
+            </DocsCard>
+          )}
+        </DocsSection>
+
+        <DocsSection id="guarantees" title="Rendering guarantees">
+          <DocsCard lede="Rules the UI follows so displayed numbers stay faithful to the feed.">
+            <div className="table-scroll">
+              <table className="docs-table docs-compact-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Rule</th>
+                    <th scope="col">Behavior</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ENGINEERING_RULES.map(([rule, behavior]) => (
+                    <tr key={rule}>
+                      <th scope="row">{rule}</th>
+                      <td>{behavior}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </DocsCard>
+        </DocsSection>
+
+        <DocsSection id="reference" title="Contract reference">
+          <DocsCard lede={`For integrators · schema ${VIEW_SCHEMA_VERSION} · mirror-only · no provider calls from the browser.`}>
+            <div className="stat-grid docs-stat-grid">
+              <StatTile label="Schema" value={VIEW_SCHEMA_VERSION} hint="Frozen view contract" />
+              <StatTile label="Snapshots" value={SNAPSHOT_KINDS.length} hint="Durable record kinds" />
+              <StatTile label="Live events" value={LIVE_EVENT_KINDS.length} hint="SSE lifecycle kinds" />
+              <StatTile label="Feed types" value={FEED_RECORD_TYPES.length} hint="Mirror transport envelope" />
+            </div>
+            <div className="docs-enum-grid">
+              <section className="docs-enum-panel docs-enum-panel-bordered">
+                <h3>Quality states</h3>
+                <ul className="docs-quality-list">
+                  {QUALITY_STATES.map((state) => (
+                    <li key={state}>
+                      <QualityBadge state={state} />
+                      <code>{state}</code>
+                      <span>{qualityStateLabel(state)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              <section className="docs-enum-panel docs-enum-panel-bordered">
+                <EnumChipTable title="Snapshot kinds" values={SNAPSHOT_KINDS} />
+              </section>
+
+              <section className="docs-enum-panel docs-enum-panel-bordered">
+                <EnumChipTable title="Live event kinds" values={LIVE_EVENT_KINDS} />
+              </section>
+            </div>
+            <DownloadsStrip />
+          </DocsCard>
+        </DocsSection>
+      </div>
     </div>
   );
 }
