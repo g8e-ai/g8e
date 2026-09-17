@@ -4,7 +4,7 @@
 // Includes column-visibility controls so users can hide columns on wide
 // tables (e.g. the 1,125-row assignment table) and keep the view scannable.
 
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import {
   type ColumnDef,
   type SortingState,
@@ -50,11 +50,13 @@ export function DataTable<T>({
 
   const pageCount = Math.ceil(data.length / pageSize);
   const safePage = Math.min(page, Math.max(0, pageCount - 1));
-  const pageRows = useMemo(() => {
-    const rows = table.getRowModel().rows;
-    const start = safePage * pageSize;
-    return rows.slice(start, start + pageSize);
-  }, [table, safePage, pageSize, data.length]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [sorting]);
+
+  const rows = table.getRowModel().rows;
+  const pageRows = rows.slice(safePage * pageSize, safePage * pageSize + pageSize);
 
   if (data.length === 0) {
     return <>{empty ?? <p className="table-empty">No rows.</p>}</>;
