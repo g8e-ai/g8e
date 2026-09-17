@@ -98,6 +98,7 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 		chatEvalCmd(deps),
 		inventoryEvalCmd(deps),
 		campaignEvalCmd(deps),
+		queueEvalCmd(deps),
 		providerObserverEvalCmd(deps),
 	)
 	return cmd

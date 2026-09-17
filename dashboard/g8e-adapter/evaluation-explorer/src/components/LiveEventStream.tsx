@@ -1,13 +1,15 @@
 // Live SSE event feed for the overview page. Newest events at the top inside a
 // grid-matched scroll region so progress ticks do not move the page.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { FeedConnectionState } from '../utils/feed-state';
 import { resolveModelSummary, useStoreState } from '../state/store';
 import { roleLabel, visibleStreamEvents } from '../views/derived';
 import { EmptyState } from './shared';
 import type { LiveEvent } from '../contract/types';
+
+const STREAM_PAGE_SIZE = 25;
 
 function eventTime(iso: string): string {
   const date = new Date(iso);
@@ -24,6 +26,8 @@ export function LiveEventStream({
 }) {
   const [modelFilter, setModelFilter] = useState('all');
   const [kindFilter, setKindFilter] = useState('all');
+  const [page, setPage] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const models = useStoreState((state) => state.models);
 
@@ -38,6 +42,21 @@ export function LiveEventStream({
     () => visibleStreamEvents(events, { modelFilter, kindFilter }),
     [events, modelFilter, kindFilter],
   );
+
+  const pageCount = Math.ceil(visible.length / STREAM_PAGE_SIZE);
+  const safePage = Math.min(page, Math.max(0, pageCount - 1));
+  const pageEvents = useMemo(() => {
+    const start = safePage * STREAM_PAGE_SIZE;
+    return visible.slice(start, start + STREAM_PAGE_SIZE);
+  }, [visible, safePage]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [modelFilter, kindFilter]);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [safePage]);
 
   return (
     <section className="panel stream-panel" id="live-stream" aria-label="Live event stream">
@@ -83,7 +102,7 @@ export function LiveEventStream({
           connection={connection}
         />
       ) : (
-        <div className="stream-scroll">
+        <div className="stream-scroll" ref={scrollRef}>
           <table className="stream-table">
             <thead>
               <tr>
@@ -95,7 +114,7 @@ export function LiveEventStream({
               </tr>
             </thead>
             <tbody>
-              {visible.map((event) => {
+              {pageEvents.map((event) => {
                 const model = event.variant_id
                   ? resolveModelSummary(models, event.dataset_id, event.variant_id)
                   : undefined;
@@ -141,6 +160,29 @@ export function LiveEventStream({
           </table>
         </div>
       )}
+      {visible.length > 0 && pageCount > 1 ? (
+        <div className="table-pagination" data-testid="stream-pagination">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={safePage === 0}
+            aria-label="Previous page"
+          >
+            Previous
+          </button>
+          <span className="page-info">
+            Page {safePage + 1} of {pageCount} ({visible.length} events)
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+            disabled={safePage >= pageCount - 1}
+            aria-label="Next page"
+          >
+            Next
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

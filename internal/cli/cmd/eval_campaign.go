@@ -32,6 +32,7 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		Short: "Initialize, schedule, and resume North Star model campaigns",
 	}
 	cmd.AddCommand(
+		campaignEvalStartCmd(deps),
 		campaignEvalInitCmd(deps),
 		campaignEvalListCmd(deps),
 		campaignEvalScheduleCmd(deps),
@@ -40,7 +41,7 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		campaignEvalExecuteCmd(deps),
 		campaignEvalPublishCmd(deps),
 		campaignEvalVerifyCmd(deps),
-		campaignEvalAccountCmd(deps),
+		campaignEvalCheckMatrixCmd(deps),
 		campaignEvalExportCmd(deps),
 		campaignEvalRepairResultsCmd(deps),
 		campaignEvalRepairTraceDigestsCmd(deps),
@@ -274,7 +275,7 @@ func campaignEvalScheduleHeterogeneousCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID("schedule-heterogeneous", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "schedule-heterogeneous", runID, args)
 			if err != nil {
 				return err
 			}
@@ -322,7 +323,7 @@ func campaignEvalScheduleCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID("schedule", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "schedule", runID, args)
 			if err != nil {
 				return err
 			}
@@ -380,7 +381,7 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID("execute", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "execute", runID, args)
 			if err != nil {
 				return err
 			}
@@ -605,7 +606,7 @@ func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID("publish", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "publish", runID, args)
 			if err != nil {
 				return err
 			}
@@ -710,7 +711,7 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID("verify", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "verify", runID, args)
 			if err != nil {
 				return err
 			}
@@ -788,16 +789,17 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
-func campaignEvalAccountCmd(deps nativeEvalDeps) *cobra.Command {
+func campaignEvalCheckMatrixCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
 	var jsonOutput bool
 	cmd := &cobra.Command{
-		Use:   "account [run-id]",
-		Short: "Verify homogeneous matrix population accounting for one campaign run",
-		Args:  cobra.MaximumNArgs(1),
+		Use:     "check-matrix [run-id]",
+		Aliases: []string{"account"},
+		Short:   "Verify homogeneous matrix population coverage for one campaign run",
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID("account", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "check-matrix", runID, args)
 			if err != nil {
 				return err
 			}
@@ -808,15 +810,15 @@ func campaignEvalAccountCmd(deps nativeEvalDeps) *cobra.Command {
 			store := evaluation.NewStore(fileSvc)
 			run, err := store.LoadRun(cmd.Context(), runID)
 			if err != nil {
-				return fmt.Errorf("evaluation: campaign account: %w", err)
+				return fmt.Errorf("evaluation: campaign check-matrix: %w", err)
 			}
 			catalog, err := store.LoadScenarioCatalog(cmd.Context(), run.GetCampaignBinding().GetCampaignId())
 			if err != nil {
-				return fmt.Errorf("evaluation: campaign account: %w", err)
+				return fmt.Errorf("evaluation: campaign check-matrix: %w", err)
 			}
 			report, err := evaluation.NewCampaignPopulationAccountant(deps.now).AccountRun(cmd.Context(), store, runID, catalog)
 			if err != nil {
-				return fmt.Errorf("evaluation: campaign account: %w", err)
+				return fmt.Errorf("evaluation: campaign check-matrix: %w", err)
 			}
 			if jsonOutput {
 				payload, err := json.MarshalIndent(map[string]any{
@@ -879,7 +881,7 @@ func campaignEvalExportCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID("export", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "export", runID, args)
 			if err != nil {
 				return err
 			}
@@ -941,7 +943,7 @@ func campaignEvalRepairTraceDigestsCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID("repair-trace-digests", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "repair-trace-digests", runID, args)
 			if err != nil {
 				return err
 			}
@@ -980,7 +982,7 @@ func campaignEvalRepairResultsCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID("repair-results", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "repair-results", runID, args)
 			if err != nil {
 				return err
 			}
@@ -1100,7 +1102,7 @@ func campaignEvalStatusCmd(deps nativeEvalDeps) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID("status", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "status", runID, args)
 			if err != nil {
 				return err
 			}
@@ -1156,18 +1158,3 @@ func resolveCampaignOllamaEndpoint(flag string) string {
 	return fmt.Sprintf("http://127.0.0.1:%d", constants.InferenceOllamaDefaultPort)
 }
 
-func resolveCampaignRunID(command, flagValue string, args []string) (string, error) {
-	if len(args) > 1 {
-		return "", fmt.Errorf("evaluation: campaign %s: accepts at most one run ID argument", command)
-	}
-	if len(args) == 1 {
-		if flagValue != "" && flagValue != args[0] {
-			return "", fmt.Errorf("evaluation: campaign %s: conflicting run ID %q and positional argument %q", command, flagValue, args[0])
-		}
-		return args[0], nil
-	}
-	if flagValue == "" {
-		return "", fmt.Errorf("evaluation: campaign %s: %w", command, constants.ErrMissingRequiredField)
-	}
-	return flagValue, nil
-}
