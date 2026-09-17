@@ -25,8 +25,11 @@ import (
 const evalExplorerRelativeRoot = "dashboard/g8e-adapter/evaluation-explorer/dist"
 
 // NewEvalExplorerHandler serves the evaluation explorer SPA with a runtime.json
-// that points at the public mirror origin exposed to browsers.
-func NewEvalExplorerHandler(rootOverride, mirrorOrigin string) (http.Handler, error) {
+// that points at the public mirror origin exposed to browsers. When
+// dedicatedPort is true the explorer is served from a separate listener
+// (for example :5173) and runtime.json always references the configured
+// mirror origin instead of the explorer request origin.
+func NewEvalExplorerHandler(rootOverride, mirrorOrigin string, dedicatedPort bool) (http.Handler, error) {
 	contentFS, err := resolveEvalExplorerFS(rootOverride)
 	if err != nil {
 		return nil, err
@@ -39,7 +42,7 @@ func NewEvalExplorerHandler(rootOverride, mirrorOrigin string) (http.Handler, er
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/runtime.json" || strings.HasSuffix(r.URL.Path, "/runtime.json") {
-			writeEvalExplorerRuntime(w, r, mirrorOrigin)
+			writeEvalExplorerRuntime(w, r, mirrorOrigin, dedicatedPort)
 			return
 		}
 		path := strings.TrimPrefix(r.URL.Path, "/")
@@ -151,10 +154,16 @@ func publicMirrorURL(listenAddress string) string {
 	return fmt.Sprintf("http://%s:%s", host, port)
 }
 
-func writeEvalExplorerRuntime(w http.ResponseWriter, r *http.Request, configuredOrigin string) {
+func writeEvalExplorerRuntime(w http.ResponseWriter, r *http.Request, configuredOrigin string, dedicatedPort bool) {
+	mirrorOrigin := configuredOrigin
+	if !dedicatedPort {
+		mirrorOrigin = resolveRequestMirrorOrigin(r, configuredOrigin)
+	} else {
+		mirrorOrigin = fallbackMirrorOrigin(configuredOrigin)
+	}
 	payload := map[string]string{
 		"schema_version": "1.0.0",
-		"mirror_origin":  resolveRequestMirrorOrigin(r, configuredOrigin),
+		"mirror_origin":  mirrorOrigin,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(payload)

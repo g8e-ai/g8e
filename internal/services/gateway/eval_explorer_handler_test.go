@@ -20,7 +20,7 @@ import (
 )
 
 func TestEvalExplorerHandler_ServesEmbeddedAssetsAndRuntime(t *testing.T) {
-	handler, err := NewEvalExplorerHandler("", "https://opendevops.ai")
+	handler, err := NewEvalExplorerHandler("", "https://opendevops.ai", false)
 	require.NoError(t, err)
 
 	indexReq := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -52,7 +52,7 @@ func TestEvalExplorerHandler_ServesEmbeddedAssetsAndRuntime(t *testing.T) {
 }
 
 func TestCombinePublicSpectatorHandler_RoutesMirrorAndExplorer(t *testing.T) {
-	explorer, err := NewEvalExplorerHandler("", "https://opendevops.ai")
+	explorer, err := NewEvalExplorerHandler("", "https://opendevops.ai", false)
 	require.NoError(t, err)
 	mirror := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -96,4 +96,19 @@ func TestResolveRequestMirrorOrigin_PublicHostUsesConfiguredOrigin(t *testing.T)
 	req.Host = "opendevops.ai"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	assert.Equal(t, "https://opendevops.ai", resolveRequestMirrorOrigin(req, "https://opendevops.ai"))
+}
+
+func TestEvalExplorerHandler_DedicatedPortUsesConfiguredMirrorOrigin(t *testing.T) {
+	handler, err := NewEvalExplorerHandler("", "http://127.0.0.1:8082", true)
+	require.NoError(t, err)
+
+	runtimeReq := httptest.NewRequest(http.MethodGet, "/runtime.json", nil)
+	runtimeReq.Host = "127.0.0.1:5173"
+	runtimeRes := httptest.NewRecorder()
+	handler.ServeHTTP(runtimeRes, runtimeReq)
+	require.Equal(t, http.StatusOK, runtimeRes.Code)
+
+	var payload map[string]string
+	require.NoError(t, json.Unmarshal(runtimeRes.Body.Bytes(), &payload))
+	assert.Equal(t, "http://127.0.0.1:8082", payload["mirror_origin"])
 }

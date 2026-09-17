@@ -107,6 +107,45 @@ func isAllowedPublicMirrorListenHost(host string, allowContainerBind bool) bool 
 	return allowContainerBind && host == "0.0.0.0"
 }
 
+// ValidatePublicExplorerListenAddress enforces loopback-only explorer listeners
+// with an address distinct from the private and public mirror listeners.
+func ValidatePublicExplorerListenAddress(explorerAddress, privateAddress, publicAddress string, allowContainerBind bool) error {
+	explorerAddress = strings.TrimSpace(explorerAddress)
+	if explorerAddress == "" {
+		return nil
+	}
+	if sameListenAddress(explorerAddress, privateAddress) || sameListenAddress(explorerAddress, publicAddress) {
+		return fmt.Errorf("%w: duplicate address %q", constants.ErrPublicFeedListenAddress, explorerAddress)
+	}
+	host, _, err := net.SplitHostPort(explorerAddress)
+	if err != nil {
+		return fmt.Errorf("%w: %q: %v", constants.ErrPublicFeedListenAddress, explorerAddress, err)
+	}
+	if !isAllowedPublicMirrorListenHost(host, allowContainerBind) {
+		return fmt.Errorf("%w: %q", constants.ErrPublicFeedListenAddress, explorerAddress)
+	}
+	return nil
+}
+
+func sameListenAddress(a, b string) bool {
+	return normalizeListenAddress(a) == normalizeListenAddress(b)
+}
+
+func normalizeListenAddress(address string) string {
+	address = strings.TrimSpace(address)
+	if address == "" {
+		return ""
+	}
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return address
+	}
+	if host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return net.JoinHostPort(host, port)
+}
+
 // EnsureLocalPublicFeed initializes export config and signing material when
 // absent so the gateway-owned mirror can accept publisher ingest.
 func EnsureLocalPublicFeed(ctx context.Context, fileSvc fs.RuntimeFileService, sourceID, mirrorOrigin string) (models.PublicExportConfig, error) {

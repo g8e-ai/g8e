@@ -129,6 +129,79 @@ describe('visibleStreamEvents', () => {
     expect(visible[0]?.event_id).toBe('evt-29');
     expect(visible[29]?.event_id).toBe('evt-0');
   });
+
+  it('sorts by observed_at even when store order is bootstrap newest-first', () => {
+    const bootstrapOrder = [
+      liveEvent({ event_id: 'evt-3', kind: 'evaluation_started', observed_at: '2026-09-17T08:31:00Z' }),
+      liveEvent({ event_id: 'evt-2', kind: 'assignment_completed', observed_at: '2026-09-17T08:30:00Z' }),
+      liveEvent({ event_id: 'evt-1', kind: 'evaluation_started', observed_at: '2026-09-17T08:00:00Z' }),
+    ];
+    const visible = visibleStreamEvents(bootstrapOrder, { modelFilter: 'all', kindFilter: 'all' });
+    expect(visible.map((event) => event.event_id)).toEqual(['evt-3', 'evt-2', 'evt-1']);
+  });
+
+  it('collapses bootstrap/history twins at the same observed_at into one result', () => {
+    const twins = [
+      liveEvent({
+        event_id: 'run:a1:lifecycle:COMPLETED',
+        kind: 'assignment_completed',
+        assignment_id: 'a1',
+        variant_id: 'gemma3-4b',
+        completed: 1,
+        total: 75,
+        observed_at: '2026-09-17T19:24:47Z',
+      }),
+      liveEvent({
+        event_id: 'run:a1:result:verified:event',
+        kind: 'assignment_completed',
+        assignment_id: 'a1',
+        variant_id: 'gemma3-4b',
+        completed: 75,
+        total: 75,
+        observed_at: '2026-09-17T19:24:47Z',
+        metric_delta: { pass: { value: 1 } },
+      }),
+    ];
+    const visible = visibleStreamEvents(twins, { modelFilter: 'all', kindFilter: 'all' });
+    expect(visible).toHaveLength(1);
+    expect(visible[0]?.event_id).toBe('run:a1:result:verified:event');
+    expect(visible[0]?.completed).toBe(1);
+  });
+
+  it('restamps progress from observed_at order so newest complete is N/N', () => {
+    const ingestOrder = [
+      liveEvent({
+        event_id: 'boot:a2',
+        kind: 'assignment_completed',
+        assignment_id: 'a2',
+        completed: 1,
+        total: 2,
+        observed_at: '2026-09-17T19:24:47Z',
+      }),
+      liveEvent({
+        event_id: 'boot:a1',
+        kind: 'assignment_completed',
+        assignment_id: 'a1',
+        completed: 2,
+        total: 2,
+        observed_at: '2026-09-17T19:20:00Z',
+      }),
+      liveEvent({
+        event_id: 'hist:a2:start',
+        kind: 'assignment_started',
+        assignment_id: 'a2',
+        completed: 3,
+        total: 2,
+        observed_at: '2026-09-17T19:24:12Z',
+      }),
+    ];
+    const visible = visibleStreamEvents(ingestOrder, { modelFilter: 'all', kindFilter: 'all' });
+    expect(visible.map((event) => `${event.kind}:${event.completed}/${event.total}`)).toEqual([
+      'assignment_completed:2/2',
+      'assignment_started:2/2',
+      'assignment_completed:1/2',
+    ]);
+  });
 });
 
 function div(n: number, d: number): number {

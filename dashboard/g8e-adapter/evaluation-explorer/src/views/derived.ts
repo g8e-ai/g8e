@@ -47,14 +47,155 @@ export function campaignTerminalProgress(run: EvaluationSummary): { done: number
   return { done, total };
 }
 
+/** Assignment kinds that are one result per assignment. Bootstrap newest-first
+ *  plus history oldest-first otherwise emit twins at the same observed_at. */
+const COLLAPSIBLE_ASSIGNMENT_KINDS = new Set<LiveEvent['kind']>([
+  'assignment_started',
+  'assignment_completed',
+  'assignment_failed',
+]);
+
+/** Execution order at equal timestamps (start before the result). */
+function streamKindRank(kind: LiveEvent['kind']): number {
+  switch (kind) {
+    case 'evaluation_queued':
+      return 0;
+    case 'evaluation_started':
+      return 1;
+    case 'assignment_started':
+      return 2;
+    case 'stage_updated':
+      return 3;
+    case 'assignment_completed':
+    case 'assignment_failed':
+      return 4;
+    case 'metric_updated':
+      return 5;
+    default:
+      return 6;
+  }
+}
+
+function streamDedupeKey(event: LiveEvent): string {
+  if (event.assignment_id && COLLAPSIBLE_ASSIGNMENT_KINDS.has(event.kind)) {
+    return `${event.run_id}:${event.assignment_id}:${event.kind}`;
+  }
+  return event.event_id;
+}
+
+function streamEventScore(event: LiveEvent): number {
+  let score = 0;
+  if (event.metric_delta) score += 4;
+  if (event.event_id.includes(':result:verified')) score += 3;
+  if (event.event_id.endsWith(':event')) score += 2;
+  if (event.stage_label) score += 1;
+  return score;
+}
+
+function preferStreamEvent(current: LiveEvent, candidate: LiveEvent): LiveEvent {
+  const currentScore = streamEventScore(current);
+  const candidateScore = streamEventScore(candidate);
+  if (candidateScore !== currentScore) return candidateScore > currentScore ? candidate : current;
+  if (candidate.observed_at !== current.observed_at) {
+    return candidate.observed_at.localeCompare(current.observed_at) > 0 ? candidate : current;
+  }
+  return candidate.event_id.localeCompare(current.event_id) > 0 ? candidate : current;
+}
+
+/** One row per assignment start/result; keeps distinct stage ticks. */
+export function dedupeStreamEvents(events: LiveEvent[]): LiveEvent[] {
+  const chosen = new Map<string, LiveEvent>();
+  const order: string[] = [];
+  for (const event of events) {
+    const key = streamDedupeKey(event);
+    const existing = chosen.get(key);
+    if (!existing) {
+      chosen.set(key, event);
+      order.push(key);
+      continue;
+    }
+    chosen.set(key, preferStreamEvent(existing, event));
+  }
+  return order.map((key) => chosen.get(key)!);
+}
+
+function compareStreamEventsOldestFirst(a: LiveEvent, b: LiveEvent): number {
+  return (
+    a.observed_at.localeCompare(b.observed_at) ||
+    streamKindRank(a.kind) - streamKindRank(b.kind) ||
+    a.event_id.localeCompare(b.event_id)
+  );
+}
+
+function compareStreamEventsNewestFirst(a: LiveEvent, b: LiveEvent): number {
+  return (
+    b.observed_at.localeCompare(a.observed_at) ||
+    streamKindRank(b.kind) - streamKindRank(a.kind) ||
+    a.event_id.localeCompare(b.event_id)
+  );
+}
+
+/** Progress from observed_at order, not ingest order. Newest complete is N/N. */
+export function restampStreamProgress(events: LiveEvent[]): LiveEvent[] {
+  const byRun = new Map<string, LiveEvent[]>();
+  for (const event of events) {
+    const group = byRun.get(event.run_id);
+    if (group) group.push(event);
+    else byRun.set(event.run_id, [event]);
+  }
+  const restamped: LiveEvent[] = [];
+  for (const group of byRun.values()) {
+    const chronological = [...group].sort(compareStreamEventsOldestFirst);
+    const terminalIds: string[] = [];
+    const seenTerminals = new Set<string>();
+    let matrixTotal = 0;
+    for (const event of chronological) {
+      if (event.total > matrixTotal) matrixTotal = event.total;
+      if (
+        event.assignment_id &&
+        (event.kind === 'assignment_completed' || event.kind === 'assignment_failed') &&
+        !seenTerminals.has(event.assignment_id)
+      ) {
+        seenTerminals.add(event.assignment_id);
+        terminalIds.push(event.assignment_id);
+      }
+    }
+    const total = Math.max(matrixTotal, terminalIds.length);
+    const finished = new Set<string>();
+    let terminalCount = 0;
+    for (const event of chronological) {
+      if (
+        event.assignment_id &&
+        (event.kind === 'assignment_completed' || event.kind === 'assignment_failed')
+      ) {
+        if (!finished.has(event.assignment_id)) {
+          finished.add(event.assignment_id);
+          terminalCount += 1;
+        }
+        restamped.push({ ...event, completed: terminalCount, total });
+        continue;
+      }
+      if (event.kind === 'assignment_started' && event.assignment_id) {
+        const completed = finished.has(event.assignment_id)
+          ? terminalCount
+          : Math.min(terminalCount + 1, Math.max(total, 1));
+        restamped.push({ ...event, completed, total: Math.max(total, completed) });
+        continue;
+      }
+      restamped.push(total > 0 ? { ...event, total } : event);
+    }
+  }
+  return restamped;
+}
+
 /** Lifecycle events for one assignment, oldest first. */
 export function assignmentLifecycleEvents(
   assignmentId: string,
   events: LiveEvent[],
 ): LiveEvent[] {
-  return events
-    .filter((event) => event.assignment_id === assignmentId)
-    .sort((a, b) => a.observed_at.localeCompare(b.observed_at));
+  return dedupeStreamEvents(events.filter((event) => event.assignment_id === assignmentId)).sort(
+    compareStreamEventsOldestFirst,
+  );
 }
 
 /** Live stream rows, newest first. Optional limit for tests or compact previews. */
@@ -65,8 +206,8 @@ export function visibleStreamEvents(
   const filtered = events
     .filter((event) => options.modelFilter === 'all' || event.variant_id === options.modelFilter)
     .filter((event) => options.kindFilter === 'all' || event.kind === options.kindFilter);
-  const recent = options.limit !== undefined ? filtered.slice(-options.limit) : filtered;
-  return recent.reverse();
+  const sorted = restampStreamProgress(dedupeStreamEvents(filtered)).sort(compareStreamEventsNewestFirst);
+  return options.limit !== undefined ? sorted.slice(0, options.limit) : sorted;
 }
 
 /** Linear-interpolation percentile over an unsorted list of observed values. */

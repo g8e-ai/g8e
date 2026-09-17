@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -39,6 +40,31 @@ func TestPublicSpectatorRuntime_StartsMirrorListeners(t *testing.T) {
 	require.NoError(t, runtime.Start(ctx))
 
 	waitForBootstrap(t, "http://127.0.0.1:"+publicPort+"/bootstrap")
+
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stopCancel()
+	require.NoError(t, runtime.Stop(stopCtx))
+}
+
+func TestPublicSpectatorRuntime_StartsDedicatedExplorerListener(t *testing.T) {
+	privatePort := mustFreePort(t)
+	publicPort := mustFreePort(t)
+	explorerPort := mustFreePort(t)
+	fileSvc := newProducerFileSvc(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	runtime, err := NewPublicSpectatorRuntime(PublicSpectatorConfig{
+		Enabled:               true,
+		PrivateListenAddress:  "127.0.0.1:" + privatePort,
+		PublicListenAddress:   "127.0.0.1:" + publicPort,
+		ExplorerListenAddress: "127.0.0.1:" + explorerPort,
+	}, fileSvc, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, runtime.Start(ctx))
+
+	waitForBootstrap(t, "http://127.0.0.1:"+publicPort+"/bootstrap")
+	waitForExplorerRuntime(t, "http://127.0.0.1:"+explorerPort+"/runtime.json", "http://127.0.0.1:"+publicPort)
 
 	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer stopCancel()
@@ -80,4 +106,23 @@ func waitForBootstrap(t *testing.T, url string) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatalf("bootstrap never became healthy at %s", url)
+}
+
+func waitForExplorerRuntime(t *testing.T, url, expectedMirrorOrigin string) {
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		response, err := http.Get(url)
+		if err == nil {
+			body, readErr := io.ReadAll(response.Body)
+			response.Body.Close()
+			if response.StatusCode == http.StatusOK && readErr == nil {
+				var payload map[string]string
+				if json.Unmarshal(body, &payload) == nil && payload["mirror_origin"] == expectedMirrorOrigin {
+					return
+				}
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("explorer runtime never became healthy at %s", url)
 }

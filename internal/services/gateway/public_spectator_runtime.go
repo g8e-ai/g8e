@@ -57,8 +57,9 @@ type PublicSpectatorRuntime struct {
 	publisher *PublicPublisherService
 	mirror    *PublicMirrorServer
 
-	privateServer *http.Server
-	publicServer  *http.Server
+	privateServer  *http.Server
+	publicServer   *http.Server
+	explorerServer *http.Server
 
 	mu      sync.Mutex
 	running bool
@@ -78,7 +79,11 @@ func NewPublicSpectatorRuntime(cfg PublicSpectatorConfig, fileSvc fs.RuntimeFile
 	if cfg.ExplorerListenAddress == "" {
 		cfg.ExplorerListenAddress = DefaultPublicSpectatorConfig().ExplorerListenAddress
 	}
-	if err := ValidatePublicMirrorListenAddresses(cfg.PrivateListenAddress, cfg.PublicListenAddress, allowContainerMirrorBind()); err != nil {
+	allowContainerBind := allowContainerMirrorBind()
+	if err := ValidatePublicMirrorListenAddresses(cfg.PrivateListenAddress, cfg.PublicListenAddress, allowContainerBind); err != nil {
+		return nil, err
+	}
+	if err := ValidatePublicExplorerListenAddress(cfg.ExplorerListenAddress, cfg.PrivateListenAddress, cfg.PublicListenAddress, allowContainerBind); err != nil {
 		return nil, err
 	}
 	return &PublicSpectatorRuntime{
@@ -144,17 +149,28 @@ func (runtime *PublicSpectatorRuntime) Start(ctx context.Context) error {
 	runtime.privateServer = newPublicMirrorHTTPServer(runtime.cfg.PrivateListenAddress, mirror.Handler())
 	mirrorOrigin := resolveEvalExplorerMirrorOrigin(runtime.cfg.PublicBaseURL, runtime.cfg.PublicListenAddress)
 	publicHandler := mirror.PublicHandler()
-	explorerHandler, explorerErr := NewEvalExplorerHandler(runtime.cfg.ExplorerRoot, mirrorOrigin)
+	explorerHandler, explorerErr := NewEvalExplorerHandler(runtime.cfg.ExplorerRoot, mirrorOrigin, false)
 	if explorerErr == nil {
 		publicHandler = combinePublicSpectatorHandler(publicHandler, explorerHandler)
 	} else {
 		runtime.logger.Warn("Evaluation explorer static assets unavailable", "error", explorerErr)
 	}
 	runtime.publicServer = newPublicMirrorHTTPServer(runtime.cfg.PublicListenAddress, publicHandler)
+	if explorerErr == nil && shouldServeDedicatedExplorer(runtime.cfg) {
+		// Dedicated explorer listeners (for example :5173) must target the local
+		// public mirror API (:8082), not the gateway HTTPS base URL used for
+		// approval links and tunnel fronting.
+		dedicatedMirrorOrigin := publicMirrorURL(runtime.cfg.PublicListenAddress)
+		dedicatedHandler, dedicatedErr := NewEvalExplorerHandler(runtime.cfg.ExplorerRoot, dedicatedMirrorOrigin, true)
+		if dedicatedErr != nil {
+			return fmt.Errorf("public spectator: dedicated explorer: %w", dedicatedErr)
+		}
+		runtime.explorerServer = newPublicMirrorHTTPServer(runtime.cfg.ExplorerListenAddress, dedicatedHandler)
+	}
 	runtime.mirror = mirror
 	runtime.publisher = publisher
 
-	errCh := make(chan error, 3)
+	errCh := make(chan error, 4)
 	startServer := func(server *http.Server, label string) {
 		if server == nil {
 			return
@@ -168,6 +184,7 @@ func (runtime *PublicSpectatorRuntime) Start(ctx context.Context) error {
 	}
 	startServer(runtime.privateServer, "mirror-private")
 	startServer(runtime.publicServer, "mirror-public")
+	startServer(runtime.explorerServer, "explorer")
 
 	runtime.mu.Lock()
 	runtime.running = true
@@ -214,7 +231,7 @@ func (runtime *PublicSpectatorRuntime) Stop(ctx context.Context) error {
 
 	shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	for _, server := range []*http.Server{runtime.privateServer, runtime.publicServer} {
+	for _, server := range []*http.Server{runtime.privateServer, runtime.publicServer, runtime.explorerServer} {
 		if server == nil {
 			continue
 		}
@@ -253,6 +270,13 @@ func (runtime *PublicSpectatorRuntime) PublicListenAddress() string {
 
 func allowContainerMirrorBind() bool {
 	return strings.TrimSpace(os.Getenv("G8E_DOCKER_COMPOSE")) == "1"
+}
+
+func shouldServeDedicatedExplorer(cfg PublicSpectatorConfig) bool {
+	if strings.TrimSpace(cfg.ExplorerListenAddress) == "" {
+		return false
+	}
+	return !sameListenAddress(cfg.ExplorerListenAddress, cfg.PublicListenAddress)
 }
 
 func (runtime *PublicSpectatorRuntime) runPublisherRetransmitLoop(ctx context.Context) {
