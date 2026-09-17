@@ -12,13 +12,15 @@ import {
   PLATFORM_LEDE,
   PLATFORM_MEASUREMENT_SUMMARY,
 } from '../content/platform';
+import { roleScopeFor } from '../content/roles';
 import { useActiveDatasetId } from '../state/dataset';
-import { modelComparisonId, recordKey, resolveModelSummary, useStoreState } from '../state/store';
+import { recordKey, useStoreState } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
 import { DatasetSelector } from '../components/DatasetSelector';
+import { LiveEventStream } from '../components/LiveEventStream';
 import {
-  EmptyState,
   ProgressBar,
+  UnavailableValue,
   formatNumber,
   formatPercent,
   formatLatency,
@@ -26,22 +28,18 @@ import {
 } from '../components/shared';
 import { formatRelativeTime } from '../utils/format';
 import { qualityStateLabel, qualityStateTone, type FeedConnectionState } from '../utils/feed-state';
-import { campaignTerminalProgress, roleLabel } from './derived';
+import { campaignTerminalProgress, roleLabel, roleLeaderRows } from './derived';
 import descriptorUrl from '../contract/descriptor.json?url';
 import type {
   CatalogSnapshot,
+  DatasetKind,
   EvaluationSummary,
   LiveEvent,
+  ModelRole,
   ModelSummary,
   QualityState,
   SuiteSummary,
 } from '../contract/types';
-
-const ROLE_LABELS: Record<ModelSummary['role'], string> = {
-  primary: 'Task owner & delegation',
-  assistant: 'Bounded technical work',
-  lite: 'Constrained decisions',
-};
 
 function agentStatus(state: QualityState): { label: string; tone: string } {
   const tone = qualityStateTone(state);
@@ -62,40 +60,51 @@ function agentStatus(state: QualityState): { label: string; tone: string } {
   }
 }
 
-function eventTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleTimeString('en-US', { hour12: false });
-}
-
 function shortRunId(runId: string): string {
   return runId.length > 14 ? `…${runId.slice(-12)}` : runId;
 }
 
-/** Measured role candidates in the active dataset. */
-function RoleLeadersPanel({ models, datasetId }: { models: ModelSummary[]; datasetId: string }) {
-  const evaluatedModels = useMemo(
-    () =>
-      models
-        .filter((m) => !m.inventory_only && m.pass_rate)
-        .sort(
-          (a, b) =>
-            (b.output_throughput_p50?.value ?? 0) - (a.output_throughput_p50?.value ?? 0),
-        ),
-    [models],
+function RoleLeaderCell({ role }: { role: ModelRole }) {
+  return (
+    <span className="role-leader-cell">
+      <span className="role-leader-name">{roleLabel(role)}</span>
+      <span className="role-leader-scope">{roleScopeFor(role)}</span>
+    </span>
   );
+}
+
+function roleLeadersUseProvisionalColumns(datasetKind: DatasetKind | undefined): boolean {
+  return datasetKind === 'live_run';
+}
+
+/** Top measured model per role in the active dataset. */
+function RoleLeadersPanel({
+  models,
+  datasetId,
+  catalog,
+}: {
+  models: ModelSummary[];
+  datasetId: string;
+  catalog: CatalogSnapshot | undefined;
+}) {
+  const roleRows = useMemo(() => roleLeaderRows(models), [models]);
+  const evaluatedRoles = roleRows.filter((row) => row.leader !== undefined);
+  const provisional = roleLeadersUseProvisionalColumns(catalog?.dataset_kind);
 
   return (
     <section className="panel ov-models-strip" aria-label="Role leaders">
       <div className="panel-head">
         <h2>
-          Role leaders <span className="panel-sub">· {evaluatedModels.length} evaluated</span>
+          Role leaders{' '}
+          <span className="panel-sub">
+            · {evaluatedRoles.length} of {roleRows.length} roles evaluated
+          </span>
         </h2>
         <Link to={`/models?dataset=${datasetId}`} className="panel-link">
           View all models →
         </Link>
       </div>
-      {evaluatedModels.length === 0 ? (
+      {evaluatedRoles.length === 0 ? (
         <p className="panel-empty">No evaluated models in the active dataset.</p>
       ) : (
         <div className="table-scroll">
@@ -105,47 +114,90 @@ function RoleLeadersPanel({ models, datasetId }: { models: ModelSummary[]; datas
                 <th>Model</th>
                 <th>Role</th>
                 <th>Status</th>
-                <th>Quant</th>
-                <th>Tokens/s</th>
-                <th>Agreement</th>
-                <th>Pass rate</th>
-                <th>Latency p50</th>
+                {provisional ? (
+                  <>
+                    <th>Coverage</th>
+                    <th>Scored</th>
+                    <th>Pass rate</th>
+                    <th>Failed</th>
+                  </>
+                ) : (
+                  <>
+                    <th>Quant</th>
+                    <th>Tokens/s</th>
+                    <th>Agreement</th>
+                    <th>Pass rate</th>
+                    <th>Latency p50</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
-              {evaluatedModels.map((model) => {
+              {roleRows.map(({ role, leader }) => {
+                if (!leader) {
+                  return (
+                    <tr key={role} className="role-leader-empty">
+                      <td colSpan={provisional ? 7 : 8}>
+                        <RoleLeaderCell role={role} /> — no measured leader yet
+                      </td>
+                    </tr>
+                  );
+                }
+                const { model } = leader;
                 const status = agentStatus(model.quality_state);
+                const failedCount = leader.model_failed ?? leader.failed;
                 return (
-                  <tr key={modelComparisonId(model)}>
+                  <tr key={role}>
                     <td>
                       <Link to={`/models/${datasetId}/${model.variant_id}?role=${model.role}`}>
                         {model.display_name}
                       </Link>
                     </td>
-                    <td>{ROLE_LABELS[model.role]}</td>
+                    <td>
+                      <RoleLeaderCell role={role} />
+                    </td>
                     <td>
                       <span className={`stream-role status-${status.tone}`}>
                         <span className="status-dot" aria-hidden="true" />
                         {status.label}
                       </span>
                     </td>
-                    <td>{model.quantization_weight_class?.toUpperCase() ?? '—'}</td>
-                    <td>
-                      {model.output_throughput_p50?.value !== undefined
-                        ? formatThroughput(model.output_throughput_p50.value)
-                        : '—'}
-                    </td>
-                    <td>
-                      {model.agreement_pairwise?.value !== undefined
-                        ? formatPercent(model.agreement_pairwise.value, 0)
-                        : '—'}
-                    </td>
-                    <td>{model.pass_rate ? formatPercent(model.pass_rate.estimate, 0) : '—'}</td>
-                    <td>
-                      {model.latency_p50_ms?.value !== undefined
-                        ? formatLatency(model.latency_p50_ms.value)
-                        : '—'}
-                    </td>
+                    {provisional ? (
+                      <>
+                        <td>{formatPercent(leader.coverage, 0)}</td>
+                        <td>{formatNumber(leader.terminal)}</td>
+                        <td>
+                          {leader.pass_rate !== undefined
+                            ? formatPercent(leader.pass_rate, 0)
+                            : '—'}
+                        </td>
+                        <td>{formatNumber(failedCount)}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td>{model.quantization_weight_class?.toUpperCase() ?? <UnavailableValue />}</td>
+                        <td>
+                          {leader.throughput_p50 !== undefined
+                            ? formatThroughput(leader.throughput_p50)
+                            : <UnavailableValue />}
+                        </td>
+                        <td>
+                          {model.agreement_pairwise?.value !== undefined
+                            ? formatPercent(model.agreement_pairwise.value, 0)
+                            : <UnavailableValue />}
+                        </td>
+                        <td>
+                          {leader.pass_rate !== undefined
+                            ? formatPercent(leader.pass_rate, 0)
+                            : '—'}
+                        </td>
+                        <td>
+                          {leader.latency_p50_ms !== undefined
+                            ? formatLatency(leader.latency_p50_ms)
+                            : <UnavailableValue />}
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
@@ -153,136 +205,6 @@ function RoleLeadersPanel({ models, datasetId }: { models: ModelSummary[]; datas
           </table>
         </div>
       )}
-    </section>
-  );
-}
-
-/** Live event stream table fed by SSE projections, newest first. */
-function LiveStreamPanel({
-  events,
-  connection,
-}: {
-  events: LiveEvent[];
-  connection: FeedConnectionState;
-}) {
-  const [modelFilter, setModelFilter] = useState('all');
-  const [kindFilter, setKindFilter] = useState('all');
-
-  const models = useStoreState((state) => state.models);
-
-  const modelOptions = useMemo(
-    () =>
-      Array.from(new Set(events.map((e) => e.variant_id).filter((v): v is string => Boolean(v)))).sort(),
-    [events],
-  );
-  const kindOptions = useMemo(() => Array.from(new Set(events.map((e) => e.kind))).sort(), [events]);
-
-  const visible = events
-    .filter((e) => modelFilter === 'all' || e.variant_id === modelFilter)
-    .filter((e) => kindFilter === 'all' || e.kind === kindFilter)
-    .slice(-15)
-    .reverse();
-
-  return (
-    <section className="panel stream-panel" id="live-stream" aria-label="Live event stream">
-      <div className="panel-head">
-        <h2>
-          Live event stream{' '}
-          <span className={`stream-state ${connection === 'live' ? 'status-ok' : 'status-warn'}`}>
-            <span className="status-dot" aria-hidden="true" />
-            {connection === 'live' ? 'Streaming via SSE' : 'Mirror offline — last accepted data'}
-          </span>
-        </h2>
-        <div className="stream-controls">
-          <select
-            aria-label="Filter by model"
-            value={modelFilter}
-            onChange={(e) => setModelFilter(e.target.value)}
-          >
-            <option value="all">All models</option>
-            {modelOptions.map((id) => (
-              <option key={id} value={id}>
-                {id}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Filter by event kind"
-            value={kindFilter}
-            onChange={(e) => setKindFilter(e.target.value)}
-          >
-            <option value="all">All events</option>
-            {kindOptions.map((kind) => (
-              <option key={kind} value={kind}>
-                {kind.replace(/_/g, ' ')}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <div className="stream-body">
-        {visible.length === 0 ? (
-          <EmptyState hasRecords={events.length > 0} hasFilters={modelFilter !== 'all' || kindFilter !== 'all'} connection={connection} />
-        ) : (
-          <div className="table-scroll">
-            <table className="stream-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Role</th>
-                <th>Event</th>
-                <th>Model</th>
-                <th>Progress</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((event) => {
-                const model = event.variant_id
-                  ? resolveModelSummary(models, event.dataset_id, event.variant_id)
-                  : undefined;
-                const servedTag = model?.served_model_tag ?? event.variant_id ?? event.kind.split('_')[0];
-                const eventLabel = `${event.kind.replace(/_/g, ' ')}${event.stage_label ? ` · ${event.stage_label}` : ''}`;
-                const eventHref = event.assignment_id
-                  ? `/evaluations/${event.dataset_id}/${event.run_id}/assignments/${event.assignment_id}`
-                  : `/evaluations/${event.dataset_id}/${event.run_id}`;
-                const modelHref = event.variant_id
-                  ? `/models/${event.dataset_id}/${event.variant_id}${model?.role ? `?role=${model.role}` : ''}`
-                  : undefined;
-                const roleLabelText = model ? roleLabel(model.role) : event.variant_id ?? 'Platform';
-                return (
-                  <tr key={event.event_id}>
-                    <td className="stream-time">{eventTime(event.observed_at)}</td>
-                    <td>
-                      <span className={`stream-role status-${event.lifecycle_status}`}>
-                        <span className="status-dot" aria-hidden="true" />
-                        {roleLabelText}
-                      </span>
-                    </td>
-                    <td className="stream-event">
-                      <Link to={eventHref} className="stream-event-link">
-                        {eventLabel}
-                      </Link>
-                    </td>
-                    <td>
-                      {modelHref ? (
-                        <Link to={modelHref} className="stream-chip stream-chip-link">
-                          {servedTag}
-                        </Link>
-                      ) : (
-                        <code className="stream-chip">{servedTag}</code>
-                      )}
-                    </td>
-                    <td className="stream-progress">
-                      {event.total > 0 ? `${event.completed}/${event.total}` : '—'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        )}
-      </div>
     </section>
   );
 }
@@ -560,12 +482,12 @@ export function OverviewView() {
       resizeObserver.disconnect();
       window.removeEventListener('resize', syncStreamPanelHeight);
     };
-  }, []);
+  }, [catalog?.dataset_id, catalog?.title, evaluations.length, suites.length, connection]);
 
   return (
     <div className="overview">
       <div className="ov-grid-main" ref={gridRef}>
-        <LiveStreamPanel events={events} connection={connection} />
+        <LiveEventStream events={events} connection={connection} />
         <SystemOverviewPanel
           ref={sysPanelRef}
           catalog={catalog}
@@ -578,7 +500,7 @@ export function OverviewView() {
       </div>
 
       <div className="ov-grid-bottom">
-        <RoleLeadersPanel models={models} datasetId={activeDatasetId} />
+        <RoleLeadersPanel models={models} datasetId={activeDatasetId} catalog={catalog} />
         <RecentRuns evaluations={evaluations} />
         <DownloadsPanel />
       </div>

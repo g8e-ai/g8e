@@ -3,7 +3,18 @@
 
 export const G8E_REPO_URL = 'https://github.com/g8e-ai/g8e';
 
+export const GITHUB_SPONSORS_URL = 'https://github.com/sponsors/Badoot';
+
 export const PLATFORM_SITE_URL = 'https://opendevops.ai';
+
+export const SPONSORSHIP_LEDE =
+  'OpenDevOps.ai is a fully independent, verifiable LLM benchmarking project. I am completely self-funded and refuse to take venture capital. If this data helps you, please help me keep the servers running and the pipeline unbiased.';
+
+export const SPONSORSHIP_USES = [
+  'Keep the public mirror, Cloudflare tunnel, and evaluation pipeline online',
+  'Fund GPU time and campaign runs on the home workstation that produces these scores',
+  'Preserve editorial independence — no venture capital and no vendor-sponsored benchmarks',
+] as const;
 
 export const PLATFORM_LEDE =
   'OpenDevOps.ai is a live deployment of g8e — model benchmarks executing on a home Windows workstation over Docker and Ollama, published to your browser through the gateway mirror.';

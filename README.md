@@ -105,6 +105,10 @@ make dashboard-test
 
 See [CONTRIBUTING.md](.github/CONTRIBUTING.md), the [developer guide](docs/devs/devs.md), and the [documentation guide](docs/devs/docs.md).
 
+## Support OpenDevOps.ai
+
+[OpenDevOps.ai](https://opendevops.ai) is a fully independent, verifiable LLM benchmarking project. I am completely self-funded and refuse to take venture capital. If this data helps you, please [sponsor the work on GitHub](https://github.com/sponsors/Badoot) to help keep the servers running and the pipeline unbiased.
+
 ## Pilots and partnerships
 
 Lateralus Labs works with teams evaluating governed AI execution, sovereign data workflows, and proof-backed compliance reporting. Contact [danny@lateraluslabs.com](mailto:danny@lateraluslabs.com), [schedule a call](https://calendly.com/danny-lateraluslabs/quick_discovery), or connect on [LinkedIn](https://www.linkedin.com/in/dannybarbour/).

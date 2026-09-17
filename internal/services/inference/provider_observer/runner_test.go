@@ -123,6 +123,15 @@ func TestComputeObservationDigest_IsStable(t *testing.T) {
 	require.NoError(t, ValidateObservationWindow(window))
 }
 
+func TestHostRAMCollector_ReadsHostRAM(t *testing.T) {
+	t.Parallel()
+	sample, err := NewHostRAMCollector().Collect(context.Background(), time.Now().UTC())
+	require.NoError(t, err)
+	require.NotNil(t, sample)
+	assert.Equal(t, evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED, sample.GetHostRamAvailability())
+	assert.Greater(t, sample.GetHostRamTotalBytes(), uint64(0))
+}
+
 func TestProcMeminfoCollector_ReadsHostRAM(t *testing.T) {
 	if _, err := os.Stat("/proc/meminfo"); err != nil {
 		t.Skip("proc meminfo unavailable")

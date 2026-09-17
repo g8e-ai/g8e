@@ -9,8 +9,8 @@ import { ModelDetailView } from './views/ModelDetailView';
 import { EvaluationsView } from './views/EvaluationsView';
 import { EvaluationDetailView } from './views/EvaluationDetailView';
 import { AssignmentDetailView } from './views/AssignmentDetailView';
-import { FailuresView } from './views/FailuresView';
 import { MethodologyView } from './views/MethodologyView';
+import { GITHUB_SPONSORS_URL } from './content/platform';
 
 function CompareRedirect() {
   const [params] = useSearchParams();
@@ -61,11 +61,18 @@ function Shell() {
         <nav className="app-nav" aria-label="Primary navigation">
           <NavItem to="/" label="Live" />
           <NavItem to="/evaluations" label="Evals" />
-          <NavItem to="/failures" label="Failures" />
           <NavItem to="/models" label="Models" />
           <NavItem to="/methodology" label="Docs" />
         </nav>
         <div className="header-right">
+          <a
+            className="header-cta header-cta-sponsor"
+            href={GITHUB_SPONSORS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Sponsor
+          </a>
           {feedStatus ? <FreshnessBadge feedStatus={feedStatus} /> : null}
         </div>
       </header>
@@ -78,7 +85,7 @@ function Shell() {
           <Route path="/evaluations" element={<EvaluationsView />} />
           <Route path="/evaluations/:datasetId?/:runId" element={<EvaluationDetailView />} />
           <Route path="/evaluations/:datasetId?/:runId/assignments/:assignmentId" element={<AssignmentDetailView />} />
-          <Route path="/failures" element={<FailuresView />} />
+          <Route path="/failures" element={<Navigate to="/evaluations" replace />} />
           <Route path="/compare" element={<CompareRedirect />} />
           <Route path="/methodology" element={<MethodologyView />} />
         </Routes>

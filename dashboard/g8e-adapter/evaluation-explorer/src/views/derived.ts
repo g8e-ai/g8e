@@ -14,6 +14,7 @@
 //     observed; model_failed assignments have no pass metric and are
 //     reported separately, not silently dropped.
 
+import { MODEL_ROLE_WIRE_ORDER } from '../content/roles';
 import type {
   AssignmentResult,
   CatalogSnapshot,
@@ -54,6 +55,19 @@ export function assignmentLifecycleEvents(
   return events
     .filter((event) => event.assignment_id === assignmentId)
     .sort((a, b) => a.observed_at.localeCompare(b.observed_at));
+}
+
+/** Recent live stream rows, newest first. */
+export function visibleStreamEvents(
+  events: LiveEvent[],
+  options: { modelFilter: string; kindFilter: string; limit?: number },
+): LiveEvent[] {
+  const limit = options.limit ?? 15;
+  return events
+    .filter((event) => options.modelFilter === 'all' || event.variant_id === options.modelFilter)
+    .filter((event) => options.kindFilter === 'all' || event.kind === options.kindFilter)
+    .slice(-limit)
+    .reverse();
 }
 
 /** Linear-interpolation percentile over an unsorted list of observed values. */
@@ -440,10 +454,16 @@ export interface ModelRoleLeaderboardRow {
   terminal: number;
   passed: number;
   failed: number;
+  model_failed?: number;
   pass_rate?: number;
   coverage: number;
   latency_p50_ms?: number;
   throughput_p50?: number;
+}
+
+export interface RoleLeaderRow {
+  role: ModelRole;
+  leader?: ModelRoleLeaderboardRow;
 }
 
 /** Homogeneous model-role leaderboard rows from measured model summaries.
@@ -467,18 +487,28 @@ export function modelRoleLeaderboardRows(
     const terminal = model.pass_rate?.denominator ?? 0;
     const passed = terminal > 0 ? Math.round((model.pass_rate?.estimate ?? 0) * terminal) : 0;
     const failed = Math.max(0, terminal - passed);
+    const modelFailed = model.terminal_outcomes?.model_failed;
     return {
       rank: index + 1,
       model,
       terminal,
       passed,
       failed,
+      model_failed: modelFailed !== undefined ? modelFailed : undefined,
       pass_rate: model.pass_rate?.estimate,
       coverage: model.evaluation_coverage,
       latency_p50_ms: model.latency_p50_ms?.value,
       throughput_p50: model.output_throughput_p50?.value,
     };
   });
+}
+
+/** Top measured model per role bucket, in Primary → Assistant → Light order. */
+export function roleLeaderRows(models: ModelSummary[]): RoleLeaderRow[] {
+  return MODEL_ROLE_WIRE_ORDER.map((role) => ({
+    role,
+    leader: modelRoleLeaderboardRows(models, role)[0],
+  }));
 }
 
 export interface SystemLeaderboardRow {

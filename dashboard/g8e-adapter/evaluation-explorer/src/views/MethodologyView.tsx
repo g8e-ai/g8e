@@ -15,9 +15,13 @@ import {
   G8E_MEASURED_TOGETHER,
   G8E_REPO_URL,
   G8E_STACK_COMPONENTS,
+  GITHUB_SPONSORS_URL,
   PLATFORM_SITE_URL,
+  SPONSORSHIP_LEDE,
+  SPONSORSHIP_USES,
   WORKSTATION_SPECS,
 } from '../content/platform';
+import { MODEL_ROLES } from '../content/roles';
 import {
   DATASET_KINDS,
   FEED_RECORD_TYPES,
@@ -350,18 +354,13 @@ function EnumChipTable({ title, values }: { title: string; values: readonly stri
 
 const DOC_NAV = [
   { id: 'overview', label: 'Overview' },
+  { id: 'support', label: 'Support' },
   { id: 'benchmark', label: 'Benchmark' },
   { id: 'differentiators', label: 'Why g8e' },
   { id: 'architecture', label: 'Architecture' },
   { id: 'feed', label: 'Current feed' },
   { id: 'guarantees', label: 'Guarantees' },
   { id: 'reference', label: 'Reference' },
-] as const;
-
-const MODEL_ROLES = [
-  { name: 'Primary', wire: 'primary', scope: 'Task owner · plans · delegates · synthesizes' },
-  { name: 'Assistant', wire: 'assistant', scope: 'Bounded technical work for Primary' },
-  { name: 'Light', wire: 'lite', scope: 'Constrained decisions or escalate' },
 ] as const;
 
 function DocsSection({ id, title, children }: { id: string; title: string; children: ReactNode }) {
@@ -382,7 +381,7 @@ function DocsCard({
   title?: string;
   lede?: string;
   children: ReactNode;
-  variant?: 'roadmap';
+  variant?: 'roadmap' | 'sponsor';
 }) {
   return (
     <article className={`panel docs-card${variant ? ` docs-card-${variant}` : ''}`}>
@@ -497,6 +496,29 @@ export function MethodologyView() {
                 </li>
               ))}
             </ul>
+          </DocsCard>
+        </DocsSection>
+
+        <DocsSection id="support" title="Support OpenDevOps.ai">
+          <DocsCard variant="sponsor" lede={SPONSORSHIP_LEDE}>
+            <ul className="docs-feature-list">
+              {SPONSORSHIP_USES.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <div className="docs-sponsor-actions">
+              <a
+                className="docs-sponsor-button"
+                href={GITHUB_SPONSORS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Sponsor on GitHub
+              </a>
+              <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">
+                g8e repository
+              </a>
+            </div>
           </DocsCard>
         </DocsSection>
 

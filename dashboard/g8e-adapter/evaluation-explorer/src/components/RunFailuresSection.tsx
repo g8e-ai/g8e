@@ -1,36 +1,25 @@
-// Failures view — every preserved terminal failure in the active dataset.
-// Assignments link to detail pages; nothing is hidden from the denominator.
+// Run-scoped terminal failures for evaluation detail pages.
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { type CellContext, type ColumnDef } from '@tanstack/react-table';
-import { Link, useSearchParams } from 'react-router-dom';
-import { useActiveDatasetId } from '../state/dataset';
-import { useStoreState } from '../state/store';
-import { DataTable } from '../components/DataTable';
-import { DatasetSelector } from '../components/DatasetSelector';
-import {
-  EmptyState,
-  QualityBadge,
-  SectionHeading,
-  formatTimestamp,
-} from '../components/shared';
+import { Link } from 'react-router-dom';
+import { DataTable } from './DataTable';
+import { EmptyState, QualityBadge, SectionHeading, formatTimestamp } from './shared';
 import type { AssignmentResult, TerminalStatus } from '../contract/types';
-import { isFailureTerminalStatus, roleLabel } from './derived';
+import type { FeedConnectionState } from '../utils/feed-state';
+import { isFailureTerminalStatus, roleLabel } from '../views/derived';
 
 function observationLabel(value: string): string {
   return value.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
 }
 
-export function FailuresView() {
-  const [params, setParams] = useSearchParams();
-  const routeDataset = params.get('dataset') ?? undefined;
-  const activeDatasetId = useActiveDatasetId(routeDataset);
-  const statusFilter = (params.get('status') ?? 'all') as TerminalStatus | 'all';
+type RunFailuresSectionProps = {
+  assignments: AssignmentResult[];
+  connection: FeedConnectionState;
+};
 
-  const assignments = useStoreState((state) =>
-    Array.from(state.assignments.values()).filter((a) => a.dataset_id === activeDatasetId),
-  );
-  const connection = useStoreState((state) => state.connection);
+export function RunFailuresSection({ assignments, connection }: RunFailuresSectionProps) {
+  const [statusFilter, setStatusFilter] = useState<TerminalStatus | 'all'>('all');
 
   const failures = useMemo(() => {
     return assignments
@@ -38,13 +27,6 @@ export function FailuresView() {
       .filter((a) => statusFilter === 'all' || a.terminal_status === statusFilter)
       .sort((a, b) => (b.observed_at ?? '').localeCompare(a.observed_at ?? ''));
   }, [assignments, statusFilter]);
-
-  const setFilter = (value: string) => {
-    const next = new URLSearchParams(params);
-    if (value === 'all') next.delete('status');
-    else next.set('status', value);
-    setParams(next);
-  };
 
   const columns = useMemo<ColumnDef<AssignmentResult, unknown>[]>(
     () => [
@@ -60,7 +42,6 @@ export function FailuresView() {
           </Link>
         ),
       },
-      { id: 'run', header: 'Run', accessorKey: 'run_id' },
       { id: 'task', header: 'Task', accessorKey: 'task_id' },
       { id: 'variant', header: 'Variant', accessorKey: 'variant_id' },
       {
@@ -102,18 +83,17 @@ export function FailuresView() {
   );
 
   return (
-    <div className="failures-view">
+    <section className="run-failures">
       <SectionHeading
         kicker="FAILURES"
-        title="Preserved terminal failures"
-        description="Every failed, partial, policy-rejected, provider-failed, grader-failed, or stopped assignment remains in the dataset."
+        title="Terminal failures"
+        description="Failed, grader-failed, invalid-evidence, or stopped assignments for this run remain in the dataset."
       />
 
       <div className="view-toolbar">
-        <DatasetSelector activeId={activeDatasetId} />
         <label className="filter-control">
           <span>Failure class</span>
-          <select value={statusFilter} onChange={(event) => setFilter(event.target.value)}>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as TerminalStatus | 'all')}>
             <option value="all">All failure classes</option>
             <option value="model_failed">Model failed</option>
             <option value="grader_failed">Grader failed</option>
@@ -126,8 +106,8 @@ export function FailuresView() {
       {failures.length === 0 ? (
         <EmptyState hasRecords={assignments.length > 0} hasFilters={statusFilter !== 'all'} connection={connection} />
       ) : (
-        <DataTable columns={columns} data={failures} caption="Terminal failures" />
+        <DataTable columns={columns} data={failures} caption="Terminal failures for this run" />
       )}
-    </div>
+    </section>
   );
 }

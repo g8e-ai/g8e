@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { FailuresView } from '../src/views/FailuresView';
-import { evalStore } from '../src/state/store';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { EvaluationDetailView } from '../src/views/EvaluationDetailView';
+import { evalStore, recordKey } from '../src/state/store';
 import { assignmentLifecycleEvents, isFailureTerminalStatus } from '../src/views/derived';
-import type { AssignmentResult, LiveEvent } from '../src/contract/types';
+import type { AssignmentResult, EvaluationSummary, LiveEvent } from '../src/contract/types';
 
 const failedAssignment: AssignmentResult = {
   kind: 'assignment_result',
@@ -30,6 +30,35 @@ const passedAssignment: AssignmentResult = {
   assignment_id: 'assign-pass-1',
   terminal_status: 'completed',
   quality_state: 'verified_public',
+};
+
+const otherRunFailure: AssignmentResult = {
+  ...failedAssignment,
+  assignment_id: 'assign-fail-other-run',
+  run_id: 'run-other',
+};
+
+const evaluation: EvaluationSummary = {
+  schema_version: '1.3.0',
+  kind: 'evaluation_summary',
+  dataset_id: 'ds-live-run-1',
+  quality_state: 'verified_public',
+  observed_at: '2026-09-16T17:01:32.171974517Z',
+  run_id: 'run-1',
+  suite_id: 'suite-1',
+  arm: 'platform',
+  evaluation_unit: 'model',
+  model_role_mapping: {},
+  lifecycle_state: 'completed',
+  assignment_total: 2,
+  assignment_completed: 1,
+  assignment_failed: 1,
+  terminal_outcomes: { completed: 1, model_failed: 1, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+  started_at: '2026-09-16T17:00:00Z',
+  ended_at: '2026-09-16T17:01:32Z',
+  elapsed_seconds: 92,
+  verifier_state: 'passed',
+  headline_metrics: { pass_rate: { value: 0.5 } },
 };
 
 describe('isFailureTerminalStatus', () => {
@@ -92,23 +121,29 @@ describe('assignmentLifecycleEvents', () => {
   });
 });
 
-describe('FailuresView', () => {
-  it('lists preserved terminal failures and links to assignment detail', () => {
+describe('EvaluationDetailView failures section', () => {
+  beforeEach(() => {
     evalStore.loadFixtures([], []);
-    evalStore.getState().assignments.set('ds-live-run-1:assign-fail-1', failedAssignment);
-    evalStore.getState().assignments.set('ds-live-run-1:assign-pass-1', passedAssignment);
+    evalStore.getState().evaluations.set(recordKey('ds-live-run-1', 'run-1'), evaluation);
+    evalStore.getState().assignments.set(recordKey('ds-live-run-1', 'assign-fail-1'), failedAssignment);
+    evalStore.getState().assignments.set(recordKey('ds-live-run-1', 'assign-pass-1'), passedAssignment);
+    evalStore.getState().assignments.set(recordKey('ds-live-run-1', 'assign-fail-other-run'), otherRunFailure);
+  });
 
+  it('lists run-scoped terminal failures at the bottom and links to assignment detail', () => {
     render(
-      <MemoryRouter initialEntries={['/failures?dataset=ds-live-run-1']}>
-        <FailuresView />
+      <MemoryRouter initialEntries={['/evaluations/ds-live-run-1/run-1']}>
+        <Routes>
+          <Route path="/evaluations/:datasetId/:runId" element={<EvaluationDetailView />} />
+        </Routes>
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading', { name: 'Preserved terminal failures' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'assign-fail-1' })).toHaveAttribute(
-      'href',
-      '/evaluations/ds-live-run-1/run-1/assignments/assign-fail-1',
-    );
-    expect(screen.queryByRole('link', { name: 'assign-pass-1' })).not.toBeInTheDocument();
+    const failuresSection = screen.getByRole('heading', { name: 'Terminal failures' }).closest('.run-failures');
+    expect(failuresSection).not.toBeNull();
+    expect(failuresSection).toHaveTextContent('assign-fail-1');
+    expect(failuresSection).not.toHaveTextContent('assign-pass-1');
+    expect(failuresSection).not.toHaveTextContent('assign-fail-other-run');
+    expect(failuresSection?.querySelector('a[href="/evaluations/ds-live-run-1/run-1/assignments/assign-fail-1"]')).not.toBeNull();
   });
 });

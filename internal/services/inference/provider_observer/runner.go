@@ -212,6 +212,6 @@ func (r *Runner) listAttempts(ctx context.Context) ([]*operatorv1.InferenceProvi
 func DefaultCollector() HardwareCollector {
 	return &CompositeCollector{
 		GPU: NewNvidiaSMICollector(),
-		RAM: NewProcMeminfoCollector(),
+		RAM: NewHostRAMCollector(),
 	}
 }

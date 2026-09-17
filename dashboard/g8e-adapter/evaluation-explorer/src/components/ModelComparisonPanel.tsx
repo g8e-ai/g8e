@@ -45,8 +45,10 @@ export function ModelComparisonPanel({
               <th scope="col">Metric</th>
               {models.map((m) => (
                 <th key={modelComparisonId(m)} scope="col">
-                  <Link to={`/models/${datasetId}/${m.variant_id}?role=${m.role}`}>{m.display_name}</Link>
-                  <QualityBadge state={m.quality_state} />
+                  <span className="compare-model-header">
+                    <Link to={`/models/${datasetId}/${m.variant_id}?role=${m.role}`}>{m.display_name}</Link>
+                    <QualityBadge state={m.quality_state} />
+                  </span>
                 </th>
               ))}
             </tr>

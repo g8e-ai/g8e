@@ -10,6 +10,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
 import { recordKey, useStoreState } from '../state/store';
 import { DataTable } from '../components/DataTable';
+import { RunFailuresSection } from '../components/RunFailuresSection';
 import {
   DetailRow,
   EmptyState,
@@ -258,6 +259,10 @@ export function EvaluationDetailView() {
           <h2>Source</h2>
           <SafeSourceLink href={run.evidence_link} label="Public-safe evidence" />
         </section>
+      ) : null}
+
+      {!run.native_result ? (
+        <RunFailuresSection assignments={assignments} connection={connection} />
       ) : null}
     </div>
   );
