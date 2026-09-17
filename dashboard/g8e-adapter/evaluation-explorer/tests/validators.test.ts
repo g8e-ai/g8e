@@ -6,6 +6,7 @@ import {
   isFeedSnapshot,
   isFeedBootstrap,
   decodeViewRecord,
+  normalizeVerifierFailureSummary,
 } from '../src/contract/validators';
 import {
   fixtureAssignmentResults,
@@ -247,6 +248,44 @@ describe('decodeViewRecord', () => {
 
   it('throws for an unknown kind', () => {
     expect(() => decodeViewRecord('unknown_kind', {})).toThrow(ValidationError);
+  });
+});
+
+describe('normalizeVerifierFailureSummary', () => {
+  it('coerces legacy string[] mirror records into one summary string', () => {
+    expect(normalizeVerifierFailureSummary(undefined)).toBeUndefined();
+    expect(normalizeVerifierFailureSummary('already a string')).toBe('already a string');
+    expect(normalizeVerifierFailureSummary(['one failure'])).toBe('one failure');
+    const summary = normalizeVerifierFailureSummary(['one', 'two', 'three', 'four']);
+    expect(summary).toContain('4 verification failure(s)');
+    expect(summary).toContain('... and 1 more');
+  });
+
+  it('decodes evaluation_summary with legacy verifier_failure_summary arrays', () => {
+    const record = decodeViewRecord('evaluation_summary', {
+      schema_version: '1.3.0',
+      kind: 'evaluation_summary',
+      dataset_id: 'ds-live-run-1',
+      quality_state: 'exploratory_partial',
+      observed_at: '2026-09-17T18:00:00Z',
+      run_id: 'run-1',
+      suite_id: 'north-star-25',
+      arm: 'homogeneous-model-role',
+      evaluation_unit: 'model',
+      model_role_mapping: {},
+      lifecycle_state: 'completed',
+      assignment_total: 1,
+      assignment_completed: 1,
+      assignment_failed: 0,
+      terminal_outcomes: { completed: 1, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+      verifier_state: 'failed',
+      verifier_failure_summary: ['assignment a: missing window', 'assignment b: missing window'],
+      headline_metrics: {},
+    });
+    expect(record.kind).toBe('evaluation_summary');
+    if (record.kind === 'evaluation_summary') {
+      expect(record.verifier_failure_summary).toContain('2 verification failure(s)');
+    }
   });
 });
 

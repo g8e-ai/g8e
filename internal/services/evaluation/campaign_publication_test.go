@@ -9,6 +9,7 @@ package evaluation
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -122,6 +123,61 @@ func TestCampaignPublicationCoordinatorPublishRunCompletion(t *testing.T) {
 	count, err = coordinator.PublishRunCompletion(context.Background(), run.GetRunId(), time.Unix(1_700_000_200, 0).UTC())
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
+}
+
+func TestCampaignPublicationCoordinatorPublishRunVerification(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(store, files, exporter)
+	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" }).WithPublication(coordinator)
+	req := testCampaignInitRequest(t)
+	catalog := req.Catalog
+	truncated := &evalv1.EvaluationScenarioCatalog{
+		SchemaVersion: catalog.GetSchemaVersion(),
+		CatalogRef:    catalog.GetCatalogRef(),
+		Scenarios:     catalog.GetScenarios()[:1],
+	}
+	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
+	require.NoError(t, err)
+	truncated.CatalogDigest = truncatedDigest
+	req.Catalog = truncated
+	run, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	_, _, err = controller.ExecuteNextAssignment(context.Background(), run.GetRunId(), CampaignExecutionBinding{
+		InferenceOperatorSessionID: "inf-session",
+		DataOperatorID:             "data-op",
+		DataOperatorSessionID:      "data-session",
+		ModelRegistryDigest:        req.Inventory.RegistryDigest,
+		ModelRegistry:              InferenceVariantsFromEvalRegistry(req.Inventory.Variants),
+	}, req.ScenarioArtifacts)
+	require.NoError(t, err)
+	report := &evalv1.EvaluationVerificationReport{
+		SchemaVersion: CampaignSchemaVersion,
+		ReportId:      run.GetRunId(),
+		RunId:         run.GetRunId(),
+		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+	}
+	before := len(exporter.records)
+	count, err := coordinator.PublishRunVerification(context.Background(), run.GetRunId(), report)
+	require.NoError(t, err)
+	assert.Greater(t, count, 0)
+	assert.Greater(t, len(exporter.records), before)
+
+	var summary map[string]any
+	for _, record := range exporter.records[len(exporter.records)-count:] {
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal([]byte(record.RecordBytes), &payload))
+		if payload["kind"] == "evaluation_summary" {
+			summary = payload
+			break
+		}
+	}
+	require.NotNil(t, summary)
+	assert.Equal(t, "passed", summary["verifier_state"])
 }
 
 func TestCampaignPublicationCoordinatorForceRepublish(t *testing.T) {

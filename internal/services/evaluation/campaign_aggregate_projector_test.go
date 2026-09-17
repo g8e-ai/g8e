@@ -137,6 +137,59 @@ func TestBuildRunCompletionViewRecords(t *testing.T) {
 	assert.Equal(t, "exploratory_partial", catalog["quality_state"])
 }
 
+func TestBuildRunVerificationViewRecords(t *testing.T) {
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+	}
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": {
+			AssignmentId:    "assign-1",
+			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+			DeterministicGrades: []*evalv1.DeterministicGrade{{
+				Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+			}},
+		},
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	run := &evalv1.EvaluationRun{
+		RunId:     "run-1",
+		StartedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: "eval-smoke-mini",
+		},
+	}
+	report := &evalv1.EvaluationVerificationReport{
+		SchemaVersion: CampaignSchemaVersion,
+		ReportId:      "run-1",
+		RunId:         "run-1",
+		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+	}
+	records, err := BuildRunVerificationViewRecords(run, state, report, time.Unix(1_700_000_200, 0).UTC())
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+
+	summary := map[string]any{}
+	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
+	assert.Equal(t, "passed", summary["verifier_state"])
+	assert.Equal(t, "exploratory_verified", summary["quality_state"])
+}
+
+func TestFormatCampaignVerifierFailureSummary(t *testing.T) {
+	assert.Equal(t, "", formatCampaignVerifierFailureSummary(nil))
+	assert.Equal(t, "assignment a: missing window", formatCampaignVerifierFailureSummary(&evalv1.EvaluationVerificationReport{
+		FailureReasons: []string{"assignment a: missing window"},
+	}))
+	summary := formatCampaignVerifierFailureSummary(&evalv1.EvaluationVerificationReport{
+		FailureReasons: []string{"one", "two", "three", "four"},
+	})
+	assert.Contains(t, summary, "4 verification failure(s)")
+	assert.Contains(t, summary, "one")
+	assert.Contains(t, summary, "... and 1 more")
+	assert.IsType(t, "", summary)
+}
+
 func TestRunAggregateCompleteLifecycleWithoutPersistedResult(t *testing.T) {
 	assignments := []*evalv1.EvaluationAssignment{
 		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),

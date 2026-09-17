@@ -116,6 +116,21 @@ function assertOptional<T>(
   check(value, path);
 }
 
+/** Legacy mirror records published verifier_failure_summary as string[]. */
+export function normalizeVerifierFailureSummary(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (isString(value)) return value;
+  if (!Array.isArray(value)) return undefined;
+  const parts = value.filter((item): item is string => isString(item));
+  if (parts.length === 0) return undefined;
+  if (parts.length === 1) return parts[0];
+  const maxDetail = 3;
+  const detail = parts.slice(0, maxDetail).join('; ');
+  const suffix = parts.length > maxDetail ? `; ... and ${parts.length - maxDetail} more` : '';
+  const combined = `${parts.length} verification failure(s): ${detail}${suffix}`;
+  return combined.length > 500 ? `${combined.slice(0, 497)}...` : combined;
+}
+
 function assertStringArray(value: unknown, path: string): asserts value is string[] {
   assert(Array.isArray(value), path, 'expected array');
   for (let i = 0; i < value.length; i++) assertString(value[i], `${path}[${i}]`);
@@ -491,6 +506,12 @@ export function decodeViewRecord(kind: string, payload: unknown): SnapshotRecord
       isSuiteSummary(payload);
       return payload as SuiteSummary;
     case 'evaluation_summary':
+      if (isObject(payload)) {
+        payload = {
+          ...payload,
+          verifier_failure_summary: normalizeVerifierFailureSummary(payload.verifier_failure_summary),
+        };
+      }
       isEvaluationSummary(payload);
       return payload as EvaluationSummary;
     case 'assignment_result':

@@ -80,6 +80,21 @@ func RunCompletionIdempotencyKey(runID string) string {
 	return runID + ":completion:final"
 }
 
+// RunVerificationIdempotencyKey returns the publication key for the post-verify
+// evaluation_summary revision for one run.
+func RunVerificationIdempotencyKey(runID string) string {
+	return runID + ":verification:summary:v2"
+}
+
+// VerifierStateFromVerificationReport maps a persisted campaign verification
+// report to the explorer verifier_state enum.
+func VerifierStateFromVerificationReport(report *evalv1.EvaluationVerificationReport) string {
+	if report != nil && report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+		return "passed"
+	}
+	return "failed"
+}
+
 // RunAggregateComplete reports whether every scheduled assignment is settled:
 // either a persisted result exists or the assignment lifecycle is terminal.
 func RunAggregateComplete(assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult, state *runAggregateState) bool {
@@ -365,6 +380,27 @@ func buildCompletedMethodologySnapshotRecord(datasetID, observedAt string) map[s
 	return record
 }
 
+// BuildRunVerificationViewRecords materializes the post-verify evaluation_summary
+// revision for one campaign run.
+func BuildRunVerificationViewRecords(run *evalv1.EvaluationRun, state *runAggregateState, report *evalv1.EvaluationVerificationReport, observedAt time.Time) ([]CampaignViewRecord, error) {
+	if run == nil || state == nil || report == nil || report.GetRunId() != run.GetRunId() {
+		return nil, fmt.Errorf("evaluation: build run verification view records: %w", constants.ErrMissingRequiredField)
+	}
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	observed := observedAt.UTC().Format(time.RFC3339Nano)
+	datasetID := CampaignDatasetID(run.GetRunId())
+	summaryBody, err := marshalCanonicalViewRecord(buildVerifiedEvaluationSummaryRecord(run, datasetID, observed, state, report))
+	if err != nil {
+		return nil, err
+	}
+	return []CampaignViewRecord{{
+		IdempotencyKey: RunVerificationIdempotencyKey(run.GetRunId()),
+		Body:           summaryBody,
+	}}, nil
+}
+
 func buildEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observedAt string, state *runAggregateState) map[string]any {
 	startedAt := ""
 	if run.GetStartedAt() != nil {
@@ -403,6 +439,19 @@ func buildEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observed
 		record["headline_metrics"] = map[string]any{
 			"pass_rate": map[string]any{"value": passRate},
 		}
+	}
+	return record
+}
+
+func buildVerifiedEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observedAt string, state *runAggregateState, report *evalv1.EvaluationVerificationReport) map[string]any {
+	record := buildEvaluationSummaryRecord(run, datasetID, observedAt, state)
+	record["quality_state"] = qualityStateForVerifiedAggregate(state, report)
+	record["verifier_state"] = VerifierStateFromVerificationReport(report)
+	if summary := formatCampaignVerifierFailureSummary(report); summary != "" {
+		record["verifier_failure_summary"] = summary
+	}
+	if report.GetVerifiedAt() != nil {
+		record["observed_at"] = report.GetVerifiedAt().AsTime().UTC().Format(time.RFC3339Nano)
 	}
 	return record
 }
@@ -556,6 +605,42 @@ func qualityStateForCompletedAggregate(state *runAggregateState) string {
 		return "live_in_progress"
 	}
 	return "not_evaluated"
+}
+
+func formatCampaignVerifierFailureSummary(report *evalv1.EvaluationVerificationReport) string {
+	if report == nil {
+		return ""
+	}
+	reasons := report.GetFailureReasons()
+	if len(reasons) == 0 {
+		return ""
+	}
+	if len(reasons) == 1 {
+		return reasons[0]
+	}
+	const maxDetail = 3
+	const maxLen = 500
+	summary := fmt.Sprintf("%d verification failure(s)", len(reasons))
+	detailCount := len(reasons)
+	if detailCount > maxDetail {
+		detailCount = maxDetail
+	}
+	detail := strings.Join(reasons[:detailCount], "; ")
+	if len(reasons) > maxDetail {
+		detail += fmt.Sprintf("; ... and %d more", len(reasons)-maxDetail)
+	}
+	combined := summary + ": " + detail
+	if len(combined) > maxLen {
+		return combined[:maxLen-3] + "..."
+	}
+	return combined
+}
+
+func qualityStateForVerifiedAggregate(state *runAggregateState, report *evalv1.EvaluationVerificationReport) string {
+	if report != nil && report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+		return "exploratory_verified"
+	}
+	return qualityStateForCompletedAggregate(state)
 }
 
 func aggregateTerminalOutcomes(state *runAggregateState) map[string]uint32 {

@@ -748,6 +748,17 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 			if err := store.SaveCampaignVerification(cmd.Context(), runID, report); err != nil {
 				return fmt.Errorf("evaluation: campaign verify: %w", err)
 			}
+			publication, pubErr := newCampaignPublicationCoordinator(cmd, fileSvc)
+			if pubErr != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication unavailable: %v\n", pubErr)
+			} else {
+				published, pubErr := publication.PublishRunVerification(cmd.Context(), runID, report)
+				if pubErr != nil {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication: %v\n", pubErr)
+				} else if published > 0 && !jsonOutput {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d verification projection record(s) to public mirror\n", published)
+				}
+			}
 			if jsonOutput {
 				payload, err := json.MarshalIndent(map[string]any{
 					"run_id":          runID,

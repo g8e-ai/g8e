@@ -157,6 +157,26 @@ func isTerminalAssignmentLifecycle(status evalv1.EvaluationAssignmentLifecycleSt
 	}
 }
 
+// LoadCampaignVerification reads one persisted run-level campaign verification report.
+func (s *Store) LoadCampaignVerification(ctx context.Context, runID string) (*evalv1.EvaluationVerificationReport, error) {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
+		return nil, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
+	}
+	path := filepath.Join(evaluationRunDir(runID), campaignRunVerificationFilename)
+	body, err := s.files.ReadFile(ctx, path)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: read campaign verification report: %w", err)
+	}
+	report := &evalv1.EvaluationVerificationReport{}
+	if err := evalv1.UnmarshalCanonical(body, report); err != nil {
+		return nil, fmt.Errorf("%w: canonical campaign verification report: %v", constants.ErrEvidenceArtifactMalformed, err)
+	}
+	if report.GetRunId() != runID {
+		return nil, fmt.Errorf("%w: campaign verification report binding does not match requested run", constants.ErrEvidenceScopeMismatch)
+	}
+	return report, nil
+}
+
 // SaveCampaignVerification persists one run-level campaign verification report.
 func (s *Store) SaveCampaignVerification(ctx context.Context, runID string, report *evalv1.EvaluationVerificationReport) error {
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) || report == nil || report.GetRunId() != runID {

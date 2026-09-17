@@ -551,6 +551,8 @@ function mapVerificationDisposition(status?: string): VerifierState {
     case 'failed':
     case 'invalid':
       return 'failed';
+    case 'unverified':
+      return 'not_applicable';
     default:
       return 'not_applicable';
   }

@@ -77,6 +77,21 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentResult(ctx context.Con
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || assignment == nil || result == nil {
 		return fmt.Errorf("evaluation: publish assignment result: %w", constants.ErrMissingRequiredField)
 	}
+	idempotencyKey := AssignmentResultIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId())
+	return c.publishAssignmentResultWithKey(ctx, assignment, result, scenarioCategory, verificationStatus, idempotencyKey)
+}
+
+func (c *CampaignPublicationCoordinator) publishAssignmentResultWithKey(
+	ctx context.Context,
+	assignment *evalv1.EvaluationAssignment,
+	result *evalv1.EvaluationAssignmentResult,
+	scenarioCategory evalv1.EvaluationScenarioCategory,
+	verificationStatus string,
+	idempotencyKey string,
+) error {
+	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || assignment == nil || result == nil || idempotencyKey == "" {
+		return fmt.Errorf("evaluation: publish assignment result: %w", constants.ErrMissingRequiredField)
+	}
 	projection, err := BuildAssignmentResultProjection(assignment, result, scenarioCategory, DerivePublicSummaryStatus(result), verificationStatus)
 	if err != nil {
 		return err
@@ -85,7 +100,6 @@ func (c *CampaignPublicationCoordinator) PublishAssignmentResult(ctx context.Con
 	if err != nil {
 		return err
 	}
-	idempotencyKey := AssignmentResultIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId())
 	return c.publishAssignmentResultEnvelope(ctx, assignment.GetRunId(), idempotencyKey, projection, benchmark)
 }
 
@@ -126,6 +140,55 @@ func (c *CampaignPublicationCoordinator) PublishRunAggregates(ctx context.Contex
 		if wrote {
 			published++
 		}
+	}
+	return published, nil
+}
+
+// PublishRunVerification emits the post-verify evaluation_summary revision and
+// republicates terminal assignment results with verification_status=verified.
+func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Context, runID string, report *evalv1.EvaluationVerificationReport) (int, error) {
+	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || runID == "" || report == nil || report.GetRunId() != runID {
+		return 0, fmt.Errorf("evaluation: publish run verification: %w", constants.ErrMissingRequiredField)
+	}
+	run, assignments, results, state, err := c.loadRunAggregateState(ctx, runID)
+	if err != nil {
+		return 0, err
+	}
+	observedAt := time.Now().UTC()
+	if report.GetVerifiedAt() != nil {
+		observedAt = report.GetVerifiedAt().AsTime().UTC()
+	}
+	records, err := BuildRunVerificationViewRecords(run, state, report, observedAt)
+	if err != nil {
+		return 0, err
+	}
+	published := 0
+	for _, record := range records {
+		wrote, err := c.publishViewRecord(ctx, runID, record.IdempotencyKey, record.Body)
+		if err != nil {
+			return published, err
+		}
+		if wrote {
+			published++
+		}
+	}
+	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return published, err
+	}
+	for _, assignment := range assignments {
+		result := results[assignment.GetAssignmentId()]
+		if result == nil {
+			continue
+		}
+		category, err := ScenarioCategoryForAssignment(catalog, assignment)
+		if err != nil {
+			return published, err
+		}
+		if err := c.publishAssignmentResultWithKey(ctx, assignment, result, category, "verified", AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId())); err != nil {
+			return published, err
+		}
+		published++
 	}
 	return published, nil
 }
