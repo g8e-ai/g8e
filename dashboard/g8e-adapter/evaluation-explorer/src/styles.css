@@ -287,6 +287,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .timeline-time { color: var(--fg-dim); font-family: var(--mono); font-size: 12px; min-width: 60px; }
 .timeline-kind { font-weight: 600; text-transform: capitalize; }
+a.timeline-kind:hover { text-decoration: underline; }
 .timeline-stage { color: var(--accent); font-size: 12px; }
 .timeline-counts { margin-left: auto; color: var(--fg-muted); font-family: var(--mono); }
 

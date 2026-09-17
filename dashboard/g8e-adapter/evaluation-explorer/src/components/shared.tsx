@@ -215,24 +215,48 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
-export function Timeline({ events }: { events: Array<{ observed_at: string; kind: string; stage_label?: string; completed?: number; total?: number }> }) {
+export interface TimelineEvent {
+  observed_at: string;
+  kind: string;
+  stage_label?: string;
+  completed?: number;
+  total?: number;
+  assignment_id?: string;
+  run_id?: string;
+  dataset_id?: string;
+}
+
+export function Timeline({ events }: { events: TimelineEvent[] }) {
   if (events.length === 0) {
     return <EmptyState hasRecords={false} hasFilters={false} connection="live" />;
   }
   return (
     <ol className="timeline" data-testid="timeline">
-      {events.map((event, i) => (
-        <li key={`${event.kind}-${i}`} className="timeline-item">
-          <span className="timeline-time">{formatRelativeTime(event.observed_at)}</span>
-          <span className="timeline-kind">{event.kind.replace(/_/g, ' ')}</span>
-          {event.stage_label ? <span className="timeline-stage">{event.stage_label}</span> : null}
-          {event.total !== undefined && event.completed !== undefined ? (
-            <span className="timeline-counts">
-              {event.completed}/{event.total}
-            </span>
-          ) : null}
-        </li>
-      ))}
+      {events.map((event, i) => {
+        const kindLabel = event.kind.replace(/_/g, ' ');
+        const assignmentHref =
+          event.assignment_id && event.run_id && event.dataset_id
+            ? `/evaluations/${event.dataset_id}/${event.run_id}/assignments/${event.assignment_id}`
+            : undefined;
+        return (
+          <li key={`${event.kind}-${i}`} className="timeline-item">
+            <span className="timeline-time">{formatRelativeTime(event.observed_at)}</span>
+            {assignmentHref ? (
+              <Link to={assignmentHref} className="timeline-kind">
+                {kindLabel}
+              </Link>
+            ) : (
+              <span className="timeline-kind">{kindLabel}</span>
+            )}
+            {event.stage_label ? <span className="timeline-stage">{event.stage_label}</span> : null}
+            {event.total !== undefined && event.completed !== undefined ? (
+              <span className="timeline-counts">
+                {event.completed}/{event.total}
+              </span>
+            ) : null}
+          </li>
+        );
+      })}
     </ol>
   );
 }
