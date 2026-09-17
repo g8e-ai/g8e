@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"io"
 	"log/slog"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
@@ -20,6 +22,15 @@ func newCmdTestEnv(t *testing.T) (fs.RuntimeFileService, *config.Config) {
 	t.Helper()
 	tmpDir := testutil.TempDir(t)
 	return setupTestConfig(t, tmpDir)
+}
+
+// silentCobraCommand returns a command whose stdout/stderr are discarded so
+// CLI formatting helpers do not leak demo banners or prompts into test output.
+func silentCobraCommand() *cobra.Command {
+	cmd := &cobra.Command{}
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	return cmd
 }
 
 // fileSvcFactoryFor returns a fileSvcFactory that always returns the given fileSvc.

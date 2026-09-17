@@ -98,11 +98,11 @@ func buildHomogeneousAssignment(campaignID, runID string, scenario *evalv1.Evalu
 			Id:      scenario.GetScenarioId(),
 			Version: scenario.GetScenarioVersion(),
 		},
-		ScenarioId: scenario.GetScenarioId(),
-		Lane:       evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
+		ScenarioId:      scenario.GetScenarioId(),
+		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
 		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED,
-		Repetition: repetition,
-		QueuedAt:   timestamppb.New(queuedAt),
+		Repetition:      repetition,
+		QueuedAt:        timestamppb.New(queuedAt),
 		Target: &evalv1.EvaluationAssignment_Homogeneous{
 			Homogeneous: &evalv1.HomogeneousAssignmentTarget{
 				CandidateVariant: clonedVariant,

@@ -39,10 +39,10 @@ type CampaignFeedExporter interface {
 }
 
 type campaignPublicationState struct {
-	SchemaVersion          string   `json:"schema_version"`
-	RunID                  string   `json:"run_id"`
-	PublishedIdempotency   []string `json:"published_idempotency_keys"`
-	LastPublishedSequence  int64    `json:"last_published_sequence"`
+	SchemaVersion         string   `json:"schema_version"`
+	RunID                 string   `json:"run_id"`
+	PublishedIdempotency  []string `json:"published_idempotency_keys"`
+	LastPublishedSequence int64    `json:"last_published_sequence"`
 }
 
 // CampaignPublicationCoordinator projects canonical campaign state into typed

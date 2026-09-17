@@ -115,21 +115,21 @@ func (c *CampaignController) InitializeCampaign(ctx context.Context, req Campaig
 		lane = evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE
 	}
 	run := &evalv1.EvaluationRun{
-		SchemaVersion:            CampaignSchemaVersion,
-		RunId:                    req.RunID,
-		SuiteRef:                 req.Catalog.GetCatalogRef(),
-		Deployment:               req.Deployment,
-		ActivePosture:            spec.GetGovernancePosture(),
-		Lane:                     lane,
-		StartedAt:                timestamppb.New(c.now().UTC()),
+		SchemaVersion: CampaignSchemaVersion,
+		RunId:         req.RunID,
+		SuiteRef:      req.Catalog.GetCatalogRef(),
+		Deployment:    req.Deployment,
+		ActivePosture: spec.GetGovernancePosture(),
+		Lane:          lane,
+		StartedAt:     timestamppb.New(c.now().UTC()),
 		CampaignBinding: &evalv1.ModelCampaignBinding{
-			CampaignId:                  req.CampaignID,
-			CampaignDigest:              spec.GetCampaignDigest(),
-			CatalogRef:                  req.Catalog.GetCatalogRef(),
-			CatalogDigest:               req.Catalog.GetCatalogDigest(),
-			ModelRegistryDigest:         req.Inventory.RegistryDigest,
-			InferenceOperatorSessionId:  req.InferenceOperatorSessionID,
-			DataOperatorSessionId:       req.DataOperatorSessionID,
+			CampaignId:                 req.CampaignID,
+			CampaignDigest:             spec.GetCampaignDigest(),
+			CatalogRef:                 req.Catalog.GetCatalogRef(),
+			CatalogDigest:              req.Catalog.GetCatalogDigest(),
+			ModelRegistryDigest:        req.Inventory.RegistryDigest,
+			InferenceOperatorSessionId: req.InferenceOperatorSessionID,
+			DataOperatorSessionId:      req.DataOperatorSessionID,
 		},
 	}
 	if err := c.store.SaveRun(ctx, run); err != nil {

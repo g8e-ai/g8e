@@ -113,9 +113,9 @@ type CampaignChatGradingContext struct {
 
 // AssignmentExecutionRequest carries one resumable controller execution attempt.
 type AssignmentExecutionRequest struct {
-	Assignment     *evalv1.EvaluationAssignment
-	AttemptID      string
-	ScenarioInput  ScenarioInputFixture
+	Assignment       *evalv1.EvaluationAssignment
+	AttemptID        string
+	ScenarioInput    ScenarioInputFixture
 	ScenarioGold     ScenarioGoldCriteria
 	ScenarioTools    ScenarioToolExpectations
 	RequiredConcepts []string

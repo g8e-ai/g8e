@@ -121,10 +121,10 @@ type ProviderObservationNotifier interface {
 // a governed inference request to the Inference Node through the full
 // L1–L5 gauntlet.
 type DispatchService struct {
-	dispatcher            CommandDispatcher
-	operatorList          OperatorLister
-	observationNotifier   ProviderObservationNotifier
-	logger                *slog.Logger
+	dispatcher          CommandDispatcher
+	operatorList        OperatorLister
+	observationNotifier ProviderObservationNotifier
+	logger              *slog.Logger
 }
 
 // NewDispatchService constructs a DispatchService wired to the gateway's

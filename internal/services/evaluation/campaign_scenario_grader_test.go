@@ -147,10 +147,10 @@ func TestGradeHomogeneousScenario_ToolSelectionPassesWithExpectedTool(t *testing
 	}
 	trace["tool_calls"] = []any{
 		map[string]any{
-			"call_id":         "exec-1",
-			"tool_name":       "recursive_grep_search",
-			"arguments_hash":  "a" + repeatHex('a', 63),
-			"success":         true,
+			"call_id":          "exec-1",
+			"tool_name":        "recursive_grep_search",
+			"arguments_hash":   "a" + repeatHex('a', 63),
+			"success":          true,
 			"is_operator_tool": false,
 		},
 	}

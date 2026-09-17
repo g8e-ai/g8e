@@ -24,12 +24,9 @@ import (
 
 // BuildExecutorFailureAssignmentResult materializes one terminal assignment
 // result when production chat execution fails before a canonical trace import.
-func BuildExecutorFailureAssignmentResult(req AssignmentExecutionRequest, execErr error, now time.Time, newID func(string) string) (*evalv1.EvaluationAssignmentResult, error) {
+func BuildExecutorFailureAssignmentResult(req AssignmentExecutionRequest, execErr error, now time.Time) (*evalv1.EvaluationAssignmentResult, error) {
 	if req.Assignment == nil || execErr == nil {
 		return nil, fmt.Errorf("evaluation: build executor failure assignment result: %w", constants.ErrMissingRequiredField)
-	}
-	if newID == nil {
-		newID = func(prefix string) string { return prefix }
 	}
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -141,7 +138,7 @@ func (c *CampaignController) buildFailureAssignmentResult(ctx context.Context, r
 			return result, nil
 		}
 	}
-	return BuildExecutorFailureAssignmentResult(req, execErr, c.now().UTC(), c.newID)
+	return BuildExecutorFailureAssignmentResult(req, execErr, c.now().UTC())
 }
 
 func (c *CampaignController) persistTerminalAssignment(ctx context.Context, assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult) error {
@@ -254,7 +251,7 @@ func (c *CampaignController) recoverTerminalAssignmentResult(ctx context.Context
 		recoveredErr = fmt.Errorf("%w: %v", recoveredErr, traceErr)
 	}
 	req := AssignmentExecutionRequest{Assignment: assignment, AttemptID: "recovered"}
-	result, err := BuildExecutorFailureAssignmentResult(req, recoveredErr, c.now().UTC(), c.newID)
+	result, err := BuildExecutorFailureAssignmentResult(req, recoveredErr, c.now().UTC())
 	if err != nil {
 		return BuildRecoveredTerminalAssignmentResult(assignment, c.now().UTC())
 	}

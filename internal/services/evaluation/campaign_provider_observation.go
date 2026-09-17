@@ -74,7 +74,7 @@ type PublicBenchmarkObservations struct {
 // CampaignProviderObservationReader loads provider-boundary observation windows
 // and governed provider-attempt records for campaign verification.
 type CampaignProviderObservationReader struct {
-	windows provider_observer.WindowStore
+	windows  provider_observer.WindowStore
 	attempts inference.AttemptStore
 }
 
@@ -288,14 +288,14 @@ func (aggregate benchmarkTimingAggregate) toPublic() *PublicBenchmarkTiming {
 }
 
 type gpuAggregate struct {
-	vramBefore         *uint64
-	vramPeak           *uint64
-	hostRAMPeak        *uint64
-	utilizationPeak    *float64
-	temperaturePeak    *float64
-	powerPeak          *float64
-	clockPeak          *uint32
-	seenVRAMBefore     bool
+	vramBefore      *uint64
+	vramPeak        *uint64
+	hostRAMPeak     *uint64
+	utilizationPeak *float64
+	temperaturePeak *float64
+	powerPeak       *float64
+	clockPeak       *uint32
+	seenVRAMBefore  bool
 }
 
 func (aggregate *gpuAggregate) observeWindow(window *evalv1.ProviderBoundaryObservationWindow) {

@@ -94,7 +94,7 @@ func TestCampaignControllerInitializeScheduleAndResume(t *testing.T) {
 		InferenceOperatorSessionID: "inf-session",
 		DataOperatorID:             "data-op",
 		DataOperatorSessionID:      "data-session",
-		ModelRegistryDigest:      req.Inventory.RegistryDigest,
+		ModelRegistryDigest:        req.Inventory.RegistryDigest,
 		ModelRegistry:              req.Inventory.ToModelRegistryFreeze().Variants,
 	}, req.ScenarioArtifacts)
 	require.NoError(t, err)

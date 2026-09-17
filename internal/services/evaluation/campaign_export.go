@@ -51,10 +51,10 @@ type CampaignExportReport struct {
 
 // CampaignExportAssignmentRecord is one disclosure-safe assignment export row.
 type CampaignExportAssignmentRecord struct {
-	SchemaVersion         string                                 `json:"schema_version"`
-	RecordType            string                                 `json:"record_type"`
+	SchemaVersion         string                                   `json:"schema_version"`
+	RecordType            string                                   `json:"record_type"`
 	Projection            *evalv1.PublicAssignmentResultProjection `json:"projection"`
-	BenchmarkObservations *PublicBenchmarkObservations           `json:"benchmark_observations,omitempty"`
+	BenchmarkObservations *PublicBenchmarkObservations             `json:"benchmark_observations,omitempty"`
 }
 
 // CampaignExporter materializes disclosure-safe JSONL, CSV, and SQLite exports
@@ -336,23 +336,23 @@ func buildCampaignRunSummaryExport(
 	aggregate *runAggregateState,
 ) map[string]any {
 	summary := map[string]any{
-		"schema_version":          campaignExportSchemaVersion,
-		"record_type":             "run_summary",
-		"run_id":                  run.GetRunId(),
-		"campaign_id":             run.GetCampaignBinding().GetCampaignId(),
-		"lane":                    run.GetLane().String(),
-		"catalog_id":              catalog.GetCatalogRef().GetId(),
-		"catalog_version":         catalog.GetCatalogRef().GetVersion(),
-		"catalog_digest":          catalog.GetCatalogDigest(),
-		"model_registry_digest":   spec.GetModelRegistryDigest(),
-		"exported_at":             exportedAt.Format(time.RFC3339Nano),
-		"scheduled_assignments":   aggregate.Scheduled,
-		"terminal_assignments":    aggregate.Terminal,
-		"passed_assignments":      aggregate.Passed,
-		"failed_assignments":      aggregate.Failed,
-		"model_count":             aggregate.ModelCount,
-		"population_complete":     population.Complete,
-		"expected_cells":          population.ExpectedCells,
+		"schema_version":             campaignExportSchemaVersion,
+		"record_type":                "run_summary",
+		"run_id":                     run.GetRunId(),
+		"campaign_id":                run.GetCampaignBinding().GetCampaignId(),
+		"lane":                       run.GetLane().String(),
+		"catalog_id":                 catalog.GetCatalogRef().GetId(),
+		"catalog_version":            catalog.GetCatalogRef().GetVersion(),
+		"catalog_digest":             catalog.GetCatalogDigest(),
+		"model_registry_digest":      spec.GetModelRegistryDigest(),
+		"exported_at":                exportedAt.Format(time.RFC3339Nano),
+		"scheduled_assignments":      aggregate.Scheduled,
+		"terminal_assignments":       aggregate.Terminal,
+		"passed_assignments":         aggregate.Passed,
+		"failed_assignments":         aggregate.Failed,
+		"model_count":                aggregate.ModelCount,
+		"population_complete":        population.Complete,
+		"expected_cells":             population.ExpectedCells,
 		"population_failure_reasons": population.FailureReasons,
 	}
 	if binding := run.GetCampaignBinding(); binding != nil {

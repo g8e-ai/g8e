@@ -155,14 +155,14 @@ func toolDecisionRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace
 			decisionID = newID("tool-decision")
 		}
 		records = append(records, &evalv1.ToolDecisionRecord{
-			DecisionId:           decisionID,
-			AssignmentId:         assignment.GetAssignmentId(),
-			ToolName:             toolName,
-			Recognized:           boolValue(decision["recognized"]),
-			Selected:             boolValue(decision["selected"]),
-			PermissionCompliant:  boolValue(decision["permission_compliant"]),
-			Unnecessary:          boolValue(decision["unnecessary"]),
-			Outcome:              toolOutcomeStatus(stringValue(decision["outcome"])),
+			DecisionId:          decisionID,
+			AssignmentId:        assignment.GetAssignmentId(),
+			ToolName:            toolName,
+			Recognized:          boolValue(decision["recognized"]),
+			Selected:            boolValue(decision["selected"]),
+			PermissionCompliant: boolValue(decision["permission_compliant"]),
+			Unnecessary:         boolValue(decision["unnecessary"]),
+			Outcome:             toolOutcomeStatus(stringValue(decision["outcome"])),
 		})
 	}
 	return records
@@ -184,11 +184,11 @@ func toolCallRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace map
 			callID = newID("tool-call")
 		}
 		record := &evalv1.ToolCallRecord{
-			CallId:         callID,
-			AssignmentId:   assignment.GetAssignmentId(),
-			ToolName:       toolName,
-			ArgumentsHash:  stringValue(call["arguments_hash"]),
-			SchemaOutcome:  toolCallOutcome(boolValue(call["success"])),
+			CallId:          callID,
+			AssignmentId:    assignment.GetAssignmentId(),
+			ToolName:        toolName,
+			ArgumentsHash:   stringValue(call["arguments_hash"]),
+			SchemaOutcome:   toolCallOutcome(boolValue(call["success"])),
 			SemanticOutcome: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE,
 		}
 		if executionID := stringValue(call["execution_id"]); executionID != "" && boolValue(call["is_operator_tool"]) {
@@ -219,12 +219,12 @@ func governedActionBindingsFromTrace(assignment *evalv1.EvaluationAssignment, tr
 			transactionID = bindingID
 		}
 		record := &evalv1.GovernedActionBinding{
-			BindingId:          bindingID,
-			AssignmentId:       assignment.GetAssignmentId(),
-			TransactionId:      transactionID,
-			OperatorId:         stringValue(action["operator_id"]),
-			OperatorSessionId:  stringValue(action["operator_session_id"]),
-			PolicyDecision:     stringValue(action["policy_decision"]),
+			BindingId:         bindingID,
+			AssignmentId:      assignment.GetAssignmentId(),
+			TransactionId:     transactionID,
+			OperatorId:        stringValue(action["operator_id"]),
+			OperatorSessionId: stringValue(action["operator_session_id"]),
+			PolicyDecision:    stringValue(action["policy_decision"]),
 		}
 		if transactionID != "" {
 			record.ReceiptRef = &compliancev1.ComplianceEvidenceReference{
@@ -257,9 +257,9 @@ func graderCallRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace m
 			callID = newID("grader-call")
 		}
 		record := &evalv1.GraderModelCallRecord{
-			GraderCallId:    callID,
-			AssignmentId:    assignment.GetAssignmentId(),
-			JudgeVariantId:  stringValue(call["judge_variant_id"]),
+			GraderCallId:   callID,
+			AssignmentId:   assignment.GetAssignmentId(),
+			JudgeVariantId: stringValue(call["judge_variant_id"]),
 		}
 		if attemptID := stringValue(call["provider_attempt_id"]); attemptID != "" {
 			record.InferenceRecordRef = &compliancev1.ComplianceEvidenceReference{

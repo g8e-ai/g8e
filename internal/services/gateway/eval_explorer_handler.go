@@ -76,6 +76,10 @@ func combinePublicSpectatorHandler(mirrorPublic, explorer http.Handler) http.Han
 			mirrorPublic.ServeHTTP(w, r)
 			return
 		}
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.NotFound(w, r)
+			return
+		}
 		explorer.ServeHTTP(w, r)
 	})
 }

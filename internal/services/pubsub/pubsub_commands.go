@@ -72,9 +72,9 @@ type OperatorPubSubService struct {
 	// inference is the governed execution handler for local LLM inference
 	// (g8ellama). Nil when cfg.Inference.Enabled is false; the event-type
 	// dispatch still fails closed with ErrInferenceBackendNotRegistered.
-	inference                  *inference.InferenceExecutionHandler
-	inferenceAttemptStore      inference.AttemptStore
-	providerBoundaryObserver   *provider_observer.Handler
+	inference                *inference.InferenceExecutionHandler
+	inferenceAttemptStore    inference.AttemptStore
+	providerBoundaryObserver *provider_observer.Handler
 
 	ShutdownChan chan string
 

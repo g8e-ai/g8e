@@ -24,13 +24,13 @@ import (
 
 // RunnerConfig configures the read-only provider-boundary observer loop.
 type RunnerConfig struct {
-	ObserverID      string
-	Collector       HardwareCollector
-	WindowStore     WindowStore
-	FileSvc         fs.RuntimeFileService
-	SampleInterval  time.Duration
-	PollInterval    time.Duration
-	Now             func() time.Time
+	ObserverID     string
+	Collector      HardwareCollector
+	WindowStore    WindowStore
+	FileSvc        fs.RuntimeFileService
+	SampleInterval time.Duration
+	PollInterval   time.Duration
+	Now            func() time.Time
 }
 
 // Runner watches inference provider-attempt records and records hardware
@@ -161,16 +161,16 @@ func (r *Runner) finalizeAttempt(ctx context.Context, attempt *operatorv1.Infere
 	attemptStartedNanos := attempt.GetStartedAtUnixMs() * int64(time.Millisecond)
 	clockSkew := int64(windowStarted) - attemptStartedNanos
 	window := &evalv1.ProviderBoundaryObservationWindow{
-		SchemaVersion:               SchemaVersion,
-		ProviderAttemptId:           attempt.GetProviderAttemptId(),
-		ObserverId:                  r.cfg.ObserverID,
-		ObserverClockSource:         DefaultObserverClockSource,
-		WindowStartedAtUnixNanos:    windowStarted,
-		WindowCompletedAtUnixNanos:  windowCompleted,
-		AttemptStartedAtUnixMs:      attempt.GetStartedAtUnixMs(),
-		AttemptCompletedAtUnixMs:    attempt.GetCompletedAtUnixMs(),
-		ClockSkewNanos:              clockSkew,
-		Samples:                     active.samples,
+		SchemaVersion:              SchemaVersion,
+		ProviderAttemptId:          attempt.GetProviderAttemptId(),
+		ObserverId:                 r.cfg.ObserverID,
+		ObserverClockSource:        DefaultObserverClockSource,
+		WindowStartedAtUnixNanos:   windowStarted,
+		WindowCompletedAtUnixNanos: windowCompleted,
+		AttemptStartedAtUnixMs:     attempt.GetStartedAtUnixMs(),
+		AttemptCompletedAtUnixMs:   attempt.GetCompletedAtUnixMs(),
+		ClockSkewNanos:             clockSkew,
+		Samples:                    active.samples,
 	}
 	digest, err := ComputeObservationDigest(window)
 	if err != nil {

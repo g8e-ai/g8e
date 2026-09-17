@@ -34,15 +34,15 @@ type EnsembleModelVariant struct {
 // EnsembleEvaluationContext mirrors the Python EvaluationInferenceContext
 // attached to POST /api/v1/chat for scored evaluation assignments.
 type EnsembleEvaluationContext struct {
-	CampaignID              string                 `json:"campaign_id"`
-	RunID                   string                 `json:"run_id"`
-	AssignmentID            string                 `json:"assignment_id"`
-	EvaluationAttemptID     string                 `json:"evaluation_attempt_id"`
-	ScenarioID              string                 `json:"scenario_id"`
-	ModelRegistryDigest     string                 `json:"model_registry_digest"`
-	ModelRegistry           []EnsembleModelVariant `json:"model_registry"`
-	TargetOperatorSessionID string                 `json:"target_operator_session_id"`
-	EvaluationLane          string                 `json:"evaluation_lane,omitempty"`
+	CampaignID              string                         `json:"campaign_id"`
+	RunID                   string                         `json:"run_id"`
+	AssignmentID            string                         `json:"assignment_id"`
+	EvaluationAttemptID     string                         `json:"evaluation_attempt_id"`
+	ScenarioID              string                         `json:"scenario_id"`
+	ModelRegistryDigest     string                         `json:"model_registry_digest"`
+	ModelRegistry           []EnsembleModelVariant         `json:"model_registry"`
+	TargetOperatorSessionID string                         `json:"target_operator_session_id"`
+	EvaluationLane          string                         `json:"evaluation_lane,omitempty"`
 	DesignatedModelRole     string                         `json:"designated_model_role,omitempty"`
 	GradingMethod           string                         `json:"grading_method,omitempty"`
 	GoldSummary             *EnsembleEvaluationGoldSummary `json:"gold_summary,omitempty"`

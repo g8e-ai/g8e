@@ -442,7 +442,7 @@ func TestRunScenario(t *testing.T) {
 
 func TestRunAllScenarios(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for org without scenarios", func(t *testing.T) {
-		err := runAllScenarios(context.Background(), nil, &cobra.Command{}, "unknown-org", "/tmp", demoTestRunID)
+		err := runAllScenarios(context.Background(), nil, silentCobraCommand(), "unknown-org", "/tmp", demoTestRunID)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
@@ -536,7 +536,7 @@ func TestSummarizeScenarioResults(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := &cobra.Command{}
+			cmd := silentCobraCommand()
 			err := summarizeScenarioResults(cmd, "fedramp", tc.results)
 			if tc.wantErr {
 				require.Error(t, err)

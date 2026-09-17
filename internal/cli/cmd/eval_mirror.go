@@ -42,6 +42,9 @@ func evalMirrorRunCmd(deps nativeEvalDeps) *cobra.Command {
 		Use:   "run",
 		Short: "Run the durable local public mirror for evaluation explorer reads",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := validatePublicMirrorListenAddresses(listenAddress, publicListenAddress); err != nil {
+				return err
+			}
 			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err

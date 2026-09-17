@@ -28,10 +28,10 @@ const (
 // CampaignProjectionEnvelope wraps one typed public eval projection with a
 // deterministic idempotency key for append-only publication.
 type CampaignProjectionEnvelope struct {
-	SchemaVersion   string          `json:"schema_version"`
-	MessageType     string          `json:"message_type"`
-	IdempotencyKey  string          `json:"idempotency_key"`
-	Record          json.RawMessage `json:"record"`
+	SchemaVersion  string          `json:"schema_version"`
+	MessageType    string          `json:"message_type"`
+	IdempotencyKey string          `json:"idempotency_key"`
+	Record         json.RawMessage `json:"record"`
 }
 
 // BuildAssignmentLifecycleProjection materializes one public lifecycle record
@@ -83,17 +83,17 @@ func BuildAssignmentResultProjection(assignment *evalv1.EvaluationAssignment, re
 		verificationStatus = "unverified"
 	}
 	projection := &evalv1.PublicAssignmentResultProjection{
-		AssignmentId:     result.GetAssignmentId(),
-		RunId:            result.GetRunId(),
-		ScenarioId:       assignment.GetScenarioId(),
-		ScenarioCategory: scenarioCategory,
-		Lane:             result.GetLane(),
-		LifecycleStatus:  result.GetLifecycleStatus(),
-		SummaryStatus:    summaryStatus,
-		ResultDigest:     result.GetResultDigest(),
+		AssignmentId:       result.GetAssignmentId(),
+		RunId:              result.GetRunId(),
+		ScenarioId:         assignment.GetScenarioId(),
+		ScenarioCategory:   scenarioCategory,
+		Lane:               result.GetLane(),
+		LifecycleStatus:    result.GetLifecycleStatus(),
+		SummaryStatus:      summaryStatus,
+		ResultDigest:       result.GetResultDigest(),
 		VerificationStatus: verificationStatus,
-		CompletedAt:      result.GetCompletedAt(),
-		DecomposedScores: append([]*evalv1.DecomposedScoreRecord(nil), result.GetDecomposedScores()...),
+		CompletedAt:        result.GetCompletedAt(),
+		DecomposedScores:   append([]*evalv1.DecomposedScoreRecord(nil), result.GetDecomposedScores()...),
 	}
 	if homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous); ok && homogeneous.Homogeneous != nil {
 		projection.DesignatedRole = homogeneous.Homogeneous.GetDesignatedRole()

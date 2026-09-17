@@ -406,10 +406,10 @@ const (
 	InferenceAttemptsDirname                = "attempts"
 	InferenceProviderObserverDirname        = "provider-observer"
 	InferenceProviderObserverWindowsDirname = "windows"
-	ModelsDirname              = "models"
-	InferenceStateFilename     = "inference-state.json"
-	InferenceModelfilesDirname = "modelfiles"
-	InferenceManifestFilename  = "inference-manifest.json"
+	ModelsDirname                           = "models"
+	InferenceStateFilename                  = "inference-state.json"
+	InferenceModelfilesDirname              = "modelfiles"
+	InferenceManifestFilename               = "inference-manifest.json"
 
 	DefaultInferenceDir = RuntimeDirname + "/" + InferenceDirname
 	DefaultModelsDir    = RuntimeDirname + "/" + InferenceDirname + "/" + ModelsDirname

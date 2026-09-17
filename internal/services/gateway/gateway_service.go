@@ -58,40 +58,40 @@ type GatewayModeService struct {
 	fileSvc  fs.RuntimeFileService
 	doctrine *governance.L1Doctrine
 
-	db                    *CanonicalDBService
-	docStore              *DocumentStoreService
-	consensusStore        *ConsensusStoreService
-	signerStore           *SignerStoreService
-	auditStore            *storage.SQLAuditStore
-	stateRootSvc          *StateRootService
-	kvStore               *KVStoreService
-	replayStore           *ReplayStoreService
-	sseStore              *SSEEventService
-	blobStore             *BlobStoreService
-	pubsub                *GatewayWebSocketHandler
-	auth                  *AuthService
-	pki                   *PKIAuthority
-	reg                   *RegistrationService
-	passkey               *PasskeyHandler
-	enrollmentTokenSvc    *EnrollmentTokenService
-	userSvc               *UserService
-	cliSessionSvc         *CLISessionService
-	operatorSessionSvc    *OperatorSessionService
-	webSessionSvc         *WebSessionService
-	suspendedTxService    *storage.SuspendedTransactionService
-	mcpGateway            *mcp.GatewayService
-	cmdSvc                *pubsub.OperatorPubSubService
-	envProc               governance.EnvelopeProcessor
-	platformEnrollmentSvc *PlatformEnrollmentService
-	consensusSvc          *consensus.ConsensusService
+	db                       *CanonicalDBService
+	docStore                 *DocumentStoreService
+	consensusStore           *ConsensusStoreService
+	signerStore              *SignerStoreService
+	auditStore               *storage.SQLAuditStore
+	stateRootSvc             *StateRootService
+	kvStore                  *KVStoreService
+	replayStore              *ReplayStoreService
+	sseStore                 *SSEEventService
+	blobStore                *BlobStoreService
+	pubsub                   *GatewayWebSocketHandler
+	auth                     *AuthService
+	pki                      *PKIAuthority
+	reg                      *RegistrationService
+	passkey                  *PasskeyHandler
+	enrollmentTokenSvc       *EnrollmentTokenService
+	userSvc                  *UserService
+	cliSessionSvc            *CLISessionService
+	operatorSessionSvc       *OperatorSessionService
+	webSessionSvc            *WebSessionService
+	suspendedTxService       *storage.SuspendedTransactionService
+	mcpGateway               *mcp.GatewayService
+	cmdSvc                   *pubsub.OperatorPubSubService
+	envProc                  governance.EnvelopeProcessor
+	platformEnrollmentSvc    *PlatformEnrollmentService
+	consensusSvc             *consensus.ConsensusService
 	dispatchSvc              *DispatchService
 	inferenceDispatchSvc     *dispatch.DispatchService
 	providerObservationCoord *ProviderBoundaryObservationCoordinator
 	observeProducer          *ObserveProducerService
-	responder             *response.Writer
-	server                *http.Server
-	publicServer          *http.Server
-	publicSpectator       *PublicSpectatorRuntime
+	responder                *response.Writer
+	server                   *http.Server
+	publicServer             *http.Server
+	publicSpectator          *PublicSpectatorRuntime
 
 	handler *HTTPHandler
 
@@ -456,42 +456,42 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	ls := &GatewayModeService{
-		cfg:                   cfg,
-		logger:                logger,
-		fileSvc:               b.fileSvc,
-		doctrine:              doctrine,
-		db:                    db,
-		docStore:              docStore,
-		consensusStore:        consensusStore,
-		signerStore:           signerStore,
-		auditStore:            auditStore,
-		stateRootSvc:          stateRootSvc,
-		kvStore:               kvStore,
-		replayStore:           replayStore,
-		sseStore:              sseStore,
-		blobStore:             blobStore,
-		pubsub:                wsHandler,
-		auth:                  auth,
-		pki:                   pki,
-		reg:                   reg,
-		passkey:               passkeyHandler,
-		enrollmentTokenSvc:    enrollmentTokenSvc,
-		userSvc:               userSvc,
-		cliSessionSvc:         cliSessionSvc,
-		operatorSessionSvc:    operatorSessionSvc,
-		webSessionSvc:         webSessionSvc,
-		suspendedTxService:    suspendedTxService,
-		extraIPs:              extraIPs,
-		mcpGateway:            mcpGateway,
-		cmdSvc:                cmdSvc,
-		envProc:               cmdSvc,
-		platformEnrollmentSvc: platformEnrollmentSvc,
-		consensusSvc:          consensusSvc,
+		cfg:                      cfg,
+		logger:                   logger,
+		fileSvc:                  b.fileSvc,
+		doctrine:                 doctrine,
+		db:                       db,
+		docStore:                 docStore,
+		consensusStore:           consensusStore,
+		signerStore:              signerStore,
+		auditStore:               auditStore,
+		stateRootSvc:             stateRootSvc,
+		kvStore:                  kvStore,
+		replayStore:              replayStore,
+		sseStore:                 sseStore,
+		blobStore:                blobStore,
+		pubsub:                   wsHandler,
+		auth:                     auth,
+		pki:                      pki,
+		reg:                      reg,
+		passkey:                  passkeyHandler,
+		enrollmentTokenSvc:       enrollmentTokenSvc,
+		userSvc:                  userSvc,
+		cliSessionSvc:            cliSessionSvc,
+		operatorSessionSvc:       operatorSessionSvc,
+		webSessionSvc:            webSessionSvc,
+		suspendedTxService:       suspendedTxService,
+		extraIPs:                 extraIPs,
+		mcpGateway:               mcpGateway,
+		cmdSvc:                   cmdSvc,
+		envProc:                  cmdSvc,
+		platformEnrollmentSvc:    platformEnrollmentSvc,
+		consensusSvc:             consensusSvc,
 		dispatchSvc:              dispatchSvc,
 		inferenceDispatchSvc:     inferenceDispatchSvc,
 		providerObservationCoord: providerObservationCoord,
 		observeProducer:          NewObserveProducerService(docStore, sseStore, wsHandler, b.fileSvc, logger),
-		responder:             res,
+		responder:                res,
 	}
 
 	// Build the HTTP handler and servers now that all dependencies are constructed.

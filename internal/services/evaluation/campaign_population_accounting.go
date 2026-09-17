@@ -20,22 +20,22 @@ import (
 // CampaignPopulationReport records matrix coverage and lifecycle accounting for
 // one homogeneous North Star campaign run.
 type CampaignPopulationReport struct {
-	RunID                string
-	ExpectedCells        uint64
-	ScheduledAssignments uint32
-	QueuedCount          uint32
-	RunningCount         uint32
-	TerminalCount        uint32
-	StoppedCount         uint32
-	DispositionCounts    map[string]uint32
-	MissingCells         []string
-	DuplicateIdentities  []string
-	ExtraAssignments     []string
+	RunID                 string
+	ExpectedCells         uint64
+	ScheduledAssignments  uint32
+	QueuedCount           uint32
+	RunningCount          uint32
+	TerminalCount         uint32
+	StoppedCount          uint32
+	DispositionCounts     map[string]uint32
+	MissingCells          []string
+	DuplicateIdentities   []string
+	ExtraAssignments      []string
 	TerminalWithoutResult []string
 	ResultWithoutTerminal []string
-	Complete             bool
-	FailureReasons       []string
-	AccountedAt          time.Time
+	Complete              bool
+	FailureReasons        []string
+	AccountedAt           time.Time
 }
 
 // CampaignPopulationAccountant independently verifies that one homogeneous run

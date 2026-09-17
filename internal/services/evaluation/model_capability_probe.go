@@ -178,12 +178,12 @@ func capabilityProbeRequest(variant *evalv1.ModelVariant, attemptID string, tool
 			Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
 			Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: prompt}}},
 		}},
-		Tools:               tools,
-		ToolChoice:          toolChoice,
-		ResponseFormat:      responseFormat,
-		MaxTokens:           128,
-		ProviderAttemptID:   attemptID,
-		ModelDigest:         variant.GetModelDigest(),
+		Tools:                tools,
+		ToolChoice:           toolChoice,
+		ResponseFormat:       responseFormat,
+		MaxTokens:            128,
+		ProviderAttemptID:    attemptID,
+		ModelDigest:          variant.GetModelDigest(),
 		RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
 	}
 	for _, opt := range opts {

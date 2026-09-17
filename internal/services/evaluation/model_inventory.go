@@ -31,10 +31,10 @@ const (
 // ModelInventoryFreeze is the immutable North Star model registry derived from
 // a complete provider inventory query and optional capability probes.
 type ModelInventoryFreeze struct {
-	CampaignID         string
-	RegistryDigest     string
-	Variants           []*evalv1.ModelVariant
-	InferenceVariants  []*operatorv1.InferenceModelVariant
+	CampaignID           string
+	RegistryDigest       string
+	Variants             []*evalv1.ModelVariant
+	InferenceVariants    []*operatorv1.InferenceModelVariant
 	HomogeneousCellCount uint64
 }
 

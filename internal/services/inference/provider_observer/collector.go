@@ -16,7 +16,7 @@ import (
 
 const (
 	SchemaVersion              = "1.0.0"
-	DefaultDevicePseudonym       = "gpu-0"
+	DefaultDevicePseudonym     = "gpu-0"
 	DefaultObserverClockSource = "host-monotonic"
 )
 

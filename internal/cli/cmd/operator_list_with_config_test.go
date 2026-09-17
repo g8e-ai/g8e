@@ -175,7 +175,7 @@ func TestOperatorListCmdWithConfig_JSONOutputIncludesRuntimeFlags(t *testing.T) 
 				OperatorSessionID: "data-session",
 				OperatorType:      constants.OperatorTypeRemote,
 				Status:            constants.OperatorStatusActive,
-				RuntimeConfig: &models.RuntimeConfig{InferenceEnabled: false},
+				RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: false},
 			},
 			{
 				ID:                "infer-op",

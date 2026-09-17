@@ -367,24 +367,24 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// OperatorPubSubService Construction
 	psConfig := pubsub.CommandServiceConfig{
-		Config:                vs.config,
-		Logger:                vs.logger,
-		Execution:             vs.execution,
-		FileEdit:              vs.fileEdit,
-		PubSubClient:          vs.pubSubClient,
-		ResultsService:        vs.pubSubResults,
-		ExecutionVault:        vs.executionVault,
-		AuditStore:            auditStore,
-		Ledger:                vs.ledger,
-		HistoryHandler:        vs.historyHandler,
-		Scrubbing:             scrubbingService,
+		Config:                   vs.config,
+		Logger:                   vs.logger,
+		Execution:                vs.execution,
+		FileEdit:                 vs.fileEdit,
+		PubSubClient:             vs.pubSubClient,
+		ResultsService:           vs.pubSubResults,
+		ExecutionVault:           vs.executionVault,
+		AuditStore:               auditStore,
+		Ledger:                   vs.ledger,
+		HistoryHandler:           vs.historyHandler,
+		Scrubbing:                scrubbingService,
 		Inference:                inferenceHandler,
 		InferenceAttemptStore:    inferenceAttemptStore,
 		ProviderBoundaryObserver: providerBoundaryObserver,
 		ActuatorSigningKey:       actuatorPriv,
-		ActuatorKeyID:         actuatorKeyID,
-		AuditorSigningKey:     auditorPriv,
-		AuditorKeyID:          auditorKeyID,
+		ActuatorKeyID:            actuatorKeyID,
+		AuditorSigningKey:        auditorPriv,
+		AuditorKeyID:             auditorKeyID,
 	}
 
 	outboundDeps, err := pubsub.NewOutboundModeDeps(pubsub.OutboundModeDeps{

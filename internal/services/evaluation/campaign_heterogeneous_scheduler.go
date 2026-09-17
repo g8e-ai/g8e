@@ -71,9 +71,9 @@ func buildHeterogeneousAssignment(campaignID, runID string, scenario *evalv1.Eva
 		return nil, fmt.Errorf("evaluation: build heterogeneous assignment: %w", constants.ErrMissingRequiredField)
 	}
 	assignment := &evalv1.EvaluationAssignment{
-		SchemaVersion:   CampaignSchemaVersion,
-		CampaignId:      campaignID,
-		RunId:           runID,
+		SchemaVersion: CampaignSchemaVersion,
+		CampaignId:    campaignID,
+		RunId:         runID,
 		ScenarioRef: &compliancev1.VersionedReference{
 			Id:      scenario.GetScenarioId(),
 			Version: scenario.GetScenarioVersion(),

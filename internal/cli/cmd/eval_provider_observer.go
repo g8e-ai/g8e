@@ -68,11 +68,11 @@ func providerObserverRunCmd(deps nativeEvalDeps) *cobra.Command {
 			defer stop()
 			if jsonOutput {
 				payload, err := json.MarshalIndent(map[string]any{
-					"observer_id":      observerID,
-					"sample_interval":  sampleIntervalMS,
-					"poll_interval":    pollIntervalMS,
-					"collector":        "nvidia-smi+proc-meminfo",
-					"windows_dir":      constants.InferenceProviderObserverDirname + "/" + constants.InferenceProviderObserverWindowsDirname,
+					"observer_id":     observerID,
+					"sample_interval": sampleIntervalMS,
+					"poll_interval":   pollIntervalMS,
+					"collector":       "nvidia-smi+proc-meminfo",
+					"windows_dir":     constants.InferenceProviderObserverDirname + "/" + constants.InferenceProviderObserverWindowsDirname,
 				}, "", "  ")
 				if err != nil {
 					return err

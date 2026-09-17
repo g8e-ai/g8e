@@ -48,13 +48,13 @@ func TestCampaignProviderObservationReader_BuildPublicBenchmarkObservations(t *t
 		AttemptCompletedAtUnixMs:   attempt.GetCompletedAtUnixMs(),
 		Samples: []*evalv1.ProviderBoundaryHardwareSample{
 			{
-				ObservedAtUnixNanos:       uint64(time.Unix(1_700_000_001, 0).UnixNano()),
-				VramBytesAvailability:     evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
-				VramUsedBytes:             1000,
+				ObservedAtUnixNanos:        uint64(time.Unix(1_700_000_001, 0).UnixNano()),
+				VramBytesAvailability:      evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+				VramUsedBytes:              1000,
 				GpuUtilizationAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
-				GpuUtilizationPercent:     42,
-				HostRamAvailability:       evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
-				HostRamUsedBytes:          2000,
+				GpuUtilizationPercent:      42,
+				HostRamAvailability:        evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+				HostRamUsedBytes:           2000,
 			},
 			{
 				ObservedAtUnixNanos:   uint64(time.Unix(1_700_000_005, 0).UnixNano()),

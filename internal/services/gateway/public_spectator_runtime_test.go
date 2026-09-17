@@ -30,9 +30,9 @@ func TestPublicSpectatorRuntime_StartsMirrorListeners(t *testing.T) {
 	defer cancel()
 
 	runtime, err := NewPublicSpectatorRuntime(PublicSpectatorConfig{
-		Enabled:              true,
-		PrivateListenAddress: "127.0.0.1:" + privatePort,
-		PublicListenAddress:  "127.0.0.1:" + publicPort,
+		Enabled:               true,
+		PrivateListenAddress:  "127.0.0.1:" + privatePort,
+		PublicListenAddress:   "127.0.0.1:" + publicPort,
 		ExplorerListenAddress: "",
 	}, fileSvc, testutil.NewTestLogger())
 	require.NoError(t, err)

@@ -551,47 +551,47 @@ type _EventOperatorStreamApproval struct {
 }
 
 type _EventOperator struct {
-	A2a                      _EventOperatorA2a
-	Audit                    _EventOperatorAudit
-	Bootstrap                _EventOperatorBootstrap
-	BootstrapConfigReceived  EventType
-	Bound                    EventType
-	Command                  _EventOperatorCommand
-	ContextChanged           EventType
-	DeviceRegistered         EventType
-	Eval                     _EventOperatorEval
-	FetchFileDiff            _EventOperatorFetchFileDiff
-	FetchFileHistory         _EventOperatorFetchFileHistory
-	FetchHistory             _EventOperatorFetchHistory
-	FetchLogs                _EventOperatorFetchLogs
-	FileEdit                 _EventOperatorFileEdit
-	FsGrep                   _EventOperatorFsGrep
-	FsList                   _EventOperatorFsList
-	FsRead                   _EventOperatorFsRead
-	Heartbeat                EventType
-	HeartbeatMissed          EventType
-	HeartbeatReceived        EventType
-	HeartbeatRequested       EventType
-	Intent                   _EventOperatorIntent
-	Inference                _EventOperatorInference
+	A2a                         _EventOperatorA2a
+	Audit                       _EventOperatorAudit
+	Bootstrap                   _EventOperatorBootstrap
+	BootstrapConfigReceived     EventType
+	Bound                       EventType
+	Command                     _EventOperatorCommand
+	ContextChanged              EventType
+	DeviceRegistered            EventType
+	Eval                        _EventOperatorEval
+	FetchFileDiff               _EventOperatorFetchFileDiff
+	FetchFileHistory            _EventOperatorFetchFileHistory
+	FetchHistory                _EventOperatorFetchHistory
+	FetchLogs                   _EventOperatorFetchLogs
+	FileEdit                    _EventOperatorFileEdit
+	FsGrep                      _EventOperatorFsGrep
+	FsList                      _EventOperatorFsList
+	FsRead                      _EventOperatorFsRead
+	Heartbeat                   EventType
+	HeartbeatMissed             EventType
+	HeartbeatReceived           EventType
+	HeartbeatRequested          EventType
+	Intent                      _EventOperatorIntent
+	Inference                   _EventOperatorInference
 	ProviderBoundaryObservation _EventOperatorProviderBoundaryObservation
-	Mcp                      _EventOperatorMcp
-	NetworkPing              _EventOperatorNetworkPing
-	Notary                   _EventOperatorNotary
-	PanelListUpdated         EventType
-	PortCheck                _EventOperatorPortCheck
-	Receipt                  _EventOperatorReceipt
-	RestoreFile              _EventOperatorRestoreFile
-	ShutdownAcknowledged     EventType
-	ShutdownRequested        EventType
-	SlotInitializationFailed EventType
-	StatusUpdated            _EventOperatorStatusUpdated
-	StreamApproval           _EventOperatorStreamApproval
-	TerminalApprovalDenied   EventType
-	TerminalAuthStateChanged EventType
-	TerminalThinkingAppend   EventType
-	TerminalThinkingComplete EventType
-	Unbound                  EventType
+	Mcp                         _EventOperatorMcp
+	NetworkPing                 _EventOperatorNetworkPing
+	Notary                      _EventOperatorNotary
+	PanelListUpdated            EventType
+	PortCheck                   _EventOperatorPortCheck
+	Receipt                     _EventOperatorReceipt
+	RestoreFile                 _EventOperatorRestoreFile
+	ShutdownAcknowledged        EventType
+	ShutdownRequested           EventType
+	SlotInitializationFailed    EventType
+	StatusUpdated               _EventOperatorStatusUpdated
+	StreamApproval              _EventOperatorStreamApproval
+	TerminalApprovalDenied      EventType
+	TerminalAuthStateChanged    EventType
+	TerminalThinkingAppend      EventType
+	TerminalThinkingComplete    EventType
+	Unbound                     EventType
 }
 
 var Event = struct {

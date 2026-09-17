@@ -398,7 +398,7 @@ func marshalHeterogeneousStackSet(stackSet *HeterogeneousStackSet) ([]byte, erro
 		SetDigest      string                       `json:"set_digest"`
 		VariantIDs     []string                     `json:"variant_ids"`
 		Stacks         []json.RawMessage            `json:"stacks"`
-		Coverage       *HeterogeneousCoverageMatrix   `json:"coverage"`
+		Coverage       *HeterogeneousCoverageMatrix `json:"coverage"`
 	}{
 		CampaignID:     stackSet.CampaignID,
 		GenerationRule: stackSet.GenerationRule,
@@ -413,12 +413,12 @@ func marshalHeterogeneousStackSet(stackSet *HeterogeneousStackSet) ([]byte, erro
 
 func unmarshalHeterogeneousStackSet(body []byte) (*HeterogeneousStackSet, error) {
 	var payload struct {
-		CampaignID     string                     `json:"campaign_id"`
-		GenerationRule string                     `json:"generation_rule"`
-		Seed           uint64                     `json:"seed"`
-		SetDigest      string                     `json:"set_digest"`
-		VariantIDs     []string                   `json:"variant_ids"`
-		Stacks         []json.RawMessage          `json:"stacks"`
+		CampaignID     string                       `json:"campaign_id"`
+		GenerationRule string                       `json:"generation_rule"`
+		Seed           uint64                       `json:"seed"`
+		SetDigest      string                       `json:"set_digest"`
+		VariantIDs     []string                     `json:"variant_ids"`
+		Stacks         []json.RawMessage            `json:"stacks"`
 		Coverage       *HeterogeneousCoverageMatrix `json:"coverage"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {

@@ -26,14 +26,14 @@ const (
 type HeterogeneousStackHypothesis string
 
 const (
-	HeterogeneousHypothesisAccuracy        HeterogeneousStackHypothesis = "accuracy"
-	HeterogeneousHypothesisEfficiency      HeterogeneousStackHypothesis = "efficiency"
-	HeterogeneousHypothesisSmallest        HeterogeneousStackHypothesis = "smallest"
-	HeterogeneousHypothesisToolCalling     HeterogeneousStackHypothesis = "tool-calling"
-	HeterogeneousHypothesisPrivacy         HeterogeneousStackHypothesis = "privacy"
-	HeterogeneousHypothesisLocalThroughput HeterogeneousStackHypothesis = "local-throughput"
+	HeterogeneousHypothesisAccuracy          HeterogeneousStackHypothesis = "accuracy"
+	HeterogeneousHypothesisEfficiency        HeterogeneousStackHypothesis = "efficiency"
+	HeterogeneousHypothesisSmallest          HeterogeneousStackHypothesis = "smallest"
+	HeterogeneousHypothesisToolCalling       HeterogeneousStackHypothesis = "tool-calling"
+	HeterogeneousHypothesisPrivacy           HeterogeneousStackHypothesis = "privacy"
+	HeterogeneousHypothesisLocalThroughput   HeterogeneousStackHypothesis = "local-throughput"
 	HeterogeneousHypothesisHomogeneousFamily HeterogeneousStackHypothesis = "homogeneous-family"
-	HeterogeneousHypothesisLineageDiverse  HeterogeneousStackHypothesis = "lineage-diverse"
+	HeterogeneousHypothesisLineageDiverse    HeterogeneousStackHypothesis = "lineage-diverse"
 )
 
 var preregisteredHeterogeneousHypotheses = []HeterogeneousStackHypothesis{

@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,6 +61,11 @@ func TestCombinePublicSpectatorHandler_RoutesMirrorAndExplorer(t *testing.T) {
 	handler.ServeHTTP(indexRes, indexReq)
 	require.Equal(t, http.StatusOK, indexRes.Code)
 	assert.Contains(t, indexRes.Body.String(), "<!doctype html>")
+
+	ingestReq := httptest.NewRequest(http.MethodPost, "/ingest", strings.NewReader("{}"))
+	ingestRes := httptest.NewRecorder()
+	handler.ServeHTTP(ingestRes, ingestReq)
+	require.Equal(t, http.StatusNotFound, ingestRes.Code)
 }
 
 func TestResolveEvalExplorerMirrorOrigin_PrefersPublicBaseURL(t *testing.T) {

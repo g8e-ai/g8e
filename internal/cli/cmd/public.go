@@ -653,6 +653,9 @@ func publicMirrorRunCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 		Use:   "run",
 		Short: "Run the durable local public mirror",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := validatePublicMirrorListenAddresses(listenAddress, publicListenAddress); err != nil {
+				return err
+			}
 			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
 			if err != nil {
 				return err
@@ -829,36 +832,4 @@ func newPublicMirrorHTTPServer(address string, handler http.Handler) *http.Serve
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-}
-
-func runPublicMirrorServers(ctx context.Context, servers ...*http.Server) error {
-	errCh := make(chan error, len(servers))
-	for _, server := range servers {
-		go func() { errCh <- server.ListenAndServe() }()
-	}
-	var serveErr error
-	select {
-	case serveErr = <-errCh:
-	case <-ctx.Done():
-	}
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	for _, server := range servers {
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			return fmt.Errorf("public mirror: shutdown: %w", err)
-		}
-	}
-	remaining := len(servers)
-	if serveErr != nil {
-		remaining--
-	}
-	for range remaining {
-		if err := <-errCh; err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("public mirror: serve: %w", err)
-		}
-	}
-	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-		return fmt.Errorf("public mirror: serve: %w", serveErr)
-	}
-	return nil
 }

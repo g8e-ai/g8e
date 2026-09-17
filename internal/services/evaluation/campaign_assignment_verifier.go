@@ -20,23 +20,18 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-const (
-	campaignAssignmentVerifierID      = "g8e-campaign-assignment-verifier"
-	campaignAssignmentVerifierVersion = "1.0.0"
-)
-
 // CampaignAssignmentVerificationRequest carries persisted assignment state for
 // read-only independent verification.
 type CampaignAssignmentVerificationRequest struct {
-	Assignment                 *evalv1.EvaluationAssignment
-	Result                     *evalv1.EvaluationAssignmentResult
-	ScenarioInput              ScenarioInputFixture
-	ScenarioGold               ScenarioGoldCriteria
-	ScenarioTools              ScenarioToolExpectations
-	GradingMethod              evalv1.EvaluationGradingMethod
-	Trace                      map[string]any
-	ProviderObservationReader  *CampaignProviderObservationReader
-	ProviderObservationPolicy  ProviderObservationPolicy
+	Assignment                *evalv1.EvaluationAssignment
+	Result                    *evalv1.EvaluationAssignmentResult
+	ScenarioInput             ScenarioInputFixture
+	ScenarioGold              ScenarioGoldCriteria
+	ScenarioTools             ScenarioToolExpectations
+	GradingMethod             evalv1.EvaluationGradingMethod
+	Trace                     map[string]any
+	ProviderObservationReader *CampaignProviderObservationReader
+	ProviderObservationPolicy ProviderObservationPolicy
 }
 
 // CampaignAssignmentVerifier independently verifies one persisted assignment

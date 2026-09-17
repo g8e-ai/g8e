@@ -106,9 +106,9 @@ type campaignMemoryDirEntry struct {
 }
 
 func (e campaignMemoryDirEntry) Name() string               { return e.name }
-func (e campaignMemoryDirEntry) IsDir() bool                  { return e.isDir }
-func (e campaignMemoryDirEntry) Type() fs.FileMode            { return 0 }
-func (e campaignMemoryDirEntry) Info() (fs.FileInfo, error)   { return nil, fs.ErrInvalid }
+func (e campaignMemoryDirEntry) IsDir() bool                { return e.isDir }
+func (e campaignMemoryDirEntry) Type() fs.FileMode          { return 0 }
+func (e campaignMemoryDirEntry) Info() (fs.FileInfo, error) { return nil, fs.ErrInvalid }
 func (m *campaignMemoryFileService) EnforceDirPermissions(context.Context, string, os.FileMode) error {
 	return nil
 }

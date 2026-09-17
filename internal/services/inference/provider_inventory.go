@@ -41,18 +41,18 @@ type ProviderModelInventoryEntry struct {
 }
 
 type ollamaShowResponse struct {
-	Parameters   string              `json:"parameters"`
-	Details      ollamaModelDetails  `json:"details"`
-	Capabilities []string            `json:"capabilities"`
+	Parameters   string                     `json:"parameters"`
+	Details      ollamaModelDetails         `json:"details"`
+	Capabilities []string                   `json:"capabilities"`
 	ModelInfo    map[string]json.RawMessage `json:"model_info"`
 }
 
 type ollamaModelDetails struct {
-	Format              string   `json:"format"`
-	Family              string   `json:"family"`
-	Families            []string `json:"families"`
-	ParameterSize       string   `json:"parameter_size"`
-	QuantizationLevel   string   `json:"quantization_level"`
+	Format            string   `json:"format"`
+	Family            string   `json:"family"`
+	Families          []string `json:"families"`
+	ParameterSize     string   `json:"parameter_size"`
+	QuantizationLevel string   `json:"quantization_level"`
 }
 
 var ollamaNumCtxPattern = regexp.MustCompile(`(?m)^num_ctx\s+(\d+)\s*$`)
@@ -142,7 +142,7 @@ func parseProviderParameterCount(raw string) (uint64, error) {
 	if value == "" {
 		return 0, nil
 	}
-	multiplier := uint64(1)
+	var multiplier uint64
 	switch {
 	case strings.HasSuffix(value, "b"):
 		multiplier = 1_000_000_000

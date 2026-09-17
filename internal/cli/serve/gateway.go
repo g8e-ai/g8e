@@ -60,11 +60,11 @@ type GatewayConfig struct {
 	AllowedOrigins      []string              `json:"allowed_origins,omitempty"`
 	DoctrineDir         string                `json:"doctrine_dir,omitempty"`
 
-	PublicSpectatorEnabled      bool   `json:"public_spectator_enabled"`
-	PublicSpectatorPrivateAddr  string `json:"public_spectator_private_addr,omitempty"`
-	PublicSpectatorPublicAddr   string `json:"public_spectator_public_addr,omitempty"`
-	EvalExplorerAddr            string `json:"eval_explorer_addr,omitempty"`
-	EvalExplorerRoot            string `json:"eval_explorer_root,omitempty"`
+	PublicSpectatorEnabled     bool   `json:"public_spectator_enabled"`
+	PublicSpectatorPrivateAddr string `json:"public_spectator_private_addr,omitempty"`
+	PublicSpectatorPublicAddr  string `json:"public_spectator_public_addr,omitempty"`
+	EvalExplorerAddr           string `json:"eval_explorer_addr,omitempty"`
+	EvalExplorerRoot           string `json:"eval_explorer_root,omitempty"`
 }
 
 // RunGateway starts the Operator in gateway mode - the platform's central
