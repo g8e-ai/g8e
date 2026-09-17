@@ -119,6 +119,11 @@ class RetryConfig(G8eBaseModel):
     retry_status_codes: set[int] = DEFAULT_RETRY_STATUS_CODES
 
 
+GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG = RetryConfig(
+    retry_methods=DEFAULT_RETRY_METHODS | {"POST"},
+)
+
+
 class CircuitBreakerConfig(G8eBaseModel):
     """Configuration for circuit breaker behavior"""
 
@@ -153,8 +158,15 @@ class CircuitBreaker:
                         self.endpoint,
                     )
 
-    async def record_failure(self) -> None:
-        """Record a failed operation"""
+    async def record_failure(self, countable: bool = True) -> None:
+        """Record a failed operation.
+
+        Transport-level failures (connection refused, timeouts) pass
+        ``countable=False`` so brief gateway outages do not open the circuit
+        while the service is unreachable rather than persistently unhealthy.
+        """
+        if not countable:
+            return
         async with self.lock:
             self.last_failure_time = time.time()
             if self.state == CircuitBreakerState.CLOSED:
@@ -380,13 +392,19 @@ class HTTPClient:
         return json_data
 
     def _should_retry(
-        self, method: str, status_code: int, retry_count: int, exception: Exception | None = None
+        self,
+        method: str,
+        status_code: int,
+        retry_count: int,
+        exception: Exception | None = None,
+        retry_config: RetryConfig | None = None,
     ) -> bool:
-        if retry_count >= self.retry_config.max_retries:
+        effective_retry = retry_config or self.retry_config
+        if retry_count >= effective_retry.max_retries:
             return False
-        if method.upper() not in self.retry_config.retry_methods:
+        if method.upper() not in effective_retry.retry_methods:
             return False
-        if status_code in self.retry_config.retry_status_codes:
+        if status_code in effective_retry.retry_status_codes:
             return True
         return bool(
             exception
@@ -402,11 +420,12 @@ class HTTPClient:
             )
         )
 
-    def _calculate_backoff(self, retry_count: int) -> float:
-        backoff = self.retry_config.retry_backoff_factor * (2**retry_count)
+    def _calculate_backoff(self, retry_count: int, retry_config: RetryConfig | None = None) -> float:
+        effective_retry = retry_config or self.retry_config
+        backoff = effective_retry.retry_backoff_factor * (2**retry_count)
         jitter = random.uniform(
-            -self.retry_config.retry_jitter_factor * backoff,
-            self.retry_config.retry_jitter_factor * backoff,
+            -effective_retry.retry_jitter_factor * backoff,
+            effective_retry.retry_jitter_factor * backoff,
         )
         return max(0, backoff + jitter)
 
@@ -418,6 +437,7 @@ class HTTPClient:
         json_data: JSONPayload | None = None,
         context: G8eHttpContext | None = None,
         params: QueryParams | None = None,
+        retry_config: RetryConfig | None = None,
     ) -> AiohttpResponse:
         """
         Make an HTTP request with automatic retry and circuit breaking.
@@ -477,6 +497,7 @@ class HTTPClient:
             raise error from error
 
         retry_count = 0
+        effective_retry = retry_config or self.retry_config
         session = await self._get_http_session()
 
         while True:
@@ -511,16 +532,22 @@ class HTTPClient:
 
                     return wrapped
 
-                if self._should_retry(method, wrapped.status_code, retry_count, exception=None):
+                if self._should_retry(
+                    method,
+                    wrapped.status_code,
+                    retry_count,
+                    exception=None,
+                    retry_config=effective_retry,
+                ):
                     retry_count += 1
-                    backoff = self._calculate_backoff(retry_count)
+                    backoff = self._calculate_backoff(retry_count, retry_config=effective_retry)
                     logger.error(
                         "Retrying request due to status %d: %s %s (attempt %d/%d, backoff %.2fs)",
                         wrapped.status_code,
                         method,
                         final_url,
                         retry_count,
-                        self.retry_config.max_retries,
+                        effective_retry.max_retries,
                         backoff,
                         extra={
                             "request_method": method,
@@ -576,15 +603,17 @@ class HTTPClient:
                 raise error
 
             except (TimeoutError, aiohttp.ServerTimeoutError) as e:
-                if self._should_retry(method, 0, retry_count, e):
+                if self._should_retry(
+                    method, 0, retry_count, e, retry_config=effective_retry
+                ):
                     retry_count += 1
-                    backoff = self._calculate_backoff(retry_count)
+                    backoff = self._calculate_backoff(retry_count, retry_config=effective_retry)
                     logger.error(
                         "Retrying request due to timeout: %s %s (attempt %d/%d, backoff %.2fs)",
                         method,
                         final_url,
                         retry_count,
-                        self.retry_config.max_retries,
+                        effective_retry.max_retries,
                         backoff,
                         extra={
                             "request_method": method,
@@ -599,7 +628,7 @@ class HTTPClient:
                     await asyncio.sleep(backoff)
                     continue
 
-                await circuit_breaker.record_failure()
+                await circuit_breaker.record_failure(countable=False)
                 trace.finish()
 
                 error = NetworkError(
@@ -632,15 +661,17 @@ class HTTPClient:
                 raise error from e
 
             except (aiohttp.ClientError, OSError) as e:
-                if self._should_retry(method, 0, retry_count, e):
+                if self._should_retry(
+                    method, 0, retry_count, e, retry_config=effective_retry
+                ):
                     retry_count += 1
-                    backoff = self._calculate_backoff(retry_count)
+                    backoff = self._calculate_backoff(retry_count, retry_config=effective_retry)
                     logger.error(
                         "Retrying request due to connection error: %s %s (attempt %d/%d, backoff %.2fs)",
                         method,
                         final_url,
                         retry_count,
-                        self.retry_config.max_retries,
+                        effective_retry.max_retries,
                         backoff,
                         extra={
                             "request_method": method,
@@ -655,7 +686,7 @@ class HTTPClient:
                     await asyncio.sleep(backoff)
                     continue
 
-                await circuit_breaker.record_failure()
+                await circuit_breaker.record_failure(countable=False)
                 trace.finish()
 
                 error = NetworkError(
@@ -726,9 +757,15 @@ class HTTPClient:
         json_data: JSONPayload | None = None,
         headers: dict[str, str] | None = None,
         context: G8eHttpContext | None = None,
+        retry_config: RetryConfig | None = None,
     ) -> AiohttpResponse:
         return await self.request(
-            "POST", url, headers=headers, json_data=json_data, context=context
+            "POST",
+            url,
+            headers=headers,
+            json_data=json_data,
+            context=context,
+            retry_config=retry_config,
         )
 
     async def get(
@@ -801,7 +838,7 @@ class HTTPClient:
         except NetworkError:
             raise
         except (TimeoutError, aiohttp.ServerTimeoutError) as e:
-            await circuit_breaker.record_failure()
+            await circuit_breaker.record_failure(countable=False)
             raise NetworkError(
                 message="Streaming request timed out",
                 code=ErrorCode.API_TIMEOUT_ERROR,
@@ -810,7 +847,7 @@ class HTTPClient:
                 cause=e,
             ) from e
         except (aiohttp.ClientError, OSError) as e:
-            await circuit_breaker.record_failure()
+            await circuit_breaker.record_failure(countable=False)
             raise NetworkError(
                 message=f"Streaming request failed: {e}",
                 code=ErrorCode.API_CONNECTION_ERROR,

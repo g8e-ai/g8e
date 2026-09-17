@@ -10,7 +10,12 @@ from collections.abc import AsyncIterator
 
 from google.protobuf import json_format
 
-from app.clients.http_client import CircuitBreakerConfig, RetryConfig, HTTPClient
+from app.clients.http_client import (
+    CircuitBreakerConfig,
+    GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG,
+    RetryConfig,
+    HTTPClient,
+)
 from app.models.settings import G8eeAppSettings, TLSConfig
 from app.constants import (
     DEFAULT_HTTP_CLIENT_TIMEOUT,
@@ -67,7 +72,8 @@ class InternalHttpClient:
             retry_config=RetryConfig(max_retries=DEFAULT_MAX_RETRIES),
             circuit_breaker_config=CircuitBreakerConfig(
                 failure_threshold=5,
-                recovery_time=60,
+                recovery_time=15.0,
+                half_open_success_threshold=1,
             ),
             auth_token="",
             api_key=settings.auth.internal_api_key or "",
@@ -125,6 +131,7 @@ class InternalHttpClient:
                 cli_session_id=cli_session_id,
                 user_id=user_id,
             ),
+            retry_config=GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG,
         )
         if not response.is_success:
             return None

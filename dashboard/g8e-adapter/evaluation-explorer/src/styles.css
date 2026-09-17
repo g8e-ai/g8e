@@ -470,7 +470,8 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 
 /* Bottom grid */
 .ov-grid-main { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(330px, 0.9fr); gap: 16px; margin-bottom: 16px; align-items: start; }
-.ov-grid-bottom { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(250px, 0.75fr) minmax(250px, 0.75fr); gap: 16px; align-items: start; }
+.ov-grid-bottom { display: grid; grid-template-columns: minmax(250px, 1fr) minmax(250px, 1fr); gap: 16px; align-items: start; }
+.ov-models-strip { grid-column: 1 / -1; }
 
 /* Recent runs mini list */
 .mini-runs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

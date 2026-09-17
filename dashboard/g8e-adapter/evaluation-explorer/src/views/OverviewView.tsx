@@ -1,5 +1,5 @@
 // Overview view — the landing page. Layout mirrors the OpenDevOps.ai
-// surface: evaluated role agents, the live event stream, a system overview
+// surface: the live event stream, a system overview
 // with dataset coverage, the measured-model table, recent runs, and the
 // public mirror download endpoints. Every panel renders real store data;
 // nothing on this page is decorative.
@@ -15,8 +15,6 @@ import {
   ProgressBar,
   formatNumber,
   formatPercent,
-  formatLatency,
-  formatThroughput,
 } from '../components/shared';
 import { formatCompact, formatRelativeTime } from '../utils/format';
 import { qualityStateLabel, qualityStateTone, type FeedConnectionState } from '../utils/feed-state';
@@ -81,7 +79,7 @@ function AgentsStrip({ models, datasetId }: { models: ModelSummary[]; datasetId:
   const agents = evaluatedModels.slice(0, 4);
 
   return (
-    <section className="panel" aria-label="Models">
+    <section className="panel ov-models-strip" aria-label="Models">
       <div className="panel-head">
         <h2>
           Models <span className="panel-sub">· {evaluatedModels.length} evaluated</span>
@@ -393,80 +391,6 @@ function SystemOverviewPanel({
   );
 }
 
-/** Measured-model comparison table for the active dataset. */
-function ModelLab({ models, datasetId }: { models: ModelSummary[]; datasetId: string }) {
-  const measured = useMemo(
-    () =>
-      models
-        .filter((m) => m.pass_rate)
-        .sort((a, b) => (b.pass_rate?.estimate ?? 0) - (a.pass_rate?.estimate ?? 0))
-        .slice(0, 6),
-    [models],
-  );
-
-  return (
-    <section className="panel" aria-label="Model evaluation lab">
-      <div className="panel-head">
-        <div>
-          <h2>Model evaluation lab</h2>
-          <p className="panel-note">Measured models in the active dataset</p>
-        </div>
-        <Link to={`/models?dataset=${datasetId}`} className="panel-link">
-          View all results →
-        </Link>
-      </div>
-      {measured.length === 0 ? (
-        <p className="panel-empty">No measured models in this dataset.</p>
-      ) : (
-        <div className="table-scroll">
-          <table className="lab-table">
-            <thead>
-              <tr>
-                <th>Model</th>
-                <th>Role</th>
-                <th>Quant</th>
-                <th>Tokens/s</th>
-                <th>Agreement</th>
-                <th>Pass rate</th>
-                <th>Latency p50</th>
-              </tr>
-            </thead>
-            <tbody>
-              {measured.map((model) => (
-                <tr key={modelComparisonId(model)}>
-                  <td>
-                    <Link to={`/models/${datasetId}/${model.variant_id}?role=${model.role}`}>
-                      {model.display_name}
-                    </Link>
-                  </td>
-                  <td>{roleLabel(model.role)}</td>
-                  <td>{model.quantization_weight_class?.toUpperCase() ?? '—'}</td>
-                  <td>
-                    {model.output_throughput_p50?.value !== undefined
-                      ? formatThroughput(model.output_throughput_p50.value)
-                      : '—'}
-                  </td>
-                  <td>
-                    {model.agreement_pairwise?.value !== undefined
-                      ? formatPercent(model.agreement_pairwise.value, 0)
-                      : '—'}
-                  </td>
-                  <td>{model.pass_rate ? formatPercent(model.pass_rate.estimate, 0) : '—'}</td>
-                  <td>
-                    {model.latency_p50_ms?.value !== undefined
-                      ? formatLatency(model.latency_p50_ms.value)
-                      : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
 /** Most recent runs for the active dataset. */
 function RecentRuns({ evaluations }: { evaluations: EvaluationSummary[] }) {
   const recent = evaluations.slice(-5).reverse();
@@ -578,8 +502,6 @@ export function OverviewView() {
 
   return (
     <div className="overview">
-      <AgentsStrip models={models} datasetId={activeDatasetId} />
-
       <div className="ov-grid-main">
         <LiveStreamPanel events={events} connection={connection} />
         <SystemOverviewPanel
@@ -594,7 +516,7 @@ export function OverviewView() {
       </div>
 
       <div className="ov-grid-bottom">
-        <ModelLab models={models} datasetId={activeDatasetId} />
+        <AgentsStrip models={models} datasetId={activeDatasetId} />
         <RecentRuns evaluations={evaluations} />
         <DownloadsPanel />
       </div>
