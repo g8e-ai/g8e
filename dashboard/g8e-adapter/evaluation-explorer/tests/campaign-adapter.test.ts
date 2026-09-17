@@ -8,6 +8,7 @@ import {
   campaignProgressCounts,
   createCampaignAdaptContext,
   isCampaignProjectionEnvelope,
+  liveEventProgressCounts,
 } from '../src/state/campaign-adapter';
 import { decodeViewRecord } from '../src/contract/validators';
 import { EvalStore } from '../src/state/store';
@@ -155,7 +156,79 @@ describe('adaptCampaignProjectionEnvelope', () => {
     );
 
     const started = runningRecords.find((record) => record.kind === 'assignment_started');
-    expect(started).toMatchObject({ completed: 1, total: 4 });
+    expect(started).toMatchObject({ completed: 2, total: 4 });
+  });
+
+  it('bumps live-event progress when a later model starts after earlier terminals', () => {
+    const context = createCampaignAdaptContext();
+    const runId = 'run-multi-model';
+    const datasetId = campaignDatasetId(runId);
+
+    adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: `${runId}:assign-1:lifecycle:queued`,
+        record: {
+          assignment_id: 'assign-1',
+          run_id: runId,
+          scenario_id: 'tool-select-constraints',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
+          designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
+          variant_id: 'qwen30:6b',
+          observed_at: '2026-09-17T04:39:37Z',
+        },
+      },
+      context,
+    );
+
+    adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: `${runId}:assign-1:result`,
+        record: {
+          assignment_id: 'assign-1',
+          run_id: runId,
+          scenario_id: 'tool-select-constraints',
+          variant_id: 'qwen30:6b',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+          summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+          completed_at: '2026-09-17T04:40:00Z',
+        },
+      },
+      context,
+    );
+
+    const startedRecords = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: `${runId}:assign-2:lifecycle:running`,
+        record: {
+          assignment_id: 'assign-2',
+          run_id: runId,
+          scenario_id: 'tool-select-constraints',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING',
+          designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
+          variant_id: 'gemma3:4b',
+          observed_at: '2026-09-17T04:40:12Z',
+        },
+      },
+      context,
+    );
+
+    const started = startedRecords.find((record) => record.kind === 'assignment_started');
+    expect(started).toMatchObject({
+      dataset_id: datasetId,
+      variant_id: 'gemma3:4b',
+      completed: 2,
+      total: 1,
+    });
+    expect(liveEventProgressCounts(context.runTotals.get(runId)!, 'assignment_started')).toEqual({
+      completed: 2,
+      total: 1,
+    });
   });
 
   it('tracks terminal progress separately from passing verdicts', () => {

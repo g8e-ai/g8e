@@ -152,6 +152,19 @@ export function campaignProgressCounts(progress: RunProgress): { completed: numb
   return { completed: progress.terminal, total };
 }
 
+/** Point-in-time progress stamped onto a live event. */
+export function liveEventProgressCounts(
+  progress: RunProgress,
+  eventKind?: LiveEventKind,
+): { completed: number; total: number } {
+  const { completed: terminal, total } = campaignProgressCounts(progress);
+  if (eventKind === 'assignment_started') {
+    // A running assignment is the next unit of work after finished terminals.
+    return { completed: terminal + 1, total };
+  }
+  return { completed: terminal, total };
+}
+
 export function isCampaignProjectionEnvelope(value: unknown): value is CampaignProjectionEnvelope {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Record<string, unknown>;
@@ -220,7 +233,7 @@ function adaptLifecycleRecord(
   }
 
   const eventKind = lifecycleEventKind(lifecycle);
-  const { completed, total } = campaignProgressCounts(progress);
+  const { completed, total } = liveEventProgressCounts(progress, eventKind);
   if (eventKind) {
     records.push({
       schema_version: VIEW_SCHEMA_VERSION,
