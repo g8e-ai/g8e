@@ -113,6 +113,63 @@ func TestCampaignProviderObservationReader_VerifyAssignmentProviderObservations_
 	assert.Equal(t, []string{"provider_boundary_observation_missing:attempt-missing"}, unavailable)
 }
 
+type stubProviderObservationRemote struct {
+	window  *evalv1.ProviderBoundaryObservationWindow
+	attempt *operatorv1.InferenceProviderAttemptRecord
+}
+
+func (s *stubProviderObservationRemote) Load(_ context.Context, providerAttemptID string) (*evalv1.ProviderBoundaryObservationWindow, *operatorv1.InferenceProviderAttemptRecord, error) {
+	if s == nil || s.window == nil || s.attempt == nil || s.window.GetProviderAttemptId() != providerAttemptID {
+		return nil, nil, constants.ErrNotFound
+	}
+	return s.window, s.attempt, nil
+}
+
+func TestCampaignProviderObservationReaderWithRemote_LoadsGatewayEvidenceOnLocalMiss(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	attempt := &operatorv1.InferenceProviderAttemptRecord{
+		ProviderAttemptId: "attempt-remote",
+		Status:            operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED,
+		StartedAtUnixMs:   time.Unix(1_700_000_000, 0).UnixMilli(),
+		CompletedAtUnixMs: time.Unix(1_700_000_010, 0).UnixMilli(),
+	}
+	window := &evalv1.ProviderBoundaryObservationWindow{
+		SchemaVersion:              provider_observer.SchemaVersion,
+		ProviderAttemptId:          "attempt-remote",
+		ObserverId:                 "observer-test",
+		ObserverClockSource:        provider_observer.DefaultObserverClockSource,
+		WindowStartedAtUnixNanos:   uint64(time.Unix(1_700_000_000, 0).UnixNano()),
+		WindowCompletedAtUnixNanos: uint64(time.Unix(1_700_000_010, 0).UnixNano()),
+		AttemptStartedAtUnixMs:     attempt.GetStartedAtUnixMs(),
+		AttemptCompletedAtUnixMs:   attempt.GetCompletedAtUnixMs(),
+		Samples: []*evalv1.ProviderBoundaryHardwareSample{{
+			ObservedAtUnixNanos:        uint64(time.Unix(1_700_000_001, 0).UnixNano()),
+			GpuUtilizationAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+			GpuUtilizationPercent:      10,
+		}},
+	}
+	digest, err := provider_observer.ComputeObservationDigest(window)
+	require.NoError(t, err)
+	window.ObservationDigest = digest
+
+	reader, err := NewCampaignProviderObservationReaderWithRemote(fileSvc, &stubProviderObservationRemote{
+		window:  window,
+		attempt: attempt,
+	})
+	require.NoError(t, err)
+	result := &evalv1.EvaluationAssignmentResult{
+		ModelInferences: []*evalv1.ModelInferenceRecord{{
+			InferenceRecordId: "inference-1",
+			ProviderAttemptId: "attempt-remote",
+		}},
+	}
+	failures, unavailable := reader.VerifyAssignmentProviderObservations(ctx, result, ProviderObservationPolicyStrict)
+	assert.Empty(t, failures)
+	assert.Empty(t, unavailable)
+}
+
 func TestCampaignProviderObservationReader_VerifyAssignmentProviderObservations_StrictMissingWindow(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

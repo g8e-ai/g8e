@@ -195,6 +195,33 @@ func TestUserService_Disable(t *testing.T) {
 	})
 }
 
+func TestUserService_FirstUserID(t *testing.T) {
+	t.Run("Returns first created user", func(t *testing.T) {
+		mockDB := newTestCanonicalDBService(t)
+		logger := newNoopLogger()
+		userSvc := NewUserService(mockDB, logger)
+
+		firstUser, err := userSvc.CreateUser()
+		require.NoError(t, err)
+		_, err = userSvc.CreateUser()
+		require.NoError(t, err)
+
+		ownerID, err := userSvc.FirstUserID()
+		require.NoError(t, err)
+		assert.Equal(t, firstUser.ID, ownerID)
+	})
+
+	t.Run("Empty when no users exist", func(t *testing.T) {
+		mockDB := newTestCanonicalDBService(t)
+		logger := newNoopLogger()
+		userSvc := NewUserService(mockDB, logger)
+
+		ownerID, err := userSvc.FirstUserID()
+		require.NoError(t, err)
+		assert.Empty(t, ownerID)
+	})
+}
+
 func TestUserService_IsFirstUser(t *testing.T) {
 	t.Run("True - sole user is the first user", func(t *testing.T) {
 		mockDB := newTestCanonicalDBService(t)

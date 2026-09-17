@@ -19,7 +19,14 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
+
+// ProviderObservationRemote loads provider-boundary observation evidence from a
+// remote gateway when local runtime files are unavailable.
+type ProviderObservationRemote interface {
+	Load(ctx context.Context, providerAttemptID string) (*evalv1.ProviderBoundaryObservationWindow, *operatorv1.InferenceProviderAttemptRecord, error)
+}
 
 const (
 	providerObservationArtifactType = "provider-boundary-observation-window"
@@ -81,18 +88,81 @@ type CampaignProviderObservationReader struct {
 // NewCampaignProviderObservationReader constructs one read-only provider
 // observation accessor from runtime file services.
 func NewCampaignProviderObservationReader(fileSvc fs.RuntimeFileService) (*CampaignProviderObservationReader, error) {
+	return NewCampaignProviderObservationReaderWithRemote(fileSvc, nil)
+}
+
+// NewCampaignProviderObservationReaderWithRemote constructs one read-only
+// provider observation accessor from local runtime files with optional gateway
+// fallback when local evidence is missing.
+func NewCampaignProviderObservationReaderWithRemote(fileSvc fs.RuntimeFileService, remote ProviderObservationRemote) (*CampaignProviderObservationReader, error) {
 	if fileSvc == nil {
 		return nil, fmt.Errorf("evaluation: provider observation reader: %w", constants.ErrMissingRequiredField)
 	}
-	windows, err := provider_observer.NewWindowStore(fileSvc)
+	localWindows, err := provider_observer.NewWindowStore(fileSvc)
 	if err != nil {
 		return nil, err
 	}
-	attempts, err := inference.NewAttemptStore(fileSvc)
+	localAttempts, err := inference.NewAttemptStore(fileSvc)
 	if err != nil {
 		return nil, err
+	}
+	windows := localWindows
+	attempts := localAttempts
+	if remote != nil {
+		windows = &fallbackProviderObservationWindows{local: localWindows, remote: remote}
+		attempts = &fallbackProviderObservationAttempts{local: localAttempts, remote: remote}
 	}
 	return &CampaignProviderObservationReader{windows: windows, attempts: attempts}, nil
+}
+
+type fallbackProviderObservationWindows struct {
+	local  provider_observer.WindowStore
+	remote ProviderObservationRemote
+}
+
+func (s *fallbackProviderObservationWindows) Save(ctx context.Context, window *evalv1.ProviderBoundaryObservationWindow) error {
+	return s.local.Save(ctx, window)
+}
+
+func (s *fallbackProviderObservationWindows) Load(ctx context.Context, providerAttemptID string) (*evalv1.ProviderBoundaryObservationWindow, error) {
+	window, err := s.local.Load(ctx, providerAttemptID)
+	if err == nil || !errors.Is(err, constants.ErrNotFound) || s.remote == nil {
+		return window, err
+	}
+	window, _, remoteErr := s.remote.Load(ctx, providerAttemptID)
+	if remoteErr != nil {
+		return nil, err
+	}
+	return window, nil
+}
+
+type fallbackProviderObservationAttempts struct {
+	local  inference.AttemptStore
+	remote ProviderObservationRemote
+}
+
+func (s *fallbackProviderObservationAttempts) Begin(ctx context.Context, record *operatorv1.InferenceProviderAttemptRecord) error {
+	return s.local.Begin(ctx, record)
+}
+
+func (s *fallbackProviderObservationAttempts) Complete(ctx context.Context, providerAttemptID, resultDigest string) error {
+	return s.local.Complete(ctx, providerAttemptID, resultDigest)
+}
+
+func (s *fallbackProviderObservationAttempts) Fail(ctx context.Context, providerAttemptID, failureSummary string) error {
+	return s.local.Fail(ctx, providerAttemptID, failureSummary)
+}
+
+func (s *fallbackProviderObservationAttempts) Get(ctx context.Context, providerAttemptID string) (*operatorv1.InferenceProviderAttemptRecord, error) {
+	attempt, err := s.local.Get(ctx, providerAttemptID)
+	if err == nil || !errors.Is(err, constants.ErrNotFound) || s.remote == nil {
+		return attempt, err
+	}
+	_, attempt, remoteErr := s.remote.Load(ctx, providerAttemptID)
+	if remoteErr != nil {
+		return nil, err
+	}
+	return attempt, nil
 }
 
 // BindProviderBoundaryObservationRefs attaches observation evidence references

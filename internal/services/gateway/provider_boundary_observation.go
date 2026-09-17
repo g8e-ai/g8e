@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
@@ -25,15 +27,41 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
+// providerBoundaryOperatorLister resolves operators for campaign gateway
+// infrastructure. Observer operators are enrolled under the gateway owner,
+// not the per-request app identity on inference dispatch.
+type providerBoundaryOperatorLister interface {
+	ListOperatorsForObservation() ([]models.OperatorDocumentGo, error)
+}
+
+type registrationOwnerOperatorLister struct {
+	reg     *RegistrationService
+	userSvc *UserService
+}
+
+func (l *registrationOwnerOperatorLister) ListOperatorsForObservation() ([]models.OperatorDocumentGo, error) {
+	if l.reg == nil || l.userSvc == nil {
+		return nil, constants.ErrServiceUnavailable
+	}
+	ownerID, err := l.userSvc.FirstUserID()
+	if err != nil {
+		return nil, err
+	}
+	if ownerID == "" {
+		return nil, constants.ErrNotFound
+	}
+	return l.reg.ListUserOperators(ownerID)
+}
+
 // ProviderBoundaryObservationCoordinator fans out BEGIN/FINALIZE observation
 // commands to the remote provider-boundary observer operator and ingests
 // completed windows on the campaign Gateway host.
 type ProviderBoundaryObservationCoordinator struct {
-	dispatch *DispatchService
-	reg      *RegistrationService
-	pubsub   *GatewayWebSocketHandler
-	windows  provider_observer.WindowStore
-	logger   *slog.Logger
+	dispatch       *DispatchService
+	operatorLister providerBoundaryOperatorLister
+	pubsub         *GatewayWebSocketHandler
+	windows        provider_observer.WindowStore
+	logger         *slog.Logger
 
 	mu         sync.Mutex
 	unregister func()
@@ -49,24 +77,24 @@ type providerBoundaryObserverTarget struct {
 // provider-boundary observation coordinator.
 func NewProviderBoundaryObservationCoordinator(
 	dispatch *DispatchService,
-	reg *RegistrationService,
+	operatorLister providerBoundaryOperatorLister,
 	pubsubHandler *GatewayWebSocketHandler,
 	windows provider_observer.WindowStore,
 	logger *slog.Logger,
 ) *ProviderBoundaryObservationCoordinator {
 	return &ProviderBoundaryObservationCoordinator{
-		dispatch: dispatch,
-		reg:      reg,
-		pubsub:   pubsubHandler,
-		windows:  windows,
-		logger:   logger,
+		dispatch:       dispatch,
+		operatorLister: operatorLister,
+		pubsub:         pubsubHandler,
+		windows:        windows,
+		logger:         logger,
 	}
 }
 
 // ensureObserver lazily resolves the enrolled provider-boundary observer
-// operator for one requestor and subscribes to its results channel once.
-func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Context, requestorUserID string) bool {
-	if c == nil || c.dispatch == nil || c.reg == nil || c.pubsub == nil || c.windows == nil || requestorUserID == "" {
+// operator for the gateway owner and subscribes to its results channel once.
+func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Context) bool {
+	if c == nil || c.dispatch == nil || c.operatorLister == nil || c.pubsub == nil || c.windows == nil {
 		return false
 	}
 	c.mu.Lock()
@@ -76,14 +104,26 @@ func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Cont
 	}
 	c.mu.Unlock()
 
-	operators, err := c.reg.ListUserOperators(requestorUserID)
+	operators, err := c.operatorLister.ListOperatorsForObservation()
 	if err != nil {
 		c.logger.Warn("Provider-boundary observation: list operators failed", "error", err)
 		return false
 	}
-	observer, err := selectProviderBoundaryObserver(operators)
+	selected, err := operatorcapability.SelectProviderBoundaryObserver(operators, "")
 	if err != nil {
+		switch {
+		case errors.Is(err, constants.ErrProviderBoundaryObserverNotFound):
+			c.logger.Warn("Provider-boundary observation: observer not found", "reason", "not found")
+		case errors.Is(err, constants.ErrProviderBoundaryObserverAmbiguous):
+			c.logger.Warn("Provider-boundary observation: observer ambiguous", "reason", "ambiguous")
+		default:
+			c.logger.Warn("Provider-boundary observation: observer selection failed", "error", err)
+		}
 		return false
+	}
+	observer := &providerBoundaryObserverTarget{
+		OperatorID:        selected.OperatorID,
+		OperatorSessionID: selected.OperatorSessionID,
 	}
 
 	resultsChannel := pubsub.ResultsChannel(observer.OperatorID, observer.OperatorSessionID)
@@ -116,11 +156,11 @@ func (c *ProviderBoundaryObservationCoordinator) Stop() {
 }
 
 // NotifyAttemptBegin sends a fire-and-forget BEGIN command to the observer.
-func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptBegin(ctx context.Context, requestorUserID, providerAttemptID string, startedAtUnixMs int64, retryCount uint32) {
+func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptBegin(ctx context.Context, _ string, providerAttemptID string, startedAtUnixMs int64, retryCount uint32) {
 	if providerAttemptID == "" {
 		return
 	}
-	if !c.ensureObserver(ctx, requestorUserID) {
+	if !c.ensureObserver(ctx) {
 		return
 	}
 	command := &evalv1.ProviderBoundaryObservationCommand{
@@ -135,7 +175,7 @@ func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptBegin(ctx context.
 // NotifyAttemptFinalize sends a fire-and-forget FINALIZE command to the observer.
 func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptFinalize(
 	ctx context.Context,
-	requestorUserID string,
+	_ string,
 	providerAttemptID string,
 	inferenceTransactionID string,
 	startedAtUnixMs int64,
@@ -146,7 +186,7 @@ func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptFinalize(
 	if providerAttemptID == "" {
 		return
 	}
-	if !c.ensureObserver(ctx, requestorUserID) {
+	if !c.ensureObserver(ctx) {
 		return
 	}
 	status := evalv1.ProviderBoundaryObservationAttemptStatus_PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_COMPLETED
@@ -274,31 +314,4 @@ func (d *DispatchService) PublishCommand(ctx context.Context, req PublishCommand
 		return "", fmt.Errorf("dispatch: publish command: %w", constants.ErrDispatchNoDelivery)
 	}
 	return env.Id, nil
-}
-
-func selectProviderBoundaryObserver(operators []models.OperatorDocumentGo) (*providerBoundaryObserverTarget, error) {
-	matches := make([]providerBoundaryObserverTarget, 0)
-	for _, op := range operators {
-		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
-			continue
-		}
-		if op.RuntimeConfig == nil || !op.RuntimeConfig.ProviderBoundaryObserverEnabled {
-			continue
-		}
-		if op.OperatorSessionID == "" {
-			continue
-		}
-		matches = append(matches, providerBoundaryObserverTarget{
-			OperatorID:        op.ID,
-			OperatorSessionID: op.OperatorSessionID,
-		})
-	}
-	switch len(matches) {
-	case 0:
-		return nil, constants.ErrProviderBoundaryObserverNotFound
-	case 1:
-		return &matches[0], nil
-	default:
-		return nil, constants.ErrProviderBoundaryObserverAmbiguous
-	}
 }

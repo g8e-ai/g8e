@@ -447,9 +447,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		&gatewayOperatorListerAdapter{svc: reg},
 		logger,
 	)
-	providerObservationCoord := NewProviderBoundaryObservationCoordinator(dispatchSvc, reg, wsHandler, nil, logger)
+	ownerOperatorLister := &registrationOwnerOperatorLister{reg: reg, userSvc: userSvc}
+	providerObservationCoord := NewProviderBoundaryObservationCoordinator(dispatchSvc, ownerOperatorLister, wsHandler, nil, logger)
 	if windowStore, err := provider_observer.NewWindowStore(b.fileSvc); err == nil {
-		providerObservationCoord = NewProviderBoundaryObservationCoordinator(dispatchSvc, reg, wsHandler, windowStore, logger)
+		providerObservationCoord = NewProviderBoundaryObservationCoordinator(dispatchSvc, ownerOperatorLister, wsHandler, windowStore, logger)
 		inferenceDispatchSvc.SetProviderObservationNotifier(providerObservationCoord)
 	} else {
 		logger.Warn("Provider-boundary observation window store unavailable", "error", err)
@@ -835,6 +836,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Responder: ls.responder,
 			Spectator: func() *PublicSpectatorRuntime { return ls.publicSpectator },
 		},
+		ProviderObservationControllerDeps: providerObservationControllerDeps(logger, ls.responder, ls.fileSvc),
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)

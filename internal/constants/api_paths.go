@@ -35,7 +35,8 @@ var APIPaths = struct {
 	// Inference dispatch route (g8ellama). Platform-internal endpoint on the
 	// User Gateway that the ensemble chat pipeline calls to dispatch a
 	// governed inference request to the Inference Node.
-	InferenceDispatch string `json:"inference_dispatch"`
+	InferenceDispatch              string `json:"inference_dispatch"`
+	InferenceProviderObservations  string `json:"inference_provider_observations"`
 	// Intent routes
 	GrantIntent  string `json:"grant_intent"`
 	RevokeIntent string `json:"revoke_intent"`
@@ -198,7 +199,8 @@ var APIPaths = struct {
 	OperatorsReauth:   "/api/v1/operators/reauth",
 	OperatorsSession:  "/api/v1/operators/session/",
 	OperatorsCommands: "/api/v1/operators/commands",
-	InferenceDispatch: "/api/v1/inference/dispatch",
+	InferenceDispatch:             "/api/v1/inference/dispatch",
+	InferenceProviderObservations: "/api/v1/inference/provider-observations/",
 	// Intent routes
 	GrantIntent:  "/api/v1/operators/{operator_id}/intents/grant",
 	RevokeIntent: "/api/v1/operators/{operator_id}/intents/revoke",

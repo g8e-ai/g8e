@@ -699,7 +699,7 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
 			}
@@ -717,7 +717,7 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign verify: %w", err)
 			}
 			verifier := evaluation.NewCampaignRunVerifier(deps.now)
-			observationReader, err := evaluation.NewCampaignProviderObservationReader(fileSvc)
+			observationReader, err := newCampaignProviderObservationReader(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign verify: %w", err)
 			}
