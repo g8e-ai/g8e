@@ -97,10 +97,10 @@ services:
       resources:
         limits:
           cpus: '2'
-          memory: 1G
+          memory: 2G
         reservations:
-          cpus: '0.5'
-          memory: 256M
+          cpus: '1'
+          memory: 512M
 
   g8e-eval-observer:
     profiles: [evaluation]
@@ -199,11 +199,11 @@ services:
       - "--inference-ollama-endpoint"
       - "${G8E_OLLAMA_ENDPOINT:?set G8E_OLLAMA_ENDPOINT to the approved remote Ollama provider}"
       - "--inference-primary-model"
-      - "${G8E_INFERENCE_PRIMARY_MODEL:-qwen3:4b}"
+      - "${G8E_INFERENCE_PRIMARY_MODEL:-gemm4:e4b}"
       - "--inference-assistant-model"
       - "${G8E_INFERENCE_ASSISTANT_MODEL:-qwen3:1.7b}"
       - "--inference-lite-model"
-      - "${G8E_INFERENCE_LITE_MODEL:-qwen3:0.6b}"
+      - "${G8E_INFERENCE_LITE_MODEL:-smol-7b:latest}"
       - "--inference-keep-alive"
       - "${G8E_INFERENCE_KEEP_ALIVE:--1}"
       - "--inference-campaign-id"
@@ -457,11 +457,11 @@ services:
       - "--inference-ollama-endpoint"
       - "${G8E_OLLAMA_ENDPOINT:?set G8E_OLLAMA_ENDPOINT to the approved remote Ollama provider}"
       - "--inference-primary-model"
-      - "${G8E_INFERENCE_PRIMARY_MODEL:-qwen3:4b}"
+      - "${G8E_INFERENCE_PRIMARY_MODEL:-gemm4:e4b}"
       - "--inference-assistant-model"
       - "${G8E_INFERENCE_ASSISTANT_MODEL:-qwen3:1.7b}"
       - "--inference-lite-model"
-      - "${G8E_INFERENCE_LITE_MODEL:-qwen3:0.6b}"
+      - "${G8E_INFERENCE_LITE_MODEL:-smol-7b:latest}"
       - "--inference-keep-alive"
       - "${G8E_INFERENCE_KEEP_ALIVE:--1}"
     restart: unless-stopped

@@ -1,0 +1,149 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 0.0.
+
+package cmd
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+)
+
+func TestDockerInit_MissingComposeFileReturnsError(t *testing.T) {
+	chdirTemp(t)
+
+	cmd := dockerInitCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.True(t, isNotFoundErr(err))
+}
+
+func TestReadDotEnvFile_ParsesValues(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, ".env")
+	content := `# comment
+G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
+G8E_INFERENCE_CAMPAIGN_ID=eval-smoke-mini
+G8E_INFERENCE_MODEL_REGISTRY_DIGEST=abc123
+`
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+
+	values, err := readDotEnvFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, "http://192.168.1.2:11434", values["G8E_OLLAMA_ENDPOINT"])
+	assert.Equal(t, "eval-smoke-mini", values["G8E_INFERENCE_CAMPAIGN_ID"])
+	assert.Equal(t, "abc123", values["G8E_INFERENCE_MODEL_REGISTRY_DIGEST"])
+}
+
+func TestCheckDockerInitEnv_MissingFile(t *testing.T) {
+	chdirTemp(t)
+
+	err := checkDockerInitEnv()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrDockerInitEnvRequired)
+}
+
+func TestCheckDockerInitEnv_MissingRequiredKeys(t *testing.T) {
+	tmpDir := chdirTemp(t)
+	content := "G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".env"), []byte(content), 0o644))
+
+	err := checkDockerInitEnv()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrDockerInitEnvRequired)
+	assert.Contains(t, err.Error(), "G8E_INFERENCE_CAMPAIGN_ID")
+}
+
+func TestCheckDockerInitEnv_Succeeds(t *testing.T) {
+	tmpDir := chdirTemp(t)
+	content := `G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
+G8E_INFERENCE_CAMPAIGN_ID=eval-smoke-mini
+G8E_INFERENCE_MODEL_REGISTRY_DIGEST=abc123
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".env"), []byte(content), 0o644))
+
+	err := checkDockerInitEnv()
+	assert.NoError(t, err)
+}
+
+func TestIsInferenceOperatorPendingRequest(t *testing.T) {
+	dataReq := models.PlatformEnrollmentPendingRequest{
+		ComponentKind: models.PlatformComponentOperator,
+		InstanceID:    "operator-a1b2c3d4",
+		Hostname:      "a1b2c3d4",
+	}
+	inferenceReq := models.PlatformEnrollmentPendingRequest{
+		ComponentKind: models.PlatformComponentOperator,
+		InstanceID:    "operator-inference-operator",
+		Hostname:      "inference-operator",
+	}
+
+	assert.False(t, isInferenceOperatorPendingRequest(&dataReq))
+	assert.True(t, isInferenceOperatorPendingRequest(&inferenceReq))
+}
+
+func TestPlatformEnrollmentApprovalRank(t *testing.T) {
+	tests := []struct {
+		name string
+		req  models.PlatformEnrollmentPendingRequest
+		want int
+	}{
+		{
+			name: "data operator first",
+			req: models.PlatformEnrollmentPendingRequest{
+				ComponentKind: models.PlatformComponentOperator,
+				InstanceID:    "operator-host",
+			},
+			want: 1,
+		},
+		{
+			name: "dashboard second",
+			req: models.PlatformEnrollmentPendingRequest{
+				ComponentKind: models.PlatformComponentDashboard,
+			},
+			want: 2,
+		},
+		{
+			name: "ensemble third",
+			req: models.PlatformEnrollmentPendingRequest{
+				ComponentKind: models.PlatformComponentEnsemble,
+			},
+			want: 3,
+		},
+		{
+			name: "inference operator last",
+			req: models.PlatformEnrollmentPendingRequest{
+				ComponentKind: models.PlatformComponentOperator,
+				Hostname:      "inference-operator",
+			},
+			want: 4,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, platformEnrollmentApprovalRank(tc.req))
+		})
+	}
+}
+
+func TestDockerFullStackProfiles(t *testing.T) {
+	assert.Equal(t, []string{
+		constants.DockerBootstrappedProfile,
+		constants.DockerEvaluationProfile,
+	}, dockerFullStackProfiles())
+}

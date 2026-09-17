@@ -29,6 +29,7 @@ func TestDockerCommandSubcommands(t *testing.T) {
 		assert.Equal(t, "docker", cmd.Use)
 
 		expectedSubcommands := []string{
+			"init",
 			"start",
 			"stop",
 			"status",

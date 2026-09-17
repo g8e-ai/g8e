@@ -188,10 +188,23 @@ Session IDs change on every volume wipe. Rediscover them after any `docker compo
 ### Automated alternative
 
 ```bash
-./g8e docker start --profile bootstrapped --profile evaluation --full
+./g8e docker init
 ```
 
-Use `--skip-enroll` to start containers without the enrollment walkthrough. The evaluation profile is not included in plain `--full`; pass `--profile evaluation` explicitly.
+`g8e docker init` runs the full bootstrap in one command: build images, start the gateway, enroll the CLI owner, start `bootstrapped` + `evaluation` workloads, auto-approve platform enrollments in order (data operator → dashboard → ensemble → inference operator), and wait for ensemble health. Requires a repository-root `.env` with `G8E_OLLAMA_ENDPOINT`, `G8E_INFERENCE_CAMPAIGN_ID`, and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` set before running.
+
+Useful flags:
+
+- `--clean-first` — wipe containers/volumes/networks before init (cold start).
+- `--skip-build` — reuse existing images.
+- `--skip-enroll` — reuse an already-enrolled CLI identity.
+- `--skip-approvals` — start workloads without auto-approving enrollments.
+
+For a gateway-only automated start with interactive enrollment prompts, use:
+
+```bash
+./g8e docker start --profile bootstrapped --profile evaluation --full
+```
 
 ## Provider-boundary Observer Operator (Windows Ollama host)
 
@@ -331,6 +344,7 @@ Do not install `deploy/systemd/opendevops-eval-publisher.service` (deleted) or r
 
 | Command | Behavior |
 | --- | --- |
+| `./g8e docker init` | Build images, enroll owner, start full evaluation stack, auto-approve platform enrollments, and wait for readiness. |
 | `./g8e docker start` | Starts default profile (Gateway only). |
 | `./g8e docker start --full` | Starts `bootstrapped` profile with enrollment walkthrough. |
 | `./g8e docker start --profile bootstrapped --profile evaluation` | Starts full evaluation stack. |

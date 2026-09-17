@@ -1267,6 +1267,12 @@ var (
 	ErrDockerStartApprovalFailed   = errors.New("docker start: platform enrollment approval failed")
 	ErrDockerStartNoPendingRequest = errors.New("docker start: no pending platform enrollment request found for component")
 
+	// Docker init bootstrap errors
+	ErrDockerInitEnvRequired       = errors.New("docker init: .env missing required evaluation settings")
+	ErrDockerInitEnrollmentFailed  = errors.New("docker init: owner enrollment failed")
+	ErrDockerInitApprovalFailed    = errors.New("docker init: platform enrollment approval failed")
+	ErrDockerInitReadinessFailed   = errors.New("docker init: workloads did not become ready")
+
 	// Demo scenario execution errors
 	ErrDemoScenarioFailed        = errors.New("demo: one or more scenarios failed")
 	ErrDemoScenarioCancelled     = errors.New("demo: scenario cancelled")

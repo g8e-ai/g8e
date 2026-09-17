@@ -153,6 +153,10 @@ func dockerCmd() *cobra.Command {
 		Short: "Manage the Docker Compose unified stack",
 		Long: `Manage the root Docker Compose unified stack (gateway, operator, ensemble, dashboard).
 
+Use ` + "`" + `g8e docker init` + "`" + ` to build images and bring the full evaluation stack online in one
+command (owner enrollment, platform approvals, readiness checks). See
+docs/guides/unified_stack.md.
+
 The root ` + "`" + `docker-compose.yml` + "`" + ` deploys the full platform. Only the gateway starts
 by default; the operator, ensemble, and dashboard are gated behind the
 ` + "`" + `bootstrapped` + "`" + ` profile and require owner enrollment before they can start. Pass
@@ -161,6 +165,7 @@ by default; the operator, ensemble, and dashboard are gated behind the
 Run these commands from the repository root where ` + "`" + `docker-compose.yml` + "`" + ` lives.`,
 	}
 	cmd.AddCommand(
+		dockerInitCmd(),
 		dockerStartCmd(),
 		dockerStopCmd(),
 		dockerStatusCmd(),
@@ -171,6 +176,15 @@ Run these commands from the repository root where ` + "`" + `docker-compose.yml`
 		dockerLogsCmd(),
 	)
 	return cmd
+}
+
+// dockerFullStackProfiles returns the compose profiles required for the full
+// evaluation topology (data operator, inference operator, ensemble, dashboard).
+func dockerFullStackProfiles() []string {
+	return []string{
+		constants.DockerBootstrappedProfile,
+		constants.DockerEvaluationProfile,
+	}
 }
 
 // resolveDockerProfile returns the bootstrapped profile name when full is true,
@@ -184,6 +198,229 @@ func resolveDockerProfile(full bool, profile string) string {
 		return constants.DockerBootstrappedProfile
 	}
 	return ""
+}
+
+func dockerInitCmd() *cobra.Command {
+	return dockerInitCmdWithConfig(loadConfig, newFileSvc, defaultAPIClientFactory, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
+}
+
+func dockerInitCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+	clientFactory apiClientFactory,
+	checkOperatorRunning func(*config.Config) error,
+	enrollerFactory enrollerFactory,
+) *cobra.Command {
+	var (
+		skipBuild      bool
+		skipEnroll     bool
+		skipApprovals  bool
+		noCache        bool
+		cleanFirst     bool
+		headlessEnroll bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: "Build, bootstrap, and bring up the full unified stack",
+		Long: `Build images and bring the full unified Docker stack online in one flow.
+
+This command performs the standard bootstrap workflow documented in
+docs/guides/unified_stack.md:
+
+  1. Validate repository-root .env evaluation settings.
+  2. Build Docker images for the unified stack (unless --skip-build).
+  3. Start the gateway and wait for it to become healthy.
+  4. Enroll the CLI owner (unless --skip-enroll).
+  5. Start bootstrapped + evaluation workloads (operator, inference operator,
+     ensemble, and dashboard).
+  6. Auto-approve pending platform enrollment requests in the documented order
+     (data operator, dashboard, ensemble, inference operator) unless
+     --skip-approvals is set.
+  7. Wait for the ensemble health endpoint to respond.
+
+Use --clean-first to wipe containers, volumes, and networks before init.
+That destroys the trust domain and repeats owner enrollment from scratch.
+
+Use --headless during owner enrollment only when the gateway is already
+bootstrapped and another enrolled CLI can approve recovery; on a cold start
+leave headless unset so the first owner can complete the passkey ceremony.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := checkDockerComposeFileExists(); err != nil {
+				return err
+			}
+			if err := checkDockerAvailable(); err != nil {
+				return err
+			}
+			if err := checkDockerInitEnv(); err != nil {
+				return err
+			}
+
+			if cleanFirst {
+				cmd.Println("Cleaning existing Docker Compose stack before init...")
+				if err := runDockerCompose([]string{"down", "-v", "--remove-orphans", "-t", "0"}, dockerTeardownProfiles("")...); err != nil {
+					cmd.Printf("Warning: compose down had issues: %v\n", err)
+				}
+				forceRemoveLeftovers(cmd, constants.DockerProjectPrefix)
+			}
+
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+
+			if !skipBuild {
+				buildArgs, err := dockerBuildArgs(versionInfoFromCmd(cmd), noCache)
+				if err != nil {
+					return fmt.Errorf("docker init: build arguments: %w", err)
+				}
+				cmd.Println("Building Docker images for the unified stack...")
+				if err := runDockerCompose(buildArgs, dockerFullStackProfiles()...); err != nil {
+					return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+				}
+				cmd.Println("Docker images built successfully.")
+			}
+
+			cmd.Println("Starting gateway...")
+			if err := runDockerCompose([]string{"up", "-d"}); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+			}
+			if err := waitForDockerGatewayHealthy(cmd); err != nil {
+				return err
+			}
+
+			if !skipEnroll {
+				cmd.Println()
+				cmd.Println("Enrolling CLI owner with the gateway...")
+				if err := checkOperatorRunning(cfg); err != nil {
+					return fmt.Errorf("%w: %w", constants.ErrDockerInitEnrollmentFailed, err)
+				}
+				coordinator := enrollerFactory(func(format string, a ...any) {
+					cmd.Printf(format+"\n", a...)
+				}, fileSvc, cfg)
+				result, err := coordinator.Enroll(cmd.Context(), auth.EnrollmentOptions{
+					Headless: headlessEnroll,
+				})
+				if err != nil {
+					return fmt.Errorf("%w: %w", constants.ErrDockerInitEnrollmentFailed, err)
+				}
+				if result.Reused {
+					cmd.Printf("Reusing existing CLI identity (User ID: %s)\n", result.UserID)
+				} else {
+					cmd.Printf("CLI enrollment complete (User ID: %s, Session: %s)\n", result.UserID, result.CLISessionID)
+				}
+			}
+
+			cmd.Println()
+			cmd.Println("Starting full stack (bootstrapped + evaluation profiles)...")
+			if err := runDockerCompose([]string{"up", "-d"}, dockerFullStackProfiles()...); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+			}
+
+			if skipApprovals {
+				cmd.Println()
+				cmd.Println("--skip-approvals set: workloads are started but will block waiting")
+				cmd.Println("for manual platform enrollment approval. Run:")
+				cmd.Println("  g8e auth pending-platform-enrollments")
+				cmd.Println("  g8e auth approve-platform-enrollment <request-id> --yes")
+				return nil
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
+			if err != nil {
+				return fmt.Errorf("%w: create API client: %w", constants.ErrDockerInitApprovalFailed, err)
+			}
+			cmd.Println()
+			cmd.Println("Approving pending platform enrollment requests...")
+			if err := runDockerInitApprovals(cmd, client); err != nil {
+				return err
+			}
+
+			cmd.Println()
+			cmd.Println("Waiting for ensemble to become healthy...")
+			if err := waitForDockerEnsembleHealthy(cmd); err != nil {
+				return err
+			}
+
+			cmd.Println()
+			cmd.Println("Unified stack init complete.")
+			cmd.Println("Run 'g8e docker status' to check service status.")
+			cmd.Println("Run 'g8e operator list' and 'g8e eval inference status --json' to verify operators.")
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&skipBuild, "skip-build", false, "Skip building Docker images before startup")
+	cmd.Flags().BoolVar(&skipEnroll, "skip-enroll", false, "Skip CLI owner enrollment (reuse an existing enrolled CLI identity)")
+	cmd.Flags().BoolVar(&skipApprovals, "skip-approvals", false, "Start workloads without auto-approving platform enrollment requests")
+	cmd.Flags().BoolVar(&noCache, "no-cache", false, "Build Docker images without using the cache")
+	cmd.Flags().BoolVar(&cleanFirst, "clean-first", false, "Remove containers, volumes, and networks before init (destructive)")
+	cmd.Flags().BoolVar(&headlessEnroll, "headless", false, "Use headless CLI owner enrollment (recovery path only; not for cold bootstrap)")
+	return cmd
+}
+
+// checkDockerInitEnv verifies repository-root .env contains the settings required
+// for the evaluation profile inference operator.
+func checkDockerInitEnv() error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
+	}
+	envPath := filepath.Join(cwd, ".env")
+	values, err := readDotEnvFile(envPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: copy .env.example to .env and set G8E_OLLAMA_ENDPOINT, G8E_INFERENCE_CAMPAIGN_ID, and G8E_INFERENCE_MODEL_REGISTRY_DIGEST", constants.ErrDockerInitEnvRequired)
+		}
+		return fmt.Errorf("%w: read .env: %w", constants.ErrDockerInitEnvRequired, err)
+	}
+	required := []string{
+		"G8E_OLLAMA_ENDPOINT",
+		"G8E_INFERENCE_CAMPAIGN_ID",
+		"G8E_INFERENCE_MODEL_REGISTRY_DIGEST",
+	}
+	var missing []string
+	for _, key := range required {
+		if strings.TrimSpace(values[key]) == "" {
+			missing = append(missing, key)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("%w: set %s in .env (see docs/guides/unified_stack.md)", constants.ErrDockerInitEnvRequired, strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+// readDotEnvFile parses KEY=VALUE lines from a dotenv file. It ignores blank
+// lines and # comments and does not perform shell expansion.
+func readDotEnvFile(path string) (map[string]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	values := make(map[string]string)
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if len(value) >= 2 {
+			if (value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'') {
+				value = value[1 : len(value)-1]
+			}
+		}
+		values[key] = value
+	}
+	return values, nil
 }
 
 // dockerTeardownProfiles returns compose profiles for stop/clean/reset down
@@ -449,20 +686,153 @@ func promptApproveComponent(cmd *cobra.Command, ctx context.Context, client apiC
 		RequestID: req.RequestID,
 		Decision:  models.PlatformEnrollmentDecisionApprove,
 	}
-	if err := decisionReq.Validate(); err != nil {
-		return fmt.Errorf("validate decision: %w", err)
+	resp, err := approvePlatformEnrollmentDecision(client, decisionReq)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrDockerStartApprovalFailed, err)
 	}
 
+	cmd.Printf("  %s enrollment request %s.\n", component, string(resp.State))
+	return nil
+}
+
+// approvePlatformEnrollmentDecision posts an owner decision for a pending platform
+// enrollment request and returns the gateway response.
+func approvePlatformEnrollmentDecision(client apiClient, decisionReq models.PlatformEnrollmentDecisionRequest) (*models.PlatformEnrollmentDecisionResponse, error) {
+	if err := decisionReq.Validate(); err != nil {
+		return nil, fmt.Errorf("validate decision: %w", err)
+	}
 	respBody, err := client.Post(constants.APIPaths.AuthPlatformEnrollmentDecision, decisionReq)
 	if err != nil {
-		return fmt.Errorf("%w: post decision: %w", constants.ErrDockerStartApprovalFailed, err)
+		return nil, fmt.Errorf("post decision: %w", err)
 	}
-
 	var resp models.PlatformEnrollmentDecisionResponse
 	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return fmt.Errorf("parse decision response: %w", err)
+		return nil, fmt.Errorf("parse decision response: %w", err)
 	}
-	cmd.Printf("  %s enrollment request %s.\n", component, string(resp.State))
+	return &resp, nil
+}
+
+// fetchPendingPlatformEnrollments returns the current pending platform enrollment
+// requests from the gateway.
+func fetchPendingPlatformEnrollments(client apiClient) ([]models.PlatformEnrollmentPendingRequest, error) {
+	pendingBody, err := client.Get(constants.APIPaths.AuthPlatformEnrollmentPending)
+	if err != nil {
+		return nil, fmt.Errorf("fetch pending list: %w", err)
+	}
+	var pendingResp models.PlatformEnrollmentPendingResponse
+	if err := json.Unmarshal(pendingBody, &pendingResp); err != nil {
+		return nil, fmt.Errorf("parse pending list: %w", err)
+	}
+	return pendingResp.Requests, nil
+}
+
+// isInferenceOperatorPendingRequest reports whether a pending operator enrollment
+// belongs to the dedicated inference operator workload.
+func isInferenceOperatorPendingRequest(req *models.PlatformEnrollmentPendingRequest) bool {
+	if req == nil || req.ComponentKind != models.PlatformComponentOperator {
+		return false
+	}
+	if req.Hostname == "inference-operator" {
+		return true
+	}
+	return strings.Contains(req.InstanceID, "inference-operator")
+}
+
+// platformEnrollmentApprovalRank assigns the documented approval order for the
+// unified stack: data operator, dashboard, ensemble, inference operator.
+func platformEnrollmentApprovalRank(req models.PlatformEnrollmentPendingRequest) int {
+	switch req.ComponentKind {
+	case models.PlatformComponentOperator:
+		if isInferenceOperatorPendingRequest(&req) {
+			return 4
+		}
+		return 1
+	case models.PlatformComponentDashboard:
+		return 2
+	case models.PlatformComponentEnsemble:
+		return 3
+	default:
+		return 99
+	}
+}
+
+// runDockerInitApprovals auto-approves pending platform enrollment requests in
+// the documented order until none remain or the readiness timeout elapses.
+func runDockerInitApprovals(cmd *cobra.Command, client apiClient) error {
+	const (
+		maxRounds    = 90
+		pollInterval = 2 * time.Second
+	)
+	approved := make(map[string]struct{})
+	for round := 0; round < maxRounds; round++ {
+		pending, err := fetchPendingPlatformEnrollments(client)
+		if err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrDockerInitApprovalFailed, err)
+		}
+		var next *models.PlatformEnrollmentPendingRequest
+		bestRank := 100
+		for i := range pending {
+			req := pending[i]
+			if _, ok := approved[req.RequestID]; ok {
+				continue
+			}
+			rank := platformEnrollmentApprovalRank(req)
+			if rank < bestRank {
+				bestRank = rank
+				next = &req
+			}
+		}
+		if next == nil {
+			if len(pending) == 0 {
+				if err := waitForDockerEnsembleHealthy(cmd); err == nil {
+					cmd.Println("All platform enrollment requests approved.")
+					return nil
+				}
+			}
+			time.Sleep(pollInterval)
+			continue
+		}
+
+		printPlatformEnrollmentRequestDetails(cmd, next)
+		decisionReq := models.PlatformEnrollmentDecisionRequest{
+			RequestID: next.RequestID,
+			Decision:  models.PlatformEnrollmentDecisionApprove,
+		}
+		resp, err := approvePlatformEnrollmentDecision(client, decisionReq)
+		if err != nil {
+			return fmt.Errorf("%w: approve %s (%s): %w", constants.ErrDockerInitApprovalFailed, next.ComponentKind, next.RequestID, err)
+		}
+		approved[next.RequestID] = struct{}{}
+		cmd.Printf("Approved %s enrollment request %s (%s).\n", next.ComponentKind, next.RequestID, resp.State)
+		time.Sleep(pollInterval)
+	}
+	return fmt.Errorf("%w: timed out waiting for platform enrollment approvals to complete", constants.ErrDockerInitApprovalFailed)
+}
+
+// waitForDockerEnsembleHealthy polls the ensemble HTTP health endpoint until it
+// responds 200 or the timeout elapses.
+func waitForDockerEnsembleHealthy(cmd *cobra.Command) error {
+	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", constants.EnsembleDefaultPort)
+	plainClient := &http.Client{Timeout: 2 * time.Second} //nolint:gosec
+	const (
+		maxAttempts  = 60
+		pollInterval = 3 * time.Second
+	)
+	for i := 0; i < maxAttempts; i++ {
+		resp, err := plainClient.Get(healthURL) //nolint:noctx
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				cmd.Println("Ensemble is healthy.")
+				return nil
+			}
+		}
+		if i == maxAttempts-1 {
+			return fmt.Errorf("%w: ensemble did not become healthy after %v",
+				constants.ErrDockerInitReadinessFailed, time.Duration(maxAttempts)*pollInterval)
+		}
+		time.Sleep(pollInterval)
+	}
 	return nil
 }
 
