@@ -234,8 +234,13 @@ func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 			MCPDownstreamURL:   "https://downstream.example.com/mcp",
 			A2ADownstreamURL:   "https://downstream.example.com/a2a",
 			PublicBaseURL:      "https://demo.g8e.ai",
-			AllowedOrigins:     []string{"https://lovable.dev"},
-			DoctrineDir:        "/etc/g8e/doctrine",
+			AllowedOrigins:             []string{"https://lovable.dev"},
+			DoctrineDir:                "/etc/g8e/doctrine",
+			PublicSpectatorEnabled:     true,
+			PublicSpectatorPrivateAddr: "127.0.0.1:8081",
+			PublicSpectatorPublicAddr:  "127.0.0.1:8082",
+			EvalExplorerAddr:           "127.0.0.1:5173",
+			EvalExplorerRoot:           "/eval-explorer",
 		},
 	}
 
