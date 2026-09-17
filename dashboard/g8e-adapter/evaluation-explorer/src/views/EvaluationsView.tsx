@@ -1,15 +1,11 @@
-// Evaluations view — the evaluation list. Filters for dataset, suite, status,
-// quality, model, role, and date. Each row shows run/campaign identity,
-// suite, model scope, assignment progress, terminal outcome counts,
-// verifier state, start/end time, and headline metrics.
+// Evaluations view — cross-dataset evaluation history. Each row shows dataset,
+// run/campaign identity, suite, progress, outcomes, verifier state, and metrics.
 
 import { useMemo } from 'react';
 import { type CellContext, type ColumnDef } from '@tanstack/react-table';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useActiveDatasetId } from '../state/dataset';
 import { useStoreState } from '../state/store';
 import { DataTable } from '../components/DataTable';
-import { DatasetSelector } from '../components/DatasetSelector';
 import {
   EmptyState,
   OutcomeCounts,
@@ -22,17 +18,22 @@ import {
 } from '../components/shared';
 import type { EvaluationSummary } from '../contract/types';
 
+function datasetLabel(datasetId: string): string {
+  const prefix = 'ds-live-';
+  return datasetId.startsWith(prefix) ? datasetId.slice(prefix.length) : datasetId;
+}
+
 export function EvaluationsView() {
   const [params, setParams] = useSearchParams();
-  const routeDataset = params.get('dataset') ?? undefined;
-  const activeDatasetId = useActiveDatasetId(routeDataset);
 
   const suiteFilter = params.get('suite') ?? 'all';
   const statusFilter = params.get('status') ?? 'all';
   const qualityFilter = params.get('quality') ?? 'all';
 
   const evaluations = useStoreState((state) =>
-    Array.from(state.evaluations.values()).filter((e) => e.dataset_id === activeDatasetId),
+    Array.from(state.evaluations.values()).sort((a, b) =>
+      (b.started_at ?? b.observed_at ?? '').localeCompare(a.started_at ?? a.observed_at ?? ''),
+    ),
   );
   const connection = useStoreState((state) => state.connection);
 
@@ -54,6 +55,16 @@ export function EvaluationsView() {
 
   const columns = useMemo<ColumnDef<EvaluationSummary, unknown>[]>(
     () => [
+      {
+        id: 'dataset',
+        header: 'Dataset',
+        accessorKey: 'dataset_id',
+        cell: ({ row }: CellContext<EvaluationSummary, unknown>) => (
+          <code className="dataset-id" title={row.original.dataset_id}>
+            {datasetLabel(row.original.dataset_id)}
+          </code>
+        ),
+      },
       {
         id: 'run',
         header: 'Run',
@@ -125,9 +136,8 @@ export function EvaluationsView() {
       <SectionHeading
         kicker="EVALUATIONS"
         title="Evaluation runs"
-        description="Each row is a run with its suite, model-role mapping, progress, verifier state, and headline metrics."
+        description="All published runs across datasets. Each row shows the dataset, suite, progress, verifier state, and headline metrics."
       />
-      <DatasetSelector activeId={activeDatasetId} />
 
       <div className="eval-toolbar">
         <select aria-label="Filter by suite" value={suiteFilter} onChange={(e) => setFilter('suite', e.target.value)}>

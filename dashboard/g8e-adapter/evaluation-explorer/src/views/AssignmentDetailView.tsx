@@ -56,7 +56,7 @@ export function AssignmentDetailView() {
   return (
     <div className="assignment-detail">
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <Link to={`/evaluations?dataset=${activeDatasetId}`}>Evaluations</Link>
+        <Link to="/evaluations">Evaluations</Link>
         <span aria-hidden="true">/</span>
         <Link to={`/evaluations/${activeDatasetId}/${runId}`}>{runId}</Link>
         <span aria-hidden="true">/</span>

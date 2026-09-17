@@ -110,7 +110,7 @@ export function EvaluationDetailView() {
   return (
     <div className="evaluation-detail">
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <Link to={`/evaluations?dataset=${activeDatasetId}`}>Evaluations</Link>
+        <Link to="/evaluations">Evaluations</Link>
         <span aria-hidden="true">/</span>
         <span>{run.run_id}</span>
       </nav>
