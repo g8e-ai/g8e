@@ -191,11 +191,13 @@ Session IDs change on every volume wipe. Rediscover them after any `docker compo
 ./g8e docker init
 ```
 
-`g8e docker init` runs the full bootstrap in one command: build images, start the gateway, enroll the CLI owner, start `bootstrapped` + `evaluation` workloads, auto-approve platform enrollments in order (data operator → dashboard → ensemble → inference operator), and wait for ensemble health. Requires a repository-root `.env` with `G8E_OLLAMA_ENDPOINT`, `G8E_INFERENCE_CAMPAIGN_ID`, and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` set before running.
+`g8e docker init` runs the full bootstrap in one command: prepare the host `.g8e` tree, build images, start the gateway, enroll the CLI owner, start `bootstrapped` + `evaluation` workloads, auto-approve platform enrollments in order (data operator → dashboard → ensemble → inference operator), and wait for ensemble health. Requires a repository-root `.env` with `G8E_OLLAMA_ENDPOINT`, `G8E_INFERENCE_CAMPAIGN_ID`, and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` set before running.
+
+If a prior Docker start created `.g8e` as root, fix ownership once with `sudo chown -R $(id -u):$(id -g) .g8e` and rerun init.
 
 Useful flags:
 
-- `--clean-first` — wipe containers/volumes/networks before init (cold start).
+- `--clean` — wipe containers/volumes/networks before init (cold start).
 - `--skip-build` — reuse existing images.
 - `--skip-enroll` — reuse an already-enrolled CLI identity.
 - `--skip-approvals` — start workloads without auto-approving enrollments.

@@ -1273,6 +1273,9 @@ var (
 	ErrDockerInitApprovalFailed    = errors.New("docker init: platform enrollment approval failed")
 	ErrDockerInitReadinessFailed   = errors.New("docker init: workloads did not become ready")
 
+	// Host runtime directory errors
+	ErrRuntimeDirNotWritable = errors.New("runtime directory is not writable by the current user")
+
 	// Demo scenario execution errors
 	ErrDemoScenarioFailed        = errors.New("demo: one or more scenarios failed")
 	ErrDemoScenarioCancelled     = errors.New("demo: scenario cancelled")

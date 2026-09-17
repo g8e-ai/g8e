@@ -58,6 +58,16 @@ func checkDockerComposeFileExists() error {
 	return nil
 }
 
+// prepareDockerHostRuntime ensures the host-side .g8e tree exists with the
+// current user's ownership before Docker Compose bind-mounts public-feed and
+// public-mirror paths (Docker creates missing paths as root).
+func prepareDockerHostRuntime(ctx context.Context, fileSvc fs.RuntimeFileService) error {
+	if err := fs.EnsureDockerHostRuntimeLayout(ctx, fileSvc); err != nil {
+		return fmt.Errorf("docker: prepare host runtime: %w", err)
+	}
+	return nil
+}
+
 // runDockerCompose builds and runs a `docker compose` command against the root
 // compose file, streaming stdout/stderr to the console. The optional profiles
 // activate compose profiles (e.g. bootstrapped, cross-enrollment) so multiple
@@ -216,7 +226,7 @@ func dockerInitCmdWithConfig(
 		skipEnroll     bool
 		skipApprovals  bool
 		noCache        bool
-		cleanFirst     bool
+		clean          bool
 		headlessEnroll bool
 	)
 
@@ -229,17 +239,18 @@ This command performs the standard bootstrap workflow documented in
 docs/guides/unified_stack.md:
 
   1. Validate repository-root .env evaluation settings.
-  2. Build Docker images for the unified stack (unless --skip-build).
-  3. Start the gateway and wait for it to become healthy.
-  4. Enroll the CLI owner (unless --skip-enroll).
-  5. Start bootstrapped + evaluation workloads (operator, inference operator,
+  2. Prepare the host .g8e runtime tree so Docker bind mounts do not create it as root.
+  3. Build Docker images for the unified stack (unless --skip-build).
+  4. Start the gateway and wait for it to become healthy.
+  5. Enroll the CLI owner (unless --skip-enroll).
+  6. Start bootstrapped + evaluation workloads (operator, inference operator,
      ensemble, and dashboard).
-  6. Auto-approve pending platform enrollment requests in the documented order
+  7. Auto-approve pending platform enrollment requests in the documented order
      (data operator, dashboard, ensemble, inference operator) unless
      --skip-approvals is set.
-  7. Wait for the ensemble health endpoint to respond.
+  8. Wait for the ensemble health endpoint to respond.
 
-Use --clean-first to wipe containers, volumes, and networks before init.
+Use --clean to wipe containers, volumes, and networks before init.
 That destroys the trust domain and repeats owner enrollment from scratch.
 
 Use --headless during owner enrollment only when the gateway is already
@@ -256,7 +267,7 @@ leave headless unset so the first owner can complete the passkey ceremony.`,
 				return err
 			}
 
-			if cleanFirst {
+			if clean {
 				cmd.Println("Cleaning existing Docker Compose stack before init...")
 				if err := runDockerCompose([]string{"down", "-v", "--remove-orphans", "-t", "0"}, dockerTeardownProfiles("")...); err != nil {
 					cmd.Printf("Warning: compose down had issues: %v\n", err)
@@ -271,6 +282,9 @@ leave headless unset so the first owner can complete the passkey ceremony.`,
 			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			if err := prepareDockerHostRuntime(cmd.Context(), fileSvc); err != nil {
+				return err
 			}
 
 			if !skipBuild {
@@ -357,7 +371,7 @@ leave headless unset so the first owner can complete the passkey ceremony.`,
 	cmd.Flags().BoolVar(&skipEnroll, "skip-enroll", false, "Skip CLI owner enrollment (reuse an existing enrolled CLI identity)")
 	cmd.Flags().BoolVar(&skipApprovals, "skip-approvals", false, "Start workloads without auto-approving platform enrollment requests")
 	cmd.Flags().BoolVar(&noCache, "no-cache", false, "Build Docker images without using the cache")
-	cmd.Flags().BoolVar(&cleanFirst, "clean-first", false, "Remove containers, volumes, and networks before init (destructive)")
+	cmd.Flags().BoolVar(&clean, "clean", false, "Remove containers, volumes, and networks before init (destructive)")
 	cmd.Flags().BoolVar(&headlessEnroll, "headless", false, "Use headless CLI owner enrollment (recovery path only; not for cold bootstrap)")
 	return cmd
 }
@@ -493,18 +507,19 @@ walkthrough (the workloads will block waiting for manual approval).`,
 				scope = fmt.Sprintf("full stack (profile %s)", resolved)
 			}
 
-			// When the interactive walkthrough is active, resolve config and
-			// fileSvc BEFORE starting containers so a factory failure aborts
-			// early without leaving half-started containers.
+			fileSvc, err := fileSvcFactory("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			if err := prepareDockerHostRuntime(cmd.Context(), fileSvc); err != nil {
+				return err
+			}
+
 			var walkthroughDeps *dockerStartDeps
 			if resolved != "" && !skipEnroll {
 				cfg, err := configLoader("")
 				if err != nil {
 					return err
-				}
-				fileSvc, err := fileSvcFactory("", slog.Default())
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 				}
 				walkthroughDeps = &dockerStartDeps{
 					clientFactory:        clientFactory,
@@ -1007,6 +1022,13 @@ func dockerResetCmd() *cobra.Command {
 				cmd.Printf("Warning: compose down had issues: %v\n", err)
 			}
 			forceRemoveLeftovers(cmd, constants.DockerProjectPrefix)
+			fileSvc, err := newFileSvc("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			if err := prepareDockerHostRuntime(cmd.Context(), fileSvc); err != nil {
+				return err
+			}
 			resolved := resolveDockerProfile(full, profile)
 			scope := "gateway"
 			if resolved != "" {
@@ -1051,6 +1073,13 @@ Use --no-cache=false to reuse the Docker build cache.`,
 			cmd.Println("\nRebuilding Docker images...")
 			if err := runDockerCompose(buildArgs, profile); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+			}
+			fileSvc, err := newFileSvc("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			if err := prepareDockerHostRuntime(cmd.Context(), fileSvc); err != nil {
+				return err
 			}
 			resolved := resolveDockerProfile(full, profile)
 			scope := "gateway"
