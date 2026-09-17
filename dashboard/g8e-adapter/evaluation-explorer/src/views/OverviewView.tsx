@@ -6,6 +6,12 @@
 
 import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import {
+  G8E_REPO_URL,
+  PLATFORM_FLOW_STEPS,
+  PLATFORM_LEDE,
+  PLATFORM_MEASUREMENT_SUMMARY,
+} from '../content/platform';
 import { useActiveDatasetId } from '../state/dataset';
 import { modelComparisonId, recordKey, resolveModelSummary, useStoreState } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
@@ -18,7 +24,7 @@ import {
   formatLatency,
   formatThroughput,
 } from '../components/shared';
-import { formatCompact, formatRelativeTime } from '../utils/format';
+import { formatRelativeTime } from '../utils/format';
 import { qualityStateLabel, qualityStateTone, type FeedConnectionState } from '../utils/feed-state';
 import { campaignTerminalProgress, roleLabel } from './derived';
 import descriptorUrl from '../contract/descriptor.json?url';
@@ -281,6 +287,22 @@ function LiveStreamPanel({
   );
 }
 
+function PlatformFlow() {
+  return (
+    <ol className="sys-platform-flow" aria-label="Platform data flow">
+      {PLATFORM_FLOW_STEPS.map((step, index) => (
+        <li key={step.id} className={step.id === 'g8e' ? 'sys-platform-step-accent' : undefined}>
+          <span className="sys-platform-step-label">{step.label}</span>
+          <span className="sys-platform-step-detail">{step.detail}</span>
+          {index < PLATFORM_FLOW_STEPS.length - 1 ? (
+            <span className="sys-platform-step-arrow" aria-hidden="true">↓</span>
+          ) : null}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function CoverageBar({ label, done, total }: { label: string; done: number; total: number }) {
   const pct = total > 0 ? Math.min(100, (done / total) * 100) : 0;
   return (
@@ -300,7 +322,6 @@ function CoverageBar({ label, done, total }: { label: string; done: number; tota
 
 type SystemOverviewPanelProps = {
   catalog: CatalogSnapshot | undefined;
-  models: ModelSummary[];
   evaluations: EvaluationSummary[];
   suites: SuiteSummary[];
   events: LiveEvent[];
@@ -308,11 +329,10 @@ type SystemOverviewPanelProps = {
   connection: FeedConnectionState;
 };
 
-/** System overview: headline counts, dataset coverage bars, current run. */
+/** System overview: platform context, active campaign progress, and current run. */
 const SystemOverviewPanel = forwardRef<HTMLElement, SystemOverviewPanelProps>(function SystemOverviewPanel(
   {
     catalog,
-    models,
     evaluations,
     suites,
     events,
@@ -321,20 +341,12 @@ const SystemOverviewPanel = forwardRef<HTMLElement, SystemOverviewPanelProps>(fu
   },
   ref,
 ) {
-  const evaluatedCount = models.filter((m) => m.pass_rate).length;
-  const totalThroughput = models.reduce(
-    (sum, m) => sum + (m.output_throughput_p50?.value ?? 0),
-    0,
-  );
   const completedRuns = evaluations.filter((e) => e.lifecycle_state === 'completed').length;
   const assignmentDone = evaluations.reduce(
     (sum, e) => sum + e.assignment_completed + e.assignment_failed,
     0,
   );
   const assignmentTotal = evaluations.reduce((sum, e) => sum + e.assignment_total, 0);
-  const verifierTotal = catalog
-    ? catalog.verifier_passed_count + catalog.verifier_failed_count
-    : 0;
 
   const latestEvent = events.length > 0 ? events[events.length - 1] : undefined;
   const currentRun = useStoreState((state) =>
@@ -354,41 +366,30 @@ const SystemOverviewPanel = forwardRef<HTMLElement, SystemOverviewPanelProps>(fu
         </span>
       </div>
 
-      <div className="sys-stats">
-        <div>
-          <strong>{formatNumber(catalog?.evaluated_count ?? evaluatedCount)}</strong>
-          <span>Models evaluated</span>
-        </div>
-        <div>
-          <strong>{formatNumber(catalog?.run_count ?? evaluations.length)}</strong>
-          <span>Runs recorded</span>
-        </div>
-        <div>
-          <strong>
-            {verifierTotal > 0 && catalog
-              ? formatPercent(catalog.verifier_passed_count / verifierTotal)
-              : '—'}
-          </strong>
-          <span>Verifier pass</span>
-        </div>
-        <div>
-          <strong>{totalThroughput > 0 ? `${formatCompact(totalThroughput)} t/s` : '—'}</strong>
-          <span>Throughput p50</span>
+      <div className="sys-platform">
+        <p className="sys-platform-lede">{PLATFORM_LEDE}</p>
+        <PlatformFlow />
+        <p className="sys-platform-measure">{PLATFORM_MEASUREMENT_SUMMARY}</p>
+        <div className="sys-platform-links">
+          <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">g8e on GitHub</a>
+          <Link to="/methodology#architecture">Architecture &amp; host specs</Link>
         </div>
       </div>
 
-      <DatasetSelector activeId={activeDatasetId} />
-      {catalog ? <p className="panel-note">{catalog.title}</p> : null}
+      <div className="sys-campaign">
+        <h3 className="sys-section-title">Active campaign</h3>
+        <DatasetSelector activeId={activeDatasetId} />
+        {catalog ? <p className="panel-note">{catalog.title}</p> : null}
 
-      {catalog ? (
-        <div className="usage-list" aria-label="Dataset coverage">
-          <h3>Dataset coverage</h3>
-          <CoverageBar label="Models evaluated" done={catalog.evaluated_count} total={catalog.model_count} />
-          <CoverageBar label="Suites verified" done={catalog.verifier_passed_count} total={catalog.suite_count} />
-          <CoverageBar label="Runs completed" done={completedRuns} total={evaluations.length} />
-          <CoverageBar label="Assignments done" done={assignmentDone} total={assignmentTotal} />
-        </div>
-      ) : null}
+        {catalog ? (
+          <div className="usage-list" aria-label="Dataset coverage">
+            <CoverageBar label="Models evaluated" done={catalog.evaluated_count} total={catalog.model_count} />
+            <CoverageBar label="Suites verified" done={catalog.verifier_passed_count} total={catalog.suite_count} />
+            <CoverageBar label="Runs completed" done={completedRuns} total={evaluations.length} />
+            <CoverageBar label="Assignments done" done={assignmentDone} total={assignmentTotal} />
+          </div>
+        ) : null}
+      </div>
 
       <div className="task-card">
         <div className="panel-head">
@@ -568,7 +569,6 @@ export function OverviewView() {
         <SystemOverviewPanel
           ref={sysPanelRef}
           catalog={catalog}
-          models={models}
           evaluations={evaluations}
           suites={suites}
           events={events}

@@ -6,8 +6,18 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStoreState } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
 import { EmptyState, QualityBadge, StatTile } from '../components/shared';
-import { qualityStateLabel } from '../utils/feed-state';
 import descriptorUrl from '../contract/descriptor.json?url';
+import {
+  G8E_ARCHITECTURE_DOCS,
+  G8E_CAMPAIGN_OPERATORS,
+  G8E_DIFFERENTIATORS,
+  G8E_DIFFERENTIATORS_LEDE,
+  G8E_MEASURED_TOGETHER,
+  G8E_REPO_URL,
+  G8E_STACK_COMPONENTS,
+  PLATFORM_SITE_URL,
+  WORKSTATION_SPECS,
+} from '../content/platform';
 import {
   DATASET_KINDS,
   FEED_RECORD_TYPES,
@@ -341,6 +351,7 @@ function EnumChipTable({ title, values }: { title: string; values: readonly stri
 const DOC_NAV = [
   { id: 'overview', label: 'Overview' },
   { id: 'benchmark', label: 'Benchmark' },
+  { id: 'differentiators', label: 'Why g8e' },
   { id: 'architecture', label: 'Architecture' },
   { id: 'feed', label: 'Current feed' },
   { id: 'guarantees', label: 'Guarantees' },
@@ -351,38 +362,6 @@ const MODEL_ROLES = [
   { name: 'Primary', wire: 'primary', scope: 'Task owner · plans · delegates · synthesizes' },
   { name: 'Assistant', wire: 'assistant', scope: 'Bounded technical work for Primary' },
   { name: 'Light', wire: 'lite', scope: 'Constrained decisions or escalate' },
-] as const;
-
-const G8E_REPO_URL = 'https://github.com/g8e-ai/g8e';
-
-const G8E_STACK_COMPONENTS = [
-  {
-    id: 'gateway',
-    label: 'g8eg · Gateway',
-    detail: 'Policy admission, routing, public mirror, and the Cloudflare tunnel origin on this workstation.',
-  },
-  {
-    id: 'operator',
-    label: 'g8eo · Operator',
-    detail: 'Host-bound execution boundary — tools, filesystem, and signed evidence on the managed host.',
-  },
-  {
-    id: 'ensemble',
-    label: 'g8ee · Ensemble',
-    detail: 'Production multi-agent chat path that turns evaluation scenarios into governed inference and tool calls.',
-  },
-  {
-    id: 'eval',
-    label: 'g8e eval',
-    detail: 'Native campaign orchestration, rubric grading, and signed report bundles for every run you see here.',
-  },
-] as const;
-
-const WORKSTATION_SPECS = [
-  { label: 'CPU', value: 'Intel Core i9-13900K' },
-  { label: 'Memory', value: '64 GB RAM' },
-  { label: 'GPU', value: 'NVIDIA GeForce RTX 4070 Ti SUPER · 16 GB VRAM' },
-  { label: 'Runtime', value: 'Docker on Windows · Ollama for local model inference' },
 ] as const;
 
 function DocsSection({ id, title, children }: { id: string; title: string; children: ReactNode }) {
@@ -548,6 +527,63 @@ export function MethodologyView() {
           </div>
         </DocsSection>
 
+        <DocsSection id="differentiators" title="Why this evaluation is different">
+          <DocsCard lede={G8E_DIFFERENTIATORS_LEDE}>
+            <ul className="docs-trust-list">
+              {G8E_DIFFERENTIATORS.map((item) => (
+                <li key={item.headline}>
+                  <strong>{item.headline}</strong>
+                  <span>{item.detail}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="docs-card-foot">
+              Full platform architecture:{' '}
+              <a href={G8E_ARCHITECTURE_DOCS.overview} target="_blank" rel="noopener noreferrer">overview</a>
+              {' · '}
+              <a href={G8E_ARCHITECTURE_DOCS.governance} target="_blank" rel="noopener noreferrer">governance</a>
+              {' · '}
+              <a href={G8E_ARCHITECTURE_DOCS.operator} target="_blank" rel="noopener noreferrer">operator</a>
+              {' · '}
+              <a href={G8E_ARCHITECTURE_DOCS.evals} target="_blank" rel="noopener noreferrer">evaluations</a>
+            </p>
+          </DocsCard>
+
+          <div className="docs-split">
+            <DocsCard
+              title="Measured together — not in isolation"
+              lede="Every model candidate runs through the same total package. Scores reflect the full governed path, not a stripped provider API call."
+            >
+              <ul className="docs-feature-list">
+                {G8E_MEASURED_TOGETHER.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </DocsCard>
+            <DocsCard
+              title="Campaign operator topology"
+              lede="One Gateway coordinates three enrolled remote Operator sessions — each an outbound-only g8e binary with its own evidence chain."
+            >
+              <ul className="docs-operator-list">
+                {G8E_CAMPAIGN_OPERATORS.map((operator) => (
+                  <li key={operator.role}>
+                    <div className="docs-operator-head">
+                      <strong>{operator.role}</strong>
+                      <code>{operator.wire}</code>
+                    </div>
+                    <span>{operator.detail}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="docs-card-foot">
+                Evidence for each session is written to the working directory where that binary was started — signed
+                receipts, audit vault entries, and campaign artifacts under <code>.g8e/data/</code>. No root
+                privilege required on the evaluation host.
+              </p>
+            </DocsCard>
+          </div>
+        </DocsSection>
+
         <DocsSection id="architecture" title="Architecture — powered by g8e">
           <DocsCard
             title="OpenDevOps.ai is a live g8e deployment"
@@ -561,7 +597,7 @@ export function MethodologyView() {
               multi-agent reasoning, native evaluations, and a public mirror for anonymous read-only spectators.
               OpenDevOps.ai uses that stack end-to-end — Docker on a Windows workstation, Ollama for local models,
               and the gateway&apos;s Cloudflare tunnel to serve this explorer at{' '}
-              <a href="https://opendevops.ai" target="_blank" rel="noopener noreferrer">opendevops.ai</a>.
+              <a href={PLATFORM_SITE_URL} target="_blank" rel="noopener noreferrer">opendevops.ai</a>.
               The suite&apos;s scope is much broader than this one surface; see the{' '}
               <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">g8e repository</a> for the full
               platform.
@@ -696,7 +732,6 @@ export function MethodologyView() {
                     <li key={state}>
                       <QualityBadge state={state} />
                       <code>{state}</code>
-                      <span>{qualityStateLabel(state)}</span>
                     </li>
                   ))}
                 </ul>

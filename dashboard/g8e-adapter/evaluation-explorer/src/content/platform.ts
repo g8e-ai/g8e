@@ -1,0 +1,131 @@
+// Shared copy for how OpenDevOps.ai deploys and presents g8e.
+// Used by the landing System overview and the Docs architecture section.
+
+export const G8E_REPO_URL = 'https://github.com/g8e-ai/g8e';
+
+export const PLATFORM_SITE_URL = 'https://opendevops.ai';
+
+export const PLATFORM_LEDE =
+  'OpenDevOps.ai is a live deployment of g8e — model benchmarks executing on a home Windows workstation over Docker and Ollama, published to your browser through the gateway mirror.';
+
+export const PLATFORM_MEASUREMENT_SUMMARY =
+  '25 frozen agent scenarios across Primary, Assistant, and Light roles — pass rate, tool selection, throughput, and escalation behavior on a real governed host boundary.';
+
+export const PLATFORM_FLOW_STEPS = [
+  {
+    id: 'workstation',
+    label: 'Home workstation',
+    detail: 'Windows · Docker · Ollama',
+  },
+  {
+    id: 'g8e',
+    label: 'g8e stack',
+    detail: 'Gateway · Operator · Ensemble · eval',
+  },
+  {
+    id: 'mirror',
+    label: 'Public mirror',
+    detail: 'JSONL + SSE · Cloudflare tunnel',
+  },
+  {
+    id: 'browser',
+    label: 'This page',
+    detail: 'Read-only live campaign view',
+  },
+] as const;
+
+export const G8E_STACK_COMPONENTS = [
+  {
+    id: 'gateway',
+    label: 'g8eg · Gateway',
+    detail: 'Policy admission, routing, public mirror, and the Cloudflare tunnel origin on this workstation.',
+  },
+  {
+    id: 'operator',
+    label: 'g8eo · Operator',
+    detail: 'Host-bound execution boundary — tools, filesystem, and signed evidence on the managed host.',
+  },
+  {
+    id: 'ensemble',
+    label: 'g8ee · Ensemble',
+    detail: 'Production multi-agent chat path that turns evaluation scenarios into governed inference and tool calls.',
+  },
+  {
+    id: 'eval',
+    label: 'g8e eval',
+    detail: 'Native campaign orchestration, rubric grading, and signed report bundles for every run you see here.',
+  },
+] as const;
+
+export const WORKSTATION_SPECS = [
+  { label: 'CPU', value: 'Intel Core i9-13900K' },
+  { label: 'Memory', value: '64 GB RAM' },
+  { label: 'GPU', value: 'NVIDIA GeForce RTX 4070 Ti SUPER · 16 GB VRAM' },
+  { label: 'Runtime', value: 'Docker on Windows · Ollama for local model inference' },
+] as const;
+
+export const G8E_ARCHITECTURE_DOCS = {
+  overview: 'https://github.com/g8e-ai/g8e/blob/main/docs/architecture/overview.md',
+  governance: 'https://github.com/g8e-ai/g8e/blob/main/docs/architecture/governance.md',
+  operator: 'https://github.com/g8e-ai/g8e/blob/main/docs/architecture/operator.md',
+  evals: 'https://github.com/g8e-ai/g8e/blob/main/docs/ensemble/evals.md',
+} as const;
+
+export const G8E_DIFFERENTIATORS_LEDE =
+  'Most benchmarks score a model API in isolation. g8e scores the full governed execution path — cryptographic proofs, host-bound operators, and the same multi-agent stack a production workload would traverse.';
+
+export const G8E_DIFFERENTIATORS = [
+  {
+    headline: 'Proof, not promises',
+    detail:
+      'Every governed mutation is a typed, signed, state-bound GovernanceEnvelope. The Gateway admits it; the Operator independently re-verifies hash, nonce, expiry, and posture proofs before any side effect. Signed receipts and content-addressed evidence land in report.json and verification.json — reproducible offline with g8e eval verify, not trust in this browser.',
+  },
+  {
+    headline: 'Five-layer fail-closed governance',
+    detail:
+      'L1 Doctrine through L5 Actuator form one pipeline: policy admission, consensus and notary gates when required, local Warden verification, and a single Actuator execution boundary. Required proofs fail closed; optional layers remain auditable evidence.',
+  },
+  {
+    headline: 'Outbound-only, no-install operators',
+    detail:
+      'Remote Operators and Observers are the same static g8e binary — no package install, no inbound management port, no root required. Each session dials out over mTLS, pulls work from the Gateway, and records authoritative evidence in the directory where it was started.',
+  },
+  {
+    headline: 'Independent witnesses, not self-report',
+    detail:
+      'Scored campaigns enroll separate remote sessions for data execution, governed inference, and provider-boundary observation. The Observer samples GPU and host telemetry at the inference boundary without prompt access or mutation authority — the executor cannot attest its own hardware usage.',
+  },
+] as const;
+
+/** The complete package every model candidate is measured against. */
+export const G8E_MEASURED_TOGETHER = [
+  '25 frozen agent scenarios across nine behavior categories — instruction, tools, routing, security, recovery, and synthesis',
+  'Primary, Assistant, and Light role stack through the production g8ee chat path',
+  'Governed inference dispatch to Ollama — never a direct provider API shortcut',
+  'Host-bound tool, filesystem, and process execution through the Data Operator boundary',
+  'Rubric pass/fail, tool scorecards, escalation disposition, and timing telemetry when observed',
+  'Signed campaign evidence with explicit quality states — live, exploratory, or verified',
+] as const;
+
+export const G8E_CAMPAIGN_OPERATORS = [
+  {
+    role: 'Gateway (g8eg)',
+    wire: 'PDP',
+    detail: 'Admits envelopes, enforces L1–L3, routes inference and tool work to bound Operator sessions, coordinates provider-boundary observation.',
+  },
+  {
+    role: 'Data Operator',
+    wire: 'g8eo',
+    detail: 'Governed host boundary for model-originated tools, filesystem, and process actions during scenarios.',
+  },
+  {
+    role: 'Inference Operator',
+    wire: 'g8eo',
+    detail: 'Sole scored path to the approved Ollama provider — L4/L5 inference PEP on the campaign host.',
+  },
+  {
+    role: 'Observer Operator',
+    wire: 'g8eo',
+    detail: 'Read-only provider-boundary witness on the GPU host — binds hardware samples to inference attempts without mutation authority.',
+  },
+] as const;
