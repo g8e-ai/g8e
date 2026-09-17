@@ -18,6 +18,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
@@ -38,6 +39,9 @@ var modelAssignmentResultVectorJSON []byte
 
 //go:embed vectors/eval/public_assignment_result.json
 var publicAssignmentResultVectorJSON []byte
+
+//go:embed vectors/eval/chat_probe_trace.json
+var chatProbeTraceVectorJSON []byte
 
 func TestEvaluationReportCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
 	var vector evaluationCanonicalizationVector
@@ -103,6 +107,20 @@ func TestEvaluationAssignmentResultCanonicalizationMatchesCrossLanguageVector(t 
 	assert.Equal(t, encoded, canonical)
 	assert.Equal(t, evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE, result.GetLane())
 	assert.Len(t, result.GetModelInferences(), 1)
+}
+
+func TestChatProbeTraceDigestMatchesCrossLanguageVector(t *testing.T) {
+	var vector struct {
+		MessageType string         `json:"message_type"`
+		Trace       map[string]any `json:"trace"`
+		TraceDigest string         `json:"trace_digest"`
+	}
+	require.NoError(t, json.Unmarshal(chatProbeTraceVectorJSON, &vector))
+	assert.Equal(t, "ChatProbeTrace", vector.MessageType)
+
+	got, err := evaluation.ComputeChatProbeTraceDigest(vector.Trace)
+	require.NoError(t, err)
+	assert.Equal(t, vector.TraceDigest, got)
 }
 
 func TestPublicAssignmentResultProjectionCanonicalizationMatchesCrossLanguageVector(t *testing.T) {

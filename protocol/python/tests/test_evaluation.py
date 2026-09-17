@@ -14,6 +14,7 @@ import pytest
 from google.protobuf.json_format import ParseError
 
 from g8e.compliance.v1.canonical import parse_canonical, serialize_canonical
+from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest
 from g8e.eval.v1 import eval_pb2
 from g8e.eval.v1.eval_pb2 import (
     EvaluationAssignmentResult,
@@ -28,12 +29,14 @@ PHASE1_REPORT_VECTOR_FILENAME = "phase1_report.json"
 MODEL_CAMPAIGN_SPEC_VECTOR_FILENAME = "model_campaign_spec.json"
 MODEL_ASSIGNMENT_RESULT_VECTOR_FILENAME = "model_assignment_result.json"
 PUBLIC_ASSIGNMENT_RESULT_VECTOR_FILENAME = "public_assignment_result.json"
+CHAT_PROBE_TRACE_VECTOR_FILENAME = "chat_probe_trace.json"
 PROTOCOL_ROOT = Path(__file__).resolve().parents[2]
 EVAL_VECTOR_DIR = PROTOCOL_ROOT / VECTORS_DIRECTORY_NAME / EVALUATION_DIRECTORY_NAME
 PHASE1_REPORT_VECTOR_PATH = EVAL_VECTOR_DIR / PHASE1_REPORT_VECTOR_FILENAME
 MODEL_CAMPAIGN_SPEC_VECTOR_PATH = EVAL_VECTOR_DIR / MODEL_CAMPAIGN_SPEC_VECTOR_FILENAME
 MODEL_ASSIGNMENT_RESULT_VECTOR_PATH = EVAL_VECTOR_DIR / MODEL_ASSIGNMENT_RESULT_VECTOR_FILENAME
 PUBLIC_ASSIGNMENT_RESULT_VECTOR_PATH = EVAL_VECTOR_DIR / PUBLIC_ASSIGNMENT_RESULT_VECTOR_FILENAME
+CHAT_PROBE_TRACE_VECTOR_PATH = EVAL_VECTOR_DIR / CHAT_PROBE_TRACE_VECTOR_FILENAME
 MODEL_CAMPAIGN_DESCRIPTOR_PATH = (
     PROTOCOL_ROOT / "descriptors" / EVALUATION_DIRECTORY_NAME / "v1" / "model_campaign.json"
 )
@@ -80,6 +83,13 @@ def test_evaluation_assignment_result_canonicalization_matches_cross_language_ve
     assert result.lane == 2  # EVALUATION_LANE_MODEL_ROLE
     assert len(result.model_inferences) == 1
     assert result.model_inferences[0].agent_persona == "sage"
+
+
+def test_chat_probe_trace_digest_matches_cross_language_vector():
+    vector = json.loads(CHAT_PROBE_TRACE_VECTOR_PATH.read_text())
+    assert vector["message_type"] == "ChatProbeTrace"
+    got = compute_chat_probe_trace_digest(vector["trace"])
+    assert got == vector["trace_digest"]
 
 
 def test_public_assignment_result_projection_canonicalization_matches_cross_language_vector():

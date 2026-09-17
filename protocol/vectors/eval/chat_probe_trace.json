@@ -1,0 +1,42 @@
+{
+  "message_type": "ChatProbeTrace",
+  "trace": {
+    "chat_execution_id": "exec-1",
+    "completed_at": "2026-09-17T03:36:01.016030+00:00",
+    "designated_role_output": "Proposed Action \u0026 Safeguard",
+    "evaluation_context": {
+      "assignment_id": "assignment-1",
+      "campaign_id": "eval-smoke-mini",
+      "evaluation_attempt_id": "attempt-1",
+      "evaluation_lane": "model_role",
+      "grading_method": "deterministic",
+      "model_registry_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "run_id": "smoke-mini-1",
+      "scenario_id": "tech-error-diagnosis",
+      "target_operator_session_id": "session-1"
+    },
+    "finish_reason": "STOP",
+    "governed_actions": [],
+    "grader_calls": [],
+    "model_calls": [
+      {
+        "agent_role": "sage",
+        "governed_result_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "governed_transaction_id": "tx-1",
+        "model": "gemma3:4b",
+        "provider": "G8EProvider",
+        "provider_attempt_id": "attempt-1",
+        "succeeded": true
+      }
+    ],
+    "policy_decisions": [],
+    "role_outcome": "invoked",
+    "schema_version": "1",
+    "semantic_grades": [],
+    "status": "completed",
+    "tool_calls": [],
+    "tool_decisions": [],
+    "trace_digest": "d8db5c01445804b4c2b7e0453b82506800220e638306dc51fceb3628880f1b32"
+  },
+  "trace_digest": "d8db5c01445804b4c2b7e0453b82506800220e638306dc51fceb3628880f1b32"
+}

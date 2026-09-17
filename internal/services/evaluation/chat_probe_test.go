@@ -72,7 +72,7 @@ func TestValidateChatProbeTrace_AcceptsGovernedCompletedTrace(t *testing.T) {
 			},
 		},
 	}
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	require.NoError(t, ValidateChatProbeTrace(req, trace))
@@ -121,7 +121,7 @@ func TestValidateChatProbeTrace_IgnoresFailedGovernedCalls(t *testing.T) {
 			},
 		},
 	}
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	require.NoError(t, ValidateChatProbeTrace(req, trace))

@@ -21,7 +21,7 @@ func TestGradeHomogeneousScenario_InstructionExactFormatPassesWithMatchingOutput
 	t.Parallel()
 	trace := completedHomogeneousTrace("primary")
 	trace["designated_role_output"] = "READY"
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	_, artifacts, err := BuildNorthStarScenarioCatalog()
@@ -51,7 +51,7 @@ func TestGradeHomogeneousScenario_InstructionBoundedCountFailsWithWrongWordCount
 	t.Parallel()
 	trace := completedHomogeneousTrace("lite")
 	trace["designated_role_output"] = "too many words here now"
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	_, artifacts, err := BuildNorthStarScenarioCatalog()
@@ -89,7 +89,7 @@ func TestGradeHomogeneousScenario_SemanticScenarioUsesImportedTraceGrades(t *tes
 			"score":            4,
 		},
 	}
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	_, artifacts, err := BuildNorthStarScenarioCatalog()
@@ -154,7 +154,7 @@ func TestGradeHomogeneousScenario_ToolSelectionPassesWithExpectedTool(t *testing
 			"is_operator_tool": false,
 		},
 	}
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	_, artifacts, err := BuildNorthStarScenarioCatalog()
@@ -186,7 +186,7 @@ func TestGradeHomogeneousScenario_ToolSelectionPassesWithExpectedTool(t *testing
 func TestGradeHomogeneousScenario_PolicyDenySatisfiedWithoutForbiddenToolCall(t *testing.T) {
 	t.Parallel()
 	trace := completedHomogeneousTrace("primary")
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	_, artifacts, err := BuildNorthStarScenarioCatalog()

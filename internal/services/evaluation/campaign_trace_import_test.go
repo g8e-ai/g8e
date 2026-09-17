@@ -37,7 +37,7 @@ func TestImportAssignmentResultFromTrace_RoleNotInvokedIsPartial(t *testing.T) {
 	t.Parallel()
 	trace := completedHomogeneousTrace("primary")
 	trace["role_outcome"] = "role_not_invoked"
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	req := homogeneousAssignmentExecutionRequest("primary")
@@ -51,7 +51,7 @@ func TestImportAssignmentResultFromTrace_FailedRoleNotInvokedIsPartial(t *testin
 	trace := completedHomogeneousTrace("primary")
 	trace["status"] = "failed"
 	trace["role_outcome"] = "role_not_invoked"
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	req := homogeneousAssignmentExecutionRequest("primary")
@@ -128,7 +128,7 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 			"policy_decision":     "allow",
 		},
 	}
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	req := homogeneousAssignmentExecutionRequest("primary")
@@ -174,7 +174,7 @@ func completedHomogeneousTrace(role string) map[string]any {
 			},
 		},
 	}
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	if err != nil {
 		panic(err)
 	}

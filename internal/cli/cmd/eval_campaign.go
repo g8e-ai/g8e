@@ -43,6 +43,7 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		campaignEvalAccountCmd(deps),
 		campaignEvalExportCmd(deps),
 		campaignEvalRepairResultsCmd(deps),
+		campaignEvalRepairTraceDigestsCmd(deps),
 		campaignEvalShowCmd(deps),
 		campaignEvalStatusCmd(deps),
 	)
@@ -903,6 +904,45 @@ func campaignEvalExportCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Export output directory (default: .g8e/data/eval/runs/<run-id>/export)")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
+	return cmd
+}
+
+func campaignEvalRepairTraceDigestsCmd(deps nativeEvalDeps) *cobra.Command {
+	var runID string
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:   "repair-trace-digests [run-id]",
+		Short: "Recompute persisted chat-probe trace digests using authoritative g8e canonical JSON",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			runID, err = resolveCampaignRunID("repair-trace-digests", runID, args)
+			if err != nil {
+				return err
+			}
+			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			repaired, err := controller.RepairAssignmentTraceDigests(cmd.Context(), runID)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign repair-trace-digests: %w", err)
+			}
+			if jsonOutput {
+				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "repaired_trace_digests": repaired}, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Repaired %d assignment trace digest(s) for run %s\n", repaired, runID)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }

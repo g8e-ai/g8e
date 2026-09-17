@@ -7,11 +7,12 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
 from pathlib import Path
+
+from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest, marshal_canonical_json
 
 from app.constants.env_vars import EnvVar
 from app.models.evaluation_trace import (
@@ -48,13 +49,9 @@ def _trace_path(assignment_id: str, evaluation_attempt_id: str) -> Path:
     return _trace_root() / assignment_id / f"{evaluation_attempt_id}.json"
 
 
-def _canonical_trace_payload(trace: EvaluationAssignmentTrace) -> str:
-    payload = trace.model_copy(update={"trace_digest": ""}).model_dump(mode="json")
-    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-
-
 def compute_trace_digest(trace: EvaluationAssignmentTrace) -> str:
-    return hashlib.sha256(_canonical_trace_payload(trace).encode()).hexdigest()
+    payload = trace.model_copy(update={"trace_digest": ""}).model_dump(mode="json")
+    return compute_chat_probe_trace_digest(payload)
 
 
 class EvaluationTraceService:
@@ -146,10 +143,7 @@ class EvaluationTraceService:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = path.with_suffix(".json.tmp")
         payload = trace.model_dump(mode="json")
-        tmp_path.write_text(
-            json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
-            encoding="utf-8",
-        )
+        tmp_path.write_bytes(marshal_canonical_json(payload))
         os.replace(tmp_path, path)
         logger.info(
             "Persisted evaluation trace assignment_id=%s attempt_id=%s status=%s",

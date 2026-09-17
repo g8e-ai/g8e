@@ -8,12 +8,7 @@
 package evaluation
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -188,7 +183,7 @@ func validateTraceDigest(trace map[string]any) error {
 	if digest == "" {
 		return fmt.Errorf("evaluation: validate chat probe trace: missing trace_digest")
 	}
-	expected, err := computeTraceDigest(trace)
+	expected, err := ComputeChatProbeTraceDigest(trace)
 	if err != nil {
 		return err
 	}
@@ -196,68 +191,6 @@ func validateTraceDigest(trace map[string]any) error {
 		return fmt.Errorf("evaluation: validate chat probe trace: trace digest mismatch")
 	}
 	return nil
-}
-
-func computeTraceDigest(trace map[string]any) (string, error) {
-	payload := make(map[string]any, len(trace))
-	for key, value := range trace {
-		payload[key] = value
-	}
-	payload["trace_digest"] = ""
-	canonicalRaw, err := marshalSortedJSON(payload)
-	if err != nil {
-		return "", fmt.Errorf("evaluation: compute trace digest: %w", err)
-	}
-	sum := sha256.Sum256(canonicalRaw)
-	return hex.EncodeToString(sum[:]), nil
-}
-
-func marshalSortedJSON(value any) ([]byte, error) {
-	switch typed := value.(type) {
-	case map[string]any:
-		keys := make([]string, 0, len(typed))
-		for key := range typed {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		var buf bytes.Buffer
-		buf.WriteByte('{')
-		for i, key := range keys {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			keyBytes, err := json.Marshal(key)
-			if err != nil {
-				return nil, err
-			}
-			buf.Write(keyBytes)
-			buf.WriteByte(':')
-			valueBytes, err := marshalSortedJSON(typed[key])
-			if err != nil {
-				return nil, err
-			}
-			buf.Write(valueBytes)
-		}
-		buf.WriteByte('}')
-		return buf.Bytes(), nil
-	case []any:
-		var buf bytes.Buffer
-		buf.WriteByte('[')
-		for i, item := range typed {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			itemBytes, err := marshalSortedJSON(item)
-			if err != nil {
-				return nil, err
-			}
-			buf.Write(itemBytes)
-		}
-		buf.WriteByte(']')
-		return buf.Bytes(), nil
-	default:
-		return json.Marshal(typed)
-	}
 }
 
 func validateTraceEvaluationContext(req ChatProbeRequest, evalContext map[string]any) error {

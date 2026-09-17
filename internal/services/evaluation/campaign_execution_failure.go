@@ -167,6 +167,46 @@ func assignmentPersistContext(ctx context.Context) context.Context {
 	return context.WithoutCancel(ctx)
 }
 
+// RepairAssignmentTraceDigests recomputes and persists trace_digest bindings for
+// every stored assignment trace using the authoritative g8e canonical JSON rules.
+func (c *CampaignController) RepairAssignmentTraceDigests(ctx context.Context, runID string) (int, error) {
+	if c == nil || c.store == nil || runID == "" {
+		return 0, fmt.Errorf("evaluation: repair assignment trace digests: %w", constants.ErrMissingRequiredField)
+	}
+	assignments, err := c.store.ListAssignments(ctx, runID)
+	if err != nil {
+		return 0, err
+	}
+	repaired := 0
+	for _, assignment := range assignments {
+		if assignment == nil {
+			continue
+		}
+		trace, err := c.store.LoadAssignmentTrace(ctx, runID, assignment.GetAssignmentId())
+		if err != nil {
+			continue
+		}
+		expected, err := ComputeChatProbeTraceDigest(trace)
+		if err != nil {
+			return repaired, err
+		}
+		current, _ := trace["trace_digest"].(string)
+		if current == expected {
+			continue
+		}
+		trace["trace_digest"] = expected
+		body, err := MarshalCanonicalJSONObject(trace)
+		if err != nil {
+			return repaired, err
+		}
+		if err := c.store.SaveAssignmentTrace(ctx, runID, assignment.GetAssignmentId(), body); err != nil {
+			return repaired, err
+		}
+		repaired++
+	}
+	return repaired, nil
+}
+
 // RepairAssignmentsWithoutResults backfills persisted terminal results for
 // assignments that already reached a terminal lifecycle.
 func (c *CampaignController) RepairAssignmentsWithoutResults(ctx context.Context, runID string, artifacts map[string]ScenarioArtifacts) (int, error) {

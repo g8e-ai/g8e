@@ -23,7 +23,7 @@ func TestCampaignAssignmentVerifier_RecomputesMatchingGrades(t *testing.T) {
 	t.Parallel()
 	trace := completedHomogeneousTrace("primary")
 	trace["designated_role_output"] = "READY"
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	req := homogeneousAssignmentExecutionRequest("primary")

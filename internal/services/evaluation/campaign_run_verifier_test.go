@@ -64,7 +64,7 @@ func TestCampaignRunVerifier_PassesCompletedAssignment(t *testing.T) {
 		"evaluation_lane":            "model_role",
 		"designated_model_role":      "primary",
 	}
-	digest, err := computeTraceDigest(trace)
+	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
 	traceBody, err := marshalSortedJSON(trace)
