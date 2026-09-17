@@ -1040,6 +1040,39 @@ class TestG8eHTTPClientRequest:
         cb = c._get_circuit_breaker("https://localhost:8443/api/v1/operators/validate")
         assert cb.state is CircuitBreakerState.CLOSED
 
+    async def test_transient_503_does_not_trip_circuit_breaker(self):
+        resp_503 = _make_mock_response(503, b"service unavailable")
+        original_request = MagicMock(return_value=resp_503)
+
+        c = HTTPClient(
+            component_id=G8EE_COMPONENT,
+            base_url="https://localhost:8443",
+            timeout=DEFAULT_TIMEOUT,
+            retry_config=RetryConfig(max_retries=0),
+            circuit_breaker_config=CircuitBreakerConfig(failure_threshold=1, recovery_time=9999.0),
+            auth_token="",
+            api_key="",
+            headers={},
+            tls_config=TLSConfig(ca_cert_path="/mock/ca.crt"),
+        )
+        session = MagicMock()
+        session.closed = False
+        session.request = original_request
+        c._session = session
+
+        with patch("asyncio.sleep", new_callable=AsyncMock), pytest.raises(NetworkError):
+            await c.request(
+                "POST",
+                "/api/v1/operators/validate",
+                headers={},
+                json_data=None,
+                context=None,
+                retry_config=GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG,
+            )
+
+        cb = c._get_circuit_breaker("https://localhost:8443/api/v1/operators/validate")
+        assert cb.state is CircuitBreakerState.CLOSED
+
     async def test_unexpected_exception_raises_network_error(self):
         resp = MagicMock()
         resp.__aenter__ = AsyncMock(side_effect=RuntimeError("unexpected internal error"))

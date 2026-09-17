@@ -67,7 +67,8 @@ Keep internal plan vocabulary separate from public campaign branding.
 
 | Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (3 roles × 25 scenarios) |
 | --- | --- | --- | --- | --- |
-| **Mini smoke** (pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.local.dev/smoke-mini-inventory.json` | 3 models → **225** |
+| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` (`init-campaign` for `gemma4:e4b`) | `<campaign-id>-<unix>` | `.local.dev/inventories/<campaign-id>.json` | 1 model → **75** |
+| **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.local.dev/smoke-mini-inventory.json` | 3 models → **225** |
 | **Dev full smoke** (private, all frozen models) | `phase1a-smoke` | `smoke-dev-<unix>` | `.local.dev/north-star-inventory.json` | 35 models → **2625** |
 | **First public homogeneous run** | `eval-genesis-homogeneous` | `genesis-homogeneous-01` (or `-<seq>`) | fresh provider freeze at launch | all discovered models |
 
@@ -77,6 +78,32 @@ Rules:
 - Use **Genesis** for the first public homogeneous release (`eval-genesis-homogeneous`).
 - Every cold start gets a **new run ID**. Never resume abandoned runs after a volume wipe.
 - Set `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` in `.env` **before** starting `g8e-inference-operator`. Without them, dispatch returns HTTP 403 / `campaign binding invalid`.
+
+### Init campaign inventory (one model per campaign)
+
+Preferred for pipeline validation and model-by-model rollout: **one north-star model, one campaign, 75 cells**. Keeps runs tidy, isolates failures, and matches the inference-operator campaign binding (rebind `.env` before each run).
+
+```bash
+# List north-star tags:
+go run ./.local.dev/tools/gen-model-campaign-inventory -list
+
+# Generate one model (example: qwen3:4b → eval-init-qwen3-4b):
+go run ./.local.dev/tools/gen-model-campaign-inventory -tag qwen3:4b
+
+# Regenerate all 35 single-model inventories + queue manifest:
+go run ./.local.dev/tools/gen-model-campaign-inventory -all -queue
+```
+
+Queue manifest: `.local.dev/init-campaign-queue.json` (status `verified` / `pending` per model).
+
+Workflow per model:
+
+1. Pick the next `pending` entry from the queue (or `-tag` for a specific model).
+2. Set `.env` `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` from that inventory file.
+3. Recreate `g8e-inference-operator` so the campaign binding matches.
+4. `RUN_ID=<campaign-id>-$(date +%s)` then `campaign init` → `schedule --publish` → `execute --publish` → `verify` (add `--require-provider-observation` when the observer is enrolled).
+
+First verified gate: `init-campaign` / `gemma4:e4b` / run `init-campaign-1789654273`.
 
 ### Mini smoke inventory (current)
 

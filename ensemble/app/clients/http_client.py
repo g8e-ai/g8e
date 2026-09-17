@@ -429,6 +429,11 @@ class HTTPClient:
         )
         return max(0, backoff + jitter)
 
+    @staticmethod
+    def _counts_toward_circuit_breaker(status_code: int, retry_config: RetryConfig) -> bool:
+        """Statuses we already retried are transient outages, not persistent failures."""
+        return status_code not in retry_config.retry_status_codes
+
     async def request(
         self,
         method: str,
@@ -569,7 +574,11 @@ class HTTPClient:
                         "text": wrapped.text[:1000] if wrapped.text else "(empty response)"
                     }
 
-                await circuit_breaker.record_failure()
+                await circuit_breaker.record_failure(
+                    countable=self._counts_toward_circuit_breaker(
+                        wrapped.status_code, effective_retry
+                    )
+                )
                 trace.finish()
 
                 error = NetworkError(
@@ -821,7 +830,11 @@ class HTTPClient:
             ) as response:
                 if response.status >= 400:
                     body = await response.read()
-                    await circuit_breaker.record_failure()
+                    await circuit_breaker.record_failure(
+                        countable=self._counts_toward_circuit_breaker(
+                            response.status, self.retry_config
+                        )
+                    )
                     raise NetworkError(
                         message=f"Streaming request failed with status {response.status}",
                         code=ErrorCode.API_RESPONSE_ERROR,
