@@ -588,6 +588,12 @@ export function roleLabel(role: string): string {
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
+/** Short dataset label for table cells; strips the live-run prefix when present. */
+export function datasetLabel(datasetId: string): string {
+  const prefix = 'ds-live-';
+  return datasetId.startsWith(prefix) ? datasetId.slice(prefix.length) : datasetId;
+}
+
 export interface ModelRoleLeaderboardRow {
   rank: number;
   model: ModelSummary;

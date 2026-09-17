@@ -16,11 +16,9 @@ import type { ModelSummary } from '../contract/types';
 
 export function ModelComparisonPanel({
   models,
-  datasetId,
   onClear,
 }: {
   models: ModelSummary[];
-  datasetId: string;
   onClear: () => void;
 }) {
   return (
@@ -46,7 +44,7 @@ export function ModelComparisonPanel({
               {models.map((m) => (
                 <th key={modelComparisonId(m)} scope="col">
                   <span className="compare-model-header">
-                    <Link to={`/models/${datasetId}/${m.variant_id}?role=${m.role}`}>{m.display_name}</Link>
+                    <Link to={`/models/${m.dataset_id}/${m.variant_id}?role=${m.role}`}>{m.display_name}</Link>
                     <QualityBadge state={m.quality_state} />
                   </span>
                 </th>

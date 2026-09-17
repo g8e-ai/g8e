@@ -7,6 +7,12 @@ export const GITHUB_SPONSORS_URL = 'https://github.com/sponsors/Badoot';
 
 export const PLATFORM_SITE_URL = 'https://opendevops.ai';
 
+export const PLATFORM_CONTACT_EMAIL = 'danny@lateraluslabs.com';
+
+export const PLATFORM_CONTACT_CALENDLY = 'https://calendly.com/danny-lateraluslabs/quick_discovery';
+
+export const PLATFORM_CONTACT_LINKEDIN = 'https://www.linkedin.com/in/dannybarbour/';
+
 export const SPONSORSHIP_LEDE =
   'OpenDevOps.ai is a fully independent, verifiable LLM benchmarking project. I am completely self-funded and refuse to take venture capital. If this data helps you, please help me keep the servers running and the pipeline unbiased.';
 
@@ -16,32 +22,37 @@ export const SPONSORSHIP_USES = [
   'Preserve editorial independence — no venture capital and no vendor-sponsored benchmarks',
 ] as const;
 
+export const PLATFORM_SOLO_NOTE = 'Solo operator · home-PC hardware · live pipeline';
+
 export const PLATFORM_LEDE =
-  'OpenDevOps.ai is a live deployment of g8e — model benchmarks executing on a home Windows workstation over Docker and Ollama, published to your browser through the gateway mirror.';
+  'OpenDevOps.ai is a one-person project running real evaluation campaigns on consumer hardware — open-source SLMs scored through the full g8e agent stack, not isolated API calls. Only signed snapshots leave the host.';
 
 export const PLATFORM_MEASUREMENT_SUMMARY =
-  '25 frozen agent scenarios across Primary, Assistant, and Light roles — pass rate, tool selection, throughput, and escalation behavior on a real governed host boundary.';
+  'Each candidate model is scored in every g8e role — Primary, Assistant, and Light — across 25 frozen agent scenarios. The goal is per-role metrics (pass rate, tool selection, throughput, escalation) to identify the strongest open models, then compare those picks against single-LLM baselines.';
+
+export const PLATFORM_PORTFOLIO_NOTE =
+  'This explorer is a live portfolio piece — the same pipeline I use for production evals, plus the public mirror UI I built on top. I am available for contract work on governed AI, evaluation infrastructure, and read-only observability surfaces.';
 
 export const PLATFORM_FLOW_STEPS = [
   {
     id: 'workstation',
-    label: 'Home workstation',
+    label: 'Home PC',
     detail: 'Windows · Docker · Ollama',
   },
   {
     id: 'g8e',
     label: 'g8e stack',
-    detail: 'Gateway · Operator · Ensemble · eval',
+    detail: 'Gateway · Operator · eval',
   },
   {
     id: 'mirror',
     label: 'Public mirror',
-    detail: 'JSONL + SSE · Cloudflare tunnel',
+    detail: 'SSE · Cloudflare tunnel',
   },
   {
     id: 'browser',
     label: 'This page',
-    detail: 'Read-only live campaign view',
+    detail: 'Portfolio viewer',
   },
 ] as const;
 

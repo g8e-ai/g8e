@@ -6,10 +6,9 @@
 import { useEffect, useMemo } from 'react';
 import { type CellContext, type ColumnDef } from '@tanstack/react-table';
 import { Link, useSearchParams } from 'react-router-dom';
-import { getCatalogForDataset, useActiveDatasetId, useUserPref, PREF } from '../state/dataset';
-import { modelComparisonId, resolveModelSummary, useStoreState } from '../state/store';
+import { useUserPref, PREF } from '../state/dataset';
+import { modelComparisonId, resolveModelFromComparisonId, useStoreState } from '../state/store';
 import { DataTable } from '../components/DataTable';
-import { DatasetSelector } from '../components/DatasetSelector';
 import { ModelComparisonPanel } from '../components/ModelComparisonPanel';
 import {
   EmptyState,
@@ -24,7 +23,7 @@ import {
   formatNumber,
 } from '../components/shared';
 import type { ModelSummary, ModelRole } from '../contract/types';
-import { roleLabel } from './derived';
+import { datasetLabel, roleLabel } from './derived';
 
 interface ModelFilters {
   search: string;
@@ -46,8 +45,6 @@ function filtersActive(filters: ModelFilters): boolean {
 
 export function ModelsView() {
   const [params, setParams] = useSearchParams();
-  const routeDataset = params.get('dataset') ?? undefined;
-  const activeDatasetId = useActiveDatasetId(routeDataset);
   const [filters, setFilters] = useUserPref<ModelFilters>(PREF.filters, DEFAULT_FILTERS);
   const [comparison, setComparison] = useUserPref<string[]>(PREF.comparison, []);
 
@@ -63,14 +60,10 @@ export function ModelsView() {
     }
   }, [params, setComparison, setParams]);
 
-  const models = useStoreState((state) =>
-    Array.from(state.models.values()).filter((m) => m.dataset_id === activeDatasetId),
-  );
+  const models = useStoreState((state) => Array.from(state.models.values()));
   const connection = useStoreState((state) => state.connection);
-  const catalog = getCatalogForDataset(activeDatasetId);
   const evaluatedFilter =
     filters.evaluated === 'evaluated' &&
-    catalog?.dataset_kind === 'live_run' &&
     models.length > 0 &&
     models.every((model) => !model.pass_rate)
       ? 'all'
@@ -78,7 +71,7 @@ export function ModelsView() {
 
   const comparedModels = useStoreState((state) =>
     comparison
-      .map((id) => resolveModelSummary(state.models, activeDatasetId, id))
+      .map((id) => resolveModelFromComparisonId(state.models, id))
       .filter((m): m is NonNullable<typeof m> => m !== undefined),
   );
 
@@ -126,12 +119,22 @@ export function ModelsView() {
         enableSorting: false,
       },
       {
+        id: 'dataset',
+        header: 'Dataset',
+        accessorKey: 'dataset_id',
+        cell: ({ row }: CellContext<ModelSummary, unknown>) => (
+          <code className="dataset-id" title={row.original.dataset_id}>
+            {datasetLabel(row.original.dataset_id)}
+          </code>
+        ),
+      },
+      {
         id: 'name',
         header: 'Model',
         accessorKey: 'display_name',
         cell: ({ row }: CellContext<ModelSummary, unknown>) => (
           <Link
-            to={`/models/${activeDatasetId}/${row.original.variant_id}?role=${row.original.role}`}
+            to={`/models/${row.original.dataset_id}/${row.original.variant_id}?role=${row.original.role}`}
             className="model-link"
           >
             {row.original.display_name}
@@ -203,19 +206,20 @@ export function ModelsView() {
         enableSorting: false,
       },
     ],
-    [activeDatasetId, comparison, setComparison],
+    [comparison, setComparison],
   );
 
   const updateFilter = (patch: Partial<ModelFilters>) => setFilters({ ...filters, ...patch });
+
+  const measuredCount = models.filter((model) => Boolean(model.pass_rate)).length;
 
   return (
     <div className="models-view">
       <SectionHeading
         kicker="MEASURED RESULTS"
         title="Models with real evaluation data"
-        description="Measured models appear first by pass rate. Use All models to inspect the unevaluated registry inventory."
+        description="Measured models appear first by pass rate across every dataset. Use All models to inspect the unevaluated registry inventory."
       />
-      <DatasetSelector activeId={activeDatasetId} />
 
       <div className="models-toolbar">
         <input
@@ -243,7 +247,7 @@ export function ModelsView() {
           <option value="verified_public">Verified public</option>
           <option value="not_evaluated">Not evaluated</option>
         </select>
-        <span className="result-count">{formatNumber(models.filter((model) => Boolean(model.pass_rate)).length)} measured · {formatNumber(models.length)} total</span>
+        <span className="result-count">{formatNumber(measuredCount)} measured · {formatNumber(models.length)} total</span>
         {comparison.length > 0 ? (
           <button type="button" className="comparison-clear-btn" onClick={() => setComparison([])}>
             Clear {comparison.length} selected
@@ -256,7 +260,7 @@ export function ModelsView() {
       ) : null}
 
       {comparison.length >= 2 && comparedModels.length < 2 ? (
-        <ErrorState message="Some selected models were not found in the active dataset." />
+        <ErrorState message="Some selected models were not found in the catalog." />
       ) : null}
 
       {comparisonDatasetMismatch ? (
@@ -266,7 +270,6 @@ export function ModelsView() {
       {comparedModels.length >= 2 && !comparisonDatasetMismatch ? (
         <ModelComparisonPanel
           models={comparedModels}
-          datasetId={activeDatasetId}
           onClear={() => setComparison([])}
         />
       ) : null}

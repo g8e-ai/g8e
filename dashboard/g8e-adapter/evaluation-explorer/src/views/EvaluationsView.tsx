@@ -17,11 +17,7 @@ import {
   formatPercent,
 } from '../components/shared';
 import type { EvaluationSummary } from '../contract/types';
-
-function datasetLabel(datasetId: string): string {
-  const prefix = 'ds-live-';
-  return datasetId.startsWith(prefix) ? datasetId.slice(prefix.length) : datasetId;
-}
+import { datasetLabel } from './derived';
 
 export function EvaluationsView() {
   const [params, setParams] = useSearchParams();
