@@ -10,7 +10,7 @@ Version: v2.1.8
 
 ## Scope
 
-g8e owns the platform evaluation programs: the Go-native **execution-boundary** suite and **model campaign** scoring that exercises real models through governed inference, tool dispatch, and provider-boundary hardware observation. The evaluator, campaign controller, evidence store, and verifier live in the `g8e` binary under `internal/services/evaluation/` and the `g8e eval` CLI.
+g8e owns the platform evaluation programs: the Go-native **execution-boundary** suite and **model campaign** scoring that exercises real models through governed inference, tool dispatch, provider-boundary hardware observation, and storage-side model provenance attestation. The evaluator, campaign controller, evidence store, and verifier live in the `g8e` binary under `internal/services/evaluation/` and the `g8e eval` CLI.
 
 g8ee participates in model campaigns as the production chat path (`POST /api/v1/chat`) but does not own platform evidence, verification, or campaign orchestration. See [Ensemble Evaluations](../ensemble/evals.md) for how g8ee uses these programs.
 
@@ -23,7 +23,7 @@ Operational deployment (Compose profiles, enrollment order, smoke workflows, tro
 | Program | Suite / catalog | Proves | Does not use |
 | --- | --- | --- | --- |
 | **Execution-boundary** | `core-execution-boundary@1.0.0` | One allowed governed mutation and one doctrine-prohibited equivalent through the real Gateway and remote Operator | g8ee, model providers, campaigns, synthetic simulators |
-| **Model campaign** | `north-star-25@1.0.0` scenario catalog | Governed model scoring through production inference, tool scenarios, and provider-boundary hardware telemetry | Direct Ollama calls from the campaign CLI or g8ee |
+| **Model campaign** | `north-star-25@1.0.0` scenario catalog | Governed model scoring through production inference, tool scenarios, provider-boundary hardware telemetry, and storage-side model weight attestation | Direct Ollama calls from the campaign CLI or g8ee |
 
 Both programs persist canonical, content-addressed evidence beneath `.g8e/data/eval/runs/`. Verification is independent of execution: `g8e eval verify` and `g8e eval campaign verify` recompute bindings and signatures without mutating the platform.
 
@@ -89,40 +89,49 @@ The independent observer is a short-lived `g8e-eval-observer` Compose process. I
 
 ## Model campaign evaluations
 
-North Star model campaigns score real models through the production g8ee `POST /api/v1/chat` path, governed inference dispatch, and a frozen scenario catalog. They use one campaign Gateway with **three** distinct enrolled remote Operator sessions:
+North Star model campaigns score real models through the production g8ee `POST /api/v1/chat` path, governed inference dispatch, and a frozen scenario catalog. They use one campaign Gateway with **three** core enrolled remote Operator sessions on the campaign host (Data and Inference) plus **one or two** provider-side witness sessions when hardware observation and model provenance are enabled:
 
 | Session | Capability flag | Host | Role |
 | --- | --- | --- | --- |
 | **Data Operator** | `inference_enabled=false` | Campaign host (Docker) | Governed tool/filesystem/process boundary for model-originated host actions |
 | **Inference Operator** | `inference_enabled=true` | Campaign host (Docker) | Governed L4/L5 inference PEP; sole scored path to the approved Ollama provider |
-| **Observer Operator** | `provider_boundary_observer_enabled=true` | Provider host (where Ollama/GPU runs) | Read-only GPU and system RAM sampling at the provider execution boundary |
+| **Observer Operator** | `provider_boundary_observer_enabled=true`; optional `provider_boundary_observer_ollama_enabled=true` (`--ollama`) | Provider host (where Ollama/GPU runs) | Read-only GPU and system RAM sampling at the provider execution boundary; optional governed Ollama service restart when `--ollama` is set |
+| **Provenance Operator** | `provenance_operator_enabled=true` | Model storage site (where weight blobs live) | Independent SHA-256 attestation of model manifests and weight blobs |
 
-Scored inference never calls Ollama directly from g8ee or the campaign CLI. The Gateway routes inference envelopes to the exact Inference Operator session, tool intents to the exact Data Operator session, and `ProviderBoundaryObservationCommand` (BEGIN/FINALIZE) to the exact Observer Operator session.
+Scored inference never calls Ollama directly from g8ee or the campaign CLI. The Gateway routes inference envelopes to the exact Inference Operator session, tool intents to the exact Data Operator session, `ProviderBoundaryObservationCommand` (BEGIN/FINALIZE) to the exact Observer Operator session, and `ModelProvenanceObservationCommand` (BEGIN/FINALIZE) to the exact Provenance Operator session when provenance is enabled.
 
-### Why the Inference Operator and Observer Operator are separate
+See [Model Provenance](model-provenance.md) for the zero-trust weight attestation architecture.
 
-Both roles use the same `g8e operator` binary but enroll as **different remote sessions** with different capability flags. Production Observer enrollment uses `--provider-boundary-observer-enabled` only; do **not** pass `--inference-enabled` on the provider host.
+### Why witness operators are separate from the Inference Operator
 
-**1. Provider-host placement.** The Inference Operator runs on the campaign host and calls the remote Ollama HTTP API. GPU VRAM, utilization, temperature, power, clocks, and host RAM must be sampled on the machine where inference actually runs. A Linux Docker container on the campaign host cannot authoritatively observe hardware on a remote Windows GPU host.
+The Inference Operator, Observer Operator, and Provenance Operator all use the same `g8e operator` binary but enroll as **different remote sessions** with different capability flags. Production witness enrollment on the provider host uses `--provider-boundary-observer-enabled` and/or `--provenance-operator-enabled` only; do **not** pass `--inference-enabled` on the provider host. The separate Observer **`--ollama`** flag opts that session into remote Ollama **service** lifecycle commands; it is recorded in `runtime_config` at bootstrap and enforced by the gateway and operator (commands are rejected without it).
 
-**2. Independent witness evidence.** Hardware-efficiency metrics are witness evidence, not executor self-report. North Star requires a typed observer at the **provider execution boundary** that binds sample windows to `provider_attempt_id`. The campaign controller verifies observation coverage separately from inference receipts and never infers provider hardware state from model latency or host-side process observations.
+**1. Provider-host placement.** The Inference Operator runs on the campaign host and calls the remote Ollama HTTP API. GPU VRAM, utilization, temperature, power, clocks, and host RAM must be sampled on the machine where inference actually runs. Model weight blobs must be hashed at the storage site where Ollama keeps content-addressed blobs (for example `~/.ollama/models`). A Linux Docker container on the campaign host cannot authoritatively witness either signal.
 
-**3. Least privilege and evidence ownership.** The Observer has no inference backend, no model-management authority, no prompt access, and no access to Inference Operator attempt files. Merging observation into the Inference Operator would let the inference executor attest its own GPU usage and blur which session owns which evidence chain.
+**2. Independent witness evidence.** Hardware-efficiency metrics and model provenance are witness evidence, not executor self-report. North Star requires typed witnesses at the **provider execution boundary** (Observer) and **model storage boundary** (Provenance Operator) that bind evidence to `provider_attempt_id`. The campaign controller verifies coverage separately from inference receipts.
 
-**4. Gateway coordination, separate execution.** When scored inference starts and ends, the Gateway `ProviderBoundaryObservationCoordinator` sends fire-and-forget BEGIN/FINALIZE commands to the Observer over pub/sub in parallel with inference dispatch. Verification binds completed `ProviderBoundaryObservationWindow` records to governed attempts. Campaigns without observer coverage may still publish timing and token fields but remain explicitly incomplete for hardware-efficiency claims until `g8e eval campaign verify --require-provider-observation` passes.
+**3. Least privilege and evidence ownership.** The Observer has no inference backend, no model-management authority, no prompt access, and no access to Inference Operator attempt files. The Provenance Operator reads model manifests and blobs locally but does not run inference, sample GPU state, or mutate weights. Merging either witness into the Inference Operator would let the inference executor attest its own GPU usage or model integrity.
 
-**5. Same pattern as tool scenarios.** Governed tool assignments require an independent observer that cannot mutate the target. Provider-boundary observation applies the same separation to inference-side hardware telemetry.
+**4. Gateway coordination, separate execution.** When scored inference starts and ends, the Gateway fans out fire-and-forget BEGIN/FINALIZE commands in parallel with inference dispatch:
 
-### Observer naming: do not confuse the two observers
+- `ProviderBoundaryObservationCoordinator` → Observer Operator → `ProviderBoundaryObservationWindow`
+- `ModelProvenanceObservationCoordinator` → Provenance Operator → `ModelProvenanceAttestationWindow`
 
-g8e uses two different “observer” concepts:
+Campaigns without observer coverage remain explicitly incomplete for hardware-efficiency claims until `g8e eval campaign verify --require-provider-observation` passes. Provenance coverage follows the same fail-closed delivery contract when the Provenance Operator is enrolled and campaign bindings carry a model digest.
+
+**5. Same pattern as tool scenarios.** Governed tool assignments require an independent observer that cannot mutate the target. Provider-boundary observation and model provenance apply the same separation to inference-side hardware telemetry and storage-side weight attestation.
+
+### Observer naming: do not confuse the witness roles
+
+g8e uses three distinct “witness” concepts for evaluations:
 
 | Name | Where it runs | Purpose |
 | --- | --- | --- |
 | **`g8e-eval-observer`** | Campaign host Compose (`evaluation` profile) | Networkless target-state reader for the native `core-execution-boundary@1.0.0` suite only |
-| **Observer Operator** | Provider host (`g8e operator start --provider-boundary-observer-enabled`) | Enrolled remote Operator for provider-boundary GPU/RAM telemetry during scored model campaigns |
+| **Observer Operator** | Provider host (`g8e operator start --provider-boundary-observer-enabled [--ollama]`) | Enrolled remote Operator for provider-boundary GPU/RAM telemetry during scored model campaigns |
+| **Provenance Operator** | Model storage site (`g8e operator start --provenance-operator-enabled --model-storage-root <path>`) | Enrolled remote Operator for storage-side model weight hashing and digest attestation during scored model campaigns |
 
-The Compose `g8e-eval-observer` service is **not** the provider-boundary Observer Operator and does not satisfy North Star hardware-efficiency requirements for model campaigns.
+The Compose `g8e-eval-observer` service is **not** the provider-boundary Observer Operator and does not satisfy North Star hardware-efficiency requirements for model campaigns. The Provenance Operator is **not** an observer — it attests model files, not GPU state.
 
 ### Provider-boundary Observer Operator
 
@@ -134,6 +143,8 @@ What the Observer does:
 2. Observer samples GPU VRAM, utilization, temperature, power, clocks, and system RAM between BEGIN and FINALIZE.
 3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
 4. Gateway ingests windows for `g8e eval campaign verify --require-provider-observation`.
+
+**Optional Ollama service restart (`--ollama`):** When the provider-host owner starts the Observer with `--ollama`, `g8e eval campaign execute` dispatches governed `EXECUTE_BASH` commands to that session before each assignment: `ollama stop`, a short settle delay, `ollama start`, and `ollama status`. The gateway reads `provider_boundary_observer_ollama_enabled` from the operator's stored runtime config and rejects those commands when the flag is false. This is an explicit opt-in on the provider host; the campaign host never manages Ollama without it.
 
 **Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
 
@@ -200,6 +211,47 @@ What to verify:
 
 If you see only BEGIN without matching FINALIZE for an attempt, or repeated `EXECUTION_STATUS_EXECUTING` without `COMPLETED`, check Gateway connectivity and that the campaign `execute` process is still running.
 
+### Storage-side Provenance Operator
+
+Deploy the Provenance Operator **at the model storage site** — the directory tree that holds Ollama manifests and content-addressed weight blobs. On a typical Ollama deployment this is the same physical host as the Observer (`~/.ollama/models`), but it enrolls as a **separate** governed session with `--provenance-operator-enabled`. Enrollment and startup procedure live in the [Unified Docker Stack Guide](../guides/unified_stack.md#storage-side-provenance-operator).
+
+What the Provenance Operator does:
+
+1. Gateway sends `ModelProvenanceObservationCommand` (BEGIN/FINALIZE) on the provenance operator's pub/sub cmd channel when scored inference starts and ends. BEGIN carries `served_model_tag`, `expected_model_digest`, `model_registry_digest`, and `campaign_id` from the frozen campaign registry.
+2. On FINALIZE, the operator reads the Ollama manifest for the served model tag, hashes every referenced blob under `--model-storage-root`, and compares the manifest digest to the expected campaign model digest.
+3. The operator publishes `ModelProvenanceObservationCompleted` on its results channel.
+4. Gateway ingests attestation windows under `data/inference/model-provenance/windows/` for campaign verification.
+
+**Fail closed:** If observed and expected model digests do not match, FINALIZE fails and the attestation window is not published. This is independent of the Inference Operator's own digest checks — the Provenance Operator is a storage-side witness, not a self-report from the inference executor.
+
+**Timing rule:** Assignments that reached a terminal state before the Provenance Operator was enrolled and pub/sub-connected will lack attestation windows. Enroll the provenance operator before `execute` when chain-of-custody claims are required.
+
+#### Example operator output (provenance)
+
+While a scored campaign runs, the Provenance Operator console shows paired BEGIN/FINALIZE cycles for `MODEL_PROVENANCE_OBSERVATION`:
+
+```text
+INFO: Model provenance observation started
+  - provider_attempt_id: f7607d6c-6804-4df9-af89-abfe16404212
+  - served_model_tag: gemma4:e4b
+  - expected_model_digest: 9ce994a6bd3c0985667bac5cdeddbdbba3d1553570a52fe6cad2225ab159d318
+INFO: Model provenance observation completed
+  - provider_attempt_id: f7607d6c-6804-4df9-af89-abfe16404212
+  - served_model_tag: gemma4:e4b
+  - observed_model_digest: 9ce994a6bd3c0985667bac5cdeddbdbba3d1553570a52fe6cad2225ab159d318
+  - attestation_digest: a1b2c3...
+INFO: Model provenance observation completion transmitted
+  - event_type: g8e.v1.operator.model.provenance.observation.completed
+```
+
+What to verify:
+
+- **BEGIN** lines include the correct `served_model_tag` and `expected_model_digest` for the frozen campaign model.
+- **FINALIZE** lines show `observed_model_digest` matching `expected_model_digest` and a non-empty `attestation_digest`.
+- `Publishing result` uses event type `g8e.v1.operator.model.provenance.observation.completed` on the session `results:` channel.
+
+See [Model Provenance](model-provenance.md) for the full zero-trust weight attestation architecture.
+
 ---
 
 ## Evidence and verification
@@ -211,8 +263,9 @@ If you see only BEGIN without matching FINALIZE for an attempt, or repeated `EXE
 | Native run report and verification | `.g8e/data/eval/runs/<run-id>/report.json`, `verification.json`, digest-named evidence | `g8e eval run` / `g8e eval verify` |
 | Campaign run state and results | `.g8e/data/eval/runs/<run-id>/` (campaign-scoped lifecycle, assignment, trace, and aggregate records) | `g8e eval campaign …` |
 | Provider observation windows (ingested) | Gateway volume under `data/inference/provider-observer/windows/` | Gateway ingest from Observer Operator results |
+| Model provenance attestation windows (ingested) | Gateway volume under `data/inference/model-provenance/windows/` | Gateway ingest from Provenance Operator results |
 
-Native verification is owned by `g8e eval verify`. Campaign verification is owned by `g8e eval campaign verify`, with `--require-provider-observation` enforcing hardware-window coverage through the Gateway read API when local evidence is missing.
+Native verification is owned by `g8e eval verify`. Campaign verification is owned by `g8e eval campaign verify`, with `--require-provider-observation` enforcing hardware-window coverage through the Gateway read API when local evidence is missing. Model provenance attestation windows are verified through the campaign assignment verifier when strict provenance policy is enabled (see [Model Provenance](model-provenance.md)).
 
 ### Public spectator projection
 
@@ -226,10 +279,10 @@ Platform evaluation logic lives in `internal/services/evaluation/`:
 
 - Native suite registry, governed command lane, and deterministic grading
 - Independent target observer for the execution-boundary suite
-- Campaign controller, publication coordinator, and provider-boundary observation integration
+- Campaign controller, publication coordinator, provider-boundary observation integration, and model provenance verification
 - Canonical evidence storage and fail-closed verification
 
-Provider-boundary sampling runs in the Observer Operator through `internal/services/operatorcapability/provider_boundary_observer.go` and `internal/services/inference/provider_observer/`. Protocol contracts are defined under `protocol/proto/g8e/eval/v1/`.
+Provider-boundary sampling runs in the Observer Operator through `internal/services/operatorcapability/provider_boundary_observer.go` and `internal/services/inference/provider_observer/`. Storage-side model weight attestation runs in the Provenance Operator through `internal/services/operatorcapability/provenance_operator.go` and `internal/services/inference/model_provenance/`. Optional Ollama service restart between campaign assignments is implemented in `internal/services/evaluation/ollama_service.go` and gated by `provider_boundary_observer_ollama_enabled`. Protocol contracts are defined under `protocol/proto/g8e/eval/v1/`.
 
 ---
 
@@ -238,6 +291,7 @@ Provider-boundary sampling runs in the Observer Operator through `internal/servi
 - [Unified Docker Stack Guide](../guides/unified_stack.md) — Compose profiles, enrollment order, campaign workflows, and troubleshooting
 - [Ensemble Evaluations](../ensemble/evals.md) — How g8ee uses g8e evals through the production chat path
 - [Ensemble (g8ee)](./ensemble.md) — g8ee's role in the platform and trust boundaries
+- [Model Provenance](./model-provenance.md) — Zero-trust weight attestation, Provenance Operator enrollment, and chain of custody
 - [Gateway Architecture](./gateway.md) — Inference dispatch, provider-boundary coordination, and pub/sub
 - [Operator Architecture](./operator.md) — L4 Warden, L5 Actuator, and capability flags
 - [Public Spectator Architecture](./public_spectator.md) — Public-safe evaluation projections and explorer contract

@@ -24,6 +24,7 @@ import (
 	execution "github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
@@ -75,6 +76,7 @@ type OperatorPubSubService struct {
 	inference                *inference.InferenceExecutionHandler
 	inferenceAttemptStore    inference.AttemptStore
 	providerBoundaryObserver *provider_observer.Handler
+	modelProvenanceOperator  *model_provenance.Handler
 
 	ShutdownChan chan string
 
@@ -136,6 +138,10 @@ type CommandServiceConfig struct {
 	// ProviderBoundaryObserver handles pubsub observation commands on the
 	// remote provider host. Nil when provider-boundary observation is disabled.
 	ProviderBoundaryObserver *provider_observer.Handler
+
+	// ModelProvenanceOperator handles pubsub provenance commands on the
+	// storage-side model file site. Nil when provenance attestation is disabled.
+	ModelProvenanceOperator *model_provenance.Handler
 
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey
@@ -208,6 +214,7 @@ func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCor
 	rs.inference = c.Inference
 	rs.inferenceAttemptStore = c.InferenceAttemptStore
 	rs.providerBoundaryObserver = c.ProviderBoundaryObserver
+	rs.modelProvenanceOperator = c.ModelProvenanceOperator
 
 	rs.buildHandlers()
 	if gatewayMode {
@@ -419,6 +426,11 @@ func (rs *OperatorPubSubService) buildHandlers() {
 	rs.handlers[constants.Event.Operator.ProviderBoundaryObservation.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
 		if _, err := rs.handleProviderBoundaryObservationSync(ctx, msg); err != nil {
 			rs.logger.Error("Provider boundary observation handler failed", "error", err)
+		}
+	}
+	rs.handlers[constants.Event.Operator.ModelProvenanceObservation.Requested] = func(ctx context.Context, msg *PubSubCommandMessage) {
+		if _, err := rs.handleModelProvenanceObservationSync(ctx, msg); err != nil {
+			rs.logger.Error("Model provenance observation handler failed", "error", err)
 		}
 	}
 }
@@ -889,6 +901,9 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 	if eventType == constants.Event.Operator.ProviderBoundaryObservation.Requested {
 		return rs.handleProviderBoundaryObservationSync(ctx, pubsubMsg)
 	}
+	if eventType == constants.Event.Operator.ModelProvenanceObservation.Requested {
+		return rs.handleModelProvenanceObservationSync(ctx, pubsubMsg)
+	}
 
 	handler(ctx, pubsubMsg)
 	return "", nil
@@ -1143,6 +1158,13 @@ func (rs *OperatorPubSubService) handleProviderBoundaryObservationSync(ctx conte
 		return "", fmt.Errorf("provider boundary observer handler not configured: %w", constants.ErrMissingRequiredField)
 	}
 	return rs.providerBoundaryObserver.HandleCommand(ctx, msg.ID, msg.Payload)
+}
+
+func (rs *OperatorPubSubService) handleModelProvenanceObservationSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	if rs.modelProvenanceOperator == nil {
+		return "", fmt.Errorf("model provenance operator handler not configured: %w", constants.ErrMissingRequiredField)
+	}
+	return rs.modelProvenanceOperator.HandleCommand(ctx, msg.ID, msg.Payload)
 }
 
 func (rs *OperatorPubSubService) handleInferenceRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {

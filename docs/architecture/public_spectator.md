@@ -316,4 +316,5 @@ This document is accepted when:
 - [Public Spectator Operations Guide](../guides/public_spectator.md): Private ingest, anonymous public listener, tunnel, restart, and publication procedure.
 - [Network Architecture](./network.md): PKI, mTLS, and transport surfaces.
 - [Gateway Architecture](./gateway.md): Gateway services, protocol surfaces, and trust boundaries.
-- [Evaluations](./evals.md): Go-native execution-boundary commands, model campaign evidence, verification, and the connected evaluation explorer projection.
+- [Evaluations](./evals.md): Go-native execution-boundary commands, model campaign evidence, Observer and Provenance Operator witness roles, verification, and the connected evaluation explorer projection.
+- [Model Provenance](./model-provenance.md): Storage-side weight attestation and chain-of-custody for scored inference.

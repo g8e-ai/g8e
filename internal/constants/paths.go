@@ -403,6 +403,8 @@ const (
 	InferenceAttemptsDirname                = "attempts"
 	InferenceProviderObserverDirname        = "provider-observer"
 	InferenceProviderObserverWindowsDirname = "windows"
+	InferenceModelProvenanceDirname         = "model-provenance"
+	InferenceModelProvenanceWindowsDirname = "windows"
 	ModelsDirname                           = "models"
 	InferenceStateFilename                  = "inference-state.json"
 	InferenceModelfilesDirname              = "modelfiles"

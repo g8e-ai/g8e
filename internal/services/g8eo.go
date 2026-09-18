@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
@@ -365,6 +366,31 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 			"observer_id", vs.config.ProviderBoundaryObserver.ObserverID)
 	}
 
+	var modelProvenanceOperator *model_provenance.Handler
+	if vs.config.ProvenanceOperator.Enabled {
+		attestor, err := model_provenance.NewOllamaStorageAttestor(
+			vs.config.ProvenanceOperator.ModelStorageRoot,
+			vs.config.ProvenanceOperator.OperatorID,
+		)
+		if err != nil {
+			return fmt.Errorf("g8eo: model provenance attestor: %w", err)
+		}
+		tracker, err := model_provenance.NewTracker(model_provenance.TrackerConfig{
+			OperatorID: vs.config.ProvenanceOperator.OperatorID,
+			Attestor:   attestor,
+		})
+		if err != nil {
+			return fmt.Errorf("g8eo: model provenance tracker: %w", err)
+		}
+		modelProvenanceOperator, err = model_provenance.NewHandler(tracker, vs.pubSubResults, vs.logger)
+		if err != nil {
+			return fmt.Errorf("g8eo: model provenance handler: %w", err)
+		}
+		vs.logger.Info("Model provenance operator enabled",
+			"operator_id", vs.config.ProvenanceOperator.OperatorID,
+			"model_storage_root", vs.config.ProvenanceOperator.ModelStorageRoot)
+	}
+
 	// OperatorPubSubService Construction
 	psConfig := pubsub.CommandServiceConfig{
 		Config:                   vs.config,
@@ -381,6 +407,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		Inference:                inferenceHandler,
 		InferenceAttemptStore:    inferenceAttemptStore,
 		ProviderBoundaryObserver: providerBoundaryObserver,
+		ModelProvenanceOperator:  modelProvenanceOperator,
 		ActuatorSigningKey:       actuatorPriv,
 		ActuatorKeyID:            actuatorKeyID,
 		AuditorSigningKey:        auditorPriv,

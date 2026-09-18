@@ -29,6 +29,7 @@ var eventToAction = map[EventType]ActionType{
 	Event.Operator.PortCheck.Requested:                   ActionTypePortCheck,
 	Event.Operator.Inference.Requested:                   ActionTypeInference,
 	Event.Operator.ProviderBoundaryObservation.Requested: ActionTypeProviderBoundaryObservation,
+	Event.Operator.ModelProvenanceObservation.Requested:  ActionTypeModelProvenanceObservation,
 	EventAppAgentActivityRecorded:                        ActionTypeDocumentUpdate,
 	EventAppCaseCreated:                                  ActionTypeDocumentUpdate,
 	EventAppCaseUpdated:                                  ActionTypeDocumentUpdate,
@@ -127,6 +128,7 @@ var eventToResultAction = map[EventType]ActionType{
 	Event.Operator.Inference.ProgressUpdated: "INFERENCE_PROGRESS",
 
 	Event.Operator.ProviderBoundaryObservation.Completed: actionResult(ActionTypeProviderBoundaryObservation),
+	Event.Operator.ModelProvenanceObservation.Completed:  actionResult(ActionTypeModelProvenanceObservation),
 }
 
 // MapEventTypeToResultActionType maps protobuf event types to GovernanceEnvelope result action types.

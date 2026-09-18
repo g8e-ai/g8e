@@ -87,6 +87,10 @@ func (m *mockResultsPublisher) PublishProviderBoundaryObservationCompleted(ctx c
 	return nil
 }
 
+func (m *mockResultsPublisher) PublishModelProvenanceObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ModelProvenanceObservationCompleted) error {
+	return nil
+}
+
 func (m *mockResultsPublisher) PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg *PubSubCommandMessage) error {
 	return nil
 }

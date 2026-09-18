@@ -116,16 +116,25 @@ type ProviderObservationNotifier interface {
 	NotifyAttemptFinalize(ctx context.Context, requestorUserID, providerAttemptID, inferenceTransactionID string, startedAtUnixMs, completedAtUnixMs int64, failed bool, retryCount uint32) error
 }
 
+// ProvenanceObservationNotifier coordinates storage-side model provenance
+// attestation for scored inference attempts. Implementations must fail closed
+// when provenance commands cannot be delivered in campaign mode.
+type ProvenanceObservationNotifier interface {
+	NotifyAttemptBegin(ctx context.Context, requestorUserID, providerAttemptID, servedModelTag, expectedModelDigest, modelRegistryDigest, campaignID string, startedAtUnixMs int64, retryCount uint32) error
+	NotifyAttemptFinalize(ctx context.Context, requestorUserID, providerAttemptID, inferenceTransactionID, servedModelTag, expectedModelDigest, modelRegistryDigest, campaignID string, startedAtUnixMs, completedAtUnixMs int64, failed bool, retryCount uint32) error
+}
+
 // DispatchService is the platform-internal inference dispatch service on
 // the User Gateway. It is not a NativeTool and is not registered in the MCP
 // ToolRegistry. The ensemble chat pipeline calls DispatchInference to route
 // a governed inference request to the Inference Node through the full
 // L1–L5 gauntlet.
 type DispatchService struct {
-	dispatcher          CommandDispatcher
-	operatorList        OperatorLister
-	observationNotifier ProviderObservationNotifier
-	logger              *slog.Logger
+	dispatcher           CommandDispatcher
+	operatorList         OperatorLister
+	observationNotifier  ProviderObservationNotifier
+	provenanceNotifier   ProvenanceObservationNotifier
+	logger               *slog.Logger
 }
 
 // NewDispatchService constructs a DispatchService wired to the gateway's
@@ -145,6 +154,15 @@ func (s *DispatchService) SetProviderObservationNotifier(notifier ProviderObserv
 		return
 	}
 	s.observationNotifier = notifier
+}
+
+// SetProvenanceObservationNotifier wires the optional storage-side model
+// provenance coordinator for scored inference attempts.
+func (s *DispatchService) SetProvenanceObservationNotifier(notifier ProvenanceObservationNotifier) {
+	if s == nil {
+		return
+	}
+	s.provenanceNotifier = notifier
 }
 
 // DispatchInferenceRequest is the input to DispatchInference. Role and ordered messages are required; optional fields override the Inference Node's config defaults when non-zero/non-empty.
@@ -314,6 +332,11 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 			return nil, fmt.Errorf("inference dispatch: %w", err)
 		}
 	}
+	if s.provenanceNotifier != nil && req.Model != "" && req.ModelDigest != "" {
+		if err := s.provenanceNotifier.NotifyAttemptBegin(ctx, req.RequestorUserID, req.ProviderAttemptID, req.Model, req.ModelDigest, req.ModelRegistryDigest, req.CampaignID, attemptStartedAt, req.RetryCount); err != nil {
+			return nil, fmt.Errorf("inference dispatch: %w", err)
+		}
+	}
 
 	// Dispatch through the gateway's CommandDispatcher. The dispatcher
 	// constructs the GovernanceEnvelope with the gateway's state root and
@@ -339,6 +362,9 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	if err != nil {
 		if s.observationNotifier != nil {
 			_ = s.notifyObservationFinalize(ctx, req, "", attemptStartedAt, time.Now().UTC().UnixMilli(), true)
+		}
+		if s.provenanceNotifier != nil {
+			_ = s.notifyProvenanceFinalize(ctx, req, "", attemptStartedAt, time.Now().UTC().UnixMilli(), true)
 		}
 		if errors.Is(err, constants.ErrDispatchResultTimeout) {
 			// The dispatch deadline expired while the provider call may
@@ -367,12 +393,20 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 		if s.observationNotifier != nil {
 			_ = s.notifyObservationFinalize(ctx, req, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), true)
 		}
+		if s.provenanceNotifier != nil {
+			_ = s.notifyProvenanceFinalize(ctx, req, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), true)
+		}
 		return nil, fmt.Errorf("inference dispatch: %w", err)
 	}
 
 	failed := result.Receipt != nil && result.Receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 	if s.observationNotifier != nil {
 		if err := s.notifyObservationFinalize(ctx, req, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), failed); err != nil {
+			return nil, err
+		}
+	}
+	if s.provenanceNotifier != nil {
+		if err := s.notifyProvenanceFinalize(ctx, req, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), failed); err != nil {
 			return nil, err
 		}
 	}
@@ -418,6 +452,43 @@ func (s *DispatchService) notifyObservationFinalize(
 		return fmt.Errorf("inference dispatch: %w", err)
 	}
 	s.logger.Warn("inference dispatch: provider-boundary observation finalize undelivered",
+		"provider_attempt_id", req.ProviderAttemptID,
+		"error", err)
+	return nil
+}
+
+func (s *DispatchService) notifyProvenanceFinalize(
+	ctx context.Context,
+	req DispatchInferenceRequest,
+	inferenceTransactionID string,
+	startedAtUnixMs int64,
+	completedAtUnixMs int64,
+	failed bool,
+) error {
+	if s == nil || s.provenanceNotifier == nil || req.Model == "" || req.ModelDigest == "" {
+		return nil
+	}
+	err := s.provenanceNotifier.NotifyAttemptFinalize(
+		ctx,
+		req.RequestorUserID,
+		req.ProviderAttemptID,
+		inferenceTransactionID,
+		req.Model,
+		req.ModelDigest,
+		req.ModelRegistryDigest,
+		req.CampaignID,
+		startedAtUnixMs,
+		completedAtUnixMs,
+		failed,
+		req.RetryCount,
+	)
+	if err == nil {
+		return nil
+	}
+	if req.CampaignID != "" || req.ModelRegistryDigest != "" || len(req.ModelRegistry) != 0 {
+		return fmt.Errorf("inference dispatch: %w", err)
+	}
+	s.logger.Warn("inference dispatch: model provenance observation finalize undelivered",
 		"provider_attempt_id", req.ProviderAttemptID,
 		"error", err)
 	return nil

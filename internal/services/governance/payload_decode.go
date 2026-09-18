@@ -76,6 +76,8 @@ func DecodePayloadForAction(actionType constants.ActionType, payload []byte) (pr
 		msg = &operatorv1.InferenceRequested{}
 	case constants.ActionTypeProviderBoundaryObservation:
 		msg = &evalv1.ProviderBoundaryObservationCommand{}
+	case constants.ActionTypeModelProvenanceObservation:
+		msg = &evalv1.ModelProvenanceObservationCommand{}
 	case constants.ActionTypePlatformEnrollmentCreate,
 		constants.ActionTypePlatformEnrollmentDecide,
 		constants.ActionTypePlatformEnrollmentIssue,

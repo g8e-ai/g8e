@@ -126,7 +126,7 @@ This catalog covers every first-party documentation surface in the repository. I
 
 - [About](../core/about.md) and [Position Paper](../core/position_paper.md): Product scope, system model, and design rationale.
 - [Architecture Overview](../architecture/overview.md): Platform components, trust boundaries, and end-to-end flow.
-- [Gateway](../architecture/gateway.md), [Operator](../architecture/operator.md), [Evaluations](../architecture/evals.md), [Ensemble](../architecture/ensemble.md), and [Dashboard](../architecture/dashboard.md): Component-level runtime architecture.
+- [Gateway](../architecture/gateway.md), [Operator](../architecture/operator.md), [Evaluations](../architecture/evals.md), [Model Provenance](../architecture/model-provenance.md), [Ensemble](../architecture/ensemble.md), and [Dashboard](../architecture/dashboard.md): Component-level runtime architecture.
 - [Governance](../architecture/governance.md), [Consensus](../architecture/consensus.md), and [AI Agents and the Governance Boundary](../architecture/agents.md): Postures, five-layer enforcement, L2, ingress paths, and client-side limits.
 - [Authentication and Authorization](../architecture/auth.md), [Encryption](../architecture/encryption.md), and [Network](../architecture/network.md): Identity, PKI, cryptography, transport, and topology.
 - [Protocol](../architecture/protocol.md), [Storage](../architecture/storage.md), and [SSE](../architecture/sse.md): Wire contracts, persistence ownership, and event transport.

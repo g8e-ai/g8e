@@ -493,6 +493,82 @@ message ProviderBoundaryObservationCompleted {
   ProviderBoundaryObservationWindow window = 1;
 }
 
+// ModelWeightAttestation is one content-addressed model weight blob attested
+// by the storage-side Provenance Operator at the model file site.
+message ModelWeightAttestation {
+  string blob_digest = 1;
+  uint64 size_bytes = 2;
+  string media_type = 3;
+}
+
+// ModelManifestVerificationStatus reports signed-manifest verification outcome.
+enum ModelManifestVerificationStatus {
+  MODEL_MANIFEST_VERIFICATION_STATUS_UNSPECIFIED = 0;
+  MODEL_MANIFEST_VERIFICATION_STATUS_UNSIGNED = 1;
+  MODEL_MANIFEST_VERIFICATION_STATUS_VERIFIED = 2;
+  MODEL_MANIFEST_VERIFICATION_STATUS_FAILED = 3;
+  MODEL_MANIFEST_VERIFICATION_STATUS_UNAVAILABLE = 4;
+}
+
+// ModelProvenanceAttestationWindow binds cryptographic model-weight evidence
+// to one governed inference provider attempt.
+message ModelProvenanceAttestationWindow {
+  string schema_version = 1;
+  string provider_attempt_id = 2;
+  string provenance_operator_id = 3;
+  string served_model_tag = 4;
+  string expected_model_digest = 5;
+  string observed_model_digest = 6;
+  string manifest_digest = 7;
+  ModelManifestVerificationStatus manifest_verification_status = 8;
+  repeated ModelWeightAttestation weight_attestations = 9;
+  int64 attempt_started_at_unix_ms = 10;
+  int64 attempt_completed_at_unix_ms = 11;
+  int64 attested_at_unix_ms = 12;
+  bool digest_match = 13;
+  string attestation_digest = 14;
+}
+
+// ModelProvenanceObservationPhase identifies one lifecycle transition for a
+// governed provider attempt on the remote Provenance Operator.
+enum ModelProvenanceObservationPhase {
+  MODEL_PROVENANCE_OBSERVATION_PHASE_UNSPECIFIED = 0;
+  MODEL_PROVENANCE_OBSERVATION_PHASE_BEGIN = 1;
+  MODEL_PROVENANCE_OBSERVATION_PHASE_FINALIZE = 2;
+}
+
+// ModelProvenanceObservationAttemptStatus mirrors the terminal provider-attempt
+// disposition carried in FINALIZE commands without importing operator.proto.
+enum ModelProvenanceObservationAttemptStatus {
+  MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_UNSPECIFIED = 0;
+  MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_IN_PROGRESS = 1;
+  MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_COMPLETED = 2;
+  MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_FAILED = 3;
+}
+
+// ModelProvenanceObservationCommand is the pubsub cmd-channel payload the
+// campaign Gateway sends to the remote Provenance Operator at the model
+// storage site.
+message ModelProvenanceObservationCommand {
+  string provider_attempt_id = 1;
+  string inference_transaction_id = 2;
+  ModelProvenanceObservationPhase phase = 3;
+  int64 attempt_started_at_unix_ms = 4;
+  int64 attempt_completed_at_unix_ms = 5;
+  ModelProvenanceObservationAttemptStatus attempt_status = 6;
+  uint32 retry_count = 7;
+  string served_model_tag = 8;
+  string expected_model_digest = 9;
+  string model_registry_digest = 10;
+  string campaign_id = 11;
+}
+
+// ModelProvenanceObservationCompleted is the pubsub results-channel payload
+// published by the remote Provenance Operator after FINALIZE attestation.
+message ModelProvenanceObservationCompleted {
+  ModelProvenanceAttestationWindow window = 1;
+}
+
 // ModelInferenceRecord captures one governed scored inference call.
 message ModelInferenceRecord {
   string inference_record_id = 1;

@@ -581,7 +581,8 @@ The root `README.md` is hand-maintained. It states the current native evaluation
 
 ## Related documentation
 
-- [Evaluations](../architecture/evals.md) — Go-native execution-boundary commands, model campaign evidence, verification, and the connected evaluation explorer projection.
+- [Evaluations](../architecture/evals.md) — Go-native execution-boundary commands, model campaign evidence, Observer and Provenance Operator witness roles, verification, and the connected evaluation explorer projection.
+- [Model Provenance](../architecture/model-provenance.md) — Storage-side weight attestation and chain-of-custody for scored inference.
 - [Headless End-to-End UX Smoke Test](ux_smoke_test.md) — authoritative unified-stack enrollment, scenario, report, and troubleshooting sequence.
 - [Unified Docker Stack](unified_stack.md) — component topology, identity, storage, and lifecycle.
 - [Demo Environments](../../demos/README.md) — per-demo architecture, commands, scenarios, and real-versus-display boundaries.

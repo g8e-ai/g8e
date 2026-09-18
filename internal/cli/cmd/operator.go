@@ -118,6 +118,10 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 						}
 						entry["provider_boundary_observer_enabled"] = op.RuntimeConfig.ProviderBoundaryObserverEnabled
 						entry["provider_boundary_observer_ollama_enabled"] = op.RuntimeConfig.ProviderBoundaryObserverOllamaEnabled
+						entry["provenance_operator_enabled"] = op.RuntimeConfig.ProvenanceOperatorEnabled
+						if op.RuntimeConfig.ProvenanceOperatorModelStorageRoot != "" {
+							entry["provenance_operator_model_storage_root"] = op.RuntimeConfig.ProvenanceOperatorModelStorageRoot
+						}
 					}
 					entries = append(entries, entry)
 				}
@@ -166,6 +170,9 @@ func operatorStartCmd() *cobra.Command {
 	var providerBoundaryObserverEnabled bool
 	var providerBoundaryObserverID string
 	var providerBoundaryObserverOllamaEnabled bool
+	var provenanceOperatorEnabled bool
+	var provenanceOperatorID string
+	var provenanceOperatorModelStorageRoot string
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -197,6 +204,10 @@ func operatorStartCmd() *cobra.Command {
 				ProviderBoundaryObserverEnabled:       providerBoundaryObserverEnabled,
 				ProviderBoundaryObserverID:            providerBoundaryObserverID,
 				ProviderBoundaryObserverOllamaEnabled: providerBoundaryObserverOllamaEnabled,
+
+				ProvenanceOperatorEnabled:          provenanceOperatorEnabled,
+				ProvenanceOperatorID:               provenanceOperatorID,
+				ProvenanceOperatorModelStorageRoot: provenanceOperatorModelStorageRoot,
 			}
 
 			// Run operator (this blocks until shutdown)
@@ -235,6 +246,9 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&providerBoundaryObserverEnabled, "provider-boundary-observer-enabled", false, "Enable read-only provider-boundary hardware observation on the approved provider host")
 	cmd.Flags().StringVar(&providerBoundaryObserverID, "provider-boundary-observer-id", "", "Stable observer identity pseudonym")
 	cmd.Flags().BoolVar(&providerBoundaryObserverOllamaEnabled, "ollama", false, "Allow remote Ollama service lifecycle commands (stop/start/status) on this provider-boundary observer host")
+	cmd.Flags().BoolVar(&provenanceOperatorEnabled, "provenance-operator-enabled", false, "Enable storage-side model provenance attestation at the model file site")
+	cmd.Flags().StringVar(&provenanceOperatorID, "provenance-operator-id", "", "Stable provenance operator identity pseudonym")
+	cmd.Flags().StringVar(&provenanceOperatorModelStorageRoot, "model-storage-root", "", "Root directory containing content-addressed model weight blobs (for example ~/.ollama/models)")
 
 	return cmd
 }

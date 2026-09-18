@@ -48,6 +48,15 @@ type RuntimeConfig struct {
 	// service lifecycle commands (stop/start/status) on the provider host.
 	ProviderBoundaryObserverOllamaEnabled bool `json:"provider_boundary_observer_ollama_enabled,omitempty"`
 
+	// ProvenanceOperatorEnabled is true when the Operator started with
+	// --provenance-operator-enabled, marking it as the storage-side model
+	// provenance attestor at the model file site.
+	ProvenanceOperatorEnabled bool `json:"provenance_operator_enabled"`
+
+	// ProvenanceOperatorModelStorageRoot is the root directory containing
+	// content-addressed model weight blobs (for example the Ollama models dir).
+	ProvenanceOperatorModelStorageRoot string `json:"provenance_operator_model_storage_root,omitempty"`
+
 	// Platform is the operator host GOOS recorded at startup (for example
 	// "linux" or "windows") so remote callers can choose host-appropriate
 	// settle commands.

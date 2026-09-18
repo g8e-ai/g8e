@@ -21,12 +21,13 @@ g8ee is an agentic ensemble that acts as an L2 producer, emitting typed, signed 
 | [Server-Sent Events (SSE)](sse.md) | SSE streaming pipeline and real-time event delivery |
 | [Development](devs.md) | Dev setup, guidelines, and coding standards |
 | [Testing](tests.md) | Testing framework and practices |
-| [Evals](evals.md) | How g8ee uses g8e evals (see [platform Evaluations](../architecture/evals.md)) |
+| [Evals](evals.md) | How g8ee uses g8e evals (see [platform Evaluations](../architecture/evals.md) and [Model Provenance](../architecture/model-provenance.md)) |
 
 ## Related Platform Documentation
 
 - [Platform Overview](../architecture/overview.md) — Three-component g8e platform architecture and service topology
-- [Evaluations](../architecture/evals.md) — Platform evaluation programs, evidence, and verification
+- [Evaluations](../architecture/evals.md) — Platform evaluation programs, Observer and Provenance Operator roles, evidence, and verification
+- [Model Provenance](../architecture/model-provenance.md) — Storage-side weight attestation and chain of custody
 - [Ensemble Architecture](../architecture/ensemble.md) — Platform-level summary of g8ee's role in the g8e platform
 - [Governance Gateway](../architecture/gateway.md) — Gateway architecture, protocol surfaces, and PKI authority
 - [Governed Operator](../architecture/operator.md) — Operator architecture, L4 Warden, and L5 Actuator execution boundary

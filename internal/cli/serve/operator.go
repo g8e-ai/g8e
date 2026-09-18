@@ -70,6 +70,10 @@ type ServeOperatorOptions struct {
 	ProviderBoundaryObserverEnabled bool
 	ProviderBoundaryObserverID      string
 	ProviderBoundaryObserverOllamaEnabled bool
+
+	ProvenanceOperatorEnabled          bool
+	ProvenanceOperatorID               string
+	ProvenanceOperatorModelStorageRoot string
 }
 
 // resolveOperatorEndpoint returns the trimmed endpoint if non-empty, otherwise the default endpoint.
@@ -264,6 +268,10 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 		ProviderBoundaryObserverEnabled:       opts.ProviderBoundaryObserverEnabled,
 		ProviderBoundaryObserverID:            opts.ProviderBoundaryObserverID,
 		ProviderBoundaryObserverOllamaEnabled: opts.ProviderBoundaryObserverOllamaEnabled,
+
+		ProvenanceOperatorEnabled:          opts.ProvenanceOperatorEnabled,
+		ProvenanceOperatorID:               opts.ProvenanceOperatorID,
+		ProvenanceOperatorModelStorageRoot: opts.ProvenanceOperatorModelStorageRoot,
 	}
 }
 

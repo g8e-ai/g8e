@@ -52,7 +52,7 @@ func ActiveCampaignDataOperators(operators []models.OperatorDocumentGo) []DataOp
 		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
 			continue
 		}
-		if op.RuntimeConfig != nil && (op.RuntimeConfig.InferenceEnabled || op.RuntimeConfig.ProviderBoundaryObserverEnabled) {
+		if op.RuntimeConfig != nil && (op.RuntimeConfig.InferenceEnabled || op.RuntimeConfig.ProviderBoundaryObserverEnabled || op.RuntimeConfig.ProvenanceOperatorEnabled) {
 			continue
 		}
 		if op.OperatorSessionID == "" {

@@ -3,7 +3,7 @@
 Last Updated: 2026-09-18  
 Version: v2.1.8
 
-This guide explains how to run the g8e platform from the repository root as one Docker Compose stack: Gateway, Data Operator, Inference Operator, ensemble (g8ee), and dashboard (g8ed). It also documents the evaluation campaign topology used for governed model scoring, the remote Ollama provider boundary, and the provider-boundary Observer Operator that enrolls from the Windows Ollama host.
+This guide explains how to run the g8e platform from the repository root as one Docker Compose stack: Gateway, Data Operator, Inference Operator, ensemble (g8ee), and dashboard (g8ed). It also documents the evaluation campaign topology used for governed model scoring, the remote Ollama provider boundary, the provider-boundary **Observer Operator** (GPU/RAM witness), and the storage-side **Provenance Operator** (model weight attestation) that enroll from the provider host.
 
 Run all commands from the repository root unless noted otherwise.
 
@@ -42,7 +42,7 @@ The Gateway and Operator containers use the same Go image. The evaluation accept
 
 ### Evaluation campaign topology
 
-Scored assignments use one campaign Gateway with two distinct remote Operator sessions:
+Scored assignments use one campaign Gateway with two remote Operator sessions on the campaign host plus one or two witness sessions on the provider host:
 
 ```text
 Campaign host (Linux + Docker)
@@ -53,13 +53,21 @@ Campaign host (Linux + Docker)
 
 Provider host (Windows + Ollama)
   Ollama ............................. approved provider (192.168.1.2:11434)
+  ~/.ollama/models ................... content-addressed weight blobs
   g8e operator (Observer) ............ provider-boundary hardware observer
-                                       (--provider-boundary-observer-enabled)
+                                       (--provider-boundary-observer-enabled;
+                                        optional --ollama for remote service restart)
+  g8e operator (Provenance) .......... storage-side model weight attestor
+                                       (--provenance-operator-enabled;
+                                        --model-storage-root ~/.ollama/models)
 ```
 
 - Scored inference never calls Ollama directly from the campaign host CLI or ensemble.
 - The Inference Operator is the only scored path to the provider.
-- The Observer Operator has **no** inference backend and **no** access to Inference Operator attempt files. It samples GPU/RAM locally and receives BEGIN/FINALIZE commands over Gateway pub/sub.
+- The Observer Operator has **no** inference backend and **no** access to Inference Operator attempt files. It samples GPU/RAM locally and receives `ProviderBoundaryObservationCommand` BEGIN/FINALIZE over Gateway pub/sub.
+- The Provenance Operator has **no** inference backend and **no** GPU sampling. It hashes Ollama manifests and weight blobs at `--model-storage-root` and receives `ModelProvenanceObservationCommand` BEGIN/FINALIZE in parallel with the Observer.
+- Observer and Provenance may run on the **same physical host** but must enroll as **separate** governed operator sessions (separate terminals, separate `operator start` processes).
+- When the provider host owner starts the Observer with **`--ollama`**, the campaign pipeline may dispatch governed `ollama stop` / settle / `ollama start` / `ollama status` commands to that session between assignments. Without `--ollama`, those service commands are rejected by both the gateway and the operator.
 
 ## Campaign and run naming
 
@@ -266,10 +274,13 @@ In a dedicated working directory on the Windows provider host:
 .\g8e.exe operator start `
   --endpoint g8e.local `
   --provider-boundary-observer-enabled `
-  --provider-boundary-observer-id g8e-provider-boundary-observer
+  --provider-boundary-observer-id g8e-provider-boundary-observer `
+  --ollama
 ```
 
 The process submits a platform enrollment request. **Do not** pass `--inference-enabled`; this Operator is read-only hardware observation only.
+
+**`--ollama` (optional, provider-host owner decision):** opts this Observer session into remote Ollama **service** lifecycle commands (`ollama stop`, `ollama start`, `ollama status`) on the machine where the operator runs. The flag is recorded in `runtime_config.provider_boundary_observer_ollama_enabled` at bootstrap. The gateway and operator both reject those commands when the session was **not** started with `--ollama`. Omit `--ollama` when you do not want the campaign host to restart Ollama remotely.
 
 From the campaign host owner CLI:
 
@@ -278,7 +289,7 @@ From the campaign host owner CLI:
 ./g8e auth enroll approve <observer-request-id> --yes
 ```
 
-After approval, confirm the observer appears in `./g8e operator list` with `provider_boundary_observer_enabled` in its runtime config.
+After approval, confirm the observer appears in `./g8e operator list` with `provider_boundary_observer_enabled` in its runtime config. When started with `--ollama`, also confirm `provider_boundary_observer_ollama_enabled: true`.
 
 ### What the Observer does
 
@@ -287,11 +298,57 @@ After approval, confirm the observer appears in `./g8e operator list` with `prov
 3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
 4. Gateway ingests windows for `g8e eval campaign verify --require-provider-observation`.
 
+When enrolled with `--ollama`, `g8e eval campaign execute` also dispatches a governed restart sequence to the Observer **before each assignment**: `ollama stop`, a short settle delay (`sleep 5` on Linux, `ping` on Windows), `ollama start`, and `ollama status` to confirm the service is up. This is separate from `--wait-for-provider-idle`, which still polls the remote HTTP `/api/ps` endpoint from the campaign host.
+
 The legacy filesystem runner `g8e eval provider-observer run` is for co-located dev tests only. Production uses the enrolled Observer Operator.
 
 **Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. That is expected. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
 
 For example Observer Operator console output and a healthy-output checklist, see [Evaluations — Provider-boundary Observer Operator](../architecture/evals.md#provider-boundary-observer-operator).
+
+## Storage-side Provenance Operator
+
+Deploy this **at the model storage site** — the directory that holds Ollama manifests and blobs. On a typical Ollama host this is the same machine as the Observer; use a **second** enrolled operator session.
+
+### Prerequisites
+
+- Same network and enrollment prerequisites as the Observer Operator (outbound TCP to Gateway **8080**/**8443**, `g8e.local` hosts mapping).
+- Read access to the Ollama models directory (for example `C:\Users\<you>\.ollama\models` on Windows or `~/.ollama/models` on Linux).
+- The frozen campaign model digest is carried on each governed dispatch; the Provenance Operator compares its locally computed manifest digest to that expected value.
+
+### Start and enroll the Provenance Operator
+
+In a **second** dedicated working directory on the provider host (separate from the Observer session):
+
+```powershell
+.\g8e.exe operator start `
+  --endpoint g8e.local `
+  --provenance-operator-enabled `
+  --provenance-operator-id g8e-model-provenance-operator `
+  --model-storage-root "$env:USERPROFILE\.ollama\models"
+```
+
+**Do not** pass `--inference-enabled` or `--provider-boundary-observer-enabled` on this session unless you intend a separate combined deployment; production uses distinct sessions per witness role.
+
+From the campaign host owner CLI:
+
+```bash
+./g8e auth enroll pending
+./g8e auth enroll approve <provenance-request-id> --yes
+```
+
+After approval, confirm the provenance operator appears in `./g8e operator list` with `provenance_operator_enabled: true` and the correct `provenance_operator_model_storage_root`.
+
+### What the Provenance Operator does
+
+1. Gateway sends `ModelProvenanceObservationCommand` (BEGIN/FINALIZE) when scored inference starts and ends, carrying `served_model_tag` and `expected_model_digest` from the frozen campaign registry.
+2. On FINALIZE, the operator hashes Ollama manifest and blob files under `--model-storage-root` and fails closed when the observed digest does not match the expected campaign digest.
+3. The operator publishes `ModelProvenanceObservationCompleted` on its results channel.
+4. Gateway ingests attestation windows under `data/inference/model-provenance/windows/`.
+
+**Timing rule:** Assignments that completed before the Provenance Operator was enrolled lack attestation windows. Enroll before `execute` when chain-of-custody claims are required.
+
+For architecture detail and example console output, see [Evaluations — Storage-side Provenance Operator](../architecture/evals.md#storage-side-provenance-operator) and [Model Provenance](../architecture/model-provenance.md).
 
 ## Mini smoke campaign workflow
 
@@ -313,7 +370,7 @@ Explorer (acceptance UI): open `http://127.0.0.1:5173/#/` after the gateway is u
 ```bash
 RUN_ID=smoke-mini-$(date +%s)
 INFERENCE_SESSION=$(./g8e eval inference status --json | jq -r .operator_session_id)
-DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true) | .operator_session_id' | head -1)
+DATA_SESSION=$(./g8e operator list --json | jq -r '.operators[] | select(.operator_type=="remote" and .inference_enabled!=true and .provider_boundary_observer_enabled!=true and .provenance_operator_enabled!=true) | .operator_session_id' | head -1)
 
 ./g8e eval campaign init \
   --campaign-id eval-smoke-mini \
@@ -338,7 +395,8 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 \
 ```
 
 - `--daemon` runs the full matrix in one process.
-- `--provider-settle 8s` waits after each assignment for Ollama to go idle.
+- `--provider-settle 8s` waits after each assignment for Ollama to go idle over HTTP (`/api/ps`).
+- When the enrolled Observer Operator has `provider_boundary_observer_ollama_enabled`, execute also restarts the Ollama **service** on the provider host before each assignment (see [Provider-boundary Observer Operator](#provider-boundary-observer-operator-windows-ollama-host)).
 - **Never** run `g8e eval campaign publish` concurrently with `execute --publish`.
 
 ### Phase D — Monitor
@@ -435,6 +493,19 @@ docker compose --profile evaluation up -d --force-recreate g8e-inference-operato
 - Confirm Gateway can reach the Observer session (`./g8e operator list`).
 - Confirm Windows host can reach Gateway ports 8080/8443 and `g8e.local` resolves to the campaign host.
 
+### Provenance operator not attesting or digest mismatch
+
+- Confirm a **separate** session enrolled with `--provenance-operator-enabled` and `--model-storage-root` pointing at the live Ollama models directory.
+- Confirm `./g8e operator list --json` shows `provenance_operator_enabled: true` and the expected storage root.
+- Confirm the served model tag and digest in campaign inventory match what Ollama reports (`ollama show <tag> --verbose` or `/api/tags` on the provider).
+- Digest mismatch on FINALIZE is intentional fail-closed behavior when weights changed after campaign freeze.
+
+### Ollama service restart rejected during campaign execute
+
+- Confirm the Observer was started with `--ollama` and `./g8e operator list --json` shows `provider_boundary_observer_ollama_enabled: true`.
+- Restart the Observer process with `--ollama` and re-enroll if runtime config is stale.
+- Without `--ollama`, the gateway and operator reject remote `ollama stop` / `ollama start` / `ollama status` commands by design.
+
 ### Public feed drift or out-of-order batches
 
 - Stop execute and any concurrent `campaign publish`.
@@ -475,7 +546,8 @@ docker compose --profile bootstrapped --profile evaluation down -v   # destroys 
 
 ## Related documentation
 
-- [Evaluations](../architecture/evals.md) — platform evaluation programs, Observer Operator roles, evidence, and verification.
+- [Evaluations](../architecture/evals.md) — platform evaluation programs, Observer and Provenance Operator roles, evidence, and verification.
+- [Model Provenance](../architecture/model-provenance.md) — zero-trust weight attestation and chain of custody.
 - [Build Operator](./build_operator.md) — build `g8e.exe` for the Windows Observer host.
 - [Connect Operator to Gateway](./connect_operator_to_gateway.md) — enrollment protocol details.
 - [Docker Gateway Guide](./docker_gateway.md) — standalone gateway operation.

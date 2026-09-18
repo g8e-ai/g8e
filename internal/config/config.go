@@ -109,6 +109,14 @@ type LoadOptions struct {
 	// ProviderBoundaryObserverOllamaEnabled opts the observer into remote
 	// Ollama service lifecycle commands on the provider host.
 	ProviderBoundaryObserverOllamaEnabled bool
+
+	// ProvenanceOperatorEnabled marks the operator as the storage-side model
+	// provenance attestor at the model file site.
+	ProvenanceOperatorEnabled bool
+	ProvenanceOperatorID      string
+	// ProvenanceOperatorModelStorageRoot is the root directory containing
+	// content-addressed model weight blobs (for example ~/.ollama/models).
+	ProvenanceOperatorModelStorageRoot string
 }
 
 // GatewayConfig holds configuration for gateway mode.
@@ -233,6 +241,14 @@ type ProviderBoundaryObserverConfig struct {
 	OllamaEnabled bool
 }
 
+// ProvenanceOperatorConfig holds configuration for the storage-side model
+// provenance attestor operator.
+type ProvenanceOperatorConfig struct {
+	Enabled          bool
+	OperatorID       string
+	ModelStorageRoot string
+}
+
 // Config holds all configuration for g8eo
 type Config struct {
 	// Basic configuration
@@ -318,6 +334,10 @@ type Config struct {
 	// ProviderBoundaryObserver configuration for the remote read-only
 	// hardware observer on the approved provider host.
 	ProviderBoundaryObserver ProviderBoundaryObserverConfig
+
+	// ProvenanceOperator configuration for the storage-side model provenance
+	// attestor at the model file site.
+	ProvenanceOperator ProvenanceOperatorConfig
 }
 
 // FindProjectRoot returns the current working directory.
@@ -658,6 +678,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		// absolute path here.
 		Inference:                newInferenceConfig(opts),
 		ProviderBoundaryObserver: newProviderBoundaryObserverConfig(opts),
+		ProvenanceOperator:       newProvenanceOperatorConfig(opts),
 	}
 
 	// Default PKIDir to .g8e/pki if not explicitly set
@@ -736,6 +757,18 @@ func newProviderBoundaryObserverConfig(opts LoadOptions) ProviderBoundaryObserve
 		Enabled:       opts.ProviderBoundaryObserverEnabled,
 		ObserverID:    observerID,
 		OllamaEnabled: opts.ProviderBoundaryObserverOllamaEnabled,
+	}
+}
+
+func newProvenanceOperatorConfig(opts LoadOptions) ProvenanceOperatorConfig {
+	operatorID := opts.ProvenanceOperatorID
+	if operatorID == "" {
+		operatorID = "g8e-model-provenance-operator"
+	}
+	return ProvenanceOperatorConfig{
+		Enabled:          opts.ProvenanceOperatorEnabled,
+		OperatorID:       operatorID,
+		ModelStorageRoot: opts.ProvenanceOperatorModelStorageRoot,
 	}
 }
 

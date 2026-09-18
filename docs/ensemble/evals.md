@@ -4,7 +4,7 @@
 
 g8ee participates in g8e evaluation programs but does not own platform evidence, verification, or campaign orchestration. The Go-native evaluator, campaign controller, evidence store, and verifier live in the `g8e` binary. This page documents how g8ee uses those programs.
 
-For the platform evaluation model — execution-boundary suite, model campaign topology, Observer Operator roles, evidence layout, and verification — see [Evaluations](../architecture/evals.md).
+For the platform evaluation model — execution-boundary suite, model campaign topology, Observer and Provenance Operator roles, evidence layout, and verification — see [Evaluations](../architecture/evals.md).
 
 ## Relationship to g8e evals
 
@@ -24,11 +24,13 @@ North Star model campaigns score real models through the same `POST /api/v1/chat
 1. Bind campaign authority, model registry digest, and exact Operator sessions on each governed dispatch.
 2. Route inference through the enrolled Inference Operator to the approved remote Ollama provider.
 3. Route tool intents through the enrolled Data Operator.
-4. Trigger provider-boundary BEGIN/FINALIZE observation on the enrolled Observer Operator (provider host).
+4. Trigger provider-boundary BEGIN/FINALIZE observation on the enrolled Observer Operator (provider host) for GPU/RAM witness telemetry.
+5. Trigger model provenance BEGIN/FINALIZE attestation on the enrolled Provenance Operator (model storage site) when provenance is enabled, binding `served_model_tag` and `expected_model_digest` to each `provider_attempt_id`.
+6. When the Observer was started with `--ollama`, restart the Ollama service on the provider host before each assignment (`ollama stop`, settle, `ollama start`, `ollama status`) via governed commands to that Observer session.
 
 g8ee's `ChatPipelineService` handles triage, model selection, tool loops, Tribunal command generation, and governed relay to the bound Operators. Campaign scoring depends on this production path rather than a separate eval-only shortcut.
 
-Operational campaign workflows (Compose profiles, enrollment order, smoke runs, observer checklist) live in the [Unified Docker Stack Guide](../guides/unified_stack.md).
+Operational campaign workflows (Compose profiles, enrollment order, smoke runs, Observer and Provenance Operator checklists) live in the [Unified Docker Stack Guide](../guides/unified_stack.md).
 
 ## g8ee evaluation services
 
@@ -65,6 +67,7 @@ See [Ensemble Tests](tests.md) for the full test tier model and commands.
 ## Related documentation
 
 - [Evaluations](../architecture/evals.md) — Primary platform evaluation architecture
+- [Model Provenance](../architecture/model-provenance.md) — Storage-side weight attestation and chain of custody
 - [Ensemble Architecture](architecture.md) — g8ee system design and component overview
 - [LLM Providers](llm-providers.md) — Provider implementations and the governed `g8e` inference path
 - [Agents](agents.md) — Persona roster, Tribunal, and tool-loop behavior during scored assignments

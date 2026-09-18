@@ -39,6 +39,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
@@ -449,11 +450,18 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	)
 	ownerOperatorLister := &registrationOwnerOperatorLister{reg: reg, userSvc: userSvc}
 	providerObservationCoord := NewProviderBoundaryObservationCoordinator(dispatchSvc, ownerOperatorLister, wsHandler, nil, logger)
+	modelProvenanceCoord := NewModelProvenanceObservationCoordinator(dispatchSvc, ownerOperatorLister, wsHandler, nil, logger)
 	if windowStore, err := provider_observer.NewWindowStore(b.fileSvc); err == nil {
 		providerObservationCoord = NewProviderBoundaryObservationCoordinator(dispatchSvc, ownerOperatorLister, wsHandler, windowStore, logger)
 		inferenceDispatchSvc.SetProviderObservationNotifier(providerObservationCoord)
 	} else {
 		logger.Warn("Provider-boundary observation window store unavailable", "error", err)
+	}
+	if provenanceWindowStore, err := model_provenance.NewWindowStore(b.fileSvc); err == nil {
+		modelProvenanceCoord = NewModelProvenanceObservationCoordinator(dispatchSvc, ownerOperatorLister, wsHandler, provenanceWindowStore, logger)
+		inferenceDispatchSvc.SetProvenanceObservationNotifier(modelProvenanceCoord)
+	} else {
+		logger.Warn("Model provenance attestation window store unavailable", "error", err)
 	}
 
 	ls := &GatewayModeService{

@@ -218,6 +218,40 @@ func (rr *PubSubResultsService) PublishProviderBoundaryObservationCompleted(ctx 
 	return nil
 }
 
+// PublishModelProvenanceObservationCompleted publishes a completed model
+// provenance attestation window on the provenance operator results channel.
+func (rr *PubSubResultsService) PublishModelProvenanceObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ModelProvenanceObservationCompleted) error {
+	if originalMsgID == "" || completion == nil || completion.GetWindow() == nil {
+		return fmt.Errorf("pubsub: publish model provenance observation completion: %w", constants.ErrMissingRequiredField)
+	}
+
+	resultEnv, err := BuildUniversalResultEnvelope(
+		rr.config,
+		constants.Event.Operator.ModelProvenanceObservation.Completed,
+		completion,
+		originalMsgID,
+		rr.config.OperatorID,
+		"",
+		"",
+		nil,
+		"",
+		"",
+	)
+	if err != nil {
+		return fmt.Errorf("pubsub: build model provenance observation completion envelope: %w", err)
+	}
+
+	if err := rr.publishUniversal(ctx, resultEnv, rr.config.OperatorID, rr.config.OperatorSessionId); err != nil {
+		return fmt.Errorf("pubsub: publish model provenance observation completion: %w", err)
+	}
+
+	rr.logger.Info("Model provenance observation completion transmitted",
+		"operator_session_id", rr.config.OperatorSessionId,
+		"provider_attempt_id", completion.GetWindow().GetProviderAttemptId(),
+		"transaction_id", originalMsgID)
+	return nil
+}
+
 // PublishExecutionStatus publishes periodic status updates during command execution.
 func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg *PubSubCommandMessage) error {
 	reflectMsg := status.ProtoReflect()

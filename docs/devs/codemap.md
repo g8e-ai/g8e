@@ -143,7 +143,10 @@ Use `Resolve` only when an API requires an absolute path and `Rel` when converti
 - `internal/services/auth/`: Operator bootstrap transport and system fingerprinting.
 - `internal/services/compliance/`: KSI models and evaluation, history and unavailable intervals, OSCAL support, catalog validation, evidence import and graph verification, assertion grading, and signed report bundles.
 - `internal/services/consensus/`: Consensus members, policy-based service construction, deliberation, and Ed25519 voting.
-- `internal/services/evaluation/`: Native suite registry, governed command lane, independent target observer, deterministic grading, canonical evidence storage, verification, and compliance importing.
+- `internal/services/evaluation/`: Native suite registry, governed command lane, independent target observer, model campaign controller, provider-boundary and model-provenance verification, deterministic grading, canonical evidence storage, verification, and compliance importing.
+- `internal/services/inference/provider_observer/`: Observer Operator GPU/RAM sampling at the provider execution boundary.
+- `internal/services/inference/model_provenance/`: Provenance Operator storage-side model weight attestation.
+- `internal/services/operatorcapability/`: Operator role selection (`provider_boundary_observer`, `provenance_operator`, inference, data).
 - `internal/services/execution/`: Command execution and governed file edits.
 - `internal/services/fs/`: Scoped `.g8e/` runtime file operations.
 - `internal/services/gateway/`: Gateway orchestration, HTTP controllers, identity, PKI, enrollment, persistence stores, pub/sub, and embedded assets.

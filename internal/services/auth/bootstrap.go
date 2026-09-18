@@ -158,6 +158,8 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		InferenceOllamaEndpoint:                 bs.config.Inference.OllamaEndpoint,
 		ProviderBoundaryObserverEnabled:         bs.config.ProviderBoundaryObserver.Enabled,
 		ProviderBoundaryObserverOllamaEnabled:   bs.config.ProviderBoundaryObserver.OllamaEnabled,
+		ProvenanceOperatorEnabled:               bs.config.ProvenanceOperator.Enabled,
+		ProvenanceOperatorModelStorageRoot:      bs.config.ProvenanceOperator.ModelStorageRoot,
 		Platform:                                runtime.GOOS,
 	}
 

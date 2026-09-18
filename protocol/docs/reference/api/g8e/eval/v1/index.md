@@ -33,7 +33,11 @@
     - [ModelCampaignBinding](#g8e-eval-v1-ModelCampaignBinding)
     - [ModelCapabilityObservation](#g8e-eval-v1-ModelCapabilityObservation)
     - [ModelInferenceRecord](#g8e-eval-v1-ModelInferenceRecord)
+    - [ModelProvenanceAttestationWindow](#g8e-eval-v1-ModelProvenanceAttestationWindow)
+    - [ModelProvenanceObservationCommand](#g8e-eval-v1-ModelProvenanceObservationCommand)
+    - [ModelProvenanceObservationCompleted](#g8e-eval-v1-ModelProvenanceObservationCompleted)
     - [ModelVariant](#g8e-eval-v1-ModelVariant)
+    - [ModelWeightAttestation](#g8e-eval-v1-ModelWeightAttestation)
     - [ProviderBoundaryHardwareSample](#g8e-eval-v1-ProviderBoundaryHardwareSample)
     - [ProviderBoundaryObservationCommand](#g8e-eval-v1-ProviderBoundaryObservationCommand)
     - [ProviderBoundaryObservationCompleted](#g8e-eval-v1-ProviderBoundaryObservationCompleted)
@@ -67,6 +71,9 @@
     - [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus)
     - [ModelCampaignRole](#g8e-eval-v1-ModelCampaignRole)
     - [ModelCapabilityKind](#g8e-eval-v1-ModelCapabilityKind)
+    - [ModelManifestVerificationStatus](#g8e-eval-v1-ModelManifestVerificationStatus)
+    - [ModelProvenanceObservationAttemptStatus](#g8e-eval-v1-ModelProvenanceObservationAttemptStatus)
+    - [ModelProvenanceObservationPhase](#g8e-eval-v1-ModelProvenanceObservationPhase)
     - [ProviderBoundaryObservationAttemptStatus](#g8e-eval-v1-ProviderBoundaryObservationAttemptStatus)
     - [ProviderBoundaryObservationPhase](#g8e-eval-v1-ProviderBoundaryObservationPhase)
     - [ProviderHardwareMetricAvailability](#g8e-eval-v1-ProviderHardwareMetricAvailability)
@@ -742,6 +749,78 @@ ModelInferenceRecord captures one governed scored inference call.
 
 
 
+<a name="g8e-eval-v1-ModelProvenanceAttestationWindow"></a>
+
+### ModelProvenanceAttestationWindow
+ModelProvenanceAttestationWindow binds cryptographic model-weight evidence
+to one governed inference provider attempt.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| schema_version | [string](#string) |  |  |
+| provider_attempt_id | [string](#string) |  |  |
+| provenance_operator_id | [string](#string) |  |  |
+| served_model_tag | [string](#string) |  |  |
+| expected_model_digest | [string](#string) |  |  |
+| observed_model_digest | [string](#string) |  |  |
+| manifest_digest | [string](#string) |  |  |
+| manifest_verification_status | [ModelManifestVerificationStatus](#g8e-eval-v1-ModelManifestVerificationStatus) |  |  |
+| weight_attestations | [ModelWeightAttestation](#g8e-eval-v1-ModelWeightAttestation) | repeated |  |
+| attempt_started_at_unix_ms | [int64](#int64) |  |  |
+| attempt_completed_at_unix_ms | [int64](#int64) |  |  |
+| attested_at_unix_ms | [int64](#int64) |  |  |
+| digest_match | [bool](#bool) |  |  |
+| attestation_digest | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-ModelProvenanceObservationCommand"></a>
+
+### ModelProvenanceObservationCommand
+ModelProvenanceObservationCommand is the pubsub cmd-channel payload the
+campaign Gateway sends to the remote Provenance Operator at the model
+storage site.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| provider_attempt_id | [string](#string) |  |  |
+| inference_transaction_id | [string](#string) |  |  |
+| phase | [ModelProvenanceObservationPhase](#g8e-eval-v1-ModelProvenanceObservationPhase) |  |  |
+| attempt_started_at_unix_ms | [int64](#int64) |  |  |
+| attempt_completed_at_unix_ms | [int64](#int64) |  |  |
+| attempt_status | [ModelProvenanceObservationAttemptStatus](#g8e-eval-v1-ModelProvenanceObservationAttemptStatus) |  |  |
+| retry_count | [uint32](#uint32) |  |  |
+| served_model_tag | [string](#string) |  |  |
+| expected_model_digest | [string](#string) |  |  |
+| model_registry_digest | [string](#string) |  |  |
+| campaign_id | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-ModelProvenanceObservationCompleted"></a>
+
+### ModelProvenanceObservationCompleted
+ModelProvenanceObservationCompleted is the pubsub results-channel payload
+published by the remote Provenance Operator after FINALIZE attestation.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| window | [ModelProvenanceAttestationWindow](#g8e-eval-v1-ModelProvenanceAttestationWindow) |  |  |
+
+
+
+
+
+
 <a name="g8e-eval-v1-ModelVariant"></a>
 
 ### ModelVariant
@@ -759,6 +838,24 @@ ModelVariant is one frozen provider-backed model identity in a campaign.
 | quantization | [string](#string) |  |  |
 | context_limit | [uint32](#uint32) |  |  |
 | capability_observations | [ModelCapabilityObservation](#g8e-eval-v1-ModelCapabilityObservation) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-ModelWeightAttestation"></a>
+
+### ModelWeightAttestation
+ModelWeightAttestation is one content-addressed model weight blob attested
+by the storage-side Provenance Operator at the model file site.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| blob_digest | [string](#string) |  |  |
+| size_bytes | [uint64](#uint64) |  |  |
+| media_type | [string](#string) |  |  |
 
 
 
@@ -1355,6 +1452,50 @@ RoleAssignment binds one designated responsibility to one frozen variant.
 | MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT | 3 |  |
 | MODEL_CAPABILITY_KIND_THINKING | 4 |  |
 | MODEL_CAPABILITY_KIND_CONTEXT_LIMIT | 5 |  |
+
+
+
+<a name="g8e-eval-v1-ModelManifestVerificationStatus"></a>
+
+### ModelManifestVerificationStatus
+ModelManifestVerificationStatus reports signed-manifest verification outcome.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| MODEL_MANIFEST_VERIFICATION_STATUS_UNSPECIFIED | 0 |  |
+| MODEL_MANIFEST_VERIFICATION_STATUS_UNSIGNED | 1 |  |
+| MODEL_MANIFEST_VERIFICATION_STATUS_VERIFIED | 2 |  |
+| MODEL_MANIFEST_VERIFICATION_STATUS_FAILED | 3 |  |
+| MODEL_MANIFEST_VERIFICATION_STATUS_UNAVAILABLE | 4 |  |
+
+
+
+<a name="g8e-eval-v1-ModelProvenanceObservationAttemptStatus"></a>
+
+### ModelProvenanceObservationAttemptStatus
+ModelProvenanceObservationAttemptStatus mirrors the terminal provider-attempt
+disposition carried in FINALIZE commands without importing operator.proto.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_UNSPECIFIED | 0 |  |
+| MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_IN_PROGRESS | 1 |  |
+| MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_COMPLETED | 2 |  |
+| MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_FAILED | 3 |  |
+
+
+
+<a name="g8e-eval-v1-ModelProvenanceObservationPhase"></a>
+
+### ModelProvenanceObservationPhase
+ModelProvenanceObservationPhase identifies one lifecycle transition for a
+governed provider attempt on the remote Provenance Operator.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| MODEL_PROVENANCE_OBSERVATION_PHASE_UNSPECIFIED | 0 |  |
+| MODEL_PROVENANCE_OBSERVATION_PHASE_BEGIN | 1 |  |
+| MODEL_PROVENANCE_OBSERVATION_PHASE_FINALIZE | 2 |  |
 
 
 

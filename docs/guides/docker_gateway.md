@@ -194,12 +194,15 @@ Docker evaluation runs the Gateway in a container while the campaign controller 
 | Public feed signing keys and outbox | Gateway volume (`g8e-gateway-data`) | `POST /api/v1/public-feed/batches` (owner mTLS) when gateway is healthy |
 | Public mirror (`8081`/`8082`) and explorer (`5173`) | Gateway `PublicSpectatorRuntime` (`--public-spectator`, Compose default) | Read-only HTTP to published ports |
 | Provider-boundary observation windows | Gateway volume under `data/inference/provider-observer/windows/` | `GET /api/v1/inference/provider-observations/{provider_attempt_id}` (owner mTLS) via `g8e eval campaign verify --require-provider-observation` |
+| Model provenance attestation windows | Gateway volume under `data/inference/model-provenance/windows/` | Campaign assignment verifier (ingested from Provenance Operator results) |
 
 **Campaign publication.** When `execute --publish` or `campaign schedule --publish` runs from the host, the CLI posts signed batches through the gateway API. Publication requires a healthy gateway with `--public-spectator` enabled.
 
-**Campaign verify.** Provider observation windows ingested by the gateway are not visible on the host filesystem. Verify uses the gateway read API when local evidence is missing. Assignments that completed before the Observer Operator enrolled fail `--require-provider-observation` honestly; re-run or accept partial coverage.
+**Campaign verify.** Provider observation windows ingested by the gateway are not visible on the host filesystem. Verify uses the gateway read API when local evidence is missing. Assignments that completed before the Observer Operator enrolled fail `--require-provider-observation` honestly; re-run or accept partial coverage. Model provenance attestation windows follow the same gateway-ingest pattern when the Provenance Operator is enrolled.
 
-**Observer Operator.** Enroll on the provider host with platform enrollment (`g8e operator start --provider-boundary-observer-enabled` → `g8e auth enroll approve`). The gateway fans out BEGIN/FINALIZE over pub/sub; do not bind-mount inference state for verify.
+**Observer Operator.** Enroll on the provider host with platform enrollment (`g8e operator start --provider-boundary-observer-enabled [--ollama]` → `g8e auth enroll approve`). The gateway fans out `ProviderBoundaryObservationCommand` BEGIN/FINALIZE over pub/sub; do not bind-mount inference state for verify. Add `--ollama` only when the provider-host owner wants the campaign pipeline to restart the local Ollama service between assignments.
+
+**Provenance Operator.** Enroll as a **separate** session at the model storage site (`g8e operator start --provenance-operator-enabled --model-storage-root <ollama-models-dir>` → `g8e auth enroll approve`). The gateway fans out `ModelProvenanceObservationCommand` BEGIN/FINALIZE in parallel with provider-boundary observation. See [Model Provenance](../architecture/model-provenance.md).
 
 See [Unified Docker Stack Guide](./unified_stack.md) for the mini-smoke workflow and [Public Spectator Operations Guide](./public_spectator.md) for mirror verification and tunnel setup.
 
