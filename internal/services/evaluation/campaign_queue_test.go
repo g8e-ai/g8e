@@ -37,9 +37,9 @@ func TestCampaignQueueNextPendingAndLookup(t *testing.T) {
 	assert.Equal(t, "eval-init-b", found.CampaignID)
 }
 
-func TestCampaignIDForNorthStarVariant(t *testing.T) {
-	assert.Equal(t, "init-campaign", CampaignIDForNorthStarVariant(&evalv1.ModelVariant{ServedModelTag: "gemma4:e4b", VariantId: "gemma4-e4b"}))
-	assert.Equal(t, "eval-init-gemma3-4b", CampaignIDForNorthStarVariant(&evalv1.ModelVariant{ServedModelTag: "gemma3:4b", VariantId: "gemma3-4b"}))
+func TestCampaignIDForVariant(t *testing.T) {
+	assert.Equal(t, "init-campaign", CampaignIDForVariant(&evalv1.ModelVariant{ServedModelTag: "gemma4:e4b", VariantId: "gemma4-e4b"}))
+	assert.Equal(t, "eval-init-gemma3-4b", CampaignIDForVariant(&evalv1.ModelVariant{ServedModelTag: "gemma3:4b", VariantId: "gemma3-4b"}))
 }
 
 func TestResolveCampaignStartPlanFromQueue(t *testing.T) {
@@ -85,7 +85,7 @@ func TestResolveCampaignStartPlanForModelTags(t *testing.T) {
 	}
 	raw, err := protojson.Marshal(variant)
 	require.NoError(t, err)
-	inventoryPath := filepath.Join(root, DefaultNorthStarInventoryRelPath)
+	inventoryPath := filepath.Join(root, DefaultModelInventoryRelPath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(inventoryPath), 0o755))
 	require.NoError(t, os.WriteFile(inventoryPath, []byte(`{"variants":[`+string(raw)+`]}`), 0o600))
 

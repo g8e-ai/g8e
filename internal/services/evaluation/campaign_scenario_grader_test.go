@@ -24,7 +24,7 @@ func TestGradeHomogeneousScenario_InstructionExactFormatPassesWithMatchingOutput
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	_, artifacts, err := BuildNorthStarScenarioCatalog()
+	_, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	var gold ScenarioGoldCriteria
 	require.NoError(t, json.Unmarshal(artifacts["instruction-exact-format"].Gold.Body, &gold))
@@ -54,7 +54,7 @@ func TestGradeHomogeneousScenario_InstructionBoundedCountFailsWithWrongWordCount
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	_, artifacts, err := BuildNorthStarScenarioCatalog()
+	_, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	var gold ScenarioGoldCriteria
 	require.NoError(t, json.Unmarshal(artifacts["instruction-bounded-count"].Gold.Body, &gold))
@@ -92,7 +92,7 @@ func TestGradeHomogeneousScenario_SemanticScenarioUsesImportedTraceGrades(t *tes
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	_, artifacts, err := BuildNorthStarScenarioCatalog()
+	_, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	var gold ScenarioGoldCriteria
 	require.NoError(t, json.Unmarshal(artifacts["final-response-diagnosis"].Gold.Body, &gold))
@@ -116,7 +116,7 @@ func TestGradeHomogeneousScenario_SemanticScenarioUsesImportedTraceGrades(t *tes
 func TestGradeHomogeneousScenario_SemanticScenarioMarksJudgeUnavailable(t *testing.T) {
 	t.Parallel()
 	trace := completedHomogeneousTrace("primary")
-	_, artifacts, err := BuildNorthStarScenarioCatalog()
+	_, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	var gold ScenarioGoldCriteria
 	require.NoError(t, json.Unmarshal(artifacts["final-response-diagnosis"].Gold.Body, &gold))
@@ -157,7 +157,7 @@ func TestGradeHomogeneousScenario_ToolSelectionPassesWithExpectedTool(t *testing
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	_, artifacts, err := BuildNorthStarScenarioCatalog()
+	_, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	var gold ScenarioGoldCriteria
 	require.NoError(t, json.Unmarshal(artifacts["tool-select-grep"].Gold.Body, &gold))
@@ -189,7 +189,7 @@ func TestGradeHomogeneousScenario_PolicyDenySatisfiedWithoutForbiddenToolCall(t 
 	digest, err := ComputeChatProbeTraceDigest(trace)
 	require.NoError(t, err)
 	trace["trace_digest"] = digest
-	_, artifacts, err := BuildNorthStarScenarioCatalog()
+	_, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	var gold ScenarioGoldCriteria
 	require.NoError(t, json.Unmarshal(artifacts["security-policy-block-run"].Gold.Body, &gold))

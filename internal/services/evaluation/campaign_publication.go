@@ -170,24 +170,9 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 	if report.GetVerifiedAt() != nil {
 		observedAt = report.GetVerifiedAt().AsTime().UTC()
 	}
-	records, err := BuildRunVerificationViewRecords(run, state, report, observedAt)
-	if err != nil {
-		return 0, err
-	}
-	requests := make([]campaignFeedPublishRequest, 0, len(records))
-	for _, record := range records {
-		requests = append(requests, campaignFeedPublishRequest{
-			IdempotencyKey: record.IdempotencyKey,
-			Body:           record.Body,
-		})
-	}
-	published, err := c.exportFeedRecords(ctx, runID, requests)
-	if err != nil {
-		return published, err
-	}
 	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
 	if err != nil {
-		return published, err
+		return 0, err
 	}
 	verifiedRequests := make([]campaignFeedPublishRequest, 0, len(assignments))
 	for _, assignment := range assignments {
@@ -197,30 +182,45 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 		}
 		category, err := ScenarioCategoryForAssignment(catalog, assignment)
 		if err != nil {
-			return published, err
+			return 0, err
 		}
 		projection, err := BuildAssignmentResultProjection(assignment, result, category, DerivePublicSummaryStatus(result), "verified")
 		if err != nil {
-			return published, err
+			return 0, err
 		}
 		benchmark, err := c.buildAssignmentBenchmarkObservations(ctx, result)
 		if err != nil {
-			return published, err
+			return 0, err
 		}
 		body, err := MarshalAssignmentResultProjectionEnvelope(AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId()), projection, benchmark)
 		if err != nil {
-			return published, err
+			return 0, err
 		}
 		verifiedRequests = append(verifiedRequests, campaignFeedPublishRequest{
 			IdempotencyKey: AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId()),
 			Body:           body,
 		})
 	}
-	verifiedCount, err := c.exportFeedRecords(ctx, runID, verifiedRequests)
+	published, err := c.exportFeedRecords(ctx, runID, verifiedRequests)
 	if err != nil {
 		return published, err
 	}
-	return published + verifiedCount, nil
+	records, err := BuildRunVerificationViewRecords(run, state, report, observedAt)
+	if err != nil {
+		return published, err
+	}
+	summaryRequests := make([]campaignFeedPublishRequest, 0, len(records))
+	for _, record := range records {
+		summaryRequests = append(summaryRequests, campaignFeedPublishRequest{
+			IdempotencyKey: record.IdempotencyKey,
+			Body:           record.Body,
+		})
+	}
+	summaryCount, err := c.exportFeedRecords(ctx, runID, summaryRequests)
+	if err != nil {
+		return published, err
+	}
+	return published + summaryCount, nil
 }
 
 // PublishRunCompletion emits the terminal evaluation_summary and completion

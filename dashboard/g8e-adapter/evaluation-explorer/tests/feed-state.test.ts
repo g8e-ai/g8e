@@ -4,7 +4,9 @@ import {
   classifyStreamConnection,
   deriveFreshness,
   effectiveFeedFreshness,
+  isRunLevelQualityEvent,
   isTerminalFailure,
+  mergeQualityState,
   qualityStateLabel,
   qualityStateTone,
   emptyStateReason,
@@ -61,6 +63,29 @@ describe('qualityStateLabel', () => {
 
   it('labels exploratory_partial', () => {
     expect(qualityStateLabel('exploratory_partial')).toBe('Exploratory · partial');
+  });
+});
+
+describe('mergeQualityState', () => {
+  it('advances to a higher-trust label', () => {
+    expect(mergeQualityState('live_in_progress', 'exploratory_partial')).toBe('exploratory_partial');
+    expect(mergeQualityState('exploratory_partial', 'exploratory_verified')).toBe('exploratory_verified');
+  });
+
+  it('does not downgrade an existing label', () => {
+    expect(mergeQualityState('exploratory_verified', 'live_in_progress')).toBe('exploratory_verified');
+  });
+});
+
+describe('isRunLevelQualityEvent', () => {
+  it('treats assignment events as assignment-scoped', () => {
+    expect(isRunLevelQualityEvent('assignment_completed')).toBe(false);
+    expect(isRunLevelQualityEvent('assignment_failed')).toBe(false);
+  });
+
+  it('treats evaluation lifecycle events as run-scoped', () => {
+    expect(isRunLevelQualityEvent('evaluation_completed')).toBe(true);
+    expect(isRunLevelQualityEvent('evaluation_started')).toBe(true);
   });
 });
 

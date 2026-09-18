@@ -660,7 +660,7 @@ export const EvaluationReportSchema: GenMessage<EvaluationReport> = /*@__PURE__*
   messageDesc(file_g8e_eval_v1_eval, 10);
 
 /**
- * ModelCampaignBinding pins immutable North Star campaign identity on a run.
+ * ModelCampaignBinding pins immutable campaign identity on a run.
  *
  * @generated from message g8e.eval.v1.ModelCampaignBinding
  */

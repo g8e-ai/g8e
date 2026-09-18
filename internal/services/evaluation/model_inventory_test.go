@@ -38,23 +38,23 @@ func TestBuildModelVariantsFromProviderInventory_PreservesEveryServedTag(t *test
 	assert.Equal(t, "gemma3-4b-instruct", variants[1].GetVariantId())
 }
 
-func TestMaterializeNorthStarModelRegistry_BindsDigestAndMatrixSize(t *testing.T) {
+func TestMaterializeModelRegistry_BindsDigestAndMatrixSize(t *testing.T) {
 	variants := []*evalv1.ModelVariant{
 		{VariantId: "qwen3-4b", ProviderClass: "ollama", ServedModelTag: "qwen3:4b", ModelDigest: repeatHex('b', 64)},
 		{VariantId: "gemma3-4b", ProviderClass: "ollama", ServedModelTag: "gemma3:4b", ModelDigest: repeatHex('c', 64)},
 	}
-	freeze, err := MaterializeNorthStarModelRegistry("north-star-smoke", variants)
+	freeze, err := MaterializeModelRegistry("north-star-smoke", variants)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(150), freeze.HomogeneousCellCount)
-	require.NoError(t, ValidateNorthStarModelRegistry(freeze))
+	require.NoError(t, ValidateModelRegistry(freeze))
 
 	freeze.RegistryDigest = repeatHex('f', 64)
-	assert.Error(t, ValidateNorthStarModelRegistry(freeze))
+	assert.Error(t, ValidateModelRegistry(freeze))
 }
 
-func TestComputeNorthStarHomogeneousMatrixSize(t *testing.T) {
-	assert.Equal(t, uint64(75), ComputeNorthStarHomogeneousMatrixSize(1))
-	assert.Equal(t, uint64(2625), ComputeNorthStarHomogeneousMatrixSize(35))
+func TestComputeHomogeneousMatrixSize(t *testing.T) {
+	assert.Equal(t, uint64(75), ComputeHomogeneousMatrixSize(1))
+	assert.Equal(t, uint64(2625), ComputeHomogeneousMatrixSize(35))
 }
 
 func TestBuildModelVariantsFromProviderInventory_AttachesCapabilityObservations(t *testing.T) {

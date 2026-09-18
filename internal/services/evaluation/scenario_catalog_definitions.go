@@ -11,7 +11,7 @@ import evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 
 const scenarioVersion = "1.0.0"
 
-func northStarScenarioBlueprints() []ScenarioBlueprint {
+func scenarioBlueprints() []ScenarioBlueprint {
 	return []ScenarioBlueprint{
 		instructionExactFormat(),
 		instructionBoundedCount(),

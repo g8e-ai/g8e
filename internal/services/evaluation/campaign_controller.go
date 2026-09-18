@@ -66,7 +66,7 @@ type CampaignStore interface {
 }
 
 // CampaignController owns deterministic scheduling, canonical assignment
-// persistence, and resumable execution coordination for North Star model campaigns.
+// persistence, and resumable execution coordination for evaluation model campaigns.
 type CampaignController struct {
 	store       CampaignStore
 	executor    CampaignAssignmentExecutor
@@ -102,7 +102,7 @@ func (c *CampaignController) InitializeCampaign(ctx context.Context, req Campaig
 	if req.CampaignID == "" || req.RunID == "" || req.Catalog == nil || req.Inventory == nil {
 		return nil, fmt.Errorf("evaluation: initialize campaign: %w", constants.ErrMissingRequiredField)
 	}
-	spec, err := MaterializeNorthStarCampaignSpec(req.CampaignID, req.Catalog, req.Inventory, req.RepetitionCount)
+	spec, err := MaterializeCampaignSpec(req.CampaignID, req.Catalog, req.Inventory, req.RepetitionCount)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func (c *CampaignController) ScheduleHomogeneousRun(ctx context.Context, runID s
 		CampaignID:           spec.GetCampaignId(),
 		RegistryDigest:       spec.GetModelRegistryDigest(),
 		Variants:             spec.GetModelRegistry(),
-		HomogeneousCellCount: ComputeNorthStarHomogeneousMatrixSize(uint64(len(spec.GetModelRegistry()))) * uint64(spec.GetRepetitionCount()),
+		HomogeneousCellCount: ComputeHomogeneousMatrixSize(uint64(len(spec.GetModelRegistry()))) * uint64(spec.GetRepetitionCount()),
 	}
 	if err := ValidateHomogeneousAssignmentMatrix(catalog, inventory, spec.GetRepetitionCount(), assignments); err != nil {
 		return 0, err
@@ -206,7 +206,7 @@ func (c *CampaignController) GenerateHeterogeneousStackSet(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	stackSet, err := GenerateNorthStarHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
+	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
 		CampaignID: campaignID,
 		Seed:       seed,
 		Variants:   spec.GetModelRegistry(),
@@ -304,9 +304,9 @@ func (c *CampaignController) RunSummary(ctx context.Context, runID string) (*Cam
 		if err != nil {
 			return nil, err
 		}
-		expected = ComputeNorthStarHeterogeneousMatrixSize(uint64(len(stackSet.Stacks)))
+		expected = ComputeHeterogeneousMatrixSize(uint64(len(stackSet.Stacks)))
 	default:
-		expected = ComputeNorthStarHomogeneousMatrixSize(uint64(len(spec.GetModelRegistry()))) * uint64(repetition)
+		expected = ComputeHomogeneousMatrixSize(uint64(len(spec.GetModelRegistry()))) * uint64(repetition)
 	}
 	summary := &CampaignRunSummary{
 		Run:                run,

@@ -22,7 +22,7 @@ import (
 const (
 	explorerViewSchemaVersion = "1.3.0"
 	campaignSourceRevision    = "g8e-eval-campaign"
-	northStarSuiteID          = "north-star-25"
+	standardSuiteID          = "north-star-25"
 )
 
 // CampaignViewRecord is one disclosure-safe explorer snapshot record published
@@ -182,6 +182,12 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 	return state, nil
 }
 
+// runAggregateSettled reports whether every scheduled assignment has reached a
+// terminal public outcome in the aggregate counters.
+func runAggregateSettled(state *runAggregateState) bool {
+	return state != nil && state.Scheduled > 0 && state.Terminal >= state.Scheduled
+}
+
 // BuildRunAggregateViewRecords materializes live evaluation_summary, catalog,
 // model, and methodology explorer snapshot records for one campaign run.
 func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregateState, observedAt time.Time) ([]CampaignViewRecord, error) {
@@ -194,6 +200,7 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 	}
 	observed := observedAt.UTC().Format(time.RFC3339Nano)
 	datasetID := CampaignDatasetID(runID)
+	settled := runAggregateSettled(state)
 	records := make([]CampaignViewRecord, 0, 3+len(state.VariantRoles))
 
 	summaryBody, err := marshalCanonicalViewRecord(buildLiveEvaluationSummaryRecord(run, datasetID, observed, state))
@@ -205,7 +212,13 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 		Body:           summaryBody,
 	})
 
-	catalogBody, err := marshalCanonicalViewRecord(buildCatalogSnapshotRecord(datasetID, runID, observed, state))
+	var catalogRecord map[string]any
+	if settled {
+		catalogRecord = buildCompletedCatalogSnapshotRecord(datasetID, runID, observed, state)
+	} else {
+		catalogRecord = buildCatalogSnapshotRecord(datasetID, runID, observed, state)
+	}
+	catalogBody, err := marshalCanonicalViewRecord(catalogRecord)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +234,13 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 	sort.Strings(keys)
 	for _, key := range keys {
 		bucket := state.VariantRoles[key]
-		modelBody, err := marshalCanonicalViewRecord(buildModelSummaryRecord(datasetID, observed, bucket))
+		var modelRecord map[string]any
+		if settled {
+			modelRecord = buildCompletedModelSummaryRecord(datasetID, observed, bucket)
+		} else {
+			modelRecord = buildModelSummaryRecord(datasetID, observed, bucket)
+		}
+		modelBody, err := marshalCanonicalViewRecord(modelRecord)
 		if err != nil {
 			return nil, err
 		}
@@ -231,7 +250,13 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 		})
 	}
 
-	methodologyBody, err := marshalCanonicalViewRecord(buildMethodologySnapshotRecord(datasetID, observed))
+	var methodologyRecord map[string]any
+	if settled {
+		methodologyRecord = buildCompletedMethodologySnapshotRecord(datasetID, observed)
+	} else {
+		methodologyRecord = buildMethodologySnapshotRecord(datasetID, observed)
+	}
+	methodologyBody, err := marshalCanonicalViewRecord(methodologyRecord)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +338,7 @@ func buildCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runA
 		"observed_at":            observedAt,
 		"source_revision_label":  campaignSourceRevision,
 		"title":                  fmt.Sprintf("Live smoke run (%s)", runID),
-		"description":            "Homogeneous full-pipeline model-role evaluation over the frozen north-star-25 catalog. Values are provisional while assignments are still executing.",
+		"description":            "Homogeneous full-pipeline model-role evaluation over the frozen standard scenario catalog. Values are provisional while assignments are still executing.",
 		"limitations":            catalogSnapshotLimitations(),
 		"model_count":            state.ModelCount,
 		"evaluated_count":        state.EvaluatedCount,
@@ -369,7 +394,7 @@ func buildModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAg
 func buildCompletedCatalogSnapshotRecord(datasetID, runID, observedAt string, state *runAggregateState) map[string]any {
 	record := buildCatalogSnapshotRecord(datasetID, runID, observedAt, state)
 	record["quality_state"] = qualityStateForCompletedAggregate(state)
-	record["description"] = "Homogeneous full-pipeline model-role evaluation over the frozen north-star-25 catalog. The campaign matrix is complete; values remain provisional until verification runs."
+	record["description"] = "Homogeneous full-pipeline model-role evaluation over the frozen standard scenario catalog. The campaign matrix is complete; values remain provisional until verification runs."
 	record["limitations"] = []string{
 		"Campaign execution is complete; values remain provisional until verification runs.",
 		"Model aggregates reflect designated role responsibility inside the production chat pipeline, not a provider-only benchmark.",
@@ -419,9 +444,13 @@ func BuildRunVerificationViewRecords(run *evalv1.EvaluationRun, state *runAggreg
 }
 
 func buildLiveEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observedAt string, state *runAggregateState) map[string]any {
-	record := buildEvaluationSummaryRecord(run, datasetID, observedAt, state, "running", false)
-	record["quality_state"] = "live_in_progress"
-	return record
+	lifecycle := "running"
+	includeEndedAt := false
+	if runAggregateSettled(state) {
+		lifecycle = "completed"
+		includeEndedAt = true
+	}
+	return buildEvaluationSummaryRecord(run, datasetID, observedAt, state, lifecycle, includeEndedAt)
 }
 
 func buildEvaluationSummaryRecord(
@@ -456,7 +485,7 @@ func buildEvaluationSummaryRecord(
 		"source_revision_label": campaignSourceRevision,
 		"run_id":                run.GetRunId(),
 		"campaign_id":           run.GetCampaignBinding().GetCampaignId(),
-		"suite_id":              northStarSuiteID,
+		"suite_id":              standardSuiteID,
 		"arm":                   armForRun(run),
 		"evaluation_unit":       evaluationUnitForRun(run),
 		"model_role_mapping":    buildModelRoleMapping(state),
@@ -548,8 +577,8 @@ func buildMethodologySnapshotRecord(datasetID, observedAt string) map[string]any
 		"metric_definitions":    methodologyMetricDefinitions(),
 		"suite_definitions": []map[string]any{
 			{
-				"suite_id":     northStarSuiteID,
-				"display_name": "North Star 25",
+				"suite_id":     standardSuiteID,
+				"display_name": "Standard 25",
 				"task_count":   25,
 				"description":  "Frozen 25-scenario catalog covering instruction adherence, tool use, analysis, routing, verification, security, recovery, and final response.",
 			},

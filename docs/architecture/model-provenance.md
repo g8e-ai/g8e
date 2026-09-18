@@ -17,7 +17,7 @@ This document describes the evaluation-time architecture. Signed manifest verifi
 
 ## Operator topology
 
-North Star model campaigns use **four** distinct remote operator sessions when provenance is enabled:
+evaluation model campaigns use **four** distinct remote operator sessions when provenance is enabled:
 
 | Session | Capability flag | Host | Role |
 | --- | --- | --- | --- |

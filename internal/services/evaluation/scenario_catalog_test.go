@@ -16,8 +16,8 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-func TestBuildNorthStarScenarioCatalog_HasTwentyFiveScenariosWithExpectedCategoryCounts(t *testing.T) {
-	catalog, artifacts, err := BuildNorthStarScenarioCatalog()
+func TestBuildScenarioCatalog_HasTwentyFiveScenariosWithExpectedCategoryCounts(t *testing.T) {
+	catalog, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	require.NotNil(t, catalog)
 	require.Len(t, catalog.Scenarios, 25)
@@ -38,13 +38,13 @@ func TestBuildNorthStarScenarioCatalog_HasTwentyFiveScenariosWithExpectedCategor
 	assert.Equal(t, 1, counts[evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_FINAL_RESPONSE])
 }
 
-func TestValidateNorthStarScenarioCatalog_EnforcesCoverageConstraints(t *testing.T) {
-	catalog, artifacts, err := BuildNorthStarScenarioCatalog()
+func TestValidateScenarioCatalog_EnforcesCoverageConstraints(t *testing.T) {
+	catalog, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
-	require.NoError(t, ValidateNorthStarScenarioCatalog(catalog, artifacts))
+	require.NoError(t, ValidateScenarioCatalog(catalog, artifacts))
 
 	var tinyTasks, toolDecisions, governedActions, failureScenarios int
-	for _, blueprint := range northStarScenarioBlueprints() {
+	for _, blueprint := range scenarioBlueprints() {
 		if blueprint.TinyTask {
 			tinyTasks++
 		}
@@ -64,18 +64,18 @@ func TestValidateNorthStarScenarioCatalog_EnforcesCoverageConstraints(t *testing
 	assert.GreaterOrEqual(t, failureScenarios, 2)
 }
 
-func TestBuildNorthStarScenarioCatalog_DigestIsStableAndBound(t *testing.T) {
-	first, _, err := BuildNorthStarScenarioCatalog()
+func TestBuildScenarioCatalog_DigestIsStableAndBound(t *testing.T) {
+	first, _, err := BuildScenarioCatalog()
 	require.NoError(t, err)
-	second, _, err := BuildNorthStarScenarioCatalog()
+	second, _, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	assert.Equal(t, first.GetCatalogDigest(), second.GetCatalogDigest())
 	assert.Len(t, first.GetCatalogDigest(), 64)
 	require.NoError(t, ValidateScenarioCatalogDigest(first))
 }
 
-func TestBuildNorthStarScenarioCatalog_FixtureReferencesMatchEmbeddedBodies(t *testing.T) {
-	catalog, artifacts, err := BuildNorthStarScenarioCatalog()
+func TestBuildScenarioCatalog_FixtureReferencesMatchEmbeddedBodies(t *testing.T) {
+	catalog, artifacts, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	for _, scenario := range catalog.Scenarios {
 		pair, ok := artifacts[scenario.GetScenarioId()]

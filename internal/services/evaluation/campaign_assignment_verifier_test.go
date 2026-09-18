@@ -77,7 +77,7 @@ func TestCampaignAssignmentVerifier_FailsWhenStoredGradesDrift(t *testing.T) {
 }
 
 func loadScenarioGold(scenarioID string) ScenarioGoldCriteria {
-	_, artifacts, err := BuildNorthStarScenarioCatalog()
+	_, artifacts, err := BuildScenarioCatalog()
 	if err != nil {
 		panic(err)
 	}

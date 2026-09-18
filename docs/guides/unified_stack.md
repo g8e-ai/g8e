@@ -77,22 +77,22 @@ Keep internal plan vocabulary separate from public campaign branding.
 | --- | --- | --- | --- | --- |
 | **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` (`init-campaign` for `gemma4:e4b`) | `<campaign-id>-<unix>` | `.local.dev/inventories/<campaign-id>.json` | 1 model → **75** |
 | **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.local.dev/smoke-mini-inventory.json` | 3 models → **225** |
-| **Dev full smoke** (private, all frozen models) | `phase1a-smoke` | `smoke-dev-<unix>` | `.local.dev/north-star-inventory.json` | 35 models → **2625** |
+| **Dev full smoke** (private, all frozen models) | `phase1a-smoke` | `smoke-dev-<unix>` | `.local.dev/model-inventory.json` | 35 models → **2625** |
 | **First public homogeneous run** | `eval-genesis-homogeneous` | `genesis-homogeneous-01` (or `-<seq>`) | fresh provider freeze at launch | all discovered models |
 
 Rules:
 
-- **Do not** use `north-star` in public run IDs or campaign IDs. *North Star* remains the internal scenario catalog name (`north-star-25@1.0.0`).
+- **Do not** use `north-star` in public run IDs or campaign IDs. The frozen scenario catalog is `north-star-25@1.0.0` (legacy slug; content is the standard 25-scenario suite).
 - Use **Genesis** for the first public homogeneous release (`eval-genesis-homogeneous`).
 - Every cold start gets a **new run ID**. Never resume abandoned runs after a volume wipe.
 - Leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` **unset** in `.env`. Campaign authority travels on each governed dispatch from g8ee; do not rebind the inference operator per model.
 
 ### Init campaign inventory (one model per campaign)
 
-Preferred for pipeline validation and model-by-model rollout: **one north-star model, one campaign, 75 cells**. Keeps runs tidy and isolates failures. Use `g8e eval campaign start` (or `g8e eval queue next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
+Preferred for pipeline validation and model-by-model rollout: **one model, one campaign, 75 cells**. Keeps runs tidy and isolates failures. Use `g8e eval campaign start` (or `g8e eval queue next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
 
 ```bash
-# List north-star tags:
+# List model tags:
 go run ./.local.dev/tools/gen-model-campaign-inventory -list
 
 # Generate one model (example: qwen3:4b → eval-init-qwen3-4b):
@@ -363,7 +363,7 @@ docker compose up -d g8e-gateway    # or: ./g8e gw start -f --public-spectator
 # To wipe spectator state: docker compose down -v && docker compose up -d g8e-gateway
 ```
 
-Explorer (acceptance UI): open `http://127.0.0.1:5173/#/` after the gateway is up. Build static assets once with `cd dashboard/g8e-adapter/evaluation-explorer && npm run build` if the explorer listener logs that dist is missing. Do **not** run `npm run dev:real` for North Star acceptance — that path is legacy local supervisor only.
+Explorer (acceptance UI): open `http://127.0.0.1:5173/#/` after the gateway is up. Build static assets once with `cd dashboard/g8e-adapter/evaluation-explorer && npm run build` if the explorer listener logs that dist is missing. Do **not** run `npm run dev:real` for campaign acceptance — that path is legacy local supervisor only.
 
 ### Phase B — Initialize and schedule
 
@@ -541,7 +541,7 @@ docker compose --profile bootstrapped --profile evaluation down -v   # destroys 
 ## Relationship to other stacks
 
 - **Demos** (`demos/`, `./g8e demos`): organization-specific scenarios; no ensemble/dashboard.
-- **g8ellama profile**: legacy separate User Gateway; not used for North Star / Genesis campaigns.
+- **g8ellama profile**: legacy separate User Gateway; not used for Genesis campaigns.
 - **Native execution-boundary eval** (`g8e eval run core-execution-boundary`): platform lane only; not a model campaign.
 
 ## Related documentation

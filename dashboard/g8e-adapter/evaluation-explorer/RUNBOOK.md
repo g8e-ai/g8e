@@ -4,7 +4,7 @@
 
 Run commands from `/home/bob/g8e` unless a section changes directory. Docker Engine and Compose are available, the repository `g8e` binary exists, Node dependencies are installed in `dashboard/g8e-adapter/evaluation-explorer`, the CLI has a valid `./g8e auth context`, and the approved Ollama provider is reachable only at `http://192.168.1.2:11434`. Do not install, start, pull, or manage Ollama on this host. The native evaluation suite does not call Ollama or g8ee; the Ollama variable is supplied only because Compose interpolation requires it.
 
-On the **provider host** (where Ollama runs), enroll two separate witness operator sessions when running full North Star campaigns:
+On the **provider host** (where Ollama runs), enroll two separate witness operator sessions when running full campaigns:
 
 1. **Observer Operator** — `--provider-boundary-observer-enabled` (and optional `--ollama` for remote Ollama service restart between assignments).
 2. **Provenance Operator** — `--provenance-operator-enabled` with `--model-storage-root` pointing at the Ollama models directory (for example `~/.ollama/models`).

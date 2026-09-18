@@ -372,6 +372,52 @@ describe('EvalStore', () => {
     expect(assignments.length).toBe(5);
   });
 
+  it('does not downgrade evaluation_summary quality from assignment live events', () => {
+    const runId = 'run-quality-guard';
+    const datasetId = `ds-live-${runId}`;
+    store.acceptProjection({
+      sequence: 1,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        schema_version: '1.3.0',
+        kind: 'evaluation_summary',
+        dataset_id: datasetId,
+        quality_state: 'exploratory_verified',
+        observed_at: '2026-09-17T12:00:00Z',
+        run_id: runId,
+        suite_id: 'north-star-25',
+        arm: 'homogeneous-model-role',
+        evaluation_unit: 'model',
+        model_role_mapping: {},
+        lifecycle_state: 'completed',
+        assignment_total: 2,
+        assignment_completed: 1,
+        assignment_failed: 1,
+        terminal_outcomes: { completed: 1, model_failed: 1, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+        verifier_state: 'passed',
+        headline_metrics: { pass_rate: { value: 0.5 } },
+      }),
+    });
+    store.acceptProjection({
+      sequence: 2,
+      record_type: 'event',
+      record_bytes: JSON.stringify({
+        schema_version: '1.3.0',
+        kind: 'assignment_completed',
+        dataset_id: datasetId,
+        quality_state: 'live_in_progress',
+        observed_at: '2026-09-17T12:01:00Z',
+        event_id: `${runId}:assign-1:result:event`,
+        run_id: runId,
+        assignment_id: 'assign-1',
+        lifecycle_status: 'completed',
+        completed: 2,
+        total: 2,
+      }),
+    });
+    expect(store.getEvaluation(datasetId, runId)?.quality_state).toBe('exploratory_verified');
+  });
+
   it('indexes native scenario and verdict detail without fake assignments', () => {
     const native = {
       schema_version: '1.3.0', kind: 'evaluation_summary', dataset_id: 'native-core-execution-boundary', quality_state: 'verified_public', observed_at: '2026-09-15T23:38:22Z',

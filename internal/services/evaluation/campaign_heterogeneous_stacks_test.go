@@ -27,8 +27,8 @@ func testHeterogeneousVariants() []*evalv1.ModelVariant {
 	}
 }
 
-func TestGenerateNorthStarHeterogeneousStackSet_IncludesHypothesesAndCoverage(t *testing.T) {
-	set, err := GenerateNorthStarHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
+func TestGenerateHeterogeneousStackSet_IncludesHypothesesAndCoverage(t *testing.T) {
+	set, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
 		CampaignID: "north-star-heterogeneous",
 		Seed:       42,
 		Variants:   testHeterogeneousVariants(),
@@ -44,15 +44,15 @@ func TestGenerateNorthStarHeterogeneousStackSet_IncludesHypothesesAndCoverage(t 
 	require.NoError(t, ValidateHeterogeneousStackSet(set))
 }
 
-func TestGenerateNorthStarHeterogeneousStackSet_IsDeterministic(t *testing.T) {
+func TestGenerateHeterogeneousStackSet_IsDeterministic(t *testing.T) {
 	req := HeterogeneousStackGenerationRequest{
 		CampaignID: "north-star-heterogeneous",
 		Seed:       7,
 		Variants:   testHeterogeneousVariants(),
 	}
-	left, err := GenerateNorthStarHeterogeneousStackSet(req)
+	left, err := GenerateHeterogeneousStackSet(req)
 	require.NoError(t, err)
-	right, err := GenerateNorthStarHeterogeneousStackSet(req)
+	right, err := GenerateHeterogeneousStackSet(req)
 	require.NoError(t, err)
 	assert.Equal(t, left.SetDigest, right.SetDigest)
 	assert.Equal(t, len(left.Stacks), len(right.Stacks))

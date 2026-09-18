@@ -30,7 +30,7 @@ import (
 func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "campaign",
-		Short: "Initialize, schedule, and resume North Star model campaigns",
+		Short: "Initialize, schedule, and resume evaluation model campaigns",
 	}
 	cmd.AddCommand(
 		campaignEvalStartCmd(deps),
@@ -62,7 +62,7 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 	var repetitionCount uint32
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize a North Star campaign run with frozen catalog and model registry",
+		Short: "Initialize a campaign run with frozen catalog and model registry",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if campaignID == "" || runID == "" {
 				return fmt.Errorf("evaluation: campaign init: %w", constants.ErrMissingRequiredField)
@@ -86,7 +86,7 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: campaign init: inventory campaign_id mismatch")
 			}
 			inventory.CampaignID = campaignID
-			catalog, artifacts, err := evaluation.LoadNorthStarScenarioCatalog()
+			catalog, artifacts, err := evaluation.LoadScenarioCatalog()
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign init: %w", err)
 			}
@@ -145,7 +145,7 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 func campaignEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List persisted North Star evaluation campaigns",
+		Short: "List persisted evaluation campaigns",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
@@ -368,7 +368,7 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	var providerSettle time.Duration
 	cmd := &cobra.Command{
 		Use:   "execute [run-id]",
-		Short: "Execute one or more queued North Star campaign assignments through production POST /api/v1/chat",
+		Short: "Execute one or more queued campaign assignments through production POST /api/v1/chat",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
@@ -445,7 +445,7 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign execute: %w", err)
 			}
-			_, artifacts, err := evaluation.LoadNorthStarScenarioCatalog()
+			_, artifacts, err := evaluation.LoadScenarioCatalog()
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign execute: %w", err)
 			}
@@ -749,7 +749,7 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign verify: %w", err)
 			}
-			_, artifacts, err := evaluation.LoadNorthStarScenarioCatalog()
+			_, artifacts, err := evaluation.LoadScenarioCatalog()
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign verify: %w", err)
 			}
@@ -782,12 +782,20 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 			publication, pubErr := newCampaignPublicationCoordinator(cmd, fileSvc)
 			if pubErr != nil {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication unavailable: %v\n", pubErr)
-			} else if report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
-				published, pubErr := publication.PublishRunVerification(cmd.Context(), runID, report)
+			} else {
+				completionCount, pubErr := publication.PublishRunCompletion(cmd.Context(), runID, deps.now().UTC())
 				if pubErr != nil {
-					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication: %v\n", pubErr)
-				} else if published > 0 && !output.JSONEnabled(cmd) {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d verification projection record(s) to public mirror\n", published)
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify completion publication: %v\n", pubErr)
+				} else if completionCount > 0 && !output.JSONEnabled(cmd) {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d completion projection record(s) to public mirror\n", completionCount)
+				}
+				if report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+					published, pubErr := publication.PublishRunVerification(cmd.Context(), runID, report)
+					if pubErr != nil {
+						_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication: %v\n", pubErr)
+					} else if published > 0 && !output.JSONEnabled(cmd) {
+						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d verification projection record(s) to public mirror\n", published)
+					}
 				}
 			}
 			if output.JSONEnabled(cmd) {
@@ -1013,7 +1021,7 @@ func campaignEvalRepairResultsCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, artifacts, err := evaluation.LoadNorthStarScenarioCatalog()
+			_, artifacts, err := evaluation.LoadScenarioCatalog()
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign repair-results: %w", err)
 			}
@@ -1041,7 +1049,7 @@ func campaignEvalRepairResultsCmd(deps nativeEvalDeps) *cobra.Command {
 func campaignEvalShowCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <run-id>",
-		Short: "Show one persisted North Star campaign run",
+		Short: "Show one persisted campaign run",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			runID := args[0]

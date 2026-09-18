@@ -44,7 +44,7 @@ func campaignEvalStartCmd(deps nativeEvalDeps) *cobra.Command {
 	var providerSettle time.Duration
 	cmd := &cobra.Command{
 		Use:   "start",
-		Short: "Initialize, schedule, and execute one homogeneous North Star campaign run",
+		Short: "Initialize, schedule, and execute one homogeneous campaign run",
 		Long: `Resolve model selection (or the init-campaign queue), bind operator sessions,
 initialize the campaign, schedule assignments, and execute them in one flow.
 

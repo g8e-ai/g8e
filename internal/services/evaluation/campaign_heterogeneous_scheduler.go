@@ -103,7 +103,7 @@ func ValidateHeterogeneousAssignmentMatrix(catalog *evalv1.EvaluationScenarioCat
 	if catalog == nil || stackSet == nil {
 		return fmt.Errorf("evaluation: validate heterogeneous assignment matrix: %w", constants.ErrMissingRequiredField)
 	}
-	expected := ComputeNorthStarHeterogeneousMatrixSize(uint64(len(stackSet.Stacks)))
+	expected := ComputeHeterogeneousMatrixSize(uint64(len(stackSet.Stacks)))
 	if uint64(len(assignments)) != expected {
 		return fmt.Errorf("evaluation: validate heterogeneous assignment matrix: expected %d assignments, got %d", expected, len(assignments))
 	}

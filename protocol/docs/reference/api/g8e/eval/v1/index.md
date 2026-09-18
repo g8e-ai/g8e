@@ -667,7 +667,7 @@ HeterogeneousStackDefinition binds Primary, Assistant, and Lite slots.
 <a name="g8e-eval-v1-ModelCampaignBinding"></a>
 
 ### ModelCampaignBinding
-ModelCampaignBinding pins immutable North Star campaign identity on a run.
+ModelCampaignBinding pins immutable campaign identity on a run.
 
 
 | Field | Type | Label | Description |

@@ -24,11 +24,11 @@ import (
 )
 
 const (
-	NorthStarHomogeneousRoleCount = 3
-	NorthStarScenarioCount        = 25
+	HomogeneousRoleCount = 3
+	StandardScenarioCount        = 25
 )
 
-// ModelInventoryFreeze is the immutable North Star model registry derived from
+// ModelInventoryFreeze is the immutable model registry derived from
 // a complete provider inventory query and optional capability probes.
 type ModelInventoryFreeze struct {
 	CampaignID           string
@@ -44,30 +44,30 @@ type ModelInventoryOptions struct {
 	ProbeBackend        CapabilityProbeBackend
 }
 
-// FreezeNorthStarModelInventoryFromProvider discovers the complete provider
+// FreezeModelInventoryFromProvider discovers the complete provider
 // inventory, optionally runs bounded capability probes, and freezes the eval
 // model registry digest for campaignID.
-func FreezeNorthStarModelInventoryFromProvider(ctx context.Context, endpoint, campaignID string, logger *slog.Logger, opts ModelInventoryOptions) (*ModelInventoryFreeze, error) {
+func FreezeModelInventoryFromProvider(ctx context.Context, endpoint, campaignID string, logger *slog.Logger, opts ModelInventoryOptions) (*ModelInventoryFreeze, error) {
 	if campaignID == "" {
-		return nil, fmt.Errorf("evaluation: freeze north star model inventory: %w", constants.ErrMissingRequiredField)
+		return nil, fmt.Errorf("evaluation: freeze model inventory: %w", constants.ErrMissingRequiredField)
 	}
 	backend, err := inference.NewOllamaBackend(endpoint, logger)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: freeze north star model inventory: %w", err)
+		return nil, fmt.Errorf("evaluation: freeze model inventory: %w", err)
 	}
 	entries, err := backend.ListProviderModelInventory(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: freeze north star model inventory: %w", err)
+		return nil, fmt.Errorf("evaluation: freeze model inventory: %w", err)
 	}
 	variants, err := BuildModelVariantsFromProviderInventory(ctx, entries, opts)
 	if err != nil {
 		return nil, err
 	}
-	registry, err := MaterializeNorthStarModelRegistry(campaignID, variants)
+	registry, err := MaterializeModelRegistry(campaignID, variants)
 	if err != nil {
 		return nil, err
 	}
-	if err := ValidateNorthStarModelRegistry(registry); err != nil {
+	if err := ValidateModelRegistry(registry); err != nil {
 		return nil, err
 	}
 	return registry, nil
@@ -130,14 +130,14 @@ func modelVariantFromProviderEntry(entry inference.ProviderModelInventoryEntry) 
 	}
 }
 
-// MaterializeNorthStarModelRegistry binds the discovered variants to one campaign registry digest.
-func MaterializeNorthStarModelRegistry(campaignID string, variants []*evalv1.ModelVariant) (*ModelInventoryFreeze, error) {
+// MaterializeModelRegistry binds the discovered variants to one campaign registry digest.
+func MaterializeModelRegistry(campaignID string, variants []*evalv1.ModelVariant) (*ModelInventoryFreeze, error) {
 	if campaignID == "" || len(variants) == 0 {
-		return nil, fmt.Errorf("evaluation: materialize north star model registry: %w", constants.ErrMissingRequiredField)
+		return nil, fmt.Errorf("evaluation: materialize model registry: %w", constants.ErrMissingRequiredField)
 	}
 	registryDigest, err := ComputeModelVariantRegistryDigest(campaignID, variants)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: materialize north star model registry: %w", err)
+		return nil, fmt.Errorf("evaluation: materialize model registry: %w", err)
 	}
 	inferenceVariants := make([]*operatorv1.InferenceModelVariant, 0, len(variants))
 	for _, variant := range variants {
@@ -151,50 +151,50 @@ func MaterializeNorthStarModelRegistry(campaignID string, variants []*evalv1.Mod
 		RegistryDigest:       registryDigest,
 		Variants:             append([]*evalv1.ModelVariant(nil), variants...),
 		InferenceVariants:    inferenceVariants,
-		HomogeneousCellCount: ComputeNorthStarHomogeneousMatrixSize(uint64(len(variants))),
+		HomogeneousCellCount: ComputeHomogeneousMatrixSize(uint64(len(variants))),
 	}, nil
 }
 
-// ValidateNorthStarModelRegistry verifies the Phase 3 inventory gate.
-func ValidateNorthStarModelRegistry(freeze *ModelInventoryFreeze) error {
+// ValidateModelRegistry verifies the Phase 3 inventory gate.
+func ValidateModelRegistry(freeze *ModelInventoryFreeze) error {
 	if freeze == nil || freeze.CampaignID == "" || freeze.RegistryDigest == "" || len(freeze.Variants) == 0 {
-		return fmt.Errorf("evaluation: validate north star model registry: %w", constants.ErrMissingRequiredField)
+		return fmt.Errorf("evaluation: validate model registry: %w", constants.ErrMissingRequiredField)
 	}
 	expectedDigest, err := ComputeModelVariantRegistryDigest(freeze.CampaignID, freeze.Variants)
 	if err != nil {
 		return err
 	}
 	if freeze.RegistryDigest != expectedDigest {
-		return fmt.Errorf("evaluation: validate north star model registry: registry digest mismatch")
+		return fmt.Errorf("evaluation: validate model registry: registry digest mismatch")
 	}
 	seenTags := make(map[string]struct{}, len(freeze.Variants))
 	seenIDs := make(map[string]struct{}, len(freeze.Variants))
 	for _, variant := range freeze.Variants {
 		if variant == nil || variant.GetVariantId() == "" || variant.GetServedModelTag() == "" || variant.GetModelDigest() == "" || variant.GetProviderClass() == "" {
-			return fmt.Errorf("evaluation: validate north star model registry: %w", constants.ErrMissingRequiredField)
+			return fmt.Errorf("evaluation: validate model registry: %w", constants.ErrMissingRequiredField)
 		}
 		if _, exists := seenTags[variant.GetServedModelTag()]; exists {
-			return fmt.Errorf("evaluation: validate north star model registry: duplicate served tag %q", variant.GetServedModelTag())
+			return fmt.Errorf("evaluation: validate model registry: duplicate served tag %q", variant.GetServedModelTag())
 		}
 		if _, exists := seenIDs[variant.GetVariantId()]; exists {
-			return fmt.Errorf("evaluation: validate north star model registry: duplicate variant_id %q", variant.GetVariantId())
+			return fmt.Errorf("evaluation: validate model registry: duplicate variant_id %q", variant.GetVariantId())
 		}
 		seenTags[variant.GetServedModelTag()] = struct{}{}
 		seenIDs[variant.GetVariantId()] = struct{}{}
 	}
-	expectedCells := ComputeNorthStarHomogeneousMatrixSize(uint64(len(freeze.Variants)))
+	expectedCells := ComputeHomogeneousMatrixSize(uint64(len(freeze.Variants)))
 	if freeze.HomogeneousCellCount != expectedCells {
-		return fmt.Errorf("evaluation: validate north star model registry: homogeneous matrix size mismatch")
+		return fmt.Errorf("evaluation: validate model registry: homogeneous matrix size mismatch")
 	}
 	if expectedCells == 0 {
-		return fmt.Errorf("evaluation: validate north star model registry: empty smoke matrix")
+		return fmt.Errorf("evaluation: validate model registry: empty smoke matrix")
 	}
 	return nil
 }
 
-// ComputeNorthStarHomogeneousMatrixSize returns model variants × roles × scenarios.
-func ComputeNorthStarHomogeneousMatrixSize(variantCount uint64) uint64 {
-	return variantCount * NorthStarHomogeneousRoleCount * NorthStarScenarioCount
+// ComputeHomogeneousMatrixSize returns model variants × roles × scenarios.
+func ComputeHomogeneousMatrixSize(variantCount uint64) uint64 {
+	return variantCount * HomogeneousRoleCount * StandardScenarioCount
 }
 
 // LookupModelVariant returns the frozen eval variant for a served model tag.
@@ -235,7 +235,7 @@ func LoadModelInventoryFreezeFile(path string) (*ModelInventoryFreeze, error) {
 		}
 		variants = append(variants, variant)
 	}
-	return MaterializeNorthStarModelRegistry(payload.CampaignID, variants)
+	return MaterializeModelRegistry(payload.CampaignID, variants)
 }
 
 // ToModelRegistryFreeze converts the eval inventory into the inference registry

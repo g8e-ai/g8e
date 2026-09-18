@@ -120,7 +120,7 @@ func buildHomogeneousAssignment(campaignID, runID string, scenario *evalv1.Evalu
 }
 
 // ValidateHomogeneousAssignmentMatrix verifies the Phase 4 scheduler gate for one
-// homogeneous North Star smoke run.
+// homogeneous smoke run.
 func ValidateHomogeneousAssignmentMatrix(catalog *evalv1.EvaluationScenarioCatalog, inventory *ModelInventoryFreeze, repetitionCount uint32, assignments []*evalv1.EvaluationAssignment) error {
 	if catalog == nil || inventory == nil {
 		return fmt.Errorf("evaluation: validate homogeneous assignment matrix: %w", constants.ErrMissingRequiredField)
@@ -128,7 +128,7 @@ func ValidateHomogeneousAssignmentMatrix(catalog *evalv1.EvaluationScenarioCatal
 	if repetitionCount == 0 {
 		repetitionCount = 1
 	}
-	expected := uint64(len(inventory.Variants)) * NorthStarHomogeneousRoleCount * uint64(len(catalog.GetScenarios())) * uint64(repetitionCount)
+	expected := uint64(len(inventory.Variants)) * HomogeneousRoleCount * uint64(len(catalog.GetScenarios())) * uint64(repetitionCount)
 	if uint64(len(assignments)) != expected {
 		return fmt.Errorf("evaluation: validate homogeneous assignment matrix: expected %d assignments, got %d", expected, len(assignments))
 	}

@@ -15,25 +15,25 @@ import (
 )
 
 const (
-	// NorthStarRepeatabilityRepetitionCount is the preregistered repetition
+	// RepeatabilityRepetitionCount is the preregistered repetition
 	// count for Phase 11 unbiased repeatability campaigns.
-	NorthStarRepeatabilityRepetitionCount = 5
+	RepeatabilityRepetitionCount = 5
 )
 
-// ValidateNorthStarRepeatabilitySpec verifies the campaign spec matches the
+// ValidateRepeatabilitySpec verifies the campaign spec matches the
 // preregistered repeatability repetition count.
-func ValidateNorthStarRepeatabilitySpec(spec *evalv1.EvaluationCampaignSpec) error {
+func ValidateRepeatabilitySpec(spec *evalv1.EvaluationCampaignSpec) error {
 	if spec == nil {
-		return fmt.Errorf("evaluation: validate north star repeatability spec: %w", constants.ErrMissingRequiredField)
+		return fmt.Errorf("evaluation: validate repeatability spec: %w", constants.ErrMissingRequiredField)
 	}
-	if spec.GetRepetitionCount() != NorthStarRepeatabilityRepetitionCount {
-		return fmt.Errorf("evaluation: validate north star repeatability spec: expected repetition_count %d, got %d", NorthStarRepeatabilityRepetitionCount, spec.GetRepetitionCount())
+	if spec.GetRepetitionCount() != RepeatabilityRepetitionCount {
+		return fmt.Errorf("evaluation: validate repeatability spec: expected repetition_count %d, got %d", RepeatabilityRepetitionCount, spec.GetRepetitionCount())
 	}
 	return nil
 }
 
-// ComputeNorthStarRepeatabilityMatrixSize returns model variants × roles ×
+// ComputeRepeatabilityMatrixSize returns model variants × roles ×
 // scenarios × repeatability repetitions.
-func ComputeNorthStarRepeatabilityMatrixSize(variantCount uint64) uint64 {
-	return ComputeNorthStarHomogeneousMatrixSize(variantCount) * uint64(NorthStarRepeatabilityRepetitionCount)
+func ComputeRepeatabilityMatrixSize(variantCount uint64) uint64 {
+	return ComputeHomogeneousMatrixSize(variantCount) * uint64(RepeatabilityRepetitionCount)
 }

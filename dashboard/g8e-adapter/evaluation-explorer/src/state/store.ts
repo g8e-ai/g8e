@@ -27,6 +27,8 @@ import type {
 import { decodeViewRecord, isProjectionRecord, ValidationError } from '../contract/validators';
 import {
   deriveFreshness,
+  isRunLevelQualityEvent,
+  mergeQualityState,
   type FeedConnectionState,
   type FeedStatus,
   type StreamConnectionState,
@@ -428,7 +430,9 @@ export class EvalStore {
       ...existing,
       lifecycle_state: event.lifecycle_status,
       assignment_total: event.total > 0 ? event.total : existing.assignment_total,
-      quality_state: event.quality_state,
+      quality_state: isRunLevelQualityEvent(event.kind)
+        ? mergeQualityState(existing.quality_state, event.quality_state)
+        : existing.quality_state,
       headline_metrics: event.metric_delta
         ? { ...existing.headline_metrics, ...event.metric_delta }
         : existing.headline_metrics,

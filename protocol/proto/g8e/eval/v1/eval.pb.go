@@ -2590,7 +2590,7 @@ func (x *EvaluationReport) GetCampaignVerificationReport() *EvaluationVerificati
 	return nil
 }
 
-// ModelCampaignBinding pins immutable North Star campaign identity on a run.
+// ModelCampaignBinding pins immutable campaign identity on a run.
 type ModelCampaignBinding struct {
 	state                      protoimpl.MessageState `protogen:"open.v1"`
 	CampaignId                 string                 `protobuf:"bytes,1,opt,name=campaign_id,json=campaignId,proto3" json:"campaign_id,omitempty"`

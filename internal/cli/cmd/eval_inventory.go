@@ -32,7 +32,7 @@ func inventoryEvalCmd(_ nativeEvalDeps) *cobra.Command {
 	}
 	freezeCmd := &cobra.Command{
 		Use:   "freeze",
-		Short: "Freeze the North Star model registry from a live provider inventory",
+		Short: "Freeze the model registry from a live provider inventory",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if campaignID == "" {
 				return fmt.Errorf("evaluation: inventory freeze: %w", constants.ErrMissingRequiredField)
@@ -51,7 +51,7 @@ func inventoryEvalCmd(_ nativeEvalDeps) *cobra.Command {
 				}
 				opts.ProbeBackend = probeBackend
 			}
-			freeze, err := evaluation.FreezeNorthStarModelInventoryFromProvider(cmd.Context(), ollamaEndpoint, campaignID, slog.Default(), opts)
+			freeze, err := evaluation.FreezeModelInventoryFromProvider(cmd.Context(), ollamaEndpoint, campaignID, slog.Default(), opts)
 			if err != nil {
 				return fmt.Errorf("evaluation: inventory freeze: %w", err)
 			}
@@ -74,8 +74,8 @@ func inventoryEvalCmd(_ nativeEvalDeps) *cobra.Command {
 				len(freeze.Variants),
 				freeze.HomogeneousCellCount,
 				len(freeze.Variants),
-				evaluation.NorthStarHomogeneousRoleCount,
-				evaluation.NorthStarScenarioCount,
+				evaluation.HomogeneousRoleCount,
+				evaluation.StandardScenarioCount,
 			); err != nil {
 				return err
 			}

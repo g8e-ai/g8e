@@ -17,7 +17,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-// ScenarioBlueprint is the authoring record for one frozen North Star scenario.
+// ScenarioBlueprint is the authoring record for one frozen scenario.
 type ScenarioBlueprint struct {
 	ScenarioID                  string
 	ScenarioVersion             string
@@ -42,16 +42,16 @@ type ScenarioArtifacts struct {
 	Gold  ScenarioArtifactPair
 }
 
-// BuildNorthStarScenarioCatalog materializes the frozen 25-scenario catalog and
+// BuildScenarioCatalog materializes the frozen 25-scenario catalog and
 // its content-addressed fixture artifacts.
-func BuildNorthStarScenarioCatalog() (*evalv1.EvaluationScenarioCatalog, map[string]ScenarioArtifacts, error) {
-	blueprints := northStarScenarioBlueprints()
+func BuildScenarioCatalog() (*evalv1.EvaluationScenarioCatalog, map[string]ScenarioArtifacts, error) {
+	blueprints := scenarioBlueprints()
 	artifacts := make(map[string]ScenarioArtifacts, len(blueprints))
 	scenarios := make([]*evalv1.EvaluationScenarioDefinition, 0, len(blueprints))
 	for _, blueprint := range blueprints {
 		scenario, pair, err := materializeScenarioBlueprint(blueprint)
 		if err != nil {
-			return nil, nil, fmt.Errorf("evaluation: build north star scenario catalog: scenario %s: %w", blueprint.ScenarioID, err)
+			return nil, nil, fmt.Errorf("evaluation: build scenario catalog: scenario %s: %w", blueprint.ScenarioID, err)
 		}
 		artifacts[blueprint.ScenarioID] = pair
 		scenarios = append(scenarios, scenario)
@@ -62,8 +62,8 @@ func BuildNorthStarScenarioCatalog() (*evalv1.EvaluationScenarioCatalog, map[str
 	catalog := &evalv1.EvaluationScenarioCatalog{
 		SchemaVersion: CampaignSchemaVersion,
 		CatalogRef: &compliancev1.VersionedReference{
-			Id:      NorthStarCatalogID,
-			Version: NorthStarCatalogVersion,
+			Id:      StandardCatalogID,
+			Version: StandardCatalogVersion,
 		},
 		Scenarios: scenarios,
 	}
@@ -75,69 +75,69 @@ func BuildNorthStarScenarioCatalog() (*evalv1.EvaluationScenarioCatalog, map[str
 	return catalog, artifacts, nil
 }
 
-// LoadNorthStarScenarioCatalog returns the validated frozen North Star catalog.
-func LoadNorthStarScenarioCatalog() (*evalv1.EvaluationScenarioCatalog, map[string]ScenarioArtifacts, error) {
-	catalog, artifacts, err := BuildNorthStarScenarioCatalog()
+// LoadScenarioCatalog returns the validated frozen scenario catalog.
+func LoadScenarioCatalog() (*evalv1.EvaluationScenarioCatalog, map[string]ScenarioArtifacts, error) {
+	catalog, artifacts, err := BuildScenarioCatalog()
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := ValidateNorthStarScenarioCatalog(catalog, artifacts); err != nil {
+	if err := ValidateScenarioCatalog(catalog, artifacts); err != nil {
 		return nil, nil, err
 	}
 	return catalog, artifacts, nil
 }
 
-// ValidateNorthStarScenarioCatalog verifies the frozen catalog gate for Phase 2.
-func ValidateNorthStarScenarioCatalog(catalog *evalv1.EvaluationScenarioCatalog, artifacts map[string]ScenarioArtifacts) error {
+// ValidateScenarioCatalog verifies the frozen catalog gate for Phase 2.
+func ValidateScenarioCatalog(catalog *evalv1.EvaluationScenarioCatalog, artifacts map[string]ScenarioArtifacts) error {
 	if catalog == nil || catalog.GetCatalogRef() == nil {
-		return fmt.Errorf("evaluation: validate north star scenario catalog: %w", constants.ErrMissingRequiredField)
+		return fmt.Errorf("evaluation: validate scenario catalog: %w", constants.ErrMissingRequiredField)
 	}
-	if catalog.GetCatalogRef().GetId() != NorthStarCatalogID || catalog.GetCatalogRef().GetVersion() != NorthStarCatalogVersion {
-		return fmt.Errorf("evaluation: validate north star scenario catalog: catalog identity mismatch")
+	if catalog.GetCatalogRef().GetId() != StandardCatalogID || catalog.GetCatalogRef().GetVersion() != StandardCatalogVersion {
+		return fmt.Errorf("evaluation: validate scenario catalog: catalog identity mismatch")
 	}
 	if catalog.GetSchemaVersion() != CampaignSchemaVersion {
-		return fmt.Errorf("evaluation: validate north star scenario catalog: unsupported schema version")
+		return fmt.Errorf("evaluation: validate scenario catalog: unsupported schema version")
 	}
 	if err := ValidateScenarioCatalogDigest(catalog); err != nil {
 		return err
 	}
 	if len(catalog.GetScenarios()) != 25 {
-		return fmt.Errorf("evaluation: validate north star scenario catalog: expected 25 scenarios, got %d", len(catalog.GetScenarios()))
+		return fmt.Errorf("evaluation: validate scenario catalog: expected 25 scenarios, got %d", len(catalog.GetScenarios()))
 	}
 	seen := make(map[string]struct{}, len(catalog.GetScenarios()))
 	for _, scenario := range catalog.GetScenarios() {
 		if scenario == nil || scenario.GetScenarioId() == "" || scenario.GetScenarioVersion() == "" {
-			return fmt.Errorf("evaluation: validate north star scenario catalog: %w", constants.ErrMissingRequiredField)
+			return fmt.Errorf("evaluation: validate scenario catalog: %w", constants.ErrMissingRequiredField)
 		}
 		key := scenario.GetScenarioId() + "@" + scenario.GetScenarioVersion()
 		if _, exists := seen[key]; exists {
-			return fmt.Errorf("evaluation: validate north star scenario catalog: duplicate scenario %s", key)
+			return fmt.Errorf("evaluation: validate scenario catalog: duplicate scenario %s", key)
 		}
 		seen[key] = struct{}{}
 		if scenario.GetCategory() == evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_UNSPECIFIED {
-			return fmt.Errorf("evaluation: validate north star scenario catalog: scenario %s has unspecified category", scenario.GetScenarioId())
+			return fmt.Errorf("evaluation: validate scenario catalog: scenario %s has unspecified category", scenario.GetScenarioId())
 		}
 		if scenario.GetPublicDescription() == "" {
-			return fmt.Errorf("evaluation: validate north star scenario catalog: scenario %s missing public description", scenario.GetScenarioId())
+			return fmt.Errorf("evaluation: validate scenario catalog: scenario %s missing public description", scenario.GetScenarioId())
 		}
 		if scenario.GetGradingMethod() == evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_UNSPECIFIED {
-			return fmt.Errorf("evaluation: validate north star scenario catalog: scenario %s has unspecified grading method", scenario.GetScenarioId())
+			return fmt.Errorf("evaluation: validate scenario catalog: scenario %s has unspecified grading method", scenario.GetScenarioId())
 		}
 		if scenario.GetInputFixtureRef() == nil || scenario.GetGoldCriteriaRef() == nil {
-			return fmt.Errorf("evaluation: validate north star scenario catalog: scenario %s missing fixture references", scenario.GetScenarioId())
+			return fmt.Errorf("evaluation: validate scenario catalog: scenario %s missing fixture references", scenario.GetScenarioId())
 		}
 		pair, ok := artifacts[scenario.GetScenarioId()]
 		if !ok {
-			return fmt.Errorf("evaluation: validate north star scenario catalog: missing artifacts for scenario %s", scenario.GetScenarioId())
+			return fmt.Errorf("evaluation: validate scenario catalog: missing artifacts for scenario %s", scenario.GetScenarioId())
 		}
 		if err := validateScenarioArtifactBinding(scenario.GetInputFixtureRef(), pair.Input); err != nil {
-			return fmt.Errorf("evaluation: validate north star scenario catalog: scenario %s input fixture: %w", scenario.GetScenarioId(), err)
+			return fmt.Errorf("evaluation: validate scenario catalog: scenario %s input fixture: %w", scenario.GetScenarioId(), err)
 		}
 		if err := validateScenarioArtifactBinding(scenario.GetGoldCriteriaRef(), pair.Gold); err != nil {
-			return fmt.Errorf("evaluation: validate north star scenario catalog: scenario %s gold criteria: %w", scenario.GetScenarioId(), err)
+			return fmt.Errorf("evaluation: validate scenario catalog: scenario %s gold criteria: %w", scenario.GetScenarioId(), err)
 		}
 	}
-	return validateNorthStarCategoryCounts(catalog.GetScenarios())
+	return validateCategoryCounts(catalog.GetScenarios())
 }
 
 func materializeScenarioBlueprint(blueprint ScenarioBlueprint) (*evalv1.EvaluationScenarioDefinition, ScenarioArtifacts, error) {
@@ -182,7 +182,7 @@ func validateScenarioArtifactBinding(reference *compliancev1.ComplianceEvidenceR
 	return nil
 }
 
-func validateNorthStarCategoryCounts(scenarios []*evalv1.EvaluationScenarioDefinition) error {
+func validateCategoryCounts(scenarios []*evalv1.EvaluationScenarioDefinition) error {
 	expected := map[evalv1.EvaluationScenarioCategory]int{
 		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE: 4,
 		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION:        4,
@@ -200,7 +200,7 @@ func validateNorthStarCategoryCounts(scenarios []*evalv1.EvaluationScenarioDefin
 	}
 	for category, want := range expected {
 		if counts[category] != want {
-			return fmt.Errorf("evaluation: validate north star scenario catalog: category %s expected %d scenarios, got %d", category.String(), want, counts[category])
+			return fmt.Errorf("evaluation: validate scenario catalog: category %s expected %d scenarios, got %d", category.String(), want, counts[category])
 		}
 	}
 	return nil

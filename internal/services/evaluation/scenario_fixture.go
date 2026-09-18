@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	NorthStarCatalogID      = "north-star-25"
-	NorthStarCatalogVersion = "1.0.0"
-	NorthStarCatalogScopeID = "north-star-25"
+	StandardCatalogID      = "north-star-25"
+	StandardCatalogVersion = "1.0.0"
+	StandardCatalogScopeID = "north-star-25"
 
 	scenarioInputSchemaVersion = "1.0.0"
 	scenarioGoldSchemaVersion  = "1.0.0"
@@ -145,7 +145,7 @@ func buildScenarioArtifactReference(artifactType complianceevidence.ArtifactType
 		SchemaRef:          schemaRef,
 		ProducerIdentity:   "g8e-eval-catalog",
 		ProducedAt:         freeze,
-		ScopeId:            NorthStarCatalogScopeID,
+		ScopeId:            StandardCatalogScopeID,
 		RunId:              "catalog",
 		ScenarioId:         scenarioID,
 		VerificationStatus: "verified",

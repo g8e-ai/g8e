@@ -18,7 +18,7 @@ import {
   formatPercent,
 } from '../components/shared';
 import type { EvaluationSummary } from '../contract/types';
-import { datasetLabel } from './derived';
+import { campaignTerminalProgress, datasetLabel } from './derived';
 
 export function EvaluationsView() {
   const [params, setParams] = useSearchParams();
@@ -79,13 +79,16 @@ export function EvaluationsView() {
       {
         id: 'progress',
         header: 'Progress',
-        cell: ({ row }: CellContext<EvaluationSummary, unknown>) => (
-          <ProgressBar
-            completed={row.original.native_result?.passed_verdict_count ?? row.original.assignment_completed}
-            total={row.original.native_result?.required_verdict_count ?? row.original.assignment_total}
-            label={`${row.original.run_id} progress`}
-          />
-        ),
+        cell: ({ row }: CellContext<EvaluationSummary, unknown>) => {
+          const terminal = campaignTerminalProgress(row.original);
+          return (
+            <ProgressBar
+              completed={row.original.native_result?.passed_verdict_count ?? terminal.done}
+              total={row.original.native_result?.required_verdict_count ?? terminal.total}
+              label={`${row.original.run_id} progress`}
+            />
+          );
+        },
         enableSorting: false,
       },
       {

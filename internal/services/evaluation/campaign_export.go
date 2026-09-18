@@ -364,7 +364,7 @@ func buildCampaignRunSummaryExport(
 func buildCampaignExportSchemaDocument() map[string]any {
 	return map[string]any{
 		"schema_version": campaignExportSchemaVersion,
-		"description":    "Disclosure-safe North Star campaign export bundle derived from public projections.",
+		"description":    "Disclosure-safe campaign export bundle derived from public projections.",
 		"files": map[string]any{
 			"export_schema.json": map[string]string{
 				"format":      "json",

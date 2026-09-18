@@ -18,9 +18,9 @@ import (
 )
 
 func TestBuildHeterogeneousAssignmentMatrix_MaterializesStacksByScenarios(t *testing.T) {
-	catalog, _, err := BuildNorthStarScenarioCatalog()
+	catalog, _, err := BuildScenarioCatalog()
 	require.NoError(t, err)
-	stackSet, err := GenerateNorthStarHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
+	stackSet, err := GenerateHeterogeneousStackSet(HeterogeneousStackGenerationRequest{
 		CampaignID: "north-star-heterogeneous",
 		Seed:       11,
 		Variants:   testHeterogeneousVariants(),
@@ -34,7 +34,7 @@ func TestBuildHeterogeneousAssignmentMatrix_MaterializesStacksByScenarios(t *tes
 		QueuedAt:   time.Unix(1_700_000_000, 0).UTC(),
 	})
 	require.NoError(t, err)
-	assert.Len(t, assignments, int(ComputeNorthStarHeterogeneousMatrixSize(uint64(len(stackSet.Stacks)))))
+	assert.Len(t, assignments, int(ComputeHeterogeneousMatrixSize(uint64(len(stackSet.Stacks)))))
 	require.NoError(t, ValidateHeterogeneousAssignmentMatrix(catalog, stackSet, assignments))
 	for _, assignment := range assignments {
 		assert.Equal(t, evalv1.EvaluationLane_EVALUATION_LANE_SYSTEM, assignment.GetLane())

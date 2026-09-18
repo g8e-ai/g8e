@@ -79,8 +79,8 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 	summary := map[string]any{}
 	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
 	assert.Equal(t, "evaluation_summary", summary["kind"])
-	assert.Equal(t, "running", summary["lifecycle_state"])
-	assert.Equal(t, "live_in_progress", summary["quality_state"])
+	assert.Equal(t, "completed", summary["lifecycle_state"])
+	assert.Equal(t, "exploratory_partial", summary["quality_state"])
 	assert.Equal(t, float64(50), summary["elapsed_seconds"])
 
 	catalog := map[string]any{}
@@ -101,6 +101,38 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 	methodology := map[string]any{}
 	require.NoError(t, json.Unmarshal(records[3].Body, &methodology))
 	assert.Equal(t, "methodology_snapshot", methodology["kind"])
+}
+
+func TestBuildRunAggregateViewRecordsPartialProgress(t *testing.T) {
+	assignments := []*evalv1.EvaluationAssignment{
+		homogeneousAssignment("assign-1", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY),
+		homogeneousAssignment("assign-2", "qwen3-4b", evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_ASSISTANT),
+	}
+	results := map[string]*evalv1.EvaluationAssignmentResult{
+		"assign-1": {
+			AssignmentId:    "assign-1",
+			LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+			DeterministicGrades: []*evalv1.DeterministicGrade{{
+				Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+			}},
+		},
+	}
+	state, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	run := &evalv1.EvaluationRun{
+		RunId:     "run-1",
+		StartedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: "eval-smoke-mini",
+		},
+	}
+	records, err := BuildRunAggregateViewRecords(run, state, time.Unix(1_700_000_050, 0).UTC())
+	require.NoError(t, err)
+
+	summary := map[string]any{}
+	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
+	assert.Equal(t, "running", summary["lifecycle_state"])
+	assert.Equal(t, "live_in_progress", summary["quality_state"])
 }
 
 func TestBuildRunCompletionViewRecords(t *testing.T) {

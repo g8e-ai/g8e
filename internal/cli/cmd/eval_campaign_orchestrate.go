@@ -113,7 +113,7 @@ func initializeCampaignRun(
 		return fmt.Errorf("evaluation: campaign init: inventory campaign_id mismatch")
 	}
 	inventory.CampaignID = plan.CampaignID
-	catalog, artifacts, err := evaluation.LoadNorthStarScenarioCatalog()
+	catalog, artifacts, err := evaluation.LoadScenarioCatalog()
 	if err != nil {
 		return fmt.Errorf("evaluation: campaign init: %w", err)
 	}
@@ -224,7 +224,7 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 	if err != nil {
 		return 0, fmt.Errorf("evaluation: campaign execute: %w", err)
 	}
-	_, artifacts, err := evaluation.LoadNorthStarScenarioCatalog()
+	_, artifacts, err := evaluation.LoadScenarioCatalog()
 	if err != nil {
 		return 0, fmt.Errorf("evaluation: campaign execute: %w", err)
 	}
@@ -360,7 +360,7 @@ func verifyCampaignRun(
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
 	}
-	_, artifacts, err := evaluation.LoadNorthStarScenarioCatalog()
+	_, artifacts, err := evaluation.LoadScenarioCatalog()
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
 	}
@@ -393,12 +393,20 @@ func verifyCampaignRun(
 	publication, pubErr := newCampaignPublicationCoordinator(cmd, fileSvc)
 	if pubErr != nil {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication unavailable: %v\n", pubErr)
-	} else if report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
-		published, pubErr := publication.PublishRunVerification(cmd.Context(), runID, report)
+	} else {
+		completionCount, pubErr := publication.PublishRunCompletion(cmd.Context(), runID, deps.now().UTC())
 		if pubErr != nil {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication: %v\n", pubErr)
-		} else if published > 0 && !jsonOutput {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d verification projection record(s) to public mirror\n", published)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify completion publication: %v\n", pubErr)
+		} else if completionCount > 0 && !jsonOutput {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d completion projection record(s) to public mirror\n", completionCount)
+		}
+		if report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+			published, pubErr := publication.PublishRunVerification(cmd.Context(), runID, report)
+			if pubErr != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication: %v\n", pubErr)
+			} else if published > 0 && !jsonOutput {
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d verification projection record(s) to public mirror\n", published)
+			}
 		}
 	}
 	return report, nil

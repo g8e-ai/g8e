@@ -358,7 +358,7 @@ func evaluationRunsRootDir() string {
 	return filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname)
 }
 
-// CampaignListEntry summarizes one persisted North Star campaign.
+// CampaignListEntry summarizes one persisted campaign.
 type CampaignListEntry struct {
 	CampaignID             string
 	ModelCount             int

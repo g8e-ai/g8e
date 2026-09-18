@@ -18,7 +18,7 @@ import (
 )
 
 func TestBuildHomogeneousAssignmentMatrix_MaterializesFullCrossProduct(t *testing.T) {
-	catalog, _, err := BuildNorthStarScenarioCatalog()
+	catalog, _, err := BuildScenarioCatalog()
 	require.NoError(t, err)
 	variants := []*evalv1.ModelVariant{
 		{VariantId: "qwen3-4b", ProviderClass: "ollama", ServedModelTag: "qwen3:4b", ModelDigest: repeatHex('a', 64)},

@@ -25,7 +25,7 @@ func chatGradingMethodLabel(method evalv1.EvaluationGradingMethod) string {
 }
 
 // ChatProbeRequest carries a non-scored production chat probe through
-// POST /api/v1/chat. It is not a North Star evaluation.
+// POST /api/v1/chat. It is not a scored campaign evaluation.
 type ChatProbeRequest struct {
 	AssignmentID            string
 	EvaluationAttemptID     string

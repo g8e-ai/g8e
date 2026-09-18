@@ -6,7 +6,36 @@
 //   - Metric unavailable: a specific metric was not observed or not applicable
 // These are distinct product states, never collapsed into a single "empty".
 
-import type { FreshnessState, LifecycleStatus, QualityState } from '../contract/types';
+import type { FreshnessState, LifecycleStatus, LiveEventKind, QualityState } from '../contract/types';
+
+/** Run-level live events may advance evaluation_summary quality; assignment events must not. */
+const RUN_LEVEL_QUALITY_EVENT_KINDS = new Set<LiveEventKind>([
+  'evaluation_queued',
+  'evaluation_started',
+  'evaluation_completed',
+  'evaluation_failed',
+  'evaluation_stopped',
+]);
+
+const QUALITY_STATE_RANK: Record<QualityState, number> = {
+  verified_public: 7,
+  exploratory_verified: 6,
+  exploratory_partial: 5,
+  live_in_progress: 4,
+  terminal_failed: 3,
+  dead_evidence: 2,
+  not_evaluated: 1,
+  unavailable: 0,
+};
+
+export function isRunLevelQualityEvent(kind: LiveEventKind): boolean {
+  return RUN_LEVEL_QUALITY_EVENT_KINDS.has(kind);
+}
+
+/** Keep the higher-trust quality label when reconciling live event updates. */
+export function mergeQualityState(current: QualityState, candidate: QualityState): QualityState {
+  return QUALITY_STATE_RANK[candidate] > QUALITY_STATE_RANK[current] ? candidate : current;
+}
 
 export type FeedConnectionState =
   | 'connecting'

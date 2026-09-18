@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	HeterogeneousStackGenerationRule = "north-star-heterogeneous-v1"
+	HeterogeneousStackGenerationRule = "heterogeneous-v1"
 )
 
 // HeterogeneousStackHypothesis names one preregistered stack-selection strategy.
@@ -76,10 +76,10 @@ type HeterogeneousStackGenerationRequest struct {
 	Variants   []*evalv1.ModelVariant
 }
 
-// GenerateNorthStarHeterogeneousStackSet materializes the preregistered
+// GenerateHeterogeneousStackSet materializes the preregistered
 // hypothesis stacks plus coverage stacks so every frozen variant appears in
 // every role at least once.
-func GenerateNorthStarHeterogeneousStackSet(req HeterogeneousStackGenerationRequest) (*HeterogeneousStackSet, error) {
+func GenerateHeterogeneousStackSet(req HeterogeneousStackGenerationRequest) (*HeterogeneousStackSet, error) {
 	if req.CampaignID == "" || len(req.Variants) == 0 {
 		return nil, fmt.Errorf("evaluation: generate heterogeneous stack set: %w", constants.ErrMissingRequiredField)
 	}
@@ -177,9 +177,9 @@ func validateVariantRoleCoverageComplete(variantIDs []string, stacks []*evalv1.H
 	return nil
 }
 
-// ComputeNorthStarHeterogeneousMatrixSize returns stacks × scenarios.
-func ComputeNorthStarHeterogeneousMatrixSize(stackCount uint64) uint64 {
-	return stackCount * NorthStarScenarioCount
+// ComputeHeterogeneousMatrixSize returns stacks × scenarios.
+func ComputeHeterogeneousMatrixSize(stackCount uint64) uint64 {
+	return stackCount * StandardScenarioCount
 }
 
 func buildHypothesisStack(campaignID string, hypothesis HeterogeneousStackHypothesis, variants []*evalv1.ModelVariant, seed uint64) (*evalv1.HeterogeneousStackDefinition, error) {

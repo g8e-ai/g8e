@@ -307,7 +307,7 @@ message EvaluationReport {
   EvaluationVerificationReport campaign_verification_report = 15;
 }
 
-// ModelCampaignBinding pins immutable North Star campaign identity on a run.
+// ModelCampaignBinding pins immutable campaign identity on a run.
 message ModelCampaignBinding {
   string campaign_id = 1;
   string campaign_digest = 2;

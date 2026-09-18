@@ -14,15 +14,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestValidateNorthStarRepeatabilitySpec(t *testing.T) {
+func TestValidateRepeatabilitySpec(t *testing.T) {
 	spec := testCampaignSpec()
-	spec.RepetitionCount = NorthStarRepeatabilityRepetitionCount
-	require.NoError(t, ValidateNorthStarRepeatabilitySpec(spec))
+	spec.RepetitionCount = RepeatabilityRepetitionCount
+	require.NoError(t, ValidateRepeatabilitySpec(spec))
 	spec.RepetitionCount = 1
-	assert.Error(t, ValidateNorthStarRepeatabilitySpec(spec))
+	assert.Error(t, ValidateRepeatabilitySpec(spec))
 }
 
-func TestComputeNorthStarRepeatabilityMatrixSize(t *testing.T) {
-	assert.Equal(t, uint64(375), ComputeNorthStarRepeatabilityMatrixSize(1))
-	assert.Equal(t, uint64(13125), ComputeNorthStarRepeatabilityMatrixSize(35))
+func TestComputeRepeatabilityMatrixSize(t *testing.T) {
+	assert.Equal(t, uint64(375), ComputeRepeatabilityMatrixSize(1))
+	assert.Equal(t, uint64(13125), ComputeRepeatabilityMatrixSize(35))
 }

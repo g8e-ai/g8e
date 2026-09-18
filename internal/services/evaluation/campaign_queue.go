@@ -24,7 +24,7 @@ import (
 
 const (
 	DefaultInitCampaignQueueRelPath    = ".local.dev/init-campaign-queue.json"
-	DefaultNorthStarInventoryRelPath   = ".local.dev/north-star-inventory.json"
+	DefaultModelInventoryRelPath   = ".local.dev/model-inventory.json"
 	DefaultCampaignInventoryRelDirname = ".g8e/eval/inventories"
 )
 
@@ -136,23 +136,23 @@ func (queue *CampaignQueue) FilterByStatus(status string) []CampaignQueueModel {
 	return filtered
 }
 
-// LoadNorthStarVariants reads the frozen north-star inventory export.
-func LoadNorthStarVariants(path string) ([]*evalv1.ModelVariant, error) {
+// LoadFrozenVariants reads a frozen model inventory export.
+func LoadFrozenVariants(path string) ([]*evalv1.ModelVariant, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation: load north star variants: %w", err)
+		return nil, fmt.Errorf("evaluation: load frozen variants: %w", err)
 	}
 	var payload struct {
 		Variants []json.RawMessage `json:"variants"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
-		return nil, fmt.Errorf("evaluation: load north star variants: decode: %w", err)
+		return nil, fmt.Errorf("evaluation: load frozen variants: decode: %w", err)
 	}
 	variants := make([]*evalv1.ModelVariant, 0, len(payload.Variants))
 	for _, raw := range payload.Variants {
 		variant := &evalv1.ModelVariant{}
 		if err := protojson.Unmarshal(raw, variant); err != nil {
-			return nil, fmt.Errorf("evaluation: load north star variants: decode variant: %w", err)
+			return nil, fmt.Errorf("evaluation: load frozen variants: decode variant: %w", err)
 		}
 		variants = append(variants, variant)
 	}
@@ -162,10 +162,10 @@ func LoadNorthStarVariants(path string) ([]*evalv1.ModelVariant, error) {
 	return variants, nil
 }
 
-// NorthStarVariantsByTags returns frozen variants for the requested served model tags.
-func NorthStarVariantsByTags(variants []*evalv1.ModelVariant, tags []string) ([]*evalv1.ModelVariant, error) {
+// VariantsByTags returns frozen variants for the requested served model tags.
+func VariantsByTags(variants []*evalv1.ModelVariant, tags []string) ([]*evalv1.ModelVariant, error) {
 	if len(tags) == 0 {
-		return nil, fmt.Errorf("evaluation: north star variants by tags: %w", constants.ErrMissingRequiredField)
+		return nil, fmt.Errorf("evaluation: variants by tags: %w", constants.ErrMissingRequiredField)
 	}
 	picked := make([]*evalv1.ModelVariant, 0, len(tags))
 	for _, tag := range tags {
@@ -182,17 +182,17 @@ func NorthStarVariantsByTags(variants []*evalv1.ModelVariant, tags []string) ([]
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("evaluation: north star variants by tags: %w: %s", constants.ErrInferenceModelNotFound, tag)
+			return nil, fmt.Errorf("evaluation: variants by tags: %w: %s", constants.ErrInferenceModelNotFound, tag)
 		}
 	}
 	if len(picked) == 0 {
-		return nil, fmt.Errorf("evaluation: north star variants by tags: %w", constants.ErrMissingRequiredField)
+		return nil, fmt.Errorf("evaluation: variants by tags: %w", constants.ErrMissingRequiredField)
 	}
 	return picked, nil
 }
 
-// CampaignIDForNorthStarVariant returns the canonical campaign ID for one model.
-func CampaignIDForNorthStarVariant(variant *evalv1.ModelVariant) string {
+// CampaignIDForVariant returns the canonical campaign ID for one model.
+func CampaignIDForVariant(variant *evalv1.ModelVariant) string {
 	if variant == nil {
 		return ""
 	}
@@ -281,12 +281,12 @@ func resolveCampaignStartPlanForTags(req CampaignStartPlanRequest, tags []string
 		}
 	}
 
-	northStarPath := filepath.Join(req.ProjectRoot, DefaultNorthStarInventoryRelPath)
-	variants, err := LoadNorthStarVariants(northStarPath)
+	northStarPath := filepath.Join(req.ProjectRoot, DefaultModelInventoryRelPath)
+	variants, err := LoadFrozenVariants(northStarPath)
 	if err != nil {
 		return nil, err
 	}
-	picked, err := NorthStarVariantsByTags(variants, tags)
+	picked, err := VariantsByTags(variants, tags)
 	if err != nil {
 		return nil, err
 	}
@@ -294,16 +294,16 @@ func resolveCampaignStartPlanForTags(req CampaignStartPlanRequest, tags []string
 	campaignID := req.CampaignID
 	if campaignID == "" {
 		if len(picked) == 1 {
-			campaignID = CampaignIDForNorthStarVariant(picked[0])
+			campaignID = CampaignIDForVariant(picked[0])
 		} else {
 			campaignID = "eval-batch-" + fmt.Sprintf("%d", now.Unix())
 		}
 	}
-	freeze, err := MaterializeNorthStarModelRegistry(campaignID, picked)
+	freeze, err := MaterializeModelRegistry(campaignID, picked)
 	if err != nil {
 		return nil, err
 	}
-	if err := ValidateNorthStarModelRegistry(freeze); err != nil {
+	if err := ValidateModelRegistry(freeze); err != nil {
 		return nil, err
 	}
 	inventoryDir := filepath.Join(req.ProjectRoot, DefaultCampaignInventoryRelDirname)

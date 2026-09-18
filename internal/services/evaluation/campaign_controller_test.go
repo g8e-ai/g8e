@@ -44,9 +44,9 @@ func (s *stubCampaignExecutor) ExecuteAssignment(_ context.Context, req Assignme
 
 func testCampaignInitRequest(t *testing.T) CampaignInitRequest {
 	t.Helper()
-	catalog, artifacts, err := LoadNorthStarScenarioCatalog()
+	catalog, artifacts, err := LoadScenarioCatalog()
 	require.NoError(t, err)
-	inventory, err := MaterializeNorthStarModelRegistry("north-star-smoke", []*evalv1.ModelVariant{testModelVariant()})
+	inventory, err := MaterializeModelRegistry("north-star-smoke", []*evalv1.ModelVariant{testModelVariant()})
 	require.NoError(t, err)
 	return CampaignInitRequest{
 		CampaignID:                 "north-star-smoke",

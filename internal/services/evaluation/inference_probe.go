@@ -17,7 +17,7 @@ import (
 )
 
 // InferenceProbeRequest carries a non-scored governed inference probe through
-// the exact Inference Operator session. It is not a North Star evaluation.
+// the exact Inference Operator session. It is not a scored campaign evaluation.
 type InferenceProbeRequest struct {
 	ProviderAttemptID       string
 	Role                    models.InferenceModelRole

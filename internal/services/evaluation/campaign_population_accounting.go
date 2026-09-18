@@ -18,7 +18,7 @@ import (
 )
 
 // CampaignPopulationReport records matrix coverage and lifecycle accounting for
-// one homogeneous North Star campaign run.
+// one homogeneous campaign run.
 type CampaignPopulationReport struct {
 	RunID                 string
 	ExpectedCells         uint64
