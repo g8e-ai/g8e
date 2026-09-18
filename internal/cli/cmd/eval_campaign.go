@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -151,13 +152,33 @@ func campaignEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			campaigns, err := evaluation.NewStore(fileSvc).ListCampaigns(cmd.Context())
+			store := evaluation.NewStore(fileSvc)
+			campaigns, err := store.ListCampaigns(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign list: %w", err)
+			}
+			controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
+			rows, err := collectCampaignListRows(cmd.Context(), controller, store, campaigns)
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign list: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
 				entries := make([]map[string]any, 0, len(campaigns))
 				for _, campaign := range campaigns {
+					runEntries := make([]map[string]any, 0, len(campaign.RunIDs))
+					for _, row := range rows {
+						if row.CampaignID != campaign.CampaignID {
+							continue
+						}
+						runEntries = append(runEntries, map[string]any{
+							"run_id":               row.RunID,
+							"status":               row.Status,
+							"expected_assignments": row.ExpectedAssignments,
+							"queued":               row.Queued,
+							"running":              row.Running,
+							"terminal":             row.Terminal,
+						})
+					}
 					entries = append(entries, map[string]any{
 						"campaign_id":              campaign.CampaignID,
 						"model_count":              campaign.ModelCount,
@@ -166,7 +187,7 @@ func campaignEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 						"model_registry_digest":    campaign.ModelRegistryDigest,
 						"catalog_digest":           campaign.CatalogDigest,
 						"has_heterogeneous_stacks": campaign.HasHeterogeneousStacks,
-						"run_ids":                  campaign.RunIDs,
+						"runs":                     runEntries,
 					})
 				}
 				payload, err := json.MarshalIndent(map[string]any{"campaigns": entries}, "", "  ")
@@ -176,37 +197,87 @@ func campaignEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
 				return err
 			}
-			if len(campaigns) == 0 {
+			if len(rows) == 0 {
 				cmd.Println("No campaigns found")
 				return nil
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Campaigns (%d total)\n", len(campaigns))
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Campaigns (%d campaigns, %d runs)\n", len(campaigns), len(rows))
 			if err != nil {
 				return err
 			}
-			for _, campaign := range campaigns {
-				runCount := len(campaign.RunIDs)
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "- %s  models=%d  scenarios=%d  repetitions=%d  runs=%d\n",
-					campaign.CampaignID,
-					campaign.ModelCount,
-					campaign.ScenarioCount,
-					campaign.RepetitionCount,
-					runCount,
+			cmd.Println(strings.Repeat("=", 132))
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "  %-24s  %-38s  %-14s  %-10s  %-6s  %-9s  %-4s\n",
+				"CAMPAIGN", "RUN", "STATUS", "PROGRESS", "MODELS", "SCENARIOS", "REPS")
+			if err != nil {
+				return err
+			}
+			cmd.Println(strings.Repeat("-", 132))
+			for _, row := range rows {
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "  %-24s  %-38s  %-14s  %3d/%-6d  %-6d  %-9d  %-4d\n",
+					row.CampaignID,
+					row.RunID,
+					row.Status,
+					row.Terminal,
+					row.ExpectedAssignments,
+					row.ModelCount,
+					row.ScenarioCount,
+					row.RepetitionCount,
 				)
 				if err != nil {
 					return err
-				}
-				for _, runID := range campaign.RunIDs {
-					_, err = fmt.Fprintf(cmd.OutOrStdout(), "  run: %s\n", runID)
-					if err != nil {
-						return err
-					}
 				}
 			}
 			return nil
 		},
 	}
 	return cmd
+}
+
+type campaignListRow struct {
+	CampaignID          string
+	RunID               string
+	Status              string
+	ExpectedAssignments uint64
+	Queued              uint32
+	Running             uint32
+	Terminal            uint32
+	ModelCount          int
+	ScenarioCount       uint32
+	RepetitionCount     uint32
+}
+
+func collectCampaignListRows(
+	ctx context.Context,
+	controller *evaluation.CampaignController,
+	store *evaluation.Store,
+	campaigns []evaluation.CampaignListEntry,
+) ([]campaignListRow, error) {
+	rows := make([]campaignListRow, 0)
+	for _, campaign := range campaigns {
+		for _, runID := range campaign.RunIDs {
+			summary, err := controller.RunSummary(ctx, runID)
+			if err != nil {
+				return nil, err
+			}
+			verification, err := store.LoadCampaignVerification(ctx, runID)
+			if err != nil {
+				verification = nil
+			}
+			rows = append(rows, campaignListRow{
+				CampaignID:          campaign.CampaignID,
+				RunID:               runID,
+				Status:              evaluation.CampaignRunStatus(summary, verification),
+				ExpectedAssignments: summary.ExpectedAssignment,
+				Queued:              summary.QueuedCount,
+				Running:             summary.RunningCount,
+				Terminal:            summary.TerminalCount,
+				ModelCount:          campaign.ModelCount,
+				ScenarioCount:       campaign.ScenarioCount,
+				RepetitionCount:     campaign.RepetitionCount,
+			})
+		}
+	}
+	return rows, nil
 }
 
 func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
