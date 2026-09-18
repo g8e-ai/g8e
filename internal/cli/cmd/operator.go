@@ -39,6 +39,7 @@ func operatorCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		operatorListCmd(),
+		operatorShowCmd(),
 		operatorBindCmd(),
 		operatorRunCmd(),
 		operatorStartCmd(),
@@ -110,6 +111,9 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 						"status":              op.Status,
 						"component":           op.Component,
 					}
+					if hostname := operatorHostnameValue(op); hostname != "" {
+						entry["hostname"] = hostname
+					}
 					if op.Name != "" {
 						entry["name"] = op.Name
 					}
@@ -131,11 +135,11 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 			}
 
 			cmd.Printf("Operators (%d total)\n", len(operators))
-			cmd.Println(strings.Repeat("=", 115))
-			cmd.Printf("  %-36s  %-12s  %-36s  %-15s\n", "ID", "Type", "Session ID", "Status")
-			cmd.Println(strings.Repeat("-", 115))
+			cmd.Println(strings.Repeat("=", 140))
+			cmd.Printf("  %-36s  %-12s  %-24s  %-36s  %-15s\n", "ID", "Type", "Hostname", "Session ID", "Status")
+			cmd.Println(strings.Repeat("-", 140))
 			for _, op := range operators {
-				cmd.Printf("  %-36s  %-12s  %-36s  %-15s\n", op.ID, op.OperatorType, op.OperatorSessionID, op.Status)
+				cmd.Printf("  %-36s  %-12s  %-24s  %-36s  %-15s\n", op.ID, op.OperatorType, operatorHostnameDisplay(op), op.OperatorSessionID, op.Status)
 			}
 
 			return nil
