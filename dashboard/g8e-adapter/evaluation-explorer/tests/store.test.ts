@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EvalStore } from '../src/state/store';
 import { allFixtureSnapshotRecords, fixtureLiveEvents } from '../src/fixtures/fixtures';
 
@@ -73,6 +73,155 @@ describe('EvalStore', () => {
     expect(store.getState().streamConnection).toBe('disconnected');
     expect(store.getState().feedStatus?.message).toBe('mirror unreachable');
     expect(store.getState().feedStatus?.freshness).toBe('source_offline');
+  });
+
+  it('batches projection updates until endBatch', () => {
+    const listener = vi.fn();
+    store.subscribe(listener);
+    store.initBootstrap(
+      {
+        protocol_version: '1.0.0',
+        source_id: 'opendevops-local',
+        high_water_sequence: 2,
+        feed_chain_hash: '0'.repeat(64),
+        batch_count: 0,
+        generated_at: '2026-09-14T08:00:00Z',
+        freshness: 'active',
+      },
+      [],
+      0,
+    );
+    listener.mockClear();
+
+    const catalogBytes = JSON.stringify({
+      schema_version: '1.3.0',
+      kind: 'catalog_snapshot',
+      dataset_id: 'ds-test',
+      quality_state: 'live_in_progress',
+      observed_at: '2026-09-14T08:00:00Z',
+      dataset_kind: 'live_run',
+      title: 'Test',
+      description: 'Test',
+      limitations: [],
+      model_count: 1,
+      evaluated_count: 0,
+      suite_count: 1,
+      run_count: 1,
+      assignment_count: 1,
+      provider_request_count: 0,
+      provider_token_count: 0,
+      retry_count: 0,
+      verifier_passed_count: 0,
+      verifier_failed_count: 0,
+      generated_at: '2026-09-14T08:00:00Z',
+    });
+
+    store.beginBatch();
+    store.acceptProjection({ sequence: 1, record_type: 'projection', record_bytes: catalogBytes });
+    store.acceptProjection({ sequence: 2, record_type: 'projection', record_bytes: catalogBytes });
+    expect(listener).not.toHaveBeenCalled();
+    expect(store.getState().observedSequence).toBe(2);
+    store.endBatch();
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports reconciliation while the bootstrap snapshot is pending', () => {
+    store.initBootstrap(
+      {
+        protocol_version: '1.0.0',
+        source_id: 'opendevops-local',
+        high_water_sequence: 3,
+        feed_chain_hash: '0'.repeat(64),
+        batch_count: 0,
+        generated_at: '2026-09-14T08:00:00Z',
+        freshness: 'active',
+      },
+      [],
+      0,
+    );
+    expect(store.isReconciling()).toBe(true);
+    store.beginBatch();
+    store.acceptProjection({
+      sequence: 1,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        schema_version: '1.3.0',
+        kind: 'catalog_snapshot',
+        dataset_id: 'ds-test',
+        quality_state: 'live_in_progress',
+        observed_at: '2026-09-14T08:00:00Z',
+        dataset_kind: 'live_run',
+        title: 'Test',
+        description: 'Test',
+        limitations: [],
+        model_count: 1,
+        evaluated_count: 0,
+        suite_count: 1,
+        run_count: 1,
+        assignment_count: 1,
+        provider_request_count: 0,
+        provider_token_count: 0,
+        retry_count: 0,
+        verifier_passed_count: 0,
+        verifier_failed_count: 0,
+        generated_at: '2026-09-14T08:00:00Z',
+      }),
+    });
+    store.acceptProjection({
+      sequence: 2,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        schema_version: '1.3.0',
+        kind: 'catalog_snapshot',
+        dataset_id: 'ds-test',
+        quality_state: 'live_in_progress',
+        observed_at: '2026-09-14T08:00:00Z',
+        dataset_kind: 'live_run',
+        title: 'Test',
+        description: 'Test',
+        limitations: [],
+        model_count: 1,
+        evaluated_count: 1,
+        suite_count: 1,
+        run_count: 1,
+        assignment_count: 1,
+        provider_request_count: 0,
+        provider_token_count: 0,
+        retry_count: 0,
+        verifier_passed_count: 0,
+        verifier_failed_count: 0,
+        generated_at: '2026-09-14T08:00:00Z',
+      }),
+    });
+    store.acceptProjection({
+      sequence: 3,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        schema_version: '1.3.0',
+        kind: 'catalog_snapshot',
+        dataset_id: 'ds-test',
+        quality_state: 'live_in_progress',
+        observed_at: '2026-09-14T08:00:00Z',
+        dataset_kind: 'live_run',
+        title: 'Test',
+        description: 'Test',
+        limitations: [],
+        model_count: 1,
+        evaluated_count: 1,
+        suite_count: 1,
+        run_count: 1,
+        assignment_count: 1,
+        provider_request_count: 0,
+        provider_token_count: 0,
+        retry_count: 0,
+        verifier_passed_count: 0,
+        verifier_failed_count: 0,
+        generated_at: '2026-09-14T08:00:00Z',
+      }),
+    });
+    store.endBatch();
+    expect(store.isReconciling()).toBe(false);
+    expect(store.getState().pendingSnapshot).toBeNull();
   });
 
   it('acceptProjection refreshes freshness from the last accepted timestamp', () => {

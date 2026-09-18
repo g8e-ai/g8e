@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import type { FeedConnectionState, StreamConnectionState } from '../utils/feed-state';
 import { resolveModelSummary, useStoreState } from '../state/store';
 import { roleLabel, visibleStreamEvents } from '../views/derived';
-import { EmptyState, StreamStatusIndicator } from './shared';
+import { EmptyState, ReconcilePlaceholder, StreamStatusIndicator } from './shared';
 import type { LiveEvent } from '../contract/types';
 
 const STREAM_PAGE_SIZE = 25;
@@ -21,10 +21,12 @@ export function LiveEventStream({
   events,
   connection,
   streamConnection,
+  isReconciling = false,
 }: {
   events: LiveEvent[];
   connection: FeedConnectionState;
   streamConnection: StreamConnectionState;
+  isReconciling?: boolean;
 }) {
   const [modelFilter, setModelFilter] = useState('all');
   const [kindFilter, setKindFilter] = useState('all');
@@ -98,7 +100,9 @@ export function LiveEventStream({
           </select>
         </div>
       </div>
-      {visible.length === 0 ? (
+      {isReconciling ? (
+        <ReconcilePlaceholder label="Loading feed history…" />
+      ) : visible.length === 0 ? (
         <EmptyState
           hasRecords={events.length > 0}
           hasFilters={modelFilter !== 'all' || kindFilter !== 'all'}

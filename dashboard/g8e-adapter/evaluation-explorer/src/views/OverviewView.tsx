@@ -23,6 +23,7 @@ import { DatasetSelector } from '../components/DatasetSelector';
 import { LiveEventStream } from '../components/LiveEventStream';
 import {
   ProgressBar,
+  ReconcilePlaceholder,
   StreamStatusIndicator,
   UnavailableValue,
   formatNumber,
@@ -266,6 +267,7 @@ type SystemOverviewPanelProps = {
   activeDatasetId: string;
   connection: FeedConnectionState;
   streamConnection: StreamConnectionState;
+  isReconciling: boolean;
 };
 
 /** System overview: platform context, active campaign progress, and current run. */
@@ -277,6 +279,7 @@ function SystemOverviewPanel({
   activeDatasetId,
   connection,
   streamConnection,
+  isReconciling,
 }: SystemOverviewPanelProps) {
   const completedRuns = evaluations.filter((e) => e.lifecycle_state === 'completed').length;
   const assignmentDone = evaluations.reduce(
@@ -327,7 +330,9 @@ function SystemOverviewPanel({
         <DatasetSelector activeId={activeDatasetId} />
         {catalog ? <p className="panel-note">{catalog.title}</p> : null}
 
-        {catalog ? (
+        {isReconciling ? (
+          <ReconcilePlaceholder label="Loading feed history…" />
+        ) : catalog ? (
           <div className="usage-list" aria-label="Dataset coverage">
             <CoverageBar label="Models evaluated" done={catalog.evaluated_count} total={catalog.model_count} />
             <CoverageBar label="Suites verified" done={catalog.verifier_passed_count} total={catalog.suite_count} />
@@ -346,7 +351,9 @@ function SystemOverviewPanel({
             </Link>
           ) : null}
         </div>
-        {currentRun && latestEvent ? (
+        {isReconciling ? (
+          <ReconcilePlaceholder label="Loading current task…" />
+        ) : currentRun && latestEvent ? (
           <>
             <p className="task-title">{currentSuite?.display_name ?? currentRun.suite_id}</p>
             <p className="task-sub">
@@ -482,11 +489,17 @@ export function OverviewView() {
   const events = useStoreState((state) => state.events);
   const connection = useStoreState((state) => state.connection);
   const streamConnection = useStoreState((state) => state.streamConnection);
+  const isReconciling = useStoreState((state) => state.pendingSnapshot !== null);
 
   return (
     <div className="overview">
       <div className="ov-grid-main">
-        <LiveEventStream events={events} connection={connection} streamConnection={streamConnection} />
+        <LiveEventStream
+          events={events}
+          connection={connection}
+          streamConnection={streamConnection}
+          isReconciling={isReconciling}
+        />
         <SystemOverviewPanel
           catalog={catalog}
           evaluations={evaluations}
@@ -495,6 +508,7 @@ export function OverviewView() {
           activeDatasetId={activeDatasetId}
           connection={connection}
           streamConnection={streamConnection}
+          isReconciling={isReconciling}
         />
       </div>
 

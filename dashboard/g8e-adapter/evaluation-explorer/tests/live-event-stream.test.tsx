@@ -20,6 +20,18 @@ function liveEvent(partial: Partial<LiveEvent> & Pick<LiveEvent, 'event_id' | 'k
 }
 
 describe('LiveEventStream', () => {
+  it('shows a reconcile placeholder while history replay is in progress', () => {
+    render(
+      <MemoryRouter>
+        <LiveEventStream events={[]} connection="live" streamConnection="connecting" isReconciling />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId('reconcile-placeholder')).toBeInTheDocument();
+    expect(screen.getByText('Loading feed history…')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
   it('paginates events and scrolls per page', async () => {
     const user = userEvent.setup();
     const events = Array.from({ length: 30 }, (_, index) =>

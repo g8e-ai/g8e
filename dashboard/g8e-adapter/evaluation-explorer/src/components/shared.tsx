@@ -255,6 +255,15 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
+export function ReconcilePlaceholder({ label = 'Loading feed history…' }: { label?: string }) {
+  return (
+    <div className="reconcile-placeholder" data-testid="reconcile-placeholder">
+      <p className="panel-note">{label}</p>
+      <Skeleton lines={4} />
+    </div>
+  );
+}
+
 export interface TimelineEvent {
   observed_at: string;
   kind: string;

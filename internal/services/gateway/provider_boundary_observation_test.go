@@ -37,6 +37,14 @@ func (s *stubProviderBoundaryOperatorLister) ListOperatorsForObservation() ([]mo
 	return s.operators, s.err
 }
 
+type mutableProviderBoundaryOperatorLister struct {
+	operators []models.OperatorDocumentGo
+}
+
+func (l *mutableProviderBoundaryOperatorLister) ListOperatorsForObservation() ([]models.OperatorDocumentGo, error) {
+	return l.operators, nil
+}
+
 func TestProviderBoundaryObservationCoordinator_EnsureObserver_SubscribesToOwnerScopedObserver(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
@@ -63,6 +71,85 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_SubscribesToOwner
 	assert.True(t, coordinator.ensureObserver(context.Background()))
 	assert.NotNil(t, coordinator.observer)
 	assert.Equal(t, "sess-observer-1", coordinator.observer.OperatorSessionID)
+}
+
+func TestProviderBoundaryObservationCoordinator_EnsureObserver_ReSubscribesOnSessionChange(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	windowStore, err := provider_observer.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	pubsubHandler := NewGatewayWebSocketHandler(logger)
+	lister := &mutableProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+		{
+			ID:                "observer-1",
+			OperatorSessionID: "sess-observer-old",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+			RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+		},
+	}}
+
+	coordinator := NewProviderBoundaryObservationCoordinator(
+		&DispatchService{},
+		lister,
+		pubsubHandler,
+		windowStore,
+		logger,
+	)
+
+	require.True(t, coordinator.ensureObserver(context.Background()))
+	require.NotNil(t, coordinator.observer)
+	assert.Equal(t, "sess-observer-old", coordinator.observer.OperatorSessionID)
+
+	lister.operators = []models.OperatorDocumentGo{
+		{
+			ID:                "observer-2",
+			OperatorSessionID: "sess-observer-new",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+			RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+		},
+	}
+
+	require.True(t, coordinator.ensureObserver(context.Background()))
+	require.NotNil(t, coordinator.observer)
+	assert.Equal(t, "sess-observer-new", coordinator.observer.OperatorSessionID)
+
+	window := &evalv1.ProviderBoundaryObservationWindow{
+		SchemaVersion:              provider_observer.SchemaVersion,
+		ProviderAttemptId:          "attempt-session-switch",
+		ObserverId:                 "observer-test",
+		ObserverClockSource:        provider_observer.DefaultObserverClockSource,
+		WindowStartedAtUnixNanos:   uint64(time.Unix(1_700_000_000, 0).UnixNano()),
+		WindowCompletedAtUnixNanos: uint64(time.Unix(1_700_000_010, 0).UnixNano()),
+		AttemptStartedAtUnixMs:     time.Unix(1_700_000_000, 0).UnixMilli(),
+		AttemptCompletedAtUnixMs:   time.Unix(1_700_000_010, 0).UnixMilli(),
+		Samples: []*evalv1.ProviderBoundaryHardwareSample{{
+			ObservedAtUnixNanos: uint64(time.Unix(1_700_000_001, 0).UnixNano()),
+			HostRamAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+			HostRamUsedBytes:    1,
+			HostRamTotalBytes:   2,
+		}},
+	}
+	digest, err := provider_observer.ComputeObservationDigest(window)
+	require.NoError(t, err)
+	window.ObservationDigest = digest
+
+	completion := &evalv1.ProviderBoundaryObservationCompleted{Window: window}
+	payload, err := proto.Marshal(completion)
+	require.NoError(t, err)
+	env := &commonv1.GovernanceEnvelope{
+		EventType: string(constants.Event.Operator.ProviderBoundaryObservation.Completed),
+		Payload:   payload,
+	}
+	wire, err := protojson.Marshal(env)
+	require.NoError(t, err)
+
+	pubsubHandler.Publish(pubsub.ResultsChannel("observer-2", "sess-observer-new"), wire)
+
+	loaded, err := windowStore.Load(context.Background(), "attempt-session-switch")
+	require.NoError(t, err)
+	assert.Equal(t, "attempt-session-switch", loaded.GetProviderAttemptId())
 }
 
 func TestProviderBoundaryObservationCoordinator_EnsureObserver_LogsNotFound(t *testing.T) {

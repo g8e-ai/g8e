@@ -6,7 +6,7 @@
 //      snapshot's high-water sequence (history items arrive in ascending
 //      sequence order; the store enforces strict contiguity)
 //   5. seal against feed-chain state once observed == high-water
-//   6. render (store emits as records land)
+//   6. render once after history replay (batched store updates)
 //   7. connect SSE from the accepted cursor
 //
 // On any transport failure the store fails closed: last accepted data
@@ -68,24 +68,29 @@ async function reconcileHistory(
   fetchImpl: typeof fetch,
   gen: number,
 ): Promise<void> {
-  for (let round = 0; round < MAX_HISTORY_ROUNDS; round++) {
-    for (let page = 0; page < MAX_HISTORY_PAGES; page++) {
-      const cursor = evalStore.getState().observedSequence;
-      const pageData = await fetchHistoryPage(mirrorOrigin, sourceId, cursor, HISTORY_LIMIT, fetchImpl);
-      for (const item of pageData.items) {
-        evalStore.acceptProjection(normalizeHistoryItem(item));
+  evalStore.beginBatch();
+  try {
+    for (let round = 0; round < MAX_HISTORY_ROUNDS; round++) {
+      for (let page = 0; page < MAX_HISTORY_PAGES; page++) {
+        const cursor = evalStore.getState().observedSequence;
+        const pageData = await fetchHistoryPage(mirrorOrigin, sourceId, cursor, HISTORY_LIMIT, fetchImpl);
+        for (const item of pageData.items) {
+          evalStore.acceptProjection(normalizeHistoryItem(item));
+        }
+        if (!pageData.has_more) break;
+        if (pageData.items.length === 0 || page === MAX_HISTORY_PAGES - 1) {
+          throw new Error('public history did not advance');
+        }
       }
-      if (!pageData.has_more) break;
-      if (pageData.items.length === 0 || page === MAX_HISTORY_PAGES - 1) {
-        throw new Error('public history did not advance');
-      }
+      if (gen !== generation) return;
+      const snapshot: FeedSnapshot = await fetchSnapshot(mirrorOrigin, sourceId, fetchImpl);
+      evalStore.acceptSnapshot(snapshot);
+      if (snapshot.high_water_sequence === evalStore.getState().observedSequence) return;
     }
-    if (gen !== generation) return;
-    const snapshot: FeedSnapshot = await fetchSnapshot(mirrorOrigin, sourceId, fetchImpl);
-    evalStore.acceptSnapshot(snapshot);
-    if (snapshot.high_water_sequence === evalStore.getState().observedSequence) return;
+    throw new Error('public history could not reach snapshot');
+  } finally {
+    evalStore.endBatch();
   }
-  throw new Error('public history could not reach snapshot');
 }
 
 function connectStream(mirrorOrigin: string, sourceId: string, sinceId: number, gen: number): void {

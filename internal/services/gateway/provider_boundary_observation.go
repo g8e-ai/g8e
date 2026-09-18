@@ -91,18 +91,14 @@ func NewProviderBoundaryObservationCoordinator(
 	}
 }
 
-// ensureObserver lazily resolves the enrolled provider-boundary observer
-// operator for the gateway owner and subscribes to its results channel once.
+// ensureObserver resolves the enrolled provider-boundary observer for the
+// gateway owner and subscribes to its results channel. When the active observer
+// session changes, any cached target is dropped and the coordinator
+// re-subscribes to the newly selected session.
 func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Context) bool {
 	if c == nil || c.dispatch == nil || c.operatorLister == nil || c.pubsub == nil || c.windows == nil {
 		return false
 	}
-	c.mu.Lock()
-	if c.observer != nil {
-		c.mu.Unlock()
-		return true
-	}
-	c.mu.Unlock()
 
 	operators, err := c.operatorLister.ListOperatorsForObservation()
 	if err != nil {
@@ -111,6 +107,7 @@ func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Cont
 	}
 	selected, err := operatorcapability.SelectProviderBoundaryObserver(operators, "")
 	if err != nil {
+		c.resetObserver()
 		switch {
 		case errors.Is(err, constants.ErrProviderBoundaryObserverNotFound):
 			c.logger.Warn("Provider-boundary observation: observer not found", "reason", "not found")
@@ -121,6 +118,22 @@ func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Cont
 		}
 		return false
 	}
+
+	c.mu.Lock()
+	cached := c.observer
+	c.mu.Unlock()
+
+	if cached != nil && cached.OperatorID == selected.OperatorID && cached.OperatorSessionID == selected.OperatorSessionID {
+		return true
+	}
+
+	if cached != nil {
+		c.logger.Info("Provider-boundary observation: observer session changed; re-subscribing",
+			"prior_operator_session_id", cached.OperatorSessionID,
+			"operator_session_id", selected.OperatorSessionID)
+	}
+	c.resetObserver()
+
 	observer := &providerBoundaryObserverTarget{
 		OperatorID:        selected.OperatorID,
 		OperatorSessionID: selected.OperatorSessionID,
@@ -146,8 +159,10 @@ func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Cont
 	return true
 }
 
-// Stop unsubscribes from the observer results channel.
-func (c *ProviderBoundaryObservationCoordinator) Stop() {
+func (c *ProviderBoundaryObservationCoordinator) resetObserver() {
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	if c.unregister != nil {
 		c.unregister()
@@ -155,6 +170,11 @@ func (c *ProviderBoundaryObservationCoordinator) Stop() {
 	}
 	c.observer = nil
 	c.mu.Unlock()
+}
+
+// Stop unsubscribes from the observer results channel.
+func (c *ProviderBoundaryObservationCoordinator) Stop() {
+	c.resetObserver()
 }
 
 // NotifyAttemptBegin sends a fire-and-forget BEGIN command to the observer.
@@ -208,16 +228,31 @@ func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptFinalize(
 }
 
 func (c *ProviderBoundaryObservationCoordinator) publishCommand(ctx context.Context, command *evalv1.ProviderBoundaryObservationCommand) {
+	err := c.tryPublishCommand(ctx, command)
+	if err == nil {
+		return
+	}
+	if !errors.Is(err, constants.ErrDispatchNoDelivery) {
+		return
+	}
+	c.resetObserver()
+	if !c.ensureObserver(ctx) {
+		return
+	}
+	_ = c.tryPublishCommand(ctx, command)
+}
+
+func (c *ProviderBoundaryObservationCoordinator) tryPublishCommand(ctx context.Context, command *evalv1.ProviderBoundaryObservationCommand) error {
 	c.mu.Lock()
 	observer := c.observer
 	c.mu.Unlock()
 	if observer == nil || c.dispatch == nil {
-		return
+		return constants.ErrMissingRequiredField
 	}
 	payload, err := proto.Marshal(command)
 	if err != nil {
 		c.logger.Warn("Provider-boundary observation command marshal failed", "error", err)
-		return
+		return err
 	}
 	if _, err := c.dispatch.PublishCommand(ctx, PublishCommandRequest{
 		TargetOperatorSessionID: observer.OperatorSessionID,
@@ -228,7 +263,9 @@ func (c *ProviderBoundaryObservationCoordinator) publishCommand(ctx context.Cont
 			"provider_attempt_id", command.GetProviderAttemptId(),
 			"phase", command.GetPhase().String(),
 			"error", err)
+		return err
 	}
+	return nil
 }
 
 func (c *ProviderBoundaryObservationCoordinator) ingestResult(ctx context.Context, data []byte) {

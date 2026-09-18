@@ -162,6 +162,8 @@ export class EvalStore {
   private state: StoreState = emptyState();
   private listeners = new Set<Listener>();
   private campaignContext: CampaignAdaptContext = createCampaignAdaptContext();
+  /** Suppress subscriber notifications while replaying history pages. */
+  private batchDepth = 0;
 
   getState = (): StoreState => this.state;
 
@@ -170,13 +172,33 @@ export class EvalStore {
     return () => this.listeners.delete(listener);
   };
 
+  /** True while history replay has not yet sealed the bootstrap snapshot. */
+  isReconciling(): boolean {
+    return this.state.pendingSnapshot !== null;
+  }
+
+  /** Coalesce store updates during cold-load history replay. */
+  beginBatch(): void {
+    this.batchDepth++;
+  }
+
+  endBatch(): void {
+    if (this.batchDepth <= 0) return;
+    this.batchDepth--;
+    if (this.batchDepth === 0) this.emit();
+  }
+
   private emit(): void {
     for (const listener of this.listeners) listener();
   }
 
+  private emitIfNotBatching(): void {
+    if (this.batchDepth === 0) this.emit();
+  }
+
   private setState(updater: (state: StoreState) => StoreState): void {
     this.state = updater(this.state);
-    this.emit();
+    this.emitIfNotBatching();
   }
 
   setConnection(connection: FeedConnectionState, message?: string): void {
@@ -219,7 +241,7 @@ export class EvalStore {
       this.ingestProjection(state, record);
     }
     this.state = state;
-    this.emit();
+    this.emitIfNotBatching();
   }
 
   acceptSnapshot(snapshot: FeedSnapshot): void {
@@ -291,7 +313,7 @@ export class EvalStore {
       if (nextFeedStatus) state.feedStatus = nextFeedStatus;
     }
     this.state = state;
-    this.emit();
+    this.emitIfNotBatching();
   }
 
   private ingestProjection(state: StoreState, record: ProjectionRecord): void {
@@ -397,7 +419,9 @@ export class EvalStore {
   }
 
   pushError(message: string): void {
+    const wasBatching = this.batchDepth > 0;
     this.setState((state) => ({ ...state, errors: [...state.errors, message].slice(-20) }));
+    if (wasBatching) this.emit();
   }
 
   clearErrors(): void {
@@ -444,7 +468,7 @@ export class EvalStore {
       }
     }
     this.state = state;
-    this.emit();
+    this.emitIfNotBatching();
   }
 
   getCatalogs(): CatalogSnapshot[] {
