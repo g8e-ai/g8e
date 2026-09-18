@@ -15,7 +15,7 @@ Each persona defines:
 - **`icon`** — Material icon identifier representing the persona.
 - **`description`** — Summary of the agent's responsibilities.
 - **`role`** — Functional classification within the ensemble (`classifier`, `reasoner`, `responder`, `tribunal_member`, `arbitrator`, `auditor`, `defender`, `summarizer`, `analyzer`, `evaluator`).
-- **`model_tier`** — Assigned LLM capacity tier (`primary`, `assistant`, `lite`).
+- **`model_tier`** — Assigned LLM model role wire value (`primary`, `assistant`, `lite`). User-facing copy displays these as Primary, Assistant, and Lite.
 - **`tools`** — Whitelist of tool names available to the persona during execution.
 - **`identity`** — System prompt guidelines specifying behavioral principles, voice, and discipline, structured via canonical XML tags (`<role>`, `<identity>`, `<purpose>`, `<autonomy>`, `<output_contract>`).
 - **`purpose`** — Operational charter defining what the agent accomplishes in the workflow pipeline.

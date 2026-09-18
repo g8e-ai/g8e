@@ -189,7 +189,7 @@ The observe API models (`protocol/models/observe_api.json`) define the browser-f
 
 The observe event payloads (`protocol/models/observe_event_payloads.json`) define the four dashboard event payloads: `app.agent.status.updated`, `app.run.status.updated`, `ai.eval.run.completed`, and `ai.eval.metric.recorded`.
 
-Per-agent role schemas in `protocol/models/agents/` define tailored models for primary (`primary.json`), assistant (`assistant.json`), lite (`lite.json`), triage (`triage.json`), title generator (`title_generator.json`), and agent harness (`agent_harness.json`) roles.
+Per-agent role schemas in `protocol/models/agents/` define tailored models for primary (`primary.json`), assistant (`assistant.json`), lite (`lite.json`, displayed as Lite), triage (`triage.json`), title generator (`title_generator.json`), and agent harness (`agent_harness.json`) roles.
 
 ### MCP Server Configurations
 

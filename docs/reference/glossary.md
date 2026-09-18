@@ -4,7 +4,7 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-09-08
+Last Updated: 2026-09-18
 Version: v2.1.7
 
 Core terminology for the g8e Governance Suite, including the protocol, Governance Gateway, Governed Operator, g8ee ensemble, g8ed dashboard, compliance evidence, and MCP and A2A integrations. Terms are organized alphabetically.
@@ -272,6 +272,20 @@ The architecture in which each target host remains authoritative for raw executi
 ## MCP (Model Context Protocol)
 
 The JSON-RPC tool protocol exposed by g8e for compatible AI clients. The Gateway supports tool discovery and calls, converts governed calls into typed Operator protobuf payloads and **Governance Envelopes**, and returns structured results or an approval suspension. Native Operator tools and configured downstream MCP servers execute only after governance admission.
+
+---
+
+## Model Roles (Primary, Assistant, Lite)
+
+The three independently configurable chat-tier model roles in g8ee and governed inference dispatch. Each role has a lowercase wire value used in APIs, settings, telemetry, and persisted records, and a title-case display label used in user-facing copy.
+
+| Wire value | Display label | Responsibility |
+| --- | --- | --- |
+| `primary` | Primary | Complex chat turns, tool-capable agent loops, and primary reasoning work |
+| `assistant` | Assistant | Simple chat turns and bounded technical work delegated from Primary |
+| `lite` | Lite | Triage, Tribunal generation, risk analysis, title generation, memory extraction, and other concise or structured tasks |
+
+Display labels are always the title-case form of the wire value. Do not use synonyms such as "Light" for the `lite` role. See [LLM Providers](../ensemble/llm-providers.md) for configuration and provider behavior.
 
 ---
 
