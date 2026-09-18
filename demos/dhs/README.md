@@ -96,7 +96,7 @@ The scenarios that exercise real L1 enforcement:
 
 ```bash
 # from the repository root
-make build && cp g8e demos/bin/g8e
+make build
 
 g8e demos start dhs
 g8e demos run dhs        # runs all four scenarios

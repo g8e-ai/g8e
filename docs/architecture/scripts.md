@@ -33,7 +33,7 @@ Each script performs three steps:
 
 1. It checks for `make` and `go`. Its version check accepts Go 1.26 or any later major or minor release; the root `go.mod` is the authoritative build requirement and currently declares Go 1.26.6.
 2. If a checked dependency is missing or too old, it asks before invoking a supported package manager. Linux supports `apt-get`, `dnf`, `pacman`, or `zypper`; macOS uses Homebrew; Windows prefers `winget` and otherwise uses Chocolatey. The package manager is necessary only when the script must install a dependency.
-3. It runs `make build`, which writes the platform binary and SHA-256 file under `bin/`, copies the host executable to the repository root, and copies the executable to `demos/bin/g8e`.
+3. It runs `make build`, which writes the platform binary and SHA-256 file under `bin/` and copies the host executable to the repository root.
 
 The Linux and macOS scripts append the repository root to `~/.zshrc`, `~/.bashrc`, or `~/.profile`, based on the current shell. The Windows script updates the user-level `Path`. These are persistent user-environment mutations. The scripts also update their own process environment, but that child-process update does not alter the invoking shell. Open a new terminal or source the selected profile, then run `g8e --version`.
 

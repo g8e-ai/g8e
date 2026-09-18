@@ -472,7 +472,7 @@ The `demos/` directory contains four Docker Compose environments. Each uses isol
 - **DHS**: coalition data-plane governance, cross-domain release control, and receipted destruction
 - **FedRAMP**: sovereign cloud governance, audit integrity, access control, and cross-domain protection
 
-The demo images compile from source in Docker. Running `make build` also copies the host CLI to `demos/bin/g8e`, but that copy is not required to build the containers. See the [Demos README](../../demos/README.md) for each environment's topology and services.
+The demo images compile from source in Docker. Running `make build` also copies the host CLI to `./g8e` at the repository root for `g8e demos` commands, but that copy is not required to build the containers. See the [Demos README](../../demos/README.md) for each environment's topology and services.
 
 ### Run a demo
 

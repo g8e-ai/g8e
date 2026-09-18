@@ -129,6 +129,13 @@ function startMirrorDetached() {
 }
 
 async function ensureMirror() {
+  if (isGatewayOwnedMirror()) {
+    if (!checkPort(PUBLIC_PORT)) {
+      throw new Error(`gateway-owned public mirror is not listening on port ${PUBLIC_PORT}; start g8e-gateway with --public-spectator`);
+    }
+    console.log(`Gateway-owned mirror detected on ${PUBLIC_ORIGIN}.`);
+    return;
+  }
   if (mirrorRunning()) return;
   console.log('Mirror not running; starting it detached...');
   startMirrorDetached();
@@ -155,11 +162,22 @@ function mirrorStatePath() {
   return resolve(g8eCwd(), '.g8e/public-mirror/state.json');
 }
 
+function hostExportConfigExists() {
+  return existsSync(resolve(feedDir(), 'export-config.json'));
+}
+
+function isGatewayOwnedMirror() {
+  return checkPort(PUBLIC_PORT) && !hostExportConfigExists();
+}
+
 function initFeed() {
   runG8e(['public', 'init', '--source-id', SOURCE_ID, '--mirror-origin', `http://127.0.0.1:${PRIVATE_PORT}`]);
 }
 
 async function resetFeedState() {
+  if (isGatewayOwnedMirror()) {
+    throw new Error('--reset with a gateway-owned mirror requires wiping the gateway volume: docker compose down -v && ./g8e docker init --headless');
+  }
   await stopMirrorAndWait();
   for (const dir of [feedDir(), resolve(g8eCwd(), '.g8e/public-mirror')]) {
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
@@ -171,11 +189,12 @@ async function resetFeedState() {
 
 function generateFixtureRecords() {
   const outPath = resolve(__dirname, '.generated/fixture-records.jsonl');
-  const viteNode = resolve(projectRoot, 'node_modules/.bin/vite-node');
-  if (!existsSync(viteNode)) {
-    throw new Error('vite-node not found; run npm install in the frontend project first');
-  }
-  const result = spawnSync(viteNode, [resolve(__dirname, 'generate-fixture-records.ts'), '--out', outPath], {
+  const localViteNode = resolve(projectRoot, 'node_modules/.bin/vite-node');
+  const command = existsSync(localViteNode) ? localViteNode : 'npx';
+  const args = existsSync(localViteNode)
+    ? [resolve(__dirname, 'generate-fixture-records.ts'), '--out', outPath]
+    : ['vite-node', resolve(__dirname, 'generate-fixture-records.ts'), '--out', outPath];
+  const result = spawnSync(command, args, {
     cwd: projectRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
   });
   if (result.stdout) process.stdout.write(result.stdout);
@@ -228,10 +247,34 @@ function loadRecords(recordsPath) {
   return { entries, datasetIds, catalogHashes, schemaVersions };
 }
 
-// Read the mirror's stored records for this source from
-// .g8e/public-mirror/state.json. Each entry has
-// {sequence, record_type, record_hash, record_bytes}.
-function mirrorSourceRecords() {
+// Read mirror records for this source. Gateway-owned mirrors are queried from
+// the public history API; legacy host mirrors read .g8e/public-mirror/state.json.
+async function mirrorSourceRecords() {
+  if (isGatewayOwnedMirror()) {
+    const records = [];
+    let cursor = '0';
+    for (let page = 0; page < 100; page++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(`${PUBLIC_ORIGIN}/history?source=${SOURCE_ID}&cursor=${cursor}&limit=100`, {
+        credentials: 'omit',
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!response.ok) return records;
+      const body = await response.json();
+      const items = Array.isArray(body?.items) ? body.items : [];
+      for (const item of items) {
+        records.push({
+          record_hash: item.record_hash,
+          record_bytes: item.record_bytes,
+        });
+      }
+      if (!body?.has_more || items.length === 0) break;
+      cursor = String(body.cursor ?? items[items.length - 1].sequence);
+    }
+    return records;
+  }
   try {
     const state = JSON.parse(readFileSync(mirrorStatePath(), 'utf8'));
     const records = state?.sources?.[SOURCE_ID]?.records;
@@ -383,7 +426,7 @@ async function main() {
     await ensureMirror();
     const status = g8eStatus();
     const publisherHighWater = status?.high_water_sequence ?? 0;
-    const classified = classifyDatasets(mirrorSourceRecords(), entries, datasetIds, catalogHashes);
+    const classified = classifyDatasets(await mirrorSourceRecords(), entries, datasetIds, catalogHashes);
 
     if (classified.drifted.length > 0) {
       for (const d of classified.drifted) {
@@ -412,7 +455,7 @@ async function main() {
     }
   }
 
-  const absentNow = classifyDatasets(mirrorSourceRecords(), entries, datasetIds, catalogHashes).absent;
+  const absentNow = classifyDatasets(await mirrorSourceRecords(), entries, datasetIds, catalogHashes).absent;
   const absentSet = new Set(absentNow);
   const entriesToPublish = entries.filter((e) => e.datasetId === undefined || absentSet.has(e.datasetId));
   if (entriesToPublish.length > 0) {

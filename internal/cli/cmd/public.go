@@ -302,6 +302,23 @@ func publicPublishCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory 
 		Short: "Publish public-safe records to the configured mirror",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory(cfg.ProjectRoot, slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			ctx := commandContext(cmd)
+			if shouldPublishViaGateway(ctx, fileSvc) {
+				count, err := publishJSONLViaGateway(ctx, fileSvc, cfg, args[0])
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Published %d records through the gateway-owned public mirror\n", count)
+				return err
+			}
 			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
 			if err != nil {
 				return err
@@ -406,6 +423,19 @@ func publicPushCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory pub
 		Use:   "push",
 		Short: "Retry the durable public-feed outbox",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory(cfg.ProjectRoot, slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			ctx := commandContext(cmd)
+			if shouldPublishViaGateway(ctx, fileSvc) {
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), "Gateway-owned public mirror is already synchronized")
+				return err
+			}
 			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
 			if err != nil {
 				return err
@@ -431,6 +461,27 @@ func publicStatusCmdWithConfig(configLoader publicConfigLoader, fileSvcFactory p
 		Use:   "status",
 		Short: "Show public-feed publication state",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory(cfg.ProjectRoot, slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			ctx := commandContext(cmd)
+			if shouldPublishViaGateway(ctx, fileSvc) {
+				status, err := gatewayPublisherStatus(ctx, fileSvc, cfg)
+				if err != nil {
+					return err
+				}
+				body, err := json.Marshal(status)
+				if err != nil {
+					return fmt.Errorf("public-feed: encode status: %w", err)
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(body))
+				return err
+			}
 			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
 			if err != nil {
 				return err

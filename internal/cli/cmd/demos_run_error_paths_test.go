@@ -67,9 +67,6 @@ func TestRunDemosList_WithValidDemosDir(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(orgDir, constants.DemosComposeFile), []byte("version: '3'\n"), 0o644))
 	}
 
-	binDir := filepath.Join(demosDir, constants.DemosBinDirname)
-	require.NoError(t, os.MkdirAll(binDir, 0o755))
-
 	var buf bytes.Buffer
 	cmd := demosListCmd()
 	cmd.SetOut(&buf)
@@ -81,7 +78,6 @@ func TestRunDemosList_WithValidDemosDir(t *testing.T) {
 	output := buf.String()
 	assert.Contains(t, output, "org-a")
 	assert.Contains(t, output, "org-b")
-	assert.NotContains(t, output, constants.DemosBinDirname)
 }
 
 func TestRunDemosPull_MissingManifestReturnsError(t *testing.T) {

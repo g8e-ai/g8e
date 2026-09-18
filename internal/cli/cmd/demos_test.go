@@ -585,25 +585,6 @@ func TestGetProjectRoot(t *testing.T) {
 	})
 }
 
-func TestBinaryPathConstruction(t *testing.T) {
-	t.Run("uses .exe extension on Windows", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			binPath := filepath.Join(constants.DemosDirname, constants.BinDirname, "g8e.exe")
-			assert.True(t, strings.HasSuffix(binPath, ".exe"))
-		} else {
-			binPath := filepath.Join(constants.DemosDirname, constants.BinDirname, "g8e")
-			assert.False(t, strings.HasSuffix(binPath, ".exe"))
-		}
-	})
-
-	t.Run("uses no extension on non-Windows", func(t *testing.T) {
-		if runtime.GOOS != "windows" {
-			binPath := filepath.Join(constants.DemosDirname, constants.BinDirname, "g8e")
-			assert.False(t, strings.HasSuffix(binPath, ".exe"))
-		}
-	})
-}
-
 func TestDemoStep(t *testing.T) {
 	t.Run("demoStep function signature is correct", func(t *testing.T) {
 		// Verify the function exists and has the correct signature

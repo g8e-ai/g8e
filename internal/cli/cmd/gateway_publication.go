@@ -9,6 +9,8 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -168,4 +170,77 @@ func newCampaignFeedExporter(cmd context.Context, fileSvc fs.RuntimeFileService,
 		return nil, fmt.Errorf("campaign publication: create gateway client: %w", err)
 	}
 	return &remoteGatewayCampaignFeedExporter{client: client}, nil
+}
+
+func isHostPublicFeedConfigured(ctx context.Context, fileSvc fs.RuntimeFileService) bool {
+	exists, err := fileSvc.FileExists(ctx, constants.PublicFeedExportConfigPath)
+	return err == nil && exists
+}
+
+func shouldPublishViaGateway(ctx context.Context, fileSvc fs.RuntimeFileService) bool {
+	return !isHostPublicFeedConfigured(ctx, fileSvc) && isGatewayHealthy()
+}
+
+func gatewayPublisherStatus(ctx context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config) (models.PublicPublisherStatus, error) {
+	exporter, err := newCampaignFeedExporter(ctx, fileSvc, cfg)
+	if err != nil {
+		return models.PublicPublisherStatus{}, err
+	}
+	bootstrap, err := fetchPublicMirrorBootstrap(ctx)
+	if err != nil {
+		return models.PublicPublisherStatus{}, err
+	}
+	highWater, err := exporter.HighWaterSequence(ctx)
+	if err != nil {
+		return models.PublicPublisherStatus{}, err
+	}
+	return models.PublicPublisherStatus{
+		Enabled:           true,
+		MirrorOrigin:      fmt.Sprintf("http://127.0.0.1:%d", constants.PublicSpectatorPublicPort),
+		SourceID:          bootstrap.Snapshot.SourceID,
+		HighWaterSequence: highWater,
+		FeedChainHash:     bootstrap.Snapshot.FeedChainHash,
+		BatchCount:        bootstrap.Snapshot.BatchCount,
+	}, nil
+}
+
+func publishJSONLViaGateway(ctx context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config, recordsPath string) (int, error) {
+	defaults := models.DefaultPublicExportConfig()
+	inputs, err := readPublicRecordInputs(recordsPath, defaults.BatchMaxRecords, defaults.BatchMaxBytes)
+	if err != nil {
+		return 0, err
+	}
+	exporter, err := newCampaignFeedExporter(ctx, fileSvc, cfg)
+	if err != nil {
+		return 0, err
+	}
+	nextSequence, err := exporter.HighWaterSequence(ctx)
+	if err != nil {
+		return 0, err
+	}
+	nextSequence++
+
+	published := 0
+	for start := 0; start < len(inputs); start += constants.PublicFeedBatchMaxRecords {
+		end := start + constants.PublicFeedBatchMaxRecords
+		if end > len(inputs) {
+			end = len(inputs)
+		}
+		chunk := inputs[start:end]
+		records := make([]evaluation.CampaignPublicFeedRecord, len(chunk))
+		for index, input := range chunk {
+			digest := sha256.Sum256([]byte(input.RecordBytes))
+			records[index] = evaluation.CampaignPublicFeedRecord{
+				Sequence:    nextSequence + int64(index),
+				RecordHash:  hex.EncodeToString(digest[:]),
+				RecordBytes: input.RecordBytes,
+			}
+		}
+		if err := exporter.ExportBatch(ctx, records); err != nil {
+			return published, err
+		}
+		published += len(records)
+		nextSequence = records[len(records)-1].Sequence + 1
+	}
+	return published, nil
 }

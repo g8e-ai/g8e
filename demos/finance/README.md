@@ -53,7 +53,7 @@ The demo includes 8 trading control doctrine rules covering:
 make build
 ```
 
-This builds the g8e binary and copies it to `demos/bin/g8e`.
+This builds the g8e binary at the repository root (`./g8e`).
 
 ### Start the finance demo
 

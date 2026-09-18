@@ -107,7 +107,7 @@ Each org demonstrates different compliance requirements and use cases:
 ### Prerequisites
 
 - Docker and Docker Compose installed
-- g8e binary built and copied to `demos/bin/`
+- g8e binary built at the repository root (`./g8e`)
 
 ### Build the g8e binary
 
@@ -117,7 +117,7 @@ From the repository root:
 make build
 ```
 
-`make build` automatically copies the binary to `demos/bin/g8e`. Demo compose files build the g8e container image from the repo-root `Dockerfile` (via `context: ../..`), which compiles the binary inside the container with FIPS 140-3 approved mode enabled (`GOFIPS140=v1.0.0`). The `demos/bin/g8e` binary is not used by the container image — it is consumed only by `g8e demos` CLI commands that run on the host.
+`make build` copies the host binary to `./g8e` at the repository root. Demo compose files build the g8e container image from the repo-root `Dockerfile` (via `context: ../..`), which compiles the binary inside the container with FIPS 140-3 approved mode enabled (`GOFIPS140=v1.0.0`). Host-side `g8e demos` commands use the same `./g8e` binary (or whichever `g8e` is on your PATH), matching the eval workflow.
 
 ### Using the g8e CLI (recommended)
 
@@ -367,7 +367,7 @@ Then:
 cd demos/neworg && docker compose up
 ```
 
-Demo compose files build from the repo-root `Dockerfile` via `context: ../..`. There is no demo-specific Dockerfile; demos use the same production image that ships to deployment. Run `make build` first to produce the host-side `demos/bin/g8e` binary used by `g8e demos` CLI commands (the container image builds its own binary from source).
+Demo compose files build from the repo-root `Dockerfile` via `context: ../..`. There is no demo-specific Dockerfile; demos use the same production image that ships to deployment. Run `make build` first to produce the host-side `./g8e` binary used by `g8e demos` CLI commands (the container image builds its own binary from source).
 
 ## Invariants
 

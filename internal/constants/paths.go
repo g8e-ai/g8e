@@ -257,8 +257,6 @@ const (
 const (
 	DemosDirname                        = "demos"
 	DemosComposeFile                    = "compose.yml"
-	DemosBinDirname                     = "bin"
-	DemosBinaryName                     = "g8e"
 	DemosTargetDataDir                  = "target-data"
 	DemosDoctrineDir                    = "doctrine"
 	DemosPARequestsFile                 = "pa_requests.json"

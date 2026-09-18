@@ -39,7 +39,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the host binary as `g8e` in the repository root (`g8e.exe` on Windows), a named platform binary and SHA-256 checksum in `bin/`, and a copy at `demos/bin/g8e`. The binary is statically linked with `CGO_ENABLED=0` and has no runtime dependency on the Go toolchain, OpenSSL, or another external library.
+This produces the host binary as `g8e` in the repository root (`g8e.exe` on Windows) and a named platform binary and SHA-256 checksum in `bin/`. The binary is statically linked with `CGO_ENABLED=0` and has no runtime dependency on the Go toolchain, OpenSSL, or another external library.
 
 ### Build Targets
 

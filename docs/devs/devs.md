@@ -25,7 +25,7 @@ make build
 make lint
 ```
 
-`make build` compiles the complete `g8e` platform CLI from `cmd/g8e`, writes a platform binary under `bin/`, copies the runnable binary to the repository root, and refreshes `demos/bin/g8e`. Use `./g8e <command> --help` as the live source for command names, arguments, flags, defaults, and destructive effects. Use the [Getting Started Guide](../guides/getting_started.md) for deployment and enrollment rather than treating this coding guide as an operations procedure.
+`make build` compiles the complete `g8e` platform CLI from `cmd/g8e`, writes a platform binary under `bin/`, and copies the runnable binary to the repository root. Use `./g8e <command> --help` as the live source for command names, arguments, flags, defaults, and destructive effects. Use the [Getting Started Guide](../guides/getting_started.md) for deployment and enrollment rather than treating this coding guide as an operations procedure.
 
 This guide owns repository-wide invariants and Go platform conventions. Component-specific workflows live in the [Protocol README](../../protocol/README.md), [Dashboard Development](../dashboard/development.md), [Dashboard Testing](../dashboard/tests.md), [Ensemble Development](../ensemble/devs.md), and [Ensemble Testing](../ensemble/tests.md).
 

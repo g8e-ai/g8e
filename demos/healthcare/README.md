@@ -235,7 +235,7 @@ PostgreSQL schema and seed data for `healthcare-reporting-db`. Creates the `pa_r
 make build
 ```
 
-This builds the g8e binary and copies it to `demos/bin/g8e` for host-side CLI use. The demo containers build from the repo-root `Dockerfile` (via `context: ../..` in `compose.yml`), which produces a FIPS 140-3 approved-mode image containing the full g8e binary, `docs/reference/`, and `protocol/constants/`. Docker Compose automatically builds images for the `gateway`, `operator`, and `agent-runtime` services on first `docker compose up`.
+This builds the g8e binary at the repository root (`./g8e`) for host-side CLI use. The demo containers build from the repo-root `Dockerfile` (via `context: ../..` in `compose.yml`), which produces a FIPS 140-3 approved-mode image containing the full g8e binary, `docs/reference/`, and `protocol/constants/`. Docker Compose automatically builds images for the `gateway`, `operator`, and `agent-runtime` services on first `docker compose up`.
 
 ---
 
@@ -526,7 +526,7 @@ demos/healthcare/
 docker compose logs gateway
 ```
 
-If the binary is missing: confirm `demos/bin/g8e` exists (`make build` from repo root).
+If the binary is missing: confirm `./g8e` exists at the repository root (`make build` from repo root).
 
 ### Operator enrollment failing
 

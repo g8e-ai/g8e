@@ -385,11 +385,8 @@ build: embed-explorer
 	echo "Building $(HOST_OS)/$(HOST_ARCH) -> $$NODE_BINARY..."; \
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(HOST_OS) GOARCH=$(HOST_ARCH) go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$(HOST_OS)_$(HOST_ARCH)" -o $$NODE_BINARY $(MAIN_PKG); \
 	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
-	INSTALL_SRC=$$NODE_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE); \
-	mkdir -p demos/bin; \
-	INSTALL_SRC=$$NODE_BINARY INSTALL_DST=demos/bin/g8e; $(INSTALL_EXECUTABLE)
+	INSTALL_SRC=$$NODE_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE)
 	@echo "Build complete. Binary: $(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH)$(if $(filter windows,$(HOST_OS)),.exe,)"
-	@echo "Demo binary: demos/bin/g8e"
 
 .PHONY: build-compressed
 build-compressed: build
@@ -435,12 +432,9 @@ build-all:
 	else \
 		ROOT_COPY=g8e; \
 	fi; \
-	INSTALL_SRC=$$HOST_NODE_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE); \
-	mkdir -p demos/bin; \
-	INSTALL_SRC=$$HOST_NODE_BINARY INSTALL_DST=demos/bin/g8e; $(INSTALL_EXECUTABLE)
+	INSTALL_SRC=$$HOST_NODE_BINARY INSTALL_DST=$$ROOT_COPY; $(INSTALL_EXECUTABLE)
 	@echo "Multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
 	@echo "Host binary copied: ./g8e ($(HOST_OS)/$(HOST_ARCH))"
-	@echo "Demo binary: demos/bin/g8e"
 
 .PHONY: build-darwin
 build-darwin:

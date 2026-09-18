@@ -110,3 +110,10 @@ func TestRemoteGatewayCampaignFeedExporterRetriesSequenceOutOfOrder(t *testing.T
 	assert.Equal(t, int64(11), records[0].Sequence)
 	assert.Equal(t, 2, client.postCalls)
 }
+
+func TestShouldPublishViaGatewayWithoutHostExportConfig(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	assert.True(t, shouldPublishViaGateway(context.Background(), fileSvc))
+	assert.False(t, isHostPublicFeedConfigured(context.Background(), fileSvc))
+	_ = cfg
+}

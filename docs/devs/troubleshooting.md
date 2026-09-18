@@ -37,7 +37,7 @@ On Unix-like systems, restore execute permission if the file exists but the shel
 chmod +x g8e
 ```
 
-`make build` compiles `cmd/g8e`, writes the platform binary under `bin/`, copies it to the repository root, and copies it into `demos/bin/`. The target uses `sha256sum` for the checksum and `pgrep` to detect a running host Gateway. Install compatible commands or use the owning platform build script when either is unavailable. Stop a running host Gateway before rebuilding if the target reports that it cannot replace the binary.
+`make build` compiles `cmd/g8e`, writes the platform binary under `bin/`, and copies it to the repository root. The target uses `sha256sum` for the checksum and `pgrep` to detect a running host Gateway. Install compatible commands or use the owning platform build script when either is unavailable. Stop a running host Gateway before rebuilding if the target reports that it cannot replace the binary.
 
 ### A Make target cannot find `curl`
 
