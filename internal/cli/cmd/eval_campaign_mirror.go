@@ -69,17 +69,11 @@ func campaignEvalMirrorRestoreCmd(deps nativeEvalDeps) *cobra.Command {
 					_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
 					return err
 				}
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Restored %d verified dataset(s) to public mirror (%d record(s))\n", len(result.RestoredRunIDs), result.PublishedRecords)
-				if len(result.SkippedRunIDs) > 0 {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Skipped %d run(s) already present in mirror\n", len(result.SkippedRunIDs))
+				writeCampaignMirrorRestoreQueueResult(cmd.OutOrStdout(), cmd.ErrOrStderr(), result)
+				if len(result.FailedRuns) > 0 {
+					return fmt.Errorf("evaluation: campaign mirror restore: %d run(s) failed", len(result.FailedRuns))
 				}
-				if len(result.HostAbsentRunIDs) > 0 {
-					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Host canonical store missing for %d verified run(s) after .g8e wipe — re-execute to repopulate: %v\n", len(result.HostAbsentRunIDs), result.HostAbsentRunIDs)
-				}
-				for runID, reason := range result.FailedRuns {
-					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: mirror restore failed for %s: %s\n", runID, reason)
-				}
-				return err
+				return nil
 			}
 			published, err := reconciler.ReconcileRun(cmd.Context(), runID)
 			if err != nil {
@@ -96,12 +90,8 @@ func campaignEvalMirrorRestoreCmd(deps nativeEvalDeps) *cobra.Command {
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
 				return err
 			}
-			if published == 0 {
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Run %s already present in public mirror\n", runID)
-				return err
-			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Restored run %s to public mirror (%d record(s))\n", runID, published)
-			return err
+			writeCampaignMirrorRestoreRunResult(cmd.OutOrStdout(), runID, published)
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&queue, "queue", false, "Restore every verified run listed in .local.dev/init-campaign-queue.json")
