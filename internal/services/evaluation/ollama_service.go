@@ -44,20 +44,15 @@ type OllamaServiceDispatcher interface {
 	DispatchOllamaServiceCommand(context.Context, OllamaServiceDispatchRequest) (*OllamaServiceDispatchResult, error)
 }
 
-// RestartOllamaViaObserver stops, settles, starts, and status-checks the
-// local Ollama service on the provider host through the enrolled observer
+// RestartOllamaViaObserver stops loaded models, settles, and ps-checks the
+// local Ollama provider on the provider host through the enrolled observer
 // operator. The observer must have started with --ollama; otherwise this
 // returns immediately without dispatching.
 func RestartOllamaViaObserver(ctx context.Context, observer *ProviderBoundaryObserverStatus, dispatcher OllamaServiceDispatcher, runID string, newID func(string) string) error {
 	if observer == nil || dispatcher == nil || newID == nil || !observer.OllamaEnabled {
 		return nil
 	}
-	commands := []string{
-		operatorcapability.OllamaServiceCommandStop,
-		operatorcapability.RestartSettleCommand(observer.Platform),
-		operatorcapability.OllamaServiceCommandStart,
-		operatorcapability.OllamaServiceCommandStatus,
-	}
+	commands := operatorcapability.RestartOllamaCommands(observer.Platform)
 	for index, command := range commands {
 		result, err := dispatcher.DispatchOllamaServiceCommand(ctx, OllamaServiceDispatchRequest{
 			ObserverSessionID: observer.OperatorSessionID,
@@ -90,8 +85,8 @@ func validateOllamaServiceDispatchResult(command string, result *OllamaServiceDi
 	if result.Result.GetStatus() != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
 		return fmt.Errorf("%w: ollama service command %q failed: %s", constants.ErrEvaluationDispatchFailed, command, result.Result.GetError())
 	}
-	if command == operatorcapability.OllamaServiceCommandStatus && result.Result.GetReturnCode() != 0 {
-		return fmt.Errorf("%w: ollama service status exited with code %d", constants.ErrEvaluationDispatchFailed, result.Result.GetReturnCode())
+	if command == operatorcapability.OllamaServiceCommandPS && result.Result.GetReturnCode() != 0 {
+		return fmt.Errorf("%w: ollama ps exited with code %d", constants.ErrEvaluationDispatchFailed, result.Result.GetReturnCode())
 	}
 	return nil
 }

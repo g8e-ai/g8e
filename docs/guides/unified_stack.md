@@ -67,7 +67,7 @@ Provider host (Windows + Ollama)
 - The Observer Operator has **no** inference backend and **no** access to Inference Operator attempt files. It samples GPU/RAM locally and receives `ProviderBoundaryObservationCommand` BEGIN/FINALIZE over Gateway pub/sub.
 - The Provenance Operator has **no** inference backend and **no** GPU sampling. It hashes Ollama manifests and weight blobs at `--model-storage-root` and receives `ModelProvenanceObservationCommand` BEGIN/FINALIZE in parallel with the Observer.
 - Observer and Provenance may run on the **same physical host** but must enroll as **separate** governed operator sessions (separate terminals, separate `operator start` processes).
-- When the provider host owner starts the Observer with **`--ollama`**, the campaign pipeline may dispatch governed `ollama stop` / settle / `ollama start` / `ollama status` commands to that session between assignments. Without `--ollama`, those service commands are rejected by both the gateway and the operator.
+- When the provider host owner starts the Observer with **`--ollama`**, the campaign pipeline may dispatch governed `ollama stop` / settle / `ollama ps` commands to that session between assignments. Without `--ollama`, those CLI commands are rejected by both the gateway and the operator.
 
 ## Campaign and run naming
 
@@ -280,7 +280,7 @@ In a dedicated working directory on the Windows provider host:
 
 The process submits a platform enrollment request. **Do not** pass `--inference-enabled`; this Operator is read-only hardware observation only.
 
-**`--ollama` (optional, provider-host owner decision):** opts this Observer session into remote Ollama **service** lifecycle commands (`ollama stop`, `ollama start`, `ollama status`) on the machine where the operator runs. The flag is recorded in `runtime_config.provider_boundary_observer_ollama_enabled` at bootstrap. The gateway and operator both reject those commands when the session was **not** started with `--ollama`. Omit `--ollama` when you do not want the campaign host to restart Ollama remotely.
+**`--ollama` (optional, provider-host owner decision):** opts this Observer session into remote Ollama CLI commands (`ollama stop`, `ollama serve`, `ollama ps`) on the machine where the operator runs. The flag is recorded in `runtime_config.provider_boundary_observer_ollama_enabled` at bootstrap. The gateway and operator both reject those commands when the session was **not** started with `--ollama`. Omit `--ollama` when you do not want the campaign host to manage Ollama remotely.
 
 From the campaign host owner CLI:
 
@@ -298,7 +298,7 @@ After approval, confirm the observer appears in `./g8e operator list` with `prov
 3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
 4. Gateway ingests windows for `g8e eval campaign verify --require-provider-observation`.
 
-When enrolled with `--ollama`, `g8e eval campaign execute` also dispatches a governed restart sequence to the Observer **before each assignment**: `ollama stop`, a short settle delay (`sleep 5` on Linux, `ping` on Windows), `ollama start`, and `ollama status` to confirm the service is up. This is separate from `--wait-for-provider-idle`, which still polls the remote HTTP `/api/ps` endpoint from the campaign host.
+When enrolled with `--ollama`, `g8e eval campaign execute` also dispatches a governed reset sequence to the Observer **before each assignment**: `ollama stop`, a short settle delay (`sleep 5` on Linux, `timeout /t 5` on Windows), and `ollama ps` to confirm the provider is quiescent. This is separate from `--wait-for-provider-idle`, which still polls the remote HTTP `/api/ps` endpoint from the campaign host.
 
 The legacy filesystem runner `g8e eval provider-observer run` is for co-located dev tests only. Production uses the enrolled Observer Operator.
 
@@ -504,7 +504,7 @@ docker compose --profile evaluation up -d --force-recreate g8e-inference-operato
 
 - Confirm the Observer was started with `--ollama` and `./g8e operator list --json` shows `provider_boundary_observer_ollama_enabled: true`.
 - Restart the Observer process with `--ollama` and re-enroll if runtime config is stale.
-- Without `--ollama`, the gateway and operator reject remote `ollama stop` / `ollama start` / `ollama status` commands by design.
+- Without `--ollama`, the gateway and operator reject remote `ollama stop` / `ollama serve` / `ollama ps` commands by design.
 
 ### Public feed drift or out-of-order batches
 

@@ -18,6 +18,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
@@ -263,13 +264,7 @@ func (c *CLIRefreshController) registryDataOperatorBinding(userID string) (sessi
 		return "", "", false, err
 	}
 	for _, op := range operators {
-		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
-			continue
-		}
-		if op.RuntimeConfig != nil && op.RuntimeConfig.InferenceEnabled {
-			continue
-		}
-		if op.OperatorSessionID == "" {
+		if !operatorcapability.IsGovernedDataOperator(op) {
 			continue
 		}
 		return op.OperatorSessionID, op.ID, true, nil

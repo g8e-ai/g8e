@@ -12,15 +12,17 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/security"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestIsOllamaServiceCommand(t *testing.T) {
 	assert.True(t, IsOllamaServiceCommand("ollama stop"))
-	assert.True(t, IsOllamaServiceCommand("  OLLAMA START  "))
-	assert.True(t, IsOllamaServiceCommand("ollama status"))
-	assert.False(t, IsOllamaServiceCommand("ollama ps"))
+	assert.True(t, IsOllamaServiceCommand("  OLLAMA SERVE  "))
+	assert.True(t, IsOllamaServiceCommand("ollama ps"))
+	assert.False(t, IsOllamaServiceCommand("ollama start"))
+	assert.False(t, IsOllamaServiceCommand("ollama status"))
 	assert.False(t, IsOllamaServiceCommand("curl http://127.0.0.1:11434/api/ps"))
 }
 
@@ -32,14 +34,30 @@ func TestValidateOllamaServiceCommand(t *testing.T) {
 	require.NoError(t, ValidateOllamaServiceCommand(capable, "ollama stop"))
 
 	incapable := &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true}
-	err := ValidateOllamaServiceCommand(incapable, "ollama start")
+	err := ValidateOllamaServiceCommand(incapable, "ollama serve")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrProviderBoundaryObserverOllamaNotCapable)
 
 	assert.NoError(t, ValidateOllamaServiceCommand(nil, "echo hello"))
 }
 
+func TestRestartOllamaCommands(t *testing.T) {
+	assert.Equal(t, []string{
+		OllamaServiceCommandStop,
+		"cmd.exe /C timeout /t 5 /nobreak",
+		OllamaServiceCommandPS,
+	}, RestartOllamaCommands("windows"))
+	assert.Equal(t, []string{
+		OllamaServiceCommandStop,
+		"sleep 5",
+		OllamaServiceCommandPS,
+	}, RestartOllamaCommands("linux"))
+}
+
 func TestRestartSettleCommand(t *testing.T) {
-	assert.Equal(t, "ping 127.0.0.1 -n 6 > nul", RestartSettleCommand("windows"))
+	windowsSettle := RestartSettleCommand("windows")
+	assert.Equal(t, "cmd.exe /C timeout /t 5 /nobreak", windowsSettle)
+	assert.False(t, security.IsShellRequired(windowsSettle), "windows settle must run without a POSIX shell")
+
 	assert.Equal(t, "sleep 5", RestartSettleCommand("linux"))
 }

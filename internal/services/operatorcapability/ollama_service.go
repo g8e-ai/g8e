@@ -16,20 +16,33 @@ import (
 )
 
 const (
-	OllamaServiceCommandStop   = "ollama stop"
-	OllamaServiceCommandStart  = "ollama start"
-	OllamaServiceCommandStatus = "ollama status"
+	OllamaServiceCommandStop  = "ollama stop"
+	OllamaServiceCommandServe = "ollama serve"
+	OllamaServiceCommandPS    = "ollama ps"
 )
 
-// IsOllamaServiceCommand reports whether command is a governed Ollama service
-// lifecycle invocation (stop, start, or status).
+// IsOllamaServiceCommand reports whether command is a governed Ollama CLI
+// invocation (stop, serve, or ps).
 func IsOllamaServiceCommand(command string) bool {
 	trimmed := strings.TrimSpace(strings.ToLower(command))
 	switch trimmed {
-	case OllamaServiceCommandStop, OllamaServiceCommandStart, OllamaServiceCommandStatus:
+	case OllamaServiceCommandStop, OllamaServiceCommandServe, OllamaServiceCommandPS:
 		return true
 	default:
 		return false
+	}
+}
+
+// RestartOllamaCommands returns the governed Ollama CLI sequence dispatched
+// before each campaign assignment when the observer started with --ollama.
+// stop unloads in-memory models; ps confirms the provider is quiescent. serve
+// is omitted because it blocks in the foreground and the provider daemon is
+// expected to stay running (Windows tray app or existing serve process).
+func RestartOllamaCommands(platform string) []string {
+	return []string{
+		OllamaServiceCommandStop,
+		RestartSettleCommand(platform),
+		OllamaServiceCommandPS,
 	}
 }
 
@@ -52,11 +65,14 @@ func ValidateOllamaServiceCommand(cfg *models.RuntimeConfig, command string) err
 }
 
 // RestartSettleCommand returns a short blocking delay command appropriate for
-// the operator host platform recorded in runtime_config.platform.
+// the operator host platform recorded in runtime_config.platform. Commands must
+// not require a POSIX shell on Windows: the operator execution service runs
+// shell metacharacters through Git Bash, where cmd-style redirects like "> nul"
+// are unreliable.
 func RestartSettleCommand(platform string) string {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case "windows":
-		return "ping 127.0.0.1 -n 6 > nul"
+		return "cmd.exe /C timeout /t 5 /nobreak"
 	default:
 		return "sleep 5"
 	}

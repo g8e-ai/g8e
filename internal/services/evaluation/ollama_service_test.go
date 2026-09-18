@@ -43,11 +43,10 @@ func TestRestartOllamaViaObserver_DispatchesLifecycleSequence(t *testing.T) {
 	}
 	err := RestartOllamaViaObserver(t.Context(), observer, dispatcher, "run-1", func(prefix string) string { return prefix + "-id" })
 	require.NoError(t, err)
-	require.Len(t, dispatcher.requests, 4)
+	require.Len(t, dispatcher.requests, 3)
 	assert.Equal(t, operatorcapability.OllamaServiceCommandStop, dispatcher.requests[0].Command)
 	assert.Equal(t, operatorcapability.RestartSettleCommand("windows"), dispatcher.requests[1].Command)
-	assert.Equal(t, operatorcapability.OllamaServiceCommandStart, dispatcher.requests[2].Command)
-	assert.Equal(t, operatorcapability.OllamaServiceCommandStatus, dispatcher.requests[3].Command)
+	assert.Equal(t, operatorcapability.OllamaServiceCommandPS, dispatcher.requests[2].Command)
 }
 
 func operatorv1CompletedCommandResult() *operatorv1.CommandResult {

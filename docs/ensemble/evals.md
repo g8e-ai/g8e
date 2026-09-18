@@ -26,7 +26,7 @@ North Star model campaigns score real models through the same `POST /api/v1/chat
 3. Route tool intents through the enrolled Data Operator.
 4. Trigger provider-boundary BEGIN/FINALIZE observation on the enrolled Observer Operator (provider host) for GPU/RAM witness telemetry.
 5. Trigger model provenance BEGIN/FINALIZE attestation on the enrolled Provenance Operator (model storage site) when provenance is enabled, binding `served_model_tag` and `expected_model_digest` to each `provider_attempt_id`.
-6. When the Observer was started with `--ollama`, restart the Ollama service on the provider host before each assignment (`ollama stop`, settle, `ollama start`, `ollama status`) via governed commands to that Observer session.
+6. When the Observer was started with `--ollama`, reset the Ollama provider on the provider host before each assignment (`ollama stop`, settle, `ollama ps`) via governed commands to that Observer session.
 
 g8ee's `ChatPipelineService` handles triage, model selection, tool loops, Tribunal command generation, and governed relay to the bound Operators. Campaign scoring depends on this production path rather than a separate eval-only shortcut.
 

@@ -247,6 +247,54 @@ func TestCLIRefreshController_Refresh_StaleOperatorSession_FallsBackToActive(t *
 // that refresh binds to the active governed tool Operator recorded in the
 // operator registry even when a stale operator_sessions row still matches the
 // old CLI session binding.
+func TestCLIRefreshController_Refresh_SkipsProvenanceOperatorBinding(t *testing.T) {
+	c, user := setupTestCLIRefreshController(t)
+
+	provenanceSessionID := "op-refresh-provenance"
+	dataSessionID := "op-refresh-data"
+	now := time.Now().UTC()
+
+	provenanceBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID:                "op-id-provenance",
+		UserID:            user.ID,
+		Status:            constants.OperatorStatusActive,
+		OperatorType:      constants.OperatorTypeRemote,
+		OperatorSessionID: provenanceSessionID,
+		RuntimeConfig:     &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	})
+	require.NoError(t, err)
+	require.NoError(t, c.cliSessionSvc.db.DocSet(
+		marshaler.CollectionName(constants.CollectionOperators), "op-id-provenance", provenanceBytes,
+	))
+
+	dataBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID:                "op-id-data",
+		UserID:            user.ID,
+		Status:            constants.OperatorStatusActive,
+		OperatorType:      constants.OperatorTypeRemote,
+		OperatorSessionID: dataSessionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	})
+	require.NoError(t, err)
+	require.NoError(t, c.cliSessionSvc.db.DocSet(
+		marshaler.CollectionName(constants.CollectionOperators), "op-id-data", dataBytes,
+	))
+
+	oldSessionID := "refresh-ctrl-provenance-skip"
+	persistCLISessionForController(t, c, user.ID, oldSessionID, provenanceSessionID)
+
+	req := refreshRequestWithContext(t, user.ID, oldSessionID)
+	rr := httptest.NewRecorder()
+	c.handleRefresh(rr, req)
+
+	resp := parseRefreshResponse(t, rr)
+	assert.Equal(t, dataSessionID, resp.OperatorSessionID)
+	assert.Equal(t, "op-id-data", resp.OperatorID)
+}
+
 func TestCLIRefreshController_Refresh_PrefersRegistryActiveDataOperator(t *testing.T) {
 	c, user := setupTestCLIRefreshController(t)
 

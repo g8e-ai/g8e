@@ -237,7 +237,7 @@ type ProviderBoundaryObserverConfig struct {
 	Enabled    bool
 	ObserverID string
 	// OllamaEnabled opts the observer into remote Ollama service lifecycle
-	// commands (stop/start/status) on the provider host.
+	// Ollama CLI commands (stop/serve/ps) on the provider host.
 	OllamaEnabled bool
 }
 

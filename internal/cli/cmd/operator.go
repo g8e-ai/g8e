@@ -245,7 +245,7 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&inferenceModelRegistryDigest, "inference-model-registry-digest", "", "SHA-256 digest of the frozen campaign model registry")
 	cmd.Flags().BoolVar(&providerBoundaryObserverEnabled, "provider-boundary-observer-enabled", false, "Enable read-only provider-boundary hardware observation on the approved provider host")
 	cmd.Flags().StringVar(&providerBoundaryObserverID, "provider-boundary-observer-id", "", "Stable observer identity pseudonym")
-	cmd.Flags().BoolVar(&providerBoundaryObserverOllamaEnabled, "ollama", false, "Allow remote Ollama service lifecycle commands (stop/start/status) on this provider-boundary observer host")
+	cmd.Flags().BoolVar(&providerBoundaryObserverOllamaEnabled, "ollama", false, "Allow remote Ollama CLI commands (stop/serve/ps) on this provider-boundary observer host")
 	cmd.Flags().BoolVar(&provenanceOperatorEnabled, "provenance-operator-enabled", false, "Enable storage-side model provenance attestation at the model file site")
 	cmd.Flags().StringVar(&provenanceOperatorID, "provenance-operator-id", "", "Stable provenance operator identity pseudonym")
 	cmd.Flags().StringVar(&provenanceOperatorModelStorageRoot, "model-storage-root", "", "Root directory containing content-addressed model weight blobs (for example ~/.ollama/models)")

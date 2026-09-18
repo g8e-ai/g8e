@@ -144,7 +144,7 @@ What the Observer does:
 3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
 4. Gateway ingests windows for `g8e eval campaign verify --require-provider-observation`.
 
-**Optional Ollama service restart (`--ollama`):** When the provider-host owner starts the Observer with `--ollama`, `g8e eval campaign execute` dispatches governed `EXECUTE_BASH` commands to that session before each assignment: `ollama stop`, a short settle delay, `ollama start`, and `ollama status`. The gateway reads `provider_boundary_observer_ollama_enabled` from the operator's stored runtime config and rejects those commands when the flag is false. This is an explicit opt-in on the provider host; the campaign host never manages Ollama without it.
+**Optional Ollama provider reset (`--ollama`):** When the provider-host owner starts the Observer with `--ollama`, `g8e eval campaign execute` dispatches governed `EXECUTE_BASH` commands to that session before each assignment: `ollama stop`, a short settle delay, and `ollama ps` to confirm the provider is quiescent. The gateway reads `provider_boundary_observer_ollama_enabled` from the operator's stored runtime config and rejects those commands when the flag is false. Governed commands also include `ollama serve` for manual dispatch; the default restart sequence omits it because `serve` blocks in the foreground. This is an explicit opt-in on the provider host; the campaign host never manages Ollama without it.
 
 **Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
 

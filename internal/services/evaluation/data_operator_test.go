@@ -54,6 +54,29 @@ func TestActiveCampaignDataOperators_ExcludesSpecializedOperators(t *testing.T) 
 	assert.Equal(t, "sess-data-1", matches[0].OperatorSessionID)
 }
 
+func TestActiveDataOperators_ExcludesSpecializedOperators(t *testing.T) {
+	t.Parallel()
+	operators := []models.OperatorDocumentGo{
+		{
+			ID:                "prov-1",
+			OperatorSessionID: "sess-prov-1",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+			RuntimeConfig:     &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+		},
+		{
+			ID:                "data-1",
+			OperatorSessionID: "sess-data-1",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+		},
+	}
+
+	matches := ActiveDataOperators(operators)
+	require.Len(t, matches, 1)
+	assert.Equal(t, "sess-data-1", matches[0].OperatorSessionID)
+}
+
 func TestSelectCampaignDataOperator_ResolvesBySessionID(t *testing.T) {
 	t.Parallel()
 	operators := []models.OperatorDocumentGo{

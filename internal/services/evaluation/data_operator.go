@@ -10,8 +10,8 @@ package evaluation
 import (
 	"fmt"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 )
 
 // DataOperatorStatus summarizes one active governed tool Operator session.
@@ -24,38 +24,19 @@ type DataOperatorStatus struct {
 // ActiveDataOperators returns every active remote Operator that is not
 // inference-capable and therefore serves the governed tool boundary.
 func ActiveDataOperators(operators []models.OperatorDocumentGo) []DataOperatorStatus {
-	matches := make([]DataOperatorStatus, 0)
-	for _, op := range operators {
-		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
-			continue
-		}
-		if op.RuntimeConfig != nil && op.RuntimeConfig.InferenceEnabled {
-			continue
-		}
-		if op.OperatorSessionID == "" {
-			continue
-		}
-		matches = append(matches, DataOperatorStatus{
-			OperatorID:        op.ID,
-			OperatorSessionID: op.OperatorSessionID,
-			Status:            string(op.Status),
-		})
-	}
-	return matches
+	return activeGovernedDataOperators(operators)
 }
 
 // ActiveCampaignDataOperators returns active governed tool Operators that are
-// not inference-capable or provider-boundary observers.
+// not inference-capable, provider-boundary observers, or provenance witnesses.
 func ActiveCampaignDataOperators(operators []models.OperatorDocumentGo) []DataOperatorStatus {
+	return activeGovernedDataOperators(operators)
+}
+
+func activeGovernedDataOperators(operators []models.OperatorDocumentGo) []DataOperatorStatus {
 	matches := make([]DataOperatorStatus, 0)
 	for _, op := range operators {
-		if op.Status != constants.OperatorStatusActive || op.OperatorType != constants.OperatorTypeRemote {
-			continue
-		}
-		if op.RuntimeConfig != nil && (op.RuntimeConfig.InferenceEnabled || op.RuntimeConfig.ProviderBoundaryObserverEnabled || op.RuntimeConfig.ProvenanceOperatorEnabled) {
-			continue
-		}
-		if op.OperatorSessionID == "" {
+		if !operatorcapability.IsGovernedDataOperator(op) {
 			continue
 		}
 		matches = append(matches, DataOperatorStatus{

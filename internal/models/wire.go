@@ -45,7 +45,7 @@ type RuntimeConfig struct {
 
 	// ProviderBoundaryObserverOllamaEnabled is true when the provider-boundary
 	// Observer Operator started with --ollama, opting in to remote Ollama
-	// service lifecycle commands (stop/start/status) on the provider host.
+	// Ollama CLI commands (stop/serve/ps) on the provider host.
 	ProviderBoundaryObserverOllamaEnabled bool `json:"provider_boundary_observer_ollama_enabled,omitempty"`
 
 	// ProvenanceOperatorEnabled is true when the Operator started with
