@@ -51,6 +51,7 @@ func TestOperatorCmd(t *testing.T) {
 		cmd := operatorCmd()
 		expectedSubcommands := map[string]bool{
 			"list":   false,
+			"run":    false,
 			"cp":     false,
 			"scp":    false,
 			"deploy": false,
