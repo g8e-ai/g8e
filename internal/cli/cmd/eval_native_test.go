@@ -223,12 +223,13 @@ func TestEvalShow_JSONLoadsPersistedReportAndEmitsCanonicalProtojson(t *testing.
 		return report, nil
 	}}
 	command := evalCmdWithConfig(nativeEvalCommandDeps(t, store, nil, nil))
+	root := globalJSONRoot(t, command)
 	var output bytes.Buffer
-	command.SetOut(&output)
-	command.SetErr(&output)
-	command.SetArgs([]string{"show", "run-1", "--json"})
+	root.SetOut(&output)
+	root.SetErr(&output)
+	root.SetArgs([]string{"eval", "show", "run-1"})
 
-	require.NoError(t, command.Execute())
+	require.NoError(t, root.Execute())
 	expected, err := evalv1.MarshalCanonical(report)
 	require.NoError(t, err)
 	assert.Equal(t, string(expected)+"\n", output.String())
@@ -241,14 +242,15 @@ func TestEvalVerify_JSONPrintsInvalidTypedReportBeforeNonzeroExit(t *testing.T) 
 		return report, nil
 	}}
 	command := evalCmdWithConfig(nativeEvalCommandDeps(t, &nativeEvalStoreStub{}, nil, verifier))
+	root := globalJSONRoot(t, command)
 	var output bytes.Buffer
-	command.SetOut(&output)
-	command.SetErr(&output)
-	command.SilenceErrors = true
-	command.SilenceUsage = true
-	command.SetArgs([]string{"verify", "run-1", "--json"})
+	root.SetOut(&output)
+	root.SetErr(&output)
+	root.SilenceErrors = true
+	root.SilenceUsage = true
+	root.SetArgs([]string{"eval", "verify", "run-1"})
 
-	err := command.Execute()
+	err := root.Execute()
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEvalRunVerificationFailed)
 	expected, marshalErr := compliancev1.MarshalCanonical(report)
@@ -282,14 +284,15 @@ func TestEvalRun_PersistsAndPrintsFailureReportsWithExactSessionBinding(t *testi
 			}}
 			store := &nativeEvalStoreStub{}
 			command := evalCmdWithConfig(nativeEvalCommandDeps(t, store, runner, verifier))
+			root := globalJSONRoot(t, command)
 			var output bytes.Buffer
-			command.SetOut(&output)
-			command.SetErr(&output)
-			command.SilenceErrors = true
-			command.SilenceUsage = true
-			command.SetArgs([]string{"run", evaluation.CoreExecutionBoundarySuiteID, "--operator-session", "operator-session-exact", "--json"})
+			root.SetOut(&output)
+			root.SetErr(&output)
+			root.SilenceErrors = true
+			root.SilenceUsage = true
+			root.SetArgs([]string{"eval", "run", evaluation.CoreExecutionBoundarySuiteID, "--operator-session", "operator-session-exact"})
 
-			err := command.Execute()
+			err := root.Execute()
 			require.Error(t, err)
 			assert.Equal(t, "operator-session-exact", request.PinnedOperatorSessionID)
 			assert.Same(t, verification, store.savedVerification)

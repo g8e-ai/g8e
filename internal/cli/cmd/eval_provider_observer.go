@@ -18,6 +18,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
@@ -36,7 +37,6 @@ func providerObserverRunCmd(deps nativeEvalDeps) *cobra.Command {
 	var observerID string
 	var sampleIntervalMS int
 	var pollIntervalMS int
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Watch inference provider attempts and record provider-boundary hardware samples",
@@ -66,7 +66,7 @@ func providerObserverRunCmd(deps nativeEvalDeps) *cobra.Command {
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"observer_id":     observerID,
 					"sample_interval": sampleIntervalMS,
@@ -96,13 +96,11 @@ func providerObserverRunCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&observerID, "observer-id", "", "Stable observer identity pseudonym")
 	cmd.Flags().IntVar(&sampleIntervalMS, "sample-interval-ms", 250, "Hardware sample interval in milliseconds")
 	cmd.Flags().IntVar(&pollIntervalMS, "poll-interval-ms", 250, "Attempt polling interval in milliseconds")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit startup JSON and run")
 	return cmd
 }
 
 func providerObserverVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 	var providerAttemptID string
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "verify",
 		Short: "Verify provider-boundary observation coverage for one provider attempt",
@@ -134,7 +132,7 @@ func providerObserverVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: provider observer verify: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"provider_attempt_id": report.ProviderAttemptID,
 					"complete":            report.Complete,
@@ -173,6 +171,5 @@ func providerObserverVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&providerAttemptID, "provider-attempt-id", "", "Governed inference provider attempt ID")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }

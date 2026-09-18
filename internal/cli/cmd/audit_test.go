@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/spf13/cobra"
@@ -54,15 +55,13 @@ func TestAuditReceiptsCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "List signed receipts")
 	})
 
-	t.Run("receipts has session, tx-id, and json flags", func(t *testing.T) {
+	t.Run("receipts has session and tx-id flags", func(t *testing.T) {
 		cmd := auditReceiptsCmd()
 		sessionFlag := cmd.Flags().Lookup("session")
 		txIDFlag := cmd.Flags().Lookup("tx-id")
-		jsonFlag := cmd.Flags().Lookup("json")
 
 		assert.NotNil(t, sessionFlag)
 		assert.NotNil(t, txIDFlag)
-		assert.NotNil(t, jsonFlag)
 	})
 }
 
@@ -119,15 +118,13 @@ func TestAuditEventsCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "Query raw audit events")
 	})
 
-	t.Run("events has session, limit, and json flags", func(t *testing.T) {
+	t.Run("events has session and limit flags", func(t *testing.T) {
 		cmd := auditEventsCmd()
 		sessionFlag := cmd.Flags().Lookup("session")
 		limitFlag := cmd.Flags().Lookup("limit")
-		jsonFlag := cmd.Flags().Lookup("json")
 
 		assert.NotNil(t, sessionFlag)
 		assert.NotNil(t, limitFlag)
-		assert.NotNil(t, jsonFlag)
 	})
 
 	t.Run("events has default limit", func(t *testing.T) {
@@ -565,18 +562,18 @@ func TestAuditEventsCmd_TableFormatting(t *testing.T) {
 // JSON output mode tests
 
 func TestAuditReceiptsCmd_JSONOutput(t *testing.T) {
-	t.Run("receipts json flag is present", func(t *testing.T) {
-		cmd := auditReceiptsCmd()
-		jsonFlag := cmd.Flags().Lookup("json")
+	t.Run("global json flag is present on root", func(t *testing.T) {
+		root := NewRootCmd("dev", serve.VersionInfo{})
+		jsonFlag := root.PersistentFlags().Lookup("json")
 		assert.NotNil(t, jsonFlag)
 		assert.Equal(t, "false", jsonFlag.DefValue)
 	})
 }
 
 func TestAuditEventsCmd_JSONOutput(t *testing.T) {
-	t.Run("events json flag is present", func(t *testing.T) {
-		cmd := auditEventsCmd()
-		jsonFlag := cmd.Flags().Lookup("json")
+	t.Run("global json flag is present on root", func(t *testing.T) {
+		root := NewRootCmd("dev", serve.VersionInfo{})
+		jsonFlag := root.PersistentFlags().Lookup("json")
 		assert.NotNil(t, jsonFlag)
 		assert.Equal(t, "false", jsonFlag.DefValue)
 	})

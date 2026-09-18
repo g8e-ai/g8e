@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
@@ -59,7 +60,6 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 	var inferenceSessionID string
 	var dataSessionID string
 	var repetitionCount uint32
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize a North Star campaign run with frozen catalog and model registry",
@@ -105,7 +105,7 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign init: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"campaign_id":           campaignID,
 					"run_id":                runID,
@@ -139,12 +139,10 @@ func campaignEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Exact inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID")
 	cmd.Flags().Uint32Var(&repetitionCount, "repetition-count", 1, "Homogeneous repetition count")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func campaignEvalListCmd(deps nativeEvalDeps) *cobra.Command {
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List persisted North Star evaluation campaigns",
@@ -157,7 +155,7 @@ func campaignEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign list: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				entries := make([]map[string]any, 0, len(campaigns))
 				for _, campaign := range campaigns {
 					entries = append(entries, map[string]any{
@@ -208,14 +206,12 @@ func campaignEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
 	var campaignID string
 	var seed uint64
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "stacks-generate",
 		Short: "Generate and persist the preregistered heterogeneous stack set for one campaign",
@@ -232,7 +228,7 @@ func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign stacks-generate: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"campaign_id":            campaignID,
 					"generation_rule":        stackSet.GenerationRule,
@@ -262,13 +258,11 @@ func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID")
 	cmd.Flags().Uint64Var(&seed, "seed", 0, "Deterministic heterogeneous stack generation seed")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func campaignEvalScheduleHeterogeneousCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
-	var jsonOutput bool
 	var publish bool
 	cmd := &cobra.Command{
 		Use:   "schedule-heterogeneous [run-id]",
@@ -296,7 +290,7 @@ func campaignEvalScheduleHeterogeneousCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign schedule-heterogeneous: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "assignment_count": count}, "", "  ")
 				if err != nil {
 					return err
@@ -310,13 +304,11 @@ func campaignEvalScheduleHeterogeneousCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
 	cmd.Flags().BoolVar(&publish, "publish", false, "Publish queued assignment lifecycle projections to the public mirror")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func campaignEvalScheduleCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
-	var jsonOutput bool
 	var publish bool
 	cmd := &cobra.Command{
 		Use:   "schedule [run-id]",
@@ -344,7 +336,7 @@ func campaignEvalScheduleCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign schedule: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "assignment_count": count}, "", "  ")
 				if err != nil {
 					return err
@@ -358,7 +350,6 @@ func campaignEvalScheduleCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
 	cmd.Flags().BoolVar(&publish, "publish", false, "Publish queued assignment lifecycle projections to the public mirror")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
@@ -369,7 +360,6 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	var dataSessionID string
 	var ensembleURL string
 	var ollamaEndpoint string
-	var jsonOutput bool
 	var noAutoRefresh bool
 	var publish bool
 	var daemon bool
@@ -485,7 +475,7 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 				dataOperator.OperatorSessionID,
 				store,
 				func(ctx context.Context, fetch func(context.Context) (map[string]any, error)) (map[string]any, error) {
-					return chatEvalWaitForTrace(ctx, fetch, newChatAcceptReporter(cmd.OutOrStdout(), jsonOutput))
+					return chatEvalWaitForTrace(ctx, fetch, newChatAcceptReporter(cmd.OutOrStdout(), output.JSONEnabled(cmd)))
 				},
 				deps.now,
 				func(prefix string) string { return prefix + "-" + deps.newID() },
@@ -548,7 +538,7 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 					if err != nil {
 						return fmt.Errorf("evaluation: campaign execute: %w", err)
 					}
-					if !jsonOutput {
+					if !output.JSONEnabled(cmd) {
 						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Provider idle at %s\n", resolvedOllamaEndpoint)
 					}
 				}
@@ -564,14 +554,14 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 						if publishErr != nil {
 							return fmt.Errorf("evaluation: campaign execute: %w", publishErr)
 						}
-						if completionCount > 0 && !jsonOutput {
+						if completionCount > 0 && !output.JSONEnabled(cmd) {
 							_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d completion projection record(s) for run %s\n", completionCount, runID)
 						}
 					}
 					break
 				}
 				executed++
-				if jsonOutput && !daemon {
+				if output.JSONEnabled(cmd) && !daemon {
 					entry := map[string]any{
 						"assignment_id": result.GetAssignmentId(),
 						"status":        result.GetLifecycleStatus().String(),
@@ -579,11 +569,11 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 					}
 					results = append(results, entry)
 				}
-				if !jsonOutput {
+				if !output.JSONEnabled(cmd) {
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Executed %s: %s\n", result.GetAssignmentId(), result.GetLifecycleStatus().String())
 				}
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"run_id":    runID,
 					"executed":  executed,
@@ -612,13 +602,11 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().DurationVar(&providerSettle, "provider-settle", 5*time.Second, "Required stable /api/ps window before starting the next assignment")
 	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
 	cmd.Flags().BoolVar(&publish, "publish", false, "Publish assignment lifecycle and terminal result projections to the public mirror")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
-	var jsonOutput bool
 	var force bool
 	cmd := &cobra.Command{
 		Use:   "publish [run-id]",
@@ -647,7 +635,7 @@ func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign publish: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"run_id":            runID,
 					"published_records": count,
@@ -669,7 +657,6 @@ func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
 	cmd.Flags().BoolVar(&force, "force", false, "Clear host publication idempotency and republish all projections (use after gateway mirror volume wipe)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
@@ -737,7 +724,6 @@ func newCampaignPublicationCoordinator(cmd *cobra.Command, fileSvc fs.RuntimeFil
 
 func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
-	var jsonOutput bool
 	var requireProviderObservation bool
 	cmd := &cobra.Command{
 		Use:   "verify [run-id]",
@@ -790,11 +776,11 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 				published, pubErr := publication.PublishRunVerification(cmd.Context(), runID, report)
 				if pubErr != nil {
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication: %v\n", pubErr)
-				} else if published > 0 && !jsonOutput {
+				} else if published > 0 && !output.JSONEnabled(cmd) {
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d verification projection record(s) to public mirror\n", published)
 				}
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"run_id":          runID,
 					"status":          report.GetStatus().String(),
@@ -819,13 +805,11 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
 	cmd.Flags().BoolVar(&requireProviderObservation, "require-provider-observation", false, "Fail verification when provider-boundary observation windows are missing or incomplete")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func campaignEvalCheckMatrixCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:     "check-matrix [run-id]",
 		Aliases: []string{"account"},
@@ -854,7 +838,7 @@ func campaignEvalCheckMatrixCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign check-matrix: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"run_id":                  runID,
 					"complete":                report.Complete,
@@ -901,14 +885,12 @@ func campaignEvalCheckMatrixCmd(deps nativeEvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func campaignEvalExportCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
 	var outputDir string
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "export [run-id]",
 		Short: "Generate disclosure-safe JSONL, CSV, and SQLite exports for one campaign run",
@@ -928,7 +910,7 @@ func campaignEvalExportCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign export: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"run_id":                report.RunID,
 					"campaign_id":           report.CampaignID,
@@ -964,13 +946,11 @@ func campaignEvalExportCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Export output directory (default: .g8e/data/eval/runs/<run-id>/export)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func campaignEvalRepairTraceDigestsCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "repair-trace-digests [run-id]",
 		Short: "Recompute persisted chat-probe trace digests using authoritative g8e canonical JSON",
@@ -990,7 +970,7 @@ func campaignEvalRepairTraceDigestsCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign repair-trace-digests: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "repaired_trace_digests": repaired}, "", "  ")
 				if err != nil {
 					return err
@@ -1003,13 +983,11 @@ func campaignEvalRepairTraceDigestsCmd(deps nativeEvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func campaignEvalRepairResultsCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "repair-results [run-id]",
 		Short: "Backfill persisted terminal results for assignments missing result records",
@@ -1033,7 +1011,7 @@ func campaignEvalRepairResultsCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign repair-results: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "repaired_results": repaired}, "", "  ")
 				if err != nil {
 					return err
@@ -1046,12 +1024,10 @@ func campaignEvalRepairResultsCmd(deps nativeEvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func campaignEvalShowCmd(deps nativeEvalDeps) *cobra.Command {
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "show <run-id>",
 		Short: "Show one persisted North Star campaign run",
@@ -1079,7 +1055,7 @@ func campaignEvalShowCmd(deps nativeEvalDeps) *cobra.Command {
 			if summary.Run.GetStartedAt() != nil {
 				startedAt = summary.Run.GetStartedAt().AsTime().Format(time.RFC3339)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"run_id":                   runID,
 					"campaign_id":              campaignID,
@@ -1123,13 +1099,11 @@ func campaignEvalShowCmd(deps nativeEvalDeps) *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func campaignEvalStatusCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "status [run-id]",
 		Short: "Report resumable campaign run status from canonical assignment records",
@@ -1149,7 +1123,7 @@ func campaignEvalStatusCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign status: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"run_id":               runID,
 					"campaign_id":          summary.Run.GetCampaignBinding().GetCampaignId(),
@@ -1178,7 +1152,6 @@ func campaignEvalStatusCmd(deps nativeEvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 

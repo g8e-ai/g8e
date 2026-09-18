@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 )
@@ -25,7 +26,6 @@ func inventoryEvalCmd(_ nativeEvalDeps) *cobra.Command {
 	var ollamaEndpoint string
 	var outputPath string
 	var probeCapabilities bool
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "inventory",
 		Short: "Discover and freeze the complete provider model inventory",
@@ -60,7 +60,7 @@ func inventoryEvalCmd(_ nativeEvalDeps) *cobra.Command {
 					return err
 				}
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := modelInventoryFreezeJSON(freeze)
 				if err != nil {
 					return err
@@ -96,7 +96,6 @@ func inventoryEvalCmd(_ nativeEvalDeps) *cobra.Command {
 	freezeCmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint (default: G8E_OLLAMA_ENDPOINT)")
 	freezeCmd.Flags().StringVar(&outputPath, "output", "", "Write the inventory freeze JSON to this path")
 	freezeCmd.Flags().BoolVar(&probeCapabilities, "probe-capabilities", false, "Run bounded non-scored capability probes for each discovered model")
-	freezeCmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON inventory freeze")
 	cmd.AddCommand(freezeCmd)
 	return cmd
 }

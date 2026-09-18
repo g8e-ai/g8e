@@ -21,6 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/cli/stream"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -53,7 +54,6 @@ func operatorListCmd() *cobra.Command {
 }
 
 func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all Operator instances",
@@ -91,19 +91,14 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 
 			operators := slotResp.Operators
 			if len(operators) == 0 {
-				if jsonOutput {
-					payload, err := json.MarshalIndent(map[string]any{"operators": []any{}}, "", "  ")
-					if err != nil {
-						return err
-					}
-					_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
-					return err
+				if output.JSONEnabled(cmd) {
+					return output.WriteJSON(cmd.OutOrStdout(), map[string]any{"operators": []any{}})
 				}
 				cmd.Println("No operators found")
 				return nil
 			}
 
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				entries := make([]map[string]any, 0, len(operators))
 				for _, op := range operators {
 					entry := map[string]any{
@@ -126,12 +121,7 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 					}
 					entries = append(entries, entry)
 				}
-				payload, err := json.MarshalIndent(map[string]any{"operators": entries}, "", "  ")
-				if err != nil {
-					return err
-				}
-				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
-				return err
+				return output.WriteJSON(cmd.OutOrStdout(), map[string]any{"operators": entries})
 			}
 
 			cmd.Printf("Operators (%d total)\n", len(operators))
@@ -145,7 +135,6 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON operator list")
 	return cmd
 }
 

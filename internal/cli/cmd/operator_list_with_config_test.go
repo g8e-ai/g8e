@@ -194,7 +194,7 @@ func TestOperatorListCmdWithConfig_JSONOutputIncludesRuntimeFlags(t *testing.T) 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getResp: respJSON}
 	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(fileSvc))
-	require.NoError(t, cmd.ParseFlags([]string{"--json"}))
+	enableGlobalJSON(t, cmd)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

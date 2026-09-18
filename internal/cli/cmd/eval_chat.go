@@ -21,6 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
@@ -67,7 +68,6 @@ func chatEvalAcceptCmd(deps chatEvalDeps) *cobra.Command {
 	var registryFile string
 	var ensembleURL string
 	var casesCSV string
-	var jsonOutput bool
 	var noAutoRefresh bool
 	cmd := &cobra.Command{
 		Use:   "accept",
@@ -123,7 +123,7 @@ func chatEvalAcceptCmd(deps chatEvalDeps) *cobra.Command {
 				OperatorID:        dataOperator.OperatorID,
 				OperatorSessionID: dataOperator.OperatorSessionID,
 			}
-			reporter := newChatAcceptReporter(cmd.OutOrStdout(), jsonOutput)
+			reporter := newChatAcceptReporter(cmd.OutOrStdout(), output.JSONEnabled(cmd))
 			reporter.writeSetup(len(cases), model, selected.OperatorSessionID, dataOperator.OperatorSessionID, resolvedEnsembleURL)
 
 			results := make([]map[string]any, 0, len(cases))
@@ -194,7 +194,7 @@ func chatEvalAcceptCmd(deps chatEvalDeps) *cobra.Command {
 					entry["model_calls"] = len(trace["model_calls"].([]any))
 				}
 				results = append(results, entry)
-				if jsonOutput {
+				if output.JSONEnabled(cmd) {
 					continue
 				}
 				status := entry["status"].(string)
@@ -204,7 +204,7 @@ func chatEvalAcceptCmd(deps chatEvalDeps) *cobra.Command {
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "FAIL %s: %s\n", acceptanceCase.ID, entry["error"])
 				}
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"operator_session_id": selected.OperatorSessionID,
 					"model":               model,
@@ -237,7 +237,6 @@ func chatEvalAcceptCmd(deps chatEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&registryFile, "registry-file", "", "JSON file produced by eval inference freeze-registry --json")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
 	cmd.Flags().StringVar(&casesCSV, "cases", "", "Comma-separated case IDs (default: full Phase 1A chat matrix)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON acceptance report")
 	return cmd
 }
 
@@ -485,7 +484,7 @@ func chatEvalEnsureOperatorBinding(
 	if err := auth.SaveCredentials(fileSvc, cfg, creds); err != nil {
 		return nil, fmt.Errorf("save credentials after refresh: %w", err)
 	}
-	if !jsonOutputEnabled(cmd) {
+	if !output.JSONEnabled(cmd) {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Refreshed CLI operator binding to session %s\n", refresh.OperatorSessionID)
 	}
 	return &auth.ClientAuthContext{
@@ -496,14 +495,6 @@ func chatEvalEnsureOperatorBinding(
 		ClientCert:        authContext.ClientCert,
 		ClientKey:         authContext.ClientKey,
 	}, nil
-}
-
-func jsonOutputEnabled(cmd *cobra.Command) bool {
-	if cmd == nil {
-		return false
-	}
-	value, err := cmd.Flags().GetBool("json")
-	return err == nil && value
 }
 
 func chatEvalResolveDataOperator(

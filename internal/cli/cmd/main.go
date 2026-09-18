@@ -76,6 +76,7 @@ Run 'g8e tui' to launch the Tactical Governance Console (TUI).`,
 
 	rootCmd.PersistentFlags().StringP("endpoint", "e", "", "Gateway HTTP discovery endpoint (host or host:port) for remote enrollment")
 	rootCmd.PersistentFlags().IntP("port", "p", 0, "Gateway HTTPS/mTLS port (overrides default 8443; use with --endpoint)")
+	rootCmd.PersistentFlags().Bool("json", false, "Emit machine-readable JSON output (pretty-printed)")
 
 	rootCmd.AddCommand(
 		gatewayCmd(),

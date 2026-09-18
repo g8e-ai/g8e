@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 )
@@ -30,7 +31,6 @@ func campaignEvalStartCmd(deps nativeEvalDeps) *cobra.Command {
 	var dataSessionID string
 	var ensembleURL string
 	var ollamaEndpoint string
-	var jsonOutput bool
 	var dryRun bool
 	var prepareOnly bool
 	var publish bool
@@ -74,30 +74,30 @@ Examples:
 				return fmt.Errorf("evaluation: campaign start: %w", err)
 			}
 			if dryRun {
-				return writeCampaignStartPlan(cmd.OutOrStdout(), plan, sessions, jsonOutput)
+				return writeCampaignStartPlan(cmd.OutOrStdout(), plan, sessions, output.JSONEnabled(cmd))
 			}
-			if err := writeCampaignStartPlan(cmd.OutOrStdout(), plan, sessions, jsonOutput); err != nil {
+			if err := writeCampaignStartPlan(cmd.OutOrStdout(), plan, sessions, output.JSONEnabled(cmd)); err != nil {
 				return err
 			}
 			startedAt := deps.now().UTC()
 			if err := initializeCampaignRun(cmd, deps, plan, sessions); err != nil {
 				return err
 			}
-			if !jsonOutput {
+			if !output.JSONEnabled(cmd) {
 				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Initialized campaign %s run %s\n", plan.CampaignID, plan.RunID)
 			}
 			assignmentCount, err := scheduleHomogeneousCampaignRun(cmd, deps, plan.RunID, publish)
 			if err != nil {
 				return err
 			}
-			if !jsonOutput {
+			if !output.JSONEnabled(cmd) {
 				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Scheduled %d assignments for run %s\n", assignmentCount, plan.RunID)
 			}
 			if err := persistActiveCampaignRun(cfg.ProjectRoot, plan, startedAt); err != nil {
 				return err
 			}
 			if prepareOnly {
-				if jsonOutput {
+				if output.JSONEnabled(cmd) {
 					payload, err := json.MarshalIndent(map[string]any{
 						"campaign_id":      plan.CampaignID,
 						"run_id":           plan.RunID,
@@ -125,16 +125,16 @@ Examples:
 				WaitForProviderIdle: waitForProviderIdle,
 				ProviderIdlePoll:    providerIdlePoll,
 				ProviderSettle:      providerSettle,
-				JSONOutput:          jsonOutput,
+				JSONOutput:          output.JSONEnabled(cmd),
 			})
 			if err != nil {
 				return err
 			}
-			if !jsonOutput {
+			if !output.JSONEnabled(cmd) {
 				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Executed %d assignment(s) for run %s\n", executed, plan.RunID)
 			}
 			if !verify {
-				if jsonOutput {
+				if output.JSONEnabled(cmd) {
 					payload, err := json.MarshalIndent(map[string]any{
 						"campaign_id": plan.CampaignID,
 						"run_id":      plan.RunID,
@@ -149,11 +149,11 @@ Examples:
 				}
 				return nil
 			}
-			report, err := verifyCampaignRun(cmd, deps, plan.RunID, requireProviderObservation, jsonOutput)
+			report, err := verifyCampaignRun(cmd, deps, plan.RunID, requireProviderObservation, output.JSONEnabled(cmd))
 			if err != nil {
 				return err
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"campaign_id":     plan.CampaignID,
 					"run_id":          plan.RunID,
@@ -204,7 +204,6 @@ Examples:
 	cmd.Flags().BoolVar(&waitForProviderIdle, "wait-for-provider-idle", true, "Wait for Ollama to become idle before each assignment")
 	cmd.Flags().DurationVar(&providerIdlePoll, "provider-idle-poll", 2*time.Second, "Poll interval while waiting for Ollama idle")
 	cmd.Flags().DurationVar(&providerSettle, "provider-settle", 8*time.Second, "Required stable /api/ps window before starting the next assignment")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 

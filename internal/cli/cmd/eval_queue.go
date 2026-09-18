@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 )
 
@@ -31,7 +32,6 @@ func queueEvalCmd(deps nativeEvalDeps) *cobra.Command {
 
 func queueEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 	var status string
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List init-campaign queue entries",
@@ -45,7 +45,7 @@ func queueEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 				return fmt.Errorf("evaluation: queue list: %w", err)
 			}
 			entries := queue.FilterByStatus(status)
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{"models": entries}, "", "  ")
 				if err != nil {
 					return err
@@ -76,12 +76,10 @@ func queueEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&status, "status", "all", "Filter by status: all, pending, verified, completed")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func queueEvalNextCmd(deps nativeEvalDeps) *cobra.Command {
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "next",
 		Short: "Show the next pending init-campaign queue entry",
@@ -98,7 +96,7 @@ func queueEvalNextCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: queue next: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(entry, "", "  ")
 				if err != nil {
 					return err
@@ -117,6 +115,5 @@ func queueEvalNextCmd(deps nativeEvalDeps) *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }

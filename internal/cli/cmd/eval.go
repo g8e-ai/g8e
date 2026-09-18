@@ -18,6 +18,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -106,7 +107,6 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 
 func nativeEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 	var operatorSessionID string
-	var jsonOutput bool
 	command := &cobra.Command{
 		Use:   "run core-execution-boundary",
 		Short: "Run the native core execution-boundary evaluation",
@@ -150,7 +150,7 @@ func nativeEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 			if saveErr := store.SaveReport(cmd.Context(), report); saveErr != nil {
 				return saveErr
 			}
-			if err := writeNativeEvalRun(cmd, report, verification, jsonOutput); err != nil {
+			if err := writeNativeEvalRun(cmd, report, verification, output.JSONEnabled(cmd)); err != nil {
 				return err
 			}
 			if runErr != nil {
@@ -163,12 +163,10 @@ func nativeEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&operatorSessionID, "operator-session", "", "Pin the evaluation to one exact active remote Operator session")
-	command.Flags().BoolVar(&jsonOutput, "json", false, "Emit canonical evaluation report protojson")
 	return command
 }
 
 func nativeEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
-	var jsonOutput bool
 	command := &cobra.Command{
 		Use:   "verify <run-id>",
 		Short: "Independently re-verify a persisted native evaluation run",
@@ -182,7 +180,7 @@ func nativeEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := writeNativeVerification(cmd, report, jsonOutput); err != nil {
+			if err := writeNativeVerification(cmd, report, output.JSONEnabled(cmd)); err != nil {
 				return err
 			}
 			if !report.GetValid() {
@@ -191,12 +189,10 @@ func nativeEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	command.Flags().BoolVar(&jsonOutput, "json", false, "Emit canonical ComplianceVerificationReport protojson")
 	return command
 }
 
 func nativeEvalShowCmd(deps nativeEvalDeps) *cobra.Command {
-	var jsonOutput bool
 	command := &cobra.Command{
 		Use:   "show <run-id>",
 		Short: "Show a persisted native evaluation report",
@@ -210,7 +206,7 @@ func nativeEvalShowCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				body, err := evalv1.MarshalCanonical(report)
 				if err != nil {
 					return fmt.Errorf("evaluation: canonicalize report: %w", err)
@@ -233,7 +229,6 @@ func nativeEvalShowCmd(deps nativeEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	command.Flags().BoolVar(&jsonOutput, "json", false, "Emit canonical evaluation report protojson")
 	return command
 }
 

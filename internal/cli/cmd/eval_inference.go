@@ -22,6 +22,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
@@ -63,7 +64,6 @@ func inferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 
 func inferenceEvalStatusCmd(deps inferenceEvalDeps) *cobra.Command {
 	var operatorSessionID string
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Verify that an inference-capable Operator is enrolled and active",
@@ -80,7 +80,7 @@ func inferenceEvalStatusCmd(deps inferenceEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: inference operator status: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]string{
 					"operator_id":         selected.OperatorID,
 					"operator_session_id": selected.OperatorSessionID,
@@ -99,14 +99,12 @@ func inferenceEvalStatusCmd(deps inferenceEvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&operatorSessionID, "operator-session", "", "Pin the status check to one exact inference Operator session")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 
 func inferenceEvalFreezeRegistryCmd(deps inferenceEvalDeps) *cobra.Command {
 	var campaignID string
 	var ollamaEndpoint string
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "freeze-registry",
 		Short: "Freeze the campaign model registry from a live Ollama inventory",
@@ -124,7 +122,7 @@ func inferenceEvalFreezeRegistryCmd(deps inferenceEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: freeze registry: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"campaign_id":           freeze.CampaignID,
 					"model_registry_digest": freeze.Digest,
@@ -150,7 +148,6 @@ func inferenceEvalFreezeRegistryCmd(deps inferenceEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID")
 	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint (default: G8E_OLLAMA_ENDPOINT)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON registry freeze")
 	return cmd
 }
 
@@ -164,7 +161,6 @@ func inferenceEvalProbeCmd(deps inferenceEvalDeps) *cobra.Command {
 	var prompt string
 	var seed int32 = -1
 	var stream bool
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "probe",
 		Short: "Run one non-scored governed inference probe through the exact Inference Operator session",
@@ -185,7 +181,7 @@ func inferenceEvalProbeCmd(deps inferenceEvalDeps) *cobra.Command {
 			if err := evaluation.ValidateInferenceProbeStream(probeReq, progress, response); err != nil {
 				return fmt.Errorf("evaluation: inference probe: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				body, err := protojson.Marshal(response)
 				if err != nil {
 					return fmt.Errorf("evaluation: inference probe: marshal response: %w", err)
@@ -207,7 +203,6 @@ func inferenceEvalProbeCmd(deps inferenceEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Probe prompt (default: Reply with exactly: probe-ok)")
 	cmd.Flags().Int32Var(&seed, "seed", -1, "Optional deterministic generation seed (omit for provider default)")
 	cmd.Flags().BoolVar(&stream, "stream", false, "Request live NDJSON progress telemetry during generation")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit canonical InferenceDispatchResponse protojson")
 	return cmd
 }
 
@@ -219,7 +214,6 @@ func inferenceEvalAcceptCmd(deps inferenceEvalDeps) *cobra.Command {
 	var registryDigest string
 	var registryFile string
 	var casesCSV string
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "accept",
 		Short: "Run the Phase 1A inference-only vertical acceptance matrix through the exact Inference Operator session",
@@ -271,7 +265,7 @@ func inferenceEvalAcceptCmd(deps inferenceEvalDeps) *cobra.Command {
 					entry["result_digest"] = response.GetResult().GetResultDigest()
 				}
 				results = append(results, entry)
-				if jsonOutput {
+				if output.JSONEnabled(cmd) {
 					continue
 				}
 				status := entry["status"].(string)
@@ -281,7 +275,7 @@ func inferenceEvalAcceptCmd(deps inferenceEvalDeps) *cobra.Command {
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "FAIL %s: %s\n", acceptanceCase.ID, entry["error"])
 				}
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"operator_session_id": selected.OperatorSessionID,
 					"model":               model,
@@ -312,7 +306,6 @@ func inferenceEvalAcceptCmd(deps inferenceEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&registryDigest, "registry-digest", "", "Frozen campaign model registry digest")
 	cmd.Flags().StringVar(&registryFile, "registry-file", "", "JSON file produced by eval inference freeze-registry --json")
 	cmd.Flags().StringVar(&casesCSV, "cases", "", "Comma-separated case IDs (default: full Phase 1A inference matrix)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON acceptance report")
 	return cmd
 }
 

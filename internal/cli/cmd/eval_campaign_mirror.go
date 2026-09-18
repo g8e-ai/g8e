@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
@@ -32,7 +33,6 @@ func campaignEvalMirrorCmd(deps nativeEvalDeps) *cobra.Command {
 func campaignEvalMirrorRestoreCmd(deps nativeEvalDeps) *cobra.Command {
 	var queue bool
 	var runID string
-	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "restore",
 		Short: "Restore missing campaign datasets to the public mirror",
@@ -61,7 +61,7 @@ func campaignEvalMirrorRestoreCmd(deps nativeEvalDeps) *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("evaluation: campaign mirror restore: %w", err)
 				}
-				if jsonOutput {
+				if output.JSONEnabled(cmd) {
 					payload, err := json.MarshalIndent(result, "", "  ")
 					if err != nil {
 						return err
@@ -79,7 +79,7 @@ func campaignEvalMirrorRestoreCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign mirror restore: %w", err)
 			}
-			if jsonOutput {
+			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
 					"run_id":            runID,
 					"published_records": published,
@@ -96,7 +96,6 @@ func campaignEvalMirrorRestoreCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&queue, "queue", false, "Restore every verified run listed in .local.dev/init-campaign-queue.json")
 	cmd.Flags().StringVar(&runID, "run-id", "", "Restore one canonical campaign run")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Emit JSON status")
 	return cmd
 }
 

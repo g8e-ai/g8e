@@ -106,8 +106,8 @@ func TestVersionCmd_HasFipsFlag(t *testing.T) {
 }
 
 func TestVersionCmd_HasJSONFlag(t *testing.T) {
-	cmd := versionCmd()
-	f := cmd.Flags().Lookup("json")
+	rootCmd := NewRootCmd("dev", serve.VersionInfo{})
+	f := rootCmd.PersistentFlags().Lookup("json")
 	require.NotNil(t, f)
 	assert.Equal(t, "false", f.DefValue)
 }

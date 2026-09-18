@@ -9,13 +9,13 @@ package cmd
 
 import (
 	"crypto/fips140"
-	"encoding/json"
 	"fmt"
 	"io"
 
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/buildinfo"
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
@@ -30,7 +30,7 @@ import (
 // enters approved mode by default and runs its integrity/CAST self-tests at
 // init, so no runtime env var is required.
 func versionCmd() *cobra.Command {
-	var fips, asJSON bool
+	var fips bool
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print g8e build version information",
@@ -55,11 +55,10 @@ for operators, not a failure. CI/release gates that require the strict
 posture should run the binary under GODEBUG=fips140=only (see 'make
 verify-fips').`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runVersion(cmd.OutOrStdout(), versionInfoFromCmd(cmd), fips, asJSON)
+			return runVersion(cmd.OutOrStdout(), versionInfoFromCmd(cmd), fips, output.JSONEnabled(cmd))
 		},
 	}
 	cmd.Flags().BoolVar(&fips, "fips", false, "report FIPS 140-3 module status; exit non-zero only if approved mode is not active")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "emit version and source provenance metadata as JSON")
 	return cmd
 }
 
@@ -188,7 +187,7 @@ func writeVersionJSON(w io.Writer, vi serve.VersionInfo, vcs buildinfo.VCSStamp,
 			fipsErr = constants.ErrFIPSModeNotActive
 		}
 	}
-	if err := json.NewEncoder(w).Encode(out); err != nil {
+	if err := output.WriteJSON(w, out); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 	return fipsErr
