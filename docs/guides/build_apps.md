@@ -96,8 +96,8 @@ Delegated enrollment establishes identity only. It does not grant L2 signing aut
 The reserved first-party names `g8ed`, `g8ee`, and `g8eo` use the owner-approved platform enrollment protocol instead of delegated enrollment. That resumable flow uses the request, status, and completion endpoints under `/api/v1/auth/platform-enrollments/`; the first owner reviews requests with:
 
 ```bash
-./g8e auth pending
-./g8e auth approve-platform-enrollment <request-id>
+./g8e auth enroll pending
+./g8e auth enroll approve <request-id>
 ```
 
 See [Authentication and Authorization](../architecture/auth.md) for both enrollment protocols and certificate lifetimes.

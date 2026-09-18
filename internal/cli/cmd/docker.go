@@ -343,8 +343,8 @@ already-enrolled CLI.`,
 				cmd.Println()
 				cmd.Println("--skip-approvals set: workloads are started but will block waiting")
 				cmd.Println("for manual platform enrollment approval. Run:")
-				cmd.Println("  g8e auth pending")
-				cmd.Println("  g8e auth approve-platform-enrollment <request-id> --yes")
+				cmd.Println("  g8e auth enroll pending")
+				cmd.Println("  g8e auth enroll approve <request-id> --yes")
 				return nil
 			}
 
@@ -569,8 +569,8 @@ walkthrough (the workloads will block waiting for manual approval).`,
 				cmd.Println()
 				cmd.Println("--skip-enroll set: workloads are started but will block waiting")
 				cmd.Println("for manual platform enrollment approval. Run:")
-				cmd.Println("  g8e auth pending")
-				cmd.Println("  g8e auth approve-platform-enrollment <request-id>")
+				cmd.Println("  g8e auth enroll pending")
+				cmd.Println("  g8e auth enroll approve <request-id>")
 				return nil
 			}
 
@@ -732,7 +732,7 @@ func promptApproveComponent(cmd *cobra.Command, ctx context.Context, client apiC
 
 	if !confirmAction(cmd, fmt.Sprintf("Approve this %s enrollment request?", component)) {
 		cmd.Printf("  Skipped %s enrollment. You can approve it later with:\n", component)
-		cmd.Printf("  g8e auth approve-platform-enrollment %s\n", req.RequestID)
+		cmd.Printf("  g8e auth enroll approve %s\n", req.RequestID)
 		return nil
 	}
 

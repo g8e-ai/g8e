@@ -281,16 +281,16 @@ until curl -fsS http://localhost:8081/api/v1/health >/dev/null 2>&1; do sleep 2;
 ./g8e auth enroll user -e localhost:8081 --port 8444
 
 # 3. List pending platform enrollment requests.
-./g8e auth pending -e localhost:8081 --port 8444
+./g8e auth enroll pending -e localhost:8081 --port 8444
 
 # 4. Approve the operator's request by exact request ID.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:8081 --port 8444
+./g8e auth enroll approve <operator-request-id> --yes -e localhost:8081 --port 8444
 
 # 5. Wait for the operator and its dependents to become healthy.
 docker compose ps
 ```
 
-The `g8e demos start healthcare` CLI path prints these bootstrap instructions automatically, including the demo gateway port and the exact `g8e auth approve-platform-enrollment <request-id>` command to run.
+The `g8e demos start healthcare` CLI path prints these bootstrap instructions automatically, including the demo gateway port and the exact `g8e auth enroll approve <request-id>` command to run.
 
 Watch startup progress:
 

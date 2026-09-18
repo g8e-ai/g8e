@@ -109,17 +109,17 @@ g8e demos clean dhs
 
 ### Owner-approved platform bootstrap
 
-After `g8e demos start dhs`, the gateway is healthy but the operator and its dependent services (`agent-coalition`, `connector-dhs`, `connector-mil`, `connector-ic`) remain not-ready until the operator's platform enrollment request is approved. `g8e demos start` prints the bootstrap instructions automatically, including the demo gateway port and the exact `g8e auth approve-platform-enrollment <request-id>` command to run. The bootstrap flow is:
+After `g8e demos start dhs`, the gateway is healthy but the operator and its dependent services (`agent-coalition`, `connector-dhs`, `connector-mil`, `connector-ic`) remain not-ready until the operator's platform enrollment request is approved. `g8e demos start` prints the bootstrap instructions automatically, including the demo gateway port and the exact `g8e auth enroll approve <request-id>` command to run. The bootstrap flow is:
 
 ```bash
 # 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start dhs`).
 ./g8e auth enroll user -e localhost:8087 --port 8450
 
 # 2. List pending platform enrollment requests.
-./g8e auth pending -e localhost:8087 --port 8450
+./g8e auth enroll pending -e localhost:8087 --port 8450
 
 # 3. Approve the operator's request by exact request ID.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:8087 --port 8450
+./g8e auth enroll approve <operator-request-id> --yes -e localhost:8087 --port 8450
 
 # 4. Wait for the operator and its dependents to become healthy.
 g8e demos status dhs

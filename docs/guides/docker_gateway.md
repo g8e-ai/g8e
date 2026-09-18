@@ -86,12 +86,12 @@ curl -fsS http://localhost:8080/api/v1/health
 docker compose --profile bootstrapped up -d
 
 # Discover the requests submitted by the workloads.
-./g8e auth pending
+./g8e auth enroll pending
 
 # Approve each exact request ID. Approving the operator first makes its shared transport credentials available before the ensemble finishes startup.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
-./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
-./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+./g8e auth enroll approve <operator-request-id> --yes
+./g8e auth enroll approve <dashboard-request-id> --yes
+./g8e auth enroll approve <ensemble-request-id> --yes
 
 # Inspect readiness after enrollment completes.
 docker compose --profile bootstrapped ps
@@ -113,8 +113,8 @@ The walkthrough currently assumes the default host gateway ports, 8080 and 8443.
 
 ```bash
 ./g8e auth enroll user -e localhost:18080 --port 18443
-./g8e auth pending -e localhost:18080 --port 18443
-./g8e auth approve-platform-enrollment <request-id> --yes -e localhost:18080 --port 18443
+./g8e auth enroll pending -e localhost:18080 --port 18443
+./g8e auth enroll approve <request-id> --yes -e localhost:18080 --port 18443
 ```
 
 Use `./g8e docker start --full --skip-enroll` to start all four services without the walkthrough. The workload services remain pending until their requests are approved manually.
@@ -197,7 +197,7 @@ Docker evaluation runs the Gateway in a container while the campaign controller 
 
 **Campaign verify.** Provider observation windows ingested by the gateway are not visible on the host filesystem. Verify uses the gateway read API when local evidence is missing. Assignments that completed before the Observer Operator enrolled fail `--require-provider-observation` honestly; re-run or accept partial coverage.
 
-**Observer Operator.** Enroll on the provider host with platform enrollment (`g8e operator start --provider-boundary-observer-enabled` → `g8e auth approve-platform-enrollment`). The gateway fans out BEGIN/FINALIZE over pub/sub; do not bind-mount inference state for verify.
+**Observer Operator.** Enroll on the provider host with platform enrollment (`g8e operator start --provider-boundary-observer-enabled` → `g8e auth enroll approve`). The gateway fans out BEGIN/FINALIZE over pub/sub; do not bind-mount inference state for verify.
 
 See [Unified Docker Stack Guide](./unified_stack.md) for the mini-smoke workflow and [Public Spectator Operations Guide](./public_spectator.md) for mirror verification and tunnel setup.
 

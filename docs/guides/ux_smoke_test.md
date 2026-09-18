@@ -31,7 +31,7 @@ Run all commands from the repository root. The cleanup commands in step 2 perman
 
 ## Docker command classification
 
-**Host network commands.** Commands such as `g8e operator list`, `g8e auth pending`, `g8e auth approve-platform-enrollment`, `g8e audit receipts`, `g8e audit events`, `g8e audit summary`, `g8e gw data operators`, and `g8e gw data audit list` read the host's local CLI configuration and mTLS credentials, then query the gateway at `localhost:8443`. They do not read the operator's Docker volume.
+**Host network commands.** Commands such as `g8e operator list`, `g8e auth enroll pending`, `g8e auth enroll approve`, `g8e auth enroll deny`, `g8e audit receipts`, `g8e audit events`, `g8e audit summary`, `g8e gw data operators`, and `g8e gw data audit list` read the host's local CLI configuration and mTLS credentials, then query the gateway at `localhost:8443`. They do not read the operator's Docker volume.
 
 **Operator filesystem commands.** Commands such as `g8e vault status`, `g8e report all`, and `g8e compliance ksi` read persistent operator state directly. In this Docker topology that state is under `/root/.g8e/` in the operator volume, so run these commands as `docker exec g8e-operator /g8e <subcommand>`. Running them through the host binary inspects the host's unrelated runtime tree.
 
@@ -112,15 +112,15 @@ Expected: the gateway, operator, ensemble, and dashboard containers are present.
 List the pending requests:
 
 ```bash
-./g8e auth pending
+./g8e auth enroll pending
 ```
 
 Approve each operator, ensemble, and dashboard request by its exact request ID:
 
 ```bash
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
-./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
-./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
+./g8e auth enroll approve <operator-request-id> --yes
+./g8e auth enroll approve <ensemble-request-id> --yes
+./g8e auth enroll approve <dashboard-request-id> --yes
 ```
 
 The order does not affect the approval protocol. Each workload polls until its request is approved and then completes certificate enrollment.

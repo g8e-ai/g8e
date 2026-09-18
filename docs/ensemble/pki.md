@@ -83,9 +83,9 @@ Operators, the dashboard, and the ensemble enroll through the owner-approved pla
 
 An enrolled owner uses these commands to review and decide requests:
 
-1. Run `g8e auth pending` to list pending requests.
+1. Run `g8e auth enroll pending` to list pending requests.
 2. Inspect the component, instance, and fingerprints.
-3. Run `g8e auth approve-platform-enrollment <request-id>` to approve, or add `--deny` to deny it.
+3. Run `g8e auth enroll approve <request-id>` to approve, or `g8e auth enroll deny <request-id>` to deny it.
 
 After approval, the workload proves possession of its private key and retrieves its certificate chain and trust bundle. Platform application certificates bind both the component identity and approving owner. Operator enrollment returns an Operator identity and a CLI identity used for authenticated renewal.
 

@@ -711,7 +711,7 @@ class AppEnrollmentService:
             if approval_url:
                 logger.info("AppEnrollmentService: Approval URL: %s", approval_url)
             logger.info(
-                "AppEnrollmentService: Approve with: g8e auth approve-platform-enrollment %s",
+                "AppEnrollmentService: Approve with: g8e auth enroll approve %s",
                 request_id,
             )
 

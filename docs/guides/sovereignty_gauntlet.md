@@ -121,15 +121,15 @@ Start the gateway, enroll the owner, then start the remaining workloads:
 docker exec g8e-gateway /g8e version --fips | tee "${CAMPAIGN_DIR}/metadata/gateway-fips.txt"
 ./g8e auth enroll user --headless -e localhost 2>&1 | tee "${CAMPAIGN_DIR}/logs/owner-enrollment.log"
 ./g8e docker start --profile bootstrapped --skip-enroll 2>&1 | tee "${CAMPAIGN_DIR}/logs/docker-start-workloads.log"
-./g8e auth pending | tee "${CAMPAIGN_DIR}/logs/pending.txt"
+./g8e auth enroll pending | tee "${CAMPAIGN_DIR}/logs/pending.txt"
 ```
 
 Approve the operator, ensemble, and dashboard requests using the exact request IDs printed by the pending-enrollments command:
 
 ```bash
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
-./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
-./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
+./g8e auth enroll approve <operator-request-id> --yes
+./g8e auth enroll approve <ensemble-request-id> --yes
+./g8e auth enroll approve <dashboard-request-id> --yes
 ```
 
 Wait until all four services are healthy. The initial owner CLI session predates the Operator session, so refresh it after Operator enrollment to bind the canonical CLI session to the active Operator session. Then capture the canonical authentication context:

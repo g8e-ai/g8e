@@ -190,16 +190,16 @@ docker compose --profile bootstrapped --profile evaluation up -d
 Wait ~5s, then list pending enrollments:
 
 ```bash
-./g8e auth pending
+./g8e auth enroll pending
 ```
 
 Approve in this order (Data Operator first):
 
 ```bash
-./g8e auth approve-platform-enrollment <data-operator-request-id> --yes
-./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
-./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
-./g8e auth approve-platform-enrollment <inference-operator-request-id> --yes
+./g8e auth enroll approve <data-operator-request-id> --yes
+./g8e auth enroll approve <dashboard-request-id> --yes
+./g8e auth enroll approve <ensemble-request-id> --yes
+./g8e auth enroll approve <inference-operator-request-id> --yes
 ```
 
 Identify requests by instance ID: `operator-<container-id>` is the **Data** Operator; `operator-inference-operator` is the **Inference** Operator.
@@ -273,8 +273,8 @@ The process submits a platform enrollment request. **Do not** pass `--inference-
 From the campaign host owner CLI:
 
 ```bash
-./g8e auth pending
-./g8e auth approve-platform-enrollment <observer-request-id> --yes
+./g8e auth enroll pending
+./g8e auth enroll approve <observer-request-id> --yes
 ```
 
 After approval, confirm the observer appears in `./g8e operator list` with `provider_boundary_observer_enabled` in its runtime config.
@@ -412,7 +412,7 @@ Workloads remain unhealthy while enrollment is pending.
 ### Workload stays unhealthy
 
 ```bash
-./g8e auth pending
+./g8e auth enroll pending
 ./g8e docker logs <service>
 ```
 

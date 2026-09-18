@@ -49,8 +49,6 @@ func authCmd() *cobra.Command {
 		logoutCmd(),
 		approveCmd(),
 		approveRecoveryCmd(),
-		approvePlatformEnrollmentCmd(),
-		pendingPlatformEnrollmentCmd(),
 		refreshCmd(),
 		authContextCmd(),
 	)
@@ -100,12 +98,12 @@ func stdinContinue(prompt string) bool {
 
 // enrollCmd is the parent command for enrollment. It has no RunE, so cobra
 // prints help and exits non-zero when invoked without a subcommand, forcing
-// explicit session-type selection (user vs operator).
+// explicit session-type selection (user vs platform workload approval).
 func enrollCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "enroll",
-		Short: "Enroll a CLI user with the running Gateway",
-		Long: `Enroll a CLI user with the running Gateway.
+		Short: "Enroll CLI users and manage platform workload enrollment",
+		Long: `Enroll CLI users and manage platform workload enrollment with the running Gateway.
 
   user      Local human CLI/user enrollment. Drives the EnrollmentCoordinator
             state machine (bootstrap, recovery, rotation, reuse), installs the
@@ -113,10 +111,20 @@ func enrollCmd() *cobra.Command {
             WebAuthn passkey ceremony. Produces a CLI session bound to a user
             identity.
 
+  pending   List pending platform workload enrollment requests (dashboard,
+            ensemble, or operator) awaiting an owner decision.
+
+  approve   Approve a pending platform workload enrollment request.
+
+  deny      Deny a pending platform workload enrollment request.
+
 Bare ` + "`auth enroll`" + ` (no subcommand) prints this help and exits non-zero.`,
 	}
 	cmd.AddCommand(
 		enrollUserCmd(),
+		pendingPlatformEnrollmentCmd(),
+		approvePlatformEnrollmentCmd(),
+		denyPlatformEnrollmentCmd(),
 	)
 	return cmd
 }

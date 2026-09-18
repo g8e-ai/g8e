@@ -23,24 +23,22 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
-func approvePlatformEnrollmentCmd() *cobra.Command {
-	return approvePlatformEnrollmentCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
+type platformEnrollmentDecisionSpec struct {
+	verb       string
+	promptVerb string
+	decision   models.PlatformEnrollmentDecision
+	short      string
+	long       string
 }
 
-func approvePlatformEnrollmentCmdWithConfig(
-	configLoader func(string) (*config.Config, error),
-	clientFactory apiClientFactory,
-	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
-) *cobra.Command {
-	var (
-		deny   bool
-		reason string
-		yes    bool
-	)
-	cmd := &cobra.Command{
-		Use:   "approve-platform-enrollment <request-id>",
-		Short: "Approve or deny a pending platform workload enrollment request via mTLS",
-		Long: `Approve or deny a pending platform workload enrollment request (dashboard,
+func approvePlatformEnrollmentCmd() *cobra.Command {
+	return platformEnrollmentDecisionCmdWithConfig(
+		platformEnrollmentDecisionSpec{
+			verb:       "approve",
+			promptVerb: "Approve",
+			decision:   models.PlatformEnrollmentDecisionApprove,
+			short:    "Approve a pending platform workload enrollment request via mTLS",
+			long: `Approve a pending platform workload enrollment request (dashboard,
 ensemble, or operator) from the authenticated CLI identity (mTLS).
 
 The command fetches the pending list to display the component kind, hostname,
@@ -49,13 +47,91 @@ decision, unless --yes is supplied for non-interactive automation. The approver
 must hold a valid, non-revoked CLI certificate bound to the active first user
 (the persistent owner); the gateway enforces this server-side.
 
-Use --deny to reject the request instead of approving it. Use --reason to attach
-an optional bounded denial or approval note (max ` + fmt.Sprintf("%d", constants.PlatformEnrollmentMaxReasonBytes) + ` bytes).
+Use --reason to attach an optional bounded approval note (max ` + fmt.Sprintf("%d", constants.PlatformEnrollmentMaxReasonBytes) + ` bytes).
 
 The request body carries only the request ID, typed decision, and optional
 reason — never a user ID or requester token. The requester token is held only by
 the requesting workload and is never exposed through this command.`,
-		Args: cobra.ExactArgs(1),
+		},
+		loadConfig, defaultAPIClientFactory, newFileSvc,
+	)
+}
+
+func denyPlatformEnrollmentCmd() *cobra.Command {
+	return platformEnrollmentDecisionCmdWithConfig(
+		platformEnrollmentDecisionSpec{
+			verb:       "deny",
+			promptVerb: "Deny",
+			decision:   models.PlatformEnrollmentDecisionDeny,
+			short:    "Deny a pending platform workload enrollment request via mTLS",
+			long: `Deny a pending platform workload enrollment request (dashboard,
+ensemble, or operator) from the authenticated CLI identity (mTLS).
+
+The command fetches the pending list to display the component kind, hostname,
+instance ID, CSR fingerprints, creation time, and expiry before posting the
+decision, unless --yes is supplied for non-interactive automation. The approver
+must hold a valid, non-revoked CLI certificate bound to the active first user
+(the persistent owner); the gateway enforces this server-side.
+
+Use --reason to attach an optional bounded denial note (max ` + fmt.Sprintf("%d", constants.PlatformEnrollmentMaxReasonBytes) + ` bytes).
+
+The request body carries only the request ID, typed decision, and optional
+reason — never a user ID or requester token. The requester token is held only by
+the requesting workload and is never exposed through this command.`,
+		},
+		loadConfig, defaultAPIClientFactory, newFileSvc,
+	)
+}
+
+func approvePlatformEnrollmentCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	clientFactory apiClientFactory,
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+) *cobra.Command {
+	return platformEnrollmentDecisionCmdWithConfig(
+		platformEnrollmentDecisionSpec{
+			verb:       "approve",
+			promptVerb: "Approve",
+			decision:   models.PlatformEnrollmentDecisionApprove,
+			short:      "Approve a pending platform workload enrollment request via mTLS",
+			long:       "Approve a pending platform workload enrollment request via mTLS.",
+		},
+		configLoader, clientFactory, fileSvcFactory,
+	)
+}
+
+func denyPlatformEnrollmentCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	clientFactory apiClientFactory,
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+) *cobra.Command {
+	return platformEnrollmentDecisionCmdWithConfig(
+		platformEnrollmentDecisionSpec{
+			verb:       "deny",
+			promptVerb: "Deny",
+			decision:   models.PlatformEnrollmentDecisionDeny,
+			short:    "Deny a pending platform workload enrollment request via mTLS",
+			long:     "Deny a pending platform workload enrollment request via mTLS.",
+		},
+		configLoader, clientFactory, fileSvcFactory,
+	)
+}
+
+func platformEnrollmentDecisionCmdWithConfig(
+	spec platformEnrollmentDecisionSpec,
+	configLoader func(string) (*config.Config, error),
+	clientFactory apiClientFactory,
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+) *cobra.Command {
+	var (
+		reason string
+		yes    bool
+	)
+	cmd := &cobra.Command{
+		Use:   spec.verb + " <request-id>",
+		Short: spec.short,
+		Long:  spec.long,
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			requestID := args[0]
 			cfg, err := configLoader("")
@@ -70,36 +146,29 @@ the requesting workload and is never exposed through this command.`,
 
 			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
-				return fmt.Errorf("approve-platform-enrollment: create API client: %w", err)
+				return fmt.Errorf("enroll %s: create API client: %w", spec.verb, err)
 			}
 
 			pendingBody, err := client.Get(constants.APIPaths.AuthPlatformEnrollmentPending)
 			if err != nil {
-				return fmt.Errorf("approve-platform-enrollment: fetch pending list: %w", err)
+				return fmt.Errorf("enroll %s: fetch pending list: %w", spec.verb, err)
 			}
 
 			var pendingResp models.PlatformEnrollmentPendingResponse
 			if err := json.Unmarshal(pendingBody, &pendingResp); err != nil {
-				return fmt.Errorf("approve-platform-enrollment: parse pending list: %w", err)
+				return fmt.Errorf("enroll %s: parse pending list: %w", spec.verb, err)
 			}
 
 			req := findPendingRequest(pendingResp.Requests, requestID)
 			if req == nil {
-				return fmt.Errorf("approve-platform-enrollment: %w: %s", constants.ErrPlatformEnrollmentRequestNotFound, requestID)
+				return fmt.Errorf("enroll %s: %w: %s", spec.verb, constants.ErrPlatformEnrollmentRequestNotFound, requestID)
 			}
 
 			printPlatformEnrollmentRequestDetails(cmd, req)
 
-			decision := models.PlatformEnrollmentDecisionApprove
-			actionWord := "Approve"
-			if deny {
-				decision = models.PlatformEnrollmentDecisionDeny
-				actionWord = "Deny"
-			}
-
 			if !yes {
 				reader := bufio.NewReader(os.Stdin)
-				fmt.Printf("\n%s this platform enrollment request? (y/N): ", actionWord)
+				fmt.Printf("\n%s this platform enrollment request? (y/N): ", spec.promptVerb)
 				response, _ := reader.ReadString('\n')
 				response = strings.TrimSpace(strings.ToLower(response))
 				if response != "y" && response != "yes" {
@@ -110,11 +179,11 @@ the requesting workload and is never exposed through this command.`,
 
 			decisionReq := models.PlatformEnrollmentDecisionRequest{
 				RequestID: requestID,
-				Decision:  decision,
+				Decision:  spec.decision,
 				Reason:    reason,
 			}
 			if err := decisionReq.Validate(); err != nil {
-				return fmt.Errorf("approve-platform-enrollment: %w", err)
+				return fmt.Errorf("enroll %s: %w", spec.verb, err)
 			}
 
 			respBody, err := client.Post(
@@ -122,12 +191,12 @@ the requesting workload and is never exposed through this command.`,
 				decisionReq,
 			)
 			if err != nil {
-				return fmt.Errorf("approve-platform-enrollment: post decision: %w", err)
+				return fmt.Errorf("enroll %s: post decision: %w", spec.verb, err)
 			}
 
 			var resp models.PlatformEnrollmentDecisionResponse
 			if err := json.Unmarshal(respBody, &resp); err != nil {
-				return fmt.Errorf("approve-platform-enrollment: parse response: %w", err)
+				return fmt.Errorf("enroll %s: parse response: %w", spec.verb, err)
 			}
 
 			cmd.Printf("Platform enrollment request %s.\n", string(resp.State))
@@ -135,8 +204,6 @@ the requesting workload and is never exposed through this command.`,
 		},
 	}
 
-	cmd.Flags().BoolVar(&deny, "deny", false,
-		"Deny the platform enrollment request instead of approving it.")
 	cmd.Flags().StringVar(&reason, "reason", "",
 		"Optional bounded note attached to the decision (max "+fmt.Sprintf("%d", constants.PlatformEnrollmentMaxReasonBytes)+" bytes).")
 	cmd.Flags().BoolVar(&yes, "yes", false,

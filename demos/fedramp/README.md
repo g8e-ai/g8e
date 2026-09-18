@@ -111,17 +111,17 @@ g8e demos clean fedramp
 
 ### Owner-approved platform bootstrap
 
-After `g8e demos start fedramp`, the gateway is healthy but the operator and its dependent service (`agent-runtime`) remain not-ready until the operator's platform enrollment request is approved. `g8e demos start` prints the bootstrap instructions automatically, including the demo gateway port and the exact `g8e auth approve-platform-enrollment <request-id>` command to run. The bootstrap flow is:
+After `g8e demos start fedramp`, the gateway is healthy but the operator and its dependent service (`agent-runtime`) remain not-ready until the operator's platform enrollment request is approved. `g8e demos start` prints the bootstrap instructions automatically, including the demo gateway port and the exact `g8e auth enroll approve <request-id>` command to run. The bootstrap flow is:
 
 ```bash
 # 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start fedramp`).
 ./g8e auth enroll user -e localhost:8088 --port 8451
 
 # 2. List pending platform enrollment requests.
-./g8e auth pending -e localhost:8088 --port 8451
+./g8e auth enroll pending -e localhost:8088 --port 8451
 
 # 3. Approve the operator's request by exact request ID.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:8088 --port 8451
+./g8e auth enroll approve <operator-request-id> --yes -e localhost:8088 --port 8451
 
 # 4. Wait for the operator and its dependents to become healthy.
 g8e demos status fedramp

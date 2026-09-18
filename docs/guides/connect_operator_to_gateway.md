@@ -125,16 +125,16 @@ Leave this process running while the owner approves the request. If the process 
 From the enrolled owner CLI, list pending platform enrollment requests:
 
 ```bash
-./g8e auth pending --endpoint <gateway-host>
+./g8e auth enroll pending --endpoint <gateway-host>
 ```
 
 Compare the displayed component, hostname, system fingerprint, and Operator and CLI key fingerprints with the requesting Operator's output. Approve the matching request:
 
 ```bash
-./g8e auth approve-platform-enrollment <request-id> --endpoint <gateway-host>
+./g8e auth enroll approve <request-id> --endpoint <gateway-host>
 ```
 
-The command displays the request details and asks for confirmation. For non-interactive operation after independently validating the request, add `--yes`. To reject a request, use `--deny`; `--reason` attaches an optional decision note.
+The command displays the request details and asks for confirmation. For non-interactive operation after independently validating the request, add `--yes`. To reject a request, use `g8e auth enroll deny <request-id>`; `--reason` attaches an optional decision note.
 
 Only a valid, non-revoked CLI identity belonging to the first enrolled owner can approve or deny the request. The Gateway enforces this authorization.
 
@@ -236,7 +236,7 @@ The Gateway is running but has not been bootstrapped with its first owner. The O
 List requests from the owner CLI:
 
 ```bash
-./g8e auth pending --endpoint <gateway-host>
+./g8e auth enroll pending --endpoint <gateway-host>
 ```
 
 Approve the matching request ID after comparing its fingerprints. Restarting the requesting Operator from the same launch directory resumes the persisted request; starting it from another directory creates or uses a different `.g8e/` runtime tree.

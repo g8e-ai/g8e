@@ -9,7 +9,7 @@ Run commands from `/home/bob/g8e` unless a section changes directory. Docker Eng
 ```bash
 cd /home/bob/g8e
 ./g8e docker start --full --skip-enroll
-./g8e auth pending
+./g8e auth enroll pending
 ./g8e docker status
 ./g8e auth context
 curl -fsS http://127.0.0.1:8000/health
@@ -143,7 +143,7 @@ Stopping the tunnel preserves publisher and mirror state. Disable the tunnel ser
 
 ## Focused troubleshooting
 
-- **Ensemble unhealthy:** run `./g8e auth pending`, inspect `./g8e docker logs ensemble`, approve the exact pending request when appropriate, and recheck `./g8e docker status`.
+- **Ensemble unhealthy:** run `./g8e auth enroll pending`, inspect `./g8e docker logs ensemble`, approve the exact pending request when appropriate, and recheck `./g8e docker status`.
 - **Mirror unreachable:** run `npm run health`; verify host listeners `8081` and `8082` separately. The browser uses only `8082` and publisher ingest uses only `8081`.
 - **Publisher retry:** run `./g8e public push`, then `npm run health`. A retained outbox retries in order without rerunning evaluation.
 - **Malformed projection:** run the contract and feed-transport tests plus `./g8e test unit --pkg ./internal/services/evaluation`. Do not bypass strict validation or publish a known-invalid corpus.
