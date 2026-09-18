@@ -653,6 +653,9 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	// Initialize AppEnrollmentService for external app enrollment
 	appEnrollment := NewAppEnrollmentService(ls.docStore, pki, logger)
 
+	providerObservationDeps := providerObservationControllerDeps(logger, ls.responder, ls.fileSvc)
+	providerObservationDeps.ObservationCoordinator = ls.providerObservationCoord
+
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:    cfg,
 		Logger: logger,
@@ -836,7 +839,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Responder: ls.responder,
 			Spectator: func() *PublicSpectatorRuntime { return ls.publicSpectator },
 		},
-		ProviderObservationControllerDeps: providerObservationControllerDeps(logger, ls.responder, ls.fileSvc),
+		ProviderObservationControllerDeps: providerObservationDeps,
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)

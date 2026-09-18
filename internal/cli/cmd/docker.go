@@ -1124,6 +1124,10 @@ Use --no-cache=false to reuse the Docker build cache.`,
 			scope := "gateway"
 			if resolved != "" {
 				scope = fmt.Sprintf("full stack (profile %s)", resolved)
+			} else {
+				cmd.Println("\nWarning: restarting gateway only. Operator, ensemble, inference-operator, and dashboard stay down.")
+				cmd.Println("Provider-boundary observation ingest will not run until the full stack is up.")
+				cmd.Println("Use --full (or ./g8e docker init --headless) before eval campaign execute.")
 			}
 			cmd.Printf("\nStarting Docker Compose %s...\n", scope)
 			if err := runDockerCompose([]string{"up", "-d"}, resolved); err != nil {

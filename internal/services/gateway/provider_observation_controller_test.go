@@ -186,6 +186,49 @@ func TestProviderObservationControllerHandleProviderObservation_ReturnsBundle(t 
 	assert.Equal(t, "attempt-1", loadedAttempt.GetProviderAttemptId())
 }
 
+type stubProviderObservationPreflight struct {
+	err error
+}
+
+func (s stubProviderObservationPreflight) PreflightCommandDelivery(context.Context) error {
+	return s.err
+}
+
+func TestProviderObservationControllerHandleProviderObservationPreflight_Ready(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	controller := newProviderObservationController(ProviderObservationControllerDeps{
+		Logger:                 logger,
+		Responder:              response.NewWriter(logger),
+		ObservationCoordinator: stubProviderObservationPreflight{},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.InferenceProviderObservations+"_preflight", nil)
+	rr := httptest.NewRecorder()
+	controller.handleProviderObservation(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.Equal(t, "ready", resp["status"])
+}
+
+func TestProviderObservationControllerHandleProviderObservationPreflight_Unavailable(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	controller := newProviderObservationController(ProviderObservationControllerDeps{
+		Logger:    logger,
+		Responder: response.NewWriter(logger),
+		ObservationCoordinator: stubProviderObservationPreflight{
+			err: constants.ErrEvaluationObservationUnavailable,
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.InferenceProviderObservations+"_preflight", nil)
+	rr := httptest.NewRecorder()
+	controller.handleProviderObservation(rr, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
+}
+
 func writeProviderAttemptRecord(ctx context.Context, fileSvc fs.RuntimeFileService, record *operatorv1.InferenceProviderAttemptRecord) error {
 	dir := filepath.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname)
 	if err := fileSvc.MkdirAll(ctx, dir, constants.PermDirStandard); err != nil {

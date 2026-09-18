@@ -95,15 +95,16 @@ func NewProviderBoundaryObservationCoordinator(
 // gateway owner and subscribes to its results channel. When the active observer
 // session changes, any cached target is dropped and the coordinator
 // re-subscribes to the newly selected session.
-func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Context) bool {
+func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Context) error {
 	if c == nil || c.dispatch == nil || c.operatorLister == nil || c.pubsub == nil || c.windows == nil {
-		return false
+		return constants.ErrServiceUnavailable
 	}
+	_ = ctx
 
 	operators, err := c.operatorLister.ListOperatorsForObservation()
 	if err != nil {
 		c.logger.Warn("Provider-boundary observation: list operators failed", "error", err)
-		return false
+		return err
 	}
 	selected, err := operatorcapability.SelectProviderBoundaryObserver(operators, "")
 	if err != nil {
@@ -116,7 +117,7 @@ func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Cont
 		default:
 			c.logger.Warn("Provider-boundary observation: observer selection failed", "error", err)
 		}
-		return false
+		return err
 	}
 
 	c.mu.Lock()
@@ -124,7 +125,7 @@ func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Cont
 	c.mu.Unlock()
 
 	if cached != nil && cached.OperatorID == selected.OperatorID && cached.OperatorSessionID == selected.OperatorSessionID {
-		return true
+		return nil
 	}
 
 	if cached != nil {
@@ -156,7 +157,7 @@ func (c *ProviderBoundaryObservationCoordinator) ensureObserver(ctx context.Cont
 		"operator_id", observer.OperatorID,
 		"operator_session_id", observer.OperatorSessionID,
 		"results_channel", resultsChannel)
-	return true
+	return nil
 }
 
 func (c *ProviderBoundaryObservationCoordinator) resetObserver() {
@@ -177,13 +178,35 @@ func (c *ProviderBoundaryObservationCoordinator) Stop() {
 	c.resetObserver()
 }
 
-// NotifyAttemptBegin sends a fire-and-forget BEGIN command to the observer.
-func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptBegin(ctx context.Context, _ string, providerAttemptID string, startedAtUnixMs int64, retryCount uint32) {
-	if providerAttemptID == "" {
-		return
+// PreflightCommandDelivery verifies that the active observer is enrolled and
+// has at least one cmd-channel WebSocket subscriber on this gateway broker.
+func (c *ProviderBoundaryObservationCoordinator) PreflightCommandDelivery(ctx context.Context) error {
+	if err := c.ensureObserver(ctx); err != nil {
+		return fmt.Errorf("provider-boundary observation preflight: %w", err)
 	}
-	if !c.ensureObserver(ctx) {
-		return
+	c.mu.Lock()
+	observer := c.observer
+	c.mu.Unlock()
+	if observer == nil {
+		return fmt.Errorf("provider-boundary observation preflight: %w", constants.ErrProviderBoundaryObserverNotFound)
+	}
+	cmdChannel := pubsub.CmdChannel(observer.OperatorID, observer.OperatorSessionID)
+	if c.pubsub == nil || c.pubsub.ChannelSubscriberCount(cmdChannel) == 0 {
+		return fmt.Errorf("provider-boundary observation preflight: %w: cmd channel %s",
+			constants.ErrEvaluationObservationUnavailable, cmdChannel)
+	}
+	return nil
+}
+
+// NotifyAttemptBegin delivers a BEGIN command to the observer. Delivery uses
+// the same governed PublishCommand transport as other gateway dispatches and
+// fails closed when the observer cmd channel has no subscribers.
+func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptBegin(ctx context.Context, _ string, providerAttemptID string, startedAtUnixMs int64, retryCount uint32) error {
+	if providerAttemptID == "" {
+		return nil
+	}
+	if err := c.ensureObserver(ctx); err != nil {
+		return fmt.Errorf("provider-boundary observation begin: %w", err)
 	}
 	command := &evalv1.ProviderBoundaryObservationCommand{
 		ProviderAttemptId:      providerAttemptID,
@@ -191,10 +214,10 @@ func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptBegin(ctx context.
 		AttemptStartedAtUnixMs: startedAtUnixMs,
 		RetryCount:             retryCount,
 	}
-	c.publishCommand(ctx, command)
+	return c.publishCommand(ctx, command)
 }
 
-// NotifyAttemptFinalize sends a fire-and-forget FINALIZE command to the observer.
+// NotifyAttemptFinalize delivers a FINALIZE command to the observer.
 func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptFinalize(
 	ctx context.Context,
 	_ string,
@@ -204,12 +227,12 @@ func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptFinalize(
 	completedAtUnixMs int64,
 	failed bool,
 	retryCount uint32,
-) {
+) error {
 	if providerAttemptID == "" {
-		return
+		return nil
 	}
-	if !c.ensureObserver(ctx) {
-		return
+	if err := c.ensureObserver(ctx); err != nil {
+		return fmt.Errorf("provider-boundary observation finalize: %w", err)
 	}
 	status := evalv1.ProviderBoundaryObservationAttemptStatus_PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_COMPLETED
 	if failed {
@@ -224,22 +247,14 @@ func (c *ProviderBoundaryObservationCoordinator) NotifyAttemptFinalize(
 		AttemptStatus:            status,
 		RetryCount:               retryCount,
 	}
-	c.publishCommand(ctx, command)
+	return c.publishCommand(ctx, command)
 }
 
-func (c *ProviderBoundaryObservationCoordinator) publishCommand(ctx context.Context, command *evalv1.ProviderBoundaryObservationCommand) {
-	err := c.tryPublishCommand(ctx, command)
-	if err == nil {
-		return
+func (c *ProviderBoundaryObservationCoordinator) publishCommand(ctx context.Context, command *evalv1.ProviderBoundaryObservationCommand) error {
+	if err := c.tryPublishCommand(ctx, command); err != nil {
+		return err
 	}
-	if !errors.Is(err, constants.ErrDispatchNoDelivery) {
-		return
-	}
-	c.resetObserver()
-	if !c.ensureObserver(ctx) {
-		return
-	}
-	_ = c.tryPublishCommand(ctx, command)
+	return nil
 }
 
 func (c *ProviderBoundaryObservationCoordinator) tryPublishCommand(ctx context.Context, command *evalv1.ProviderBoundaryObservationCommand) error {
@@ -249,22 +264,34 @@ func (c *ProviderBoundaryObservationCoordinator) tryPublishCommand(ctx context.C
 	if observer == nil || c.dispatch == nil {
 		return constants.ErrMissingRequiredField
 	}
+	cmdChannel := pubsub.CmdChannel(observer.OperatorID, observer.OperatorSessionID)
 	payload, err := proto.Marshal(command)
 	if err != nil {
 		c.logger.Warn("Provider-boundary observation command marshal failed", "error", err)
 		return err
 	}
-	if _, err := c.dispatch.PublishCommand(ctx, PublishCommandRequest{
+	txID, err := c.dispatch.PublishCommand(ctx, PublishCommandRequest{
 		TargetOperatorSessionID: observer.OperatorSessionID,
 		ActionType:              string(constants.ActionTypeProviderBoundaryObservation),
 		Payload:                 payload,
-	}); err != nil {
+	})
+	if err != nil {
 		c.logger.Warn("Provider-boundary observation command publish failed",
 			"provider_attempt_id", command.GetProviderAttemptId(),
 			"phase", command.GetPhase().String(),
+			"operator_id", observer.OperatorID,
+			"operator_session_id", observer.OperatorSessionID,
+			"cmd_channel", cmdChannel,
 			"error", err)
 		return err
 	}
+	c.logger.Info("Provider-boundary observation command published",
+		"transaction_id", txID,
+		"provider_attempt_id", command.GetProviderAttemptId(),
+		"phase", command.GetPhase().String(),
+		"operator_id", observer.OperatorID,
+		"operator_session_id", observer.OperatorSessionID,
+		"cmd_channel", cmdChannel)
 	return nil
 }
 

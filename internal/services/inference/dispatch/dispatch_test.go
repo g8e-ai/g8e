@@ -579,3 +579,56 @@ func TestDispatchInference_PayloadCarriesRequestFields(t *testing.T) {
 	}
 	assert.True(t, proto.Equal(expected, infReq), "forwarded governed payload must preserve every ordered message and tool field")
 }
+
+type stubObservationNotifier struct {
+	beginErr     error
+	finalizeErr  error
+	beginCalls   int
+	finalizeCalls int
+}
+
+func (s *stubObservationNotifier) NotifyAttemptBegin(_ context.Context, _, _ string, _ int64, _ uint32) error {
+	s.beginCalls++
+	return s.beginErr
+}
+
+func (s *stubObservationNotifier) NotifyAttemptFinalize(_ context.Context, _, _, _ string, _, _ int64, _ bool, _ uint32) error {
+	s.finalizeCalls++
+	return s.finalizeErr
+}
+
+func TestDispatchInference_ObservationBeginFailureFailsClosedBeforeProviderCall(t *testing.T) {
+	dispatcher := &stubCommandDispatcher{result: successDispatchResult(t)}
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+		capableOp("sess-inf"),
+	}}, testLogger())
+	notifier := &stubObservationNotifier{beginErr: constants.ErrDispatchNoDelivery}
+	svc.SetProviderObservationNotifier(notifier)
+
+	req := baseRequest()
+	configureCampaignRequest(t, &req)
+
+	_, err := svc.DispatchInference(context.Background(), req)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrDispatchNoDelivery)
+	assert.Equal(t, 1, notifier.beginCalls)
+	assert.Equal(t, 0, dispatcher.calls, "inference must not dispatch when observation begin fails")
+}
+
+func TestDispatchInference_CampaignObservationFinalizeFailureFailsClosed(t *testing.T) {
+	req := baseRequest()
+	configureCampaignRequest(t, &req)
+	dispatcher := &stubCommandDispatcher{result: successDispatchResultFor(t, req)}
+	svc := NewDispatchService(dispatcher, &stubOperatorLister{ops: []models.OperatorDocumentGo{
+		capableOp("sess-inf"),
+	}}, testLogger())
+	notifier := &stubObservationNotifier{finalizeErr: constants.ErrDispatchNoDelivery}
+	svc.SetProviderObservationNotifier(notifier)
+
+	_, err := svc.DispatchInference(context.Background(), req)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrDispatchNoDelivery)
+	assert.Equal(t, 1, notifier.beginCalls)
+	assert.Equal(t, 1, notifier.finalizeCalls)
+	assert.Equal(t, 1, dispatcher.calls, "inference may complete before finalize delivery is checked")
+}

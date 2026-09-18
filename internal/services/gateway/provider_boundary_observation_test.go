@@ -68,9 +68,69 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_SubscribesToOwner
 		logger,
 	)
 
-	assert.True(t, coordinator.ensureObserver(context.Background()))
+	assert.NoError(t, coordinator.ensureObserver(context.Background()))
 	assert.NotNil(t, coordinator.observer)
 	assert.Equal(t, "sess-observer-1", coordinator.observer.OperatorSessionID)
+}
+
+func TestProviderBoundaryObservationCoordinator_NotifyAttemptBegin_FailsWithoutCmdSubscriber(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	windowStore, err := provider_observer.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	op := &models.OperatorDocumentGo{
+		ID:                "observer-1",
+		OperatorSessionID: "sess-observer-1",
+	}
+	dispatchSvc, pubsubHandler := newTestDispatchService(t, "root-abc", op)
+
+	coordinator := NewProviderBoundaryObservationCoordinator(
+		dispatchSvc,
+		&stubProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+			{
+				ID:                op.ID,
+				OperatorSessionID: op.OperatorSessionID,
+				Status:            constants.OperatorStatusActive,
+				OperatorType:      constants.OperatorTypeRemote,
+				RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+			},
+		}},
+		pubsubHandler,
+		windowStore,
+		logger,
+	)
+
+	err = coordinator.NotifyAttemptBegin(context.Background(), "user-1", "attempt-1", time.Now().UnixMilli(), 0)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrDispatchNoDelivery)
+}
+
+func TestProviderBoundaryObservationCoordinator_PreflightCommandDelivery_FailsWithoutCmdSubscriber(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	windowStore, err := provider_observer.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	pubsubHandler := NewGatewayWebSocketHandler(logger)
+
+	coordinator := NewProviderBoundaryObservationCoordinator(
+		&DispatchService{pubsub: pubsubHandler},
+		&stubProviderBoundaryOperatorLister{operators: []models.OperatorDocumentGo{
+			{
+				ID:                "observer-1",
+				OperatorSessionID: "sess-observer-1",
+				Status:            constants.OperatorStatusActive,
+				OperatorType:      constants.OperatorTypeRemote,
+				RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+			},
+		}},
+		pubsubHandler,
+		windowStore,
+		logger,
+	)
+
+	err = coordinator.PreflightCommandDelivery(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvaluationObservationUnavailable)
 }
 
 func TestProviderBoundaryObservationCoordinator_EnsureObserver_ReSubscribesOnSessionChange(t *testing.T) {
@@ -97,7 +157,7 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_ReSubscribesOnSes
 		logger,
 	)
 
-	require.True(t, coordinator.ensureObserver(context.Background()))
+	require.NoError(t, coordinator.ensureObserver(context.Background()))
 	require.NotNil(t, coordinator.observer)
 	assert.Equal(t, "sess-observer-old", coordinator.observer.OperatorSessionID)
 
@@ -111,7 +171,7 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_ReSubscribesOnSes
 		},
 	}
 
-	require.True(t, coordinator.ensureObserver(context.Background()))
+	require.NoError(t, coordinator.ensureObserver(context.Background()))
 	require.NotNil(t, coordinator.observer)
 	assert.Equal(t, "sess-observer-new", coordinator.observer.OperatorSessionID)
 
@@ -174,7 +234,8 @@ func TestProviderBoundaryObservationCoordinator_EnsureObserver_LogsNotFound(t *t
 		logger,
 	)
 
-	assert.False(t, coordinator.ensureObserver(context.Background()))
+	err = coordinator.ensureObserver(context.Background())
+	assert.Error(t, err)
 	assert.Nil(t, coordinator.observer)
 }
 
@@ -202,7 +263,7 @@ func TestProviderBoundaryObservationCoordinator_IngestAfterDispatchContextCancel
 	)
 
 	dispatchCtx, cancel := context.WithCancel(context.Background())
-	require.True(t, coordinator.ensureObserver(dispatchCtx))
+	require.NoError(t, coordinator.ensureObserver(dispatchCtx))
 	cancel()
 
 	window := &evalv1.ProviderBoundaryObservationWindow{

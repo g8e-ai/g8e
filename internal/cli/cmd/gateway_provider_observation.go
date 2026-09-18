@@ -92,3 +92,27 @@ func newCampaignProviderObservationReader(fileSvc fs.RuntimeFileService, cfg *co
 	}
 	return evaluation.NewCampaignProviderObservationReaderWithRemote(fileSvc, remote)
 }
+
+func preflightProviderObservationDelivery(fileSvc fs.RuntimeFileService, cfg *config.Config) error {
+	if !isGatewayHealthy() {
+		return constants.ErrEvaluationObservationUnavailable
+	}
+	client, err := defaultAPIClientFactory(fileSvc, cfg)
+	if err != nil {
+		return fmt.Errorf("provider observation preflight: create gateway client: %w", err)
+	}
+	body, err := client.Get(constants.APIPaths.InferenceProviderObservations + "_preflight")
+	if err != nil {
+		return fmt.Errorf("provider observation preflight: %w", err)
+	}
+	var resp struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	if resp.Status != "ready" {
+		return fmt.Errorf("provider observation preflight: unexpected status %q", resp.Status)
+	}
+	return nil
+}

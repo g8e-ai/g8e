@@ -353,6 +353,15 @@ func (b *GatewayWebSocketHandler) Publish(channel string, data []byte) int {
 	return count
 }
 
+// ChannelSubscriberCount returns the number of active WebSocket subscribers on
+// an exact channel name. Used by gateway preflight checks before scored
+// inference dispatches that require remote observer cmd delivery.
+func (b *GatewayWebSocketHandler) ChannelSubscriberCount(channel string) int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return len(b.subscribers[channel])
+}
+
 // RegisterHandler registers an in-process handler for a channel.
 // Used for governance command processing in gateway mode and SSE streaming.
 // Returns a function that unregisters the handler.

@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -45,18 +46,24 @@ func providerObservationControllerDeps(logger *slog.Logger, responder *response.
 // ProviderObservationController serves owner mTLS reads of provider-boundary
 // observation evidence stored in the gateway runtime volume.
 type ProviderObservationController struct {
-	logger    *slog.Logger
-	responder *response.Writer
-	windows   provider_observer.WindowStore
-	attempts  inference.AttemptStore
+	logger       *slog.Logger
+	responder    *response.Writer
+	windows      provider_observer.WindowStore
+	attempts     inference.AttemptStore
+	preflight    providerObservationPreflight
+}
+
+type providerObservationPreflight interface {
+	PreflightCommandDelivery(ctx context.Context) error
 }
 
 // ProviderObservationControllerDeps groups dependencies for ProviderObservationController.
 type ProviderObservationControllerDeps struct {
-	Logger    *slog.Logger
-	Responder *response.Writer
-	Windows   provider_observer.WindowStore
-	Attempts  inference.AttemptStore
+	Logger                 *slog.Logger
+	Responder              *response.Writer
+	Windows                provider_observer.WindowStore
+	Attempts               inference.AttemptStore
+	ObservationCoordinator providerObservationPreflight
 }
 
 func newProviderObservationController(d ProviderObservationControllerDeps) *ProviderObservationController {
@@ -65,6 +72,7 @@ func newProviderObservationController(d ProviderObservationControllerDeps) *Prov
 		responder: d.Responder,
 		windows:   d.Windows,
 		attempts:  d.Attempts,
+		preflight: d.ObservationCoordinator,
 	}
 }
 
@@ -79,6 +87,11 @@ func newProviderObservationController(d ProviderObservationControllerDeps) *Prov
 // @Failure		503	{string}	string	"Provider observation store unavailable"
 // @Router			/api/v1/inference/provider-observations/{provider_attempt_id} [get]
 func (c *ProviderObservationController) handleProviderObservation(w http.ResponseWriter, r *http.Request) {
+	suffix := strings.TrimPrefix(r.URL.Path, constants.APIPaths.InferenceProviderObservations)
+	if suffix == "_preflight" {
+		c.handleProviderObservationPreflight(w, r)
+		return
+	}
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
@@ -88,7 +101,7 @@ func (c *ProviderObservationController) handleProviderObservation(w http.Respons
 		return
 	}
 
-	providerAttemptID := strings.TrimPrefix(r.URL.Path, constants.APIPaths.InferenceProviderObservations)
+	providerAttemptID := suffix
 	if providerAttemptID == "" || strings.Contains(providerAttemptID, "/") {
 		c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 		return
@@ -133,4 +146,26 @@ func (c *ProviderObservationController) handleProviderObservation(w http.Respons
 		Window:          windowBytes,
 		ProviderAttempt: attemptBytes,
 	})
+}
+
+func (c *ProviderObservationController) handleProviderObservationPreflight(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	if c.preflight == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrServiceUnavailable.Error())
+		return
+	}
+	if err := c.preflight.PreflightCommandDelivery(r.Context()); err != nil {
+		if errors.Is(err, constants.ErrEvaluationObservationUnavailable) ||
+			errors.Is(err, constants.ErrProviderBoundaryObserverNotFound) ||
+			errors.Is(err, constants.ErrProviderBoundaryObserverAmbiguous) {
+			c.responder.Error(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }

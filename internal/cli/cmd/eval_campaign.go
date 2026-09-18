@@ -514,6 +514,9 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := preflightProviderObservationDelivery(fileSvc, cfg); err != nil {
+				return fmt.Errorf("evaluation: campaign execute: %w", err)
+			}
 			iterations := int(limit)
 			if daemon {
 				iterations = 1<<31 - 1

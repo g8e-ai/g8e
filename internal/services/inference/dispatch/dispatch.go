@@ -109,10 +109,11 @@ type OperatorLister interface {
 }
 
 // ProviderObservationNotifier coordinates remote provider-boundary observation
-// for scored inference attempts. Implementations must be non-blocking.
+// for scored inference attempts. Implementations use the gateway command
+// transport and must fail closed when observation commands cannot be delivered.
 type ProviderObservationNotifier interface {
-	NotifyAttemptBegin(ctx context.Context, requestorUserID, providerAttemptID string, startedAtUnixMs int64, retryCount uint32)
-	NotifyAttemptFinalize(ctx context.Context, requestorUserID, providerAttemptID, inferenceTransactionID string, startedAtUnixMs, completedAtUnixMs int64, failed bool, retryCount uint32)
+	NotifyAttemptBegin(ctx context.Context, requestorUserID, providerAttemptID string, startedAtUnixMs int64, retryCount uint32) error
+	NotifyAttemptFinalize(ctx context.Context, requestorUserID, providerAttemptID, inferenceTransactionID string, startedAtUnixMs, completedAtUnixMs int64, failed bool, retryCount uint32) error
 }
 
 // DispatchService is the platform-internal inference dispatch service on
@@ -309,7 +310,9 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 
 	attemptStartedAt := time.Now().UTC().UnixMilli()
 	if s.observationNotifier != nil {
-		s.observationNotifier.NotifyAttemptBegin(ctx, req.RequestorUserID, req.ProviderAttemptID, attemptStartedAt, req.RetryCount)
+		if err := s.observationNotifier.NotifyAttemptBegin(ctx, req.RequestorUserID, req.ProviderAttemptID, attemptStartedAt, req.RetryCount); err != nil {
+			return nil, fmt.Errorf("inference dispatch: %w", err)
+		}
 	}
 
 	// Dispatch through the gateway's CommandDispatcher. The dispatcher
@@ -335,7 +338,7 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	})
 	if err != nil {
 		if s.observationNotifier != nil {
-			s.observationNotifier.NotifyAttemptFinalize(ctx, req.RequestorUserID, req.ProviderAttemptID, "", attemptStartedAt, time.Now().UTC().UnixMilli(), true, req.RetryCount)
+			_ = s.notifyObservationFinalize(ctx, req, "", attemptStartedAt, time.Now().UTC().UnixMilli(), true)
 		}
 		if errors.Is(err, constants.ErrDispatchResultTimeout) {
 			// The dispatch deadline expired while the provider call may
@@ -362,14 +365,16 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 	}
 	if err := validateInferenceResult(infResult, req); err != nil {
 		if s.observationNotifier != nil {
-			s.observationNotifier.NotifyAttemptFinalize(ctx, req.RequestorUserID, req.ProviderAttemptID, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), true, req.RetryCount)
+			_ = s.notifyObservationFinalize(ctx, req, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), true)
 		}
 		return nil, fmt.Errorf("inference dispatch: %w", err)
 	}
 
 	failed := result.Receipt != nil && result.Receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 	if s.observationNotifier != nil {
-		s.observationNotifier.NotifyAttemptFinalize(ctx, req.RequestorUserID, req.ProviderAttemptID, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), failed, req.RetryCount)
+		if err := s.notifyObservationFinalize(ctx, req, result.TransactionID, attemptStartedAt, time.Now().UTC().UnixMilli(), failed); err != nil {
+			return nil, err
+		}
 	}
 
 	s.logger.Info("Governed inference dispatch completed",
@@ -383,6 +388,39 @@ func (s *DispatchService) DispatchInference(ctx context.Context, req DispatchInf
 		Result:        infResult,
 		Receipt:       result.Receipt,
 	}, nil
+}
+
+func (s *DispatchService) notifyObservationFinalize(
+	ctx context.Context,
+	req DispatchInferenceRequest,
+	inferenceTransactionID string,
+	startedAtUnixMs int64,
+	completedAtUnixMs int64,
+	failed bool,
+) error {
+	if s == nil || s.observationNotifier == nil {
+		return nil
+	}
+	err := s.observationNotifier.NotifyAttemptFinalize(
+		ctx,
+		req.RequestorUserID,
+		req.ProviderAttemptID,
+		inferenceTransactionID,
+		startedAtUnixMs,
+		completedAtUnixMs,
+		failed,
+		req.RetryCount,
+	)
+	if err == nil {
+		return nil
+	}
+	if req.CampaignID != "" || req.ModelRegistryDigest != "" || len(req.ModelRegistry) != 0 {
+		return fmt.Errorf("inference dispatch: %w", err)
+	}
+	s.logger.Warn("inference dispatch: provider-boundary observation finalize undelivered",
+		"provider_attempt_id", req.ProviderAttemptID,
+		"error", err)
+	return nil
 }
 
 func validateCampaignModelRegistry(req DispatchInferenceRequest) error {
