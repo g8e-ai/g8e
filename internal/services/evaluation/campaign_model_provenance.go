@@ -9,13 +9,21 @@ package evaluation
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
+
+// ModelProvenanceRemote loads model provenance attestation evidence from a
+// remote gateway when local runtime files are unavailable.
+type ModelProvenanceRemote interface {
+	Load(ctx context.Context, providerAttemptID string) (*evalv1.ModelProvenanceAttestationWindow, error)
+}
 
 const (
 	modelProvenanceArtifactType = "model-provenance-attestation-window"
@@ -63,6 +71,91 @@ func (r *localModelProvenanceReader) Load(ctx context.Context, providerAttemptID
 
 // VerifyModelProvenanceWindow validates one attestation window against the
 // expected campaign model digest when strict policy is enabled.
+// CampaignModelProvenanceReader loads model provenance attestation windows
+// for campaign verification.
+type CampaignModelProvenanceReader struct {
+	windows ModelProvenanceReader
+}
+
+// NewCampaignModelProvenanceReader constructs one read-only model provenance
+// accessor from runtime file services.
+func NewCampaignModelProvenanceReader(fileSvc fs.RuntimeFileService) (*CampaignModelProvenanceReader, error) {
+	return NewCampaignModelProvenanceReaderWithRemote(fileSvc, nil)
+}
+
+// NewCampaignModelProvenanceReaderWithRemote constructs one read-only model
+// provenance accessor from local runtime files with optional gateway fallback
+// when local evidence is missing.
+func NewCampaignModelProvenanceReaderWithRemote(fileSvc fs.RuntimeFileService, remote ModelProvenanceRemote) (*CampaignModelProvenanceReader, error) {
+	if fileSvc == nil {
+		return nil, fmt.Errorf("evaluation: model provenance reader: %w", constants.ErrMissingRequiredField)
+	}
+	localReader, err := NewLocalModelProvenanceReader(fileSvc)
+	if err != nil {
+		return nil, err
+	}
+	windows := localReader
+	if remote != nil {
+		windows = &fallbackModelProvenanceReader{local: localReader, remote: remote}
+	}
+	return &CampaignModelProvenanceReader{windows: windows}, nil
+}
+
+type fallbackModelProvenanceReader struct {
+	local  ModelProvenanceReader
+	remote ModelProvenanceRemote
+}
+
+func (s *fallbackModelProvenanceReader) Load(ctx context.Context, providerAttemptID string) (*evalv1.ModelProvenanceAttestationWindow, error) {
+	window, err := s.local.Load(ctx, providerAttemptID)
+	if err == nil || !isModelProvenanceEvidenceNotFound(err) || s.remote == nil {
+		return window, err
+	}
+	return s.remote.Load(ctx, providerAttemptID)
+}
+
+func isModelProvenanceEvidenceNotFound(err error) bool {
+	return errors.Is(err, constants.ErrNotFound) || errors.Is(err, os.ErrNotExist)
+}
+
+// VerifyAssignmentModelProvenance independently checks model provenance
+// attestation coverage for every scored inference in one assignment result.
+func (r *CampaignModelProvenanceReader) VerifyAssignmentModelProvenance(
+	ctx context.Context,
+	result *evalv1.EvaluationAssignmentResult,
+	policy ModelProvenancePolicy,
+) ([]string, []string) {
+	if r == nil || result == nil {
+		return nil, nil
+	}
+	failures := make([]string, 0)
+	unavailable := make([]string, 0)
+	for _, inferenceRecord := range scoredModelInferences(result) {
+		attemptID := inferenceRecord.GetProviderAttemptId()
+		if attemptID == "" {
+			continue
+		}
+		expectedDigest := inferenceRecord.GetModelVariant().GetModelDigest()
+		window, err := r.windows.Load(ctx, attemptID)
+		if err != nil {
+			if isModelProvenanceEvidenceNotFound(err) {
+				reason := fmt.Sprintf("model_provenance_missing:%s", attemptID)
+				unavailable = append(unavailable, reason)
+				if policy == ModelProvenancePolicyStrict {
+					failures = append(failures, fmt.Sprintf("inference %s missing model provenance attestation window", inferenceRecord.GetInferenceRecordId()))
+				}
+				continue
+			}
+			failures = append(failures, fmt.Sprintf("inference %s model provenance window load failed: %v", inferenceRecord.GetInferenceRecordId(), err))
+			continue
+		}
+		if err := VerifyModelProvenanceWindow(window, expectedDigest, policy); err != nil {
+			failures = append(failures, fmt.Sprintf("inference %s model provenance verification failed: %v", inferenceRecord.GetInferenceRecordId(), err))
+		}
+	}
+	return failures, unavailable
+}
+
 func VerifyModelProvenanceWindow(window *evalv1.ModelProvenanceAttestationWindow, expectedModelDigest string, policy ModelProvenancePolicy) error {
 	if window == nil {
 		if policy == ModelProvenancePolicyStrict {

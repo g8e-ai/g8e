@@ -32,6 +32,8 @@ type CampaignAssignmentVerificationRequest struct {
 	Trace                     map[string]any
 	ProviderObservationReader *CampaignProviderObservationReader
 	ProviderObservationPolicy ProviderObservationPolicy
+	ModelProvenanceReader     *CampaignModelProvenanceReader
+	ModelProvenancePolicy     ModelProvenancePolicy
 }
 
 // CampaignAssignmentVerifier independently verifies one persisted assignment
@@ -104,6 +106,10 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 	if req.ProviderObservationReader != nil && len(scoredModelInferences(req.Result)) > 0 {
 		observationFailures, _ := req.ProviderObservationReader.VerifyAssignmentProviderObservations(ctx, req.Result, req.ProviderObservationPolicy)
 		failures = append(failures, observationFailures...)
+	}
+	if req.ModelProvenanceReader != nil && len(scoredModelInferences(req.Result)) > 0 {
+		provenanceFailures, _ := req.ModelProvenanceReader.VerifyAssignmentModelProvenance(ctx, req.Result, req.ModelProvenancePolicy)
+		failures = append(failures, provenanceFailures...)
 	}
 	return finalizeCampaignVerificationReport(report, failures), nil
 }

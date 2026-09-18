@@ -183,6 +183,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.PublicFeedSnapshot, h.publicFeedController.handlePublicFeedSnapshot)
 	mux.Handle(constants.APIPaths.EvalCampaignPublicationStateByRun, http.HandlerFunc(h.evalCampaignPublicationController.handlePublicationState))
 	mux.Handle(constants.APIPaths.InferenceProviderObservations, http.HandlerFunc(h.providerObservationController.handleProviderObservation))
+	mux.Handle(constants.APIPaths.InferenceModelProvenanceAttestations, http.HandlerFunc(h.modelProvenanceController.handleModelProvenance))
 
 	mux.HandleFunc(constants.APIPaths.SSEPush, h.sseController.handleInternalSSEPush)
 	mux.HandleFunc(constants.APIPaths.SSEEvents, h.sseController.handleInternalSSEEvents)

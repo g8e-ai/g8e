@@ -95,6 +95,7 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.PublicFeedSnapshot, RouteAuthMTLS)
 	r.addPrefix(constants.APIPaths.EvalCampaignPublicationStateByRun, RouteAuthMTLS)
 	r.addPrefix(constants.APIPaths.InferenceProviderObservations, RouteAuthMTLS)
+	r.addPrefix(constants.APIPaths.InferenceModelProvenanceAttestations, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.PKICSRSign, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.PKIDevicesEnroll, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthBootstrap, RouteAuthNone)

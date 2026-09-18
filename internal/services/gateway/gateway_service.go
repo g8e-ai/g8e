@@ -663,6 +663,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 
 	providerObservationDeps := providerObservationControllerDeps(logger, ls.responder, ls.fileSvc)
 	providerObservationDeps.ObservationCoordinator = ls.providerObservationCoord
+	modelProvenanceDeps := modelProvenanceControllerDeps(logger, ls.responder, ls.fileSvc)
 
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:    cfg,
@@ -853,6 +854,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Service:   NewEvalCampaignPublicationService(ls.docStore),
 		},
 		ProviderObservationControllerDeps: providerObservationDeps,
+		ModelProvenanceControllerDeps:     modelProvenanceDeps,
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)

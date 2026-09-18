@@ -29,6 +29,8 @@ type CampaignRunVerifier struct {
 	assignmentVerifier        *CampaignAssignmentVerifier
 	providerObservationReader *CampaignProviderObservationReader
 	providerObservationPolicy ProviderObservationPolicy
+	modelProvenanceReader     *CampaignModelProvenanceReader
+	modelProvenancePolicy     ModelProvenancePolicy
 	now                       func() time.Time
 }
 
@@ -50,6 +52,17 @@ func (v *CampaignRunVerifier) WithProviderObservationReader(reader *CampaignProv
 	}
 	v.providerObservationReader = reader
 	v.providerObservationPolicy = policy
+	return v
+}
+
+// WithModelProvenanceReader enables model provenance attestation coverage
+// checks during run verification.
+func (v *CampaignRunVerifier) WithModelProvenanceReader(reader *CampaignModelProvenanceReader, policy ModelProvenancePolicy) *CampaignRunVerifier {
+	if v == nil {
+		return v
+	}
+	v.modelProvenanceReader = reader
+	v.modelProvenancePolicy = policy
 	return v
 }
 
@@ -129,6 +142,8 @@ func (v *CampaignRunVerifier) VerifyRun(ctx context.Context, store *Store, runID
 			Trace:                     trace,
 			ProviderObservationReader: v.providerObservationReader,
 			ProviderObservationPolicy: v.providerObservationPolicy,
+			ModelProvenanceReader:     v.modelProvenanceReader,
+			ModelProvenancePolicy:     v.modelProvenancePolicy,
 		})
 		if err != nil {
 			return nil, err

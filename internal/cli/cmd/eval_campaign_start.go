@@ -37,6 +37,7 @@ func campaignEvalStartCmd(deps nativeEvalDeps) *cobra.Command {
 	var daemon bool
 	var verify bool
 	var requireProviderObservation bool
+	var requireModelProvenance bool
 	var noAutoRefresh bool
 	var waitForProviderIdle bool
 	var providerIdlePoll time.Duration
@@ -149,7 +150,7 @@ Examples:
 				}
 				return nil
 			}
-			report, err := verifyCampaignRun(cmd, deps, plan.RunID, requireProviderObservation, output.JSONEnabled(cmd))
+			report, err := verifyCampaignRun(cmd, deps, plan.RunID, requireProviderObservation, requireModelProvenance, output.JSONEnabled(cmd))
 			if err != nil {
 				return err
 			}
@@ -200,6 +201,7 @@ Examples:
 	cmd.Flags().BoolVar(&daemon, "daemon", true, "Execute continuously until the queued matrix is exhausted")
 	cmd.Flags().BoolVar(&verify, "verify", false, "Run campaign verify after execute completes")
 	cmd.Flags().BoolVar(&requireProviderObservation, "require-provider-observation", false, "Fail verify when provider-boundary observation windows are missing")
+	cmd.Flags().BoolVar(&requireModelProvenance, "require-model-provenance", false, "Fail verify when model provenance attestation windows are missing or digest_match is false")
 	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
 	cmd.Flags().BoolVar(&waitForProviderIdle, "wait-for-provider-idle", true, "Wait for Ollama to become idle before each assignment")
 	cmd.Flags().DurationVar(&providerIdlePoll, "provider-idle-poll", 2*time.Second, "Poll interval while waiting for Ollama idle")

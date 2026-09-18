@@ -93,6 +93,46 @@ func TestLocalModelProvenanceReader_LoadRoundTrip(t *testing.T) {
 	assert.Equal(t, window.GetAttestationDigest(), loaded.GetAttestationDigest())
 }
 
+func TestCampaignModelProvenanceReader_VerifyAssignmentModelProvenance_StrictMissingWindow(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	reader, err := NewCampaignModelProvenanceReader(fileSvc)
+	require.NoError(t, err)
+	result := &evalv1.EvaluationAssignmentResult{
+		ModelInferences: []*evalv1.ModelInferenceRecord{{
+			InferenceRecordId: "inf-1",
+			ProviderAttemptId: "attempt-missing",
+			ModelVariant:      &evalv1.ModelVariant{ModelDigest: strings.Repeat("a", 64)},
+		}},
+	}
+	failures, unavailable := reader.VerifyAssignmentModelProvenance(ctx, result, ModelProvenancePolicyStrict)
+	require.NotEmpty(t, failures)
+	require.NotEmpty(t, unavailable)
+}
+
+func TestCampaignModelProvenanceReader_VerifyAssignmentModelProvenance_StrictDigestMatch(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	store, err := model_provenance.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	window := testModelProvenanceWindow("attempt-1")
+	require.NoError(t, store.Save(ctx, window))
+	reader, err := NewCampaignModelProvenanceReader(fileSvc)
+	require.NoError(t, err)
+	result := &evalv1.EvaluationAssignmentResult{
+		ModelInferences: []*evalv1.ModelInferenceRecord{{
+			InferenceRecordId: "inf-1",
+			ProviderAttemptId: "attempt-1",
+			ModelVariant:      &evalv1.ModelVariant{ModelDigest: window.GetExpectedModelDigest()},
+		}},
+	}
+	failures, unavailable := reader.VerifyAssignmentModelProvenance(ctx, result, ModelProvenancePolicyStrict)
+	assert.Empty(t, failures)
+	assert.Empty(t, unavailable)
+}
+
 func TestLocalModelProvenanceReader_RejectsMissingProviderAttemptID(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

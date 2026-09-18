@@ -344,6 +344,7 @@ func verifyCampaignRun(
 	deps nativeEvalDeps,
 	runID string,
 	requireProviderObservation bool,
+	requireModelProvenance bool,
 	jsonOutput bool,
 ) (*evalv1.EvaluationVerificationReport, error) {
 	cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
@@ -373,6 +374,15 @@ func verifyCampaignRun(
 		policy = evaluation.ProviderObservationPolicyStrict
 	}
 	verifier = verifier.WithProviderObservationReader(observationReader, policy)
+	provenanceReader, err := newCampaignModelProvenanceReader(fileSvc, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
+	}
+	provenancePolicy := evaluation.ModelProvenancePolicyInterim
+	if requireModelProvenance {
+		provenancePolicy = evaluation.ModelProvenancePolicyStrict
+	}
+	verifier = verifier.WithModelProvenanceReader(provenanceReader, provenancePolicy)
 	report, err := verifier.VerifyRun(cmd.Context(), store, runID, catalog, artifacts)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)

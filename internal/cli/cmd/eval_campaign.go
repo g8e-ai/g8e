@@ -725,6 +725,7 @@ func newCampaignPublicationCoordinator(cmd *cobra.Command, fileSvc fs.RuntimeFil
 func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
 	var requireProviderObservation bool
+	var requireModelProvenance bool
 	cmd := &cobra.Command{
 		Use:   "verify [run-id]",
 		Short: "Independently verify persisted campaign assignment results for one run",
@@ -762,6 +763,15 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 				policy = evaluation.ProviderObservationPolicyStrict
 			}
 			verifier = verifier.WithProviderObservationReader(observationReader, policy)
+			provenanceReader, err := newCampaignModelProvenanceReader(fileSvc, cfg)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign verify: %w", err)
+			}
+			provenancePolicy := evaluation.ModelProvenancePolicyInterim
+			if requireModelProvenance {
+				provenancePolicy = evaluation.ModelProvenancePolicyStrict
+			}
+			verifier = verifier.WithModelProvenanceReader(provenanceReader, provenancePolicy)
 			report, err := verifier.VerifyRun(cmd.Context(), store, runID, catalog, artifacts)
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign verify: %w", err)
@@ -805,6 +815,7 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
 	cmd.Flags().BoolVar(&requireProviderObservation, "require-provider-observation", false, "Fail verification when provider-boundary observation windows are missing or incomplete")
+	cmd.Flags().BoolVar(&requireModelProvenance, "require-model-provenance", false, "Fail verification when model provenance attestation windows are missing or digest_match is false")
 	return cmd
 }
 

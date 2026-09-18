@@ -60,6 +60,7 @@ type HTTPHandlerDependencies struct {
 	PublicFeedControllerDeps                 PublicFeedControllerDeps
 	EvalCampaignPublicationControllerDeps EvalCampaignPublicationControllerDeps
 	ProviderObservationControllerDeps        ProviderObservationControllerDeps
+	ModelProvenanceControllerDeps            ModelProvenanceControllerDeps
 }
 
 // HTTPHandler manages the web API for the gateway service.
@@ -97,6 +98,7 @@ type HTTPHandler struct {
 	publicFeedController                 *PublicFeedController
 	evalCampaignPublicationController *EvalCampaignPublicationController
 	providerObservationController        *ProviderObservationController
+	modelProvenanceController            *ModelProvenanceController
 
 	// router is the main HTTP router, built once at construction by
 	// buildPublicRouter and cached for the lifetime of the handler. It is
@@ -241,6 +243,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		publicFeedController:                 newPublicFeedController(deps.PublicFeedControllerDeps),
 		evalCampaignPublicationController: newEvalCampaignPublicationController(deps.EvalCampaignPublicationControllerDeps),
 		providerObservationController:        newProviderObservationController(deps.ProviderObservationControllerDeps),
+		modelProvenanceController:            newModelProvenanceController(deps.ModelProvenanceControllerDeps),
 		mcpController:                newMCPController(deps.MCPControllerDeps),
 		pubsubController:             newPubSubController(deps.PubSubControllerDeps),
 		passkeyController:            newPasskeyController(deps.PasskeyControllerDeps),
