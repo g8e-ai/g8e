@@ -155,7 +155,7 @@ func (e *CampaignExporter) ExportRun(
 	if err != nil {
 		return nil, err
 	}
-	aggregateRecords, err := BuildRunAggregateViewRecords(runID, aggregateState, exportedAt)
+	aggregateRecords, err := BuildRunAggregateViewRecords(run, aggregateState, exportedAt)
 	if err != nil {
 		return nil, err
 	}

@@ -145,8 +145,7 @@ func inferenceEvalFreezeRegistryCmd(deps inferenceEvalDeps) *cobra.Command {
 					return err
 				}
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "\nExport for docker compose:\nG8E_INFERENCE_CAMPAIGN_ID=%s\nG8E_INFERENCE_MODEL_REGISTRY_DIGEST=%s\n", freeze.CampaignID, freeze.Digest)
-			return err
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID")

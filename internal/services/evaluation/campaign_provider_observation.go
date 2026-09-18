@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -126,7 +127,7 @@ func (s *fallbackProviderObservationWindows) Save(ctx context.Context, window *e
 
 func (s *fallbackProviderObservationWindows) Load(ctx context.Context, providerAttemptID string) (*evalv1.ProviderBoundaryObservationWindow, error) {
 	window, err := s.local.Load(ctx, providerAttemptID)
-	if err == nil || !errors.Is(err, constants.ErrNotFound) || s.remote == nil {
+	if err == nil || !isProviderEvidenceNotFound(err) || s.remote == nil {
 		return window, err
 	}
 	window, _, remoteErr := s.remote.Load(ctx, providerAttemptID)
@@ -155,7 +156,7 @@ func (s *fallbackProviderObservationAttempts) Fail(ctx context.Context, provider
 
 func (s *fallbackProviderObservationAttempts) Get(ctx context.Context, providerAttemptID string) (*operatorv1.InferenceProviderAttemptRecord, error) {
 	attempt, err := s.local.Get(ctx, providerAttemptID)
-	if err == nil || !errors.Is(err, constants.ErrNotFound) || s.remote == nil {
+	if err == nil || !isProviderEvidenceNotFound(err) || s.remote == nil {
 		return attempt, err
 	}
 	_, attempt, remoteErr := s.remote.Load(ctx, providerAttemptID)
@@ -163,6 +164,10 @@ func (s *fallbackProviderObservationAttempts) Get(ctx context.Context, providerA
 		return nil, err
 	}
 	return attempt, nil
+}
+
+func isProviderEvidenceNotFound(err error) bool {
+	return errors.Is(err, constants.ErrNotFound) || errors.Is(err, os.ErrNotExist)
 }
 
 // BindProviderBoundaryObservationRefs attaches observation evidence references
@@ -261,7 +266,7 @@ func (r *CampaignProviderObservationReader) BuildPublicBenchmarkObservations(ctx
 		}
 		window, err := r.windows.Load(ctx, attemptID)
 		if err != nil {
-			if errors.Is(err, constants.ErrNotFound) {
+			if isProviderEvidenceNotFound(err) {
 				observations.UnavailableReasons = appendUniqueStrings(observations.UnavailableReasons, "provider_boundary_observation_missing:"+attemptID)
 				continue
 			}

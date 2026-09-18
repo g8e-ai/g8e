@@ -65,21 +65,18 @@ func TestCheckDockerInitEnv_MissingFile(t *testing.T) {
 
 func TestCheckDockerInitEnv_MissingRequiredKeys(t *testing.T) {
 	tmpDir := chdirTemp(t)
-	content := "G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434\n"
+	content := "G8E_INFERENCE_CAMPAIGN_ID=eval-smoke-mini\n"
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".env"), []byte(content), 0o644))
 
 	err := checkDockerInitEnv()
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrDockerInitEnvRequired)
-	assert.Contains(t, err.Error(), "G8E_INFERENCE_CAMPAIGN_ID")
+	assert.Contains(t, err.Error(), "G8E_OLLAMA_ENDPOINT")
 }
 
 func TestCheckDockerInitEnv_Succeeds(t *testing.T) {
 	tmpDir := chdirTemp(t)
-	content := `G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
-G8E_INFERENCE_CAMPAIGN_ID=eval-smoke-mini
-G8E_INFERENCE_MODEL_REGISTRY_DIGEST=abc123
-`
+	content := "G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434\n"
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".env"), []byte(content), 0o644))
 
 	err := checkDockerInitEnv()

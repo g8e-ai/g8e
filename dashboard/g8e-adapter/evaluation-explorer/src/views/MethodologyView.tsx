@@ -363,6 +363,11 @@ const DOC_NAV = [
   { id: 'reference', label: 'Reference' },
 ] as const;
 
+function scrollToSection(id: string, event: React.MouseEvent<HTMLAnchorElement>) {
+  event.preventDefault();
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+}
+
 function DocsSection({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <section id={id} className="docs-section" aria-labelledby={`${id}-title`}>
@@ -447,7 +452,9 @@ export function MethodologyView() {
           <ul className="docs-sidebar-nav">
             {DOC_NAV.map((item) => (
               <li key={item.id}>
-                <a href={`#${item.id}`}>{item.label}</a>
+                <a href={`#${item.id}`} onClick={(event) => scrollToSection(item.id, event)}>
+                  {item.label}
+                </a>
               </li>
             ))}
           </ul>

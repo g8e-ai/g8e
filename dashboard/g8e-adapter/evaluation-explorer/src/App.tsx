@@ -45,7 +45,16 @@ function Shell() {
 
   return (
     <div className={`app-shell connection-${connection}`}>
-      <a className="skip-link" href="#main">Skip to content</a>
+      <a
+        className="skip-link"
+        href="#main"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById('main')?.scrollIntoView({ behavior: 'smooth' });
+        }}
+      >
+        Skip to content
+      </a>
       <header className="app-header">
         <div className="header-left">
           <button

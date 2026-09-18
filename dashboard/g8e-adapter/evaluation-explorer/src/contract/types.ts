@@ -461,6 +461,7 @@ export interface LiveEvent extends ViewRecordEnvelope {
   assignment_id?: string;
   task_id?: string;
   variant_id?: string;
+  role?: ModelRole;
   lifecycle_status: LifecycleStatus;
   completed: number;
   total: number;

@@ -32,6 +32,27 @@ describe('LiveEventStream', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
+  it('shows only the 100 most recent events', () => {
+    const events = Array.from({ length: 120 }, (_, index) =>
+      liveEvent({
+        event_id: `evt-${index}`,
+        variant_id: `model-${index}`,
+        kind: 'assignment_completed',
+        observed_at: `2026-09-17T${String(Math.floor(index / 60)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}:00Z`,
+      }),
+    );
+
+    render(
+      <MemoryRouter>
+        <LiveEventStream events={events} connection="live" streamConnection="connected" />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Page 1 of 4 (100 events)')).toBeInTheDocument();
+    expect(screen.queryByText('model-0')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'model-119' })).toHaveLength(1);
+  });
+
   it('paginates events and scrolls per page', async () => {
     const user = userEvent.setup();
     const events = Array.from({ length: 30 }, (_, index) =>
@@ -56,5 +77,30 @@ describe('LiveEventStream', () => {
 
     expect(screen.getByText('Page 2 of 2 (30 events)')).toBeInTheDocument();
     expect(screen.getAllByRole('row')).toHaveLength(6); // header + 5 rows
+  });
+
+  it('shows designated role from the event before model summaries exist', () => {
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-lite',
+              kind: 'stage_updated',
+              variant_id: 'gemma2-9b',
+              role: 'lite',
+              stage_label: 'Stage Updated · Queued · Routing Delegation · Route-Lite-Triage',
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    const roleCell = screen.getByText('Light').closest('.stream-role');
+    expect(roleCell).not.toBeNull();
+    expect(roleCell).toHaveTextContent('Light');
+    expect(roleCell).not.toHaveTextContent('gemma2-9b');
   });
 });

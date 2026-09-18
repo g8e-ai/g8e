@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	defaultProviderIdlePollInterval = 2 * time.Second
-	defaultProviderSettleDuration   = 5 * time.Second
+	defaultProviderIdlePollInterval       = 2 * time.Second
+	defaultProviderSettleDuration         = 5 * time.Second
+	maxConsecutiveProviderIdleFetchErrors = 5
 )
 
 // ProviderIdleOptions configures polling against the remote Ollama provider
@@ -58,12 +59,17 @@ func WaitForProviderIdle(ctx context.Context, opts ProviderIdleOptions) error {
 	}
 
 	var (
-		lastDigest string
-		stableAt   time.Time
+		lastDigest        string
+		stableAt          time.Time
+		consecutiveErrors int
 	)
 	for {
 		digest, err := fetchProviderPSDigest(ctx, client, psURL)
 		if err != nil {
+			consecutiveErrors++
+			if consecutiveErrors >= maxConsecutiveProviderIdleFetchErrors {
+				return fmt.Errorf("inference: wait for provider idle: provider unreachable at %s: %w", opts.Endpoint, err)
+			}
 			select {
 			case <-ctx.Done():
 				return fmt.Errorf("inference: wait for provider idle: %w", ctx.Err())
@@ -71,6 +77,7 @@ func WaitForProviderIdle(ctx context.Context, opts ProviderIdleOptions) error {
 				continue
 			}
 		}
+		consecutiveErrors = 0
 		now := time.Now()
 		if digest != lastDigest {
 			lastDigest = digest

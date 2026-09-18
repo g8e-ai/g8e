@@ -106,7 +106,7 @@ func queueEvalNextCmd(deps nativeEvalDeps) *cobra.Command {
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
 				return err
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Next pending model\nTag: %s\nVariant: %s\nCampaign: %s\nInventory: %s\nRegistry digest: %s\nCells: %d\n\nRecommended flow:\n  ./g8e eval campaign start --queue next --prepare-only --publish\n  # rebind inference operator from the printed .env lines\n  ./g8e eval campaign execute --publish --daemon\n  ./g8e eval campaign verify --require-provider-observation\n",
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Next pending model\nTag: %s\nVariant: %s\nCampaign: %s\nInventory: %s\nRegistry digest: %s\nCells: %d\n\nRecommended flow:\n  ./g8e eval campaign start --queue next --publish --daemon --verify --require-provider-observation\n",
 				entry.ServedModelTag,
 				entry.VariantID,
 				entry.CampaignID,

@@ -49,5 +49,5 @@ func TestQueueEvalNext_PrintsPendingEntry(t *testing.T) {
 	command.SetArgs([]string{"queue", "next", "--project-root", root})
 	require.NoError(t, command.Execute())
 	assert.Contains(t, output.String(), "deepseek-r1:7b")
-	assert.Contains(t, output.String(), "prepare-only")
+	assert.Contains(t, output.String(), "campaign start --queue next")
 }

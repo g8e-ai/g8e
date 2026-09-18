@@ -10,6 +10,7 @@ package evaluation
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -72,6 +73,12 @@ func ModelSummaryIdempotencyKey(runID, variantID, role string, terminal uint32) 
 // methodology aggregate revision keyed by terminal assignment count.
 func MethodologySnapshotIdempotencyKey(runID string, terminal uint32) string {
 	return fmt.Sprintf("%s:aggregate:methodology:t%d", runID, terminal)
+}
+
+// EvaluationSummaryIdempotencyKey returns the publication key for one live
+// evaluation_summary aggregate revision keyed by scheduled and terminal counts.
+func EvaluationSummaryIdempotencyKey(runID string, scheduled, terminal uint32) string {
+	return fmt.Sprintf("%s:aggregate:evaluation_summary:s%d:t%d", runID, scheduled, terminal)
 }
 
 // RunCompletionIdempotencyKey returns the publication key for the terminal
@@ -175,18 +182,28 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 	return state, nil
 }
 
-// BuildRunAggregateViewRecords materializes catalog, model, and methodology
-// explorer snapshot records for one live campaign run.
-func BuildRunAggregateViewRecords(runID string, state *runAggregateState, observedAt time.Time) ([]CampaignViewRecord, error) {
-	if runID == "" || state == nil || state.Scheduled == 0 {
+// BuildRunAggregateViewRecords materializes live evaluation_summary, catalog,
+// model, and methodology explorer snapshot records for one campaign run.
+func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregateState, observedAt time.Time) ([]CampaignViewRecord, error) {
+	if run == nil || run.GetRunId() == "" || state == nil || state.Scheduled == 0 {
 		return nil, fmt.Errorf("evaluation: build run aggregate view records: %w", constants.ErrMissingRequiredField)
 	}
+	runID := run.GetRunId()
 	if observedAt.IsZero() {
 		observedAt = time.Now().UTC()
 	}
 	observed := observedAt.UTC().Format(time.RFC3339Nano)
 	datasetID := CampaignDatasetID(runID)
-	records := make([]CampaignViewRecord, 0, 2+len(state.VariantRoles))
+	records := make([]CampaignViewRecord, 0, 3+len(state.VariantRoles))
+
+	summaryBody, err := marshalCanonicalViewRecord(buildLiveEvaluationSummaryRecord(run, datasetID, observed, state))
+	if err != nil {
+		return nil, err
+	}
+	records = append(records, CampaignViewRecord{
+		IdempotencyKey: EvaluationSummaryIdempotencyKey(runID, state.Scheduled, state.Terminal),
+		Body:           summaryBody,
+	})
 
 	catalogBody, err := marshalCanonicalViewRecord(buildCatalogSnapshotRecord(datasetID, runID, observed, state))
 	if err != nil {
@@ -240,7 +257,7 @@ func BuildRunCompletionViewRecords(run *evalv1.EvaluationRun, assignments []*eva
 	datasetID := CampaignDatasetID(runID)
 	records := make([]CampaignViewRecord, 0, 2+len(state.VariantRoles))
 
-	summaryBody, err := marshalCanonicalViewRecord(buildEvaluationSummaryRecord(run, datasetID, observed, state))
+	summaryBody, err := marshalCanonicalViewRecord(buildEvaluationSummaryRecord(run, datasetID, observed, state, "completed", true))
 	if err != nil {
 		return nil, err
 	}
@@ -401,10 +418,30 @@ func BuildRunVerificationViewRecords(run *evalv1.EvaluationRun, state *runAggreg
 	}}, nil
 }
 
-func buildEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observedAt string, state *runAggregateState) map[string]any {
+func buildLiveEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observedAt string, state *runAggregateState) map[string]any {
+	record := buildEvaluationSummaryRecord(run, datasetID, observedAt, state, "running", false)
+	record["quality_state"] = "live_in_progress"
+	return record
+}
+
+func buildEvaluationSummaryRecord(
+	run *evalv1.EvaluationRun,
+	datasetID, observedAt string,
+	state *runAggregateState,
+	lifecycleState string,
+	includeEndedAt bool,
+) map[string]any {
+	var startedAtTime time.Time
 	startedAt := ""
 	if run.GetStartedAt() != nil {
-		startedAt = run.GetStartedAt().AsTime().UTC().Format(time.RFC3339Nano)
+		startedAtTime = run.GetStartedAt().AsTime().UTC()
+		startedAt = startedAtTime.Format(time.RFC3339Nano)
+	}
+	observedTime, _ := time.Parse(time.RFC3339Nano, observedAt)
+	if observedTime.IsZero() {
+		if parsed, err := time.Parse(time.RFC3339, observedAt); err == nil {
+			observedTime = parsed.UTC()
+		}
 	}
 	passRate := 0.0
 	if state.Terminal > 0 {
@@ -423,7 +460,7 @@ func buildEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observed
 		"arm":                   armForRun(run),
 		"evaluation_unit":       evaluationUnitForRun(run),
 		"model_role_mapping":    buildModelRoleMapping(state),
-		"lifecycle_state":       "completed",
+		"lifecycle_state":       lifecycleState,
 		"assignment_total":      state.Scheduled,
 		"assignment_completed":  state.Passed,
 		"assignment_failed":     state.Failed,
@@ -433,7 +470,14 @@ func buildEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observed
 	}
 	if startedAt != "" {
 		record["started_at"] = startedAt
-		record["ended_at"] = observedAt
+		if includeEndedAt {
+			record["ended_at"] = observedAt
+		}
+		if !startedAtTime.IsZero() && !observedTime.IsZero() {
+			if elapsed := elapsedSecondsBetween(startedAtTime, observedTime); elapsed != nil {
+				record["elapsed_seconds"] = *elapsed
+			}
+		}
 	}
 	if state.Terminal > 0 {
 		record["headline_metrics"] = map[string]any{
@@ -443,8 +487,16 @@ func buildEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observed
 	return record
 }
 
+func elapsedSecondsBetween(startedAt, observedAt time.Time) *float64 {
+	if startedAt.IsZero() || observedAt.IsZero() || observedAt.Before(startedAt) {
+		return nil
+	}
+	seconds := math.Round(observedAt.Sub(startedAt).Seconds())
+	return &seconds
+}
+
 func buildVerifiedEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observedAt string, state *runAggregateState, report *evalv1.EvaluationVerificationReport) map[string]any {
-	record := buildEvaluationSummaryRecord(run, datasetID, observedAt, state)
+	record := buildEvaluationSummaryRecord(run, datasetID, observedAt, state, "completed", true)
 	record["quality_state"] = qualityStateForVerifiedAggregate(state, report)
 	record["verifier_state"] = VerifierStateFromVerificationReport(report)
 	if summary := formatCampaignVerifierFailureSummary(report); summary != "" {

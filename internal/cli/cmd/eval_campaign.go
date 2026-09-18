@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -511,7 +510,10 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 			}
 			results := make([]map[string]any, 0, resultsCap)
 			executed := 0
-			resolvedOllamaEndpoint := resolveCampaignOllamaEndpoint(ollamaEndpoint)
+			resolvedOllamaEndpoint, err := resolveCampaignOllamaEndpoint(ollamaEndpoint, operators, selected.OperatorSessionID)
+			if err != nil {
+				return err
+			}
 			iterations := int(limit)
 			if daemon {
 				iterations = 1<<31 - 1
@@ -585,7 +587,7 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Exact inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
-	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for provider-idle gating (default: G8E_OLLAMA_ENDPOINT or http://127.0.0.1:11434)")
+	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for provider-idle gating (default: active inference operator runtime_config, then G8E_OLLAMA_ENDPOINT, then loopback)")
 	cmd.Flags().BoolVar(&daemon, "daemon", false, "Run continuously until the queued matrix is exhausted")
 	cmd.Flags().BoolVar(&waitForProviderIdle, "wait-for-provider-idle", true, "Wait for Ollama to become idle before each assignment")
 	cmd.Flags().DurationVar(&providerIdlePoll, "provider-idle-poll", 2*time.Second, "Poll interval while waiting for Ollama idle")
@@ -694,10 +696,15 @@ func newCampaignPublicationCoordinator(cmd *cobra.Command, fileSvc fs.RuntimeFil
 	if err != nil {
 		return nil, err
 	}
+	remote, err := newProviderObservationRemote(fileSvc, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("campaign publication: provider observation remote: %w", err)
+	}
 	return evaluation.NewCampaignPublicationCoordinator(
 		evaluation.NewStore(fileSvc),
 		fileSvc,
 		exporter,
+		remote,
 	), nil
 }
 
@@ -1148,13 +1155,10 @@ func campaignEvalStatusCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
-func resolveCampaignOllamaEndpoint(flag string) string {
-	if flag != "" {
-		return flag
+func resolveCampaignOllamaEndpoint(flag string, operators []models.OperatorDocumentGo, inferenceSessionID string) (string, error) {
+	endpoint, err := evaluation.ResolveInferenceOllamaEndpoint(flag, operators, inferenceSessionID)
+	if err != nil {
+		return "", fmt.Errorf("evaluation: campaign execute: %w", err)
 	}
-	if env := os.Getenv("G8E_OLLAMA_ENDPOINT"); env != "" {
-		return env
-	}
-	return fmt.Sprintf("http://127.0.0.1:%d", constants.InferenceOllamaDefaultPort)
+	return endpoint, nil
 }
-

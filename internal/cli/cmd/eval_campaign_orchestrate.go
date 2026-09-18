@@ -276,7 +276,10 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		ModelRegistry:              evaluation.InferenceVariantsFromEvalRegistry(spec.GetModelRegistry()),
 	}
 	executed := 0
-	resolvedOllamaEndpoint := resolveCampaignOllamaEndpoint(opts.OllamaEndpoint)
+	resolvedOllamaEndpoint, err := resolveCampaignOllamaEndpoint(opts.OllamaEndpoint, operators, selected.OperatorSessionID)
+	if err != nil {
+		return executed, err
+	}
 	iterations := int(opts.Limit)
 	if opts.Daemon {
 		iterations = 1<<31 - 1
@@ -405,16 +408,6 @@ func writeCampaignStartPlan(out io.Writer, plan *evaluation.CampaignStartPlan, s
 		plan.RegistryDigest,
 		sessions.InferenceSessionID,
 		sessions.DataSessionID,
-	)
-	return err
-}
-
-func printInferenceOperatorRebind(out io.Writer, plan *evaluation.CampaignStartPlan) error {
-	_, err := fmt.Fprintf(out, "\nBefore execute, rebind the inference operator:\n\n# %s — %d cells\nG8E_INFERENCE_CAMPAIGN_ID=%s\nG8E_INFERENCE_MODEL_REGISTRY_DIGEST=%s\n\ndocker compose --profile evaluation up -d --force-recreate g8e-inference-operator\n\n",
-		plan.CampaignID,
-		plan.HomogeneousCellCount,
-		plan.CampaignID,
-		plan.RegistryDigest,
 	)
 	return err
 }

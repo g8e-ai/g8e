@@ -154,6 +154,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		HTTPPort: bs.config.HTTPPort,
 
 		InferenceEnabled:                bs.config.Inference.Enabled,
+		InferenceOllamaEndpoint:         bs.config.Inference.OllamaEndpoint,
 		ProviderBoundaryObserverEnabled: bs.config.ProviderBoundaryObserver.Enabled,
 	}
 

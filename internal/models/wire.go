@@ -34,6 +34,10 @@ type RuntimeConfig struct {
 	// field set.
 	InferenceEnabled bool `json:"inference_enabled"`
 
+	// InferenceOllamaEndpoint is the approved remote Ollama provider URL
+	// configured when the Inference Node started with --inference-ollama-endpoint.
+	InferenceOllamaEndpoint string `json:"inference_ollama_endpoint,omitempty"`
+
 	// ProviderBoundaryObserverEnabled is true when the Operator started with
 	// --provider-boundary-observer-enabled, marking it as the read-only
 	// remote hardware observer on the approved provider host.

@@ -36,7 +36,7 @@ describe('isCampaignProjectionEnvelope', () => {
 });
 
 describe('adaptCampaignProjectionEnvelope', () => {
-  it('maps lifecycle queued records to stage updates and run summaries', () => {
+  it('maps lifecycle queued records to stage updates without synthesizing evaluation summaries', () => {
     const context = createCampaignAdaptContext();
     const records = adaptCampaignProjectionEnvelope(
       {
@@ -53,29 +53,62 @@ describe('adaptCampaignProjectionEnvelope', () => {
           repetition: 1,
           designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
           variant_id: 'qwen3-4b',
-          observed_at: '2026-09-16T14:00:00Z',
+          observed_at: '2026-09-16T14:00:00.000Z',
         },
       },
       context,
     );
 
-    expect(records.some((record) => record.kind === 'evaluation_summary')).toBe(true);
+    expect(records.some((record) => record.kind === 'evaluation_summary')).toBe(false);
     const event = records.find((record) => record.kind === 'stage_updated');
     expect(event).toMatchObject({
       dataset_id: campaignDatasetId('run-1'),
       run_id: 'run-1',
       assignment_id: 'assign-1',
+      role: 'primary',
       lifecycle_status: 'queued',
       completed: 0,
       total: 1,
       stage_label: expect.stringContaining('instruction-exact-format'),
     });
-    const summary = records.find((record) => record.kind === 'evaluation_summary');
-    expect(summary).toMatchObject({
-      assignment_total: 1,
-      assignment_completed: 0,
-      assignment_failed: 0,
-    });
+  });
+
+  it('maps result projections to assignment results and live events only', () => {
+    const context = createCampaignAdaptContext();
+    adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: 'run-1:assign-1:lifecycle:queued',
+        record: {
+          assignment_id: 'assign-1',
+          run_id: 'run-1',
+          scenario_id: 'instruction-exact-format',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
+          lane: 'EVALUATION_LANE_MODEL_ROLE',
+          observed_at: '2026-09-16T14:00:00.000Z',
+        },
+      },
+      context,
+    );
+    const resultRecords = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: 'run-1:assign-1:result',
+        record: {
+          assignment_id: 'assign-1',
+          run_id: 'run-1',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+          summary_status: 'EVALUATION_VERDICT_STATUS_PASS',
+          completed_at: '2026-09-16T14:05:00.000Z',
+        },
+      },
+      context,
+    );
+    expect(resultRecords.some((record) => record.kind === 'evaluation_summary')).toBe(false);
+    expect(resultRecords.some((record) => record.kind === 'assignment_result')).toBe(true);
+    expect(resultRecords.some((record) => record.kind === 'assignment_completed')).toBe(true);
   });
 
   it('does not inflate terminal progress when the same result is adapted twice', () => {
@@ -115,7 +148,7 @@ describe('adaptCampaignProjectionEnvelope', () => {
             run_id: 'run-1',
             scenario_id: 'instruction-exact-format',
             lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
-            observed_at: '2026-09-16T14:00:00Z',
+            observed_at: '2026-09-16T14:00:00.000Z',
           },
         },
         context,
@@ -244,7 +277,7 @@ describe('adaptCampaignProjectionEnvelope', () => {
             run_id: 'run-1',
             scenario_id: 'instruction-exact-format',
             lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
-            observed_at: '2026-09-16T14:00:00Z',
+            observed_at: '2026-09-16T14:00:00.000Z',
           },
         },
         context,
@@ -393,39 +426,37 @@ describe('adaptCampaignProjectionEnvelope', () => {
 });
 
 describe('EvalStore campaign ingest', () => {
-  it('indexes model summaries separately for each designated role', () => {
+  it('indexes published model summaries separately for each designated role', () => {
     const store = new EvalStore();
     const runId = 'run-role-matrix';
     const datasetId = campaignDatasetId(runId);
-    const enqueue = (assignmentId: string, role: string) => {
+    const ingestModel = (sequence: number, role: 'primary' | 'assistant' | 'lite') => {
       store.acceptProjection({
-        sequence: store.getState().observedSequence + 1,
+        sequence,
         record_type: 'projection',
         record_bytes: JSON.stringify({
-          schema_version: '1.0.0',
-          message_type: 'PublicAssignmentLifecycleRecord',
-          idempotency_key: `${runId}:${assignmentId}:lifecycle:queued`,
-          record: {
-            assignment_id: assignmentId,
-            run_id: runId,
-            scenario_id: 'instruction-exact-format',
-            lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
-            designated_role: role,
-            variant_id: 'qwen3-4b',
-            observed_at: '2026-09-16T14:00:00Z',
-          },
+          schema_version: '1.3.0',
+          kind: 'model_summary',
+          dataset_id: datasetId,
+          quality_state: 'live_in_progress',
+          observed_at: '2026-09-16T14:00:00.000Z',
+          variant_id: 'qwen3-4b',
+          display_name: 'qwen3-4b',
+          role,
+          inventory_only: false,
+          evaluation_coverage: 1,
         }),
       });
     };
-    enqueue('assign-primary', 'MODEL_CAMPAIGN_ROLE_PRIMARY');
-    enqueue('assign-assistant', 'MODEL_CAMPAIGN_ROLE_ASSISTANT');
-    enqueue('assign-lite', 'MODEL_CAMPAIGN_ROLE_LITE');
+    ingestModel(1, 'primary');
+    ingestModel(2, 'assistant');
+    ingestModel(3, 'lite');
 
     const models = store.getModels(datasetId).filter((model) => model.variant_id === 'qwen3-4b');
     expect(models.map((model) => model.role).sort()).toEqual(['assistant', 'lite', 'primary']);
   });
 
-  it('materializes catalog and model aggregates from campaign envelopes', () => {
+  it('does not synthesize catalog, model, or methodology aggregates from campaign envelopes', () => {
     const context = createCampaignAdaptContext();
     adaptCampaignProjectionEnvelope(
       {
@@ -439,7 +470,7 @@ describe('EvalStore campaign ingest', () => {
           lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
           designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
           variant_id: 'qwen3-4b',
-          observed_at: '2026-09-16T14:00:00Z',
+          observed_at: '2026-09-16T14:00:00.000Z',
         },
       },
       context,
@@ -468,22 +499,11 @@ describe('EvalStore campaign ingest', () => {
     const catalog = resultRecords.find((record) => record.kind === 'catalog_snapshot');
     const model = resultRecords.find((record) => record.kind === 'model_summary');
     const methodology = resultRecords.find((record) => record.kind === 'methodology_snapshot');
-    expect(catalog).toMatchObject({
-      dataset_kind: 'live_run',
-      assignment_count: 1,
-      model_count: 1,
-      evaluated_count: 1,
-    });
-    expect(model).toMatchObject({
-      variant_id: 'qwen3-4b',
-      role: 'primary',
-      inventory_only: false,
-      pass_rate: { estimate: 1, denominator: 1 },
-    });
-    expect(methodology?.kind).toBe('methodology_snapshot');
-    expect(() => decodeViewRecord('catalog_snapshot', catalog)).not.toThrow();
-    expect(() => decodeViewRecord('model_summary', model)).not.toThrow();
-    expect(() => decodeViewRecord('methodology_snapshot', methodology)).not.toThrow();
+    expect(catalog).toBeUndefined();
+    expect(model).toBeUndefined();
+    expect(methodology).toBeUndefined();
+    expect(resultRecords.some((record) => record.kind === 'assignment_result')).toBe(true);
+    expect(resultRecords.some((record) => record.kind === 'assignment_completed')).toBe(true);
   });
 
   it('uses catalog assignment_count as the campaign matrix total', () => {
@@ -493,6 +513,37 @@ describe('EvalStore campaign ingest', () => {
 
     store.acceptProjection({
       sequence: 1,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        schema_version: '1.3.0',
+        kind: 'evaluation_summary',
+        dataset_id: datasetId,
+        quality_state: 'live_in_progress',
+        observed_at: '2026-09-16T14:00:00.000Z',
+        source_revision_label: 'g8e-eval-campaign',
+        run_id: runId,
+        suite_id: 'north-star-25',
+        arm: 'homogeneous-model-role',
+        evaluation_unit: 'model',
+        model_role_mapping: {},
+        lifecycle_state: 'running',
+        assignment_total: 1,
+        assignment_completed: 0,
+        assignment_failed: 0,
+        terminal_outcomes: {
+          completed: 0,
+          model_failed: 0,
+          grader_failed: 0,
+          invalid_evidence: 0,
+          stopped: 0,
+        },
+        verifier_state: 'not_applicable',
+        headline_metrics: {},
+      }),
+    });
+
+    store.acceptProjection({
+      sequence: 2,
       record_type: 'projection',
       record_bytes: JSON.stringify({
         schema_version: '1.3.0',
@@ -520,7 +571,7 @@ describe('EvalStore campaign ingest', () => {
     });
 
     store.acceptProjection({
-      sequence: 2,
+      sequence: 3,
       record_type: 'projection',
       record_bytes: JSON.stringify({
         schema_version: '1.0.0',
@@ -539,7 +590,7 @@ describe('EvalStore campaign ingest', () => {
 
     const run = store.getEvaluation(datasetId, runId);
     const failEvent = store.getEvents(runId, datasetId).find((event) => event.kind === 'assignment_failed');
-    expect(run).toMatchObject({ assignment_total: 4, assignment_failed: 1 });
+    expect(run).toMatchObject({ assignment_total: 4 });
     expect(failEvent).toMatchObject({ completed: 1, total: 4 });
   });
 
@@ -562,16 +613,16 @@ describe('EvalStore campaign ingest', () => {
           repetition: 1,
           designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
           variant_id: 'qwen3-4b',
-          observed_at: '2026-09-16T14:00:00Z',
+          observed_at: '2026-09-16T14:00:00.000Z',
         },
       }),
     });
 
     expect(store.getState().errors).toEqual([]);
-    expect(store.getEvaluations(campaignDatasetId('run-live')).length).toBe(1);
+    expect(store.getEvaluations(campaignDatasetId('run-live')).length).toBe(0);
     expect(store.getEvents('run-live', campaignDatasetId('run-live')).length).toBe(1);
-    expect(store.getCatalog(campaignDatasetId('run-live'))?.dataset_kind).toBe('live_run');
-    expect(store.getModels(campaignDatasetId('run-live')).length).toBeGreaterThan(0);
-    expect(store.getState().methodology?.kind).toBe('methodology_snapshot');
+    expect(store.getCatalog(campaignDatasetId('run-live'))).toBeUndefined();
+    expect(store.getModels(campaignDatasetId('run-live'))).toEqual([]);
+    expect(store.getState().methodology).toBeNull();
   });
 });

@@ -10,6 +10,7 @@ import { EmptyState, ReconcilePlaceholder, StreamStatusIndicator } from './share
 import type { LiveEvent } from '../contract/types';
 
 const STREAM_PAGE_SIZE = 25;
+const STREAM_EVENT_LIMIT = 100;
 
 function eventTime(iso: string): string {
   const date = new Date(iso);
@@ -35,16 +36,21 @@ export function LiveEventStream({
 
   const models = useStoreState((state) => state.models);
 
-  const modelOptions = useMemo(
-    () =>
-      Array.from(new Set(events.map((e) => e.variant_id).filter((v): v is string => Boolean(v)))).sort(),
+  const boundedEvents = useMemo(
+    () => visibleStreamEvents(events, { modelFilter: 'all', kindFilter: 'all', limit: STREAM_EVENT_LIMIT }),
     [events],
   );
-  const kindOptions = useMemo(() => Array.from(new Set(events.map((e) => e.kind))).sort(), [events]);
+
+  const modelOptions = useMemo(
+    () =>
+      Array.from(new Set(boundedEvents.map((e) => e.variant_id).filter((v): v is string => Boolean(v)))).sort(),
+    [boundedEvents],
+  );
+  const kindOptions = useMemo(() => Array.from(new Set(boundedEvents.map((e) => e.kind))).sort(), [boundedEvents]);
 
   const visible = useMemo(
-    () => visibleStreamEvents(events, { modelFilter, kindFilter }),
-    [events, modelFilter, kindFilter],
+    () => visibleStreamEvents(boundedEvents, { modelFilter, kindFilter }),
+    [boundedEvents, modelFilter, kindFilter],
   );
 
   const pageCount = Math.ceil(visible.length / STREAM_PAGE_SIZE);
@@ -104,7 +110,7 @@ export function LiveEventStream({
         <ReconcilePlaceholder label="Loading feed history…" />
       ) : visible.length === 0 ? (
         <EmptyState
-          hasRecords={events.length > 0}
+          hasRecords={boundedEvents.length > 0}
           hasFilters={modelFilter !== 'all' || kindFilter !== 'all'}
           connection={connection}
         />
@@ -133,7 +139,11 @@ export function LiveEventStream({
                 const modelHref = event.variant_id
                   ? `/models/${event.dataset_id}/${event.variant_id}${model?.role ? `?role=${model.role}` : ''}`
                   : undefined;
-                const roleLabelText = model ? roleLabel(model.role) : event.variant_id ?? 'Platform';
+                const roleLabelText = event.role
+                  ? roleLabel(event.role)
+                  : model
+                    ? roleLabel(model.role)
+                    : 'Platform';
                 return (
                   <tr key={event.event_id}>
                     <td className="stream-time">{eventTime(event.observed_at)}</td>

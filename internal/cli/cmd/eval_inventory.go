@@ -88,7 +88,7 @@ func inventoryEvalCmd(_ nativeEvalDeps) *cobra.Command {
 				_, err = fmt.Fprintf(cmd.OutOrStdout(), "\nWrote inventory freeze to %s\n", outputPath)
 				return err
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "\nExport for docker compose:\nG8E_INFERENCE_CAMPAIGN_ID=%s\nG8E_INFERENCE_MODEL_REGISTRY_DIGEST=%s\n", freeze.CampaignID, freeze.RegistryDigest)
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "\nCampaign: %s\nRegistry digest: %s\n", freeze.CampaignID, freeze.RegistryDigest)
 			return err
 		},
 	}

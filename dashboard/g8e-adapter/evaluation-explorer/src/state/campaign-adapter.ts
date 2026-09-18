@@ -1,18 +1,11 @@
-// Maps Go campaign publication envelopes (Phase 8) into frozen explorer view
-// records. The mirror carries CampaignProjectionEnvelope payloads inside
-// record_bytes; this adapter is the only decode path for those envelopes.
+// Maps Go campaign publication envelopes (Phase 8) into explorer view records
+// for assignment results and live events. evaluation_summary, catalog, model,
+// and methodology snapshots are published only by the Go projector.
 
-import {
-  buildCampaignAggregateRecords,
-  ensureVariantRoleBucket,
-  recordVariantRoleTerminal,
-  type VariantRoleBucket,
-} from './campaign-aggregates';
 import {
   VIEW_SCHEMA_VERSION,
   type AssignmentResult,
   type BenchmarkObservations,
-  type EvaluationSummary,
   type EvaluationUnit,
   type LifecycleStatus,
   type LiveEvent,
@@ -40,7 +33,6 @@ export interface CampaignAdaptContext {
   runTotals: Map<string, RunProgress>;
   scheduledAssignments: Map<string, Set<string>>;
   terminalAssignments: Map<string, Set<string>>;
-  variantRoleStats: Map<string, VariantRoleBucket>;
 }
 
 interface AssignmentMeta {
@@ -72,7 +64,6 @@ export function createCampaignAdaptContext(): CampaignAdaptContext {
     runTotals: new Map(),
     scheduledAssignments: new Map(),
     terminalAssignments: new Map(),
-    variantRoleStats: new Map(),
   };
 }
 
@@ -206,7 +197,6 @@ function adaptLifecycleRecord(
   const observedAt = timestampString(record.observed_at) ?? new Date().toISOString();
   const lifecycle = mapLifecycleStatus(requiredString(record, 'lifecycle_status'));
   const scenarioCategory = mapScenarioCategory(optionalString(record.scenario_category));
-  const variantId = optionalString(record.variant_id);
   const role = mapModelRole(optionalString(record.designated_role));
   const evaluationUnit = mapEvaluationUnit(optionalString(record.lane));
   const repetition = optionalInteger(record.repetition) ?? 1;
@@ -222,14 +212,10 @@ function adaptLifecycleRecord(
   });
 
   const records: Array<SnapshotRecord | LiveEvent> = [];
-  const hadRun = context.runTotals.has(runId);
   let progress = ensureRunProgress(context, runId);
   if (lifecycle === 'queued') {
     progress = trackScheduledAssignment(context, runId, assignmentId);
     recordMatrixTotal(context, runId, progress.scheduled);
-  }
-  if (!hadRun && progress.scheduled === 0) {
-    records.push(buildInitialEvaluationSummary(runId, datasetId, observedAt, evaluationUnit));
   }
 
   const eventKind = lifecycleEventKind(lifecycle);
@@ -247,21 +233,13 @@ function adaptLifecycleRecord(
       assignment_id: assignmentId,
       task_id: optionalString(record.scenario_id),
       variant_id: optionalString(record.variant_id),
+      role,
       lifecycle_status: lifecycle,
       completed,
       total,
       stage_label: buildStageLabel(lifecycle, scenarioCategory, optionalString(record.scenario_id)),
     });
   }
-
-  if (progress.scheduled > 0) {
-    records.push(buildUpdatedEvaluationSummary(runId, datasetId, observedAt, progress, evaluationUnit));
-  }
-
-  if (variantId && role) {
-    ensureVariantRoleBucket(context.variantRoleStats, runId, assignmentId, variantId, role);
-  }
-  records.push(...buildCampaignAggregateRecords(context.variantRoleStats, context.runTotals, runId, datasetId, observedAt));
 
   return records;
 }
@@ -283,8 +261,7 @@ function adaptResultProjection(
   const variantId = optionalString(record.variant_id) ?? meta?.variantId ?? 'unknown';
   const role = meta?.role ?? mapModelRole(optionalString(record.designated_role)) ?? 'primary';
 
-  const hadRunProgress = context.runTotals.has(runId);
-  const { progress, isNew } = markTerminalAssignment(context, runId, assignmentId, terminalStatus);
+  const { progress } = markTerminalAssignment(context, runId, assignmentId, terminalStatus);
   const { completed, total } = campaignProgressCounts(progress);
 
   const assignment: AssignmentResult = {
@@ -312,9 +289,6 @@ function adaptResultProjection(
   };
 
   const records: Array<SnapshotRecord | LiveEvent> = [assignment];
-  if (!hadRunProgress) {
-    records.unshift(buildInitialEvaluationSummary(runId, datasetId, observedAt, assignment.evaluation_unit));
-  }
 
   const eventKind: LiveEventKind = terminalStatus === 'completed' ? 'assignment_completed' : 'assignment_failed';
   records.push({
@@ -329,6 +303,7 @@ function adaptResultProjection(
     assignment_id: assignmentId,
     task_id: assignment.task_id,
     variant_id: assignment.variant_id,
+    role: assignment.role,
     lifecycle_status: lifecycle === 'completed' ? 'completed' : 'failed',
     completed,
     total,
@@ -336,94 +311,7 @@ function adaptResultProjection(
     metric_delta: assignment.metric_values.pass ? { pass_rate: assignment.metric_values.pass } : undefined,
   });
 
-  records.push(buildUpdatedEvaluationSummary(runId, datasetId, observedAt, progress, assignment.evaluation_unit));
-
-  if (isNew && variantId !== 'unknown') {
-    recordVariantRoleTerminal(
-      context.variantRoleStats,
-      runId,
-      assignmentId,
-      variantId,
-      role,
-      terminalStatus === 'completed',
-      terminalStatus,
-    );
-  }
-  records.push(...buildCampaignAggregateRecords(context.variantRoleStats, context.runTotals, runId, datasetId, observedAt));
-
   return records;
-}
-
-function buildInitialEvaluationSummary(
-  runId: string,
-  datasetId: string,
-  observedAt: string,
-  evaluationUnit?: EvaluationUnit,
-): EvaluationSummary {
-  return {
-    schema_version: VIEW_SCHEMA_VERSION,
-    kind: 'evaluation_summary',
-    dataset_id: datasetId,
-    quality_state: 'live_in_progress',
-    observed_at: observedAt,
-    source_revision_label: CAMPAIGN_SOURCE_REVISION,
-    run_id: runId,
-    suite_id: 'north-star-25',
-    arm: evaluationUnit === 'system' ? 'heterogeneous-system' : 'homogeneous-model-role',
-    evaluation_unit: evaluationUnit ?? 'model',
-    model_role_mapping: {},
-    lifecycle_state: 'running',
-    assignment_total: 0,
-    assignment_completed: 0,
-    assignment_failed: 0,
-    terminal_outcomes: {
-      completed: 0,
-      model_failed: 0,
-      grader_failed: 0,
-      invalid_evidence: 0,
-      stopped: 0,
-    },
-    verifier_state: 'not_applicable',
-    headline_metrics: {},
-  };
-}
-
-function buildUpdatedEvaluationSummary(
-  runId: string,
-  datasetId: string,
-  observedAt: string,
-  progress: RunProgress,
-  evaluationUnit?: EvaluationUnit,
-): EvaluationSummary {
-  const passRate: MetricValue<number> | undefined =
-    progress.terminal > 0 ? { value: progress.passed / progress.terminal } : undefined;
-  const { total: assignmentTotal } = campaignProgressCounts(progress);
-  return {
-    schema_version: VIEW_SCHEMA_VERSION,
-    kind: 'evaluation_summary',
-    dataset_id: datasetId,
-    quality_state: 'live_in_progress',
-    observed_at: observedAt,
-    source_revision_label: CAMPAIGN_SOURCE_REVISION,
-    run_id: runId,
-    suite_id: 'north-star-25',
-    arm: evaluationUnit === 'system' ? 'heterogeneous-system' : 'homogeneous-model-role',
-    evaluation_unit: evaluationUnit ?? 'model',
-    model_role_mapping: {},
-    lifecycle_state: 'running',
-    assignment_total: assignmentTotal,
-    assignment_completed: progress.passed,
-    assignment_failed: progress.failed,
-    terminal_outcomes: {
-      completed: progress.passed,
-      model_failed: progress.failed,
-      grader_failed: 0,
-      invalid_evidence: 0,
-      stopped: 0,
-    },
-    verifier_state: 'not_applicable',
-    headline_metrics: passRate ? { pass_rate: passRate } : {},
-  };
 }
 
 function lifecycleEventKind(lifecycle: LifecycleStatus): LiveEventKind | undefined {

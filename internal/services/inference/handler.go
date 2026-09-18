@@ -139,23 +139,26 @@ func (h *InferenceExecutionHandler) ExecuteInference(ctx context.Context, cmdMsg
 }
 
 func (h *InferenceExecutionHandler) authorizeInferenceModel(req models.InferenceRequestPayload) (string, error) {
-	campaignMode := h.cfg.Inference.CampaignID != "" || h.cfg.Inference.ModelRegistryDigest != ""
 	requestHasCampaignAuthority := req.CampaignID != "" || req.ModelRegistryDigest != "" || len(req.ModelRegistry) != 0
-	if !campaignMode {
-		if requestHasCampaignAuthority {
-			return "", constants.ErrInferenceCampaignBindingInvalid
-		}
-		approved := h.defaultModelForRole(req.Role)
-		if approved == "" {
-			return "", constants.ErrInferenceModelRefInvalid
-		}
-		if req.Model != "" && req.Model != approved {
-			return "", constants.ErrInferenceModelOverrideDenied
-		}
-		return approved, nil
+	if requestHasCampaignAuthority {
+		return h.authorizeGovernedCampaignModel(req)
 	}
-	if h.cfg.Inference.CampaignID == "" || !models.IsSHA256Hex(h.cfg.Inference.ModelRegistryDigest) ||
-		req.CampaignID != h.cfg.Inference.CampaignID || req.ModelRegistryDigest != h.cfg.Inference.ModelRegistryDigest ||
+	startupCampaignMode := h.cfg.Inference.CampaignID != "" || h.cfg.Inference.ModelRegistryDigest != ""
+	if startupCampaignMode {
+		return "", constants.ErrInferenceCampaignBindingInvalid
+	}
+	approved := h.defaultModelForRole(req.Role)
+	if approved == "" {
+		return "", constants.ErrInferenceModelRefInvalid
+	}
+	if req.Model != "" && req.Model != approved {
+		return "", constants.ErrInferenceModelOverrideDenied
+	}
+	return approved, nil
+}
+
+func (h *InferenceExecutionHandler) authorizeGovernedCampaignModel(req models.InferenceRequestPayload) (string, error) {
+	if req.CampaignID == "" || !models.IsSHA256Hex(req.ModelRegistryDigest) ||
 		req.RunID == "" || req.AssignmentID == "" || req.EvaluationAttemptID == "" || req.ScenarioID == "" {
 		return "", constants.ErrInferenceCampaignBindingInvalid
 	}

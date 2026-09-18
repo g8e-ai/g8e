@@ -74,15 +74,9 @@ Examples:
 				return fmt.Errorf("evaluation: campaign start: %w", err)
 			}
 			if dryRun {
-				if err := writeCampaignStartPlan(cmd.OutOrStdout(), plan, sessions, jsonOutput); err != nil {
-					return err
-				}
-				return printInferenceOperatorRebind(cmd.OutOrStdout(), plan)
+				return writeCampaignStartPlan(cmd.OutOrStdout(), plan, sessions, jsonOutput)
 			}
 			if err := writeCampaignStartPlan(cmd.OutOrStdout(), plan, sessions, jsonOutput); err != nil {
-				return err
-			}
-			if err := printInferenceOperatorRebind(cmd.OutOrStdout(), plan); err != nil {
 				return err
 			}
 			startedAt := deps.now().UTC()
@@ -116,7 +110,7 @@ Examples:
 					_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
 					return err
 				}
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Prepared run %s (%d assignments). Rebind the inference operator, then run:\n  ./g8e eval campaign execute --run-id %s --publish --daemon\n", plan.RunID, assignmentCount, plan.RunID)
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Prepared run %s (%d assignments). Run:\n  ./g8e eval campaign execute --run-id %s --publish --daemon\n", plan.RunID, assignmentCount, plan.RunID)
 				return err
 			}
 			executed, err := runCampaignExecute(cmd, deps, campaignExecuteOptions{
@@ -199,9 +193,9 @@ Examples:
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Pin the inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Pin the data Operator session ID")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
-	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for provider-idle gating")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the resolved plan and inference-operator rebind steps without running")
-	cmd.Flags().BoolVar(&prepareOnly, "prepare-only", false, "Initialize and schedule only; stop before execute so the inference operator can be rebound")
+	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for provider-idle gating (default: active inference operator runtime_config, then G8E_OLLAMA_ENDPOINT, then loopback)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the resolved plan without running")
+	cmd.Flags().BoolVar(&prepareOnly, "prepare-only", false, "Initialize and schedule only; stop before execute")
 	cmd.Flags().BoolVar(&publish, "publish", true, "Publish lifecycle projections to the public mirror during schedule and execute")
 	cmd.Flags().BoolVar(&daemon, "daemon", true, "Execute continuously until the queued matrix is exhausted")
 	cmd.Flags().BoolVar(&verify, "verify", false, "Run campaign verify after execute completes")

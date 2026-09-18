@@ -485,6 +485,7 @@ export function isLiveEvent(value: unknown): asserts value is LiveEvent {
   assertOptional(value.assignment_id, 'live_event.assignment_id', assertString);
   assertOptional(value.task_id, 'live_event.task_id', assertString);
   assertOptional(value.variant_id, 'live_event.variant_id', assertString);
+  assertOptional(value.role, 'live_event.role', (role) => assertEnum(role, MODEL_ROLES, 'live_event.role'));
   assertEnum(value.lifecycle_status, LIFECYCLE_STATUSES, 'live_event.lifecycle_status');
   assertInteger(value.completed, 'live_event.completed');
   assertInteger(value.total, 'live_event.total');

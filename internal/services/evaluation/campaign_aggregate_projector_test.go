@@ -65,19 +65,33 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 	}
 	state, err := CollectRunAggregateState(assignments, results)
 	require.NoError(t, err)
-	records, err := BuildRunAggregateViewRecords("run-1", state, time.Unix(1_700_000_000, 0).UTC())
+	run := &evalv1.EvaluationRun{
+		RunId:     "run-1",
+		StartedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: "eval-smoke-mini",
+		},
+	}
+	records, err := BuildRunAggregateViewRecords(run, state, time.Unix(1_700_000_050, 0).UTC())
 	require.NoError(t, err)
-	require.Len(t, records, 3)
+	require.Len(t, records, 4)
+
+	summary := map[string]any{}
+	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
+	assert.Equal(t, "evaluation_summary", summary["kind"])
+	assert.Equal(t, "running", summary["lifecycle_state"])
+	assert.Equal(t, "live_in_progress", summary["quality_state"])
+	assert.Equal(t, float64(50), summary["elapsed_seconds"])
 
 	catalog := map[string]any{}
-	require.NoError(t, json.Unmarshal(records[0].Body, &catalog))
+	require.NoError(t, json.Unmarshal(records[1].Body, &catalog))
 	assert.Equal(t, "catalog_snapshot", catalog["kind"])
 	assert.Equal(t, "ds-live-run-1", catalog["dataset_id"])
 	assert.Equal(t, float64(1), catalog["assignment_count"])
 	assert.Equal(t, float64(1), catalog["provider_request_count"])
 
 	model := map[string]any{}
-	require.NoError(t, json.Unmarshal(records[1].Body, &model))
+	require.NoError(t, json.Unmarshal(records[2].Body, &model))
 	assert.Equal(t, "model_summary", model["kind"])
 	assert.Equal(t, "qwen3-4b", model["variant_id"])
 	assert.Equal(t, "primary", model["role"])
@@ -85,7 +99,7 @@ func TestBuildRunAggregateViewRecords(t *testing.T) {
 	assert.Equal(t, "qwen3:4b", model["served_model_tag"])
 
 	methodology := map[string]any{}
-	require.NoError(t, json.Unmarshal(records[2].Body, &methodology))
+	require.NoError(t, json.Unmarshal(records[3].Body, &methodology))
 	assert.Equal(t, "methodology_snapshot", methodology["kind"])
 }
 
@@ -126,6 +140,7 @@ func TestBuildRunCompletionViewRecords(t *testing.T) {
 	assert.Equal(t, "evaluation_summary", summary["kind"])
 	assert.IsType(t, map[string]any{}, summary["model_role_mapping"])
 	assert.Equal(t, "completed", summary["lifecycle_state"])
+	assert.Equal(t, float64(100), summary["elapsed_seconds"])
 	assert.Equal(t, float64(2), summary["assignment_total"])
 	assert.Equal(t, float64(1), summary["assignment_completed"])
 	assert.Equal(t, float64(1), summary["assignment_failed"])
@@ -206,7 +221,7 @@ func TestCampaignPublicationCoordinatorPublishRunAggregates(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	exporter := &recordingCampaignFeedExporter{}
-	coordinator := NewCampaignPublicationCoordinator(store, files, exporter)
+	coordinator := NewCampaignPublicationCoordinator(store, files, exporter, nil)
 	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" }).WithPublication(coordinator)
 	req := testCampaignInitRequest(t)
 	catalog := req.Catalog
@@ -240,7 +255,8 @@ func TestCampaignPublicationCoordinatorPublishRunAggregates(t *testing.T) {
 			aggregateKinds = append(aggregateKinds, kind)
 		}
 	}
-	assert.Contains(t, aggregateKinds, "catalog_snapshot")
+    assert.Contains(t, aggregateKinds, "evaluation_summary")
+    assert.Contains(t, aggregateKinds, "catalog_snapshot")
 	assert.Contains(t, aggregateKinds, "model_summary")
 	assert.Contains(t, aggregateKinds, "methodology_snapshot")
 }

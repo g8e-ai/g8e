@@ -48,13 +48,19 @@ type campaignPublicationState struct {
 // CampaignPublicationCoordinator projects canonical campaign state into typed
 // public records and coordinates idempotent publisher export.
 type CampaignPublicationCoordinator struct {
-	store    CampaignStore
-	files    fs.RuntimeFileService
-	exporter CampaignFeedExporter
+	store             CampaignStore
+	files             fs.RuntimeFileService
+	exporter          CampaignFeedExporter
+	observationRemote ProviderObservationRemote
 }
 
-func NewCampaignPublicationCoordinator(store CampaignStore, files fs.RuntimeFileService, exporter CampaignFeedExporter) *CampaignPublicationCoordinator {
-	return &CampaignPublicationCoordinator{store: store, files: files, exporter: exporter}
+func NewCampaignPublicationCoordinator(store CampaignStore, files fs.RuntimeFileService, exporter CampaignFeedExporter, observationRemote ProviderObservationRemote) *CampaignPublicationCoordinator {
+	return &CampaignPublicationCoordinator{
+		store:             store,
+		files:             files,
+		exporter:          exporter,
+		observationRemote: observationRemote,
+	}
 }
 
 // PublishAssignmentLifecycle emits one lifecycle projection when it has not yet
@@ -107,27 +113,27 @@ func (c *CampaignPublicationCoordinator) buildAssignmentBenchmarkObservations(ct
 	if c == nil || c.files == nil || result == nil {
 		return nil, fmt.Errorf("evaluation: build assignment benchmark observations: %w", constants.ErrMissingRequiredField)
 	}
-	reader, err := NewCampaignProviderObservationReader(c.files)
+	reader, err := NewCampaignProviderObservationReaderWithRemote(c.files, c.observationRemote)
 	if err != nil {
 		return nil, err
 	}
 	return reader.BuildPublicBenchmarkObservations(ctx, result)
 }
 
-// PublishRunAggregates emits explorer catalog, model, and methodology snapshot
-// records derived from canonical assignment and result state.
+// PublishRunAggregates emits explorer evaluation_summary, catalog, model, and
+// methodology snapshot records derived from canonical assignment and result state.
 func (c *CampaignPublicationCoordinator) PublishRunAggregates(ctx context.Context, runID string, observedAt time.Time) (int, error) {
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || runID == "" {
 		return 0, fmt.Errorf("evaluation: publish run aggregates: %w", constants.ErrMissingRequiredField)
 	}
-	_, _, _, state, err := c.loadRunAggregateState(ctx, runID)
+	run, _, _, state, err := c.loadRunAggregateState(ctx, runID)
 	if err != nil {
 		return 0, err
 	}
 	if state.Scheduled == 0 {
 		return 0, nil
 	}
-	records, err := BuildRunAggregateViewRecords(runID, state, observedAt)
+	records, err := BuildRunAggregateViewRecords(run, state, observedAt)
 	if err != nil {
 		return 0, err
 	}

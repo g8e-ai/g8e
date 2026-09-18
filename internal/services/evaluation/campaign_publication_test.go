@@ -18,6 +18,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 )
 
 type recordingCampaignFeedExporter struct {
@@ -37,7 +39,7 @@ func TestCampaignPublicationCoordinatorIdempotentLifecyclePublish(t *testing.T) 
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	exporter := &recordingCampaignFeedExporter{}
-	coordinator := NewCampaignPublicationCoordinator(store, files, exporter)
+	coordinator := NewCampaignPublicationCoordinator(store, files, exporter, nil)
 	assignment := &evalv1.EvaluationAssignment{
 		AssignmentId:    "assign-1",
 		RunId:           "run-1",
@@ -56,7 +58,7 @@ func TestCampaignPublicationCoordinatorPublishRunCatchUp(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	exporter := &recordingCampaignFeedExporter{}
-	coordinator := NewCampaignPublicationCoordinator(store, files, exporter)
+	coordinator := NewCampaignPublicationCoordinator(store, files, exporter, nil)
 	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" }).WithPublication(coordinator)
 	req := testCampaignInitRequest(t)
 	catalog := req.Catalog
@@ -88,7 +90,7 @@ func TestCampaignPublicationCoordinatorPublishRunCompletion(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	exporter := &recordingCampaignFeedExporter{}
-	coordinator := NewCampaignPublicationCoordinator(store, files, exporter)
+	coordinator := NewCampaignPublicationCoordinator(store, files, exporter, nil)
 	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" }).WithPublication(coordinator)
 	req := testCampaignInitRequest(t)
 	catalog := req.Catalog
@@ -129,7 +131,7 @@ func TestCampaignPublicationCoordinatorPublishRunVerification(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	exporter := &recordingCampaignFeedExporter{}
-	coordinator := NewCampaignPublicationCoordinator(store, files, exporter)
+	coordinator := NewCampaignPublicationCoordinator(store, files, exporter, nil)
 	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" }).WithPublication(coordinator)
 	req := testCampaignInitRequest(t)
 	catalog := req.Catalog
@@ -184,7 +186,7 @@ func TestCampaignPublicationCoordinatorForceRepublish(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	exporter := &recordingCampaignFeedExporter{}
-	coordinator := NewCampaignPublicationCoordinator(store, files, exporter)
+	coordinator := NewCampaignPublicationCoordinator(store, files, exporter, nil)
 	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" }).WithPublication(coordinator)
 	req := testCampaignInitRequest(t)
 	catalog := req.Catalog
@@ -226,7 +228,7 @@ func TestCampaignControllerWithPublicationPublishesQueuedAssignments(t *testing.
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	exporter := &recordingCampaignFeedExporter{}
-	coordinator := NewCampaignPublicationCoordinator(store, files, exporter)
+	coordinator := NewCampaignPublicationCoordinator(store, files, exporter, nil)
 	controller := NewCampaignController(store, nil, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" }).WithPublication(coordinator)
 	req := testCampaignInitRequest(t)
 	catalog := req.Catalog
@@ -245,4 +247,78 @@ func TestCampaignControllerWithPublicationPublishesQueuedAssignments(t *testing.
 	require.NoError(t, err)
 	assert.Equal(t, 3, count)
 	assert.GreaterOrEqual(t, len(exporter.records), 8)
+}
+
+func TestCampaignPublicationCoordinatorPublishAssignmentResultUsesRemoteObservationWindows(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	exporter := &recordingCampaignFeedExporter{}
+	attempt := &operatorv1.InferenceProviderAttemptRecord{
+		ProviderAttemptId: "attempt-remote",
+		Status:            operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED,
+		StartedAtUnixMs:   time.Unix(1_700_000_000, 0).UnixMilli(),
+		CompletedAtUnixMs: time.Unix(1_700_000_010, 0).UnixMilli(),
+	}
+	window := &evalv1.ProviderBoundaryObservationWindow{
+		SchemaVersion:              provider_observer.SchemaVersion,
+		ProviderAttemptId:          "attempt-remote",
+		ObserverId:                 "observer-test",
+		ObserverClockSource:        provider_observer.DefaultObserverClockSource,
+		WindowStartedAtUnixNanos:   uint64(time.Unix(1_700_000_000, 0).UnixNano()),
+		WindowCompletedAtUnixNanos: uint64(time.Unix(1_700_000_010, 0).UnixNano()),
+		AttemptStartedAtUnixMs:     attempt.GetStartedAtUnixMs(),
+		AttemptCompletedAtUnixMs:   attempt.GetCompletedAtUnixMs(),
+		Samples: []*evalv1.ProviderBoundaryHardwareSample{{
+			ObservedAtUnixNanos:        uint64(time.Unix(1_700_000_001, 0).UnixNano()),
+			VramBytesAvailability:      evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+			VramUsedBytes:              16_000_000_000,
+			GpuUtilizationAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+			GpuUtilizationPercent:      42,
+		}},
+	}
+	digest, err := provider_observer.ComputeObservationDigest(window)
+	require.NoError(t, err)
+	window.ObservationDigest = digest
+
+	coordinator := NewCampaignPublicationCoordinator(store, files, exporter, &stubProviderObservationRemote{
+		window:  window,
+		attempt: attempt,
+	})
+	assignment := &evalv1.EvaluationAssignment{
+		AssignmentId:    "assign-1",
+		RunId:           "run-1",
+		ScenarioId:      "instruction-exact-format",
+		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+	}
+	result := &evalv1.EvaluationAssignmentResult{
+		AssignmentId: "assign-1",
+		RunId:        "run-1",
+		ModelInferences: []*evalv1.ModelInferenceRecord{{
+			InferenceRecordId: "inference-1",
+			ProviderAttemptId: "attempt-remote",
+		}},
+	}
+	require.NoError(t, coordinator.PublishAssignmentResult(
+		ctx,
+		assignment,
+		result,
+		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE,
+		"unverified",
+	))
+	require.Len(t, exporter.records, 1)
+
+	envelope := CampaignProjectionEnvelope{}
+	require.NoError(t, json.Unmarshal([]byte(exporter.records[0].RecordBytes), &envelope))
+	record := map[string]any{}
+	require.NoError(t, json.Unmarshal(envelope.Record, &record))
+	benchmark, ok := record["benchmark_observations"].(map[string]any)
+	require.True(t, ok)
+	gpu, ok := benchmark["gpu"].(map[string]any)
+	require.True(t, ok)
+	peak, ok := gpu["vram_peak_bytes"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(16_000_000_000), peak["value"])
 }

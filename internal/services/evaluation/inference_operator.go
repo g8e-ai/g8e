@@ -9,6 +9,8 @@ package evaluation
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -21,6 +23,7 @@ type InferenceOperatorStatus struct {
 	OperatorSessionID string
 	Status            string
 	InferenceEnabled  bool
+	OllamaEndpoint    string
 }
 
 // ActiveInferenceOperators returns every active remote Operator with
@@ -42,6 +45,7 @@ func ActiveInferenceOperators(operators []models.OperatorDocumentGo) []Inference
 			OperatorSessionID: op.OperatorSessionID,
 			Status:            string(op.Status),
 			InferenceEnabled:  true,
+			OllamaEndpoint:    inferenceOperatorOllamaEndpoint(op),
 		})
 	}
 	return matches
@@ -70,4 +74,30 @@ func SelectInferenceOperator(operators []models.OperatorDocumentGo, sessionID st
 	default:
 		return nil, constants.ErrInferenceOperatorAmbiguous
 	}
+}
+
+func inferenceOperatorOllamaEndpoint(op models.OperatorDocumentGo) string {
+	if op.RuntimeConfig == nil {
+		return ""
+	}
+	return strings.TrimSpace(op.RuntimeConfig.InferenceOllamaEndpoint)
+}
+
+// ResolveInferenceOllamaEndpoint selects the Ollama provider URL for campaign
+// provider-idle gating. Resolution order: explicit flag override, process
+// environment, active inference operator runtime_config, then loopback default.
+func ResolveInferenceOllamaEndpoint(flag string, operators []models.OperatorDocumentGo, inferenceSessionID string) (string, error) {
+	if endpoint := strings.TrimSpace(flag); endpoint != "" {
+		return endpoint, nil
+	}
+	if endpoint := strings.TrimSpace(os.Getenv("G8E_OLLAMA_ENDPOINT")); endpoint != "" {
+		return endpoint, nil
+	}
+	selected, err := SelectInferenceOperator(operators, inferenceSessionID)
+	if err == nil {
+		if endpoint := strings.TrimSpace(selected.OllamaEndpoint); endpoint != "" {
+			return endpoint, nil
+		}
+	}
+	return fmt.Sprintf("http://127.0.0.1:%d", constants.InferenceOllamaDefaultPort), nil
 }

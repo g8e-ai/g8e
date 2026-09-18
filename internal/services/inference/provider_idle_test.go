@@ -47,3 +47,15 @@ func TestWaitForProviderIdle_RejectsInvalidEndpoint(t *testing.T) {
 	err := WaitForProviderIdle(context.Background(), ProviderIdleOptions{Endpoint: "ftp://bad"})
 	require.Error(t, err)
 }
+
+func TestWaitForProviderIdle_FailsFastWhenProviderUnreachable(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := WaitForProviderIdle(ctx, ProviderIdleOptions{
+		Endpoint:     "http://127.0.0.1:1",
+		PollInterval: 10 * time.Millisecond,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "provider unreachable")
+}

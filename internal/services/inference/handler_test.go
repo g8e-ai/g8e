@@ -360,8 +360,8 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_CampaignRegistryRejectsInva
 		wantError error
 	}{
 		{name: "missing assignment binding", mutate: func(req *operatorv1.InferenceRequested) { req.AssignmentId = "" }, wantError: constants.ErrInferenceCampaignBindingInvalid},
-		{name: "changed campaign", mutate: func(req *operatorv1.InferenceRequested) { req.CampaignId = "campaign-2" }, wantError: constants.ErrInferenceCampaignBindingInvalid},
-		{name: "changed registry digest", mutate: func(req *operatorv1.InferenceRequested) { req.ModelRegistryDigest = strings.Repeat("b", 64) }, wantError: constants.ErrInferenceCampaignBindingInvalid},
+		{name: "changed campaign", mutate: func(req *operatorv1.InferenceRequested) { req.CampaignId = "campaign-2" }, wantError: constants.ErrInferenceModelRegistryInvalid},
+		{name: "changed registry digest", mutate: func(req *operatorv1.InferenceRequested) { req.ModelRegistryDigest = strings.Repeat("b", 64) }, wantError: constants.ErrInferenceModelRegistryInvalid},
 		{name: "model absent", mutate: func(req *operatorv1.InferenceRequested) { req.Model = "absent:1" }, wantError: constants.ErrInferenceModelOverrideDenied},
 		{name: "model digest mismatch", mutate: func(req *operatorv1.InferenceRequested) { req.ModelDigest = strings.Repeat("b", 64) }, wantError: constants.ErrInferenceModelOverrideDenied},
 		{name: "duplicate model", mutate: func(req *operatorv1.InferenceRequested) {
@@ -396,6 +396,51 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_CampaignRegistryRejectsInva
 
 			assert.ErrorIs(t, err, tt.wantError)
 			assert.Zero(t, backend.calls)
+		})
+	}
+}
+
+func TestInferenceHandler_ExecuteVerifiedTransaction_AcceptsGovernedCampaignWithoutStartupBinding(t *testing.T) {
+	t.Parallel()
+	const model = "gemma2:9b"
+	modelDigest := strings.Repeat("c", 64)
+	registry := []*operatorv1.InferenceModelVariant{{Model: model, Digest: modelDigest}}
+
+	for _, campaignID := range []string{"eval-init-gemma2-9b", "eval-init-deepseek-r1-7b"} {
+		t.Run(campaignID, func(t *testing.T) {
+			registryDigest, err := models.ComputeInferenceModelRegistryDigest(campaignID, registry)
+			require.NoError(t, err)
+			backend := &stubBackend{generateResp: &models.GenerateResponse{
+				Parts:             textInferenceResponseParts("response"),
+				FinishReason:      "stop",
+				Model:             model,
+				ServedModelDigest: modelDigest,
+			}}
+			handler := NewInferenceExecutionHandler(backend, &config.Config{Inference: config.InferenceConfig{
+				Enabled:       true,
+				PrimaryModel:  model,
+				AssistantModel: model,
+				LiteModel:     model,
+			}}, nil, testutil.NewTestLogger())
+			payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
+				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,
+				Role:                 operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+				Model:                model,
+				ModelDigest:          modelDigest,
+				Messages:             textInferenceMessages("test"),
+				CampaignId:           campaignID,
+				RunId:                "run-1",
+				AssignmentId:         "assignment-1",
+				EvaluationAttemptId:  "attempt-1",
+				ScenarioId:           "scenario-1",
+				ModelRegistry:        registry,
+				ModelRegistryDigest:  registryDigest,
+			})
+
+			_, err = handler.ExecuteInference(context.Background(), &testCommandMessage{payload: payload})
+
+			require.NoError(t, err)
+			assert.Equal(t, model, backend.lastReq.Model)
 		})
 	}
 }

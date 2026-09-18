@@ -31,6 +31,41 @@ func TestSelectInferenceOperator_RequiresExactSessionWhenPinned(t *testing.T) {
 	require.ErrorIs(t, err, constants.ErrInferenceOperatorNotCapable)
 }
 
+func TestResolveInferenceOllamaEndpoint_PrefersInferenceOperatorRuntimeConfig(t *testing.T) {
+	t.Parallel()
+	operators := []models.OperatorDocumentGo{
+		{
+			ID:                "inf-1",
+			OperatorSessionID: "sess-inf-1",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+			RuntimeConfig: &models.RuntimeConfig{
+				InferenceEnabled:        true,
+				InferenceOllamaEndpoint: "http://192.168.1.2:11434",
+			},
+		},
+	}
+	endpoint, err := ResolveInferenceOllamaEndpoint("", operators, "sess-inf-1")
+	require.NoError(t, err)
+	assert.Equal(t, "http://192.168.1.2:11434", endpoint)
+}
+
+func TestResolveInferenceOllamaEndpoint_UsesLoopbackWhenOperatorEndpointMissing(t *testing.T) {
+	t.Parallel()
+	operators := []models.OperatorDocumentGo{
+		{
+			ID:                "inf-1",
+			OperatorSessionID: "sess-inf-1",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+			RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: true},
+		},
+	}
+	endpoint, err := ResolveInferenceOllamaEndpoint("", operators, "sess-inf-1")
+	require.NoError(t, err)
+	assert.Equal(t, "http://127.0.0.1:11434", endpoint)
+}
+
 func TestSelectInferenceOperator_FailsClosedOnAmbiguity(t *testing.T) {
 	t.Parallel()
 	operators := []models.OperatorDocumentGo{

@@ -118,6 +118,9 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 					}
 					if op.RuntimeConfig != nil {
 						entry["inference_enabled"] = op.RuntimeConfig.InferenceEnabled
+						if op.RuntimeConfig.InferenceOllamaEndpoint != "" {
+							entry["inference_ollama_endpoint"] = op.RuntimeConfig.InferenceOllamaEndpoint
+						}
 						entry["provider_boundary_observer_enabled"] = op.RuntimeConfig.ProviderBoundaryObserverEnabled
 					}
 					entries = append(entries, entry)

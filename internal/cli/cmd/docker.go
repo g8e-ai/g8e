@@ -408,14 +408,12 @@ func checkDockerInitEnv() error {
 	values, err := readDotEnvFile(envPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("%w: copy .env.example to .env and set G8E_OLLAMA_ENDPOINT, G8E_INFERENCE_CAMPAIGN_ID, and G8E_INFERENCE_MODEL_REGISTRY_DIGEST", constants.ErrDockerInitEnvRequired)
+			return fmt.Errorf("%w: copy .env.example to .env and set G8E_OLLAMA_ENDPOINT", constants.ErrDockerInitEnvRequired)
 		}
 		return fmt.Errorf("%w: read .env: %w", constants.ErrDockerInitEnvRequired, err)
 	}
 	required := []string{
 		"G8E_OLLAMA_ENDPOINT",
-		"G8E_INFERENCE_CAMPAIGN_ID",
-		"G8E_INFERENCE_MODEL_REGISTRY_DIGEST",
 	}
 	var missing []string
 	for _, key := range required {

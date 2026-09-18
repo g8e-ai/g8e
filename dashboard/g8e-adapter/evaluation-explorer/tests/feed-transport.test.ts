@@ -195,20 +195,49 @@ describe('history backfill', () => {
       },
     };
     const recent = [
-      snapshotRecord(queuedEnvelope, 1),
-      snapshotRecord(resultEnvelope, 2),
+      snapshotRecord(
+        {
+          schema_version: '1.3.0',
+          kind: 'evaluation_summary',
+          dataset_id: datasetId,
+          quality_state: 'live_in_progress',
+          observed_at: '2026-09-16T14:00:00.000Z',
+          source_revision_label: 'g8e-eval-campaign',
+          run_id: runId,
+          suite_id: 'north-star-25',
+          arm: 'homogeneous-model-role',
+          evaluation_unit: 'model',
+          model_role_mapping: {},
+          lifecycle_state: 'running',
+          assignment_total: 1,
+          assignment_completed: 0,
+          assignment_failed: 0,
+          terminal_outcomes: {
+            completed: 0,
+            model_failed: 0,
+            grader_failed: 0,
+            invalid_evidence: 0,
+            stopped: 0,
+          },
+          verifier_state: 'not_applicable',
+          headline_metrics: {},
+        },
+        1,
+      ),
+      snapshotRecord(queuedEnvelope, 2),
+      snapshotRecord(resultEnvelope, 3),
     ];
-    const snapshot: FeedSnapshot = { ...SNAP, high_water_sequence: 2, batch_count: 1 };
+    const snapshot: FeedSnapshot = { ...SNAP, high_water_sequence: 3, batch_count: 1 };
 
     store.initBootstrap(snapshot, recent, 0);
-    store.acceptProjection(snapshotRecord(queuedEnvelope, 1));
-    store.acceptProjection(snapshotRecord(resultEnvelope, 2));
+    store.acceptProjection(snapshotRecord(queuedEnvelope, 2));
+    store.acceptProjection(snapshotRecord(resultEnvelope, 3));
 
     const run = store.getEvaluation(datasetId, runId);
     expect(run).toMatchObject({
       assignment_total: 1,
       assignment_completed: 0,
-      assignment_failed: 1,
+      assignment_failed: 0,
     });
     const failEvent = store.getEvents(runId, datasetId).find((event) => event.kind === 'assignment_failed');
     expect(failEvent).toMatchObject({ completed: 1, total: 1 });
