@@ -1,6 +1,6 @@
 # Unified Docker Stack Guide
 
-Last Updated: 2026-09-16  
+Last Updated: 2026-09-18  
 Version: v2.1.8
 
 This guide explains how to run the g8e platform from the repository root as one Docker Compose stack: Gateway, Data Operator, Inference Operator, ensemble (g8ee), and dashboard (g8ed). It also documents the evaluation campaign topology used for governed model scoring, the remote Ollama provider boundary, and the provider-boundary Observer Operator that enrolls from the Windows Ollama host.
@@ -291,6 +291,8 @@ The legacy filesystem runner `g8e eval provider-observer run` is for co-located 
 
 **Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. That is expected. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
 
+For example Observer Operator console output and a healthy-output checklist, see [Evaluations — Provider-boundary Observer Operator](../architecture/evals.md#provider-boundary-observer-operator).
+
 ## Mini smoke campaign workflow
 
 Use this to validate the full pipeline (schedule → execute → publish → explorer) in hours instead of days.
@@ -473,6 +475,7 @@ docker compose --profile bootstrapped --profile evaluation down -v   # destroys 
 
 ## Related documentation
 
+- [Evaluations](../architecture/evals.md) — platform evaluation programs, Observer Operator roles, evidence, and verification.
 - [Build Operator](./build_operator.md) — build `g8e.exe` for the Windows Observer host.
 - [Connect Operator to Gateway](./connect_operator_to_gateway.md) — enrollment protocol details.
 - [Docker Gateway Guide](./docker_gateway.md) — standalone gateway operation.

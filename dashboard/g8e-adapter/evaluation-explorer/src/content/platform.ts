@@ -93,7 +93,7 @@ export const G8E_ARCHITECTURE_DOCS = {
   overview: 'https://github.com/g8e-ai/g8e/blob/main/docs/architecture/overview.md',
   governance: 'https://github.com/g8e-ai/g8e/blob/main/docs/architecture/governance.md',
   operator: 'https://github.com/g8e-ai/g8e/blob/main/docs/architecture/operator.md',
-  evals: 'https://github.com/g8e-ai/g8e/blob/main/docs/ensemble/evals.md',
+  evals: 'https://github.com/g8e-ai/g8e/blob/main/docs/architecture/evals.md',
 } as const;
 
 export const G8E_DIFFERENTIATORS_LEDE =

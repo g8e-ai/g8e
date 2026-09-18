@@ -13,7 +13,7 @@ The guide separates evidence that the repository generates today from the public
 
 When asked to run this guide, the agent:
 
-1. Reads this guide, [Evals](../ensemble/evals.md), [Headless End-to-End UX Smoke Test](ux_smoke_test.md), [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md), and the relevant demo README before executing commands.
+1. Reads this guide, [Evaluations](../architecture/evals.md), [Headless End-to-End UX Smoke Test](ux_smoke_test.md), [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md), and the relevant demo README before executing commands.
 2. Creates a new timestamped campaign directory. It never overwrites or deletes a prior run.
 3. Asks for explicit confirmation before `g8e docker clean`, `g8e demos clean`, Docker volume removal, or any other command that destroys retained state.
 4. Records whether every model is real, local, or deterministic fake; whether every target is real or synthetic; and which enforcement, storage, and verification paths are real.
@@ -389,7 +389,7 @@ Re-run verification and inspect the report in separate read-only invocations:
 ./g8e eval show <run-id>
 ```
 
-Acceptance requires 10/10 required invariants, valid verification with zero failures, exactly one allowed marker, no prohibited additional effect, valid receipt and persistence signatures, a valid deterministic protocol chain, exact Operator and session binding, and Gateway L1 attribution for the prohibited attempt. See [Native Evaluations](../ensemble/evals.md) for the complete evidence and trust-boundary model.
+Acceptance requires 10/10 required invariants, valid verification with zero failures, exactly one allowed marker, no prohibited additional effect, valid receipt and persistence signatures, a valid deterministic protocol chain, exact Operator and session binding, and Gateway L1 attribution for the prohibited attempt. See [Evaluations](../architecture/evals.md) for the complete evidence and trust-boundary model.
 
 ## 6. Where the juicy data is
 
@@ -577,11 +577,11 @@ The agent also calls out any `FAIL`, `SKIPPED`, empty report, missing observer, 
 
 ## README evidence
 
-The root `README.md` is hand-maintained. It states the current native evaluation boundary and links to [Native Evaluations](../ensemble/evals.md) for acceptance invariants, trust boundaries, and JSON output. The native evaluation proof table row reflects the Go-native `core-execution-boundary` suite result against the unified Docker stack. Update the README directly when its current behavior or evidence summary changes, then review it end to end and validate its links.
+The root `README.md` is hand-maintained. It states the current native evaluation boundary and links to [Evaluations](../architecture/evals.md) for acceptance invariants, trust boundaries, and JSON output. The native evaluation proof table row reflects the Go-native `core-execution-boundary` suite result against the unified Docker stack. Update the README directly when its current behavior or evidence summary changes, then review it end to end and validate its links.
 
 ## Related documentation
 
-- [Evals](../ensemble/evals.md) — Go-native execution-boundary commands, verification, evidence, and the connected evaluation explorer projection.
+- [Evaluations](../architecture/evals.md) — Go-native execution-boundary commands, model campaign evidence, verification, and the connected evaluation explorer projection.
 - [Headless End-to-End UX Smoke Test](ux_smoke_test.md) — authoritative unified-stack enrollment, scenario, report, and troubleshooting sequence.
 - [Unified Docker Stack](unified_stack.md) — component topology, identity, storage, and lifecycle.
 - [Demo Environments](../../demos/README.md) — per-demo architecture, commands, scenarios, and real-versus-display boundaries.

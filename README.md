@@ -8,7 +8,7 @@ g8e is an AI data and execution governance suite. It places a fail-closed contro
 
 Every governed mutation is a typed, signed, state-bound `GovernanceEnvelope`. The Gateway admits it, the Operator independently verifies it, the Actuator executes it at the data owner’s boundary, and the platform records signed evidence of the result.
 
-[Get started](docs/guides/getting_started.md) · [Run the full suite](docs/guides/unified_stack.md) · [Architecture](docs/architecture/overview.md) · [Proof-backed compliance](docs/reference/compliance-evidence.md) · [Native evaluations](docs/ensemble/evals.md) · [Protocol](protocol/docs/spec.md)
+[Get started](docs/guides/getting_started.md) · [Run the full suite](docs/guides/unified_stack.md) · [Architecture](docs/architecture/overview.md) · [Proof-backed compliance](docs/reference/compliance-evidence.md) · [Evaluations](docs/architecture/evals.md) · [Protocol](protocol/docs/spec.md)
 
 ## Proof, not promises
 
@@ -16,7 +16,7 @@ g8e separates measured evidence from architecture claims. Published results rema
 
 | Proof | Published result | Boundary |
 | --- | --- | --- |
-| [Native core execution-boundary evaluation](docs/ensemble/evals.md) | The Go-native suite passed 10/10 required invariants against the unified Docker stack, and an independent `g8e eval verify` invocation returned valid with zero failures. | One doctrine-posture deployment, one exact remote Operator session, one controlled target, and one networkless observer. |
+| [Native core execution-boundary evaluation](docs/architecture/evals.md) | The Go-native suite passed 10/10 required invariants against the unified Docker stack, and an independent `g8e eval verify` invocation returned valid with zero failures. | One doctrine-posture deployment, one exact remote Operator session, one controlled target, and one networkless observer. |
 | [Clean offline compliance verification](docs/release_notes/v2.1.x/v2.1.7-offline-acceptance.md) | A fresh network-disabled, read-only container reproduced a signed compliance bundle and passed all 10 verification checks. Four protected-source, renderer, and signature mutations failed closed. | One v2.1.7 candidate and one point-in-time assessment scope. This is not certification or recurring operating effectiveness. |
 | [Compliance evidence model](docs/reference/compliance-evidence.md) | Typed assertions, evidence-grade scenarios, explicit control classifications, and fail-closed verification. | Catalog and verifier coverage do not imply customer compliance, authorization, or external attestation. |
 | [Live CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) | Build and test status is published as a live external signal. | Live CI is not frozen release evidence. |
@@ -68,7 +68,7 @@ The native evaluator proves the remote execution boundary against the real unifi
 
 The run command selects one exact active remote Operator, submits an allowed typed mutation through the authenticated Gateway ingress, proves exactly one effect through a separate networkless Compose observer, submits the doctrine-prohibited equivalent through the same ingress, and proves rejection without another effect. It persists canonical `report.json`, `verification.json`, and digest-named evidence under `.g8e/data/eval/runs/<run-id>/`.
 
-See [Native Evaluations](docs/ensemble/evals.md) for acceptance invariants, trust boundaries, and JSON output.
+See [Evaluations](docs/architecture/evals.md) for acceptance invariants, trust boundaries, and JSON output.
 
 ## What the boundary enforces
 
@@ -88,7 +88,7 @@ The boundary governs operations that traverse g8e. It does not sandbox an AI cli
 | Install and operate g8e | [Getting Started](docs/guides/getting_started.md), [Unified Stack](docs/guides/unified_stack.md), and [Operator Connection](docs/guides/connect_operator_to_gateway.md) |
 | Understand trust and execution | [Architecture Overview](docs/architecture/overview.md), [Governance](docs/architecture/governance.md), [AI Agent Boundary](docs/architecture/agents.md), [Authentication](docs/architecture/auth.md), and [Network](docs/architecture/network.md) |
 | Build an integration | [Build Apps](docs/guides/build_apps.md), [Connect Apps](docs/guides/connect_apps_to_gateway.md), [MCP](protocol/docs/mcp.md), and [A2A](protocol/docs/a2a.md) |
-| Evaluate execution | [Native Evaluations](docs/ensemble/evals.md) |
+| Evaluate execution | [Evaluations](docs/architecture/evals.md) |
 | Evaluate evidence and claims | [Compliance Evidence](docs/reference/compliance-evidence.md), [Compliance Alignment](docs/reference/compliance-alignment.md), and [Sovereignty Gauntlet](docs/guides/sovereignty_gauntlet.md) |
 | Develop and release | [Developer Guidelines](docs/devs/devs.md), [Code Map](docs/devs/codemap.md), [Testing](docs/devs/tests.md), and [Release Process](docs/devs/release_process.md) |
 

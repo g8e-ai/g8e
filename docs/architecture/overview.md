@@ -174,6 +174,7 @@ g8e provides platform-specific bootstrap scripts for local development, gateway-
 | [AI Agents and the g8e Governance Boundary](./agents.md) | AI client surface (MCP, A2A), native tool playbook, intent-to-execution flow, security boundaries summary. |
 | [Gateway Architecture](./gateway.md) | Gateway service stack, operating modes, port topology, MCP/A2A endpoints, pub/sub brokering, in-process Operator substrate. |
 | [Operator Architecture](./operator.md) | Operator execution boundary, L4 Warden and L5 Actuator, native tool playbook, local audit vault. |
+| [Evaluations](./evals.md) | Go-native execution-boundary suite, model campaign scoring, Observer Operator roles, evidence, and verification. |
 | [Ensemble (g8ee)](./ensemble.md) | First-party agentic ensemble: role, connection model, in-tree protocol dependency, build and test. |
 | [Dashboard (g8ed)](./dashboard.md) | Browser dashboard: static-host boundary, browser and container identities, gateway-direct requests, SSE, build, and test. |
 | [Governance](./governance.md) | Five-layer interlock sequence, GovernanceEnvelope structure, posture configurations, transaction flow. |

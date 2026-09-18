@@ -87,7 +87,7 @@ g8ee owns conversation history, cases, investigations, generated memories, attac
 
 Each model call records provider and model identity, monotonic timing, provider-reported token usage when available, retry and finish metadata, canonical input and output hashes, and a hash-bound privacy attestation. The analytical telemetry stores scanner identity, sensitive-occurrence counts, and detected types rather than the detected values. Conversation content, attachments, prompts, and model outputs remain application data and can contain user-supplied or sensitive content.
 
-The native Go evaluator runs independently of g8ee and does not consume application model telemetry. See [Native Evaluations](../ensemble/evals.md) for evidence collection and verification, and [Ensemble Tests](../ensemble/tests.md) for the Python application test tiers and commands.
+The native Go evaluator runs independently of g8ee and does not consume application model telemetry. See [Evaluations](./evals.md) for platform evidence collection and verification, [Ensemble Evaluations](../ensemble/evals.md) for how g8ee uses those programs, and [Ensemble Tests](../ensemble/tests.md) for the Python application test tiers and commands.
 
 ## Security Properties and Limits
 

@@ -328,7 +328,7 @@ A release that changes native evaluation runtime behavior runs the Go-native `co
 
 The run command must report 10/10 required invariants, a passing summary, valid verification, and one exact Operator and session. The separate verification invocation must report `Valid: true` with zero failures, and `show` must return the same suite, Operator, session, status, and summary. Retain the run ID and command outputs in the release acceptance record. The persisted authority is the canonical `report.json`, `verification.json`, and digest-named evidence under `.g8e/data/eval/runs/<run-id>/`.
 
-The suite proves one allowed governed mutation and one doctrine-prohibited equivalent against a controlled target. It verifies exact target and session binding, exactly one allowed effect, no prohibited additional effect, receipt and persistence signatures, the deterministic protocol chain, evidence bindings, and Gateway L1 attribution. It does not measure model quality, use g8ee or a provider, establish certification, or demonstrate recurring operating effectiveness. See [Native Evaluations](../ensemble/evals.md) for the complete boundary.
+The suite proves one allowed governed mutation and one doctrine-prohibited equivalent against a controlled target. It verifies exact target and session binding, exactly one allowed effect, no prohibited additional effect, receipt and persistence signatures, the deterministic protocol chain, evidence bindings, and Gateway L1 attribution. It does not measure model quality, use g8ee or a provider, establish certification, or demonstrate recurring operating effectiveness. See [Evaluations](../architecture/evals.md) for the complete boundary.
 
 ---
 

@@ -316,4 +316,4 @@ This document is accepted when:
 - [Public Spectator Operations Guide](../guides/public_spectator.md): Private ingest, anonymous public listener, tunnel, restart, and publication procedure.
 - [Network Architecture](./network.md): PKI, mTLS, and transport surfaces.
 - [Gateway Architecture](./gateway.md): Gateway services, protocol surfaces, and trust boundaries.
-- [Native Evaluations](../ensemble/evals.md): Go-native execution-boundary commands, verification, evidence, and the connected evaluation explorer projection.
+- [Evaluations](./evals.md): Go-native execution-boundary commands, model campaign evidence, verification, and the connected evaluation explorer projection.
