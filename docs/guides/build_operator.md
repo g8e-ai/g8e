@@ -107,6 +107,8 @@ On the target host, start the Operator with the Gateway discovery endpoint:
 
 When no installed Operator credentials exist, `--endpoint` starts the owner-approved platform enrollment protocol. The Operator fetches the Gateway trust bundle from the HTTP discovery endpoint, creates Operator and CLI certificate requests, persists pending enrollment state, waits for Gateway-owner approval, verifies the completion transcript, and writes the issued credentials and canonical trust bundle into `.g8e/pki/`. Restarting the process resumes the same pending enrollment request and key material.
 
+The enrolled owner reviews pending requests with `g8e auth enroll pending`, approves with `g8e auth enroll approve <request-id>`, or denies with `g8e auth enroll deny <request-id>`. See [Authentication and Authorization](../architecture/auth.md) for the full platform enrollment command reference.
+
 After enrollment, the Operator loads `.g8e/pki/operator.crt` and `.g8e/pki/operator.key`, connects to the Gateway over mTLS, requests bootstrap configuration, initializes encrypted local services, subscribes to its command channel, and starts automatic heartbeats. The canonical trust bundle is `.g8e/pki/trust/g8eg-ca-bundle.pem`.
 
 For pre-provisioned credentials, pass explicit paths:

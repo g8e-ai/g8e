@@ -98,6 +98,7 @@ The reserved first-party names `g8ed`, `g8ee`, and `g8eo` use the owner-approved
 ```bash
 ./g8e auth enroll pending
 ./g8e auth enroll approve <request-id>
+# or: ./g8e auth enroll deny <request-id>
 ```
 
 See [Authentication and Authorization](../architecture/auth.md) for both enrollment protocols and certificate lifetimes.

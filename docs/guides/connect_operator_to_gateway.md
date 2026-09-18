@@ -128,13 +128,14 @@ From the enrolled owner CLI, list pending platform enrollment requests:
 ./g8e auth enroll pending --endpoint <gateway-host>
 ```
 
-Compare the displayed component, hostname, system fingerprint, and Operator and CLI key fingerprints with the requesting Operator's output. Approve the matching request:
+Compare the displayed component, hostname, system fingerprint, and Operator and CLI key fingerprints with the requesting Operator's output. Approve or deny the matching request:
 
 ```bash
 ./g8e auth enroll approve <request-id> --endpoint <gateway-host>
+./g8e auth enroll deny <request-id> --endpoint <gateway-host>
 ```
 
-The command displays the request details and asks for confirmation. For non-interactive operation after independently validating the request, add `--yes`. To reject a request, use `g8e auth enroll deny <request-id>`; `--reason` attaches an optional decision note.
+Each command displays the request details and asks for confirmation. For non-interactive operation after independently validating the request, add `--yes`. Use `--reason` to attach an optional decision note.
 
 Only a valid, non-revoked CLI identity belonging to the first enrolled owner can approve or deny the request. The Gateway enforces this authorization.
 

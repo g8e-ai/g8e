@@ -193,13 +193,14 @@ Wait ~5s, then list pending enrollments:
 ./g8e auth enroll pending
 ```
 
-Approve in this order (Data Operator first):
+Approve in this order (Data Operator first), or deny any request that should not be admitted:
 
 ```bash
 ./g8e auth enroll approve <data-operator-request-id> --yes
 ./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
 ./g8e auth enroll approve <inference-operator-request-id> --yes
+# ./g8e auth enroll deny <request-id> --yes
 ```
 
 Identify requests by instance ID: `operator-<container-id>` is the **Data** Operator; `operator-inference-operator` is the **Inference** Operator.

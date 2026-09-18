@@ -22,11 +22,12 @@ Run these commands from the repository root:
 
 The start command launches the Gateway, Operator, ensemble, and dashboard. On a fresh deployment, it enrolls the first owner and prompts for approval of each platform workload. The ensemble generates its own key and certificate signing request, then remains unavailable until an enrolled owner approves its request.
 
-The automated walkthrough checks each workload once. If the ensemble request is not available when checked, list and approve it manually:
+The automated walkthrough checks each workload once. If the ensemble request is not available when checked, list and decide it manually:
 
 ```bash
 ./g8e auth enroll pending
 ./g8e auth enroll approve <ensemble-request-id> --yes
+# or: ./g8e auth enroll deny <ensemble-request-id> --yes
 ```
 
 Approve the Operator before the ensemble when both are pending. Governed submissions use the enrolled Operator identity, while other ensemble connections use the ensemble workload identity.

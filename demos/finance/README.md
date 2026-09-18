@@ -75,7 +75,7 @@ until curl -fsS http://localhost:8082/api/v1/health >/dev/null 2>&1; do sleep 2;
 # 2. Enroll the first owner. This creates the first user and a usable CLI mTLS identity.
 ./g8e auth enroll user -e localhost:8082 --port 8445
 
-# 3. List pending platform enrollment requests.
+# 3. List pending platform enrollment requests and approve or deny each request as needed.
 ./g8e auth enroll pending -e localhost:8082 --port 8445
 
 # 4. Approve the operator's request by exact request ID.

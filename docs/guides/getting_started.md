@@ -86,9 +86,9 @@ With the owner identity established, bring up the Operator, Agentic Ensemble (g8
 docker compose --profile bootstrapped up -d
 ```
 
-### 5. Approve platform workload enrollments
+### 5. Review platform workload enrollments
 
-List pending platform enrollment requests and approve each workload using your authenticated CLI session:
+List pending platform enrollment requests and approve or deny each workload using your authenticated CLI session:
 
 ```bash
 # List pending enrollment requests
@@ -98,9 +98,12 @@ List pending platform enrollment requests and approve each workload using your a
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
+
+# Reject a request instead of approving it
+./g8e auth enroll deny <request-id> --yes
 ```
 
-You can also view and approve pending enrollments in your browser via the Gateway Web Console at `https://localhost:8443/console/`.
+You can also view and decide pending enrollments in your browser via the Gateway Web Console at `https://localhost:8443/console/`.
 
 ### 6. Verify stack health
 
@@ -402,7 +405,7 @@ To connect an operator on a remote host to the gateway:
 ./g8e operator start -e <gateway-ip>
 ```
 
-When `--endpoint` (or `-e`) is provided, the operator automatically initiates platform enrollment with the gateway if credentials are not yet installed. The gateway holds the enrollment request in pending state until the enrolled owner approves it via `./g8e auth enroll pending` and `./g8e auth enroll approve <request-id> --yes` (or via the gateway web console at `https://<gateway-ip>:8443/console/`). Once approved, the operator receives signed mTLS credentials, connects to the gateway pub/sub broker on port 8443, and begins executing governed actions. See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enrollment and remote deployment options.
+When `--endpoint` (or `-e`) is provided, the operator automatically initiates platform enrollment with the gateway if credentials are not yet installed. The gateway holds the enrollment request in pending state until the enrolled owner decides it via `./g8e auth enroll pending`, then `./g8e auth enroll approve <request-id> --yes` or `./g8e auth enroll deny <request-id> --yes` (or via the gateway web console at `https://<gateway-ip>:8443/console/`). Once approved, the operator receives signed mTLS credentials, connects to the gateway pub/sub broker on port 8443, and begins executing governed actions. See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enrollment and remote deployment options.
 
 ### Run the gateway and operator in Docker
 

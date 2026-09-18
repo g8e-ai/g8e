@@ -47,6 +47,7 @@ services:
     #   ./g8e auth enroll user -e <gateway>
     #   ./g8e auth enroll pending
     #   ./g8e auth enroll approve <request-id> --yes
+    #   ./g8e auth enroll deny <request-id> --yes
     build:
       context: ../..
       dockerfile: Dockerfile

@@ -167,7 +167,7 @@ g8e demos pull
 
 ### Owner-approved platform bootstrap
 
-Every demo boots the gateway with zero users. The operator (and any service that depends on it) starts not-ready and remains not-ready until its owner-approved platform enrollment request is approved. After `g8e demos start <org>` completes, the CLI prints the bootstrap instructions: enroll the first owner, list pending platform enrollment requests, and approve the operator's request by exact request ID.
+Every demo boots the gateway with zero users. The operator (and any service that depends on it) starts not-ready and remains not-ready until its owner-approved platform enrollment request is approved. After `g8e demos start <org>` completes, the CLI prints the bootstrap instructions: enroll the first owner, list pending platform enrollment requests with `g8e auth enroll pending`, and approve or deny each request with `g8e auth enroll approve <request-id>` or `g8e auth enroll deny <request-id>`.
 
 ```bash
 # 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start <org>`).
@@ -252,6 +252,7 @@ docker compose --profile bootstrapped up -d
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
 ./g8e auth enroll approve <dashboard-request-id> --yes
+# ./g8e auth enroll deny <request-id> --yes
 
 # 5. Refresh the owner CLI session after Operator enrollment.
 ./g8e auth refresh

@@ -93,11 +93,13 @@ docker compose --profile bootstrapped up -d
 ./g8e auth enroll approve <dashboard-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
 
+# To reject a request instead: ./g8e auth enroll deny <request-id> --yes
+
 # Inspect readiness after enrollment completes.
 docker compose --profile bootstrapped ps
 ```
 
-The approval commands use the enrolled host CLI identity over mTLS. They accept request IDs, not requester tokens, token hashes, CSRs, or certificates. The gateway console at `https://localhost:8443/console/` also lists and approves pending requests after browser passkey enrollment.
+The `auth enroll pending`, `approve`, and `deny` commands use the enrolled host CLI identity over mTLS. They accept request IDs, not requester tokens, token hashes, CSRs, or certificates. The gateway console at `https://localhost:8443/console/` also lists and decides pending requests after browser passkey enrollment.
 
 ### Use the CLI walkthrough
 

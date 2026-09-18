@@ -57,7 +57,7 @@ export const PLATFORM_FLOW_STEPS = [
 ] as const;
 
 export const PLATFORM_OVERVIEW_PORTFOLIO_NOTE =
-  'Live portfolio piece — available for contract work on governed AI and eval infrastructure.';
+  'Live portfolio piece — looking to join a team, available for contracts on governed AI and eval infrastructure.';
 
 export const G8E_STACK_COMPONENTS = [
   {

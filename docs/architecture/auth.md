@@ -1,6 +1,6 @@
 # Authentication & Authorization
 
-Last Updated: 2026-09-12
+Last Updated: 2026-09-18
 Version: v2.1.8
 
 ## Overview
@@ -86,6 +86,21 @@ Run `g8e auth refresh` when the CLI certificate is still valid but its server-si
 `g8e auth logout` removes the local CLI credentials, certificate, and private key. It does not revoke the gateway-side session or certificate, and it does not remove the shared gateway root CA from the operating-system trust store. Use gateway administration and certificate revocation when server-side invalidation is required.
 
 On Windows, interactive enrollment also imports the signed CLI certificate into the current user's certificate store. CLI private keys remain file-backed ECDSA P-256 keys on every platform.
+
+### Platform Enrollment Commands
+
+`g8e auth enroll` groups human CLI enrollment and platform workload enrollment review:
+
+| Subcommand | Purpose |
+| --- | --- |
+| `user` | Enroll or repair the local CLI identity |
+| `pending` | List pending platform workload enrollment requests |
+| `approve <request-id>` | Approve a pending request |
+| `deny <request-id>` | Deny a pending request |
+
+`pending`, `approve`, and `deny` use the enrolled host CLI identity over mTLS. They accept request IDs only; requester tokens, CSRs, and certificates never pass through these commands. Both `approve` and `deny` support `--yes` for non-interactive automation and `--reason` for an optional bounded decision note. Use `--endpoint` and `--port` when the gateway HTTP and HTTPS ports are remapped.
+
+Bare `g8e auth enroll` prints help and exits non-zero. Select an explicit subcommand.
 
 ## Browser Authentication
 

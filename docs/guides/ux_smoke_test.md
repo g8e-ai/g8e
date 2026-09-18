@@ -107,12 +107,15 @@ Expected: no browser opens. The command prints `User ID: <uuid>` and `CLI Sessio
 
 Expected: the gateway, operator, ensemble, and dashboard containers are present. The three workloads can remain unready while their enrollment requests await approval.
 
-### 5. Approve the workload enrollments
+### 5. Review the workload enrollments
 
 List the pending requests:
 
 ```bash
 ./g8e auth enroll pending
+
+# Reject a request instead of approving it:
+# ./g8e auth enroll deny <request-id> --yes
 ```
 
 Approve each operator, ensemble, and dashboard request by its exact request ID:

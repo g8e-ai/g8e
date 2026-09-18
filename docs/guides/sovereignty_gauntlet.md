@@ -124,12 +124,13 @@ docker exec g8e-gateway /g8e version --fips | tee "${CAMPAIGN_DIR}/metadata/gate
 ./g8e auth enroll pending | tee "${CAMPAIGN_DIR}/logs/pending.txt"
 ```
 
-Approve the operator, ensemble, and dashboard requests using the exact request IDs printed by the pending-enrollments command:
+Approve or deny the operator, ensemble, and dashboard requests using the exact request IDs printed by the pending-enrollments command:
 
 ```bash
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
 ./g8e auth enroll approve <dashboard-request-id> --yes
+# ./g8e auth enroll deny <request-id> --yes
 ```
 
 Wait until all four services are healthy. The initial owner CLI session predates the Operator session, so refresh it after Operator enrollment to bind the canonical CLI session to the active Operator session. Then capture the canonical authentication context:

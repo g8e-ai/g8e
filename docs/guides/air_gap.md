@@ -120,12 +120,13 @@ docker load -i /media/g8e-unified-images.tar
 docker compose up -d --no-build --pull never
 ./g8e auth enroll user -e localhost
 
-# Start the enrolled workloads, then approve their pending requests.
+# Start the enrolled workloads, then approve or deny their pending requests.
 docker compose --profile bootstrapped up -d --no-build --pull never
 ./g8e auth enroll pending
 ./g8e auth enroll approve <operator-request-id> --yes
 ./g8e auth enroll approve <ensemble-request-id> --yes
 ./g8e auth enroll approve <dashboard-request-id> --yes
+# ./g8e auth enroll deny <request-id> --yes
 ```
 
 Before sending model requests, configure every model role in use through platform settings or a Compose override. For deterministic operation without a model server, pass both `G8E_LLM_PRIMARY_PROVIDER=fake` and a primary model name such as `G8E_LLM_PRIMARY_MODEL=fake`; the root Compose file does not forward these host variables unless they are added to the ensemble service's `environment` list. Otherwise configure a supported provider with an approved internal endpoint. See [Unified Docker Stack](unified_stack.md) for identity, volume, hostname, and port configuration.

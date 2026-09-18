@@ -16,7 +16,7 @@ curl -fsS http://127.0.0.1:8000/health
 curl -fsS http://192.168.1.2:11434/api/version
 ```
 
-Gateway, Operator, and Ensemble report healthy before a real evaluation. Approve an exact pending workload request only through the documented enrollment flow; do not reset the trust domain to repair an enrollment wait.
+Gateway, Operator, and Ensemble report healthy before a real evaluation. Approve or deny an exact pending workload request only through the documented `auth enroll` flow (`pending`, `approve`, `deny`); do not reset the trust domain to repair an enrollment wait.
 
 ## Start the complete mock experience
 
