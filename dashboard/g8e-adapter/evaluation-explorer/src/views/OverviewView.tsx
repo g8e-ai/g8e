@@ -1,6 +1,6 @@
 // Overview view — the landing page. Layout mirrors the OpenDevOps.ai
 // surface: the live event stream, a system overview
-// with dataset coverage, the measured-model table, recent campaigns, and the
+// with dataset coverage, recent campaigns, and the
 // public mirror download endpoints. Every panel renders real store data;
 // nothing on this page is decorative.
 
@@ -13,7 +13,6 @@ import {
   PLATFORM_LEDE,
   PLATFORM_OVERVIEW_PORTFOLIO_NOTE,
 } from '../content/platform';
-import { roleScopeFor } from '../content/roles';
 import { useActiveDatasetId } from '../state/dataset';
 import { recordKey, useStoreState } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
@@ -23,50 +22,21 @@ import {
   ProgressBar,
   ReconcilePlaceholder,
   StreamStatusIndicator,
-  UnavailableValue,
   formatNumber,
-  formatPercent,
-  formatLatency,
-  formatThroughput,
 } from '../components/shared';
 import { formatRelativeTime } from '../utils/format';
 import {
-  qualityStateLabel,
-  qualityStateTone,
   type FeedConnectionState,
   type StreamConnectionState,
 } from '../utils/feed-state';
-import { campaignTerminalProgress, recentCampaignRows, roleLabel, roleLeaderRows } from './derived';
+import { campaignTerminalProgress, recentCampaignRows } from './derived';
 import descriptorUrl from '../contract/descriptor.json?url';
 import type {
   CatalogSnapshot,
-  DatasetKind,
   EvaluationSummary,
   LiveEvent,
-  ModelRole,
-  ModelSummary,
-  QualityState,
   SuiteSummary,
 } from '../contract/types';
-
-function agentStatus(state: QualityState): { label: string; tone: string } {
-  const tone = qualityStateTone(state);
-  switch (state) {
-    case 'verified_public':
-    case 'exploratory_verified':
-      return { label: 'Verified', tone };
-    case 'exploratory_partial':
-      return { label: 'Partial', tone };
-    case 'live_in_progress':
-      return { label: 'Running', tone };
-    case 'terminal_failed':
-      return { label: 'Failed', tone };
-    case 'dead_evidence':
-      return { label: 'Dead evidence', tone };
-    default:
-      return { label: qualityStateLabel(state), tone };
-  }
-}
 
 function shortRunId(runId: string): string {
   return runId.length > 14 ? `…${runId.slice(-12)}` : runId;
@@ -74,151 +44,6 @@ function shortRunId(runId: string): string {
 
 function shortCampaignLabel(label: string): string {
   return label.length > 22 ? `…${label.slice(-20)}` : label;
-}
-
-function RoleLeaderCell({ role }: { role: ModelRole }) {
-  return (
-    <span className="role-leader-cell">
-      <span className="role-leader-name">{roleLabel(role)}</span>
-      <span className="role-leader-scope">{roleScopeFor(role)}</span>
-    </span>
-  );
-}
-
-function roleLeadersUseProvisionalColumns(datasetKind: DatasetKind | undefined): boolean {
-  return datasetKind === 'live_run';
-}
-
-/** Top measured model per role in the active dataset. */
-function RoleLeadersPanel({
-  models,
-  datasetId,
-  catalog,
-}: {
-  models: ModelSummary[];
-  datasetId: string;
-  catalog: CatalogSnapshot | undefined;
-}) {
-  const roleRows = useMemo(() => roleLeaderRows(models), [models]);
-  const evaluatedRoles = roleRows.filter((row) => row.leader !== undefined);
-  const provisional = roleLeadersUseProvisionalColumns(catalog?.dataset_kind);
-
-  return (
-    <section className="panel ov-models-strip" aria-label="Role leaders">
-      <div className="panel-head">
-        <h2>
-          Role leaders{' '}
-          <span className="panel-sub">
-            · {evaluatedRoles.length} of {roleRows.length} roles evaluated
-          </span>
-        </h2>
-        <Link to={`/models?dataset=${datasetId}`} className="panel-link">
-          View all models →
-        </Link>
-      </div>
-      {evaluatedRoles.length === 0 ? (
-        <p className="panel-empty">No evaluated models in the active dataset.</p>
-      ) : (
-        <div className="table-scroll">
-          <table className="lab-table">
-            <thead>
-              <tr>
-                <th>Model</th>
-                <th>Role</th>
-                <th>Status</th>
-                {provisional ? (
-                  <>
-                    <th>Coverage</th>
-                    <th>Scored</th>
-                    <th>Pass rate</th>
-                    <th>Failed</th>
-                  </>
-                ) : (
-                  <>
-                    <th>Quant</th>
-                    <th>Tokens/s</th>
-                    <th>Agreement</th>
-                    <th>Pass rate</th>
-                    <th>Latency p50</th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {roleRows.map(({ role, leader }) => {
-                if (!leader) {
-                  return (
-                    <tr key={role} className="role-leader-empty">
-                      <td colSpan={provisional ? 7 : 8}>
-                        <RoleLeaderCell role={role} /> — no measured leader yet
-                      </td>
-                    </tr>
-                  );
-                }
-                const { model } = leader;
-                const status = agentStatus(model.quality_state);
-                const failedCount = leader.model_failed ?? leader.failed;
-                return (
-                  <tr key={role}>
-                    <td>
-                      <Link to={`/models/${datasetId}/${model.variant_id}?role=${model.role}`}>
-                        {model.display_name}
-                      </Link>
-                    </td>
-                    <td>
-                      <RoleLeaderCell role={role} />
-                    </td>
-                    <td>
-                      <span className={`stream-role status-${status.tone}`}>
-                        <span className="status-dot" aria-hidden="true" />
-                        {status.label}
-                      </span>
-                    </td>
-                    {provisional ? (
-                      <>
-                        <td>{formatPercent(leader.coverage, 0)}</td>
-                        <td>{formatNumber(leader.terminal)}</td>
-                        <td>
-                          {leader.pass_rate !== undefined
-                            ? formatPercent(leader.pass_rate, 0)
-                            : '—'}
-                        </td>
-                        <td>{formatNumber(failedCount)}</td>
-                      </>
-                    ) : (
-                      <>
-                        <td>{model.quantization_weight_class?.toUpperCase() ?? <UnavailableValue />}</td>
-                        <td>
-                          {leader.throughput_p50 !== undefined
-                            ? formatThroughput(leader.throughput_p50)
-                            : <UnavailableValue />}
-                        </td>
-                        <td>
-                          {model.agreement_pairwise?.value !== undefined
-                            ? formatPercent(model.agreement_pairwise.value, 0)
-                            : <UnavailableValue />}
-                        </td>
-                        <td>
-                          {leader.pass_rate !== undefined
-                            ? formatPercent(leader.pass_rate, 0)
-                            : '—'}
-                        </td>
-                        <td>
-                          {leader.latency_p50_ms !== undefined
-                            ? formatLatency(leader.latency_p50_ms)
-                            : <UnavailableValue />}
-                        </td>
-                      </>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
 }
 
 function PlatformFlowStep({ step }: { step: (typeof PLATFORM_FLOW_STEPS)[number] }) {
@@ -525,9 +350,6 @@ export function OverviewView() {
   const activeDatasetId = useActiveDatasetId(routeDataset);
   const catalog = useStoreState((state) => state.catalogs.get(activeDatasetId));
   const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
-  const models = useStoreState((state) =>
-    Array.from(state.models.values()).filter((m) => m.dataset_id === activeDatasetId),
-  );
   const evaluations = useStoreState((state) =>
     Array.from(state.evaluations.values()).filter((e) => e.dataset_id === activeDatasetId),
   );
@@ -564,7 +386,6 @@ export function OverviewView() {
       </div>
 
       <div className="ov-grid-bottom">
-        <RoleLeadersPanel models={models} datasetId={activeDatasetId} catalog={catalog} />
         <RecentCampaigns catalogs={catalogs} evaluations={allEvaluations} />
         <DownloadsPanel />
       </div>

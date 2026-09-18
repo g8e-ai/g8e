@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { FeedConnectionState, StreamConnectionState } from '../utils/feed-state';
 import { resolveModelSummary, useStoreState } from '../state/store';
-import { roleLabel, visibleStreamEvents } from '../views/derived';
+import { roleLabel, streamProgressLabel, visibleStreamEvents } from '../views/derived';
 import { EmptyState, ReconcilePlaceholder, StreamStatusIndicator } from './shared';
 import type { LiveEvent } from '../contract/types';
 import { LIVE_EVENT_RETENTION_LIMIT } from '../constants';
@@ -167,9 +167,7 @@ export function LiveEventStream({
                         <code className="stream-chip">{servedTag}</code>
                       )}
                     </td>
-                    <td className="stream-progress">
-                      {event.total > 0 ? `${event.completed}/${event.total}` : '—'}
-                    </td>
+                    <td className="stream-progress">{streamProgressLabel(event)}</td>
                   </tr>
                 );
               })}

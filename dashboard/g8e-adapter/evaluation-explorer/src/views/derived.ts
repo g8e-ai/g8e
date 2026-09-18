@@ -183,7 +183,7 @@ export function retainLatestStreamEvents(events: LiveEvent[], maxEvents: number)
   return events.slice(-maxEvents);
 }
 
-/** Progress from observed_at order, not ingest order. Newest complete is N/N. */
+/** Progress from observed_at order when the full run event history is available. */
 export function restampStreamProgress(events: LiveEvent[]): LiveEvent[] {
   const byRun = new Map<string, LiveEvent[]>();
   for (const event of events) {
@@ -246,8 +246,8 @@ export function assignmentLifecycleEvents(
   );
 }
 
-/** Live stream rows, newest first. Optional limit keeps the last N rows by mirror
- *  feed sequence, then sorts for display. */
+/** Live stream rows, newest first. Progress is restamped in observed_at order
+ *  across the full filtered event set, then the feed tail is kept for display. */
 export function visibleStreamEvents(
   events: LiveEvent[],
   options: { modelFilter: string; kindFilter: string; limit?: number },
@@ -255,10 +255,17 @@ export function visibleStreamEvents(
   const filtered = events
     .filter((event) => options.modelFilter === 'all' || event.variant_id === options.modelFilter)
     .filter((event) => options.kindFilter === 'all' || event.kind === options.kindFilter);
-  const deduped = restampStreamProgress(dedupeStreamEvents(filtered));
+  const deduped = dedupeStreamEvents(filtered);
+  const restamped = restampStreamProgress(deduped);
   const bounded =
-    options.limit !== undefined ? retainLatestStreamEvents(deduped, options.limit) : deduped;
+    options.limit !== undefined ? retainLatestStreamEvents(restamped, options.limit) : restamped;
   return bounded.sort(compareStreamEventsNewestFirst);
+}
+
+/** Progress column for the live stream: point-in-time values stamped at ingest. */
+export function streamProgressLabel(event: LiveEvent): string {
+  if (event.total > 0) return `${event.completed}/${event.total}`;
+  return '—';
 }
 
 /** Linear-interpolation percentile over an unsorted list of observed values. */

@@ -40,7 +40,7 @@ import {
   recordCampaignMatrixTotal,
   type CampaignAdaptContext,
 } from './campaign-adapter';
-import { LIVE_EVENT_RETENTION_LIMIT } from '../constants';
+import { LIVE_EVENT_STORE_LIMIT } from '../constants';
 import { retainLatestStreamEvents, upsertLiveEvent } from '../views/derived';
 
 /** Composite index key: dataset first so the same identity can coexist. */
@@ -386,7 +386,7 @@ export class EvalStore {
             state.eventIds.add(event.event_id);
             state.events = events;
             this.applyLiveEvent(state, event);
-            this.retainLiveEvents(state, LIVE_EVENT_RETENTION_LIMIT);
+            this.retainLiveEvents(state, LIVE_EVENT_STORE_LIMIT);
           }
         }
         break;
@@ -485,7 +485,7 @@ export class EvalStore {
         state.eventIds.add(event.event_id);
         state.events = events;
         this.applyLiveEvent(state, event);
-        this.retainLiveEvents(state, LIVE_EVENT_RETENTION_LIMIT);
+        this.retainLiveEvents(state, LIVE_EVENT_STORE_LIMIT);
       }
     }
     this.state = state;

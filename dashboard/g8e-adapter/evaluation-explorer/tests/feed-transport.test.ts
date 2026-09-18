@@ -13,6 +13,7 @@ import {
 } from '../src/state/feed';
 import { campaignDatasetId } from '../src/state/campaign-adapter';
 import { EvalStore, recordKey } from '../src/state/store';
+import { LIVE_EVENT_STORE_LIMIT } from '../src/constants';
 import {
   fixtureCatalogExploratory,
   fixtureCatalogVerified,
@@ -291,7 +292,7 @@ describe('history backfill', () => {
     }
 
     const events = store.getEvents(runId, datasetId);
-    expect(events.length).toBe(100);
+    expect(events.length).toBe(LIVE_EVENT_STORE_LIMIT);
     expect(events.some((event) => event.event_id === `${runId}:hist-1:lifecycle:queued`)).toBe(false);
     expect(events.some((event) => event.event_id === `${runId}:hist-1000:lifecycle:queued`)).toBe(true);
     expect(events.some((event) => event.event_id === `${runId}:recent-49:lifecycle:queued`)).toBe(true);

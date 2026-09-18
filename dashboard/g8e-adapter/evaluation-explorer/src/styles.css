@@ -999,7 +999,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   min-height: 0;
 }
 .ov-grid-bottom { display: grid; grid-template-columns: minmax(250px, 1fr) minmax(250px, 1fr); gap: 16px; align-items: start; }
-.ov-models-strip { grid-column: 1 / -1; }
+.role-leaders-panel { margin-bottom: 16px; }
 
 /* Recent campaigns mini list */
 .mini-runs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

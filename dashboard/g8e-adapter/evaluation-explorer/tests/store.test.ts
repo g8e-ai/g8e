@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EvalStore } from '../src/state/store';
 import { allFixtureSnapshotRecords, fixtureLiveEvents } from '../src/fixtures/fixtures';
-import { LIVE_EVENT_RETENTION_LIMIT } from '../src/constants';
+import { LIVE_EVENT_STORE_LIMIT } from '../src/constants';
 import type { LiveEvent } from '../src/contract/types';
 
 function loadFixtures(store: EvalStore): void {
@@ -43,8 +43,7 @@ describe('EvalStore', () => {
   });
 
   it('retains only the most recent live events by ingest order', () => {
-    loadFixtures(store);
-    const extra: LiveEvent[] = Array.from({ length: LIVE_EVENT_RETENTION_LIMIT + 5 }, (_, index) => ({
+    const extra: LiveEvent[] = Array.from({ length: LIVE_EVENT_STORE_LIMIT + 5 }, (_, index) => ({
       schema_version: '1.3.0',
       kind: 'stage_updated',
       dataset_id: 'ds-live-a',
@@ -56,16 +55,16 @@ describe('EvalStore', () => {
       completed: 0,
       total: 75,
     }));
-    store.loadFixtures(allFixtureSnapshotRecords, [...fixtureLiveEvents, ...extra]);
-    expect(store.getState().events.length).toBe(LIVE_EVENT_RETENTION_LIMIT);
+    store.loadFixtures([], extra);
+    expect(store.getState().events.length).toBe(LIVE_EVENT_STORE_LIMIT);
     expect(store.getState().events.some((event) => event.event_id === 'evt-retention-0')).toBe(false);
-    expect(store.getState().events.some((event) => event.event_id === 'evt-retention-104')).toBe(true);
+    expect(store.getState().events.some((event) => event.event_id === `evt-retention-${LIVE_EVENT_STORE_LIMIT + 4}`)).toBe(true);
   });
 
   it('keeps newly ingested live events even when observed_at is older than retained rows', () => {
     const runId = 'run-retention-ingest';
     const datasetId = `ds-live-${runId}`;
-    const completions: LiveEvent[] = Array.from({ length: LIVE_EVENT_RETENTION_LIMIT }, (_, index) => ({
+    const completions: LiveEvent[] = Array.from({ length: LIVE_EVENT_STORE_LIMIT }, (_, index) => ({
       schema_version: '1.3.0',
       kind: 'assignment_completed',
       dataset_id: datasetId,
@@ -80,10 +79,10 @@ describe('EvalStore', () => {
       feed_sequence: index + 1,
     }));
     store.loadFixtures([], completions);
-    expect(store.getState().events.length).toBe(LIVE_EVENT_RETENTION_LIMIT);
+    expect(store.getState().events.length).toBe(LIVE_EVENT_STORE_LIMIT);
 
     store.acceptProjection({
-      sequence: LIVE_EVENT_RETENTION_LIMIT + 1,
+      sequence: LIVE_EVENT_STORE_LIMIT + 1,
       record_type: 'projection',
       record_bytes: JSON.stringify({
         schema_version: '1.0.0',
@@ -103,7 +102,7 @@ describe('EvalStore', () => {
 
     const events = store.getEvents(runId, datasetId);
     expect(events.some((event) => event.event_id === `${runId}:assign-live:lifecycle:running`)).toBe(true);
-    expect(events.length).toBe(LIVE_EVENT_RETENTION_LIMIT);
+    expect(events.length).toBe(LIVE_EVENT_STORE_LIMIT);
     expect(events.some((event) => event.event_id === `${runId}:assign-0:result:event`)).toBe(false);
   });
 

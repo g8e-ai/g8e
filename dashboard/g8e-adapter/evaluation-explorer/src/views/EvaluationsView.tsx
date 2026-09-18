@@ -6,6 +6,7 @@ import { type CellContext, type ColumnDef } from '@tanstack/react-table';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useStoreState } from '../state/store';
 import { DataTable } from '../components/DataTable';
+import { RoleLeadersPanel } from '../components/RoleLeadersPanel';
 import {
   EmptyState,
   OutcomeCounts,
@@ -31,6 +32,8 @@ export function EvaluationsView() {
       (b.started_at ?? b.observed_at ?? '').localeCompare(a.started_at ?? a.observed_at ?? ''),
     ),
   );
+  const models = useStoreState((state) => Array.from(state.models.values()));
+  const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
   const connection = useStoreState((state) => state.connection);
 
   const filtered = useMemo(() => {
@@ -129,6 +132,7 @@ export function EvaluationsView() {
 
   return (
     <div className="evaluations-view">
+      <RoleLeadersPanel models={models} catalogs={catalogs} />
       <SectionHeading
         kicker="EVALUATIONS"
         title="Evaluation runs"
