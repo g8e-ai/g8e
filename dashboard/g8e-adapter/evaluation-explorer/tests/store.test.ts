@@ -42,7 +42,7 @@ describe('EvalStore', () => {
     expect(store.getState().events.length).toBe(initialCount);
   });
 
-  it('retains only the most recent live events', () => {
+  it('retains only the most recent live events by ingest order', () => {
     loadFixtures(store);
     const extra: LiveEvent[] = Array.from({ length: LIVE_EVENT_RETENTION_LIMIT + 5 }, (_, index) => ({
       schema_version: '1.3.0',
@@ -60,6 +60,51 @@ describe('EvalStore', () => {
     expect(store.getState().events.length).toBe(LIVE_EVENT_RETENTION_LIMIT);
     expect(store.getState().events.some((event) => event.event_id === 'evt-retention-0')).toBe(false);
     expect(store.getState().events.some((event) => event.event_id === 'evt-retention-104')).toBe(true);
+  });
+
+  it('keeps newly ingested live events even when observed_at is older than retained rows', () => {
+    const runId = 'run-retention-ingest';
+    const datasetId = `ds-live-${runId}`;
+    const completions: LiveEvent[] = Array.from({ length: LIVE_EVENT_RETENTION_LIMIT }, (_, index) => ({
+      schema_version: '1.3.0',
+      kind: 'assignment_completed',
+      dataset_id: datasetId,
+      quality_state: 'live_in_progress',
+      observed_at: `2026-09-17T12:${String(index).padStart(2, '0')}:00Z`,
+      run_id: runId,
+      event_id: `${runId}:assign-${index}:result:event`,
+      assignment_id: `assign-${index}`,
+      lifecycle_status: 'completed',
+      completed: index + 1,
+      total: 75,
+      feed_sequence: index + 1,
+    }));
+    store.loadFixtures([], completions);
+    expect(store.getState().events.length).toBe(LIVE_EVENT_RETENTION_LIMIT);
+
+    store.acceptProjection({
+      sequence: LIVE_EVENT_RETENTION_LIMIT + 1,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: `${runId}:assign-live:lifecycle:running`,
+        record: {
+          assignment_id: 'assign-live',
+          run_id: runId,
+          scenario_id: 'instruction-exact-format',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING',
+          designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
+          variant_id: 'qwen3-4b',
+          observed_at: '2026-09-17T08:00:00Z',
+        },
+      }),
+    });
+
+    const events = store.getEvents(runId, datasetId);
+    expect(events.some((event) => event.event_id === `${runId}:assign-live:lifecycle:running`)).toBe(true);
+    expect(events.length).toBe(LIVE_EVENT_RETENTION_LIMIT);
+    expect(events.some((event) => event.event_id === `${runId}:assign-0:result:event`)).toBe(false);
   });
 
   it('getModels returns models for a specific dataset', () => {

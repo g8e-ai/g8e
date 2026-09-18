@@ -81,6 +81,10 @@ function buildOptions(catalogs: CatalogSnapshot[], liveDatasetIds: string[]): Da
 }
 
 function defaultDatasetId(options: DatasetOption[], liveDatasetIds: string[]): string {
+  // Prefer the newest live campaign on Overview/Live so SSE lifecycle rows match
+  // the active dataset without a manual selector change.
+  const liveRun = options.find((o) => o.available && o.kind === 'live_run');
+  if (liveRun) return liveRun.id;
   const firstAvailable = options.find((o) => o.available)?.id;
   if (firstAvailable) return firstAvailable;
   return liveDatasetIds[0] ?? '';

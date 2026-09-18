@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogSnapshot, EvaluationSummary, LiveEvent, ModelSummary } from '../src/contract/types';
-import { recentCampaignRows, roleLabel, roleLeaderRows, visibleStreamEvents } from '../src/views/derived';
+import { recentCampaignRows, roleLabel, roleLeaderRows, upsertLiveEvent, visibleStreamEvents } from '../src/views/derived';
 
 describe('roleLabel', () => {
   it('maps wire roles to display labels', () => {
@@ -130,6 +130,22 @@ describe('visibleStreamEvents', () => {
     expect(visible[29]?.event_id).toBe('evt-0');
   });
 
+  it('limits to the last N events by feed sequence, not array position', () => {
+    const batch = Array.from({ length: 120 }, (_, index) =>
+      liveEvent({
+        event_id: `assign-${String(index).padStart(3, '0')}`,
+        kind: 'stage_updated',
+        observed_at: '2026-09-17T12:00:00Z',
+        feed_sequence: index + 1,
+      }),
+    );
+    const scrambled = [...batch.slice(60), ...batch.slice(0, 60)];
+    const visible = visibleStreamEvents(scrambled, { modelFilter: 'all', kindFilter: 'all', limit: 100 });
+    expect(visible).toHaveLength(100);
+    expect(visible.some((event) => event.event_id === 'assign-000')).toBe(false);
+    expect(visible.some((event) => event.event_id === 'assign-119')).toBe(true);
+  });
+
   it('sorts by observed_at even when store order is bootstrap newest-first', () => {
     const bootstrapOrder = [
       liveEvent({ event_id: 'evt-3', kind: 'evaluation_started', observed_at: '2026-09-17T08:31:00Z' }),
@@ -201,6 +217,28 @@ describe('visibleStreamEvents', () => {
       'assignment_started:2/2',
       'assignment_completed:1/2',
     ]);
+  });
+
+  it('upsertLiveEvent replaces bootstrap/history twins instead of growing raw rows', () => {
+    const lifecycle = liveEvent({
+      event_id: 'run:a1:lifecycle:COMPLETED',
+      kind: 'assignment_completed',
+      assignment_id: 'a1',
+      observed_at: '2026-09-17T19:24:47Z',
+    });
+    const verified = liveEvent({
+      event_id: 'run:a1:result:verified:event',
+      kind: 'assignment_completed',
+      assignment_id: 'a1',
+      observed_at: '2026-09-17T19:24:47Z',
+      metric_delta: { pass: { value: 1 } },
+    });
+    const first = upsertLiveEvent([], lifecycle);
+    expect(first.events).toHaveLength(1);
+    const second = upsertLiveEvent(first.events, verified);
+    expect(second.events).toHaveLength(1);
+    expect(second.events[0]?.event_id).toBe('run:a1:result:verified:event');
+    expect(second.replacedId).toBe('run:a1:lifecycle:COMPLETED');
   });
 });
 

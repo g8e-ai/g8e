@@ -102,6 +102,35 @@ function preferStreamEvent(current: LiveEvent, candidate: LiveEvent): LiveEvent 
   return candidate.event_id.localeCompare(current.event_id) > 0 ? candidate : current;
 }
 
+/** Merge one live event into the store buffer, replacing a dedupe twin when the
+ *  incoming row is the preferred stream representation. */
+function mergedFeedSequence(left: LiveEvent, right: LiveEvent): number | undefined {
+  const max = Math.max(left.feed_sequence ?? 0, right.feed_sequence ?? 0);
+  return max > 0 ? max : undefined;
+}
+
+export function upsertLiveEvent(events: LiveEvent[], incoming: LiveEvent): { events: LiveEvent[]; replacedId?: string } {
+  const incomingKey = streamDedupeKey(incoming);
+  for (let index = 0; index < events.length; index += 1) {
+    const existing = events[index]!;
+    if (streamDedupeKey(existing) !== incomingKey) continue;
+    if (existing.event_id === incoming.event_id) return { events };
+    const preferred = preferStreamEvent(existing, incoming);
+    const next = [...events];
+    if (preferred === existing) {
+      const feed_sequence = mergedFeedSequence(existing, incoming);
+      if (feed_sequence !== undefined && feed_sequence !== existing.feed_sequence) {
+        next[index] = { ...existing, feed_sequence };
+        return { events: next };
+      }
+      return { events };
+    }
+    next[index] = { ...incoming, feed_sequence: mergedFeedSequence(existing, incoming) };
+    return { events: next, replacedId: existing.event_id };
+  }
+  return { events: [...events, incoming] };
+}
+
 /** One row per assignment start/result; keeps distinct stage ticks. */
 export function dedupeStreamEvents(events: LiveEvent[]): LiveEvent[] {
   const chosen = new Map<string, LiveEvent>();
@@ -133,6 +162,25 @@ function compareStreamEventsNewestFirst(a: LiveEvent, b: LiveEvent): number {
     streamKindRank(b.kind) - streamKindRank(a.kind) ||
     a.event_id.localeCompare(b.event_id)
   );
+}
+
+/** Ascending mirror sequence; used to keep the feed tail, not array position. */
+function compareStreamEventsByFeedSequence(a: LiveEvent, b: LiveEvent): number {
+  return (
+    (a.feed_sequence ?? 0) - (b.feed_sequence ?? 0) ||
+    a.observed_at.localeCompare(b.observed_at) ||
+    a.event_id.localeCompare(b.event_id)
+  );
+}
+
+/** Keep the newest maxEvents rows by mirror feed sequence. */
+export function retainLatestStreamEvents(events: LiveEvent[], maxEvents: number): LiveEvent[] {
+  if (events.length <= maxEvents) return events;
+  const sequenced = events.some((event) => event.feed_sequence !== undefined);
+  if (sequenced) {
+    return [...events].sort(compareStreamEventsByFeedSequence).slice(-maxEvents);
+  }
+  return events.slice(-maxEvents);
 }
 
 /** Progress from observed_at order, not ingest order. Newest complete is N/N. */
@@ -198,7 +246,8 @@ export function assignmentLifecycleEvents(
   );
 }
 
-/** Live stream rows, newest first. Optional limit for tests or compact previews. */
+/** Live stream rows, newest first. Optional limit keeps the last N rows by mirror
+ *  feed sequence, then sorts for display. */
 export function visibleStreamEvents(
   events: LiveEvent[],
   options: { modelFilter: string; kindFilter: string; limit?: number },
@@ -206,8 +255,10 @@ export function visibleStreamEvents(
   const filtered = events
     .filter((event) => options.modelFilter === 'all' || event.variant_id === options.modelFilter)
     .filter((event) => options.kindFilter === 'all' || event.kind === options.kindFilter);
-  const sorted = restampStreamProgress(dedupeStreamEvents(filtered)).sort(compareStreamEventsNewestFirst);
-  return options.limit !== undefined ? sorted.slice(0, options.limit) : sorted;
+  const deduped = restampStreamProgress(dedupeStreamEvents(filtered));
+  const bounded =
+    options.limit !== undefined ? retainLatestStreamEvents(deduped, options.limit) : deduped;
+  return bounded.sort(compareStreamEventsNewestFirst);
 }
 
 /** Linear-interpolation percentile over an unsorted list of observed values. */

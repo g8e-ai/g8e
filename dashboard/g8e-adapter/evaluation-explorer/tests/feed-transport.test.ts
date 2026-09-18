@@ -261,6 +261,41 @@ describe('history backfill', () => {
     expect(store.getState().observedSequence).toBe(3);
     expect(store.getState().errors).toContain('public feed sequence gap');
   });
+
+  it('retains the highest feed sequences after bootstrap-then-history ingest', () => {
+    const runId = 'run-feed-tail';
+    const datasetId = campaignDatasetId(runId);
+    const lifecycleEnvelope = (assignmentId: string, sequence: number) =>
+      snapshotRecord(
+        {
+          schema_version: '1.0.0',
+          message_type: 'PublicAssignmentLifecycleRecord',
+          idempotency_key: `${runId}:${assignmentId}:lifecycle:queued`,
+          record: {
+            assignment_id: assignmentId,
+            run_id: runId,
+            scenario_id: 'instruction-exact-format',
+            lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
+            observed_at: `2026-09-17T10:${String(sequence).padStart(2, '0')}:00Z`,
+          },
+        },
+        sequence,
+      );
+
+    const recent = Array.from({ length: 50 }, (_, index) => lifecycleEnvelope(`recent-${index}`, 951 + index));
+    const snapshot: FeedSnapshot = { ...SNAP, high_water_sequence: 1000, batch_count: 1 };
+    store.initBootstrap(snapshot, recent, 0);
+
+    for (let sequence = 1; sequence <= 1000; sequence += 1) {
+      store.acceptProjection(lifecycleEnvelope(`hist-${sequence}`, sequence));
+    }
+
+    const events = store.getEvents(runId, datasetId);
+    expect(events.length).toBe(100);
+    expect(events.some((event) => event.event_id === `${runId}:hist-1:lifecycle:queued`)).toBe(false);
+    expect(events.some((event) => event.event_id === `${runId}:hist-1000:lifecycle:queued`)).toBe(true);
+    expect(events.some((event) => event.event_id === `${runId}:recent-49:lifecycle:queued`)).toBe(true);
+  });
 });
 
 describe('cross-dataset keying', () => {

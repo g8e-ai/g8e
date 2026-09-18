@@ -468,6 +468,8 @@ export interface LiveEvent extends ViewRecordEnvelope {
   stage_label?: string;
   metric_delta?: Record<string, MetricValue>;
   observed_at: string;
+  /** Mirror feed sequence stamped at client ingest; not part of wire payloads. */
+  feed_sequence?: number;
 }
 
 /** Union of all snapshot records. */

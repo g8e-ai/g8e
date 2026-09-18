@@ -535,7 +535,9 @@ export function OverviewView() {
   const suites = useStoreState((state) =>
     Array.from(state.suites.values()).filter((s) => s.dataset_id === activeDatasetId),
   );
-  const events = useStoreState((state) => state.events);
+  const events = useStoreState((state) =>
+    state.events.filter((event) => event.dataset_id === activeDatasetId),
+  );
   const connection = useStoreState((state) => state.connection);
   const streamConnection = useStoreState((state) => state.streamConnection);
   const isReconciling = useStoreState((state) => state.pendingSnapshot !== null);

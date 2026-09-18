@@ -36,22 +36,22 @@ export function LiveEventStream({
 
   const models = useStoreState((state) => state.models);
 
-  const boundedEvents = useMemo(
-    () => visibleStreamEvents(events, { modelFilter: 'all', kindFilter: 'all', limit: LIVE_EVENT_RETENTION_LIMIT }),
-    [events],
+  const visible = useMemo(
+    () =>
+      visibleStreamEvents(events, {
+        modelFilter,
+        kindFilter,
+        limit: LIVE_EVENT_RETENTION_LIMIT,
+      }),
+    [events, modelFilter, kindFilter],
   );
 
   const modelOptions = useMemo(
     () =>
-      Array.from(new Set(boundedEvents.map((e) => e.variant_id).filter((v): v is string => Boolean(v)))).sort(),
-    [boundedEvents],
+      Array.from(new Set(visible.map((e) => e.variant_id).filter((v): v is string => Boolean(v)))).sort(),
+    [visible],
   );
-  const kindOptions = useMemo(() => Array.from(new Set(boundedEvents.map((e) => e.kind))).sort(), [boundedEvents]);
-
-  const visible = useMemo(
-    () => visibleStreamEvents(boundedEvents, { modelFilter, kindFilter }),
-    [boundedEvents, modelFilter, kindFilter],
-  );
+  const kindOptions = useMemo(() => Array.from(new Set(visible.map((e) => e.kind))).sort(), [visible]);
 
   const pageCount = Math.ceil(visible.length / STREAM_PAGE_SIZE);
   const safePage = Math.min(page, Math.max(0, pageCount - 1));
@@ -110,7 +110,7 @@ export function LiveEventStream({
         <ReconcilePlaceholder label="Loading feed history…" />
       ) : visible.length === 0 ? (
         <EmptyState
-          hasRecords={boundedEvents.length > 0}
+          hasRecords={events.length > 0}
           hasFilters={modelFilter !== 'all' || kindFilter !== 'all'}
           connection={connection}
         />

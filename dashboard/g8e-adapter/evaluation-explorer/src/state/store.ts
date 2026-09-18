@@ -41,6 +41,7 @@ import {
   type CampaignAdaptContext,
 } from './campaign-adapter';
 import { LIVE_EVENT_RETENTION_LIMIT } from '../constants';
+import { retainLatestStreamEvents, upsertLiveEvent } from '../views/derived';
 
 /** Composite index key: dataset first so the same identity can coexist. */
 export function recordKey(datasetId: string, id: string): string {
@@ -238,7 +239,9 @@ export class EvalStore {
     state.feedStatus = withFeedSnapshot(state, snapshot, 'Reconciling feed history.');
     state.feedStatus.connection = 'live';
     void proofCount;
-    for (const record of recentProjections) {
+    // Mirror bootstrap recent_projections are newest-first; reverse so ingest order
+    // matches /history replay (oldest-first) and slice(-N) retention keeps the tail.
+    for (const record of [...recentProjections].reverse()) {
       this.ingestProjection(state, record);
     }
     this.state = state;
@@ -332,19 +335,19 @@ export class EvalStore {
       if (isCampaignProjectionEnvelope(payload)) {
         const adapted = adaptCampaignProjectionEnvelope(payload, this.campaignContext);
         for (const decoded of adapted) {
-          this.indexRecord(state, decoded);
+          this.indexRecord(state, decoded, record.sequence);
         }
         return;
       }
       const decoded = decodeViewRecord(payload.kind, payload);
-      this.indexRecord(state, decoded);
+      this.indexRecord(state, decoded, record.sequence);
     } catch (error) {
       const message = error instanceof ValidationError ? `${error.path}: ${error.message}` : 'invalid public feed record';
       state.errors = [...state.errors, message].slice(-20);
     }
   }
 
-  private indexRecord(state: StoreState, record: SnapshotRecord | LiveEvent): void {
+  private indexRecord(state: StoreState, record: SnapshotRecord | LiveEvent, feedSequence?: number): void {
     switch (record.kind) {
       case 'catalog_snapshot':
         state.catalogs.set(record.dataset_id, record);
@@ -373,10 +376,15 @@ export class EvalStore {
         break;
       default:
         if ('event_id' in record) {
-          const event = record as LiveEvent;
+          const event =
+            feedSequence !== undefined
+              ? ({ ...(record as LiveEvent), feed_sequence: feedSequence } as LiveEvent)
+              : (record as LiveEvent);
           if (!state.eventIds.has(event.event_id)) {
+            const { events, replacedId } = upsertLiveEvent(state.events, event);
+            if (replacedId) state.eventIds.delete(replacedId);
             state.eventIds.add(event.event_id);
-            state.events = [...state.events, event];
+            state.events = events;
             this.applyLiveEvent(state, event);
             this.retainLiveEvents(state, LIVE_EVENT_RETENTION_LIMIT);
           }
@@ -385,15 +393,10 @@ export class EvalStore {
     }
   }
 
-  /** Keep only the most recent live events so SSE/history replay stays bounded. */
+  /** Drop oldest live events by mirror feed sequence so retention tracks the feed tail. */
   private retainLiveEvents(state: StoreState, maxEvents: number): void {
     if (state.events.length <= maxEvents) return;
-    const retained = [...state.events]
-      .sort(
-        (left, right) =>
-          left.observed_at.localeCompare(right.observed_at) || left.event_id.localeCompare(right.event_id),
-      )
-      .slice(-maxEvents);
+    const retained = retainLatestStreamEvents(state.events, maxEvents);
     state.events = retained;
     state.eventIds = new Set(retained.map((event) => event.event_id));
   }
@@ -477,8 +480,10 @@ export class EvalStore {
     }
     for (const event of liveEvents) {
       if (!state.eventIds.has(event.event_id)) {
+        const { events, replacedId } = upsertLiveEvent(state.events, event);
+        if (replacedId) state.eventIds.delete(replacedId);
         state.eventIds.add(event.event_id);
-        state.events = [...state.events, event];
+        state.events = events;
         this.applyLiveEvent(state, event);
         this.retainLiveEvents(state, LIVE_EVENT_RETENTION_LIMIT);
       }
