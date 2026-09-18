@@ -76,7 +76,8 @@ var APIPaths = struct {
 	AuditReport         string `json:"audit_report"`
 	AuditStream         string `json:"audit_stream"`
 	// Public feed routes
-	PublicFeedBatches string `json:"public_feed_batches"`
+	PublicFeedBatches  string `json:"public_feed_batches"`
+	PublicFeedSnapshot string `json:"public_feed_snapshot"`
 	// User routes
 	Users   string `json:"users"`
 	UsersMe string `json:"users_me"`
@@ -240,7 +241,8 @@ var APIPaths = struct {
 	AuditReport:         "/api/v1/audit/report",
 	AuditStream:         "/api/v1/audit/stream",
 	// Public feed routes
-	PublicFeedBatches: "/api/v1/public-feed/batches",
+	PublicFeedBatches:  "/api/v1/public-feed/batches",
+	PublicFeedSnapshot: "/api/v1/public-feed/snapshot",
 	// User routes
 	Users:   "/api/v1/users",
 	UsersMe: "/api/v1/users/me",

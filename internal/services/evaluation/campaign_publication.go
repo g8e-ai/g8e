@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -43,6 +44,11 @@ type campaignPublicationState struct {
 	RunID                 string   `json:"run_id"`
 	PublishedIdempotency  []string `json:"published_idempotency_keys"`
 	LastPublishedSequence int64    `json:"last_published_sequence"`
+}
+
+type campaignFeedPublishRequest struct {
+	IdempotencyKey string
+	Body           []byte
 }
 
 // CampaignPublicationCoordinator projects canonical campaign state into typed
@@ -137,17 +143,14 @@ func (c *CampaignPublicationCoordinator) PublishRunAggregates(ctx context.Contex
 	if err != nil {
 		return 0, err
 	}
-	published := 0
+	requests := make([]campaignFeedPublishRequest, 0, len(records))
 	for _, record := range records {
-		wrote, err := c.publishViewRecord(ctx, runID, record.IdempotencyKey, record.Body)
-		if err != nil {
-			return published, err
-		}
-		if wrote {
-			published++
-		}
+		requests = append(requests, campaignFeedPublishRequest{
+			IdempotencyKey: record.IdempotencyKey,
+			Body:           record.Body,
+		})
 	}
-	return published, nil
+	return c.exportFeedRecords(ctx, runID, requests)
 }
 
 // PublishRunVerification emits the post-verify evaluation_summary revision and
@@ -168,20 +171,22 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 	if err != nil {
 		return 0, err
 	}
-	published := 0
+	requests := make([]campaignFeedPublishRequest, 0, len(records))
 	for _, record := range records {
-		wrote, err := c.publishViewRecord(ctx, runID, record.IdempotencyKey, record.Body)
-		if err != nil {
-			return published, err
-		}
-		if wrote {
-			published++
-		}
+		requests = append(requests, campaignFeedPublishRequest{
+			IdempotencyKey: record.IdempotencyKey,
+			Body:           record.Body,
+		})
+	}
+	published, err := c.exportFeedRecords(ctx, runID, requests)
+	if err != nil {
+		return published, err
 	}
 	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
 	if err != nil {
 		return published, err
 	}
+	verifiedRequests := make([]campaignFeedPublishRequest, 0, len(assignments))
 	for _, assignment := range assignments {
 		result := results[assignment.GetAssignmentId()]
 		if result == nil {
@@ -191,12 +196,28 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 		if err != nil {
 			return published, err
 		}
-		if err := c.publishAssignmentResultWithKey(ctx, assignment, result, category, "verified", AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId())); err != nil {
+		projection, err := BuildAssignmentResultProjection(assignment, result, category, DerivePublicSummaryStatus(result), "verified")
+		if err != nil {
 			return published, err
 		}
-		published++
+		benchmark, err := c.buildAssignmentBenchmarkObservations(ctx, result)
+		if err != nil {
+			return published, err
+		}
+		body, err := MarshalAssignmentResultProjectionEnvelope(AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId()), projection, benchmark)
+		if err != nil {
+			return published, err
+		}
+		verifiedRequests = append(verifiedRequests, campaignFeedPublishRequest{
+			IdempotencyKey: AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId()),
+			Body:           body,
+		})
 	}
-	return published, nil
+	verifiedCount, err := c.exportFeedRecords(ctx, runID, verifiedRequests)
+	if err != nil {
+		return published, err
+	}
+	return published + verifiedCount, nil
 }
 
 // PublishRunCompletion emits the terminal evaluation_summary and completion
@@ -216,17 +237,14 @@ func (c *CampaignPublicationCoordinator) PublishRunCompletion(ctx context.Contex
 	if err != nil {
 		return 0, err
 	}
-	published := 0
+	requests := make([]campaignFeedPublishRequest, 0, len(records))
 	for _, record := range records {
-		wrote, err := c.publishViewRecord(ctx, runID, record.IdempotencyKey, record.Body)
-		if err != nil {
-			return published, err
-		}
-		if wrote {
-			published++
-		}
+		requests = append(requests, campaignFeedPublishRequest{
+			IdempotencyKey: record.IdempotencyKey,
+			Body:           record.Body,
+		})
 	}
-	return published, nil
+	return c.exportFeedRecords(ctx, runID, requests)
 }
 
 // ResetPublicationIdempotency clears host-side publication idempotency so a run
@@ -334,83 +352,107 @@ func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Conte
 }
 
 func (c *CampaignPublicationCoordinator) publishViewRecord(ctx context.Context, runID, idempotencyKey string, body []byte) (bool, error) {
-	state, err := c.loadPublicationState(ctx, runID)
+	count, err := c.exportFeedRecords(ctx, runID, []campaignFeedPublishRequest{{
+		IdempotencyKey: idempotencyKey,
+		Body:           body,
+	}})
 	if err != nil {
 		return false, err
 	}
-	if containsString(state.PublishedIdempotency, idempotencyKey) {
-		return false, nil
-	}
-	nextSequence, err := c.exporter.HighWaterSequence(ctx)
-	if err != nil {
-		return false, err
-	}
-	nextSequence++
-	feedRecord := buildCampaignPublicFeedRecord(nextSequence, body)
-	if err := c.exporter.ExportBatch(ctx, []CampaignPublicFeedRecord{feedRecord}); err != nil {
-		return false, err
-	}
-	state.PublishedIdempotency = append(state.PublishedIdempotency, idempotencyKey)
-	sort.Strings(state.PublishedIdempotency)
-	state.LastPublishedSequence = nextSequence
-	if err := c.savePublicationState(ctx, state); err != nil {
-		return false, err
-	}
-	return true, nil
+	return count > 0, nil
 }
 
 func (c *CampaignPublicationCoordinator) publishAssignmentResultEnvelope(ctx context.Context, runID, idempotencyKey string, projection *evalv1.PublicAssignmentResultProjection, benchmark *PublicBenchmarkObservations) error {
-	state, err := c.loadPublicationState(ctx, runID)
-	if err != nil {
-		return err
-	}
-	if containsString(state.PublishedIdempotency, idempotencyKey) {
-		return nil
-	}
 	body, err := MarshalAssignmentResultProjectionEnvelope(idempotencyKey, projection, benchmark)
 	if err != nil {
 		return err
 	}
-	nextSequence, err := c.exporter.HighWaterSequence(ctx)
-	if err != nil {
-		return err
-	}
-	nextSequence++
-	feedRecord := buildCampaignPublicFeedRecord(nextSequence, body)
-	if err := c.exporter.ExportBatch(ctx, []CampaignPublicFeedRecord{feedRecord}); err != nil {
-		return err
-	}
-	state.PublishedIdempotency = append(state.PublishedIdempotency, idempotencyKey)
-	sort.Strings(state.PublishedIdempotency)
-	state.LastPublishedSequence = nextSequence
-	return c.savePublicationState(ctx, state)
+	_, err = c.exportFeedRecords(ctx, runID, []campaignFeedPublishRequest{{
+		IdempotencyKey: idempotencyKey,
+		Body:           body,
+	}})
+	return err
 }
 
 func (c *CampaignPublicationCoordinator) publishEnvelope(ctx context.Context, runID, idempotencyKey, messageType string, record proto.Message) error {
-	state, err := c.loadPublicationState(ctx, runID)
-	if err != nil {
-		return err
-	}
-	if containsString(state.PublishedIdempotency, idempotencyKey) {
-		return nil
-	}
 	body, err := MarshalCampaignProjectionEnvelope(messageType, idempotencyKey, record)
 	if err != nil {
 		return err
 	}
-	nextSequence, err := c.exporter.HighWaterSequence(ctx)
+	_, err = c.exportFeedRecords(ctx, runID, []campaignFeedPublishRequest{{
+		IdempotencyKey: idempotencyKey,
+		Body:           body,
+	}})
+	return err
+}
+
+func (c *CampaignPublicationCoordinator) exportFeedRecords(ctx context.Context, runID string, requests []campaignFeedPublishRequest) (int, error) {
+	if c == nil || c.exporter == nil || runID == "" {
+		return 0, fmt.Errorf("evaluation: export feed records: %w", constants.ErrMissingRequiredField)
+	}
+	if len(requests) == 0 {
+		return 0, nil
+	}
+	state, err := c.loadPublicationState(ctx, runID)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	nextSequence++
-	feedRecord := buildCampaignPublicFeedRecord(nextSequence, body)
-	if err := c.exporter.ExportBatch(ctx, []CampaignPublicFeedRecord{feedRecord}); err != nil {
-		return err
+	pending := make([]campaignFeedPublishRequest, 0, len(requests))
+	for _, request := range requests {
+		if request.IdempotencyKey == "" || len(request.Body) == 0 {
+			return 0, fmt.Errorf("evaluation: export feed records: %w", constants.ErrMissingRequiredField)
+		}
+		if containsString(state.PublishedIdempotency, request.IdempotencyKey) {
+			continue
+		}
+		pending = append(pending, request)
 	}
-	state.PublishedIdempotency = append(state.PublishedIdempotency, idempotencyKey)
-	sort.Strings(state.PublishedIdempotency)
-	state.LastPublishedSequence = nextSequence
-	return c.savePublicationState(ctx, state)
+	if len(pending) == 0 {
+		return 0, nil
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		nextSequence, err := c.exporter.HighWaterSequence(ctx)
+		if err != nil {
+			return 0, err
+		}
+		records := make([]CampaignPublicFeedRecord, len(pending))
+		for index, request := range pending {
+			records[index] = buildCampaignPublicFeedRecord(nextSequence+1+int64(index), request.Body)
+		}
+		if err := c.exportFeedRecordsInBatches(ctx, records); err != nil {
+			if attempt == 0 && isCampaignFeedSequenceOutOfOrder(err) {
+				continue
+			}
+			return 0, err
+		}
+		for _, request := range pending {
+			state.PublishedIdempotency = append(state.PublishedIdempotency, request.IdempotencyKey)
+		}
+		sort.Strings(state.PublishedIdempotency)
+		state.LastPublishedSequence = records[len(records)-1].Sequence
+		if err := c.savePublicationState(ctx, state); err != nil {
+			return 0, err
+		}
+		return len(pending), nil
+	}
+	return 0, fmt.Errorf("evaluation: export feed records: %w", constants.ErrPublicFeedSequenceOutOfOrder)
+}
+
+func (c *CampaignPublicationCoordinator) exportFeedRecordsInBatches(ctx context.Context, records []CampaignPublicFeedRecord) error {
+	for start := 0; start < len(records); start += constants.PublicFeedBatchMaxRecords {
+		end := start + constants.PublicFeedBatchMaxRecords
+		if end > len(records) {
+			end = len(records)
+		}
+		if err := c.exporter.ExportBatch(ctx, records[start:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isCampaignFeedSequenceOutOfOrder(err error) bool {
+	return err != nil && strings.Contains(err.Error(), constants.ErrPublicFeedSequenceOutOfOrder.Error())
 }
 
 func buildCampaignPublicFeedRecord(sequence int64, body []byte) CampaignPublicFeedRecord {

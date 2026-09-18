@@ -53,6 +53,41 @@ func newPublicFeedController(d PublicFeedControllerDeps) *PublicFeedController {
 // @Failure		405	{string}	string	"Method Not Allowed"
 // @Failure		503	{string}	string	"Public spectator unavailable"
 // @Router			/api/v1/public-feed/batches [post]
+//
+// @Summary		Get public feed snapshot
+// @Description	Returns the gateway publisher high-water sequence and feed-chain hash (mTLS owner CLI only).
+// @Tags			public-feed
+// @Produce		json
+// @Success		200	{object}	models.PublicFeedSnapshot
+// @Failure		404	{string}	string	"Snapshot not found"
+// @Failure		405	{string}	string	"Method Not Allowed"
+// @Failure		503	{string}	string	"Public spectator unavailable"
+// @Router			/api/v1/public-feed/snapshot [get]
+func (c *PublicFeedController) handlePublicFeedSnapshot(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+
+	publisher, err := c.publisher()
+	if err != nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+
+	snapshot, err := publisher.GetSnapshot(r.Context())
+	if err != nil {
+		if errors.Is(err, constants.ErrPublicFeedSnapshotNotFound) {
+			c.responder.Error(w, http.StatusNotFound, err.Error())
+			return
+		}
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("public-feed: snapshot: %w", err).Error())
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, snapshot)
+}
+
 func (c *PublicFeedController) handlePublicFeedBatches(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())

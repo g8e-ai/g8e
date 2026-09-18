@@ -37,17 +37,17 @@ export const PLATFORM_FLOW_STEPS = [
   {
     id: 'workstation',
     label: 'Home PC',
-    detail: 'Windows · Docker · Ollama',
+    detail: 'Docker + Ollama',
   },
   {
     id: 'g8e',
     label: 'g8e stack',
-    detail: 'Gateway · Operator · eval',
+    detail: 'g8eg · g8eo · eval',
   },
   {
     id: 'mirror',
     label: 'Public mirror',
-    detail: 'SSE · Cloudflare tunnel',
+    detail: 'SSE mirror',
   },
   {
     id: 'browser',
@@ -55,6 +55,9 @@ export const PLATFORM_FLOW_STEPS = [
     detail: 'Portfolio viewer',
   },
 ] as const;
+
+export const PLATFORM_OVERVIEW_PORTFOLIO_NOTE =
+  'Live portfolio piece — available for contract work on governed AI and eval infrastructure.';
 
 export const G8E_STACK_COMPONENTS = [
   {

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,14 +36,32 @@ func (e *remoteGatewayCampaignFeedExporter) HighWaterSequence(ctx context.Contex
 	if cached > 0 {
 		return cached, nil
 	}
-	bootstrap, err := fetchPublicMirrorBootstrap(ctx)
-	if err != nil {
-		return 0, err
-	}
-	return bootstrap.Snapshot.HighWaterSequence, nil
+	return e.fetchGatewayHighWater(ctx)
 }
 
 func (e *remoteGatewayCampaignFeedExporter) ExportBatch(ctx context.Context, records []evaluation.CampaignPublicFeedRecord) error {
+	for attempt := 0; attempt < 2; attempt++ {
+		err := e.exportBatchOnce(ctx, records)
+		if err == nil {
+			return nil
+		}
+		if attempt == 1 || !isPublicFeedSequenceOutOfOrder(err) {
+			return err
+		}
+		e.invalidateHighWater()
+		nextSequence, err := e.HighWaterSequence(ctx)
+		if err != nil {
+			return fmt.Errorf("campaign publication: gateway export batch: refresh high water: %w", err)
+		}
+		nextSequence++
+		for index := range records {
+			records[index].Sequence = nextSequence + int64(index)
+		}
+	}
+	return fmt.Errorf("campaign publication: gateway export batch: sequence retry exhausted")
+}
+
+func (e *remoteGatewayCampaignFeedExporter) exportBatchOnce(ctx context.Context, records []evaluation.CampaignPublicFeedRecord) error {
 	batch := make([]models.PublicFeedRecord, len(records))
 	for index, record := range records {
 		batch[index] = models.PublicFeedRecord{
@@ -64,6 +83,41 @@ func (e *remoteGatewayCampaignFeedExporter) ExportBatch(ctx context.Context, rec
 	e.highWater = resp.HighWaterSequence
 	e.mu.Unlock()
 	return nil
+}
+
+func (e *remoteGatewayCampaignFeedExporter) fetchGatewayHighWater(ctx context.Context) (int64, error) {
+	body, err := e.client.Get(constants.APIPaths.PublicFeedSnapshot)
+	if err != nil {
+		if isPublicFeedSnapshotNotFound(err) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("campaign publication: gateway public feed snapshot: %w", err)
+	}
+	var snapshot models.PublicFeedSnapshot
+	if err := json.Unmarshal(body, &snapshot); err != nil {
+		return 0, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	e.mu.Lock()
+	if snapshot.HighWaterSequence > e.highWater {
+		e.highWater = snapshot.HighWaterSequence
+	}
+	highWater := e.highWater
+	e.mu.Unlock()
+	return highWater, nil
+}
+
+func (e *remoteGatewayCampaignFeedExporter) invalidateHighWater() {
+	e.mu.Lock()
+	e.highWater = 0
+	e.mu.Unlock()
+}
+
+func isPublicFeedSequenceOutOfOrder(err error) bool {
+	return err != nil && strings.Contains(err.Error(), constants.ErrPublicFeedSequenceOutOfOrder.Error())
+}
+
+func isPublicFeedSnapshotNotFound(err error) bool {
+	return err != nil && strings.Contains(err.Error(), constants.ErrPublicFeedSnapshotNotFound.Error())
 }
 
 func isGatewayHealthy() bool {

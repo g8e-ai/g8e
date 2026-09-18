@@ -10,6 +10,7 @@ package evaluation
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -33,6 +34,52 @@ func (r *recordingCampaignFeedExporter) HighWaterSequence(context.Context) (int6
 func (r *recordingCampaignFeedExporter) ExportBatch(_ context.Context, records []CampaignPublicFeedRecord) error {
 	r.records = append(r.records, records...)
 	return nil
+}
+
+type sequenceTrackingCampaignFeedExporter struct {
+	highWater int64
+	batches   [][]CampaignPublicFeedRecord
+}
+
+func (s *sequenceTrackingCampaignFeedExporter) HighWaterSequence(context.Context) (int64, error) {
+	return s.highWater, nil
+}
+
+func (s *sequenceTrackingCampaignFeedExporter) ExportBatch(_ context.Context, records []CampaignPublicFeedRecord) error {
+	if len(records) == 0 {
+		return nil
+	}
+	expected := s.highWater + 1
+	if records[0].Sequence != expected {
+		return fmt.Errorf("public-feed: batch sequence is out of order")
+	}
+	for index, record := range records {
+		if record.Sequence != expected+int64(index) {
+			return fmt.Errorf("public-feed: batch sequence is out of order")
+		}
+	}
+	s.batches = append(s.batches, append([]CampaignPublicFeedRecord(nil), records...))
+	s.highWater = records[len(records)-1].Sequence
+	return nil
+}
+
+func TestCampaignPublicationCoordinatorExportFeedRecordsBatches(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	exporter := &sequenceTrackingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(NewStore(files), files, exporter, nil)
+	requests := make([]campaignFeedPublishRequest, 0, 3)
+	for index := 0; index < 3; index++ {
+		requests = append(requests, campaignFeedPublishRequest{
+			IdempotencyKey: fmt.Sprintf("run-1:key-%d", index),
+			Body:           []byte(fmt.Sprintf("{\"index\":%d}", index)),
+		})
+	}
+	count, err := coordinator.exportFeedRecords(context.Background(), "run-1", requests)
+	require.NoError(t, err)
+	assert.Equal(t, 3, count)
+	assert.Len(t, exporter.batches, 1)
+	assert.Len(t, exporter.batches[0], 3)
+	assert.Equal(t, int64(3), exporter.highWater)
 }
 
 func TestCampaignPublicationCoordinatorIdempotentLifecyclePublish(t *testing.T) {

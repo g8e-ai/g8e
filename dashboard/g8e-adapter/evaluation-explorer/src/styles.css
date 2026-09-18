@@ -844,76 +844,105 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   flex-direction: column;
   gap: 6px;
 }
-.sys-platform-solo {
+.sys-platform-flow-heading {
   margin: 0;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--fg-dim);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--fg-dim);
 }
 .sys-platform-flow {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
-  align-items: stretch;
-  gap: 2px;
+  flex-direction: column;
 }
 .sys-platform-flow > li {
-  display: flex;
-  align-items: center;
-  flex: 1 1 0;
-  min-width: 0;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: stretch;
 }
-.sys-platform-step {
+.sys-platform-flow-rail {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  align-items: center;
+  width: 22px;
+  min-height: 100%;
+  padding-top: 11px;
+}
+.sys-platform-flow-node {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: var(--bg-elev);
+  box-shadow: 0 0 0 2px var(--bg-elev);
+}
+.sys-platform-flow > li.sys-platform-step-accent .sys-platform-flow-node {
+  background: var(--accent);
+}
+.sys-platform-flow-connector {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
   width: 100%;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-elev2);
+  min-height: 18px;
+  padding: 3px 0 2px;
 }
-.sys-platform-step-accent {
-  border-color: var(--accent);
-  background: var(--navy);
+.sys-platform-flow-connector-line {
+  flex: 1 1 auto;
+  width: 2px;
+  min-height: 10px;
+  background: linear-gradient(to bottom, var(--accent), color-mix(in srgb, var(--accent) 55%, transparent));
+  border-radius: 1px;
 }
-.sys-platform-step-label {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--fg);
-  line-height: 1.25;
-}
-.sys-platform-step-accent .sys-platform-step-label { color: var(--accent); }
-.sys-platform-step-detail {
-  font-size: 10.5px;
-  line-height: 1.3;
-  color: var(--fg-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sys-platform-step-arrow {
-  flex: 0 0 auto;
-  padding: 0 1px;
+.sys-platform-flow-connector-arrow {
+  flex-shrink: 0;
   font-size: 11px;
   line-height: 1;
   color: var(--accent);
 }
-.sys-platform-measure {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--fg-muted);
-}
-.sys-platform-portfolio {
-  margin: 0;
-  padding: 8px 10px;
+.sys-platform-flow-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  margin-bottom: 6px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg-elev2);
+}
+.sys-platform-flow > li:last-child .sys-platform-flow-content {
+  margin-bottom: 0;
+}
+.sys-platform-flow-content strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg);
+  line-height: 1.25;
+}
+.sys-platform-flow-content span {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--fg-dim);
+}
+.sys-platform-flow > li.sys-platform-step-accent .sys-platform-flow-content {
+  border-color: var(--accent);
+  background: var(--navy);
+}
+.sys-platform-flow > li.sys-platform-step-accent .sys-platform-flow-content strong { color: var(--accent); }
+.sys-platform-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sys-platform-cta-note {
+  margin: 0;
   font-size: 12px;
   line-height: 1.45;
   color: var(--fg-muted);

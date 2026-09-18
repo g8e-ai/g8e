@@ -98,3 +98,52 @@ func TestPublicFeedControllerHandlePublicFeedBatches_AcceptsBatch(t *testing.T) 
 
 	require.NoError(t, runtime.Stop(t.Context()))
 }
+
+func TestPublicFeedControllerHandlePublicFeedSnapshot_ReturnsHighWater(t *testing.T) {
+	privatePort := mustFreePort(t)
+	publicPort := mustFreePort(t)
+	runtime, err := NewPublicSpectatorRuntime(PublicSpectatorConfig{
+		Enabled:              true,
+		PrivateListenAddress: "127.0.0.1:" + privatePort,
+		PublicListenAddress:  "127.0.0.1:" + publicPort,
+		SourceID:             "test-source",
+	}, newProducerFileSvc(t), testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, runtime.Start(t.Context()))
+
+	logger := testutil.NewTestLogger()
+	controller := newPublicFeedController(PublicFeedControllerDeps{
+		Logger:    logger,
+		Responder: response.NewWriter(logger),
+		Spectator: func() *PublicSpectatorRuntime { return runtime },
+	})
+
+	recordBytes, err := json.Marshal(map[string]any{"campaign_id": "campaign-1"})
+	require.NoError(t, err)
+	recordHash := sha256.Sum256(recordBytes)
+	record := models.PublicFeedRecord{
+		Sequence:    1,
+		RecordType:  models.PublicFeedRecordTypeProjection,
+		RecordHash:  hex.EncodeToString(recordHash[:]),
+		RecordBytes: string(recordBytes),
+	}
+	body, err := json.Marshal([]models.PublicFeedRecord{record})
+	require.NoError(t, err)
+
+	postReq := httptest.NewRequest(http.MethodPost, constants.APIPaths.PublicFeedBatches, bytes.NewReader(body))
+	postRR := httptest.NewRecorder()
+	controller.handlePublicFeedBatches(postRR, postReq)
+	require.Equal(t, http.StatusOK, postRR.Code)
+
+	getReq := httptest.NewRequest(http.MethodGet, constants.APIPaths.PublicFeedSnapshot, nil)
+	getRR := httptest.NewRecorder()
+	controller.handlePublicFeedSnapshot(getRR, getReq)
+	require.Equal(t, http.StatusOK, getRR.Code)
+
+	var snapshot models.PublicFeedSnapshot
+	require.NoError(t, json.Unmarshal(getRR.Body.Bytes(), &snapshot))
+	assert.Equal(t, int64(1), snapshot.HighWaterSequence)
+	assert.NotEmpty(t, snapshot.FeedChainHash)
+
+	require.NoError(t, runtime.Stop(t.Context()))
+}

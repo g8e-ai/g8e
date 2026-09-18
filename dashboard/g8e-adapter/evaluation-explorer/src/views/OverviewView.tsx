@@ -11,9 +11,7 @@ import {
   PLATFORM_CONTACT_CALENDLY,
   PLATFORM_FLOW_STEPS,
   PLATFORM_LEDE,
-  PLATFORM_MEASUREMENT_SUMMARY,
-  PLATFORM_PORTFOLIO_NOTE,
-  PLATFORM_SOLO_NOTE,
+  PLATFORM_OVERVIEW_PORTFOLIO_NOTE,
 } from '../content/platform';
 import { roleScopeFor } from '../content/roles';
 import { useActiveDatasetId } from '../state/dataset';
@@ -226,19 +224,26 @@ function RoleLeadersPanel({
 function PlatformFlow() {
   return (
     <div className="sys-platform-flow-wrap">
-      <p className="sys-platform-solo">{PLATFORM_SOLO_NOTE}</p>
+      <p className="sys-platform-flow-heading" aria-hidden="true">Outbound only</p>
       <ol className="sys-platform-flow" aria-label="Platform data flow, outbound only">
         {PLATFORM_FLOW_STEPS.map((step, index) => (
-          <li key={step.id}>
-            <span
-              className={`sys-platform-step${step.id === 'g8e' ? ' sys-platform-step-accent' : ''}`}
-            >
-              <span className="sys-platform-step-label">{step.label}</span>
-              <span className="sys-platform-step-detail">{step.detail}</span>
+          <li
+            key={step.id}
+            className={step.id === 'g8e' ? 'sys-platform-step-accent' : undefined}
+          >
+            <span className="sys-platform-flow-rail" aria-hidden="true">
+              <span className="sys-platform-flow-node" />
+              {index < PLATFORM_FLOW_STEPS.length - 1 ? (
+                <span className="sys-platform-flow-connector">
+                  <span className="sys-platform-flow-connector-line" />
+                  <span className="sys-platform-flow-connector-arrow">↓</span>
+                </span>
+              ) : null}
             </span>
-            {index < PLATFORM_FLOW_STEPS.length - 1 ? (
-              <span className="sys-platform-step-arrow" aria-hidden="true">→</span>
-            ) : null}
+            <div className="sys-platform-flow-content">
+              <strong>{step.label}</strong>
+              <span>{step.detail}</span>
+            </div>
           </li>
         ))}
       </ol>
@@ -313,19 +318,20 @@ function SystemOverviewPanel({
       <div className="sys-platform">
         <p className="sys-platform-lede">{PLATFORM_LEDE}</p>
         <PlatformFlow />
-        <p className="sys-platform-measure">{PLATFORM_MEASUREMENT_SUMMARY}</p>
-        <p className="sys-platform-portfolio">{PLATFORM_PORTFOLIO_NOTE}</p>
-        <div className="sys-platform-links">
-          <a
-            className="sys-platform-cta-hire"
-            href={PLATFORM_CONTACT_CALENDLY}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Hire Me
-          </a>
-          <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">g8e on GitHub</a>
-          <Link to="/methodology#architecture">Architecture &amp; host specs</Link>
+        <div className="sys-platform-cta">
+          <p className="sys-platform-cta-note">{PLATFORM_OVERVIEW_PORTFOLIO_NOTE}</p>
+          <div className="sys-platform-links">
+            <a
+              className="sys-platform-cta-hire"
+              href={PLATFORM_CONTACT_CALENDLY}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Hire Me
+            </a>
+            <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">g8e on GitHub</a>
+            <Link to="/methodology#architecture">Architecture &amp; host specs</Link>
+          </div>
         </div>
       </div>
 
