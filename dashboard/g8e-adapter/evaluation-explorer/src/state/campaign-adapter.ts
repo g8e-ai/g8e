@@ -499,6 +499,31 @@ function mapMetricValue(value: unknown): MetricValue | undefined {
   return undefined;
 }
 
+function decomposedScoreKey(score: Record<string, unknown>): string | undefined {
+  const dimension = optionalString(score.dimension);
+  if (dimension) return dimension;
+  const scoreId = optionalString(score.score_id);
+  if (!scoreId) return undefined;
+  if (!scoreId.includes(':')) return scoreId;
+  const suffix = scoreId.slice(scoreId.lastIndexOf(':') + 1).replace(/-/g, '_');
+  return suffix || undefined;
+}
+
+function synthesizePassMetric(metrics: Record<string, MetricValue>): void {
+  if (metrics.task_score) {
+    metrics.pass = metrics.task_score;
+    return;
+  }
+  const rate = metrics.deterministic_pass_rate;
+  if (rate?.value !== undefined) {
+    metrics.pass = { value: rate.value >= 1 ? 1 : 0 };
+    return;
+  }
+  if (!metrics.pass) {
+    metrics.pass = { unavailable_reason: 'task score not published' };
+  }
+}
+
 function mapDecomposedScores(value: unknown): Record<string, MetricValue> {
   if (!Array.isArray(value)) {
     return { pass: { unavailable_reason: 'decomposed scores not published' } };
@@ -507,19 +532,15 @@ function mapDecomposedScores(value: unknown): Record<string, MetricValue> {
   for (const entry of value) {
     if (typeof entry !== 'object' || entry === null) continue;
     const score = entry as Record<string, unknown>;
-    const scoreId = optionalString(score.score_id);
-    if (!scoreId) continue;
+    const key = decomposedScoreKey(score);
+    if (!key) continue;
     if (typeof score.value === 'number' && Number.isFinite(score.value)) {
-      metrics[scoreId] = { value: score.value };
+      metrics[key] = { value: score.value };
     } else {
-      metrics[scoreId] = { unavailable_reason: 'score value unavailable' };
+      metrics[key] = { unavailable_reason: 'score value unavailable' };
     }
   }
-  if (metrics.task_score) {
-    metrics.pass = metrics.task_score;
-  } else if (!metrics.pass) {
-    metrics.pass = { unavailable_reason: 'task score not published' };
-  }
+  synthesizePassMetric(metrics);
   return metrics;
 }
 

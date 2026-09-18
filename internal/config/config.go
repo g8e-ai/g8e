@@ -106,6 +106,9 @@ type LoadOptions struct {
 	// read-only provider-boundary hardware observer.
 	ProviderBoundaryObserverEnabled bool
 	ProviderBoundaryObserverID      string
+	// ProviderBoundaryObserverOllamaEnabled opts the observer into remote
+	// Ollama service lifecycle commands on the provider host.
+	ProviderBoundaryObserverOllamaEnabled bool
 }
 
 // GatewayConfig holds configuration for gateway mode.
@@ -225,6 +228,9 @@ type InferenceConfig struct {
 type ProviderBoundaryObserverConfig struct {
 	Enabled    bool
 	ObserverID string
+	// OllamaEnabled opts the observer into remote Ollama service lifecycle
+	// commands (stop/start/status) on the provider host.
+	OllamaEnabled bool
 }
 
 // Config holds all configuration for g8eo
@@ -727,8 +733,9 @@ func newProviderBoundaryObserverConfig(opts LoadOptions) ProviderBoundaryObserve
 		observerID = "g8e-provider-boundary-observer"
 	}
 	return ProviderBoundaryObserverConfig{
-		Enabled:    opts.ProviderBoundaryObserverEnabled,
-		ObserverID: observerID,
+		Enabled:       opts.ProviderBoundaryObserverEnabled,
+		ObserverID:    observerID,
+		OllamaEnabled: opts.ProviderBoundaryObserverOllamaEnabled,
 	}
 }
 

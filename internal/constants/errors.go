@@ -1450,6 +1450,7 @@ var (
 	ErrProviderBoundaryObserverNotFound   = errors.New("provider observer: no provider-boundary observer operator session found")
 	ErrProviderBoundaryObserverAmbiguous  = errors.New("provider observer: multiple provider-boundary observer sessions; explicit target required")
 	ErrProviderBoundaryObserverNotCapable = errors.New("provider observer: target operator session is not a provider-boundary observer")
+	ErrProviderBoundaryObserverOllamaNotCapable = errors.New("provider observer: target operator session did not opt in to remote Ollama service control (--ollama)")
 	ErrInferenceModelOverrideDenied       = errors.New("inference: model override not permitted by role authority")
 	ErrInferenceOutcomeUnknown            = errors.New("inference: dispatch deadline exceeded; remote provider outcome unknown")
 	ErrInferenceGovernanceRejected        = errors.New("inference: governance rejected the transaction")

@@ -1,12 +1,44 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogSnapshot, EvaluationSummary, LiveEvent, ModelSummary } from '../src/contract/types';
-import { recentCampaignRows, roleLabel, roleLeaderRows, restampStreamProgress, streamProgressLabel, upsertLiveEvent, visibleStreamEvents } from '../src/views/derived';
+import {
+  assignmentMetricEntries,
+  assignmentMetricFormatter,
+  recentCampaignRows,
+  roleLabel,
+  roleLeaderRows,
+  restampStreamProgress,
+  streamProgressLabel,
+  upsertLiveEvent,
+  visibleStreamEvents,
+} from '../src/views/derived';
 
 describe('roleLabel', () => {
   it('maps wire roles to display labels', () => {
     expect(roleLabel('primary')).toBe('Primary');
     expect(roleLabel('assistant')).toBe('Assistant');
     expect(roleLabel('lite')).toBe('Lite');
+  });
+});
+
+describe('assignmentMetricEntries', () => {
+  it('orders scoring metrics and hides task_score when pass is present', () => {
+    const entries = assignmentMetricEntries({
+      task_score: { value: 1 },
+      pass: { value: 1 },
+      deterministic_pass_rate: { value: 1 },
+      latency_ms: { value: 780 },
+    });
+    expect(entries.map((entry) => entry.key)).toEqual(['pass', 'deterministic_pass_rate', 'latency_ms']);
+    expect(entries[0]?.label).toBe('Pass');
+    expect(entries[1]?.label).toBe('Deterministic pass rate');
+  });
+});
+
+describe('assignmentMetricFormatter', () => {
+  it('formats pass outcomes and rates for display', () => {
+    expect(assignmentMetricFormatter('pass')(1)).toBe('Pass');
+    expect(assignmentMetricFormatter('pass')(0)).toBe('Fail');
+    expect(assignmentMetricFormatter('deterministic_pass_rate')(1)).toBe('100.0%');
   });
 });
 

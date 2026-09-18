@@ -42,4 +42,14 @@ type RuntimeConfig struct {
 	// --provider-boundary-observer-enabled, marking it as the read-only
 	// remote hardware observer on the approved provider host.
 	ProviderBoundaryObserverEnabled bool `json:"provider_boundary_observer_enabled"`
+
+	// ProviderBoundaryObserverOllamaEnabled is true when the provider-boundary
+	// Observer Operator started with --ollama, opting in to remote Ollama
+	// service lifecycle commands (stop/start/status) on the provider host.
+	ProviderBoundaryObserverOllamaEnabled bool `json:"provider_boundary_observer_ollama_enabled,omitempty"`
+
+	// Platform is the operator host GOOS recorded at startup (for example
+	// "linux" or "windows") so remote callers can choose host-appropriate
+	// settle commands.
+	Platform string `json:"platform,omitempty"`
 }

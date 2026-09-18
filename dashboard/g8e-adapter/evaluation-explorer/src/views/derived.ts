@@ -20,6 +20,7 @@ import type {
   CatalogSnapshot,
   EvaluationSummary,
   LiveEvent,
+  MetricValue,
   ModelRole,
   ModelSummary,
   QualityState,
@@ -27,6 +28,7 @@ import type {
   TerminalStatus,
   VerifierState,
 } from '../contract/types';
+import { formatLatency, formatNumber, formatPercent, formatTokens } from '../utils/format';
 
 const FAILURE_TERMINAL_STATUSES = new Set<TerminalStatus>([
   'model_failed',
@@ -299,6 +301,52 @@ export function sumDefined(values: Array<number | undefined>): { total: number; 
  *  attempt had no graded metric (for example a model_failed terminal). */
 export function assignmentPass(assignment: AssignmentResult): number | undefined {
   return assignment.metric_values.pass?.value;
+}
+
+const ASSIGNMENT_METRIC_LABELS: Record<string, string> = {
+  pass: 'Pass',
+  task_score: 'Task score',
+  deterministic_pass_rate: 'Deterministic pass rate',
+  latency_ms: 'Latency',
+};
+
+const ASSIGNMENT_METRIC_ORDER = ['pass', 'deterministic_pass_rate', 'latency_ms', 'task_score'];
+
+function assignmentMetricLabel(key: string): string {
+  const known = ASSIGNMENT_METRIC_LABELS[key];
+  if (known) return known;
+  return key.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function assignmentMetricSortIndex(key: string): number {
+  const index = ASSIGNMENT_METRIC_ORDER.indexOf(key);
+  return index === -1 ? ASSIGNMENT_METRIC_ORDER.length : index;
+}
+
+/** Ordered, labeled assignment scoring metrics for the detail view. Hides
+ *  internal wire keys when a synthesized pass metric is already present. */
+export function assignmentMetricEntries(
+  metricValues: Record<string, MetricValue>,
+): Array<{ key: string; label: string; metric: MetricValue }> {
+  const hideWhenPassPresent = metricValues.pass !== undefined ? new Set(['task_score']) : new Set<string>();
+  return Object.entries(metricValues)
+    .filter(([key]) => !hideWhenPassPresent.has(key))
+    .sort(([left], [right]) => {
+      const byOrder = assignmentMetricSortIndex(left) - assignmentMetricSortIndex(right);
+      return byOrder !== 0 ? byOrder : left.localeCompare(right);
+    })
+    .map(([key, metric]) => ({ key, label: assignmentMetricLabel(key), metric }));
+}
+
+/** Formatter for one assignment-level scoring metric card. */
+export function assignmentMetricFormatter(key: string): (value: number) => string {
+  if (key.includes('latency')) return formatLatency;
+  if (key.includes('token')) return formatTokens;
+  if (key === 'deterministic_pass_rate' || key.endsWith('_rate')) return formatPercent;
+  if (key === 'pass' || key === 'task_score') {
+    return (value: number) => (value === 1 ? 'Pass' : value === 0 ? 'Fail' : formatNumber(value));
+  }
+  return formatNumber;
 }
 
 /** True when the assignment has no provider resource observation at all:

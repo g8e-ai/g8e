@@ -69,6 +69,7 @@ type ServeOperatorOptions struct {
 
 	ProviderBoundaryObserverEnabled bool
 	ProviderBoundaryObserverID      string
+	ProviderBoundaryObserverOllamaEnabled bool
 }
 
 // resolveOperatorEndpoint returns the trimmed endpoint if non-empty, otherwise the default endpoint.
@@ -260,8 +261,9 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 		InferenceCampaignID:          opts.InferenceCampaignID,
 		InferenceModelRegistryDigest: opts.InferenceModelRegistryDigest,
 
-		ProviderBoundaryObserverEnabled: opts.ProviderBoundaryObserverEnabled,
-		ProviderBoundaryObserverID:      opts.ProviderBoundaryObserverID,
+		ProviderBoundaryObserverEnabled:       opts.ProviderBoundaryObserverEnabled,
+		ProviderBoundaryObserverID:            opts.ProviderBoundaryObserverID,
+		ProviderBoundaryObserverOllamaEnabled: opts.ProviderBoundaryObserverOllamaEnabled,
 	}
 }
 

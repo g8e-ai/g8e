@@ -296,6 +296,10 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	operatorID := op.ID
 	operatorSessionID := op.OperatorSessionID
 
+	if err := validateOllamaServiceDispatch(op, req.ActionType, req.Payload); err != nil {
+		return nil, err
+	}
+
 	// 2. Fetch the gateway's current state root.
 	stateRoot, err := d.stateRootProvider.GetCurrentStateRoot()
 	if err != nil {
@@ -715,7 +719,11 @@ func (c *DispatchController) HandleDispatch(w http.ResponseWriter, r *http.Reque
 	})
 	if err != nil {
 		c.logger.Error("dispatch: command dispatch failed", "error", err)
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		status := http.StatusInternalServerError
+		if errors.Is(err, constants.ErrProviderBoundaryObserverOllamaNotCapable) {
+			status = http.StatusUnprocessableEntity
+		}
+		c.responder.Error(w, status, err.Error())
 		return
 	}
 

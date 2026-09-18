@@ -122,6 +122,7 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 							entry["inference_ollama_endpoint"] = op.RuntimeConfig.InferenceOllamaEndpoint
 						}
 						entry["provider_boundary_observer_enabled"] = op.RuntimeConfig.ProviderBoundaryObserverEnabled
+						entry["provider_boundary_observer_ollama_enabled"] = op.RuntimeConfig.ProviderBoundaryObserverOllamaEnabled
 					}
 					entries = append(entries, entry)
 				}
@@ -175,6 +176,7 @@ func operatorStartCmd() *cobra.Command {
 	var inferenceModelRegistryDigest string
 	var providerBoundaryObserverEnabled bool
 	var providerBoundaryObserverID string
+	var providerBoundaryObserverOllamaEnabled bool
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -203,8 +205,9 @@ func operatorStartCmd() *cobra.Command {
 				InferenceKeepAlive:              inferenceKeepAlive,
 				InferenceCampaignID:             inferenceCampaignID,
 				InferenceModelRegistryDigest:    inferenceModelRegistryDigest,
-				ProviderBoundaryObserverEnabled: providerBoundaryObserverEnabled,
-				ProviderBoundaryObserverID:      providerBoundaryObserverID,
+				ProviderBoundaryObserverEnabled:       providerBoundaryObserverEnabled,
+				ProviderBoundaryObserverID:            providerBoundaryObserverID,
+				ProviderBoundaryObserverOllamaEnabled: providerBoundaryObserverOllamaEnabled,
 			}
 
 			// Run operator (this blocks until shutdown)
@@ -242,6 +245,7 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&inferenceModelRegistryDigest, "inference-model-registry-digest", "", "SHA-256 digest of the frozen campaign model registry")
 	cmd.Flags().BoolVar(&providerBoundaryObserverEnabled, "provider-boundary-observer-enabled", false, "Enable read-only provider-boundary hardware observation on the approved provider host")
 	cmd.Flags().StringVar(&providerBoundaryObserverID, "provider-boundary-observer-id", "", "Stable observer identity pseudonym")
+	cmd.Flags().BoolVar(&providerBoundaryObserverOllamaEnabled, "ollama", false, "Allow remote Ollama service lifecycle commands (stop/start/status) on this provider-boundary observer host")
 
 	return cmd
 }

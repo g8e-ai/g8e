@@ -621,6 +621,14 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 		return
 	}
 
+	if err := validateOllamaServiceDispatch(op, intent.ActionType, intent.Payload); err != nil {
+		b.logger.Warn("PubSub cmd: relay: ollama service dispatch rejected",
+			"channel", channel,
+			"operator_session_id", intent.OperatorSessionId,
+			"error", err.Error())
+		return
+	}
+
 	// 4. Fetch the gateway's current state root.
 	stateRoot, err := stateRootProvider.GetCurrentStateRoot()
 	if err != nil {

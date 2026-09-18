@@ -20,7 +20,7 @@ import {
   formatTokens,
   formatNumber,
 } from '../components/shared';
-import { assignmentLifecycleEvents, roleLabel } from './derived';
+import { assignmentLifecycleEvents, assignmentMetricEntries, assignmentMetricFormatter, roleLabel } from './derived';
 
 function observationLabel(value: string): string {
   return value.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
@@ -52,6 +52,8 @@ export function AssignmentDetailView() {
 
   if (!assignmentId || !runId) return <ErrorState message="No assignment selected." />;
   if (!assignment) return <EmptyState hasRecords={false} hasFilters={false} connection={connection} />;
+
+  const eligibleMetrics = assignmentMetricEntries(assignment.metric_values);
 
   return (
     <div className="assignment-detail">
@@ -160,16 +162,16 @@ export function AssignmentDetailView() {
 
       <section className="assignment-metrics">
         <h2>Eligible metric values</h2>
-        {Object.keys(assignment.metric_values).length === 0 ? (
+        {eligibleMetrics.length === 0 ? (
           <p>No eligible metric values for this assignment.</p>
         ) : (
           <div className="metric-grid">
-            {Object.entries(assignment.metric_values).map(([key, metric]) => (
+            {eligibleMetrics.map(({ key, label, metric }) => (
               <MetricCard
                 key={key}
-                label={key}
+                label={label}
                 metric={metric}
-                formatter={key.includes('latency') ? formatLatency : key.includes('token') ? formatTokens : formatNumber}
+                formatter={assignmentMetricFormatter(key)}
               />
             ))}
           </div>

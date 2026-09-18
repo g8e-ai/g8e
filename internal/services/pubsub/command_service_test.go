@@ -169,6 +169,26 @@ func TestCommandService_HandleExecutionRequest(t *testing.T) {
 		svc.HandleExecutionRequest(context.Background(), msg)
 		// Should log error and return without panic
 	})
+
+	t.Run("rejects ollama service command without opt in", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		cfg.ProviderBoundaryObserver.Enabled = true
+		logger := testutil.NewTestLogger()
+		execSvc := execution.NewExecutionService(cfg, logger)
+		svc := NewCommandService(cfg, logger, execSvc)
+
+		req := &operatorv1.CommandRequested{Command: "ollama stop", ExecutionId: "exec-1"}
+		payload, err := proto.Marshal(req)
+		require.NoError(t, err)
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.Command.Requested,
+			Payload:   payload,
+		}
+
+		svc.HandleExecutionRequest(context.Background(), msg)
+	})
 }
 
 func TestCommandService_SetResultsPublisher_SetAuditStore_SetLedgerService(t *testing.T) {

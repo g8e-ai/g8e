@@ -16,6 +16,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/certs"
@@ -153,9 +154,11 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 
 		HTTPPort: bs.config.HTTPPort,
 
-		InferenceEnabled:                bs.config.Inference.Enabled,
-		InferenceOllamaEndpoint:         bs.config.Inference.OllamaEndpoint,
-		ProviderBoundaryObserverEnabled: bs.config.ProviderBoundaryObserver.Enabled,
+		InferenceEnabled:                        bs.config.Inference.Enabled,
+		InferenceOllamaEndpoint:                 bs.config.Inference.OllamaEndpoint,
+		ProviderBoundaryObserverEnabled:         bs.config.ProviderBoundaryObserver.Enabled,
+		ProviderBoundaryObserverOllamaEnabled:   bs.config.ProviderBoundaryObserver.OllamaEnabled,
+		Platform:                                runtime.GOOS,
 	}
 
 	reqBody := operatorAuthRequest{
