@@ -5,7 +5,7 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-09-09
+Last Updated: 2026-09-18
 Version: v2.1.8
 
 ---
@@ -349,7 +349,7 @@ Restart the host gateway managed by the CLI:
 ./g8e gw restart
 ```
 
-Restart preserves only the persisted posture. Other startup flags return to their defaults, so stop and start the gateway explicitly when it must retain custom ports, paths, origins, downstream URLs, or consensus bootstrap configuration.
+Restart reads the complete validated launch profile from `.g8e/pids/operator-launch-profile.json`, re-runs network identity detection, and starts the Gateway with the full persisted configuration: posture, ports, CORS origins, passkey settings, downstream URLs, consensus bootstrap configuration, and the rest of the prior launch flags. If the profile is missing or malformed, restart fails closed rather than falling back to defaults. Use `gw stop` followed by `gw start` with explicit flags when you need a different configuration than the last successful background start.
 
 ### Gateway Settings
 

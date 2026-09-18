@@ -180,6 +180,27 @@ class ProviderBoundaryObservationAttemptStatus(int, metaclass=_enum_type_wrapper
     PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_IN_PROGRESS: _ClassVar[ProviderBoundaryObservationAttemptStatus]
     PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_COMPLETED: _ClassVar[ProviderBoundaryObservationAttemptStatus]
     PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_FAILED: _ClassVar[ProviderBoundaryObservationAttemptStatus]
+
+class ModelManifestVerificationStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    MODEL_MANIFEST_VERIFICATION_STATUS_UNSPECIFIED: _ClassVar[ModelManifestVerificationStatus]
+    MODEL_MANIFEST_VERIFICATION_STATUS_UNSIGNED: _ClassVar[ModelManifestVerificationStatus]
+    MODEL_MANIFEST_VERIFICATION_STATUS_VERIFIED: _ClassVar[ModelManifestVerificationStatus]
+    MODEL_MANIFEST_VERIFICATION_STATUS_FAILED: _ClassVar[ModelManifestVerificationStatus]
+    MODEL_MANIFEST_VERIFICATION_STATUS_UNAVAILABLE: _ClassVar[ModelManifestVerificationStatus]
+
+class ModelProvenanceObservationPhase(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    MODEL_PROVENANCE_OBSERVATION_PHASE_UNSPECIFIED: _ClassVar[ModelProvenanceObservationPhase]
+    MODEL_PROVENANCE_OBSERVATION_PHASE_BEGIN: _ClassVar[ModelProvenanceObservationPhase]
+    MODEL_PROVENANCE_OBSERVATION_PHASE_FINALIZE: _ClassVar[ModelProvenanceObservationPhase]
+
+class ModelProvenanceObservationAttemptStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_UNSPECIFIED: _ClassVar[ModelProvenanceObservationAttemptStatus]
+    MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_IN_PROGRESS: _ClassVar[ModelProvenanceObservationAttemptStatus]
+    MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_COMPLETED: _ClassVar[ModelProvenanceObservationAttemptStatus]
+    MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_FAILED: _ClassVar[ModelProvenanceObservationAttemptStatus]
 EVALUATION_LANE_UNSPECIFIED: EvaluationLane
 EVALUATION_LANE_PLATFORM: EvaluationLane
 EVALUATION_LANE_MODEL_ROLE: EvaluationLane
@@ -287,6 +308,18 @@ PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_UNSPECIFIED: ProviderBoundaryObserv
 PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_IN_PROGRESS: ProviderBoundaryObservationAttemptStatus
 PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_COMPLETED: ProviderBoundaryObservationAttemptStatus
 PROVIDER_BOUNDARY_OBSERVATION_ATTEMPT_STATUS_FAILED: ProviderBoundaryObservationAttemptStatus
+MODEL_MANIFEST_VERIFICATION_STATUS_UNSPECIFIED: ModelManifestVerificationStatus
+MODEL_MANIFEST_VERIFICATION_STATUS_UNSIGNED: ModelManifestVerificationStatus
+MODEL_MANIFEST_VERIFICATION_STATUS_VERIFIED: ModelManifestVerificationStatus
+MODEL_MANIFEST_VERIFICATION_STATUS_FAILED: ModelManifestVerificationStatus
+MODEL_MANIFEST_VERIFICATION_STATUS_UNAVAILABLE: ModelManifestVerificationStatus
+MODEL_PROVENANCE_OBSERVATION_PHASE_UNSPECIFIED: ModelProvenanceObservationPhase
+MODEL_PROVENANCE_OBSERVATION_PHASE_BEGIN: ModelProvenanceObservationPhase
+MODEL_PROVENANCE_OBSERVATION_PHASE_FINALIZE: ModelProvenanceObservationPhase
+MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_UNSPECIFIED: ModelProvenanceObservationAttemptStatus
+MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_IN_PROGRESS: ModelProvenanceObservationAttemptStatus
+MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_COMPLETED: ModelProvenanceObservationAttemptStatus
+MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_FAILED: ModelProvenanceObservationAttemptStatus
 
 class EvaluationRuntimeBoundary(_message.Message):
     __slots__ = ("component", "process_identity", "runtime_namespace", "mounted_filesystems", "persistent_store", "endpoint", "authenticated_identity", "execution_owner_operator_id")
@@ -797,6 +830,80 @@ class ProviderBoundaryObservationCompleted(_message.Message):
     WINDOW_FIELD_NUMBER: _ClassVar[int]
     window: ProviderBoundaryObservationWindow
     def __init__(self, window: _Optional[_Union[ProviderBoundaryObservationWindow, _Mapping]] = ...) -> None: ...
+
+class ModelWeightAttestation(_message.Message):
+    __slots__ = ("blob_digest", "size_bytes", "media_type")
+    BLOB_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    SIZE_BYTES_FIELD_NUMBER: _ClassVar[int]
+    MEDIA_TYPE_FIELD_NUMBER: _ClassVar[int]
+    blob_digest: str
+    size_bytes: int
+    media_type: str
+    def __init__(self, blob_digest: _Optional[str] = ..., size_bytes: _Optional[int] = ..., media_type: _Optional[str] = ...) -> None: ...
+
+class ModelProvenanceAttestationWindow(_message.Message):
+    __slots__ = ("schema_version", "provider_attempt_id", "provenance_operator_id", "served_model_tag", "expected_model_digest", "observed_model_digest", "manifest_digest", "manifest_verification_status", "weight_attestations", "attempt_started_at_unix_ms", "attempt_completed_at_unix_ms", "attested_at_unix_ms", "digest_match", "attestation_digest")
+    SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
+    PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_OPERATOR_ID_FIELD_NUMBER: _ClassVar[int]
+    SERVED_MODEL_TAG_FIELD_NUMBER: _ClassVar[int]
+    EXPECTED_MODEL_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    OBSERVED_MODEL_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    MANIFEST_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    MANIFEST_VERIFICATION_STATUS_FIELD_NUMBER: _ClassVar[int]
+    WEIGHT_ATTESTATIONS_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_STARTED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_COMPLETED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    ATTESTED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    DIGEST_MATCH_FIELD_NUMBER: _ClassVar[int]
+    ATTESTATION_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    schema_version: str
+    provider_attempt_id: str
+    provenance_operator_id: str
+    served_model_tag: str
+    expected_model_digest: str
+    observed_model_digest: str
+    manifest_digest: str
+    manifest_verification_status: ModelManifestVerificationStatus
+    weight_attestations: _containers.RepeatedCompositeFieldContainer[ModelWeightAttestation]
+    attempt_started_at_unix_ms: int
+    attempt_completed_at_unix_ms: int
+    attested_at_unix_ms: int
+    digest_match: bool
+    attestation_digest: str
+    def __init__(self, schema_version: _Optional[str] = ..., provider_attempt_id: _Optional[str] = ..., provenance_operator_id: _Optional[str] = ..., served_model_tag: _Optional[str] = ..., expected_model_digest: _Optional[str] = ..., observed_model_digest: _Optional[str] = ..., manifest_digest: _Optional[str] = ..., manifest_verification_status: _Optional[_Union[ModelManifestVerificationStatus, str]] = ..., weight_attestations: _Optional[_Iterable[_Union[ModelWeightAttestation, _Mapping]]] = ..., attempt_started_at_unix_ms: _Optional[int] = ..., attempt_completed_at_unix_ms: _Optional[int] = ..., attested_at_unix_ms: _Optional[int] = ..., digest_match: _Optional[bool] = ..., attestation_digest: _Optional[str] = ...) -> None: ...
+
+class ModelProvenanceObservationCommand(_message.Message):
+    __slots__ = ("provider_attempt_id", "inference_transaction_id", "phase", "attempt_started_at_unix_ms", "attempt_completed_at_unix_ms", "attempt_status", "retry_count", "served_model_tag", "expected_model_digest", "model_registry_digest", "campaign_id")
+    PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    INFERENCE_TRANSACTION_ID_FIELD_NUMBER: _ClassVar[int]
+    PHASE_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_STARTED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_COMPLETED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    ATTEMPT_STATUS_FIELD_NUMBER: _ClassVar[int]
+    RETRY_COUNT_FIELD_NUMBER: _ClassVar[int]
+    SERVED_MODEL_TAG_FIELD_NUMBER: _ClassVar[int]
+    EXPECTED_MODEL_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    MODEL_REGISTRY_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    CAMPAIGN_ID_FIELD_NUMBER: _ClassVar[int]
+    provider_attempt_id: str
+    inference_transaction_id: str
+    phase: ModelProvenanceObservationPhase
+    attempt_started_at_unix_ms: int
+    attempt_completed_at_unix_ms: int
+    attempt_status: ModelProvenanceObservationAttemptStatus
+    retry_count: int
+    served_model_tag: str
+    expected_model_digest: str
+    model_registry_digest: str
+    campaign_id: str
+    def __init__(self, provider_attempt_id: _Optional[str] = ..., inference_transaction_id: _Optional[str] = ..., phase: _Optional[_Union[ModelProvenanceObservationPhase, str]] = ..., attempt_started_at_unix_ms: _Optional[int] = ..., attempt_completed_at_unix_ms: _Optional[int] = ..., attempt_status: _Optional[_Union[ModelProvenanceObservationAttemptStatus, str]] = ..., retry_count: _Optional[int] = ..., served_model_tag: _Optional[str] = ..., expected_model_digest: _Optional[str] = ..., model_registry_digest: _Optional[str] = ..., campaign_id: _Optional[str] = ...) -> None: ...
+
+class ModelProvenanceObservationCompleted(_message.Message):
+    __slots__ = ("window",)
+    WINDOW_FIELD_NUMBER: _ClassVar[int]
+    window: ModelProvenanceAttestationWindow
+    def __init__(self, window: _Optional[_Union[ModelProvenanceAttestationWindow, _Mapping]] = ...) -> None: ...
 
 class ModelInferenceRecord(_message.Message):
     __slots__ = ("inference_record_id", "provider_attempt_id", "assignment_id", "evaluation_attempt_id", "model_role", "agent_persona", "call_site", "model_variant", "temperature", "top_p", "top_k", "seed", "max_output_tokens", "input_hash", "output_hash", "usage_availability", "prompt_tokens", "completion_tokens", "thinking_tokens", "cache_tokens", "request_started_at_unix_nanos", "first_token_at_unix_nanos", "generation_duration_nanos", "total_duration_nanos", "load_duration_nanos", "load_state", "retry_count", "finish_reason", "privacy_attested", "governed_receipt_ref", "result_digest", "provider_boundary_observation_ref")

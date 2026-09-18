@@ -6,6 +6,7 @@ parent: Architecture
 # Zero Trust Model Provenance
 
 Last Updated: 2026-09-18
+Version: v2.1.8
 
 ## Scope
 
@@ -17,7 +18,7 @@ This document describes the evaluation-time architecture. Signed manifest verifi
 
 ## Operator topology
 
-evaluation model campaigns use **four** distinct remote operator sessions when provenance is enabled:
+Model evaluation campaigns use **four** distinct remote operator sessions when provenance is enabled:
 
 | Session | Capability flag | Host | Role |
 | --- | --- | --- | --- |

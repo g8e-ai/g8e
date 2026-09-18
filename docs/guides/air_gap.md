@@ -5,7 +5,7 @@ parent: Guides
 
 # Air-Gapped Deployment
 
-Last Updated: 2026-09-09
+Last Updated: 2026-09-18
 Version: v2.1.8
 
 g8e runs without internet access when its binaries, container images, configuration, and any optional downstream services are staged inside the isolated environment. The Gateway and Operator do not require a hosted g8e service, and the repository vendors the Go modules required to build the `g8e` binary.
@@ -165,7 +165,7 @@ Build a Python wheel and collect its transitive dependencies on the connected ho
 
 ```bash
 make python-build
-pip download --dest /tmp/g8e-python-wheels protocol/python/dist/g8e-2.1.7-py3-none-any.whl
+pip download --dest /tmp/g8e-python-wheels protocol/python/dist/g8e-2.1.8-py3-none-any.whl
 ```
 
 Transfer the complete wheel directory, then install without an index:

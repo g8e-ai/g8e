@@ -5,7 +5,7 @@ parent: Guides
 
 # Build a g8e-Compatible Frontend
 
-Last Updated: 2026-09-09
+Last Updated: 2026-09-18
 Version: v2.1.8
 
 ---
@@ -447,7 +447,7 @@ For a guided one-command workflow on a local Gateway, run `./g8e gw connect http
 
 ## Generator-Neutral Observe Frontend
 
-The sections above describe the full browser integration surface for an external frontend that implements approvals, passkey management, and chat. A generator-neutral observe frontend is a narrower surface: a read-only browser dashboard that shows agent and run lifecycle projections, eval summaries, downloads, and a live SSE narrative. It does not implement approvals, chat, tool execution, or any mutation surface.
+The sections above describe the full browser integration surface for an external frontend that implements approvals, passkey management, and chat. A generator-neutral observe frontend is a narrower surface: a read-only browser dashboard that shows agent and run lifecycle projections, eval summaries, downloads, and a live SSE narrative. It does not implement approvals, chat, tool execution, or any mutation surface. This owner-local observe surface is passkey-authenticated and scoped to the connected user's data. It is separate from the anonymous [Public Spectator](../architecture/public_spectator.md) mirror and evaluation explorer, which publish campaign evidence without credentials. See [Public Spectator Operations Guide](./public_spectator.md) for mirror deployment.
 
 The repository ships an audited adapter and a deterministic contract pack that together let a builder (Lovable, Notion, or other supported SPA builder) generate a deployable observe frontend without reimplementing transport, auth, SSE parsing, or the endpoint allowlist.
 
@@ -466,7 +466,7 @@ The `dashboard/g8e-adapter/` package is the audited integration core. It owns:
 - A safe event presentation registry: escaped bounded fields, safe labels, thinking events as phase labels (never raw chain-of-thought), unknown events as bounded diagnostic rows that cannot mutate projections or counters.
 - Explicit loading, empty, stale, unavailable, unsupported, partial-verification, disconnected, unauthenticated, and error view states.
 
-The adapter is verified by 414 unit tests. A minimal host (`host/`) exercises the adapter against a real Gateway fixture in browser contract tests. A reference frontend (`reference-ui/`) demonstrates one valid presentation layer that wraps the adapter; it is replaceable and is not the only valid output.
+The adapter is verified by 443 unit tests. A minimal host (`host/`) exercises the adapter against a real Gateway fixture in browser contract tests. A reference frontend (`reference-ui/`) demonstrates one valid presentation layer that wraps the adapter; it is replaceable and is not the only valid output.
 
 ### The deterministic contract pack
 
@@ -522,6 +522,7 @@ See [Generator-Neutral Builder Guide](./build_observe_frontend.md) for the runti
 
 - [Connect a Lovable App](./lovable.md) - Minimal local setup for a browser-hosted Lovable app
 - [Generator-Neutral Builder Guide](./build_observe_frontend.md) - Runtime capability requirements for a generated observe frontend
+- [Public Spectator Operations Guide](./public_spectator.md) - Anonymous campaign mirror deployment and tunnel setup
 - [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) - Expose the gateway via a public tunnel
 - [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
 - [Architecture: Auth](../architecture/auth.md) - WebAuthn passkey authentication architecture

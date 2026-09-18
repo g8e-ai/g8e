@@ -1,7 +1,7 @@
 # g8e Scripts
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 This document catalogs the executable automation under `scripts/`, the deploy-script templates embedded in the Gateway, and the script-backed `g8e demos` image-transfer workflow. The root `Makefile` owns build and validation orchestration.
 

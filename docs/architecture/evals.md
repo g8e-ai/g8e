@@ -5,7 +5,7 @@ parent: Architecture
 
 # Evaluations
 
-Last Updated: 2026-09-18  
+Last Updated: 2026-09-18
 Version: v2.1.8
 
 ## Scope
@@ -89,7 +89,7 @@ The independent observer is a short-lived `g8e-eval-observer` Compose process. I
 
 ## Model campaign evaluations
 
-evaluation model campaigns score real models through the production g8ee `POST /api/v1/chat` path, governed inference dispatch, and a frozen scenario catalog. They use one campaign Gateway with **three** core enrolled remote Operator sessions on the campaign host (Data and Inference) plus **one or two** provider-side witness sessions when hardware observation and model provenance are enabled:
+Evaluation model campaigns score real models through the production g8ee `POST /api/v1/chat` path, governed inference dispatch, and a frozen scenario catalog. They use one campaign Gateway with **two** core enrolled remote Operator sessions on the campaign host (Data and Inference) plus **one or two** provider-side witness sessions when hardware observation and model provenance are enabled:
 
 | Session | Capability flag | Host | Role |
 | --- | --- | --- | --- |

@@ -4,7 +4,7 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-09-09
+Last Updated: 2026-09-18
 Version: v2.1.8
 
 The Governance Gateway provides a Server-Sent Events (SSE) bridge for session-targeted application telemetry and platform workflow notifications. App workloads publish events over authenticated HTTPS, and browser, CLI, Operator, and test clients consume a session-scoped event history by polling or by opening a live stream. The Gateway also publishes completion events for passkey enrollment and L3 approval without calling its public push endpoint.
@@ -24,7 +24,9 @@ The Gateway also exposes two observe producer endpoints that accept typed agent 
 - **`POST /api/v1/observe/producer/agent-state`** accepts a typed `ObserveProducerAgentStateRequest`, persists the agent projection, and emits an `app.agent.status.updated` SSE event after successful persistence.
 - **`POST /api/v1/observe/producer/run-state`** accepts a typed `ObserveProducerRunStateRequest`, persists the run projection, and emits an `app.run.status.updated` SSE event after successful persistence.
 
-Both producer endpoints require mTLS app-workload authentication (never browser-accessible), enforce strict JSON decoding with unknown-field rejection, validate the supported schema version, required display/role/run-kind fields, recognized lifecycle statuses even on first write, non-negative task counters, completed-tasks-not-exceeding-total, and coherent start/end times. The Gateway derives `user_id` from the mTLS peer certificate; the request body carries no `user_id` field and cannot override the authenticated identity. Exactly one of `web_session_id` or `cli_session_id` is required for routing; supplying both or neither is rejected at the Gateway boundary.
+The in-process `ObserveProducerService` also implements persist-before-publish for the full `g8e.v1.ai.eval.*` campaign event family (`ai.eval.cycle.started`, `ai.eval.assignment.started`, `ai.eval.assignment.completed`, `ai.eval.model_role.invoked`, `ai.eval.metric.available`, `ai.eval.verifier.completed`, `ai.eval.proof.available`, `ai.eval.publication.completed`, `ai.eval.heartbeat`, and `ai.eval.stop.requested`). Gateway live tests verify those emissions. Campaign `--publish` additionally exports signed public-safe projections through `POST /api/v1/public-feed/batches` for the anonymous mirror SSE relay; see [Public Spectator Architecture](./public_spectator.md).
+
+Both HTTP producer endpoints require mTLS app-workload authentication (never browser-accessible), enforce strict JSON decoding with unknown-field rejection, validate the supported schema version, required display/role/run-kind fields, recognized lifecycle statuses even on first write, non-negative task counters, completed-tasks-not-exceeding-total, and coherent start/end times. The Gateway derives `user_id` from the mTLS peer certificate; the request body carries no `user_id` field and cannot override the authenticated identity. Exactly one of `web_session_id` or `cli_session_id` is required for routing; supplying both or neither is rejected at the Gateway boundary.
 
 Every accepted event has two routing dimensions: `user_id` identifies the owning user, and exactly one of `web_session_id` or `cli_session_id` identifies the delivery target. A user ID without a session target is not a valid Gateway route, and the Gateway does not provide user-wide fan-out.
 
@@ -140,7 +142,11 @@ Both producer endpoints map ownership mismatch to a non-disclosing 403 response.
 
 ### Browser read surface
 
-The browser-scoped observe read API (`GET /api/v1/observe/bootstrap`, `GET /api/v1/observe/runs`, etc.) returns the persisted projections with no ownership field in the wire response. A browser session can read only its own user's projections. The SSE stream carries the nested typed `app.agent.status.updated` and `app.run.status.updated` envelopes to the authenticated session.
+The browser-scoped observe read API (`GET /api/v1/observe/bootstrap`, `GET /api/v1/observe/runs`, `GET /api/v1/observe/evals`, etc.) returns the persisted projections with no ownership field in the wire response. A browser session can read only its own user's projections. The SSE stream carries the nested typed `app.agent.status.updated`, `app.run.status.updated`, and `g8e.v1.ai.eval.*` envelopes to the authenticated session.
+
+### Event dashboard classification
+
+The protocol registry (`protocol/constants/event_dashboard_classification.json`) classifies event families for browser observability. At v2.1.8, `g8e.v1.app.run` and `g8e.v1.ai.eval` are `produced_to_sse` and `dashboard_safe`. Agent/run HTTP producers and the in-process eval observe producer are the registered production paths for those families. Reserved contracts `ai.eval.run.completed` and `ai.eval.metric.recorded` remain typed payloads without a native evaluation HTTP producer. See [Protocol Library](./protocol.md) for the full inventory.
 
 ## Retention and Administration
 
@@ -183,4 +189,5 @@ As a result, the current in-tree dashboard browser client does not establish a f
 - [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md): The audited g8e-adapter and contract pack for generated observe frontends.
 - [Public Spectator Architecture and Threat Model](./public_spectator.md): The separate anonymous public-mirror SSE relay and outbound-only export architecture.
 - [AI Agents and the Governance Boundary](./agents.md): Distinction between event telemetry and governed execution.
+- [Evaluations](./evals.md): Model campaign evidence and observe publication.
 - [Constants Reference](../../protocol/docs/constants.md): Canonical endpoint and event constants.

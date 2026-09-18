@@ -277,8 +277,8 @@ The `--ensemble-url` flag points the harness at the ensemble (g8ee) HTTP surface
 
 - `ensemble-chat-file-create` - AI creates a governed file via the `file_create` tool. Verifies a `FILE_EDIT` receipt with `COMPLETED` status appears in the audit vault.
 - `ensemble-chat-file-write` - AI writes content to an existing file via the `file_write` tool. Verifies a `FILE_EDIT` receipt.
-- `ensemble-document-update` - AI triggers a case/investigation create via the ensemble. Verifies a `DOCUMENT_UPDATE` envelope was admitted by L1 and persisted via the document store handler.
-- `ensemble-document-delete` - AI triggers a document delete. Verifies a `DOCUMENT_DELETE` envelope was admitted and the document was removed.
+- `ensemble-document-update` - Submits governed `DOCUMENT_UPDATE` envelopes directly (create with `merge=false`, then partial patch with `merge=true`). Verifies untouched fields survive the merge. Does not call the ensemble or an LLM.
+- `ensemble-document-delete` - Submits governed `DOCUMENT_UPDATE` (create) and `DOCUMENT_DELETE` envelopes directly. Verifies the document is removed from the store. Does not call the ensemble or an LLM.
 
 **LLM provider selection:**
 

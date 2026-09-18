@@ -87,6 +87,8 @@ Run `g8e auth refresh` when the CLI certificate is still valid but its server-si
 
 On Windows, interactive enrollment also imports the signed CLI certificate into the current user's certificate store. CLI private keys remain file-backed ECDSA P-256 keys on every platform.
 
+Browser-hosted frontend connection no longer uses a separate `auth enroll gui` command family. Run `./g8e gw connect <frontend-origin>` to validate the origin, configure WebAuthn and CORS, start or restart the Gateway with consent, install local trust when needed, and verify HTTPS and CORS against the running process. See [Build a g8e-Compatible Frontend](../guides/build_frontend.md) and [Connect a Lovable App](../guides/lovable.md).
+
 ### Platform Enrollment Commands
 
 `g8e auth enroll` groups human CLI enrollment and platform workload enrollment review:

@@ -1,6 +1,6 @@
 # Developer Guidelines
 
-Last Updated: 2026-09-15
+Last Updated: 2026-09-18
 Version: v2.1.8
 
 This guide defines the coding and maintenance rules for the g8e repository. The current working tree is the source of truth for current behavior. Use the [Code Map](codemap.md) for package and runtime ownership, the [Testing Guide](tests.md) for test infrastructure and commands, and the [Documentation Guide](docs.md) for documentation ownership, style, metadata, generation, and validation.

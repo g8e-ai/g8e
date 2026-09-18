@@ -4,7 +4,7 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-09-09
+Last Updated: 2026-09-18
 Version: v2.1.8
 
 The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L2-L3 proofs and L1 validation results attached from the Gateway (PDP), re-verifies the L2 and L3 proofs and re-runs L1 doctrine validation locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
@@ -15,6 +15,20 @@ The reference implementation of a g8e-compliant Policy Execution Point (PEP) is 
 - **Governed Operator (PEP)**: The binary run in Standard Mode (`g8e operator start`). It acts as the Policy Execution Point (PEP) and MCP server, handling L4 Warden (pre-dispatch verification) and L5 Actuator (execution and signed receipt production) for operations on its own host. The Operator re-verifies L1-L3 proofs attached to the envelope by the Gateway before executing.
 
 This document focuses on the **Governed Operator** (PEP) role.
+
+---
+
+## Capability Flags
+
+Remote operators enroll through `g8e operator start` with capability flags stored in `runtime_config` and enforced by the Gateway and Operator:
+
+| Flag | CLI flag | Role |
+| --- | --- | --- |
+| **Inference Operator** | `--inference-enabled` | Governed L4/L5 inference PEP; sole scored path to the approved Ollama provider on the campaign host |
+| **Observer Operator** | `--provider-boundary-observer-enabled`; optional `--ollama` | Read-only GPU and system RAM sampling at the provider execution boundary; optional governed Ollama service restart when `--ollama` is set |
+| **Provenance Operator** | `--provenance-operator-enabled`; `--model-storage-root <path>` | Storage-side SHA-256 attestation of model manifests and weight blobs |
+
+Production witness enrollment on the provider or storage host uses observer and/or provenance flags only; do not pass `--inference-enabled` on those hosts. See [Evaluations](./evals.md) and [Model Provenance](./model-provenance.md).
 
 ---
 
@@ -128,7 +142,7 @@ The Governed Operator is fully isolated from Identity Providers (IdP). The Gover
 - **Owner-Centric Model**: The first human to authenticate becomes the Platform Owner. Starting the Gateway is the owner's act of authorization; no standing invite codes or manual approval steps are required for subsequent CSR enrollment.
 - **CSR-Based Enrollment**: For mTLS-based authentication, clients enroll via Certificate Signing Request (CSR) where they generate their own key pair and the Gateway acts as a Certificate Authority (CA) to sign the certificate. No shared secrets, no API keys to leak.
 - **JWT-Based JIT**: When a JWT is presented, the Governance Gateway validates the signature and provisions the user subject to platform owner authorization. The user is bound to the owner's organization.
-- **Strict TTL**: CLI sessions have a 1-hour TTL. Web sessions have a 24-hour TTL. Long-lived access requires programmatic renewal or re-authentication.
+- **Strict TTL**: CLI certificates and CLI sessions both have a seven-day lifetime. Web sessions have a 24-hour TTL. Long-lived access requires programmatic renewal or re-authentication.
 - **Governance Gateway Responsibility**: The Governance Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs JIT user provisioning subject to owner authorization, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
 - **Governed Operator Responsibility**: The Governed Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
 - **No IdP Dependency**: The Operator never requires outbound internet access to verify tokens or manage user state. This enables air-gapped and high-security deployments where the Operator has no external network connectivity.
@@ -262,4 +276,6 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 - [Storage Architecture](./storage.md) for audit vault and ledger internals
 - [Consensus](./consensus.md) for consensus configuration and consensus setup
 - [Encryption](./encryption.md) for encryption at rest details
+- [Evaluations](./evals.md): Model campaign operator topology and witness roles
+- [Model Provenance](./model-provenance.md): Storage-side weight attestation
 - [Lattice Adapter](../../internal/adapters/lattice/README.md) for Anduril Lattice COP integration

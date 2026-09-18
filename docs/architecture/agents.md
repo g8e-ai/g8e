@@ -5,8 +5,8 @@ parent: Architecture
 
 # AI Agents and the g8e Governance Boundary
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 ## Scope
 
@@ -50,7 +50,7 @@ See [Build Apps](../guides/build_apps.md) for choosing among these integration p
 
 ## MCP Agent Launcher
 
-`g8e mcp agent run <agent>` provides a managed local launch flow for Claude, Codex, Devin, Gemini, and Goose. It starts a local Gateway in `doctrine` posture when one is not already running, ensures the human CLI identity and passkey are enrolled, obtains a short-lived delegated app certificate for the selected agent, configures `g8e mcp stdio` as the agent's MCP server, verifies the generated interception configuration by default, and starts the agent.
+`g8e mcp agent run <agent>` provides a managed local launch flow for Claude, Codex, Devin, Gemini, and Goose. It starts a local Gateway in `doctrine` posture when one is not already running, ensures the human CLI identity and passkey are enrolled, obtains a short-lived delegated app certificate for the selected agent, configures `g8e mcp stdio` as the agent's MCP server, verifies the generated interception configuration by default, and starts the agent. For browser-hosted frontends on the same computer, `./g8e gw connect <frontend-origin>` replaces the removed `auth enroll gui` workflow; see [Build a g8e-Compatible Frontend](../guides/build_frontend.md).
 
 The delegated certificate binds the app identity and requesting human identity in its SPIFFE URI SANs. The stdio bridge presents that certificate to the Gateway, and the Gateway records both identities in the governed transaction. This creates per-agent attribution without trusting caller-supplied identity headers.
 
@@ -183,3 +183,5 @@ SSE events are delivery telemetry, not governance state, and do not alter the st
 - [Ensemble Architecture](./ensemble.md): The first-party g8ee deployment and connection model.
 - [g8ee Agents](../ensemble/agents.md): Persona hierarchy, Tribunal, Warden, and support agents.
 - [Build Apps](../guides/build_apps.md): Public integration paths and application-owned state.
+- [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md): Audited `g8e-adapter`, observe API, and contract pack for generated frontends.
+- [Evaluations](./evals.md): Platform evaluation programs and campaign orchestration.

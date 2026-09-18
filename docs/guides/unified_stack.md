@@ -33,7 +33,7 @@ The root `docker-compose.yml` defines platform services on the `g8e-net` bridge 
 | --- | --- | --- | --- |
 | `g8e-gateway` | default | 8080 HTTP, 8443 HTTPS | Policy Decision Point (PDP). PKI, governance, pub/sub, console, MCP, A2A. |
 | `g8e-operator` | `bootstrapped` | none | **Data Operator** — governed tool/filesystem/process boundary. |
-| `g8e-inference-operator` | `evaluation` | none | **Inference Operator** — governed inference to the remote Ollama provider. Requires `G8E_OLLAMA_ENDPOINT` and campaign registry bindings. |
+| `g8e-inference-operator` | `evaluation` | none | **Inference Operator** — governed inference to the remote Ollama provider. Requires `G8E_OLLAMA_ENDPOINT`; campaign authority travels on each governed dispatch. |
 | `ensemble` | `bootstrapped` | 8000 | g8ee chat pipeline (`POST /api/v1/chat`). |
 | `dashboard` | `bootstrapped` | 3000 | Legacy dashboard (not the evaluation acceptance UI). |
 | `g8e-eval-observer` | `evaluation` | none | Short-lived networkless target observer for the native execution-boundary suite only. Not the provider-boundary Observer Operator. |
@@ -56,7 +56,7 @@ Provider host (Windows + Ollama)
   ~/.ollama/models ................... content-addressed weight blobs
   g8e operator (Observer) ............ provider-boundary hardware observer
                                        (--provider-boundary-observer-enabled;
-                                        optional --ollama for remote service restart)
+                                        optional --ollama for governed provider quiesce)
   g8e operator (Provenance) .......... storage-side model weight attestor
                                        (--provenance-operator-enabled;
                                         --model-storage-root ~/.ollama/models)
@@ -75,7 +75,7 @@ Keep internal plan vocabulary separate from public campaign branding.
 
 | Purpose | Campaign ID | Run ID pattern | Model inventory | Cells (3 roles × 25 scenarios) |
 | --- | --- | --- | --- | --- |
-| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` (`init-campaign` for `gemma4:e4b`) | `<campaign-id>-<unix>` | `.local.dev/inventories/<campaign-id>.json` | 1 model → **75** |
+| **Init campaign** (one model, tidy pipeline gate) | `eval-init-<variant_id>` | `<campaign-id>-<unix>` | `.local.dev/inventories/<campaign-id>.json` | 1 model → **75** |
 | **Mini smoke** (multi-model pipeline validation) | `eval-smoke-mini` | `smoke-mini-<unix>` | `.local.dev/smoke-mini-inventory.json` | 3 models → **225** |
 | **Dev full smoke** (private, all frozen models) | `phase1a-smoke` | `smoke-dev-<unix>` | `.local.dev/model-inventory.json` | 35 models → **2625** |
 | **First public homogeneous run** | `eval-genesis-homogeneous` | `genesis-homogeneous-01` (or `-<seq>`) | fresh provider freeze at launch | all discovered models |
@@ -121,7 +121,7 @@ Workflow per model:
 
 Do not run concurrent `campaign verify` / `publish` processes.
 
-First verified gate: `init-campaign` / `gemma4:e4b` / run `init-campaign-1789654273`.
+Track per-model verification progress in `.local.dev/init-campaign-queue.json` (`status: verified` or `pending`, plus `verified_run_id` when complete).
 
 ### Mini smoke inventory (current)
 
@@ -396,7 +396,7 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 \
 
 - `--daemon` runs the full matrix in one process.
 - `--provider-settle 8s` waits after each assignment for Ollama to go idle over HTTP (`/api/ps`).
-- When the enrolled Observer Operator has `provider_boundary_observer_ollama_enabled`, execute also restarts the Ollama **service** on the provider host before each assignment (see [Provider-boundary Observer Operator](#provider-boundary-observer-operator-windows-ollama-host)).
+- When the enrolled Observer Operator has `provider_boundary_observer_ollama_enabled`, execute also quiesces the Ollama provider on the provider host before each assignment (`ollama stop`, settle, `ollama ps`; see [Provider-boundary Observer Operator](#provider-boundary-observer-operator-windows-ollama-host)).
 - **Never** run `g8e eval campaign publish` concurrently with `execute --publish`.
 
 ### Phase D — Monitor

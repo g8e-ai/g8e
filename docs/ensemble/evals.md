@@ -19,7 +19,7 @@ g8ee remains outside the trusted execution boundary. Model output, Tribunal agre
 
 ## Production chat path for model campaigns
 
-evaluation model campaigns score real models through the same `POST /api/v1/chat` path used in production. The campaign CLI does not call Ollama or model APIs directly. Instead, `g8e eval campaign execute` drives assignments that:
+Model evaluation campaigns score real models through the same `POST /api/v1/chat` path used in production. The campaign CLI does not call Ollama or model APIs directly. Instead, `g8e eval campaign execute` drives assignments that:
 
 1. Bind campaign authority, model registry digest, and exact Operator sessions on each governed dispatch.
 2. Route inference through the enrolled Inference Operator to the approved remote Ollama provider.

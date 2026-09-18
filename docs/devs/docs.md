@@ -1,6 +1,6 @@
 # Documentation Guide
 
-Last Updated: 2026-09-09
+Last Updated: 2026-09-18
 Version: v2.1.8
 
 This guide defines how maintainers and AI agents audit, write, generate, review, and cross-link g8e documentation. The current working tree is the source of truth for current behavior. Historical release notes and evidence artifacts describe only their stated release, run, or assessment scope.
@@ -126,7 +126,7 @@ This catalog covers every first-party documentation surface in the repository. I
 
 - [About](../core/about.md) and [Position Paper](../core/position_paper.md): Product scope, system model, and design rationale.
 - [Architecture Overview](../architecture/overview.md): Platform components, trust boundaries, and end-to-end flow.
-- [Gateway](../architecture/gateway.md), [Operator](../architecture/operator.md), [Evaluations](../architecture/evals.md), [Model Provenance](../architecture/model-provenance.md), [Ensemble](../architecture/ensemble.md), and [Dashboard](../architecture/dashboard.md): Component-level runtime architecture.
+- [Gateway](../architecture/gateway.md), [Operator](../architecture/operator.md), [Evaluations](../architecture/evals.md), [Model Provenance](../architecture/model-provenance.md), [Public Spectator](../architecture/public_spectator.md), [Ensemble](../architecture/ensemble.md), and [Dashboard](../architecture/dashboard.md): Component-level runtime architecture.
 - [Governance](../architecture/governance.md), [Consensus](../architecture/consensus.md), and [AI Agents and the Governance Boundary](../architecture/agents.md): Postures, five-layer enforcement, L2, ingress paths, and client-side limits.
 - [Authentication and Authorization](../architecture/auth.md), [Encryption](../architecture/encryption.md), and [Network](../architecture/network.md): Identity, PKI, cryptography, transport, and topology.
 - [Protocol](../architecture/protocol.md), [Storage](../architecture/storage.md), and [SSE](../architecture/sse.md): Wire contracts, persistence ownership, and event transport.
@@ -136,8 +136,8 @@ This catalog covers every first-party documentation surface in the repository. I
 
 - [Getting Started](../guides/getting_started.md), [Unified Stack](../guides/unified_stack.md), and [Docker Gateway](../guides/docker_gateway.md): Primary installation, deployment, bootstrap, and owner-approval workflows.
 - [Build Gateway](../guides/build_gateway.md), [Build Operator](../guides/build_operator.md), [Connect Operator](../guides/connect_operator_to_gateway.md), and [Air Gap](../guides/air_gap.md): Core component deployment and disconnected operation.
-- [Build Apps](../guides/build_apps.md), [Connect Apps](../guides/connect_apps_to_gateway.md), [Build Frontend](../guides/build_frontend.md), and [Connect Frontend](../guides/connect_frontend_to_gateway.md): Public client and browser integration paths.
-- [Lovable](../guides/lovable.md): One-command local browser frontend connection via `gw connect`. [Cloudflare Tunnel](../guides/cloudflare_tunnel.md): Optional public tunnel integration for remote access.
+- [Build Apps](../guides/build_apps.md), [Connect Apps](../guides/connect_apps_to_gateway.md), [Build Frontend](../guides/build_frontend.md), [Connect Frontend](../guides/connect_frontend_to_gateway.md), and [Build Observe Frontend](../guides/build_observe_frontend.md): Public client and browser integration paths, including the generator-neutral observe adapter and contract pack.
+- [Lovable](../guides/lovable.md): One-command local browser frontend connection via `gw connect`. [Cloudflare Tunnel](../guides/cloudflare_tunnel.md): Optional public tunnel integration for remote access. [Public Spectator](../guides/public_spectator.md): Gateway-owned mirror deployment, tunnel, and publication procedure for anonymous campaign observation.
 - [Sovereignty Gauntlet](../guides/sovereignty_gauntlet.md): Evidence-oriented demonstration, native evaluation, and claim-scoping workflow.
 - [UX Smoke Test](../guides/ux_smoke_test.md): Manual product-surface verification.
 

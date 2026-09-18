@@ -261,7 +261,7 @@ The protocol designates the ensemble as the authority for task documents, but no
 
 Operator dispatch does not have an authoritative persona projection. `DispatchRequest` carries operator identity, not an agent persona. There is no "operator dispatch" persona in `PERSONA_REGISTRY`. The dispatch path routes governance envelopes to operators; it does not produce agent lifecycle transitions. Operator agent status is recorded as unsupported and no synthetic projection is fabricated.
 
-
+## Human-in-the-Loop Approvals
 
 State-changing operations requiring human authorization trigger interactive approval events managed by `OperatorApprovalService` (`app/services/operator/approval_service.py`).
 

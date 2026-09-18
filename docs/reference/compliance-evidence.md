@@ -1,8 +1,8 @@
 # Proof-Backed Compliance Evidence
 
-**Document Version:** 2.1.7
-**Last Updated:** 2026-09-08
-**Platform:** g8e v2.1.7
+**Document Version:** 2.1.8
+**Last Updated:** 2026-09-18
+**Platform:** g8e v2.1.8
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -193,12 +193,17 @@ This demonstrates L3 evidence (real-stack scenario with verified receipts and in
 
 ## What is not yet available
 
-Canonical analysis, signed report-bundle generation, protected-source replay, and offline complete-bundle verification are available. The [v2.1.7 clean offline acceptance record](../release_notes/v2.1.x/v2.1.7-offline-acceptance.md) identifies the candidate, bundle, external trust, isolated environment, successful verification report, and four rejected mutation classes. The following capabilities remain outstanding:
+Canonical analysis, signed report-bundle generation, protected-source replay, and offline complete-bundle verification are available. The [v2.1.7 clean offline acceptance record](../release_notes/v2.1.x/v2.1.7-offline-acceptance.md) identifies the candidate, bundle, external trust, isolated environment, successful verification report, and four rejected mutation classes.
 
-- **Eval-native signed release bundle** — Eval runs replay when represented in a signed compliance report bundle. A separate eval-native canonical analysis, statistical release gate, signing format, and complete eval verifier remain deferred.
+**Delivered in v2.1.8 — Eval-native campaign infrastructure.** Go-native `g8e eval campaign` lifecycle (init, schedule, execute, verify, publish), production chat-path scoring through g8ee (`POST /api/v1/chat`), provider-boundary Observer and storage-side Provenance Operator witness evidence, independent `g8e eval campaign verify`, cohort-stratified campaign analysis, signed campaign bundle offline verification, campaign-aware observe/public-mirror publication, and a bounded R0 pipeline-integrity campaign with real Ollama inference under a descriptive-only claim policy. g8ee records assignment traces and grading telemetry consumed by the campaign controller; verification and publication remain platform-owned.
+
+The following capabilities remain outstanding:
+
+- **Compliance-report eval release gate** — Native eval and campaign runs replay when represented in `g8e compliance report generate --eval-run` and `g8e compliance evidence-graph verify`. A dedicated eval-native statistical release gate and first-class compliance-report signing profile for campaign bundles remain future work; campaign verification is owned by `g8e eval campaign verify`, not `g8e compliance report verify`.
 - **Historical effectiveness evidence** — Recurring evidence collection, assertion and control history stores, release-gate profiles, failed-run denominator preservation, and version bridge assessments are not implemented. Canonical analysis calculates point-in-time evidence-window completeness but does not establish operating effectiveness over a recurring period.
 - **Additional framework crosswalks** — Only FedRAMP 20x and NIST SP 800-53 have canonical framework definitions and a reviewed crosswalk. SOC 2, ISO 27001, HIPAA, PCI DSS, GDPR, NIST SP 800-63B, and NSA ZIG do not receive generated framework-control assessments.
 - **Manual notary real-topology verification** — The `fedramp-escalate` and `dhs-release` passkey flows are implemented and unit-tested but have not been run against their real notary topologies.
+- **Init campaign qualification matrix** — Multi-model `eval-init-*` qualification runs remain in progress; the bounded R0 pipeline-integrity campaign in v2.1.8 is the demonstrated evidence lane, not the full init-campaign matrix.
 
 ---
 
@@ -210,7 +215,7 @@ The verifier reads all source bodies through the bundle root, enforces the signe
 
 ## Roadmap
 
-Phases 0 through 5 are complete for in-tree implementation, verification, and the recorded v2.1.7 clean offline acceptance lane. The remaining roadmap begins with eval-native release evidence, then recurring operating-effectiveness evidence and additional reviewed framework catalogs and crosswalks.
+Phases 0 through 5 are complete for in-tree implementation, verification, and the recorded v2.1.7 clean offline acceptance lane. v2.1.8 adds Go-native model campaign infrastructure with independent verify/publish and a bounded R0 pipeline-integrity campaign. The remaining roadmap begins with recurring operating-effectiveness evidence and additional reviewed framework catalogs and crosswalks.
 
 **Phase 6 — Recurring evidence, release gates, and historical effectiveness.** This phase adds scheduled evidence collection, assertion and control history, release-gate profiles, failed-run denominator preservation, and bridge assessments for version changes.
 
@@ -297,6 +302,7 @@ For compliance evidence questions, audit support, or independent verification as
 | 2.1.3 | 2026-09-02 | Lateralus Labs | Initial proof-backed compliance evidence document; documented the protocol-owned assertion, framework, crosswalk, and demo-scenario catalogs, 14 evidence-grade demo scenarios, independent demo-run verification, demonstrated evidence at the v2.1.3 release boundary, and the Phase 3-7 roadmap |
 | 2.1.6 | 2026-09-07 | Lateralus Labs | Reconciled completed evidence-graph, KSI, canonical analysis, OSCAL, shared renderer, control-section, and framework-profile capabilities; retained complete signed bundles, recurring effectiveness, and expanded frameworks as outstanding work |
 | 2.1.7 | 2026-09-08 | Lateralus Labs | Completed protected demo, eval, KSI, commitment, attestation, audit, ledger, and build/configuration source replay; documented distinct external report and evidence trust, fail-closed offline verification, and the remaining clean-environment, eval-native, recurring-effectiveness, and framework limits |
+| 2.1.8 | 2026-09-18 | Lateralus Labs | Documented v2.1.8 eval-native campaign infrastructure (production chat-path scoring through g8ee, campaign verify/publish, observe publication, bounded R0 campaign); refined outstanding work to compliance-report eval release gates, recurring effectiveness, expanded frameworks, manual-notary real-topology runs, and the init-campaign qualification matrix |
 
 ---
 

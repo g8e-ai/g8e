@@ -1,7 +1,7 @@
 # Sovereignty Gauntlet Evidence and Social Content Guide
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 This runbook gives a coding agent a repeatable process for generating, preserving, and explaining g8e proof artifacts for social posts, articles, demonstrations, and technical review. The campaign message is:
 
@@ -63,7 +63,7 @@ docker compose version > "${CAMPAIGN_DIR}/metadata/docker-compose-version.txt"
 printf '%s\n' "${CAMPAIGN_DIR}"
 ```
 
-Keep the same shell for the run so `CAMPAIGN_DIR`, identity values, provider settings, `pipefail`, and the evidence-key location remain available. The binary version and digest identify the executable used, not the source tree that produced it. The repository rules prohibit agents from invoking Git, so `source-provenance-status.txt` remains `not-collected` unless the user supplies an approved provenance artifact or directs the release-owner provenance workflow in [Release Process](../devs/release_process.md#stage-2-reproduction-and-provenance). Do not claim source reproducibility from the binary version or digest alone.
+Keep the same shell for the run so `CAMPAIGN_DIR`, identity values, provider settings, `pipefail`, and the evidence-key location remain available. The binary version and digest identify the executable used, not the source tree that produced it. The repository rules prohibit agents from invoking Git, so `source-provenance-status.txt` remains `not-collected` unless the user supplies an approved provenance artifact or directs the release-owner workflow in [Release Process](../devs/release_process.md). Do not claim source reproducibility from the binary version or digest alone.
 
 Record the current capability boundary before continuing:
 

@@ -70,6 +70,21 @@ The run command selects one exact active remote Operator, submits an allowed typ
 
 See [Evaluations](docs/architecture/evals.md) for acceptance invariants, trust boundaries, and JSON output.
 
+## Model evaluation campaigns
+
+Scored model campaigns run on the unified Docker stack with a remote Ollama provider, an Inference Operator on the campaign host, and optional Observer and Provenance Operators on the provider host. Campaign authority travels on each governed dispatch; leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` unset in `.env`.
+
+```bash
+./g8e eval queue next
+./g8e eval campaign start --queue next --publish --daemon --verify --require-provider-observation
+```
+
+See the [Unified Docker Stack guide](docs/guides/unified_stack.md) for topology, witness enrollment, and troubleshooting.
+
+## Connect a browser frontend
+
+To connect a local browser app (React, Lovable, Vue) to a Gateway on the same machine, run `./g8e gw connect <frontend-origin>`. The command validates the origin, configures CORS and passkey RP ID, installs local certificate trust with consent, and verifies HTTPS. See [Connect a Lovable App](docs/guides/lovable.md).
+
 ## What the boundary enforces
 
 - **Data custody stays local.** Raw data, vault keys, execution state, and authoritative audit evidence remain with the Operator runtime.
@@ -85,7 +100,7 @@ The boundary governs operations that traverse g8e. It does not sandbox an AI cli
 
 | Need | Start here |
 | --- | --- |
-| Install and operate g8e | [Getting Started](docs/guides/getting_started.md), [Unified Stack](docs/guides/unified_stack.md), and [Operator Connection](docs/guides/connect_operator_to_gateway.md) |
+| Install and operate g8e | [Getting Started](docs/guides/getting_started.md), [Unified Stack](docs/guides/unified_stack.md), [Operator Connection](docs/guides/connect_operator_to_gateway.md), and [Connect a browser app](docs/guides/lovable.md) (`g8e gw connect`) |
 | Understand trust and execution | [Architecture Overview](docs/architecture/overview.md), [Governance](docs/architecture/governance.md), [AI Agent Boundary](docs/architecture/agents.md), [Authentication](docs/architecture/auth.md), and [Network](docs/architecture/network.md) |
 | Build an integration | [Build Apps](docs/guides/build_apps.md), [Connect Apps](docs/guides/connect_apps_to_gateway.md), [MCP](protocol/docs/mcp.md), and [A2A](protocol/docs/a2a.md) |
 | Evaluate execution | [Evaluations](docs/architecture/evals.md) |

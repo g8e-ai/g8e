@@ -1,5 +1,8 @@
 # Constants System
 
+Last Updated: 2026-09-18
+Version: v2.1.8
+
 ## Overview
 
 The g8e constants system maintains canonical constant definitions across the platform. Go source files in `internal/constants/` are the single source of truth (SSOT) for the platform. JSON schemas in `protocol/constants/` provide protocol-level reference documentation and external protocol definitions for SDKs and other consumers.
@@ -81,7 +84,7 @@ The file also provides a hierarchical `Event` struct accessor (`Event.Operator.*
 HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with JSON tags:
 
 - Prefixes: `InternalPrefix` (`/api/v1`), `OperatorPrefix` (`/api`)
-- Client map: `chat` (`/api/v1/chat`), `health` (`/api/v1/health`), `sse_events` (`/api/v1/internal/sse/events`), `sse_stream` (`/api/v1/internal/sse/stream`)
+- Client map: `chat` (`/api/v1/chat`), `health` (`/api/v1/health`), `sse_events` (`/api/v1/sse/events`), `sse_stream` (`/api/v1/sse/stream`)
 - MCP: `MCPEndpoint` (`/mcp`)
 - A2A: `A2ACall` (`/api/v1/a2a/call`), `A2APrefix` (`/api/v1/a2a/`)
 - Governance: `GovernanceEnvelopes`, `GovernanceSigners`, `GovernanceSignersByID`, `GovernanceSignersPrefix`
@@ -90,6 +93,8 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - KV: `KV` (`/api/v1/kv/`), `KVPrefix` (`/api/v1/kv/`)
 - PubSub: `PubSubPublish`, `PubSubStream`, `PubSubWebSocket` (`/ws/pubsub`)
 - SSE: `SSEPush`, `SSEEvents`, `SSEStream`
+- Observe (browser read-only): `ObservePrefix` (`/api/v1/observe/`), `ObserveBootstrap`, `ObserveRuns`, `ObserveRunsByID`, `ObserveEvals`, `ObserveEvalsByID`, `ObserveDownloads`, `ObserveDownloadsByID`
+- Observe producers (mTLS, ensemble-only): `ObserveProducerPrefix` (`/api/v1/observe/producer/`), `ObserveProducerAgentState` (`/api/v1/observe/producer/agent-state`), `ObserveProducerRunState` (`/api/v1/observe/producer/run-state`)
 - PKI: `PKICSRSign`, `PKIDevicesEnroll`, `PKIAppsDelegated`, `PKICertificatesRevoke`, `PKIRevocationBundle`, `PKICRL`, `PKICABundle`, `PKIFingerprint`
 - Audit: `AuditReceipts`, `AuditReceiptsExport`, `AuditEvents`, `AuditSummary`, `AuditReport`, `AuditStream`
 - User: `Users`, `UsersMe`, `UsersPrefix`

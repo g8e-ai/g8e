@@ -37,7 +37,7 @@ The root command registers these command groups:
 - `test`: Unit, integration, E2E, coverage, lint, chaos, and summary workflows.
 - `demos`: Demo environment and scenario lifecycle.
 - `docker`: Unified Docker Compose stack lifecycle.
-- `eval`: Native execution-boundary evaluation run, verification, and persisted report inspection.
+- `eval`: Native execution-boundary runs, model campaign orchestration (`campaign`, `queue`, `inference`), inventory freeze, verification, and persisted report inspection.
 - `public`: Public spectator feed configuration, publication, mirror operation, and status.
 - `audit`: Receipt, event, summary, export, and report queries.
 - `report`: Deterministic CSV evidence generation and offline verification.

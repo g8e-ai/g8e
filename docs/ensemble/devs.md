@@ -31,7 +31,7 @@ Alternatively, running `make setup` from the `ensemble/` directory installs the 
 
 ## g8e Package Dependency
 
-g8ee depends on the `g8e` Python package (`g8e>=1.7.8`) as the single source of truth for protocol constants, enums, and models. In the repository monorepo structure, `pyproject.toml` configures `[tool.uv.sources]` to resolve `g8e` directly to `../protocol/python`. In container builds, the Dockerfile installs `protocol/python/` before `ensemble/` so dependencies resolve to the local in-tree package without requiring external PyPI distribution.
+g8ee depends on the `g8e` Python package as the single source of truth for protocol constants, enums, and models. In this repository, `protocol/python/` publishes `g8e` 2.1.8 and `ensemble/pyproject.toml` resolves it through `[tool.uv.sources]` to `../protocol/python`. In container builds, the Dockerfile installs `protocol/python/` before `ensemble/` so dependencies resolve to the local in-tree package without requiring external PyPI distribution.
 
 ## Model Hierarchy
 
@@ -158,7 +158,7 @@ pip install -e ".[dev,test,docs]"
 - [Thinking](thinking.md) — L2 consensus, provider reasoning, and thought signatures
 - [PKI & Trust](pki.md) — Public Key Infrastructure, trust bundles, and workload enrollment
 - [Storage](storage.md) — Storage tiers and data sovereignty principles
-- [LLM Providers](llm-providers.md) — Provider implementations and capacity tiers
+- [LLM Providers](llm-providers.md) — Provider implementations and model roles
 - [Server-Sent Events](sse.md) — Real-time event streaming pipeline and Gateway push delivery
 - [Testing](tests.md) — Testing framework, test tiers, and practices
 - [Evals](evals.md) — Benchmark evaluation suite and Judge scoring rubrics

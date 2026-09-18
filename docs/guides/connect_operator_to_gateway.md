@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 ---
 
@@ -218,7 +218,7 @@ The command lists Operator records associated with the enrolled user, including 
 ./g8e gw stop
 ```
 
-Gateway restart preserves the persisted posture. A running Operator detects a closed pub/sub stream and retries the connection with bounded backoff; supervise the worker so it restarts if its retry limit is exhausted.
+Gateway restart restores the complete validated launch profile written on the last successful `gw start`, including posture, CORS, passkey, port, and service URL settings. Missing or invalid profiles fail closed. A running Operator detects a closed pub/sub stream and retries the connection with bounded backoff; supervise the worker so it restarts if its retry limit is exhausted.
 
 ### Stop the Operator
 

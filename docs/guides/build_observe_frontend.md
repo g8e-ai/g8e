@@ -5,7 +5,7 @@ parent: Guides
 
 # Generator-Neutral Builder Guide
 
-Last Updated: 2026-09-09
+Last Updated: 2026-09-18
 Version: v2.1.8
 
 ---
@@ -14,7 +14,7 @@ Version: v2.1.8
 
 This guide explains the runtime capability requirements a generated observe frontend must satisfy. A generated observe frontend is a read-only browser dashboard that shows agent and run lifecycle projections, eval summaries, downloads, and a live SSE narrative. It is produced by a builder (Lovable, Notion, or other supported SPA builder) consuming the deterministic contract pack. A Notion page alone is not a runtime SPA; the builder must produce a deployable single-page application that runs in a top-level browser tab and connects directly to a local g8e Gateway.
 
-For the full browser integration reference (WebAuthn, SSE, CORS, approvals, passkey management), see [Build a g8e-Compatible Frontend](./build_frontend.md). For the minimal Lovable setup, see [Connect a Lovable App](./lovable.md). This guide covers the observe frontend specifically.
+For the full browser integration reference (WebAuthn, SSE, CORS, approvals, passkey management), see [Build a g8e-Compatible Frontend](./build_frontend.md). For the minimal Lovable setup, see [Connect a Lovable App](./lovable.md). This guide covers the owner-local observe frontend specifically. It is not the anonymous [Public Spectator](../architecture/public_spectator.md) mirror; see [Public Spectator Operations Guide](./public_spectator.md) for publication and tunnel operations.
 
 ## Architecture
 
@@ -32,7 +32,7 @@ The generated SPA wraps the audited `g8e-adapter` package. The adapter owns runt
 
 ## The audited adapter
 
-The `dashboard/g8e-adapter/` package is the audited integration core. It is verified by 444 unit tests and ships with a minimal host, a reference frontend, and the checked-in public evaluation explorer in `evaluation-explorer/`. The evaluation explorer consumes the anonymous public adapter while retaining its own typed full-corpus presentation store. Builder-generated code imports from the adapter and calls its exported APIs.
+The `dashboard/g8e-adapter/` package is the audited integration core. It is verified by 443 unit tests and ships with a minimal host, a reference frontend, and the checked-in public evaluation explorer in `evaluation-explorer/`. The evaluation explorer consumes the anonymous public adapter while retaining its own typed full-corpus presentation store. Builder-generated code imports from the adapter and calls its exported APIs.
 
 The adapter exposes:
 

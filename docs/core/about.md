@@ -5,8 +5,8 @@ parent: Core
 
 # About g8e
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 ## Why g8e Exists
 

@@ -1,6 +1,6 @@
 # Network Architecture
 
-Last Updated: 2026-09-12
+Last Updated: 2026-09-18
 Version: v2.1.8
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
@@ -218,6 +218,9 @@ The docker-compose stack starts two first-party services alongside the gateway. 
 | --- | --- | --- |
 | **Ensemble (g8ee)** | `8000` | Python/FastAPI agentic ensemble; connects to the gateway over mTLS and streams events via SSE. See [Ensemble (g8ee)](./ensemble.md). |
 | **Dashboard (g8ed)** | `3000` | Node.js/Express operator dashboard UI. See [Dashboard (g8ed)](./dashboard.md). |
+| **Public spectator private ingest** | `8081` (loopback default) | Authenticated public-feed batch and proof ingest when `--public-spectator` is enabled. Not part of the primary mTLS execution boundary. |
+| **Public spectator public read** | `8082` (loopback default) | Anonymous bootstrap, history, SSE, and proof downloads for the in-process mirror. Cloudflared targets this listener only. |
+| **Evaluation explorer (dev)** | `5173` | Checked-in SPA for campaign observation against the public mirror. See [Public Spectator Architecture](./public_spectator.md). |
 
 ---
 
@@ -263,7 +266,7 @@ When configured, the Governed Operator can receive work via an alternative inbou
 
 ### Server-Sent Events (SSE)
 
-The gateway provides real-time event streaming from app workloads to browser and CLI clients via dedicated push, polling, and live stream endpoints. Events are routed by session or user identity. See [SSE Streaming](./sse.md) for details.
+The gateway provides real-time event streaming from app workloads to browser and CLI clients via dedicated push, polling, and live stream endpoints. Events are routed by session or user identity. The observe read API (`GET /api/v1/observe/*`) and mTLS producer endpoints (`POST /api/v1/observe/producer/agent-state`, `POST /api/v1/observe/producer/run-state`) complement SSE for browser observability. See [SSE Streaming](./sse.md) for details.
 
 ### Agent Integration
 
@@ -298,3 +301,4 @@ This information is used for certificate SAN generation and peer discovery. The 
 - [g8e Operator](./operator.md)
 - [Ensemble (g8ee)](./ensemble.md)
 - [Dashboard (g8ed)](./dashboard.md)
+- [Public Spectator Architecture](./public_spectator.md)
