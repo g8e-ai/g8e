@@ -193,6 +193,7 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// no persisted session (handled by the controller's oldSession=nil
 	// path). The explicit classification documents the requirement.
 	r.addExact(constants.APIPaths.AuthCLIRefresh, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.AuthCLIBind, RouteAuthMTLS)
 
 	// CLI session info — mTLS only. Returns the authenticated session's
 	// persisted operator binding so the CLI can resync local credentials.
@@ -726,7 +727,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			// missing session is the refresh endpoint, where the cert is
 			// the proof of identity and the session may have been lost
 			// (e.g., gateway volume reset). All other paths fail closed.
-			if r.URL.Path == constants.APIPaths.AuthCLIRefresh {
+			if isCLISessionLifecyclePath(r.URL.Path) {
 				return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
 			}
 			s.logger.Warn("gateway: auth: CLI session not found", "cli_session_id", cliSessionID)
@@ -753,7 +754,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			// the proof of identity and the session expiry is the
 			// condition being recovered from. All other paths fail
 			// closed.
-			if r.URL.Path == constants.APIPaths.AuthCLIRefresh {
+			if isCLISessionLifecyclePath(r.URL.Path) {
 				return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
 			}
 			s.logger.Warn("gateway: auth: CLI session expired", "cli_session_id", cliSessionID)
@@ -847,12 +848,16 @@ func matchesCertificateFingerprint(cert *x509.Certificate, expected string) bool
 	return subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) == 1
 }
 
+func isCLISessionLifecyclePath(path string) bool {
+	return path == constants.APIPaths.AuthCLIRefresh || path == constants.APIPaths.AuthCLIBind
+}
+
 // handleCLIRefreshAuth is the fail-closed auth path for the CLI session
-// refresh endpoint. It is called from handleCLIAuth when the session is
-// expired or missing — the exact condition the refresh endpoint recovers
-// from. The cert is the proof of identity: it was already verified by the
-// mTLS handshake (revocation check, chain validation, expiry check) in
-// handleMTLSAuth before handleCLIAuth was called.
+// refresh and bind endpoints. It is called from handleCLIAuth when the
+// session is expired or missing — the exact condition those endpoints
+// recover from. The cert is the proof of identity: it was already verified
+// by the mTLS handshake (revocation check, chain validation, expiry check)
+// in handleMTLSAuth before handleCLIAuth was called.
 //
 // Security guarantees:
 //   - The cert is verified (revocation, chain, expiry) by handleMTLSAuth.

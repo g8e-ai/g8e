@@ -85,6 +85,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// because refresh requires mTLS, which the plain router does not
 	// provide.
 	mux.HandleFunc(constants.APIPaths.AuthCLIRefresh, h.cliRefreshController.handleRefresh)
+	mux.HandleFunc(constants.APIPaths.AuthCLIBind, h.cliRefreshController.handleBind)
 
 	// CLI session info — mTLS-protected; reports the authenticated
 	// session's persisted operator binding so the CLI can resync local

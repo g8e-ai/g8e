@@ -40,6 +40,7 @@ func setupTestCLIRefreshController(t *testing.T) (*CLIRefreshController, *models
 		CLISessionSvc:      infra.CLISessionSvc,
 		OperatorSessionSvc: infra.OperatorSessionSvc,
 		Reg:                infra.Reg,
+		Auth:               infra.Auth,
 		UserSvc:            infra.UserSvc,
 		Responder:          infra.Responder,
 	})

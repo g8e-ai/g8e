@@ -649,6 +649,25 @@ type CLIRefreshResponse struct {
 	OperatorID        string `json:"operator_id,omitempty"`
 }
 
+// CLIBindRequest is the wire request for POST /api/v1/auth/cli/bind.
+// This is an mTLS-protected endpoint; the current user and CLI session are
+// derived from the authenticated certificate context. The caller pins the
+// CLI session to the specified operator session, issuing a replacement CLI
+// session when the binding changes.
+type CLIBindRequest struct {
+	OperatorSessionID string `json:"operator_session_id"`
+}
+
+// CLIBindResponse is the wire response for POST /api/v1/auth/cli/bind.
+type CLIBindResponse struct {
+	Success           bool   `json:"success"`
+	CLISessionID      string `json:"cli_session_id"`
+	UserID            string `json:"user_id"`
+	OperatorSessionID string `json:"operator_session_id,omitempty"`
+	OperatorID        string `json:"operator_id,omitempty"`
+	AlreadyBound      bool   `json:"already_bound,omitempty"`
+}
+
 // CLISessionInfoResponse is the wire response for
 // GET /api/v1/auth/cli/session. It reports the authenticated CLI session's
 // persisted identity binding verbatim: the operator session the session was

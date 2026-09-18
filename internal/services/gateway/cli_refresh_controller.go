@@ -29,6 +29,7 @@ type CLIRefreshControllerDeps struct {
 	CLISessionSvc      *CLISessionService
 	OperatorSessionSvc *OperatorSessionService
 	Reg                *RegistrationService
+	Auth               *AuthService
 	UserSvc            *UserService
 	Responder          *response.Writer
 }
@@ -54,6 +55,7 @@ type CLIRefreshController struct {
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
 	reg                *RegistrationService
+	auth               *AuthService
 	userSvc            *UserService
 	responder          *response.Writer
 }
@@ -65,6 +67,7 @@ func newCLIRefreshController(deps CLIRefreshControllerDeps) *CLIRefreshControlle
 		cliSessionSvc:      deps.CLISessionSvc,
 		operatorSessionSvc: deps.OperatorSessionSvc,
 		reg:                deps.Reg,
+		auth:               deps.Auth,
 		userSvc:            deps.UserSvc,
 		responder:          deps.Responder,
 	}

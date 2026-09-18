@@ -39,6 +39,7 @@ func operatorCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		operatorListCmd(),
+		operatorBindCmd(),
 		operatorStartCmd(),
 		operatorCpCmd(),
 		operatorScpCmd(),
