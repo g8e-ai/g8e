@@ -195,7 +195,7 @@ help:
 	@echo "  website-test    Test the g8e.ai generator and Worker"
 	@echo ""
 	@echo "Cleanup:"
-	@echo "  clean         Remove all build artifacts and runtime state"
+	@echo "  clean         Remove build artifacts (bin/, test/coverage outputs, Go caches)"
 	@echo "  clean-docker  Stop all profile containers and remove volumes (--profile bootstrapped down -v --remove-orphans)"
 	@echo ""
 	@echo "Docker Compose:"
@@ -770,8 +770,7 @@ update-doctrines:
 # =============================================================================
 .PHONY: clean
 clean:
-	@echo "Cleaning up build artifacts and runtime state..."
-	@rm -rf .g8e/
+	@echo "Cleaning up build artifacts..."
 	@rm -rf .g8e-test-tmp/
 	@rm -rf bin/
 	@rm -f *.sha256 *.test coverage.out coverage_filtered.out buf
