@@ -504,10 +504,10 @@ func formatMetricValue(observations *PublicBenchmarkObservations, metric string)
 }
 
 func formatPublicMetric(value *PublicMetricValue) string {
-	if value == nil {
+	if value == nil || value.Value == nil {
 		return ""
 	}
-	return fmt.Sprintf("%.3f", value.Value)
+	return fmt.Sprintf("%.3f", *value.Value)
 }
 
 func buildModelSummariesCSV(state *runAggregateState) ([]byte, error) {

@@ -127,7 +127,7 @@ func TestBuildAssignmentResultsCSV_EmitsHeaderAndRow(t *testing.T) {
 			},
 			BenchmarkObservations: &PublicBenchmarkObservations{
 				Timing: &PublicBenchmarkTiming{
-					GenerationMS: &PublicMetricValue{Value: 42.5},
+					GenerationMS: publicMetricValue(42.5),
 				},
 			},
 		},

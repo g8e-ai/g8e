@@ -49,7 +49,15 @@ const (
 
 // PublicMetricValue is one disclosure-safe scalar metric for explorer views.
 type PublicMetricValue struct {
-	Value float64 `json:"value"`
+	Value             *float64 `json:"value,omitempty"`
+	UnavailableReason string   `json:"unavailable_reason,omitempty"`
+}
+
+// PublicGradeSummary is one disclosure-safe deterministic grade for explorer views.
+type PublicGradeSummary struct {
+	CriterionID string `json:"criterion_id"`
+	Status      string `json:"status"`
+	Detail      string `json:"detail,omitempty"`
 }
 
 // PublicBenchmarkTiming carries assignment-level timing observations.
@@ -74,9 +82,31 @@ type PublicGPUObservation struct {
 // PublicBenchmarkObservations is the explorer-safe benchmark projection for
 // one terminal assignment.
 type PublicBenchmarkObservations struct {
-	Timing             *PublicBenchmarkTiming `json:"timing,omitempty"`
-	GPU                *PublicGPUObservation  `json:"gpu,omitempty"`
-	UnavailableReasons []string               `json:"unavailable_reasons"`
+	GradeSummaries     []PublicGradeSummary          `json:"grade_summaries,omitempty"`
+	ToolScorecard      map[string]*PublicMetricValue `json:"tool_scorecard,omitempty"`
+	Timing             *PublicBenchmarkTiming        `json:"timing,omitempty"`
+	GPU                *PublicGPUObservation         `json:"gpu,omitempty"`
+	UnavailableReasons []string                      `json:"unavailable_reasons"`
+}
+
+var toolScorecardDimensions = []string{
+	"tool_recognition",
+	"tool_selection",
+	"argument_schema",
+	"argument_semantics",
+	"permission_compliance",
+	"result_interpretation",
+	"follow_up_decision",
+	"unnecessary_tool_calls",
+	"looping",
+	"recovery",
+}
+
+var gradeToToolScorecardDimension = map[string]string{
+	"tool-selection":     "tool_selection",
+	"policy-expectation": "permission_compliance",
+	"role-invoked":       "tool_recognition",
+	"governed-inference": "follow_up_decision",
 }
 
 // CampaignProviderObservationReader loads provider-boundary observation windows
@@ -280,10 +310,98 @@ func (r *CampaignProviderObservationReader) BuildPublicBenchmarkObservations(ctx
 	if gpu.hasValues() {
 		observations.GPU = gpu.toPublic()
 	}
+	if gradeSummaries := buildPublicGradeSummaries(result); len(gradeSummaries) > 0 {
+		observations.GradeSummaries = gradeSummaries
+	}
+	if scorecard := buildToolScorecardObservations(result); len(scorecard) > 0 {
+		observations.ToolScorecard = scorecard
+	}
 	if len(observations.UnavailableReasons) == 0 {
 		observations.UnavailableReasons = nil
 	}
 	return observations, nil
+}
+
+func buildPublicGradeSummaries(result *evalv1.EvaluationAssignmentResult) []PublicGradeSummary {
+	if result == nil {
+		return nil
+	}
+	grades := result.GetDeterministicGrades()
+	if len(grades) == 0 {
+		return nil
+	}
+	summaries := make([]PublicGradeSummary, 0, len(grades))
+	for _, grade := range grades {
+		if grade == nil || grade.GetCriterionId() == "" {
+			continue
+		}
+		summaries = append(summaries, PublicGradeSummary{
+			CriterionID: grade.GetCriterionId(),
+			Status:      publicVerdictStatus(grade.GetStatus()),
+			Detail:      grade.GetDetail(),
+		})
+	}
+	return summaries
+}
+
+func buildToolScorecardObservations(result *evalv1.EvaluationAssignmentResult) map[string]*PublicMetricValue {
+	scorecard := make(map[string]*PublicMetricValue, len(toolScorecardDimensions))
+	for _, dimension := range toolScorecardDimensions {
+		scorecard[dimension] = &PublicMetricValue{
+			UnavailableReason: "not required by this scenario",
+		}
+	}
+	if result == nil {
+		return scorecard
+	}
+	for _, grade := range result.GetDeterministicGrades() {
+		if grade == nil {
+			continue
+		}
+		dimension, ok := gradeToToolScorecardDimension[grade.GetCriterionId()]
+		if !ok {
+			continue
+		}
+		scorecard[dimension] = toolScorecardMetricFromGrade(grade)
+	}
+	return scorecard
+}
+
+func toolScorecardMetricFromGrade(grade *evalv1.DeterministicGrade) *PublicMetricValue {
+	switch grade.GetStatus() {
+	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL:
+		return publicMetricValue(grade.GetScore())
+	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE:
+		detail := grade.GetDetail()
+		if detail == "" {
+			detail = "criterion unavailable"
+		}
+		return &PublicMetricValue{UnavailableReason: detail}
+	default:
+		detail := grade.GetDetail()
+		if detail == "" {
+			detail = publicVerdictStatus(grade.GetStatus())
+		}
+		return &PublicMetricValue{UnavailableReason: detail}
+	}
+}
+
+func publicVerdictStatus(status evalv1.EvaluationVerdictStatus) string {
+	switch status {
+	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS:
+		return "pass"
+	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL:
+		return "fail"
+	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE:
+		return "unavailable"
+	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSUPPORTED:
+		return "unsupported"
+	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_INVALID_EVIDENCE:
+		return "invalid_evidence"
+	default:
+		return "unspecified"
+	}
 }
 
 func scoredModelInferences(result *evalv1.EvaluationAssignmentResult) []*evalv1.ModelInferenceRecord {
@@ -348,96 +466,183 @@ func (aggregate benchmarkTimingAggregate) hasValues() bool {
 func (aggregate benchmarkTimingAggregate) toPublic() *PublicBenchmarkTiming {
 	timing := &PublicBenchmarkTiming{}
 	if aggregate.modelLoadMS != nil {
-		timing.ModelLoadMS = &PublicMetricValue{Value: *aggregate.modelLoadMS}
+		timing.ModelLoadMS = publicMetricValue(*aggregate.modelLoadMS)
 	}
 	if aggregate.timeToFirstTokenMS != nil {
-		timing.TimeToFirstTokenMS = &PublicMetricValue{Value: *aggregate.timeToFirstTokenMS}
+		timing.TimeToFirstTokenMS = publicMetricValue(*aggregate.timeToFirstTokenMS)
 	}
 	if aggregate.generationMS != nil {
-		timing.GenerationMS = &PublicMetricValue{Value: *aggregate.generationMS}
+		timing.GenerationMS = publicMetricValue(*aggregate.generationMS)
 	}
 	if aggregate.wholeTaskMS != nil {
-		timing.WholeTaskMS = &PublicMetricValue{Value: *aggregate.wholeTaskMS}
+		timing.WholeTaskMS = publicMetricValue(*aggregate.wholeTaskMS)
 	}
 	return timing
 }
 
+type gpuMetricProjection struct {
+	value             *float64
+	unavailableReason string
+}
+
 type gpuAggregate struct {
-	vramBefore      *uint64
-	vramPeak        *uint64
-	hostRAMPeak     *uint64
-	utilizationPeak *float64
-	temperaturePeak *float64
-	powerPeak       *float64
-	clockPeak       *uint32
-	seenVRAMBefore  bool
+	vramBefore       *uint64
+	vramPeak         *uint64
+	hostRAMPeak      *uint64
+	utilizationPeak  *float64
+	temperaturePeak  *float64
+	powerPeak        *float64
+	clockPeak        *uint32
+	seenVRAMBefore   bool
+	windowObserved   bool
+	vramBeforeState  gpuMetricProjection
+	vramPeakState    gpuMetricProjection
+	hostRAMState     gpuMetricProjection
+	utilizationState gpuMetricProjection
+	temperatureState gpuMetricProjection
+	powerState       gpuMetricProjection
+	clockState       gpuMetricProjection
 }
 
 func (aggregate *gpuAggregate) observeWindow(window *evalv1.ProviderBoundaryObservationWindow) {
 	if aggregate == nil || window == nil {
 		return
 	}
+	aggregate.windowObserved = true
 	for index, sample := range window.GetSamples() {
 		if sample == nil {
 			continue
 		}
-		if sample.GetVramBytesAvailability() == evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED {
-			if !aggregate.seenVRAMBefore {
-				aggregate.vramBefore = uint64Ptr(sample.GetVramUsedBytes())
-				aggregate.seenVRAMBefore = true
-			}
-			aggregate.vramPeak = maxUint64Ptr(aggregate.vramPeak, sample.GetVramUsedBytes())
-		}
-		if sample.GetHostRamAvailability() == evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED {
-			aggregate.hostRAMPeak = maxUint64Ptr(aggregate.hostRAMPeak, sample.GetHostRamUsedBytes())
-		}
-		if sample.GetGpuUtilizationAvailability() == evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED {
-			aggregate.utilizationPeak = maxFloatPtr(aggregate.utilizationPeak, float64(sample.GetGpuUtilizationPercent()))
-		}
-		if sample.GetTemperatureAvailability() == evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED {
-			aggregate.temperaturePeak = maxFloatPtr(aggregate.temperaturePeak, float64(sample.GetTemperatureCelsius()))
-		}
-		if sample.GetPowerAvailability() == evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED {
-			aggregate.powerPeak = maxFloatPtr(aggregate.powerPeak, float64(sample.GetPowerWatts()))
-		}
-		if sample.GetClockAvailability() == evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED {
-			aggregate.clockPeak = maxUint32Ptr(aggregate.clockPeak, sample.GetClockMhz())
-		}
-		if index == 0 && !aggregate.seenVRAMBefore && sample.GetVramBytesAvailability() != evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED {
+		aggregate.observeVRAMBefore(sample, index)
+		aggregate.observeVRAMPeak(sample)
+		aggregate.observeHostRAM(sample)
+		aggregate.observeUtilization(sample)
+		aggregate.observeTemperature(sample)
+		aggregate.observePower(sample)
+		aggregate.observeClock(sample)
+	}
+}
+
+func (aggregate *gpuAggregate) observeVRAMBefore(sample *evalv1.ProviderBoundaryHardwareSample, index int) {
+	switch sample.GetVramBytesAvailability() {
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED:
+		if !aggregate.seenVRAMBefore {
+			aggregate.vramBefore = uint64Ptr(sample.GetVramUsedBytes())
+			aggregate.vramBeforeState.value = float64Ptr(float64(sample.GetVramUsedBytes()))
 			aggregate.seenVRAMBefore = true
 		}
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE:
+		aggregate.vramBeforeState.unavailableReason = gpuMetricUnavailableReason("vram_before_bytes")
 	}
+	if index == 0 && !aggregate.seenVRAMBefore && sample.GetVramBytesAvailability() != evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED {
+		aggregate.seenVRAMBefore = true
+	}
+}
+
+func (aggregate *gpuAggregate) observeVRAMPeak(sample *evalv1.ProviderBoundaryHardwareSample) {
+	switch sample.GetVramBytesAvailability() {
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED:
+		aggregate.vramPeak = maxUint64Ptr(aggregate.vramPeak, sample.GetVramUsedBytes())
+		aggregate.vramPeakState.value = maxFloatPtr(aggregate.vramPeakState.value, float64(sample.GetVramUsedBytes()))
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE:
+		aggregate.vramPeakState.unavailableReason = gpuMetricUnavailableReason("vram_peak_bytes")
+	}
+}
+
+func (aggregate *gpuAggregate) observeHostRAM(sample *evalv1.ProviderBoundaryHardwareSample) {
+	switch sample.GetHostRamAvailability() {
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED:
+		aggregate.hostRAMPeak = maxUint64Ptr(aggregate.hostRAMPeak, sample.GetHostRamUsedBytes())
+		aggregate.hostRAMState.value = maxFloatPtr(aggregate.hostRAMState.value, float64(sample.GetHostRamUsedBytes()))
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE:
+		aggregate.hostRAMState.unavailableReason = gpuMetricUnavailableReason("system_ram_peak_bytes")
+	}
+}
+
+func (aggregate *gpuAggregate) observeUtilization(sample *evalv1.ProviderBoundaryHardwareSample) {
+	switch sample.GetGpuUtilizationAvailability() {
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED:
+		aggregate.utilizationPeak = maxFloatPtr(aggregate.utilizationPeak, float64(sample.GetGpuUtilizationPercent()))
+		aggregate.utilizationState.value = maxFloatPtr(aggregate.utilizationState.value, float64(sample.GetGpuUtilizationPercent()))
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE:
+		aggregate.utilizationState.unavailableReason = gpuMetricUnavailableReason("utilization_percent")
+	}
+}
+
+func (aggregate *gpuAggregate) observeTemperature(sample *evalv1.ProviderBoundaryHardwareSample) {
+	switch sample.GetTemperatureAvailability() {
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED:
+		aggregate.temperaturePeak = maxFloatPtr(aggregate.temperaturePeak, float64(sample.GetTemperatureCelsius()))
+		aggregate.temperatureState.value = maxFloatPtr(aggregate.temperatureState.value, float64(sample.GetTemperatureCelsius()))
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE:
+		aggregate.temperatureState.unavailableReason = gpuMetricUnavailableReason("temperature_celsius")
+	}
+}
+
+func (aggregate *gpuAggregate) observePower(sample *evalv1.ProviderBoundaryHardwareSample) {
+	switch sample.GetPowerAvailability() {
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED:
+		aggregate.powerPeak = maxFloatPtr(aggregate.powerPeak, float64(sample.GetPowerWatts()))
+		aggregate.powerState.value = maxFloatPtr(aggregate.powerState.value, float64(sample.GetPowerWatts()))
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE:
+		aggregate.powerState.unavailableReason = gpuMetricUnavailableReason("power_watts")
+	}
+}
+
+func (aggregate *gpuAggregate) observeClock(sample *evalv1.ProviderBoundaryHardwareSample) {
+	switch sample.GetClockAvailability() {
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED:
+		aggregate.clockPeak = maxUint32Ptr(aggregate.clockPeak, sample.GetClockMhz())
+		if aggregate.clockState.value == nil || float64(sample.GetClockMhz()) > *aggregate.clockState.value {
+			aggregate.clockState.value = float64Ptr(float64(sample.GetClockMhz()))
+		}
+	case evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE:
+		aggregate.clockState.unavailableReason = gpuMetricUnavailableReason("clock_mhz")
+	}
+}
+
+func gpuMetricUnavailableReason(metric string) string {
+	return "provider gpu collector unavailable: " + metric
 }
 
 func (aggregate *gpuAggregate) hasValues() bool {
 	return aggregate.vramBefore != nil || aggregate.vramPeak != nil || aggregate.hostRAMPeak != nil ||
-		aggregate.utilizationPeak != nil || aggregate.temperaturePeak != nil || aggregate.powerPeak != nil || aggregate.clockPeak != nil
+		aggregate.utilizationPeak != nil || aggregate.temperaturePeak != nil || aggregate.powerPeak != nil || aggregate.clockPeak != nil ||
+		aggregate.windowObserved && (aggregate.vramBeforeState.unavailableReason != "" || aggregate.vramPeakState.unavailableReason != "" ||
+			aggregate.hostRAMState.unavailableReason != "" || aggregate.utilizationState.unavailableReason != "" ||
+			aggregate.temperatureState.unavailableReason != "" || aggregate.powerState.unavailableReason != "" ||
+			aggregate.clockState.unavailableReason != "")
 }
 
 func (aggregate *gpuAggregate) toPublic() *PublicGPUObservation {
 	gpu := &PublicGPUObservation{}
-	if aggregate.vramBefore != nil {
-		gpu.VRAMBeforeBytes = &PublicMetricValue{Value: float64(*aggregate.vramBefore)}
-	}
-	if aggregate.vramPeak != nil {
-		gpu.VRAMPeakBytes = &PublicMetricValue{Value: float64(*aggregate.vramPeak)}
-	}
-	if aggregate.hostRAMPeak != nil {
-		gpu.SystemRAMPeakBytes = &PublicMetricValue{Value: float64(*aggregate.hostRAMPeak)}
-	}
-	if aggregate.utilizationPeak != nil {
-		gpu.UtilizationPercent = &PublicMetricValue{Value: *aggregate.utilizationPeak}
-	}
-	if aggregate.temperaturePeak != nil {
-		gpu.TemperatureCelsius = &PublicMetricValue{Value: *aggregate.temperaturePeak}
-	}
-	if aggregate.powerPeak != nil {
-		gpu.PowerWatts = &PublicMetricValue{Value: *aggregate.powerPeak}
-	}
-	if aggregate.clockPeak != nil {
-		gpu.ClockMHz = &PublicMetricValue{Value: float64(*aggregate.clockPeak)}
-	}
+	gpu.VRAMBeforeBytes = aggregate.projectMetric(aggregate.vramBeforeState)
+	gpu.VRAMPeakBytes = aggregate.projectMetric(aggregate.vramPeakState)
+	gpu.SystemRAMPeakBytes = aggregate.projectMetric(aggregate.hostRAMState)
+	gpu.UtilizationPercent = aggregate.projectMetric(aggregate.utilizationState)
+	gpu.TemperatureCelsius = aggregate.projectMetric(aggregate.temperatureState)
+	gpu.PowerWatts = aggregate.projectMetric(aggregate.powerState)
+	gpu.ClockMHz = aggregate.projectMetric(aggregate.clockState)
 	return gpu
+}
+
+func (aggregate *gpuAggregate) projectMetric(state gpuMetricProjection) *PublicMetricValue {
+	if state.value != nil {
+		return publicMetricValue(*state.value)
+	}
+	if aggregate.windowObserved && state.unavailableReason != "" {
+		return &PublicMetricValue{UnavailableReason: state.unavailableReason}
+	}
+	return nil
+}
+
+func publicMetricValue(value float64) *PublicMetricValue {
+	copied := value
+	return &PublicMetricValue{Value: &copied}
+}
+
+func float64Ptr(value float64) *float64 {
+	return &value
 }
 
 func nanosToMillis(value uint64) float64 {

@@ -211,9 +211,22 @@ function assertMetricRecord(value: unknown, allowed: readonly string[], path: st
   for (const [key, metric] of Object.entries(value)) assertMetricValue(metric, `${path}.${key}`);
 }
 
+function assertGradeSummaries(value: unknown, path: string): void {
+  assert(Array.isArray(value), path, 'expected array');
+  for (let i = 0; i < value.length; i++) {
+    const summary = value[i];
+    assertObject(summary, `${path}[${i}]`);
+    rejectUnknown(summary, ['criterion_id', 'status', 'detail'], `${path}[${i}]`);
+    assertString(summary.criterion_id, `${path}[${i}].criterion_id`);
+    assertString(summary.status, `${path}[${i}].status`);
+    assertOptional(summary.detail, `${path}[${i}].detail`, assertString);
+  }
+}
+
 function assertBenchmarkObservations(value: unknown, path: string): void {
   assertObject(value, path);
-  rejectUnknown(value, ['escalation_disposition', 'tool_scorecard', 'security_privacy_events', 'timing', 'gpu', 'correlated_failure', 'unavailable_reasons'], path);
+  rejectUnknown(value, ['grade_summaries', 'escalation_disposition', 'tool_scorecard', 'security_privacy_events', 'timing', 'gpu', 'correlated_failure', 'unavailable_reasons'], path);
+  if (value.grade_summaries !== undefined) assertGradeSummaries(value.grade_summaries, `${path}.grade_summaries`);
   assertOptional(value.escalation_disposition, `${path}.escalation_disposition`, (v, p) => assertEnum(v, ESCALATION_DISPOSITIONS, p));
   if (value.tool_scorecard !== undefined) assertMetricRecord(value.tool_scorecard, TOOL_SCORE_DIMENSIONS, `${path}.tool_scorecard`);
   if (value.security_privacy_events !== undefined) {

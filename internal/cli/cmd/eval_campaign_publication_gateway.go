@@ -53,16 +53,12 @@ func (s *gatewayCampaignPublicationStateStore) Save(_ context.Context, state *ev
 		return fmt.Errorf("evaluation: save publication state: %w", constants.ErrMissingRequiredField)
 	}
 	path := constants.APIPaths.EvalCampaignPublicationStateByRun + state.RunID + "/publication-state"
-	payload, err := json.Marshal(models.EvalCampaignPublicationState{
+	if _, err := s.client.Put(path, models.EvalCampaignPublicationState{
 		SchemaVersion:         state.SchemaVersion,
 		RunID:                 state.RunID,
 		PublishedIdempotency:  state.PublishedIdempotency,
 		LastPublishedSequence: state.LastPublishedSequence,
-	})
-	if err != nil {
-		return fmt.Errorf("evaluation: save publication state: %w", err)
-	}
-	if _, err := s.client.Put(path, payload); err != nil {
+	}); err != nil {
 		return fmt.Errorf("evaluation: save publication state: %w", err)
 	}
 	return nil

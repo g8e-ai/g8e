@@ -346,15 +346,107 @@ function mapBenchmarkObservations(value: unknown): BenchmarkObservations | undef
   const unavailableReasons = Array.isArray(observations.unavailable_reasons)
     ? observations.unavailable_reasons.filter((reason): reason is string => typeof reason === 'string')
     : [];
+  const gradeSummaries = mapGradeSummaries(observations.grade_summaries);
+  const toolScorecard = mapToolScorecard(observations.tool_scorecard);
+  const escalationDisposition = mapEscalationDisposition(observations.escalation_disposition);
+  const securityPrivacyEvents = mapSecurityPrivacyEvents(observations.security_privacy_events);
   const timing = mapBenchmarkTiming(observations.timing);
   const gpu = mapGPUObservation(observations.gpu);
-  if (!timing && !gpu && unavailableReasons.length === 0) {
+  const correlatedFailure = mapCorrelatedFailure(observations.correlated_failure);
+  if (
+    !gradeSummaries &&
+    !toolScorecard &&
+    !escalationDisposition &&
+    !securityPrivacyEvents &&
+    !timing &&
+    !gpu &&
+    !correlatedFailure &&
+    unavailableReasons.length === 0
+  ) {
     return undefined;
   }
   return {
+    grade_summaries: gradeSummaries,
+    tool_scorecard: toolScorecard,
+    escalation_disposition: escalationDisposition,
+    security_privacy_events: securityPrivacyEvents,
     timing,
     gpu,
+    correlated_failure: correlatedFailure,
     unavailable_reasons: unavailableReasons,
+  };
+}
+
+function mapGradeSummaries(value: unknown): BenchmarkObservations['grade_summaries'] {
+  if (!Array.isArray(value)) return undefined;
+  const summaries = value
+    .map((entry) => {
+      if (typeof entry !== 'object' || entry === null) return undefined;
+      const summary = entry as Record<string, unknown>;
+      const criterionId = optionalString(summary.criterion_id);
+      const status = optionalString(summary.status);
+      if (!criterionId || !status) return undefined;
+      return {
+        criterion_id: criterionId,
+        status,
+        detail: optionalString(summary.detail),
+      };
+    })
+    .filter((summary): summary is NonNullable<typeof summary> => summary !== undefined);
+  return summaries.length > 0 ? summaries : undefined;
+}
+
+function mapToolScorecard(value: unknown): BenchmarkObservations['tool_scorecard'] {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const scorecard = value as Record<string, unknown>;
+  const mapped = compactMetricRecord(
+    Object.fromEntries(Object.entries(scorecard).map(([key, metric]) => [key, mapMetricValue(metric)])) as Record<
+      string,
+      MetricValue | undefined
+    >,
+  );
+  return Object.keys(mapped).length > 0 ? mapped : undefined;
+}
+
+function mapEscalationDisposition(value: unknown): BenchmarkObservations['escalation_disposition'] {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.replace(/-/g, '_');
+  if (
+    normalized === 'correct_autonomous_completion' ||
+    normalized === 'correct_escalation' ||
+    normalized === 'false_escalation' ||
+    normalized === 'missed_escalation'
+  ) {
+    return normalized;
+  }
+  return undefined;
+}
+
+function mapSecurityPrivacyEvents(value: unknown): BenchmarkObservations['security_privacy_events'] {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const events = value as Record<string, unknown>;
+  const mapped: NonNullable<BenchmarkObservations['security_privacy_events']> = {};
+  for (const [key, count] of Object.entries(events)) {
+    if (typeof count === 'number' && Number.isFinite(count)) {
+      mapped[key as keyof typeof mapped] = count;
+    }
+  }
+  return Object.keys(mapped).length > 0 ? mapped : undefined;
+}
+
+function mapCorrelatedFailure(value: unknown): BenchmarkObservations['correlated_failure'] {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const failure = value as Record<string, unknown>;
+  const clusterId = optionalString(failure.cluster_id);
+  const semanticErrorCode = optionalString(failure.semantic_error_code);
+  if (!clusterId || !semanticErrorCode) return undefined;
+  const affectedRoles = Array.isArray(failure.affected_roles)
+    ? failure.affected_roles.filter((role): role is 'primary' | 'assistant' | 'lite' => role === 'primary' || role === 'assistant' || role === 'lite')
+    : [];
+  return {
+    cluster_id: clusterId,
+    semantic_error_code: semanticErrorCode,
+    affected_roles: affectedRoles,
   };
 }
 

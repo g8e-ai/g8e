@@ -759,6 +759,26 @@ func httpsPortOrDefault(p int) int {
 	return constants.Ports.OperatorHttps
 }
 
+// ReportedHTTPPort returns the HTTP port for heartbeat reporting and logging.
+// Gateway mode uses Gateway.HTTPPort; remote operator mode uses the dial port
+// on Config.HTTPPort (defaults applied at load time).
+func (c *Config) ReportedHTTPPort() int {
+	if c.Gateway.HTTPPort > 0 {
+		return c.Gateway.HTTPPort
+	}
+	return c.HTTPPort
+}
+
+// ReportedHTTPSPort returns the HTTPS port for heartbeat reporting and logging.
+// Gateway mode uses Gateway.HTTPSPort; remote operator mode uses the dial port
+// on Config.HTTPSPort (defaults applied at load time).
+func (c *Config) ReportedHTTPSPort() int {
+	if c.Gateway.HTTPSPort > 0 {
+		return c.Gateway.HTTPSPort
+	}
+	return c.HTTPSPort
+}
+
 // tlsServerName returns the TLS ServerName override to use when endpoint is a
 // raw IP address. When connecting to a Gateway via IP, we use the internal
 // Gateway hostname (g8e.local) for TLS verification since the Gateway's

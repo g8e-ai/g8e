@@ -200,7 +200,7 @@ func TestHeartbeatService_Build(t *testing.T) {
 		assert.Positive(t, heartbeat.SystemIdentity.MemoryMB)
 	})
 
-	t.Run("includes network info", func(t *testing.T) {
+	t.Run("includes network info from gateway ports", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		cfg.Gateway.HTTPPort = 8080
@@ -209,10 +209,23 @@ func TestHeartbeatService_Build(t *testing.T) {
 		svc := NewHeartbeatService(cfg, logger, nil)
 
 		heartbeat := svc.Build(models.HeartbeatTypeRequested)
-		assert.NotZero(t, heartbeat.NetworkInfo.HTTPPort)
-		assert.NotZero(t, heartbeat.NetworkInfo.HTTPSPort)
+		assert.Equal(t, 8080, heartbeat.NetworkInfo.HTTPPort)
+		assert.Equal(t, 8443, heartbeat.NetworkInfo.HTTPSPort)
 		assert.NotEmpty(t, heartbeat.NetworkInfo.Interfaces)
 		assert.NotEmpty(t, heartbeat.NetworkInfo.ConnectivityStatus)
+	})
+
+	t.Run("includes network info from operator dial ports when gateway ports unset", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		cfg.HTTPPort = 8080
+		cfg.HTTPSPort = 8443
+		logger := testutil.NewTestLogger()
+		svc := NewHeartbeatService(cfg, logger, nil)
+
+		heartbeat := svc.Build(models.HeartbeatTypeRequested)
+		assert.Equal(t, 8080, heartbeat.NetworkInfo.HTTPPort)
+		assert.Equal(t, 8443, heartbeat.NetworkInfo.HTTPSPort)
 	})
 
 	t.Run("includes version info", func(t *testing.T) {

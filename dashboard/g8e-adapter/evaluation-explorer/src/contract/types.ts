@@ -249,7 +249,14 @@ export interface CorrelatedFailureObservation {
   affected_roles: ModelRole[];
 }
 
+export interface GradeSummary {
+  criterion_id: string;
+  status: string;
+  detail?: string;
+}
+
 export interface BenchmarkObservations {
+  grade_summaries?: GradeSummary[];
   escalation_disposition?: EscalationDisposition;
   tool_scorecard?: Partial<Record<ToolScoreDimension, MetricValue<number>>>;
   security_privacy_events?: Partial<Record<SecurityPrivacyEvent, number>>;

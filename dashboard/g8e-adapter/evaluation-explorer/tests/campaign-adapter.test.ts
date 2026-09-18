@@ -423,6 +423,71 @@ describe('adaptCampaignProjectionEnvelope', () => {
     });
     expect(() => decodeViewRecord('assignment_result', assignment)).not.toThrow();
   });
+
+  it('forwards grade summaries and tool scorecard benchmark_observations fields', () => {
+    const context = createCampaignAdaptContext();
+    adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: 'run-1:assign-1:lifecycle:running',
+        record: {
+          assignment_id: 'assign-1',
+          run_id: 'run-1',
+          scenario_id: 'tool-select-grep',
+          scenario_category: 'EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION',
+          lane: 'EVALUATION_LANE_MODEL_ROLE',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING',
+          repetition: 1,
+          designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
+          variant_id: 'qwen3-4b',
+          observed_at: '2026-09-16T14:00:01Z',
+        },
+      },
+      context,
+    );
+    const resultRecord = JSON.parse(publicResultVector.canonical_json) as Record<string, unknown>;
+    const records = adaptCampaignProjectionEnvelope(
+      {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: 'run-1:assign-1:result',
+        record: {
+          ...resultRecord,
+          benchmark_observations: {
+            grade_summaries: [
+              {
+                criterion_id: 'tool-selection',
+                status: 'fail',
+                detail: 'expected tool selection evidence is missing',
+              },
+            ],
+            tool_scorecard: {
+              tool_selection: { value: 0 },
+              tool_recognition: { unavailable_reason: 'not required by this scenario' },
+            },
+          },
+        },
+      },
+      context,
+    );
+
+    const assignment = records.find((record) => record.kind === 'assignment_result');
+    expect(assignment?.benchmark_observations).toMatchObject({
+      grade_summaries: [
+        {
+          criterion_id: 'tool-selection',
+          status: 'fail',
+          detail: 'expected tool selection evidence is missing',
+        },
+      ],
+      tool_scorecard: {
+        tool_selection: { value: 0 },
+        tool_recognition: { unavailable_reason: 'not required by this scenario' },
+      },
+    });
+    expect(() => decodeViewRecord('assignment_result', assignment)).not.toThrow();
+  });
 });
 
 describe('EvalStore campaign ingest', () => {

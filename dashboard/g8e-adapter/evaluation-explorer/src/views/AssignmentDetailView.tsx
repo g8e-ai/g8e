@@ -107,6 +107,18 @@ export function AssignmentDetailView() {
           </div>
         ) : <p className="benchmark-empty">Not observed in this dataset</p>}
 
+        <h3>Failure why</h3>
+        {assignment.benchmark_observations?.grade_summaries && assignment.benchmark_observations.grade_summaries.length > 0 ? (
+          <dl className="benchmark-event-grid">
+            {assignment.benchmark_observations.grade_summaries.map((summary) => (
+              <DetailRow key={summary.criterion_id} label={observationLabel(summary.criterion_id)}>
+                {observationLabel(summary.status)}
+                {summary.detail ? ` — ${summary.detail}` : null}
+              </DetailRow>
+            ))}
+          </dl>
+        ) : <p className="benchmark-empty">Not observed in this dataset</p>}
+
         <h3>Security and privacy events</h3>
         {assignment.benchmark_observations?.security_privacy_events && Object.keys(assignment.benchmark_observations.security_privacy_events).length > 0 ? (
           <dl className="benchmark-event-grid">

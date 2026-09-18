@@ -28,6 +28,7 @@ definitions:
     - PLATFORM_ENROLLMENT_PERSIST_POLICY
     - PLATFORM_ENROLLMENT_CREATE_SESSION
     - PORT_CHECK
+    - PROVIDER_BOUNDARY_OBSERVATION
     - RESTORE_FILE
     - SHUTDOWN
     type: string
@@ -59,6 +60,7 @@ definitions:
     - ActionTypePlatformEnrollmentPersistPolicy
     - ActionTypePlatformEnrollmentCreateSession
     - ActionTypePortCheck
+    - ActionTypeProviderBoundaryObservation
     - ActionTypeRestoreFile
     - ActionTypeShutdown
   constants.GatewayMode:
@@ -200,6 +202,22 @@ definitions:
       sign_count:
         type: integer
     type: object
+  models.CampaignFreshness:
+    enum:
+    - active
+    - delayed
+    - stale
+    - intentionally_stopped
+    - safety_stopped
+    - source_offline
+    type: string
+    x-enum-varnames:
+    - CampaignFreshnessActive
+    - CampaignFreshnessDelayed
+    - CampaignFreshnessStale
+    - CampaignFreshnessIntentionallyStopped
+    - CampaignFreshnessSafetyStopped
+    - CampaignFreshnessSourceOffline
   models.DownloadArtifact:
     properties:
       artifact_id:
@@ -702,6 +720,64 @@ definitions:
       web_session_id:
         type: string
     type: object
+  models.ProviderObservationResponse:
+    properties:
+      provider_attempt:
+        items:
+          type: integer
+        type: array
+      window:
+        items:
+          type: integer
+        type: array
+    type: object
+  models.PublicFeedExportBatchResponse:
+    properties:
+      feed_chain_hash:
+        type: string
+      high_water_sequence:
+        type: integer
+    type: object
+  models.PublicFeedRecord:
+    properties:
+      record_bytes:
+        type: string
+      record_hash:
+        type: string
+      record_type:
+        $ref: '#/definitions/models.PublicFeedRecordType'
+      sequence:
+        type: integer
+    type: object
+  models.PublicFeedRecordType:
+    enum:
+    - projection
+    - event
+    - proof_manifest
+    - key_revocation
+    type: string
+    x-enum-varnames:
+    - PublicFeedRecordTypeProjection
+    - PublicFeedRecordTypeEvent
+    - PublicFeedRecordTypeProofManifest
+    - PublicFeedRecordTypeKeyRevocation
+  models.PublicFeedSnapshot:
+    properties:
+      batch_count:
+        type: integer
+      feed_chain_hash:
+        type: string
+      freshness:
+        $ref: '#/definitions/models.CampaignFreshness'
+      generated_at:
+        type: string
+      high_water_sequence:
+        type: integer
+      protocol_version:
+        type: string
+      source_id:
+        type: string
+    type: object
   models.RunDetail:
     properties:
       active_task_id:
@@ -1158,10 +1234,18 @@ definitions:
       acting_app_id:
         description: Application that initiated the inference request.
         type: string
+      assignment_id:
+        type: string
+      campaign_id:
+        type: string
       case_id:
         description: Application context propagated from the chat turn.
         type: string
       cli_session_id:
+        type: string
+      context_limit:
+        type: integer
+      evaluation_attempt_id:
         type: string
       investigation_id:
         type: string
@@ -1171,21 +1255,60 @@ definitions:
       max_tokens:
         description: Maximum tokens to generate (0 = use backend default).
         type: integer
+      messages:
+        description: Ordered conversation turns sent to the Inference Node. The node
+          validates and re-scrubs every data-bearing part before crossing the provider
+          boundary.
+        items:
+          $ref: '#/definitions/operatorv1.InferenceMessage'
+        type: array
       model:
         description: |-
-          Optional model override. Accepted only when it matches the Inference
-          Node's configured model for the role; any other value is rejected as an
-          unauthorized override.
+          Requested provider model. A campaign Inference Operator accepts it only
+          when the exact model and digest occur in the frozen registry committed by
+          model_registry_digest; standard inference uses the configured role model.
         type: string
-      prompt:
-        description: |-
-          Prompt text sent to the Inference Node. The node re-scrubs it through
-          its own ScrubbingService before crossing the execution boundary.
+      model_digest:
         type: string
+      model_registry:
+        items:
+          $ref: '#/definitions/operatorv1.InferenceModelVariant'
+        type: array
+      model_registry_digest:
+        type: string
+      parallel_tool_calls:
+        type: boolean
+      provider_attempt_id:
+        type: string
+      request_schema_version:
+        type: string
+      response_format:
+        $ref: '#/definitions/operatorv1.InferenceResponseFormat'
+      retry_count:
+        description: Zero-based retry ordinal for this provider attempt.
+        type: integer
       role:
         allOf:
         - $ref: '#/definitions/operatorv1.ModelRole'
         description: Chat-tier role for this request (primary, assistant, lite).
+      run_id:
+        type: string
+      scenario_id:
+        type: string
+      seed:
+        description: |-
+          Optional deterministic generation seed forwarded to the provider when
+          supported. Absent means use the provider default.
+        type: integer
+      stop_sequences:
+        items:
+          type: string
+        type: array
+      stream:
+        description: |-
+          When true, the Gateway forwards live InferenceProgressEvent telemetry
+          to the caller while waiting for the authoritative terminal completion.
+        type: boolean
       target_operator_session_id:
         description: |-
           Explicit Inference Node target. When empty, the gateway requires exactly
@@ -1196,6 +1319,19 @@ definitions:
         type: string
       temperature:
         description: Generation temperature override (0 = use backend default).
+        type: number
+      thinking:
+        $ref: '#/definitions/operatorv1.InferenceThinkingControl'
+      tool_choice:
+        $ref: '#/definitions/operatorv1.InferenceToolChoice'
+      tools:
+        description: Ordered callable function declarations available to the model.
+        items:
+          $ref: '#/definitions/operatorv1.InferenceToolDeclaration'
+        type: array
+      top_k:
+        type: integer
+      top_p:
         type: number
       web_session_id:
         type: string
@@ -1216,22 +1352,116 @@ definitions:
         description: Transaction ID correlating the dispatch with the audit chain.
         type: string
     type: object
+  operatorv1.InferenceLoadState:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - InferenceLoadState_INFERENCE_LOAD_STATE_UNSPECIFIED
+    - InferenceLoadState_INFERENCE_LOAD_STATE_COLD
+    - InferenceLoadState_INFERENCE_LOAD_STATE_WARM
+    - InferenceLoadState_INFERENCE_LOAD_STATE_UNAVAILABLE
+  operatorv1.InferenceMessage:
+    properties:
+      parts:
+        items:
+          $ref: '#/definitions/operatorv1.InferenceMessagePart'
+        type: array
+      role:
+        $ref: '#/definitions/operatorv1.InferenceMessageRole'
+    type: object
+  operatorv1.InferenceMessagePart:
+    properties:
+      part:
+        description: "Types that are valid to be assigned to Part:\n\n\t*InferenceMessagePart_Text\n\t*InferenceMessagePart_ToolCall\n\t*InferenceMessagePart_ToolResult"
+    type: object
+  operatorv1.InferenceMessageRole:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - InferenceMessageRole_INFERENCE_MESSAGE_ROLE_UNSPECIFIED
+    - InferenceMessageRole_INFERENCE_MESSAGE_ROLE_SYSTEM
+    - InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER
+    - InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT
+    - InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL
+  operatorv1.InferenceModelVariant:
+    properties:
+      digest:
+        type: string
+      model:
+        type: string
+    type: object
+  operatorv1.InferenceResponseFormat:
+    properties:
+      json_schema:
+        type: string
+      media_type:
+        type: string
+    type: object
+  operatorv1.InferenceResponsePart:
+    properties:
+      part:
+        description: "Types that are valid to be assigned to Part:\n\n\t*InferenceResponsePart_Text\n\t*InferenceResponsePart_ToolCall\n\t*InferenceResponsePart_Thinking"
+    type: object
   operatorv1.InferenceResult:
     properties:
+      assignment_id:
+        type: string
+      cache_tokens:
+        type: integer
+      campaign_id:
+        type: string
       completion_tokens:
         description: Number of completion tokens generated.
         type: integer
+      evaluation_attempt_id:
+        type: string
       finish_reason:
         description: Finish reason (e.g., "stop", "length").
         type: string
+      generation_duration_ns:
+        type: integer
+      load_duration_ns:
+        type: integer
+      load_state:
+        $ref: '#/definitions/operatorv1.InferenceLoadState'
       model:
         description: |-
           Model that produced the result (echoed from the request or resolved by
           the backend).
         type: string
+      model_registry_digest:
+        type: string
+      normalized_request_hash:
+        type: string
+      output_hash:
+        type: string
+      parts:
+        description: Ordered model response parts covered by result_digest.
+        items:
+          $ref: '#/definitions/operatorv1.InferenceResponsePart'
+        type: array
+      prompt_eval_duration_ns:
+        type: integer
       prompt_tokens:
         description: Number of prompt tokens consumed.
         type: integer
+      provider_attempt_id:
+        type: string
+      requested_model:
+        type: string
+      requested_model_digest:
+        type: string
       result_digest:
         description: |-
           Canonical digest of the complete result: lowercase hex SHA-256 over the
@@ -1240,12 +1470,87 @@ definitions:
           ActionReceipt's result_summary binds it, and the User Gateway verifies
           digest equality before returning success to the caller.
         type: string
-      text:
-        description: Generated text from the model.
+      retry_classification:
+        $ref: '#/definitions/operatorv1.InferenceRetryClassification'
+      retry_count:
+        type: integer
+      run_id:
         type: string
+      scenario_id:
+        type: string
+      served_model_digest:
+        type: string
+      thinking_tokens:
+        type: integer
+      time_to_first_token_ns:
+        type: integer
+      timing_source:
+        $ref: '#/definitions/operatorv1.InferenceTimingSource'
+      total_duration_ns:
+        type: integer
       total_tokens:
         description: Total tokens (prompt + completion).
         type: integer
+      usage_reported:
+        type: boolean
+    type: object
+  operatorv1.InferenceRetryClassification:
+    enum:
+    - 0
+    - 1
+    - 2
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED
+    - InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_NONE
+    - InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT
+  operatorv1.InferenceThinkingControl:
+    properties:
+      include_thoughts:
+        type: boolean
+      mode:
+        description: "Types that are valid to be assigned to Mode:\n\n\t*InferenceThinkingControl_Enabled\n\t*InferenceThinkingControl_Level"
+    type: object
+  operatorv1.InferenceTimingSource:
+    enum:
+    - 0
+    - 1
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - InferenceTimingSource_INFERENCE_TIMING_SOURCE_UNSPECIFIED
+    - InferenceTimingSource_INFERENCE_TIMING_SOURCE_PROVIDER
+  operatorv1.InferenceToolChoice:
+    properties:
+      allowed_tool_names:
+        items:
+          type: string
+        type: array
+      mode:
+        $ref: '#/definitions/operatorv1.InferenceToolChoiceMode'
+    type: object
+  operatorv1.InferenceToolChoiceMode:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_UNSPECIFIED
+    - InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO
+    - InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_NONE
+    - InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_REQUIRED
+  operatorv1.InferenceToolDeclaration:
+    properties:
+      description:
+        type: string
+      json_schema:
+        type: string
+      name:
+        type: string
     type: object
   operatorv1.L2Status:
     enum:
@@ -1317,6 +1622,14 @@ definitions:
     - 8
     - 9
     - 10
+    - 11
+    - 12
+    - 13
+    - 14
+    - 15
+    - 16
+    - 17
+    - 18
     format: int32
     type: integer
     x-enum-varnames:
@@ -1331,6 +1644,14 @@ definitions:
     - ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED
     - ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND
     - ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID
+    - ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID
   operatorv1.ReceiptPersistenceAttestation:
     properties:
       audit_record_id:
@@ -2288,7 +2609,7 @@ paths:
           schema:
             $ref: '#/definitions/operatorv1.InferenceDispatchResponse'
         "400":
-          description: Bad Request — malformed body, unknown field, empty prompt,
+          description: Bad Request — malformed body, unknown field, missing messages,
             invalid role, or acting_app_id identity mismatch
           schema:
             type: string
@@ -2340,6 +2661,39 @@ paths:
           schema:
             type: string
       summary: Dispatch a governed inference request
+      tags:
+      - inference
+  /api/v1/inference/provider-observations/{provider_attempt_id}:
+    get:
+      description: Returns the canonical provider-boundary observation window and
+        durable provider-attempt record for one provider attempt ID (mTLS owner CLI
+        only).
+      parameters:
+      - description: Provider attempt ID
+        in: path
+        name: provider_attempt_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ProviderObservationResponse'
+        "404":
+          description: Observation evidence not found
+          schema:
+            type: string
+        "405":
+          description: Method Not Allowed
+          schema:
+            type: string
+        "503":
+          description: Provider observation store unavailable
+          schema:
+            type: string
+      summary: Get provider-boundary observation evidence
       tags:
       - inference
   /api/v1/observe/bootstrap:
@@ -2730,6 +3084,94 @@ paths:
       summary: PKI device enrollment
       tags:
       - pki
+  /api/v1/public-feed/batches:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Accepts campaign projection records and signs/publishes them through the gateway-owned public spectator stack (mTLS owner CLI only).
+        Returns the gateway publisher high-water sequence and feed-chain hash (mTLS owner CLI only).
+      parameters:
+      - description: Ordered public feed records
+        in: body
+        name: records
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/models.PublicFeedRecord'
+          type: array
+      produces:
+      - application/json
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PublicFeedSnapshot'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Snapshot not found
+          schema:
+            type: string
+        "405":
+          description: Method Not Allowed
+          schema:
+            type: string
+        "503":
+          description: Public spectator unavailable
+          schema:
+            type: string
+      summary: Get public feed snapshot
+      tags:
+      - public-feed
+      - public-feed
+  /api/v1/public-feed/snapshot:
+    get:
+      consumes:
+      - application/json
+      description: |-
+        Accepts campaign projection records and signs/publishes them through the gateway-owned public spectator stack (mTLS owner CLI only).
+        Returns the gateway publisher high-water sequence and feed-chain hash (mTLS owner CLI only).
+      parameters:
+      - description: Ordered public feed records
+        in: body
+        name: records
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/models.PublicFeedRecord'
+          type: array
+      produces:
+      - application/json
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PublicFeedSnapshot'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Snapshot not found
+          schema:
+            type: string
+        "405":
+          description: Method Not Allowed
+          schema:
+            type: string
+        "503":
+          description: Public spectator unavailable
+          schema:
+            type: string
+      summary: Get public feed snapshot
+      tags:
+      - public-feed
+      - public-feed
   /api/v1/sse/events:
     get:
       description: |-
