@@ -221,31 +221,44 @@ function RoleLeadersPanel({
   );
 }
 
+function PlatformFlowStep({ step }: { step: (typeof PLATFORM_FLOW_STEPS)[number] }) {
+  return (
+    <li className={step.id === 'g8e' ? 'sys-platform-step-accent' : undefined}>
+      <div className="sys-platform-flow-content">
+        <strong>{step.label}</strong>
+        <span>{step.detail}</span>
+      </div>
+    </li>
+  );
+}
+
+function PlatformFlowArrow({ direction }: { direction: 'h' | 'hl' | 'v' }) {
+  const arrow = direction === 'h' ? '→' : direction === 'hl' ? '←' : '↓';
+
+  return (
+    <li
+      className={`sys-platform-flow-arrow sys-platform-flow-arrow-${direction}`}
+      aria-hidden="true"
+    >
+      {arrow}
+    </li>
+  );
+}
+
 function PlatformFlow() {
+  const [home, g8e, mirror, page] = PLATFORM_FLOW_STEPS;
+
   return (
     <div className="sys-platform-flow-wrap">
       <p className="sys-platform-flow-heading" aria-hidden="true">Outbound only</p>
-      <ol className="sys-platform-flow" aria-label="Platform data flow, outbound only">
-        {PLATFORM_FLOW_STEPS.map((step, index) => (
-          <li
-            key={step.id}
-            className={step.id === 'g8e' ? 'sys-platform-step-accent' : undefined}
-          >
-            <span className="sys-platform-flow-rail" aria-hidden="true">
-              <span className="sys-platform-flow-node" />
-              {index < PLATFORM_FLOW_STEPS.length - 1 ? (
-                <span className="sys-platform-flow-connector">
-                  <span className="sys-platform-flow-connector-line" />
-                  <span className="sys-platform-flow-connector-arrow">↓</span>
-                </span>
-              ) : null}
-            </span>
-            <div className="sys-platform-flow-content">
-              <strong>{step.label}</strong>
-              <span>{step.detail}</span>
-            </div>
-          </li>
-        ))}
+      <ol className="sys-platform-flow sys-platform-flow-grid" aria-label="Platform data flow, outbound only">
+        <PlatformFlowStep step={home} />
+        <PlatformFlowArrow direction="h" />
+        <PlatformFlowStep step={g8e} />
+        <PlatformFlowArrow direction="v" />
+        <PlatformFlowStep step={page} />
+        <PlatformFlowArrow direction="hl" />
+        <PlatformFlowStep step={mirror} />
       </ol>
     </div>
   );
@@ -329,7 +342,14 @@ function SystemOverviewPanel({
             >
               Hire Me
             </a>
-            <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">g8e on GitHub</a>
+            <a
+              className="sys-platform-cta-run"
+              href={G8E_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Run this yourself
+            </a>
             <Link to="/methodology#architecture">Architecture &amp; host specs</Link>
           </div>
         </div>
