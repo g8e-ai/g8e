@@ -282,7 +282,9 @@ type PublicMirrorServer struct {
 
 	// maxSSEQueueSize is the bounded SSE queue size per subscriber.
 	maxSSEQueueSize    int
-	maxRetainedBatches int
+	// maxSSEReplayRecords caps how many backlog records are sent on connect.
+	maxSSEReplayRecords int
+	maxRetainedBatches  int
 
 	// defaultPageSize is the default cursor page size.
 	defaultPageSize int
@@ -329,6 +331,7 @@ func NewPublicMirrorServer(logger *slog.Logger, store PublicMirrorStore) (*Publi
 		sseSubscribers:          make(map[*mirrorSSESubscriber]struct{}),
 		maxBootstrapProjections: 50,
 		maxSSEQueueSize:         100,
+		maxSSEReplayRecords:     constants.PublicFeedSSEReplayMaxRecords,
 		maxRetainedBatches:      constants.PublicFeedMirrorRetainedBatches,
 		defaultPageSize:         20,
 		maxPageSize:             100,
@@ -364,6 +367,13 @@ func (m *PublicMirrorServer) SetMaxSSEQueueSize(n int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.maxSSEQueueSize = n
+}
+
+// SetMaxSSEReplayRecords sets the bounded SSE backlog replay size per connect.
+func (m *PublicMirrorServer) SetMaxSSEReplayRecords(n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.maxSSEReplayRecords = n
 }
 
 func (m *PublicMirrorServer) SetMaxRetainedBatches(maxBatches int) error {
@@ -1348,7 +1358,7 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
@@ -1392,9 +1402,18 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 	snapshot := m.getSnapshotForSSE(sourceID)
 	sseWriteEvent(w, flusher, "snapshot", snapshot)
 
-	// Send replay records.
+	// Send replay records (oldest first, bounded so reconnects do not replay
+	// the full retained feed over SSE).
+	replayTruncated := false
+	if m.maxSSEReplayRecords > 0 && len(replayRecords) > m.maxSSEReplayRecords {
+		replayRecords = replayRecords[:m.maxSSEReplayRecords]
+		replayTruncated = true
+	}
 	for _, rec := range replayRecords {
 		sseWriteRecord(w, flusher, rec)
+	}
+	if replayTruncated {
+		sseWriteSentinel(w, flusher, "truncated", "replay limit reached")
 	}
 
 	if sub == nil {
@@ -1404,10 +1423,14 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 	}
 
 	ctx := r.Context()
+	keepalive := time.NewTicker(15 * time.Second)
+	defer keepalive.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-keepalive.C:
+			sseWriteComment(w, flusher)
 		case rec, open := <-sub.ch:
 			if !open {
 				sseWriteSentinel(w, flusher, "error", "stream closed")
@@ -1418,30 +1441,6 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 				continue
 			}
 			sseWriteRecord(w, flusher, rec)
-		default:
-			// Check for queue overflow.
-			if sub.consumeTruncated() {
-				sseWriteSentinel(w, flusher, "truncated", "queue overflow")
-				flusher.Flush()
-				return
-			}
-			// Brief wait to avoid busy loop.
-			select {
-			case <-ctx.Done():
-				return
-			case rec, open := <-sub.ch:
-				if !open {
-					sseWriteSentinel(w, flusher, "error", "stream closed")
-					flusher.Flush()
-					return
-				}
-				if rec.Sequence <= sinceID {
-					continue
-				}
-				sseWriteRecord(w, flusher, rec)
-			case <-time.After(50 * time.Millisecond):
-				flusher.Flush()
-			}
 		}
 	}
 }
@@ -1681,6 +1680,13 @@ func sseWriteRecord(w http.ResponseWriter, flusher http.Flusher, rec models.Publ
 func sseWriteSentinel(w http.ResponseWriter, flusher http.Flusher, sentinelType, reason string) {
 	payload, _ := json.Marshal(map[string]string{"reason": reason})
 	fmt.Fprintf(w, "event: %s\ndata: %s\n\n", sentinelType, string(payload))
+	flusher.Flush()
+}
+
+// sseWriteComment emits an SSE comment keepalive so intermediaries such as
+// Cloudflare do not treat idle streams as dead QUIC connections.
+func sseWriteComment(w http.ResponseWriter, flusher http.Flusher) {
+	fmt.Fprintf(w, ": keepalive\n\n")
 	flusher.Flush()
 }
 

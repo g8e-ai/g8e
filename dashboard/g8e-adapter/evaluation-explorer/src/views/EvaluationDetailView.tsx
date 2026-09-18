@@ -36,7 +36,7 @@ import { campaignTerminalProgress, roleLabel } from './derived';
 export function EvaluationDetailView() {
   const { runId: routeRun, datasetId: routeDataset } = useParams();
   const [params] = useSearchParams();
-  // Single-segment URLs (#/evaluations/<run>) resolve the run against the
+  // Single-segment URLs (/evaluations/<run>) resolve the run against the
   // active dataset rather than erroring.
   const runId = routeRun ?? routeDataset;
   const datasetParam = routeRun ? routeDataset : undefined;

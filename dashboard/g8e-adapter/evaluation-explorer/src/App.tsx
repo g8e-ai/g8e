@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { HashRouter, Navigate, NavLink, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
 import { useFeedStatus, useConnection, useStoreState, evalStore } from './state/store';
 import { startFeed, stopFeed } from './state/startup';
 import { ErrorBanner, FreshnessBadge } from './components/shared';
@@ -111,8 +111,8 @@ function Shell() {
 
 export function App() {
   return (
-    <HashRouter>
+    <BrowserRouter>
       <Shell />
-    </HashRouter>
+    </BrowserRouter>
   );
 }

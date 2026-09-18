@@ -63,7 +63,25 @@ func NewEvalExplorerHandler(rootOverride, mirrorOrigin string, dedicatedPort boo
 }
 
 func serveEvalExplorerFile(w http.ResponseWriter, r *http.Request, contentFS fs.FS, name string) {
+	setEvalExplorerSecurityHeaders(w, name)
 	http.ServeFileFS(w, r, contentFS, name)
+}
+
+func setEvalExplorerSecurityHeaders(w http.ResponseWriter, name string) {
+	// Do not set Content-Security-Policy here. opendevops.ai is fronted by
+	// Cloudflare, which injects per-request inline challenge and analytics
+	// scripts that cannot be hash-pinned. A strict origin CSP only produces
+	// console violations without improving safety on this read-only SPA.
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
+	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
+	w.Header().Set("Permissions-Policy", "camera=(), geolocation=(), microphone=(), payment=(), usb=()")
+	switch {
+	case name == "index.html", name == "runtime.json":
+		w.Header().Set("Cache-Control", "public, max-age=0, must-revalidate")
+	case strings.HasPrefix(name, "assets/"):
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
 }
 
 // combinePublicSpectatorHandler serves anonymous mirror reads and the evaluation
@@ -165,6 +183,7 @@ func writeEvalExplorerRuntime(w http.ResponseWriter, r *http.Request, configured
 		"schema_version": "1.0.0",
 		"mirror_origin":  mirrorOrigin,
 	}
+	setEvalExplorerSecurityHeaders(w, "runtime.json")
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(payload)
 }

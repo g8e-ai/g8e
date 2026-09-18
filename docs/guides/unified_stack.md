@@ -77,11 +77,11 @@ Rules:
 - **Do not** use `north-star` in public run IDs or campaign IDs. *North Star* remains the internal scenario catalog name (`north-star-25@1.0.0`).
 - Use **Genesis** for the first public homogeneous release (`eval-genesis-homogeneous`).
 - Every cold start gets a **new run ID**. Never resume abandoned runs after a volume wipe.
-- Set `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` in `.env` **before** starting `g8e-inference-operator`. Without them, dispatch returns HTTP 403 / `campaign binding invalid`.
+- Leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` **unset** in `.env`. Campaign authority travels on each governed dispatch from g8ee; do not rebind the inference operator per model.
 
 ### Init campaign inventory (one model per campaign)
 
-Preferred for pipeline validation and model-by-model rollout: **one north-star model, one campaign, 75 cells**. Keeps runs tidy, isolates failures, and matches the inference-operator campaign binding (rebind `.env` before each run).
+Preferred for pipeline validation and model-by-model rollout: **one north-star model, one campaign, 75 cells**. Keeps runs tidy and isolates failures. Use `g8e eval campaign start` (or `g8e eval queue next` to inspect the next pending entry) — no `.env` edits or operator recreate between models.
 
 ```bash
 # List north-star tags:
@@ -98,10 +98,20 @@ Queue manifest: `.local.dev/init-campaign-queue.json` (status `verified` / `pend
 
 Workflow per model:
 
-1. Pick the next `pending` entry from the queue (or `-tag` for a specific model).
-2. Set `.env` `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` from that inventory file.
-3. Recreate `g8e-inference-operator` so the campaign binding matches.
-4. `RUN_ID=<campaign-id>-$(date +%s)` then `campaign init` → `schedule --publish` → `execute --publish` → `verify` (add `--require-provider-observation` when the observer is enrolled).
+```bash
+# Inspect next pending entry:
+./g8e eval queue next
+
+# One command: resolve queue → init → schedule → execute → (optional) verify
+./g8e eval campaign start --queue next --publish --daemon \
+  --verify --require-provider-observation
+
+# Or target one model:
+./g8e eval campaign start --model gemma2:9b --publish --daemon \
+  --verify --require-provider-observation
+```
+
+Do not run concurrent `campaign verify` / `publish` processes.
 
 First verified gate: `init-campaign` / `gemma4:e4b` / run `init-campaign-1789654273`.
 
@@ -132,13 +142,9 @@ Copy `.env.example` to `.env` and set at minimum:
 
 ```bash
 G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434
-
-# Mini smoke (change before starting inference operator):
-G8E_INFERENCE_CAMPAIGN_ID=eval-smoke-mini
-G8E_INFERENCE_MODEL_REGISTRY_DIGEST=ce4ce367289752cb39f5b34c431696ea5fa685825ac4392c493fc564e0be8854
 ```
 
-For the dev full matrix, use `phase1a-smoke` and digest `bf99592643c56dc78a10c0ee5de59cf4d740fae0684cda6f9f9e40363959c50c` instead.
+`g8e docker init` validates only `G8E_OLLAMA_ENDPOINT`. Campaign ID and registry digest are **not** `.env` concerns — `g8e eval campaign start` resolves them from the queue or `--model` flag and g8ee attaches them to each governed dispatch.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
@@ -148,9 +154,9 @@ For the dev full matrix, use `phase1a-smoke` and digest `bf99592643c56dc78a10c0e
 | `G8E_ENSEMBLE_PORT` | `8000` | Ensemble API |
 | `G8E_DASHBOARD_PORT` | `3000` | Dashboard |
 | `G8E_HOSTNAME` | `localhost` | Browser-visible gateway hostname (CORS, WebAuthn) |
-| `G8E_OLLAMA_ENDPOINT` | — | Remote Ollama URL for Inference Operator |
-| `G8E_INFERENCE_CAMPAIGN_ID` | — | Frozen campaign ID bound at Inference Operator enrollment |
-| `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` | — | SHA-256 of frozen model registry |
+| `G8E_OLLAMA_ENDPOINT` | — | Remote Ollama URL for Inference Operator (required for `docker init`) |
+| `G8E_INFERENCE_CAMPAIGN_ID` | *(unset)* | **Leave empty.** Legacy startup binding; per-model rollout uses dispatch-carried authority instead |
+| `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` | *(unset)* | **Leave empty.** Same as above |
 
 ## Standard bootstrap workflow
 
@@ -176,8 +182,6 @@ Headless (CLI-only owner):
 ```
 
 ### 3. Start evaluation workloads
-
-Ensure `.env` campaign bindings match the inventory you will schedule **before** this step.
 
 ```bash
 docker compose --profile bootstrapped --profile evaluation up -d
@@ -218,7 +222,7 @@ Session IDs change on every volume wipe. Rediscover them after any `docker compo
 ./g8e docker init
 ```
 
-`g8e docker init` runs the full bootstrap in one command: prepare the host `.g8e` tree, build images, start the gateway, enroll the CLI owner, start `bootstrapped` + `evaluation` workloads, auto-approve platform enrollments in order (data operator → dashboard → ensemble → inference operator), and wait for ensemble health. Requires a repository-root `.env` with `G8E_OLLAMA_ENDPOINT`, `G8E_INFERENCE_CAMPAIGN_ID`, and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` set before running.
+`g8e docker init` runs the full bootstrap in one command: prepare the host `.g8e` tree, build images, start the gateway, enroll the CLI owner, start `bootstrapped` + `evaluation` workloads, auto-approve platform enrollments in order (data operator → dashboard → ensemble → inference operator), and wait for ensemble health. Requires a repository-root `.env` with `G8E_OLLAMA_ENDPOINT` set before running.
 
 If a prior Docker start created `.g8e` as root, fix ownership once with `sudo chown -R $(id -u):$(id -g) .g8e` and rerun init.
 
@@ -358,7 +362,7 @@ After the Observer Operator is enrolled, verify hardware coverage:
 
 1. **Never** call Ollama at `127.0.0.1:11434` on the campaign host for scored work when the approved provider is remote.
 2. **Always** rediscover Operator session IDs after a volume wipe.
-3. **Always** match `.env` campaign/registry digest to the inventory file used at `campaign init`.
+3. **Always** use `g8e eval campaign start` (or ensure dispatch-carried campaign authority matches the inventory) — do not rebind `.env` per model.
 4. **Never** resume archived or abandoned run IDs from prior checkpoints.
 
 ## Public spectator feed
@@ -414,10 +418,12 @@ Workloads remain unhealthy while enrollment is pending.
 
 ### Inference dispatch returns 403 / campaign binding invalid
 
-Set `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` in `.env` to match the inventory used at `campaign init`, then recreate the inference operator container:
+Usually means the inference operator was started with a **stale startup campaign binding** (`G8E_INFERENCE_CAMPAIGN_ID` / `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` set in `.env`) that no longer matches the run. Clear those keys in `.env`, recreate the operator, and use `g8e eval campaign start` so g8ee carries campaign authority on each dispatch:
 
 ```bash
+# .env: only G8E_OLLAMA_ENDPOINT required; leave campaign keys unset
 docker compose --profile evaluation up -d --force-recreate g8e-inference-operator
+./g8e eval campaign start --queue next --publish --daemon
 ```
 
 ### Observer not receiving commands

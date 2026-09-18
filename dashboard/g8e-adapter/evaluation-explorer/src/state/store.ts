@@ -40,6 +40,7 @@ import {
   recordCampaignMatrixTotal,
   type CampaignAdaptContext,
 } from './campaign-adapter';
+import { LIVE_EVENT_RETENTION_LIMIT } from '../constants';
 
 /** Composite index key: dataset first so the same identity can coexist. */
 export function recordKey(datasetId: string, id: string): string {
@@ -377,10 +378,24 @@ export class EvalStore {
             state.eventIds.add(event.event_id);
             state.events = [...state.events, event];
             this.applyLiveEvent(state, event);
+            this.retainLiveEvents(state, LIVE_EVENT_RETENTION_LIMIT);
           }
         }
         break;
     }
+  }
+
+  /** Keep only the most recent live events so SSE/history replay stays bounded. */
+  private retainLiveEvents(state: StoreState, maxEvents: number): void {
+    if (state.events.length <= maxEvents) return;
+    const retained = [...state.events]
+      .sort(
+        (left, right) =>
+          left.observed_at.localeCompare(right.observed_at) || left.event_id.localeCompare(right.event_id),
+      )
+      .slice(-maxEvents);
+    state.events = retained;
+    state.eventIds = new Set(retained.map((event) => event.event_id));
   }
 
   /** Reconcile assignment_total on summaries and live events after the matrix size is known. */
@@ -465,6 +480,7 @@ export class EvalStore {
         state.eventIds.add(event.event_id);
         state.events = [...state.events, event];
         this.applyLiveEvent(state, event);
+        this.retainLiveEvents(state, LIVE_EVENT_RETENTION_LIMIT);
       }
     }
     this.state = state;

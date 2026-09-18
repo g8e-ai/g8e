@@ -50,6 +50,34 @@ describe('public spectator SSE boundary', () => {
     expect(created[0].init).toEqual({ withCredentials: false });
   });
 
+  it('reconnects with backoff after transport errors', async () => {
+    const created: FakeEventSource[] = [];
+    const stream = new PublicSseStream({
+      config: parsePublicRuntimeConfig({ schema_version: '1.0.0', mirror_origin: 'https://feed.example.com' }),
+      source_id: 'deployment-a',
+      since_sequence: 3,
+      callbacks: {},
+      eventSourceFactory: () => {
+        const source = new FakeEventSource();
+        created.push(source);
+        return source as unknown as EventSource;
+      },
+    });
+
+    stream.connect();
+    expect(created).toHaveLength(1);
+    created[0].onerror?.(new Event('error'));
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    expect(created).toHaveLength(2);
+    expect(created[1].readyState).toBe(0);
+
+    stream.disconnect();
+    created[1].onerror?.(new Event('error'));
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    expect(created).toHaveLength(2);
+  });
+
   it('reconciles records and seals their chain position with a snapshot', () => {
     let state = createPublicMirrorState();
     const source = new FakeEventSource();

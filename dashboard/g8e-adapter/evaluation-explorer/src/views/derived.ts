@@ -594,6 +594,64 @@ export function datasetLabel(datasetId: string): string {
   return datasetId.startsWith(prefix) ? datasetId.slice(prefix.length) : datasetId;
 }
 
+export interface RecentCampaignRow {
+  datasetId: string;
+  label: string;
+  detail: string;
+  observedAt: string;
+  qualityState: QualityState;
+  lifecycleState?: EvaluationSummary['lifecycle_state'];
+  runId?: string;
+}
+
+function compareEvaluationRecency(a: EvaluationSummary, b: EvaluationSummary): number {
+  return (b.started_at ?? b.observed_at ?? '').localeCompare(a.started_at ?? a.observed_at ?? '');
+}
+
+/** Cross-dataset campaign rows for the overview, newest activity first. */
+export function recentCampaignRows(
+  catalogs: CatalogSnapshot[],
+  evaluations: EvaluationSummary[],
+  limit = 5,
+): RecentCampaignRow[] {
+  const byDataset = new Map<string, { catalog?: CatalogSnapshot; evals: EvaluationSummary[] }>();
+
+  for (const catalog of catalogs) {
+    const entry = byDataset.get(catalog.dataset_id) ?? { evals: [] };
+    entry.catalog = catalog;
+    byDataset.set(catalog.dataset_id, entry);
+  }
+
+  for (const evaluation of evaluations) {
+    const entry = byDataset.get(evaluation.dataset_id) ?? { evals: [] };
+    entry.evals.push(evaluation);
+    byDataset.set(evaluation.dataset_id, entry);
+  }
+
+  const rows: RecentCampaignRow[] = [];
+  for (const [datasetId, { catalog, evals }] of byDataset) {
+    const sortedEvals = [...evals].sort(compareEvaluationRecency);
+    const primary = sortedEvals[0];
+    const label = primary?.campaign_id ?? catalog?.title ?? datasetLabel(datasetId);
+    const detail = primary?.suite_id ?? catalog?.dataset_kind ?? '';
+    const observedAt =
+      catalog?.generated_at ?? primary?.started_at ?? primary?.observed_at ?? '';
+    if (!observedAt) continue;
+
+    rows.push({
+      datasetId,
+      label,
+      detail,
+      observedAt,
+      qualityState: catalog?.quality_state ?? primary?.quality_state ?? 'not_evaluated',
+      lifecycleState: primary?.lifecycle_state,
+      runId: primary?.run_id,
+    });
+  }
+
+  return rows.sort((a, b) => b.observedAt.localeCompare(a.observedAt)).slice(0, limit);
+}
+
 export interface ModelRoleLeaderboardRow {
   rank: number;
   model: ModelSummary;

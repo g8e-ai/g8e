@@ -22,6 +22,7 @@ import {
   isProjectionRecord,
   isFeedSnapshot,
 } from '../contract/validators';
+import { evalStore } from './store';
 
 export type RuntimeConfig = PublicRuntimeConfig;
 
@@ -143,6 +144,7 @@ export function openStream(
         }
       },
       onRecord: (record) => {
+        if (record.sequence <= evalStore.getState().observedSequence) return;
         try {
           handlers.onProjection(normalizeStreamRecord(record.record_type, String(record.sequence), record.record_bytes));
         } catch {

@@ -28,7 +28,7 @@ import { modelSuiteRows, roleLabel, runsForVariant } from './derived';
 export function ModelDetailView() {
   const { variantId: routeVariant, datasetId: routeDataset } = useParams();
   const [params] = useSearchParams();
-  // Single-segment URLs (#/models/<variant>) resolve the variant against
+  // Single-segment URLs (/models/<variant>) resolve the variant against
   // the active dataset rather than erroring.
   const variantId = routeVariant ?? routeDataset;
   const datasetParam = routeVariant ? routeDataset : undefined;

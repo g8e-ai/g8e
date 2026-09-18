@@ -8,9 +8,9 @@ import { resolveModelSummary, useStoreState } from '../state/store';
 import { roleLabel, visibleStreamEvents } from '../views/derived';
 import { EmptyState, ReconcilePlaceholder, StreamStatusIndicator } from './shared';
 import type { LiveEvent } from '../contract/types';
+import { LIVE_EVENT_RETENTION_LIMIT } from '../constants';
 
 const STREAM_PAGE_SIZE = 25;
-const STREAM_EVENT_LIMIT = 100;
 
 function eventTime(iso: string): string {
   const date = new Date(iso);
@@ -37,7 +37,7 @@ export function LiveEventStream({
   const models = useStoreState((state) => state.models);
 
   const boundedEvents = useMemo(
-    () => visibleStreamEvents(events, { modelFilter: 'all', kindFilter: 'all', limit: STREAM_EVENT_LIMIT }),
+    () => visibleStreamEvents(events, { modelFilter: 'all', kindFilter: 'all', limit: LIVE_EVENT_RETENTION_LIMIT }),
     [events],
   );
 

@@ -671,7 +671,7 @@ func reportDockerPublicSpectatorReady(cmd *cobra.Command) error {
 // printDockerSpectatorEndpoints prints the acceptance URLs for the embedded
 // evaluation explorer and public mirror after docker init.
 func printDockerSpectatorEndpoints(cmd *cobra.Command) {
-	cmd.Printf("Evaluation explorer: http://127.0.0.1:%d/#/\n", constants.EvalExplorerDefaultPort)
+	cmd.Printf("Evaluation explorer: http://127.0.0.1:%d/\n", constants.EvalExplorerDefaultPort)
 	cmd.Printf("Public mirror bootstrap: http://127.0.0.1:%d/bootstrap\n", constants.PublicSpectatorPublicPort)
 	cmd.Println("Campaigns publish through the gateway-owned public spectator automatically.")
 }

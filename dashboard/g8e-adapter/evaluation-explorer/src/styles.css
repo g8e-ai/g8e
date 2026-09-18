@@ -984,7 +984,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .ov-grid-bottom { display: grid; grid-template-columns: minmax(250px, 1fr) minmax(250px, 1fr); gap: 16px; align-items: start; }
 .ov-models-strip { grid-column: 1 / -1; }
 
-/* Recent runs mini list */
+/* Recent campaigns mini list */
 .mini-runs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .mini-run {
   display: flex; align-items: center; gap: 10px; padding: 9px 4px;

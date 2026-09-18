@@ -28,6 +28,11 @@ func TestEvalExplorerHandler_ServesEmbeddedAssetsAndRuntime(t *testing.T) {
 	handler.ServeHTTP(indexRes, indexReq)
 	require.Equal(t, http.StatusOK, indexRes.Code)
 	assert.Contains(t, indexRes.Body.String(), "<!doctype html>")
+	assert.Empty(t, indexRes.Header().Get("Content-Security-Policy"))
+	assert.Equal(t, "no-referrer", indexRes.Header().Get("Referrer-Policy"))
+	assert.Equal(t, "nosniff", indexRes.Header().Get("X-Content-Type-Options"))
+	assert.Equal(t, "DENY", indexRes.Header().Get("X-Frame-Options"))
+	assert.Equal(t, "public, max-age=0, must-revalidate", indexRes.Header().Get("Cache-Control"))
 
 	localRuntimeReq := httptest.NewRequest(http.MethodGet, "/runtime.json", nil)
 	localRuntimeReq.Host = "127.0.0.1:8082"
@@ -38,6 +43,7 @@ func TestEvalExplorerHandler_ServesEmbeddedAssetsAndRuntime(t *testing.T) {
 	var localPayload map[string]string
 	require.NoError(t, json.Unmarshal(localRuntimeRes.Body.Bytes(), &localPayload))
 	assert.Equal(t, "http://127.0.0.1:8082", localPayload["mirror_origin"])
+	assert.Empty(t, localRuntimeRes.Header().Get("Content-Security-Policy"))
 
 	publicRuntimeReq := httptest.NewRequest(http.MethodGet, "/runtime.json", nil)
 	publicRuntimeReq.Host = "opendevops.ai"

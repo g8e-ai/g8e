@@ -1,6 +1,6 @@
 // Overview view — the landing page. Layout mirrors the OpenDevOps.ai
 // surface: the live event stream, a system overview
-// with dataset coverage, the measured-model table, recent runs, and the
+// with dataset coverage, the measured-model table, recent campaigns, and the
 // public mirror download endpoints. Every panel renders real store data;
 // nothing on this page is decorative.
 
@@ -38,7 +38,7 @@ import {
   type FeedConnectionState,
   type StreamConnectionState,
 } from '../utils/feed-state';
-import { campaignTerminalProgress, roleLabel, roleLeaderRows } from './derived';
+import { campaignTerminalProgress, recentCampaignRows, roleLabel, roleLeaderRows } from './derived';
 import descriptorUrl from '../contract/descriptor.json?url';
 import type {
   CatalogSnapshot,
@@ -72,6 +72,10 @@ function agentStatus(state: QualityState): { label: string; tone: string } {
 
 function shortRunId(runId: string): string {
   return runId.length > 14 ? `…${runId.slice(-12)}` : runId;
+}
+
+function shortCampaignLabel(label: string): string {
+  return label.length > 22 ? `…${label.slice(-20)}` : label;
 }
 
 function RoleLeaderCell({ role }: { role: ModelRole }) {
@@ -380,33 +384,50 @@ function SystemOverviewPanel({
   );
 }
 
-/** Most recent runs for the active dataset. */
-function RecentRuns({ evaluations }: { evaluations: EvaluationSummary[] }) {
-  const recent = evaluations.slice(-5).reverse();
+/** Most recent campaigns across every dataset in the feed. */
+function RecentCampaigns({
+  catalogs,
+  evaluations,
+}: {
+  catalogs: CatalogSnapshot[];
+  evaluations: EvaluationSummary[];
+}) {
+  const recent = useMemo(
+    () => recentCampaignRows(catalogs, evaluations),
+    [catalogs, evaluations],
+  );
   return (
-    <section className="panel" aria-label="Recent runs">
+    <section className="panel" aria-label="Recent campaigns">
       <div className="panel-head">
-        <h2>Recent runs</h2>
+        <h2>Recent campaigns</h2>
         <Link to="/evaluations" className="panel-link">
-          View all runs →
+          View all campaigns →
         </Link>
       </div>
       {recent.length === 0 ? (
-        <p className="panel-empty">No runs recorded for this dataset.</p>
+        <p className="panel-empty">No campaigns recorded yet.</p>
       ) : (
         <ul className="mini-runs">
-          {recent.map((run) => (
-            <li key={run.run_id}>
-              <Link to={`/evaluations/${run.dataset_id}/${run.run_id}`} className="mini-run">
-                <code className="mini-run-id">{shortRunId(run.run_id)}</code>
-                <span className="mini-run-name">{run.suite_id}</span>
-                <span className="mini-run-when">
-                  {formatRelativeTime(run.started_at ?? run.observed_at)}
-                </span>
-                <span className={`status-dot status-${run.lifecycle_state}`} aria-label={run.lifecycle_state} />
-              </Link>
-            </li>
-          ))}
+          {recent.map((campaign) => {
+            const status = campaign.lifecycleState ?? campaign.qualityState;
+            const href = campaign.runId
+              ? `/evaluations/${campaign.datasetId}/${campaign.runId}`
+              : `/?dataset=${campaign.datasetId}`;
+            return (
+              <li key={campaign.datasetId}>
+                <Link to={href} className="mini-run">
+                  <code className="mini-run-id" title={campaign.label}>
+                    {shortCampaignLabel(campaign.label)}
+                  </code>
+                  <span className="mini-run-name">{campaign.detail}</span>
+                  <span className="mini-run-when">
+                    {formatRelativeTime(campaign.observedAt)}
+                  </span>
+                  <span className={`status-dot status-${status}`} aria-label={status} />
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
@@ -477,12 +498,14 @@ export function OverviewView() {
   const routeDataset = params.get('dataset') ?? undefined;
   const activeDatasetId = useActiveDatasetId(routeDataset);
   const catalog = useStoreState((state) => state.catalogs.get(activeDatasetId));
+  const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
   const models = useStoreState((state) =>
     Array.from(state.models.values()).filter((m) => m.dataset_id === activeDatasetId),
   );
   const evaluations = useStoreState((state) =>
     Array.from(state.evaluations.values()).filter((e) => e.dataset_id === activeDatasetId),
   );
+  const allEvaluations = useStoreState((state) => Array.from(state.evaluations.values()));
   const suites = useStoreState((state) =>
     Array.from(state.suites.values()).filter((s) => s.dataset_id === activeDatasetId),
   );
@@ -514,7 +537,7 @@ export function OverviewView() {
 
       <div className="ov-grid-bottom">
         <RoleLeadersPanel models={models} datasetId={activeDatasetId} catalog={catalog} />
-        <RecentRuns evaluations={evaluations} />
+        <RecentCampaigns catalogs={catalogs} evaluations={allEvaluations} />
         <DownloadsPanel />
       </div>
     </div>

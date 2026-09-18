@@ -933,6 +933,44 @@ func TestMirror_SSE_ResumesFromSinceID(t *testing.T) {
 	assert.GreaterOrEqual(t, dataLines, 3)
 }
 
+func TestMirror_SSE_ReplayTruncatesAtLimit(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	env.mirror.SetMaxSSEReplayRecords(2)
+
+	records := make([]models.PublicFeedRecord, 4)
+	for i := range records {
+		records[i] = env.makeRecord(int64(i+1), map[string]any{"v": i + 1})
+	}
+	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
+	_, resp := env.sendIngest(batch)
+	require.True(t, resp.Accepted)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, env.server.URL+"/stream?source="+env.sourceID, nil)
+	require.NoError(t, err)
+	resp2, err := env.client.Do(req)
+	require.NoError(t, err)
+	defer resp2.Body.Close()
+
+	scanner := bufio.NewScanner(resp2.Body)
+	recordEvents := 0
+	truncated := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "event: projection") {
+			recordEvents++
+		}
+		if line == "event: truncated" {
+			truncated = true
+			break
+		}
+	}
+	assert.Equal(t, 2, recordEvents)
+	assert.True(t, truncated)
+}
+
 // ---------------------------------------------------------------------------
 // Stale source tests
 // ---------------------------------------------------------------------------

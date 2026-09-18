@@ -932,6 +932,8 @@ const (
 	PublicFeedAnonymousRateWindowSecs = 60
 	PublicFeedAnonymousRateMaxClients = 10000
 	PublicFeedSSEMaxSubscribers       = 1000
+	// Cap SSE backlog replay so reconnects do not resend the full retained feed.
+	PublicFeedSSEReplayMaxRecords = 100
 	// Retain enough batches for a full homogeneous smoke matrix (~2.6k cells
 	// plus lifecycle, result, and aggregate projections) without pruning the
 	// prefix the evaluation explorer replays on cold load.

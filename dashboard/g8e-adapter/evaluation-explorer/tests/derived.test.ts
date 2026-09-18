@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { LiveEvent, ModelSummary } from '../src/contract/types';
-import { roleLabel, roleLeaderRows, visibleStreamEvents } from '../src/views/derived';
+import type { CatalogSnapshot, EvaluationSummary, LiveEvent, ModelSummary } from '../src/contract/types';
+import { recentCampaignRows, roleLabel, roleLeaderRows, visibleStreamEvents } from '../src/views/derived';
 
 describe('roleLabel', () => {
   it('maps wire roles to display labels', () => {
@@ -207,3 +207,82 @@ describe('visibleStreamEvents', () => {
 function div(n: number, d: number): number {
   return n / d;
 }
+
+function evaluationSummary(
+  partial: Partial<EvaluationSummary> & Pick<EvaluationSummary, 'dataset_id' | 'run_id'>,
+): EvaluationSummary {
+  return {
+    schema_version: '1.3.0',
+    kind: 'evaluation_summary',
+    quality_state: 'live_in_progress',
+    observed_at: '2026-09-17T00:00:00Z',
+    suite_id: 'north-star-25',
+    arm: 'platform',
+    evaluation_unit: 'model',
+    model_role_mapping: {},
+    lifecycle_state: 'running',
+    assignment_total: 75,
+    assignment_completed: 10,
+    assignment_failed: 0,
+    terminal_outcomes: { completed: 10, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+    verifier_state: 'not_applicable',
+    headline_metrics: {},
+    ...partial,
+  };
+}
+
+describe('recentCampaignRows', () => {
+  it('returns cross-dataset campaigns sorted by newest activity', () => {
+    const catalogs: CatalogSnapshot[] = [
+      {
+        schema_version: '1.3.0',
+        kind: 'catalog_snapshot',
+        dataset_id: 'ds-exploratory',
+        dataset_kind: 'exploratory_baseline',
+        quality_state: 'exploratory_partial',
+        observed_at: '2026-09-14T00:00:00Z',
+        title: 'Exploratory baseline (2026-09-14 r2)',
+        description: '',
+        limitations: [],
+        model_count: 1,
+        evaluated_count: 1,
+        suite_count: 1,
+        run_count: 1,
+        assignment_count: 1,
+        provider_request_count: 0,
+        provider_token_count: 0,
+        retry_count: 0,
+        verifier_passed_count: 1,
+        verifier_failed_count: 0,
+        generated_at: '2026-09-14T06:00:00Z',
+      },
+    ];
+    const evaluations = [
+      evaluationSummary({
+        dataset_id: 'ds-live-init-campaign-1789654273',
+        run_id: 'init-campaign-1789654273',
+        campaign_id: 'init-campaign',
+        started_at: '2026-09-17T10:00:00Z',
+        observed_at: '2026-09-17T10:00:00Z',
+      }),
+      evaluationSummary({
+        dataset_id: 'ds-live-eval-init-qwen3-4b-1789657337',
+        run_id: 'eval-init-qwen3-4b-1789657337',
+        campaign_id: 'eval-init-qwen3-4b',
+        started_at: '2026-09-17T12:00:00Z',
+        observed_at: '2026-09-17T12:00:00Z',
+        lifecycle_state: 'completed',
+        quality_state: 'verified_public',
+      }),
+    ];
+
+    const rows = recentCampaignRows(catalogs, evaluations);
+    expect(rows.map((row) => row.label)).toEqual([
+      'eval-init-qwen3-4b',
+      'init-campaign',
+      'Exploratory baseline (2026-09-14 r2)',
+    ]);
+    expect(rows[0]?.detail).toBe('north-star-25');
+    expect(rows[0]?.runId).toBe('eval-init-qwen3-4b-1789657337');
+  });
+});

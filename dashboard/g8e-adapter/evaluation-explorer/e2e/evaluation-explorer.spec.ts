@@ -9,7 +9,7 @@ const runIds = [
 ];
 
 async function expectNativeRun(page: import('@playwright/test').Page, runId: string) {
-  await page.goto(`/#/evaluations/${datasetId}/${runId}`);
+  await page.goto(`/evaluations/${datasetId}/${runId}`);
   await expect(page.getByRole('heading', { name: runId })).toBeVisible();
   await expect(page.getByText('core-execution-boundary@1.0.0', { exact: true })).toBeVisible();
   await expect(page.getByText('10/10 required invariants passed', { exact: true })).toBeVisible();
@@ -34,7 +34,7 @@ test('reconstructs native evaluations from public mirror history', async ({ page
     if (response.url().startsWith(`${mirrorOrigin}/`)) mirrorResponses.push(response.url());
   });
 
-  await page.goto('/#/evaluations');
+  await page.goto('/evaluations');
   await expect(page.getByRole('heading', { name: 'Evaluation runs' })).toBeVisible();
   for (const runId of runIds) await expect(page.getByRole('link', { name: runId })).toBeVisible();
   await expect.poll(() => mirrorResponses.some((url) => url.endsWith('/bootstrap'))).toBe(true);
@@ -47,7 +47,7 @@ test('reconstructs native evaluations from public mirror history', async ({ page
   await expect(page.getByText('10/10 required invariants passed', { exact: true })).toBeVisible();
   await expect(page.locator('.native-scenario li')).toHaveCount(10);
 
-  await page.goto('/#/evaluations');
+  await page.goto('/evaluations');
   for (const runId of runIds) await expect(page.getByRole('link', { name: runId })).toBeVisible();
 
   expect(consoleErrors).toEqual([]);

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EvalStore } from '../src/state/store';
 import { allFixtureSnapshotRecords, fixtureLiveEvents } from '../src/fixtures/fixtures';
+import { LIVE_EVENT_RETENTION_LIMIT } from '../src/constants';
+import type { LiveEvent } from '../src/contract/types';
 
 function loadFixtures(store: EvalStore): void {
   store.loadFixtures(allFixtureSnapshotRecords, fixtureLiveEvents);
@@ -38,6 +40,26 @@ describe('EvalStore', () => {
     // Re-ingest the same events through indexRecord by loading fixtures again
     loadFixtures(store);
     expect(store.getState().events.length).toBe(initialCount);
+  });
+
+  it('retains only the most recent live events', () => {
+    loadFixtures(store);
+    const extra: LiveEvent[] = Array.from({ length: LIVE_EVENT_RETENTION_LIMIT + 5 }, (_, index) => ({
+      schema_version: '1.3.0',
+      kind: 'stage_updated',
+      dataset_id: 'ds-live-a',
+      quality_state: 'live_in_progress',
+      observed_at: `2026-09-17T10:${String(index).padStart(2, '0')}:00Z`,
+      run_id: 'run-retention-test',
+      event_id: `evt-retention-${index}`,
+      lifecycle_status: 'running',
+      completed: 0,
+      total: 75,
+    }));
+    store.loadFixtures(allFixtureSnapshotRecords, [...fixtureLiveEvents, ...extra]);
+    expect(store.getState().events.length).toBe(LIVE_EVENT_RETENTION_LIMIT);
+    expect(store.getState().events.some((event) => event.event_id === 'evt-retention-0')).toBe(false);
+    expect(store.getState().events.some((event) => event.event_id === 'evt-retention-104')).toBe(true);
   });
 
   it('getModels returns models for a specific dataset', () => {
