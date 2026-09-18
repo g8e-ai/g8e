@@ -989,7 +989,7 @@ export const RoleAssignmentSchema: GenMessage<RoleAssignment> = /*@__PURE__*/
   messageDesc(file_g8e_eval_v1_eval, 17);
 
 /**
- * HeterogeneousStackDefinition binds Primary, Assistant, and Light slots.
+ * HeterogeneousStackDefinition binds Primary, Assistant, and Lite slots.
  *
  * @generated from message g8e.eval.v1.HeterogeneousStackDefinition
  */

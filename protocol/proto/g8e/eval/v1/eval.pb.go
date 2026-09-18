@@ -3057,7 +3057,7 @@ func (x *RoleAssignment) GetVariantId() string {
 	return ""
 }
 
-// HeterogeneousStackDefinition binds Primary, Assistant, and Light slots.
+// HeterogeneousStackDefinition binds Primary, Assistant, and Lite slots.
 type HeterogeneousStackDefinition struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	StackId       string                 `protobuf:"bytes,1,opt,name=stack_id,json=stackId,proto3" json:"stack_id,omitempty"`

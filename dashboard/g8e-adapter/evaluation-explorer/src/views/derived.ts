@@ -14,7 +14,7 @@
 //     observed; model_failed assignments have no pass metric and are
 //     reported separately, not silently dropped.
 
-import { MODEL_ROLE_WIRE_ORDER } from '../content/roles';
+import { MODEL_ROLE_WIRE_ORDER, MODEL_ROLES } from '../content/roles';
 import type {
   AssignmentResult,
   CatalogSnapshot,
@@ -642,8 +642,8 @@ export function modelRetries(variantId: string, assignments: AssignmentResult[])
 
 /** Display label for a catalog role key. */
 export function roleLabel(role: string): string {
-  if (role === 'lite') return 'Light';
-  return role.charAt(0).toUpperCase() + role.slice(1);
+  const match = MODEL_ROLES.find((entry) => entry.wire === role);
+  return match?.name ?? role;
 }
 
 /** Short dataset label for table cells; strips the live-run prefix when present. */
@@ -765,7 +765,7 @@ export function modelRoleLeaderboardRows(
   });
 }
 
-/** Top measured model per role bucket, in Primary → Assistant → Light order. */
+/** Top measured model per role bucket, in Primary → Assistant → Lite order. */
 export function roleLeaderRows(models: ModelSummary[]): RoleLeaderRow[] {
   return MODEL_ROLE_WIRE_ORDER.map((role) => ({
     role,

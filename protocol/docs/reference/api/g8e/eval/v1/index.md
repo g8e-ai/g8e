@@ -625,7 +625,7 @@ EvaluationVerificationReport independently verifies one run or assignment.
 <a name="g8e-eval-v1-HeterogeneousStackDefinition"></a>
 
 ### HeterogeneousStackDefinition
-HeterogeneousStackDefinition binds Primary, Assistant, and Light slots.
+HeterogeneousStackDefinition binds Primary, Assistant, and Lite slots.
 
 
 | Field | Type | Label | Description |

@@ -6,7 +6,7 @@ describe('roleLabel', () => {
   it('maps wire roles to display labels', () => {
     expect(roleLabel('primary')).toBe('Primary');
     expect(roleLabel('assistant')).toBe('Assistant');
-    expect(roleLabel('lite')).toBe('Light');
+    expect(roleLabel('lite')).toBe('Lite');
   });
 });
 
@@ -25,7 +25,7 @@ function modelSummary(partial: Partial<ModelSummary> & Pick<ModelSummary, 'varia
 }
 
 describe('roleLeaderRows', () => {
-  it('returns one leader per role ordered Primary, Assistant, Light', () => {
+  it('returns one leader per role ordered Primary, Assistant, Lite', () => {
     const models = [
       modelSummary({
         variant_id: 'qwen3-4b',

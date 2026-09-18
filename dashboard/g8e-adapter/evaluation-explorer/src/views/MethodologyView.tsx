@@ -80,7 +80,7 @@ const ENGINEERING_RULES = [
 
 const SHIPPED_TODAY = [
   'A public Evaluation Explorer over a signed mirror feed — live campaign progress, historical runs, per-model results, and role-scoped comparison, all reconstructed from bootstrap, paginated history, and SSE.',
-  'Model campaign benchmarks that run models through the production g8ee chat path: governed inference dispatch, tool and filesystem boundaries, and the Primary / Assistant / Light role stack used in real workloads.',
+  'Model campaign benchmarks that run models through the production g8ee chat path: governed inference dispatch, tool and filesystem boundaries, and the Primary / Assistant / Lite role stack used in real workloads.',
   'A frozen 25-scenario agent benchmark catalog across nine behavior categories, graded on a real host boundary with rubric-based pass/fail, tool scorecards, escalation disposition, and timing telemetry when observed.',
   'Explicit quality-state labeling on every record — verified, exploratory, live-in-progress, or failed — so you can see what has passed integrity checks and what is still provisional.',
 ] as const;

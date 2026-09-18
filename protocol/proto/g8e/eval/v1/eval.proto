@@ -382,7 +382,7 @@ message RoleAssignment {
   string variant_id = 2;
 }
 
-// HeterogeneousStackDefinition binds Primary, Assistant, and Light slots.
+// HeterogeneousStackDefinition binds Primary, Assistant, and Lite slots.
 message HeterogeneousStackDefinition {
   string stack_id = 1;
   string stack_digest = 2;

@@ -98,9 +98,9 @@ describe('LiveEventStream', () => {
       </MemoryRouter>,
     );
 
-    const roleCell = screen.getByText('Light').closest('.stream-role');
+    const roleCell = screen.getByText('Lite').closest('.stream-role');
     expect(roleCell).not.toBeNull();
-    expect(roleCell).toHaveTextContent('Light');
+    expect(roleCell).toHaveTextContent('Lite');
     expect(roleCell).not.toHaveTextContent('gemma2-9b');
   });
 });

@@ -28,7 +28,7 @@ export const PLATFORM_LEDE =
   'OpenDevOps.ai is a one-person project running real evaluation campaigns on consumer hardware — open-source SLMs scored through the full g8e agent stack, not isolated API calls. Only signed snapshots leave the host.';
 
 export const PLATFORM_MEASUREMENT_SUMMARY =
-  'Each candidate model is scored in every g8e role — Primary, Assistant, and Light — across 25 frozen agent scenarios. The goal is per-role metrics (pass rate, tool selection, throughput, escalation) to identify the strongest open models, then compare those picks against single-LLM baselines.';
+  'Each candidate model is scored in every g8e role — Primary, Assistant, and Lite — across 25 frozen agent scenarios. The goal is per-role metrics (pass rate, tool selection, throughput, escalation) to identify the strongest open models, then compare those picks against single-LLM baselines.';
 
 export const PLATFORM_PORTFOLIO_NOTE =
   'This explorer is a live portfolio piece — the same pipeline I use for production evals, plus the public mirror UI I built on top. I am available for contract work on governed AI, evaluation infrastructure, and read-only observability surfaces.';
@@ -125,7 +125,7 @@ export const G8E_DIFFERENTIATORS = [
 /** The complete package every model candidate is measured against. */
 export const G8E_MEASURED_TOGETHER = [
   '25 frozen agent scenarios across nine behavior categories — instruction, tools, routing, security, recovery, and synthesis',
-  'Primary, Assistant, and Light role stack through the production g8ee chat path',
+  'Primary, Assistant, and Lite role stack through the production g8ee chat path',
   'Governed inference dispatch to Ollama — never a direct provider API shortcut',
   'Host-bound tool, filesystem, and process execution through the Data Operator boundary',
   'Rubric pass/fail, tool scorecards, escalation disposition, and timing telemetry when observed',

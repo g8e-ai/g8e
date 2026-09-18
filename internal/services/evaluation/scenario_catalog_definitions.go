@@ -525,7 +525,7 @@ func routeLiteTriage() ScenarioBlueprint {
 	return ScenarioBlueprint{
 		ScenarioID: "route-lite-triage", ScenarioVersion: scenarioVersion,
 		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_ROUTING_DELEGATION,
-		PublicDescription: "Handle a tiny triage label in Light without over-escalating.",
+		PublicDescription: "Handle a tiny triage label in Lite without over-escalating.",
 		GradingMethod:     evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
 		RequiredConcepts:  []string{"lite-triage", "routing"},
 		TinyTask:          true,

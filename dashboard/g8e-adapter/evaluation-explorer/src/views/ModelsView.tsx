@@ -233,7 +233,7 @@ export function ModelsView() {
           <option value="all">All roles</option>
           <option value="primary">Primary</option>
           <option value="assistant">Assistant</option>
-          <option value="lite">Light</option>
+          <option value="lite">Lite</option>
         </select>
         <select aria-label="Filter by evaluation status" value={filters.evaluated} onChange={(e) => updateFilter({ evaluated: e.target.value as ModelFilters['evaluated'] })}>
           <option value="all">All models</option>
