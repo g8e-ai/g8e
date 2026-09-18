@@ -370,7 +370,7 @@ func verifyCampaignRun(
 	publication, pubErr := newCampaignPublicationCoordinator(cmd, fileSvc)
 	if pubErr != nil {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication unavailable: %v\n", pubErr)
-	} else {
+	} else if report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
 		published, pubErr := publication.PublishRunVerification(cmd.Context(), runID, report)
 		if pubErr != nil {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication: %v\n", pubErr)

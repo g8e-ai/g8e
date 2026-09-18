@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
@@ -39,6 +40,7 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		campaignEvalScheduleHeterogeneousCmd(deps),
 		campaignEvalExecuteCmd(deps),
 		campaignEvalPublishCmd(deps),
+		campaignEvalMirrorCmd(deps),
 		campaignEvalVerifyCmd(deps),
 		campaignEvalCheckMatrixCmd(deps),
 		campaignEvalExportCmd(deps),
@@ -703,12 +705,21 @@ func newCampaignPublicationCoordinator(cmd *cobra.Command, fileSvc fs.RuntimeFil
 	if err != nil {
 		return nil, fmt.Errorf("campaign publication: provider observation remote: %w", err)
 	}
-	return evaluation.NewCampaignPublicationCoordinator(
+	publicationState, err := newGatewayCampaignPublicationStateStoreFromConfig(fileSvc, cfg)
+	if err != nil {
+		return nil, err
+	}
+	coordinator := evaluation.NewCampaignPublicationCoordinator(
 		evaluation.NewStore(fileSvc),
 		fileSvc,
+		publicationState,
 		exporter,
 		remote,
-	), nil
+	)
+	if isGatewayHealthy() {
+		coordinator.WithMirrorProbe(newHTTPCampaignMirrorProbe(commandContext(cmd)))
+	}
+	return coordinator, nil
 }
 
 func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
@@ -762,7 +773,7 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 			publication, pubErr := newCampaignPublicationCoordinator(cmd, fileSvc)
 			if pubErr != nil {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication unavailable: %v\n", pubErr)
-			} else {
+			} else if report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
 				published, pubErr := publication.PublishRunVerification(cmd.Context(), runID, report)
 				if pubErr != nil {
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication: %v\n", pubErr)

@@ -221,7 +221,7 @@ func TestCampaignPublicationCoordinatorPublishRunAggregates(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	exporter := &recordingCampaignFeedExporter{}
-	coordinator := NewCampaignPublicationCoordinator(store, files, exporter, nil)
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
 	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" }).WithPublication(coordinator)
 	req := testCampaignInitRequest(t)
 	catalog := req.Catalog

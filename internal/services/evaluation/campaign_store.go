@@ -139,6 +139,18 @@ func (s *Store) SaveRun(ctx context.Context, run *evalv1.EvaluationRun) error {
 	return nil
 }
 
+// RunExists reports whether the canonical run record exists on the host store.
+func (s *Store) RunExists(ctx context.Context, runID string) (bool, error) {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
+		return false, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
+	}
+	exists, err := s.files.FileExists(ctx, runStatePath(runID))
+	if err != nil {
+		return false, fmt.Errorf("evaluation: run exists: %w", err)
+	}
+	return exists, nil
+}
+
 // LoadRun reads one persisted model-campaign run record.
 func (s *Store) LoadRun(ctx context.Context, runID string) (*evalv1.EvaluationRun, error) {
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {

@@ -12,6 +12,63 @@ describe('useActiveDatasetId', () => {
     expect(result.current).toBe('ds-live-north-star-smoke-1789575779');
   });
 
+  it('prefers verified public live run over in-progress live run', () => {
+    evalStore.loadFixtures([], []);
+    evalStore.getState().evaluations.set('ds-live-verified:run-verified', {
+      schema_version: VIEW_SCHEMA_VERSION,
+      kind: 'evaluation_summary',
+      dataset_id: 'ds-live-verified',
+      quality_state: 'verified_public',
+      observed_at: '2026-09-18T10:00:00Z',
+      source_revision_label: 'test',
+      run_id: 'run-verified',
+      suite_id: 'suite-1',
+      arm: 'homogeneous-model-role',
+      evaluation_unit: 'model',
+      lifecycle_state: 'completed',
+      assignment_total: 75,
+      assignment_completed: 75,
+      assignment_failed: 0,
+      terminal_outcomes: {
+        completed: 75,
+        model_failed: 0,
+        grader_failed: 0,
+        invalid_evidence: 0,
+        stopped: 0,
+      },
+      verifier_state: 'passed',
+      headline_metrics: {},
+    });
+    evalStore.getState().evaluations.set('ds-live-in-progress:run-active', {
+      schema_version: VIEW_SCHEMA_VERSION,
+      kind: 'evaluation_summary',
+      dataset_id: 'ds-live-in-progress',
+      quality_state: 'live_in_progress',
+      observed_at: '2026-09-18T12:00:00Z',
+      source_revision_label: 'test',
+      run_id: 'run-active',
+      suite_id: 'suite-1',
+      arm: 'homogeneous-model-role',
+      evaluation_unit: 'model',
+      lifecycle_state: 'running',
+      assignment_total: 75,
+      assignment_completed: 10,
+      assignment_failed: 0,
+      terminal_outcomes: {
+        completed: 10,
+        model_failed: 0,
+        grader_failed: 0,
+        invalid_evidence: 0,
+        stopped: 0,
+      },
+      verifier_state: 'not_applicable',
+      headline_metrics: {},
+    });
+
+    const { result } = renderHook(() => useActiveDatasetId(undefined));
+    expect(result.current).toBe('ds-live-verified');
+  });
+
   it('prefers live run over exploratory baseline when both are available', () => {
     evalStore.loadFixtures(
       [

@@ -50,6 +50,7 @@ type CampaignStore interface {
 	SaveScenarioCatalog(ctx context.Context, campaignID string, catalog *evalv1.EvaluationScenarioCatalog) error
 	LoadScenarioCatalog(ctx context.Context, campaignID string) (*evalv1.EvaluationScenarioCatalog, error)
 	SaveRun(ctx context.Context, run *evalv1.EvaluationRun) error
+	RunExists(ctx context.Context, runID string) (bool, error)
 	LoadRun(ctx context.Context, runID string) (*evalv1.EvaluationRun, error)
 	SaveAssignment(ctx context.Context, assignment *evalv1.EvaluationAssignment) error
 	LoadAssignment(ctx context.Context, runID, assignmentID string) (*evalv1.EvaluationAssignment, error)
@@ -61,6 +62,7 @@ type CampaignStore interface {
 	LoadAssignmentResult(ctx context.Context, runID, assignmentID string) (*evalv1.EvaluationAssignmentResult, error)
 	SaveHeterogeneousStackSet(ctx context.Context, campaignID string, stackSet *HeterogeneousStackSet) error
 	LoadHeterogeneousStackSet(ctx context.Context, campaignID string) (*HeterogeneousStackSet, error)
+	LoadCampaignVerification(ctx context.Context, runID string) (*evalv1.EvaluationVerificationReport, error)
 }
 
 // CampaignController owns deterministic scheduling, canonical assignment

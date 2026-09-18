@@ -11,14 +11,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	"google.golang.org/protobuf/proto"
@@ -39,13 +37,6 @@ type CampaignFeedExporter interface {
 	ExportBatch(ctx context.Context, records []CampaignPublicFeedRecord) error
 }
 
-type campaignPublicationState struct {
-	SchemaVersion         string   `json:"schema_version"`
-	RunID                 string   `json:"run_id"`
-	PublishedIdempotency  []string `json:"published_idempotency_keys"`
-	LastPublishedSequence int64    `json:"last_published_sequence"`
-}
-
 type campaignFeedPublishRequest struct {
 	IdempotencyKey string
 	Body           []byte
@@ -56,17 +47,29 @@ type campaignFeedPublishRequest struct {
 type CampaignPublicationCoordinator struct {
 	store             CampaignStore
 	files             fs.RuntimeFileService
+	publicationState  CampaignPublicationStateStore
 	exporter          CampaignFeedExporter
 	observationRemote ProviderObservationRemote
+	mirrorProbe       CampaignMirrorProbe
 }
 
-func NewCampaignPublicationCoordinator(store CampaignStore, files fs.RuntimeFileService, exporter CampaignFeedExporter, observationRemote ProviderObservationRemote) *CampaignPublicationCoordinator {
+func NewCampaignPublicationCoordinator(store CampaignStore, files fs.RuntimeFileService, publicationState CampaignPublicationStateStore, exporter CampaignFeedExporter, observationRemote ProviderObservationRemote) *CampaignPublicationCoordinator {
 	return &CampaignPublicationCoordinator{
 		store:             store,
 		files:             files,
+		publicationState:  publicationState,
 		exporter:          exporter,
 		observationRemote: observationRemote,
 	}
+}
+
+// WithMirrorProbe enables drift-aware catch-up when the gateway mirror volume
+// was wiped but host publication idempotency state remains.
+func (c *CampaignPublicationCoordinator) WithMirrorProbe(probe CampaignMirrorProbe) *CampaignPublicationCoordinator {
+	if c != nil {
+		c.mirrorProbe = probe
+	}
+	return c
 }
 
 // PublishAssignmentLifecycle emits one lifecycle projection when it has not yet
@@ -247,20 +250,36 @@ func (c *CampaignPublicationCoordinator) PublishRunCompletion(ctx context.Contex
 	return c.exportFeedRecords(ctx, runID, requests)
 }
 
-// ResetPublicationIdempotency clears host-side publication idempotency so a run
-// can be republished after the gateway mirror volume was wiped. Gateway
-// high-water sequence is authoritative for the next export batch.
+// ResetPublicationIdempotency clears gateway-owned publication idempotency so a
+// run can be republished after the mirror volume was wiped.
 func (c *CampaignPublicationCoordinator) ResetPublicationIdempotency(ctx context.Context, runID string) error {
-	if c == nil || c.files == nil || runID == "" {
+	if c == nil || c.publicationState == nil || runID == "" {
 		return fmt.Errorf("evaluation: reset publication idempotency: %w", constants.ErrMissingRequiredField)
 	}
-	state, err := c.loadPublicationState(ctx, runID)
+	state, err := c.publicationState.Load(ctx, runID)
 	if err != nil {
 		return err
 	}
 	state.PublishedIdempotency = []string{}
 	state.LastPublishedSequence = 0
-	return c.savePublicationState(ctx, state)
+	return c.publicationState.Save(ctx, state)
+}
+
+// PublishRunCatchUpWithVerification republishes one run and, when the persisted
+// verification report passed, emits the post-verify explorer revisions.
+func (c *CampaignPublicationCoordinator) PublishRunCatchUpWithVerification(ctx context.Context, runID string, report *evalv1.EvaluationVerificationReport) (int, error) {
+	published, err := c.PublishRunCatchUp(ctx, runID)
+	if err != nil {
+		return published, err
+	}
+	if report == nil || report.GetRunId() != runID || report.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+		return published, nil
+	}
+	verificationCount, err := c.PublishRunVerification(ctx, runID, report)
+	if err != nil {
+		return published, err
+	}
+	return published + verificationCount, nil
 }
 
 // PublishRunCatchUp scans one run and publishes any missing lifecycle and
@@ -268,6 +287,9 @@ func (c *CampaignPublicationCoordinator) ResetPublicationIdempotency(ctx context
 func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, runID string) (int, error) {
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || runID == "" {
 		return 0, fmt.Errorf("evaluation: publish run catch-up: %w", constants.ErrMissingRequiredField)
+	}
+	if err := c.ensureMirrorCatchUpReady(ctx, runID); err != nil {
+		return 0, err
 	}
 	run, err := c.store.LoadRun(ctx, runID)
 	if err != nil {
@@ -315,6 +337,27 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUp(ctx context.Context, 
 		return published, err
 	}
 	return published + completionCount, nil
+}
+
+func (c *CampaignPublicationCoordinator) ensureMirrorCatchUpReady(ctx context.Context, runID string) error {
+	if c == nil || c.mirrorProbe == nil || runID == "" {
+		return nil
+	}
+	present, err := c.mirrorProbe.DatasetPresent(ctx, CampaignDatasetID(runID))
+	if err != nil {
+		return fmt.Errorf("evaluation: publish run catch-up: mirror probe: %w", err)
+	}
+	if present {
+		return nil
+	}
+	state, err := c.publicationState.Load(ctx, runID)
+	if err != nil {
+		return err
+	}
+	if len(state.PublishedIdempotency) == 0 {
+		return nil
+	}
+	return c.ResetPublicationIdempotency(ctx, runID)
 }
 
 func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Context, runID string) (*evalv1.EvaluationRun, []*evalv1.EvaluationAssignment, map[string]*evalv1.EvaluationAssignmentResult, *runAggregateState, error) {
@@ -393,7 +436,10 @@ func (c *CampaignPublicationCoordinator) exportFeedRecords(ctx context.Context, 
 	if len(requests) == 0 {
 		return 0, nil
 	}
-	state, err := c.loadPublicationState(ctx, runID)
+	if c.publicationState == nil {
+		return 0, fmt.Errorf("evaluation: export feed records: %w", constants.ErrMissingRequiredField)
+	}
+	state, err := c.publicationState.Load(ctx, runID)
 	if err != nil {
 		return 0, err
 	}
@@ -430,7 +476,7 @@ func (c *CampaignPublicationCoordinator) exportFeedRecords(ctx context.Context, 
 		}
 		sort.Strings(state.PublishedIdempotency)
 		state.LastPublishedSequence = records[len(records)-1].Sequence
-		if err := c.savePublicationState(ctx, state); err != nil {
+		if err := c.publicationState.Save(ctx, state); err != nil {
 			return 0, err
 		}
 		return len(pending), nil
@@ -462,51 +508,6 @@ func buildCampaignPublicFeedRecord(sequence int64, body []byte) CampaignPublicFe
 		RecordHash:  hex.EncodeToString(digest[:]),
 		RecordBytes: string(body),
 	}
-}
-
-func (c *CampaignPublicationCoordinator) loadPublicationState(ctx context.Context, runID string) (*campaignPublicationState, error) {
-	path := campaignPublicationStatePath(runID)
-	body, err := c.files.ReadFile(ctx, path)
-	if err != nil {
-		return &campaignPublicationState{
-			SchemaVersion:        CampaignSchemaVersion,
-			RunID:                runID,
-			PublishedIdempotency: []string{},
-		}, nil
-	}
-	state := &campaignPublicationState{}
-	if err := json.Unmarshal(body, state); err != nil {
-		return nil, fmt.Errorf("evaluation: load publication state: %w", err)
-	}
-	if state.SchemaVersion != CampaignSchemaVersion || state.RunID != runID {
-		return nil, fmt.Errorf("evaluation: load publication state: scope mismatch")
-	}
-	if state.PublishedIdempotency == nil {
-		state.PublishedIdempotency = []string{}
-	}
-	return state, nil
-}
-
-func (c *CampaignPublicationCoordinator) savePublicationState(ctx context.Context, state *campaignPublicationState) error {
-	if state == nil || !complianceevidence.ValidPathElement(state.RunID) {
-		return fmt.Errorf("evaluation: save publication state: %w", constants.ErrMissingRequiredField)
-	}
-	body, err := json.Marshal(state)
-	if err != nil {
-		return fmt.Errorf("evaluation: save publication state: %w", err)
-	}
-	if err := complianceevidence.ValidateCanonicalJSON(body); err != nil {
-		return fmt.Errorf("evaluation: save publication state: canonical JSON: %w", err)
-	}
-	path := campaignPublicationStatePath(state.RunID)
-	if err := c.files.MkdirAll(ctx, evaluationRunDir(state.RunID), constants.PermDirStandard); err != nil {
-		return fmt.Errorf("evaluation: save publication state: %w", err)
-	}
-	return c.files.WriteFile(ctx, path, body, constants.PermFileReadOnly)
-}
-
-func campaignPublicationStatePath(runID string) string {
-	return evaluationRunDir(runID) + "/" + constants.EvaluationPublicationStateFilename
 }
 
 func containsString(values []string, target string) bool {

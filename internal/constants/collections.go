@@ -57,4 +57,5 @@ const (
 	CollectionObservePublicationProgress  CollectionName = "observe_publication_progress"
 	CollectionObserveSourceFreshness      CollectionName = "observe_source_freshness"
 	CollectionPublicFeedOutbox            CollectionName = "public_feed_outbox"
+	CollectionEvalCampaignPublicationState CollectionName = "eval_campaign_publication_state"
 )

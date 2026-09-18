@@ -839,6 +839,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Responder: ls.responder,
 			Spectator: func() *PublicSpectatorRuntime { return ls.publicSpectator },
 		},
+		EvalCampaignPublicationControllerDeps: EvalCampaignPublicationControllerDeps{
+			Logger:    logger,
+			Responder: ls.responder,
+			Service:   NewEvalCampaignPublicationService(ls.docStore),
+		},
 		ProviderObservationControllerDeps: providerObservationDeps,
 	})
 	if err != nil {

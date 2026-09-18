@@ -80,11 +80,22 @@ function buildOptions(catalogs: CatalogSnapshot[], liveDatasetIds: string[]): Da
   return options;
 }
 
-function defaultDatasetId(options: DatasetOption[], liveDatasetIds: string[]): string {
-  // Prefer the newest live campaign on Overview/Live so SSE lifecycle rows match
-  // the active dataset without a manual selector change.
+function defaultDatasetId(
+  options: DatasetOption[],
+  liveDatasetIds: string[],
+  evaluations: Iterable<EvaluationSummary>,
+): string {
+  const verifiedLive = Array.from(evaluations)
+    .filter((summary) => summary.dataset_id.startsWith('ds-live-') && summary.quality_state === 'verified_public')
+    .sort((a, b) => (b.observed_at ?? '').localeCompare(a.observed_at ?? ''));
+  if (verifiedLive.length > 0) return verifiedLive[0].dataset_id;
+
+  const verifiedSnapshot = options.find((o) => o.available && o.kind === 'verified_public_snapshot');
+  if (verifiedSnapshot) return verifiedSnapshot.id;
+
   const liveRun = options.find((o) => o.available && o.kind === 'live_run');
   if (liveRun) return liveRun.id;
+
   const firstAvailable = options.find((o) => o.available)?.id;
   if (firstAvailable) return firstAvailable;
   return liveDatasetIds[0] ?? '';
@@ -103,7 +114,7 @@ export function useActiveDatasetId(routeDatasetId: string | undefined): string {
   const options = useDatasetOptions();
   const evaluations = useStoreState((state) => state.evaluations);
   const liveDatasetIds = liveDatasetIdsFromEvaluations(evaluations.values());
-  const fallbackDatasetId = defaultDatasetId(options, liveDatasetIds);
+  const fallbackDatasetId = defaultDatasetId(options, liveDatasetIds, evaluations.values());
   if (routeDatasetId) {
     if (options.some((o) => o.id === routeDatasetId)) return routeDatasetId;
     // Live campaign datasets are synthesized from publication envelopes and may

@@ -367,6 +367,15 @@ already-enrolled CLI.`,
 			if err := reportDockerPublicSpectatorReady(cmd); err != nil {
 				cmd.Printf("Warning: public spectator bootstrap check failed: %v\n", err)
 				cmd.Println("Campaign publish may still work once the gateway exports the first batch.")
+			} else if result, err := reconcileVerifiedCampaignMirrorFromDockerInit(cmd.Context(), fileSvc, cfg); err != nil {
+				cmd.Printf("Warning: verified campaign mirror restore failed: %v\n", err)
+			} else {
+				if len(result.RestoredRunIDs) > 0 {
+					cmd.Printf("Restored %d verified dataset(s) to public mirror.\n", len(result.RestoredRunIDs))
+				}
+				if len(result.HostAbsentRunIDs) > 0 {
+					cmd.Printf("Host canonical store missing for %d verified run(s) after .g8e wipe — re-execute to repopulate.\n", len(result.HostAbsentRunIDs))
+				}
 			}
 
 			cmd.Println()

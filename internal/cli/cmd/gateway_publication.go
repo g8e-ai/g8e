@@ -136,6 +136,107 @@ func isGatewayHealthy() bool {
 // publicMirrorBootstrapURL overrides the default mirror bootstrap URL in tests.
 var publicMirrorBootstrapURL string
 
+// publicMirrorHistoryURL overrides the default mirror history URL in tests.
+var publicMirrorHistoryURL string
+
+type httpCampaignMirrorProbe struct {
+	client *http.Client
+}
+
+func newHTTPCampaignMirrorProbe(ctx context.Context) evaluation.CampaignMirrorProbe {
+	return &httpCampaignMirrorProbe{client: &http.Client{Timeout: 5 * time.Second}} //nolint:gosec
+}
+
+func (p *httpCampaignMirrorProbe) DatasetPresent(ctx context.Context, datasetID string) (bool, error) {
+	if p == nil || datasetID == "" {
+		return false, fmt.Errorf("campaign mirror probe: missing dataset id")
+	}
+	bootstrap, err := fetchPublicMirrorBootstrap(ctx)
+	if err != nil {
+		return false, err
+	}
+	if bootstrap.Snapshot.HighWaterSequence == 0 {
+		return false, nil
+	}
+	if mirrorProjectionHasDataset(bootstrap.RecentProjections, datasetID) {
+		return true, nil
+	}
+	cursor := ""
+	for page := 0; page < 32; page++ {
+		history, err := fetchPublicMirrorHistory(ctx, p.client, cursor, 100)
+		if err != nil {
+			return false, err
+		}
+		for _, item := range history.Items {
+			if mirrorProjectionHasDataset([]map[string]any{item}, datasetID) {
+				return true, nil
+			}
+		}
+		if !history.HasMore || history.Cursor == "" {
+			break
+		}
+		cursor = history.Cursor
+	}
+	return false, nil
+}
+
+func mirrorProjectionHasDataset(projections []map[string]any, datasetID string) bool {
+	for _, item := range projections {
+		if mirrorCatalogDatasetPresent(item, datasetID) {
+			return true
+		}
+	}
+	return false
+}
+
+func mirrorCatalogDatasetPresent(item map[string]any, datasetID string) bool {
+	if item == nil {
+		return false
+	}
+	if item["kind"] == "catalog_snapshot" && item["dataset_id"] == datasetID {
+		return true
+	}
+	if record, ok := item["record"].(map[string]any); ok {
+		return mirrorCatalogDatasetPresent(record, datasetID)
+	}
+	return false
+}
+
+func fetchPublicMirrorHistory(ctx context.Context, client *http.Client, cursor string, limit int) (models.PublicFeedCursorPage, error) {
+	historyURL := publicMirrorHistoryURL
+	if historyURL == "" {
+		historyURL = fmt.Sprintf("http://127.0.0.1:%d/history", constants.PublicSpectatorPublicPort)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, historyURL, nil)
+	if err != nil {
+		return models.PublicFeedCursorPage{}, err
+	}
+	query := req.URL.Query()
+	if cursor != "" {
+		query.Set("cursor", cursor)
+	}
+	if limit > 0 {
+		query.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	req.URL.RawQuery = query.Encode()
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Second} //nolint:gosec
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return models.PublicFeedCursorPage{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return models.PublicFeedCursorPage{}, fmt.Errorf("public mirror history: status %d", resp.StatusCode)
+	}
+	var page models.PublicFeedCursorPage
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		return models.PublicFeedCursorPage{}, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	return page, nil
+}
+
 func fetchPublicMirrorBootstrap(ctx context.Context) (models.PublicFeedBootstrap, error) {
 	bootstrapURL := publicMirrorBootstrapURL
 	if bootstrapURL == "" {
