@@ -372,6 +372,9 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 			return
 		}
 		if resultEnv.Id == txHash {
+			if isShellCommandDispatch(req.ActionType) && !isOperatorCommandTerminalResult(resultEnv) {
+				return
+			}
 			select {
 			case resultCh <- resultEnv:
 			default:
@@ -444,6 +447,11 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 					}
 				}
 				return result, nil
+			}
+			if isShellCommandDispatch(req.ActionType) {
+				if payload := operatorCommandResultPayload(resultEnv); len(payload) > 0 {
+					resultEnv.Payload = payload
+				}
 			}
 			return &DispatchResult{
 				TransactionID:  txHash,
@@ -628,9 +636,56 @@ func (r *DispatchResult) ToResponse() DispatchResponse {
 	if r.ResultEnvelope != nil {
 		resp.EventType = r.ResultEnvelope.EventType
 		resp.ActionType = r.ResultEnvelope.ActionType
-		resp.ResultPayload = r.ResultEnvelope.Payload
+		if isOperatorCommandTerminalResult(r.ResultEnvelope) {
+			resp.ResultPayload = operatorCommandResultPayload(r.ResultEnvelope)
+		} else {
+			resp.ResultPayload = r.ResultEnvelope.Payload
+		}
 	}
 	return resp
+}
+
+func isShellCommandDispatch(actionType string) bool {
+	return actionType == string(constants.ActionTypeExecuteBash)
+}
+
+func isOperatorCommandTerminalResult(env *commonv1.GovernanceEnvelope) bool {
+	if env == nil {
+		return false
+	}
+	switch env.GetEventType() {
+	case string(constants.Event.Operator.Command.Completed),
+		string(constants.Event.Operator.Command.Failed),
+		string(constants.Event.Operator.Command.Cancelled):
+		return true
+	default:
+		return false
+	}
+}
+
+func operatorCommandResultPayload(env *commonv1.GovernanceEnvelope) []byte {
+	if env == nil {
+		return nil
+	}
+	if len(env.GetPayload()) > 0 {
+		return env.GetPayload()
+	}
+	if env.GetIntentData() == nil {
+		return nil
+	}
+	wire, err := protojson.Marshal(env.GetIntentData())
+	if err != nil {
+		return nil
+	}
+	result := &operatorv1.CommandResult{}
+	if err := protojson.Unmarshal(wire, result); err != nil {
+		return nil
+	}
+	out, err := proto.Marshal(result)
+	if err != nil {
+		return nil
+	}
+	return out
 }
 
 // OperatorCommandRequest is the typed JSON request for POST /api/v1/operators/commands.

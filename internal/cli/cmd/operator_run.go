@@ -231,13 +231,10 @@ func dispatchOperatorRunOnce(client apiClient, target operatorRunTarget, command
 		return result
 	}
 
-	commandResult, err := operator.DecodeCommandResult(response.ResultPayload)
+	commandResult, err := operator.ParseCommandResult(response)
 	if err != nil {
 		result.Error = err.Error()
 		result.Success = false
-		return result
-	}
-	if commandResult == nil {
 		return result
 	}
 

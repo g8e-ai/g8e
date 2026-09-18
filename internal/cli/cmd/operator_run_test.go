@@ -110,6 +110,8 @@ func mustMarshalDispatchSuccess(t *testing.T, stdout string) []byte {
 	body, err := json.Marshal(operator.DispatchResponse{
 		Success:       true,
 		TransactionID: "tx-1",
+		EventType:     "g8e.v1.operator.command.completed",
+		ActionType:    "EXECUTE_BASH_RESULT",
 		ResultPayload: resultPayload,
 	})
 	require.NoError(t, err)

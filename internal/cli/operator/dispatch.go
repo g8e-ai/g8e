@@ -97,11 +97,25 @@ func DecodeDispatchResponse(raw []byte) (*DispatchResponse, error) {
 
 // DecodeCommandResult extracts stdout/stderr/exit code from a dispatch result payload.
 func DecodeCommandResult(payload []byte) (*operatorv1.CommandResult, error) {
-	if len(payload) == 0 {
-		return nil, nil
+	return ParseCommandResult(&DispatchResponse{ResultPayload: payload})
+}
+
+// ParseCommandResult decodes the governed operator command result from a dispatch
+// response. The gateway blocks until a terminal command.completed/failed event
+// arrives; an empty payload after success indicates a protocol mismatch.
+func ParseCommandResult(response *DispatchResponse) (*operatorv1.CommandResult, error) {
+	if response == nil {
+		return nil, fmt.Errorf("%w: dispatch response is nil", constants.ErrMissingRequiredField)
+	}
+	if len(response.ResultPayload) == 0 {
+		return nil, fmt.Errorf(
+			"operator dispatch: empty command result payload (event_type=%s action_type=%s)",
+			response.EventType,
+			response.ActionType,
+		)
 	}
 	result := &operatorv1.CommandResult{}
-	if err := proto.Unmarshal(payload, result); err != nil {
+	if err := proto.Unmarshal(response.ResultPayload, result); err != nil {
 		return nil, fmt.Errorf("operator dispatch: decode command result: %w", err)
 	}
 	return result, nil

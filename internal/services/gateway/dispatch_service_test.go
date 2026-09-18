@@ -615,6 +615,107 @@ func TestDispatchController_HandleDispatch_ValidationFails(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
+func TestOperatorCommandResultHelpers(t *testing.T) {
+	t.Run("terminal command events", func(t *testing.T) {
+		assert.True(t, isOperatorCommandTerminalResult(&commonv1.GovernanceEnvelope{
+			EventType: string(constants.Event.Operator.Command.Completed),
+		}))
+		assert.False(t, isOperatorCommandTerminalResult(&commonv1.GovernanceEnvelope{
+			EventType: string(constants.Event.Operator.Command.StatusUpdated.Running),
+		}))
+	})
+
+	t.Run("payload from envelope bytes", func(t *testing.T) {
+		cmdResult := &operatorv1.CommandResult{Stdout: "hello\n", ReturnCode: 0}
+		wire, err := proto.Marshal(cmdResult)
+		require.NoError(t, err)
+		assert.Equal(t, wire, operatorCommandResultPayload(&commonv1.GovernanceEnvelope{Payload: wire}))
+	})
+
+	t.Run("ToResponse uses command result payload for completed events", func(t *testing.T) {
+		cmdResult := &operatorv1.CommandResult{Stdout: "hello\n", ReturnCode: 0}
+		wire, err := proto.Marshal(cmdResult)
+		require.NoError(t, err)
+		resp := (&DispatchResult{
+			TransactionID: "tx-1",
+			ResultEnvelope: &commonv1.GovernanceEnvelope{
+				EventType:  string(constants.Event.Operator.Command.Completed),
+				ActionType: "EXECUTE_BASH_RESULT",
+				Payload:    wire,
+			},
+		}).ToResponse()
+		assert.Equal(t, wire, resp.ResultPayload)
+	})
+}
+
+func TestDispatchService_Dispatch_ExecuteBash_WaitsForTerminalResult(t *testing.T) {
+	op := &models.OperatorDocumentGo{
+		ID:                "op-001",
+		OperatorSessionID: "sess-001",
+	}
+	svc, broker := newTestDispatchService(t, "root-abc", op)
+
+	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
+	resultsChannel := pubsub.ResultsChannel(op.ID, op.OperatorSessionID)
+
+	unregisterOperator := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
+		cmdEnv := &commonv1.GovernanceEnvelope{}
+		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
+			t.Errorf("operator: unmarshal command: %v", err)
+			return
+		}
+
+		statusEnv := &commonv1.GovernanceEnvelope{
+			Id:         cmdEnv.Id,
+			EventType:  string(constants.Event.Operator.Command.StatusUpdated.Running),
+			ActionType: "EXECUTE_STATUS_UPDATE",
+			Timestamp:  timestamppb.Now(),
+		}
+		statusWire, err := protojson.Marshal(statusEnv)
+		require.NoError(t, err)
+		broker.Publish(resultsChannel, statusWire)
+
+		resultPayload, err := proto.Marshal(&operatorv1.CommandResult{
+			Stdout:     "hello\n",
+			ReturnCode: 0,
+		})
+		require.NoError(t, err)
+		completedEnv := &commonv1.GovernanceEnvelope{
+			Id:         cmdEnv.Id,
+			EventType:  string(constants.Event.Operator.Command.Completed),
+			ActionType: "EXECUTE_BASH_RESULT",
+			Payload:    resultPayload,
+			Timestamp:  timestamppb.Now(),
+		}
+		completedWire, err := protojson.Marshal(completedEnv)
+		require.NoError(t, err)
+		broker.Publish(resultsChannel, completedWire)
+	})
+	defer unregisterOperator()
+
+	execPayload, err := proto.Marshal(&operatorv1.CommandRequested{
+		Command:     "echo hello",
+		ExecutionId: "exec-1",
+	})
+	require.NoError(t, err)
+
+	result, err := svc.Dispatch(context.Background(), DispatchRequest{
+		TargetOperatorSessionID: "sess-001",
+		ActionType:              string(constants.ActionTypeExecuteBash),
+		Payload:                 execPayload,
+		TargetResource:          "cli",
+		RequestorUserID:         "user-001",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.ResultEnvelope)
+	assert.Equal(t, string(constants.Event.Operator.Command.Completed), result.ResultEnvelope.EventType)
+
+	decoded := &operatorv1.CommandResult{}
+	require.NoError(t, proto.Unmarshal(result.ToResponse().ResultPayload, decoded))
+	assert.Equal(t, "hello\n", decoded.Stdout)
+}
+
 func TestDecodeInferenceProgressEnvelope(t *testing.T) {
 	t.Parallel()
 	progress := &operatorv1.InferenceProgressEvent{

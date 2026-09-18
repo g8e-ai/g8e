@@ -40,3 +40,30 @@ func TestBuildExecuteBashDispatchRequest_MissingFields(t *testing.T) {
 	_, err := BuildExecuteBashDispatchRequest("", "echo", "exec-1", "cli-1")
 	require.Error(t, err)
 }
+
+func TestParseCommandResult_EmptyPayload(t *testing.T) {
+	_, err := ParseCommandResult(&DispatchResponse{
+		Success:   true,
+		EventType: "g8e.v1.operator.command.status.updated.running",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty command result payload")
+}
+
+func TestParseCommandResult_Success(t *testing.T) {
+	payload, err := proto.Marshal(&operatorv1.CommandResult{
+		Stdout:     "hello\n",
+		ReturnCode: 0,
+	})
+	require.NoError(t, err)
+
+	result, err := ParseCommandResult(&DispatchResponse{
+		Success:       true,
+		EventType:     "g8e.v1.operator.command.completed",
+		ActionType:    "EXECUTE_BASH_RESULT",
+		ResultPayload: payload,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "hello\n", result.Stdout)
+	assert.Equal(t, int32(0), result.ReturnCode)
+}
