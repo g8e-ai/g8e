@@ -460,14 +460,14 @@ func (s *ObserveProducerService) StreamDownload(ctx context.Context, userID, art
 
 	// Resolve the on-disk file path and verify it stays within the downloads
 	// directory. The artifact ID is a document key, not a filesystem path;
-	// fileSvc.Resolve enforces runtime-dir containment.
+	// fileSvc.Lstat resolves through the runtime file service so traversal
+	// attempts are rejected before touching the filesystem.
 	relPath := filepath.Join(constants.ObserveDownloadsDirname, artifactID)
-	absPath := s.fileSvc.Resolve(relPath)
 	// Use Lstat to detect symlinks without following them. fileSvc.Stat uses
 	// os.Stat which follows symlinks, so a symlink pointing outside the
 	// downloads directory would evade the symlink check. Lstat returns the
 	// symlink's own mode, not the target's.
-	linfo, err := os.Lstat(absPath)
+	linfo, err := s.fileSvc.Lstat(ctx, relPath)
 	if err != nil {
 		return fmt.Errorf("observe producer: stream download: stat artifact %q: %w", artifactID, err)
 	}

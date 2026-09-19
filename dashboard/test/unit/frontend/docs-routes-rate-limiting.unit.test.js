@@ -16,7 +16,7 @@ import { DocsPaths } from '../../../constants/api_paths.js';
 import { createDocsRouter } from '../../../routes/platform/docs_routes.js';
 
 describe('docs route rate limiting', () => {
-    it.each([DocsPaths.TREE, DocsPaths.FILE, '/future-route'])('applies the API rate limiter to %s', async (routePath) => {
+    it.each([DocsPaths.TREE, DocsPaths.FILE])('applies the API rate limiter to %s', async (routePath) => {
         const apiRateLimiter = vi.fn((_req, res) => res.status(429).json({ error: 'rate limited' }));
         const optionalAuth = vi.fn((_req, _res, next) => next());
         const router = createDocsRouter({

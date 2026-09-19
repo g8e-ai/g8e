@@ -29,6 +29,7 @@ from app.models.evaluation_trace import (
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
 from app.utils.path import resolve_project_root
+from app.utils.security import validate_safe_path
 from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,9 @@ def _validate_trace_segment(value: str, label: str) -> None:
 def _trace_path(assignment_id: str, evaluation_attempt_id: str) -> Path:
     _validate_trace_segment(assignment_id, "assignment_id")
     _validate_trace_segment(evaluation_attempt_id, "evaluation_attempt_id")
-    return _trace_root() / assignment_id / f"{evaluation_attempt_id}.json"
+    root = _trace_root()
+    relative = Path(assignment_id) / f"{evaluation_attempt_id}.json"
+    return validate_safe_path(relative, root)
 
 
 def compute_trace_digest(trace: EvaluationAssignmentTrace) -> str:

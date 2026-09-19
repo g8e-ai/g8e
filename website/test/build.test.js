@@ -8,6 +8,7 @@ import { repositoryLink, renderWebsite, slugify } from '../src/build.js';
 test('slugify creates stable heading anchors', () => {
   assert.equal(slugify('Proof of Human Presence'), 'proof-of-human-presence');
   assert.equal(slugify('L1–L5: Verify & Execute'), 'l1l5-verify-execute');
+  assert.equal(slugify('<scrip<script>t>alert(1)</script>'), 'scripscripttalert1script');
 });
 
 test('repositoryLink sends relative documents to the source repository', () => {

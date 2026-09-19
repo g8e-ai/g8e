@@ -23,7 +23,6 @@ import {
   presentEval,
   presentNarrativeRow,
   presentRun,
-  VIEW_STATES,
 } from '../src/presentation/registry';
 import type { NormalizedGatewayEvent } from '../src/sse/normalizer';
 

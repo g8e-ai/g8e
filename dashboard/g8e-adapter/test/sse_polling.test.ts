@@ -399,7 +399,6 @@ describe('SsePollingFallback', () => {
     await polling.start();
     expect(polling.getLastEventId()).toBe(15);
     polling.stop();
-    const fetchMock2 = makeFetchMock(200, []);
     // Reuse the same polling instance by swapping the fetch impl via a new start.
     // lastEventId is internal state; verify via getLastEventId.
     expect(polling.getLastEventId()).toBe(15);

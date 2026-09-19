@@ -70,24 +70,6 @@ function checkPort(port) {
   return result.stdout.includes(`:${port}`);
 }
 
-function waitForPort(port, label, timeoutMs) {
-  return new Promise((resolvePort, reject) => {
-    const deadline = Date.now() + timeoutMs;
-    const check = () => {
-      if (checkPort(port)) {
-        resolvePort();
-        return;
-      }
-      if (Date.now() > deadline) {
-        reject(new Error(`${label} on port ${port} did not start within ${timeoutMs}ms`));
-        return;
-      }
-      setTimeout(check, 200);
-    };
-    check();
-  });
-}
-
 const children = [];
 
 function spawnChild(label, cmd, args, cwd) {

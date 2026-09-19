@@ -102,6 +102,13 @@ def test_trace_finalize_persists_designated_role_output(trace_service):
     assert loaded.designated_role_output == "READY"
 
 
+def test_trace_load_rejects_path_traversal(trace_service):
+    with pytest.raises(ValueError, match="invalid assignment_id"):
+        trace_service.load("../etc", "attempt-1")
+    with pytest.raises(ValueError, match="invalid evaluation_attempt_id"):
+        trace_service.load("assignment-1", "../secret")
+
+
 def test_trace_digest_changes_when_model_calls_change():
     context = _context()
     base = EvaluationAssignmentTrace(

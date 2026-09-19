@@ -449,8 +449,7 @@ class TestNoCircularImport:
             [
                 sys.executable,
                 "-c",
-                "import sys; import app.security; "
-                "print('app.services.cache.cache_aside' in sys.modules)",
+                "import sys; import app.security; print('app.services.cache.cache_aside' in sys.modules)",
             ],
             cwd=ensemble_root,
             capture_output=True,

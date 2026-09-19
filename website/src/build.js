@@ -22,10 +22,7 @@ const LOCAL_IMAGES = new Map([
 ]);
 
 export function slugify(value) {
-  let cleaned = value.toLowerCase().trim();
-  while (/<[^>]*>/.test(cleaned)) {
-    cleaned = cleaned.replace(/<[^>]*>/g, '');
-  }
+  const cleaned = value.toLowerCase().trim().replace(/[<>]/g, '');
   return cleaned.replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-').replace(/-+/g, '-');
 }
 

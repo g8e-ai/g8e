@@ -117,10 +117,7 @@ async function runLiveMode(config: ReturnType<typeof parseRuntimeConfig>): Promi
   (window as unknown as Record<string, unknown>).g8eAdapter = { config, stream, observeClient, getState: () => state };
 }
 
-async function runDesignPreviewMode(config: ReturnType<typeof parseRuntimeConfig>): Promise<void> {
-  let state: AdapterState = INITIAL_ADAPTER_STATE;
-  state = adapterReducer(state, { type: 'runtimeFeatures', action: { type: 'config_loaded', config } });
-
+async function runDesignPreviewMode(_config: ReturnType<typeof parseRuntimeConfig>): Promise<void> {
   // Load the bootstrap fixture as a representative preview.
   const fixture: PreviewFixture = {
     scenario: 'bootstrap',
