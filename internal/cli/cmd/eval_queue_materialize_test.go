@@ -18,16 +18,20 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -240,6 +244,220 @@ func TestWriteCampaignQueueRunPlan_TextAndJSON(t *testing.T) {
 	assert.Contains(t, output.String(), `"models"`)
 }
 
+func TestRolloutEvalListCmd_TextAndJSON(t *testing.T) {
+	root := t.TempDir()
+	queue := evaluation.CampaignQueue{
+		Models: []evaluation.CampaignQueueModel{
+			{VariantID: "qwen3-4b", ServedModelTag: "qwen3:4b", Status: "pending", CampaignID: "eval-init-qwen3-4b", HomogeneousCellCount: 3},
+			{VariantID: "gemma3-4b", ServedModelTag: "gemma3:4b", Status: "verified", CampaignID: "eval-init-gemma3-4b", HomogeneousCellCount: 3},
+		},
+	}
+	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, &queue))
+
+	deps := testNativeEvalDeps(root)
+	command := evalCmdWithConfig(deps)
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"rollout", "list", "--project-root", root, "--status", "pending"})
+	require.NoError(t, command.Execute())
+	assert.Contains(t, output.String(), "qwen3-4b")
+	assert.NotContains(t, output.String(), "gemma3-4b")
+
+	rootCmd := globalJSONRoot(t, command)
+	output.Reset()
+	rootCmd.SetOut(&output)
+	rootCmd.SetArgs([]string{"eval", "rollout", "list", "--project-root", root})
+	require.NoError(t, rootCmd.Execute())
+	assert.Contains(t, output.String(), `"models"`)
+}
+
+func TestRolloutEvalListCmd_ReportsEmptyQueue(t *testing.T) {
+	root := t.TempDir()
+	queue := evaluation.CampaignQueue{
+		Models: []evaluation.CampaignQueueModel{
+			{VariantID: "qwen3-4b", ServedModelTag: "qwen3:4b", Status: "pending"},
+		},
+	}
+	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, &queue))
+
+	deps := testNativeEvalDeps(root)
+	command := evalCmdWithConfig(deps)
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"rollout", "list", "--project-root", root, "--status", "verified"})
+	require.NoError(t, command.Execute())
+	assert.Contains(t, output.String(), "No queue entries found")
+}
+
+func TestRolloutEvalNextCmd_ShowsPendingEntry(t *testing.T) {
+	root := t.TempDir()
+	queue := evaluation.CampaignQueue{
+		Models: []evaluation.CampaignQueueModel{
+			{
+				VariantID:            "qwen3-4b",
+				ServedModelTag:       "qwen3:4b",
+				Status:               "pending",
+				CampaignID:           "eval-init-qwen3-4b",
+				InventoryFile:        ".g8e/eval/inventories/eval-init-qwen3-4b.json",
+				ModelRegistryDigest:  "digest-1",
+				HomogeneousCellCount: 3,
+			},
+		},
+	}
+	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, &queue))
+
+	deps := testNativeEvalDeps(root)
+	command := evalCmdWithConfig(deps)
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"rollout", "next", "--project-root", root})
+	require.NoError(t, command.Execute())
+	assert.Contains(t, output.String(), "qwen3:4b")
+	assert.Contains(t, output.String(), "eval-init-qwen3-4b")
+}
+
+func TestRolloutEvalRunCmd_RecordsStartFailure(t *testing.T) {
+	root, deps, _, cleanup := setupCampaignWitnessEnv(t)
+	defer cleanup()
+
+	queue := evaluation.CampaignQueue{
+		Models: []evaluation.CampaignQueueModel{
+			{
+				VariantID:      "qwen3-4b",
+				ServedModelTag: "qwen3:4b",
+				Status:         "pending",
+				CampaignID:     "north-star-smoke",
+			},
+		},
+	}
+	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, &queue))
+
+	health := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(func() { health.Close(); mirror.Close() })
+
+	command := evalCmdWithConfig(deps)
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{
+		"rollout", "run", "--project-root", root,
+		"--continue-on-error",
+		"--ensemble-health-url", health.URL,
+		"--mirror-bootstrap-url", mirror.URL,
+	})
+	err := command.Execute()
+	require.Error(t, err)
+	assert.Contains(t, output.String(), "FAIL qwen3-4b")
+}
+
+func campaignWitnessOperators() []models.OperatorDocumentGo {
+	ops := campaignOrchestrateOperators()
+	return append(ops,
+		models.OperatorDocumentGo{
+			Status:        constants.OperatorStatusActive,
+			OperatorType:  constants.OperatorTypeRemote,
+			RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+		},
+		models.OperatorDocumentGo{
+			Status:        constants.OperatorStatusActive,
+			OperatorType:  constants.OperatorTypeRemote,
+			RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+		},
+	)
+}
+
+func setupCampaignWitnessEnv(t *testing.T) (root string, deps nativeEvalDeps, cmd *cobra.Command, cleanup func()) {
+	t.Helper()
+	root = t.TempDir()
+	writeTestFrozenInventory(t, root, evaluation.DefaultModelInventoryRelPath, &evalv1.ModelVariant{
+		VariantId:      "qwen3-4b",
+		ServedModelTag: "qwen3:4b",
+		ModelDigest:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		ProviderClass:  "ollama",
+	})
+
+	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: campaignWitnessOperators()})
+	require.NoError(t, err)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, constants.APIPaths.Operators, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+
+	paths := config.DefaultPathsConfig()
+	paths.Host = server.URL
+	cfg := &config.Config{ProjectRoot: root, RuntimeDir: root + "/.g8e", Paths: &paths}
+	deps = nativeEvalDeps{
+		configLoader: func(string) (*config.Config, error) { return cfg, nil },
+		fileSvcFactory: func(string, *slog.Logger) (fs.RuntimeFileService, error) {
+			return fs.NewRuntimeFileService(root, slog.Default())
+		},
+		createRuntimeTree: func(context.Context, fs.RuntimeFileService) error { return nil },
+		clientFactory:     harnessclient.New,
+		authLoader: func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error) {
+			return &auth.ClientAuthContext{UserID: "user-1", CLISessionID: "cli-1"}, nil
+		},
+		now:   func() time.Time { return time.Unix(1789657337, 0).UTC() },
+		newID: func() string { return "test-id" },
+	}
+	cmd = silentCobraCommand()
+	cmd.SetContext(context.Background())
+	cmd.Flags().String("project-root", root, "")
+	return root, deps, cmd, func() { server.Close() }
+}
+
+func TestPreflightCampaignQueueRun_SucceedsWhenWitnessesReady(t *testing.T) {
+	root, deps, cmd, cleanup := setupCampaignWitnessEnv(t)
+	defer cleanup()
+
+	health := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(health.Close)
+	t.Cleanup(mirror.Close)
+
+	cfg, err := deps.configLoader(root)
+	require.NoError(t, err)
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	require.NoError(t, preflightCampaignQueueRun(cmd, deps, cfg, 0, health.URL, mirror.URL))
+	assert.Contains(t, stderr.String(), "no active observer with --ollama")
+	assert.Contains(t, stdout.String(), "Preflight ok")
+}
+
+func TestPreflightCampaignQueueRun_RejectsMissingWitnesses(t *testing.T) {
+	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
+	defer cleanup()
+
+	health := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(health.Close)
+	t.Cleanup(mirror.Close)
+
+	cfg, err := deps.configLoader(root)
+	require.NoError(t, err)
+	err = preflightCampaignQueueRun(cmd, deps, cfg, 0, health.URL, mirror.URL)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no active provider-boundary observer")
+}
+
 func TestCampaignWitnessStatus_UsesOperatorList(t *testing.T) {
 	_, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
@@ -251,6 +469,25 @@ func TestCampaignWitnessStatus_UsesOperatorList(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, status.ActiveObserverCount)
 	assert.Zero(t, status.ActiveProvenanceCount)
+}
+
+func TestRolloutEvalRunCmd_ReportsEmptySelection(t *testing.T) {
+	root := t.TempDir()
+	queue := evaluation.CampaignQueue{
+		Models: []evaluation.CampaignQueueModel{
+			{VariantID: "qwen3-4b", ServedModelTag: "qwen3:4b", Status: "verified"},
+		},
+	}
+	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, &queue))
+
+	deps := testNativeEvalDeps(root)
+	command := evalCmdWithConfig(deps)
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"rollout", "run", "--project-root", root, "--skip-verified"})
+	require.NoError(t, command.Execute())
+	assert.Contains(t, output.String(), "No queue entries selected")
 }
 
 func testNativeEvalDeps(root string) nativeEvalDeps {

@@ -8,6 +8,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"path/filepath"
@@ -138,6 +139,122 @@ func (evaluationStubCampaignExecutor) ExecuteAssignment(_ context.Context, req e
 	}
 	result.ResultDigest = digest
 	return result, nil
+}
+
+func TestCampaignEvalMirrorRestoreQueue_ViaCLI(t *testing.T) {
+	withGatewayHealthCheck(t, true)
+	root, deps, _, cleanup := setupCampaignPublishGatewayEnv(t)
+	defer cleanup()
+
+	fileSvc, err := deps.fileSvcFactory(root, nil)
+	require.NoError(t, err)
+	store := evaluation.NewStore(fileSvc)
+	exporter := &evaluationRecordingCampaignFeedExporter{}
+	probe := &evaluationStubCampaignMirrorProbe{present: map[string]bool{}}
+	coordinator := evaluation.NewCampaignPublicationCoordinator(
+		store, fileSvc, evaluation.NewMemoryCampaignPublicationStateStore(), exporter, nil,
+	).WithMirrorProbe(probe)
+	controller := evaluation.NewCampaignController(
+		store,
+		&evaluationStubCampaignExecutor{},
+		deps.now,
+		func(prefix string) string { return prefix + "-1" },
+	).WithPublication(coordinator)
+
+	req := evaluationTestCampaignInitRequest(t)
+	run, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	_, _, err = controller.ExecuteNextAssignment(context.Background(), run.GetRunId(), evaluation.CampaignExecutionBinding{
+		InferenceOperatorSessionID: "inf-session",
+		DataOperatorID:             "data-op",
+		DataOperatorSessionID:      "data-session",
+		ModelRegistryDigest:        req.Inventory.RegistryDigest,
+		ModelRegistry:              evaluation.InferenceVariantsFromEvalRegistry(req.Inventory.Variants),
+	}, req.ScenarioArtifacts)
+	require.NoError(t, err)
+
+	report := &evalv1.EvaluationVerificationReport{
+		SchemaVersion: evaluation.CampaignSchemaVersion,
+		ReportId:      run.GetRunId(),
+		RunId:         run.GetRunId(),
+		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+	}
+	require.NoError(t, store.SaveCampaignVerification(context.Background(), run.GetRunId(), report))
+	_, err = coordinator.PublishRunCatchUpWithVerification(context.Background(), run.GetRunId(), report)
+	require.NoError(t, err)
+
+	queue := &evaluation.CampaignQueue{
+		Models: []evaluation.CampaignQueueModel{{
+			VariantID:     "qwen3-4b",
+			Status:        "verified",
+			VerifiedRunID: run.GetRunId(),
+		}},
+	}
+	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
+	require.NoError(t, evaluation.SaveInitCampaignQueue(queuePath, queue))
+
+	command := evalCmdWithConfig(deps)
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"campaign", "mirror", "restore", "--project-root", root, "--queue"})
+	require.NoError(t, command.Execute())
+	assert.Contains(t, output.String(), "Restored")
+}
+
+func TestCampaignEvalMirrorRestoreRun_ViaCLI(t *testing.T) {
+	withGatewayHealthCheck(t, true)
+	root, deps, _, cleanup := setupCampaignPublishGatewayEnv(t)
+	defer cleanup()
+
+	fileSvc, err := deps.fileSvcFactory(root, nil)
+	require.NoError(t, err)
+	store := evaluation.NewStore(fileSvc)
+	exporter := &evaluationRecordingCampaignFeedExporter{}
+	probe := &evaluationStubCampaignMirrorProbe{present: map[string]bool{}}
+	coordinator := evaluation.NewCampaignPublicationCoordinator(
+		store, fileSvc, evaluation.NewMemoryCampaignPublicationStateStore(), exporter, nil,
+	).WithMirrorProbe(probe)
+	controller := evaluation.NewCampaignController(
+		store,
+		&evaluationStubCampaignExecutor{},
+		deps.now,
+		func(prefix string) string { return prefix + "-1" },
+	).WithPublication(coordinator)
+
+	req := evaluationTestCampaignInitRequest(t)
+	run, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	_, _, err = controller.ExecuteNextAssignment(context.Background(), run.GetRunId(), evaluation.CampaignExecutionBinding{
+		InferenceOperatorSessionID: "inf-session",
+		DataOperatorID:             "data-op",
+		DataOperatorSessionID:      "data-session",
+		ModelRegistryDigest:        req.Inventory.RegistryDigest,
+		ModelRegistry:              evaluation.InferenceVariantsFromEvalRegistry(req.Inventory.Variants),
+	}, req.ScenarioArtifacts)
+	require.NoError(t, err)
+
+	report := &evalv1.EvaluationVerificationReport{
+		SchemaVersion: evaluation.CampaignSchemaVersion,
+		ReportId:      run.GetRunId(),
+		RunId:         run.GetRunId(),
+		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+	}
+	require.NoError(t, store.SaveCampaignVerification(context.Background(), run.GetRunId(), report))
+	_, err = coordinator.PublishRunCatchUpWithVerification(context.Background(), run.GetRunId(), report)
+	require.NoError(t, err)
+
+	command := evalCmdWithConfig(deps)
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"campaign", "mirror", "restore", "--project-root", root, "--run-id", run.GetRunId()})
+	require.NoError(t, command.Execute())
+	assert.Contains(t, output.String(), run.GetRunId())
 }
 
 func evaluationTestCampaignInitRequest(t *testing.T) evaluation.CampaignInitRequest {
