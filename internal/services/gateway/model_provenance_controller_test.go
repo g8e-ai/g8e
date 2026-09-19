@@ -26,6 +26,50 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
+func TestModelProvenanceControllerHandleModelProvenance_RejectsNonGet(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	controller := newModelProvenanceController(ModelProvenanceControllerDeps{
+		Logger:    logger,
+		Responder: response.NewWriter(logger),
+	})
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.InferenceModelProvenanceAttestations+"attempt-1", nil)
+	rr := httptest.NewRecorder()
+	controller.handleModelProvenance(rr, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+}
+
+func TestModelProvenanceControllerHandleModelProvenance_UnavailableWithoutStore(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	controller := newModelProvenanceController(ModelProvenanceControllerDeps{
+		Logger:    logger,
+		Responder: response.NewWriter(logger),
+	})
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.InferenceModelProvenanceAttestations+"attempt-1", nil)
+	rr := httptest.NewRecorder()
+	controller.handleModelProvenance(rr, req)
+	assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
+}
+
+func TestModelProvenanceControllerHandleModelProvenance_NotFound(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	store, err := model_provenance.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	logger := testutil.NewTestLogger()
+	controller := newModelProvenanceController(ModelProvenanceControllerDeps{
+		Logger:    logger,
+		Responder: response.NewWriter(logger),
+		Windows:   store,
+	})
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.InferenceModelProvenanceAttestations+"missing-attempt", nil).WithContext(ctx)
+	rr := httptest.NewRecorder()
+	controller.handleModelProvenance(rr, req)
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
+
 func TestModelProvenanceControllerHandleModelProvenance_ReturnsWindow(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()

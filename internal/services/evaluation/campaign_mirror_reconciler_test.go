@@ -89,6 +89,60 @@ func TestCampaignMirrorReconcilerRestoresMissingVerifiedRuns(t *testing.T) {
 	assert.Greater(t, len(exporter.records), 0)
 }
 
+func TestCampaignMirrorReconciler_ReconcileRunRestoresMissingDataset(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	exporter := &recordingCampaignFeedExporter{}
+	probe := &stubCampaignMirrorProbe{present: map[string]bool{}}
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil).WithMirrorProbe(probe)
+	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" }).WithPublication(coordinator)
+	req := testCampaignInitRequest(t)
+	catalog := req.Catalog
+	truncated := &evalv1.EvaluationScenarioCatalog{
+		SchemaVersion: catalog.GetSchemaVersion(),
+		CatalogRef:    catalog.GetCatalogRef(),
+		Scenarios:     catalog.GetScenarios()[:1],
+	}
+	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
+	require.NoError(t, err)
+	truncated.CatalogDigest = truncatedDigest
+	req.Catalog = truncated
+	run, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	_, _, err = controller.ExecuteNextAssignment(context.Background(), run.GetRunId(), CampaignExecutionBinding{
+		InferenceOperatorSessionID: "inf-session",
+		DataOperatorID:             "data-op",
+		DataOperatorSessionID:      "data-session",
+		ModelRegistryDigest:        req.Inventory.RegistryDigest,
+		ModelRegistry:              InferenceVariantsFromEvalRegistry(req.Inventory.Variants),
+	}, req.ScenarioArtifacts)
+	require.NoError(t, err)
+
+	exporter.records = nil
+	reconciler := NewCampaignMirrorReconciler(coordinator, store, probe)
+	published, err := reconciler.ReconcileRun(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	assert.Greater(t, published, 0)
+	assert.Greater(t, len(exporter.records), 0)
+}
+
+func TestCampaignMirrorReconciler_ReconcileRunSkipsPresentDataset(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	exporter := &recordingCampaignFeedExporter{}
+	runID := "run-present"
+	probe := &stubCampaignMirrorProbe{present: map[string]bool{CampaignDatasetID(runID): true}}
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil).WithMirrorProbe(probe)
+	reconciler := NewCampaignMirrorReconciler(coordinator, store, probe)
+
+	published, err := reconciler.ReconcileRun(context.Background(), runID)
+	require.NoError(t, err)
+	assert.Zero(t, published)
+	assert.Empty(t, exporter.records)
+}
+
 func TestCampaignPublicationCoordinatorResetsIdempotencyWhenMirrorDatasetMissing(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)

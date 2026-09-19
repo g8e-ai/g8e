@@ -79,6 +79,15 @@ func TestGatewayCampaignPublicationStateStoreSaveSendsTypedStruct(t *testing.T) 
 	assert.NotContains(t, raw, "SchemaVersion")
 }
 
+func TestNewGatewayCampaignPublicationStateStoreFromConfig(t *testing.T) {
+	withGatewayHealthCheck(t, true)
+	cfg, _, fileSvc := setupApproveSSETestEnv(t)
+
+	store, err := newGatewayCampaignPublicationStateStoreFromConfig(fileSvc, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, store)
+}
+
 func TestGatewayCampaignPublicationStateStoreLoadMapsRemoteState(t *testing.T) {
 	t.Parallel()
 	remote := models.EvalCampaignPublicationState{

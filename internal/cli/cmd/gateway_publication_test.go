@@ -13,12 +13,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
@@ -196,4 +199,158 @@ func TestIsPublicFeedSequenceOutOfOrder(t *testing.T) {
 func TestIsPublicFeedSnapshotNotFound(t *testing.T) {
 	assert.True(t, isPublicFeedSnapshotNotFound(fmt.Errorf("snapshot lookup: %w", constants.ErrPublicFeedSnapshotNotFound)))
 	assert.False(t, isPublicFeedSnapshotNotFound(nil))
+}
+
+func TestNewCampaignFeedExporter_RequiresHealthyGateway(t *testing.T) {
+	withGatewayHealthCheck(t, false)
+	fileSvc, cfg := newCmdTestEnv(t)
+
+	_, err := newCampaignFeedExporter(context.Background(), fileSvc, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gateway is not healthy")
+}
+
+func TestNewCampaignFeedExporter_UsesGatewaySnapshot(t *testing.T) {
+	withGatewayHealthCheck(t, true)
+	client := &stubGatewayPublicationClient{highWater: 12}
+	exporter := &remoteGatewayCampaignFeedExporter{client: client}
+
+	highWater, err := exporter.HighWaterSequence(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(12), highWater)
+}
+
+func TestGatewayPublisherStatus_ReturnsBootstrapFields(t *testing.T) {
+	withGatewayHealthCheck(t, true)
+	cfg, _, fileSvc := setupApproveSSETestEnv(t)
+
+	bootstrapServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedBootstrap{
+			Snapshot: models.PublicFeedSnapshot{
+				SourceID:          "source-1",
+				HighWaterSequence: 9,
+				FeedChainHash:     "chain-hash",
+				BatchCount:        3,
+			},
+		}))
+	}))
+	t.Cleanup(bootstrapServer.Close)
+
+	originalBootstrap := publicMirrorBootstrapURL
+	publicMirrorBootstrapURL = bootstrapServer.URL
+	t.Cleanup(func() { publicMirrorBootstrapURL = originalBootstrap })
+
+	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case constants.APIPaths.PublicFeedSnapshot:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"high_water_sequence":9}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gateway.Close)
+	cfg.Paths = &config.PathsConfig{Host: gateway.URL}
+
+	status, err := gatewayPublisherStatus(context.Background(), fileSvc, cfg)
+	require.NoError(t, err)
+	assert.True(t, status.Enabled)
+	assert.Equal(t, "source-1", status.SourceID)
+	assert.Equal(t, int64(9), status.HighWaterSequence)
+	assert.Equal(t, "chain-hash", status.FeedChainHash)
+	assert.Equal(t, 3, status.BatchCount)
+}
+
+func TestPublishJSONLViaGateway_ExportsRecords(t *testing.T) {
+	withGatewayHealthCheck(t, true)
+	cfg, _, fileSvc := setupApproveSSETestEnv(t)
+
+	recordsPath := filepath.Join(t.TempDir(), "records.jsonl")
+	recordLine, err := json.Marshal(models.PublicFeedRecordInput{
+		RecordType:  models.PublicFeedRecordTypeProjection,
+		RecordBytes: `{"campaign_id":"campaign-a"}`,
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(recordsPath, append(recordLine, '\n'), 0o600))
+
+	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case constants.APIPaths.PublicFeedSnapshot:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"high_water_sequence":0}`))
+		case constants.APIPaths.PublicFeedBatches:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"high_water_sequence":1}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(gateway.Close)
+	config.SetEndpointOverride(gateway.URL)
+	t.Cleanup(func() { config.SetEndpointOverride("") })
+
+	published, err := publishJSONLViaGateway(context.Background(), fileSvc, cfg, recordsPath)
+	require.NoError(t, err)
+	assert.Equal(t, 1, published)
+}
+
+func TestFetchPublicMirrorHistory_ReturnsCursorPage(t *testing.T) {
+	historyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "cursor-1", r.URL.Query().Get("cursor"))
+		assert.Equal(t, "25", r.URL.Query().Get("limit"))
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedCursorPage{
+			Items: []map[string]any{
+				{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"},
+			},
+			Cursor:  "cursor-2",
+			HasMore: true,
+		}))
+	}))
+	t.Cleanup(historyServer.Close)
+
+	originalHistory := publicMirrorHistoryURL
+	publicMirrorHistoryURL = historyServer.URL
+	t.Cleanup(func() { publicMirrorHistoryURL = originalHistory })
+
+	page, err := fetchPublicMirrorHistory(context.Background(), nil, "cursor-1", 25)
+	require.NoError(t, err)
+	assert.True(t, page.HasMore)
+	assert.Equal(t, "cursor-2", page.Cursor)
+	assert.Len(t, page.Items, 1)
+}
+
+func TestHTTPCampaignMirrorProbe_DatasetPresentFromHistory(t *testing.T) {
+	bootstrapServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedBootstrap{
+			Snapshot: models.PublicFeedSnapshot{HighWaterSequence: 1},
+		}))
+	}))
+	historyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedCursorPage{
+			Items: []map[string]any{
+				{"kind": "catalog_snapshot", "dataset_id": "eval-run-history"},
+			},
+		}))
+	}))
+	t.Cleanup(bootstrapServer.Close)
+	t.Cleanup(historyServer.Close)
+
+	originalBootstrap := publicMirrorBootstrapURL
+	originalHistory := publicMirrorHistoryURL
+	publicMirrorBootstrapURL = bootstrapServer.URL
+	publicMirrorHistoryURL = historyServer.URL
+	t.Cleanup(func() {
+		publicMirrorBootstrapURL = originalBootstrap
+		publicMirrorHistoryURL = originalHistory
+	})
+
+	probe := newHTTPCampaignMirrorProbe(context.Background())
+	present, err := probe.DatasetPresent(context.Background(), "eval-run-history")
+	require.NoError(t, err)
+	assert.True(t, present)
 }
