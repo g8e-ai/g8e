@@ -89,10 +89,10 @@ func TestProviderObservationControllerHandleProviderObservation_SynthesizesAttem
 		AttemptStartedAtUnixMs:     started,
 		AttemptCompletedAtUnixMs:   completed,
 		Samples: []*evalv1.ProviderBoundaryHardwareSample{{
-			ObservedAtUnixNanos:   uint64(time.Unix(1_700_000_001, 0).UnixNano()),
-			HostRamAvailability:     evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
-			HostRamUsedBytes:        1,
-			HostRamTotalBytes:       2,
+			ObservedAtUnixNanos: uint64(time.Unix(1_700_000_001, 0).UnixNano()),
+			HostRamAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+			HostRamUsedBytes:    1,
+			HostRamTotalBytes:   2,
 		}},
 	}
 	digest, err := provider_observer.ComputeObservationDigest(window)

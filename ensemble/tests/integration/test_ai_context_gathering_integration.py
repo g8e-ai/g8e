@@ -95,42 +95,10 @@ def cache_aside_service(fake_cache_aside_service):
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def all_services(cache_aside_service, test_settings):
-    from unittest.mock import AsyncMock, MagicMock
+    from unittest.mock import MagicMock
 
     from app.services.service_factory import ServiceFactory
-
-    governance_client = MagicMock()
-
-    async def _submit_write_through(message):
-        payload = message.payload
-        if payload is not None and hasattr(payload, "case_id"):
-            data = payload.model_dump(mode="json")
-            data["id"] = message.id
-            data["created_at"] = datetime.now(UTC).isoformat()
-            await cache_aside_service.db_client.create_document(
-                collection="investigations",
-                document_id=message.id,
-                data=data,
-            )
-        elif payload is not None and hasattr(payload, "collection") and hasattr(payload, "updates"):
-            await cache_aside_service.db_client.create_document(
-                collection=payload.collection,
-                document_id=payload.document_id,
-                data=payload.updates,
-            )
-        return {"status": "accepted"}
-
-    async def _update_write_through(collection, document_id, updates, **kwargs):
-        return await cache_aside_service.db_client.update_document(
-            collection=collection,
-            document_id=document_id,
-            data=updates,
-            merge=kwargs.get("merge", True),
-        )
-
-    governance_client.submit_envelope = AsyncMock(side_effect=_submit_write_through)
-    governance_client.update_governed_doc = AsyncMock(side_effect=_update_write_through)
-    governance_client.delete_governed_doc = AsyncMock(return_value={"status": "accepted"})
+    from tests.integration.conftest import make_write_through_governance_client
 
     services = ServiceFactory.create_all_services(
         test_settings,
@@ -138,7 +106,7 @@ async def all_services(cache_aside_service, test_settings):
         db_service=MagicMock(),
         kv_service=MagicMock(),
         blob_service=MagicMock(),
-        governance_client=governance_client,
+        governance_client=make_write_through_governance_client(cache_aside_service),
     )
     yield services
     await ServiceFactory.stop_services(services)

@@ -28,10 +28,10 @@ func TestRepairAssignmentTraceDigests_RecomputesLegacyDigest(t *testing.T) {
 	assignmentID := "assignment-trace-digest"
 	trace := map[string]any{
 		"schema_version":         "1",
-		"chat_execution_id":        "exec-1",
-		"status":                   "completed",
-		"completed_at":               "2026-09-17T03:36:01.016030+00:00",
-		"designated_role_output":   "Proposed Action & Safeguard",
+		"chat_execution_id":      "exec-1",
+		"status":                 "completed",
+		"completed_at":           "2026-09-17T03:36:01.016030+00:00",
+		"designated_role_output": "Proposed Action & Safeguard",
 		"evaluation_context": map[string]any{
 			"campaign_id":                "eval-smoke-mini",
 			"run_id":                     runID,

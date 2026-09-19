@@ -287,8 +287,8 @@ func TestCampaignPublicationCoordinatorPublishRunAggregates(t *testing.T) {
 			aggregateKinds = append(aggregateKinds, kind)
 		}
 	}
-    assert.Contains(t, aggregateKinds, "evaluation_summary")
-    assert.Contains(t, aggregateKinds, "catalog_snapshot")
+	assert.Contains(t, aggregateKinds, "evaluation_summary")
+	assert.Contains(t, aggregateKinds, "catalog_snapshot")
 	assert.Contains(t, aggregateKinds, "model_summary")
 	assert.Contains(t, aggregateKinds, "methodology_snapshot")
 }

@@ -19,9 +19,9 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"

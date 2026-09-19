@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	HomogeneousRoleCount = 3
-	StandardScenarioCount        = 25
+	HomogeneousRoleCount  = 3
+	StandardScenarioCount = 25
 )
 
 // ModelInventoryFreeze is the immutable model registry derived from

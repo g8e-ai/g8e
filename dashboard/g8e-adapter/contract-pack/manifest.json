@@ -6,7 +6,7 @@
     },
     {
       "path": "event-schemas.json",
-      "sha256": "74685aa1b5bf6e16d556144423b4f9cf1d9d3315f10d34fca9c227560a476c37"
+      "sha256": "0f573ec57a1c96d5a2e9550fb6a4f30e249cde9b780c460073d262ce318877f2"
     },
     {
       "path": "fixtures/bootstrap.json",
@@ -58,7 +58,7 @@
     },
     {
       "path": "observe.openapi.json",
-      "sha256": "654dd32167d70a79f75bdec1dd0f71b423f18d5775a21e193db7ec2c2ba6ea06"
+      "sha256": "b4e567bc1753a481792a115221d3d1bcad2a49aa4008ab2e219237ef20d041bc"
     },
     {
       "path": "public/disclosure-matrix.json",

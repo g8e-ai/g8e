@@ -466,7 +466,7 @@ The `dashboard/g8e-adapter/` package is the audited integration core. It owns:
 - A safe event presentation registry: escaped bounded fields, safe labels, thinking events as phase labels (never raw chain-of-thought), unknown events as bounded diagnostic rows that cannot mutate projections or counters.
 - Explicit loading, empty, stale, unavailable, unsupported, partial-verification, disconnected, unauthenticated, and error view states.
 
-The adapter is verified by 443 unit tests. A minimal host (`host/`) exercises the adapter against a real Gateway fixture in browser contract tests. A reference frontend (`reference-ui/`) demonstrates one valid presentation layer that wraps the adapter; it is replaceable and is not the only valid output.
+The adapter is verified by 445 unit tests, including the contract-pack drift check. A minimal host (`host/`) exercises the adapter against a real Gateway fixture in browser contract tests. A reference frontend (`reference-ui/`) demonstrates one valid presentation layer that wraps the adapter; it is replaceable and is not the only valid output.
 
 ### The deterministic contract pack
 

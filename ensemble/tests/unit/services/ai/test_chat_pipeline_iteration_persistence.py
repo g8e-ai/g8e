@@ -106,6 +106,7 @@ def _make_pipeline() -> ChatPipelineService:
     svc.investigation_service.persist_ai_message = AsyncMock(side_effect=_fake_persist_ai_message)
     svc.memory_generation_service = MagicMock()
     svc.memory_generation_service.update_memory_from_conversation = AsyncMock()
+    svc.evaluation_trace_service = MagicMock()
     return svc
 
 

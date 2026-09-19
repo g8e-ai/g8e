@@ -404,7 +404,7 @@ const (
 	InferenceProviderObserverDirname        = "provider-observer"
 	InferenceProviderObserverWindowsDirname = "windows"
 	InferenceModelProvenanceDirname         = "model-provenance"
-	InferenceModelProvenanceWindowsDirname = "windows"
+	InferenceModelProvenanceWindowsDirname  = "windows"
 	ModelsDirname                           = "models"
 	InferenceStateFilename                  = "inference-state.json"
 	InferenceModelfilesDirname              = "modelfiles"
@@ -938,6 +938,6 @@ const (
 	// plus lifecycle, result, and aggregate projections) without pruning the
 	// prefix the evaluation explorer replays on cold load.
 	PublicFeedMirrorRetainedBatches = 25000
-	PublicFeedIngestTokenBytes        = 32
-	PublicFeedZeroHashHex             = "0000000000000000000000000000000000000000000000000000000000000000"
+	PublicFeedIngestTokenBytes      = 32
+	PublicFeedZeroHashHex           = "0000000000000000000000000000000000000000000000000000000000000000"
 )

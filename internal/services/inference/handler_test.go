@@ -417,10 +417,10 @@ func TestInferenceHandler_ExecuteVerifiedTransaction_AcceptsGovernedCampaignWith
 				ServedModelDigest: modelDigest,
 			}}
 			handler := NewInferenceExecutionHandler(backend, &config.Config{Inference: config.InferenceConfig{
-				Enabled:       true,
-				PrimaryModel:  model,
+				Enabled:        true,
+				PrimaryModel:   model,
 				AssistantModel: model,
-				LiteModel:     model,
+				LiteModel:      model,
 			}}, nil, testutil.NewTestLogger())
 			payload := mustMarshalInferenceRequested(t, &operatorv1.InferenceRequested{
 				RequestSchemaVersion: constants.InferenceRequestSchemaVersion,

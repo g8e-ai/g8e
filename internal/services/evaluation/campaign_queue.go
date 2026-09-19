@@ -24,7 +24,7 @@ import (
 
 const (
 	DefaultInitCampaignQueueRelPath    = ".local.dev/init-campaign-queue.json"
-	DefaultModelInventoryRelPath   = ".local.dev/model-inventory.json"
+	DefaultModelInventoryRelPath       = ".local.dev/model-inventory.json"
 	DefaultCampaignInventoryRelDirname = ".g8e/eval/inventories"
 )
 

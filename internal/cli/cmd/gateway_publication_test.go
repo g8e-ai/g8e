@@ -112,8 +112,21 @@ func TestRemoteGatewayCampaignFeedExporterRetriesSequenceOutOfOrder(t *testing.T
 }
 
 func TestShouldPublishViaGatewayWithoutHostExportConfig(t *testing.T) {
-	fileSvc, cfg := newCmdTestEnv(t)
-	assert.True(t, shouldPublishViaGateway(context.Background(), fileSvc))
+	fileSvc, _ := newCmdTestEnv(t)
+	original := gatewayHealthCheck
+	gatewayHealthCheck = func() bool { return true }
+	t.Cleanup(func() { gatewayHealthCheck = original })
+
 	assert.False(t, isHostPublicFeedConfigured(context.Background(), fileSvc))
-	_ = cfg
+	assert.True(t, shouldPublishViaGateway(context.Background(), fileSvc))
+}
+
+func TestShouldPublishViaGatewayReturnsFalseWhenGatewayUnhealthy(t *testing.T) {
+	fileSvc, _ := newCmdTestEnv(t)
+	original := gatewayHealthCheck
+	gatewayHealthCheck = func() bool { return false }
+	t.Cleanup(func() { gatewayHealthCheck = original })
+
+	assert.False(t, isHostPublicFeedConfigured(context.Background(), fileSvc))
+	assert.False(t, shouldPublishViaGateway(context.Background(), fileSvc))
 }

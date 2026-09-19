@@ -37,7 +37,7 @@ func approvePlatformEnrollmentCmd() *cobra.Command {
 			verb:       "approve",
 			promptVerb: "Approve",
 			decision:   models.PlatformEnrollmentDecisionApprove,
-			short:    "Approve a pending platform workload enrollment request via mTLS",
+			short:      "Approve a pending platform workload enrollment request via mTLS",
 			long: `Approve a pending platform workload enrollment request (dashboard,
 ensemble, or operator) from the authenticated CLI identity (mTLS).
 
@@ -63,7 +63,7 @@ func denyPlatformEnrollmentCmd() *cobra.Command {
 			verb:       "deny",
 			promptVerb: "Deny",
 			decision:   models.PlatformEnrollmentDecisionDeny,
-			short:    "Deny a pending platform workload enrollment request via mTLS",
+			short:      "Deny a pending platform workload enrollment request via mTLS",
 			long: `Deny a pending platform workload enrollment request (dashboard,
 ensemble, or operator) from the authenticated CLI identity (mTLS).
 
@@ -110,8 +110,8 @@ func denyPlatformEnrollmentCmdWithConfig(
 			verb:       "deny",
 			promptVerb: "Deny",
 			decision:   models.PlatformEnrollmentDecisionDeny,
-			short:    "Deny a pending platform workload enrollment request via mTLS",
-			long:     "Deny a pending platform workload enrollment request via mTLS.",
+			short:      "Deny a pending platform workload enrollment request via mTLS",
+			long:       "Deny a pending platform workload enrollment request via mTLS.",
 		},
 		configLoader, clientFactory, fileSvcFactory,
 	)

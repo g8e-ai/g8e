@@ -677,10 +677,10 @@ type CLIUnbindRequest struct{}
 
 // CLIUnbindResponse is the wire response for POST /api/v1/auth/cli/unbind.
 type CLIUnbindResponse struct {
-	Success         bool   `json:"success"`
-	CLISessionID    string `json:"cli_session_id"`
-	UserID          string `json:"user_id"`
-	AlreadyUnbound  bool   `json:"already_unbound,omitempty"`
+	Success        bool   `json:"success"`
+	CLISessionID   string `json:"cli_session_id"`
+	UserID         string `json:"user_id"`
+	AlreadyUnbound bool   `json:"already_unbound,omitempty"`
 }
 
 // CLISessionInfoResponse is the wire response for

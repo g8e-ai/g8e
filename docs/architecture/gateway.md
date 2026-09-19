@@ -4,7 +4,7 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-09-18
+Last Updated: 2026-09-19
 Version: v2.1.8
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
@@ -66,6 +66,7 @@ By passing `--posture doctrine`, `--posture consensus`, `--posture ratify`, or `
     - **Root CA / PKI**: Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
     - **Audit Authority**: Append-only encrypted log of every event and signed ActionReceipt.
     - **Unified MCP Endpoint**: Single-URL JSON-RPC dispatch contract for MCP protocol communication.
+    - **CLI Operator Dispatch**: `POST /api/v1/operators/commands` builds governed envelopes for enrolled CLI callers and fans out `EXECUTE_BASH` (and other typed actions) to explicit operator sessions, blocking until a terminal result per target.
 
 ### Port Topology
 

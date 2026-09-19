@@ -28,7 +28,7 @@ func TestIsOllamaServiceCommand(t *testing.T) {
 
 func TestValidateOllamaServiceCommand(t *testing.T) {
 	capable := &models.RuntimeConfig{
-		ProviderBoundaryObserverEnabled:      true,
+		ProviderBoundaryObserverEnabled:       true,
 		ProviderBoundaryObserverOllamaEnabled: true,
 	}
 	require.NoError(t, ValidateOllamaServiceCommand(capable, "ollama stop"))

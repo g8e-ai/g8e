@@ -67,8 +67,8 @@ type ServeOperatorOptions struct {
 	InferenceCampaignID          string
 	InferenceModelRegistryDigest string
 
-	ProviderBoundaryObserverEnabled bool
-	ProviderBoundaryObserverID      string
+	ProviderBoundaryObserverEnabled       bool
+	ProviderBoundaryObserverID            string
 	ProviderBoundaryObserverOllamaEnabled bool
 
 	ProvenanceOperatorEnabled          bool

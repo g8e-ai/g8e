@@ -5,7 +5,7 @@ parent: Architecture
 
 # Platform Architecture Overview
 
-Last Updated: 2026-09-18
+Last Updated: 2026-09-19
 Version: v2.1.8
 
 ## What g8e Is
@@ -73,6 +73,8 @@ The practical flow for an AI client is:
 8. The gateway returns the receipt to the AI client through the original MCP/A2A response or SSE channel.
 
 Only the operator bound to the envelope receives the work. The gateway binds the envelope to the authenticated operator session and publishes to that operator's unique command channel. No broadcast occurs. For the visual sequence, see the [principal-ensemble-gateway-operator sequence diagram](../diagrams/sequence-principal-ensemble-gateway-operator-v3.md). For the agent-facing surface, see [AI Agents and the g8e Governance Boundary](./agents.md).
+
+Enrolled CLI owners can also pin their session to a specific operator (`g8e operator bind`) and fan out governed `EXECUTE_BASH` commands to one or more explicit operator sessions in parallel (`g8e operator run`). The gateway dispatch service constructs envelopes and waits for terminal results per target. See [Operator Architecture](./operator.md#3-cli-directed-command-dispatch).
 
 ---
 

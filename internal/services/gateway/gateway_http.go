@@ -32,35 +32,35 @@ type HTTPHandlerDependencies struct {
 	Logger *slog.Logger
 	Auth   *AuthService
 
-	PKIControllerDeps                PKIControllerDeps
-	AuditControllerDeps              AuditControllerDeps
-	DataControllerDeps               DataControllerDeps
-	SignerControllerDeps             SignerControllerDeps
-	BootstrapControllerDeps          BootstrapControllerDeps
-	CLIRecoveryControllerDeps        CLIRecoveryControllerDeps
-	CLIRotationControllerDeps        CLIRotationControllerDeps
-	CLIRefreshControllerDeps         CLIRefreshControllerDeps
-	CLISessionControllerDeps         CLISessionControllerDeps
-	EnrollmentTokenControllerDeps    EnrollmentTokenControllerDeps
-	UserControllerDeps               UserControllerDeps
-	SessionControllerDeps            SessionControllerDeps
-	AdminControllerDeps              AdminControllerDeps
-	OperatorControllerDeps           OperatorControllerDeps
-	DispatchControllerDeps           DispatchControllerDeps
-	InferenceDispatchControllerDeps  InferenceDispatchControllerDeps
-	SSEControllerDeps                SSEControllerDeps
-	HealthControllerDeps             HealthControllerDeps
-	GovernanceControllerDeps         GovernanceControllerDeps
-	MCPControllerDeps                MCPControllerDeps
-	PubSubControllerDeps             PubSubControllerDeps
-	PasskeyControllerDeps            PasskeyControllerDeps
-	PlatformEnrollmentControllerDeps PlatformEnrollmentControllerDeps
-	ObserveControllerDeps            ObserveControllerDeps
-	ObserveProducerControllerDeps    ObserveProducerControllerDeps
-	PublicFeedControllerDeps                 PublicFeedControllerDeps
+	PKIControllerDeps                     PKIControllerDeps
+	AuditControllerDeps                   AuditControllerDeps
+	DataControllerDeps                    DataControllerDeps
+	SignerControllerDeps                  SignerControllerDeps
+	BootstrapControllerDeps               BootstrapControllerDeps
+	CLIRecoveryControllerDeps             CLIRecoveryControllerDeps
+	CLIRotationControllerDeps             CLIRotationControllerDeps
+	CLIRefreshControllerDeps              CLIRefreshControllerDeps
+	CLISessionControllerDeps              CLISessionControllerDeps
+	EnrollmentTokenControllerDeps         EnrollmentTokenControllerDeps
+	UserControllerDeps                    UserControllerDeps
+	SessionControllerDeps                 SessionControllerDeps
+	AdminControllerDeps                   AdminControllerDeps
+	OperatorControllerDeps                OperatorControllerDeps
+	DispatchControllerDeps                DispatchControllerDeps
+	InferenceDispatchControllerDeps       InferenceDispatchControllerDeps
+	SSEControllerDeps                     SSEControllerDeps
+	HealthControllerDeps                  HealthControllerDeps
+	GovernanceControllerDeps              GovernanceControllerDeps
+	MCPControllerDeps                     MCPControllerDeps
+	PubSubControllerDeps                  PubSubControllerDeps
+	PasskeyControllerDeps                 PasskeyControllerDeps
+	PlatformEnrollmentControllerDeps      PlatformEnrollmentControllerDeps
+	ObserveControllerDeps                 ObserveControllerDeps
+	ObserveProducerControllerDeps         ObserveProducerControllerDeps
+	PublicFeedControllerDeps              PublicFeedControllerDeps
 	EvalCampaignPublicationControllerDeps EvalCampaignPublicationControllerDeps
-	ProviderObservationControllerDeps        ProviderObservationControllerDeps
-	ModelProvenanceControllerDeps            ModelProvenanceControllerDeps
+	ProviderObservationControllerDeps     ProviderObservationControllerDeps
+	ModelProvenanceControllerDeps         ModelProvenanceControllerDeps
 }
 
 // HTTPHandler manages the web API for the gateway service.
@@ -74,31 +74,31 @@ type HTTPHandler struct {
 	passkeyController            *PasskeyController
 	platformEnrollmentController *PlatformEnrollmentController
 	// Controllers for domain-specific endpoints
-	pkiController               *PKIController
-	auditController             *AuditController
-	dataController              *DataController
-	signerController            *SignerController
-	bootstrapController         *BootstrapController
-	cliRecoveryController       *CLIRecoveryController
-	cliRotationController       *CLIRotationController
-	cliRefreshController        *CLIRefreshController
-	cliSessionController        *CLISessionController
-	enrollmentTokenController   *EnrollmentTokenController
-	userController              *UserController
-	sessionController           *SessionController
-	adminController             *AdminController
-	operatorController          *OperatorController
-	dispatchController          *DispatchController
-	inferenceDispatchController *InferenceDispatchController
-	sseController               *SSEController
-	healthController            *HealthController
-	governanceController        *GovernanceController
-	observeController           *ObserveController
-	observeProducerController   *ObserveProducerController
-	publicFeedController                 *PublicFeedController
+	pkiController                     *PKIController
+	auditController                   *AuditController
+	dataController                    *DataController
+	signerController                  *SignerController
+	bootstrapController               *BootstrapController
+	cliRecoveryController             *CLIRecoveryController
+	cliRotationController             *CLIRotationController
+	cliRefreshController              *CLIRefreshController
+	cliSessionController              *CLISessionController
+	enrollmentTokenController         *EnrollmentTokenController
+	userController                    *UserController
+	sessionController                 *SessionController
+	adminController                   *AdminController
+	operatorController                *OperatorController
+	dispatchController                *DispatchController
+	inferenceDispatchController       *InferenceDispatchController
+	sseController                     *SSEController
+	healthController                  *HealthController
+	governanceController              *GovernanceController
+	observeController                 *ObserveController
+	observeProducerController         *ObserveProducerController
+	publicFeedController              *PublicFeedController
 	evalCampaignPublicationController *EvalCampaignPublicationController
-	providerObservationController        *ProviderObservationController
-	modelProvenanceController            *ModelProvenanceController
+	providerObservationController     *ProviderObservationController
+	modelProvenanceController         *ModelProvenanceController
 
 	// router is the main HTTP router, built once at construction by
 	// buildPublicRouter and cached for the lifetime of the handler. It is
@@ -218,41 +218,41 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	}
 
 	h := &HTTPHandler{
-		cfg:                          deps.Cfg,
-		logger:                       deps.Logger,
-		authMiddleware:               deps.Auth,
-		responder:                    responder,
-		pkiController:                newPKIController(deps.PKIControllerDeps),
-		auditController:              newAuditController(deps.AuditControllerDeps),
-		dataController:               newDataController(deps.DataControllerDeps),
-		signerController:             newSignerController(deps.SignerControllerDeps),
-		bootstrapController:          newBootstrapController(deps.BootstrapControllerDeps),
-		cliRecoveryController:        newCLIRecoveryController(deps.CLIRecoveryControllerDeps),
-		cliRotationController:        newCLIRotationController(deps.CLIRotationControllerDeps),
-		cliRefreshController:         newCLIRefreshController(deps.CLIRefreshControllerDeps),
-		cliSessionController:         newCLISessionController(deps.CLISessionControllerDeps),
-		enrollmentTokenController:    newEnrollmentTokenController(deps.EnrollmentTokenControllerDeps),
-		userController:               newUserController(deps.UserControllerDeps),
-		sessionController:            newSessionController(deps.SessionControllerDeps),
-		adminController:              newAdminController(deps.AdminControllerDeps),
-		operatorController:           newOperatorController(deps.OperatorControllerDeps),
-		dispatchController:           newDispatchController(deps.DispatchControllerDeps),
-		inferenceDispatchController:  newInferenceDispatchController(deps.InferenceDispatchControllerDeps),
-		sseController:                newSSEController(deps.SSEControllerDeps),
-		healthController:             newHealthController(deps.HealthControllerDeps),
-		governanceController:         newGovernanceController(deps.GovernanceControllerDeps),
-		observeController:            newObserveController(deps.ObserveControllerDeps),
-		observeProducerController:    newObserveProducerController(deps.ObserveProducerControllerDeps),
-		publicFeedController:                 newPublicFeedController(deps.PublicFeedControllerDeps),
+		cfg:                               deps.Cfg,
+		logger:                            deps.Logger,
+		authMiddleware:                    deps.Auth,
+		responder:                         responder,
+		pkiController:                     newPKIController(deps.PKIControllerDeps),
+		auditController:                   newAuditController(deps.AuditControllerDeps),
+		dataController:                    newDataController(deps.DataControllerDeps),
+		signerController:                  newSignerController(deps.SignerControllerDeps),
+		bootstrapController:               newBootstrapController(deps.BootstrapControllerDeps),
+		cliRecoveryController:             newCLIRecoveryController(deps.CLIRecoveryControllerDeps),
+		cliRotationController:             newCLIRotationController(deps.CLIRotationControllerDeps),
+		cliRefreshController:              newCLIRefreshController(deps.CLIRefreshControllerDeps),
+		cliSessionController:              newCLISessionController(deps.CLISessionControllerDeps),
+		enrollmentTokenController:         newEnrollmentTokenController(deps.EnrollmentTokenControllerDeps),
+		userController:                    newUserController(deps.UserControllerDeps),
+		sessionController:                 newSessionController(deps.SessionControllerDeps),
+		adminController:                   newAdminController(deps.AdminControllerDeps),
+		operatorController:                newOperatorController(deps.OperatorControllerDeps),
+		dispatchController:                newDispatchController(deps.DispatchControllerDeps),
+		inferenceDispatchController:       newInferenceDispatchController(deps.InferenceDispatchControllerDeps),
+		sseController:                     newSSEController(deps.SSEControllerDeps),
+		healthController:                  newHealthController(deps.HealthControllerDeps),
+		governanceController:              newGovernanceController(deps.GovernanceControllerDeps),
+		observeController:                 newObserveController(deps.ObserveControllerDeps),
+		observeProducerController:         newObserveProducerController(deps.ObserveProducerControllerDeps),
+		publicFeedController:              newPublicFeedController(deps.PublicFeedControllerDeps),
 		evalCampaignPublicationController: newEvalCampaignPublicationController(deps.EvalCampaignPublicationControllerDeps),
-		providerObservationController:        newProviderObservationController(deps.ProviderObservationControllerDeps),
-		modelProvenanceController:            newModelProvenanceController(deps.ModelProvenanceControllerDeps),
-		mcpController:                newMCPController(deps.MCPControllerDeps),
-		pubsubController:             newPubSubController(deps.PubSubControllerDeps),
-		passkeyController:            newPasskeyController(deps.PasskeyControllerDeps),
-		platformEnrollmentController: newPlatformEnrollmentController(deps.PlatformEnrollmentControllerDeps),
-		limiters:                     make(map[string]*tokenBucket),
-		limiterLastUsed:              make(map[string]time.Time),
+		providerObservationController:     newProviderObservationController(deps.ProviderObservationControllerDeps),
+		modelProvenanceController:         newModelProvenanceController(deps.ModelProvenanceControllerDeps),
+		mcpController:                     newMCPController(deps.MCPControllerDeps),
+		pubsubController:                  newPubSubController(deps.PubSubControllerDeps),
+		passkeyController:                 newPasskeyController(deps.PasskeyControllerDeps),
+		platformEnrollmentController:      newPlatformEnrollmentController(deps.PlatformEnrollmentControllerDeps),
+		limiters:                          make(map[string]*tokenBucket),
+		limiterLastUsed:                   make(map[string]time.Time),
 	}
 
 	// Build router once to avoid per-request overhead

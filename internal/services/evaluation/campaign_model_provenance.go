@@ -25,11 +25,6 @@ type ModelProvenanceRemote interface {
 	Load(ctx context.Context, providerAttemptID string) (*evalv1.ModelProvenanceAttestationWindow, error)
 }
 
-const (
-	modelProvenanceArtifactType = "model-provenance-attestation-window"
-	modelProvenanceSchemaRef    = "g8e.eval.v1.ModelProvenanceAttestationWindow"
-)
-
 // ModelProvenancePolicy controls whether missing provenance attestations are
 // verification failures or interim unavailable telemetry.
 type ModelProvenancePolicy int

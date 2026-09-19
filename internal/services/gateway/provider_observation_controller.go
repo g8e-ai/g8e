@@ -46,11 +46,11 @@ func providerObservationControllerDeps(logger *slog.Logger, responder *response.
 // ProviderObservationController serves owner mTLS reads of provider-boundary
 // observation evidence stored in the gateway runtime volume.
 type ProviderObservationController struct {
-	logger       *slog.Logger
-	responder    *response.Writer
-	windows      provider_observer.WindowStore
-	attempts     inference.AttemptStore
-	preflight    providerObservationPreflight
+	logger    *slog.Logger
+	responder *response.Writer
+	windows   provider_observer.WindowStore
+	attempts  inference.AttemptStore
+	preflight providerObservationPreflight
 }
 
 type providerObservationPreflight interface {

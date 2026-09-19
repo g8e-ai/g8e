@@ -18,9 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
-	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 )
 
 type recordingCampaignFeedExporter struct {

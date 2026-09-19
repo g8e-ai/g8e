@@ -4,7 +4,7 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-09-18
+Last Updated: 2026-09-19
 Version: v2.1.8
 
 Core terminology for the g8e Governance Suite, including the protocol, Governance Gateway, Governed Operator, g8ee ensemble, g8ed dashboard, compliance evidence, and MCP and A2A integrations. Terms are organized alphabetically.
@@ -62,6 +62,12 @@ The Gateway's SQLite database, `g8e.db`, opened in WAL mode and used by the docu
 ## Capability
 
 A just-in-time, single-action permission minted by L5 from a verified transaction. It binds the transaction hash, action type, target resource, Operator identity and session, envelope expiry, a random single-use token, and the Actuator key identity. L5 places it in the execution context and dissolves it immediately after dispatch succeeds or fails; handlers can verify it before performing work.
+
+---
+
+## CLI Operator Session Binding
+
+The persisted pair of `operator_session_id` and `operator_id` stamped on an authenticated CLI session. `g8e operator bind` pins the CLI session to one active operator session owned by the same user through `POST /api/v1/auth/cli/bind`; `bind unbind` clears it through `POST /api/v1/auth/cli/unbind`. Binding changes issue a replacement CLI session server-side. Refresh, rotation, and recovery inherit the prior binding when present. The unified auth middleware derives operator identity from the session record and rejects contradictory request headers.
 
 ---
 
@@ -304,6 +310,12 @@ TLS authentication in which both peers present and verify certificates. g8e uses
 ## Observed-State Root
 
 A separate SHA-256 commitment over active observed-tier KV and blob rows. It does not gate transaction admission, so telemetry and environmental readings do not make in-flight envelopes stale. Audit evidence can chain this root to make observations tamper-evident.
+
+---
+
+## Operator Run Dispatch
+
+The enrolled-CLI automation path for governed shell execution on one or more remote Operators. `g8e operator run` posts typed dispatch requests to `POST /api/v1/operators/commands` with an explicit `target_operator_session_id` per target, fans out `EXECUTE_BASH` in parallel, and waits for a terminal `CommandResult` per session. The gateway dispatch service constructs the envelope, screens the payload with L1 Doctrine, applies posture-aware L3 gating, publishes to each target's `cmd:` channel, and returns stdout, stderr, and exit code to the caller.
 
 ---
 

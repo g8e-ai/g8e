@@ -36,13 +36,13 @@ func TestTracker_BeginAndFinalize(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0).UTC()
 	attestor := &stubAttestor{
 		window: &evalv1.ModelProvenanceAttestationWindow{
-			SchemaVersion:        SchemaVersion,
-			ServedModelTag:       "probe-model:7b",
-			ExpectedModelDigest:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			ObservedModelDigest:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			ManifestDigest:       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-			AttestedAtUnixMs:     now.UnixMilli(),
-			DigestMatch:          true,
+			SchemaVersion:       SchemaVersion,
+			ServedModelTag:      "probe-model:7b",
+			ExpectedModelDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			ObservedModelDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			ManifestDigest:      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			AttestedAtUnixMs:    now.UnixMilli(),
+			DigestMatch:         true,
 		},
 	}
 	tracker, err := NewTracker(TrackerConfig{

@@ -39,8 +39,10 @@ func TestQueueEvalNext_PrintsPendingEntry(t *testing.T) {
 	require.NoError(t, os.WriteFile(queuePath, body, 0o600))
 
 	deps := nativeEvalDeps{
-		configLoader:      func(string) (*config.Config, error) { return &config.Config{ProjectRoot: root}, nil },
-		fileSvcFactory:    func(string, *slog.Logger) (fs.RuntimeFileService, error) { return fs.NewRuntimeFileService(root, slog.Default()) },
+		configLoader: func(string) (*config.Config, error) { return &config.Config{ProjectRoot: root}, nil },
+		fileSvcFactory: func(string, *slog.Logger) (fs.RuntimeFileService, error) {
+			return fs.NewRuntimeFileService(root, slog.Default())
+		},
 		createRuntimeTree: func(context.Context, fs.RuntimeFileService) error { return nil },
 	}
 	command := evalCmdWithConfig(deps)

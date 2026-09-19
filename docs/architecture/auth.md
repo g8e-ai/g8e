@@ -1,6 +1,6 @@
 # Authentication & Authorization
 
-Last Updated: 2026-09-18
+Last Updated: 2026-09-19
 Version: v2.1.8
 
 ## Overview
@@ -82,6 +82,20 @@ Run `g8e auth refresh` when the CLI certificate is still valid but its server-si
 ### Authentication Context and Logout
 
 `g8e auth context` emits the local CLI identity, CLI and operator session binding, and certificate and key paths as typed JSON for automation. If local metadata lacks an operator binding, the command resolves the persisted binding through `GET /api/v1/auth/cli/session`, writes the returned pair back to local credentials, and fails closed with refresh guidance when the session reports no binding.
+
+### CLI Operator Session Binding
+
+`g8e operator bind` manages the authenticated CLI session's persisted operator binding independently of enrollment or refresh:
+
+| Subcommand | Purpose |
+| --- | --- |
+| `bind <operator-session-id>` | Pin the CLI session to one active operator session owned by the same user |
+| `bind list` | Show the operator currently bound to the CLI session |
+| `bind unbind` | Clear the operator binding from the CLI session |
+
+Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS. The gateway validates that the target operator session is active and belongs to the authenticated user, then issues a replacement CLI session server-side and returns the new `cli_session_id`. Local credentials are updated immediately. Re-binding to the same operator session is idempotent and does not rotate the CLI session.
+
+Use `./g8e operator list` to discover operator session IDs and `./g8e operator show <operator-id-or-session-id>` to inspect host heartbeat details before binding. Eval and chat automation paths can refresh stale bindings automatically; pass `--no-auto-refresh` on supported eval commands to skip that step.
 
 `g8e auth logout` removes the local CLI credentials, certificate, and private key. It does not revoke the gateway-side session or certificate, and it does not remove the shared gateway root CA from the operating-system trust store. Use gateway administration and certificate revocation when server-side invalidation is required.
 

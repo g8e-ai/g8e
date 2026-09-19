@@ -148,10 +148,7 @@ func (c *CampaignPublicationCoordinator) PublishRunAggregates(ctx context.Contex
 	}
 	requests := make([]campaignFeedPublishRequest, 0, len(records))
 	for _, record := range records {
-		requests = append(requests, campaignFeedPublishRequest{
-			IdempotencyKey: record.IdempotencyKey,
-			Body:           record.Body,
-		})
+		requests = append(requests, campaignFeedPublishRequest(record))
 	}
 	return c.exportFeedRecords(ctx, runID, requests)
 }
@@ -211,10 +208,7 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 	}
 	summaryRequests := make([]campaignFeedPublishRequest, 0, len(records))
 	for _, record := range records {
-		summaryRequests = append(summaryRequests, campaignFeedPublishRequest{
-			IdempotencyKey: record.IdempotencyKey,
-			Body:           record.Body,
-		})
+		summaryRequests = append(summaryRequests, campaignFeedPublishRequest(record))
 	}
 	summaryCount, err := c.exportFeedRecords(ctx, runID, summaryRequests)
 	if err != nil {
@@ -242,10 +236,7 @@ func (c *CampaignPublicationCoordinator) PublishRunCompletion(ctx context.Contex
 	}
 	requests := make([]campaignFeedPublishRequest, 0, len(records))
 	for _, record := range records {
-		requests = append(requests, campaignFeedPublishRequest{
-			IdempotencyKey: record.IdempotencyKey,
-			Body:           record.Body,
-		})
+		requests = append(requests, campaignFeedPublishRequest(record))
 	}
 	return c.exportFeedRecords(ctx, runID, requests)
 }
@@ -392,17 +383,6 @@ func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Conte
 		return nil, nil, nil, nil, err
 	}
 	return run, assignments, results, state, nil
-}
-
-func (c *CampaignPublicationCoordinator) publishViewRecord(ctx context.Context, runID, idempotencyKey string, body []byte) (bool, error) {
-	count, err := c.exportFeedRecords(ctx, runID, []campaignFeedPublishRequest{{
-		IdempotencyKey: idempotencyKey,
-		Body:           body,
-	}})
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
 }
 
 func (c *CampaignPublicationCoordinator) publishAssignmentResultEnvelope(ctx context.Context, runID, idempotencyKey string, projection *evalv1.PublicAssignmentResultProjection, benchmark *PublicBenchmarkObservations) error {

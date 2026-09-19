@@ -10,7 +10,6 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -22,7 +21,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
-	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -729,34 +727,6 @@ func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
 	cmd.Flags().BoolVar(&force, "force", false, "Clear host publication idempotency and republish all projections (use after gateway mirror volume wipe)")
 	return cmd
-}
-
-type gatewayCampaignFeedExporter struct {
-	publisher *gateway.PublicPublisherService
-}
-
-func (e *gatewayCampaignFeedExporter) HighWaterSequence(ctx context.Context) (int64, error) {
-	snapshot, err := e.publisher.GetSnapshot(ctx)
-	if err == nil {
-		return snapshot.HighWaterSequence, nil
-	}
-	if errors.Is(err, constants.ErrPublicFeedSnapshotNotFound) {
-		return 0, nil
-	}
-	return 0, err
-}
-
-func (e *gatewayCampaignFeedExporter) ExportBatch(ctx context.Context, records []evaluation.CampaignPublicFeedRecord) error {
-	batch := make([]models.PublicFeedRecord, len(records))
-	for index, record := range records {
-		batch[index] = models.PublicFeedRecord{
-			Sequence:    record.Sequence,
-			RecordType:  models.PublicFeedRecordTypeProjection,
-			RecordHash:  record.RecordHash,
-			RecordBytes: record.RecordBytes,
-		}
-	}
-	return e.publisher.ExportBatch(ctx, batch)
 }
 
 func newCampaignPublicationCoordinator(cmd *cobra.Command, fileSvc fs.RuntimeFileService) (*evaluation.CampaignPublicationCoordinator, error) {

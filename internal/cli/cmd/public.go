@@ -683,4 +683,3 @@ func publicRotateKeyCmdWithConfig(configLoader publicConfigLoader, fileSvcFactor
 		},
 	}
 }
-

@@ -55,13 +55,13 @@ func (d *harnessOllamaServiceDispatcher) DispatchOllamaServiceCommand(ctx contex
 	}
 	status, response, body, err := d.client.DispatchCommand(ctx, d.persona, harnessclient.DispatchCommandRequest{
 		TargetOperatorSessionID: request.ObserverSessionID,
-		ActionType:            string(constants.ActionTypeExecuteBash),
-		Payload:               payload,
-		TargetResource:        "ollama-service",
-		CaseID:                request.CaseID,
-		InvestigationID:       request.InvestigationID,
-		TaskID:                request.TaskID,
-		CLISessionID:          d.persona.CLISessionID,
+		ActionType:              string(constants.ActionTypeExecuteBash),
+		Payload:                 payload,
+		TargetResource:          "ollama-service",
+		CaseID:                  request.CaseID,
+		InvestigationID:         request.InvestigationID,
+		TaskID:                  request.TaskID,
+		CLISessionID:            d.persona.CLISessionID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: ollama service dispatch: %w", err)

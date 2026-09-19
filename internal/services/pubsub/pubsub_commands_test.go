@@ -299,15 +299,15 @@ func buildGatewayDispatchedDoctrineEnvelope(t *testing.T, stateRoot, nonce strin
 		ExpiresAt:         timestamppb.New(time.Now().Add(time.Hour)),
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
-		ActionType: string(constants.ActionTypeFsList),
-		TargetResource: "localhost",
+		ActionType:        string(constants.ActionTypeFsList),
+		TargetResource:    "localhost",
 		Payload: mustMarshalProto(t, &operatorv1.FsListRequested{
 			Path:        ".",
 			ExecutionId: "exec-gateway-dispatch",
 		}),
-		StateMerkleRoot:   stateRoot,
-		Nonce:             nonce,
-		Posture:           constants.PostureDoctrine,
+		StateMerkleRoot: stateRoot,
+		Nonce:           nonce,
+		Posture:         constants.PostureDoctrine,
 	}
 	hash, err := govpkg.GenerateMessageID(env)
 	require.NoError(t, err)

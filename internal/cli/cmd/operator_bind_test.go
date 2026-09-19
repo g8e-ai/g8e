@@ -25,16 +25,16 @@ import (
 )
 
 type stubOperatorBindClient struct {
-	result      auth.CLISessionBind
-	unbind      auth.CLISessionUnbind
-	sessionInfo auth.CLISessionInfo
-	err         error
-	unbindErr   error
-	sessionErr  error
-	called      bool
-	unbindCalled bool
+	result        auth.CLISessionBind
+	unbind        auth.CLISessionUnbind
+	sessionInfo   auth.CLISessionInfo
+	err           error
+	unbindErr     error
+	sessionErr    error
+	called        bool
+	unbindCalled  bool
 	sessionCalled bool
-	arg         string
+	arg           string
 }
 
 func (s *stubOperatorBindClient) Bind(_ context.Context, _ fs.RuntimeFileService, operatorSessionID string) (auth.CLISessionBind, error) {

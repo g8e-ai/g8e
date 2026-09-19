@@ -26,5 +26,3 @@ func TestMarshalCanonicalJSONObject_EscapesHTMLSensitiveCharacters(t *testing.T)
 	assert.Contains(t, string(canonical), "\\u003c")
 	assert.NotContains(t, string(canonical), " & ")
 }
-
-

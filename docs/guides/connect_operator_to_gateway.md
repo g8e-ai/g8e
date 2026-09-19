@@ -5,7 +5,7 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-09-18
+Last Updated: 2026-09-19
 Version: v2.1.8
 
 ---
@@ -203,7 +203,25 @@ From an enrolled CLI identity:
 ./g8e operator list --endpoint <gateway-host>
 ```
 
-The command lists Operator records associated with the enrolled user, including Operator ID, type, cloud subtype, Operator session ID, and recorded status. Use the Operator process log and the `Channel established - Ready to receive` message as the direct confirmation that the current worker established its pub/sub channel.
+The command lists Operator records associated with the enrolled user, including Operator ID, type, hostname, Operator session ID, and recorded status. Use `g8e operator show <operator-id-or-session-id>` for the latest heartbeat snapshot. Use the Operator process log and the `Channel established - Ready to receive` message as the direct confirmation that the current worker established its pub/sub channel.
+
+### Bind the CLI session and run remote commands
+
+Pin the enrolled CLI to a specific operator session when automation or eval flows need a stable default target:
+
+```bash
+./g8e operator bind <operator-session-id>
+./g8e operator bind list
+```
+
+Execute a governed shell command on one or more active operator sessions in parallel:
+
+```bash
+./g8e operator run <operator-session-id> [<operator-session-id>...] \
+  --cmd "uname -a"
+```
+
+Each target must belong to the authenticated user. Binding changes and `operator run` both require an enrolled CLI identity. See [Build Operator](build_operator.md#operate-remote-operators-from-the-cli) and [Authentication and Authorization](../architecture/auth.md#cli-operator-session-binding).
 
 ### View Gateway Logs
 

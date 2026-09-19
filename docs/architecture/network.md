@@ -1,6 +1,6 @@
 # Network Architecture
 
-Last Updated: 2026-09-18
+Last Updated: 2026-09-19
 Version: v2.1.8
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
@@ -115,6 +115,8 @@ The old `handleCLIEnrollment` endpoint (`/api/v1/auth/cli/enroll`) and the trust
 - `POST /api/v1/auth/cli/rotate` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. Identity is derived from the verified client certificate, and only one replacement is performed per run.
 - `POST /api/v1/auth/cli/refresh` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. It allows a CLI with a valid certificate but an expired or missing session to re-establish its session without rotating the certificate. Identity is derived from the verified client certificate URI SAN.
 - `GET /api/v1/auth/cli/session` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. It returns the authenticated CLI session's persisted identity binding (`cli_session_id`, `user_id`, `operator_session_id`, and `operator_id`) resolved from the session record and the operators collection, never from request headers. A session with no operator binding reports empty operator fields; `g8e auth context` uses the response to resync local credentials against server-side state.
+- `POST /api/v1/auth/cli/bind` and `POST /api/v1/auth/cli/unbind` are HTTPS-only and mTLS-only. They pin or clear the authenticated CLI session's operator binding. A successful bind or unbind issues a replacement CLI session server-side; local credentials must be updated to the returned `cli_session_id`. The target operator session must be active and belong to the authenticated user.
+- `POST /api/v1/operators/commands` is HTTPS-only and mTLS-only. Enrolled CLI callers submit typed dispatch requests with an explicit `target_operator_session_id`; the gateway constructs the governed envelope, publishes to the target operator's `cmd:` channel, and blocks until a terminal command result arrives. `g8e operator run` is the supported CLI surface for parallel `EXECUTE_BASH` fan-out to multiple operator sessions.
 
 The recovery request, status, and complete endpoints are reachable over both plain HTTP and HTTPS so a new CLI without trusted TLS can initiate recovery. The approve endpoint is HTTPS-only because it requires a web-session cookie, which is only set over TLS. The approve-cli endpoint is HTTPS-only and mTLS-only because the approver must already hold a valid CLI certificate.
 

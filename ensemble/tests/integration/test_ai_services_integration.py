@@ -33,6 +33,7 @@ from app.constants import (
 )
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.agents.triage import TriageRequest, TriageResult
+from app.models.http_context import RequestContext
 from app.models.investigations import ConversationHistoryMessage
 from app.models.memory import InvestigationMemory
 from app.models.tool_results import CommandRiskContext
@@ -42,7 +43,8 @@ from app.services.ai.response_analyzer import AIResponseAnalyzer
 from app.services.ai.title_generator import generate_case_title
 from app.services.ai.triage import TriageAgent
 from tests.fakes.factories import (
-    create_investigation_data,
+    build_request_context,
+    create_investigation_request,
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.slow]
@@ -58,6 +60,7 @@ async def all_services(cache_aside_service, test_settings):
     from unittest.mock import MagicMock
 
     from app.services.service_factory import ServiceFactory
+    from tests.integration.conftest import make_write_through_governance_client
 
     services = ServiceFactory.create_all_services(
         test_settings,
@@ -65,6 +68,7 @@ async def all_services(cache_aside_service, test_settings):
         db_service=MagicMock(),
         kv_service=MagicMock(),
         blob_service=MagicMock(),
+        governance_client=make_write_through_governance_client(cache_aside_service),
     )
     yield services
     await ServiceFactory.stop_services(services)
@@ -101,7 +105,7 @@ class TestMemoryGenerationServiceIntegration:
         memory_service = all_services.memory_generation_service
 
         # Create investigation
-        investigation = create_investigation_data()
+        investigation = create_investigation_request()
         created_investigation = await investigation_data_service.create_investigation(investigation)
 
         # Create realistic conversation history about a specific technical issue
@@ -203,7 +207,7 @@ class TestMemoryGenerationServiceIntegration:
         memory_service = all_services.memory_generation_service
 
         # Create investigation
-        investigation = create_investigation_data()
+        investigation = create_investigation_request()
         created_investigation = await investigation_data_service.create_investigation(investigation)
 
         # Create existing memory with specific initial context
@@ -222,7 +226,11 @@ class TestMemoryGenerationServiceIntegration:
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
-        await memory_data_service.save_memory(existing_memory, is_new=True)
+        memory_context = build_request_context(
+            investigation_id=created_investigation.id,
+            user_id=created_investigation.user_id,
+        )
+        await memory_data_service.save_memory(existing_memory, is_new=True, context=memory_context)
 
         # Add new conversation about a completely different, specific aspect
         conversation_history = [
@@ -347,7 +355,7 @@ class TestMemoryGenerationServiceIntegration:
         memory_service = all_services.memory_generation_service
 
         # Create investigation
-        investigation = create_investigation_data()
+        investigation = create_investigation_request()
         created_investigation = await investigation_data_service.create_investigation(investigation)
 
         # Test with empty conversation

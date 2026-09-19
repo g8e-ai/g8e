@@ -154,13 +154,13 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 
 		HTTPPort: bs.config.HTTPPort,
 
-		InferenceEnabled:                        bs.config.Inference.Enabled,
-		InferenceOllamaEndpoint:                 bs.config.Inference.OllamaEndpoint,
-		ProviderBoundaryObserverEnabled:         bs.config.ProviderBoundaryObserver.Enabled,
-		ProviderBoundaryObserverOllamaEnabled:   bs.config.ProviderBoundaryObserver.OllamaEnabled,
-		ProvenanceOperatorEnabled:               bs.config.ProvenanceOperator.Enabled,
-		ProvenanceOperatorModelStorageRoot:      bs.config.ProvenanceOperator.ModelStorageRoot,
-		Platform:                                runtime.GOOS,
+		InferenceEnabled:                      bs.config.Inference.Enabled,
+		InferenceOllamaEndpoint:               bs.config.Inference.OllamaEndpoint,
+		ProviderBoundaryObserverEnabled:       bs.config.ProviderBoundaryObserver.Enabled,
+		ProviderBoundaryObserverOllamaEnabled: bs.config.ProviderBoundaryObserver.OllamaEnabled,
+		ProvenanceOperatorEnabled:             bs.config.ProvenanceOperator.Enabled,
+		ProvenanceOperatorModelStorageRoot:    bs.config.ProvenanceOperator.ModelStorageRoot,
+		Platform:                              runtime.GOOS,
 	}
 
 	reqBody := operatorAuthRequest{

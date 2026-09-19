@@ -123,9 +123,12 @@ func isPublicFeedSnapshotNotFound(err error) bool {
 }
 
 func isGatewayHealthy() bool {
+	if gatewayHealthCheck != nil {
+		return gatewayHealthCheck()
+	}
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
 	client := &http.Client{Timeout: 2 * time.Second} //nolint:gosec
-	resp, err := client.Get(healthURL) //nolint:noctx
+	resp, err := client.Get(healthURL)               //nolint:noctx
 	if err != nil {
 		return false
 	}
@@ -138,6 +141,9 @@ var publicMirrorBootstrapURL string
 
 // publicMirrorHistoryURL overrides the default mirror history URL in tests.
 var publicMirrorHistoryURL string
+
+// gatewayHealthCheck overrides isGatewayHealthy in tests.
+var gatewayHealthCheck func() bool
 
 type httpCampaignMirrorProbe struct {
 	client *http.Client

@@ -5,7 +5,7 @@ parent: Guides
 
 # Build and Run a g8e Operator
 
-Last Updated: 2026-09-18
+Last Updated: 2026-09-19
 Version: v2.1.8
 
 ---
@@ -167,6 +167,42 @@ The `g8e vault` commands provide explicit administration:
 - `g8e vault reset [--vault-dir <dir>] [--confirm]`
 
 `vault unlock` validates that a key opens the vault in that process; it does not leave a daemon or persistent unlocked process behind. `operator start` opens and unlocks its own vault instance.
+
+---
+
+## Operate Remote Operators from the CLI
+
+After enrolling the host CLI with `g8e auth enroll user` and starting one or more remote Operators with `g8e operator start --endpoint <gateway-host>`, use these commands from the owner CLI:
+
+### Discover operators
+
+```bash
+./g8e operator list
+./g8e operator show <operator-id-or-session-id>
+```
+
+`operator list` prints operator ID, type, hostname (from the latest heartbeat), session ID, and status. `operator show` accepts either the operator ID or the session ID from the list and prints operator metadata plus the latest heartbeat snapshot.
+
+### Bind the CLI session to an operator
+
+```bash
+./g8e operator bind <operator-session-id>
+./g8e operator bind list
+./g8e operator bind unbind
+```
+
+Binding pins the authenticated CLI session to one active operator session owned by the same user. A successful bind issues a replacement CLI session server-side and updates local credentials. Use `bind list` to confirm the current binding and `bind unbind` to clear it. `g8e auth context` and `GET /api/v1/auth/cli/session` report the persisted binding for automation.
+
+### Run a governed shell command on one or more operators
+
+```bash
+./g8e operator run <operator-session-id> [<operator-session-id>...] \
+  --cmd "echo hello from $(hostname)"
+```
+
+`operator run` fans out governed `EXECUTE_BASH` dispatches in parallel through `POST /api/v1/operators/commands`. Each target must belong to the authenticated user and be `active`. The gateway constructs the envelope, publishes to the operator `cmd:` channel, waits for a terminal result, and returns per-target stdout, stderr, exit code, and transaction ID. Use `--timeout` to override the per-operator dispatch timeout (default 30 seconds, maximum 300).
+
+This path is the supported owner automation surface for multi-host shell execution. It is distinct from MCP/A2A ingress and from manual `GovernanceEnvelope` submission.
 
 ---
 

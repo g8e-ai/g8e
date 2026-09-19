@@ -4,7 +4,7 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-09-18
+Last Updated: 2026-09-19
 Version: v2.1.8
 
 The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L2-L3 proofs and L1 validation results attached from the Gateway (PDP), re-verifies the L2 and L3 proofs and re-runs L1 doctrine validation locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
@@ -76,7 +76,25 @@ The L5 Actuator runs on the Operator substrate as the singular execution boundar
 
 ---
 
-## 3. Core Subsystems
+## 3. CLI-Directed Command Dispatch
+
+An enrolled CLI can execute governed shell commands on one or more remote Operators without constructing envelopes manually.
+
+### CLI operator session binding
+
+Each CLI session may carry a persisted `operator_session_id` and `operator_id` pair. `g8e operator bind <operator-session-id>` pins the authenticated CLI session to one active operator session owned by the same user. `g8e operator bind list` reports the current binding, and `g8e operator bind unbind` clears it. Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS, issue a replacement CLI session server-side, and update local credentials. Refresh, rotation, and recovery inherit the prior binding when present. The unified auth middleware stamps operator identity from the persisted session record and rejects request headers that contradict that binding.
+
+### Parallel `operator run`
+
+`g8e operator run <operator-session-id> [operator-session-id...] --cmd "<shell command>"` fans out governed `EXECUTE_BASH` dispatches in parallel. For each target session the CLI posts to `POST /api/v1/operators/commands` with `target_operator_session_id`, the typed `CommandRequested` payload, and the caller's `cli_session_id`. The gateway's dispatch service is the single envelope-construction authority: it screens the payload with L1 Doctrine, applies posture-aware L3 gating for mutations, computes the transaction hash, publishes to the target operator's `cmd:` channel, and blocks until a terminal command result arrives. The CLI prints per-target stdout, stderr, exit code, and transaction ID. Every target must belong to the authenticated user and be `active`.
+
+`g8e operator list` shows operator ID, type, hostname, session ID, and status. `g8e operator show <operator-id-or-session-id>` returns operator metadata plus the latest heartbeat snapshot (system identity, resource metrics, capability flags, and runtime configuration).
+
+This path is distinct from MCP/A2A ingress, direct-envelope submission, and ensemble `CommandIntent` relay. It is the supported automation surface for owner-operated multi-host shell execution from an enrolled CLI.
+
+---
+
+## 4. Core Subsystems
 
 ### Universal Protocol Translator
 By exposing standard MCP and A2A interfaces, the Operator acts as the admission gate for BYO (Bring-Your-Own) AI clients. It isolates the complex requirements of the `GovernanceEnvelope` (such as transaction hashing and L2/L3 signature collection) behind a standardized tool-calling facade, mapping native JSON-RPC/HTTP requests directly to governed mutations.
@@ -155,7 +173,7 @@ The host is the authoritative source of truth for all mutations.
 
 ---
 
-## 4. Governance & Safety
+## 5. Governance & Safety
 
 - **Sovereign Execution Boundary**: Data sovereignty is enforced at the boundary. Sensitive data is scrubbed before leaving the host and replaced with tokens. These tokens are rehydrated by the Actuator only at the moment of execution.
 - **Canonical JSON Wire Format**: All client-facing surfaces use canonical JSON as the wire format.
@@ -163,7 +181,7 @@ The host is the authoritative source of truth for all mutations.
 
 ---
 
-## 5. Current Implementation Status
+## 6. Current Implementation Status
 
 The reference implementation currently supports:
 
@@ -180,7 +198,7 @@ The reference implementation currently supports:
 
 ---
 
-## 6. Post-Bootstrap Workflow
+## 7. Post-Bootstrap Workflow
 
 After completing platform bootstrap via `g8e auth enroll user`, follow this workflow to begin using the Operator. Enrollment automatically registers a passkey via browser after successful CLI session enrollment.
 
@@ -261,7 +279,7 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 
 ---
 
-## 7. See Also
+## 8. See Also
 
 - [g8e Protocol](../../protocol/docs/spec.md) for protocol definitions and wire formats
 - [g8e Gateway](./gateway.md) for PDP architecture and communication patterns

@@ -42,7 +42,7 @@ func TestOperatorRunCmdWithConfig_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	mockClient := &mockAPIClient{
-		getResp: listBody,
+		getResp:  listBody,
 		postResp: mustMarshalDispatchSuccess(t, "welcome to host-a"),
 	}
 

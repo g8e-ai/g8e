@@ -8,8 +8,17 @@
 
 """Example usage of g8e models."""
 
+from datetime import UTC, datetime
+
 from g8e.constants import ComponentName
-from g8e.models import RequestContext, BoundOperator, PlatformSettings
+from g8e.models import (
+    BoundOperator,
+    ObserveProducerAgentStateRequest,
+    ObserveProducerResponse,
+    PlatformSettings,
+    PublicFeedRecord,
+    RequestContext,
+)
 
 
 def main():
@@ -86,6 +95,37 @@ def main():
         print("  ERROR: Should have failed validation with missing session id")
     except ValueError as e:
         print(f"  Validation error caught: {e}")
+    print()
+
+    # Observe producer request (mTLS-internal wire type)
+    print("Observe Producer Request:")
+    observed_at = datetime(2026, 9, 19, 12, 0, 0, tzinfo=UTC)
+    producer_req = ObserveProducerAgentStateRequest(
+        schema_version="1.0.0",
+        agent_id="triage",
+        display_name="Triage",
+        role="triage",
+        status="running",
+        observed_at=observed_at,
+        web_session_id="web-session-abc-123",
+    )
+    print(f"  Agent ID: {producer_req.agent_id}")
+    print(f"  Status: {producer_req.status}")
+    print(f"  Web Session ID: {producer_req.web_session_id}")
+    producer_resp = ObserveProducerResponse(accepted=True)
+    print(f"  Producer accepted: {producer_resp.accepted}")
+    print()
+
+    # Public spectator feed record (outbound projection envelope)
+    print("Public Feed Record:")
+    record = PublicFeedRecord(
+        sequence=1,
+        record_type="projection",
+        record_hash="a" * 64,
+        record_bytes='{"campaign_id":"demo-r0"}',
+    )
+    print(f"  Sequence: {record.sequence}")
+    print(f"  Record type: {record.record_type}")
     print()
 
 

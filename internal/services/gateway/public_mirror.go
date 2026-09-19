@@ -281,7 +281,7 @@ type PublicMirrorServer struct {
 	maxBootstrapProjections int
 
 	// maxSSEQueueSize is the bounded SSE queue size per subscriber.
-	maxSSEQueueSize    int
+	maxSSEQueueSize int
 	// maxSSEReplayRecords caps how many backlog records are sent on connect.
 	maxSSEReplayRecords int
 	maxRetainedBatches  int

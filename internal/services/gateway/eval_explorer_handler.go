@@ -173,7 +173,7 @@ func publicMirrorURL(listenAddress string) string {
 }
 
 func writeEvalExplorerRuntime(w http.ResponseWriter, r *http.Request, configuredOrigin string, dedicatedPort bool) {
-	mirrorOrigin := configuredOrigin
+	var mirrorOrigin string
 	if !dedicatedPort {
 		mirrorOrigin = resolveRequestMirrorOrigin(r, configuredOrigin)
 	} else {

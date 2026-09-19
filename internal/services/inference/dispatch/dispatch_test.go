@@ -581,9 +581,9 @@ func TestDispatchInference_PayloadCarriesRequestFields(t *testing.T) {
 }
 
 type stubObservationNotifier struct {
-	beginErr     error
-	finalizeErr  error
-	beginCalls   int
+	beginErr      error
+	finalizeErr   error
+	beginCalls    int
 	finalizeCalls int
 }
 

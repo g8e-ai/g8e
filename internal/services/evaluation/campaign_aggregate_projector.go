@@ -22,7 +22,7 @@ import (
 const (
 	explorerViewSchemaVersion = "1.3.0"
 	campaignSourceRevision    = "g8e-eval-campaign"
-	standardSuiteID          = "north-star-25"
+	standardSuiteID           = "north-star-25"
 )
 
 // CampaignViewRecord is one disclosure-safe explorer snapshot record published
