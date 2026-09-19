@@ -154,6 +154,8 @@ func TestOperatorCommandSubcommands(t *testing.T) {
 
 		expectedSubcommands := []string{
 			"list",
+			"bind",
+			"run",
 			"start",
 			"cp",
 			"scp",

@@ -239,7 +239,7 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 		if createResp.ApprovalURL != "" {
 			c.logger.Info("operator enrollment: approval URL", "url", createResp.ApprovalURL)
 		}
-		fmt.Fprintf(os.Stderr, "Approve with: g8e auth approve-platform-enrollment %s\n", requestID)
+		fmt.Fprintf(os.Stderr, "Approve with: g8e auth enroll approve %s\n", requestID)
 	}
 
 	// Step 5: Poll status until approved.

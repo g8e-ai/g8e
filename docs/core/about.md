@@ -5,8 +5,8 @@ parent: Core
 
 # About g8e
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 ## Why g8e Exists
 
@@ -22,9 +22,9 @@ That trust did not come from personality or blind faith. I was the person their 
 
 I wanted people to have that kind of help in their pocket: a capable expert powered by safe and reliable AI, available without depending on an escalation chain. That is why I built g8e.
 
-## Danny as Code
+## Danny-as-Code
 
-g8e encodes the operating method I developed across those thirty years:
+g8e encodes the operating method I developed across those thirty years... I think of it as 'Danny-as-Code' (DaC):
 
 1. Gather broad context from the user and the systems involved.
 2. Ask focused questions that reduce uncertainty.

@@ -74,6 +74,10 @@ func TestNewRootCmd_PersistentFlagsExist(t *testing.T) {
 	require.NotNil(t, portFlag)
 	assert.Equal(t, "p", portFlag.Shorthand)
 	assert.Equal(t, "0", portFlag.DefValue)
+
+	jsonFlag := rootCmd.PersistentFlags().Lookup("json")
+	require.NotNil(t, jsonFlag)
+	assert.Equal(t, "false", jsonFlag.DefValue)
 }
 
 func TestNewRootCmd_PersistentPreRunE_SetsEndpointOverride(t *testing.T) {

@@ -71,6 +71,22 @@ func (w *Writer) ProtoJSON(rw http.ResponseWriter, status int, message proto.Mes
 		w.Error(rw, http.StatusInternalServerError, constants.ErrResponseEncodeJSON.Error())
 		return
 	}
+	w.writeProtoJSON(rw, status, payload)
+}
+
+// ProtoJSONCanonical writes a protojson response using proto field names
+// (snake_case), matching the canonical client-facing serialization used by
+// the protocol Python bindings (preserving_proto_field_name=True).
+func (w *Writer) ProtoJSONCanonical(rw http.ResponseWriter, status int, message proto.Message) {
+	payload, err := (protojson.MarshalOptions{UseProtoNames: true}).Marshal(message)
+	if err != nil {
+		w.Error(rw, http.StatusInternalServerError, constants.ErrResponseEncodeJSON.Error())
+		return
+	}
+	w.writeProtoJSON(rw, status, payload)
+}
+
+func (w *Writer) writeProtoJSON(rw http.ResponseWriter, status int, payload []byte) {
 	rw.Header().Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
 	rw.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
 	rw.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)

@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 ---
 
@@ -32,8 +32,11 @@ Building the gateway container image runs `make build-all` in the builder stage.
 ```bash
 git clone https://github.com/g8e-ai/g8e.git
 cd g8e
+cp .env.example .env  # required: Compose fails fast without G8E_OLLAMA_ENDPOINT
 docker compose up -d --build
 ```
+
+The Compose file declares a `g8ellama` profile whose Inference Node requires `G8E_OLLAMA_ENDPOINT` (the approved remote Ollama provider). Because the variable uses Compose's fail-fast `:?` interpolation, every `docker compose` command — including `ps` and default-profile `up` — errors on a fresh clone until the variable is set in `.env` or exported. The `.env.example` value is `http://localhost:11434`; set it to the approved remote endpoint for your deployment. The `g8ellama` profile itself stays inactive unless explicitly selected.
 
 `docker compose up -d` starts the central Policy Decision Point (`g8e-gateway`) on port 8080 for plain-HTTP bootstrap and PKI discovery and port 8443 for HTTPS/mTLS APIs, MCP, and the Web Console. Platform workloads (`g8e-operator`, `ensemble`, `dashboard`) belong to the `bootstrapped` profile and do not start until Step 4.
 
@@ -83,21 +86,24 @@ With the owner identity established, bring up the Operator, Agentic Ensemble (g8
 docker compose --profile bootstrapped up -d
 ```
 
-### 5. Approve platform workload enrollments
+### 5. Review platform workload enrollments
 
-List pending platform enrollment requests and approve each workload using your authenticated CLI session:
+List pending platform enrollment requests and approve or deny each workload using your authenticated CLI session:
 
 ```bash
 # List pending enrollment requests
-./g8e auth pending-platform-enrollments
+./g8e auth enroll pending
 
 # Approve the operator, dashboard, and ensemble
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
-./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
-./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+./g8e auth enroll approve <operator-request-id> --yes
+./g8e auth enroll approve <dashboard-request-id> --yes
+./g8e auth enroll approve <ensemble-request-id> --yes
+
+# Reject a request instead of approving it
+./g8e auth enroll deny <request-id> --yes
 ```
 
-You can also view and approve pending enrollments in your browser via the Gateway Web Console at `https://localhost:8443/console/`.
+You can also view and decide pending enrollments in your browser via the Gateway Web Console at `https://localhost:8443/console/`.
 
 ### 6. Verify stack health
 
@@ -168,7 +174,7 @@ If you only need the g8e wire protocol, constants, models, enums, or protobuf de
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.7
+go get github.com/g8e-ai/g8e/v2@v2.1.8
 ```
 
 Import the protocol packages in your Go code:
@@ -195,7 +201,7 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==2.1.7
+pip install g8e==2.1.8
 ```
 
 The package provides:
@@ -399,7 +405,7 @@ To connect an operator on a remote host to the gateway:
 ./g8e operator start -e <gateway-ip>
 ```
 
-When `--endpoint` (or `-e`) is provided, the operator automatically initiates platform enrollment with the gateway if credentials are not yet installed. The gateway holds the enrollment request in pending state until the enrolled owner approves it via `./g8e auth pending-platform-enrollments` and `./g8e auth approve-platform-enrollment <request-id> --yes` (or via the gateway web console at `https://<gateway-ip>:8443/console/`). Once approved, the operator receives signed mTLS credentials, connects to the gateway pub/sub broker on port 8443, and begins executing governed actions. See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enrollment and remote deployment options.
+When `--endpoint` (or `-e`) is provided, the operator automatically initiates platform enrollment with the gateway if credentials are not yet installed. The gateway holds the enrollment request in pending state until the enrolled owner decides it via `./g8e auth enroll pending`, then `./g8e auth enroll approve <request-id> --yes` or `./g8e auth enroll deny <request-id> --yes` (or via the gateway web console at `https://<gateway-ip>:8443/console/`). Once approved, the operator receives signed mTLS credentials, connects to the gateway pub/sub broker on port 8443, and begins executing governed actions. See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enrollment and remote deployment options.
 
 ### Run the gateway and operator in Docker
 
@@ -414,10 +420,10 @@ docker compose up -d
 
 # Phase 3: Start workloads and approve every enrollment request
 docker compose --profile bootstrapped up -d
-./g8e auth pending-platform-enrollments
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
-./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
-./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+./g8e auth enroll pending
+./g8e auth enroll approve <operator-request-id> --yes
+./g8e auth enroll approve <dashboard-request-id> --yes
+./g8e auth enroll approve <ensemble-request-id> --yes
 ```
 
 The gateway exposes plain-HTTP bootstrap and discovery on port 8080 and HTTPS/mTLS APIs and MCP on port 8443. The operator resolves the gateway through the internal Docker network alias `g8e.local`. See [Unified Docker Stack Guide](unified_stack.md) and [Docker Gateway Guide](docker_gateway.md) for full configuration options.
@@ -469,7 +475,7 @@ The `demos/` directory contains four Docker Compose environments. Each uses isol
 - **DHS**: coalition data-plane governance, cross-domain release control, and receipted destruction
 - **FedRAMP**: sovereign cloud governance, audit integrity, access control, and cross-domain protection
 
-The demo images compile from source in Docker. Running `make build` also copies the host CLI to `demos/bin/g8e`, but that copy is not required to build the containers. See the [Demos README](../../demos/README.md) for each environment's topology and services.
+The demo images compile from source in Docker. Running `make build` also copies the host CLI to `./g8e` at the repository root for `g8e demos` commands, but that copy is not required to build the containers. See the [Demos README](../../demos/README.md) for each environment's topology and services.
 
 ### Run a demo
 
@@ -494,8 +500,8 @@ Every demo starts with zero users. Its Operator submits a platform enrollment re
 
 ```bash
 ./g8e auth enroll user -e localhost:8081 --port 8444
-./g8e auth pending-platform-enrollments -e localhost:8081 --port 8444
-./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:8081 --port 8444
+./g8e auth enroll pending -e localhost:8081 --port 8444
+./g8e auth enroll approve <operator-request-id> --yes -e localhost:8081 --port 8444
 ./g8e demos status healthcare
 ```
 

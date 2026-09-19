@@ -41,6 +41,7 @@ func testCmd() *cobra.Command {
 		testE2EFullCmd(),
 		testCoverageCmd(),
 		testLintCmd(),
+		publicLoopCmd(),
 		chaosCmd(),
 		testSummaryCmd(),
 	)
@@ -85,24 +86,35 @@ func testUnitCmd() *cobra.Command {
 }
 
 func testIntegrationCmd() *cobra.Command {
+	return testIntegrationCmdWithRunner(realE2ERunner(os.Stdout, os.Stderr))
+}
+
+func testIntegrationCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
+	var runRegexp string
+	var pkg string
+
 	cmd := &cobra.Command{
 		Use:   "integration",
 		Short: "Run Tier 2 (In-Process Integration) tests",
-		Long:  `Run in-process integration tests with the 'integration' build tag. These tests run the gateway in-process against real on-disk SQLite databases, local PKI generation, and local pubsub.`,
+		Long:  `Run in-process integration tests with the 'integration' build tag. These tests run the gateway in-process against real on-disk SQLite databases, local PKI generation, and local pubsub. Use --pkg and --run to select a package and tests by regular expression.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 2 (In-Process Integration) tests...")
 
-			testRace := ""
+			testArgs := []string{"test", "-tags=integration", "-count=1", "-timeout", "180s"}
 			if runtime.GOOS != "windows" {
-				testRace = "-race"
+				testArgs = append(testArgs, "-race")
 			}
+			if runRegexp != "" {
+				testArgs = append(testArgs, "-run", runRegexp)
+			}
+			testArgs = append(testArgs, pkg)
 
-			testCmd := exec.Command("go", "test", "-tags=integration", testRace, "-count=1", "-timeout", "180s", "./...")
-			testCmd.Stdout = os.Stdout
-			testCmd.Stderr = os.Stderr
-
-			if err := testCmd.Run(); err != nil {
+			code, err := runner(cmd.Context(), "go", testArgs...)
+			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrIntegrationTestsFailed, err)
+			}
+			if code != 0 {
+				return fmt.Errorf("%w: exit code %d", constants.ErrIntegrationTestsFailed, code)
 			}
 
 			fmt.Println("Integration tests completed successfully.")
@@ -110,12 +122,17 @@ func testIntegrationCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&pkg, "pkg", "./...", "Package pattern selecting which integration test package to compile and run")
+	cmd.Flags().StringVar(&runRegexp, "run", "", "Regular expression selecting which integration tests to run (passed to go test -run)")
+
 	return cmd
 }
 
 // e2eCommandRunner abstracts exec.CommandContext so unit tests can verify
 // argument propagation and failure wrapping without starting platform tests.
 type e2eCommandRunner func(ctx context.Context, name string, args ...string) (int, error)
+
+const defaultE2ERunRegexp = "^(TestApprovedRestart_|TestAuth_|TestCommandRoundtrip_|TestCompliance_|TestDashboard_|TestEnsemble_|TestGateway_|TestGovernance_|TestOperatorRegistry_|TestPlatform_FullBootstrap$|TestPubSub_|TestSSE_)"
 
 // realE2ERunner runs the Go test binary as a child process, streaming stdout
 // and stderr to the parent. It returns the child exit code and any start/run
@@ -142,9 +159,9 @@ func testE2ECmd() *cobra.Command {
 // testE2ECmdWithRunner constructs the canonical Tier 3 executor. It runs only
 // ./test/e2e/... with the e2e build tag, race detection on non-Windows
 // platforms, -count=1, -parallel=1 as a backstop against accidental
-// t.Parallel() use, and an optional --run regexp for scenario selection. The
-// external scenario runner owns Docker lifecycle; this command performs network
-// requests and assertions only.
+// t.Parallel() use, and the approved-stack test set by default. An explicit
+// --run regexp selects topology-specific scenarios. The external scenario runner
+// owns Docker lifecycle; this command performs network requests and assertions only.
 func testE2ECmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 	var runRegexp string
 
@@ -153,20 +170,20 @@ func testE2ECmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 		Short: "Run Tier 3 (Live Platform E2E) tests",
 		Long: `Run Tier 3 (Live Platform E2E) tests against a running production platform.
 
-Start the platform first (docker compose up or ./g8e gw start), then run this
-command. The test binary connects to the running platform and fails fast if it
-is not reachable. Supports an optional --run regexp to select specific tests.`,
+Start the approved platform first, then run this command. The default suite
+covers the approved-stack topology. Use --run to select a topology-specific
+scenario such as pending enrollment, headless, denial, or cross-enrollment.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
 
-			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s"}
+			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s", "-v"}
 			if runtime.GOOS != "windows" {
 				testArgs = append(testArgs, "-race")
 			}
-			if runRegexp != "" {
-				testArgs = append(testArgs, "-run", runRegexp)
+			if runRegexp == "" {
+				runRegexp = defaultE2ERunRegexp
 			}
-			testArgs = append(testArgs, "./test/e2e/...")
+			testArgs = append(testArgs, "-run", runRegexp, "./test/e2e/...")
 
 			code, err := runner(cmd.Context(), "go", testArgs...)
 			if err != nil {
@@ -195,21 +212,30 @@ func testE2EFullCmd() *cobra.Command {
 // and tears down on completion or failure.
 func testE2EFullCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 	var runRegexp string
+	var crossEnrollment bool
 
 	cmd := &cobra.Command{
 		Use:   "e2e-full",
 		Short: "Run full lifecycle Tier 3 E2E tests (start compose, test, tear down)",
 		Long: `Start the unified Docker Compose stack (--profile bootstrapped), wait for
 services to become healthy, run the Tier 3 E2E test suite, and tear down
-(docker compose down -v) on completion or failure.`,
+(docker compose down -v) on completion or failure.
+
+Use --cross-enrollment to additionally activate the cross-enrollment profile,
+which starts a secondary gateway container in operator mode enrolling against
+the primary gateway. This is required for the TestCrossEnrollment_* E2E tests.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Starting unified Docker Compose stack (--profile bootstrapped)...")
-			if err := runDockerCompose([]string{"up", "-d"}, "bootstrapped"); err != nil {
+			profiles := []string{constants.DockerBootstrappedProfile}
+			if crossEnrollment {
+				profiles = append(profiles, constants.DockerCrossEnrollProfile)
+			}
+			fmt.Printf("Starting unified Docker Compose stack (profiles: %s)...\n", strings.Join(profiles, ", "))
+			if err := runDockerCompose([]string{"up", "-d"}, profiles...); err != nil {
 				return fmt.Errorf("%w: docker compose up failed: %w", constants.ErrE2ETestsFailed, err)
 			}
 			defer func() {
 				fmt.Println("Tearing down Docker Compose stack...")
-				_ = runDockerCompose([]string{"down", "-v"}, "")
+				_ = runDockerCompose([]string{"down", "-v"})
 			}()
 
 			fmt.Println("Waiting for platform services to become healthy...")
@@ -220,14 +246,14 @@ services to become healthy, run the Tier 3 E2E test suite, and tear down
 			}
 
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
-			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s"}
+			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s", "-v"}
 			if runtime.GOOS != "windows" {
 				testArgs = append(testArgs, "-race")
 			}
-			if runRegexp != "" {
-				testArgs = append(testArgs, "-run", runRegexp)
+			if runRegexp == "" {
+				runRegexp = defaultE2ERunRegexp
 			}
-			testArgs = append(testArgs, "./test/e2e/...")
+			testArgs = append(testArgs, "-run", runRegexp, "./test/e2e/...")
 
 			code, err := runner(cmd.Context(), "go", testArgs...)
 			if err != nil {
@@ -243,6 +269,8 @@ services to become healthy, run the Tier 3 E2E test suite, and tear down
 	}
 
 	cmd.Flags().StringVar(&runRegexp, "run", "", "Regular expression selecting which E2E tests to run (passed to go test -run)")
+	cmd.Flags().BoolVar(&crossEnrollment, "cross-enrollment", false,
+		"Activate the cross-enrollment profile (secondary gateway in operator mode) for TestCrossEnrollment_* tests")
 	return cmd
 }
 

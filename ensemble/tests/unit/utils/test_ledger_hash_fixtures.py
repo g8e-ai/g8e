@@ -29,8 +29,9 @@ from app.utils.ledger_hash import (
 
 
 def _load_fixtures():
+    # ensemble/tests/unit/utils is five levels below the workspace root.
     fixtures_path = (
-        Path(__file__).resolve().parent.parent.parent.parent.parent.parent
+        Path(__file__).resolve().parent.parent.parent.parent.parent
         / "protocol"
         / "test-fixtures"
         / "ledger-hash-fixtures.json"

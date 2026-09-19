@@ -141,7 +141,7 @@ func TestDataOperatorsCmdWithConfig_ValidResponse(t *testing.T) {
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
 		Operators: []models.OperatorDocumentGo{
-			{ID: "op1", CloudSubtype: "aws", Status: "active"},
+			{ID: "op1", OperatorType: "remote", Status: "active"},
 		},
 	}
 	opsJSON, _ := json.Marshal(slotResp)

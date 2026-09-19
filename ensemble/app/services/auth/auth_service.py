@@ -52,8 +52,37 @@ class AuthService:
         proxy_org_id = request.headers.get(X_PROXY_ORGANIZATION_ID)
 
         user = None
+        auth_header = request.headers.get(AUTHORIZATION, "")
+        if auth_header.startswith("Bearer "):
+            bearer_token = auth_header[len("Bearer ") :]
+            g8e_context = getattr(request.state, "g8e_context", None)
+            cli_session_id = (
+                (g8e_context.cli_session_id if g8e_context else None)
+                or request.headers.get(X_PROXY_CLI_SESSION_ID)
+                or request.headers.get(CLI_SESSION_ID)
+            )
+            user_id = (g8e_context.user_id if g8e_context else None) or request.headers.get(
+                X_PROXY_USER_ID
+            )
+            if cli_session_id and user_id:
+                binding = await self._internal_http_client.validate_operator_session(
+                    bearer_token, cli_session_id, user_id
+                )
+                if binding:
+                    logger.debug(
+                        "[AuthService] Authenticated via authoritative operator session binding",
+                        extra={"user_id": binding.user_id, "operator_session_id": bearer_token[:8]},
+                    )
+                    user = AuthenticatedUser(
+                        uid=binding.user_id,
+                        user_id=binding.user_id,
+                        operator_id=binding.operator_id,
+                        operator_session_id=bearer_token,
+                        cli_session_id=cli_session_id,
+                        auth_method=AuthMethod.OPERATOR_SESSION,
+                    )
 
-        if proxy_user_id and proxy_user_email:
+        if user is None and proxy_user_id and proxy_user_email:
             proxy_cli_session_id = request.headers.get(X_PROXY_CLI_SESSION_ID) or request.headers.get(CLI_SESSION_ID)
             proxy_web_session_id = request.headers.get(X_PROXY_WEB_SESSION_ID) or request.headers.get(WEB_SESSION_ID)
             g8e_context = getattr(request.state, "g8e_context", None)
@@ -82,32 +111,6 @@ class AuthService:
                 web_session_id=proxy_web_session_id,
                 auth_method=AuthMethod.PROXY,
             )
-        else:
-            auth_header = request.headers.get(AUTHORIZATION, "")
-            if auth_header.startswith("Bearer "):
-                bearer_token = auth_header[len("Bearer ") :]
-                g8e_context = getattr(request.state, "g8e_context", None)
-                cli_session_id = (
-                    g8e_context.cli_session_id if g8e_context else None
-                ) or request.headers.get(CLI_SESSION_ID)
-                user_id = g8e_context.user_id if g8e_context else None
-                if cli_session_id and user_id:
-                    binding = await self._internal_http_client.validate_operator_session(
-                        bearer_token, cli_session_id, user_id
-                    )
-                    if binding:
-                        logger.debug(
-                            "[AuthService] Authenticated via authoritative operator session binding",
-                            extra={"user_id": binding.user_id, "operator_session_id": bearer_token[:8]},
-                        )
-                        user = AuthenticatedUser(
-                            uid=binding.user_id,
-                            user_id=binding.user_id,
-                            operator_id=binding.operator_id,
-                            operator_session_id=bearer_token,
-                            cli_session_id=cli_session_id,
-                            auth_method=AuthMethod.OPERATOR_SESSION,
-                        )
 
         if not user:
             raise AuthenticationError("Authentication required", component=G8EE_COMPONENT)

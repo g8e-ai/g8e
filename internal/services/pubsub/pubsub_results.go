@@ -19,6 +19,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -104,6 +105,150 @@ func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result 
 	}
 
 	rr.logger.Info("FS grep result transmitted to g8e", "operator_session_id", rr.config.OperatorSessionId)
+	return nil
+}
+
+// PublishInferenceProgress publishes bounded inference progress telemetry to
+// the results channel while a governed provider stream is active. Progress
+// events are delivery telemetry only; the signed InferenceCompletion remains
+// the sole authoritative terminal outcome.
+func (rr *PubSubResultsService) PublishInferenceProgress(ctx context.Context, originalMsg *PubSubCommandMessage, progress *operatorv1.InferenceProgressEvent) error {
+	if originalMsg == nil || progress == nil {
+		return fmt.Errorf("pubsub: publish inference progress: %w", constants.ErrMissingRequiredField)
+	}
+
+	resultEnv, err := BuildUniversalResultEnvelope(
+		rr.config,
+		constants.Event.Operator.Inference.ProgressUpdated,
+		progress,
+		originalMsg.ID,
+		rr.config.OperatorID,
+		originalMsg.CaseID,
+		originalMsg.InvestigationID,
+		originalMsg.TaskID,
+		originalMsg.WebSessionID,
+		originalMsg.CLISessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("pubsub: build inference progress envelope: %w", err)
+	}
+	resultEnv.OperatorSessionId = originalMsg.OperatorSessionID
+	operatorID := rr.config.OperatorID
+	if originalMsg.OperatorID != nil && *originalMsg.OperatorID != "" {
+		operatorID = *originalMsg.OperatorID
+	}
+
+	if err := rr.publishUniversal(ctx, resultEnv, operatorID, originalMsg.OperatorSessionID); err != nil {
+		return fmt.Errorf("pubsub: publish inference progress: %w", err)
+	}
+	return nil
+}
+
+// PublishInferenceCompletion publishes the protocol-owned InferenceCompletion
+// — the final signed ActionReceipt plus, on success, the complete
+// InferenceResult — via Operator pub/sub. The completion envelope is
+// correlated with the original command by transaction ID (the command
+// envelope's Id) on the results channel. A completion whose receipt status
+// is not EXECUTION_STATUS_COMPLETED is published under the inference.failed
+// event type so the waiting Gateway dispatch terminates immediately with a
+// typed failure.
+func (rr *PubSubResultsService) PublishInferenceCompletion(ctx context.Context, env *commonv1.GovernanceEnvelope, completion *operatorv1.InferenceCompletion) error {
+	if env == nil || completion == nil || completion.Receipt == nil {
+		return fmt.Errorf("pubsub: publish inference completion: %w", constants.ErrMissingRequiredField)
+	}
+
+	eventType := constants.Event.Operator.Inference.Completed
+	if completion.Receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+		eventType = constants.Event.Operator.Inference.Failed
+	}
+
+	resultEnv, err := BuildUniversalResultEnvelope(rr.config, eventType, completion, env.Id, env.OperatorId, env.CaseId, env.InvestigationId, &env.TaskId, env.WebSessionId, env.CliSessionId)
+	if err != nil {
+		return fmt.Errorf("pubsub: build inference completion envelope: %w", err)
+	}
+	// Route and identify by the command envelope's operator session, not the
+	// service config, so the completion returns on the channel the waiting
+	// dispatcher is subscribed to.
+	resultEnv.OperatorSessionId = env.OperatorSessionId
+
+	if err := rr.publishUniversal(ctx, resultEnv, env.OperatorId, env.OperatorSessionId); err != nil {
+		return fmt.Errorf("pubsub: publish inference completion: %w", err)
+	}
+
+	rr.logger.Info("Inference completion transmitted to g8e",
+		"operator_session_id", env.OperatorSessionId,
+		"event_type", eventType,
+		"transaction_id", completion.Receipt.TransactionId)
+	return nil
+}
+
+// PublishProviderBoundaryObservationCompleted publishes a completed
+// provider-boundary observation window on the observer operator results
+// channel. The completion is correlated with the originating command by
+// transaction ID.
+func (rr *PubSubResultsService) PublishProviderBoundaryObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ProviderBoundaryObservationCompleted) error {
+	if originalMsgID == "" || completion == nil || completion.GetWindow() == nil {
+		return fmt.Errorf("pubsub: publish provider boundary observation completion: %w", constants.ErrMissingRequiredField)
+	}
+
+	resultEnv, err := BuildUniversalResultEnvelope(
+		rr.config,
+		constants.Event.Operator.ProviderBoundaryObservation.Completed,
+		completion,
+		originalMsgID,
+		rr.config.OperatorID,
+		"",
+		"",
+		nil,
+		"",
+		"",
+	)
+	if err != nil {
+		return fmt.Errorf("pubsub: build provider boundary observation completion envelope: %w", err)
+	}
+
+	if err := rr.publishUniversal(ctx, resultEnv, rr.config.OperatorID, rr.config.OperatorSessionId); err != nil {
+		return fmt.Errorf("pubsub: publish provider boundary observation completion: %w", err)
+	}
+
+	rr.logger.Info("Provider-boundary observation completion transmitted",
+		"operator_session_id", rr.config.OperatorSessionId,
+		"provider_attempt_id", completion.GetWindow().GetProviderAttemptId(),
+		"transaction_id", originalMsgID)
+	return nil
+}
+
+// PublishModelProvenanceObservationCompleted publishes a completed model
+// provenance attestation window on the provenance operator results channel.
+func (rr *PubSubResultsService) PublishModelProvenanceObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ModelProvenanceObservationCompleted) error {
+	if originalMsgID == "" || completion == nil || completion.GetWindow() == nil {
+		return fmt.Errorf("pubsub: publish model provenance observation completion: %w", constants.ErrMissingRequiredField)
+	}
+
+	resultEnv, err := BuildUniversalResultEnvelope(
+		rr.config,
+		constants.Event.Operator.ModelProvenanceObservation.Completed,
+		completion,
+		originalMsgID,
+		rr.config.OperatorID,
+		"",
+		"",
+		nil,
+		"",
+		"",
+	)
+	if err != nil {
+		return fmt.Errorf("pubsub: build model provenance observation completion envelope: %w", err)
+	}
+
+	if err := rr.publishUniversal(ctx, resultEnv, rr.config.OperatorID, rr.config.OperatorSessionId); err != nil {
+		return fmt.Errorf("pubsub: publish model provenance observation completion: %w", err)
+	}
+
+	rr.logger.Info("Model provenance observation completion transmitted",
+		"operator_session_id", rr.config.OperatorSessionId,
+		"provider_attempt_id", completion.GetWindow().GetProviderAttemptId(),
+		"transaction_id", originalMsgID)
 	return nil
 }
 

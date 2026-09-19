@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/governance/governancetest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -120,6 +121,25 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 		}
 	case constants.ActionTypeCancel:
 		msg = &operatorv1.CommandCancelRequested{ExecutionId: "exec-1"}
+	case constants.ActionTypeInference:
+		msg = &operatorv1.InferenceRequested{
+			Role:  operatorv1.ModelRole_MODEL_ROLE_PRIMARY,
+			Model: "test-model",
+			Messages: []*operatorv1.InferenceMessage{{
+				Role:  operatorv1.InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER,
+				Parts: []*operatorv1.InferenceMessagePart{{Part: &operatorv1.InferenceMessagePart_Text{Text: "test prompt"}}},
+			}},
+		}
+	case constants.ActionTypeProviderBoundaryObservation:
+		msg = &evalv1.ProviderBoundaryObservationCommand{
+			ProviderAttemptId: "attempt-1",
+			Phase:             evalv1.ProviderBoundaryObservationPhase_PROVIDER_BOUNDARY_OBSERVATION_PHASE_BEGIN,
+		}
+	case constants.ActionTypeModelProvenanceObservation:
+		msg = &evalv1.ModelProvenanceObservationCommand{
+			ProviderAttemptId: "attempt-1",
+			Phase:             evalv1.ModelProvenanceObservationPhase_MODEL_PROVENANCE_OBSERVATION_PHASE_BEGIN,
+		}
 	case constants.ActionTypePlatformEnrollmentCreate,
 		constants.ActionTypePlatformEnrollmentDecide,
 		constants.ActionTypePlatformEnrollmentIssue,

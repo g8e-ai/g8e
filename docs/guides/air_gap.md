@@ -5,8 +5,8 @@ parent: Guides
 
 # Air-Gapped Deployment
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 g8e runs without internet access when its binaries, container images, configuration, and any optional downstream services are staged inside the isolated environment. The Gateway and Operator do not require a hosted g8e service, and the repository vendors the Go modules required to build the `g8e` binary.
 
@@ -120,12 +120,13 @@ docker load -i /media/g8e-unified-images.tar
 docker compose up -d --no-build --pull never
 ./g8e auth enroll user -e localhost
 
-# Start the enrolled workloads, then approve their pending requests.
+# Start the enrolled workloads, then approve or deny their pending requests.
 docker compose --profile bootstrapped up -d --no-build --pull never
-./g8e auth pending-platform-enrollments
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
-./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
-./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
+./g8e auth enroll pending
+./g8e auth enroll approve <operator-request-id> --yes
+./g8e auth enroll approve <ensemble-request-id> --yes
+./g8e auth enroll approve <dashboard-request-id> --yes
+# ./g8e auth enroll deny <request-id> --yes
 ```
 
 Before sending model requests, configure every model role in use through platform settings or a Compose override. For deterministic operation without a model server, pass both `G8E_LLM_PRIMARY_PROVIDER=fake` and a primary model name such as `G8E_LLM_PRIMARY_MODEL=fake`; the root Compose file does not forward these host variables unless they are added to the ensemble service's `environment` list. Otherwise configure a supported provider with an approved internal endpoint. See [Unified Docker Stack](unified_stack.md) for identity, volume, hostname, and port configuration.
@@ -164,13 +165,13 @@ Build a Python wheel and collect its transitive dependencies on the connected ho
 
 ```bash
 make python-build
-pip download --dest /tmp/g8e-python-wheels protocol/python/dist/g8e-2.1.7-py3-none-any.whl
+pip download --dest /tmp/g8e-python-wheels protocol/python/dist/g8e-2.1.8-py3-none-any.whl
 ```
 
 Transfer the complete wheel directory, then install without an index:
 
 ```bash
-pip install --no-index --find-links /media/g8e-python-wheels g8e==2.1.7
+pip install --no-index --find-links /media/g8e-python-wheels g8e==2.1.8
 ```
 
 The Python package includes its JSON constants under `g8e/_data`; there is no `G8E_PROTOCOL_DIR` runtime setting.

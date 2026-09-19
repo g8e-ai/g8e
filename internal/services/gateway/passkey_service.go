@@ -284,6 +284,12 @@ func NewPasskeyService(docStore *DocumentStoreService, logger *slog.Logger, cfg 
 	}, nil
 }
 
+// embeddedOperatorBinder binds the gateway's claimed embedded operator to a
+// freshly created web session. Satisfied by *RegistrationService.
+type embeddedOperatorBinder interface {
+	BindEmbeddedOperatorToWebSession(userID, webSessionID string) (bool, error)
+}
+
 // PasskeyHandler handles HTTP endpoints for passkey registration, authentication,
 // credential management, and OOB approval flows. It wraps a PasskeyService for
 // domain logic and delegates business orchestration (MCP, suspended transactions,
@@ -292,6 +298,8 @@ type PasskeyHandler struct {
 	*PasskeyService
 	webSessionSvc      *WebSessionService
 	enrollmentTokenSvc *EnrollmentTokenService
+	operatorBinder     embeddedOperatorBinder
+	operatorClaimer    embeddedOperatorClaimer
 	responder          *response.Writer
 	maxPayload         int64
 	orchestrator       *PasskeyOrchestrator
@@ -303,6 +311,8 @@ type PasskeyHandlerDeps struct {
 	Service            *PasskeyService
 	WebSessionSvc      *WebSessionService
 	EnrollmentTokenSvc *EnrollmentTokenService
+	OperatorBinder     embeddedOperatorBinder
+	OperatorClaimer    embeddedOperatorClaimer
 	Responder          *response.Writer
 	MaxPayload         int64
 	Orchestrator       *PasskeyOrchestrator
@@ -315,6 +325,8 @@ func NewPasskeyHandler(deps PasskeyHandlerDeps) *PasskeyHandler {
 		PasskeyService:     deps.Service,
 		webSessionSvc:      deps.WebSessionSvc,
 		enrollmentTokenSvc: deps.EnrollmentTokenSvc,
+		operatorBinder:     deps.OperatorBinder,
+		operatorClaimer:    deps.OperatorClaimer,
 		responder:          deps.Responder,
 		maxPayload:         deps.MaxPayload,
 		orchestrator:       deps.Orchestrator,

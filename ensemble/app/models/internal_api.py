@@ -7,7 +7,17 @@
 
 from g8e.models.internal_api import ResourceCreationRequest as _G8eResourceCreationRequest
 from g8e.models.internal_api import ChatStartedResponse as _G8eChatStartedResponse
+from g8e.models.internal_api import EvaluationTraceResponse as _G8eEvaluationTraceResponse
 from g8e.models.internal_api import ChatMessageRequest as _G8eChatMessageRequest
+from g8e.models.observe_api import (
+    ObserveProducerAgentStateRequest as _G8eObserveProducerAgentStateRequest,
+    ObserveProducerRunStateRequest as _G8eObserveProducerRunStateRequest,
+    ObserveProducerResponse as _G8eObserveProducerResponse,
+)
+from g8e.operator.v1.operator_pb2 import (
+    InferenceDispatchRequest as _G8eInferenceDispatchRequest,
+    InferenceDispatchResponse as _G8eInferenceDispatchResponse,
+)
 
 from app.models.attachments import AttachmentMetadata
 from app.models.base import ConfigDict, Field, G8eBaseModel
@@ -107,6 +117,7 @@ class ChatMessageRequest(_G8eChatMessageRequest, RequestOverrides):
 
 
 ChatStartedResponse = _G8eChatStartedResponse
+EvaluationTraceResponse = _G8eEvaluationTraceResponse
 
 
 class StopAIResponse(G8eBaseModel):
@@ -194,8 +205,7 @@ class OperatorSlotCreationRequest(G8eBaseModel):
         ..., description="Request context with session/user/organization identity"
     )
     slot_number: int = Field(..., description="Slot number")
-    operator_type: str = Field(..., description="Operator type (CLOUD, SYSTEM)")
-    cloud_subtype: str | None = Field(default=None, description="Cloud operator subtype")
+    operator_type: str = Field(..., description="Operator type (EMBEDDED, REMOTE)")
     name_prefix: str = Field(default="operator", description="Name prefix")
 
 
@@ -372,7 +382,7 @@ class OperatorDeviceLinkRegisterRequest(G8eBaseModel):
     operator_id: str | None = Field(
         default=None, description="Operator ID (optional if creating on-demand)"
     )
-    operator_type: str = Field(default="SYSTEM", description="Operator type")
+    operator_type: str = Field(default="REMOTE", description="Operator type")
     device_link_token: str | None = Field(
         default=None, description="Device link token for on-demand slot creation"
     )
@@ -633,3 +643,21 @@ class OperatorLinkRequestPayload(G8eBaseModel):
     )
     operator_id: str
     user_id: str
+
+
+ObserveProducerAgentStateRequest = _G8eObserveProducerAgentStateRequest
+ObserveProducerRunStateRequest = _G8eObserveProducerRunStateRequest
+ObserveProducerResponse = _G8eObserveProducerResponse
+
+
+# ---------------------------------------------------------------------------
+# Inference dispatch (g8ellama). Platform-internal endpoint on the User
+# Gateway that the ensemble chat pipeline calls to dispatch a governed
+# inference request to the Inference Node. Not AI-visible; not an MCP tool.
+# The request/response contract is protocol-owned
+# (g8e.operator.v1.InferenceDispatchRequest / InferenceDispatchResponse) and
+# serializes as canonical protojson with proto field names.
+# ---------------------------------------------------------------------------
+
+InferenceDispatchRequest = _G8eInferenceDispatchRequest
+InferenceDispatchResponse = _G8eInferenceDispatchResponse

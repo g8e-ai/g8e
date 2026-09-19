@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.constants import (
-    ComponentName,
     G8EE_COMPONENT,
 )
 from app.models.agents.tribunal import TribunalAuditorFailedError, VoteBreakdown

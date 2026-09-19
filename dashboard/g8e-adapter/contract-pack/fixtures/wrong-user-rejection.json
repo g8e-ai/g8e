@@ -1,0 +1,13 @@
+{
+  "auth": {
+    "status": "authenticated"
+  },
+  "description": "A cross-user observe read is rejected by the Gateway. The browser receives no other user projections, evals, or downloads.",
+  "observe": {
+    "available": true,
+    "cross_user_isolation": true,
+    "reason": "forbidden",
+    "rejected_user": "user-b"
+  },
+  "scenario": "wrong-user-rejection"
+}

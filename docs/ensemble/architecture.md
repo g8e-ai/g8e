@@ -39,14 +39,14 @@ A conversation turn follows this flow:
 1. g8ee authenticates the caller, validates the request context, loads user settings, and reads the relevant case, investigation history, attachments, Operator state, and memories.
 2. Triage classifies the turn. Simple turns use the assistant-tier Dash role, while complex turns and triage failures use the primary-tier Sage role. Attachments also select the complex path.
 3. The selected model streams a response and may request tools through a sequential ReAct loop. Each tool result returns to the model as context for the next turn until the model stops requesting tools.
-4. A host-command request enters the Tribunal command-generation pipeline. The default configuration runs five independent persona passes, clusters and votes on candidates, and starts an anonymized second round when the first round lacks sufficient agreement. The application Warden assesses risk, the optional Auditor reviews the selected command, and deterministic command constraints run before dispatch.
+4. A host-command request enters the Tribunal command-generation pipeline. The default configuration runs five independent persona passes, clusters and votes on candidates, and starts an anonymized second round when the first round lacks sufficient agreement. Marshal assesses risk, the optional Auditor reviews the selected command, and deterministic command constraints run before dispatch.
 5. Commands and state-changing Operator tools pass the g8ee approval workflow. Configured auto-approved commands skip the application prompt only after the command passes the deterministic safety gates.
 6. g8ee sends typed intent to each exact target Operator session. Execution results return on the corresponding result channel, become client events, and return to the model when the tool loop continues.
 7. g8ee persists the conversation and associated application records. Memory generation runs after the response path, while model calls contribute usage, timing, retry, finish, artifact-hash, and privacy metadata.
 
 Clarification questions pause tool execution until the caller answers, skips, or times out. Reaching the configured tool-turn limit similarly pauses the loop for an explicit continuation decision. Approval resets the tool-turn counter, while denial stops the loop.
 
-See [Agents](agents.md) for the persona roster, Tribunal stages, and application Warden behavior.
+See [Agents](agents.md) for the persona roster, Tribunal stages, and Marshal behavior.
 
 ## Governance Paths
 
@@ -64,7 +64,7 @@ The target Operator performs the authoritative pre-dispatch verification and exe
 
 For designated application records, g8ee constructs a canonical `GovernanceEnvelope`, binds the current Gateway state root, identity, nonce, expiry, and typed payload into its transaction hash, and submits it through the privileged governance surface. Concurrent state changes can make the bound root stale; g8ee serializes submissions and retries a state-mismatch rejection with a fresh root up to three times.
 
-The unified deployment uses the Operator certificate for this transport because app certificates cannot access the privileged route. The Gateway binds the envelope to the authenticated Operator identity, supplies the active posture when needed, and processes the operation through its local Warden and Actuator. The route verifies supplied evidence but does not create missing L2 votes or human L3 authorization.
+The unified deployment uses the Operator certificate for this transport because app certificates cannot access the privileged route. The Gateway binds the envelope to the authenticated Operator identity, supplies the active posture when needed, and processes the operation through its local L4 Warden and L5 Actuator. The route verifies supplied evidence but does not create missing L2 votes or human L3 authorization.
 
 The certificate fingerprint carried by g8ee is transport evidence, not a complete L3 proof. Postures requiring CLI authorization also require a signature over the transaction, while browser authorization uses WebAuthn. Direct application-record mutations therefore fail under a posture whose required proof is absent.
 
@@ -95,7 +95,7 @@ Durable application records survive a g8ee restart, but active model turns, pend
 - g8ee supplies intent but cannot bypass doctrine, posture-required proofs, or Operator verification.
 - g8ee has no direct management connection to a target host; host operations execute only through a bound Operator.
 - Gateway routing binds host intent to an exact Operator and session rather than broadcasting it.
-- Tribunal agreement, Auditor output, application Warden risk, reputation, and auto-approval remain advisory to protocol governance.
+- Tribunal agreement, Auditor output, Marshal risk, reputation, and auto-approval remain advisory to protocol governance.
 - Application approval and auto-approval do not satisfy protocol L3.
 - Direct-envelope and command-relay paths fail when the active posture requires proofs they do not supply.
 - Model-provider calls occur outside the g8e execution boundary. Governance receipts do not attest to provider behavior or to activity through side channels outside g8e transports.
@@ -110,6 +110,6 @@ Durable application records survive a g8ee restart, but active model turns, pend
 - [Governance](../architecture/governance.md): Five-layer verification, receipts, and posture behavior.
 - [Authentication and Authorization](../architecture/auth.md): Workload enrollment, mTLS identities, CLI sessions, and WebAuthn.
 - [Server-Sent Events](../architecture/sse.md): Approval and application event delivery.
-- [Agents](agents.md): Triage, Dash, Sage, Tribunal, Auditor, Warden, and support agents.
+- [Agents](agents.md): Triage, Dash, Sage, Tribunal, Auditor, Marshal, and support agents.
 - [LLM Providers](llm-providers.md): Provider configuration and model tiers.
 - [Testing](tests.md): Ensemble test tiers and commands.

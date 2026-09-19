@@ -31,7 +31,7 @@ Alternatively, running `make setup` from the `ensemble/` directory installs the 
 
 ## g8e Package Dependency
 
-g8ee depends on the `g8e` Python package (`g8e>=1.7.8`) as the single source of truth for protocol constants, enums, and models. In the repository monorepo structure, `pyproject.toml` configures `[tool.uv.sources]` to resolve `g8e` directly to `../protocol/python`. In container builds, the Dockerfile installs `protocol/python/` before `ensemble/` so dependencies resolve to the local in-tree package without requiring external PyPI distribution.
+g8ee depends on the `g8e` Python package as the single source of truth for protocol constants, enums, and models. In this repository, `protocol/python/` publishes `g8e` 2.1.8 and `ensemble/pyproject.toml` resolves it through `[tool.uv.sources]` to `../protocol/python`. In container builds, the Dockerfile installs `protocol/python/` before `ensemble/` so dependencies resolve to the local in-tree package without requiring external PyPI distribution.
 
 ## Model Hierarchy
 
@@ -73,6 +73,23 @@ Generated Python protobuf stubs from the g8e protocol `.proto` definitions are p
 - Re-exported via: `app/proto/__init__.py`
 
 ## Development Commands
+
+Ensemble dependencies are installed into a virtualenv, not system Python. Bare `python` or `python3` usually resolves to the system interpreter and fails with missing modules such as `openai`.
+
+Use the Make targets below. They select `ensemble/.venv/bin/python` when that venv exists. For one-off commands, call that interpreter explicitly:
+
+```bash
+ensemble/.venv/bin/python -m pytest tests/unit/services/evaluation/test_trace_service.py -v
+```
+
+The repository root also has a `.venv` used by `make ensemble-test` and `make ensemble-lint`. Keep both venvs current after changing `protocol/python/`:
+
+```bash
+pip install -e protocol/python
+pip install -e 'ensemble[dev,test]'
+```
+
+When working on ensemble code, prefer `cd ensemble && make test|lint|check` over root `make ensemble-test` unless you maintain the root venv deliberately.
 
 ### From the Repository Root
 
@@ -138,6 +155,8 @@ pip install -e ".[dev,test,docs]"
 ## Project Conventions
 
 - Follow existing code patterns — let Ruff and Pyright guide type safety and formatting
+- Reuse existing implementations before writing new code — search `app/` and the in-tree `g8e` package for existing models, utilities, services, and constants; the codebase already contains what most tasks need, so keep additions minimal and extend existing code rather than introducing parallel functionality
+- Never add shims, compatibility wrappers, or duplicate helpers that reinvent existing functionality
 - Keep changes minimal, focused, and covered by tests
 - Add unit tests for new functionality and regression tests for bug fixes
 - Update documentation in `docs/ensemble/` when interfaces or models change
@@ -156,7 +175,7 @@ pip install -e ".[dev,test,docs]"
 - [Thinking](thinking.md) — L2 consensus, provider reasoning, and thought signatures
 - [PKI & Trust](pki.md) — Public Key Infrastructure, trust bundles, and workload enrollment
 - [Storage](storage.md) — Storage tiers and data sovereignty principles
-- [LLM Providers](llm-providers.md) — Provider implementations and capacity tiers
+- [LLM Providers](llm-providers.md) — Provider implementations and model roles
 - [Server-Sent Events](sse.md) — Real-time event streaming pipeline and Gateway push delivery
 - [Testing](tests.md) — Testing framework, test tiers, and practices
 - [Evals](evals.md) — Benchmark evaluation suite and Judge scoring rubrics

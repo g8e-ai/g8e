@@ -18,11 +18,11 @@ from .nemesis import NemesisPersona
 from .scribe import ScribePersona
 from .codex import CodexPersona
 from .judge import JudgePersona
-from .warden import (
-    WardenPersona,
-    WardenCommandRiskPersona,
-    WardenErrorPersona,
-    WardenFileRiskPersona,
+from .marshal import (
+    MarshalPersona,
+    MarshalCommandPersona,
+    MarshalErrorPersona,
+    MarshalFilePersona,
 )
 from .tribunal import TribunalPersona
 
@@ -39,10 +39,10 @@ PERSONA_REGISTRY: dict[str, AgentPersonaModel] = {
     "scribe": ScribePersona(),
     "codex": CodexPersona(),
     "judge": JudgePersona(),
-    "warden": WardenPersona(),
-    "warden_command_risk": WardenCommandRiskPersona(),
-    "warden_error": WardenErrorPersona(),
-    "warden_file_risk": WardenFileRiskPersona(),
+    "marshal": MarshalPersona(),
+    "marshal_command": MarshalCommandPersona(),
+    "marshal_error": MarshalErrorPersona(),
+    "marshal_file": MarshalFilePersona(),
     "tribunal": TribunalPersona(),
 }
 

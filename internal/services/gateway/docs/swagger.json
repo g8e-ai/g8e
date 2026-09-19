@@ -682,6 +682,615 @@
                 }
             }
         },
+        "/api/v1/inference/dispatch": {
+            "post": {
+                "description": "Platform-internal endpoint (mTLS, app workload) that routes an inference request through the L1-L5 governance gauntlet to the Inference Node and returns the verified result plus final signed receipt.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inference"
+                ],
+                "summary": "Dispatch a governed inference request",
+                "parameters": [
+                    {
+                        "description": "Governed inference dispatch request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/operatorv1.InferenceDispatchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Verified inference result and final signed receipt",
+                        "schema": {
+                            "$ref": "#/definitions/operatorv1.InferenceDispatchResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request — malformed body, unknown field, missing messages, invalid role, or acting_app_id identity mismatch",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized — missing delegated user identity",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — not an app workload, model override denied, or governance rejection",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found — no inference-capable operator session",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict — multiple inference-capable operators; explicit target required",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large — body exceeds the payload limit",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity — target operator session is not inference-capable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway — provider or receipt verification failure",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable — command delivered to no operator subscribers",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "504": {
+                        "description": "Gateway Timeout — request deadline exceeded; remote provider outcome unknown",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inference/model-provenance/attestations/{provider_attempt_id}": {
+            "get": {
+                "description": "Returns the canonical model provenance attestation window for one provider attempt ID (mTLS owner CLI only).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inference"
+                ],
+                "summary": "Get model provenance attestation evidence",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider attempt ID",
+                        "name": "provider_attempt_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ModelProvenanceResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Model provenance evidence not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Model provenance store unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inference/provider-observations/{provider_attempt_id}": {
+            "get": {
+                "description": "Returns the canonical provider-boundary observation window and durable provider-attempt record for one provider attempt ID (mTLS owner CLI only).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inference"
+                ],
+                "summary": "Get provider-boundary observation evidence",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider attempt ID",
+                        "name": "provider_attempt_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ProviderObservationResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Observation evidence not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Provider observation store unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observe/bootstrap": {
+            "get": {
+                "description": "Returns one bounded initial snapshot for agents, active run, overview counters, recent runs, latest eval summaries, and download metadata.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "observe"
+                ],
+                "summary": "Get observe bootstrap snapshot",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ObserveBootstrapSnapshot"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observe/downloads": {
+            "get": {
+                "description": "Returns a paginated list of allowlisted download artifacts owned by the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "observe"
+                ],
+                "summary": "List observe downloads",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (1-100, default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ObservePage"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid cursor or limit",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observe/downloads/{artifact_id}": {
+            "get": {
+                "description": "Returns a single allowlisted download artifact owned by the authenticated user. Use ?download=1 to stream the artifact bytes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "observe"
+                ],
+                "summary": "Get observe download artifact",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Artifact ID",
+                        "name": "artifact_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Set to 1 to stream the artifact bytes instead of returning metadata",
+                        "name": "download",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.DownloadArtifact"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Download not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observe/evals": {
+            "get": {
+                "description": "Returns paginated eval run projections owned by the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "observe"
+                ],
+                "summary": "List observe evals",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (1-100, default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ObservePage"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid cursor or limit",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observe/evals/{run_id}": {
+            "get": {
+                "description": "Returns a typed eval detail projection with manifest-safe identity, arm/model information, aggregate metrics, status, and verification boundary.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "observe"
+                ],
+                "summary": "Get observe eval detail",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Eval run ID",
+                        "name": "run_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.EvalDetail"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Eval not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observe/producer/agent-state": {
+            "post": {
+                "description": "Accepts a typed agent state update from an mTLS-authenticated app workload (the g8ee ensemble). The gateway derives user_id from the peer certificate, persists the agent state projection, and emits an app.agent.status.updated SSE event after successful persistence.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "observe"
+                ],
+                "summary": "Push observe agent state",
+                "parameters": [
+                    {
+                        "description": "Agent state update",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.ObserveProducerAgentStateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "accepted",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid transition, stale update, or missing fields",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized — mTLS user identity required",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — not an app workload or cross-user",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Persistence failure",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observe/producer/run-state": {
+            "post": {
+                "description": "Accepts a typed run state update from an mTLS-authenticated app workload (the g8ee ensemble). The gateway derives user_id from the peer certificate, persists the run state projection, and emits an app.run.status.updated SSE event after successful persistence.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "observe"
+                ],
+                "summary": "Push observe run state",
+                "parameters": [
+                    {
+                        "description": "Run state update",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.ObserveProducerRunStateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "accepted",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid transition, stale update, or missing fields",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized — mTLS user identity required",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — not an app workload or cross-user",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Persistence failure",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observe/runs": {
+            "get": {
+                "description": "Returns paginated read-only run summaries owned by the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "observe"
+                ],
+                "summary": "List observe runs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (1-100, default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ObservePage"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid cursor or limit",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observe/runs/{run_id}": {
+            "get": {
+                "description": "Returns a typed run detail projection with tasks and evidence-safe links.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "observe"
+                ],
+                "summary": "Get observe run detail",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Run ID",
+                        "name": "run_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.RunDetail"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Run not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/operators/validate": {
             "post": {
                 "description": "Validates the exact active operator-session, CLI-session, and user binding. The Gateway is authoritative; callers authenticate with an enrolled application mTLS certificate.",
@@ -836,6 +1445,132 @@
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public-feed/batches": {
+            "post": {
+                "description": "Accepts campaign projection records and signs/publishes them through the gateway-owned public spectator stack (mTLS owner CLI only).\nReturns the gateway publisher high-water sequence and feed-chain hash (mTLS owner CLI only).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json",
+                    "application/json"
+                ],
+                "tags": [
+                    "public-feed",
+                    "public-feed"
+                ],
+                "summary": "Get public feed snapshot",
+                "parameters": [
+                    {
+                        "description": "Ordered public feed records",
+                        "name": "records",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.PublicFeedRecord"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PublicFeedSnapshot"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Snapshot not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Public spectator unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public-feed/snapshot": {
+            "get": {
+                "description": "Accepts campaign projection records and signs/publishes them through the gateway-owned public spectator stack (mTLS owner CLI only).\nReturns the gateway publisher high-water sequence and feed-chain hash (mTLS owner CLI only).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json",
+                    "application/json"
+                ],
+                "tags": [
+                    "public-feed",
+                    "public-feed"
+                ],
+                "summary": "Get public feed snapshot",
+                "parameters": [
+                    {
+                        "description": "Ordered public feed records",
+                        "name": "records",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.PublicFeedRecord"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PublicFeedSnapshot"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Snapshot not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Public spectator unavailable",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 }
@@ -1281,6 +2016,7 @@
                 "FS_LIST",
                 "FS_READ",
                 "HEARTBEAT",
+                "INFERENCE",
                 "MCP_CALL",
                 "MCP_PROMPT_GET",
                 "MCP_PROMPT_LIST",
@@ -1292,6 +2028,8 @@
                 "PLATFORM_ENROLLMENT_PERSIST_POLICY",
                 "PLATFORM_ENROLLMENT_CREATE_SESSION",
                 "PORT_CHECK",
+                "PROVIDER_BOUNDARY_OBSERVATION",
+                "MODEL_PROVENANCE_OBSERVATION",
                 "RESTORE_FILE",
                 "SHUTDOWN"
             ],
@@ -1311,6 +2049,7 @@
                 "ActionTypeFsList",
                 "ActionTypeFsRead",
                 "ActionTypeHeartbeat",
+                "ActionTypeInference",
                 "ActionTypeMcpCall",
                 "ActionTypeMcpPromptGet",
                 "ActionTypeMcpPromptList",
@@ -1322,6 +2061,8 @@
                 "ActionTypePlatformEnrollmentPersistPolicy",
                 "ActionTypePlatformEnrollmentCreateSession",
                 "ActionTypePortCheck",
+                "ActionTypeProviderBoundaryObservation",
+                "ActionTypeModelProvenanceObservation",
                 "ActionTypeRestoreFile",
                 "ActionTypeShutdown"
             ]
@@ -1439,6 +2180,65 @@
                 }
             }
         },
+        "models.AgentLifecycleStatus": {
+            "type": "string",
+            "enum": [
+                "idle",
+                "queued",
+                "running",
+                "waiting",
+                "completed",
+                "failed",
+                "offline"
+            ],
+            "x-enum-varnames": [
+                "AgentLifecycleStatusIdle",
+                "AgentLifecycleStatusQueued",
+                "AgentLifecycleStatusRunning",
+                "AgentLifecycleStatusWaiting",
+                "AgentLifecycleStatusCompleted",
+                "AgentLifecycleStatusFailed",
+                "AgentLifecycleStatusOffline"
+            ]
+        },
+        "models.AgentStateProjection": {
+            "type": "object",
+            "properties": {
+                "agent_id": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "freshness": {
+                    "$ref": "#/definitions/models.SnapshotFreshness"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "observed_at": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.AgentLifecycleStatus"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "throughput": {
+                    "$ref": "#/definitions/models.ObservedMeasurement"
+                }
+            }
+        },
         "models.AuditReceiptsResponse": {
             "type": "object",
             "properties": {
@@ -1467,6 +2267,299 @@
                 },
                 "sign_count": {
                     "type": "integer"
+                }
+            }
+        },
+        "models.CampaignFreshness": {
+            "type": "string",
+            "enum": [
+                "active",
+                "delayed",
+                "stale",
+                "intentionally_stopped",
+                "safety_stopped",
+                "source_offline"
+            ],
+            "x-enum-varnames": [
+                "CampaignFreshnessActive",
+                "CampaignFreshnessDelayed",
+                "CampaignFreshnessStale",
+                "CampaignFreshnessIntentionallyStopped",
+                "CampaignFreshnessSafetyStopped",
+                "CampaignFreshnessSourceOffline"
+            ]
+        },
+        "models.DownloadArtifact": {
+            "type": "object",
+            "properties": {
+                "artifact_id": {
+                    "type": "string"
+                },
+                "byte_size": {
+                    "type": "integer"
+                },
+                "download_url": {
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "media_type": {
+                    "type": "string"
+                },
+                "privacy_classification": {
+                    "$ref": "#/definitions/models.DownloadPrivacyClassification"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "sha256": {
+                    "type": "string"
+                },
+                "source_run_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.DownloadPrivacyClassification": {
+            "type": "string",
+            "enum": [
+                "public_safe",
+                "restricted"
+            ],
+            "x-enum-varnames": [
+                "DownloadPrivacyPublicSafe",
+                "DownloadPrivacyRestricted"
+            ]
+        },
+        "models.EvalDetail": {
+            "type": "object",
+            "properties": {
+                "arm_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "artifact_digest": {
+                    "type": "string"
+                },
+                "assigned_tasks": {
+                    "type": "integer"
+                },
+                "assistant_variant_id": {
+                    "type": "string"
+                },
+                "backend_name": {
+                    "type": "string"
+                },
+                "benchmark_population": {
+                    "type": "integer"
+                },
+                "campaign_id": {
+                    "type": "string"
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "environment_class": {
+                    "type": "string"
+                },
+                "lite_variant_id": {
+                    "type": "string"
+                },
+                "metrics": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.EvalMetricSummary"
+                    }
+                },
+                "model_cohort_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "observed_at": {
+                    "type": "string"
+                },
+                "primary_variant_id": {
+                    "type": "string"
+                },
+                "proof_links": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.EvidenceSafeLink"
+                    }
+                },
+                "published_projection_sha256": {
+                    "type": "string"
+                },
+                "qualification_count": {
+                    "type": "integer"
+                },
+                "quantization": {
+                    "type": "string"
+                },
+                "receipt_count": {
+                    "type": "integer"
+                },
+                "repetition_count": {
+                    "type": "integer"
+                },
+                "role_combination_id": {
+                    "type": "string"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.RunLifecycleStatus"
+                },
+                "suite_id": {
+                    "type": "string"
+                },
+                "suite_version": {
+                    "type": "string"
+                },
+                "superseded_count": {
+                    "type": "integer"
+                },
+                "terminal_attempts": {
+                    "type": "integer"
+                },
+                "unavailable_count": {
+                    "type": "integer"
+                },
+                "verification_status": {
+                    "$ref": "#/definitions/models.EvalVerificationStatus"
+                }
+            }
+        },
+        "models.EvalMetricSummary": {
+            "type": "object",
+            "properties": {
+                "arm_id": {
+                    "type": "string"
+                },
+                "denominator": {
+                    "type": "integer"
+                },
+                "eligible": {
+                    "type": "integer"
+                },
+                "metric_id": {
+                    "type": "string"
+                },
+                "metric_version": {
+                    "type": "string"
+                },
+                "model_cohort_id": {
+                    "type": "string"
+                },
+                "recorded_at": {
+                    "type": "string"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "verification_status": {
+                    "$ref": "#/definitions/models.EvalVerificationStatus"
+                }
+            }
+        },
+        "models.EvalSummary": {
+            "type": "object",
+            "properties": {
+                "arm_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "campaign_id": {
+                    "type": "string"
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "metric_count": {
+                    "type": "integer"
+                },
+                "model_cohort_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "observed_at": {
+                    "type": "string"
+                },
+                "published_projection_sha256": {
+                    "type": "string"
+                },
+                "receipt_count": {
+                    "type": "integer"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.RunLifecycleStatus"
+                },
+                "suite_id": {
+                    "type": "string"
+                },
+                "suite_version": {
+                    "type": "string"
+                },
+                "verification_status": {
+                    "$ref": "#/definitions/models.EvalVerificationStatus"
+                }
+            }
+        },
+        "models.EvalVerificationStatus": {
+            "type": "string",
+            "enum": [
+                "projection_validated",
+                "receipt_verification_not_applicable",
+                "verified"
+            ],
+            "x-enum-varnames": [
+                "EvalVerificationProjectionValidated",
+                "EvalVerificationReceiptVerificationNotApplicable",
+                "EvalVerificationVerified"
+            ]
+        },
+        "models.EvidenceSafeLink": {
+            "type": "object",
+            "properties": {
+                "artifact_id": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "media_type": {
+                    "type": "string"
+                },
+                "schema_version": {
+                    "type": "string"
                 }
             }
         },
@@ -1516,6 +2609,232 @@
                 }
             }
         },
+        "models.MeasurementScope": {
+            "type": "string",
+            "enum": [
+                "process",
+                "system",
+                "accelerator"
+            ],
+            "x-enum-varnames": [
+                "MeasurementScopeProcess",
+                "MeasurementScopeSystem",
+                "MeasurementScopeAccelerator"
+            ]
+        },
+        "models.MeasurementStatus": {
+            "type": "string",
+            "enum": [
+                "observed",
+                "stale",
+                "unavailable",
+                "unsupported"
+            ],
+            "x-enum-varnames": [
+                "MeasurementStatusObserved",
+                "MeasurementStatusStale",
+                "MeasurementStatusUnavailable",
+                "MeasurementStatusUnsupported"
+            ]
+        },
+        "models.ModelProvenanceResponse": {
+            "type": "object",
+            "properties": {
+                "window": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "models.ObserveBootstrapSnapshot": {
+            "type": "object",
+            "properties": {
+                "active_run": {
+                    "$ref": "#/definitions/models.RunSummary"
+                },
+                "agents": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.AgentStateProjection"
+                    }
+                },
+                "downloads": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.DownloadArtifact"
+                    }
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "latest_evals": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.EvalSummary"
+                    }
+                },
+                "measurements": {
+                    "$ref": "#/definitions/models.OverviewMeasurements"
+                },
+                "overview": {
+                    "$ref": "#/definitions/models.OverviewCounters"
+                },
+                "recent_runs": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.RunSummary"
+                    }
+                },
+                "schema_version": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ObservePage": {
+            "type": "object",
+            "properties": {
+                "cursor": {
+                    "type": "string"
+                },
+                "has_more": {
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "schema_version": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ObserveProducerAgentStateRequest": {
+            "type": "object",
+            "properties": {
+                "agent_id": {
+                    "type": "string"
+                },
+                "cli_session_id": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "observed_at": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.AgentLifecycleStatus"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "web_session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ObserveProducerRunStateRequest": {
+            "type": "object",
+            "properties": {
+                "active_task_id": {
+                    "type": "string"
+                },
+                "cli_session_id": {
+                    "type": "string"
+                },
+                "completed_tasks": {
+                    "type": "integer"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "ended_at": {
+                    "type": "string"
+                },
+                "observed_at": {
+                    "type": "string"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "run_kind": {
+                    "$ref": "#/definitions/models.RunKind"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.RunLifecycleStatus"
+                },
+                "total_tasks": {
+                    "type": "integer"
+                },
+                "web_session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ObservedMeasurement": {
+            "type": "object",
+            "properties": {
+                "collector_version": {
+                    "type": "string"
+                },
+                "evidence_hash": {
+                    "type": "string"
+                },
+                "metric_id": {
+                    "type": "string"
+                },
+                "observed_at": {
+                    "type": "string"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "scope": {
+                    "$ref": "#/definitions/models.MeasurementScope"
+                },
+                "source_component": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.MeasurementStatus"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "window_seconds": {
+                    "type": "number"
+                }
+            }
+        },
         "models.OperatorSessionValidationRequest": {
             "type": "object",
             "properties": {
@@ -1541,6 +2860,55 @@
                 },
                 "valid": {
                     "type": "boolean"
+                }
+            }
+        },
+        "models.OverviewCounters": {
+            "type": "object",
+            "properties": {
+                "agents_running": {
+                    "type": "integer"
+                },
+                "agents_running_freshness": {
+                    "$ref": "#/definitions/models.SnapshotFreshness"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "success_rate": {
+                    "$ref": "#/definitions/models.SuccessRateMeasurement"
+                },
+                "tasks_in_queue": {
+                    "type": "integer"
+                },
+                "tasks_in_queue_freshness": {
+                    "$ref": "#/definitions/models.SnapshotFreshness"
+                }
+            }
+        },
+        "models.OverviewMeasurements": {
+            "type": "object",
+            "properties": {
+                "cpu": {
+                    "$ref": "#/definitions/models.ObservedMeasurement"
+                },
+                "disk": {
+                    "$ref": "#/definitions/models.ObservedMeasurement"
+                },
+                "ram": {
+                    "$ref": "#/definitions/models.ObservedMeasurement"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "total_throughput": {
+                    "$ref": "#/definitions/models.ObservedMeasurement"
+                },
+                "vram": {
+                    "$ref": "#/definitions/models.ObservedMeasurement"
                 }
             }
         },
@@ -1689,6 +3057,249 @@
                 }
             }
         },
+        "models.ProviderObservationResponse": {
+            "type": "object",
+            "properties": {
+                "provider_attempt": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "window": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "models.PublicFeedExportBatchResponse": {
+            "type": "object",
+            "properties": {
+                "feed_chain_hash": {
+                    "type": "string"
+                },
+                "high_water_sequence": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.PublicFeedRecord": {
+            "type": "object",
+            "properties": {
+                "record_bytes": {
+                    "type": "string"
+                },
+                "record_hash": {
+                    "type": "string"
+                },
+                "record_type": {
+                    "$ref": "#/definitions/models.PublicFeedRecordType"
+                },
+                "sequence": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.PublicFeedRecordType": {
+            "type": "string",
+            "enum": [
+                "projection",
+                "event",
+                "proof_manifest",
+                "key_revocation"
+            ],
+            "x-enum-varnames": [
+                "PublicFeedRecordTypeProjection",
+                "PublicFeedRecordTypeEvent",
+                "PublicFeedRecordTypeProofManifest",
+                "PublicFeedRecordTypeKeyRevocation"
+            ]
+        },
+        "models.PublicFeedSnapshot": {
+            "type": "object",
+            "properties": {
+                "batch_count": {
+                    "type": "integer"
+                },
+                "feed_chain_hash": {
+                    "type": "string"
+                },
+                "freshness": {
+                    "$ref": "#/definitions/models.CampaignFreshness"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "high_water_sequence": {
+                    "type": "integer"
+                },
+                "protocol_version": {
+                    "type": "string"
+                },
+                "source_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.RunDetail": {
+            "type": "object",
+            "properties": {
+                "active_task_id": {
+                    "type": "string"
+                },
+                "completed_tasks": {
+                    "type": "integer"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "ended_at": {
+                    "type": "string"
+                },
+                "evidence_safe_links": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.EvidenceSafeLink"
+                    }
+                },
+                "observed_at": {
+                    "type": "string"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "run_kind": {
+                    "$ref": "#/definitions/models.RunKind"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.RunLifecycleStatus"
+                },
+                "tasks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.RunTask"
+                    }
+                },
+                "total_tasks": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.RunKind": {
+            "type": "string",
+            "enum": [
+                "investigation",
+                "eval",
+                "demo",
+                "workflow"
+            ],
+            "x-enum-varnames": [
+                "RunKindInvestigation",
+                "RunKindEval",
+                "RunKindDemo",
+                "RunKindWorkflow"
+            ]
+        },
+        "models.RunLifecycleStatus": {
+            "type": "string",
+            "enum": [
+                "queued",
+                "running",
+                "waiting",
+                "completed",
+                "failed",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "RunLifecycleStatusQueued",
+                "RunLifecycleStatusRunning",
+                "RunLifecycleStatusWaiting",
+                "RunLifecycleStatusCompleted",
+                "RunLifecycleStatusFailed",
+                "RunLifecycleStatusCancelled"
+            ]
+        },
+        "models.RunSummary": {
+            "type": "object",
+            "properties": {
+                "active_task_id": {
+                    "type": "string"
+                },
+                "completed_tasks": {
+                    "type": "integer"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "ended_at": {
+                    "type": "string"
+                },
+                "evidence_count": {
+                    "type": "integer"
+                },
+                "has_receipts": {
+                    "type": "boolean"
+                },
+                "observed_at": {
+                    "type": "string"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "run_kind": {
+                    "$ref": "#/definitions/models.RunKind"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.RunLifecycleStatus"
+                },
+                "total_tasks": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.RunTask": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "ended_at": {
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "owning_agent": {
+                    "type": "string"
+                },
+                "schema_version": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.RunLifecycleStatus"
+                },
+                "task_id": {
+                    "type": "string"
+                }
+            }
+        },
         "models.SSEEventRow": {
             "type": "object",
             "properties": {
@@ -1760,6 +3371,19 @@
                 }
             }
         },
+        "models.SnapshotFreshness": {
+            "type": "string",
+            "enum": [
+                "observed",
+                "stale",
+                "unavailable"
+            ],
+            "x-enum-varnames": [
+                "SnapshotFreshnessObserved",
+                "SnapshotFreshnessStale",
+                "SnapshotFreshnessUnavailable"
+            ]
+        },
         "models.StateResponse": {
             "type": "object",
             "properties": {
@@ -1773,6 +3397,29 @@
             "properties": {
                 "status": {
                     "$ref": "#/definitions/constants.GatewayMode"
+                }
+            }
+        },
+        "models.SuccessRateMeasurement": {
+            "type": "object",
+            "properties": {
+                "denominator": {
+                    "type": "integer"
+                },
+                "metric_id": {
+                    "type": "string"
+                },
+                "metric_version": {
+                    "type": "string"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "verification_status": {
+                    "$ref": "#/definitions/models.EvalVerificationStatus"
                 }
             }
         },
@@ -1928,6 +3575,14 @@
                 "executed_at_unix_ms": {
                     "description": "Timestamp when execution finished",
                     "type": "integer"
+                },
+                "failure_code": {
+                    "description": "Typed classification of a FAILED receipt. UNSPECIFIED on non-failed\nreceipts. Bound into the signature via canonicalization.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/operatorv1.ReceiptFailureCode"
+                        }
+                    ]
                 },
                 "final_persistence_attestation": {
                     "$ref": "#/definitions/operatorv1.ReceiptPersistenceAttestation"
@@ -2140,6 +3795,445 @@
                 "ExecutionStatus_EXECUTION_STATUS_TIMEOUT"
             ]
         },
+        "operatorv1.InferenceDispatchRequest": {
+            "type": "object",
+            "properties": {
+                "acting_app_id": {
+                    "description": "Application that initiated the inference request.",
+                    "type": "string"
+                },
+                "assignment_id": {
+                    "type": "string"
+                },
+                "campaign_id": {
+                    "type": "string"
+                },
+                "case_id": {
+                    "description": "Application context propagated from the chat turn.",
+                    "type": "string"
+                },
+                "cli_session_id": {
+                    "type": "string"
+                },
+                "context_limit": {
+                    "type": "integer"
+                },
+                "evaluation_attempt_id": {
+                    "type": "string"
+                },
+                "investigation_id": {
+                    "type": "string"
+                },
+                "keep_alive": {
+                    "description": "Ollama keep-alive duration override (empty = use config default).",
+                    "type": "string"
+                },
+                "max_tokens": {
+                    "description": "Maximum tokens to generate (0 = use backend default).",
+                    "type": "integer"
+                },
+                "messages": {
+                    "description": "Ordered conversation turns sent to the Inference Node. The node validates and re-scrubs every data-bearing part before crossing the provider boundary.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operatorv1.InferenceMessage"
+                    }
+                },
+                "model": {
+                    "description": "Requested provider model. A campaign Inference Operator accepts it only\nwhen the exact model and digest occur in the frozen registry committed by\nmodel_registry_digest; standard inference uses the configured role model.",
+                    "type": "string"
+                },
+                "model_digest": {
+                    "type": "string"
+                },
+                "model_registry": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operatorv1.InferenceModelVariant"
+                    }
+                },
+                "model_registry_digest": {
+                    "type": "string"
+                },
+                "parallel_tool_calls": {
+                    "type": "boolean"
+                },
+                "provider_attempt_id": {
+                    "type": "string"
+                },
+                "request_schema_version": {
+                    "type": "string"
+                },
+                "response_format": {
+                    "$ref": "#/definitions/operatorv1.InferenceResponseFormat"
+                },
+                "retry_count": {
+                    "description": "Zero-based retry ordinal for this provider attempt.",
+                    "type": "integer"
+                },
+                "role": {
+                    "description": "Chat-tier role for this request (primary, assistant, lite).",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/operatorv1.ModelRole"
+                        }
+                    ]
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "scenario_id": {
+                    "type": "string"
+                },
+                "seed": {
+                    "description": "Optional deterministic generation seed forwarded to the provider when\nsupported. Absent means use the provider default.",
+                    "type": "integer"
+                },
+                "stop_sequences": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "stream": {
+                    "description": "When true, the Gateway forwards live InferenceProgressEvent telemetry\nto the caller while waiting for the authoritative terminal completion.",
+                    "type": "boolean"
+                },
+                "target_operator_session_id": {
+                    "description": "Explicit Inference Node target. When empty, the gateway requires exactly\none enrolled inference-capable operator for the requestor; zero or\nmultiple matches are rejected.",
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "temperature": {
+                    "description": "Generation temperature override (0 = use backend default).",
+                    "type": "number"
+                },
+                "thinking": {
+                    "$ref": "#/definitions/operatorv1.InferenceThinkingControl"
+                },
+                "tool_choice": {
+                    "$ref": "#/definitions/operatorv1.InferenceToolChoice"
+                },
+                "tools": {
+                    "description": "Ordered callable function declarations available to the model.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operatorv1.InferenceToolDeclaration"
+                    }
+                },
+                "top_k": {
+                    "type": "integer"
+                },
+                "top_p": {
+                    "type": "number"
+                },
+                "web_session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "operatorv1.InferenceDispatchResponse": {
+            "type": "object",
+            "properties": {
+                "receipt": {
+                    "description": "The verified final signed ActionReceipt for the transaction.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/operatorv1.ActionReceipt"
+                        }
+                    ]
+                },
+                "result": {
+                    "description": "The complete inference result whose result_digest is bound into the\nsigned receipt.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/operatorv1.InferenceResult"
+                        }
+                    ]
+                },
+                "transaction_id": {
+                    "description": "Transaction ID correlating the dispatch with the audit chain.",
+                    "type": "string"
+                }
+            }
+        },
+        "operatorv1.InferenceLoadState": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "x-enum-varnames": [
+                "InferenceLoadState_INFERENCE_LOAD_STATE_UNSPECIFIED",
+                "InferenceLoadState_INFERENCE_LOAD_STATE_COLD",
+                "InferenceLoadState_INFERENCE_LOAD_STATE_WARM",
+                "InferenceLoadState_INFERENCE_LOAD_STATE_UNAVAILABLE"
+            ]
+        },
+        "operatorv1.InferenceMessage": {
+            "type": "object",
+            "properties": {
+                "parts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operatorv1.InferenceMessagePart"
+                    }
+                },
+                "role": {
+                    "$ref": "#/definitions/operatorv1.InferenceMessageRole"
+                }
+            }
+        },
+        "operatorv1.InferenceMessagePart": {
+            "type": "object",
+            "properties": {
+                "part": {
+                    "description": "Types that are valid to be assigned to Part:\n\n\t*InferenceMessagePart_Text\n\t*InferenceMessagePart_ToolCall\n\t*InferenceMessagePart_ToolResult"
+                }
+            }
+        },
+        "operatorv1.InferenceMessageRole": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3,
+                4
+            ],
+            "x-enum-varnames": [
+                "InferenceMessageRole_INFERENCE_MESSAGE_ROLE_UNSPECIFIED",
+                "InferenceMessageRole_INFERENCE_MESSAGE_ROLE_SYSTEM",
+                "InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER",
+                "InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT",
+                "InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL"
+            ]
+        },
+        "operatorv1.InferenceModelVariant": {
+            "type": "object",
+            "properties": {
+                "digest": {
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                }
+            }
+        },
+        "operatorv1.InferenceResponseFormat": {
+            "type": "object",
+            "properties": {
+                "json_schema": {
+                    "type": "string"
+                },
+                "media_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "operatorv1.InferenceResponsePart": {
+            "type": "object",
+            "properties": {
+                "part": {
+                    "description": "Types that are valid to be assigned to Part:\n\n\t*InferenceResponsePart_Text\n\t*InferenceResponsePart_ToolCall\n\t*InferenceResponsePart_Thinking"
+                }
+            }
+        },
+        "operatorv1.InferenceResult": {
+            "type": "object",
+            "properties": {
+                "assignment_id": {
+                    "type": "string"
+                },
+                "cache_tokens": {
+                    "type": "integer"
+                },
+                "campaign_id": {
+                    "type": "string"
+                },
+                "completion_tokens": {
+                    "description": "Number of completion tokens generated.",
+                    "type": "integer"
+                },
+                "evaluation_attempt_id": {
+                    "type": "string"
+                },
+                "finish_reason": {
+                    "description": "Finish reason (e.g., \"stop\", \"length\").",
+                    "type": "string"
+                },
+                "generation_duration_ns": {
+                    "type": "integer"
+                },
+                "load_duration_ns": {
+                    "type": "integer"
+                },
+                "load_state": {
+                    "$ref": "#/definitions/operatorv1.InferenceLoadState"
+                },
+                "model": {
+                    "description": "Model that produced the result (echoed from the request or resolved by\nthe backend).",
+                    "type": "string"
+                },
+                "model_registry_digest": {
+                    "type": "string"
+                },
+                "normalized_request_hash": {
+                    "type": "string"
+                },
+                "output_hash": {
+                    "type": "string"
+                },
+                "parts": {
+                    "description": "Ordered model response parts covered by result_digest.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operatorv1.InferenceResponsePart"
+                    }
+                },
+                "prompt_eval_duration_ns": {
+                    "type": "integer"
+                },
+                "prompt_tokens": {
+                    "description": "Number of prompt tokens consumed.",
+                    "type": "integer"
+                },
+                "provider_attempt_id": {
+                    "type": "string"
+                },
+                "requested_model": {
+                    "type": "string"
+                },
+                "requested_model_digest": {
+                    "type": "string"
+                },
+                "result_digest": {
+                    "description": "Canonical digest of the complete result: lowercase hex SHA-256 over the\ndeterministic protobuf serialization of this message with result_digest\ncleared. The Inference Node computes it at execution time; the signed\nActionReceipt's result_summary binds it, and the User Gateway verifies\ndigest equality before returning success to the caller.",
+                    "type": "string"
+                },
+                "retry_classification": {
+                    "$ref": "#/definitions/operatorv1.InferenceRetryClassification"
+                },
+                "retry_count": {
+                    "type": "integer"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "scenario_id": {
+                    "type": "string"
+                },
+                "served_model_digest": {
+                    "type": "string"
+                },
+                "thinking_tokens": {
+                    "type": "integer"
+                },
+                "time_to_first_token_ns": {
+                    "type": "integer"
+                },
+                "timing_source": {
+                    "$ref": "#/definitions/operatorv1.InferenceTimingSource"
+                },
+                "total_duration_ns": {
+                    "type": "integer"
+                },
+                "total_tokens": {
+                    "description": "Total tokens (prompt + completion).",
+                    "type": "integer"
+                },
+                "usage_reported": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "operatorv1.InferenceRetryClassification": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2
+            ],
+            "x-enum-varnames": [
+                "InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED",
+                "InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_NONE",
+                "InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT"
+            ]
+        },
+        "operatorv1.InferenceThinkingControl": {
+            "type": "object",
+            "properties": {
+                "include_thoughts": {
+                    "type": "boolean"
+                },
+                "mode": {
+                    "description": "Types that are valid to be assigned to Mode:\n\n\t*InferenceThinkingControl_Enabled\n\t*InferenceThinkingControl_Level"
+                }
+            }
+        },
+        "operatorv1.InferenceTimingSource": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1
+            ],
+            "x-enum-varnames": [
+                "InferenceTimingSource_INFERENCE_TIMING_SOURCE_UNSPECIFIED",
+                "InferenceTimingSource_INFERENCE_TIMING_SOURCE_PROVIDER"
+            ]
+        },
+        "operatorv1.InferenceToolChoice": {
+            "type": "object",
+            "properties": {
+                "allowed_tool_names": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "mode": {
+                    "$ref": "#/definitions/operatorv1.InferenceToolChoiceMode"
+                }
+            }
+        },
+        "operatorv1.InferenceToolChoiceMode": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "x-enum-varnames": [
+                "InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_UNSPECIFIED",
+                "InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO",
+                "InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_NONE",
+                "InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_REQUIRED"
+            ]
+        },
+        "operatorv1.InferenceToolDeclaration": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "json_schema": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "operatorv1.L2Status": {
             "type": "integer",
             "format": "int32",
@@ -2192,6 +4286,68 @@
                 "L3Status_L3_STATUS_NOT_REQUIRED",
                 "L3Status_L3_STATUS_REQUIRED_VALID",
                 "L3Status_L3_STATUS_REQUIRED_FAILED"
+            ]
+        },
+        "operatorv1.ModelRole": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "x-enum-varnames": [
+                "ModelRole_MODEL_ROLE_UNSPECIFIED",
+                "ModelRole_MODEL_ROLE_PRIMARY",
+                "ModelRole_MODEL_ROLE_ASSISTANT",
+                "ModelRole_MODEL_ROLE_LITE"
+            ]
+        },
+        "operatorv1.ReceiptFailureCode": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18
+            ],
+            "x-enum-varnames": [
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_ROLE_INVALID",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REF_INVALID",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATE_FAILED",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID",
+                "ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID"
             ]
         },
         "operatorv1.ReceiptPersistenceAttestation": {

@@ -43,10 +43,16 @@ from app.llm.llm_types import (
 )
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.agents.triage import TriageResult
+from app.models.http_context import RequestContext
 from app.models.investigations import AIResponseMetadata
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.chat_pipeline import ChatPipelineService
-from tests.fakes.factories import build_enriched_context, build_g8e_http_context
+from app.services.investigation.investigation_service import InvestigationService
+from tests.fakes.factories import (
+    build_bound_operator,
+    build_enriched_context,
+    build_g8e_http_context,
+)
 from tests.fakes.fake_event_service import FakeEventService
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
@@ -75,6 +81,7 @@ def _make_pipeline() -> ChatPipelineService:
     async def _fake_persist_ai_message(
         investigation_id,
         text,
+        context,
         grounding_metadata=None,
         token_usage=None,
         sender=MessageSender.AI_PRIMARY,
@@ -92,12 +99,14 @@ def _make_pipeline() -> ChatPipelineService:
                 grounding_metadata=grounding_metadata,
                 token_usage=token_usage,
             ),
+            context=context,
         )
         return True
 
     svc.investigation_service.persist_ai_message = AsyncMock(side_effect=_fake_persist_ai_message)
     svc.memory_generation_service = MagicMock()
     svc.memory_generation_service.update_memory_from_conversation = AsyncMock()
+    svc.evaluation_trace_service = MagicMock()
     return svc
 
 
@@ -178,7 +187,17 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
 
     svc.g8e_agent.run_with_sse = AsyncMock(side_effect=_fake_run_with_sse)
 
-    g8e_ctx = build_g8e_http_context(investigation_id="inv-iter", web_session_id="web-iter")
+    remote_target = build_bound_operator(
+        operator_id="remote-execution-target",
+        operator_session_id="remote-execution-session",
+    )
+    g8e_ctx = build_g8e_http_context(
+        investigation_id="inv-iter",
+        web_session_id="web-iter",
+        operator_id="embedded-operator",
+        operator_session_id="embedded-operator-session",
+        bound_operators=[remote_target],
+    )
     user_settings = G8eeUserSettings(llm=LLMSettings())
 
     with patch("app.services.ai.chat_pipeline.get_llm_provider"):
@@ -222,6 +241,42 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
     assert final["sender"] == MessageSender.AI_PRIMARY
     assert isinstance(final["metadata"], AIResponseMetadata)
     assert final["metadata"].source == EventType.SOURCE_AI_PRIMARY
+
+    for call in primary_calls:
+        context = call["context"]
+        assert isinstance(context, RequestContext)
+        assert context.operator_id == "embedded-operator"
+        assert context.operator_session_id == "embedded-operator-session"
+        assert context.bound_operators == [remote_target]
+
+
+async def test_persist_ai_message_forwards_delegated_authority_and_remote_target():
+    data_service = MagicMock()
+    data_service.add_chat_message = AsyncMock(return_value=True)
+    service = InvestigationService(data_service, MagicMock(), MagicMock())
+    remote_target = build_bound_operator(
+        operator_id="remote-execution-target",
+        operator_session_id="remote-execution-session",
+    )
+    context = RequestContext.from_app_context(
+        build_g8e_http_context(
+            operator_id="embedded-operator",
+            operator_session_id="embedded-operator-session",
+            bound_operators=[remote_target],
+        )
+    )
+
+    persisted = await service.persist_ai_message(
+        investigation_id="inv-iter",
+        text="Persist this response",
+        context=context,
+    )
+
+    assert persisted is True
+    persisted_context = data_service.add_chat_message.await_args.kwargs["context"]
+    assert persisted_context.operator_id == "embedded-operator"
+    assert persisted_context.operator_session_id == "embedded-operator-session"
+    assert persisted_context.bound_operators == [remote_target]
 
 
 async def test_final_persist_skipped_when_response_text_is_whitespace_only():

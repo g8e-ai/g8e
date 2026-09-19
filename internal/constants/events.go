@@ -302,7 +302,7 @@ const EventAiConsensusSessionModelNotConfigured EventType = "g8e.v1.ai.consensus
 const EventAiConsensusSessionProviderUnavailable EventType = "g8e.v1.ai.consensus.session.provider.unavailable"
 const EventAiConsensusSessionSystemError EventType = "g8e.v1.ai.consensus.session.system.error"
 const EventAiConsensusSessionAuditorFailed EventType = "g8e.v1.ai.consensus.session.auditor.failed"
-const EventAiConsensusSessionWardenBlocked EventType = "g8e.v1.ai.consensus.session.warden.blocked"
+const EventAiConsensusSessionMarshalBlocked EventType = "g8e.v1.ai.consensus.session.marshal.blocked"
 
 // AI Consensus voting events
 const EventAiConsensusVotingPassCompleted EventType = "g8e.v1.ai.consensus.voting.pass.completed"
@@ -328,6 +328,48 @@ const EventAppMemoryCreated EventType = "g8e.v1.app.memory.created"
 const EventAppMemoryUpdated EventType = "g8e.v1.app.memory.updated"
 const EventOperatorPortCheckRequested EventType = "g8e.v1.operator.port.check.requested"
 const EventOperatorReceiptRecorded EventType = "g8e.v1.operator.receipt.recorded"
+const EventOperatorInferenceRequested EventType = "g8e.v1.operator.inference.requested"
+const EventOperatorInferenceProgressUpdated EventType = "g8e.v1.operator.inference.progress.updated"
+const EventOperatorInferenceCompleted EventType = "g8e.v1.operator.inference.completed"
+const EventOperatorInferenceFailed EventType = "g8e.v1.operator.inference.failed"
+const EventOperatorProviderBoundaryObservationRequested EventType = "g8e.v1.operator.provider.boundary.observation.requested"
+const EventOperatorProviderBoundaryObservationCompleted EventType = "g8e.v1.operator.provider.boundary.observation.completed"
+const EventOperatorModelProvenanceObservationRequested EventType = "g8e.v1.operator.model.provenance.observation.requested"
+const EventOperatorModelProvenanceObservationCompleted EventType = "g8e.v1.operator.model.provenance.observation.completed"
+
+// Observability dashboard events. These carry protocol-owned typed payloads
+// (see protocol/models/observe_event_payloads.json) and are emitted by real
+// producers only after the corresponding state projection is persisted. They
+// are distinct from governed-document events such as app.agent.activity.recorded.
+const EventAppAgentStatusUpdated EventType = "g8e.v1.app.agent.status.updated"
+const EventAppRunStatusUpdated EventType = "g8e.v1.app.run.status.updated"
+const EventAiEvalRunCompleted EventType = "g8e.v1.ai.eval.run.completed"
+const EventAiEvalMetricRecorded EventType = "g8e.v1.ai.eval.metric.recorded"
+
+// Live campaign observability events. These carry protocol-owned typed
+// payloads (see protocol/models/observe_event_payloads.json) with monotonic
+// source_sequence and event_id for ordering, replay, and duplicate
+// suppression. Producers persist the corresponding projection before
+// emitting the SSE event (persist-before-event).
+const EventAiEvalCycleStarted EventType = "g8e.v1.ai.eval.cycle.started"
+const EventAiEvalCycleCompleted EventType = "g8e.v1.ai.eval.cycle.completed"
+const EventAiEvalAssignmentStarted EventType = "g8e.v1.ai.eval.assignment.started"
+const EventAiEvalAssignmentCompleted EventType = "g8e.v1.ai.eval.assignment.completed"
+const EventAiEvalModelRoleInvoked EventType = "g8e.v1.ai.eval.model_role.invoked"
+const EventAiEvalMetricAvailable EventType = "g8e.v1.ai.eval.metric.available"
+const EventAiEvalVerifierCompleted EventType = "g8e.v1.ai.eval.verifier.completed"
+const EventAiEvalProofAvailable EventType = "g8e.v1.ai.eval.proof.available"
+const EventAiEvalPublicationCompleted EventType = "g8e.v1.ai.eval.publication.completed"
+const EventAiEvalHeartbeat EventType = "g8e.v1.ai.eval.heartbeat"
+const EventAiEvalStopRequested EventType = "g8e.v1.ai.eval.stop.requested"
+
+// Public feed events (O3-public-feed: outbound publisher and signed
+// append-only batches). These events are produced by the Gateway's
+// outbound publisher and are dashboard-safe.
+const EventPublicFeedBatchExported EventType = "g8e.v1.public.feed.batch.exported"
+const EventPublicFeedBatchAcknowledged EventType = "g8e.v1.public.feed.batch.acknowledged"
+const EventPublicFeedProofPublished EventType = "g8e.v1.public.feed.proof.published"
+const EventPublicFeedKeyRotated EventType = "g8e.v1.public.feed.key.rotated"
 
 // Canonical governed-document request events. These are the deterministic
 // EventType values that MapActionTypeToEventType returns for the
@@ -445,6 +487,20 @@ type _EventOperatorFsRead struct {
 	Requested EventType
 	Started   EventType
 }
+type _EventOperatorInference struct {
+	Completed       EventType
+	Failed          EventType
+	ProgressUpdated EventType
+	Requested       EventType
+}
+type _EventOperatorProviderBoundaryObservation struct {
+	Completed EventType
+	Requested EventType
+}
+type _EventOperatorModelProvenanceObservation struct {
+	Completed EventType
+	Requested EventType
+}
 type _EventOperatorMcp struct {
 	CallRequested EventType
 }
@@ -501,45 +557,48 @@ type _EventOperatorStreamApproval struct {
 }
 
 type _EventOperator struct {
-	A2a                      _EventOperatorA2a
-	Audit                    _EventOperatorAudit
-	Bootstrap                _EventOperatorBootstrap
-	BootstrapConfigReceived  EventType
-	Bound                    EventType
-	Command                  _EventOperatorCommand
-	ContextChanged           EventType
-	DeviceRegistered         EventType
-	Eval                     _EventOperatorEval
-	FetchFileDiff            _EventOperatorFetchFileDiff
-	FetchFileHistory         _EventOperatorFetchFileHistory
-	FetchHistory             _EventOperatorFetchHistory
-	FetchLogs                _EventOperatorFetchLogs
-	FileEdit                 _EventOperatorFileEdit
-	FsGrep                   _EventOperatorFsGrep
-	FsList                   _EventOperatorFsList
-	FsRead                   _EventOperatorFsRead
-	Heartbeat                EventType
-	HeartbeatMissed          EventType
-	HeartbeatReceived        EventType
-	HeartbeatRequested       EventType
-	Intent                   _EventOperatorIntent
-	Mcp                      _EventOperatorMcp
-	NetworkPing              _EventOperatorNetworkPing
-	Notary                   _EventOperatorNotary
-	PanelListUpdated         EventType
-	PortCheck                _EventOperatorPortCheck
-	Receipt                  _EventOperatorReceipt
-	RestoreFile              _EventOperatorRestoreFile
-	ShutdownAcknowledged     EventType
-	ShutdownRequested        EventType
-	SlotInitializationFailed EventType
-	StatusUpdated            _EventOperatorStatusUpdated
-	StreamApproval           _EventOperatorStreamApproval
-	TerminalApprovalDenied   EventType
-	TerminalAuthStateChanged EventType
-	TerminalThinkingAppend   EventType
-	TerminalThinkingComplete EventType
-	Unbound                  EventType
+	A2a                         _EventOperatorA2a
+	Audit                       _EventOperatorAudit
+	Bootstrap                   _EventOperatorBootstrap
+	BootstrapConfigReceived     EventType
+	Bound                       EventType
+	Command                     _EventOperatorCommand
+	ContextChanged              EventType
+	DeviceRegistered            EventType
+	Eval                        _EventOperatorEval
+	FetchFileDiff               _EventOperatorFetchFileDiff
+	FetchFileHistory            _EventOperatorFetchFileHistory
+	FetchHistory                _EventOperatorFetchHistory
+	FetchLogs                   _EventOperatorFetchLogs
+	FileEdit                    _EventOperatorFileEdit
+	FsGrep                      _EventOperatorFsGrep
+	FsList                      _EventOperatorFsList
+	FsRead                      _EventOperatorFsRead
+	Heartbeat                   EventType
+	HeartbeatMissed             EventType
+	HeartbeatReceived           EventType
+	HeartbeatRequested          EventType
+	Intent                      _EventOperatorIntent
+	Inference                   _EventOperatorInference
+	ProviderBoundaryObservation _EventOperatorProviderBoundaryObservation
+	ModelProvenanceObservation  _EventOperatorModelProvenanceObservation
+	Mcp                         _EventOperatorMcp
+	NetworkPing                 _EventOperatorNetworkPing
+	Notary                      _EventOperatorNotary
+	PanelListUpdated            EventType
+	PortCheck                   _EventOperatorPortCheck
+	Receipt                     _EventOperatorReceipt
+	RestoreFile                 _EventOperatorRestoreFile
+	ShutdownAcknowledged        EventType
+	ShutdownRequested           EventType
+	SlotInitializationFailed    EventType
+	StatusUpdated               _EventOperatorStatusUpdated
+	StreamApproval              _EventOperatorStreamApproval
+	TerminalApprovalDenied      EventType
+	TerminalAuthStateChanged    EventType
+	TerminalThinkingAppend      EventType
+	TerminalThinkingComplete    EventType
+	Unbound                     EventType
 }
 
 var Event = struct {
@@ -665,6 +724,20 @@ var Event = struct {
 			Requested:         EventOperatorIntentRequested,
 			RevokeRequested:   EventOperatorIntentRevokeRequested,
 			Revoked:           EventOperatorIntentRevoked,
+		},
+		Inference: _EventOperatorInference{
+			Completed:       EventOperatorInferenceCompleted,
+			Failed:          EventOperatorInferenceFailed,
+			ProgressUpdated: EventOperatorInferenceProgressUpdated,
+			Requested:       EventOperatorInferenceRequested,
+		},
+		ProviderBoundaryObservation: _EventOperatorProviderBoundaryObservation{
+			Completed: EventOperatorProviderBoundaryObservationCompleted,
+			Requested: EventOperatorProviderBoundaryObservationRequested,
+		},
+		ModelProvenanceObservation: _EventOperatorModelProvenanceObservation{
+			Completed: EventOperatorModelProvenanceObservationCompleted,
+			Requested: EventOperatorModelProvenanceObservationRequested,
 		},
 		Mcp: _EventOperatorMcp{
 			CallRequested: EventOperatorMcpCallRequested,

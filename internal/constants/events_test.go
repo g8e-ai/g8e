@@ -29,7 +29,7 @@ func TestNewConsensusEventConstants(t *testing.T) {
 		{EventAiConsensusSessionProviderUnavailable, "g8e.v1.ai.consensus.session.provider.unavailable"},
 		{EventAiConsensusSessionSystemError, "g8e.v1.ai.consensus.session.system.error"},
 		{EventAiConsensusSessionAuditorFailed, "g8e.v1.ai.consensus.session.auditor.failed"},
-		{EventAiConsensusSessionWardenBlocked, "g8e.v1.ai.consensus.session.warden.blocked"},
+		{EventAiConsensusSessionMarshalBlocked, "g8e.v1.ai.consensus.session.marshal.blocked"},
 		{EventAiConsensusVotingPassCompleted, "g8e.v1.ai.consensus.voting.pass.completed"},
 		{EventAiConsensusVotingConsensusReached, "g8e.v1.ai.consensus.voting.consensus.reached"},
 		{EventAiConsensusVotingConsensusNotReached, "g8e.v1.ai.consensus.voting.consensus.not.reached"},
@@ -62,6 +62,21 @@ func TestOtherNewEventConstants(t *testing.T) {
 		{EventAppMemoryCreated, "g8e.v1.app.memory.created"},
 		{EventAppMemoryUpdated, "g8e.v1.app.memory.updated"},
 		{EventOperatorPortCheckRequested, "g8e.v1.operator.port.check.requested"},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.value, string(tc.goConst))
+	}
+}
+
+func TestObservabilityDashboardEventConstants(t *testing.T) {
+	cases := []struct {
+		goConst EventType
+		value   string
+	}{
+		{EventAppAgentStatusUpdated, "g8e.v1.app.agent.status.updated"},
+		{EventAppRunStatusUpdated, "g8e.v1.app.run.status.updated"},
+		{EventAiEvalRunCompleted, "g8e.v1.ai.eval.run.completed"},
+		{EventAiEvalMetricRecorded, "g8e.v1.ai.eval.metric.recorded"},
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.value, string(tc.goConst))

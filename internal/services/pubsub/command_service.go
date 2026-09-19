@@ -19,6 +19,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	execution "github.com/g8e-ai/g8e/v2/internal/services/execution"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/v2/internal/services/storage"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -93,6 +94,13 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 	cs.logger.Info("Parsed command payload via Protobuf (CommandRequested)")
 
 	command := protoCmd.Command
+	if err := operatorcapability.ValidateOllamaServiceCommand(&models.RuntimeConfig{
+		ProviderBoundaryObserverEnabled:       cs.config.ProviderBoundaryObserver.Enabled,
+		ProviderBoundaryObserverOllamaEnabled: cs.config.ProviderBoundaryObserver.OllamaEnabled,
+	}, command); err != nil {
+		cs.logger.Error("Ollama service command rejected", "command", command, string(constants.ConnectionStateError), err)
+		return
+	}
 	justification := protoCmd.Justification
 	if justification == "" {
 		justification = "No justification provided"

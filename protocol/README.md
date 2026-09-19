@@ -51,6 +51,7 @@ The protobuf module is `buf.build/g8e/platform`, configured in `proto/buf.yaml`.
 - `g8e/operator/v1/operator.proto` defines the `OperatorService`, operator request and result payloads, execution and governance status enums, deterministic stage evidence, action receipts, commitment attestations, and persistence attestations.
 - `g8e/pubsub/v1/pubsub.proto` defines the shared pub/sub message and event envelopes.
 - `g8e/compliance/v1/compliance.proto` defines compliance catalogs, assessment scope and evidence, control assessments, trust policies, signed report bundles, verification results, analysis records, framework profiles, and demo scenario evidence.
+- `g8e/eval/v1/eval.proto` defines eval-native campaign specs, provider-boundary observation, storage-side model provenance, bundle verification, and publication metadata.
 
 Generated Go code lives beside each schema. Generated Python modules and `.pyi` stubs live under `python/g8e/`, generated TypeScript modules live under `node/src/gen/`, and generated Markdown references live under `docs/reference/api/`.
 
@@ -72,7 +73,7 @@ The Python `g8e.receipts` module strictly parses protojson receipts, reproduces 
 
 The top-level JSON registries cover events, statuses, collections, API paths, authentication values, headers, key-value keys, channels, pub/sub values, intents, prompts, agents, platform settings and enrollment, senders, exit codes, field paths, document identifiers, network values, output formats, ports, timestamps, environment variables, compliance paths, and platform enrollment transcript vectors. `constants/doctrine/` contains L1 detection and allowlist registries. `constants/compliance/` contains digest-verified assertion, framework, crosswalk, and demo scenario catalogs exposed to Go through `constants/compliance/catalogs.go` and bundled into the Python package.
 
-The JSON schemas in `models/` cover persisted records, runtime and security configuration, governance data, filesystem and execution results, SSE payloads and wire messages, platform enrollment, WebAuthn data, and per-agent role definitions. `schemas/oscal/` provides the official NIST OSCAL 1.1.2 assessment-results schema with pinned SHA-256 and provenance metadata for offline, fail-closed validation. See the [constants reference](docs/constants.md) for registry conventions.
+The JSON schemas in `models/` cover persisted records, runtime and security configuration, governance data, filesystem and execution results, SSE payloads and wire messages, observe API read and producer models, observe event payloads, public spectator feed batches and proofs, platform enrollment, WebAuthn data, and per-agent role definitions. `schemas/oscal/` provides the official NIST OSCAL 1.1.2 assessment-results schema with pinned SHA-256 and provenance metadata for offline, fail-closed validation. See the [constants reference](docs/constants.md) for registry conventions.
 
 ### Workload identities
 

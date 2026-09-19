@@ -5,34 +5,42 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from pydantic import Field
+from g8e.models.events import (
+    ModelBoundaryPrivacyAttestation,
+    ModelCallTelemetry,
+)
 
 from app.models.base import G8eBaseModel
 
+__all__ = [
+    "GovernedDispatchEvidence",
+    "ModelBoundaryPrivacyAttestation",
+    "ModelCallTelemetry",
+]
 
-class ModelBoundaryPrivacyAttestation(G8eBaseModel):
-    scanner_version: str
-    input_artifact_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    raw_sensitive_occurrences: int = Field(ge=0)
-    raw_sensitive_types: list[str] = Field(default_factory=list)
 
+class GovernedDispatchEvidence(G8eBaseModel):
+    """Evidence recorded by the G8E governed-dispatch provider per call.
 
-class ModelCallTelemetry(G8eBaseModel):
-    agent_role: str
-    provider: str
-    model: str
-    monotonic_start: float
-    monotonic_end: float
-    input_tokens: int = 0
-    output_tokens: int = 0
-    thinking_tokens: int = 0
-    cache_tokens: int = 0
-    total_tokens: int = 0
-    usage_reported: bool = False
-    finish_reason: str | None = None
-    retry_count: int = 0
-    succeeded: bool = True
-    error_type: str | None = None
-    input_artifact_hash: str = ""
-    output_artifact_hash: str = ""
-    model_boundary_privacy: ModelBoundaryPrivacyAttestation | None = None
+    Captured from the verified ``InferenceDispatchResponse`` so downstream
+    telemetry can bind each model call to the governed transaction, the
+    result digest bound into the signed receipt, and the receipt's final
+    status name. Internal to the ensemble; never crosses the wire as its
+    own message - the fields flatten onto ``ModelCallTelemetry.governed_*``.
+    """
+
+    transaction_id: str = ""
+    result_digest: str = ""
+    receipt_status: str = ""
+    provider_attempt_id: str = ""
+    requested_model: str = ""
+    served_model: str = ""
+    model_digest: str = ""
+    normalized_request_hash: str = ""
+    output_hash: str = ""
+    campaign_id: str = ""
+    run_id: str = ""
+    assignment_id: str = ""
+    evaluation_attempt_id: str = ""
+    scenario_id: str = ""
+    model_registry_digest: str = ""

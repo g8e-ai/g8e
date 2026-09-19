@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // TestPlatform_FullBootstrap verifies that a fully bootstrapped live stack
@@ -38,7 +39,15 @@ func TestPlatform_FullBootstrap(t *testing.T) {
 		require.NoError(t, err, "listing operators must succeed")
 		require.True(t, operators.Success, "operator list must report success")
 		require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
-		assert.NotEmpty(t, operators.Operators[0].OperatorSessionID, "operator must have an active session ID")
+		var remoteOperator *models.OperatorDocumentGo
+		for i := range operators.Operators {
+			if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
+				remoteOperator = &operators.Operators[i]
+				break
+			}
+		}
+		require.NotNil(t, remoteOperator, "an active remote operator must be registered")
+		assert.NotEmpty(t, remoteOperator.OperatorSessionID, "remote operator must have an active session ID")
 	})
 
 	t.Run("EnsembleHealth", func(t *testing.T) {

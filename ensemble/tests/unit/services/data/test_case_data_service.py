@@ -98,11 +98,16 @@ class TestCaseDataService:
             priority=Priority.MEDIUM,
             severity=Severity.LOW,
             source="web",
+            operator_id="embedded-operator",
+            operator_session_id="embedded-session-123",
         )
         generated_title = "Generated Title"
 
         result = await service.create_case(request, generated_title)
 
+        message = mock_governance_client.submit_envelope.call_args.args[0]
+        assert message.operator_id == "embedded-operator"
+        assert message.operator_session_id == "embedded-session-123"
         assert result.title == generated_title
         assert result.description == "Hello world"
         assert result.status == CaseStatus.NEW

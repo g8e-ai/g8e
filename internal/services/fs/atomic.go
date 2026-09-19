@@ -9,6 +9,7 @@ package fs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,6 +40,9 @@ func (fs *localFS) WriteFile(ctx context.Context, relPath string, data []byte, m
 
 	tmpFile, err := os.CreateTemp(dir, ".g8e-tmp-*")
 	if err != nil {
+		if errors.Is(err, os.ErrPermission) {
+			return fmt.Errorf("%w: %w (%s)", constants.ErrFileWriteFailed, err, runtimeWriteFailureHint(dir))
+		}
 		return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 	}
 	tmpPath := tmpFile.Name()

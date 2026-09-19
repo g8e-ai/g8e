@@ -134,6 +134,26 @@
       "_go_const": "CollectionWebSessions",
       "value": "web_sessions",
       "_python_const": "WEB_SESSIONS"
+    },
+    "observe_agent_states": {
+      "_go_const": "CollectionObserveAgentStates",
+      "value": "observe_agent_states",
+      "_python_const": "OBSERVE_AGENT_STATES"
+    },
+    "observe_runs": {
+      "_go_const": "CollectionObserveRuns",
+      "value": "observe_runs",
+      "_python_const": "OBSERVE_RUNS"
+    },
+    "observe_evals": {
+      "_go_const": "CollectionObserveEvals",
+      "value": "observe_evals",
+      "_python_const": "OBSERVE_EVALS"
+    },
+    "observe_downloads": {
+      "_go_const": "CollectionObserveDownloads",
+      "value": "observe_downloads",
+      "_python_const": "OBSERVE_DOWNLOADS"
     }
   }
 }

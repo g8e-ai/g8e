@@ -62,7 +62,6 @@ _ALL_MODES: frozenset[AgentMode] = frozenset(AgentMode)
 _BOUND_MODES: frozenset[AgentMode] = frozenset(
     {
         AgentMode.G8E_BOUND,
-        AgentMode.CLOUD_OPERATOR_BOUND,
     }
 )
 

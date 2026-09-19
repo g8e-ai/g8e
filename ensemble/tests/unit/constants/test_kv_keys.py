@@ -31,13 +31,13 @@ class TestKVKeyMethodsFromG8e:
 
     def test_doc(self):
         result = KVKey.doc("users", "user-123")
-        expected = _g8e_kv_key("CacheDoc", **{"collection": "users", "id": "user-123"})
+        expected = _g8e_kv_key("CacheDoc", collection="users", id="user-123")
         assert result == expected
         assert result == "g8e:cache:doc:users:user-123"
 
     def test_query(self):
         result = KVKey.query("users", "abc123")
-        expected = _g8e_kv_key("CacheQuery", **{"collection": "users", "hash": "abc123"})
+        expected = _g8e_kv_key("CacheQuery", collection="users", hash="abc123")
         assert result == expected
         assert result == "g8e:cache:query:users:abc123"
 
@@ -116,37 +116,37 @@ class TestKVKeyMethodsFromG8e:
 
     def test_nonce(self):
         result = KVKey.nonce("nonce-abc")
-        expected = _g8e_kv_key("AuthNonce", **{"nonce": "nonce-abc"})
+        expected = _g8e_kv_key("AuthNonce", nonce="nonce-abc")
         assert result == expected
         assert result == "g8e:auth:nonce:nonce-abc"
 
     def test_download_token(self):
         result = KVKey.download_token("tok-123")
-        expected = _g8e_kv_key("AuthTokenDownload", **{"token": "tok-123"})
+        expected = _g8e_kv_key("AuthTokenDownload", token="tok-123")
         assert result == expected
         assert result == "g8e:auth:token:download:tok-123"
 
     def test_device_link(self):
         result = KVKey.device_link("tok-123")
-        expected = _g8e_kv_key("AuthTokenDevice", **{"token": "tok-123"})
+        expected = _g8e_kv_key("AuthTokenDevice", token="tok-123")
         assert result == expected
         assert result == "g8e:auth:token:device:tok-123"
 
     def test_device_link_uses(self):
         result = KVKey.device_link_uses("tok-123")
-        expected = _g8e_kv_key("AuthTokenDeviceUses", **{"token": "tok-123"})
+        expected = _g8e_kv_key("AuthTokenDeviceUses", token="tok-123")
         assert result == expected
         assert result == "g8e:auth:token:device:tok-123:uses"
 
     def test_device_link_fingerprints(self):
         result = KVKey.device_link_fingerprints("tok-123")
-        expected = _g8e_kv_key("AuthTokenDeviceFingerprints", **{"token": "tok-123"})
+        expected = _g8e_kv_key("AuthTokenDeviceFingerprints", token="tok-123")
         assert result == expected
         assert result == "g8e:auth:token:device:tok-123:fingerprints"
 
     def test_device_link_registration_lock(self):
         result = KVKey.device_link_registration_lock("tok-123")
-        expected = _g8e_kv_key("AuthTokenDeviceRegLock", **{"token": "tok-123"})
+        expected = _g8e_kv_key("AuthTokenDeviceRegLock", token="tok-123")
         assert result == expected
         assert result == "g8e:auth:token:device:tok-123:reg.lock"
 
@@ -158,19 +158,19 @@ class TestKVKeyMethodsFromG8e:
 
     def test_login_failed(self):
         result = KVKey.login_failed("user@example.com")
-        expected = _g8e_kv_key("AuthLoginFailed", **{"identifier": "user@example.com"})
+        expected = _g8e_kv_key("AuthLoginFailed", identifier="user@example.com")
         assert result == expected
         assert result == "g8e:auth:login:user@example.com:failed"
 
     def test_login_lock(self):
         result = KVKey.login_lock("user@example.com")
-        expected = _g8e_kv_key("AuthLoginLock", **{"identifier": "user@example.com"})
+        expected = _g8e_kv_key("AuthLoginLock", identifier="user@example.com")
         assert result == expected
         assert result == "g8e:auth:login:user@example.com:lock"
 
     def test_login_ip_accounts(self):
         result = KVKey.login_ip_accounts("10.0.0.1")
-        expected = _g8e_kv_key("AuthLoginIPAccounts", **{"ip": "10.0.0.1"})
+        expected = _g8e_kv_key("AuthLoginIPAccounts", ip="10.0.0.1")
         assert result == expected
         assert result == "g8e:auth:login:ip:10.0.0.1:accounts"
 

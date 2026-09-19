@@ -6,6 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 from app.models.base import G8eBaseModel, Field
+from app.models.model_telemetry import ModelCallTelemetry
 
 
 class CaseTitleRequest(G8eBaseModel):
@@ -20,3 +21,6 @@ class CaseTitleResult(G8eBaseModel):
 
     generated_title: str = Field(description="The concise, meaningful generated title.")
     fallback: bool = Field(default=False, description="True if the title is a non-AI fallback.")
+    model_call: ModelCallTelemetry | None = Field(
+        default=None, description="Governed model-call telemetry when an LLM was invoked."
+    )

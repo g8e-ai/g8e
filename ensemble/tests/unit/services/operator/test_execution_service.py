@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, AsyncMock
 import pytest
 
 from app.constants.generated_status import EventType
-from app.constants.generated_status import AITaskId, ComponentName, CommandErrorType
+from app.constants.generated_status import AITaskId, CommandErrorType
 from app.constants import ExecutionStatus, G8EE_COMPONENT
 from app.errors import BusinessLogicError, ValidationError
 from app.models.http_context import RequestContext
@@ -163,19 +163,19 @@ class TestOperatorExecutionServiceResolveOperators:
             execution_service.resolve_operators([], ["op-1"])
 
     def test_resolve_operators_empty_targets(self, execution_service):
-        docs = [OperatorDocument(id="op-1", operator_type="system", user_id="user-1")]
+        docs = [OperatorDocument(id="op-1", operator_type="remote", user_id="user-1")]
         with pytest.raises(ValidationError, match="target_operators list is empty"):
             execution_service.resolve_operators(docs, [])
 
     def test_resolve_operators_single_doc(self, execution_service):
-        docs = [OperatorDocument(id="op-1", operator_type="system", user_id="user-1")]
+        docs = [OperatorDocument(id="op-1", operator_type="remote", user_id="user-1")]
         resolved = execution_service.resolve_operators(docs, ["something"])
         assert resolved == docs
 
     def test_resolve_operators_fleet_sentinels(self, execution_service):
         docs = [
-            OperatorDocument(id="op-1", operator_type="system", user_id="user-1"),
-            OperatorDocument(id="op-2", operator_type="system", user_id="user-1"),
+            OperatorDocument(id="op-1", operator_type="remote", user_id="user-1"),
+            OperatorDocument(id="op-2", operator_type="remote", user_id="user-1"),
         ]
         for sentinel in ["all", "*", "fleet", "every", "everyone"]:
             resolved = execution_service.resolve_operators(docs, [sentinel])
@@ -183,8 +183,8 @@ class TestOperatorExecutionServiceResolveOperators:
 
     def test_resolve_operators_by_id(self, execution_service):
         docs = [
-            OperatorDocument(id="op-1", operator_type="system", user_id="user-1"),
-            OperatorDocument(id="op-2", operator_type="system", user_id="user-1"),
+            OperatorDocument(id="op-1", operator_type="remote", user_id="user-1"),
+            OperatorDocument(id="op-2", operator_type="remote", user_id="user-1"),
         ]
         resolved = execution_service.resolve_operators(docs, ["op-2"])
         assert len(resolved) == 1
@@ -193,11 +193,11 @@ class TestOperatorExecutionServiceResolveOperators:
     def test_resolve_operators_by_hostname(self, execution_service):
         docs = [
             OperatorDocument(
-                id="op-1", current_hostname="host-1", operator_type="system", user_id="user-1"
+                id="op-1", current_hostname="host-1", operator_type="remote", user_id="user-1"
             ),
             OperatorDocument(
                 id="op-2",
-                operator_type="system",
+                operator_type="remote",
                 user_id="user-1",
                 latest_heartbeat_snapshot=HeartbeatSnapshot(
                     system_identity=HeartbeatSystemIdentity(hostname="host-2")
@@ -210,8 +210,8 @@ class TestOperatorExecutionServiceResolveOperators:
 
     def test_resolve_operators_by_index(self, execution_service):
         docs = [
-            OperatorDocument(id="op-1", operator_type="system", user_id="user-1"),
-            OperatorDocument(id="op-2", operator_type="system", user_id="user-1"),
+            OperatorDocument(id="op-1", operator_type="remote", user_id="user-1"),
+            OperatorDocument(id="op-2", operator_type="remote", user_id="user-1"),
         ]
         resolved = execution_service.resolve_operators(docs, ["1"])
         assert len(resolved) == 1
@@ -219,8 +219,8 @@ class TestOperatorExecutionServiceResolveOperators:
 
     def test_resolve_operators_not_found(self, execution_service):
         docs = [
-            OperatorDocument(id="op-1", operator_type="system", user_id="user-1"),
-            OperatorDocument(id="op-2", operator_type="system", user_id="user-1"),
+            OperatorDocument(id="op-1", operator_type="remote", user_id="user-1"),
+            OperatorDocument(id="op-2", operator_type="remote", user_id="user-1"),
         ]
         with pytest.raises(ValidationError, match="Could not resolve any operators"):
             execution_service.resolve_operators(docs, ["non-existent"])
@@ -230,9 +230,9 @@ class TestOperatorExecutionServiceTargetSystems:
     def test_build_target_systems_list(self, execution_service):
         docs = [
             OperatorDocument(
-                id="op-1", current_hostname="host-1", operator_type="system", user_id="user-1"
+                id="op-1", current_hostname="host-1", operator_type="remote", user_id="user-1"
             ),
-            OperatorDocument(id="op-2", operator_type="system", user_id="user-1"),
+            OperatorDocument(id="op-2", operator_type="remote", user_id="user-1"),
         ]
         systems = execution_service.build_target_systems_list(docs)
         assert len(systems) == 2

@@ -1,3 +1,10 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
 FROM golang@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS vhs-builder
 
 ADD --checksum=sha256:d05c926d39cf1411001006d8b8dcd88b601eaab8dd8e0f921f6b5bccb22de156 https://github.com/charmbracelet/vhs/releases/download/v0.11.0/vhs-0.11.0.tar.gz /tmp/vhs.tar.gz

@@ -16,6 +16,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -38,6 +40,66 @@ type JSONRPCError struct {
 	Code    int             `json:"code"`
 	Message string          `json:"message"`
 	Data    json.RawMessage `json:"data,omitempty"`
+}
+
+type DispatchCommandRequest struct {
+	TargetOperatorSessionID string `json:"target_operator_session_id"`
+	ActionType              string `json:"action_type"`
+	Payload                 []byte `json:"payload"`
+	TargetResource          string `json:"target_resource,omitempty"`
+	CaseID                  string `json:"case_id,omitempty"`
+	InvestigationID         string `json:"investigation_id,omitempty"`
+	TaskID                  string `json:"task_id,omitempty"`
+	WebSessionID            string `json:"web_session_id,omitempty"`
+	CLISessionID            string `json:"cli_session_id,omitempty"`
+}
+
+type DispatchCommandResponse struct {
+	Success       bool   `json:"success"`
+	TransactionID string `json:"transaction_id"`
+	EventType     string `json:"event_type,omitempty"`
+	ActionType    string `json:"action_type,omitempty"`
+	ResultPayload []byte `json:"result_payload,omitempty"`
+	Error         string `json:"error,omitempty"`
+}
+
+func (c *Client) Health(ctx context.Context) (*models.HealthResponse, []byte, error) {
+	status, raw, err := c.do(ctx, c.auditorPersona(), http.MethodGet, c.cfg.MTLSBaseURL+constants.APIPaths.Health, nil)
+	if err != nil {
+		return nil, raw, err
+	}
+	if status < http.StatusOK || status >= http.StatusMultipleChoices {
+		return nil, raw, fmt.Errorf("%w: gateway health returned status %d", constants.ErrHTTPStatusError, status)
+	}
+	health := &models.HealthResponse{}
+	if err := json.Unmarshal(raw, health); err != nil {
+		return nil, raw, fmt.Errorf("%w: decode gateway health: %v", constants.ErrInvalidJSONResponse, err)
+	}
+	if health.Posture == "" {
+		return nil, raw, fmt.Errorf("%w: gateway health omits posture", constants.ErrInvalidJSONResponse)
+	}
+	return health, raw, nil
+}
+
+func (c *Client) DispatchCommand(ctx context.Context, persona Persona, request DispatchCommandRequest) (int, *DispatchCommandResponse, []byte, error) {
+	if request.TargetOperatorSessionID == "" || request.ActionType == "" || len(request.Payload) == 0 {
+		return 0, nil, nil, constants.ErrMissingRequiredField
+	}
+	body, err := json.Marshal(request)
+	if err != nil {
+		return 0, nil, nil, fmt.Errorf("agent harness: marshal dispatch command: %w", err)
+	}
+	status, raw, err := c.doWithCLI(ctx, persona, http.MethodPost, c.cfg.MTLSBaseURL+constants.APIPaths.OperatorsCommands, body)
+	if err != nil {
+		return status, nil, raw, err
+	}
+	response := &DispatchCommandResponse{}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, response); err != nil {
+			return status, nil, raw, fmt.Errorf("agent harness: decode dispatch response: %w", err)
+		}
+	}
+	return status, response, raw, nil
 }
 
 // rpc posts a JSON-RPC request to an MCP/A2A route and decodes the response.

@@ -443,10 +443,12 @@ def clamp_thinking_level(desired: ThinkingLevel, config: LLModelConfig) -> Think
 # leaking between tests. Its name is a sentinel ("unknown") rather than the
 # requested model name because the config is meant to be opaque - callers that
 # need the real model string must resolve it from their own context.
+# Tool calling defaults off for unknown models; register a config with
+# supports_tools=True when a provider tag is known to accept declarations.
 UNKNOWN_MODEL_CONFIG = LLModelConfig(
     name="unknown",
     supported_thinking_levels=[],
-    supports_tools=True,
+    supports_tools=False,
     context_window_input=128_000,
     context_window_output=8_192,
     # Declare NONE explicitly so the sentinel is a legal argument to

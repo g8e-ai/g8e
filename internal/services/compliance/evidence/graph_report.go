@@ -24,8 +24,11 @@ type ImporterError struct {
 	Error    string `json:"error"`
 }
 
-type runBoundEvidenceImporter interface {
-	sourceRunID() string
+// RunBoundImporter is implemented by importers that bind to a single run
+// ID. The exported method allows importers defined outside the evidence
+// package to report their run ID for importer-error attribution.
+type RunBoundImporter interface {
+	RunID() string
 }
 
 // EvidenceGraphReport is the typed result of building and validating an
@@ -74,8 +77,8 @@ func BuildAndValidateGraph(
 		nodes, err := importer.Import(ctx)
 		if err != nil {
 			runID := ""
-			if runBoundImporter, ok := importer.(runBoundEvidenceImporter); ok {
-				runID = runBoundImporter.sourceRunID()
+			if runBoundImporter, ok := importer.(RunBoundImporter); ok {
+				runID = runBoundImporter.RunID()
 			}
 			report.ImporterErrors = append(report.ImporterErrors, ImporterError{
 				SourceID: importer.SourceID(),

@@ -55,9 +55,6 @@ reports/
 .DS_Store
 Thumbs.db
 
-# Protocol generated files (will be synced)
-evals/g8e_evals/proto/
-
 # Logs
 *.log
 logs/

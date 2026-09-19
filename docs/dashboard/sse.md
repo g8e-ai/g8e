@@ -71,6 +71,7 @@ Dashboard unit tests do not mount the static host with the Gateway or prove brow
 - [Gateway SSE Streaming](../architecture/sse.md) - Gateway push ingestion, persistence, replay, framing, and consumer authentication
 - [Network Architecture](../architecture/network.md) - Gateway protocol surfaces, ports, and network topology
 - [Ensemble SSE](../ensemble/sse.md) - First-party event production pipeline
+- [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) - The audited g8e-adapter implements the correct Gateway browser SSE contract
 - [Authentication](auth.md)
 - [Gateway Integration](gateway.md)
 - [Testing](tests.md)

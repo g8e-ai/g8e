@@ -1,0 +1,114 @@
+{
+  "_comment": "Cross-language test vectors for investigation conversation ledger hash parity. The agent is the authority for hash computation (ensemble/app/utils/ledger_hash.py). client and other consumers must reproduce identical canonical JSON encodings, entry hashes, genesis hashes, and chain verification results. These fixtures are consumed by ensemble/tests/unit/utils/test_ledger_hash_fixtures.py and the client JS verifier test (ledger-verify-fixtures.spec.js).",
+  "_authority": "agent",
+  "_consumers": ["client"],
+
+  "canonical_json": [
+    {
+      "name": "simple_flat",
+      "input": { "a": 1, "b": 2 },
+      "expected_utf8": "{\"a\":1,\"b\":2}"
+    },
+    {
+      "name": "reverse_key_order",
+      "input": { "z": 1, "a": 2, "m": 3 },
+      "expected_utf8": "{\"a\":2,\"m\":3,\"z\":1}"
+    },
+    {
+      "name": "nested_object",
+      "input": { "a": 1, "b": { "c": 2, "d": [3, 4] } },
+      "expected_utf8": "{\"a\":1,\"b\":{\"c\":2,\"d\":[3,4]}}"
+    },
+    {
+      "name": "unicode",
+      "input": { "name": "café", "emoji": "🔒" },
+      "expected_utf8": "{\"emoji\":\"🔒\",\"name\":\"café\"}"
+    },
+    {
+      "name": "empty_object",
+      "input": {},
+      "expected_utf8": "{}"
+    }
+  ],
+
+  "entry_hash": [
+    {
+      "name": "basic_message_with_prev",
+      "entry": {
+        "id": "msg-001",
+        "sender": "user.chat",
+        "content": "Hello, world!",
+        "timestamp": "2024-01-01T00:00:01Z"
+      },
+      "prev_hash": "185e8b47c473f827a412a86cc8b60df834c3ac76b0aa382579e92a6e9d3bb3e4",
+      "expected_hash": "78489448dab64cc941209de9d7bfbf98cdfe013950a2aa07eeeba28478fb4705"
+    },
+    {
+      "name": "ai_response",
+      "entry": {
+        "id": "msg-002",
+        "sender": "ai.primary",
+        "content": "Response text",
+        "timestamp": "2024-01-01T00:00:02Z",
+        "metadata": { "model": "test-model", "tokens": 42 }
+      },
+      "prev_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_hash": "ab5c486ed0abae55ed214c2fab581cec90c5b42a79492edff9c2049290ea42ef"
+    },
+    {
+      "name": "null_prev_hash",
+      "entry": {
+        "id": "msg-genesis",
+        "sender": "system",
+        "content": "Investigation started",
+        "timestamp": "2024-01-01T00:00:00Z"
+      },
+      "prev_hash": null,
+      "expected_hash": "75b483f91d50d420c5e4075481e785e22006726e1d0e541079bff6fbc27b8b80"
+    }
+  ],
+
+  "genesis_hash": [
+    {
+      "investigation_id": "550e8400-e29b-41d4-a716-446655440000",
+      "created_at": "2024-01-01T00:00:00Z",
+      "expected_hash": "185e8b47c473f827a412a86cc8b60df834c3ac76b0aa382579e92a6e9d3bb3e4"
+    },
+    {
+      "investigation_id": "660e8400-e29b-41d4-a716-446655440001",
+      "created_at": "2025-06-15T12:30:00.000Z",
+      "expected_hash": "552620ca047a69b2b8d8109e37c2867fedfc7e2b6f14e6baf28176f97645bec5"
+    }
+  ],
+
+  "chain": {
+    "investigation_id": "550e8400-e29b-41d4-a716-446655440000",
+    "created_at": "2024-01-01T00:00:00Z",
+    "entries": [
+      {
+        "id": "msg-001",
+        "sender": "user.chat",
+        "content": "First message",
+        "timestamp": "2024-01-01T00:00:01Z",
+        "prev_hash": "185e8b47c473f827a412a86cc8b60df834c3ac76b0aa382579e92a6e9d3bb3e4",
+        "entry_hash": "49c2ca51fb375406f5b671e3900f5d8684ae8d48b493166fe06650382780c0b7"
+      },
+      {
+        "id": "msg-002",
+        "sender": "ai.primary",
+        "content": "Second message",
+        "timestamp": "2024-01-01T00:00:02Z",
+        "prev_hash": "49c2ca51fb375406f5b671e3900f5d8684ae8d48b493166fe06650382780c0b7",
+        "entry_hash": "9713d983d3cb4515c2bb86d03ffe9e729de79373925bbcdeb7a42f8809e48a40"
+      },
+      {
+        "id": "msg-003",
+        "sender": "user.chat",
+        "content": "Third message",
+        "timestamp": "2024-01-01T00:00:03Z",
+        "prev_hash": "9713d983d3cb4515c2bb86d03ffe9e729de79373925bbcdeb7a42f8809e48a40",
+        "entry_hash": "567ef79664f004e0930e3d9b7500e389e293d6bdaf2da6adfa3534a8db884026"
+      }
+    ]
+  }
+}

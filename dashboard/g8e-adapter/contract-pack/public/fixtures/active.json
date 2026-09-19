@@ -1,0 +1,53 @@
+{
+  "bootstrap": {
+    "generated_at": "2026-09-13T00:00:00Z",
+    "proof_catalog_summary": {
+      "artifact_count": 0,
+      "total_byte_size": 0
+    },
+    "protocol_version": "1.0.0",
+    "recent_projections": [
+      {
+        "campaign_id": "campaign-fixture",
+        "publication_status": "published",
+        "record_type": "projection",
+        "sequence": 1,
+        "source_freshness": "active"
+      }
+    ],
+    "snapshot": {
+      "batch_count": 1,
+      "feed_chain_hash": "69d47339491254da1aafb3ed9783eb00e374f049884b9371735efe543f0d5466",
+      "freshness": "active",
+      "generated_at": "2026-09-13T00:00:00Z",
+      "high_water_sequence": 1,
+      "protocol_version": "1.0.0",
+      "source_id": "fixture-source"
+    },
+    "source_freshness": "active"
+  },
+  "fixture_public_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+  "signed_batch": {
+    "content_hash": "69d47339491254da1aafb3ed9783eb00e374f049884b9371735efe543f0d5466",
+    "first_sequence": 1,
+    "generated_at": "2026-09-13T00:00:00Z",
+    "last_sequence": 1,
+    "previous_batch_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "protocol_version": "1.0.0",
+    "record_hashes": [
+      "77f2a7f0a6102b3cdbe605ae3a037e1c06bf541ebbea33e43660bc0163f018ba"
+    ],
+    "records": [
+      {
+        "record_bytes": "{\n  \"campaign_id\": \"campaign-fixture\",\n  \"publication_status\": \"published\",\n  \"source_freshness\": \"active\"\n}",
+        "record_hash": "77f2a7f0a6102b3cdbe605ae3a037e1c06bf541ebbea33e43660bc0163f018ba",
+        "record_type": "projection",
+        "sequence": 1
+      }
+    ],
+    "schema_version": "1.0.0",
+    "signature": "ce9607168e4b66a9d32ae043a9596dd8ac66d780330fd096f54876e76f504d717bb583af51eaeb42573f7da906f64b6afc40847b4ea3844bd0c1e5e36506530c",
+    "signing_key_id": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+    "source_id": "fixture-source"
+  }
+}

@@ -304,25 +304,25 @@ func TestCheckComposeFileExists_NonExistentReturnsNotFound(t *testing.T) {
 }
 
 func TestConfirmAction_YesResponse(t *testing.T) {
-	cmd := &cobra.Command{}
+	cmd := silentCobraCommand()
 	cmd.SetIn(strings.NewReader("y\n"))
 	assert.True(t, confirmAction(cmd, "Proceed?"))
 }
 
 func TestConfirmAction_NoResponse(t *testing.T) {
-	cmd := &cobra.Command{}
+	cmd := silentCobraCommand()
 	cmd.SetIn(strings.NewReader("n\n"))
 	assert.False(t, confirmAction(cmd, "Proceed?"))
 }
 
 func TestConfirmAction_EmptyResponse(t *testing.T) {
-	cmd := &cobra.Command{}
+	cmd := silentCobraCommand()
 	cmd.SetIn(strings.NewReader("\n"))
 	assert.False(t, confirmAction(cmd, "Proceed?"))
 }
 
 func TestConfirmAction_YesFullWord(t *testing.T) {
-	cmd := &cobra.Command{}
+	cmd := silentCobraCommand()
 	cmd.SetIn(strings.NewReader("yes\n"))
 	assert.True(t, confirmAction(cmd, "Proceed?"))
 }
@@ -625,7 +625,7 @@ func TestRunScenarioWithResults_UnknownOrgReturnsNotFound(t *testing.T) {
 }
 
 func TestRunAllScenarios_UnknownOrgReturnsNotFound(t *testing.T) {
-	cmd := &cobra.Command{}
+	cmd := silentCobraCommand()
 	err := runAllScenarios(context.Background(), nil, cmd, "unknown-org", "/tmp", demoTestRunID)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
@@ -635,7 +635,7 @@ func TestRunAllScenarios_CancelledContextStopsBeforeScenarioLookup(t *testing.T)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := runAllScenarios(ctx, nil, &cobra.Command{}, "unknown-org", "/tmp", demoTestRunID)
+	err := runAllScenarios(ctx, nil, silentCobraCommand(), "unknown-org", "/tmp", demoTestRunID)
 
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.NotErrorIs(t, err, constants.ErrNotFound)
@@ -675,7 +675,7 @@ func TestRunAllScenariosWithRunner_ContextCancellationStopsLoop(t *testing.T) {
 		return []*compliancev1.DemoScenarioResult{newDemoScenarioResult(scenario, fmt.Sprintf("scenario %s", scenario), demoStatusPassed, "")}, nil
 	}
 
-	err := runAllScenariosWithRunner(ctx, nil, &cobra.Command{}, constants.DemosOrgHealthcare, "", demoTestRunID, runner)
+	err := runAllScenariosWithRunner(ctx, nil, silentCobraCommand(), constants.DemosOrgHealthcare, "", demoTestRunID, runner)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.Equal(t, 2, callCount, "loop should stop after context cancellation")

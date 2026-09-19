@@ -20,6 +20,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 
 // mockAPIClient implements apiClient for testing.
 type mockAPIClient struct {
+	mu        sync.Mutex
 	getResp   []byte
 	getErr    error
 	postResp  []byte
@@ -48,13 +50,19 @@ type mockPostCall struct {
 }
 
 func (m *mockAPIClient) Get(path string) ([]byte, error) {
+	m.mu.Lock()
 	m.getCalls = append(m.getCalls, path)
-	return m.getResp, m.getErr
+	resp, err := m.getResp, m.getErr
+	m.mu.Unlock()
+	return resp, err
 }
 
 func (m *mockAPIClient) Post(path string, body interface{}) ([]byte, error) {
+	m.mu.Lock()
 	m.postCalls = append(m.postCalls, mockPostCall{path: path, body: body})
-	return m.postResp, m.postErr
+	resp, err := m.postResp, m.postErr
+	m.mu.Unlock()
+	return resp, err
 }
 
 func (m *mockAPIClient) Put(path string, body interface{}) ([]byte, error) {

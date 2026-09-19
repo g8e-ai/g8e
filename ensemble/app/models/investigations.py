@@ -388,10 +388,10 @@ class InvestigationCurrentState(G8eBaseModel):
     collaboration_status: dict[str, ComponentStatus] = Field(
         default_factory=dict, description="Component collaboration status"
     )
-    warden_block_count: int = Field(
+    marshal_block_count: int = Field(
         default=0,
         ge=0,
-        description="Count of warden blocks in current turn (Two-Strike Circuit Breaker)",
+        description="Count of marshal blocks in current turn (Two-Strike Circuit Breaker)",
     )
 
 
@@ -641,6 +641,12 @@ class InvestigationCreateRequest(G8eBaseModel):
         default=None, description="Email of the user creating the investigation"
     )
     user_id: str = Field(..., description="ID of the user creating the investigation")
+    operator_id: str | None = Field(
+        default=None, description="Delegated Operator authority identifier"
+    )
+    operator_session_id: str | None = Field(
+        default=None, description="Delegated Operator authority session identifier"
+    )
     customer_context: InvestigationCustomerContext | None = Field(
         default=None, description="Customer context"
     )

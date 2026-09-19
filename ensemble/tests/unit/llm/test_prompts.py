@@ -52,7 +52,7 @@ def operator_context():
         hostname="test-host",
         username="g8e",
         working_directory="/home/g8e",
-        operator_type=OperatorType.SYSTEM,
+        operator_type=OperatorType.REMOTE,
         is_container=True,
         container_runtime="docker",
         init_system="systemd",
@@ -261,43 +261,23 @@ def test_build_modular_system_prompt_injects_triage_context(mock_loader, operato
     assert "request_posture: escalated" in prompt
 
 
-def test_build_modular_system_prompt_cloud_operator(mock_loader):
-    cloud_context = OperatorContext(
-        operator_id="op_cloud",
-        operator_type=OperatorType.CLOUD,
-        cloud_subtype="aws",
+def test_build_modular_system_prompt_operator_with_granted_intents(mock_loader):
+    remote_context = OperatorContext(
+        operator_id="op_remote",
+        operator_type=OperatorType.REMOTE,
         granted_intents=["s3:ListBucket"],
-        is_cloud_operator=True,
     )
 
     prompt, _context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
-        system_context=cloud_context,
+        system_context=remote_context,
         user_memories=[],
         case_memories=[],
         investigation=None,
     )
 
-    assert "Operator Type: Cloud Operator for AWS" in prompt
+    assert "Operator Type: remote" in prompt
     assert "granted_intents: ['s3:ListBucket']" in prompt
-
-
-def test_build_modular_system_prompt_cloud_operator_missing_subtype(mock_loader):
-    no_subtype_context = OperatorContext(
-        operator_id="op_no_subtype", operator_type=OperatorType.CLOUD, is_cloud_operator=True
-    )
-
-    prompt, _context_sizes = prompts.build_modular_system_prompt(
-        operator_bound=True,
-        system_context=no_subtype_context,
-        user_memories=[],
-        case_memories=[],
-        investigation=None,
-    )
-
-    assert "Operator Type: Cloud Operator - Least-privilege intent-based access" in prompt
-    assert "AWS" not in prompt
-    assert "G8E_POD" not in prompt
 
 
 def test_build_modular_system_prompt_no_systemd(mock_loader):
@@ -337,7 +317,7 @@ def test_build_modular_system_prompt_multi_operator(mock_loader):
         hostname="test-host-1",
         username="g8e",
         working_directory="/home/g8e",
-        operator_type=OperatorType.SYSTEM,
+        operator_type=OperatorType.REMOTE,
         is_container=True,
         container_runtime="docker",
         init_system="systemd",
@@ -349,17 +329,15 @@ def test_build_modular_system_prompt_multi_operator(mock_loader):
         hostname="test-host-2",
         username="ubuntu",
         working_directory="/home/ubuntu",
-        operator_type=OperatorType.SYSTEM,
+        operator_type=OperatorType.REMOTE,
         is_container=False,
         init_system="systemd",
     )
 
     operator3 = OperatorContext(
         operator_id="op_789",
-        operator_type=OperatorType.CLOUD,
-        cloud_subtype="aws",
+        operator_type=OperatorType.REMOTE,
         granted_intents=["s3:ListBucket", "ec2:DescribeInstances"],
-        is_cloud_operator=True,
     )
 
     prompt, _context_sizes = prompts.build_modular_system_prompt(
@@ -392,8 +370,8 @@ def test_build_modular_system_prompt_multi_operator(mock_loader):
         not in prompt.split('<operator index="1">')[1].split("</operator>")[0]
     )
 
-    # Operator 3 details (cloud operator)
-    assert "Operator Type: Cloud Operator for AWS" in prompt
+    # Operator 3 details (remote operator with granted intents)
+    assert "Operator Type: remote" in prompt
     assert "granted_intents: ['s3:ListBucket', 'ec2:DescribeInstances']" in prompt
 
 
@@ -412,41 +390,6 @@ def test_build_modular_system_prompt_backward_compatibility(mock_loader, operato
     assert "<operator index=" not in prompt  # No operator tags for single
     assert "Hostname: test-host" in prompt
     assert "OS: linux" in prompt
-
-
-def test_build_modular_system_prompt_mixed_cloud_operator_detection(mock_loader):
-    """Test that is_cloud_operator is True when any operator is cloud-based."""
-    system_operator = OperatorContext(
-        operator_id="op_system", operator_type=OperatorType.SYSTEM, is_cloud_operator=False
-    )
-
-    cloud_operator = OperatorContext(
-        operator_id="op_cloud", operator_type=OperatorType.CLOUD, is_cloud_operator=True
-    )
-
-    # Single system operator - should not be cloud mode
-    prompt, context_sizes = prompts.build_modular_system_prompt(
-        operator_bound=True,
-        system_context=system_operator,
-        user_memories=[],
-        case_memories=[],
-        investigation=None,
-    )
-    # This test mainly ensures the function doesn't crash with mixed operators
-
-    # Mixed operators - should detect cloud operator
-    prompt, _context_sizes = prompts.build_modular_system_prompt(
-        operator_bound=True,
-        system_context=[system_operator, cloud_operator],
-        user_memories=[],
-        case_memories=[],
-        investigation=None,
-    )
-    # Should contain both operators
-    assert '<operator index="0">' in prompt
-    assert '<operator index="1">' in prompt
-    assert "Operator Type: Operator - Standard system access" in prompt
-    assert "Operator Type: Cloud Operator" in prompt
 
 
 # ---------------------------------------------------------------------------

@@ -1,3 +1,10 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
 """Cross-language transaction hash parity tests.
 
 Validates that Python's ``compute_transaction_hash`` produces identical
@@ -45,6 +52,13 @@ def test_hash_parity_vector(vector: dict[str, Any]) -> None:
         intent_data=vector["intent_data"],
         requestor_user_id=vector.get("requestor_user_id"),
         acting_app_id=vector.get("acting_app_id"),
+        operator_id=vector.get("operator_id"),
+        operator_session_id=vector.get("operator_session_id"),
+        case_id=vector.get("case_id"),
+        investigation_id=vector.get("investigation_id"),
+        task_id=vector.get("task_id"),
+        web_session_id=vector.get("web_session_id"),
+        cli_session_id=vector.get("cli_session_id"),
     )
     assert actual == vector["expected_hash"], (
         f"Hash mismatch for vector {vector['name']!r}:\n"

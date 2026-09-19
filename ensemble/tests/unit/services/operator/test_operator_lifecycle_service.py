@@ -82,7 +82,7 @@ class TestOperatorLifecycleService:
             operator_id=operator_id,
             operator_session_id=operator_session_id,
             bound_web_session_id="web-123",
-            operator_type=OperatorType.SYSTEM,
+            operator_type=OperatorType.REMOTE,
         )
 
         assert success is True
@@ -274,7 +274,7 @@ class TestOperatorLifecycleService:
             operator_id=operator_id,
             operator_session_id=new_session_id,
             bound_web_session_id="web-123",
-            operator_type=OperatorType.SYSTEM,
+            operator_type=OperatorType.REMOTE,
         )
 
         assert success is True

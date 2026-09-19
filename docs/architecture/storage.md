@@ -5,14 +5,14 @@ parent: Architecture
 
 # Storage Architecture
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 ## Overview
 
 g8e separates platform coordination state from host-local execution evidence. Each Gateway and outbound Operator has a local canonical SQLite database named `g8e.db`. The Gateway uses it for shared platform state and Gateway-executed audit evidence, while an outbound Operator uses its local copy for state services and authoritative evidence from operations executed on that host.
 
-Additional stores have separate lifecycles. An outbound Operator maintains an execution vault, a replay database, and, when enabled, git-backed file ledgers. Both operating modes use a separate suspended-transaction database for pending L3 approvals. A remote Operator remains authoritative for its local execution evidence; its publication of signed receipts to the Gateway is a best-effort mirror.
+Additional stores have separate lifecycles. An outbound Operator maintains an execution vault, a replay database, and, when enabled, git-backed file ledgers. Both operating modes use a separate suspended-transaction database for pending L3 approvals. Platform evaluation evidence (native runs and campaign artifacts) persists under `.g8e/data/eval/runs/` on the host that owns the evaluation CLI; see [Evaluations](./evals.md). A remote Operator remains authoritative for its local execution evidence; its publication of signed receipts to the Gateway is a best-effort mirror.
 
 See [Encryption Architecture](./encryption.md) for vault and keystore protection, [Gateway Architecture](./gateway.md) for Gateway service assembly, and [Operator Architecture](./operator.md) for host-local execution.
 
@@ -150,4 +150,5 @@ The initial receipt and commitment are execution gates. Final receipt persistenc
 - [Operator Architecture](./operator.md): Host execution and local-first evidence
 - [SSE Streaming](./sse.md): Session routing and event replay
 - [Network Architecture](./network.md): mTLS and transport identity
+- [Evaluations](./evals.md): Native and campaign evaluation evidence layout
 - [g8e Protocol](../../protocol/docs/spec.md): Canonical governance messages and wire contract

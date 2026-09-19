@@ -195,20 +195,6 @@ type EnrollmentArtifacts struct {
 	// CredentialStore to refresh the local runtime bundle and by
 	// ExtractRootAnchors/InstallRoot to install root anchors for OS trust.
 	TrustBundlePEM string
-
-	// OperatorCertPEM is the operator certificate PEM, when the enrollment
-	// path produced one (remote operator enrollment). Empty for
-	// local CLI enrollment.
-	OperatorCertPEM string
-
-	// OperatorCertChainPEM is the operator certificate chain PEM, when
-	// applicable.
-	OperatorCertChainPEM string
-
-	// OperatorKeyPEM is the operator private key PEM, when applicable and
-	// when the caller generated it locally. Empty for remote enrollment
-	// where the operator key was generated elsewhere.
-	OperatorKeyPEM string
 }
 
 // EnrollmentSource identifies which gateway enrollment operation produced

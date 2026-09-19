@@ -26,7 +26,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/security"
 	system "github.com/g8e-ai/g8e/v2/internal/services/system"
@@ -184,7 +183,7 @@ func NewExecutionService(cfg *config.Config, logger *slog.Logger) *ExecutionServ
 func getCloudCLICommands() map[string]bool {
 	return map[string]bool{
 		// Cloud provider CLIs
-		marshaler.Status(constants.CloudSubtypeAWS): true,
+		"aws":    true,
 		"gcloud": true,
 		"az":     true,
 		"gsutil": true,

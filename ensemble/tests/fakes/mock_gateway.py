@@ -46,13 +46,12 @@ from __future__ import annotations
 import asyncio
 import datetime
 import fnmatch
-import json
 import logging
 import os
 import ssl
 import tempfile
 from typing import Any
-from urllib.parse import quote, unquote
+from urllib.parse import unquote
 
 import aiohttp
 from aiohttp import web
@@ -79,7 +78,7 @@ def _generate_self_signed_cert(tmpdir: str) -> tuple[str, str, str]:
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.x509.oid import NameOID
 
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
 
     # --- CA ---
     ca_key = ec.generate_private_key(ec.SECP256R1())

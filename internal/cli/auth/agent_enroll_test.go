@@ -49,12 +49,17 @@ func generateTestCertificateWithSPIFFE(t *testing.T, agentName string, notAfter 
 	uri, err := url.Parse(spiFFEID)
 	require.NoError(t, err)
 
+	// x509 stores NotBefore/NotAfter at second precision; align test certs to that
+	// so boundary checks against AppCertMinValidity stay deterministic under load.
+	now := time.Now().Truncate(time.Second)
+	notAfter = notAfter.Truncate(time.Second)
+
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			CommonName: agentName,
 		},
-		NotBefore: time.Now(),
+		NotBefore: now,
 		NotAfter:  notAfter,
 		KeyUsage:  x509.KeyUsageDigitalSignature,
 		ExtKeyUsage: []x509.ExtKeyUsage{
@@ -744,7 +749,7 @@ func TestCheckExistingAppCert_ExactlyAtThreshold(t *testing.T) {
 	agentName := "test-agent"
 
 	// Create cert expiring exactly at 7 days (should be rejected)
-	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(7*24*time.Hour))
+	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(constants.AppCertMinValidity))
 	certRel, err := fileSvc.RelFromAbs(certFile)
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
@@ -763,8 +768,8 @@ func TestCheckExistingAppCert_JustAboveThreshold(t *testing.T) {
 	certFile := fileSvc.Resolve("valid-cert.pem")
 	agentName := "test-agent"
 
-	// Create cert expiring in 7 days + 1 second (should be accepted)
-	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(7*24*time.Hour+time.Second))
+	// Create cert expiring just above the 7-day minimum (should be accepted)
+	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(constants.AppCertMinValidity+time.Minute))
 	certRel, err := fileSvc.RelFromAbs(certFile)
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))

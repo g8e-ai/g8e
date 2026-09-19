@@ -76,14 +76,16 @@ type EnsembleBoundOperator struct {
 
 // EnsembleRequestContext is the typed context inside EnsembleChatRequest.
 type EnsembleRequestContext struct {
-	WebSessionID    string                  `json:"web_session_id,omitempty"`
-	CLISessionID    string                  `json:"cli_session_id,omitempty"`
-	UserID          string                  `json:"user_id,omitempty"`
-	OrganizationID  string                  `json:"organization_id,omitempty"`
-	CaseID          string                  `json:"case_id,omitempty"`
-	InvestigationID string                  `json:"investigation_id,omitempty"`
-	BoundOperators  []EnsembleBoundOperator `json:"bound_operators,omitempty"`
-	SourceComponent string                  `json:"source_component"`
+	WebSessionID      string                  `json:"web_session_id,omitempty"`
+	CLISessionID      string                  `json:"cli_session_id,omitempty"`
+	UserID            string                  `json:"user_id,omitempty"`
+	OrganizationID    string                  `json:"organization_id,omitempty"`
+	CaseID            string                  `json:"case_id,omitempty"`
+	InvestigationID   string                  `json:"investigation_id,omitempty"`
+	BoundOperators    []EnsembleBoundOperator `json:"bound_operators,omitempty"`
+	OperatorID        string                  `json:"operator_id,omitempty"`
+	OperatorSessionID string                  `json:"operator_session_id,omitempty"`
+	SourceComponent   string                  `json:"source_component"`
 }
 
 // EnsembleResourceCreation controls case creation on chat start.
@@ -142,12 +144,8 @@ func (c *E2EClient) SendChatRequest(ctx context.Context, ensembleURL string, req
 		return EnsembleChatResponse{}, fmt.Errorf("build chat request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	if c.userID != "" {
-		httpReq.Header.Set("X-Proxy-User-Id", c.userID)
-		httpReq.Header.Set("X-Proxy-User-Email", c.userID+"@g8e.local")
-	}
-	if c.cliSessionID != "" {
-		httpReq.Header.Set("X-Proxy-CLI-Session-Id", c.cliSessionID)
+	if c.operatorSessionID != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.operatorSessionID)
 	}
 
 	body, _, err := doRequest(c.publicClient, httpReq, http.StatusOK)
@@ -345,12 +343,14 @@ func (a *E2EApprovalAutoApprover) respondApproval(ad struct {
 
 	body := map[string]any{
 		"context": map[string]any{
-			"cli_session_id":   cliSessionID,
-			"user_id":          userID,
-			"case_id":          ad.CaseID,
-			"investigation_id": ad.InvestigationID,
-			"source_component": "CLIENT",
-			"bound_operators":  []map[string]any{},
+			"cli_session_id":      cliSessionID,
+			"user_id":             userID,
+			"case_id":             ad.CaseID,
+			"investigation_id":    ad.InvestigationID,
+			"source_component":    "CLIENT",
+			"operator_id":         a.client.operatorID,
+			"operator_session_id": a.client.operatorSessionID,
+			"bound_operators":     []map[string]any{},
 		},
 		"approval_id": ad.ApprovalID,
 		"approved":    true,
@@ -371,12 +371,8 @@ func (a *E2EApprovalAutoApprover) respondApproval(ad struct {
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if userID != "" {
-		req.Header.Set("X-Proxy-User-Id", userID)
-		req.Header.Set("X-Proxy-User-Email", userID+"@g8e.local")
-	}
-	if cliSessionID != "" {
-		req.Header.Set("X-Proxy-CLI-Session-Id", cliSessionID)
+	if a.client.operatorSessionID != "" {
+		req.Header.Set("Authorization", "Bearer "+a.client.operatorSessionID)
 	}
 
 	resp, err := a.client.publicClient.Do(req)
@@ -438,10 +434,12 @@ func newE2EClient(ctx context.Context, cfg *e2eConfig) (*E2EClient, error) {
 	}
 
 	return &E2EClient{
-		publicClient: publicClient,
-		mtlsClient:   mtlsClient,
-		cliSessionID: cfg.cliSessionID,
-		userID:       cfg.userID,
-		gatewayHTTPS: cfg.gatewayHTTPSURL,
+		publicClient:      publicClient,
+		mtlsClient:        mtlsClient,
+		cliSessionID:      cfg.cliSessionID,
+		userID:            cfg.userID,
+		operatorID:        cfg.operatorID,
+		operatorSessionID: cfg.operatorSessionID,
+		gatewayHTTPS:      cfg.gatewayHTTPSURL,
 	}, nil
 }

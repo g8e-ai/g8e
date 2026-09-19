@@ -189,8 +189,6 @@ class TestHashParityVectors:
 
         vectors = self._load_vectors()
         for v in vectors:
-            requestor = v.get("requestor_user_id")
-            acting = v.get("acting_app_id")
             result = compute_transaction_hash(
                 action_type=v["action_type"],
                 target_resource=v["target_resource"],
@@ -199,8 +197,15 @@ class TestHashParityVectors:
                 nonce=v["nonce"],
                 expires_at=v["expires_at"],
                 intent_data=v["intent_data"],
-                requestor_user_id=requestor if requestor else None,
-                acting_app_id=acting if acting else None,
+                requestor_user_id=v.get("requestor_user_id") or None,
+                acting_app_id=v.get("acting_app_id") or None,
+                operator_id=v.get("operator_id") or None,
+                operator_session_id=v.get("operator_session_id") or None,
+                case_id=v.get("case_id") or None,
+                investigation_id=v.get("investigation_id") or None,
+                task_id=v.get("task_id") or None,
+                web_session_id=v.get("web_session_id") or None,
+                cli_session_id=v.get("cli_session_id") or None,
             )
             assert result == v["expected_hash"], (
                 f"hash mismatch for vector {v['name']!r}: "

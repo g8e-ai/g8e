@@ -254,11 +254,12 @@ func runDemosList(cmd *cobra.Command, args []string) error {
 
 	cmd.Println("Available demo environments:")
 	for _, entry := range entries {
-		if entry.IsDir() && entry.Name() != constants.DemosBinDirname {
-			composePath := filepath.Join(demosDir, entry.Name(), constants.DemosComposeFile)
-			if _, err := os.Stat(composePath); err == nil {
-				cmd.Printf("  - %s\n", entry.Name())
-			}
+		if !entry.IsDir() {
+			continue
+		}
+		composePath := filepath.Join(demosDir, entry.Name(), constants.DemosComposeFile)
+		if _, err := os.Stat(composePath); err == nil {
+			cmd.Printf("  - %s\n", entry.Name())
 		}
 	}
 
@@ -518,23 +519,6 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Check if g8e binary exists in demos/bin
-	binPath := filepath.Join(cwd, constants.DemosDirname, constants.DemosBinDirname, constants.DemosBinaryName)
-	if runtime.GOOS == "windows" {
-		binPath += ".exe"
-	}
-	if _, err := os.Stat(binPath); err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
-		}
-		cmd.Printf("Warning: g8e binary not found at %s\n", binPath)
-		if runtime.GOOS == "windows" {
-			cmd.Printf("Run 'make build' from the repository root, then copy the binary:\n  copy g8e.exe %s\\%s\\g8e.exe\n", constants.DemosDirname, constants.DemosBinDirname)
-		} else {
-			cmd.Printf("Run 'make build && cp g8e %s/%s/%s' from the repository root to build it.\n", constants.DemosDirname, constants.DemosBinDirname, constants.DemosBinaryName)
-		}
-	}
-
 	// Pre-flight: verify Docker is available and running
 	if err := checkDockerAvailable(); err != nil {
 		return err
@@ -635,10 +619,10 @@ func printPlatformEnrollmentInstructions(cmd *cobra.Command, org string) {
 	cmd.Printf("     ./g8e auth enroll user -e localhost:%s --port %s\n", ports.http, ports.https)
 	cmd.Println()
 	cmd.Println("  2. List pending platform enrollment requests:")
-	cmd.Printf("     ./g8e auth pending-platform-enrollments -e localhost:%s --port %s\n", ports.http, ports.https)
+	cmd.Printf("     ./g8e auth enroll pending -e localhost:%s --port %s\n", ports.http, ports.https)
 	cmd.Println()
 	cmd.Println("  3. Approve each request by ID (operator first, then dependents):")
-	cmd.Printf("     ./g8e auth approve-platform-enrollment <request-id> --yes -e localhost:%s --port %s\n", ports.http, ports.https)
+	cmd.Printf("     ./g8e auth enroll approve <request-id> --yes -e localhost:%s --port %s\n", ports.http, ports.https)
 	cmd.Println()
 	cmd.Println("  4. Wait for workload health:")
 	cmd.Printf("     g8e demos status %s\n", org)
@@ -866,7 +850,7 @@ func cleanAllDemos(cmd *cobra.Command, demosDir string, skipConfirm bool) error 
 
 	var demos []demoInfo
 	for _, entry := range entries {
-		if !entry.IsDir() || entry.Name() == constants.DemosBinDirname {
+		if !entry.IsDir() {
 			continue
 		}
 		composePath := filepath.Join(demosDir, entry.Name(), constants.DemosComposeFile)

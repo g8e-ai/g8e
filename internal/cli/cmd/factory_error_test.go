@@ -10,25 +10,116 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"errors"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/frontendverify"
+	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
+	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 )
 
 var errFactory = errors.New("factory boom")
 
+// panickingTrustInstaller is a mock auth.SystemTrustInstaller that panics on
+// every method call. Used in factory-error tests to prove that downstream
+// dependencies are not reached when fileSvcFactory fails.
+type panickingTrustInstaller struct{}
+
+func (p *panickingTrustInstaller) IsTrusted(context.Context, string) (bool, error) {
+	panic("trustInstaller.IsTrusted should not be called when fileSvcFactory fails")
+}
+
+func (p *panickingTrustInstaller) InstallRoot(context.Context, *x509.Certificate, string) error {
+	panic("trustInstaller.InstallRoot should not be called when fileSvcFactory fails")
+}
+
+func (p *panickingTrustInstaller) ListStaleAnchors(context.Context, string) ([]platform.StaleAnchor, error) {
+	panic("trustInstaller.ListStaleAnchors should not be called when fileSvcFactory fails")
+}
+
+func (p *panickingTrustInstaller) RemoveStaleAnchors(context.Context, []platform.StaleAnchor) error {
+	panic("trustInstaller.RemoveStaleAnchors should not be called when fileSvcFactory fails")
+}
+
 // configLoaderFor returns a config loader that always returns the given cfg.
 func configLoaderFor(cfg *config.Config) func(string) (*config.Config, error) {
 	return func(string) (*config.Config, error) { return cfg, nil }
+}
+
+func TestPublicInitCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicInitCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	cmd.SetArgs([]string{"--source-id", "deployment-a", "--mirror-origin", "https://mirror.example"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPublicConfigSetCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicConfigSetCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	cmd.SetArgs([]string{"--mirror-origin", "https://mirror.example"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPublicPublishCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicPublishCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	cmd.SetArgs([]string{constants.TestPublicFeedRecordsFilename})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPublicPushCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicPushCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPublicStatusCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicStatusCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPublicRotateKeyCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicRotateKeyCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
 }
 
 func TestApproveCmdWithConfig_FileSvcFactoryError(t *testing.T) {
@@ -63,6 +154,20 @@ func TestApprovePlatformEnrollmentCmdWithConfig_FileSvcFactoryError(t *testing.T
 	_, cfg := newCmdTestEnv(t)
 
 	cmd := approvePlatformEnrollmentCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(errFactory))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, []string{"req-001"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestDenyPlatformEnrollmentCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+
+	cmd := denyPlatformEnrollmentCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(errFactory))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -672,4 +777,78 @@ func TestDockerStartCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, errFactory)
+}
+
+// --- Gateway connect command (Phase 4) ---
+
+// TestGatewayConnectCmdWithConfig_FileSvcFactoryError verifies that a
+// fileSvcFactory failure is surfaced as ErrFileServiceInit with the original
+// factory error preserved via errors.Is. The command must fail before reaching
+// any downstream dependency (ProcessManager, trust installer, verifier).
+func TestGatewayConnectCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+
+	deps := connectDeps{
+		trustInstaller: &panickingTrustInstaller{},
+		discoveryFetcher: func(context.Context, string, func() time.Time) (auth.TrustDiscoveryResult, error) {
+			panic("discoveryFetcher should not be called when fileSvcFactory fails")
+		},
+		verifier: frontendverify.NewVerifier(frontendverify.VerifierDeps{
+			HTTPClientFactory: func(*x509.CertPool, time.Duration) (*http.Client, error) {
+				panic("verifier should not be called when fileSvcFactory fails")
+			},
+		}),
+		browserOpener: func(string) error {
+			panic("browserOpener should not be called when fileSvcFactory fails")
+		},
+	}
+
+	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), deps)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, []string{"https://your-app.lovable.app"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+// --- Eval commands ---
+
+func TestEvalCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	deps := nativeEvalDeps{
+		configLoader:   configLoaderFor(cfg),
+		fileSvcFactory: failingFileSvcFactory(errFactory),
+		clientFactory: func(harnessconfig.Config) (*harnessclient.Client, error) {
+			panic("client factory should not be called when fileSvcFactory fails")
+		},
+		authLoader: func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error) {
+			panic("auth loader should not be called when fileSvcFactory fails")
+		},
+		now:   time.Now,
+		newID: func() string { return "run-id" },
+	}
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "run", args: []string{"boundary", "run"}},
+		{name: "verify", args: []string{"boundary", "verify", "run-id"}},
+		{name: "show", args: []string{"boundary", "show", "run-id"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cmd := evalCmdWithConfig(deps)
+			cmd.SetArgs(test.args)
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+			assert.ErrorIs(t, err, errFactory)
+		})
+	}
 }

@@ -31,6 +31,7 @@ from app.llm.prompts import (
     build_tribunal_prompt_fields,
 )
 from app.llm.factory import get_llm_provider
+from app.llm.model_call_attribution import prepare_provider_call
 from app.models.agents.tribunal import (
     CandidateCommand,
     CommandGenerationResult,
@@ -59,13 +60,51 @@ from app.services.ai.tribunal.stages.generation import (
     _run_generation_stage,
 )
 from app.services.ai.tribunal.stages.voting import _run_voting_stage
-from app.services.ai.tribunal.stages.warden import _run_warden_stage
+from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
 from app.services.ai.tribunal.utils import (
     member_for_pass,
     resolve_model,
 )
+from app.services.observe.payloads import build_agent_state_request
 
 logger = logging.getLogger(__name__)
+
+
+async def _push_tribunal_agent_state(
+    emitter: TribunalEmitter,
+    status: str,
+    run_id: str | None = None,
+    model: str | None = None,
+) -> None:
+    """Best-effort Tribunal agent-state projection push.
+
+    Uses the emitter's event_service and g8e_context to route the
+    projection. Skips when the emitter has no event_service, no
+    g8e_context, or the routing is targetless. The persona id is
+    always ``"tribunal"`` and display metadata comes from the
+    persona registry. Failures are caught at this boundary and do
+    not abort the consensus pipeline.
+    """
+    if emitter.event_service is None or emitter.g8e_context is None:
+        return
+    request = build_agent_state_request(
+        user_id=emitter.g8e_context.user_id or "",
+        persona_id="tribunal",
+        status=status,
+        run_id=run_id,
+        model=model,
+        web_session_id=emitter.g8e_context.web_session_id,
+        cli_session_id=emitter.g8e_context.cli_session_id,
+    )
+    if request is None:
+        return
+    try:
+        await emitter.event_service.publish_agent_state(request)
+    except Exception as exc:
+        logger.warning(
+            "[TRIBUNAL] observe agent-state push failed (non-blocking): %s",
+            exc,
+        )
 
 
 async def _build_and_emit_result(
@@ -86,7 +125,7 @@ async def _build_and_emit_result(
     operator_context: OperatorContext | None = None,
     correlation_id: str | None = None,
     reputation_commitment_id: str | None = None,
-    warden_risk_analysis: CommandRiskAnalysis | None = None,
+    marshal_risk_analysis: CommandRiskAnalysis | None = None,
     round_2_candidates: list[CandidateCommand] | None = None,
     round_2_vote_breakdown: VoteBreakdown | None = None,
 ) -> CommandGenerationResult:
@@ -120,7 +159,7 @@ async def _build_and_emit_result(
         auditor_passed=auditor_passed,
         auditor_revision=auditor_revision,
         auditor_reason=auditor_reason,
-        warden_risk_analysis=warden_risk_analysis,
+        marshal_risk_analysis=marshal_risk_analysis,
         correlation_id=correlation_id,
         reputation_commitment_id=reputation_commitment_id,
         round_2_candidates=round_2_candidates,
@@ -134,8 +173,8 @@ async def _build_and_emit_result(
             final_command=final_command or "",
             outcome=outcome,
             vote_score=vote_score or 0.0,
-            model_calls=[warden_risk_analysis.model_call]
-            if warden_risk_analysis and warden_risk_analysis.model_call
+            model_calls=[marshal_risk_analysis.model_call]
+            if marshal_risk_analysis and marshal_risk_analysis.model_call
             else [],
         ),
     )
@@ -177,6 +216,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
     emitter = TribunalEmitter(
         request.event_service, request.g8e_context, correlation_id=correlation_id
     )
+    investigation_id = request.g8e_context.investigation_id if request.g8e_context else None
 
     if request.settings.llm is None:
         raise ConfigurationError("LLM settings are missing")
@@ -186,6 +226,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
             EventType.AI_CONSENSUS_SESSION_DISABLED,
             TribunalSessionDisabledPayload(request=request.request),
         )
+        await _push_tribunal_agent_state(emitter, "offline", run_id=investigation_id)
         raise TribunalDisabledError(request=request.request)
 
     try:
@@ -200,6 +241,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
                 error=exc.user_message,
             ),
         )
+        await _push_tribunal_agent_state(emitter, "failed", run_id=investigation_id)
         raise
 
     num_passes = max(1, request.settings.llm.llm_command_gen_passes)
@@ -216,6 +258,10 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
             correlation_id=correlation_id,
         ),
     )
+    # Tribunal persona enters running state at consensus start.
+    await _push_tribunal_agent_state(
+        emitter, "running", run_id=investigation_id, model=generation_model
+    )
 
     try:
         generation_provider = get_llm_provider(request.settings.llm, is_lite=True)
@@ -230,6 +276,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
                 error=str(exc),
             ),
         )
+        await _push_tribunal_agent_state(emitter, "failed", run_id=investigation_id)
         raise TribunalProviderUnavailableError(
             provider=lite_provider,
             error=str(exc),
@@ -240,6 +287,8 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         lite_provider = request.settings.llm.lite_provider
         provider_name = lite_provider.value if lite_provider else "not_configured"
         raise ConfigurationError(f"Failed to initialize generation provider for {provider_name}")
+
+    prepare_provider_call(generation_provider, g8e_context=request.g8e_context)
 
     candidates = await _run_generation_stage(
         provider=generation_provider,
@@ -283,6 +332,10 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
                 members=members,
                 correlation_id=correlation_id,
             ),
+        )
+        # First-round no-consensus is not terminal; Tribunal continues running.
+        await _push_tribunal_agent_state(
+            emitter, "running", run_id=investigation_id, model=generation_model
         )
 
         # Anonymize R1 clusters for peer review context
@@ -377,6 +430,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
             round_2_candidates=None,
             round_2_vote_breakdown=None,
         )
+        await _push_tribunal_agent_state(emitter, "failed", run_id=investigation_id)
         raise TribunalConsensusFailedError(request=request.request, vote_breakdown=vote_breakdown)
 
     try:
@@ -388,8 +442,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         # Auditor failure is non-fatal if consensus was reached, but here we can't even start it
         auditor_provider = None
 
-    investigation_id = request.g8e_context.investigation_id
-    warden_risk_analysis = await _run_warden_stage(
+    marshal_risk_analysis = await _run_marshal_stage(
         request=request.request,
         guidelines=request.guidelines,
         vote_winner=vote_winner,
@@ -424,7 +477,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         blacklisting_enabled=request.blacklisting_enabled,
     )
 
-    return await _build_and_emit_result(
+    result = await _build_and_emit_result(
         request=request.request,
         guidelines=request.guidelines,
         final_command=audit_result.final_command,
@@ -442,7 +495,10 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         operator_context=request.operator_context,
         correlation_id=correlation_id,
         reputation_commitment_id=audit_result.reputation_commitment_id,
-        warden_risk_analysis=warden_risk_analysis,
+        marshal_risk_analysis=marshal_risk_analysis,
         round_2_candidates=round_2_candidates,
         round_2_vote_breakdown=round_2_vote_breakdown,
     )
+    # Tribunal persona completes when the final consensus succeeds.
+    await _push_tribunal_agent_state(emitter, "completed", run_id=investigation_id)
+    return result

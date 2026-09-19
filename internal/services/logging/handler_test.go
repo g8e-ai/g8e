@@ -351,14 +351,16 @@ func TestLogHandler_Handle_TimestampFormat(t *testing.T) {
 	var buf bytes.Buffer
 	handler := newLogHandler(&buf, slog.LevelInfo)
 
-	ts := time.Date(2026, 1, 15, 14, 30, 0, 0, time.UTC)
+	ts := time.Date(2026, 1, 15, 14, 30, 0, 123456789, time.UTC)
 	record := slog.NewRecord(ts, slog.LevelInfo, "ts test", 0)
 	err := handler.Handle(context.Background(), record)
 
 	require.NoError(t, err)
 	output := buf.String()
-	_, parseErr := time.Parse(time.RFC3339, strings.TrimSpace(strings.Split(output, " ")[0]))
-	require.NoError(t, parseErr, "timestamp should be RFC3339-parseable")
+	timestamp := strings.TrimSpace(strings.Split(output, " ")[0])
+	_, parseErr := time.Parse(logTimestampFormat, timestamp)
+	require.NoError(t, parseErr, "timestamp should be millisecond-precision RFC3339-parseable")
+	assert.Contains(t, timestamp, ".123", "timestamp should include millisecond precision")
 }
 
 func TestLogHandler_Enabled_Boundary(t *testing.T) {

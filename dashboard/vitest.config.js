@@ -18,6 +18,10 @@ export default defineConfig({
     test: {
       globals: true,
       environment: 'node',
+      exclude: [
+        '**/node_modules/**',
+        'g8e-adapter/evaluation-explorer/**',
+      ],
   
       setupFiles: ['./test/setup.js'],
       // Run tests sequentially to avoid g8eg KV flushdb() conflicts

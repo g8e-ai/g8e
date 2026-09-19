@@ -210,7 +210,6 @@ export class CreateOperatorRequest extends VSOBaseModel {
         runtime_config:      { type: F.any,    default: () => ({}) },
         api_key:             { type: F.string, default: null },
         operator_type:       { type: F.string, default: null },
-        cloud_subtype:       { type: F.string, default: null },
     };
 }
 

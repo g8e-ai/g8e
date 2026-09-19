@@ -2,7 +2,7 @@
 
 ## Overview
 
-g8ee uses pytest and organizes tests by dependency level. The main ensemble suite contains unit, integration, and external-provider tests. A Tier 3 directory and marker are reserved for end-to-end tests, but the current ensemble suite does not contain Tier 3 test cases. The standalone eval package has its own locked environment, pytest configuration, and Tier 1 and Tier 2 suites.
+g8ee uses pytest and organizes tests by dependency level. The ensemble suite contains unit, integration, and external-provider tests. A Tier 3 directory and marker are reserved for end-to-end tests, but the current ensemble suite does not contain Tier 3 test cases. The Go-native evaluator is a platform subsystem with tests under `internal/services/evaluation/` and `internal/cli/cmd/`; it is not part of the Python ensemble test suite.
 
 Pytest probes the local Operator when every main ensemble test session starts, including sessions that select only unit tests. The probe loads platform settings when the Operator is available and falls back to local bootstrap settings when it is not. Unit test bodies remain isolated from live services, but starting a unit test session is not strictly free of network attempts because of this probe.
 
@@ -21,8 +21,6 @@ The main suite also contains shared fakes and top-level parity tests under `ense
 
 The main ensemble requires Python 3.12 or later, the in-tree Python protocol package, and the ensemble test dependencies. Follow [Development](devs.md) for environment setup. Run ensemble commands from the repository root unless a command explicitly says otherwise.
 
-The eval package uses `uv` and its own `uv.lock`. Its root Makefile targets invoke `uv run --locked --extra test`, so eval dependencies do not need to be installed into the main ensemble environment.
-
 ## Run the Main Ensemble Suite
 
 From the repository root:
@@ -30,7 +28,7 @@ From the repository root:
 - `make ensemble-test` runs `ensemble/tests/unit/` and `ensemble/tests/integration/` while excluding `ai_integration`, `requires_web_search`, and `requires_api` tests.
 - `make test-external` runs integration tests carrying at least one external marker. Missing configuration detected during collection skips the affected tests; invalid credentials, unavailable providers, and provider errors still fail tests that run.
 - `make ensemble-lint` runs Ruff and Pyright against `ensemble/app`.
-- `make ci-ensemble` runs `ensemble-lint` followed by `ensemble-test`. It does not run standalone eval checks.
+- `make ci-ensemble` runs `ensemble-lint` followed by `ensemble-test`. Native evaluation tests run through the platform test commands.
 
 From `ensemble/`:
 
@@ -47,18 +45,7 @@ For focused pytest runs from `ensemble/`:
 - `python -m pytest tests/integration/ -m ai_integration` runs live LLM tests.
 - `python -m pytest tests/integration/ -m "requires_web_search or requires_api"` runs live search tests.
 
-The repository `./g8e test` subcommands run the Go platform test suites. They do not run the Python ensemble or eval suites.
-
-## Run the Standalone Eval Tests
-
-From the repository root:
-
-- `make evals-test` runs eval Tier 1 and Tier 2 tests.
-- `make evals-test-unit` runs tests marked `unit`.
-- `make evals-test-integration` runs tests marked `integration`. Some tests use local filesystem or subprocess dependencies, and CI builds the `g8e` binary before this tier.
-- `make evals-lint` runs Ruff over `g8e_evals` and its tests, then runs Pyright with the eval project configuration.
-
-The eval package registers an `e2e` marker for tests that require a live stack or provider, but no current eval test uses that marker and the root eval targets do not select it.
+The repository `./g8e test` subcommands run the Go platform test suites. They do not run the Python ensemble suite.
 
 ## Markers and External Configuration
 
@@ -94,7 +81,7 @@ Protocol checks cover two separate concerns. Fake conformance tests verify that 
 
 Coverage configuration tracks branch coverage for `app/` and omits tests, package entry points, conftest files, and empty modules. The ensemble does not configure a coverage failure threshold. From `ensemble/`, `python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not e2e" --cov=app --cov-report=term-missing` produces a terminal report without making configured external-provider calls. Add `--cov-report=html` or `--cov-report=json` to write reports to the configured paths under `coverage-reports/g8ee/`.
 
-Ruff checks only `app/` in the main ensemble Makefile and CI targets. Pyright also checks only `app/`. The standalone eval lint target checks both production and test code.
+Ruff checks only `app/` in the ensemble Makefile and CI targets. Pyright also checks only `app/`. Go-native evaluation code is covered by `./g8e test unit`, `./g8e test lint`, and repository coverage.
 
 ## Related
 

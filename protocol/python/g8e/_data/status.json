@@ -97,6 +97,22 @@
         "_python_const": "HEARTBEAT",
         "value": "HEARTBEAT"
       },
+      "INFERENCE": {
+        "_go_const": "ActionTypeInference",
+        "_mutation": true,
+        "_python_const": "INFERENCE",
+        "value": "INFERENCE"
+      },
+      "PROVIDER_BOUNDARY_OBSERVATION": {
+        "_go_const": "ActionTypeProviderBoundaryObservation",
+        "_python_const": "PROVIDER_BOUNDARY_OBSERVATION",
+        "value": "PROVIDER_BOUNDARY_OBSERVATION"
+      },
+      "MODEL_PROVENANCE_OBSERVATION": {
+        "_go_const": "ActionTypeModelProvenanceObservation",
+        "_python_const": "MODEL_PROVENANCE_OBSERVATION",
+        "value": "MODEL_PROVENANCE_OBSERVATION"
+      },
       "DOCUMENT_UPDATE": {
         "_go_const": "ActionTypeDocumentUpdate",
         "_mutation": true,
@@ -693,23 +709,6 @@
         "_go_const": "CitationLayoutHoverCardViewportMarginPx",
         "_python_const": "HOVER_CARD_VIEWPORT_MARGIN_PX",
         "value": "8"
-      }
-    },
-    "cloud_subtype": {
-      "aws": {
-        "_go_const": "CloudSubtypeAWS",
-        "_python_const": "AWS",
-        "value": "aws"
-      },
-      "azure": {
-        "_go_const": "CloudSubtypeAzure",
-        "_python_const": "AZURE",
-        "value": "azure"
-      },
-      "gcp": {
-        "_go_const": "CloudSubtypeGCP",
-        "_python_const": "GCP",
-        "value": "gcp"
       }
     },
     "command_category": {
@@ -1715,15 +1714,15 @@
       }
     },
     "operator_type": {
-      "cloud": {
-        "_go_const": "OperatorTypeCloud",
-        "_python_const": "CLOUD",
-        "value": "cloud"
+      "embedded": {
+        "_go_const": "OperatorTypeEmbedded",
+        "_python_const": "EMBEDDED",
+        "value": "embedded"
       },
-      "system": {
-        "_go_const": "OperatorTypeSystem",
-        "_python_const": "SYSTEM",
-        "value": "system"
+      "remote": {
+        "_go_const": "OperatorTypeRemote",
+        "_python_const": "REMOTE",
+        "value": "remote"
       }
     },
     "platform": {

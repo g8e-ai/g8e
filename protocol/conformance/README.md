@@ -76,7 +76,7 @@ Validates that Python Pydantic models in the `g8e` package produce JSON that
 is structurally compatible with the canonical model schemas in
 `protocol/models/`.
 
-- **Model schema integrity**: All 56 model JSON schemas (50 in
+- **Model schema integrity**: All 60 model JSON schemas (54 in
   `protocol/models/` plus 6 agent definition files in `agents/`) load and
   have expected structure.
 - **PlatformSettings field parity**: Python `PlatformSettings` model fields
@@ -115,6 +115,10 @@ is structurally compatible with the canonical model schemas in
   via round-trip serialization, default-value checks, boolean/string-list
   type conformance, `protocol_version` default handling, and schema field
   parity for each model section.
+- **Observe producer conformance**: `ObserveProducerAgentStateRequest`,
+  `ObserveProducerRunStateRequest`, and `ObserveProducerResponse` reject
+  unknown fields, require exactly one SSE routing target, and round-trip
+  lifecycle enums. Covered in `protocol/python/tests/test_observe_producer_models.py`.
 
 ### `test_hash_parity.py`
 

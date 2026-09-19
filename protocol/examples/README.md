@@ -10,6 +10,8 @@ This directory contains runnable Go examples and MCP client configuration templa
 | `mcp_server/` | Provides JSON templates for direct gateway, governed stdio, and agent-launch MCP configurations |
 | `workload_identity/` | Generates, matches, extracts fields from, and parses g8e SPIFFE workload identities |
 
+Observe API read models, producer request types, observe event payloads, and public spectator feed schemas are defined in `protocol/models/observe_api.json`, `protocol/models/observe_event_payloads.json`, and `protocol/models/public_feed.json`. Python usage examples for the producer and public-feed models are in `protocol/python/examples/models_example.py`. Browser integration uses the audited `g8e-adapter` contract pack under `dashboard/g8e-adapter/contract-pack/`.
+
 ## Governance Envelope
 
 The governance envelope example demonstrates these operations:

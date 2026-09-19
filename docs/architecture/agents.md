@@ -5,8 +5,8 @@ parent: Architecture
 
 # AI Agents and the g8e Governance Boundary
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 ## Scope
 
@@ -50,7 +50,7 @@ See [Build Apps](../guides/build_apps.md) for choosing among these integration p
 
 ## MCP Agent Launcher
 
-`g8e mcp agent run <agent>` provides a managed local launch flow for Claude, Codex, Devin, Gemini, and Goose. It starts a local Gateway in `doctrine` posture when one is not already running, ensures the human CLI identity and passkey are enrolled, obtains a short-lived delegated app certificate for the selected agent, configures `g8e mcp stdio` as the agent's MCP server, verifies the generated interception configuration by default, and starts the agent.
+`g8e mcp agent run <agent>` provides a managed local launch flow for Claude, Codex, Devin, Gemini, and Goose. It starts a local Gateway in `doctrine` posture when one is not already running, ensures the human CLI identity and passkey are enrolled, obtains a short-lived delegated app certificate for the selected agent, configures `g8e mcp stdio` as the agent's MCP server, verifies the generated interception configuration by default, and starts the agent. For browser-hosted frontends on the same computer, `./g8e gw connect <frontend-origin>` replaces the removed `auth enroll gui` workflow; see [Build a g8e-Compatible Frontend](../guides/build_frontend.md).
 
 The delegated certificate binds the app identity and requesting human identity in its SPIFFE URI SANs. The stdio bridge presents that certificate to the Gateway, and the Gateway records both identities in the governed transaction. This creates per-agent attribution without trusting caller-supplied identity headers.
 
@@ -95,7 +95,7 @@ Every governed operation reaches the same L4/L5 verification and execution bound
 
 ### L1 Doctrine
 
-L1 decodes the typed payload and applies protobuf field constraints, forbidden-pattern rules, and MITRE ATT&CK-oriented threat detection. L1 is mandatory in every posture. The executing Warden performs this validation before dispatch.
+L1 decodes the typed payload and applies protobuf field constraints, forbidden-pattern rules, and MITRE ATT&CK-oriented threat detection. L1 is mandatory in every posture. The executing L4 Warden performs this validation before dispatch.
 
 ### L2 Consensus
 
@@ -130,7 +130,7 @@ g8ee is an optional first-party client, not part of the Gateway or Operator trus
 
 1. Triage classifies a turn and selects the fast Dash path or the primary Sage path.
 2. The selected model streams a response and may request tools through a sequential ReAct loop.
-3. Host-command requests pass through the five-member Tribunal, candidate clustering and audit, and application-level Warden risk analysis before dispatch.
+3. Host-command requests pass through the five-member Tribunal, candidate clustering and audit, and Marshal risk analysis before dispatch.
 4. The tool result returns to the model for another turn until the model stops requesting tools.
 5. Reaching the configured tool-turn limit requires an explicit continuation decision before the loop can continue.
 6. The ensemble publishes typed progress and result events through the Gateway SSE event bridge.
@@ -181,5 +181,7 @@ SSE events are delivery telemetry, not governance state, and do not alter the st
 - [Network Architecture](./network.md): TLS surfaces, pub/sub transport, and Operator channels.
 - [SSE Streaming](./sse.md): Approval and application event delivery.
 - [Ensemble Architecture](./ensemble.md): The first-party g8ee deployment and connection model.
-- [g8ee Agents](../ensemble/agents.md): Persona hierarchy, Tribunal, Warden, and support agents.
+- [g8ee Agents](../ensemble/agents.md): Persona hierarchy, Tribunal, Marshal, and support agents.
 - [Build Apps](../guides/build_apps.md): Public integration paths and application-owned state.
+- [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md): Audited `g8e-adapter`, observe API, and contract pack for generated frontends.
+- [Evaluations](./evals.md): Platform evaluation programs and campaign orchestration.

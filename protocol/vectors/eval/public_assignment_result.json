@@ -1,0 +1,4 @@
+{
+  "message_type": "PublicAssignmentResultProjection",
+  "canonical_json": "{\"assignment_id\":\"assign-1\",\"run_id\":\"run-1\",\"scenario_id\":\"instruction-exact-1\",\"scenario_category\":\"EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE\",\"lane\":\"EVALUATION_LANE_MODEL_ROLE\",\"designated_role\":\"MODEL_CAMPAIGN_ROLE_PRIMARY\",\"variant_id\":\"qwen3-4b\",\"lifecycle_status\":\"EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED\",\"summary_status\":\"EVALUATION_VERDICT_STATUS_PASS\",\"result_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"verification_status\":\"verified\",\"completed_at\":\"2026-09-16T14:00:00Z\"}"
+}

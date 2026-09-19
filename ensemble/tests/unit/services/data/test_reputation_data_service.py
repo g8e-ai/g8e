@@ -118,7 +118,7 @@ class TestReputationStateCrud:
 
     async def test_upsert_state_creates_when_absent(self, service, mock_cache):
         from app.models.http_context import RequestContext
-        
+
 
         mock_cache.get_document_with_cache.return_value = None
         context = RequestContext(
@@ -136,7 +136,7 @@ class TestReputationStateCrud:
 
     async def test_upsert_state_updates_when_present(self, service, mock_cache):
         from app.models.http_context import RequestContext
-        
+
 
         mock_cache.get_document_with_cache.return_value = {
             "agent_id": "axiom",
@@ -173,7 +173,7 @@ class TestReputationCommitmentCrud:
 
     async def test_create_commitment_writes_to_collection(self, service, mock_cache):
         from app.models.http_context import RequestContext
-        
+
 
         c = _make_commitment()
         context = RequestContext(

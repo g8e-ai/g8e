@@ -12,16 +12,11 @@ from fastapi import Request
 
 from app.constants import (
     AuthMethod,
-    ComponentName,
     G8EE_COMPONENT,
     HealthStatus,
-    X_PROXY_ORGANIZATION_ID,
-    X_PROXY_USER_EMAIL,
-    X_PROXY_USER_ID,
 )
 from app.dependencies import (
     get_g8ee_attachment_service,
-    get_g8ee_auth_service,
     get_g8ee_cache_aside_service,
     get_g8ee_case_data_service,
     get_g8ee_chat_pipeline,
@@ -37,7 +32,7 @@ from app.dependencies import (
     require_authenticated_context,
     require_authenticated_user,
 )
-from app.constants.generated_paths import PathConstants, PortConstants
+from app.constants.generated_paths import PortConstants
 from app.errors import (
     AuthenticationError,
     ConfigurationError,

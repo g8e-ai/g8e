@@ -35,7 +35,6 @@ tool files, or an enum value with no tool description file).
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
@@ -70,7 +69,7 @@ _PERSONA_PLACEHOLDER_ALLOWLIST: frozenset[str] = frozenset()
 # rendered through ``TRIBUNAL_PROMPT_TEMPLATE`` / ``TRIBUNAL_AUDITOR_TEMPLATE``
 # in ``command_generator.py``; the primary / fast-path agents (Sage, Dash)
 # are rendered through ``build_modular_system_prompt``. Codex, Judge, and
-# the Warden sub-agents are rendered from their own dedicated paths and
+# the Marshal sub-agents are rendered from their own dedicated paths and
 # do not embed template scaffolding either. None of them carry scaffolding
 # in their system prompts.
 _PURE_VOICE_PERSONAS: tuple[str, ...] = (
@@ -86,9 +85,9 @@ _PURE_VOICE_PERSONAS: tuple[str, ...] = (
     "nemesis",
     "codex",
     "judge",
-    "warden_command_risk",
-    "warden_error",
-    "warden_file_risk",
+    "marshal_command",
+    "marshal_error",
+    "marshal_file",
 )
 
 

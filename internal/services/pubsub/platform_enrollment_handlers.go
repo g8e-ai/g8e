@@ -392,7 +392,7 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 		Name:              req.Hostname,
 		Status:            constants.OperatorStatusActive,
 		OperatorSessionID: operatorSessionID,
-		OperatorType:      constants.OperatorTypeSystem,
+		OperatorType:      constants.OperatorTypeRemote,
 		SystemFingerprint: req.SystemFingerprint,
 		Claimed:           true,
 		ClaimedAt:         &now,

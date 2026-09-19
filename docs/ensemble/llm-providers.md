@@ -10,11 +10,13 @@ The primary implementation entry points are `ensemble/app/llm/provider.py`, `ens
 
 g8ee has three independently configurable model roles:
 
-| Role | Use |
-| --- | --- |
-| `primary` | Complex chat turns, tool-capable agent loops, and primary reasoning work |
-| `assistant` | The model selected for simple chat turns |
-| `lite` | Triage, Tribunal generation, risk analysis, title generation, memory extraction, and other concise or structured tasks |
+| Wire value | Display label | Use |
+| --- | --- | --- |
+| `primary` | Primary | Complex chat turns, tool-capable agent loops, and primary reasoning work |
+| `assistant` | Assistant | The model selected for simple chat turns |
+| `lite` | Lite | Triage, Tribunal generation, risk analysis, title generation, memory extraction, and other concise or structured tasks |
+
+Wire values are canonical in APIs, settings, telemetry, and persisted records. User-facing documentation and UI copy use the display labels (`Primary`, `Assistant`, `Lite`). Do not introduce alternate display names for `lite`.
 
 Configure a provider and model for every role that uses a distinct backend. If the assistant role has no provider, provider resolution falls back to primary. If the lite role has no provider, resolution falls back to assistant and then primary. Model resolution follows the same direction, with assistant falling back to primary and lite falling back to assistant and then primary.
 

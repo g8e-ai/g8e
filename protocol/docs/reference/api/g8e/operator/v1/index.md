@@ -59,6 +59,25 @@
     - [GetRevocationBundleResult](#g8e-operator-v1-GetRevocationBundleResult)
     - [HeartbeatRequested](#g8e-operator-v1-HeartbeatRequested)
     - [HeartbeatResult](#g8e-operator-v1-HeartbeatResult)
+    - [InferenceCompletion](#g8e-operator-v1-InferenceCompletion)
+    - [InferenceDispatchRequest](#g8e-operator-v1-InferenceDispatchRequest)
+    - [InferenceDispatchResponse](#g8e-operator-v1-InferenceDispatchResponse)
+    - [InferenceDispatchStreamFailure](#g8e-operator-v1-InferenceDispatchStreamFailure)
+    - [InferenceDispatchStreamFrame](#g8e-operator-v1-InferenceDispatchStreamFrame)
+    - [InferenceMessage](#g8e-operator-v1-InferenceMessage)
+    - [InferenceMessagePart](#g8e-operator-v1-InferenceMessagePart)
+    - [InferenceModelVariant](#g8e-operator-v1-InferenceModelVariant)
+    - [InferenceProgressEvent](#g8e-operator-v1-InferenceProgressEvent)
+    - [InferenceProviderAttemptRecord](#g8e-operator-v1-InferenceProviderAttemptRecord)
+    - [InferenceRequested](#g8e-operator-v1-InferenceRequested)
+    - [InferenceResponseFormat](#g8e-operator-v1-InferenceResponseFormat)
+    - [InferenceResponsePart](#g8e-operator-v1-InferenceResponsePart)
+    - [InferenceResult](#g8e-operator-v1-InferenceResult)
+    - [InferenceThinkingControl](#g8e-operator-v1-InferenceThinkingControl)
+    - [InferenceToolCall](#g8e-operator-v1-InferenceToolCall)
+    - [InferenceToolChoice](#g8e-operator-v1-InferenceToolChoice)
+    - [InferenceToolDeclaration](#g8e-operator-v1-InferenceToolDeclaration)
+    - [InferenceToolResult](#g8e-operator-v1-InferenceToolResult)
     - [ListDeviceLinksRequested](#g8e-operator-v1-ListDeviceLinksRequested)
     - [ListDeviceLinksResult](#g8e-operator-v1-ListDeviceLinksResult)
     - [ListOperatorSlotsRequested](#g8e-operator-v1-ListOperatorSlotsRequested)
@@ -116,8 +135,16 @@
     - [DeterministicStageOutcome](#g8e-operator-v1-DeterministicStageOutcome)
     - [ExecutionStatus](#g8e-operator-v1-ExecutionStatus)
     - [HeartbeatType](#g8e-operator-v1-HeartbeatType)
+    - [InferenceLoadState](#g8e-operator-v1-InferenceLoadState)
+    - [InferenceMessageRole](#g8e-operator-v1-InferenceMessageRole)
+    - [InferenceProviderAttemptStatus](#g8e-operator-v1-InferenceProviderAttemptStatus)
+    - [InferenceRetryClassification](#g8e-operator-v1-InferenceRetryClassification)
+    - [InferenceTimingSource](#g8e-operator-v1-InferenceTimingSource)
+    - [InferenceToolChoiceMode](#g8e-operator-v1-InferenceToolChoiceMode)
     - [L2Status](#g8e-operator-v1-L2Status)
     - [L3Status](#g8e-operator-v1-L3Status)
+    - [ModelRole](#g8e-operator-v1-ModelRole)
+    - [ReceiptFailureCode](#g8e-operator-v1-ReceiptFailureCode)
   
     - [OperatorService](#g8e-operator-v1-OperatorService)
   
@@ -171,6 +198,7 @@ ActionReceipt is the signed proof of an executing, completed, or failed mutation
 | l3_status | [L3Status](#g8e-operator-v1-L3Status) |  | Status of L3 (Notary/Human) proof verification. Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; for compliance. |
 | deterministic_stage_evidence | [DeterministicStageEvidence](#g8e-operator-v1-DeterministicStageEvidence) | repeated |  |
 | final_persistence_attestation | [ReceiptPersistenceAttestation](#g8e-operator-v1-ReceiptPersistenceAttestation) |  |  |
+| failure_code | [ReceiptFailureCode](#g8e-operator-v1-ReceiptFailureCode) |  | Typed classification of a FAILED receipt. UNSPECIFIED on non-failed receipts. Bound into the signature via canonicalization. |
 
 
 
@@ -1269,6 +1297,440 @@ Empty message - just the event type matters
 
 
 
+<a name="g8e-operator-v1-InferenceCompletion"></a>
+
+### InferenceCompletion
+InferenceCompletion is the protocol-owned completion publication for a
+governed inference request. The Inference Node publishes it to the
+results channel only after the L5 Actuator has finalized and signed the
+ActionReceipt, so the complete result and its verified receipt are a
+single correlated outcome. A failed execution carries the FAILED receipt
+and no result, which terminates the Gateway&#39;s dispatch wait immediately
+instead of at the dispatch deadline.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| receipt | [ActionReceipt](#g8e-operator-v1-ActionReceipt) |  | The signed final ActionReceipt for the inference transaction. |
+| result | [InferenceResult](#g8e-operator-v1-InferenceResult) |  | The complete inference result. Absent when the receipt status is not EXECUTION_STATUS_COMPLETED. |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceDispatchRequest"></a>
+
+### InferenceDispatchRequest
+InferenceDispatchRequest is the protocol-owned request body for
+POST /api/v1/inference/dispatch, the mTLS-protected platform-internal
+endpoint the ensemble chat pipeline calls to dispatch a governed
+inference request to the Inference Node.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| role | [ModelRole](#g8e-operator-v1-ModelRole) |  | Chat-tier role for this request (primary, assistant, lite). |
+| model | [string](#string) |  | Requested provider model. A campaign Inference Operator accepts it only when the exact model and digest occur in the frozen registry committed by model_registry_digest; standard inference uses the configured role model. |
+| temperature | [float](#float) |  | Generation temperature override (0 = use backend default). |
+| max_tokens | [int32](#int32) |  | Maximum tokens to generate (0 = use backend default). |
+| keep_alive | [string](#string) |  | Ollama keep-alive duration override (empty = use config default). |
+| target_operator_session_id | [string](#string) |  | Explicit Inference Node target. When empty, the gateway requires exactly one enrolled inference-capable operator for the requestor; zero or multiple matches are rejected. |
+| acting_app_id | [string](#string) |  | Application that initiated the inference request. |
+| case_id | [string](#string) |  | Application context propagated from the chat turn. |
+| investigation_id | [string](#string) |  |  |
+| task_id | [string](#string) |  |  |
+| web_session_id | [string](#string) |  |  |
+| cli_session_id | [string](#string) |  |  |
+| messages | [InferenceMessage](#g8e-operator-v1-InferenceMessage) | repeated | Ordered conversation turns sent to the Inference Node. The node validates and re-scrubs every data-bearing part before crossing the provider boundary. |
+| tools | [InferenceToolDeclaration](#g8e-operator-v1-InferenceToolDeclaration) | repeated | Ordered callable function declarations available to the model. |
+| top_p | [float](#float) | optional |  |
+| top_k | [int32](#int32) | optional |  |
+| stop_sequences | [string](#string) | repeated |  |
+| response_format | [InferenceResponseFormat](#g8e-operator-v1-InferenceResponseFormat) |  |  |
+| request_schema_version | [string](#string) |  |  |
+| tool_choice | [InferenceToolChoice](#g8e-operator-v1-InferenceToolChoice) |  |  |
+| parallel_tool_calls | [bool](#bool) | optional |  |
+| thinking | [InferenceThinkingControl](#g8e-operator-v1-InferenceThinkingControl) |  |  |
+| context_limit | [int32](#int32) | optional |  |
+| provider_attempt_id | [string](#string) |  |  |
+| model_digest | [string](#string) |  |  |
+| campaign_id | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| assignment_id | [string](#string) |  |  |
+| evaluation_attempt_id | [string](#string) |  |  |
+| scenario_id | [string](#string) |  |  |
+| model_registry | [InferenceModelVariant](#g8e-operator-v1-InferenceModelVariant) | repeated |  |
+| model_registry_digest | [string](#string) |  |  |
+| stream | [bool](#bool) |  | When true, the Gateway forwards live InferenceProgressEvent telemetry to the caller while waiting for the authoritative terminal completion. |
+| retry_count | [uint32](#uint32) |  | Zero-based retry ordinal for this provider attempt. |
+| seed | [int32](#int32) | optional | Optional deterministic generation seed forwarded to the provider when supported. Absent means use the provider default. |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceDispatchResponse"></a>
+
+### InferenceDispatchResponse
+InferenceDispatchResponse is the protocol-owned success response for
+POST /api/v1/inference/dispatch. The Gateway returns it only after
+verifying the final receipt signature, persistence attestation,
+transaction identity, and result digest equality. Failure responses use
+the gateway&#39;s standard typed error envelope with a public-safe code.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| transaction_id | [string](#string) |  | Transaction ID correlating the dispatch with the audit chain. |
+| result | [InferenceResult](#g8e-operator-v1-InferenceResult) |  | The complete inference result whose result_digest is bound into the signed receipt. |
+| receipt | [ActionReceipt](#g8e-operator-v1-ActionReceipt) |  | The verified final signed ActionReceipt for the transaction. |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceDispatchStreamFailure"></a>
+
+### InferenceDispatchStreamFailure
+InferenceDispatchStreamFailure is the protocol-owned terminal failure
+frame for a streaming dispatch that already started NDJSON delivery.
+Reason is a public-safe centralized sentinel; it never carries raw
+prompts, model output, or receipt bodies.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| reason | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceDispatchStreamFrame"></a>
+
+### InferenceDispatchStreamFrame
+InferenceDispatchStreamFrame is one NDJSON line in a streaming dispatch
+response. Progress frames are delivery telemetry only. The completion
+frame carries the verified terminal result and signed receipt. A failure
+frame is the explicit terminal outcome when cancellation, disconnect,
+backpressure, or event-to-terminal hash reconciliation prevents a
+verified completion after the HTTP response has started.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| progress | [InferenceProgressEvent](#g8e-operator-v1-InferenceProgressEvent) |  |  |
+| completion | [InferenceDispatchResponse](#g8e-operator-v1-InferenceDispatchResponse) |  |  |
+| failure | [InferenceDispatchStreamFailure](#g8e-operator-v1-InferenceDispatchStreamFailure) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceMessage"></a>
+
+### InferenceMessage
+InferenceMessage preserves one ordered conversation turn without prompt flattening.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| role | [InferenceMessageRole](#g8e-operator-v1-InferenceMessageRole) |  |  |
+| parts | [InferenceMessagePart](#g8e-operator-v1-InferenceMessagePart) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceMessagePart"></a>
+
+### InferenceMessagePart
+InferenceMessagePart carries exactly one typed part of a conversation turn.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| text | [string](#string) |  |  |
+| tool_call | [InferenceToolCall](#g8e-operator-v1-InferenceToolCall) |  |  |
+| tool_result | [InferenceToolResult](#g8e-operator-v1-InferenceToolResult) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceModelVariant"></a>
+
+### InferenceModelVariant
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| model | [string](#string) |  |  |
+| digest | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceProgressEvent"></a>
+
+### InferenceProgressEvent
+InferenceProgressEvent carries bounded incremental provider output for
+live cross-boundary delivery telemetry. It is not authoritative; the
+signed InferenceCompletion remains the sole terminal outcome.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| provider_attempt_id | [string](#string) |  | Stable provider-attempt identity copied from the governed request. |
+| sequence | [uint32](#uint32) |  | Monotonic sequence number for this attempt, starting at 1. |
+| parts | [InferenceResponsePart](#g8e-operator-v1-InferenceResponsePart) | repeated | Ordered response parts emitted by this provider stream event. |
+| time_to_first_token_ns | [int64](#int64) | optional | Measured time from immediately before the provider request to the first observable thinking, text, or tool-call event. Present only on the first progress event that carries observable output for the attempt. |
+| served_model | [string](#string) |  | Provider-served model tag when known from the stream event. |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceProviderAttemptRecord"></a>
+
+### InferenceProviderAttemptRecord
+InferenceProviderAttemptRecord is the durable operator-local record for one
+governed provider attempt. It is written before provider contact and
+finalized only after terminal receipt/result evidence is available.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| provider_attempt_id | [string](#string) |  |  |
+| transaction_id | [string](#string) |  |  |
+| retry_count | [uint32](#uint32) |  |  |
+| retry_classification | [InferenceRetryClassification](#g8e-operator-v1-InferenceRetryClassification) |  |  |
+| status | [InferenceProviderAttemptStatus](#g8e-operator-v1-InferenceProviderAttemptStatus) |  |  |
+| started_at_unix_ms | [int64](#int64) |  |  |
+| completed_at_unix_ms | [int64](#int64) |  |  |
+| result_digest | [string](#string) |  |  |
+| failure_summary | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceRequested"></a>
+
+### InferenceRequested
+Payload for g8e.v1.operator.inference.requested. The handler receives an ordered typed conversation, validates and scrubs every data-bearing part, and sends only the normalized request across the provider boundary.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| role | [ModelRole](#g8e-operator-v1-ModelRole) |  | Chat-tier role for this request (primary, assistant, lite). |
+| model | [string](#string) |  | Ollama model name (e.g., &#34;gemma3:4b&#34;). Encodes the role; Ollama routes by model name in the API call. |
+| temperature | [float](#float) |  | Generation temperature override (0 = use backend default). |
+| max_tokens | [int32](#int32) |  | Maximum tokens to generate (0 = use backend default). |
+| keep_alive | [string](#string) |  | Ollama keep-alive duration override (empty = use config default). |
+| messages | [InferenceMessage](#g8e-operator-v1-InferenceMessage) | repeated | Ordered conversation turns sent to the backend. |
+| tools | [InferenceToolDeclaration](#g8e-operator-v1-InferenceToolDeclaration) | repeated | Ordered callable function declarations available to the model. |
+| top_p | [float](#float) | optional |  |
+| top_k | [int32](#int32) | optional |  |
+| stop_sequences | [string](#string) | repeated |  |
+| response_format | [InferenceResponseFormat](#g8e-operator-v1-InferenceResponseFormat) |  |  |
+| request_schema_version | [string](#string) |  |  |
+| tool_choice | [InferenceToolChoice](#g8e-operator-v1-InferenceToolChoice) |  |  |
+| parallel_tool_calls | [bool](#bool) | optional |  |
+| thinking | [InferenceThinkingControl](#g8e-operator-v1-InferenceThinkingControl) |  |  |
+| context_limit | [int32](#int32) | optional |  |
+| provider_attempt_id | [string](#string) |  |  |
+| model_digest | [string](#string) |  |  |
+| campaign_id | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| assignment_id | [string](#string) |  |  |
+| evaluation_attempt_id | [string](#string) |  |  |
+| scenario_id | [string](#string) |  |  |
+| model_registry | [InferenceModelVariant](#g8e-operator-v1-InferenceModelVariant) | repeated |  |
+| model_registry_digest | [string](#string) |  |  |
+| stream | [bool](#bool) |  | When true, the Inference Node publishes bounded InferenceProgressEvent telemetry on the results channel while the provider stream is active. Progress events are delivery telemetry only; the signed InferenceCompletion remains the sole authoritative terminal outcome. |
+| retry_count | [uint32](#uint32) |  | Zero-based retry ordinal for this provider attempt. Each retry uses a distinct provider_attempt_id and is durably retained. |
+| seed | [int32](#int32) | optional | Optional deterministic generation seed forwarded to the provider when supported. Absent means use the provider default. |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceResponseFormat"></a>
+
+### InferenceResponseFormat
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| media_type | [string](#string) |  |  |
+| json_schema | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceResponsePart"></a>
+
+### InferenceResponsePart
+InferenceResponsePart carries exactly one typed model response part.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| text | [string](#string) |  |  |
+| tool_call | [InferenceToolCall](#g8e-operator-v1-InferenceToolCall) |  |  |
+| thinking | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceResult"></a>
+
+### InferenceResult
+InferenceResult carries ordered response parts, usage metadata, and the finish reason returned by the backend. The governed envelope carries this for the receipt and audit chain.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| prompt_tokens | [int32](#int32) |  | Number of prompt tokens consumed. |
+| completion_tokens | [int32](#int32) |  | Number of completion tokens generated. |
+| total_tokens | [int32](#int32) |  | Total tokens (prompt &#43; completion). |
+| finish_reason | [string](#string) |  | Finish reason (e.g., &#34;stop&#34;, &#34;length&#34;). |
+| model | [string](#string) |  | Model that produced the result (echoed from the request or resolved by the backend). |
+| result_digest | [string](#string) |  | Canonical digest of the complete result: lowercase hex SHA-256 over the deterministic protobuf serialization of this message with result_digest cleared. The Inference Node computes it at execution time; the signed ActionReceipt&#39;s result_summary binds it, and the User Gateway verifies digest equality before returning success to the caller. |
+| parts | [InferenceResponsePart](#g8e-operator-v1-InferenceResponsePart) | repeated | Ordered model response parts covered by result_digest. |
+| usage_reported | [bool](#bool) |  |  |
+| thinking_tokens | [int32](#int32) | optional |  |
+| cache_tokens | [int32](#int32) | optional |  |
+| load_duration_ns | [int64](#int64) | optional |  |
+| prompt_eval_duration_ns | [int64](#int64) | optional |  |
+| generation_duration_ns | [int64](#int64) | optional |  |
+| total_duration_ns | [int64](#int64) | optional |  |
+| time_to_first_token_ns | [int64](#int64) | optional |  |
+| timing_source | [InferenceTimingSource](#g8e-operator-v1-InferenceTimingSource) |  |  |
+| provider_attempt_id | [string](#string) |  |  |
+| requested_model | [string](#string) |  |  |
+| requested_model_digest | [string](#string) |  |  |
+| served_model_digest | [string](#string) |  |  |
+| normalized_request_hash | [string](#string) |  |  |
+| output_hash | [string](#string) |  |  |
+| campaign_id | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| assignment_id | [string](#string) |  |  |
+| evaluation_attempt_id | [string](#string) |  |  |
+| scenario_id | [string](#string) |  |  |
+| model_registry_digest | [string](#string) |  |  |
+| retry_count | [uint32](#uint32) |  |  |
+| load_state | [InferenceLoadState](#g8e-operator-v1-InferenceLoadState) |  |  |
+| retry_classification | [InferenceRetryClassification](#g8e-operator-v1-InferenceRetryClassification) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceThinkingControl"></a>
+
+### InferenceThinkingControl
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| enabled | [bool](#bool) |  |  |
+| level | [string](#string) |  |  |
+| include_thoughts | [bool](#bool) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceToolCall"></a>
+
+### InferenceToolCall
+InferenceToolCall carries a model-requested function invocation. arguments_json is a canonical JSON object.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| call_id | [string](#string) |  |  |
+| name | [string](#string) |  |  |
+| arguments_json | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceToolChoice"></a>
+
+### InferenceToolChoice
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| mode | [InferenceToolChoiceMode](#g8e-operator-v1-InferenceToolChoiceMode) |  |  |
+| allowed_tool_names | [string](#string) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceToolDeclaration"></a>
+
+### InferenceToolDeclaration
+InferenceToolDeclaration defines one callable function. json_schema is a canonical strict JSON Schema object.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| name | [string](#string) |  |  |
+| description | [string](#string) |  |  |
+| json_schema | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-InferenceToolResult"></a>
+
+### InferenceToolResult
+InferenceToolResult carries a tool continuation value. result_json is a canonical JSON value.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| call_id | [string](#string) |  |  |
+| name | [string](#string) |  |  |
+| result_json | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="g8e-operator-v1-ListDeviceLinksRequested"></a>
 
 ### ListDeviceLinksRequested
@@ -1544,7 +2006,6 @@ Reads a specific resource from the downstream MCP server.
 | is_slot | [bool](#bool) |  |  |
 | claimed | [bool](#bool) |  |  |
 | operator_type | [string](#string) |  |  |
-| cloud_subtype | [string](#string) |  |  |
 | system_fingerprint | [string](#string) |  |  |
 | created_at_unix_ms | [int64](#int64) |  |  |
 | updated_at_unix_ms | [int64](#int64) |  |  |
@@ -2260,6 +2721,88 @@ Heartbeat type enum
 
 
 
+<a name="g8e-operator-v1-InferenceLoadState"></a>
+
+### InferenceLoadState
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| INFERENCE_LOAD_STATE_UNSPECIFIED | 0 |  |
+| INFERENCE_LOAD_STATE_COLD | 1 |  |
+| INFERENCE_LOAD_STATE_WARM | 2 |  |
+| INFERENCE_LOAD_STATE_UNAVAILABLE | 3 |  |
+
+
+
+<a name="g8e-operator-v1-InferenceMessageRole"></a>
+
+### InferenceMessageRole
+InferenceMessageRole identifies the semantic role of one ordered conversation turn.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| INFERENCE_MESSAGE_ROLE_UNSPECIFIED | 0 |  |
+| INFERENCE_MESSAGE_ROLE_SYSTEM | 1 |  |
+| INFERENCE_MESSAGE_ROLE_USER | 2 |  |
+| INFERENCE_MESSAGE_ROLE_ASSISTANT | 3 |  |
+| INFERENCE_MESSAGE_ROLE_TOOL | 4 |  |
+
+
+
+<a name="g8e-operator-v1-InferenceProviderAttemptStatus"></a>
+
+### InferenceProviderAttemptStatus
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED | 0 |  |
+| INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS | 1 |  |
+| INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED | 2 |  |
+| INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED | 3 |  |
+
+
+
+<a name="g8e-operator-v1-InferenceRetryClassification"></a>
+
+### InferenceRetryClassification
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED | 0 |  |
+| INFERENCE_RETRY_CLASSIFICATION_NONE | 1 |  |
+| INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT | 2 |  |
+
+
+
+<a name="g8e-operator-v1-InferenceTimingSource"></a>
+
+### InferenceTimingSource
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| INFERENCE_TIMING_SOURCE_UNSPECIFIED | 0 |  |
+| INFERENCE_TIMING_SOURCE_PROVIDER | 1 |  |
+
+
+
+<a name="g8e-operator-v1-InferenceToolChoiceMode"></a>
+
+### InferenceToolChoiceMode
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| INFERENCE_TOOL_CHOICE_MODE_UNSPECIFIED | 0 |  |
+| INFERENCE_TOOL_CHOICE_MODE_AUTO | 1 |  |
+| INFERENCE_TOOL_CHOICE_MODE_NONE | 2 |  |
+| INFERENCE_TOOL_CHOICE_MODE_REQUIRED | 3 |  |
+
+
+
 <a name="g8e-operator-v1-L2Status"></a>
 
 ### L2Status
@@ -2287,6 +2830,53 @@ Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; fo
 | L3_STATUS_NOT_REQUIRED | 1 | L3 proof not required by posture (doctrine/consensus) |
 | L3_STATUS_REQUIRED_VALID | 2 | L3 proof required and valid |
 | L3_STATUS_REQUIRED_FAILED | 3 | L3 proof required but missing or invalid |
+
+
+
+<a name="g8e-operator-v1-ModelRole"></a>
+
+### ModelRole
+ModelRole identifies the chat-tier role for a governed inference request.
+Maps directly to the three tiers in ensemble&#39;s LLMSettings.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| MODEL_ROLE_UNSPECIFIED | 0 |  |
+| MODEL_ROLE_PRIMARY | 1 |  |
+| MODEL_ROLE_ASSISTANT | 2 |  |
+| MODEL_ROLE_LITE | 3 |  |
+
+
+
+<a name="g8e-operator-v1-ReceiptFailureCode"></a>
+
+### ReceiptFailureCode
+ReceiptFailureCode is the typed classification of a FAILED ActionReceipt.
+The L5 actuator stamps it at finalization so verifiers can distinguish
+governance rejections, client faults, and provider failures without
+string-matching the result_summary. It is bound into the receipt signature.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| RECEIPT_FAILURE_CODE_UNSPECIFIED | 0 |  |
+| RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED | 1 | The transaction failed governance verification before execution (L1 doctrine, L2 consensus, L3 notary, identity, replay, expiry). |
+| RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED | 2 | The request model did not equal the configured role model. |
+| RECEIPT_FAILURE_CODE_ROLE_INVALID | 3 | The request carried an unspecified or unknown model role. |
+| RECEIPT_FAILURE_CODE_MODEL_REF_INVALID | 4 | The request carried a malformed model reference. |
+| RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE | 5 | The inference backend was unreachable or not registered. |
+| RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT | 6 | The inference backend request timed out. |
+| RECEIPT_FAILURE_CODE_GENERATE_FAILED | 7 | The inference backend failed generation. |
+| RECEIPT_FAILURE_CODE_EXECUTION_FAILED | 8 | Any other execution failure. |
+| RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND | 9 | The requested or configured model is absent from the provider&#39;s model store. |
+| RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID | 10 | The provider returned a malformed or oversized response. |
+| RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID | 11 |  |
+| RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED | 12 |  |
+| RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED | 13 |  |
+| RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH | 14 |  |
+| RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH | 15 |  |
+| RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID | 16 |  |
+| RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID | 17 |  |
+| RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID | 18 |  |
 
 
  

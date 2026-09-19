@@ -157,7 +157,12 @@ class TribunalAuditor:
         for attempt in range(max_attempts):
             try:
                 call_result = await call_auditor_llm(
-                    provider, model, prompt, auditor_persona, attempt
+                    provider,
+                    model,
+                    prompt,
+                    auditor_persona,
+                    attempt,
+                    g8e_context=self.emitter.g8e_context,
                 )
                 model_calls.append(call_result.telemetry)
                 if call_result.error:

@@ -10,6 +10,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -41,14 +42,16 @@ Prerequisites:
   - A Cloudflare account with a registered domain
 
 Subcommands:
-  create   Create a named tunnel, route DNS, and generate config.yml
-  run      Start the tunnel (foreground, blocks until interrupted)
-  status   Check tunnel connectivity and gateway health through the tunnel
+  create    Create a named tunnel, route DNS, and generate config.yml
+  route-dns Route a hostname to a tunnel in the correct Cloudflare DNS zone
+  run       Start the tunnel (foreground, blocks until interrupted)
+  status    Check tunnel connectivity and gateway health through the tunnel
 `,
 	}
 
 	cmd.AddCommand(
 		tunnelCreateCmd(),
+		tunnelRouteDNSCmd(),
 		tunnelRunCmd(),
 		tunnelStatusCmd(),
 	)
@@ -72,6 +75,7 @@ func tunnelCreateCmd() *cobra.Command {
 	var hostname string
 	var configDir string
 	var httpsPort int
+	var service string
 	var caBundle string
 	var originServerName string
 	var skipDNS bool
@@ -115,7 +119,7 @@ Prerequisites:
 				if err != nil {
 					return fmt.Errorf("%w: cannot determine home directory: %w", constants.ErrInternal, err)
 				}
-				configDir = filepath.Join(homeDir, ".cloudflared")
+				configDir = filepath.Join(homeDir, constants.CloudflaredDirname)
 			}
 
 			cmd.Println("[g8e] Cloudflare Tunnel Setup")
@@ -176,13 +180,20 @@ Prerequisites:
 				tunnelID = "<tunnel-id>"
 			}
 
-			credentialsFile := filepath.Join(configDir, tunnelID+".json")
+			credentialsFile := filepath.Join(configDir, tunnelID+constants.CloudflaredCredentialFileExtension)
+			if service == "" {
+				service = fmt.Sprintf("https://localhost:%d", httpsPort)
+			}
+			serviceURL, err := url.Parse(service)
+			if err != nil || serviceURL.Host == "" || (serviceURL.Scheme != "http" && serviceURL.Scheme != "https") || serviceURL.User != nil || serviceURL.RawQuery != "" || serviceURL.Fragment != "" {
+				return fmt.Errorf("%w: --service must be an http or https origin URL", constants.ErrValidationFailed)
+			}
 
-			configContent := generateTunnelConfig(tunnelID, credentialsFile, hostname, httpsPort, caBundle, originServerName)
+			configContent := generateTunnelConfig(tunnelID, credentialsFile, hostname, service, caBundle, originServerName)
 			if err := os.MkdirAll(configDir, 0o700); err != nil {
 				return fmt.Errorf("%w: create config directory: %w", constants.ErrInternal, err)
 			}
-			configPath := filepath.Join(configDir, "config.yml")
+			configPath := filepath.Join(configDir, constants.CloudflaredConfigFilename)
 			if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
 				return fmt.Errorf("%w: write config.yml: %w", constants.ErrInternal, err)
 			}
@@ -201,8 +212,8 @@ Prerequisites:
 			cmd.Printf("  3. Verify connectivity:\n")
 			cmd.Printf("     g8e gw tunnel status --hostname %s\n", hostname)
 			cmd.Println()
-			cmd.Printf("  4. Enroll a frontend:\n")
-			cmd.Printf("     g8e auth enroll gui enroll --origin https://your-app.lovable.app --public-base-url https://%s\n", hostname)
+			cmd.Printf("  4. Connect a frontend:\n")
+			cmd.Printf("     g8e gw connect https://your-app.lovable.app\n")
 
 			return nil
 		},
@@ -212,11 +223,20 @@ Prerequisites:
 	cmd.Flags().StringVar(&hostname, "hostname", "", "Public hostname for the tunnel (e.g. console.g8e.ai)")
 	cmd.Flags().StringVar(&configDir, "config-dir", "", "cloudflared config directory (default: ~/.cloudflared)")
 	cmd.Flags().IntVar(&httpsPort, "https-port", 0, "Gateway HTTPS port (default: 8443)")
+	cmd.Flags().StringVar(&service, "service", "", "Origin service URL (default: https://localhost:<https-port>)")
 	cmd.Flags().StringVar(&caBundle, "ca-bundle", "", "Path to CA bundle for origin TLS verification (default: noTLSVerify)")
 	cmd.Flags().StringVar(&originServerName, "origin-server-name", "", "Origin server name for TLS SNI (default: g8e.local)")
 	cmd.Flags().BoolVar(&skipDNS, "skip-dns", false, "Skip DNS routing (use if CNAME already exists)")
 
 	return cmd
+}
+
+func buildTunnelRunArgs(tunnelName, configDir string) []string {
+	args := make([]string, 0, 5)
+	if configDir != "" {
+		args = append(args, "--config", filepath.Join(configDir, constants.CloudflaredConfigFilename))
+	}
+	return append(args, "tunnel", "run", tunnelName)
 }
 
 // tunnelRunCmd starts the cloudflared tunnel in the foreground.
@@ -243,11 +263,7 @@ config.yml) before starting the tunnel.`,
 				return fmt.Errorf("%w: --name is required", constants.ErrMissingRequiredField)
 			}
 
-			args2 := []string{"tunnel", "run"}
-			if configDir != "" {
-				args2 = append(args2, "--config", filepath.Join(configDir, "config.yml"))
-			}
-			args2 = append(args2, tunnelName)
+			args2 := buildTunnelRunArgs(tunnelName, configDir)
 
 			cmd.Printf("[g8e] Starting Cloudflare tunnel '%s'...\n", tunnelName)
 			cmd.Println("[g8e] Press Ctrl+C to stop.")
@@ -273,11 +289,7 @@ config.yml) before starting the tunnel.`,
 			}()
 
 			if err := c.Wait(); err != nil {
-				// Exit code 0 or signal termination is not an error
-				if c.ProcessState != nil && c.ProcessState.Exited() {
-					return nil
-				}
-				return fmt.Errorf("cloudflared exited with error: %w", err)
+				return fmt.Errorf("%w: cloudflared exited: %w", constants.ErrServiceUnavailable, err)
 			}
 
 			return nil
@@ -373,7 +385,7 @@ This command:
 // cloudflaredAuthenticated checks whether cloudflared has been authenticated
 // by looking for the cert.pem file in the config directory.
 func cloudflaredAuthenticated(configDir string) bool {
-	certPath := filepath.Join(configDir, "cert.pem")
+	certPath := filepath.Join(configDir, constants.CloudflaredOriginCertFilename)
 	_, err := os.Stat(certPath)
 	return err == nil
 }
@@ -420,7 +432,7 @@ func getTunnelID(tunnelName string) (string, error) {
 
 // generateTunnelConfig produces the cloudflared config.yml content for the
 // g8e Gateway.
-func generateTunnelConfig(tunnelID, credentialsFile, hostname string, httpsPort int, caBundle, originServerName string) string {
+func generateTunnelConfig(tunnelID, credentialsFile, hostname, service, caBundle, originServerName string) string {
 	var sb strings.Builder
 
 	fmt.Fprintf(&sb, "tunnel: %s\n", tunnelID)
@@ -428,19 +440,19 @@ func generateTunnelConfig(tunnelID, credentialsFile, hostname string, httpsPort 
 	sb.WriteString("\n")
 	sb.WriteString("ingress:\n")
 	fmt.Fprintf(&sb, "  - hostname: %s\n", hostname)
-	fmt.Fprintf(&sb, "    service: https://localhost:%d\n", httpsPort)
-	sb.WriteString("    originRequest:\n")
-
-	if caBundle != "" {
-		fmt.Fprintf(&sb, "      originCaPool: %s\n", caBundle)
-		if originServerName != "" {
-			fmt.Fprintf(&sb, "      originServerName: %s\n", originServerName)
+	fmt.Fprintf(&sb, "    service: %s\n", service)
+	if strings.HasPrefix(service, "https://") {
+		sb.WriteString("    originRequest:\n")
+		if caBundle != "" {
+			fmt.Fprintf(&sb, "      originCaPool: %s\n", caBundle)
+			if originServerName != "" {
+				fmt.Fprintf(&sb, "      originServerName: %s\n", originServerName)
+			}
+		} else {
+			sb.WriteString("      noTLSVerify: true\n")
 		}
-	} else {
-		sb.WriteString("      noTLSVerify: true\n")
+		sb.WriteString("      http2Origin: true\n")
 	}
-
-	sb.WriteString("      http2Origin: true\n")
 	sb.WriteString("  - service: http_status:404\n")
 
 	return sb.String()

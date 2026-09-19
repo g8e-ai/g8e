@@ -13,15 +13,19 @@ Uses a lightweight model optimized for quick text generation tasks.
 """
 
 import logging
+import time
 
 from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.errors import OllamaEmptyResponseError
 from app.llm import get_llm_provider, Role
-from app.models.settings import G8eeUserSettings
-from app.models.agents.title_generator import CaseTitleResult
 from app.llm.llm_types import Content, Part, LiteLLMSettings
-from app.utils.agent_persona_loader import get_agent_persona
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.llm.model_evidence import model_boundary_hash
+from app.models.agents.title_generator import CaseTitleResult
+from app.models.http_context import G8eHttpContext
 from app.models.model_configs import get_model_config
+from app.models.settings import G8eeUserSettings
+from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +35,7 @@ async def generate_case_title(
     *,
     max_length: int = 80,
     settings: G8eeUserSettings,
+    g8e_context: G8eHttpContext | None = None,
 ) -> CaseTitleResult:
     """
     Generate a concise case title from a description using the configured LLM.
@@ -39,6 +44,7 @@ async def generate_case_title(
         description: The case description or initial message
         max_length: Maximum title length in characters (default: 80)
         settings: Optional Settings object
+        g8e_context: Request-scoped evaluation and governance correlation
 
     Returns:
         CaseTitleResult containing generated title and fallback flag
@@ -85,11 +91,43 @@ async def generate_case_title(
             system_instructions="",
             response_format=None,
         )
+        prepare_provider_call(provider, g8e_context=g8e_context)
+        contents = [Content(role=Role.USER, parts=[Part.from_text(prompt)])]
+        input_artifact_hash = model_boundary_hash({
+            "model": model,
+            "contents": contents,
+            "settings": lite_llm_settings,
+        })
+        monotonic_start = time.monotonic()
         try:
             response = await provider.generate_content_lite(
                 model=model,
-                contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
+                contents=contents,
                 lite_llm_settings=lite_llm_settings,
+            )
+            monotonic_end = time.monotonic()
+            usage = response.usage_metadata
+            finish_reason = response.candidates[0].finish_reason if response.candidates else None
+            model_call = build_model_call_telemetry(
+                provider=provider,
+                agent_role="scribe",
+                model_role="lite",
+                model=model,
+                monotonic_start=monotonic_start,
+                monotonic_end=monotonic_end,
+                input_artifact_hash=input_artifact_hash,
+                input_tokens=usage.prompt_token_count,
+                output_tokens=usage.candidates_token_count,
+                thinking_tokens=usage.thinking_token_count,
+                cache_tokens=usage.cache_token_count,
+                total_tokens=usage.total_token_count,
+                usage_reported=usage.usage_reported,
+                finish_reason=finish_reason,
+                generation_duration_seconds=usage.eval_duration_seconds,
+                prompt_eval_duration_seconds=usage.prompt_eval_duration_seconds,
+                total_duration_seconds=usage.total_duration_seconds,
+                load_duration_seconds=usage.load_duration_seconds,
+                output_artifact_hash=model_boundary_hash(response.text or ""),
             )
             if response.text is None:
                 raise OllamaEmptyResponseError(
@@ -108,8 +146,20 @@ async def generate_case_title(
             generated_title = response.text.strip()
         except OllamaEmptyResponseError as exc:
             logger.warning("[TITLE-GEN] No response from LLM, using fallback title: %s", exc)
+            failed_call = build_model_call_telemetry(
+                provider=provider,
+                agent_role="scribe",
+                model_role="lite",
+                model=model,
+                monotonic_start=monotonic_start,
+                input_artifact_hash=input_artifact_hash,
+                succeeded=False,
+                error_type=type(exc).__name__,
+            )
             return CaseTitleResult(
-                generated_title=_create_fallback_title(description, max_length), fallback=True
+                generated_title=_create_fallback_title(description, max_length),
+                fallback=True,
+                model_call=failed_call,
             )
 
         if generated_title.startswith('"') and generated_title.endswith('"'):
@@ -122,12 +172,18 @@ async def generate_case_title(
 
         if not generated_title or len(generated_title.strip()) < 5:
             return CaseTitleResult(
-                generated_title=_create_fallback_title(description, max_length), fallback=True
+                generated_title=_create_fallback_title(description, max_length),
+                fallback=True,
+                model_call=model_call,
             )
 
         logger.info("[TITLE-GEN] Title generated: %s", generated_title)
 
-        return CaseTitleResult(generated_title=generated_title, fallback=False)
+        return CaseTitleResult(
+            generated_title=generated_title,
+            fallback=False,
+            model_call=model_call,
+        )
 
     except Exception as e:
         logger.error("[TITLE-GEN] Failed to generate title: %s", e)

@@ -1,0 +1,58 @@
+{
+  "description": "Authenticated first paint. One running agent, one active investigation run, empty evals, no downloads. Resource/throughput measurements omitted (unavailable).",
+  "scenario": "bootstrap",
+  "snapshot": {
+    "active_run": {
+      "completed_tasks": 0,
+      "display_name": "Disclosure-safe case title",
+      "evidence_count": 0,
+      "has_receipts": false,
+      "observed_at": "2026-09-09T12:00:00Z",
+      "run_id": "inv-001",
+      "run_kind": "investigation",
+      "schema_version": "1.0.0",
+      "status": "running",
+      "total_tasks": 0
+    },
+    "agents": [
+      {
+        "agent_id": "user-a:sage",
+        "display_name": "Sage",
+        "freshness": "observed",
+        "observed_at": "2026-09-09T12:00:00Z",
+        "role": "sage",
+        "schema_version": "1.0.0",
+        "status": "running"
+      }
+    ],
+    "downloads": [],
+    "generated_at": "2026-09-09T12:00:00Z",
+    "latest_evals": [],
+    "measurements": {
+      "schema_version": "1.0.0"
+    },
+    "overview": {
+      "agents_running": 1,
+      "agents_running_freshness": "observed",
+      "generated_at": "2026-09-09T12:00:00Z",
+      "schema_version": "1.0.0",
+      "tasks_in_queue": 0,
+      "tasks_in_queue_freshness": "observed"
+    },
+    "recent_runs": [
+      {
+        "completed_tasks": 0,
+        "display_name": "Disclosure-safe case title",
+        "evidence_count": 0,
+        "has_receipts": false,
+        "observed_at": "2026-09-09T12:00:00Z",
+        "run_id": "inv-001",
+        "run_kind": "investigation",
+        "schema_version": "1.0.0",
+        "status": "running",
+        "total_tasks": 0
+      }
+    ],
+    "schema_version": "1.0.0"
+  }
+}

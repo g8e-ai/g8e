@@ -32,6 +32,12 @@ var APIPaths = struct {
 	OperatorsReauth   string `json:"operators_reauth"`
 	OperatorsSession  string `json:"operators_session"`
 	OperatorsCommands string `json:"operators_commands"`
+	// Inference dispatch route (g8ellama). Platform-internal endpoint on the
+	// User Gateway that the ensemble chat pipeline calls to dispatch a
+	// governed inference request to the Inference Node.
+	InferenceDispatch                    string `json:"inference_dispatch"`
+	InferenceProviderObservations        string `json:"inference_provider_observations"`
+	InferenceModelProvenanceAttestations string `json:"inference_model_provenance_attestations"`
 	// Intent routes
 	GrantIntent  string `json:"grant_intent"`
 	RevokeIntent string `json:"revoke_intent"`
@@ -70,6 +76,11 @@ var APIPaths = struct {
 	AuditSummary        string `json:"audit_summary"`
 	AuditReport         string `json:"audit_report"`
 	AuditStream         string `json:"audit_stream"`
+	// Public feed routes
+	PublicFeedBatches  string `json:"public_feed_batches"`
+	PublicFeedSnapshot string `json:"public_feed_snapshot"`
+	// Native eval campaign publication state (gateway-owned idempotency)
+	EvalCampaignPublicationStateByRun string `json:"eval_campaign_publication_state_by_run"`
 	// User routes
 	Users   string `json:"users"`
 	UsersMe string `json:"users_me"`
@@ -89,6 +100,9 @@ var APIPaths = struct {
 	AuthCLIRecoveryComplete                  string `json:"auth_cli_recovery_complete"`
 	AuthCLIRotate                            string `json:"auth_cli_rotate"`
 	AuthCLIRefresh                           string `json:"auth_cli_refresh"`
+	AuthCLIBind                              string `json:"auth_cli_bind"`
+	AuthCLIUnbind                            string `json:"auth_cli_unbind"`
+	AuthCLISession                           string `json:"auth_cli_session"`
 	AuthPasskeys                             string `json:"auth_passkeys"`
 	AuthPasskeysByID                         string `json:"auth_passkeys_by_id"`
 	AuthPasskeysJITRegisterChallenge         string `json:"auth_passkeys_jit_register_challenge"`
@@ -135,6 +149,23 @@ var APIPaths = struct {
 	DeployScriptWindows string `json:"deploy_script_windows"`
 	// Console SPA
 	ConsolePrefix string `json:"console_prefix"`
+	// Observe API routes (passkey-scoped, read-only observability surface)
+	ObservePrefix        string `json:"observe_prefix"`
+	ObserveBootstrap     string `json:"observe_bootstrap"`
+	ObserveRuns          string `json:"observe_runs"`
+	ObserveRunsByID      string `json:"observe_runs_by_id"`
+	ObserveEvals         string `json:"observe_evals"`
+	ObserveEvalsByID     string `json:"observe_evals_by_id"`
+	ObserveDownloads     string `json:"observe_downloads"`
+	ObserveDownloadsByID string `json:"observe_downloads_by_id"`
+	// Observe producer routes (mTLS-authenticated, ensemble-only mutation
+	// surface for persisting agent and run state projections). These are
+	// never browser-accessible; the RouteAuthMTLS classification is
+	// explicit so the producer sub-prefix does not inherit the
+	// RouteAuthWebSession classification of the observe prefix.
+	ObserveProducerPrefix     string `json:"observe_producer_prefix"`
+	ObserveProducerAgentState string `json:"observe_producer_agent_state"`
+	ObserveProducerRunState   string `json:"observe_producer_run_state"`
 	// WebSocket prefix
 	WSPrefix string `json:"ws_prefix"`
 	// User routes
@@ -165,15 +196,18 @@ var APIPaths = struct {
 	GovernanceSignersByID:   "/api/v1/governance/signers/",
 	GovernanceSignersPrefix: "/api/v1/governance/signers/",
 	// Operator routes
-	Operators:         "/api/v1/operators",
-	OperatorsByID:     "/api/v1/operators/",
-	OperatorsValidate: "/api/v1/operators/validate",
-	OperatorsBind:     "/api/v1/operators/bind",
-	OperatorsUnbind:   "/api/v1/operators/unbind",
-	OperatorsTarget:   "/api/v1/operators/target",
-	OperatorsReauth:   "/api/v1/operators/reauth",
-	OperatorsSession:  "/api/v1/operators/session/",
-	OperatorsCommands: "/api/v1/operators/commands",
+	Operators:                            "/api/v1/operators",
+	OperatorsByID:                        "/api/v1/operators/",
+	OperatorsValidate:                    "/api/v1/operators/validate",
+	OperatorsBind:                        "/api/v1/operators/bind",
+	OperatorsUnbind:                      "/api/v1/operators/unbind",
+	OperatorsTarget:                      "/api/v1/operators/target",
+	OperatorsReauth:                      "/api/v1/operators/reauth",
+	OperatorsSession:                     "/api/v1/operators/session/",
+	OperatorsCommands:                    "/api/v1/operators/commands",
+	InferenceDispatch:                    "/api/v1/inference/dispatch",
+	InferenceProviderObservations:        "/api/v1/inference/provider-observations/",
+	InferenceModelProvenanceAttestations: "/api/v1/inference/model-provenance/attestations/",
 	// Intent routes
 	GrantIntent:  "/api/v1/operators/{operator_id}/intents/grant",
 	RevokeIntent: "/api/v1/operators/{operator_id}/intents/revoke",
@@ -212,6 +246,11 @@ var APIPaths = struct {
 	AuditSummary:        "/api/v1/audit/summary",
 	AuditReport:         "/api/v1/audit/report",
 	AuditStream:         "/api/v1/audit/stream",
+	// Public feed routes
+	PublicFeedBatches:  "/api/v1/public-feed/batches",
+	PublicFeedSnapshot: "/api/v1/public-feed/snapshot",
+	// Native eval campaign publication state
+	EvalCampaignPublicationStateByRun: "/api/v1/eval/campaign/runs/",
 	// User routes
 	Users:   "/api/v1/users",
 	UsersMe: "/api/v1/users/me",
@@ -231,6 +270,9 @@ var APIPaths = struct {
 	AuthCLIRecoveryComplete:                  "/api/v1/auth/cli/recovery/complete",
 	AuthCLIRotate:                            "/api/v1/auth/cli/rotate",
 	AuthCLIRefresh:                           "/api/v1/auth/cli/refresh",
+	AuthCLIBind:                              "/api/v1/auth/cli/bind",
+	AuthCLIUnbind:                            "/api/v1/auth/cli/unbind",
+	AuthCLISession:                           "/api/v1/auth/cli/session",
 	AuthPasskeys:                             "/api/v1/auth/passkeys",
 	AuthPasskeysByID:                         "/api/v1/auth/passkeys/",
 	AuthPasskeysJITRegisterChallenge:         "/api/v1/auth/passkeys/jit-register/challenge",
@@ -277,6 +319,19 @@ var APIPaths = struct {
 	DeployScriptWindows: "/" + DeployScriptFilenameWindows,
 	// Console SPA
 	ConsolePrefix: "/console/",
+	// Observe API routes (passkey-scoped, read-only observability surface)
+	ObservePrefix:        "/api/v1/observe/",
+	ObserveBootstrap:     "/api/v1/observe/bootstrap",
+	ObserveRuns:          "/api/v1/observe/runs",
+	ObserveRunsByID:      "/api/v1/observe/runs/",
+	ObserveEvals:         "/api/v1/observe/evals",
+	ObserveEvalsByID:     "/api/v1/observe/evals/",
+	ObserveDownloads:     "/api/v1/observe/downloads",
+	ObserveDownloadsByID: "/api/v1/observe/downloads/",
+	// Observe producer routes (mTLS-authenticated, ensemble-only)
+	ObserveProducerPrefix:     "/api/v1/observe/producer/",
+	ObserveProducerAgentState: "/api/v1/observe/producer/agent-state",
+	ObserveProducerRunState:   "/api/v1/observe/producer/run-state",
 	// WebSocket prefix
 	WSPrefix: "/ws/",
 	// User routes

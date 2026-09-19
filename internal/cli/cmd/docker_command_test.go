@@ -12,6 +12,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,6 +29,7 @@ func TestDockerCommandSubcommands(t *testing.T) {
 		assert.Equal(t, "docker", cmd.Use)
 
 		expectedSubcommands := []string{
+			"init",
 			"start",
 			"stop",
 			"status",
@@ -310,20 +312,40 @@ func TestResolveDockerProfile(t *testing.T) {
 	assert.Equal(t, "custom", resolveDockerProfile(true, "custom"), "explicit profile overrides --full")
 }
 
-func TestDockerBuildArgs_IncludesSourceBuildID(t *testing.T) {
+func TestDockerTeardownProfiles(t *testing.T) {
+	assert.Equal(t, []string{"custom"}, dockerTeardownProfiles("custom"))
+	assert.Equal(t, []string{
+		constants.DockerBootstrappedProfile,
+		constants.DockerEvaluationProfile,
+	}, dockerTeardownProfiles(""))
+}
+
+func TestDockerBuildArgs_IncludesSourceProvenance(t *testing.T) {
+	vi := serve.VersionInfo{
+		BuildID:             "abc123",
+		SourceRevision:      "unavailable",
+		SourceTreeStateHash: "a" + strings.Repeat("1", 63),
+	}
 	tests := []struct {
 		name     string
 		noCache  bool
 		expected []string
 	}{
-		{name: "cached build", expected: []string{"build", "--build-arg", "BUILD_ID=abc123"}},
-		{name: "uncached build", noCache: true, expected: []string{"build", "--build-arg", "BUILD_ID=abc123", "--no-cache"}},
+		{name: "cached build", expected: []string{"build", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=unavailable", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash}},
+		{name: "uncached build", noCache: true, expected: []string{"build", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=unavailable", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash, "--no-cache"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, dockerBuildArgs("abc123", tt.noCache))
+			args, err := dockerBuildArgs(vi, tt.noCache)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, args)
 		})
 	}
+}
+
+func TestDockerBuildArgs_RejectsUnstampedSourceHash(t *testing.T) {
+	_, err := dockerBuildArgs(serve.VersionInfo{SourceTreeStateHash: string(constants.SystemHealthUnknown)}, false)
+	assert.ErrorIs(t, err, constants.ErrSourceTreeHashInvalid)
 }
 
 func TestDockerComposePath_ResolvesFromCwd(t *testing.T) {

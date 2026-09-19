@@ -25,17 +25,19 @@ import (
 // and shared across all E2E test functions via the package-level e2eCfg
 // variable set in TestMain.
 type e2eConfig struct {
-	gatewayHTTPURL  string
-	gatewayHTTPSURL string
-	ensembleURL     string
-	dashboardURL    string
-	cliCertPath     string
-	cliKeyPath      string
-	caBundleRelPath string
-	cliSessionID    string
-	userID          string
-	fileSvc         fs.RuntimeFileService
-	cfg             *config.Config
+	gatewayHTTPURL    string
+	gatewayHTTPSURL   string
+	ensembleURL       string
+	dashboardURL      string
+	cliCertPath       string
+	cliKeyPath        string
+	caBundleRelPath   string
+	cliSessionID      string
+	userID            string
+	operatorID        string
+	operatorSessionID string
+	fileSvc           fs.RuntimeFileService
+	cfg               *config.Config
 }
 
 // healthCheckTimeout is the bounded timeout for the TestMain preflight health
@@ -86,17 +88,19 @@ func loadE2EConfig() (*e2eConfig, error) {
 	}
 
 	return &e2eConfig{
-		gatewayHTTPURL:  gatewayHTTPURL,
-		gatewayHTTPSURL: gatewayHTTPSURL,
-		ensembleURL:     ensembleURL,
-		dashboardURL:    dashboardURL,
-		cliCertPath:     cfg.CLICertFile(),
-		cliKeyPath:      cfg.CLIKeyFile(),
-		caBundleRelPath: cfg.DefaultTrustBundleRelPath(),
-		cliSessionID:    creds.CLISessionID,
-		userID:          creds.UserID,
-		fileSvc:         fileSvc,
-		cfg:             cfg,
+		gatewayHTTPURL:    gatewayHTTPURL,
+		gatewayHTTPSURL:   gatewayHTTPSURL,
+		ensembleURL:       ensembleURL,
+		dashboardURL:      dashboardURL,
+		cliCertPath:       cfg.CLICertFile(),
+		cliKeyPath:        cfg.CLIKeyFile(),
+		caBundleRelPath:   cfg.DefaultTrustBundleRelPath(),
+		cliSessionID:      creds.CLISessionID,
+		userID:            creds.UserID,
+		operatorID:        creds.OperatorID,
+		operatorSessionID: creds.OperatorSessionID,
+		fileSvc:           fileSvc,
+		cfg:               cfg,
 	}, nil
 }
 

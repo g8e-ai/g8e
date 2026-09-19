@@ -55,6 +55,10 @@ func (s *stubFileSvc) Stat(ctx context.Context, relPath string) (os.FileInfo, er
 	panic("unexpected")
 }
 
+func (s *stubFileSvc) Lstat(ctx context.Context, relPath string) (os.FileInfo, error) {
+	panic("unexpected")
+}
+
 func (s *stubFileSvc) WriteFile(ctx context.Context, relPath string, data []byte, mode os.FileMode) error {
 	panic("unexpected")
 }

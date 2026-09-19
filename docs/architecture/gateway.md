@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-09-05
-Version: v2.1.4
+Last Updated: 2026-09-19
+Version: v2.1.8
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
@@ -41,6 +41,8 @@ The g8e platform is built on the g8e Protocol. Conforming gateway and Operator i
 
 The same five layers run on every conforming host. The gateway applies L1–L3, then either its own in-process Operator or a remote Governed Operator applies L4–L5. Each remote operator re-verifies L1–L3 proofs from the gateway before execution.
 
+A gateway can also enroll as an operator of another gateway. Because the gateway binary runs the same `operator start` path as any standalone operator, it submits an operator CSR through the platform enrollment protocol, the upstream owner approves it through the same pending-list and operator-registry surfaces, and the enrolling gateway receives an operator identity signed by the upstream gateway's Operator intermediate CA. The enrolled gateway-as-operator then dials out over outbound-only mTLS and re-verifies the upstream gateway's L1-L3 proofs before its Actuator executes. This enables cascading outbound-only topologies: a gateway at the absolute edge enrolls outbound-only to an upstream gateway, which may itself enroll outbound-only further in, so every hop is an outbound mTLS connection and no edge device opens an inbound port. See [Network Architecture](./network.md#cross-gateway-enrollment) and [Operator Architecture](./operator.md#cross-gateway-enrollment-cascading-outbound-topologies).
+
 For a detailed view of the Gateway service stack and its relationship to the Operator substrate, see the [Gateway Service Stack Diagram](../diagrams/graph-gateway-services.md).
 
 ---
@@ -64,6 +66,7 @@ By passing `--posture doctrine`, `--posture consensus`, `--posture ratify`, or `
     - **Root CA / PKI**: Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
     - **Audit Authority**: Append-only encrypted log of every event and signed ActionReceipt.
     - **Unified MCP Endpoint**: Single-URL JSON-RPC dispatch contract for MCP protocol communication.
+    - **CLI Operator Dispatch**: `POST /api/v1/operators/commands` builds governed envelopes for enrolled CLI callers and fans out `EXECUTE_BASH` (and other typed actions) to explicit operator sessions, blocking until a terminal result per target.
 
 ### Port Topology
 
@@ -82,6 +85,12 @@ The `--doctrine-dir` flag (env: `G8E_DOCTRINE_DIR`) specifies a directory of JSO
 ### Onboarding Wizard
 
 `g8e gw start --interactive` (or `-i`) launches an interactive TUI wizard before gateway startup. The `g8e gw setup` command launches the same wizard without starting the gateway, producing a resolved configuration for inspection. The wizard guides users through four steps: Network & Identity, Security & Governance Posture, Agent Tooling & Routing, and Review & Confirm. The wizard produces a focused configuration containing only wizard-owned fields; the gateway startup process merges the result into resolved CLI flags, preserving non-wizard flags (ports, directories, log level, rate limits). Cancellation returns without starting the gateway. The wizard is explicit opt-in only; existing flags and automation continue to work unchanged.
+
+### Frontend Connection and Launch Profiles
+
+`./g8e gw connect <frontend-origin>` is the guided one-command workflow for connecting a browser-hosted frontend on the same computer as the Gateway. It validates and normalizes the origin, derives the exact-host WebAuthn RP ID, starts or restarts the Gateway with matching CORS and passkey settings when needed (with explicit consent), installs or refreshes local gateway root trust when required, verifies HTTPS and CORS against the running process, and prints a frontend handoff prompt. It replaces the removed `auth enroll gui` command family. See [Connect a Lovable App](../guides/lovable.md) and [Build a g8e-Compatible Frontend](../guides/build_frontend.md).
+
+Every successful background `g8e gw start` writes a versioned launch profile to `.g8e/pids/operator-launch-profile.json`. `g8e gw restart` reads that profile, re-runs network identity detection, and starts the child with the complete persisted configuration (posture, ports, CORS origins, passkey settings, downstream URLs, consensus bootstrap, and public-spectator flags). Restart fails closed when the profile is missing, malformed, or unknown-version rather than falling back to doctrine defaults.
 
 ---
 
@@ -104,6 +113,21 @@ Application certificates are blocked from privileged governance and query paths.
 ### Console SPA
 
 The console SPA is an embedded single-page application served at `/console/`. The SPA provides browser-based passkey registration, authentication, credential management, OOB transaction approval, and a live audit stream. The SPA auto-detects approval hash fragments in the URL and triggers the WebAuthn approval flow after successful authentication.
+
+### Observe Read API and Producers
+
+The Gateway exposes a browser-scoped, read-only observe API under `/api/v1/observe/` for credentialed web sessions: bootstrap snapshot, paginated runs and evals, and content-addressed downloads. These routes derive user identity from the web-session cookie and return projections without ownership fields on the wire.
+
+Two mTLS producer endpoints accept typed state from enrolled app workloads (primarily g8ee):
+
+- `POST /api/v1/observe/producer/agent-state` persists agent projections and emits `app.agent.status.updated`.
+- `POST /api/v1/observe/producer/run-state` persists run projections and emits `app.run.status.updated`.
+
+The Gateway derives `user_id` from the mTLS peer certificate; producer requests carry exactly one routing target (`web_session_id` or `cli_session_id`). The in-process `ObserveProducerService` also implements persist-before-publish for the full `g8e.v1.ai.eval.*` campaign event family (`ai.eval.cycle.started`, `ai.eval.assignment.completed`, `ai.eval.publication.completed`, and related types). Gateway live tests verify those emissions; campaign `--publish` additionally exports signed public-safe projections through `POST /api/v1/public-feed/batches` for the anonymous mirror. See [SSE Streaming](./sse.md), [Evaluations](./evals.md), and [Public Spectator Architecture](./public_spectator.md).
+
+### Public Spectator Mirror
+
+When started with `--public-spectator` (Docker Compose default), the Gateway runs an in-process `PublicSpectatorRuntime` with two loopback listeners over the same durable state in the gateway volume: a private ingest listener (authenticated batch and proof ingest) and a public read listener (anonymous bootstrap, history, SSE, and content-addressed proof downloads). Campaign publication from the host CLI uses owner mTLS and `POST /api/v1/public-feed/batches`; it does not expose anonymous routes on the primary HTTPS surface. See [Public Spectator Operations Guide](../guides/public_spectator.md).
 
 ---
 
@@ -396,3 +420,6 @@ The browser utility provides cross-platform browser opening for L3 approval URLs
 - [**g8e Protocol**](../../protocol/docs/spec.md) - The wire contract and governance hierarchy.
 - [**g8e Operator**](./operator.md) - Sovereign host-side execution agent and MCP server.
 - [**Getting Started**](../guides/getting_started.md) - CLI commands, agent integration, and setup guides.
+- [**Build a g8e-Compatible Frontend**](../guides/build_frontend.md) - Browser integration and `gw connect`.
+- [**Evaluations**](./evals.md) - Native execution-boundary suite and model campaign orchestration.
+- [**Public Spectator Architecture**](./public_spectator.md) - Anonymous mirror observation mode.

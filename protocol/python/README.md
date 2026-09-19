@@ -49,14 +49,16 @@ The `g8e.models` package provides Pydantic v2 models for protocol data structure
 
 - **`g8e/models/base.py`**: `G8eBaseModel`, `UTCDatetime`, and re-exports of Pydantic `Field`, `ConfigDict`, `field_validator`, `model_validator`, and `ValidationError`.
 - **`g8e/models/context.py`**: `RequestContext` and `BoundOperator`. `RequestContext` validates session identity for `CLIENT` source components, requiring either `web_session_id` or `cli_session_id` and a `user_id`.
-- **`g8e/models/events.py`**: SSE wire models (`SessionEventWire`, `BackgroundEventWire`) with factory methods `from_session_event()` and `from_background_event()` for construction from event type + data. AI event payload models for chat processing, processing stopped, response chunks, response completion, tool lifecycle, citations, errors, thinking, turn completion, retry, and triage clarification.
+- **`g8e/models/events.py`**: SSE wire models (`SessionEventWire`, `BackgroundEventWire`) with factory methods `from_session_event()` and `from_background_event()` for construction from event type + data. AI event payload models for chat processing, processing stopped, response chunks, response completion, tool lifecycle, citations, errors, thinking, turn completion, retry, and triage clarification. Observe telemetry payloads include `AgentStatusUpdatedPayload`, `RunStatusUpdatedPayload`, `EvalRunCompletedPayload`, `EvalMetricRecordedPayload`, and `ObservedMeasurement`.
+- **`g8e/models/observe_api.py`**: Browser-facing read projections (`ObserveBootstrapSnapshot`, `RunDetail`, `EvalDetail`, `DownloadArtifact`) and mTLS producer request/response types (`ObserveProducerAgentStateRequest`, `ObserveProducerRunStateRequest`, `ObserveProducerResponse`). Producer models use `extra="forbid"` for unknown-field rejection.
+- **`g8e/models/public_feed.py`**: Public spectator feed types (`PublicFeedBatch`, `PublicFeedSnapshot`, `PublicFeedBootstrap`, `PublicIngestRequest`, `PublicProofManifest`, and related cursor and proof-catalog models).
 - **`g8e/models/internal_api.py`**: `ChatMessageRequest`, `ChatStartedResponse`, and `ResourceCreationRequest` for internal API interactions. `ChatMessageRequest` inherits from `LLMOverrides`, which provides 12 optional LLM provider/model/endpoint override fields.
 - **`g8e/models/settings.py`**: `G8eeUserSettings`, `PlatformSettings`, and nested settings models for LLM providers, search, eval judge, command validation, and batch execution.
 - **`g8e/models/governance.py`**: `GovernanceEnvelope`, `GovernanceMetadata`, `GovernanceL1`, `GovernanceL2`, `GovernanceL2Vote`, `GovernanceL3`, `GovernanceL3Proof`, and `compute_transaction_hash()`. The `GovernanceEnvelope` model mirrors the canonical wire format for all mutations. `compute_transaction_hash()` produces a deterministic SHA-256 over pipe-delimited canonical fields.
 
 ### Generated Protobuf Messages
 
-The `g8e.common.v1`, `g8e.operator.v1`, and `g8e.pubsub.v1` packages contain generated `_pb2.py` runtime modules and matching `_pb2.pyi` type stubs. They expose the same canonical messages as the Go protocol, including `ActionReceipt`, `DeterministicStageEvidence`, `ReceiptPersistenceAttestation`, and `CommitmentAttestation`. The generated files are committed and checked against their `.proto` sources in CI.
+The `g8e.common.v1`, `g8e.compliance.v1`, `g8e.eval.v1`, `g8e.operator.v1`, and `g8e.pubsub.v1` packages contain generated `_pb2.py` runtime modules and matching `_pb2.pyi` type stubs. They expose the same canonical messages as the Go protocol, including `ActionReceipt`, `DeterministicStageEvidence`, `ReceiptPersistenceAttestation`, `CommitmentAttestation`, and eval-native campaign messages. The generated files are committed and checked against their `.proto` sources in CI.
 
 ### Receipt Verification
 
@@ -72,14 +74,14 @@ The verification helpers establish signature validity against the public key sup
 
 ### Examples
 
-Working examples are in `protocol/python/examples/`. Run `constants_example.py` for constants and headers usage, or `models_example.py` for model instantiation, serialization, and validation.
+Working examples are in `protocol/python/examples/`. Run `constants_example.py` for constants and headers usage, or `models_example.py` for model instantiation, serialization, validation, and observe producer request construction.
 
 ## Components
 
 - **`g8e/constants.py`**: Runtime loader for JSON protocol constants from `protocol/constants/`. Exports dict constants, `ComponentName` enum, HTTP header string constants, and accessor functions (`collection()`, `channel()`, `intent()`, `prompt()`, `kv_key()`, `kv_session_type()`).
 - **`g8e/enums.py`**: Dynamic `StrEnum` and `IntEnum` generation from `STATUS`, `EVENTS`, and other constant categories (channels, intents, prompts, collections, kv_keys).
-- **`g8e/common/v1/`, `g8e/operator/v1/`, `g8e/pubsub/v1/`**: Generated protobuf runtime modules and PEP 561-compatible `.pyi` stubs.
-- **`g8e/models/`**: Pydantic v2 models for protocol data structures, SSE events, internal API requests, user settings, and governance envelopes.
+- **`g8e/common/v1/`, `g8e/compliance/v1/`, `g8e/eval/v1/`, `g8e/operator/v1/`, `g8e/pubsub/v1/`**: Generated protobuf runtime modules and PEP 561-compatible `.pyi` stubs.
+- **`g8e/models/`**: Pydantic v2 models for protocol data structures, SSE and observe events, observe API projections, public spectator feed batches, internal API requests, user settings, and governance envelopes.
 - **`g8e/receipts.py`**: Canonical receipt parsing, serialization, Ed25519 signature verification, and persistence-attestation verification.
 
 ## Protocol Versioning

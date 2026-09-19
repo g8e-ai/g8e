@@ -360,6 +360,37 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		}
 	})
 
+	t.Run("GetActiveSessionForUser_PrefersEmbedded", func(t *testing.T) {
+		userID := "user-embedded-pref"
+		now := time.Now().UTC()
+
+		// Persist an older embedded session and a newer remote session.
+		// The embedded operator is the canonical local binding and must
+		// win regardless of recency.
+		persist := func(sessionID, operatorID string, createdAt time.Time) {
+			b, err := json.Marshal(models.OperatorSession{
+				ID:          sessionID,
+				SessionType: string(constants.SessionTypeOperator),
+				UserID:      userID,
+				OperatorID:  operatorID,
+				IsActive:    true,
+				CreatedAt:   createdAt.Format(time.RFC3339),
+				LoginMethod: "mTLS",
+			})
+			require.NoError(t, err)
+			require.NoError(t, infra.DocStore.DocSetWithTimestamps(
+				marshaler.CollectionName(constants.CollectionOperatorSessions), sessionID, b, createdAt, createdAt))
+		}
+		persist("op-sess-embedded", string(constants.DocIDEmbeddedOperator), now.Add(-2*time.Hour))
+		persist("op-sess-remote", "remote-operator-1", now)
+
+		session, err := svc.GetActiveSessionForUser(userID)
+		require.NoError(t, err)
+		require.NotNil(t, session)
+		assert.Equal(t, "op-sess-embedded", session.ID, "embedded session wins over a newer remote session")
+		assert.Equal(t, string(constants.DocIDEmbeddedOperator), session.OperatorID)
+	})
+
 	t.Run("PasskeyLoginMethod_PersistedCorrectly", func(t *testing.T) {
 		operatorSessionID := "op-session-passkey"
 

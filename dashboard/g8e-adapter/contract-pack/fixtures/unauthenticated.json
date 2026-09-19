@@ -1,0 +1,12 @@
+{
+  "auth": {
+    "status": "unauthenticated"
+  },
+  "bootstrap_status": false,
+  "description": "No session. Bootstrap status is false; the SPA shows the login ceremony. No observe data is available.",
+  "observe": {
+    "available": false,
+    "reason": "unauthenticated"
+  },
+  "scenario": "unauthenticated"
+}

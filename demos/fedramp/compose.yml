@@ -45,8 +45,9 @@ services:
     # via depends_on: condition: service_healthy. The bootstrap flow is:
     #   docker compose up -d
     #   ./g8e auth enroll user -e <gateway>
-    #   ./g8e auth pending-platform-enrollments
-    #   ./g8e auth approve-platform-enrollment <request-id> --yes
+    #   ./g8e auth enroll pending
+    #   ./g8e auth enroll approve <request-id> --yes
+    #   ./g8e auth enroll deny <request-id> --yes
     build:
       context: ../..
       dockerfile: Dockerfile

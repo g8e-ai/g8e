@@ -38,7 +38,7 @@ from app.services.ai.reputation_service import (
     DEFAULT_EMA_HALF_LIFE,
     SAGE_ID,
     TRIBUNAL_HONEST_FOUR,
-    WARDEN_ID,
+    MARSHAL_ID,
     ClassifierInputs,
     ReputationService,
     apply_slash,
@@ -416,7 +416,7 @@ class TestClassifyStakesAuditor:
             ClassifierInputs(
                 gen_result=_result(),
                 execution_result=exec_failed,
-                warden_risk=RiskLevel.HIGH,
+                marshal_risk=RiskLevel.HIGH,
             )
         )
         by_agent = _outcomes_by_agent(rows)
@@ -479,146 +479,146 @@ class TestClassifyStakesExtraAgents:
 
 
 # ---------------------------------------------------------------------------
-# Warden staking (GDD §14.5 extension)
+# Marshal staking (GDD §14.5 extension)
 # ---------------------------------------------------------------------------
 
 
-class TestClassifyStakesWarden:
-    """Warden stakes reputation on accurate risk assessment."""
+class TestClassifyStakesMarshal:
+    """Marshal stakes reputation on accurate risk assessment."""
 
     def _exec_result(
         self, *, success: bool = True, exit_code: int | None = 0, error: str | None = None
     ) -> CommandExecutionResult:
         return CommandExecutionResult(success=success, exit_code=exit_code, error=error)
 
-    def test_warden_blocked_high_risk_gets_credit(self):
-        """Warden blocked a HIGH risk command - full credit for caution."""
+    def test_marshal_blocked_high_risk_gets_credit(self):
+        """Marshal blocked a HIGH risk command - full credit for caution."""
         rows = classify_stakes(
             ClassifierInputs(
                 gen_result=_result(),
                 execution_result=self._exec_result(success=False),
-                warden_risk=RiskLevel.HIGH,
-                warden_blocked=True,
+                marshal_risk=RiskLevel.HIGH,
+                marshal_blocked=True,
             )
         )
         by_agent = _outcomes_by_agent(rows)
-        assert by_agent[WARDEN_ID].outcome_score == 0.85
-        assert by_agent[WARDEN_ID].rationale == "warden_blocked_high_risk"
-        assert by_agent[WARDEN_ID].slash_tier is None
+        assert by_agent[MARSHAL_ID].outcome_score == 0.85
+        assert by_agent[MARSHAL_ID].rationale == "marshal_blocked_high_risk"
+        assert by_agent[MARSHAL_ID].slash_tier is None
 
-    def test_warden_blocked_medium_risk_partial_credit(self):
-        """Warden blocked a MEDIUM risk command - partial credit for borderline over-caution."""
+    def test_marshal_blocked_medium_risk_partial_credit(self):
+        """Marshal blocked a MEDIUM risk command - partial credit for borderline over-caution."""
         rows = classify_stakes(
             ClassifierInputs(
                 gen_result=_result(),
                 execution_result=self._exec_result(success=False),
-                warden_risk=RiskLevel.MEDIUM,
-                warden_blocked=True,
+                marshal_risk=RiskLevel.MEDIUM,
+                marshal_blocked=True,
             )
         )
         by_agent = _outcomes_by_agent(rows)
-        assert by_agent[WARDEN_ID].outcome_score == 0.6
-        assert by_agent[WARDEN_ID].rationale == "warden_blocked_medium_risk"
+        assert by_agent[MARSHAL_ID].outcome_score == 0.6
+        assert by_agent[MARSHAL_ID].rationale == "marshal_blocked_medium_risk"
 
-    def test_warden_blocked_low_risk_penalized(self):
-        """Warden blocked a LOW risk command - penalized for over-caution."""
+    def test_marshal_blocked_low_risk_penalized(self):
+        """Marshal blocked a LOW risk command - penalized for over-caution."""
         rows = classify_stakes(
             ClassifierInputs(
                 gen_result=_result(),
                 execution_result=self._exec_result(success=False),
-                warden_risk=RiskLevel.LOW,
-                warden_blocked=True,
+                marshal_risk=RiskLevel.LOW,
+                marshal_blocked=True,
             )
         )
         by_agent = _outcomes_by_agent(rows)
-        assert by_agent[WARDEN_ID].outcome_score == 0.3
-        assert by_agent[WARDEN_ID].rationale == "warden_over_caution_low_risk"
-        assert by_agent[WARDEN_ID].slash_tier == SlashTier.TIER_3
+        assert by_agent[MARSHAL_ID].outcome_score == 0.3
+        assert by_agent[MARSHAL_ID].rationale == "marshal_over_caution_low_risk"
+        assert by_agent[MARSHAL_ID].slash_tier == SlashTier.TIER_3
 
-    def test_warden_allowed_low_success_top_score(self):
-        """Warden allowed LOW risk and command succeeded - top score."""
+    def test_marshal_allowed_low_success_top_score(self):
+        """Marshal allowed LOW risk and command succeeded - top score."""
         rows = classify_stakes(
             ClassifierInputs(
                 gen_result=_result(),
                 execution_result=self._exec_result(success=True),
-                warden_risk=RiskLevel.LOW,
-                warden_blocked=False,
+                marshal_risk=RiskLevel.LOW,
+                marshal_blocked=False,
             )
         )
         by_agent = _outcomes_by_agent(rows)
-        assert by_agent[WARDEN_ID].outcome_score == 1.0
-        assert by_agent[WARDEN_ID].rationale == "warden_allowed_low_success"
+        assert by_agent[MARSHAL_ID].outcome_score == 1.0
+        assert by_agent[MARSHAL_ID].rationale == "marshal_allowed_low_success"
 
-    def test_warden_allowed_medium_success_high_score(self):
-        """Warden allowed MEDIUM risk and command succeeded - high score."""
+    def test_marshal_allowed_medium_success_high_score(self):
+        """Marshal allowed MEDIUM risk and command succeeded - high score."""
         rows = classify_stakes(
             ClassifierInputs(
                 gen_result=_result(),
                 execution_result=self._exec_result(success=True),
-                warden_risk=RiskLevel.MEDIUM,
-                warden_blocked=False,
+                marshal_risk=RiskLevel.MEDIUM,
+                marshal_blocked=False,
             )
         )
         by_agent = _outcomes_by_agent(rows)
-        assert by_agent[WARDEN_ID].outcome_score == 0.9
-        assert by_agent[WARDEN_ID].rationale == "warden_allowed_medium_success"
+        assert by_agent[MARSHAL_ID].outcome_score == 0.9
+        assert by_agent[MARSHAL_ID].rationale == "marshal_allowed_medium_success"
 
-    def test_warden_allowed_high_success_moderate_score(self):
-        """Warden allowed HIGH risk but command succeeded - moderate score for borderline under-caution."""
+    def test_marshal_allowed_high_success_moderate_score(self):
+        """Marshal allowed HIGH risk but command succeeded - moderate score for borderline under-caution."""
         rows = classify_stakes(
             ClassifierInputs(
                 gen_result=_result(),
                 execution_result=self._exec_result(success=True),
-                warden_risk=RiskLevel.HIGH,
-                warden_blocked=False,
+                marshal_risk=RiskLevel.HIGH,
+                marshal_blocked=False,
             )
         )
         by_agent = _outcomes_by_agent(rows)
-        assert by_agent[WARDEN_ID].outcome_score == 0.7
-        assert by_agent[WARDEN_ID].rationale == "warden_allowed_high_success"
+        assert by_agent[MARSHAL_ID].outcome_score == 0.7
+        assert by_agent[MARSHAL_ID].rationale == "marshal_allowed_high_success"
 
-    def test_warden_allowed_low_failed_major_penalty(self):
-        """Warden allowed LOW risk but command failed - major penalty for miss."""
+    def test_marshal_allowed_low_failed_major_penalty(self):
+        """Marshal allowed LOW risk but command failed - major penalty for miss."""
         rows = classify_stakes(
             ClassifierInputs(
                 gen_result=_result(),
                 execution_result=self._exec_result(success=False, exit_code=1, error="boom"),
-                warden_risk=RiskLevel.LOW,
-                warden_blocked=False,
+                marshal_risk=RiskLevel.LOW,
+                marshal_blocked=False,
             )
         )
         by_agent = _outcomes_by_agent(rows)
-        assert by_agent[WARDEN_ID].outcome_score == 0.1
-        assert by_agent[WARDEN_ID].rationale == "warden_low_risk_missed"
-        assert by_agent[WARDEN_ID].slash_tier == SlashTier.TIER_2
+        assert by_agent[MARSHAL_ID].outcome_score == 0.1
+        assert by_agent[MARSHAL_ID].rationale == "marshal_low_risk_missed"
+        assert by_agent[MARSHAL_ID].slash_tier == SlashTier.TIER_2
 
-    def test_warden_allowed_medium_failed_moderate_penalty(self):
-        """Warden allowed MEDIUM risk but command failed - moderate penalty."""
+    def test_marshal_allowed_medium_failed_moderate_penalty(self):
+        """Marshal allowed MEDIUM risk but command failed - moderate penalty."""
         rows = classify_stakes(
             ClassifierInputs(
                 gen_result=_result(),
                 execution_result=self._exec_result(success=False, exit_code=1),
-                warden_risk=RiskLevel.MEDIUM,
-                warden_blocked=False,
+                marshal_risk=RiskLevel.MEDIUM,
+                marshal_blocked=False,
             )
         )
         by_agent = _outcomes_by_agent(rows)
-        assert by_agent[WARDEN_ID].outcome_score == 0.35
-        assert by_agent[WARDEN_ID].rationale == "warden_medium_risk_missed"
+        assert by_agent[MARSHAL_ID].outcome_score == 0.35
+        assert by_agent[MARSHAL_ID].rationale == "marshal_medium_risk_missed"
 
-    def test_warden_allowed_high_failed_but_flagged_gets_credit(self):
-        """Warden allowed HIGH risk, command failed, but warden had flagged it - gets partial credit."""
+    def test_marshal_allowed_high_failed_but_flagged_gets_credit(self):
+        """Marshal allowed HIGH risk, command failed, but marshal had flagged it - gets partial credit."""
         rows = classify_stakes(
             ClassifierInputs(
                 gen_result=_result(),
                 execution_result=self._exec_result(success=False, exit_code=1),
-                warden_risk=RiskLevel.HIGH,
-                warden_blocked=False,
+                marshal_risk=RiskLevel.HIGH,
+                marshal_blocked=False,
             )
         )
         by_agent = _outcomes_by_agent(rows)
-        assert by_agent[WARDEN_ID].outcome_score == 0.75
-        assert by_agent[WARDEN_ID].rationale == "warden_high_risk_flagged_correctly"
+        assert by_agent[MARSHAL_ID].outcome_score == 0.75
+        assert by_agent[MARSHAL_ID].rationale == "marshal_high_risk_flagged_correctly"
 
 
 # ---------------------------------------------------------------------------
@@ -757,7 +757,7 @@ class TestResolveStakes:
             investigation_id="inv-1",
             gen_result=_result(),
             execution_result=CommandExecutionResult(success=False, exit_code=1, error="boom"),
-            warden_risk=RiskLevel.HIGH,
+            marshal_risk=RiskLevel.HIGH,
             context=RequestContext(
                 web_session_id="test-web-session",
                 user_id="test-user",

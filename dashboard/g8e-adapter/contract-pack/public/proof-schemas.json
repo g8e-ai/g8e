@@ -1,0 +1,171 @@
+{
+  "schema_version": "1.0.0",
+  "schemas": {
+    "public_proof_catalog": {
+      "_description": "The full public proof catalog listing every available proof package artifact. Served as a bounded anonymous read. Public retention uses append-only tombstones rather than rewriting history.",
+      "entries": {
+        "description": "Catalog entries for every available proof artifact",
+        "items": "public_proof_catalog_entry",
+        "required": true,
+        "type": "array"
+      },
+      "generated_at": {
+        "description": "UTC timestamp when the catalog was generated",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "schema_version": {
+        "description": "Proof catalog schema version",
+        "required": true,
+        "type": "string"
+      }
+    },
+    "public_proof_catalog_entry": {
+      "_description": "One entry in the public proof catalog. Each artifact is served under an immutable content-addressed identity derived from its SHA-256. Catalog metadata includes filename, media type, bytes, SHA-256, signature and trust metadata, campaign and run source, generated time, classification, verification command, and immutable URL.",
+      "artifact_id": {
+        "description": "Content-addressed artifact identifier (derived from SHA-256)",
+        "required": true,
+        "type": "string"
+      },
+      "byte_size": {
+        "description": "Byte length of the artifact content",
+        "required": true,
+        "type": "integer"
+      },
+      "campaign_id": {
+        "description": "Campaign identity from the campaign manifest",
+        "required": true,
+        "type": "string"
+      },
+      "classification": {
+        "description": "Disclosure classification",
+        "enum": [
+          "public_safe"
+        ],
+        "required": true,
+        "type": "string"
+      },
+      "filename": {
+        "description": "Human-readable filename",
+        "required": true,
+        "type": "string"
+      },
+      "generated_at": {
+        "description": "UTC timestamp when the artifact was generated",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "immutable_url": {
+        "description": "Immutable content-addressed URL path relative to the mirror base URL",
+        "required": true,
+        "type": "string"
+      },
+      "media_type": {
+        "description": "IANA media type of the artifact content",
+        "required": true,
+        "type": "string"
+      },
+      "sha256": {
+        "description": "SHA-256 of the artifact content (64-char hex)",
+        "required": true,
+        "type": "string"
+      },
+      "source_run_id": {
+        "description": "Source eval run identity. Omitted for campaign-level artifacts.",
+        "required": false,
+        "type": "string"
+      },
+      "verification_command": {
+        "description": "Offline verification command for this artifact",
+        "required": true,
+        "type": "string"
+      }
+    },
+    "public_proof_catalog_summary": {
+      "_description": "Summary of the public proof catalog for bootstrap responses. Carries the total artifact count, total byte size, and the most recent generation time.",
+      "artifact_count": {
+        "description": "Total number of proof artifacts in the catalog",
+        "required": true,
+        "type": "integer"
+      },
+      "last_generated_at": {
+        "description": "UTC timestamp of the most recently generated proof artifact. Omitted when the catalog is empty.",
+        "format": "iso8601",
+        "required": false,
+        "type": "string"
+      },
+      "total_byte_size": {
+        "description": "Total byte size of all proof artifacts",
+        "required": true,
+        "type": "integer"
+      }
+    },
+    "public_proof_manifest": {
+      "_description": "Root manifest for a public proof package. Binds the proof root SHA-256, campaign identity, verified index generation hash, artifact count, artifact catalog, verifier instructions, and generation time. A network-disabled verifier reproduces the root from the manifest and the listed artifacts.",
+      "artifact_count": {
+        "description": "Number of artifacts in the proof package",
+        "required": true,
+        "type": "integer"
+      },
+      "artifacts": {
+        "description": "Catalog entries for every artifact in the proof package",
+        "items": "public_proof_catalog_entry",
+        "required": true,
+        "type": "array"
+      },
+      "campaign_id": {
+        "description": "Campaign identity from the campaign manifest",
+        "required": true,
+        "type": "string"
+      },
+      "campaign_revision": {
+        "description": "Campaign revision from the frozen profile hash",
+        "required": true,
+        "type": "string"
+      },
+      "generated_at": {
+        "description": "UTC timestamp when the proof package was generated",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "proof_root_sha256": {
+        "description": "SHA-256 over the canonical encoding of all artifact hashes and manifest metadata (64-char hex)",
+        "required": true,
+        "type": "string"
+      },
+      "schema_version": {
+        "description": "Proof manifest schema version",
+        "required": true,
+        "type": "string"
+      },
+      "signature": {
+        "description": "Ed25519 signature over the proof root SHA-256, hex-encoded",
+        "required": true,
+        "type": "string"
+      },
+      "signing_key_id": {
+        "description": "Identifier of the signing key used to sign the proof root",
+        "required": true,
+        "type": "string"
+      },
+      "verification_ok": {
+        "description": "True when the campaign verification report passed",
+        "required": true,
+        "type": "boolean"
+      },
+      "verified_index_generation_hash": {
+        "description": "SHA-256 of the verified index generation's content hash (64-char hex)",
+        "required": true,
+        "type": "string"
+      },
+      "verifier_instructions": {
+        "description": "Human-readable offline verification instructions",
+        "required": true,
+        "type": "string"
+      }
+    }
+  }
+}

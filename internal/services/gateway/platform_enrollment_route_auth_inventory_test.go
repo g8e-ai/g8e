@@ -76,6 +76,12 @@ func TestPlatformEnrollmentBypassRouteAuth_CurrentClassifications(t *testing.T) 
 	// certificate.
 	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.AuthBootstrap),
 		"bootstrap is explicitly RouteAuthNone (creates first user); remains RouteAuthNone")
+
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.PublicFeedBatches),
+		"campaign publication uses owner CLI mTLS against the gateway-owned public spectator")
+
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.InferenceProviderObservations+"attempt-1"),
+		"campaign verification reads provider observation evidence via owner CLI mTLS")
 }
 
 // TestPlatformEnrollmentRouteAuth_NewRoutesClassified proves that the

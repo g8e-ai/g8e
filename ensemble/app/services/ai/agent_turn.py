@@ -58,6 +58,11 @@ class TurnState(BaseModel):
     cache_tokens: int = 0
     total_tokens: int = 0
     usage_reported: bool = False
+    time_to_first_token_seconds: float | None = None
+    prompt_eval_duration_seconds: float | None = None
+    eval_duration_seconds: float | None = None
+    total_duration_seconds: float | None = None
+    load_duration_seconds: float | None = None
 
     def flush_thinking_block(self) -> None:
         combined = "".join(self.thinking_text_parts)
@@ -70,6 +75,15 @@ class TurnState(BaseModel):
                 )
             )
         self.thinking_text_parts.clear()
+
+
+_TIMING_USAGE_FIELDS = (
+    "time_to_first_token_seconds",
+    "prompt_eval_duration_seconds",
+    "eval_duration_seconds",
+    "total_duration_seconds",
+    "load_duration_seconds",
+)
 
 
 def handle_usage_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> None:
@@ -86,6 +100,13 @@ def handle_usage_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> N
         state.cache_tokens += chunk_cache
         state.total_tokens += chunk_total
         state.usage_reported = state.usage_reported or usage.usage_reported
+        # Timing fields are point measurements, not counters: the last
+        # reported value wins, and a later chunk without the field does
+        # not erase an earlier observation.
+        for field_name in _TIMING_USAGE_FIELDS:
+            value = getattr(usage, field_name, None)
+            if value is not None:
+                setattr(state, field_name, value)
         logger.info("[TOKEN_USAGE] Chunk: in=%d out=%d total=%d", chunk_in, chunk_out, chunk_total)
 
 
@@ -290,6 +311,11 @@ async def process_provider_turn(
             thinking_tokens=state.thinking_tokens,
             cache_tokens=state.cache_tokens,
             usage_reported=state.usage_reported,
+            time_to_first_token_seconds=state.time_to_first_token_seconds,
+            prompt_eval_duration_seconds=state.prompt_eval_duration_seconds,
+            eval_duration_seconds=state.eval_duration_seconds,
+            total_duration_seconds=state.total_duration_seconds,
+            load_duration_seconds=state.load_duration_seconds,
         )
     )
 

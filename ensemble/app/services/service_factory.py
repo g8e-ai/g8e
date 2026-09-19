@@ -271,13 +271,14 @@ class ServiceFactory:
 
     @staticmethod
     def create_domain_services(
-        settings: G8eeAppSettings, data_services: DataServices
+        settings: G8eeAppSettings, data_services: DataServices, core_services: CoreServices
     ) -> DomainServices:
         """Create domain services that orchestrate business logic."""
         investigation_service = InvestigationService(
             investigation_data_service=data_services.investigation_data_service,
             operator_data_service=data_services.operator_data_service,
             memory_data_service=data_services.memory_data_service,
+            event_service=core_services.event_service,
         )
 
         memory_generation_service = MemoryGenerationService(
@@ -378,7 +379,9 @@ class ServiceFactory:
         data_services = ServiceFactory.create_data_services(
             settings, cache_aside_service, core_services, governance_client
         )
-        domain_services = ServiceFactory.create_domain_services(settings, data_services)
+        domain_services = ServiceFactory.create_domain_services(
+            settings, data_services, core_services
+        )
         operator_services = ServiceFactory.create_operator_services(
             core_services, data_services, cache_aside_service, pubsub_client
         )

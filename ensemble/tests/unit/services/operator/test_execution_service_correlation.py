@@ -22,7 +22,7 @@ import asyncio
 import pytest
 
 from app.constants.generated_status import EventType
-from app.constants.generated_status import AITaskId, ComponentName
+from app.constants.generated_status import AITaskId
 from app.constants import ExecutionStatus, G8EE_COMPONENT
 from app.models.command_request_payloads import CommandRequestPayload
 from app.models.pubsub_messages import G8eMessage

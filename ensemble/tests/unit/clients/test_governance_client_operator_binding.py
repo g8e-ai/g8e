@@ -20,13 +20,11 @@ See: .local.dev/docs/plans/in-progress/2026-08-23-ollama-ensemble-e2e-remaining-
 
 import datetime
 import json
-import os
-import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.constants import EventType, G8EE_COMPONENT
+from app.constants import EventType
 from app.constants.config import G8EE_COMPONENT as G8EE_COMPONENT_STR
 from app.models.command_request_payloads import DocumentUpdateRequestPayload
 from app.models.pubsub_messages import G8eMessage
@@ -53,8 +51,8 @@ def _generate_operator_cert_with_spiffe(
         .issuer_name(issuer)
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1))
-        .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1))
+        .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=1))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1))
         .add_extension(
             x509.SubjectAlternativeName([x509.UniformResourceIdentifier(spiffe_uri)]),
             critical=False,
@@ -103,8 +101,8 @@ def operator_cert_no_spiffe(tmp_path):
         .issuer_name(issuer)
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1))
-        .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1))
+        .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=1))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1))
         .sign(private_key, hashes.SHA256())
     )
     with open(cert_path, "wb") as f:

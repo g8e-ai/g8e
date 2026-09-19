@@ -30,13 +30,28 @@ type Client struct {
 	baseURL    string // Optional override for testing
 }
 
+const defaultClientTimeout = 5 * time.Second
+
 func NewClient(fileSvc fs.RuntimeFileService, cfg *config.Config) (*Client, error) {
 	return NewClientWithURL(fileSvc, cfg, "")
+}
+
+// NewClientWithTimeout creates a client with a custom request timeout. A zero
+// timeout uses the default CLI API timeout.
+func NewClientWithTimeout(fileSvc fs.RuntimeFileService, cfg *config.Config, timeout time.Duration) (*Client, error) {
+	return newClient(fileSvc, cfg, "", timeout)
 }
 
 // NewClientWithURL creates a client with an optional base URL override for testing.
 // If baseURL is empty, it uses cfg.OperatorHTTPURL().
 func NewClientWithURL(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL string) (*Client, error) {
+	return newClient(fileSvc, cfg, baseURL, defaultClientTimeout)
+}
+
+func newClient(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL string, timeout time.Duration) (*Client, error) {
+	if timeout <= 0 {
+		timeout = defaultClientTimeout
+	}
 	creds, err := auth.LoadCredentials(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
@@ -71,7 +86,7 @@ func NewClientWithURL(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
-		Timeout: 5 * time.Second,
+		Timeout: timeout,
 	}
 
 	return &Client{

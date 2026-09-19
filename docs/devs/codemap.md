@@ -6,7 +6,7 @@ This document maps the current repository by runtime entry point, service bounda
 
 - `cmd/g8e/`: Go binary entry point. `main.go` passes build metadata to the Cobra command package.
 - `internal/cli/`: CLI commands, configuration loading, enrollment, process management, service startup, SSE clients, streaming, the terminal UI, and the onboarding wizard.
-- `internal/services/`: Gateway, Operator, governance, transport, persistence, execution, compliance, and supporting services.
+- `internal/services/`: Gateway, Operator, governance, transport, persistence, execution, native evaluation, compliance, and supporting services.
 - `internal/adapters/`: Optional external system adapters. The current adapter integrates an Operator with Anduril Lattice.
 - `internal/constants/`: Go constants for paths, errors, protocol identifiers, permissions, and runtime behavior.
 - `internal/models/`: Internal typed models used by services and CLI code.
@@ -14,7 +14,7 @@ This document maps the current repository by runtime entry point, service bounda
 - `internal/certs/`, `internal/httpclient/`, `internal/marshaler/`, `internal/response/`, and `internal/security/`: Shared certificate, HTTP, serialization, response, and security infrastructure.
 - `protocol/`: Canonical protobuf schemas, JSON registries, JSON model schemas, generated language bindings, conformance tests, vectors, examples, and protocol documentation.
 - `test/`: Cross-package integration tests, reusable gateway fixtures, and Docker E2E tests.
-- `ensemble/`: Python g8ee application, agent ensemble, evaluation harness, and tests. See [Ensemble documentation](../ensemble/index.md).
+- `ensemble/`: Python g8ee application, agent ensemble, and tests. See [Ensemble documentation](../ensemble/index.md).
 - `dashboard/`: Node.js g8ed static SPA host and browser application. See [Dashboard documentation](../dashboard/index.md).
 - `demos/`: Healthcare, finance, DHS, and FedRAMP demo environments.
 - `docs/`: Architecture, guides, references, developer documentation, release notes, and generated README inputs.
@@ -37,6 +37,8 @@ The root command registers these command groups:
 - `test`: Unit, integration, E2E, coverage, lint, chaos, and summary workflows.
 - `demos`: Demo environment and scenario lifecycle.
 - `docker`: Unified Docker Compose stack lifecycle.
+- `eval`: Native execution-boundary runs, model campaign orchestration (`campaign`, `queue`, `inference`), inventory freeze, verification, and persisted report inspection.
+- `public`: Public spectator feed configuration, publication, mirror operation, and status.
 - `audit`: Receipt, event, summary, export, and report queries.
 - `report`: Deterministic CSV evidence generation and offline verification.
 - `compliance`: KSI evaluation, KSI history, overlay validation, demo-run verification, release evidence, evidence graph verification, and signed compliance report workflows.
@@ -141,6 +143,10 @@ Use `Resolve` only when an API requires an absolute path and `Rel` when converti
 - `internal/services/auth/`: Operator bootstrap transport and system fingerprinting.
 - `internal/services/compliance/`: KSI models and evaluation, history and unavailable intervals, OSCAL support, catalog validation, evidence import and graph verification, assertion grading, and signed report bundles.
 - `internal/services/consensus/`: Consensus members, policy-based service construction, deliberation, and Ed25519 voting.
+- `internal/services/evaluation/`: Native suite registry, governed command lane, independent target observer, model campaign controller, provider-boundary and model-provenance verification, deterministic grading, canonical evidence storage, verification, and compliance importing.
+- `internal/services/inference/provider_observer/`: Observer Operator GPU/RAM sampling at the provider execution boundary.
+- `internal/services/inference/model_provenance/`: Provenance Operator storage-side model weight attestation.
+- `internal/services/operatorcapability/`: Operator role selection (`provider_boundary_observer`, `provenance_operator`, inference, data).
 - `internal/services/execution/`: Command execution and governed file edits.
 - `internal/services/fs/`: Scoped `.g8e/` runtime file operations.
 - `internal/services/gateway/`: Gateway orchestration, HTTP controllers, identity, PKI, enrollment, persistence stores, pub/sub, and embedded assets.
@@ -174,10 +180,11 @@ Command functions that access `.g8e/` receive a `fileSvcFactory`. Their factory 
 
 ## Protocol and Generated Packages
 
-`protocol/proto/g8e/` contains four protobuf domains:
+`protocol/proto/g8e/` contains five protobuf domains:
 
 - `common/v1`: Governance envelopes, layer metadata, shared enums, validation options, and common messages.
 - `compliance/v1`: Compliance evidence, assessment, and report messages.
+- `eval/v1`: Native evaluation runs, attempts, observations, assertions, verdicts, metrics, reports, and deployment identities.
 - `operator/v1`: Operator commands, execution results, telemetry, receipts, and service RPC definitions.
 - `pubsub/v1`: Pub/sub event and message envelopes.
 
@@ -221,7 +228,7 @@ Runtime compliance paths are centralized in `internal/constants/paths.go`; exter
 
 ### Ensemble
 
-`ensemble/app/main.py` is the g8ee application entry point. `ensemble/app/` contains API routers, middleware, typed models, LLM integrations, storage, security, gateway clients, and orchestration services. `ensemble/evals/` contains the standalone evaluation harness, and `ensemble/tests/` contains Python unit and integration tests.
+`ensemble/app/main.py` is the g8ee application entry point. `ensemble/app/` contains API routers, middleware, typed models, LLM integrations, storage, security, gateway clients, and orchestration services. `ensemble/tests/` contains Python unit, integration, and external-provider tests. The independent Go-native evaluator lives under `internal/services/evaluation/` and is exposed by `internal/cli/cmd/eval.go`.
 
 ### Dashboard
 
@@ -237,7 +244,7 @@ Dashboard application code lives in `dashboard/public/`, workload enrollment liv
 
 ### Website and README
 
-The root `README.md` is generated from `docs/templates/README.md.tmpl` and the reviewed public evidence snapshot in `docs/evidence/readme/current/`. `scripts/generate_readme.py` validates the manifest and checksums before rendering. `website/` converts the README into the static site and packages the Cloudflare Worker. The [Documentation Guide](docs.md) catalogs every first-party documentation surface and defines audit, ownership, generation, cross-linking, metadata, and validation rules.
+The root `README.md` is the handwritten product overview. `website/` converts the README into the static site and packages the Cloudflare Worker. The [Documentation Guide](docs.md) catalogs every first-party documentation surface and defines audit, ownership, cross-linking, metadata, and validation rules.
 
 ## Test Map
 
@@ -261,7 +268,7 @@ See [Testing Guide](./tests.md) for fixture conventions, build tags, and the ful
 
 ## Build and Validation Map
 
-The root `Makefile` coordinates protobuf generation, Go builds, Python protocol packaging, platform tests, component tests, linting, vulnerability checks, Swagger generation, doctrine and COSAiS validation, README generation, website generation, Docker builds, and FIPS builds.
+The root `Makefile` coordinates protobuf generation, Go builds, Python protocol packaging, platform tests, component tests, linting, vulnerability checks, Swagger generation, doctrine and COSAiS validation, website generation, Docker builds, and FIPS builds.
 
 The primary boundaries are:
 
@@ -271,4 +278,3 @@ The primary boundaries are:
 - `make python-build`: Builds the Python protocol distribution with bundled registries.
 - `make dashboard-test`, `make ensemble-test`, and `make website-test`: Validate non-Go components.
 - `make build-fips` and `make verify-fips`: Build and verify the pinned Linux AMD64 FIPS variant. See [FIPS 140-3 Compliance](../reference/fips140-3.md).
-- `make readme`, `make readme-check`, and `make readme-test`: Generate and validate the public README and evidence projection.

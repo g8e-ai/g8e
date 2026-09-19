@@ -65,6 +65,11 @@ type GatewayWebSocketHandler struct {
 	// per-transaction at L4 verification time.
 	posture string
 
+	// doctrine is the L1 validator the cmd: relay runs against the decoded
+	// typed payload before setting L1.Validated. Nil disables the cmd: relay
+	// path (the relay fails closed without a doctrine to screen against).
+	doctrine *governance.L1Doctrine
+
 	// receiptRelayDeps are wired by SetReceiptRelayDeps for the receipts:
 	// relay path. When set, publishes to receipts: channels from
 	// authorized operators are intercepted, the ActionReceipt signature is
@@ -209,21 +214,24 @@ func NewGatewayWebSocketHandler(logger *slog.Logger) *GatewayWebSocketHandler {
 	}
 }
 
-// SetCommandRelayDeps wires the StateRootProvider, session validator, and
-// gateway posture required for the cmd: command intent relay. When set,
-// publishes to cmd: channels from authorized app workloads are intercepted,
-// transformed into governed GovernanceEnvelopes with the gateway's state
-// root and posture, and fanned out to subscribers. When nil (the default),
-// the cmd: relay path is disabled and publishes to cmd: are rejected
-// fail-closed. Called once during gateway startup after the auth service
-// and state root service are constructed. The posture is injected into
-// every relayed envelope so the operator reads it per-transaction at L4
-// verification time instead of from out-of-band config.
-func (b *GatewayWebSocketHandler) SetCommandRelayDeps(stateRootProvider governance.StateRootProvider, sessionValidator operatorSessionValidator, posture string) {
+// SetCommandRelayDeps wires the StateRootProvider, session validator, gateway
+// posture, and L1 doctrine required for the cmd: command intent relay. When
+// set, publishes to cmd: channels from authorized app workloads are
+// intercepted, transformed into governed GovernanceEnvelopes with the
+// gateway's state root, posture, and L1 screening, and fanned out to
+// subscribers. When nil (the default), the cmd: relay path is disabled and
+// publishes to cmd: are rejected fail-closed. Called once during gateway
+// startup after the auth service, state root service, and L1 doctrine are
+// constructed. The posture is injected into every relayed envelope so the
+// operator reads it per-transaction at L4 verification time instead of from
+// out-of-band config. The doctrine is the L1 validator the relay runs
+// against the decoded typed payload before setting L1.Validated.
+func (b *GatewayWebSocketHandler) SetCommandRelayDeps(stateRootProvider governance.StateRootProvider, sessionValidator operatorSessionValidator, posture string, doctrine *governance.L1Doctrine) {
 	b.mu.Lock()
 	b.stateRootProvider = stateRootProvider
 	b.sessionValidator = sessionValidator
 	b.posture = posture
+	b.doctrine = doctrine
 	b.mu.Unlock()
 }
 
@@ -343,6 +351,15 @@ func (b *GatewayWebSocketHandler) Publish(channel string, data []byte) int {
 	}
 
 	return count
+}
+
+// ChannelSubscriberCount returns the number of active WebSocket subscribers on
+// an exact channel name. Used by gateway preflight checks before scored
+// inference dispatches that require remote observer cmd delivery.
+func (b *GatewayWebSocketHandler) ChannelSubscriberCount(channel string) int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return len(b.subscribers[channel])
 }
 
 // RegisterHandler registers an in-process handler for a channel.
@@ -538,10 +555,17 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 	b.mu.RLock()
 	stateRootProvider := b.stateRootProvider
 	sessionValidator := b.sessionValidator
+	posture := b.posture
+	doctrine := b.doctrine
 	b.mu.RUnlock()
 
 	if stateRootProvider == nil || sessionValidator == nil {
 		b.logger.Warn("PubSub cmd: relay disabled: state root provider or session validator not configured",
+			"channel", channel)
+		return
+	}
+	if doctrine == nil {
+		b.logger.Warn("PubSub cmd: relay disabled: L1 doctrine not configured",
 			"channel", channel)
 		return
 	}
@@ -597,6 +621,14 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 		return
 	}
 
+	if err := validateOllamaServiceDispatch(op, intent.ActionType, intent.Payload); err != nil {
+		b.logger.Warn("PubSub cmd: relay: ollama service dispatch rejected",
+			"channel", channel,
+			"operator_session_id", intent.OperatorSessionId,
+			"error", err.Error())
+		return
+	}
+
 	// 4. Fetch the gateway's current state root.
 	stateRoot, err := stateRootProvider.GetCurrentStateRoot()
 	if err != nil {
@@ -624,7 +656,8 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 		TaskID:            intent.TaskId,
 		WebSessionID:      intent.WebSessionId,
 		CliSessionID:      intent.CliSessionId,
-		Posture:           b.posture,
+		Posture:           posture,
+		Doctrine:          doctrine,
 	})
 	if err != nil {
 		b.logger.Warn("PubSub cmd: relay: failed to build governance envelope",

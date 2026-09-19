@@ -80,6 +80,7 @@ func TestVerifyEnvelopeIdentityBinding_Exhaustive(t *testing.T) {
 		uris              []*url.URL
 		operatorID        string
 		operatorSessionID string
+		actingAppID       string
 		source            commonv1.Component
 		expectErr         bool
 	}{
@@ -117,32 +118,36 @@ func TestVerifyEnvelopeIdentityBinding_Exhaustive(t *testing.T) {
 			expectErr:         true,
 		},
 		{
-			name:       "App match",
-			uris:       []*url.URL{mustParseURL("spiffe://g8e.local/app/op-1")},
-			operatorID: "op-1",
-			source:     commonv1.Component_COMPONENT_AGENT,
-			expectErr:  false,
+			name:        "App match",
+			uris:        []*url.URL{mustParseURL("spiffe://g8e.local/app/app-1")},
+			operatorID:  "op-1",
+			actingAppID: "app-1",
+			source:      commonv1.Component_COMPONENT_AGENT,
+			expectErr:   false,
 		},
 		{
-			name:       "App mismatch",
-			uris:       []*url.URL{mustParseURL("spiffe://g8e.local/app/op-2")},
-			operatorID: "op-1",
-			source:     commonv1.Component_COMPONENT_AGENT,
-			expectErr:  true,
+			name:        "App mismatch",
+			uris:        []*url.URL{mustParseURL("spiffe://g8e.local/app/app-2")},
+			operatorID:  "op-1",
+			actingAppID: "app-1",
+			source:      commonv1.Component_COMPONENT_AGENT,
+			expectErr:   true,
 		},
 		{
-			name:       "Non-app component skips App check",
-			uris:       []*url.URL{mustParseURL("spiffe://g8e.local/app/op-1")},
-			operatorID: "op-1",
-			source:     commonv1.Component_COMPONENT_G8EO,
-			expectErr:  true,
+			name:        "Non-app component skips App check",
+			uris:        []*url.URL{mustParseURL("spiffe://g8e.local/app/app-1")},
+			operatorID:  "op-1",
+			actingAppID: "app-1",
+			source:      commonv1.Component_COMPONENT_G8EO,
+			expectErr:   true,
 		},
 		{
-			name:       "Multiple URIs, one matches",
-			uris:       []*url.URL{mustParseURL("spiffe://g8e.local/unknown"), mustParseURL("spiffe://g8e.local/app/op-1")},
-			operatorID: "op-1",
-			source:     commonv1.Component_COMPONENT_AGENT,
-			expectErr:  false,
+			name:        "Multiple URIs, one matches",
+			uris:        []*url.URL{mustParseURL("spiffe://g8e.local/unknown"), mustParseURL("spiffe://g8e.local/app/app-1")},
+			operatorID:  "op-1",
+			actingAppID: "app-1",
+			source:      commonv1.Component_COMPONENT_AGENT,
+			expectErr:   false,
 		},
 		{
 			name:              "Wrong trust domain",
@@ -180,6 +185,7 @@ func TestVerifyEnvelopeIdentityBinding_Exhaustive(t *testing.T) {
 			envelope := marshalEnvelope(t, &commonv1.GovernanceEnvelope{
 				OperatorId:        tc.operatorID,
 				OperatorSessionId: tc.operatorSessionID,
+				ActingAppId:       tc.actingAppID,
 				SourceComponent:   tc.source,
 			})
 			err := verifyEnvelopeIdentityBinding(req, envelope)

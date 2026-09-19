@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 This guide covers building the shared Gateway/Operator image, running a gateway-only container, and managing the repository's Docker Compose deployments. For the complete four-service product workflow, see the [Unified Docker Stack Guide](./unified_stack.md).
 
@@ -86,18 +86,20 @@ curl -fsS http://localhost:8080/api/v1/health
 docker compose --profile bootstrapped up -d
 
 # Discover the requests submitted by the workloads.
-./g8e auth pending-platform-enrollments
+./g8e auth enroll pending
 
 # Approve each exact request ID. Approving the operator first makes its shared transport credentials available before the ensemble finishes startup.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
-./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
-./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+./g8e auth enroll approve <operator-request-id> --yes
+./g8e auth enroll approve <dashboard-request-id> --yes
+./g8e auth enroll approve <ensemble-request-id> --yes
+
+# To reject a request instead: ./g8e auth enroll deny <request-id> --yes
 
 # Inspect readiness after enrollment completes.
 docker compose --profile bootstrapped ps
 ```
 
-The approval commands use the enrolled host CLI identity over mTLS. They accept request IDs, not requester tokens, token hashes, CSRs, or certificates. The gateway console at `https://localhost:8443/console/` also lists and approves pending requests after browser passkey enrollment.
+The `auth enroll pending`, `approve`, and `deny` commands use the enrolled host CLI identity over mTLS. They accept request IDs, not requester tokens, token hashes, CSRs, or certificates. The gateway console at `https://localhost:8443/console/` also lists and decides pending requests after browser passkey enrollment.
 
 ### Use the CLI walkthrough
 
@@ -113,8 +115,8 @@ The walkthrough currently assumes the default host gateway ports, 8080 and 8443.
 
 ```bash
 ./g8e auth enroll user -e localhost:18080 --port 18443
-./g8e auth pending-platform-enrollments -e localhost:18080 --port 18443
-./g8e auth approve-platform-enrollment <request-id> --yes -e localhost:18080 --port 18443
+./g8e auth enroll pending -e localhost:18080 --port 18443
+./g8e auth enroll approve <request-id> --yes -e localhost:18080 --port 18443
 ```
 
 Use `./g8e docker start --full --skip-enroll` to start all four services without the walkthrough. The workload services remain pending until their requests are approved manually.
@@ -180,6 +182,29 @@ The gateway runtime volume is mounted at `/root/.g8e` and includes:
 - `vault/` for encrypted vault state and the default vault key at `vault/key`
 
 Removing `g8e-gateway-data` destroys the gateway PKI, owner records, and audit state. The next startup creates a new authority and requires owner and workload enrollment again.
+
+The host CLI identity under `<cwd>/.g8e/pki/` is separate from the gateway volume. Compose does **not** bind-mount host `public-feed`, `public-mirror`, or provider-observation paths into the gateway container. Cross-boundary campaign operations use enrollment and mTLS APIs instead of shared filesystems.
+
+## Evaluation publish and verify (split host and container)
+
+Docker evaluation runs the Gateway in a container while the campaign controller CLI stays on the host. Spectator and provider-observation state are gateway-owned; the host never shares directories with the container for those paths.
+
+| Concern | Owner | Host CLI access |
+| --- | --- | --- |
+| Public feed signing keys and outbox | Gateway volume (`g8e-gateway-data`) | `POST /api/v1/public-feed/batches` (owner mTLS) when gateway is healthy |
+| Public mirror (`8081`/`8082`) and explorer (`5173`) | Gateway `PublicSpectatorRuntime` (`--public-spectator`, Compose default) | Read-only HTTP to published ports |
+| Provider-boundary observation windows | Gateway volume under `data/inference/provider-observer/windows/` | `GET /api/v1/inference/provider-observations/{provider_attempt_id}` (owner mTLS) via `g8e eval campaign verify --require-provider-observation` |
+| Model provenance attestation windows | Gateway volume under `data/inference/model-provenance/windows/` | Campaign assignment verifier (ingested from Provenance Operator results) |
+
+**Campaign publication.** When `execute --publish` or `campaign schedule --publish` runs from the host, the CLI posts signed batches through the gateway API. Publication requires a healthy gateway with `--public-spectator` enabled.
+
+**Campaign verify.** Provider observation windows ingested by the gateway are not visible on the host filesystem. Verify uses the gateway read API when local evidence is missing. Assignments that completed before the Observer Operator enrolled fail `--require-provider-observation` honestly; re-run or accept partial coverage. Model provenance attestation windows follow the same gateway-ingest pattern when the Provenance Operator is enrolled.
+
+**Observer Operator.** Enroll on the provider host with platform enrollment (`g8e operator start --provider-boundary-observer-enabled [--ollama]` → `g8e auth enroll approve`). The gateway fans out `ProviderBoundaryObservationCommand` BEGIN/FINALIZE over pub/sub; do not bind-mount inference state for verify. Add `--ollama` only when the provider-host owner wants the campaign pipeline to restart the local Ollama service between assignments.
+
+**Provenance Operator.** Enroll as a **separate** session at the model storage site (`g8e operator start --provenance-operator-enabled --model-storage-root <ollama-models-dir>` → `g8e auth enroll approve`). The gateway fans out `ModelProvenanceObservationCommand` BEGIN/FINALIZE in parallel with provider-boundary observation. See [Model Provenance](../architecture/model-provenance.md).
+
+See [Unified Docker Stack Guide](./unified_stack.md) for the mini-smoke workflow and [Public Spectator Operations Guide](./public_spectator.md) for mirror verification and tunnel setup.
 
 ## Host Identity and Certificates
 

@@ -32,27 +32,35 @@ type HTTPHandlerDependencies struct {
 	Logger *slog.Logger
 	Auth   *AuthService
 
-	PKIControllerDeps                PKIControllerDeps
-	AuditControllerDeps              AuditControllerDeps
-	DataControllerDeps               DataControllerDeps
-	SignerControllerDeps             SignerControllerDeps
-	BootstrapControllerDeps          BootstrapControllerDeps
-	CLIRecoveryControllerDeps        CLIRecoveryControllerDeps
-	CLIRotationControllerDeps        CLIRotationControllerDeps
-	CLIRefreshControllerDeps         CLIRefreshControllerDeps
-	EnrollmentTokenControllerDeps    EnrollmentTokenControllerDeps
-	UserControllerDeps               UserControllerDeps
-	SessionControllerDeps            SessionControllerDeps
-	AdminControllerDeps              AdminControllerDeps
-	OperatorControllerDeps           OperatorControllerDeps
-	DispatchControllerDeps           DispatchControllerDeps
-	SSEControllerDeps                SSEControllerDeps
-	HealthControllerDeps             HealthControllerDeps
-	GovernanceControllerDeps         GovernanceControllerDeps
-	MCPControllerDeps                MCPControllerDeps
-	PubSubControllerDeps             PubSubControllerDeps
-	PasskeyControllerDeps            PasskeyControllerDeps
-	PlatformEnrollmentControllerDeps PlatformEnrollmentControllerDeps
+	PKIControllerDeps                     PKIControllerDeps
+	AuditControllerDeps                   AuditControllerDeps
+	DataControllerDeps                    DataControllerDeps
+	SignerControllerDeps                  SignerControllerDeps
+	BootstrapControllerDeps               BootstrapControllerDeps
+	CLIRecoveryControllerDeps             CLIRecoveryControllerDeps
+	CLIRotationControllerDeps             CLIRotationControllerDeps
+	CLIRefreshControllerDeps              CLIRefreshControllerDeps
+	CLISessionControllerDeps              CLISessionControllerDeps
+	EnrollmentTokenControllerDeps         EnrollmentTokenControllerDeps
+	UserControllerDeps                    UserControllerDeps
+	SessionControllerDeps                 SessionControllerDeps
+	AdminControllerDeps                   AdminControllerDeps
+	OperatorControllerDeps                OperatorControllerDeps
+	DispatchControllerDeps                DispatchControllerDeps
+	InferenceDispatchControllerDeps       InferenceDispatchControllerDeps
+	SSEControllerDeps                     SSEControllerDeps
+	HealthControllerDeps                  HealthControllerDeps
+	GovernanceControllerDeps              GovernanceControllerDeps
+	MCPControllerDeps                     MCPControllerDeps
+	PubSubControllerDeps                  PubSubControllerDeps
+	PasskeyControllerDeps                 PasskeyControllerDeps
+	PlatformEnrollmentControllerDeps      PlatformEnrollmentControllerDeps
+	ObserveControllerDeps                 ObserveControllerDeps
+	ObserveProducerControllerDeps         ObserveProducerControllerDeps
+	PublicFeedControllerDeps              PublicFeedControllerDeps
+	EvalCampaignPublicationControllerDeps EvalCampaignPublicationControllerDeps
+	ProviderObservationControllerDeps     ProviderObservationControllerDeps
+	ModelProvenanceControllerDeps         ModelProvenanceControllerDeps
 }
 
 // HTTPHandler manages the web API for the gateway service.
@@ -66,23 +74,31 @@ type HTTPHandler struct {
 	passkeyController            *PasskeyController
 	platformEnrollmentController *PlatformEnrollmentController
 	// Controllers for domain-specific endpoints
-	pkiController             *PKIController
-	auditController           *AuditController
-	dataController            *DataController
-	signerController          *SignerController
-	bootstrapController       *BootstrapController
-	cliRecoveryController     *CLIRecoveryController
-	cliRotationController     *CLIRotationController
-	cliRefreshController      *CLIRefreshController
-	enrollmentTokenController *EnrollmentTokenController
-	userController            *UserController
-	sessionController         *SessionController
-	adminController           *AdminController
-	operatorController        *OperatorController
-	dispatchController        *DispatchController
-	sseController             *SSEController
-	healthController          *HealthController
-	governanceController      *GovernanceController
+	pkiController                     *PKIController
+	auditController                   *AuditController
+	dataController                    *DataController
+	signerController                  *SignerController
+	bootstrapController               *BootstrapController
+	cliRecoveryController             *CLIRecoveryController
+	cliRotationController             *CLIRotationController
+	cliRefreshController              *CLIRefreshController
+	cliSessionController              *CLISessionController
+	enrollmentTokenController         *EnrollmentTokenController
+	userController                    *UserController
+	sessionController                 *SessionController
+	adminController                   *AdminController
+	operatorController                *OperatorController
+	dispatchController                *DispatchController
+	inferenceDispatchController       *InferenceDispatchController
+	sseController                     *SSEController
+	healthController                  *HealthController
+	governanceController              *GovernanceController
+	observeController                 *ObserveController
+	observeProducerController         *ObserveProducerController
+	publicFeedController              *PublicFeedController
+	evalCampaignPublicationController *EvalCampaignPublicationController
+	providerObservationController     *ProviderObservationController
+	modelProvenanceController         *ModelProvenanceController
 
 	// router is the main HTTP router, built once at construction by
 	// buildPublicRouter and cached for the lifetime of the handler. It is
@@ -185,44 +201,83 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	if deps.CLIRefreshControllerDeps.UserSvc == nil {
 		deps.CLIRefreshControllerDeps.UserSvc = deps.BootstrapControllerDeps.UserSvc
 	}
+	if deps.CLIRefreshControllerDeps.Reg == nil {
+		deps.CLIRefreshControllerDeps.Reg = deps.OperatorControllerDeps.Reg
+	}
+	if deps.CLIRefreshControllerDeps.Auth == nil {
+		deps.CLIRefreshControllerDeps.Auth = deps.Auth
+	}
 	if deps.CLIRefreshControllerDeps.Responder == nil {
 		deps.CLIRefreshControllerDeps.Responder = responder
 	}
+	if deps.CLISessionControllerDeps.Logger == nil {
+		deps.CLISessionControllerDeps.Logger = deps.Logger
+	}
+	if deps.CLISessionControllerDeps.Responder == nil {
+		deps.CLISessionControllerDeps.Responder = responder
+	}
 
 	h := &HTTPHandler{
-		cfg:                          deps.Cfg,
-		logger:                       deps.Logger,
-		authMiddleware:               deps.Auth,
-		responder:                    responder,
-		pkiController:                newPKIController(deps.PKIControllerDeps),
-		auditController:              newAuditController(deps.AuditControllerDeps),
-		dataController:               newDataController(deps.DataControllerDeps),
-		signerController:             newSignerController(deps.SignerControllerDeps),
-		bootstrapController:          newBootstrapController(deps.BootstrapControllerDeps),
-		cliRecoveryController:        newCLIRecoveryController(deps.CLIRecoveryControllerDeps),
-		cliRotationController:        newCLIRotationController(deps.CLIRotationControllerDeps),
-		cliRefreshController:         newCLIRefreshController(deps.CLIRefreshControllerDeps),
-		enrollmentTokenController:    newEnrollmentTokenController(deps.EnrollmentTokenControllerDeps),
-		userController:               newUserController(deps.UserControllerDeps),
-		sessionController:            newSessionController(deps.SessionControllerDeps),
-		adminController:              newAdminController(deps.AdminControllerDeps),
-		operatorController:           newOperatorController(deps.OperatorControllerDeps),
-		dispatchController:           newDispatchController(deps.DispatchControllerDeps),
-		sseController:                newSSEController(deps.SSEControllerDeps),
-		healthController:             newHealthController(deps.HealthControllerDeps),
-		governanceController:         newGovernanceController(deps.GovernanceControllerDeps),
-		mcpController:                newMCPController(deps.MCPControllerDeps),
-		pubsubController:             newPubSubController(deps.PubSubControllerDeps),
-		passkeyController:            newPasskeyController(deps.PasskeyControllerDeps),
-		platformEnrollmentController: newPlatformEnrollmentController(deps.PlatformEnrollmentControllerDeps),
-		limiters:                     make(map[string]*tokenBucket),
-		limiterLastUsed:              make(map[string]time.Time),
+		cfg:                               deps.Cfg,
+		logger:                            deps.Logger,
+		authMiddleware:                    deps.Auth,
+		responder:                         responder,
+		pkiController:                     newPKIController(deps.PKIControllerDeps),
+		auditController:                   newAuditController(deps.AuditControllerDeps),
+		dataController:                    newDataController(deps.DataControllerDeps),
+		signerController:                  newSignerController(deps.SignerControllerDeps),
+		bootstrapController:               newBootstrapController(deps.BootstrapControllerDeps),
+		cliRecoveryController:             newCLIRecoveryController(deps.CLIRecoveryControllerDeps),
+		cliRotationController:             newCLIRotationController(deps.CLIRotationControllerDeps),
+		cliRefreshController:              newCLIRefreshController(deps.CLIRefreshControllerDeps),
+		cliSessionController:              newCLISessionController(deps.CLISessionControllerDeps),
+		enrollmentTokenController:         newEnrollmentTokenController(deps.EnrollmentTokenControllerDeps),
+		userController:                    newUserController(deps.UserControllerDeps),
+		sessionController:                 newSessionController(deps.SessionControllerDeps),
+		adminController:                   newAdminController(deps.AdminControllerDeps),
+		operatorController:                newOperatorController(deps.OperatorControllerDeps),
+		dispatchController:                newDispatchController(deps.DispatchControllerDeps),
+		inferenceDispatchController:       newInferenceDispatchController(deps.InferenceDispatchControllerDeps),
+		sseController:                     newSSEController(deps.SSEControllerDeps),
+		healthController:                  newHealthController(deps.HealthControllerDeps),
+		governanceController:              newGovernanceController(deps.GovernanceControllerDeps),
+		observeController:                 newObserveController(deps.ObserveControllerDeps),
+		observeProducerController:         newObserveProducerController(deps.ObserveProducerControllerDeps),
+		publicFeedController:              newPublicFeedController(deps.PublicFeedControllerDeps),
+		evalCampaignPublicationController: newEvalCampaignPublicationController(deps.EvalCampaignPublicationControllerDeps),
+		providerObservationController:     newProviderObservationController(deps.ProviderObservationControllerDeps),
+		modelProvenanceController:         newModelProvenanceController(deps.ModelProvenanceControllerDeps),
+		mcpController:                     newMCPController(deps.MCPControllerDeps),
+		pubsubController:                  newPubSubController(deps.PubSubControllerDeps),
+		passkeyController:                 newPasskeyController(deps.PasskeyControllerDeps),
+		platformEnrollmentController:      newPlatformEnrollmentController(deps.PlatformEnrollmentControllerDeps),
+		limiters:                          make(map[string]*tokenBucket),
+		limiterLastUsed:                   make(map[string]time.Time),
 	}
 
 	// Build router once to avoid per-request overhead
 	h.router = h.buildPublicRouter()
 
 	return h, nil
+}
+
+// requireAppIdentity verifies the caller is an authenticated app workload
+// with a delegated user identity. The unified auth middleware stamps
+// ContextKeyAppID (app workloads) and ContextKeyUserID (delegated user SAN)
+// during handleAppAuth. On failure it writes 403 (not an app workload) or
+// 401 (missing user identity) and returns ok=false.
+func requireAppIdentity(responder *response.Writer, w http.ResponseWriter, r *http.Request) (appID, userID string, ok bool) {
+	appID, _ = r.Context().Value(constants.ContextKeyAppID).(string)
+	if appID == "" {
+		responder.Error(w, http.StatusForbidden, constants.ErrForbidden.Error())
+		return "", "", false
+	}
+	userID, _ = r.Context().Value(constants.ContextKeyUserID).(string)
+	if userID == "" {
+		responder.Error(w, http.StatusUnauthorized, constants.ErrNotAuthenticated.Error())
+		return "", "", false
+	}
+	return appID, userID, true
 }
 
 func readRequestBody(r *http.Request, maxPayloadBytes int64) ([]byte, error) {

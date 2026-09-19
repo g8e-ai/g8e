@@ -51,6 +51,12 @@ var (
 	ErrPEMExtraData                 = errors.New("extra data after PEM block")
 	ErrHTTPStatusError              = errors.New("HTTP status error")
 	ErrEmptyTrustBundle             = errors.New("trust bundle is empty")
+	ErrSourceTreeNotDir             = errors.New("source tree root is not a directory")
+	ErrSourceTreeSymlink            = errors.New("symlink rejected in source tree")
+	ErrSourceTreeEntryNotFound      = errors.New("source manifest entry not found")
+	ErrSourceTreeEntryInvalid       = errors.New("source manifest entry is not a clean relative path")
+	ErrSourceTreeHashInvalid        = errors.New("source tree hash is not a SHA-256 digest")
+	ErrFIPSModeNotActive            = errors.New("fips 140-3 mode is not active")
 	ErrCAParseFailed                = errors.New("failed to parse CA certificates")
 	ErrMissingRequiredField         = errors.New("missing required field")
 	ErrInvalidLogLevel              = errors.New("invalid log level")
@@ -142,6 +148,14 @@ var (
 	ErrProcessForceKillTimeout = errors.New("process did not exit after force kill")
 	ErrBinaryResolveFailed     = errors.New("failed to resolve operator binary")
 	ErrBinaryCopyFailed        = errors.New("failed to copy operator binary")
+
+	// Launch profile errors. The launch profile is the complete validated
+	// configuration persisted after every successful managed background
+	// `gw start` and read by `gw restart` to reconstruct the prior launch.
+	ErrLaunchProfileMissing            = errors.New("launch profile not found")
+	ErrLaunchProfileCorrupted          = errors.New("launch profile is corrupted")
+	ErrLaunchProfileVersionUnsupported = errors.New("launch profile version is unsupported")
+	ErrLaunchProfileInvalid            = errors.New("launch profile is invalid")
 
 	// File system errors
 	ErrPathNotFound         = errors.New("path not found")
@@ -578,6 +592,15 @@ var (
 	ErrSystemTrustStaleRemovalDenied = errors.New("user declined removal of stale trust anchors")
 	ErrBrowserRestartDeclined        = errors.New("user declined to restart browser before passkey ceremony")
 
+	// Frontend connection trust and verification errors. These cover the
+	// distinct failure modes of the gw connect trust and verification flow.
+	ErrHTTPSCertificateVerification = errors.New("HTTPS certificate verification failed")
+	ErrCORSPreflightRejected        = errors.New("CORS preflight rejected or mismatched")
+	ErrManualBrowserTrustRequired   = errors.New("manual browser trust installation required")
+	ErrGatewayReadinessTimeout      = errors.New("gateway readiness check timed out")
+	ErrGatewayConfigMismatch        = errors.New("running gateway configuration does not match the requested configuration")
+	ErrManagedRestartDeclined       = errors.New("user declined the required managed gateway restart")
+
 	// Data command errors
 	ErrCollectionRequired         = errors.New("collection required")
 	ErrOperatorSessionIDRequired  = errors.New("operator session id required")
@@ -995,6 +1018,7 @@ var (
 	ErrTxL3ProofMissing               = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
 	ErrTxL3ProofInvalid               = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
 	ErrTxL3NotaryNotConfigured        = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")
+	ErrTxL3ProofUnmintable            = errors.New("TX_NOTARY_L3_PROOF_UNMINTABLE: posture requires L3 proof but the gateway dispatch path cannot mint human proofs")
 	ErrTxTransactionHashMissing       = errors.New("TX_HASH_MISSING: transaction_hash required")
 	ErrTxTransactionIDMissing         = errors.New("TX_ID_MISSING: id required")
 	ErrTxExpiresAtMissing             = errors.New("TX_EXPIRES_AT_MISSING: expires_at required")
@@ -1080,6 +1104,8 @@ var (
 	ErrMTLSCertRevoked            = errors.New("mTLS client certificate revoked or invalid")
 	ErrProtocolAuthRequired       = errors.New("protocol authentication required")
 	ErrMTLSIdentityMismatch       = errors.New("mTLS identity mismatch")
+	ErrOperatorBindingMismatch    = errors.New("operator binding mismatch; run './g8e auth refresh' to resync the local operator binding")
+	ErrEmbeddedOperatorClaimed    = errors.New("embedded operator already claimed")
 	ErrSessionLoadFailed          = errors.New("failed to load session")
 	ErrSessionParseFailed         = errors.New("failed to parse session")
 	ErrCLISessionExpired          = errors.New("CLI session expired")
@@ -1202,6 +1228,7 @@ var (
 	ErrEvidenceArtifactMalformed      = errors.New("compliance: malformed evidence artifact")
 	ErrUnexpectedEvidenceArtifact     = errors.New("compliance: unexpected evidence artifact")
 	ErrEvidenceArtifactTooLarge       = errors.New("compliance: evidence artifact exceeds size limit")
+	ErrEvidenceArtifactPersistFailed  = errors.New("compliance: evidence artifact persistence failed")
 	ErrEvidenceDirectoryLimitExceeded = errors.New("compliance: evidence directory resource limit exceeded")
 	ErrDemoRunVerificationFailed      = errors.New("compliance: demo run verification failed")
 	ErrEvalRunVerificationFailed      = errors.New("compliance: eval run verification failed")
@@ -1240,6 +1267,15 @@ var (
 	ErrDockerStartApprovalFailed   = errors.New("docker start: platform enrollment approval failed")
 	ErrDockerStartNoPendingRequest = errors.New("docker start: no pending platform enrollment request found for component")
 
+	// Docker init bootstrap errors
+	ErrDockerInitEnvRequired      = errors.New("docker init: .env missing required evaluation settings")
+	ErrDockerInitEnrollmentFailed = errors.New("docker init: owner enrollment failed")
+	ErrDockerInitApprovalFailed   = errors.New("docker init: platform enrollment approval failed")
+	ErrDockerInitReadinessFailed  = errors.New("docker init: workloads did not become ready")
+
+	// Host runtime directory errors
+	ErrRuntimeDirNotWritable = errors.New("runtime directory is not writable by the current user")
+
 	// Demo scenario execution errors
 	ErrDemoScenarioFailed        = errors.New("demo: one or more scenarios failed")
 	ErrDemoScenarioCancelled     = errors.New("demo: scenario cancelled")
@@ -1257,4 +1293,207 @@ var (
 	ErrJSONSchemaCompileFailed       = errors.New("jsonschema: schema compilation failed")
 	ErrJSONSchemaValidationFailed    = errors.New("jsonschema: instance validation failed")
 	ErrJSONSchemaResourceLimit       = errors.New("jsonschema: resource limit exceeded")
+
+	// Observe read API errors
+	ErrObserveCursorInvalid    = errors.New("observe: invalid cursor")
+	ErrObserveLimitOutOfBounds = errors.New("observe: limit out of bounds")
+	ErrObserveRunNotFound      = errors.New("observe: run not found")
+	ErrObserveEvalNotFound     = errors.New("observe: eval not found")
+	ErrObserveDownloadNotFound = errors.New("observe: download not found")
+
+	// Observe producer errors (Phase 3: state projection persistence and SSE emission)
+	ErrObserveInvalidTransition  = errors.New("observe: invalid state transition")
+	ErrObserveStaleUpdate        = errors.New("observe: stale update rejected")
+	ErrObserveAgentIDRequired    = errors.New("observe: agent_id is required")
+	ErrObserveRunIDRequired      = errors.New("observe: run_id is required")
+	ErrObserveObservedAtRequired = errors.New("observe: observed_at is required")
+
+	// Observe producer ownership sentinels. ErrObserveAgentNotFound and
+	// ErrObserveRunNotFound are distinct internally so callers can
+	// distinguish agent vs run ownership mismatches, but the HTTP boundary
+	// maps both to the same forbidden response to avoid disclosing record
+	// existence.
+	ErrObserveAgentNotFound = errors.New("observe: agent not found")
+
+	// Observe producer payload validation errors. These are checked at the
+	// Gateway boundary before persistence so permissive behavior does not
+	// become a dependency for real producers.
+	ErrObserveUnsupportedSchemaVersion = errors.New("observe: unsupported schema version")
+	ErrObserveAgentDisplayNameRequired = errors.New("observe: agent display_name is required")
+	ErrObserveAgentRoleRequired        = errors.New("observe: agent role is required")
+	ErrObserveRunDisplayNameRequired   = errors.New("observe: run display_name is required")
+	ErrObserveRunKindRequired          = errors.New("observe: run_kind is required")
+	ErrObserveNegativeTaskCount        = errors.New("observe: task count is negative")
+	ErrObserveCompletedExceedsTotal    = errors.New("observe: completed_tasks exceeds total_tasks")
+	ErrObserveEndBeforeStart           = errors.New("observe: ended_at precedes started_at")
+
+	// Observe download streaming errors (Phase 4: authenticated byte
+	// streaming with hash and size verification).
+	ErrObserveDownloadRestrictedArtifact = errors.New("observe: restricted download artifact")
+	ErrObserveDownloadHashMismatch       = errors.New("observe: download hash mismatch")
+	ErrObserveDownloadSizeMismatch       = errors.New("observe: download size mismatch")
+	ErrObserveDownloadOversized          = errors.New("observe: download exceeds max bytes")
+	ErrObserveDownloadSymlinkRejected    = errors.New("observe: download symlink rejected")
+
+	// Live campaign producer errors (O2-live: typed live projections with
+	// persist-before-event, monotonic sequence, and duplicate suppression).
+	ErrObserveCampaignIDRequired        = errors.New("observe: campaign_id is required")
+	ErrObserveCycleIDRequired           = errors.New("observe: cycle_id is required")
+	ErrObserveAssignmentIDRequired      = errors.New("observe: assignment_id is required")
+	ErrObserveSupervisorIDRequired      = errors.New("observe: supervisor_id is required")
+	ErrObserveSourceIDRequired          = errors.New("observe: source_id is required")
+	ErrObserveRoleCombinationIDRequired = errors.New("observe: role_combination_id is required")
+	ErrObserveVariantIDRequired         = errors.New("observe: variant_id is required")
+	ErrObserveDuplicateEventID          = errors.New("observe: duplicate event_id suppressed")
+
+	// Supervisor errors (O1-supervisor: continuous campaign supervisor with
+	// explicit start/status/stop/resume, hash-linked cycle ledger, and typed
+	// safety stops).
+	ErrSupervisorAlreadyRunning      = errors.New("supervisor: already running")
+	ErrSupervisorNotRunning          = errors.New("supervisor: not running")
+	ErrSupervisorNotFound            = errors.New("supervisor: not found")
+	ErrSupervisorSpecRequired        = errors.New("supervisor: spec is required")
+	ErrSupervisorIDRequired          = errors.New("supervisor: supervisor_id is required")
+	ErrSupervisorCampaignIDRequired  = errors.New("supervisor: campaign_id is required")
+	ErrSupervisorNoRoleCombinations  = errors.New("supervisor: role_combinations is empty")
+	ErrSupervisorCycleBudgetInvalid  = errors.New("supervisor: cycle_budget must be positive")
+	ErrSupervisorLedgerCorrupt       = errors.New("supervisor: cycle ledger is corrupt")
+	ErrSupervisorLedgerHashMismatch  = errors.New("supervisor: cycle ledger hash mismatch")
+	ErrSupervisorAlreadyOwned        = errors.New("supervisor: owned by another owner")
+	ErrSupervisorCycleFailed         = errors.New("supervisor: cycle failed")
+	ErrSupervisorVerificationFailed  = errors.New("supervisor: verification failed")
+	ErrSupervisorPublicationFailed   = errors.New("supervisor: publication failed")
+	ErrSupervisorSafetyStop          = errors.New("supervisor: safety stop triggered")
+	ErrSupervisorBudgetExceeded      = errors.New("supervisor: provider budget exceeded")
+	ErrSupervisorDiskReserveViolated = errors.New("supervisor: disk reserve violated")
+	ErrSupervisorInvalidSpec         = errors.New("supervisor: invalid spec")
+	ErrSupervisorResumeFailed        = errors.New("supervisor: resume failed")
+)
+
+// Public feed errors (O3-public-feed: outbound publisher, signed batches,
+// ordered outbox, and content-addressed proof packages).
+var (
+	ErrPublicFeedDisabled             = errors.New("public-feed: outbound publisher is disabled")
+	ErrPublicFeedConfigRequired       = errors.New("public-feed: export config is required")
+	ErrPublicFeedMirrorOriginRequired = errors.New("public-feed: mirror origin is required")
+	ErrPublicFeedSourceIDRequired     = errors.New("public-feed: source_id is required")
+	ErrPublicFeedSigningKeyRequired   = errors.New("public-feed: signing key is required")
+	ErrPublicFeedSigningKeyIDRequired = errors.New("public-feed: signing_key_id is required")
+	ErrPublicFeedIngestTokenRequired  = errors.New("public-feed: ingest token is required")
+	ErrPublicFeedConfigExists         = errors.New("public-feed: configuration already exists")
+	ErrPublicFeedBatchEmpty           = errors.New("public-feed: batch must contain at least one record")
+	ErrPublicFeedBatchOversized       = errors.New("public-feed: batch exceeds max records or bytes")
+	ErrPublicFeedRecordHashMismatch   = errors.New("public-feed: record hash does not match computed hash")
+	ErrPublicFeedContentHashMismatch  = errors.New("public-feed: batch content hash does not match computed hash")
+	ErrPublicFeedSignatureInvalid     = errors.New("public-feed: batch signature is invalid")
+	ErrPublicFeedSequenceOutOfOrder   = errors.New("public-feed: batch sequence is out of order")
+	ErrPublicFeedHashChainMismatch    = errors.New("public-feed: previous batch hash does not match feed chain")
+	ErrPublicFeedDuplicateSequence    = errors.New("public-feed: duplicate sequence number rejected")
+	ErrPublicFeedEquivocation         = errors.New("public-feed: equivocal batch rejected")
+	ErrPublicFeedRevokedKey           = errors.New("public-feed: signing key is revoked")
+	ErrPublicFeedUnknownKey           = errors.New("public-feed: signing key is unknown")
+	ErrPublicFeedOutboxCorrupt        = errors.New("public-feed: outbox is corrupt")
+	ErrPublicFeedOutboxEquivocation   = errors.New("public-feed: outbox contains equivocal sequence data")
+	ErrPublicFeedOutboxEmpty          = errors.New("public-feed: outbox is empty")
+	ErrPublicFeedMirrorRejected       = errors.New("public-feed: mirror rejected batch")
+	ErrPublicFeedMirrorUnreachable    = errors.New("public-feed: mirror is unreachable")
+	ErrPublicFeedMirrorStoreCorrupt   = errors.New("public-feed: mirror store is corrupt")
+	ErrPublicFeedMirrorStoreWrite     = errors.New("public-feed: mirror store write failed")
+	ErrPublicFeedRateLimited          = errors.New("public-feed: anonymous read rate limit exceeded")
+	ErrPublicFeedRateLimitConfig      = errors.New("public-feed: anonymous read rate limit configuration is invalid")
+	ErrPublicFeedRetentionConfig      = errors.New("public-feed: retention configuration is invalid")
+	ErrPublicFeedFreshnessConfig      = errors.New("public-feed: freshness window configuration is invalid")
+	ErrPublicFeedListenAddress        = errors.New("public-feed: mirror listen address must be unique and loopback-only")
+	ErrPublicFeedMaxRetriesExceeded   = errors.New("public-feed: max retry attempts exceeded")
+	ErrPublicFeedSnapshotNotFound     = errors.New("public-feed: snapshot not found")
+	ErrPublicFeedProofNotFound        = errors.New("public-feed: proof not found")
+	ErrPublicFeedProofNotVerified     = errors.New("public-feed: proof verification report is not ok")
+	ErrPublicFeedProofOversized       = errors.New("public-feed: proof artifact exceeds max bytes")
+	ErrPublicFeedProofHashMismatch    = errors.New("public-feed: proof artifact hash mismatch")
+	ErrPublicFeedProofSymlinkRejected = errors.New("public-feed: proof artifact symlink rejected")
+	ErrPublicFeedProofSizeMismatch    = errors.New("public-feed: proof artifact size mismatch")
+	ErrPublicFeedProofPathTraversal   = errors.New("public-feed: proof path traversal rejected")
+	ErrPublicFeedProofManifestInvalid = errors.New("public-feed: proof manifest is invalid")
+	ErrPublicFeedProofCatalogMismatch = errors.New("public-feed: proof catalog does not match manifest")
+	ErrPublicFeedProofRestricted      = errors.New("public-feed: restricted artifact in proof package")
+	ErrPublicFeedProofIngestRejected  = errors.New("public-feed: mirror rejected proof package")
+	ErrPublicFeedProofDirExists       = errors.New("public-feed: proof directory already exists")
+	ErrPublicFeedProofIDRequired      = errors.New("public-feed: proof_id is required")
+	ErrPublicFeedRecordTypeInvalid    = errors.New("public-feed: invalid record type")
+	ErrPublicFeedRestrictedField      = errors.New("public-feed: restricted field in public record")
+	ErrPublicFeedBatchSignFailed      = errors.New("public-feed: failed to sign batch")
+	ErrPublicFeedKeyGenFailed         = errors.New("public-feed: failed to generate signing key")
+	ErrPublicFeedKeyRegistration      = errors.New("public-feed: signing key registration failed")
+	ErrPublicFeedKeyRevocation        = errors.New("public-feed: signing key revocation is invalid")
+	ErrPublicFeedKeyRotationPending   = errors.New("public-feed: signing key rotation requires recovery")
+
+	// Inference backend errors (g8ellama). The Go backend is an HTTP client
+	// to Ollama; it does not load or shut down models, so no load/shutdown
+	// error constants are defined.
+	ErrInferenceBackendUnavailable              = errors.New("inference: backend unavailable")
+	ErrInferenceModelNotFound                   = errors.New("inference: model not found in backend store")
+	ErrInferenceGenerateFailed                  = errors.New("inference: generation failed")
+	ErrInferenceBackendTimeout                  = errors.New("inference: backend request timed out")
+	ErrInferenceModelRefInvalid                 = errors.New("inference: model reference invalid")
+	ErrInferenceBackendNotRegistered            = errors.New("inference: backend not registered")
+	ErrInferenceRoleInvalid                     = errors.New("inference: role invalid")
+	ErrInferenceOperatorNotFound                = errors.New("inference: no inference-capable operator session found")
+	ErrInferenceResultDecode                    = errors.New("inference: failed to decode result envelope payload")
+	ErrInferenceCompletionNoReceipt             = errors.New("inference: completion missing final receipt")
+	ErrInferenceCompletionNoResult              = errors.New("inference: completed receipt missing result")
+	ErrInferenceReceiptFailed                   = errors.New("inference: execution failed on inference node")
+	ErrInferenceReceiptVerify                   = errors.New("inference: receipt verification failed")
+	ErrInferenceResultDigestMismatch            = errors.New("inference: result digest mismatch")
+	ErrInferenceResultDigest                    = errors.New("inference: result digest computation failed")
+	ErrInferenceOperatorAmbiguous               = errors.New("inference: multiple inference-capable operator sessions; explicit target required")
+	ErrInferenceOperatorNotCapable              = errors.New("inference: target operator session is not inference-capable")
+	ErrProviderBoundaryObserverNotFound         = errors.New("provider observer: no provider-boundary observer operator session found")
+	ErrProviderBoundaryObserverAmbiguous        = errors.New("provider observer: multiple provider-boundary observer sessions; explicit target required")
+	ErrProviderBoundaryObserverNotCapable       = errors.New("provider observer: target operator session is not a provider-boundary observer")
+	ErrProviderBoundaryObserverOllamaNotCapable = errors.New("provider observer: target operator session did not opt in to remote Ollama service control (--ollama)")
+	ErrProvenanceOperatorNotFound               = errors.New("provenance operator: no provenance operator session found")
+	ErrProvenanceOperatorAmbiguous              = errors.New("provenance operator: multiple provenance operator sessions; explicit target required")
+	ErrProvenanceOperatorNotCapable             = errors.New("provenance operator: target operator session is not a provenance operator")
+	ErrModelProvenanceDigestMismatch            = errors.New("model provenance: observed model digest does not match expected digest")
+	ErrInferenceModelOverrideDenied             = errors.New("inference: model override not permitted by role authority")
+	ErrInferenceOutcomeUnknown                  = errors.New("inference: dispatch deadline exceeded; remote provider outcome unknown")
+	ErrInferenceGovernanceRejected              = errors.New("inference: governance rejected the transaction")
+	ErrInferenceMessagesRequired                = errors.New("inference: messages required")
+	ErrInferenceMessageInvalid                  = errors.New("inference: message invalid")
+	ErrInferenceJSONInvalid                     = errors.New("inference: JSON value invalid")
+	ErrInferenceJSONNonCanonical                = errors.New("inference: JSON value is not canonical")
+	ErrInferenceToolSchemaInvalid               = errors.New("inference: tool schema invalid")
+	ErrInferenceEndpointInvalid                 = errors.New("inference: provider endpoint invalid")
+	ErrInferenceProviderResponseInvalid         = errors.New("inference: provider response invalid")
+	ErrInferenceGenerationOptionsInvalid        = errors.New("inference: generation options invalid")
+	ErrInferenceCapabilityUnsupported           = errors.New("inference: requested capability unsupported")
+	ErrInferenceProviderAttemptRequired         = errors.New("inference: provider attempt ID required")
+	ErrInferenceIdentityMismatch                = errors.New("inference: request and result identity mismatch")
+	ErrInferenceModelDigestMismatch             = errors.New("inference: model digest mismatch")
+	ErrInferenceEvidenceHashInvalid             = errors.New("inference: evidence hash invalid")
+	ErrInferenceModelRegistryInvalid            = errors.New("inference: model registry invalid")
+	ErrInferenceCampaignBindingInvalid          = errors.New("inference: campaign binding invalid")
+	ErrInferenceProviderAttemptConflict         = errors.New("inference: provider attempt already recorded")
+	ErrInferenceRequestTooLarge                 = errors.New("inference: request exceeds size bound")
+	ErrInferenceCanceled                        = errors.New("inference: canceled")
+	ErrInferenceCallerDisconnected              = errors.New("inference: caller disconnected")
+	ErrInferenceProgressBackpressure            = errors.New("inference: progress backpressure")
+	ErrInferenceProgressHashMismatch            = errors.New("inference: progress does not reconcile to terminal output hash")
+
+	// Dispatch transport errors. Zero delivery and a missing correlated
+	// result are terminal transport outcomes, not log-and-continue events.
+	ErrDispatchNoDelivery    = errors.New("dispatch: command delivered to no operator subscribers")
+	ErrDispatchResultTimeout = errors.New("dispatch: timed out waiting for operator result")
+)
+
+// Native evaluation errors.
+var (
+	ErrEvaluationSuiteUnsupported       = errors.New("evaluation: suite is unsupported")
+	ErrEvaluationTargetUnavailable      = errors.New("evaluation: target operator is unavailable")
+	ErrEvaluationPostureUnsupported     = errors.New("evaluation: governance posture is unsupported")
+	ErrEvaluationObservationUnavailable = errors.New("evaluation: independent observation is unavailable")
+	ErrEvaluationReportPersistFailed    = errors.New("evaluation: report persistence failed")
+	ErrEvaluationTargetAmbiguous        = errors.New("evaluation: target operator selection is ambiguous")
+	ErrEvaluationDispatchFailed         = errors.New("evaluation: governed dispatch failed")
+	ErrEvaluationReceiptUnavailable     = errors.New("evaluation: canonical receipt is unavailable")
 )

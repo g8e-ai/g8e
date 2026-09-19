@@ -138,6 +138,7 @@ class PrimaryLLMSettings:
     max_output_tokens: int = LLM_DEFAULT_MAX_OUTPUT_TOKENS
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
+    random_seed: int | None = None
     stop_sequences: list[str] | None = None
     response_modalities: list[str] = field(
         default_factory=lambda: list(_DEFAULT_RESPONSE_MODALITIES)
@@ -146,6 +147,7 @@ class PrimaryLLMSettings:
     system_instructions: str | None = None
     thinking_config: ThinkingConfig = field(default_factory=ThinkingConfig)
     tool_config: ToolConfig = field(default_factory=ToolConfig)
+    parallel_tool_calls: bool = True
 
 
 @dataclass
@@ -160,6 +162,7 @@ class AssistantLLMSettings:
     max_output_tokens: int = LLM_DEFAULT_MAX_OUTPUT_TOKENS
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
+    random_seed: int | None = None
     stop_sequences: list[str] | None = None
     system_instructions: str | None = None
     response_format: ResponseFormat | None = None
@@ -177,6 +180,7 @@ class LiteLLMSettings:
     max_output_tokens: int = LLM_DEFAULT_MAX_OUTPUT_TOKENS
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
+    random_seed: int | None = None
     stop_sequences: list[str] | None = None
     system_instructions: str | None = None
     response_format: ResponseFormat | None = None
@@ -188,6 +192,7 @@ class GenerateContentConfig:
     system_instructions: str | None = None
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
+    random_seed: int | None = None
     stop_sequences: list[str] | None = None
     response_modalities: list[str] = field(default_factory=lambda: ["TEXT"])
     tools: list[ToolGroup] = field(default_factory=list)

@@ -12,13 +12,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -140,8 +140,7 @@ func buildEvidenceGraphImporters(
 		if !evidence.ValidPathElement(runID) {
 			return nil, fmt.Errorf("%w: invalid eval run ID %q", constants.ErrPathValidation, runID)
 		}
-		runDir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.EvalRunsDirname, runID)
-		importers = append(importers, evidence.NewEvalBundleImporter(fileSvc, runID, runDir))
+		importers = append(importers, evaluation.NewEvidenceImporter(fileSvc, runID, time.Now))
 	}
 
 	return importers, nil

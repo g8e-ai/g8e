@@ -100,23 +100,19 @@ def clear_cache() -> None:
 @lru_cache(maxsize=16)
 def load_mode_prompts(
     operator_bound: bool,
-    is_cloud_operator: bool = False,
     g8e_web_search_available: bool = True,
 ) -> dict[str, str]:
-    """Load mode-specific prompts based on Operator binding status and type.
+    """Load mode-specific prompts based on Operator binding status.
 
     Args:
         operator_bound: True for g8e.bound mode, False for g8e.not.bound.
-        is_cloud_operator: True for Cloud Operator (AWS), uses cloud_operator_bound mode.
         g8e_web_search_available: When False and operator is not bound, loads the no-search
             variant prompt files instead of the standard ones.
 
     Returns:
         Dict keyed by PromptSection string with loaded prompt content.
     """
-    if is_cloud_operator and operator_bound:
-        mode = AgentMode.CLOUD_OPERATOR_BOUND
-    elif operator_bound:
+    if operator_bound:
         mode = AgentMode.G8E_BOUND
     else:
         mode = AgentMode.G8E_NOT_BOUND
@@ -146,7 +142,6 @@ def load_mode_prompts(
         extra={
             "mode": str(mode),
             "operator_bound": operator_bound,
-            "is_cloud_operator": is_cloud_operator,
             "g8e_web_search_available": g8e_web_search_available,
             "prompts_loaded": list(prompts.keys()),
         },

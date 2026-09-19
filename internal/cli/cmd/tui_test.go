@@ -26,7 +26,14 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
-const RegressionMarkerAfterFix = "REGRESSION: AFTER FIX"
+const (
+	// RegressionMarkerAfterFix indicates the expected behavior after a fix is implemented
+	RegressionMarkerAfterFix = "REGRESSION: AFTER FIX"
+	// RegressionMarkerBeforeFix indicates the current (broken) behavior before a fix
+	RegressionMarkerBeforeFix = "REGRESSION: BEFORE FIX"
+	// RegressionMarkerIssue identifies a specific issue being tracked
+	RegressionMarkerIssue = "REGRESSION: ISSUE"
+)
 
 // --- helpers ---
 

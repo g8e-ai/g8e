@@ -85,6 +85,14 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// because refresh requires mTLS, which the plain router does not
 	// provide.
 	mux.HandleFunc(constants.APIPaths.AuthCLIRefresh, h.cliRefreshController.handleRefresh)
+	mux.HandleFunc(constants.APIPaths.AuthCLIBind, h.cliRefreshController.handleBind)
+	mux.HandleFunc(constants.APIPaths.AuthCLIUnbind, h.cliRefreshController.handleUnbind)
+
+	// CLI session info — mTLS-protected; reports the authenticated
+	// session's persisted operator binding so the CLI can resync local
+	// credentials. NOT registered on buildHTTPRouter (plain HTTP) because
+	// it requires mTLS, which the plain router does not provide.
+	mux.HandleFunc(constants.APIPaths.AuthCLISession, h.cliSessionController.handleSessionInfo)
 
 	// Enrollment token validation (public — the token itself is the credential)
 	mux.HandleFunc(constants.APIPaths.AuthEnrollmentTokenValidate, h.enrollmentTokenController.handleEnrollmentTokenValidate)
@@ -148,6 +156,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.OperatorsReauth, h.operatorController.handleReauth)
 	mux.Handle(constants.APIPaths.OperatorsSession, http.HandlerFunc(h.operatorController.handleGetOperatorBySession))
 	mux.HandleFunc(constants.APIPaths.OperatorsCommands, h.dispatchController.HandleDispatch)
+	mux.HandleFunc(constants.APIPaths.InferenceDispatch, h.inferenceDispatchController.HandleDispatch)
 	mux.HandleFunc(constants.APIPaths.GovernanceSigners, h.signerController.handleGovernanceSigners)
 	mux.Handle(constants.APIPaths.GovernanceSignersByID, http.HandlerFunc(h.signerController.handleGovernanceSignerByID))
 	mux.Handle(constants.APIPaths.AdminAppPoliciesBySigner, http.HandlerFunc(h.adminController.handleAppPolicySigner))
@@ -172,6 +181,11 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuditEvents, h.auditController.handleAuditEvents)
 	mux.HandleFunc(constants.APIPaths.AuditSummary, h.auditController.handleAuditSummary)
 	mux.HandleFunc(constants.APIPaths.AuditReport, h.auditController.handleAuditReport)
+	mux.HandleFunc(constants.APIPaths.PublicFeedBatches, h.publicFeedController.handlePublicFeedBatches)
+	mux.HandleFunc(constants.APIPaths.PublicFeedSnapshot, h.publicFeedController.handlePublicFeedSnapshot)
+	mux.Handle(constants.APIPaths.EvalCampaignPublicationStateByRun, http.HandlerFunc(h.evalCampaignPublicationController.handlePublicationState))
+	mux.Handle(constants.APIPaths.InferenceProviderObservations, http.HandlerFunc(h.providerObservationController.handleProviderObservation))
+	mux.Handle(constants.APIPaths.InferenceModelProvenanceAttestations, http.HandlerFunc(h.modelProvenanceController.handleModelProvenance))
 
 	mux.HandleFunc(constants.APIPaths.SSEPush, h.sseController.handleInternalSSEPush)
 	mux.HandleFunc(constants.APIPaths.SSEEvents, h.sseController.handleInternalSSEEvents)
@@ -212,6 +226,29 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.Approvals, h.passkeyController.handleListSuspendedTransactions)
 	mux.HandleFunc(constants.APIPaths.AuthPasskeys, h.passkeyController.listCredentials)
 	mux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.passkeyController.revokeCredential))
+
+	// Observe API routes (RouteAuthWebSession — passkey-scoped, read-only
+	// observability surface). The unified auth middleware validates the web
+	// session cookie and stamps context with user_id before these handlers
+	// run. Controllers derive user_id from context and apply ownership
+	// scoping through the ObserveService.
+	mux.HandleFunc(constants.APIPaths.ObserveBootstrap, h.observeController.handleBootstrap)
+	mux.HandleFunc(constants.APIPaths.ObserveRuns, h.observeController.handleListRuns)
+	mux.Handle(constants.APIPaths.ObserveRunsByID, http.HandlerFunc(h.observeController.handleGetRun))
+	mux.HandleFunc(constants.APIPaths.ObserveEvals, h.observeController.handleListEvals)
+	mux.Handle(constants.APIPaths.ObserveEvalsByID, http.HandlerFunc(h.observeController.handleGetEval))
+	mux.HandleFunc(constants.APIPaths.ObserveDownloads, h.observeController.handleListDownloads)
+	mux.Handle(constants.APIPaths.ObserveDownloadsByID, http.HandlerFunc(h.observeController.handleGetDownload))
+
+	// Observe producer endpoints (RouteAuthMTLS — mTLS-authenticated app
+	// workload only, never browser-accessible). The g8ee ensemble calls
+	// these endpoints to report agent and run state changes. The unified
+	// auth middleware enforces mTLS and stamps context with the app
+	// identity and delegated user_id; the controller rejects non-app
+	// callers. These are registered after the read-only observe routes so
+	// the producer prefix does not shadow any by-id read path.
+	mux.HandleFunc(constants.APIPaths.ObserveProducerAgentState, h.observeProducerController.handleAgentState)
+	mux.HandleFunc(constants.APIPaths.ObserveProducerRunState, h.observeProducerController.handleRunState)
 
 	var handler http.Handler = mux
 	if h.authMiddleware != nil {

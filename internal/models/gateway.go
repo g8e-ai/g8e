@@ -380,8 +380,6 @@ type BootstrapResponse struct {
 	User              *User           `json:"user,omitempty"`
 	UserID            string          `json:"user_id,omitempty"`
 	WebSession        *WebSessionInfo `json:"web_session,omitempty"`
-	OperatorCert      string          `json:"operator_cert,omitempty"`
-	OperatorCertChain string          `json:"operator_cert_chain,omitempty"`
 	OperatorSessionID string          `json:"operator_session_id,omitempty"`
 	OperatorID        string          `json:"operator_id,omitempty"`
 	CLISessionID      string          `json:"cli_session_id,omitempty"`

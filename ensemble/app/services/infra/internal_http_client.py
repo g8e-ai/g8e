@@ -6,8 +6,16 @@
 # released under the Apache License, Version 2.0.
 
 import logging
+from collections.abc import AsyncIterator
 
-from app.clients.http_client import CircuitBreakerConfig, RetryConfig, HTTPClient
+from google.protobuf import json_format
+
+from app.clients.http_client import (
+    CircuitBreakerConfig,
+    GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG,
+    RetryConfig,
+    HTTPClient,
+)
 from app.models.settings import G8eeAppSettings, TLSConfig
 from app.constants import (
     DEFAULT_HTTP_CLIENT_TIMEOUT,
@@ -29,7 +37,13 @@ from app.models.internal_api import (
     SSEPushResponse,
     OperatorLinkResponse,
     OperatorLinkRequestPayload,
+    ObserveProducerAgentStateRequest,
+    ObserveProducerRunStateRequest,
+    ObserveProducerResponse,
+    InferenceDispatchRequest,
+    InferenceDispatchResponse,
 )
+from g8e.operator.v1.operator_pb2 import InferenceDispatchStreamFrame
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +72,8 @@ class InternalHttpClient:
             retry_config=RetryConfig(max_retries=DEFAULT_MAX_RETRIES),
             circuit_breaker_config=CircuitBreakerConfig(
                 failure_threshold=5,
-                recovery_time=60,
+                recovery_time=15.0,
+                half_open_success_threshold=1,
             ),
             auth_token="",
             api_key=settings.auth.internal_api_key or "",
@@ -116,6 +131,7 @@ class InternalHttpClient:
                 cli_session_id=cli_session_id,
                 user_id=user_id,
             ),
+            retry_config=GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG,
         )
         if not response.is_success:
             return None
@@ -368,3 +384,190 @@ class InternalHttpClient:
                 component=G8EE_COMPONENT,
                 cause=e,
             ) from e
+
+    async def push_agent_state(
+        self,
+        request: ObserveProducerAgentStateRequest,
+    ) -> ObserveProducerResponse:
+        """POST an agent state update to the gateway observe producer endpoint.
+
+        The gateway derives user_id from the mTLS peer certificate, persists
+        the agent state projection, and emits an app.agent.status.updated SSE
+        event after successful persistence (persist-before-publish). A
+        projection push failure is logged as a warning and raised as a
+        NetworkError so the caller can decide whether to abort primary work;
+        call sites treat this as non-blocking per the wiring contract.
+        """
+        self._ensure_mtls()
+        try:
+            response = await self._http.post(
+                GatewayAPIPaths.OBSERVE_PRODUCER_AGENT_STATE,
+                json_data=request,
+            )
+        except Exception as e:
+            raise NetworkError(
+                f"[HTTP-CLIENT] Agent state push failed: {e}",
+                component=G8EE_COMPONENT,
+                cause=e,
+            ) from e
+
+        if not response.is_success:
+            logger.warning(
+                "[HTTP-CLIENT] Agent state push rejected",
+                extra={
+                    "status": response.status_code,
+                    "error": response.text,
+                    "agent_id": request.agent_id,
+                },
+            )
+            raise NetworkError(
+                f"[HTTP-CLIENT] Agent state push returned HTTP {response.status_code}",
+                component=G8EE_COMPONENT,
+                details={
+                    "status_code": response.status_code,
+                    "response": response.text,
+                    "agent_id": request.agent_id,
+                },
+            )
+
+        return ObserveProducerResponse.model_validate(response.json())
+
+    async def push_run_state(
+        self,
+        request: ObserveProducerRunStateRequest,
+    ) -> ObserveProducerResponse:
+        """POST a run state update to the gateway observe producer endpoint.
+
+        The gateway derives user_id from the mTLS peer certificate, persists
+        the run state projection, and emits an app.run.status.updated SSE
+        event after successful persistence (persist-before-publish). A
+        projection push failure is logged as a warning and raised as a
+        NetworkError so the caller can decide whether to abort primary work;
+        call sites treat this as non-blocking per the wiring contract.
+        """
+        self._ensure_mtls()
+        try:
+            response = await self._http.post(
+                GatewayAPIPaths.OBSERVE_PRODUCER_RUN_STATE,
+                json_data=request,
+            )
+        except Exception as e:
+            raise NetworkError(
+                f"[HTTP-CLIENT] Run state push failed: {e}",
+                component=G8EE_COMPONENT,
+                cause=e,
+            ) from e
+
+        if not response.is_success:
+            logger.warning(
+                "[HTTP-CLIENT] Run state push rejected",
+                extra={
+                    "status": response.status_code,
+                    "error": response.text,
+                    "run_id": request.run_id,
+                },
+            )
+            raise NetworkError(
+                f"[HTTP-CLIENT] Run state push returned HTTP {response.status_code}",
+                component=G8EE_COMPONENT,
+                details={
+                    "status_code": response.status_code,
+                    "response": response.text,
+                    "run_id": request.run_id,
+                },
+            )
+
+        return ObserveProducerResponse.model_validate(response.json())
+
+    async def dispatch_inference(
+        self,
+        request: InferenceDispatchRequest,
+    ) -> InferenceDispatchResponse:
+        """POST a governed inference request to the gateway dispatch endpoint.
+
+        The gateway resolves the Inference Node's operator session from the
+        requestor's mTLS identity, constructs a governed envelope, dispatches
+        it through the full L1–L5 gauntlet on the Inference Node, and returns
+        the signed receipt and InferenceResult. This is the transport layer
+        underneath the ensemble chat pipeline's ``G8E`` LLM provider.
+        """
+        self._ensure_mtls()
+        try:
+            response = await self._http.post(
+                GatewayAPIPaths.INFERENCE_DISPATCH,
+                json_data=json_format.MessageToDict(
+                    request,
+                    preserving_proto_field_name=True,
+                ),
+            )
+        except NetworkError:
+            raise
+        except Exception as e:
+            raise NetworkError(
+                f"[HTTP-CLIENT] Inference dispatch failed: {e}",
+                component=G8EE_COMPONENT,
+                cause=e,
+            ) from e
+
+        if not response.is_success:
+            logger.warning(
+                "[HTTP-CLIENT] Inference dispatch rejected",
+                extra={
+                    "status": response.status_code,
+                    "error": response.text,
+                    "role": request.role,
+                },
+            )
+            raise NetworkError(
+                f"[HTTP-CLIENT] Inference dispatch returned HTTP {response.status_code}",
+                component=G8EE_COMPONENT,
+                details={
+                    "status_code": response.status_code,
+                    "response": response.text,
+                    "role": request.role,
+                },
+            )
+
+        dispatch_response = InferenceDispatchResponse()
+        json_format.ParseDict(response.json(), dispatch_response)
+        return dispatch_response
+
+    async def dispatch_inference_stream(
+        self,
+        request: InferenceDispatchRequest,
+    ) -> AsyncIterator[InferenceDispatchStreamFrame]:
+        """POST a streaming governed inference dispatch and yield NDJSON frames."""
+        self._ensure_mtls()
+        request.stream = True
+        buffer = ""
+        try:
+            async for chunk in self._http.stream(
+                "POST",
+                GatewayAPIPaths.INFERENCE_DISPATCH,
+                headers={"Accept": "application/x-ndjson"},
+                json_data=json_format.MessageToDict(
+                    request,
+                    preserving_proto_field_name=True,
+                ),
+            ):
+                buffer += chunk.decode("utf-8")
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    if not line.strip():
+                        continue
+                    frame = InferenceDispatchStreamFrame()
+                    json_format.Parse(line, frame)
+                    yield frame
+        except NetworkError:
+            raise
+        except Exception as e:
+            raise NetworkError(
+                f"[HTTP-CLIENT] Inference dispatch stream failed: {e}",
+                component=G8EE_COMPONENT,
+                cause=e,
+            ) from e
+
+        if buffer.strip():
+            frame = InferenceDispatchStreamFrame()
+            json_format.Parse(buffer.strip(), frame)
+            yield frame

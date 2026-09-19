@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-09-02
-Version: v2.1.3
+Last Updated: 2026-09-19
+Version: v2.1.8
 
 The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L2-L3 proofs and L1 validation results attached from the Gateway (PDP), re-verifies the L2 and L3 proofs and re-runs L1 doctrine validation locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -15,6 +15,20 @@ The reference implementation of a g8e-compliant Policy Execution Point (PEP) is 
 - **Governed Operator (PEP)**: The binary run in Standard Mode (`g8e operator start`). It acts as the Policy Execution Point (PEP) and MCP server, handling L4 Warden (pre-dispatch verification) and L5 Actuator (execution and signed receipt production) for operations on its own host. The Operator re-verifies L1-L3 proofs attached to the envelope by the Gateway before executing.
 
 This document focuses on the **Governed Operator** (PEP) role.
+
+---
+
+## Capability Flags
+
+Remote operators enroll through `g8e operator start` with capability flags stored in `runtime_config` and enforced by the Gateway and Operator:
+
+| Flag | CLI flag | Role |
+| --- | --- | --- |
+| **Inference Operator** | `--inference-enabled` | Governed L4/L5 inference PEP; sole scored path to the approved Ollama provider on the campaign host |
+| **Observer Operator** | `--provider-boundary-observer-enabled`; optional `--ollama` | Read-only GPU and system RAM sampling at the provider execution boundary; optional governed Ollama service restart when `--ollama` is set |
+| **Provenance Operator** | `--provenance-operator-enabled`; `--model-storage-root <path>` | Storage-side SHA-256 attestation of model manifests and weight blobs |
+
+Production witness enrollment on the provider or storage host uses observer and/or provenance flags only; do not pass `--inference-enabled` on those hosts. See [Evaluations](./evals.md) and [Model Provenance](./model-provenance.md).
 
 ---
 
@@ -62,7 +76,25 @@ The L5 Actuator runs on the Operator substrate as the singular execution boundar
 
 ---
 
-## 3. Core Subsystems
+## 3. CLI-Directed Command Dispatch
+
+An enrolled CLI can execute governed shell commands on one or more remote Operators without constructing envelopes manually.
+
+### CLI operator session binding
+
+Each CLI session may carry a persisted `operator_session_id` and `operator_id` pair. `g8e operator bind <operator-session-id>` pins the authenticated CLI session to one active operator session owned by the same user. `g8e operator bind list` reports the current binding, and `g8e operator bind unbind` clears it. Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS, issue a replacement CLI session server-side, and update local credentials. Refresh, rotation, and recovery inherit the prior binding when present. The unified auth middleware stamps operator identity from the persisted session record and rejects request headers that contradict that binding.
+
+### Parallel `operator run`
+
+`g8e operator run <operator-session-id> [operator-session-id...] --cmd "<shell command>"` fans out governed `EXECUTE_BASH` dispatches in parallel. For each target session the CLI posts to `POST /api/v1/operators/commands` with `target_operator_session_id`, the typed `CommandRequested` payload, and the caller's `cli_session_id`. The gateway's dispatch service is the single envelope-construction authority: it screens the payload with L1 Doctrine, applies posture-aware L3 gating for mutations, computes the transaction hash, publishes to the target operator's `cmd:` channel, and blocks until a terminal command result arrives. The CLI prints per-target stdout, stderr, exit code, and transaction ID. Every target must belong to the authenticated user and be `active`.
+
+`g8e operator list` shows operator ID, type, hostname, session ID, and status. `g8e operator show <operator-id-or-session-id>` returns operator metadata plus the latest heartbeat snapshot (system identity, resource metrics, capability flags, and runtime configuration).
+
+This path is distinct from MCP/A2A ingress, direct-envelope submission, and ensemble `CommandIntent` relay. It is the supported automation surface for owner-operated multi-host shell execution from an enrolled CLI.
+
+---
+
+## 4. Core Subsystems
 
 ### Universal Protocol Translator
 By exposing standard MCP and A2A interfaces, the Operator acts as the admission gate for BYO (Bring-Your-Own) AI clients. It isolates the complex requirements of the `GovernanceEnvelope` (such as transaction hashing and L2/L3 signature collection) behind a standardized tool-calling facade, mapping native JSON-RPC/HTTP requests directly to governed mutations.
@@ -128,7 +160,7 @@ The Governed Operator is fully isolated from Identity Providers (IdP). The Gover
 - **Owner-Centric Model**: The first human to authenticate becomes the Platform Owner. Starting the Gateway is the owner's act of authorization; no standing invite codes or manual approval steps are required for subsequent CSR enrollment.
 - **CSR-Based Enrollment**: For mTLS-based authentication, clients enroll via Certificate Signing Request (CSR) where they generate their own key pair and the Gateway acts as a Certificate Authority (CA) to sign the certificate. No shared secrets, no API keys to leak.
 - **JWT-Based JIT**: When a JWT is presented, the Governance Gateway validates the signature and provisions the user subject to platform owner authorization. The user is bound to the owner's organization.
-- **Strict TTL**: CLI sessions have a 1-hour TTL. Web sessions have a 24-hour TTL. Long-lived access requires programmatic renewal or re-authentication.
+- **Strict TTL**: CLI certificates and CLI sessions both have a seven-day lifetime. Web sessions have a 24-hour TTL. Long-lived access requires programmatic renewal or re-authentication.
 - **Governance Gateway Responsibility**: The Governance Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs JIT user provisioning subject to owner authorization, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
 - **Governed Operator Responsibility**: The Governed Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
 - **No IdP Dependency**: The Operator never requires outbound internet access to verify tokens or manage user state. This enables air-gapped and high-security deployments where the Operator has no external network connectivity.
@@ -141,7 +173,7 @@ The host is the authoritative source of truth for all mutations.
 
 ---
 
-## 4. Governance & Safety
+## 5. Governance & Safety
 
 - **Sovereign Execution Boundary**: Data sovereignty is enforced at the boundary. Sensitive data is scrubbed before leaving the host and replaced with tokens. These tokens are rehydrated by the Actuator only at the moment of execution.
 - **Canonical JSON Wire Format**: All client-facing surfaces use canonical JSON as the wire format.
@@ -149,14 +181,14 @@ The host is the authoritative source of truth for all mutations.
 
 ---
 
-## 5. Current Implementation Status
+## 6. Current Implementation Status
 
 The reference implementation currently supports:
 
 - **Universal Protocol Translation**: Functional MCP and A2A gateway mapping standard tool calls to signed `GovernanceEnvelope` mutations.
 - **Fail-Closed 5-Layer Verification**: L1 (Doctrine), L2 (Consensus), L3 (Notary), L4 (Warden), and L5 (Actuator) gates are fully enforced on every transaction.
 - **SSE-Based L3 Approvals**: L3 notary approvals use Server-Sent Events for real-time notification delivery, replacing polling-based waiting. CLI clients subscribe to the SSE stream and receive `approval.completed` events when passkey verification succeeds.
-- **Outbound-Only mTLS Connectivity**: Dial-out reverse tunnels with zero inbound port requirements. See [Network Architecture](./network.md) for detailed communication patterns and port topology.
+- **Outbound-Only mTLS Connectivity**: Dial-out reverse tunnels with zero inbound port requirements. A gateway can enroll as an operator of another gateway, enabling cascading outbound-only topologies where the operator at the absolute edge re-verifies the full L1-L3 proof chain before execution. See [Network Architecture](./network.md) for detailed communication patterns and port topology.
 - **Local-First Audit Vault**: Git-backed ledger and fail-closed audit vault enforcing session existence for all writes. Encryption at rest for all storage services.
 - **Deterministic Hash Binding**: SHA-256 transaction hash integrity enforced across all wire formats.
 - **Sovereign Execution Boundary**: Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
@@ -166,7 +198,7 @@ The reference implementation currently supports:
 
 ---
 
-## 6. Post-Bootstrap Workflow
+## 7. Post-Bootstrap Workflow
 
 After completing platform bootstrap via `g8e auth enroll user`, follow this workflow to begin using the Operator. Enrollment automatically registers a passkey via browser after successful CLI session enrollment.
 
@@ -177,6 +209,14 @@ Confirm the Governance Gateway is running and accessible with `g8e gw status`.
 ### 2. Enroll Remote Operators (Multi-Host Setups)
 
 For distributed enforcement across multiple hosts, deploy the binary and start each remote operator with `g8e operator start -e <gateway-ip>`. When no installed operator credentials are found and `--endpoint` is provided, the operator automatically drives the owner-approved platform enrollment protocol: it submits an operator CSR, waits for owner approval in the gateway console, and saves the signed certificates to the PKI directory. Each Operator receives a unique SPIFFE workload identity bound to its mTLS certificate. To deploy the binary to remote hosts, use `g8e operator deploy` or `g8e operator stream`.
+
+### Cross-Gateway Enrollment (Cascading Outbound Topologies)
+
+The platform enrollment protocol does not screen requester identity. The request endpoint is unauthenticated, validation checks only CSR key material and format, and the upstream owner's manual approval is the sole admission gate. Because the gateway binary runs the same `operator start` path as any standalone operator, a gateway can enroll as an operator of another gateway. The enrolling gateway submits an operator CSR through the platform enrollment protocol, the upstream owner approves it through the same pending-list and operator-registry surfaces as any standalone operator, and the enrolling gateway receives operator and CLI leaf certificates signed by the upstream gateway's Operator intermediate CA with a `spiffe://g8e.local/operator/...` identity.
+
+The enrolled gateway-as-operator then dials out to the upstream gateway over outbound-only mTLS, subscribes to its session-specific command channel, and executes governed commands through its own L4 Warden and L5 Actuator. It re-verifies the L1-L3 proofs attached by the upstream gateway before the Actuator executes, exactly as a standalone operator does. This re-verification is the defense-in-depth invariant of the Operator: the operator at the absolute edge distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out, regardless of whether the upstream gateway is a root gateway or another gateway that is itself enrolled outbound-only further in.
+
+This enables cascading outbound-only topologies. A gateway deployed at the absolute edge — where the data lives — enrolls outbound-only to an upstream gateway, which may itself enroll outbound-only to a gateway further in, and so on to a root gateway. Every hop is an outbound mTLS connection, no edge device opens an inbound management port, and the operator at each edge re-verifies the full L1-L3 proof chain before execution. Cross-gateway enrollment uses the operator identity path and is distinct from the gateway peer PKI tier (`spiffe://g8e.local/gateway/<gateway_id>`), which is a separate federated communication tier. See [Network Architecture](./network.md#cross-gateway-enrollment) for the enrollment routes, identity path, and topology constraints.
 
 ### 3. Configure AI Client Integration
 
@@ -239,7 +279,7 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 
 ---
 
-## 7. See Also
+## 8. See Also
 
 - [g8e Protocol](../../protocol/docs/spec.md) for protocol definitions and wire formats
 - [g8e Gateway](./gateway.md) for PDP architecture and communication patterns
@@ -254,4 +294,6 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 - [Storage Architecture](./storage.md) for audit vault and ledger internals
 - [Consensus](./consensus.md) for consensus configuration and consensus setup
 - [Encryption](./encryption.md) for encryption at rest details
+- [Evaluations](./evals.md): Model campaign operator topology and witness roles
+- [Model Provenance](./model-provenance.md): Storage-side weight attestation
 - [Lattice Adapter](../../internal/adapters/lattice/README.md) for Anduril Lattice COP integration

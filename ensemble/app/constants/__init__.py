@@ -31,6 +31,7 @@ Constant modules:
 - tool_registry_pending.py: Pending tool registry definitions
 """
 
+from app.constants.agents import PersonaCapability
 from app.constants.api_paths import API_PATHS, GatewayAPIPaths, InternalAPIPaths
 from app.constants.channels import (
     CHANNEL_SEGMENT_COUNT,
@@ -67,13 +68,13 @@ from app.constants.config import (
     AGENT_RETRYABLE_STATUS_CODES,
     AGENT_RETRY_BACKOFF_MULTIPLIER,
     AGENT_RETRY_DELAY_SECONDS,
+    EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
     ANTHROPIC_DEFAULT_ENDPOINT,
     ANTHROPIC_DEFAULT_MODEL,
     ANTHROPIC_CLAUDE_OPUS_4_6,
     ANTHROPIC_CLAUDE_SONNET_4_6,
     ANTHROPIC_CLAUDE_HAIKU_4_5,
     ApprovalType,
-    CloudSubtype,
     ConversationStatus,
     EscalationRisk,
     ExecutionStatus,
@@ -445,6 +446,7 @@ __all__ = [
     "DOCS_CACHE_TTL_SECONDS",
     "DOCS_UNAVAILABLE_CACHE_TEMPLATE",
     "DOCS_UNAVAILABLE_TEMPLATE",
+    "EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS",
     "EVENT_PUBLISH_SUCCESS",
     "EXECUTION_ID",
     "EXECUTION_ID_PREFIX",
@@ -578,7 +580,6 @@ __all__ = [
     "CircuitBreakerState",
     "CitationLayout",
     "CloudIntent",
-    "CloudSubtype",
     "CommandCategory",
     "CommandErrorType",
     "CommandGenerationOutcome",
@@ -627,6 +628,7 @@ __all__ = [
     "OperatorToolName",
     "OperatorType",
     "PathConstants",
+    "PersonaCapability",
     "Platform",
     "PortConstants",
     "Priority",

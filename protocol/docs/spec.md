@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-19
+Version: v2.1.8
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -226,7 +226,7 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `AiLLMToolG8eWebSearchCompleted`, `AiLLMToolG8eWebSearchFailed`, `AiLLMToolG8eWebSearchReceived`, `AiLLMToolG8eWebSearchRequested`
 - `AiReputationStateUpdated`
 - `AiTriageClarificationAnswered`, `AiTriageClarificationQuestions`, `AiTriageClarificationSkipped`, `AiTriageClarificationTimeout`
-- `AiConsensusSessionStarted`, `AiConsensusSessionCompleted`, `AiConsensusSessionDisabled`, `AiConsensusSessionGenerationFailed`, `AiConsensusSessionModelNotConfigured`, `AiConsensusSessionProviderUnavailable`, `AiConsensusSessionSystemError`, `AiConsensusSessionAuditorFailed`, `AiConsensusSessionWardenBlocked`
+- `AiConsensusSessionStarted`, `AiConsensusSessionCompleted`, `AiConsensusSessionDisabled`, `AiConsensusSessionGenerationFailed`, `AiConsensusSessionModelNotConfigured`, `AiConsensusSessionProviderUnavailable`, `AiConsensusSessionSystemError`, `AiConsensusSessionAuditorFailed`, `AiConsensusSessionMarshalBlocked`
 - `AiConsensusVotingPassCompleted`, `AiConsensusVotingConsensusReached`, `AiConsensusVotingConsensusNotReached`, `AiConsensusVotingConsensusFailed`, `AiConsensusVotingRoundStarted`, `AiConsensusVotingRoundCompleted`, `AiConsensusVotingRound2Started`, `AiConsensusVotingRound2ConsensusReached`, `AiConsensusVotingRound2ConsensusFailed`, `AiConsensusVotingDissentRecorded`, `AiConsensusVotingAuditStarted`, `AiConsensusVotingAuditCompleted`
 
 ### Application Events
@@ -432,6 +432,32 @@ CLI flags:
 
 ---
 
+## Observability Surfaces
+
+v2.1.8 adds typed read-only observability contracts alongside the mutation envelope. These surfaces do not replace `GovernanceEnvelope`; they project governed runtime state to browser sessions and to anonymous public spectators.
+
+### Observe API
+
+The observe API (`protocol/models/observe_api.json`) defines browser-session-authenticated, user-scoped read models under `/api/v1/observe/`. The Gateway derives `user_id` from the validated web session cookie and ignores caller-supplied identity. Read models include `ObserveBootstrapSnapshot`, paginated run and eval summaries and details, and download artifacts. Freshness is explicit through `observed`, `stale`, and `unavailable` markers and optional `ObservedMeasurement` fields.
+
+mTLS producer endpoints under `/api/v1/observe/producer/` accept typed state from enrolled ensemble producers. Request models `observe_producer_agent_state_request` and `observe_producer_run_state_request` carry lifecycle enums, an `observed_at` timestamp, and exactly one SSE routing target (`web_session_id` or `cli_session_id`). The Gateway derives `user_id` from the producer mTLS certificate, never from the request body. The producer response is a typed `{ "accepted": true }` object. Python bindings live in `g8e.models.observe_api` with `extra="forbid"` on producer models.
+
+Dashboard and campaign SSE payloads for agent, run, and eval state are defined in `protocol/models/observe_event_payloads.json`, including live campaign events such as `ai.eval.cycle.started`, `ai.eval.assignment.completed`, and `ai.eval.publication.completed`. The event dashboard classification inventory in `protocol/constants/event_dashboard_classification.json` records which families are `produced_to_sse`, `governed_record_only`, `mixed`, or `unsupported`.
+
+See [SSE Architecture](../../docs/architecture/sse.md), [Dashboard Architecture](../../docs/architecture/dashboard.md), and [Build an Observe Frontend](../../docs/guides/build_observe_frontend.md).
+
+### Public Spectator Feed
+
+The public spectator feed (`protocol/models/public_feed.json`) defines outbound-only, allowlisted projections for anonymous mirror readers. The Gateway publisher signs append-only `public_feed_batch` records and posts them to a hosted mirror ingest endpoint. Public browsers read bootstrap, cursor-paginated history, replayable SSE, and content-addressed proof downloads from the mirror without Gateway credentials. Python bindings live in `g8e.models.public_feed`.
+
+This surface is isolated from credentialed observe reads: no shared credentials, endpoints, or session state. See [Public Spectator Architecture](../../docs/architecture/public_spectator.md) and [Public Spectator Guide](../../docs/guides/public_spectator.md).
+
+### Evaluation Campaign Wire Types
+
+Eval-native campaign evidence uses protobuf messages in `protocol/proto/g8e/eval/v1/eval.proto` and generated references under `protocol/docs/reference/api/g8e/eval/v1/`. Campaign specs, provider-boundary observation, storage-side model provenance, bundle verification, and observe publication are platform-owned; g8ee records assignment traces and grading telemetry consumed by the campaign controller. See [Evaluations](../../docs/architecture/evals.md) and [Ensemble Evals](../../docs/ensemble/evals.md).
+
+---
+
 ## Host Sovereignty & Data Audit
 
 ### Multi-Ledger Architecture
@@ -505,6 +531,13 @@ All tests follow a Tier 1 philosophy where possible (no external network/DB requ
 | Whitelist doctrine | `../../protocol/constants/doctrine/whitelist_doctrine.json` |
 | RPC error codes | `../../internal/constants/rpc_errors.go` |
 | Governance posture | `../../internal/services/governance/posture.go` |
+| Observe API models | `../../protocol/models/observe_api.json` |
+| Observe event payloads | `../../protocol/models/observe_event_payloads.json` |
+| Public spectator feed | `../../protocol/models/public_feed.json` |
+| Event dashboard classification | `../../protocol/constants/event_dashboard_classification.json` |
+| Eval campaign protobuf | `../../protocol/proto/g8e/eval/v1/eval.proto` |
+| CLI operator bind/unbind | `../../internal/services/gateway/cli_bind_controller.go` |
+| CLI operator command dispatch | `../../internal/services/gateway/dispatch_service.go`, `../../internal/cli/operator/dispatch.go` |
 
 ---
 

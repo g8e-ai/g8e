@@ -5,8 +5,8 @@ parent: Core
 
 # Governing Agentic Execution Without Surrendering Data Custody
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-19
+Version: v2.1.8
 
 ## Abstract
 
@@ -34,7 +34,7 @@ The g8e architecture operationalizes these propositions. Its design vocabulary i
 
 This position originates in a practitioner method developed over thirty years of operating and protecting remote data systems. In production incidents, trust did not arise because an expert sounded confident. It arose because the expert worked inside the customer's controls, gathered evidence from the affected systems, explained the next action, used authority supplied for that purpose, verified the result, and left a record that others could examine.
 
-The [About g8e](./about.md) page describes this method as “Danny as Code”: gather broad context, reduce uncertainty with focused questions, converge on a justified next step, present that step to the person with the most at stake, bind any required approval to the exact action, execute through a constrained local boundary, and preserve evidence through completion. The phrase supplies design history, not empirical validation. The research position is that this operating method can be expressed as a machine-verifiable separation among proposal, authorization, execution, and evidence.
+The [About g8e](./about.md) page describes this method as “Danny-as-Code” (DaC) — a play on Infrastructure-as-Code, in which the infrastructure is, regrettably, Danny: gather broad context, reduce uncertainty with focused questions, converge on a justified next step, present that step to the person with the most at stake, bind any required approval to the exact action, execute through a constrained local boundary, and preserve evidence through completion. The phrase supplies design history, not empirical validation. The research position is that this operating method can be expressed as a machine-verifiable separation among proposal, authorization, execution, and evidence.
 
 The human motivation remains important. Good automation reduces operational burden without asking a person to surrender control. In this model, an AI system can perform substantial investigative and planning work, but confidence, fluency, or apparent expertise never substitutes for authorization. Trust is constructed from bounded authority and inspectable evidence.
 
@@ -140,6 +140,44 @@ L5 signs and persists an `EXECUTING` receipt before dispatch and a final receipt
 
 These records serve two related purposes. Operationally, they support diagnosis, audit, and result verification. Epistemically, they provide a more defensible memory substrate than unverified conversational summaries: future reasoning can distinguish proposed, rejected, executing, completed, and failed work by reference to signed records. In that limited sense, memory is sovereign—it remains controlled and verifiable at the boundary that owns the affected state. This phrase describes custody and provenance, not infallibility. A valid receipt can faithfully record a bad but authorized outcome, and a ledger cannot observe actions taken outside its path.
 
+### 5.7 Confidential Edge Execution with Governed State Mutation
+
+The g8e reference architecture combines four separable roles that recur across high-consequence deployments:
+
+1. **Local artifact provenance** — an outbound Operator attests the integrity of inputs that inference depends on (source trees, firmware, calibrated sensors, certified model weights, market feeds).
+2. **Runtime telemetry observation** — a read-only witness captures execution-boundary signals (test outcomes, physical sensor readings, confidence thresholds, order slippage) without mutating the observed target.
+3. **Central policy decision** — the Gateway admits or rejects state-mutating work as a Policy Decision Point, binding identity, posture, freshness, and required proofs to each transaction.
+4. **Outbound state mutation** — a Data Operator at the owner's boundary is the sole authorized path for side effects (repository merges, SCADA actuation, EHR writes, exchange orders).
+
+Evaluations are one instance of this topology exercised in a predominantly read-only telemetry mode: they prove that governed mutations succeed or fail closed and that an independent observer can attest terminal state. The same separation becomes more consequential when local inference drives **active state mutation** rather than scored measurement alone. In that regime, provenance and observation are not optional audit extras; they are prerequisites for admitting mutations whose failure modes include compromised supply chains, physical harm, regulatory breach, or financial loss.
+
+The following domains illustrate how the Gateway + Operator pattern mirrors into workflows beyond model evaluation. These are architectural mappings, not claims that g8e ships turnkey products for each sector. They show why the evaluation topology generalizes.
+
+#### DevSecOps auto-remediation
+
+An air-gapped repository flags a critical vulnerability. A local coding agent generates a patch, compiles it, and runs unit tests in a sandbox. A Provenance Operator hashes the source tree, compiler, and local model weights. An Observer captures test execution, memory behavior, and pass/fail metrics. A remote Data Operator merges a cryptographically signed pull request. The Gateway enforces release policy: no merge to the primary branch unless provenance confirms pristine input hashes and the observer confirms full test success without unauthorized network egress.
+
+#### OT / SCADA cyber-physical response
+
+Edge sensors detect vibration anomalies in industrial equipment. An edge GPU runs an anomaly model that may recommend load shedding or valve adjustment. Provenance attests PLC configuration, sensor calibration, and model weights against supply-chain tampering. An Observer monitors physical telemetry and reaction latency. A Data Operator sends low-level actuation commands to the SCADA controller. The Gateway applies engineering safety envelopes so automated physical changes remain within pre-approved limits while the central SOC receives outbound telemetry rather than inbound plant access.
+
+#### Confidential healthcare AI
+
+A hospital GPU runs a diagnostic model on local DICOM scans and draft notes that must not leave the premises. Provenance attests scan headers and certified model identity. An Observer tracks confidence thresholds, processing speed, and PHI isolation in ephemeral storage. A Data Operator appends approved diagnostic notes to the central EHR. The Gateway gives CISOs and HIPAA auditors an immutable audit trail that inference occurred through certified models without patient data traversing external networks.
+
+#### Sovereign financial risk management
+
+A trading firm runs proprietary risk models over a confidential order book. Provenance verifies market feed and model-weight integrity before order generation. An Observer captures execution latency and slippage during volatile events. A Data Operator executes orders against exchange APIs or smart contracts. The Gateway enforces treasury and risk caps so state-mutating transactions that exceed dollar limits or risk ratios fail closed even if a local agent misbehaves during market stress.
+
+| Layer | DevSecOps | OT / SCADA | Healthcare | FinTech |
+| --- | --- | --- | --- | --- |
+| **Provenance** | Git tree and compiler hashes | PLC configs and firmware | DICOM scans and FDA-certified weights | Order book and risk model weights |
+| **Observer** | Test execution and build telemetry | Sensor heat, pressure, and latency | PHI isolation and model confidence | Latency and order slippage |
+| **Data Operator** | Signed pull request merge | Valve and breaker actuation | Central EHR mutation | Ledger or broker execution |
+| **Gateway (PDP)** | Code release policy | Physical safety envelopes | HIPAA / FDA compliance gates | Treasury and risk limit policy |
+
+These mirrors share one invariant: reasoning may occur locally, but **authority and evidence remain separable**. Provenance establishes what the inference environment contained. Observation establishes what happened during execution. The Gateway decides whether a mutation may proceed. The Data Operator executes only admitted transactions and retains authoritative receipts. g8e's evaluation programs exist to prove that invariant on the reference stack; the domain table above describes where the same invariant applies when mutations carry operational, physical, clinical, or financial consequence.
+
 ## 6. Evidence and Claim Discipline
 
 ### 6.1 External evidence motivating the architecture
@@ -215,7 +253,7 @@ Agentic systems require a boundary between producing an answer and exercising au
 
 g8e's position is that the data owner retains custody of authoritative state, keys, execution, and evidence while AI systems remain replaceable reasoning components. A proposal becomes executable only as a canonical, state-bound transaction that clears the controls required by the active posture and is independently verified where the side effect occurs. Human approval, when required, binds to that transaction. Execution receives a narrow capability. Signed evidence records the attempt and outcome.
 
-The architecture is not a claim that AI becomes trustworthy. It is a method for reducing how much trust consequential execution places in AI—or in any other proposer. The practitioner idea behind “Danny as Code” survives in a precise form: gather evidence, justify one next action, work inside the owner's controls, prove what happened, and carry the work through without taking custody away from the people who bear the consequences.
+The architecture is not a claim that AI becomes trustworthy. It is a method for reducing how much trust consequential execution places in AI—or in any other proposer. The practitioner idea behind Danny-as-Code survives in a precise form: gather evidence, justify one next action, work inside the owner's controls, prove what happened, and carry the work through without taking custody away from the people who bear the consequences.
 
 ## References
 
@@ -243,4 +281,5 @@ The architecture is not a claim that AI becomes trustworthy. It is a method for 
 - [Storage Architecture](../architecture/storage.md): Audit, commitment, execution-vault, and file-evidence ownership.
 - [Consensus Architecture](../architecture/consensus.md): Enrollment, deliberation, signatures, policy, and quorum.
 - [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md): Evidence levels, typed assertions, verification, and claim boundaries.
+- [Evaluations](../architecture/evals.md): Evaluation programs, witness-operator topology, and domain mirrors beyond model scoring.
 - [Protocol Specification](../../protocol/docs/spec.md): Canonical messages, hashes, proofs, and wire rules.

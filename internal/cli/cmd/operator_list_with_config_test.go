@@ -136,8 +136,8 @@ func TestOperatorListCmdWithConfig_ValidResponsePrintsOperatorTable(t *testing.T
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
 		Operators: []models.OperatorDocumentGo{
-			{ID: "op-001", OperatorSessionID: "session-001", OperatorType: "system", CloudSubtype: "aws", Status: "active"},
-			{ID: "op-002", OperatorSessionID: "session-002", OperatorType: "cloud", CloudSubtype: "gcp", Status: "standby"},
+			{ID: "op-001", OperatorSessionID: "session-001", OperatorType: "embedded", Status: "active"},
+			{ID: "op-002", OperatorSessionID: "session-002", OperatorType: "remote", Status: "standby"},
 		},
 	}
 	respJSON, _ := json.Marshal(slotResp)
@@ -158,11 +158,59 @@ func TestOperatorListCmdWithConfig_ValidResponsePrintsOperatorTable(t *testing.T
 	assert.Contains(t, output, "op-002")
 	assert.Contains(t, output, "session-001")
 	assert.Contains(t, output, "session-002")
-	assert.Contains(t, output, "system")
-	assert.Contains(t, output, "cloud")
-	assert.Contains(t, output, "aws")
-	assert.Contains(t, output, "gcp")
+	assert.Contains(t, output, "embedded")
+	assert.Contains(t, output, "remote")
 	assert.Equal(t, []string{constants.APIPaths.Operators + "?user_id=user-001"}, client.getCalls)
+}
+
+func TestOperatorListCmdWithConfig_JSONOutputIncludesRuntimeFlags(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+
+	slotResp := models.OperatorSlotResponse{
+		Success: true,
+		Operators: []models.OperatorDocumentGo{
+			{
+				ID:                "data-op",
+				OperatorSessionID: "data-session",
+				OperatorType:      constants.OperatorTypeRemote,
+				Status:            constants.OperatorStatusActive,
+				RuntimeConfig:     &models.RuntimeConfig{InferenceEnabled: false},
+			},
+			{
+				ID:                "infer-op",
+				OperatorSessionID: "infer-session",
+				OperatorType:      constants.OperatorTypeRemote,
+				Status:            constants.OperatorStatusActive,
+				RuntimeConfig: &models.RuntimeConfig{
+					InferenceEnabled:                true,
+					ProviderBoundaryObserverEnabled: false,
+				},
+			},
+		},
+	}
+	respJSON, _ := json.Marshal(slotResp)
+
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	client := &mockAPIClient{getResp: respJSON}
+	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(fileSvc))
+	enableGlobalJSON(t, cmd)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, nil)
+	require.NoError(t, err)
+
+	var payload struct {
+		Operators []map[string]any `json:"operators"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &payload))
+	require.Len(t, payload.Operators, 2)
+	assert.Equal(t, "data-session", payload.Operators[0]["operator_session_id"])
+	assert.Equal(t, false, payload.Operators[0]["inference_enabled"])
+	assert.Equal(t, "infer-session", payload.Operators[1]["operator_session_id"])
+	assert.Equal(t, true, payload.Operators[1]["inference_enabled"])
 }
 
 func TestOperatorListCmdWithConfig_SendsUserIDQueryParameter(t *testing.T) {

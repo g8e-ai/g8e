@@ -33,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -524,9 +525,9 @@ func buildDemoRawSourceArtifacts(ctx context.Context, reader evidence.ArtifactRe
 func buildEvalVerificationArtifacts(ctx context.Context, reader evidence.ArtifactReader, runIDs []string, verifiedAt time.Time) ([]compliancereport.SourceArtifact, error) {
 	artifacts := make([]compliancereport.SourceArtifact, 0, len(runIDs))
 	for _, runID := range runIDs {
-		runtimeRoot := path.Join(constants.DataDirname, constants.ComplianceDirname, constants.EvalRunsDirname, runID)
+		runtimeRoot := path.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname, runID)
 		bundleRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID)
-		report, err := evidence.VerifyEvalRun(ctx, reader, runID, runtimeRoot, verifiedAt)
+		report, err := evaluation.NewVerifier(reader, evaluation.NewRegistry(), func() time.Time { return verifiedAt }).Verify(ctx, runID)
 		if err != nil {
 			return nil, fmt.Errorf("%w: verify eval run %s: %w", constants.ErrEvalRunVerificationFailed, runID, err)
 		}

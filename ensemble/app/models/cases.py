@@ -109,6 +109,12 @@ class CaseCreateRequest(G8eBaseModel):
     organization_id: str | None = Field(
         default=None, description="Organization ID - injected by client from session"
     )
+    operator_id: str | None = Field(
+        default=None, description="Delegated Operator authority identifier"
+    )
+    operator_session_id: str | None = Field(
+        default=None, description="Delegated Operator authority session identifier"
+    )
     priority: Priority = Field(
         default=Priority.MEDIUM, description="Server default - not client controllable"
     )

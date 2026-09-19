@@ -174,7 +174,7 @@ class CommandRiskContext(G8eBaseModel):
     git_status: str | None = Field(default=None, description="Git repository status")
     investigation_context: str | None = Field(
         default=None,
-        description="Brief description of the active investigation (e.g. case title and description) to help Warden reason about expected command scope",
+        description="Brief description of the active investigation (e.g. case title and description) to help Marshal reason about expected command scope",
     )
 
 
@@ -599,9 +599,9 @@ class CommandExecutionResult(BatchExecutionMeta):
     execution_id: str | None = Field(default=None)
     approval_id: str | None = Field(default=None)
     available_operators: int | None = Field(default=None)
-    warden_risk: RiskLevel | None = Field(
+    marshal_risk: RiskLevel | None = Field(
         default=None,
-        description="Warden-classified risk level from the approval gate, used for Tier 1 reputation resolution.",
+        description="Marshal-classified risk level from the approval gate, used for Tier 1 reputation resolution.",
     )
     blocked_pattern: str | None = Field(default=None)
     blocked_command: str | None = Field(default=None)

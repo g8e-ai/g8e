@@ -20,13 +20,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // --- stubs for Tier 1 unit tests ---
@@ -142,55 +145,13 @@ func TestDispatchResult_ToResponse(t *testing.T) {
 	})
 }
 
-// --- dispatchResultTracker tests ---
-
-func TestDispatchResultTracker_RegisterRouteUnregister(t *testing.T) {
-	tracker := newDispatchResultTracker()
-	txID := "tx-001"
-
-	ch := tracker.register(txID)
-	require.NotNil(t, ch)
-
-	env := &commonv1.GovernanceEnvelope{Id: txID}
-	routed := tracker.route(txID, env)
-	assert.True(t, routed)
-
-	select {
-	case got := <-ch:
-		assert.Equal(t, txID, got.Id)
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("expected result on channel")
-	}
-
-	tracker.unregister(txID)
-
-	// After unregister, route returns false.
-	routed = tracker.route(txID, env)
-	assert.False(t, routed)
-}
-
-func TestDispatchResultTracker_RouteUnknownTxID(t *testing.T) {
-	tracker := newDispatchResultTracker()
-	env := &commonv1.GovernanceEnvelope{Id: "unknown"}
-	routed := tracker.route("unknown", env)
-	assert.False(t, routed)
-}
-
-func TestDispatchResultTracker_RouteFullChannel(t *testing.T) {
-	tracker := newDispatchResultTracker()
-	txID := "tx-002"
-	ch := tracker.register(txID)
-
-	// Fill the buffered channel (capacity 1).
-	env := &commonv1.GovernanceEnvelope{Id: txID}
-	require.True(t, tracker.route(txID, env))
-
-	// Second route should return false (channel full, default case).
-	routed := tracker.route(txID, env)
-	assert.False(t, routed)
-
-	// Drain to verify the first one is still there.
-	<-ch
+// fsReadPayloadBytes builds a valid proto-marshaled FsReadRequested payload
+// for dispatch tests that need a typed payload the builder can decode.
+func fsReadPayloadBytes(t *testing.T) []byte {
+	t.Helper()
+	b, err := proto.Marshal(&operatorv1.FsReadRequested{Path: "/etc/hostname", ExecutionId: "exec-1"})
+	require.NoError(t, err)
+	return b
 }
 
 // --- DispatchService.Dispatch tests ---
@@ -210,6 +171,9 @@ func newTestDispatchService(t *testing.T, stateRoot string, op *models.OperatorD
 		&stubStateRootProvider{root: stateRoot},
 		&stubOperatorSessionValidator{op: op},
 		"doctrine",
+		governance.NewL1Doctrine(),
+		nil, // no L2 deliberator under doctrine posture
+		nil, // no receipt signer store; inference dispatch tests wire their own
 	)
 	return svc, broker
 }
@@ -257,7 +221,7 @@ func TestDispatchService_Dispatch_Success(t *testing.T) {
 	result, err := svc.Dispatch(context.Background(), DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
 		ActionType:              string(constants.ActionTypeFsRead),
-		Payload:                 []byte("read-payload"),
+		Payload:                 fsReadPayloadBytes(t),
 		TargetResource:          "/etc/hostname",
 		RequestorUserID:         "user-001",
 	})
@@ -293,6 +257,9 @@ func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
 		&stubStateRootProvider{err: errors.New("state root unavailable")},
 		&stubOperatorSessionValidator{op: op},
 		"doctrine",
+		governance.NewL1Doctrine(),
+		nil,
+		nil,
 	)
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{
@@ -304,11 +271,30 @@ func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
 	assert.Contains(t, err.Error(), "dispatch: get state root")
 }
 
-func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
+func TestDispatchService_Dispatch_ZeroDeliveryFailsClosed(t *testing.T) {
 	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
 	svc, _ := newTestDispatchService(t, "root-abc", op)
 
-	// No operator handler registered — no result will be published.
+	// No operator handler registered — the publish delivers to zero
+	// subscribers, which is a terminal transport failure.
+	_, err := svc.Dispatch(context.Background(), DispatchRequest{
+		TargetOperatorSessionID: "sess-001",
+		ActionType:              string(constants.ActionTypeFsRead),
+		Payload:                 fsReadPayloadBytes(t),
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrDispatchNoDelivery)
+}
+
+func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
+	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	svc, broker := newTestDispatchService(t, "root-abc", op)
+
+	// Operator handler is registered (so delivery succeeds) but never
+	// publishes a result.
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
+	defer unreg()
+
 	// Use a context with a short timeout so the test doesn't wait 30s.
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -316,10 +302,265 @@ func TestDispatchService_Dispatch_TimeoutNoResult(t *testing.T) {
 	_, err := svc.Dispatch(ctx, DispatchRequest{
 		TargetOperatorSessionID: "sess-001",
 		ActionType:              string(constants.ActionTypeFsRead),
-		Payload:                 []byte("payload"),
+		Payload:                 fsReadPayloadBytes(t),
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "timed out")
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestDispatchService_Dispatch_RequestTimeoutOverridesDefault(t *testing.T) {
+	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	svc, broker := newTestDispatchService(t, "root-abc", op)
+
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
+	defer unreg()
+
+	start := time.Now()
+	_, err := svc.Dispatch(context.Background(), DispatchRequest{
+		TargetOperatorSessionID: "sess-001",
+		ActionType:              string(constants.ActionTypeFsRead),
+		Payload:                 fsReadPayloadBytes(t),
+		Timeout:                 100 * time.Millisecond,
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrDispatchResultTimeout)
+	assert.Less(t, time.Since(start), 5*time.Second, "request timeout must override the default dispatch timeout")
+}
+
+func TestDispatchService_Dispatch_CallerCancelReturnsCtxErr(t *testing.T) {
+	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	svc, broker := newTestDispatchService(t, "root-abc", op)
+
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
+	defer unreg()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := svc.Dispatch(ctx, DispatchRequest{
+		TargetOperatorSessionID: "sess-001",
+		ActionType:              string(constants.ActionTypeFsRead),
+		Payload:                 fsReadPayloadBytes(t),
+		Timeout:                 30 * time.Second,
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInferenceCanceled)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.NotErrorIs(t, err, constants.ErrDispatchResultTimeout,
+		"caller cancellation must not be reported as a dispatch timeout")
+}
+
+func TestDispatchService_Dispatch_StreamingProgressOverflowFailsClosed(t *testing.T) {
+	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	svc, broker := newTestDispatchService(t, "root-abc", op)
+
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, data []byte) {
+		cmdEnv := &commonv1.GovernanceEnvelope{}
+		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
+			return
+		}
+		resultsChannel := pubsub.ResultsChannel(op.ID, op.OperatorSessionID)
+		for i := 0; i < InferenceProgressResultBuffer+1; i++ {
+			progress, err := proto.Marshal(&operatorv1.InferenceProgressEvent{
+				ProviderAttemptId: "attempt-1",
+				Sequence:          uint32(i + 1),
+				Parts: []*operatorv1.InferenceResponsePart{
+					{Part: &operatorv1.InferenceResponsePart_Text{Text: "x"}},
+				},
+			})
+			if err != nil {
+				return
+			}
+			wire, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
+				Id:        cmdEnv.Id,
+				EventType: string(constants.Event.Operator.Inference.ProgressUpdated),
+				Payload:   progress,
+			})
+			if err != nil {
+				return
+			}
+			broker.Publish(resultsChannel, wire)
+		}
+	})
+	defer unreg()
+
+	_, err := svc.Dispatch(context.Background(), DispatchRequest{
+		TargetOperatorSessionID: op.OperatorSessionID,
+		ActionType:              string(constants.ActionTypeInference),
+		Payload:                 inferencePayload(t),
+		Timeout:                 2 * time.Second,
+		OnInferenceProgress:     func(*operatorv1.InferenceProgressEvent) error { return nil },
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInferenceProgressBackpressure)
+	assert.NotErrorIs(t, err, constants.ErrDispatchResultTimeout)
+}
+
+// resultHandlerCount returns the number of registered in-process handlers on
+// the operator's results channel, for leak assertions.
+func resultHandlerCount(b *GatewayWebSocketHandler, op *models.OperatorDocumentGo) int {
+	b.handlersMu.RLock()
+	defer b.handlersMu.RUnlock()
+	return len(b.handlers[pubsub.ResultsChannel(op.ID, op.OperatorSessionID)])
+}
+
+func TestDispatchService_Dispatch_ResultHandlerRemovedAfterReturn(t *testing.T) {
+	newOp := func() *models.OperatorDocumentGo {
+		return &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	}
+
+	publishResult := func(broker *GatewayWebSocketHandler, op *models.OperatorDocumentGo) func(string, []byte) {
+		return func(_ string, data []byte) {
+			cmdEnv := &commonv1.GovernanceEnvelope{}
+			if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
+				return
+			}
+			resultEnv := &commonv1.GovernanceEnvelope{Id: cmdEnv.Id, EventType: cmdEnv.EventType, ActionType: cmdEnv.ActionType}
+			wire, err := protojson.Marshal(resultEnv)
+			if err != nil {
+				return
+			}
+			broker.Publish(pubsub.ResultsChannel(op.ID, op.OperatorSessionID), wire)
+		}
+	}
+
+	t.Run("after success", func(t *testing.T) {
+		op := newOp()
+		svc, broker := newTestDispatchService(t, "root-abc", op)
+		unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), publishResult(broker, op))
+		defer unreg()
+
+		_, err := svc.Dispatch(context.Background(), DispatchRequest{
+			TargetOperatorSessionID: op.OperatorSessionID,
+			ActionType:              string(constants.ActionTypeFsRead),
+			Payload:                 fsReadPayloadBytes(t),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 0, resultHandlerCount(broker, op), "result handler must be unregistered after success")
+	})
+
+	t.Run("after timeout", func(t *testing.T) {
+		op := newOp()
+		svc, broker := newTestDispatchService(t, "root-abc", op)
+		unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
+		defer unreg()
+
+		_, err := svc.Dispatch(context.Background(), DispatchRequest{
+			TargetOperatorSessionID: op.OperatorSessionID,
+			ActionType:              string(constants.ActionTypeFsRead),
+			Payload:                 fsReadPayloadBytes(t),
+			Timeout:                 50 * time.Millisecond,
+		})
+		require.Error(t, err)
+		assert.Equal(t, 0, resultHandlerCount(broker, op), "result handler must be unregistered after timeout")
+	})
+
+	t.Run("after caller cancellation", func(t *testing.T) {
+		op := newOp()
+		svc, broker := newTestDispatchService(t, "root-abc", op)
+		unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, _ []byte) {})
+		defer unreg()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			cancel()
+		}()
+		_, err := svc.Dispatch(ctx, DispatchRequest{
+			TargetOperatorSessionID: op.OperatorSessionID,
+			ActionType:              string(constants.ActionTypeFsRead),
+			Payload:                 fsReadPayloadBytes(t),
+		})
+		require.Error(t, err)
+		assert.Equal(t, 0, resultHandlerCount(broker, op), "result handler must be unregistered after cancellation")
+	})
+
+	t.Run("after zero delivery", func(t *testing.T) {
+		op := newOp()
+		svc, broker := newTestDispatchService(t, "root-abc", op)
+
+		_, err := svc.Dispatch(context.Background(), DispatchRequest{
+			TargetOperatorSessionID: op.OperatorSessionID,
+			ActionType:              string(constants.ActionTypeFsRead),
+			Payload:                 fsReadPayloadBytes(t),
+		})
+		require.Error(t, err)
+		assert.Equal(t, 0, resultHandlerCount(broker, op), "result handler must be unregistered after zero delivery")
+	})
+}
+
+func TestDispatchService_Dispatch_LateResultDiscarded(t *testing.T) {
+	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	svc, broker := newTestDispatchService(t, "root-abc", op)
+
+	var cmdEnvID string
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, data []byte) {
+		cmdEnv := &commonv1.GovernanceEnvelope{}
+		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err == nil {
+			cmdEnvID = cmdEnv.Id
+		}
+	})
+	defer unreg()
+
+	_, err := svc.Dispatch(context.Background(), DispatchRequest{
+		TargetOperatorSessionID: op.OperatorSessionID,
+		ActionType:              string(constants.ActionTypeFsRead),
+		Payload:                 fsReadPayloadBytes(t),
+		Timeout:                 50 * time.Millisecond,
+	})
+	require.Error(t, err)
+	require.NotEmpty(t, cmdEnvID)
+
+	// The result arrives after the dispatch deadline: the handler is gone
+	// and the publication is a no-op.
+	resultEnv := &commonv1.GovernanceEnvelope{Id: cmdEnvID}
+	wire, merr := protojson.Marshal(resultEnv)
+	require.NoError(t, merr)
+	broker.Publish(pubsub.ResultsChannel(op.ID, op.OperatorSessionID), wire)
+	assert.Equal(t, 0, resultHandlerCount(broker, op))
+}
+
+func TestDispatchService_Dispatch_DuplicateResultDropped(t *testing.T) {
+	op := &models.OperatorDocumentGo{ID: "op-001", OperatorSessionID: "sess-001"}
+	svc, broker := newTestDispatchService(t, "root-abc", op)
+
+	unreg := broker.RegisterHandler(pubsub.CmdChannel(op.ID, op.OperatorSessionID), func(_ string, data []byte) {
+		cmdEnv := &commonv1.GovernanceEnvelope{}
+		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
+			return
+		}
+		// Publish two result envelopes for the same transaction in one
+		// handler invocation: the first fills the buffered result channel,
+		// the second must be dropped, not block or corrupt the outcome.
+		for i := 0; i < 2; i++ {
+			resultEnv := &commonv1.GovernanceEnvelope{
+				Id:         cmdEnv.Id,
+				EventType:  cmdEnv.EventType,
+				ActionType: cmdEnv.ActionType,
+				Payload:    []byte{byte('a' + i)},
+			}
+			wire, err := protojson.Marshal(resultEnv)
+			if err != nil {
+				return
+			}
+			broker.Publish(pubsub.ResultsChannel(op.ID, op.OperatorSessionID), wire)
+		}
+	})
+	defer unreg()
+
+	result, err := svc.Dispatch(context.Background(), DispatchRequest{
+		TargetOperatorSessionID: op.OperatorSessionID,
+		ActionType:              string(constants.ActionTypeFsRead),
+		Payload:                 fsReadPayloadBytes(t),
+		Timeout:                 5 * time.Second,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result.ResultEnvelope)
+	assert.Equal(t, []byte("a"), result.ResultEnvelope.Payload, "the first correlated result wins; the duplicate is dropped")
+	assert.Equal(t, 0, resultHandlerCount(broker, op))
 }
 
 // --- DispatchController.HandleDispatch tests ---
@@ -372,4 +613,129 @@ func TestDispatchController_HandleDispatch_ValidationFails(t *testing.T) {
 	ctrl.HandleDispatch(rr, req)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestOperatorCommandResultHelpers(t *testing.T) {
+	t.Run("terminal command events", func(t *testing.T) {
+		assert.True(t, isOperatorCommandTerminalResult(&commonv1.GovernanceEnvelope{
+			EventType: string(constants.Event.Operator.Command.Completed),
+		}))
+		assert.False(t, isOperatorCommandTerminalResult(&commonv1.GovernanceEnvelope{
+			EventType: string(constants.Event.Operator.Command.StatusUpdated.Running),
+		}))
+	})
+
+	t.Run("payload from envelope bytes", func(t *testing.T) {
+		cmdResult := &operatorv1.CommandResult{Stdout: "hello\n", ReturnCode: 0}
+		wire, err := proto.Marshal(cmdResult)
+		require.NoError(t, err)
+		assert.Equal(t, wire, operatorCommandResultPayload(&commonv1.GovernanceEnvelope{Payload: wire}))
+	})
+
+	t.Run("ToResponse uses command result payload for completed events", func(t *testing.T) {
+		cmdResult := &operatorv1.CommandResult{Stdout: "hello\n", ReturnCode: 0}
+		wire, err := proto.Marshal(cmdResult)
+		require.NoError(t, err)
+		resp := (&DispatchResult{
+			TransactionID: "tx-1",
+			ResultEnvelope: &commonv1.GovernanceEnvelope{
+				EventType:  string(constants.Event.Operator.Command.Completed),
+				ActionType: "EXECUTE_BASH_RESULT",
+				Payload:    wire,
+			},
+		}).ToResponse()
+		assert.Equal(t, wire, resp.ResultPayload)
+	})
+}
+
+func TestDispatchService_Dispatch_ExecuteBash_WaitsForTerminalResult(t *testing.T) {
+	op := &models.OperatorDocumentGo{
+		ID:                "op-001",
+		OperatorSessionID: "sess-001",
+	}
+	svc, broker := newTestDispatchService(t, "root-abc", op)
+
+	cmdChannel := pubsub.CmdChannel(op.ID, op.OperatorSessionID)
+	resultsChannel := pubsub.ResultsChannel(op.ID, op.OperatorSessionID)
+
+	unregisterOperator := broker.RegisterHandler(cmdChannel, func(channel string, data []byte) {
+		cmdEnv := &commonv1.GovernanceEnvelope{}
+		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(data, cmdEnv); err != nil {
+			t.Errorf("operator: unmarshal command: %v", err)
+			return
+		}
+
+		statusEnv := &commonv1.GovernanceEnvelope{
+			Id:         cmdEnv.Id,
+			EventType:  string(constants.Event.Operator.Command.StatusUpdated.Running),
+			ActionType: "EXECUTE_STATUS_UPDATE",
+			Timestamp:  timestamppb.Now(),
+		}
+		statusWire, err := protojson.Marshal(statusEnv)
+		require.NoError(t, err)
+		broker.Publish(resultsChannel, statusWire)
+
+		resultPayload, err := proto.Marshal(&operatorv1.CommandResult{
+			Stdout:     "hello\n",
+			ReturnCode: 0,
+		})
+		require.NoError(t, err)
+		completedEnv := &commonv1.GovernanceEnvelope{
+			Id:         cmdEnv.Id,
+			EventType:  string(constants.Event.Operator.Command.Completed),
+			ActionType: "EXECUTE_BASH_RESULT",
+			Payload:    resultPayload,
+			Timestamp:  timestamppb.Now(),
+		}
+		completedWire, err := protojson.Marshal(completedEnv)
+		require.NoError(t, err)
+		broker.Publish(resultsChannel, completedWire)
+	})
+	defer unregisterOperator()
+
+	execPayload, err := proto.Marshal(&operatorv1.CommandRequested{
+		Command:     "echo hello",
+		ExecutionId: "exec-1",
+	})
+	require.NoError(t, err)
+
+	result, err := svc.Dispatch(context.Background(), DispatchRequest{
+		TargetOperatorSessionID: "sess-001",
+		ActionType:              string(constants.ActionTypeExecuteBash),
+		Payload:                 execPayload,
+		TargetResource:          "cli",
+		RequestorUserID:         "user-001",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.ResultEnvelope)
+	assert.Equal(t, string(constants.Event.Operator.Command.Completed), result.ResultEnvelope.EventType)
+
+	decoded := &operatorv1.CommandResult{}
+	require.NoError(t, proto.Unmarshal(result.ToResponse().ResultPayload, decoded))
+	assert.Equal(t, "hello\n", decoded.Stdout)
+}
+
+func TestDecodeInferenceProgressEnvelope(t *testing.T) {
+	t.Parallel()
+	progress := &operatorv1.InferenceProgressEvent{
+		ProviderAttemptId: "attempt-1",
+		Sequence:          2,
+	}
+	payload, err := proto.Marshal(progress)
+	require.NoError(t, err)
+
+	decoded, ok := decodeInferenceProgressEnvelope(&commonv1.GovernanceEnvelope{
+		EventType: string(constants.Event.Operator.Inference.ProgressUpdated),
+		Payload:   payload,
+	})
+	require.True(t, ok)
+	assert.Equal(t, "attempt-1", decoded.GetProviderAttemptId())
+	assert.Equal(t, uint32(2), decoded.GetSequence())
+
+	_, ok = decodeInferenceProgressEnvelope(&commonv1.GovernanceEnvelope{
+		EventType: string(constants.Event.Operator.Inference.Completed),
+		Payload:   payload,
+	})
+	assert.False(t, ok)
 }

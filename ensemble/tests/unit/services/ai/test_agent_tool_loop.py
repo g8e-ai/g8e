@@ -20,16 +20,18 @@ Run with:
     ./g8e test g8ee -- tests/unit/services/ai/test_agent_tool_loop.py
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.constants import StreamChunkFromModelType
+from app.llm.llm_types import ToolCall
 from app.models.agent import ExecutorCommandArgs, OperatorContext, SageOperatorRequest
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.settings import CommandValidationSettings, G8eeUserSettings
+from app.models.settings import CommandValidationSettings, G8eeUserSettings, LLMSettings
 from app.models.whitelist import WhitelistedCommand
-from app.services.ai.agent_tool_loop import TribunalInvoker
+from app.services.ai.agent_tool_loop import TribunalInvoker, execute_turn_tool_calls
 from app.services.ai.generator import (
     CommandGenerationResult,
     TribunalDisabledError,
@@ -37,6 +39,7 @@ from app.services.ai.generator import (
 from app.services.ai.tool_service import AIToolService
 from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.utils.whitelist_validator import CommandWhitelistValidator
+from app.utils.ids import is_valid_command_execution_id
 
 pytestmark = [pytest.mark.unit]
 
@@ -107,6 +110,42 @@ def mock_request_settings():
 def mock_event_service():
     """Mock EventService."""
     return AsyncMock()
+
+
+@pytest.mark.asyncio
+async def test_execute_turn_tool_calls_assigns_execution_id_when_orchestration_fails(
+    mock_tool_executor,
+    mock_investigation,
+    mock_g8e_context,
+    mock_request_settings,
+    mock_event_service,
+):
+    mock_request_settings.llm = LLMSettings(llm_parallel_tool_calls=False)
+    result_out = []
+
+    with patch(
+        "app.services.ai.agent_tool_loop.orchestrate_tool_execution",
+        new=AsyncMock(side_effect=RuntimeError("tool orchestration failed")),
+    ):
+        chunks = [
+            chunk
+            async for chunk in execute_turn_tool_calls(
+                pending_tool_calls=[ToolCall(id="call-1", name="query_investigation_context", args={})],
+                tool_executor=mock_tool_executor,
+                investigation=mock_investigation,
+                g8e_context=mock_g8e_context,
+                result_out=result_out,
+                request_settings=mock_request_settings,
+                event_service=mock_event_service,
+            )
+        ]
+
+    assert [chunk.type for chunk in chunks] == [
+        StreamChunkFromModelType.TOOL_CALL,
+        StreamChunkFromModelType.TOOL_RESULT,
+    ]
+    assert chunks[0].data.execution_id == chunks[1].data.execution_id
+    assert is_valid_command_execution_id(chunks[0].data.execution_id)
 
 
 class TestTribunalInvokerFetchCommandConstraints:

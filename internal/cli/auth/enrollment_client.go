@@ -24,9 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/certs"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
-	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/httpclient"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -91,21 +89,23 @@ func defaultSystemFingerprint() (string, error) {
 
 // Bootstrap performs the initial unbootstrapped-gateway CLI enrollment
 // (POST /api/v1/auth/bootstrap over the discovery/plain-HTTP surface).
-// The caller supplies the CLI CSR (and its private key, for staging) and
-// an optional operator CSR. The gateway returns the first user/session
-// and the full runtime trust bundle.
+// The caller supplies the CLI CSR (and its private key, for staging). The
+// gateway claims its pending embedded operator as part of the same
+// explicit first-user enrollment act and returns the first user/session,
+// the embedded operator binding, and the full runtime trust bundle. The
+// embedded operator is certless — no operator CSR is submitted and no
+// operator certs are returned.
 //
 // baseURL, when non-empty, overrides the discovery URL (used by demos and
 // tests). caFingerprint, when non-empty, pins the expected root CA
 // fingerprint.
-func (c *EnrollmentClient) Bootstrap(ctx context.Context, cliCSR string, cliKey *ecdsa.PrivateKey, operatorCSR, caFingerprint, baseURL string) (EnrollmentArtifacts, error) {
+func (c *EnrollmentClient) Bootstrap(ctx context.Context, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint, baseURL string) (EnrollmentArtifacts, error) {
 	systemFp, err := c.systemFingerprint()
 	if err != nil {
 		return EnrollmentArtifacts{}, err
 	}
 
 	req := models.BootstrapRequest{
-		CSR:               operatorCSR,
 		CLICSR:            cliCSR,
 		SystemFingerprint: systemFp,
 		LocalOSUser:       getLocalOSUser(),
@@ -125,17 +125,15 @@ func (c *EnrollmentClient) Bootstrap(ctx context.Context, cliCSR string, cliKey 
 	}
 
 	artifacts := EnrollmentArtifacts{
-		Source:               EnrollmentSourceBootstrap,
-		CLISessionID:         resp.CLISessionID,
-		UserID:               resp.UserID,
-		OperatorSessionID:    resp.OperatorSessionID,
-		OperatorID:           resp.OperatorID,
-		CLICertPEM:           resp.CLICert,
-		CLICertChainPEM:      resp.CLICertChain,
-		CLIKey:               cliKey,
-		TrustBundlePEM:       resp.HubTrustBundle,
-		OperatorCertPEM:      resp.OperatorCert,
-		OperatorCertChainPEM: resp.OperatorCertChain,
+		Source:            EnrollmentSourceBootstrap,
+		CLISessionID:      resp.CLISessionID,
+		UserID:            resp.UserID,
+		OperatorSessionID: resp.OperatorSessionID,
+		OperatorID:        resp.OperatorID,
+		CLICertPEM:        resp.CLICert,
+		CLICertChainPEM:   resp.CLICertChain,
+		CLIKey:            cliKey,
+		TrustBundlePEM:    resp.HubTrustBundle,
 	}
 
 	if err := validateLocalCLI(artifacts, caFingerprint); err != nil {
@@ -341,19 +339,183 @@ func (c *EnrollmentClient) Refresh(ctx context.Context, fileSvc fs.RuntimeFileSe
 	if !resp.Success {
 		return CLISessionRefresh{}, fmt.Errorf("%w: refresh unsuccessful", constants.ErrCLIRefreshFailed)
 	}
-	if resp.CLISessionID == "" || resp.UserID == "" {
+	if resp.CLISessionID == "" || resp.UserID == "" || resp.OperatorSessionID == "" || resp.OperatorID == "" {
 		return CLISessionRefresh{}, constants.ErrMissingRequiredField
 	}
 	return CLISessionRefresh{
-		CLISessionID: resp.CLISessionID,
-		UserID:       resp.UserID,
+		CLISessionID:      resp.CLISessionID,
+		UserID:            resp.UserID,
+		OperatorSessionID: resp.OperatorSessionID,
+		OperatorID:        resp.OperatorID,
 	}, nil
 }
 
+// Bind pins the authenticated CLI session to the requested operator session
+// (POST /api/v1/auth/cli/bind over the public HTTPS surface). The caller's
+// existing CLI cert is used to build the mTLS client; the gateway derives
+// the user from the authenticated certificate context. When the binding
+// changes, a replacement CLI session is issued with a fresh TTL.
+func (c *EnrollmentClient) Bind(ctx context.Context, fileSvc fs.RuntimeFileService, operatorSessionID string) (CLISessionBind, error) {
+	if operatorSessionID == "" {
+		return CLISessionBind{}, constants.ErrGatewayOperatorSessionIDRequired
+	}
+
+	mtlsClient, err := BuildMTLSClient(fileSvc, c.cfg, httpTimeout)
+	if err != nil {
+		return CLISessionBind{}, err
+	}
+
+	publicURL := c.cfg.OperatorPublicURL()
+
+	store := NewCredentialStore(fileSvc, c.cfg)
+	creds, _ := store.LoadCredentials(ctx)
+	headers := map[string]string{}
+	if creds != nil && creds.CLISessionID != "" {
+		headers[constants.HeaderCLISessionID] = creds.CLISessionID
+	}
+
+	var resp models.CLIBindResponse
+	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIBind, models.CLIBindRequest{
+		OperatorSessionID: operatorSessionID,
+	}, &resp, headers); err != nil {
+		return CLISessionBind{}, err
+	}
+	if !resp.Success {
+		return CLISessionBind{}, fmt.Errorf("%w: bind unsuccessful", constants.ErrCLIRefreshFailed)
+	}
+	if resp.CLISessionID == "" || resp.UserID == "" || resp.OperatorSessionID == "" || resp.OperatorID == "" {
+		return CLISessionBind{}, constants.ErrMissingRequiredField
+	}
+	return CLISessionBind{
+		CLISessionID:      resp.CLISessionID,
+		UserID:            resp.UserID,
+		OperatorSessionID: resp.OperatorSessionID,
+		OperatorID:        resp.OperatorID,
+		AlreadyBound:      resp.AlreadyBound,
+	}, nil
+}
+
+// CLISessionBind is the result of a successful CLI operator bind.
+type CLISessionBind struct {
+	CLISessionID      string
+	UserID            string
+	OperatorSessionID string
+	OperatorID        string
+	AlreadyBound      bool
+}
+
+// Unbind clears the authenticated CLI session's operator binding
+// (POST /api/v1/auth/cli/unbind over the public HTTPS surface). When a
+// binding was present, a replacement CLI session is issued with a fresh TTL.
+func (c *EnrollmentClient) Unbind(ctx context.Context, fileSvc fs.RuntimeFileService) (CLISessionUnbind, error) {
+	mtlsClient, err := BuildMTLSClient(fileSvc, c.cfg, httpTimeout)
+	if err != nil {
+		return CLISessionUnbind{}, err
+	}
+
+	publicURL := c.cfg.OperatorPublicURL()
+
+	store := NewCredentialStore(fileSvc, c.cfg)
+	creds, _ := store.LoadCredentials(ctx)
+	headers := map[string]string{}
+	if creds != nil && creds.CLISessionID != "" {
+		headers[constants.HeaderCLISessionID] = creds.CLISessionID
+	}
+
+	var resp models.CLIUnbindResponse
+	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIUnbind, models.CLIUnbindRequest{}, &resp, headers); err != nil {
+		return CLISessionUnbind{}, err
+	}
+	if !resp.Success {
+		return CLISessionUnbind{}, fmt.Errorf("%w: unbind unsuccessful", constants.ErrCLIRefreshFailed)
+	}
+	if resp.CLISessionID == "" || resp.UserID == "" {
+		return CLISessionUnbind{}, constants.ErrMissingRequiredField
+	}
+	return CLISessionUnbind{
+		CLISessionID:   resp.CLISessionID,
+		UserID:         resp.UserID,
+		AlreadyUnbound: resp.AlreadyUnbound,
+	}, nil
+}
+
+// SessionInfo returns the authenticated CLI session's persisted identity
+// binding (GET /api/v1/auth/cli/session over the public HTTPS surface).
+func (c *EnrollmentClient) SessionInfo(ctx context.Context, fileSvc fs.RuntimeFileService) (CLISessionInfo, error) {
+	mtlsClient, err := BuildMTLSClient(fileSvc, c.cfg, httpTimeout)
+	if err != nil {
+		return CLISessionInfo{}, err
+	}
+
+	publicURL := c.cfg.OperatorPublicURL()
+
+	store := NewCredentialStore(fileSvc, c.cfg)
+	creds, _ := store.LoadCredentials(ctx)
+	headers := map[string]string{}
+	if creds != nil && creds.CLISessionID != "" {
+		headers[constants.HeaderCLISessionID] = creds.CLISessionID
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, publicURL+constants.APIPaths.AuthCLISession, nil)
+	if err != nil {
+		return CLISessionInfo{}, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
+	}
+	for key, value := range headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	resp, err := mtlsClient.Do(httpReq)
+	if err != nil {
+		return CLISessionInfo{}, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return CLISessionInfo{}, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return CLISessionInfo{}, fmt.Errorf("%w: status %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(body))
+	}
+
+	var info models.CLISessionInfoResponse
+	if err := json.Unmarshal(body, &info); err != nil {
+		return CLISessionInfo{}, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	if !info.Success || info.CLISessionID == "" || info.UserID == "" {
+		return CLISessionInfo{}, constants.ErrMissingRequiredField
+	}
+	return CLISessionInfo{
+		CLISessionID:      info.CLISessionID,
+		UserID:            info.UserID,
+		OperatorSessionID: info.OperatorSessionID,
+		OperatorID:        info.OperatorID,
+	}, nil
+}
+
+// CLISessionUnbind is the result of a successful CLI operator unbind.
+type CLISessionUnbind struct {
+	CLISessionID   string
+	UserID         string
+	AlreadyUnbound bool
+}
+
+// CLISessionInfo is the authoritative CLI session identity binding.
+type CLISessionInfo struct {
+	CLISessionID      string
+	UserID            string
+	OperatorSessionID string
+	OperatorID        string
+}
+
 // CLISessionRefresh is the result of a successful CLI session refresh.
+// It carries the full session/operator binding so the caller can persist
+// the authoritative pair back to local credentials.
 type CLISessionRefresh struct {
-	CLISessionID string
-	UserID       string
+	CLISessionID      string
+	UserID            string
+	OperatorSessionID string
+	OperatorID        string
 }
 
 // ProbeCLISession issues a lightweight authenticated mTLS GET to
@@ -452,31 +614,20 @@ func (c *EnrollmentClient) CheckBootstrapStatus(ctx context.Context, baseURL str
 // fingerprint pin is applied — the live bundle IS the source of truth for
 // the pin, so pinning against the local bundle would be circular.
 //
+// Delegates to DiscoverLiveTrustBundle so identity enrollment and gw
+// connect share one implementation of root selection, chain verification,
+// and fingerprint formatting.
+//
 // See EnrollmentGateway.DiscoverGatewayCA for the contract.
 func (c *EnrollmentClient) DiscoverGatewayCA(ctx context.Context) ([]byte, string, error) {
 	discoveryURL := c.cfg.OperatorDiscoveryURL()
 	caURL := discoveryURL + constants.APIPaths.WellKnownPKICABundle
 
-	// Use the IPv4-only transport so `localhost` resolves to 127.0.0.1 on
-	// Windows (where the OS resolver returns ::1 first and the IDE's
-	// port-forward only listens on IPv4). The discovery surface is plain
-	// HTTP, so no TLS config is needed.
-	bundlePEM, err := certs.FetchTrustBundleWithClient(ctx, caURL, "", &http.Client{
-		Timeout:   15 * time.Second,
-		Transport: httpclient.NewIPv4Transport(nil),
-	})
+	result, err := DiscoverLiveTrustBundle(ctx, caURL, time.Now)
 	if err != nil {
 		return nil, "", err
 	}
-
-	roots, err := platform.ExtractRootAnchors(bundlePEM, time.Now)
-	if err != nil {
-		return nil, "", fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, err)
-	}
-	if len(roots) == 0 {
-		return nil, "", constants.ErrSystemTrustInvalidAnchor
-	}
-	return bundlePEM, platform.CertFingerprint(roots[0]), nil
+	return result.BundlePEM, result.Fingerprint, nil
 }
 
 // postJSON is the centralized HTTP POST + JSON decode + status check
@@ -528,6 +679,12 @@ func postJSON(ctx context.Context, httpClient *http.Client, url string, reqBody 
 func validateLocalCLI(a EnrollmentArtifacts, caFingerprint string) error {
 	if a.CLISessionID == "" || a.UserID == "" || a.CLICertPEM == "" {
 		return constants.ErrMissingRequiredField
+	}
+	// Rotation inherits the persisted operator binding from local
+	// credentials; bootstrap and recovery must carry the authoritative
+	// operator pair returned by the gateway.
+	if a.Source != EnrollmentSourceRotation && (a.OperatorSessionID == "" || a.OperatorID == "") {
+		return fmt.Errorf("%w: operator binding", constants.ErrMissingRequiredField)
 	}
 	if a.TrustBundlePEM == "" {
 		return constants.ErrEmptyTrustBundle

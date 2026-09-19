@@ -42,6 +42,7 @@ from .providers.gemini import GeminiProvider
 from .providers.anthropic import AnthropicProvider
 from .providers.llama_cpp import LlamaCppProvider
 from .providers.ollama import OllamaProvider, _normalize_ollama_host
+from .providers.g8e import G8EProvider
 from .providers.fake import FakeProvider
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ _settings: G8eeAppSettings | None = None
 _llm_settings: LLMSettings | None = None
 _search_settings: SearchSettings | None = None
 _provider_cache: dict[str, LLMProviderBase] = {}
+_internal_http_client: object | None = None
 
 
 def set_settings(settings: G8eeAppSettings) -> None:
@@ -83,6 +85,23 @@ def set_search_settings(settings: SearchSettings) -> None:
 def get_search_settings() -> SearchSettings | None:
     """Return the search settings singleton (used in tests)."""
     return _search_settings
+
+
+def set_internal_http_client(client: object) -> None:
+    """Inject the platform InternalHttpClient at startup.
+
+    The G8E governed-dispatch provider uses this client to call the
+    gateway's /api/v1/inference/dispatch endpoint over mTLS. The client
+    is a singleton shared with the rest of the application; the factory
+    does not own its lifecycle.
+    """
+    global _internal_http_client
+    _internal_http_client = client
+
+
+def get_internal_http_client() -> object | None:
+    """Return the internal HTTP client singleton (used by the G8E provider)."""
+    return _internal_http_client
 
 
 def _get_provider_cache_key(
@@ -119,10 +138,11 @@ async def clear_provider_cache() -> None:
 
 def reset_settings() -> None:
     """Reset all settings singletons. Intended for use in tests only."""
-    global _settings, _llm_settings, _search_settings
+    global _settings, _llm_settings, _search_settings, _internal_http_client
     _settings = None
     _llm_settings = None
     _search_settings = None
+    _internal_http_client = None
 
 
 def get_llm_provider(
@@ -181,6 +201,15 @@ def get_llm_provider(
             endpoint=endpoint,
             api_key=api_key,
         )
+    elif provider_type == LLMProvider.G8E:
+        if _internal_http_client is None:
+            from app.errors import ConfigurationError
+
+            raise ConfigurationError(
+                "G8E provider requires the InternalHttpClient to be injected "
+                "at startup via set_internal_http_client()"
+            )
+        provider = G8EProvider(internal_http_client=_internal_http_client)
     else:
         from app.errors import ConfigurationError
 

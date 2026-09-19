@@ -1,0 +1,4 @@
+{
+  "message_type": "EvaluationCampaignSpec",
+  "canonical_json": "{\"schema_version\":\"1.0.0\",\"campaign_id\":\"phase1a-smoke\",\"catalog_ref\":{\"id\":\"north-star-25\",\"version\":\"1.0.0\"},\"catalog_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"model_registry\":[{\"variant_id\":\"qwen3-4b\",\"provider_class\":\"ollama\",\"served_model_tag\":\"qwen3:4b\",\"model_digest\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"model_family\":\"qwen3\",\"parameter_count\":\"4000000000\",\"quantization\":\"q4_0\"}],\"model_registry_digest\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"campaign_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"governance_posture\":\"EVALUATION_GOVERNANCE_POSTURE_DOCTRINE\",\"scenario_count\":25,\"repetition_count\":1}"
+}

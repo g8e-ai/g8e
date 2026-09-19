@@ -62,7 +62,7 @@ func samplePendingResponse() models.PlatformEnrollmentPendingResponse {
 	}
 }
 
-// --- approve-platform-enrollment command tests ---
+// --- enroll approve command tests ---
 
 // TestApprovePlatformEnrollmentCmd_ApproveWithYes verifies that --yes skips the
 // interactive prompt, posts an approve decision with the correct request ID,
@@ -100,9 +100,9 @@ func TestApprovePlatformEnrollmentCmd_ApproveWithYes(t *testing.T) {
 	assert.Contains(t, buf.String(), "approved")
 }
 
-// TestApprovePlatformEnrollmentCmd_DenyWithYes verifies that --deny posts a
+// TestDenyPlatformEnrollmentCmd_WithYes verifies that the deny subcommand posts a
 // deny decision and prints the denied state.
-func TestApprovePlatformEnrollmentCmd_DenyWithYes(t *testing.T) {
+func TestDenyPlatformEnrollmentCmd_WithYes(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
 	pendingBody, err := json.Marshal(samplePendingResponse())
@@ -117,9 +117,8 @@ func TestApprovePlatformEnrollmentCmd_DenyWithYes(t *testing.T) {
 
 	mockClient := &mockAPIClient{getResp: pendingBody, postResp: postResp}
 
-	cmd := approvePlatformEnrollmentCmdWithConfig(
+	cmd := denyPlatformEnrollmentCmdWithConfig(
 		configLoaderFor(cfg), mockClientFactory(mockClient), fileSvcFactoryFor(nil))
-	cmd.Flags().Set("deny", "true")
 	cmd.Flags().Set("yes", "true")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -378,7 +377,7 @@ func TestApprovePlatformEnrollmentCmd_ReasonTooLongReturnsError(t *testing.T) {
 	assert.Empty(t, mockClient.postCalls, "decision must not be posted when reason validation fails")
 }
 
-// --- pending-platform-enrollments command tests ---
+// --- pending command tests ---
 
 // TestPendingPlatformEnrollmentCmd_ListsRequests verifies that the command
 // fetches the pending list and prints request metadata for each entry.
@@ -648,13 +647,24 @@ func TestApprovePlatformEnrollmentCmd_DisplaysSystemFingerprint(t *testing.T) {
 func TestApprovePlatformEnrollmentCmd_CommandStructure(t *testing.T) {
 	cmd := approvePlatformEnrollmentCmdWithConfig(
 		configLoaderFor(nil), panickingClientFactory(), fileSvcFactoryFor(nil))
-	assert.Equal(t, "approve-platform-enrollment <request-id>", cmd.Use)
+	assert.Equal(t, "approve <request-id>", cmd.Use)
 	assert.NotNil(t, cmd.RunE)
-	assert.NotNil(t, cmd.Flags().Lookup("deny"))
+	assert.Nil(t, cmd.Flags().Lookup("deny"))
 	assert.NotNil(t, cmd.Flags().Lookup("reason"))
 	assert.NotNil(t, cmd.Flags().Lookup("yes"))
-	assert.Equal(t, "false", cmd.Flags().Lookup("deny").DefValue)
 	assert.Equal(t, "false", cmd.Flags().Lookup("yes").DefValue)
+}
+
+// TestDenyPlatformEnrollmentCmd_CommandStructure verifies the deny command's
+// Use, flags, and Args validation.
+func TestDenyPlatformEnrollmentCmd_CommandStructure(t *testing.T) {
+	cmd := denyPlatformEnrollmentCmdWithConfig(
+		configLoaderFor(nil), panickingClientFactory(), fileSvcFactoryFor(nil))
+	assert.Equal(t, "deny <request-id>", cmd.Use)
+	assert.NotNil(t, cmd.RunE)
+	assert.Nil(t, cmd.Flags().Lookup("deny"))
+	assert.NotNil(t, cmd.Flags().Lookup("reason"))
+	assert.NotNil(t, cmd.Flags().Lookup("yes"))
 }
 
 // TestPendingPlatformEnrollmentCmd_CommandStructure verifies the command's
@@ -662,7 +672,7 @@ func TestApprovePlatformEnrollmentCmd_CommandStructure(t *testing.T) {
 func TestPendingPlatformEnrollmentCmd_CommandStructure(t *testing.T) {
 	cmd := pendingPlatformEnrollmentCmdWithConfig(
 		configLoaderFor(nil), panickingClientFactory(), fileSvcFactoryFor(nil))
-	assert.Equal(t, "pending-platform-enrollments", cmd.Use)
+	assert.Equal(t, "pending", cmd.Use)
 	assert.NotNil(t, cmd.RunE)
 }
 

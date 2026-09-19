@@ -284,9 +284,10 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 
 }
 
-func TestApplyBootstrapConfig_AppliesAllFields(t *testing.T) {
+func TestApplyBootstrapConfig_PreservesLocalHeartbeatInterval(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
+	cfg.HeartbeatInterval = time.Second
 	logger := testutil.NewTestLogger()
 
 	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
@@ -305,7 +306,7 @@ func TestApplyBootstrapConfig_AppliesAllFields(t *testing.T) {
 
 	assert.Equal(t, 50, cfg.MaxConcurrentTasks)
 	assert.Equal(t, 4096, cfg.MaxMemoryMB)
-	assert.Equal(t, 60, int(cfg.HeartbeatInterval.Seconds()))
+	assert.Equal(t, time.Second, cfg.HeartbeatInterval)
 	assert.Equal(t, "op-applied", cfg.OperatorID)
 	assert.Equal(t, "sess-applied", cfg.OperatorSessionId)
 }

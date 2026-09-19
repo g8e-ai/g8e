@@ -16,6 +16,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/certs"
@@ -152,6 +153,14 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		LogLevel:              bs.config.LogLevel,
 
 		HTTPPort: bs.config.HTTPPort,
+
+		InferenceEnabled:                      bs.config.Inference.Enabled,
+		InferenceOllamaEndpoint:               bs.config.Inference.OllamaEndpoint,
+		ProviderBoundaryObserverEnabled:       bs.config.ProviderBoundaryObserver.Enabled,
+		ProviderBoundaryObserverOllamaEnabled: bs.config.ProviderBoundaryObserver.OllamaEnabled,
+		ProvenanceOperatorEnabled:             bs.config.ProvenanceOperator.Enabled,
+		ProvenanceOperatorModelStorageRoot:    bs.config.ProvenanceOperator.ModelStorageRoot,
+		Platform:                              runtime.GOOS,
 	}
 
 	reqBody := operatorAuthRequest{
@@ -292,10 +301,6 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 
 	if bootstrapConfig.Posture != "" {
 		bs.config.Posture = config.GatewayPosture(bootstrapConfig.Posture)
-	}
-
-	if bootstrapConfig.HeartbeatIntervalSeconds > 0 {
-		bs.config.HeartbeatInterval = time.Duration(bootstrapConfig.HeartbeatIntervalSeconds) * time.Second
 	}
 
 	if bootstrapConfig.OperatorCert != "" && bootstrapConfig.OperatorCertKey != "" {

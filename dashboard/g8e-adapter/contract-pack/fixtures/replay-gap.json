@@ -1,0 +1,20 @@
+{
+  "description": "Truncation sentinel during replay. The adapter triggers snapshot reconciliation; SSE is invalidation, not durable truth.",
+  "events": [
+    {
+      "id": 30,
+      "payload": {
+        "limit": 100,
+        "since_id": 25
+      },
+      "recognized": true,
+      "type": "truncated"
+    }
+  ],
+  "scenario": "replay-gap",
+  "transport": {
+    "connection_state": "connected",
+    "last_event_id": 30,
+    "reconcile_reason": "truncated"
+  }
+}

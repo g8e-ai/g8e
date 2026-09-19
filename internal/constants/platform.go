@@ -7,6 +7,14 @@
 
 package constants
 
+import "time"
+
+const (
+	EvaluationReceiptPollInterval = 500 * time.Millisecond
+	EvaluationReceiptPollTimeout  = 30 * time.Second
+	InferenceRequestSchemaVersion = "1.0"
+)
+
 const (
 	PlatformUsageUpdated = "g8e.v1.platform.usage.updated"
 	PlatformNotification = "g8e.v1.platform.notification"

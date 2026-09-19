@@ -15,6 +15,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -248,6 +249,7 @@ func (w *L5Actuator) RecordRejectedTransaction(ctx context.Context, vt *Verified
 	receipt := w.buildInitialReceipt(vt)
 	receipt.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 	receipt.ResultSummary = fmt.Sprintf("rejected: %v", rejection)
+	receipt.FailureCode = operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED
 	receipt.ExecutedAtUnixMs = time.Now().UnixMilli()
 	if err := w.signAndLogFinalReceipt(vt, receipt); err != nil {
 		return nil, err
@@ -488,8 +490,56 @@ func (w *L5Actuator) finalizeReceipt(receipt *operatorv1.ActionReceipt, summary 
 
 	receipt.Status = status
 	receipt.ResultSummary = summary
+	receipt.FailureCode = classifyReceiptFailure(execErr)
 	receipt.StateRootAfter = stateAfter
 	receipt.ExecutedAtUnixMs = time.Now().UnixMilli()
+}
+
+// classifyReceiptFailure maps an execution error to the typed
+// ReceiptFailureCode stamped on the FAILED receipt. The code is bound into
+// the receipt signature so the User Gateway can map it back to a typed
+// sentinel without parsing the result_summary text.
+func classifyReceiptFailure(execErr error) operatorv1.ReceiptFailureCode {
+	if execErr == nil {
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED
+	}
+	switch {
+	case errors.Is(execErr, constants.ErrInferenceModelOverrideDenied):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED
+	case errors.Is(execErr, constants.ErrInferenceRoleInvalid):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_ROLE_INVALID
+	case errors.Is(execErr, constants.ErrInferenceModelRefInvalid):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REF_INVALID
+	case errors.Is(execErr, constants.ErrInferenceBackendUnavailable),
+		errors.Is(execErr, constants.ErrInferenceBackendNotRegistered):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE
+	case errors.Is(execErr, constants.ErrInferenceBackendTimeout):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT
+	case errors.Is(execErr, constants.ErrInferenceGenerateFailed):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATE_FAILED
+	case errors.Is(execErr, constants.ErrInferenceModelNotFound):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND
+	case errors.Is(execErr, constants.ErrInferenceProviderResponseInvalid):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID
+	case errors.Is(execErr, constants.ErrInferenceGenerationOptionsInvalid):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID
+	case errors.Is(execErr, constants.ErrInferenceCapabilityUnsupported):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED
+	case errors.Is(execErr, constants.ErrInferenceProviderAttemptRequired):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED
+	case errors.Is(execErr, constants.ErrInferenceIdentityMismatch):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH
+	case errors.Is(execErr, constants.ErrInferenceModelDigestMismatch):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH
+	case errors.Is(execErr, constants.ErrInferenceEvidenceHashInvalid):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID
+	case errors.Is(execErr, constants.ErrInferenceModelRegistryInvalid):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID
+	case errors.Is(execErr, constants.ErrInferenceCampaignBindingInvalid):
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID
+	default:
+		return operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED
+	}
 }
 
 // signAndLogFinalReceipt signs and logs the final receipt. Best-effort: returns error but receipt is still returned by caller.
@@ -641,6 +691,7 @@ type canonicalReceipt struct {
 	L2Status                       int32  `json:"l2_status"`
 	L3Status                       int32  `json:"l3_status"`
 	DeterministicStageEvidenceHash string `json:"deterministic_stage_evidence_hash,omitempty"`
+	FailureCode                    int32  `json:"failure_code,omitempty"`
 }
 
 func deterministicStageEvidenceHash(stages []*operatorv1.DeterministicStageEvidence) (string, error) {
@@ -684,6 +735,7 @@ func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 		L2Status:                       int32(r.L2Status),
 		L3Status:                       int32(r.L3Status),
 		DeterministicStageEvidenceHash: stageEvidenceHash,
+		FailureCode:                    int32(r.FailureCode),
 	}
 	payload, err := json.Marshal(canonical)
 	if err != nil {

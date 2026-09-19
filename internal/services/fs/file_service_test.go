@@ -422,3 +422,21 @@ func TestRelFromAbs_OutsidePathReturnsError(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrPathValidation))
 }
+
+func TestReadFile_RejectsPathTraversal(t *testing.T) {
+	svc := setupTestFS(t)
+	ctx := context.Background()
+
+	_, err := svc.ReadFile(ctx, filepath.Join("..", "outside.txt"))
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrPathValidation))
+}
+
+func TestLstat_RejectsPathTraversal(t *testing.T) {
+	svc := setupTestFS(t)
+	ctx := context.Background()
+
+	_, err := svc.Lstat(ctx, filepath.Join("..", "outside.txt"))
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrPathValidation))
+}

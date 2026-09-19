@@ -496,6 +496,51 @@ func TestHandleReauth_ResponseContainsGatewayPosture(t *testing.T) {
 		"reauth response must propagate the gateway's posture to the operator")
 }
 
+func TestHandleReauth_PersistsRuntimeConfig(t *testing.T) {
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	cfg := &config.Config{Gateway: config.GatewayConfig{MaxPayloadBytes: 1024, Posture: config.PostureDoctrine}}
+	reg := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), nil, logger, userSvc, nil, nil, &cfg.Gateway)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: cfg, Logger: logger, Reg: reg, Auth: auth, Responder: res})
+
+	operatorSessionID := "test-session-runtime-config"
+	opDoc := map[string]interface{}{
+		"id":                  "op-runtime-config",
+		"operator_session_id": operatorSessionID,
+		"status":              marshaler.Status(constants.OperatorStatusActive),
+		"user_id":             "user-runtime-config",
+		"organization_id":     "org-runtime-config",
+	}
+	opBytes, err := json.Marshal(opDoc)
+	require.NoError(t, err)
+	require.NoError(t, db.GetDocStore().DocSet("operators", "op-runtime-config", opBytes))
+
+	body := `{"runtime_config":{"inference_enabled":true,"log_level":"info"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	wid := protocol.NewWorkloadIdentity()
+	opURI, err := wid.OperatorSPIFFEURL("org-runtime-config", "op-runtime-config", operatorSessionID)
+	require.NoError(t, err)
+	req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{{URIs: []*url.URL{opURI}}}}
+	ctx := context.WithValue(req.Context(), constants.ContextKeyOperatorSessionID, operatorSessionID)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	controller.handleReauth(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	operators, err := reg.ListUserOperators("user-runtime-config")
+	require.NoError(t, err)
+	require.Len(t, operators, 1)
+	require.NotNil(t, operators[0].RuntimeConfig)
+	assert.True(t, operators[0].RuntimeConfig.InferenceEnabled)
+}
+
 func TestOperatorController_HandleGetOperatorBySession(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
 	controller := newOperatorController(OperatorControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Responder: infra.Responder})

@@ -14,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // --- validatePublicBaseURL ---
@@ -183,6 +185,42 @@ func TestValidatePasskeyRP_UnsupportedScheme(t *testing.T) {
 	assert.Error(t, validatePasskeyRP("demo.g8e.ai", "ftp://demo.g8e.ai"))
 }
 
+// The following tests assert the stricter centralized behavior delegated to
+// browserorigin.Parse and browserorigin.ValidateRPID. The previous wizard
+// implementation accepted any registrable suffix as an RP ID without checking
+// the Public Suffix List, and accepted any http origin regardless of host.
+// The centralized parser rejects public-suffix RP IDs (which would scope
+// credentials across unrelated tenants) and non-loopback HTTP origins.
+
+func TestValidatePasskeyRP_RejectsPublicSuffixRPID(t *testing.T) {
+	// "app" is an ICANN public suffix. Using it as an RP ID would scope
+	// passkey credentials across every *.app tenant, so the centralized
+	// validator rejects it even though it is a suffix of the origin host.
+	err := validatePasskeyRP("app", "https://your-app.lovable.app")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
+func TestValidatePasskeyRP_RejectsUnrelatedSuffix(t *testing.T) {
+	err := validatePasskeyRP("other.com", "https://demo.g8e.ai")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
+func TestValidatePasskeyRP_RejectsNonLoopbackHTTPOrigin(t *testing.T) {
+	err := validatePasskeyRP("example.com", "http://example.com")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
+func TestValidatePasskeyRP_RejectsPortBearingRPID(t *testing.T) {
+	// The centralized validator derives the RP ID from the hostname only;
+	// a port-bearing override is never a valid WebAuthn RP ID.
+	err := validatePasskeyRP("demo.g8e.ai:8443", "https://demo.g8e.ai:8443")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
 // --- validateDownstreamURL ---
 
 func TestValidateDownstreamURL_EmptyRejected(t *testing.T) {
@@ -249,6 +287,30 @@ func TestValidateCORSOrigin_RejectsUnsupportedScheme(t *testing.T) {
 
 func TestValidateCORSOrigin_AllowsRootPath(t *testing.T) {
 	assert.NoError(t, validateCORSOrigin("https://console.g8e.ai/"))
+}
+
+// The following tests assert the stricter centralized behavior delegated to
+// browserorigin.Parse. The previous wizard implementation accepted any
+// http origin regardless of host; the centralized parser rejects non-loopback
+// HTTP because a browser origin served over plain HTTP outside loopback is
+// not a secure CORS origin.
+
+func TestValidateCORSOrigin_RejectsNonLoopbackHTTP(t *testing.T) {
+	err := validateCORSOrigin("http://example.com")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
+func TestValidateCORSOrigin_RejectsNonLoopbackHTTPWithPort(t *testing.T) {
+	err := validateCORSOrigin("http://app.lovable.app:3000")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
+func TestValidateCORSOrigin_RejectsIPHost(t *testing.T) {
+	err := validateCORSOrigin("https://192.168.1.10")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
 }
 
 // --- isLoopbackHost ---

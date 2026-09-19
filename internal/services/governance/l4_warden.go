@@ -20,7 +20,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/system"
-	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -558,78 +557,7 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *govtypes.Gove
 }
 
 func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payload []byte) (proto.Message, error) {
-	var msg proto.Message
-	switch actionType {
-	case constants.ActionTypeExecuteBash:
-		msg = &operatorv1.CommandRequested{}
-	case constants.ActionTypeFileEdit:
-		msg = &operatorv1.FileEditRequested{}
-	case constants.ActionTypeRestoreFile:
-		msg = &operatorv1.RestoreFileRequested{}
-	case constants.ActionTypeShutdown:
-		msg = &operatorv1.ShutdownRequested{}
-	case constants.ActionTypeFsList:
-		msg = &operatorv1.FsListRequested{}
-	case constants.ActionTypeFsRead:
-		msg = &operatorv1.FsReadRequested{}
-	case constants.ActionTypeFsGrep:
-		msg = &operatorv1.FsGrepRequested{}
-	case constants.ActionTypePortCheck:
-		msg = &operatorv1.CheckPortRequested{}
-	case constants.ActionTypeFetchLogs:
-		msg = &operatorv1.FetchLogsRequested{}
-	case constants.ActionTypeFetchHistory:
-		msg = &operatorv1.FetchHistoryRequested{}
-	case constants.ActionTypeFetchFileHistory:
-		msg = &operatorv1.FetchFileHistoryRequested{}
-	case constants.ActionTypeEvalAnswer:
-		msg = &operatorv1.EvalAnswerRequested{}
-	case constants.ActionTypeMcpCall:
-		msg = &operatorv1.McpCallRequested{}
-	case constants.ActionTypeA2aCall:
-		msg = &operatorv1.A2ACallRequested{}
-	case constants.ActionTypeMcpResourceRead:
-		msg = &operatorv1.McpResourceReadRequested{}
-	case constants.ActionTypeMcpPromptGet:
-		msg = &operatorv1.McpPromptGetRequested{}
-	case constants.ActionTypeFetchFileDiff:
-		msg = &operatorv1.FetchFileDiffRequested{}
-	case constants.ActionTypeMcpResourceList:
-		msg = &operatorv1.McpResourceListRequested{}
-	case constants.ActionTypeMcpPromptList:
-		msg = &operatorv1.McpPromptListRequested{}
-	case constants.ActionTypeHeartbeat:
-		msg = &operatorv1.HeartbeatRequested{}
-	case constants.ActionTypeCancel:
-		msg = &operatorv1.CommandCancelRequested{}
-	case constants.ActionTypeDocumentUpdate:
-		msg = &operatorv1.DocumentUpdateRequested{}
-	case constants.ActionTypeDocumentDelete:
-		msg = &operatorv1.DocumentDeleteRequested{}
-	case constants.ActionTypePlatformEnrollmentCreate,
-		constants.ActionTypePlatformEnrollmentDecide,
-		constants.ActionTypePlatformEnrollmentIssue,
-		constants.ActionTypePlatformEnrollmentPersistPolicy,
-		constants.ActionTypePlatformEnrollmentCreateSession:
-		// All five platform enrollment actions share the same
-		// PlatformEnrollmentGovernancePayload proto. The action field
-		// inside the payload distinguishes them; L1 doctrine validates
-		// the payload shape and the handler layer enforces per-action
-		// semantics. CSR PEM, token hashes, and private keys are never
-		// placed in the audited envelope payload.
-		msg = &commonv1.PlatformEnrollmentGovernancePayload{}
-
-	default:
-		// Known action type without a typed proto decode case (e.g.
-		// adapter-specific action types). Treat payload as raw bytes.
-		// Unknown action types are rejected before reaching this
-		// function (knownActionTypes check).
-		return nil, nil
-	}
-	if err := proto.Unmarshal(payload, msg); err != nil {
-		return nil, err
-	}
-	return msg, nil
+	return DecodePayloadForAction(actionType, payload)
 }
 
 // computeTransactionHash computes the canonical transaction hash.

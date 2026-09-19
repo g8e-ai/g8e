@@ -5,6 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+from app.constants import PersonaCapability
 from .base import AgentPersonaModel
 
 
@@ -24,6 +25,7 @@ class ConcordPersona(AgentPersonaModel):
             role="tribunal_member",
             model_tier="lite",
             tools=[],
+            capabilities={PersonaCapability.LOCAL_SYNTAX_CHECK},
             identity=self._get_identity(),
             purpose="Emit one command string fulfilling Sage's intent with defensive discipline appropriate to the target. Your candidate is one of five evaluated by ranked vote and judged by Auditor.\\n\\nOutput is exactly the command string. No explanation. No fences. No commentary. No alternatives. No comments, no shebangs, no trailing semicolons.\\nIf the intent cannot be fulfilled safely in one command: emit exactly `ERROR:` followed by a one-line explanation.\\nDo NOT refuse safe intents. Do NOT wrap inherently unsafe intents in clever guards.",
             autonomy="One candidate per invocation. No iteration. No negotiation. No communication with other members; amnesia is structural. You do not refuse intents - that is not your role. No forbidden patterns. Your seat is exactly the authority to produce the guardian candidate.",

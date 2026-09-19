@@ -75,13 +75,11 @@ func TestFileActuatorKeyReader(t *testing.T) {
 }
 
 func TestHandleBootstrapWithURL(t *testing.T) {
-	t.Run("Success - Bootstrap with CSR creates the first real user", func(t *testing.T) {
+	t.Run("Success - Bootstrap with CLI CSR creates the first real user", func(t *testing.T) {
 		c, _ := setupTestBootstrapController(t)
-		csr := testutil.GenerateTestCSRP256(t, "test-operator")
 		cliCsr := testutil.GenerateTestCSRP256(t, "test-cli")
 		body := map[string]string{
 			"name":               "Owner",
-			"csr_pem":            csr,
 			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "test-fp",
 		}
@@ -93,16 +91,15 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 		c.handleLocalBootstrapWithURL(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
-		var resp map[string]interface{}
+		var resp models.BootstrapResponse
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.NotEmpty(t, resp["operator_cert"])
-		assert.NotEmpty(t, resp["operator_cert_chain"])
-		assert.NotEmpty(t, resp["hub_trust_bundle"])
-		assert.NotEmpty(t, resp["operator_session_id"])
-		assert.NotEmpty(t, resp["cli_session_id"])
-		assert.NotEqual(t, resp["operator_session_id"], resp["cli_session_id"],
+		assert.True(t, resp.Success)
+		assert.Equal(t, string(constants.DocIDEmbeddedOperator), resp.OperatorID)
+		assert.NotEmpty(t, resp.OperatorSessionID)
+		assert.NotEmpty(t, resp.CLISessionID)
+		assert.NotEmpty(t, resp.HubTrustBundle)
+		assert.NotEqual(t, resp.OperatorSessionID, resp.CLISessionID,
 			"cli_session_id MUST be a distinct identifier from operator_session_id")
 		// Bootstrap creates exactly one real user (the first human enrollee
 		// and gateway admin). There is no ephemeral bootstrap-user concept.

@@ -31,6 +31,7 @@ var (
 	kernel32                 = windows.NewLazySystemDLL("kernel32.dll")
 	procGetTickCount64       = kernel32.NewProc("GetTickCount64")
 	procGlobalMemoryStatusEx = kernel32.NewProc("GlobalMemoryStatusEx")
+	procGetSystemTimes       = kernel32.NewProc("GetSystemTimes")
 )
 
 const (
@@ -74,9 +75,46 @@ func GetUptimeSeconds() int64 {
 }
 
 func GetCPUPercent() float64 {
-	// Windows CPU monitoring requires more complex API calls
-	// For now, return 0 - full implementation would use GetSystemTimes
-	return 0.0
+	idle1, total1, ok := readSystemCPUTimes()
+	if !ok {
+		return 0.0
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	idle2, total2, ok := readSystemCPUTimes()
+	if !ok {
+		return 0.0
+	}
+
+	totalDiff := total2 - total1
+	if totalDiff == 0 {
+		return 0.0
+	}
+
+	idleDiff := idle2 - idle1
+	cpuUsage := float64(totalDiff-idleDiff) / float64(totalDiff) * 100.0
+	return math.Round(cpuUsage*100) / 100
+}
+
+func readSystemCPUTimes() (idle, total uint64, ok bool) {
+	var idleTime, kernelTime, userTime windows.Filetime
+	ret, _, _ := procGetSystemTimes.Call(
+		uintptr(unsafe.Pointer(&idleTime)),
+		uintptr(unsafe.Pointer(&kernelTime)),
+		uintptr(unsafe.Pointer(&userTime)),
+	)
+	if ret == 0 {
+		return 0, 0, false
+	}
+
+	idle = filetimeToUint64(&idleTime)
+	total = filetimeToUint64(&kernelTime) + filetimeToUint64(&userTime)
+	return idle, total, true
+}
+
+func filetimeToUint64(ft *windows.Filetime) uint64 {
+	return uint64(ft.HighDateTime)<<32 + uint64(ft.LowDateTime)
 }
 
 func GetMemoryPercent() float64 {

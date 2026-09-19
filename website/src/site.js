@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 const menuButton = document.querySelector('.menu-button');
 const pageNav = document.querySelector('.page-nav');
 const progress = document.querySelector('.progress span');

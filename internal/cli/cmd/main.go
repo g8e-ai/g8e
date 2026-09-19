@@ -76,6 +76,7 @@ Run 'g8e tui' to launch the Tactical Governance Console (TUI).`,
 
 	rootCmd.PersistentFlags().StringP("endpoint", "e", "", "Gateway HTTP discovery endpoint (host or host:port) for remote enrollment")
 	rootCmd.PersistentFlags().IntP("port", "p", 0, "Gateway HTTPS/mTLS port (overrides default 8443; use with --endpoint)")
+	rootCmd.PersistentFlags().Bool("json", false, "Emit machine-readable JSON output (pretty-printed)")
 
 	rootCmd.AddCommand(
 		gatewayCmd(),
@@ -88,10 +89,12 @@ Run 'g8e tui' to launch the Tactical Governance Console (TUI).`,
 		dockerCmd(),
 		auditCmd(),
 		reportCmd(),
+		publicCmd(),
 		swaggerCmd(),
 		tuiCmd(),
 		versionCmd(),
 		complianceCmd(),
+		evalCmd(),
 	)
 
 	return rootCmd
@@ -104,14 +107,8 @@ func versionInfoFromCmd(cmd *cobra.Command) serve.VersionInfo {
 	return serve.VersionInfo{}
 }
 
-func ExecuteWithVersionInfo(version, buildID, buildTime, platform string) {
-	vi := serve.VersionInfo{
-		Version:   version,
-		BuildID:   buildID,
-		BuildTime: buildTime,
-		Platform:  platform,
-	}
-	rootCmd := NewRootCmd(version, vi)
+func ExecuteWithVersionInfo(vi serve.VersionInfo) {
+	rootCmd := NewRootCmd(vi.Version, vi)
 	rootCmd.SetVersionTemplate(`{{with .Version}}{{printf "g8e version %s\n" .}}{{end}}`)
 	rootCmd.SetOut(os.Stdout)
 	rootCmd.SetErr(os.Stderr)

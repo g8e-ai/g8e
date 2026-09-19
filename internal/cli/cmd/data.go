@@ -137,7 +137,7 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 			cmd.Printf("Operators (%d total)\n", len(operators))
 			cmd.Println(strings.Repeat("=", 110))
 			for _, op := range operators {
-				cmd.Printf("  %s  %s  %s\n", op.ID, op.CloudSubtype, op.Status)
+				cmd.Printf("  %s  %s  %s\n", op.ID, op.OperatorType, op.Status)
 			}
 
 			return nil

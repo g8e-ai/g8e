@@ -1,0 +1,42 @@
+{
+  "description": "One eval summary with projection_validated verification status. The complete verifier is not implemented; verified is never claimed.",
+  "scenario": "partial-verification",
+  "snapshot": {
+    "agents": [],
+    "downloads": [],
+    "generated_at": "2026-09-09T12:00:00Z",
+    "latest_evals": [
+      {
+        "arm_ids": [
+          "arm-1"
+        ],
+        "campaign_id": "",
+        "completed_at": "2026-09-09T12:00:00Z",
+        "metric_count": 2,
+        "model_cohort_ids": [],
+        "observed_at": "2026-09-09T12:00:00Z",
+        "published_projection_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "receipt_count": 3,
+        "run_id": "eval-001",
+        "schema_version": "1.0.0",
+        "status": "completed",
+        "suite_id": "suite-a",
+        "suite_version": "1.0.0",
+        "verification_status": "projection_validated"
+      }
+    ],
+    "measurements": {
+      "schema_version": "1.0.0"
+    },
+    "overview": {
+      "agents_running": 0,
+      "agents_running_freshness": "observed",
+      "generated_at": "2026-09-09T12:00:00Z",
+      "schema_version": "1.0.0",
+      "tasks_in_queue": 0,
+      "tasks_in_queue_freshness": "observed"
+    },
+    "recent_runs": [],
+    "schema_version": "1.0.0"
+  }
+}

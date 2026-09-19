@@ -37,6 +37,7 @@ const (
 	ActionTypeFsList                          ActionType = "FS_LIST"
 	ActionTypeFsRead                          ActionType = "FS_READ"
 	ActionTypeHeartbeat                       ActionType = "HEARTBEAT"
+	ActionTypeInference                       ActionType = "INFERENCE"
 	ActionTypeMcpCall                         ActionType = "MCP_CALL"
 	ActionTypeMcpPromptGet                    ActionType = "MCP_PROMPT_GET"
 	ActionTypeMcpPromptList                   ActionType = "MCP_PROMPT_LIST"
@@ -48,6 +49,8 @@ const (
 	ActionTypePlatformEnrollmentPersistPolicy ActionType = "PLATFORM_ENROLLMENT_PERSIST_POLICY"
 	ActionTypePlatformEnrollmentCreateSession ActionType = "PLATFORM_ENROLLMENT_CREATE_SESSION"
 	ActionTypePortCheck                       ActionType = "PORT_CHECK"
+	ActionTypeProviderBoundaryObservation     ActionType = "PROVIDER_BOUNDARY_OBSERVATION"
+	ActionTypeModelProvenanceObservation      ActionType = "MODEL_PROVENANCE_OBSERVATION"
 	ActionTypeRestoreFile                     ActionType = "RESTORE_FILE"
 	ActionTypeShutdown                        ActionType = "SHUTDOWN"
 )
@@ -70,6 +73,7 @@ var AllActionTypes = []ActionType{
 	ActionTypeFsList,
 	ActionTypeFsRead,
 	ActionTypeHeartbeat,
+	ActionTypeInference,
 	ActionTypeMcpCall,
 	ActionTypeMcpPromptGet,
 	ActionTypeMcpPromptList,
@@ -81,6 +85,8 @@ var AllActionTypes = []ActionType{
 	ActionTypePlatformEnrollmentPersistPolicy,
 	ActionTypePlatformEnrollmentCreateSession,
 	ActionTypePortCheck,
+	ActionTypeProviderBoundaryObservation,
+	ActionTypeModelProvenanceObservation,
 	ActionTypeRestoreFile,
 	ActionTypeShutdown,
 }
@@ -95,6 +101,7 @@ func (a ActionType) IsMutation() bool {
 		ActionTypeDocumentUpdate,
 		ActionTypeExecuteBash,
 		ActionTypeFileEdit,
+		ActionTypeInference,
 		ActionTypeMcpCall,
 		ActionTypePlatformEnrollmentDecide,
 		ActionTypePlatformEnrollmentIssue,

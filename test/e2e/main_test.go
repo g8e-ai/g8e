@@ -64,13 +64,12 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// preflightHealthCheck performs bounded HTTP GET checks against the gateway,
-// ensemble, and dashboard services. It returns an error if any service is not
-// reachable or does not return 200 within the context deadline.
+// preflightHealthCheck performs a bounded HTTP GET check against the gateway.
+// Individual tests check the additional services required by their topology. It
+// returns an error if the gateway is unreachable or does not return 200.
 func preflightHealthCheck(ctx context.Context, cfg *e2eConfig) error {
 	client := &http.Client{Timeout: healthCheckTimeout}
 
-	// 1. Gateway health
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.gatewayHTTPURL+"/api/v1/health", nil)
 	if err != nil {
 		return fmt.Errorf("build gateway health request: %w", err)
@@ -82,34 +81,6 @@ func preflightHealthCheck(ctx context.Context, cfg *e2eConfig) error {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("gateway health endpoint returned status %d, expected 200", resp.StatusCode)
-	}
-
-	// 2. Ensemble health
-	ensReq, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.ensembleURL+"/health", nil)
-	if err != nil {
-		return fmt.Errorf("build ensemble health request: %w", err)
-	}
-	ensResp, err := client.Do(ensReq)
-	if err != nil {
-		return fmt.Errorf("ensemble not reachable at %s: %w", cfg.ensembleURL, err)
-	}
-	ensResp.Body.Close()
-	if ensResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("ensemble health endpoint returned status %d, expected 200", ensResp.StatusCode)
-	}
-
-	// 3. Dashboard index
-	dashReq, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.dashboardURL+"/", nil)
-	if err != nil {
-		return fmt.Errorf("build dashboard request: %w", err)
-	}
-	dashResp, err := client.Do(dashReq)
-	if err != nil {
-		return fmt.Errorf("dashboard not reachable at %s: %w", cfg.dashboardURL, err)
-	}
-	dashResp.Body.Close()
-	if dashResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("dashboard index returned status %d, expected 200", dashResp.StatusCode)
 	}
 
 	return nil

@@ -32,6 +32,13 @@ from app.models.events import ScrubbingTelemetry
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import G8eeUserSettings
 from app.models.agents import TriageResult
+from app.models.evaluation_trace import (
+    EvaluationControlledRoleAssignment,
+    EvaluationGovernedActionRecord,
+    EvaluationPolicyDecisionRecord,
+    EvaluationToolCallRecord,
+    EvaluationToolDecisionRecord,
+)
 from app.models.command_request_payloads import TargetedOperatorBase
 from app.models.tool_results import (
     TokenUsage,
@@ -128,7 +135,7 @@ class ExecutorCommandArgs(TargetedOperatorBase):
         default=300, description="Maximum seconds to wait for command completion before timing out."
     )
     risk_analysis: CommandRiskAnalysis | None = Field(
-        default=None, description="Risk analysis from Warden (if available)"
+        default=None, description="Risk analysis from Marshal (if available)"
     )
 
 
@@ -144,8 +151,6 @@ class OperatorContext(G8eBaseModel):
     memory_mb: int | None = None
     public_ip: str | None = None
     operator_type: OperatorType | None = None
-    cloud_subtype: str | None = None
-    is_cloud_operator: bool = False
     granted_intents: list[str] | None = None
     distro: str | None = None
     kernel: str | None = None
@@ -200,6 +205,8 @@ class AgentInputs(G8eBaseModel):
     user_memories: list[InvestigationMemory] = Field(default_factory=list)
     case_memories: list[InvestigationMemory] = Field(default_factory=list)
     triage_result: TriageResult | None = None
+    designated_model_role: str | None = None
+    controlled_role_assignment: EvaluationControlledRoleAssignment | None = None
     sentinel_mode: bool = True
     scrubbing_observations: list[ScrubbingTelemetry] = Field(default_factory=list)
     context_sizes: dict[str, int] = Field(default_factory=dict)
@@ -233,9 +240,14 @@ class AgentStreamState(G8eBaseModel):
     grounding_metadata: GroundingMetadata | None = None
     tool_call_count: int = 0
     tool_types_used: list[str] = Field(default_factory=list)
+    tool_decisions: list[EvaluationToolDecisionRecord] = Field(default_factory=list)
+    tool_calls: list[EvaluationToolCallRecord] = Field(default_factory=list)
+    governed_actions: list[EvaluationGovernedActionRecord] = Field(default_factory=list)
+    policy_decisions: list[EvaluationPolicyDecisionRecord] = Field(default_factory=list)
     tool_response_sizes: list[int] = Field(
         default_factory=list, description="Character sizes of individual tool responses"
     )
+    stream_failed: bool = False
 
 
 class StreamChunkData(G8eBaseModel):
@@ -296,6 +308,11 @@ class TurnResult(G8eBaseModel):
     thinking_tokens: int = 0
     cache_tokens: int = 0
     usage_reported: bool = False
+    time_to_first_token_seconds: float | None = None
+    prompt_eval_duration_seconds: float | None = None
+    eval_duration_seconds: float | None = None
+    total_duration_seconds: float | None = None
+    load_duration_seconds: float | None = None
 
 
 class ToolCallResponse(G8eBaseModel):

@@ -29,12 +29,14 @@ from app.errors import BusinessLogicError, ConfigurationError
 from app.constants import (
     ReasoningAgent,
     AITaskId,
+    EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
     EventType,
     LLMProvider,
     TriageComplexityClassification,
     AgentMode,
     OperatorStatus,
 )
+from app.models.model_telemetry import ModelCallTelemetry
 from app.constants.message_sender import MessageSender
 from app.llm import get_llm_provider
 from app.llm.providers.open_ai import OpenAIProvider
@@ -43,6 +45,7 @@ from app.llm.providers.gemini import GeminiProvider
 from app.llm.providers.ollama import OllamaProvider
 from app.llm.providers.llama_cpp import LlamaCppProvider
 from app.llm.providers.fake import FakeProvider
+from app.llm.providers.g8e import G8EProvider
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
 from app.models.http_context import G8eHttpContext, RequestContext
@@ -57,6 +60,13 @@ from app.llm.utils import resolve_model, ModelOverrideResolver
 
 from app.services.infra.event_service import EventService
 from .agent import g8eEnsemble
+from app.services.evaluation.semantic_grader import grade_campaign_assignment_semantically
+from app.services.evaluation.trace_service import EvaluationTraceService
+from app.services.evaluation.role_control import (
+    apply_homogeneous_role_control,
+    resolve_role_outcome,
+    resolve_scored_provider_is_lite,
+)
 from app.services.investigation.investigation_service import (
     extract_all_operators_context,
     InvestigationService,
@@ -92,6 +102,7 @@ class ChatPipelineService:
         memory_service: MemoryDataService,
         memory_generation_service: MemoryGenerationService,
         agent_activity_data_service: AgentActivityDataService,
+        evaluation_trace_service: EvaluationTraceService | None = None,
     ) -> None:
         self.event_service = event_service
         self.investigation_service = investigation_service
@@ -100,6 +111,7 @@ class ChatPipelineService:
         self.memory_service = memory_service
         self.memory_generation_service = memory_generation_service
         self.agent_activity_data_service = agent_activity_data_service
+        self.evaluation_trace_service = evaluation_trace_service or EvaluationTraceService()
         self.triage_agent = TriageAgent()
 
         logger.info("ChatPipelineService initialized")
@@ -151,6 +163,7 @@ class ChatPipelineService:
             LLMProvider.OLLAMA.value: OllamaProvider,
             LLMProvider.LLAMACPP.value: LlamaCppProvider,
             LLMProvider.FAKE.value: FakeProvider,
+            LLMProvider.G8E.value: G8EProvider,
         }
 
         def check_tier(
@@ -319,20 +332,43 @@ class ChatPipelineService:
             attachments=attachments,
             settings=request_settings,
             model_override=model_overrides.for_triage(),
+            g8e_context=g8e_context,
         )
         triage_result = await self.triage_agent.triage(triage_request)
 
-        needs_main_model = triage_result.complexity == TriageComplexityClassification.COMPLEX
+        controlled_routing = None
+        if g8e_context.evaluation_context is not None:
+            controlled_routing = apply_homogeneous_role_control(
+                evaluation_context=g8e_context.evaluation_context,
+                triage_complexity=triage_result.complexity,
+                model_overrides=model_overrides,
+                request_settings=request_settings,
+            )
+            self.evaluation_trace_service.begin(
+                g8e_context,
+                triage_model_call=triage_result.model_call,
+                controlled_role_assignment=(
+                    controlled_routing.controlled_role_assignment
+                    if controlled_routing is not None
+                    else None
+                ),
+            )
 
-        model_to_use = resolve_model(
-            tier="primary" if needs_main_model else "assistant",
-            primary_override=model_overrides.for_main_generation(needs_primary=True),
-            assistant_override=model_overrides.for_main_generation(needs_primary=False),
-            lite_override=None,
-            settings_primary_model=request_settings.llm.resolved_primary_model,
-            settings_assistant_model=request_settings.llm.resolved_assistant_model,
-            settings_lite_model=request_settings.llm.resolved_lite_model,
-        )
+        if controlled_routing is not None:
+            model_to_use = controlled_routing.model_to_use
+            active_agent = controlled_routing.active_agent
+        else:
+            needs_main_model = triage_result.complexity == TriageComplexityClassification.COMPLEX
+            model_to_use = resolve_model(
+                tier="primary" if needs_main_model else "assistant",
+                primary_override=model_overrides.for_main_generation(needs_primary=True),
+                assistant_override=model_overrides.for_main_generation(needs_primary=False),
+                lite_override=None,
+                settings_primary_model=request_settings.llm.resolved_primary_model,
+                settings_assistant_model=request_settings.llm.resolved_assistant_model,
+                settings_lite_model=request_settings.llm.resolved_lite_model,
+            )
+            active_agent = ReasoningAgent.SAGE if needs_main_model else ReasoningAgent.DASH
 
         if not model_to_use:
             raise ConfigurationError(
@@ -384,7 +420,6 @@ class ChatPipelineService:
             logger.warning("Failed to retrieve memories for chat context: %s", e, exc_info=True)
 
         all_operator_contexts = extract_all_operators_context(investigation)
-        active_agent = ReasoningAgent.SAGE if needs_main_model else ReasoningAgent.DASH
         system_instructions, context_sizes = build_modular_system_prompt(
             operator_bound=operator_bound,
             system_context=all_operator_contexts,
@@ -445,6 +480,16 @@ class ChatPipelineService:
             case_memories=case_memories,
             triage_result=triage_result,
             context_sizes=context_sizes,
+            designated_model_role=(
+                controlled_routing.controlled_role_assignment.designated_model_role
+                if controlled_routing is not None
+                else None
+            ),
+            controlled_role_assignment=(
+                controlled_routing.controlled_role_assignment
+                if controlled_routing is not None
+                else None
+            ),
         )
 
     async def _persist_ai_response(
@@ -454,6 +499,7 @@ class ChatPipelineService:
         state: AgentStreamState,
         user_settings: G8eeUserSettings,
         task_manager: BackgroundTaskManager | None = None,
+        memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] | None = None,
     ) -> None:
         """Persist the final AI response and schedule memory update off the response path.
 
@@ -474,6 +520,7 @@ class ChatPipelineService:
         persisted = await self.investigation_service.persist_ai_message(
             investigation_id=g8e_context.investigation_id,
             text=state.response_text,
+            context=RequestContext.from_app_context(g8e_context),
             grounding_metadata=state.grounding_metadata,
             token_usage=state.token_usage,
             sender=sender,
@@ -494,6 +541,8 @@ class ChatPipelineService:
                 user_settings=user_settings,
                 task_manager=task_manager,
                 context=RequestContext.from_app_context(g8e_context),
+                g8e_context=g8e_context,
+                memory_holder=memory_holder,
             )
 
     async def _detect_and_publish_interrogation(
@@ -642,6 +691,8 @@ class ChatPipelineService:
         user_settings: G8eeUserSettings,
         task_manager: BackgroundTaskManager | None,
         context: RequestContext,
+        g8e_context: G8eHttpContext | None = None,
+        memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] | None = None,
     ) -> None:
         """Schedule memory generation as a background task so it never blocks persistence.
 
@@ -655,12 +706,15 @@ class ChatPipelineService:
 
         async def _run_memory_update() -> None:
             try:
-                await self.memory_generation_service.update_memory_from_conversation(
+                _, model_call = await self.memory_generation_service.update_memory_from_conversation(
                     conversation_history=conversation_history,
                     investigation=investigation,
                     settings=user_settings,
                     context=context,
+                    g8e_context=g8e_context,
                 )
+                if memory_holder is not None:
+                    memory_holder["model_call"] = model_call
                 logger.info(
                     "Background memory update completed for investigation %s",
                     investigation_id,
@@ -683,6 +737,8 @@ class ChatPipelineService:
                 )
 
         task = asyncio.create_task(_run_memory_update())
+        if memory_holder is not None:
+            memory_holder["task"] = task
         if task_manager is not None:
             task_manager.track_detached(f"memory:{investigation_id}", task)
         else:
@@ -700,6 +756,88 @@ class ChatPipelineService:
                     )
 
             task.add_done_callback(_log_uncaught)
+
+    async def _finalize_evaluation_assignment(
+        self,
+        g8e_context: G8eHttpContext,
+        inputs: AgentInputs,
+        state: AgentStreamState,
+        memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] | None,
+    ) -> None:
+        if g8e_context.evaluation_context is None:
+            return
+
+        background_calls: list[ModelCallTelemetry] = []
+        memory_task = memory_holder.get("task") if memory_holder else None
+        if memory_task is not None:
+            try:
+                async with asyncio.timeout(EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS):
+                    await memory_task
+            except TimeoutError:
+                logger.warning(
+                    "Evaluation background memory barrier timed out after %.0fs for assignment %s",
+                    EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS,
+                    g8e_context.evaluation_context.assignment_id,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Evaluation background memory barrier failed for assignment %s: %s",
+                    g8e_context.evaluation_context.assignment_id,
+                    exc,
+                    exc_info=True,
+                )
+            model_call = memory_holder.get("model_call") if memory_holder else None
+            if isinstance(model_call, ModelCallTelemetry):
+                background_calls.append(model_call)
+
+        model_calls = list(state.model_calls)
+        model_calls.extend(background_calls)
+
+        role_outcome = None
+        controlled_role_assignment = inputs.controlled_role_assignment
+        if controlled_role_assignment is not None:
+            role_outcome = resolve_role_outcome(
+                controlled_role_assignment.designated_model_role,
+                model_calls,
+            )
+
+        designated_role_output = None
+        if controlled_role_assignment is not None:
+            designated_role_output = (state.response_text or "").strip() or None
+
+        semantic_grades = []
+        grader_calls = []
+        evaluation_context = g8e_context.evaluation_context
+        if (
+            evaluation_context is not None
+            and evaluation_context.grading_method == "semantic_judge"
+            and evaluation_context.gold_summary is not None
+        ):
+            semantic_grades, grader_calls = await grade_campaign_assignment_semantically(
+                evaluation_context=evaluation_context,
+                g8e_context=g8e_context,
+                request_settings=inputs.request_settings,
+                gold_summary=evaluation_context.gold_summary,
+                designated_role_output=designated_role_output,
+                tool_calls=state.tool_calls,
+            )
+
+        self.evaluation_trace_service.finalize(
+            g8e_context,
+            model_calls=model_calls,
+            triage_model_call=inputs.triage_result.model_call if inputs.triage_result else None,
+            controlled_role_assignment=controlled_role_assignment,
+            role_outcome=role_outcome,
+            designated_role_output=designated_role_output,
+            tool_decisions=state.tool_decisions,
+            tool_calls=state.tool_calls,
+            governed_actions=state.governed_actions,
+            policy_decisions=state.policy_decisions,
+            semantic_grades=semantic_grades,
+            grader_calls=grader_calls,
+            finish_reason=state.finish_reason or "stop",
+            status="failed" if state.stream_failed else "completed",
+        )
 
     async def run_chat(
         self,
@@ -973,11 +1111,16 @@ class ChatPipelineService:
         logger.info("[SSE-CHAT] _prepare_chat_context completed successfully")
 
         state = AgentStreamState()
+        memory_holder: dict[str, asyncio.Task[None] | ModelCallTelemetry | None] = {}
 
-        is_lite = (
-            inputs.triage_result.complexity == TriageComplexityClassification.SIMPLE
+        triage_complexity = (
+            inputs.triage_result.complexity
             if inputs.triage_result
-            else False
+            else TriageComplexityClassification.COMPLEX
+        )
+        is_lite = resolve_scored_provider_is_lite(
+            designated_model_role=inputs.designated_model_role,
+            triage_complexity=triage_complexity,
         )
         llm_provider = get_llm_provider(resolved_settings.llm, is_lite=is_lite)
         logger.info(
@@ -1001,6 +1144,7 @@ class ChatPipelineService:
                 await self.investigation_service.persist_ai_message(
                     investigation_id=inputs.investigation_id,
                     text=text,
+                    context=RequestContext.from_app_context(g8e_context),
                     sender=inputs.message_sender,
                 )
                 # Detect and publish clarifying questions from intermediate turns
@@ -1014,6 +1158,7 @@ class ChatPipelineService:
                 event_service=self.event_service,
                 llm_provider=llm_provider,
                 on_iteration_text=_persist_iteration_text,
+                evaluation_trace_service=self.evaluation_trace_service,
             )
             logger.info("[SSE-CHAT] Agent execution completed")
 
@@ -1024,8 +1169,16 @@ class ChatPipelineService:
             g8e_context=g8e_context,
             inputs=inputs,
             state=state,
-            user_settings=user_settings,
+            user_settings=resolved_settings,
             task_manager=task_manager,
+            memory_holder=memory_holder,
+        )
+
+        await self._finalize_evaluation_assignment(
+            g8e_context=g8e_context,
+            inputs=inputs,
+            state=state,
+            memory_holder=memory_holder,
         )
 
         await self._record_agent_activity_metadata(

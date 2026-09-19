@@ -287,8 +287,8 @@ export class TerminalExecutionMixin {
 
         const systemItems = targetSystems.map(sys => {
             const hostname = this.escapeHtml(sys.hostname || 'unknown');
-            const opType = sys.operator_type === 'cloud' ? 'cloud' : 'system';
-            const icon = opType === 'cloud' ? 'cloud' : 'computer';
+            const opType = sys.operator_type === 'embedded' ? 'embedded' : 'remote';
+            const icon = opType === 'embedded' ? 'dns' : 'computer';
 
             return `
                 <div class="operator-terminal__target-system">

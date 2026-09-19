@@ -5,14 +5,16 @@ parent: Architecture
 
 # Dashboard (g8ed)
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 ## Purpose
 
 g8ed is the first-party browser interface for g8e. A Node.js 22 and Express 5 process serves a framework-free JavaScript single-page application. The browser and the dashboard container have separate identities and communicate with different Gateway surfaces.
 
 The current runtime provides static application delivery and browser passkey authentication. It also contains user-interface modules for ensemble chat, Operator management, approvals, audit inspection, settings, and terminal activity, but those modules do not have an active API backend in the running dashboard server.
+
+The audited `g8e-adapter` package at `dashboard/g8e-adapter/` is a separate, generator-neutral integration core for observe frontends. It implements the correct Gateway browser contract (absolute configured origin, `/api/v1/sse/stream`, nested envelope parsing, `withCredentials: true`, endpoint allowlist) and is verified by the adapter Vitest suite (445 passing unit tests at v2.1.8, including contract-pack drift check). The legacy dashboard transport (`dashboard/server.js`, `dashboard/public/js/`, `dashboard/routes/`) is left untouched because the original observability plan explicitly records that the in-tree dashboard has incompatible auth and SSE behavior. See [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) for the audited adapter and contract pack.
 
 See the [Dashboard documentation](../dashboard/index.md) for component-level details and development guidance.
 
@@ -94,4 +96,6 @@ Tests cover browser authentication, event handling and reconnection, static-host
 - [Operator Architecture](./operator.md): Governed host execution and local verification.
 - [Ensemble](./ensemble.md): The first-party ensemble that publishes browser-visible events.
 - [Build a g8e-Compatible Frontend](../guides/build_frontend.md): Browser integration requirements.
+- [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md): The audited g8e-adapter and contract pack for generated observe frontends.
+- [Public Spectator Architecture and Threat Model](./public_spectator.md): The separate anonymous public-mirror observation mode and outbound-only export architecture.
 - [Unified Docker Stack](../guides/unified_stack.md): Full-stack deployment including g8ed.

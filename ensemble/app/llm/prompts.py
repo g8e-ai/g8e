@@ -15,7 +15,6 @@ from typing import Any
 from app.constants import (
     ReasoningAgent,
     FORBIDDEN_COMMAND_PATTERNS,
-    OperatorType,
     PromptFile,
     PromptSection,
 )
@@ -240,12 +239,8 @@ def build_tribunal_operator_context_string(operator_context: OperatorContext | N
         parts.append(f"Working Directory: {operator_context.working_directory}")
     if operator_context.operator_type:
         parts.append(f"Operator Type: {operator_context.operator_type}")
-    if operator_context.is_cloud_operator:
-        parts.append("Cloud Operator: Yes")
-        if operator_context.cloud_subtype:
-            parts.append(f"Cloud Subtype: {operator_context.cloud_subtype}")
-        if operator_context.granted_intents:
-            parts.append(f"Granted Intents: {operator_context.granted_intents}")
+    if operator_context.granted_intents:
+        parts.append(f"Granted Intents: {operator_context.granted_intents}")
     if operator_context.is_container:
         parts.append("Container Environment: Yes")
         if operator_context.container_runtime:
@@ -453,27 +448,9 @@ def _build_system_context_section(
             system_parts.append(f'<operator index="{idx}">')
 
         if ctx.operator_type:
-            if ctx.operator_type == OperatorType.CLOUD:
-                if ctx.cloud_subtype:
-                    system_parts.append(
-                        f"Operator Type: Cloud Operator for {ctx.cloud_subtype.upper()} - Least-privilege intent-based access"
-                    )
-                else:
-                    logger.warning(
-                        "[PROMPT] Cloud operator %s has no cloud_subtype set", ctx.operator_id
-                    )
-                    system_parts.append(
-                        "Operator Type: Cloud Operator - Least-privilege intent-based access"
-                    )
-                granted_intents = ctx.granted_intents or []
-                if granted_intents:
-                    system_parts.append(f"granted_intents: {granted_intents}")
-                else:
-                    system_parts.append(
-                        "granted_intents: [] (bootstrap only - ask permission before using cloud APIs)"
-                    )
-            else:
-                system_parts.append("Operator Type: Operator - Standard system access")
+            system_parts.append(f"Operator Type: {ctx.operator_type}")
+        if ctx.granted_intents:
+            system_parts.append(f"granted_intents: {ctx.granted_intents}")
 
         if ctx.os:
             system_parts.append(f"OS: {ctx.os}")
@@ -506,8 +483,6 @@ def _build_system_context_section(
             "uid",
             "working_directory",
             "operator_type",
-            "cloud_subtype",
-            "is_cloud_operator",
             "granted_intents",
             "is_container",
             "container_runtime",
@@ -595,17 +570,8 @@ def build_modular_system_prompt(
     sections.append(load_prompt(PromptFile.CORE_DISSENT))
     section_labels.append(PromptSection.DISSENT)
 
-    # Determine if any operator is a cloud operator for mode selection
-    is_cloud_operator = False
-    if system_context:
-        if isinstance(system_context, list):
-            is_cloud_operator = any(ctx.is_cloud_operator for ctx in system_context if ctx)
-        else:
-            is_cloud_operator = system_context.is_cloud_operator
-
     mode_prompts = load_mode_prompts(
         operator_bound,
-        is_cloud_operator=is_cloud_operator,
         g8e_web_search_available=g8e_web_search_available,
     )
 

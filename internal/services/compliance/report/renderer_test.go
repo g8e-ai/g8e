@@ -128,7 +128,7 @@ func TestRenderComplianceAnalysis_RejectsInvalidInput(t *testing.T) {
 		ProducerIdentity:   "gateway",
 		ScopeId:            invalidOSCALAnalysis.GetScopeRef(),
 		VerificationStatus: "verified",
-		BundlePath:         constants.EvalRunReceiptsFilename,
+		BundlePath:         constants.EvaluationReportFilename,
 	}}
 	tests := []struct {
 		name     string

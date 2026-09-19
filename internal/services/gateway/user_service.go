@@ -228,6 +228,20 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 	return nil
 }
 
+// FirstUserID returns the user ID of the first human enrollee, who is the
+// gateway owner and admin. Returns an empty string when no users exist.
+func (s *UserService) FirstUserID() (string, error) {
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 0)
+	if err != nil {
+		return "", fmt.Errorf("user service: failed to query users for first-user lookup: %w", err)
+	}
+	if len(docs) == 0 {
+		return "", nil
+	}
+	sort.Slice(docs, func(i, j int) bool { return docs[i].CreatedAt.Before(docs[j].CreatedAt) })
+	return docs[0].ID, nil
+}
+
 // IsFirstUser reports whether the given userID is the first user ever
 // created in the system (the first human enrollee). The first user created
 // via `auth enroll user` is the gateway owner and admin; admin endpoints
@@ -239,15 +253,14 @@ func (s *UserService) IsFirstUser(userID string) (bool, error) {
 	if userID == "" {
 		return false, constants.ErrUserIDRequired
 	}
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 0)
+	firstUserID, err := s.FirstUserID()
 	if err != nil {
-		return false, fmt.Errorf("user service: failed to query users for first-user check: %w", err)
+		return false, err
 	}
-	if len(docs) == 0 {
+	if firstUserID == "" {
 		return false, nil
 	}
-	sort.Slice(docs, func(i, j int) bool { return docs[i].CreatedAt.Before(docs[j].CreatedAt) })
-	return docs[0].ID == userID, nil
+	return firstUserID == userID, nil
 }
 
 func (s *UserService) appendAdminAudit(entry models.AdminAuditEntry) error {

@@ -148,6 +148,7 @@ const (
 	FileExtKey  = ".key"
 	FileExtPEM  = ".pem"
 	FileExtJSON = ".json"
+	FileExtText = ".txt"
 
 	// CA and bundle filenames
 	PkiFileRootCA          = "root_ca.crt"
@@ -235,21 +236,27 @@ const (
 
 // Docker constants for the root unified-stack compose deployment.
 const (
-	DockerComposeFile         = "docker-compose.yml"
-	DockerBootstrappedProfile = "bootstrapped"
-	DockerGatewayContainer    = "g8e-gateway"
-	DockerOperatorContainer   = "g8e-operator"
-	DockerEnsembleContainer   = "ensemble"
-	DockerDashboardContainer  = "dashboard"
-	DockerProjectPrefix       = "g8e"
+	DockerExecutable                 = "docker"
+	DockerComposeFile                = "docker-compose.yml"
+	DockerBootstrappedProfile        = "bootstrapped"
+	DockerCrossEnrollProfile         = "cross-enrollment"
+	DockerEvaluationProfile          = "evaluation"
+	DockerGatewayContainer           = "g8e-gateway"
+	DockerOperatorContainer          = "g8e-operator"
+	DockerEnsembleContainer          = "ensemble"
+	DockerDashboardContainer         = "dashboard"
+	DockerEvaluationObserverService  = "g8e-eval-observer"
+	DockerProjectPrefix              = "g8e"
+	EvaluationTargetContainerDir     = "/tmp"
+	EvaluationTargetFilenamePrefix   = "g8e-eval-"
+	EvaluationObserverTargetEnv      = "G8E_EVAL_TARGET"
+	EvaluationObserverAbsentExitCode = 3
 )
 
 // Demos constants for organization names, doctrine files, and compose config.
 const (
 	DemosDirname                        = "demos"
 	DemosComposeFile                    = "compose.yml"
-	DemosBinDirname                     = "bin"
-	DemosBinaryName                     = "g8e"
 	DemosTargetDataDir                  = "target-data"
 	DemosDoctrineDir                    = "doctrine"
 	DemosPARequestsFile                 = "pa_requests.json"
@@ -360,6 +367,14 @@ const (
 	OperatorPIDFilename     = "operator.pid"
 	OperatorPostureFilename = "operator.posture"
 	OperatorBinaryFilename  = "g8e-operator"
+
+	// Launch profile persisted after every successful managed background
+	// `gw start`. Read by `gw restart` to reconstruct the complete prior
+	// launch configuration (CORS, passkey, ports, posture, downstream
+	// routes, rate limits, doctrine, consensus, vault, cert mode, public
+	// base URL). Ephemeral network identity is re-detected on restart, not
+	// persisted. Stored under .g8e/pids/ alongside the PID file.
+	OperatorLaunchProfileFilename = "operator-launch-profile.json"
 )
 
 // Runtime directory constants for the .g8e/ state tree.
@@ -379,6 +394,24 @@ const (
 	ProtocolModelsDirname    = "models"
 	BinDirname               = "bin"
 	LogDirname               = "logs"
+
+	// Inference directory and model store paths. The model files under
+	// DefaultModelsDir are governed data assets (.gguf files that Ollama
+	// reads); the directory is the canonical path for staged models in
+	// air-gapped deployments.
+	InferenceDirname                        = "inference"
+	InferenceAttemptsDirname                = "attempts"
+	InferenceProviderObserverDirname        = "provider-observer"
+	InferenceProviderObserverWindowsDirname = "windows"
+	InferenceModelProvenanceDirname         = "model-provenance"
+	InferenceModelProvenanceWindowsDirname  = "windows"
+	ModelsDirname                           = "models"
+	InferenceStateFilename                  = "inference-state.json"
+	InferenceModelfilesDirname              = "modelfiles"
+	InferenceManifestFilename               = "inference-manifest.json"
+
+	DefaultInferenceDir = RuntimeDirname + "/" + InferenceDirname
+	DefaultModelsDir    = RuntimeDirname + "/" + InferenceDirname + "/" + ModelsDirname
 
 	// Ledger-specific directory and file names
 	FilesDirname      = "files"
@@ -475,28 +508,42 @@ const (
 	TestTempDirname = ".g8e-test-tmp"
 
 	// Test path constants for gateway config and consensus bootstrap tests
-	TestPathVarLibDataDir                    = "/var/lib/g8e/data"
-	TestPathVarLibPKIDir                     = "/var/lib/g8e/pki"
-	TestPathVarLibSecretsDir                 = "/var/lib/g8e/secrets"
-	TestPathVarLibVaultDir                   = "/var/lib/g8e/vault"
-	TestPathVarLibVaultKey                   = "/var/lib/g8e/vault/key"
-	TestPathEtcNetworkIdentity               = "/etc/g8e/network-identity.json"
-	TestPathShortData                        = "/data"
-	TestPathShortPKI                         = "/pki"
-	TestPathShortSecrets                     = "/secrets"
-	TestPathShortVault                       = "/vault"
-	TestPathShortVaultKey                    = "/vault/key"
-	TestPathIdentityFile                     = "/path/to/identity.json"
-	TestPathIdentityFileShort                = "/path/identity.json"
-	TestPathNonexistentConsensus             = "/nonexistent/path/consensus.json"
-	TestPathNonexistentCatalog               = "/nonexistent/path/ksi-catalog.json"
-	TestPathNonexistentOverlayDir            = "/nonexistent/path/overlays"
-	TestCustomComplianceOutDir               = "custom-compliance-out"
-	TestInvalidJSONFilename                  = "invalid.json"
-	TestOverlaysDirname                      = "test-overlays"
-	TestPathRepoRootFromCompliancePackage    = "../../.."
-	TestDataDirname                          = "testdata"
-	TestEvalSyntheticGovernanceBundleDirname = "governance_adversarial-synthetic-20260906-000000"
+	TestPathVarLibDataDir                 = "/var/lib/g8e/data"
+	TestPathVarLibPKIDir                  = "/var/lib/g8e/pki"
+	TestPathVarLibSecretsDir              = "/var/lib/g8e/secrets"
+	TestPathVarLibVaultDir                = "/var/lib/g8e/vault"
+	TestPathVarLibVaultKey                = "/var/lib/g8e/vault/key"
+	TestPathEtcNetworkIdentity            = "/etc/g8e/network-identity.json"
+	TestPathShortData                     = "/data"
+	TestPathShortPKI                      = "/pki"
+	TestPathShortSecrets                  = "/secrets"
+	TestPathShortVault                    = "/vault"
+	TestPathShortVaultKey                 = "/vault/key"
+	TestPathIdentityFile                  = "/path/to/identity.json"
+	TestPathIdentityFileShort             = "/path/identity.json"
+	TestPathNonexistentConsensus          = "/nonexistent/path/consensus.json"
+	TestPathNonexistentCatalog            = "/nonexistent/path/ksi-catalog.json"
+	TestPathNonexistentOverlayDir         = "/nonexistent/path/overlays"
+	TestCustomComplianceOutDir            = "custom-compliance-out"
+	TestInvalidJSONFilename               = "invalid.json"
+	TestPublicFeedRecordsFilename         = "public-feed-records.jsonl"
+	TestQualificationCandidateFilename    = "qualification-candidate.json"
+	TestPublicLoopEvidenceFilename        = "public-loop-evidence.json"
+	TestOverlaysDirname                   = "test-overlays"
+	TestPathRepoRootFromCompliancePackage = "../../.."
+	TestDataDirname                       = "testdata"
+	TestEvaluationTargetFilename          = "evaluation-target.txt"
+
+	// Source-tree protocol path constants for contract tests in
+	// internal/constants and internal/models. These resolve canonical
+	// protocol JSON files relative to the package directory so tests do not
+	// hand-roll "../../protocol/..." literals.
+	ProtocolSourceTreeRootFromInternalPkg            = "../../"
+	ProtocolEventsJSONFilename                       = "events.json"
+	ProtocolEventDashboardClassificationJSONFilename = "event_dashboard_classification.json"
+	ProtocolObserveAPIJSONFilename                   = "observe_api.json"
+	ProtocolObserveEventPayloadsJSONFilename         = "observe_event_payloads.json"
+	ProtocolPublicFeedJSONFilename                   = "public_feed.json"
 )
 
 // Consensus bootstrap config filename for declarative consensus seeding.
@@ -681,17 +728,19 @@ const (
 	DemoRunMaxArtifactBytes                       = 16 << 20
 	DemoRunMaxResults                             = 1024
 	DemoRunMaxArtifactsPerDirectory               = 4096
-	EvalRunsDirname                               = "eval-runs"
-	EvalRunManifestFilename                       = "manifest.json"
-	EvalRunTasksFilename                          = "tasks.jsonl"
-	EvalRunAttemptsFilename                       = "attempts.jsonl"
-	EvalRunReceiptsFilename                       = "receipts.jsonl"
-	EvalRunStagesFilename                         = "stages.jsonl"
-	EvalRunMetricsFilename                        = "metrics.jsonl"
-	EvalRunEvidenceIndexFilename                  = "evidence-index.jsonl"
-	EvalRunEvidenceDirname                        = "evidence"
-	EvalRunEncryptedSuffix                        = ".enc"
-	EvalRunVerifierID                             = "g8e-eval-bundle-importer"
+	EvaluationDirname                             = "eval"
+	EvaluationCampaignsDirname                    = "campaigns"
+	EvaluationRunsDirname                         = "runs"
+	EvaluationAssignmentsDirname                  = "assignments"
+	EvaluationReportFilename                      = "report.json"
+	EvaluationVerificationFilename                = "verification.json"
+	EvaluationCampaignSpecFilename                = "campaign-spec.json"
+	EvaluationHeterogeneousStackSetFilename       = "heterogeneous-stack-set.json"
+	EvaluationScenarioCatalogFilename             = "scenario-catalog.json"
+	EvaluationRunStateFilename                    = "run.json"
+	EvaluationPublicationStateFilename            = "public-projection-state.json"
+	EvaluationEvidenceDirname                     = "evidence"
+	EvalRunVerifierID                             = "g8e-native-evaluation-verifier"
 	EvalRunVerifierVersion                        = "1.0.0"
 	EvalScopePrefix                               = "eval:"
 	EvalRestrictedEvidenceScope                   = "restricted_evaluation_evidence"
@@ -703,7 +752,11 @@ const (
 	MediaTypeMarkdown                             = "text/markdown; charset=utf-8"
 	MediaTypeHTML                                 = "text/html; charset=utf-8"
 	MediaTypeText                                 = "text/plain; charset=utf-8"
-	EvalRunMaxRecords                             = 4096
+	ObserveEventPayloadSchemaVersion              = "1.0.0"
+	ObserveMeasurementSchemaVersion               = "1.0.0"
+	ObserveAPIReadModelSchemaVersion              = "1.0.0"
+	ObserveDownloadsDirname                       = "observe-downloads"
+	ObserveDownloadArtifactMaxBytes               = 64 << 20
 	EvidenceGraphVerifierID                       = "g8e-evidence-graph-verifier"
 	EvidenceGraphVerifierVersion                  = "1.0.0"
 	EvidenceGraphMaxBytes                         = 64 << 20
@@ -810,4 +863,81 @@ const DemoVersion = "1.0.0"
 // Demo provenance subdirectory names hashed by buildDemoManifest.
 const (
 	DemoConfigDirname = "config"
+)
+
+// Cloudflare Tunnel configuration path constants.
+const (
+	CloudflaredDirname                 = ".cloudflared"
+	CloudflaredConfigFilename          = "config.yml"
+	CloudflaredOriginCertFilename      = "cert.pem"
+	CloudflaredCredentialFileExtension = ".json"
+)
+
+// Supervisor runtime path constants (O1-supervisor: continuous campaign
+// supervisor with hash-linked cycle ledger and persisted spec).
+const (
+	SupervisorDirname        = "supervisor"
+	SupervisorSpecFilename   = "spec.json"
+	SupervisorLedgerFilename = "cycle-ledger.jsonl"
+	SupervisorLockFilename   = "supervisor.lock"
+	SupervisorStateFilename  = "state.json"
+)
+
+// Public feed runtime path constants (O3-public-feed: outbound publisher,
+// signed append-only batches, ordered outbox, and content-addressed proof
+// packages).
+const (
+	PublicLoopTempPrefix           = "g8e-public-loop-"
+	PublicFeedDirname              = "public-feed"
+	PublicFeedOutboxFilename       = "outbox.jsonl"
+	PublicFeedOutboxPath           = "public-feed/outbox.jsonl"
+	PublicFeedSnapshotFilename     = "snapshot.json"
+	PublicFeedSnapshotPath         = "public-feed/snapshot.json"
+	PublicFeedExportConfigFilename = "export-config.json"
+	PublicFeedExportConfigPath     = "public-feed/export-config.json"
+	PublicFeedSigningKeyFilename   = "signing-key.ed25519"
+	PublicFeedSigningKeyPath       = "public-feed/signing-key.ed25519"
+	PublicFeedIngestTokenFilename  = "ingest-token"
+	PublicFeedIngestTokenPath      = "public-feed/ingest-token"
+	PublicFeedKeyRotationFilename  = "key-rotation.json"
+	PublicFeedKeyRotationPath      = "public-feed/key-rotation.json"
+	PublicMirrorDirname            = "public-mirror"
+	PublicMirrorStateFilename      = "state.json"
+	PublicMirrorStatePath          = "public-mirror/state.json"
+	PublicProofsDirname            = "public-proofs"
+	PublicProofCatalogFilename     = "proof-catalog.json"
+	PublicProofManifestFilename    = "proof-manifest.json"
+)
+
+// Public feed schema and protocol version constants.
+const (
+	PublicFeedProtocolVersion         = "1.0.0"
+	PublicFeedSchemaVersion           = "1.0.0"
+	PublicProofManifestSchemaVersion  = "1.0.0"
+	PublicProofCatalogSchemaVersion   = "1.0.0"
+	PublicFeedBatchMaxRecords         = 100
+	PublicFeedBatchMaxBytes           = 4 << 20
+	PublicFeedRetryMaxAttempts        = 5
+	PublicFeedRetryInitialBackoff     = 1
+	PublicFeedRetryMaxBackoff         = 60
+	PublicFeedAckWindowSeconds        = 300
+	PublicFeedMaxArtifactBytes        = 64 << 20
+	PublicFeedProofIngestMaxBytes     = 512 << 20
+	PublicFeedKeyRegistrationMaxBytes = 16 << 10
+	PublicFeedProofMaxArtifacts       = 1000
+	PublicFeedFreshnessDelayedSeconds = 60
+	PublicFeedFreshnessStaleSeconds   = 300
+	PublicFeedFreshnessOfflineSeconds = 900
+	PublicFeedAnonymousRatePerWindow  = 600
+	PublicFeedAnonymousRateWindowSecs = 60
+	PublicFeedAnonymousRateMaxClients = 10000
+	PublicFeedSSEMaxSubscribers       = 1000
+	// Cap SSE backlog replay so reconnects do not resend the full retained feed.
+	PublicFeedSSEReplayMaxRecords = 100
+	// Retain enough batches for a full homogeneous smoke matrix (~2.6k cells
+	// plus lifecycle, result, and aggregate projections) without pruning the
+	// prefix the evaluation explorer replays on cold load.
+	PublicFeedMirrorRetainedBatches = 25000
+	PublicFeedIngestTokenBytes      = 32
+	PublicFeedZeroHashHex           = "0000000000000000000000000000000000000000000000000000000000000000"
 )

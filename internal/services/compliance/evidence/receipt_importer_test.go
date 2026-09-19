@@ -1,3 +1,10 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
 package evidence
 
 import (
@@ -14,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
@@ -328,9 +336,9 @@ func TestPersistenceImporter_Import_RejectsDigestCanonicalAndBindingMutations(t 
 			fixture.persistenceBinding.Reference = ContentReferenceForBody(constants.ReceiptPersistenceReferencePrefix, body)
 		}, targetErr: constants.ErrEvidenceArtifactMalformed},
 		{name: "persistence differs from embedded attestation", mutate: func(t *testing.T, fixture *standaloneReceiptFixture) {
-			attestation := *fixture.receipt.FinalPersistenceAttestation
+			attestation := proto.Clone(fixture.receipt.FinalPersistenceAttestation).(*operatorv1.ReceiptPersistenceAttestation)
 			attestation.AuditRecordId = "other-audit-record"
-			body, err := compliancev1.MarshalCanonical(&attestation)
+			body, err := compliancev1.MarshalCanonical(attestation)
 			require.NoError(t, err)
 			fixture.reader.files[fixture.persistenceBinding.Path] = body
 			fixture.persistenceBinding.Reference = ContentReferenceForBody(constants.ReceiptPersistenceReferencePrefix, body)

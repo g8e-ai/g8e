@@ -1,0 +1,135 @@
+{
+  "files": [
+    {
+      "path": "builder-prompt.md",
+      "sha256": "9c3467f9034090d56746fec8015088a3e245b9d2f32401a82f18a79ea8494305"
+    },
+    {
+      "path": "event-schemas.json",
+      "sha256": "0f573ec57a1c96d5a2e9550fb6a4f30e249cde9b780c460073d262ce318877f2"
+    },
+    {
+      "path": "fixtures/bootstrap.json",
+      "sha256": "fe0b59f4b9cc95229505af27c26b79a544a291d5a46f5d4d0318822db9b10f8b"
+    },
+    {
+      "path": "fixtures/download-availability.json",
+      "sha256": "7b14de0f2c4e8091d688a609a84b15b410b500a22e4905104aa33e17e11381a5"
+    },
+    {
+      "path": "fixtures/empty-evals.json",
+      "sha256": "0d0d74fea2345afe25601e2d9b0c9c4712dcdef05e07e2f2300e5b06ed07bb62"
+    },
+    {
+      "path": "fixtures/live-stream.json",
+      "sha256": "5dc471c43e5f348d8fc559caff8c266ba5478403cb7c0c09d9f3d56c8ce8775a"
+    },
+    {
+      "path": "fixtures/partial-verification.json",
+      "sha256": "755b1bf08416412b6e2733542de49d292981f78b99d2e09d8b6edf7e2f517ab4"
+    },
+    {
+      "path": "fixtures/reconnect.json",
+      "sha256": "377f021d25156a4f12b13d33519cab1d2236984a09a9033e24eadbb4e4e4219f"
+    },
+    {
+      "path": "fixtures/replay-gap.json",
+      "sha256": "c66653e90201397979c177fb16e0f3f24030ba75ba49eb1f16a75c03a51c8766"
+    },
+    {
+      "path": "fixtures/stale-telemetry.json",
+      "sha256": "37ec587ae4b6d2073fd89b614d22fc145f7e25f0ec28618b2b9722a76d88e67f"
+    },
+    {
+      "path": "fixtures/unauthenticated.json",
+      "sha256": "24329be9031f0fb5183ff3cbf45a02ca9f359156f2c92212a1abeffaa04354e4"
+    },
+    {
+      "path": "fixtures/unavailable-metrics.json",
+      "sha256": "02fbcf982dfdf90821d93ff53082227aeb7b588dda35abd73a888b0315d4dcc8"
+    },
+    {
+      "path": "fixtures/wrong-user-rejection.json",
+      "sha256": "b4f6bc7358cfc3e12c62ed341bd268b371471484e9bf9e0823527acd9866d186"
+    },
+    {
+      "path": "models.ts",
+      "sha256": "1a0ceb0aa26891faf0fd9662e88ce6e2b168649b10e925267465fb054de183cf"
+    },
+    {
+      "path": "observe.openapi.json",
+      "sha256": "b4e567bc1753a481792a115221d3d1bcad2a49aa4008ab2e219237ef20d041bc"
+    },
+    {
+      "path": "public/disclosure-matrix.json",
+      "sha256": "b86b4b1fbddf8b40589142fedfbf5de95d6de8cf6356e73507c04e22b9c375bd"
+    },
+    {
+      "path": "public/event-schemas.json",
+      "sha256": "1e23b01756ead0d711c9d2146db0da5c6e329d936d939cd487613910481fd158"
+    },
+    {
+      "path": "public/fixtures/active.json",
+      "sha256": "cb0788440609fb91fc3fc72641edbe6194368cf2ce0cc946fc651a534457f3ab"
+    },
+    {
+      "path": "public/fixtures/delayed.json",
+      "sha256": "1f410f0a4421467c7d823937b6bf5bc470550d5a4e65f9207e1913af90efd541"
+    },
+    {
+      "path": "public/fixtures/intentionally-stopped.json",
+      "sha256": "f949737e4ba788c06c9caae67af4d14f524552f3adc70995efc9ba95b019f5fe"
+    },
+    {
+      "path": "public/fixtures/safety-stopped.json",
+      "sha256": "eacc2e5dd26139706de1935ff36838996b78f2d606716e32a33aaf904828bcfd"
+    },
+    {
+      "path": "public/fixtures/source-offline.json",
+      "sha256": "eada5dd4397f90e1c9ea1768d1346aecef6119188ba38c2845bce5e905f39973"
+    },
+    {
+      "path": "public/fixtures/stale.json",
+      "sha256": "95dff2b2b9d119e82a5f8bfbb7e657e7831f694d35aa1466ebbb59997e04aee7"
+    },
+    {
+      "path": "public/manifest.json",
+      "sha256": "3a19347d7844b011acafab42add08643f4d5aa22399633733fd423f9f6fac939"
+    },
+    {
+      "path": "public/models.ts",
+      "sha256": "4e0eee77766c42110c71a7463e3dc39eab8a6408a48bfc902d5d5cbab70f2b0b"
+    },
+    {
+      "path": "public/offline-verifier.md",
+      "sha256": "ab648a2ca10e547a6e5167d0736b79ff1ac6c94685dc3d0e247e0ec4bbe9db82"
+    },
+    {
+      "path": "public/proof-schemas.json",
+      "sha256": "920fd70cb9164945c45f2faab2f67657157dc3bcc9fc04823cf3fce43329b3aa"
+    },
+    {
+      "path": "public/public-read.openapi.json",
+      "sha256": "d5b436f9e1a70b0a362519b103dcade7da6eea4b04f28e6a38a11693514094c2"
+    },
+    {
+      "path": "public/README.md",
+      "sha256": "90c5db86e3ac81be057930278e207f61a796e75ad0968251b52c00f315a3bad0"
+    },
+    {
+      "path": "public/runtime-config.schema.json",
+      "sha256": "dac454d762353a2bd846e3d2a0f89ef5a270777783acf53700688faf9de82801"
+    },
+    {
+      "path": "README.md",
+      "sha256": "f137d51a6be24341be1b9b87b1a1adcfa99802b98cef523d2a1be7a1d03e5243"
+    },
+    {
+      "path": "runtime-config.schema.json",
+      "sha256": "3b0073517f53987cddc945de9ff6ce6b075d70aa27ba2016ead89d1e366aca8d"
+    }
+  ],
+  "generated_at": "deterministic",
+  "generator": "dashboard/g8e-adapter/generator/gen-contract-pack.mjs",
+  "schema_version": "1.0.0"
+}

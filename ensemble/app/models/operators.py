@@ -33,7 +33,6 @@ from app.constants import (
     ApprovalType,
     AttachmentType,
     CloudIntent,
-    CloudSubtype,
     CommandErrorType,
     ExecutionStatus,
     FileOperation,
@@ -172,20 +171,19 @@ class OperatorDocument(G8eIdentifiableModel):
     api_key: str | None = Field(default=None, description="Operator API key (authority: g8ee)")
     is_active: bool = Field(default=False, description="Whether Operator is in active status")
     operator_type: OperatorType = Field(
-        default=OperatorType.SYSTEM, description="Operator deployment type"
+        default=OperatorType.REMOTE, description="Operator deployment type"
     )
 
     @field_validator("operator_type", mode="before")
     @classmethod
     def coerce_operator_type(cls, v: object) -> OperatorType:
         if v == "" or v is None:
-            return OperatorType.SYSTEM
+            return OperatorType.REMOTE
         return OperatorType(v)
 
     granted_intents: list[str] | None = Field(
-        default=None, description="Granted intent permissions (cloud operators)"
+        default=None, description="Granted intent permissions"
     )
-    cloud_subtype: CloudSubtype | None = Field(default=None, description="Cloud provider subtype")
     current_hostname: str | None = Field(
         default=None,
         description="Denormalized hostname from latest_heartbeat_snapshot for quick access",
@@ -459,10 +457,6 @@ class HeartbeatSnapshot(G8eBaseModel):
         default=None, description="Sub-fields used to compute system_fingerprint"
     )
 
-    # Cloud operator flags
-    is_cloud_operator: bool = Field(
-        default=False, description="True when this is a cloud-hosted operator"
-    )
     cloud_provider: str | None = Field(default=None, description="Cloud provider identifier")
 
     # Operator capability flags
@@ -573,7 +567,6 @@ class HeartbeatSnapshot(G8eBaseModel):
             if payload.fingerprint_details
             else None,
             system_fingerprint=payload.system_fingerprint,
-            is_cloud_operator=False,
             cloud_provider=None,
             local_storage_enabled=payload.capability_flags.local_storage_enabled,
             git_available=payload.capability_flags.git_available,

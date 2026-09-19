@@ -30,7 +30,7 @@ from app.logging import (
     setup_logging,
 )
 from app.models.settings import G8eeAppSettings
-from app.constants.generated_paths import PathConstants, PortConstants
+from app.constants.generated_paths import PortConstants
 
 pytestmark = pytest.mark.unit
 

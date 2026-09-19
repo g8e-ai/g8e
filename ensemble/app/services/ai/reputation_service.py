@@ -78,7 +78,7 @@ proper-scoring rule (GDD §5)."""
 NEMESIS_ID: str = str(ConsensusMember.NEMESIS)
 SAGE_ID: str = "sage"
 AUDITOR_ID: str = "auditor"
-WARDEN_ID: str = "warden"
+MARSHAL_ID: str = "marshal"
 
 # Slash-tier scalar adjustments. The classifier returns a slash tier; these
 # multipliers approximate the GDD §6 stake-loss bands and are applied AFTER
@@ -162,8 +162,8 @@ class ClassifierInputs:
 
     gen_result: CommandGenerationResult
     execution_result: CommandExecutionResult | None = None
-    warden_risk: RiskLevel | None = None
-    warden_blocked: bool = False
+    marshal_risk: RiskLevel | None = None
+    marshal_blocked: bool = False
     extra_agents: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -188,15 +188,15 @@ def _execution_failed(execution_result: CommandExecutionResult | None) -> bool:
 
 def _execution_destructive(
     execution_result: CommandExecutionResult | None,
-    warden_risk: RiskLevel | None,
+    marshal_risk: RiskLevel | None,
 ) -> bool:
-    """True if the executed command was high-risk per warden AND failed.
+    """True if the executed command was high-risk per marshal AND failed.
 
-    Mirrors the GDD §14.5 Tier 1 trigger: ``warden_command_risk = HIGH`` plus a
+    Mirrors the GDD §14.5 Tier 1 trigger: ``marshal_command = HIGH`` plus a
     non-zero damaging exit. We treat any failure (not just a damaging exit
     code, which is unknowable from the platform) as the worst-case proxy.
     """
-    if warden_risk != RiskLevel.HIGH:
+    if marshal_risk != RiskLevel.HIGH:
         return False
     return _execution_failed(execution_result)
 
@@ -221,7 +221,7 @@ def classify_stakes(inputs: ClassifierInputs) -> list[StakeOutcome]:
 
     supporters = _winner_supporters(gen)
     exec_failed = _execution_failed(inputs.execution_result)
-    destructive = _execution_destructive(inputs.execution_result, inputs.warden_risk)
+    destructive = _execution_destructive(inputs.execution_result, inputs.marshal_risk)
 
     rows: list[StakeOutcome] = []
 
@@ -492,101 +492,101 @@ def classify_stakes(inputs: ClassifierInputs) -> list[StakeOutcome]:
             )
 
     # ------------------------------------------------------------------
-    # Warden (defensive coordinator, stakes on accurate risk assessment)
+    # Marshal (defensive coordinator, stakes on accurate risk assessment)
     #
-    # Warden must be careful about what it blocks. Blocking safe operations
+    # Marshal must be careful about what it blocks. Blocking safe operations
     # costs reputation; correctly identifying dangerous operations earns it.
     # ------------------------------------------------------------------
-    warden_risk = inputs.warden_risk
-    warden_blocked = inputs.warden_blocked
+    marshal_risk = inputs.marshal_risk
+    marshal_blocked = inputs.marshal_blocked
     exec_failed = _execution_failed(inputs.execution_result)
 
-    if warden_blocked:
-        # Warden blocked the command. It only earns full credit if the
+    if marshal_blocked:
+        # Marshal blocked the command. It only earns full credit if the
         # risk was genuinely HIGH. Blocking MEDIUM/LOW as HIGH is over-caution.
-        if warden_risk == RiskLevel.HIGH:
+        if marshal_risk == RiskLevel.HIGH:
             # Blocked correctly flagged as HIGH - full credit for caution
             rows.append(
                 StakeOutcome(
-                    agent_id=WARDEN_ID,
+                    agent_id=MARSHAL_ID,
                     outcome_score=0.85,
-                    rationale="warden_blocked_high_risk",
+                    rationale="marshal_blocked_high_risk",
                 )
             )
-        elif warden_risk == RiskLevel.MEDIUM:
+        elif marshal_risk == RiskLevel.MEDIUM:
             # Blocked MEDIUM as too risky - partial credit, borderline over-caution
             rows.append(
                 StakeOutcome(
-                    agent_id=WARDEN_ID,
+                    agent_id=MARSHAL_ID,
                     outcome_score=0.6,
-                    rationale="warden_blocked_medium_risk",
+                    rationale="marshal_blocked_medium_risk",
                 )
             )
         else:
             # Blocked LOW risk command - over-caution, penalize
             rows.append(
                 StakeOutcome(
-                    agent_id=WARDEN_ID,
+                    agent_id=MARSHAL_ID,
                     outcome_score=0.3,
-                    rationale="warden_over_caution_low_risk",
+                    rationale="marshal_over_caution_low_risk",
                     slash_tier=SlashTier.TIER_3,
                 )
             )
-    # Warden allowed the command. Outcome determines if assessment was right.
+    # Marshal allowed the command. Outcome determines if assessment was right.
     elif not exec_failed:
-        # Command succeeded - warden's risk assessment was accurate
-        if warden_risk == RiskLevel.LOW:
+        # Command succeeded - marshal's risk assessment was accurate
+        if marshal_risk == RiskLevel.LOW:
             rows.append(
                 StakeOutcome(
-                    agent_id=WARDEN_ID,
+                    agent_id=MARSHAL_ID,
                     outcome_score=1.0,
-                    rationale="warden_allowed_low_success",
+                    rationale="marshal_allowed_low_success",
                 )
             )
-        elif warden_risk == RiskLevel.MEDIUM:
+        elif marshal_risk == RiskLevel.MEDIUM:
             rows.append(
                 StakeOutcome(
-                    agent_id=WARDEN_ID,
+                    agent_id=MARSHAL_ID,
                     outcome_score=0.9,
-                    rationale="warden_allowed_medium_success",
+                    rationale="marshal_allowed_medium_success",
                 )
             )
         else:
             # HIGH risk allowed but succeeded - borderline under-caution
             rows.append(
                 StakeOutcome(
-                    agent_id=WARDEN_ID,
+                    agent_id=MARSHAL_ID,
                     outcome_score=0.7,
-                    rationale="warden_allowed_high_success",
+                    rationale="marshal_allowed_high_success",
                 )
             )
-    # Command failed - warden should have caught the risk
-    elif warden_risk == RiskLevel.LOW:
-        # LOW risk failed - major miss by warden
+    # Command failed - marshal should have caught the risk
+    elif marshal_risk == RiskLevel.LOW:
+        # LOW risk failed - major miss by marshal
         rows.append(
             StakeOutcome(
-                agent_id=WARDEN_ID,
+                agent_id=MARSHAL_ID,
                 outcome_score=0.1,
-                rationale="warden_low_risk_missed",
+                rationale="marshal_low_risk_missed",
                 slash_tier=SlashTier.TIER_2,
             )
         )
-    elif warden_risk == RiskLevel.MEDIUM:
+    elif marshal_risk == RiskLevel.MEDIUM:
         # MEDIUM risk failed - moderate miss
         rows.append(
             StakeOutcome(
-                agent_id=WARDEN_ID,
+                agent_id=MARSHAL_ID,
                 outcome_score=0.35,
-                rationale="warden_medium_risk_missed",
+                rationale="marshal_medium_risk_missed",
             )
         )
     else:
-        # HIGH risk failed - warden flagged it, auditor/approval failed
+        # HIGH risk failed - marshal flagged it, auditor/approval failed
         rows.append(
             StakeOutcome(
-                agent_id=WARDEN_ID,
+                agent_id=MARSHAL_ID,
                 outcome_score=0.75,
-                rationale="warden_high_risk_flagged_correctly",
+                rationale="marshal_high_risk_flagged_correctly",
             )
         )
 
@@ -646,8 +646,8 @@ class ReputationService:
         investigation_id: str,
         gen_result: CommandGenerationResult,
         execution_result: CommandExecutionResult | None = None,
-        warden_risk: RiskLevel | None = None,
-        warden_blocked: bool = False,
+        marshal_risk: RiskLevel | None = None,
+        marshal_blocked: bool = False,
         extra_agents: tuple[str, ...] = (),
         context: RequestContext,
     ) -> ResolveStakesResult:
@@ -667,8 +667,8 @@ class ReputationService:
             ClassifierInputs(
                 gen_result=gen_result,
                 execution_result=execution_result,
-                warden_risk=warden_risk,
-                warden_blocked=warden_blocked,
+                marshal_risk=marshal_risk,
+                marshal_blocked=marshal_blocked,
                 extra_agents=extra_agents,
             )
         )

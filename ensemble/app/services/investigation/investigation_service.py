@@ -16,7 +16,6 @@ from app.constants import (
     INVESTIGATION_LOOKUP_MAX_RETRIES,
     INVESTIGATION_LOOKUP_RETRY_DELAYS_MS,
     OperatorStatus,
-    OperatorType,
 )
 from app.errors import ExternalServiceError, ResourceNotFoundError
 from app.models.agent import OperatorContext
@@ -35,9 +34,14 @@ from app.models.investigations import (
 from app.models.operators import OperatorDocument
 from app.models.tool_results import TokenUsage
 from app.services.protocols import (
+    EventServiceProtocol,
     InvestigationDataServiceProtocol,
     OperatorDataServiceProtocol,
     MemoryDataServiceProtocol,
+)
+from app.services.observe.payloads import (
+    build_investigation_run_state_request,
+    map_investigation_status_to_run_lifecycle,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,10 +53,12 @@ class InvestigationService:
         investigation_data_service: InvestigationDataServiceProtocol,
         operator_data_service: OperatorDataServiceProtocol,
         memory_data_service: MemoryDataServiceProtocol,
+        event_service: EventServiceProtocol | None = None,
     ):
         self._investigation_data_service = investigation_data_service
         self._operator_data_service = operator_data_service
         self._memory_data_service = memory_data_service
+        self._event_service = event_service
 
     @property
     def investigation_data_service(self) -> InvestigationDataServiceProtocol:
@@ -88,7 +94,11 @@ class InvestigationService:
         request: InvestigationCreateRequest,
     ) -> InvestigationModel:
         """Domain orchestration for creating a new investigation."""
-        return await self.investigation_data_service.create_investigation(request)
+        investigation = await self.investigation_data_service.create_investigation(request)
+        # Push a queued run projection after successful governed creation persistence.
+        # If creation fails, the data service raises before reaching here.
+        await self._push_run_projection(investigation, "queued")
+        return investigation
 
     async def get_investigation_context(
         self,
@@ -376,12 +386,17 @@ class InvestigationService:
             investigation_id, patch, request.context
         )
         logger.info("Updated investigation %s", investigation_id)
+        # Push a run projection after authoritative status persistence.
+        if "status" in changes:
+            run_status = map_investigation_status_to_run_lifecycle(investigation.status)
+            await self._push_run_projection(investigation, run_status)
         return investigation
 
     async def persist_ai_message(
         self,
         investigation_id: str | None,
         text: str,
+        context: RequestContext,
         grounding_metadata: GroundingMetadata | None = None,
         token_usage: TokenUsage | None = None,
         sender: MessageSender = MessageSender.AI_PRIMARY,
@@ -411,7 +426,45 @@ class InvestigationService:
                 grounding_metadata=grounding_metadata,
                 token_usage=token_usage,
             ),
+            context=context,
         )
+
+    async def _push_run_projection(
+        self,
+        investigation: InvestigationModel,
+        status: str,
+    ) -> None:
+        """Best-effort investigation run-state projection push.
+
+        Derives the display name from the disclosure-safe case title only.
+        Routing targets come from the investigation's web_session_id; CLI
+        sessions are not associated with investigation creation. If the
+        event service is not injected or the routing is targetless, the
+        push is skipped. Failures are caught at this boundary and do not
+        abort the primary investigation write.
+        """
+        if self._event_service is None:
+            return
+        request = build_investigation_run_state_request(
+            run_id=investigation.id,
+            display_name=investigation.case_title or "",
+            status=status,
+            user_id=investigation.user_id or "",
+            web_session_id=investigation.web_session_id,
+            cli_session_id=None,
+        )
+        if request is None:
+            return
+        try:
+            await self._event_service.publish_run_state(request)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "observe run-state push failed for investigation %s (non-blocking): %s",
+                investigation.id,
+                exc,
+            )
 
 
 def extract_single_operator_context(op: OperatorDocument) -> OperatorContext:
@@ -449,8 +502,6 @@ def extract_single_operator_context(op: OperatorDocument) -> OperatorContext:
         memory_mb=system_identity.memory_mb if system_identity else None,
         public_ip=network.public_ip if network else None,
         operator_type=op.operator_type,
-        cloud_subtype=op.cloud_subtype,
-        is_cloud_operator=op.operator_type == OperatorType.CLOUD,
         granted_intents=op.granted_intents,
         distro=os_details.distro if os_details else None,
         kernel=os_details.kernel if os_details else None,
@@ -489,7 +540,7 @@ def extract_system_context(
     logger.info(
         "[CONTEXT] Primary operator context: operator_id=%s hostname=%s os=%s "
         "arch=%s memory_mb=%s cpu_count=%s public_ip=%s operator_type=%s "
-        "is_cloud=%s granted_intents=%s username=%s uid=%s shell=%s working_dir=%s",
+        "granted_intents=%s username=%s uid=%s shell=%s working_dir=%s",
         context.operator_id,
         context.hostname,
         context.os,
@@ -498,7 +549,6 @@ def extract_system_context(
         context.cpu_count,
         context.public_ip,
         context.operator_type,
-        context.is_cloud_operator,
         context.granted_intents or [],
         context.username,
         context.uid,
@@ -525,14 +575,13 @@ def extract_all_operators_context(
         context = extract_single_operator_context(operator_doc)
         logger.info(
             "[CONTEXT] Operator[%d] context: operator_id=%s hostname=%s os=%s "
-            "arch=%s operator_type=%s is_cloud=%s granted_intents=%s",
+            "arch=%s operator_type=%s granted_intents=%s",
             len(contexts),
             context.operator_id,
             context.hostname,
             context.os,
             context.architecture,
             context.operator_type,
-            context.is_cloud_operator,
             context.granted_intents or [],
         )
         contexts.append(context)

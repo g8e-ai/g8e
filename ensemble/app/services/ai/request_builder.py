@@ -253,6 +253,7 @@ class AIRequestBuilder:
             max_tokens=max_tokens or settings.llm.llm_max_tokens,
             system_instructions=system_instructions,
             tools=tools,
+            parallel_tool_calls=settings.llm.llm_parallel_tool_calls,
         )
 
     def format_attachment_parts(

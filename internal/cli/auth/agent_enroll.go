@@ -121,7 +121,7 @@ func checkExistingAppCert(fileSvc fs.RuntimeFileService, certFile, agentName str
 	if err != nil {
 		return "", false
 	}
-	if time.Until(cert.NotAfter) < constants.AppCertMinValidity {
+	if time.Until(cert.NotAfter) <= constants.AppCertMinValidity {
 		return "", false
 	}
 	expectedSPIFFE := protocol.NewWorkloadIdentity().AppSPIFFEID(agentName)

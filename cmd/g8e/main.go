@@ -9,17 +9,27 @@ package main
 
 import (
 	clicmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd"
+	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // Version information (set via ldflags during build)
 var (
-	version   string = string(constants.VersionStabilityDev)
-	buildID   string = string(constants.SystemHealthUnknown)
-	buildTime string = string(constants.SystemHealthUnknown)
-	platform  string = string(constants.SystemHealthUnknown)
+	version        string = string(constants.VersionStabilityDev)
+	buildID        string = string(constants.SystemHealthUnknown)
+	buildTime      string = string(constants.SystemHealthUnknown)
+	platform       string = string(constants.SystemHealthUnknown)
+	sourceRevision string = string(constants.SystemHealthUnknown)
+	sourceTreeHash string = string(constants.SystemHealthUnknown)
 )
 
 func main() {
-	clicmd.ExecuteWithVersionInfo(version, buildID, buildTime, platform)
+	clicmd.ExecuteWithVersionInfo(serve.VersionInfo{
+		Version:             version,
+		BuildID:             buildID,
+		BuildTime:           buildTime,
+		Platform:            platform,
+		SourceRevision:      sourceRevision,
+		SourceTreeStateHash: sourceTreeHash,
+	})
 }

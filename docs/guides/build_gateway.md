@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 ---
 
@@ -39,7 +39,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the host binary as `g8e` in the repository root (`g8e.exe` on Windows), a named platform binary and SHA-256 checksum in `bin/`, and a copy at `demos/bin/g8e`. The binary is statically linked with `CGO_ENABLED=0` and has no runtime dependency on the Go toolchain, OpenSSL, or another external library.
+This produces the host binary as `g8e` in the repository root (`g8e.exe` on Windows) and a named platform binary and SHA-256 checksum in `bin/`. The binary is statically linked with `CGO_ENABLED=0` and has no runtime dependency on the Go toolchain, OpenSSL, or another external library.
 
 ### Build Targets
 
@@ -178,7 +178,7 @@ Custom gateway implementations need the g8e Protocol Library for protobuf schema
 The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.7
+go get github.com/g8e-ai/g8e/v2@v2.1.8
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).
@@ -190,7 +190,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For gateway-side tooling, testing, or Python-based services that need to consume protocol constants:
 
 ```bash
-pip install g8e==2.1.7
+pip install g8e==2.1.8
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -349,7 +349,7 @@ Restart the host gateway managed by the CLI:
 ./g8e gw restart
 ```
 
-Restart preserves only the persisted posture. Other startup flags return to their defaults, so stop and start the gateway explicitly when it must retain custom ports, paths, origins, downstream URLs, or consensus bootstrap configuration.
+Restart reads the complete validated launch profile from `.g8e/pids/operator-launch-profile.json`, re-runs network identity detection, and starts the Gateway with the full persisted configuration: posture, ports, CORS origins, passkey settings, downstream URLs, consensus bootstrap configuration, and the rest of the prior launch flags. If the profile is missing or malformed, restart fails closed rather than falling back to defaults. Use `gw stop` followed by `gw start` with explicit flags when you need a different configuration than the last successful background start.
 
 ### Gateway Settings
 
@@ -403,7 +403,7 @@ This command validates local state; it does not authenticate to a remote gateway
 ./g8e auth enroll user -e <gateway-host>
 ```
 
-Operators and other platform workloads submit platform enrollment requests at startup. An enrolled owner reviews and decides those requests with `./g8e auth pending-platform-enrollments` and `./g8e auth approve-platform-enrollment <request-id>`.
+Operators and other platform workloads submit platform enrollment requests at startup. An enrolled owner reviews and decides those requests with `./g8e auth enroll pending`, `./g8e auth enroll approve <request-id>`, or `./g8e auth enroll deny <request-id>`.
 
 ---
 

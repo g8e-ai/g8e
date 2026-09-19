@@ -5,18 +5,16 @@ parent: Guides
 
 # Build a g8e-Compatible Frontend
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 ---
 
 ## Overview
 
-This guide describes how to build a g8e-compatible web UI. It covers gateway configuration, frontend enrollment, WebAuthn authentication, SSE streaming, approval flows, API data types, UI/UX guidelines, and the recommended project structure. It applies to custom React apps, Vue dashboards, vanilla JS consoles, and hosted platforms like Lovable.
+This guide describes how to build a g8e-compatible web UI. It covers gateway configuration, WebAuthn authentication, SSE streaming, approval flows, API data types, UI/UX guidelines, and the recommended project structure. It applies to custom React apps, Vue dashboards, vanilla JS consoles, and hosted platforms like Lovable.
 
-The `g8e auth enroll gui` command family records external frontend origins and generates integration configuration. The `enroll` command validates the origin, verifies the local gateway's CORS response, optionally checks that a public gateway URL is healthy, persists the origin to a local enrollment file, and outputs a TypeScript configuration snippet. It does not configure or restart the gateway, and it does not verify the gateway's passkey RP configuration.
-
-For the minimal local Lovable setup, see [Connect a Lovable App](./lovable.md).
+For the minimal local Lovable setup, see [Connect a Lovable App](./lovable.md). `./g8e gw connect <frontend-origin>` is the guided one-command workflow for connecting a browser-hosted frontend to a local Gateway; the advanced `gw start` flags below remain available for multi-origin and public deployments.
 
 ### Architecture
 
@@ -46,6 +44,8 @@ The g8e Gateway ships with an embedded, single-file vanilla JavaScript console S
 ---
 
 ## Gateway-Side Configuration
+
+The flags below are the advanced interface for multi-origin and public deployments. For a single-origin local frontend, `./g8e gw connect <frontend-origin>` derives these settings automatically; skip this section unless you need multiple origins, a public tunnel, or custom ports.
 
 The gateway starts with CORS and passkey RP settings that match the frontend app's origin. WebAuthn ceremonies execute in the frontend page, so the RP ID is the frontend hostname or a registrable domain suffix of it, not necessarily the gateway hostname. An RP ID contains only a hostname or domain: it never includes a scheme or port. The browser rejects ceremonies when the RP ID is not valid for the page's origin.
 
@@ -96,61 +96,9 @@ The gateway sets a `g8e_web_session_cookie` cookie after successful passkey regi
 
 The cookie has a 24-hour TTL. The gateway validates the cookie on every authenticated request by looking up the session ID in its database and checking expiry.
 
----
+### Third-Party Cookie Blocking
 
-## Frontend Enrollment Commands
-
-### Enroll a Frontend Origin
-
-```bash
-g8e auth enroll gui enroll --origin https://your-app.example.com --passkey-rp-id example.com
-```
-
-Optional flags:
-
-- `--passkey-rp-id` - RP ID written to the generated snippet. Pass this explicitly. When omitted, the command derives it from the parsed URL host, which includes the port for origins such as `http://localhost:3003` and is not a valid WebAuthn RP ID.
-- `--passkey-rp-name` - RP display name written to the generated snippet (default: `g8e`)
-- `--public-base-url` - Gateway base URL written to the generated snippet. The command performs a health check at this URL, but a failed check produces a warning and does not fail enrollment.
-
-These flags affect generated output only. They do not change the running gateway's RP or public URL configuration.
-
-This command:
-
-1. Validates the origin URL
-2. Sends a CORS preflight to the gateway's local plain-HTTP health endpoint on the default gateway port and verifies that the response allows the origin
-3. Checks gateway health at `--public-base-url`, when provided, and warns if the check fails
-4. Persists the origin to the runtime enrollment file (`.g8e/gui_enrollments.json` under the configured runtime root)
-5. Outputs a TypeScript configuration snippet with `API_BASE_URL`, `PASSKEY_RP_ID`, `PASSKEY_RP_NAME`, `apiFetch()` helper, `connectSSE()` helper, and key endpoint paths
-
-Copy the emitted snippet into the frontend project as a starting point, then correct its L3 redirect example to `${API_BASE_URL}/api/v1/approve/${txHash}`. The current generator emits `${API_BASE_URL}/approve/${txHash}`, which is not a registered gateway route.
-
-### Show Enrolled Origins
-
-```bash
-g8e auth enroll gui show
-```
-
-Alias: `g8e auth enroll gui list`. Lists all enrolled origins and regenerates config snippets. Supports `--json` for scripting:
-
-```bash
-g8e auth enroll gui show --json
-```
-
-### Verify Enrollment
-
-```bash
-g8e auth enroll gui verify --origin https://your-app.example.com
-```
-
-Checks whether the origin appears in the local enrollment file and prints URLs, sample commands, and a manual verification checklist. It does not execute the health, CORS, WebAuthn, cookie, SSE, or authenticated-route checks.
-
-### Remove an Origin
-
-```bash
-g8e auth enroll gui remove --origin https://your-app.example.com
-```
-
-Removes an origin from the enrollment file. Does not restart the gateway. The origin remains in the gateway's CORS and passkey RP configuration until the gateway is restarted without the corresponding flags.
+When the frontend and Gateway are cross-site (for example, a hosted frontend at `https://your-app.lovable.app` calling `https://localhost:8443`), the session cookie is `SameSite=None` so the browser sends it cross-origin. Browsers that block third-party cookies reject `SameSite=None` cookies, so authenticated requests return `401` even after a successful passkey login. The Gateway cannot detect or override browser cookie policy. If the browser blocks the cookie, deploy both origins on the same site or proxy Gateway requests through the frontend origin so the cookie is first-party. A tunnel does not guarantee cookie acceptance and is not a universal fix for this limitation. For the same-machine local workflow, `./g8e gw connect` verifies HTTPS and CORS but does not claim to verify cookie acceptance.
 
 ---
 
@@ -444,7 +392,6 @@ Organize the frontend with separate concerns:
 - [ ] **Enrollment token**: Navigate to `#enroll=1&token={token}` and confirm registration uses the token-gated challenge and verify endpoints without first calling `/auth/enrollment-token/validate`.
 - [ ] **URL hash approval**: Navigate to `#approve={txHash}` and confirm auto-approval flow triggers.
 - [ ] **Logout**: Sign out and confirm redirect to login page and cookie cleared.
-- [ ] **Enrollment record**: Run `g8e auth enroll gui verify --origin <url>` to confirm the local enrollment record and print the manual checks; complete the checks above separately.
 
 ---
 
@@ -462,7 +409,7 @@ Organize the frontend with separate concerns:
 ./g8e gw start --cors-origin https://your-app.example.com --passkey-rp-origin https://your-app.example.com
 ```
 
-Then run `g8e auth enroll gui enroll --origin https://your-app.example.com --passkey-rp-id example.com` to verify the local gateway's CORS response and generate a snippet.
+For a guided one-command workflow on a local Gateway, run `./g8e gw connect https://your-app.example.com`, which validates the origin, derives the RP ID, restarts the Gateway with the correct CORS and passkey settings when needed, installs local trust with consent, and verifies HTTPS and CORS against the running process.
 
 ### Passkey RP Mismatch
 
@@ -498,13 +445,89 @@ Then run `g8e auth enroll gui enroll --origin https://your-app.example.com --pas
 
 ---
 
+## Generator-Neutral Observe Frontend
+
+The sections above describe the full browser integration surface for an external frontend that implements approvals, passkey management, and chat. A generator-neutral observe frontend is a narrower surface: a read-only browser dashboard that shows agent and run lifecycle projections, eval summaries, downloads, and a live SSE narrative. It does not implement approvals, chat, tool execution, or any mutation surface. This owner-local observe surface is passkey-authenticated and scoped to the connected user's data. It is separate from the anonymous [Public Spectator](../architecture/public_spectator.md) mirror and evaluation explorer, which publish campaign evidence without credentials. See [Public Spectator Operations Guide](./public_spectator.md) for mirror deployment.
+
+The repository ships an audited adapter and a deterministic contract pack that together let a builder (Lovable, Notion, or other supported SPA builder) generate a deployable observe frontend without reimplementing transport, auth, SSE parsing, or the endpoint allowlist.
+
+### The audited g8e-adapter package
+
+The `dashboard/g8e-adapter/` package is the audited integration core. It owns:
+
+- `FrontendRuntimeConfig` parsing and validation (rejects credentials, tokens, user IDs, session IDs, URL fragments, userinfo, insecure non-loopback HTTP, and unknown fields).
+- A named endpoint allowlist of 20 browser-reachable operations. No generic arbitrary-path request helper is exported to components.
+- Credentialed fetch (`credentials: 'include'` on every request) with absolute configured Gateway origin.
+- WebAuthn registration, authentication, and CLI enrollment ceremonies matching the embedded console contract exactly (unpadded base64url, flat attestation/assertion wire shapes, `options.publicKey` wrapper, returning-user `user_id` requirement, token stripping via `history.replaceState`).
+- SSE normalization: outer push envelope parsing, nested string event parsing, durable ID from `lastEventId`, recognized type/data/version validation, routing ID isolation, bounded deduplication, `truncated` and `replay_failed` sentinel handling.
+- SSE stream (`EventSource` with `withCredentials: true` on the absolute configured `/api/v1/sse/stream`) and polling fallback (`GET /api/v1/sse/events?since_id=&limit=`).
+- Snapshot reconciliation after initial connection, reconnect gap, truncation, replay failure, visibility restoration, and dropped live delivery.
+- Five separate typed stores (auth, projections, narrative, transport, runtime features) with pure reducers.
+- A safe event presentation registry: escaped bounded fields, safe labels, thinking events as phase labels (never raw chain-of-thought), unknown events as bounded diagnostic rows that cannot mutate projections or counters.
+- Explicit loading, empty, stale, unavailable, unsupported, partial-verification, disconnected, unauthenticated, and error view states.
+
+The adapter is verified by 445 unit tests, including the contract-pack drift check. A minimal host (`host/`) exercises the adapter against a real Gateway fixture in browser contract tests. A reference frontend (`reference-ui/`) demonstrates one valid presentation layer that wraps the adapter; it is replaceable and is not the only valid output.
+
+### The deterministic contract pack
+
+The `dashboard/g8e-adapter/contract-pack/` directory contains deterministic, generator-neutral inputs. Regenerate it with `npm run gen:contract-pack` from `dashboard/g8e-adapter/`; verify committed outputs are current with `npm run gen:contract-pack:check`.
+
+Contents:
+
+- `builder-prompt.md` — the prompt to give a builder. Encodes every hard constraint: preserve the adapter boundary, top-level browser only, absolute configured origin, credentials on every request, exact WebAuthn and SSE contracts, allowlisted operations only, isolated design-preview fixtures, unavailable states instead of placeholder values.
+- `runtime-config.schema.json` — JSON Schema for `FrontendRuntimeConfig`.
+- `observe.openapi.json` — curated OpenAPI 3.0 for the 20 allowlisted browser operations. mTLS producer endpoints are excluded.
+- `event-schemas.json` — the four dashboard event payloads plus sentinel events, with family classifications.
+- `models.ts` — standalone TypeScript models and validators derived from protocol JSON.
+- `fixtures/` — 11 typed fixture scenarios (unauthenticated, bootstrap, live-stream, reconnect, replay-gap, empty-evals, partial-verification, stale-telemetry, unavailable-metrics, wrong-user-rejection, download-availability). Every fixture parses through the generated validators.
+- `manifest.json` — schema version and SHA-256 of every output. Detects drift.
+
+Re-running the generator against identical inputs produces byte-identical files. JSON outputs use sorted keys and a fixed 2-space indent.
+
+### Observe API (read-only browser surface)
+
+The observe API is a passkey-scoped, read-only observability surface. Every route requires a validated web session cookie. The middleware stamps `user_id` into context; controllers apply ownership scoping. A browser session can read only its own user's projections, evals, and downloads.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/observe/bootstrap` | Bootstrap snapshot: agents, active run, overview counters, measurements, recent runs, latest evals, downloads |
+| `GET` | `/api/v1/observe/runs?cursor=&limit=` | Paginated run summaries |
+| `GET` | `/api/v1/observe/runs/{run_id}` | Run detail with tasks and evidence-safe links |
+| `GET` | `/api/v1/observe/evals` | Paginated eval summaries |
+| `GET` | `/api/v1/observe/evals/{run_id}` | Eval detail with metrics |
+| `GET` | `/api/v1/observe/downloads` | Paginated download artifacts |
+| `GET` | `/api/v1/observe/downloads/{artifact_id}` | Download artifact detail |
+
+The observe producer endpoints (`POST /api/v1/observe/producer/agent-state` and `POST /api/v1/observe/producer/run-state`) are mTLS-authenticated app-workload-only endpoints. They are never browser-accessible. The g8ee ensemble calls them to report agent and run state changes; the Gateway persists the projection and emits the corresponding `app.agent.status.updated` or `app.run.status.updated` SSE event after successful persistence (persist-before-publish).
+
+### Runtime configuration
+
+The SPA reads its `FrontendRuntimeConfig` from a JSON script tag and validates it with the adapter's `parseRuntimeConfig`. The schema accepts only: schema version, Gateway base URL, RP ID, RP name, app name, optional docs URL, and feature flags. It rejects credentials, tokens, user IDs, session IDs, URL fragments, userinfo, insecure non-loopback HTTP, and unknown fields. Loopback HTTP (`localhost`, `127.0.0.1`, `[::1]`) is accepted for local development.
+
+### Acceptance workflow
+
+1. A builder consumes `builder-prompt.md` plus the models, OpenAPI, event schemas, and fixtures.
+2. The builder generates presentation code that imports the audited g8e-adapter for transport, auth, SSE, and state.
+3. The generated SPA is deployed at a top-level origin.
+4. The owner connects the origin to a local Gateway with `./g8e gw connect <origin>`.
+5. The SPA authenticates with a passkey, reads typed observe data, and renders normalized SSE updates.
+
+The connected page must contain no fixture leakage, fabricated values, dead controls, unsupported claims, or mutation surface. Real-browser acceptance (exact-origin CORS, WebAuthn authenticator, SSE credentials, two-user isolation) is an owner-operated gate.
+
+See [Generator-Neutral Builder Guide](./build_observe_frontend.md) for the runtime capability requirements a builder must satisfy, and the [contract pack README](../../dashboard/g8e-adapter/contract-pack/README.md) for the deterministic generation and acceptance commands.
+
+---
+
 ## See Also
 
 - [Connect a Lovable App](./lovable.md) - Minimal local setup for a browser-hosted Lovable app
+- [Generator-Neutral Builder Guide](./build_observe_frontend.md) - Runtime capability requirements for a generated observe frontend
+- [Public Spectator Operations Guide](./public_spectator.md) - Anonymous campaign mirror deployment and tunnel setup
 - [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) - Expose the gateway via a public tunnel
 - [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
 - [Architecture: Auth](../architecture/auth.md) - WebAuthn passkey authentication architecture
 - [Architecture: Gateway](../architecture/gateway.md) - Gateway service architecture
+- [Architecture: SSE Streaming](../architecture/sse.md) - SSE push ingestion, persistence, replay, and consumer endpoints
 
 ---
 

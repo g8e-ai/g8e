@@ -315,6 +315,8 @@ def make_event_service():
         return await capture_publish(session_event)
 
     svc.publish_reputation_event = AsyncMock(side_effect=capture_publish_reputation)
+    svc.publish_agent_state = AsyncMock()
+    svc.publish_run_state = AsyncMock()
 
     # Store the captured events on the service for test access
     svc._published_events = published_events

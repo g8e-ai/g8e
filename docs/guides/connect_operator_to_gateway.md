@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-19
+Version: v2.1.8
 
 ---
 
@@ -125,16 +125,17 @@ Leave this process running while the owner approves the request. If the process 
 From the enrolled owner CLI, list pending platform enrollment requests:
 
 ```bash
-./g8e auth pending-platform-enrollments --endpoint <gateway-host>
+./g8e auth enroll pending --endpoint <gateway-host>
 ```
 
-Compare the displayed component, hostname, system fingerprint, and Operator and CLI key fingerprints with the requesting Operator's output. Approve the matching request:
+Compare the displayed component, hostname, system fingerprint, and Operator and CLI key fingerprints with the requesting Operator's output. Approve or deny the matching request:
 
 ```bash
-./g8e auth approve-platform-enrollment <request-id> --endpoint <gateway-host>
+./g8e auth enroll approve <request-id> --endpoint <gateway-host>
+./g8e auth enroll deny <request-id> --endpoint <gateway-host>
 ```
 
-The command displays the request details and asks for confirmation. For non-interactive operation after independently validating the request, add `--yes`. To reject a request, use `--deny`; `--reason` attaches an optional decision note.
+Each command displays the request details and asks for confirmation. For non-interactive operation after independently validating the request, add `--yes`. Use `--reason` to attach an optional decision note.
 
 Only a valid, non-revoked CLI identity belonging to the first enrolled owner can approve or deny the request. The Gateway enforces this authorization.
 
@@ -202,7 +203,25 @@ From an enrolled CLI identity:
 ./g8e operator list --endpoint <gateway-host>
 ```
 
-The command lists Operator records associated with the enrolled user, including Operator ID, type, cloud subtype, Operator session ID, and recorded status. Use the Operator process log and the `Channel established - Ready to receive` message as the direct confirmation that the current worker established its pub/sub channel.
+The command lists Operator records associated with the enrolled user, including Operator ID, type, hostname, Operator session ID, and recorded status. Use `g8e operator show <operator-id-or-session-id>` for the latest heartbeat snapshot. Use the Operator process log and the `Channel established - Ready to receive` message as the direct confirmation that the current worker established its pub/sub channel.
+
+### Bind the CLI session and run remote commands
+
+Pin the enrolled CLI to a specific operator session when automation or eval flows need a stable default target:
+
+```bash
+./g8e operator bind <operator-session-id>
+./g8e operator bind list
+```
+
+Execute a governed shell command on one or more active operator sessions in parallel:
+
+```bash
+./g8e operator run <operator-session-id> [<operator-session-id>...] \
+  --cmd "uname -a"
+```
+
+Each target must belong to the authenticated user. Binding changes and `operator run` both require an enrolled CLI identity. See [Build Operator](build_operator.md#operate-remote-operators-from-the-cli) and [Authentication and Authorization](../architecture/auth.md#cli-operator-session-binding).
 
 ### View Gateway Logs
 
@@ -217,7 +236,7 @@ The command lists Operator records associated with the enrolled user, including 
 ./g8e gw stop
 ```
 
-Gateway restart preserves the persisted posture. A running Operator detects a closed pub/sub stream and retries the connection with bounded backoff; supervise the worker so it restarts if its retry limit is exhausted.
+Gateway restart restores the complete validated launch profile written on the last successful `gw start`, including posture, CORS, passkey, port, and service URL settings. Missing or invalid profiles fail closed. A running Operator detects a closed pub/sub stream and retries the connection with bounded backoff; supervise the worker so it restarts if its retry limit is exhausted.
 
 ### Stop the Operator
 
@@ -236,7 +255,7 @@ The Gateway is running but has not been bootstrapped with its first owner. The O
 List requests from the owner CLI:
 
 ```bash
-./g8e auth pending-platform-enrollments --endpoint <gateway-host>
+./g8e auth enroll pending --endpoint <gateway-host>
 ```
 
 Approve the matching request ID after comparing its fingerprints. Restarting the requesting Operator from the same launch directory resumes the persisted request; starting it from another directory creates or uses a different `.g8e/` runtime tree.

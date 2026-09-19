@@ -5,8 +5,8 @@ parent: Architecture
 
 # Ensemble (g8ee)
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 ## Scope
 
@@ -33,7 +33,7 @@ A conversation turn follows this flow:
 1. g8ee authenticates the caller, validates the request context, loads platform and user settings, and reads the relevant case, investigation history, attachments, Operator state, and memories.
 2. Triage classifies the turn. Simple turns use the Dash assistant role, while complex turns use the Sage primary role.
 3. The selected model streams a response and can request tools through a sequential ReAct loop. Tool results return to the model for the next turn until the model stops requesting tools.
-4. A host-command request enters the five-member Tribunal. The members generate candidates independently, the ensemble clusters and votes on the candidates, the optional Auditor checks the selected command, and the application Warden assesses execution risk.
+4. A host-command request enters the five-member Tribunal. The members generate candidates independently, the ensemble clusters and votes on the candidates, the optional Auditor checks the selected command, and Marshal assesses execution risk.
 5. The command passes deterministic command constraints and the g8ee approval workflow. Configured auto-approved commands skip this application prompt only after the command passes the hard safety checks.
 6. g8ee sends a typed `CommandIntent` for each target Operator. The Gateway binds current state, posture, identity, replay controls, and the exact Operator session into a `GovernanceEnvelope`, then relays it to that Operator.
 7. The Operator verifies the envelope and executes an accepted operation through its Actuator. Results return on the session-specific result channel, and g8ee publishes the corresponding client event and returns the result to the model when the tool loop continues.
@@ -41,7 +41,7 @@ A conversation turn follows this flow:
 
 When the model reaches the configured tool-turn limit, g8ee requests an explicit continuation decision. Approval resets the turn counter, while denial stops the loop. Clarification questions similarly pause progress until the caller answers, skips, or times out.
 
-See [g8ee Agents](../ensemble/agents.md) for the persona roster, Tribunal stages, and application Warden behavior.
+See [g8ee Agents](../ensemble/agents.md) for the persona roster, Tribunal stages, and Marshal behavior.
 
 ## Governance Paths
 
@@ -57,7 +57,7 @@ The command relay does not obtain missing protocol L2 votes or L3 authorization 
 
 For designated application records, g8ee constructs a canonical `GovernanceEnvelope`, binds the current state root, identity, nonce, expiry, and typed payload into its transaction hash, and submits it to the Gateway's privileged governance surface. The unified deployment uses the Operator certificate only for this transport because app certificates cannot access the privileged route. Other Gateway traffic continues to use the g8ee app identity.
 
-The Gateway binds the envelope to the authenticated Operator identity, supplies the active posture when the client leaves it unset, and verifies the envelope through its local Warden and Actuator. This route also does not create missing L2 votes or human L3 authorization. A certificate fingerprint is transport evidence and does not replace a posture-required WebAuthn or signed CLI proof.
+The Gateway binds the envelope to the authenticated Operator identity, supplies the active posture when the client leaves it unset, and verifies the envelope through its local L4 Warden and L5 Actuator. This route also does not create missing L2 votes or human L3 authorization. A certificate fingerprint is transport evidence and does not replace a posture-required WebAuthn or signed CLI proof.
 
 ## Five-Layer Interlock
 
@@ -87,14 +87,14 @@ g8ee owns conversation history, cases, investigations, generated memories, attac
 
 Each model call records provider and model identity, monotonic timing, provider-reported token usage when available, retry and finish metadata, canonical input and output hashes, and a hash-bound privacy attestation. The analytical telemetry stores scanner identity, sensitive-occurrence counts, and detected types rather than the detected values. Conversation content, attachments, prompts, and model outputs remain application data and can contain user-supplied or sensitive content.
 
-The standalone evaluation package consumes normalized model telemetry and governance receipt evidence but is not part of the running g8ee service. See [Evals](../ensemble/evals.md) for evidence collection and verification, and [Ensemble Tests](../ensemble/tests.md) for the Python test tiers and commands.
+The native Go evaluator runs independently of g8ee and does not consume application model telemetry. See [Evaluations](./evals.md) for platform evidence collection and verification (including Observer and Provenance Operator witness roles), [Model Provenance](./model-provenance.md) for storage-side weight attestation, [Ensemble Evaluations](../ensemble/evals.md) for how g8ee uses those programs, and [Ensemble Tests](../ensemble/tests.md) for the Python application test tiers and commands.
 
 ## Security Properties and Limits
 
 - g8ee does not open a management path to a target host. Host operations execute only through the bound Operator.
 - The Gateway binds a relayed command to an exact Operator and session instead of broadcasting it.
 - The target Operator independently applies L1 through L4 before L5 execution, even though g8ee generated the intent.
-- Tribunal agreement, Auditor approval, reputation, and application Warden output remain advisory to protocol governance.
+- Tribunal agreement, Auditor approval, reputation, and Marshal output remain advisory to protocol governance.
 - Application approval and auto-approval do not satisfy protocol L3.
 - Direct-envelope and command-relay paths fail when the active posture requires proofs they do not supply.
 - SSE events report progress and outcomes but do not authorize execution or alter the governance state root.
@@ -107,6 +107,6 @@ The standalone evaluation package consumes normalized model telemetry and govern
 - [Operator Architecture](./operator.md): Remote Operator verification, execution, results, and audit.
 - [SSE Streaming](./sse.md): Approval and application event delivery.
 - [Authentication and Authorization](./auth.md): Workload identities, platform enrollment, and human authorization.
-- [g8ee Agents](../ensemble/agents.md): Triage, Dash, Sage, Tribunal, Auditor, Warden, and support agents.
+- [g8ee Agents](../ensemble/agents.md): Triage, Dash, Sage, Tribunal, Auditor, Marshal, and support agents.
 - [Build Apps](../guides/build_apps.md): Public integration and enrollment choices for third-party applications.
 - [Unified Docker Stack](../guides/unified_stack.md): Deployment and startup workflow for Gateway, Operator, dashboard, and g8ee.

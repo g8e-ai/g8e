@@ -94,6 +94,7 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 	cliSessionID := envelope.GetCliSessionId()
 	operatorSessionID := envelope.GetOperatorSessionId()
 	operatorID := envelope.GetOperatorId()
+	actingAppID := envelope.GetActingAppId()
 	sourceComponent := envelope.GetSourceComponent()
 	actionType := constants.ActionType(envelope.GetActionType())
 
@@ -143,11 +144,11 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 			}
 		}
 
-		// App workload match — only AGENT and CLIENT components use operator_id-based
-		// app SPIFFE identities. CLI/operator sessions are matched above via
-		// session-based auth, so they are not eligible for app matching.
-		if operatorID != "" && isAppComponent(sourceComponent) {
-			if wid.MatchesApp(spiffeID, operatorID) {
+		// App workload match — AGENT and CLIENT certificates bind to acting_app_id.
+		// The operator fields identify delegated human authority and need not equal
+		// the app identity. CLI/operator sessions are matched above.
+		if actingAppID != "" && isAppComponent(sourceComponent) {
+			if wid.MatchesApp(spiffeID, actingAppID) {
 				return nil
 			}
 		}
@@ -316,6 +317,7 @@ func classifyEnvelopeError(err error) int {
 		errors.Is(err, constants.ErrTxL2DuplicateSigner),
 		errors.Is(err, constants.ErrTxL3ProofMissing),
 		errors.Is(err, constants.ErrTxL3ProofInvalid),
+		errors.Is(err, constants.ErrTxL3ProofUnmintable),
 		errors.Is(err, constants.ErrTxL3NotaryNotConfigured),
 		errors.Is(err, constants.ErrTxInFlight):
 		return http.StatusForbidden

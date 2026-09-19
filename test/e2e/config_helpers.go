@@ -77,5 +77,14 @@ func validateCredentials(creds *auth.Credentials) error {
 	if creds.CLISessionID == "" {
 		return fmt.Errorf("credentials missing cli_session_id")
 	}
+	if creds.UserID == "" {
+		return fmt.Errorf("credentials missing user_id")
+	}
+	if creds.OperatorID == "" {
+		return fmt.Errorf("credentials missing operator_id")
+	}
+	if creds.OperatorSessionID == "" {
+		return fmt.Errorf("credentials missing operator_session_id")
+	}
 	return nil
 }

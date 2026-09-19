@@ -1,7 +1,7 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 This guide covers common contributor setup, build, test, Gateway, authentication, governance, and local deployment failures. Run the commands from the repository root unless a section says otherwise. See the [Getting Started guide](../guides/getting_started.md) for the supported setup sequence, the [Code Map](codemap.md) for implementation ownership, and the [Documentation Guide](docs.md) for the standards used to maintain this page.
 
@@ -37,7 +37,7 @@ On Unix-like systems, restore execute permission if the file exists but the shel
 chmod +x g8e
 ```
 
-`make build` compiles `cmd/g8e`, writes the platform binary under `bin/`, copies it to the repository root, and copies it into `demos/bin/`. The target uses `sha256sum` for the checksum and `pgrep` to detect a running host Gateway. Install compatible commands or use the owning platform build script when either is unavailable. Stop a running host Gateway before rebuilding if the target reports that it cannot replace the binary.
+`make build` compiles `cmd/g8e`, writes the platform binary under `bin/`, and copies it to the repository root. The target uses `sha256sum` for the checksum and `pgrep` to detect a running host Gateway. Install compatible commands or use the owning platform build script when either is unavailable. Stop a running host Gateway before rebuilding if the target reports that it cannot replace the binary.
 
 ### A Make target cannot find `curl`
 
@@ -103,16 +103,17 @@ The plain-HTTP surface serves health, state binding, CA discovery, bootstrap, re
 
 Missing `--consensus-id`, a missing policy, or a disabled policy does not currently stop the Gateway. Startup logs a warning, and L2-gated transactions fail closed at verification time until the policy and trusted signers exist. Check the active posture, consensus ID, policy, signer registration, and quorum rather than treating process health as proof that L2 is configured. See [Governance](../architecture/governance.md) for the canonical posture and enrollment flow.
 
-### Restart does not preserve a non-default posture
+### `gw restart` fails closed without a launch profile
 
-The current `gw restart` path stops the managed process before reading the persisted posture, and stopping removes the posture file. As a result, restart falls back to `doctrine`. Restart a non-doctrine Gateway explicitly:
+Every successful background `gw start` writes the complete validated Gateway configuration to `.g8e/pids/operator-launch-profile.json`. `gw restart` reads that launch profile, re-runs network identity detection, and starts the child with the full persisted configuration, including posture, ports, CORS origins, passkey settings, downstream URLs, and consensus bootstrap configuration.
+
+If the launch profile is missing, malformed, unknown-version, or invalid, restart fails closed with a typed error instead of falling back to doctrine defaults. Recover by starting explicitly with the required flags:
 
 ```bash
-./g8e gw stop
-./g8e gw start --posture consensus --consensus-id <consensus-id>
+./g8e gw start --posture consensus --consensus-id <consensus-id> [other flags]
 ```
 
-Include the other startup flags required by the deployment. Do not rely on `gw restart` to preserve custom ports, CORS origins, passkey settings, downstream URLs, or consensus bootstrap configuration.
+A successful start writes a fresh launch profile for the next restart.
 
 ### `gw reset` and `gw clean` are destructive
 

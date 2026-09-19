@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 
@@ -722,6 +723,40 @@ func TestDeterministicStageActionType_RequiresOneConsistentActionType(t *testing
 			}
 			require.NoError(t, err)
 			assert.Equal(t, test.expected, actionType)
+		})
+	}
+}
+
+func TestClassifyReceiptFailure_MapsTypedSentinelsToCodes(t *testing.T) {
+	tests := []struct {
+		name    string
+		execErr error
+		want    operatorv1.ReceiptFailureCode
+	}{
+		{name: "nil error is unspecified", execErr: nil, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED},
+		{name: "model override denied", execErr: constants.ErrInferenceModelOverrideDenied, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED},
+		{name: "role invalid", execErr: constants.ErrInferenceRoleInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_ROLE_INVALID},
+		{name: "model ref invalid", execErr: constants.ErrInferenceModelRefInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REF_INVALID},
+		{name: "backend unavailable", execErr: constants.ErrInferenceBackendUnavailable, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE},
+		{name: "backend not registered", execErr: constants.ErrInferenceBackendNotRegistered, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE},
+		{name: "backend timeout", execErr: constants.ErrInferenceBackendTimeout, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT},
+		{name: "generate failed", execErr: constants.ErrInferenceGenerateFailed, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATE_FAILED},
+		{name: "model not found", execErr: constants.ErrInferenceModelNotFound, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND},
+		{name: "provider response invalid", execErr: constants.ErrInferenceProviderResponseInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID},
+		{name: "generation options invalid", execErr: constants.ErrInferenceGenerationOptionsInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID},
+		{name: "capability unsupported", execErr: constants.ErrInferenceCapabilityUnsupported, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED},
+		{name: "provider attempt required", execErr: constants.ErrInferenceProviderAttemptRequired, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED},
+		{name: "identity mismatch", execErr: constants.ErrInferenceIdentityMismatch, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH},
+		{name: "model digest mismatch", execErr: constants.ErrInferenceModelDigestMismatch, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH},
+		{name: "evidence hash invalid", execErr: constants.ErrInferenceEvidenceHashInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID},
+		{name: "model registry invalid", execErr: constants.ErrInferenceModelRegistryInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID},
+		{name: "campaign binding invalid", execErr: constants.ErrInferenceCampaignBindingInvalid, want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID},
+		{name: "untyped error is generic execution failure", execErr: errors.New("boom"), want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED},
+		{name: "wrapped sentinel still classifies", execErr: fmt.Errorf("inference handler: %w", constants.ErrInferenceModelNotFound), want: operatorv1.ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, classifyReceiptFailure(test.execErr))
 		})
 	}
 }

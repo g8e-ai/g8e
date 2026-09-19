@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>g8e Observe</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <header role="banner" class="site-header">
+    <h1>g8e Observe</h1>
+    <button id="watch-live" type="button" class="watch-live-btn" aria-label="Focus the live narrative stream">Watch Live</button>
+  </header>
+  <nav role="navigation" aria-label="Sections" class="section-nav">
+    <ul>
+      <li><a href="#auth">Authentication</a></li>
+      <li><a href="#connection">Connection</a></li>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#measurements">Measurements</a></li>
+      <li><a href="#agents">Agents</a></li>
+      <li><a href="#runs">Runs</a></li>
+      <li><a href="#evals">Evals</a></li>
+      <li><a href="#downloads">Downloads</a></li>
+      <li><a href="#narrative">Live narrative</a></li>
+    </ul>
+  </nav>
+  <main id="main-content" role="main" tabindex="-1">
+    <section class="state-loading" role="status" aria-live="polite"><p>Loading…</p></section>
+  </main>
+  <div id="connection-live" aria-live="polite"></div>
+  <script id="g8e-runtime-config" type="application/json">{"schema_version":"1.0.0","gateway_base_url":"https://localhost:8443","passkey_rp_id":"localhost","passkey_rp_name":"g8e Observe","app_name":"g8e Observe"}</script>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

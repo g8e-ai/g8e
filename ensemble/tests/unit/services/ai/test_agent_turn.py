@@ -156,6 +156,53 @@ class TestHandleUsageChunk:
         assert state.total_tokens == 0
         assert state.usage_reported is False
 
+    def test_propagates_provider_timing_fields(self):
+        """Provider-native durations and TTFT propagate onto TurnState."""
+        state = TurnState()
+        chunk = types.StreamChunkFromModel(
+            usage_metadata=UsageMetadata(
+                prompt_token_count=10,
+                candidates_token_count=5,
+                total_token_count=15,
+                usage_reported=True,
+                time_to_first_token_seconds=0.4,
+                prompt_eval_duration_seconds=0.01,
+                eval_duration_seconds=0.04,
+                total_duration_seconds=0.052,
+                load_duration_seconds=0.002,
+            )
+        )
+
+        handle_usage_chunk(chunk, state)
+
+        assert state.time_to_first_token_seconds == 0.4
+        assert state.prompt_eval_duration_seconds == 0.01
+        assert state.eval_duration_seconds == 0.04
+        assert state.total_duration_seconds == 0.052
+        assert state.load_duration_seconds == 0.002
+
+    def test_none_timing_fields_do_not_overwrite_earlier_values(self):
+        """A later usage chunk without timing fields keeps earlier values."""
+        state = TurnState()
+        chunk1 = types.StreamChunkFromModel(
+            usage_metadata=UsageMetadata(
+                time_to_first_token_seconds=0.4,
+                eval_duration_seconds=0.04,
+            )
+        )
+        chunk2 = types.StreamChunkFromModel(
+            usage_metadata=UsageMetadata(prompt_token_count=10)
+        )
+
+        handle_usage_chunk(chunk1, state)
+        handle_usage_chunk(chunk2, state)
+
+        assert state.time_to_first_token_seconds == 0.4
+        assert state.eval_duration_seconds == 0.04
+        assert state.prompt_eval_duration_seconds is None
+        assert state.total_duration_seconds is None
+        assert state.load_duration_seconds is None
+
 
 class TestHandleFinishReasonChunk:
     """Test handle_finish_reason_chunk normalization."""
@@ -484,6 +531,38 @@ class TestProcessProviderTurn:
         assert result_out[0].input_tokens == 15
         assert result_out[0].output_tokens == 10
         assert result_out[0].total_tokens == 25
+
+    @pytest.mark.asyncio
+    async def test_turn_result_carries_provider_timing_fields(self):
+        """Timing fields observed on usage chunks land on TurnResult."""
+
+        async def stream():
+            yield types.StreamChunkFromModel(text="hello ", thought=False)
+            yield types.StreamChunkFromModel(
+                finish_reason="stop",
+                usage_metadata=UsageMetadata(
+                    prompt_token_count=10,
+                    candidates_token_count=5,
+                    total_token_count=15,
+                    usage_reported=True,
+                    time_to_first_token_seconds=0.4,
+                    prompt_eval_duration_seconds=0.01,
+                    eval_duration_seconds=0.04,
+                    total_duration_seconds=0.052,
+                    load_duration_seconds=0.002,
+                ),
+            )
+
+        result_out = []
+        async for _ in process_provider_turn(stream(), "test-model", result_out):
+            pass
+
+        result = result_out[0]
+        assert result.time_to_first_token_seconds == 0.4
+        assert result.prompt_eval_duration_seconds == 0.01
+        assert result.eval_duration_seconds == 0.04
+        assert result.total_duration_seconds == 0.052
+        assert result.load_duration_seconds == 0.002
 
     @pytest.mark.asyncio
     async def test_thinking_flush_on_stream_end(self):

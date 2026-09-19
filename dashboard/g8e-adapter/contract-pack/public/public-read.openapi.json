@@ -1,0 +1,640 @@
+{
+  "components": {
+    "schemas": {
+      "PublicFeedBatch": {
+        "$ref": "#/x-models/public_feed_batch"
+      },
+      "PublicFeedBootstrap": {
+        "$ref": "#/x-models/public_feed_bootstrap"
+      },
+      "PublicFeedCursorPage": {
+        "$ref": "#/x-models/public_feed_cursor_page"
+      },
+      "PublicFeedRecord": {
+        "$ref": "#/x-models/public_feed_record"
+      },
+      "PublicFeedSnapshot": {
+        "$ref": "#/x-models/public_feed_snapshot"
+      },
+      "PublicProofCatalog": {
+        "$ref": "#/x-models/public_proof_catalog"
+      },
+      "PublicProofCatalogEntry": {
+        "$ref": "#/x-models/public_proof_catalog_entry"
+      },
+      "PublicProofCatalogSummary": {
+        "$ref": "#/x-models/public_proof_catalog_summary"
+      },
+      "PublicProofManifest": {
+        "$ref": "#/x-models/public_proof_manifest"
+      }
+    }
+  },
+  "info": {
+    "description": "Anonymous bounded read-only public mirror API.",
+    "title": "g8e Public Spectator Read API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/bootstrap": {
+      "get": {
+        "operationId": "public_bootstrap",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicFeedBootstrap"
+                }
+              }
+            },
+            "description": "Bounded initial state"
+          }
+        }
+      }
+    },
+    "/history": {
+      "get": {
+        "operationId": "public_history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicFeedCursorPage"
+                }
+              }
+            },
+            "description": "Bounded history page"
+          }
+        }
+      }
+    },
+    "/proof-catalog": {
+      "get": {
+        "operationId": "public_proof_catalog",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicProofCatalog"
+                }
+              }
+            },
+            "description": "Public-safe proof catalog"
+          }
+        }
+      }
+    },
+    "/proof-manifest": {
+      "get": {
+        "operationId": "public_proof_manifest",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicProofManifest"
+                }
+              }
+            },
+            "description": "Signed public proof manifest"
+          }
+        }
+      }
+    },
+    "/proofs/{artifact_id}": {
+      "get": {
+        "operationId": "public_proof_download",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Content-addressed public-safe proof bytes"
+          }
+        }
+      }
+    },
+    "/snapshot": {
+      "get": {
+        "operationId": "public_snapshot",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicFeedSnapshot"
+                }
+              }
+            },
+            "description": "Current feed position"
+          }
+        }
+      }
+    },
+    "/stream": {
+      "get": {
+        "operationId": "public_stream",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since_id",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Replayable public event stream"
+          }
+        }
+      }
+    }
+  },
+  "x-models": {
+    "public_feed_batch": {
+      "_description": "A signed append-only batch binding source, protocol version, schema version, monotonic sequence range, prior-batch hash, record hashes, generated time, content hash, signing key ID, and Ed25519 signature. The first batch carries a fixed zero hash for previous_batch_hash. The mirror rejects any batch whose first sequence is less than or equal to the last accepted sequence.",
+      "content_hash": {
+        "description": "SHA-256 over the canonical encoding of all record hashes and batch metadata (64-char hex)",
+        "required": true,
+        "type": "string"
+      },
+      "first_sequence": {
+        "description": "Monotonic sequence number of the first record in the batch",
+        "required": true,
+        "type": "integer"
+      },
+      "generated_at": {
+        "description": "UTC timestamp when the batch was produced",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "last_sequence": {
+        "description": "Monotonic sequence number of the last record in the batch",
+        "required": true,
+        "type": "integer"
+      },
+      "previous_batch_hash": {
+        "description": "SHA-256 of the previous accepted batch. The first batch carries a fixed zero hash (64-char hex of 32 zero bytes).",
+        "required": true,
+        "type": "string"
+      },
+      "protocol_version": {
+        "description": "Public feed protocol version",
+        "required": true,
+        "type": "string"
+      },
+      "record_hashes": {
+        "description": "SHA-256 of each record in the batch, in order",
+        "items": "string",
+        "required": true,
+        "type": "array"
+      },
+      "records": {
+        "description": "Records in this batch, in sequence order",
+        "items": "public_feed_record",
+        "required": true,
+        "type": "array"
+      },
+      "schema_version": {
+        "description": "Projection schema version",
+        "required": true,
+        "type": "string"
+      },
+      "signature": {
+        "description": "Ed25519 signature over the content hash, hex-encoded",
+        "required": true,
+        "type": "string"
+      },
+      "signing_key_id": {
+        "description": "Identifier of the signing key used to produce the signature",
+        "required": true,
+        "type": "string"
+      },
+      "source_id": {
+        "description": "Pseudonymous source deployment identifier. Not the real hostname, IP, or PKI identity.",
+        "required": true,
+        "type": "string"
+      }
+    },
+    "public_feed_bootstrap": {
+      "_description": "One bounded initial snapshot for public first paint. Contains the feed snapshot, current source freshness, recent projections, and proof catalog summary. SSE provides incremental change notifications after the snapshot.",
+      "generated_at": {
+        "description": "UTC timestamp when the bootstrap was produced",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "proof_catalog_summary": {
+        "description": "Summary of the available public proof packages",
+        "model": "public_proof_catalog_summary",
+        "required": true,
+        "type": "object"
+      },
+      "protocol_version": {
+        "description": "Public feed protocol version",
+        "required": true,
+        "type": "string"
+      },
+      "recent_projections": {
+        "description": "Bounded list of recent public projections (JSON objects). Each carries only allowlisted fields.",
+        "required": true,
+        "type": "array"
+      },
+      "snapshot": {
+        "description": "Current feed snapshot with high-water sequence and feed-chain hash",
+        "model": "public_feed_snapshot",
+        "required": true,
+        "type": "object"
+      },
+      "source_freshness": {
+        "description": "Source freshness label",
+        "enum": [
+          "active",
+          "delayed",
+          "stale",
+          "intentionally_stopped",
+          "safety_stopped",
+          "source_offline"
+        ],
+        "required": true,
+        "type": "string"
+      }
+    },
+    "public_feed_cursor_page": {
+      "_description": "Cursor-paginated page of public records (projections, events, or proof manifests). Uses stable cursors and bounded page sizes (1-100, default 20). Anonymous reads are bounded by the rate policy.",
+      "cursor": {
+        "description": "Opaque cursor for the next page. Omitted when there are no more results.",
+        "required": false,
+        "type": "string"
+      },
+      "has_more": {
+        "required": true,
+        "type": "boolean"
+      },
+      "items": {
+        "description": "Page items. Each item is a JSON object with only allowlisted fields.",
+        "required": true,
+        "type": "array"
+      },
+      "limit": {
+        "description": "Page size applied to this response",
+        "required": true,
+        "type": "integer"
+      },
+      "protocol_version": {
+        "description": "Public feed protocol version",
+        "required": true,
+        "type": "string"
+      }
+    },
+    "public_feed_record": {
+      "_description": "One record in a signed batch. A record is a serialized projection or event payload with its SHA-256 content hash. The record type identifies whether it is a live projection, an event payload, a proof manifest, or a key revocation record.",
+      "record_bytes": {
+        "description": "Canonical JSON bytes of the record, UTF-8 encoded",
+        "required": true,
+        "type": "string"
+      },
+      "record_hash": {
+        "description": "SHA-256 of the canonical record bytes (64-char hex)",
+        "required": true,
+        "type": "string"
+      },
+      "record_type": {
+        "description": "Record type from the closed vocabulary",
+        "enum": [
+          "projection",
+          "event",
+          "proof_manifest",
+          "key_revocation"
+        ],
+        "required": true,
+        "type": "string"
+      },
+      "sequence": {
+        "description": "Monotonic sequence number assigned by the source",
+        "required": true,
+        "type": "integer"
+      }
+    },
+    "public_feed_snapshot": {
+      "_description": "A snapshot binding the high-water sequence (the last accepted sequence) and the feed-chain hash (the content hash of the last accepted batch). A public client reconciles against the snapshot to establish a consistent cursor.",
+      "batch_count": {
+        "description": "Total number of accepted batches",
+        "required": true,
+        "type": "integer"
+      },
+      "feed_chain_hash": {
+        "description": "Content hash of the last accepted batch (64-char hex)",
+        "required": true,
+        "type": "string"
+      },
+      "freshness": {
+        "description": "Source freshness label",
+        "enum": [
+          "active",
+          "delayed",
+          "stale",
+          "intentionally_stopped",
+          "safety_stopped",
+          "source_offline"
+        ],
+        "required": true,
+        "type": "string"
+      },
+      "generated_at": {
+        "description": "UTC timestamp when the snapshot was produced",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "high_water_sequence": {
+        "description": "The last accepted monotonic sequence number",
+        "required": true,
+        "type": "integer"
+      },
+      "protocol_version": {
+        "description": "Public feed protocol version",
+        "required": true,
+        "type": "string"
+      },
+      "source_id": {
+        "description": "Pseudonymous source deployment identifier",
+        "required": true,
+        "type": "string"
+      }
+    },
+    "public_proof_catalog": {
+      "_description": "The full public proof catalog listing every available proof package artifact. Served as a bounded anonymous read. Public retention uses append-only tombstones rather than rewriting history.",
+      "entries": {
+        "description": "Catalog entries for every available proof artifact",
+        "items": "public_proof_catalog_entry",
+        "required": true,
+        "type": "array"
+      },
+      "generated_at": {
+        "description": "UTC timestamp when the catalog was generated",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "schema_version": {
+        "description": "Proof catalog schema version",
+        "required": true,
+        "type": "string"
+      }
+    },
+    "public_proof_catalog_entry": {
+      "_description": "One entry in the public proof catalog. Each artifact is served under an immutable content-addressed identity derived from its SHA-256. Catalog metadata includes filename, media type, bytes, SHA-256, signature and trust metadata, campaign and run source, generated time, classification, verification command, and immutable URL.",
+      "artifact_id": {
+        "description": "Content-addressed artifact identifier (derived from SHA-256)",
+        "required": true,
+        "type": "string"
+      },
+      "byte_size": {
+        "description": "Byte length of the artifact content",
+        "required": true,
+        "type": "integer"
+      },
+      "campaign_id": {
+        "description": "Campaign identity from the campaign manifest",
+        "required": true,
+        "type": "string"
+      },
+      "classification": {
+        "description": "Disclosure classification",
+        "enum": [
+          "public_safe"
+        ],
+        "required": true,
+        "type": "string"
+      },
+      "filename": {
+        "description": "Human-readable filename",
+        "required": true,
+        "type": "string"
+      },
+      "generated_at": {
+        "description": "UTC timestamp when the artifact was generated",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "immutable_url": {
+        "description": "Immutable content-addressed URL path relative to the mirror base URL",
+        "required": true,
+        "type": "string"
+      },
+      "media_type": {
+        "description": "IANA media type of the artifact content",
+        "required": true,
+        "type": "string"
+      },
+      "sha256": {
+        "description": "SHA-256 of the artifact content (64-char hex)",
+        "required": true,
+        "type": "string"
+      },
+      "source_run_id": {
+        "description": "Source eval run identity. Omitted for campaign-level artifacts.",
+        "required": false,
+        "type": "string"
+      },
+      "verification_command": {
+        "description": "Offline verification command for this artifact",
+        "required": true,
+        "type": "string"
+      }
+    },
+    "public_proof_catalog_summary": {
+      "_description": "Summary of the public proof catalog for bootstrap responses. Carries the total artifact count, total byte size, and the most recent generation time.",
+      "artifact_count": {
+        "description": "Total number of proof artifacts in the catalog",
+        "required": true,
+        "type": "integer"
+      },
+      "last_generated_at": {
+        "description": "UTC timestamp of the most recently generated proof artifact. Omitted when the catalog is empty.",
+        "format": "iso8601",
+        "required": false,
+        "type": "string"
+      },
+      "total_byte_size": {
+        "description": "Total byte size of all proof artifacts",
+        "required": true,
+        "type": "integer"
+      }
+    },
+    "public_proof_manifest": {
+      "_description": "Root manifest for a public proof package. Binds the proof root SHA-256, campaign identity, verified index generation hash, artifact count, artifact catalog, verifier instructions, and generation time. A network-disabled verifier reproduces the root from the manifest and the listed artifacts.",
+      "artifact_count": {
+        "description": "Number of artifacts in the proof package",
+        "required": true,
+        "type": "integer"
+      },
+      "artifacts": {
+        "description": "Catalog entries for every artifact in the proof package",
+        "items": "public_proof_catalog_entry",
+        "required": true,
+        "type": "array"
+      },
+      "campaign_id": {
+        "description": "Campaign identity from the campaign manifest",
+        "required": true,
+        "type": "string"
+      },
+      "campaign_revision": {
+        "description": "Campaign revision from the frozen profile hash",
+        "required": true,
+        "type": "string"
+      },
+      "generated_at": {
+        "description": "UTC timestamp when the proof package was generated",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "proof_root_sha256": {
+        "description": "SHA-256 over the canonical encoding of all artifact hashes and manifest metadata (64-char hex)",
+        "required": true,
+        "type": "string"
+      },
+      "schema_version": {
+        "description": "Proof manifest schema version",
+        "required": true,
+        "type": "string"
+      },
+      "signature": {
+        "description": "Ed25519 signature over the proof root SHA-256, hex-encoded",
+        "required": true,
+        "type": "string"
+      },
+      "signing_key_id": {
+        "description": "Identifier of the signing key used to sign the proof root",
+        "required": true,
+        "type": "string"
+      },
+      "verification_ok": {
+        "description": "True when the campaign verification report passed",
+        "required": true,
+        "type": "boolean"
+      },
+      "verified_index_generation_hash": {
+        "description": "SHA-256 of the verified index generation's content hash (64-char hex)",
+        "required": true,
+        "type": "string"
+      },
+      "verifier_instructions": {
+        "description": "Human-readable offline verification instructions",
+        "required": true,
+        "type": "string"
+      }
+    }
+  }
+}

@@ -57,7 +57,8 @@ func (i *DemoRunImporter) SourceID() string {
 	return "demo-run"
 }
 
-func (i *DemoRunImporter) sourceRunID() string {
+// RunID returns the run ID this importer is bound to.
+func (i *DemoRunImporter) RunID() string {
 	if i == nil {
 		return ""
 	}

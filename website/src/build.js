@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -19,7 +22,8 @@ const LOCAL_IMAGES = new Map([
 ]);
 
 export function slugify(value) {
-  return value.toLowerCase().trim().replace(/<[^>]*>/g, '').replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-').replace(/-+/g, '-');
+  const cleaned = value.toLowerCase().trim().replace(/[<>]/g, '');
+  return cleaned.replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-').replace(/-+/g, '-');
 }
 
 export function repositoryLink(href) {
@@ -114,7 +118,7 @@ async function build() {
   ]);
   const html = renderWebsite(readme, template);
   if (process.argv.includes('--check')) {
-    if (!html.includes('id="proof-not-promises"') || !html.includes('id="four-components-one-governance-boundary"') || !html.includes('class="mermaid"') || html.includes('href="docs/')) throw new Error('generated website validation failed');
+    if (!html.includes('id="proof-not-promises"') || !html.includes('id="four-components-one-governance-boundary"') || !html.includes('id="how-it-works"') || html.includes('href="docs/')) throw new Error('generated website validation failed');
     return;
   }
   await rm(OUTPUT_DIRECTORY, { recursive: true, force: true });

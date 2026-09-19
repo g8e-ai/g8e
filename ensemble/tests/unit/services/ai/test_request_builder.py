@@ -231,7 +231,11 @@ class TestGetGenerationConfig:
 
     def test_builds_config_successfully(self, builder, mock_tool_executor):
         settings = G8eeUserSettings(
-            llm=LLMSettings(llm_model="gemini-1.5-pro", llm_max_tokens=2048)
+            llm=LLMSettings(
+                llm_model="gemini-1.5-pro",
+                llm_max_tokens=2048,
+                llm_parallel_tool_calls=False,
+            )
         )
 
         config = builder.get_generation_config(
@@ -242,9 +246,8 @@ class TestGetGenerationConfig:
 
         assert config.system_instructions == "instructions"
         assert config.max_output_tokens == 2048
-        mock_tool_executor.get_tools.assert_called_once_with(
-            AgentMode.G8E_BOUND, "gemini-1.5-pro"
-        )
+        assert config.parallel_tool_calls is False
+        mock_tool_executor.get_tools.assert_called_once_with(AgentMode.G8E_BOUND, "gemini-1.5-pro")
 
     def test_raises_configuration_error_when_model_missing(self, builder):
         settings = G8eeUserSettings(

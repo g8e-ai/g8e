@@ -210,6 +210,38 @@ func ParseTestCert(t *testing.T, pemStr string) *x509.Certificate {
 	return cert
 }
 
+// GenerateTestCAWithKey generates a self-signed CA certificate and
+// returns both the ECDSA private key and the parsed x509.Certificate.
+// Unlike GenerateTestCA (which returns only PEM), this exposes the key
+// so callers can sign leaf certificates with it via
+// GenerateTestSignedCert.
+func GenerateTestCAWithKey(t *testing.T, commonName string) (*ecdsa.PrivateKey, *x509.Certificate) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+	tmpl := x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: commonName},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &key.PublicKey, key)
+	require.NoError(t, err)
+	cert, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+	return key, cert
+}
+
+// EncodePEM encodes DER bytes as a PEM string with the given block type.
+func EncodePEM(blockType string, der []byte) string {
+	return string(pem.EncodeToMemory(&pem.Block{Type: blockType, Bytes: der}))
+}
+
 // GenerateTestECPrivateKey generates a minimal valid EC private key PEM.
 func GenerateTestECPrivateKey(t *testing.T) string {
 	t.Helper()

@@ -216,7 +216,7 @@ class OperatorFileService:
                         settings=request_settings or G8eeUserSettings(llm=LLMSettings()),
                     )
                     if risk_analysis and not risk_analysis.safe_to_proceed:
-                        # Broadcast Warden block to UI
+                        # Broadcast Marshal block to UI
                         await self.event_service.publish_command_event(
                             EventType.OPERATOR_FILE_EDIT_FAILED,
                             CommandFailedBroadcastEvent(
@@ -224,7 +224,7 @@ class OperatorFileService:
                                 execution_id=exec_id,
                                 operator_session_id=operator_session_id,
                                 status=ExecutionStatus.FAILED,
-                                error=f"WARDEN BLOCK: {risk_analysis.blocking_issues[0] if risk_analysis.blocking_issues else 'Operation deemed unsafe'}",
+                                error=f"MARSHAL BLOCK: {risk_analysis.blocking_issues[0] if risk_analysis.blocking_issues else 'Operation deemed unsafe'}",
                                 error_type=CommandErrorType.RISK_ANALYSIS_BLOCKED,
                             ),
                             g8e_context,

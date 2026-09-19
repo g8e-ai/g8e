@@ -1143,20 +1143,25 @@ func startGatewayIfNeeded(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeF
 		fmt.Fprintf(os.Stderr, "[g8e] Gateway already running (PID %d)\n", pid)
 	} else {
 		fmt.Fprintf(os.Stderr, "[g8e] Starting gateway...\n")
-		if err := pm.StartOperator(platform.OperatorStartOptions{
-			GatewayConfig: serve.GatewayConfig{
-				Posture:          g8econfig.GatewayPosture("doctrine"),
-				LogLevel:         "info",
-				CertIdentityMode: "localhost",
-			},
-		}); err != nil {
+		startOpts := platform.OperatorStartOptions{GatewayConfig: serve.GatewayConfig{
+			Posture:          g8econfig.GatewayPosture("doctrine"),
+			LogLevel:         "info",
+			CertIdentityMode: "localhost",
+		}}
+		if err := pm.StartOperator(&startOpts); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+		}
+		if err := serve.WriteLaunchProfile(fileSvc, startOpts.GatewayConfig); err != nil {
+			if stopErr := pm.StopOperator(); stopErr != nil {
+				return fmt.Errorf("%w: persist launch profile: %w; stop untracked gateway: %w", constants.ErrInternal, err, stopErr)
+			}
+			return fmt.Errorf("%w: persist launch profile: %w", constants.ErrInternal, err)
 		}
 
 		// Poll plain HTTP health until the gateway is ready.
 		// mTLS certs do not exist yet at this stage, so HTTP is the only
 		// option. HTTP is only ever used here for this bootstrap health check.
-		healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
+		healthURL := network.LocalhostHTTPURL(startOpts.HTTPPort) + constants.APIPaths.Health
 		plainClient := &http.Client{Timeout: 2 * time.Second}
 		const (
 			maxAttempts  = 30

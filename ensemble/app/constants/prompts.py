@@ -27,7 +27,6 @@ class AgentMode(StrEnum):
     """
 
     G8E_BOUND = _g8e_prompt("AgentModeG8eBound")
-    CLOUD_OPERATOR_BOUND = _g8e_prompt("AgentModeCloudOperatorBound")
     G8E_NOT_BOUND = _g8e_prompt("AgentModeG8eNotBound")
 
 
@@ -78,8 +77,6 @@ class PromptFile(StrEnum):
 
     MODES_OPERATOR_BOUND_CAPABILITIES = "modes/operator_bound/capabilities.txt"
     MODES_OPERATOR_BOUND_EXECUTION = "modes/operator_bound/execution.txt"
-    MODES_CLOUD_OPERATOR_BOUND_CAPABILITIES = "modes/cloud_operator_bound/capabilities.txt"
-    MODES_CLOUD_OPERATOR_BOUND_EXECUTION = "modes/cloud_operator_bound/execution.txt"
     MODES_OPERATOR_NOT_BOUND_CAPABILITIES = "modes/operator_not_bound/capabilities.txt"
     MODES_OPERATOR_NOT_BOUND_EXECUTION = "modes/operator_not_bound/execution.txt"
     MODES_OPERATOR_NOT_BOUND_CAPABILITIES_NO_SEARCH = (
@@ -89,7 +86,6 @@ class PromptFile(StrEnum):
         "modes/operator_not_bound/execution_no_search.txt"
     )
     MODES_OPERATOR_BOUND_TOOLS = "modes/operator_bound/tools.txt"
-    MODES_CLOUD_OPERATOR_BOUND_TOOLS = "modes/cloud_operator_bound/tools.txt"
     MODES_OPERATOR_NOT_BOUND_TOOLS = "modes/operator_not_bound/tools.txt"
 
     TOOLS_FILE_READ = "tools/file_read_on_operator.txt"
@@ -123,11 +119,6 @@ AGENT_MODE_PROMPT_FILES = {
         PromptSection.CAPABILITIES: PromptFile.MODES_OPERATOR_BOUND_CAPABILITIES,
         PromptSection.EXECUTION: PromptFile.MODES_OPERATOR_BOUND_EXECUTION,
         PromptSection.TOOLS: PromptFile.MODES_OPERATOR_BOUND_TOOLS,
-    },
-    AgentMode.CLOUD_OPERATOR_BOUND: {
-        PromptSection.CAPABILITIES: PromptFile.MODES_CLOUD_OPERATOR_BOUND_CAPABILITIES,
-        PromptSection.EXECUTION: PromptFile.MODES_CLOUD_OPERATOR_BOUND_EXECUTION,
-        PromptSection.TOOLS: PromptFile.MODES_CLOUD_OPERATOR_BOUND_TOOLS,
     },
     AgentMode.G8E_NOT_BOUND: {
         PromptSection.CAPABILITIES: PromptFile.MODES_OPERATOR_NOT_BOUND_CAPABILITIES,
