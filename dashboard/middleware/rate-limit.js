@@ -52,6 +52,36 @@ function extractApiKeyForRateLimit(req) {
 }
 
 /**
+ * Build the shared general-API rate limiter used by route modules that perform
+ * filesystem access. Route files import this factory directly so static
+ * analysis can associate express-rate-limit middleware with handlers.
+ *
+ * @param {string} scope - Short label for log messages
+ * @returns {import('express-rate-limit').RateLimitRequestHandler}
+ */
+export function buildApiRateLimiter(scope = 'API') {
+    return rateLimit({
+        windowMs: ApiRateLimit.WINDOW_MS,
+        max: ApiRateLimit.MAX,
+        message: {
+            success: false,
+            error: RateLimitError.GENERIC
+        },
+        standardHeaders: true,
+        handler: (req, res) => {
+            logger.warn(`[RATE-LIMIT] ${scope} rate limit exceeded`, {
+                ip: req.ip,
+                path: req.path,
+                method: req.method
+            });
+            res.status(429).json(new ErrorResponse({
+                error: RateLimitError.RATE_EXCEEDED
+            }).forWire());
+        }
+    });
+}
+
+/**
  * Rate limiting Middleware Factory
  * Protects against brute force and DoS attacks
  * 
@@ -156,29 +186,7 @@ export function createRateLimiters() {
         }
     });
 
-    /**
-     * Rate limiter for general API endpoints
-     * Moderate limits for normal operations
-     */
-    const apiRateLimiter = rateLimit({
-        windowMs: ApiRateLimit.WINDOW_MS,
-        max: ApiRateLimit.MAX,
-        message: {
-            success: false,
-            error: RateLimitError.GENERIC
-        },
-        standardHeaders: true,
-        handler: (req, res) => {
-            logger.warn('[RATE-LIMIT] API rate limit exceeded', {
-                ip: req.ip,
-                path: req.path,
-                method: req.method
-            });
-            res.status(429).json(new ErrorResponse({
-                error: RateLimitError.RATE_EXCEEDED
-            }).forWire());
-        }
-    });
+    const apiRateLimiter = buildApiRateLimiter();
 
     /**
      * Rate limiter for file upload endpoints

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 from pathlib import Path
 import secrets
 
@@ -37,23 +38,21 @@ def validate_safe_path(path: str | Path, root: str | Path) -> Path:
         raise ValueError("Empty path provided")
 
     root_path = Path(root).resolve()
+    path_obj = Path(os.fspath(path))
 
-    # Clean and resolve the target path
-    # Path.resolve() handles '..' segments and redundant slashes
-    try:
-        if Path(path).is_absolute():
-            target_path = Path(path).resolve()
-        else:
-            target_path = (root_path / path).resolve()
-    except Exception as e:
-        raise ValueError(f"Invalid path format: {e}")
+    if path_obj.is_absolute():
+        target_path = path_obj.resolve()
+    else:
+        if any(part in {"", ".."} for part in path_obj.parts):
+            raise ValueError(f"Path traversal detected: {path} is outside of {root}")
+        target_path = root_path.joinpath(*path_obj.parts).resolve()
 
     # Security check: Ensure target_path is within root_path
     try:
         # relative_to raises ValueError if target_path is not under root_path
         target_path.relative_to(root_path)
-    except ValueError:
-        raise ValueError(f"Path traversal detected: {path} is outside of {root}")
+    except ValueError as exc:
+        raise ValueError(f"Path traversal detected: {path} is outside of {root}") from exc
 
     return target_path
 

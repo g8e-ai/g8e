@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/pathutil"
+	"github.com/g8e-ai/g8e/v2/internal/security"
 )
 
 // RuntimeFileService provides safe file operations within the .g8e runtime directory.
@@ -157,6 +158,17 @@ func (fs *localFS) isWithinRuntimeDir(absPath string) bool {
 	return !strings.HasPrefix(rel, "..") && rel != ".."
 }
 
+func (fs *localFS) resolveValidated(relPath string) (string, error) {
+	if relPath == "" {
+		return fs.runtimeDir, nil
+	}
+	absPath, err := security.ValidatePath(relPath, fs.runtimeDir)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+	}
+	return absPath, nil
+}
+
 // MkdirAll creates a directory and all parents with the given mode.
 func (fs *localFS) MkdirAll(ctx context.Context, relPath string, mode os.FileMode) error {
 	if err := ctx.Err(); err != nil {
@@ -175,9 +187,9 @@ func (fs *localFS) ReadFile(ctx context.Context, relPath string) ([]byte, error)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	absPath := fs.Resolve(relPath)
-	if !fs.isWithinRuntimeDir(absPath) {
-		return nil, fmt.Errorf("%w: %s", constants.ErrPathValidation, absPath)
+	absPath, err := fs.resolveValidated(relPath)
+	if err != nil {
+		return nil, err
 	}
 	f, err := os.Open(absPath)
 	if err != nil {
@@ -230,7 +242,10 @@ func (fs *localFS) Lstat(ctx context.Context, relPath string) (os.FileInfo, erro
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	absPath := fs.Resolve(relPath)
+	absPath, err := fs.resolveValidated(relPath)
+	if err != nil {
+		return nil, err
+	}
 	info, err := os.Lstat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {

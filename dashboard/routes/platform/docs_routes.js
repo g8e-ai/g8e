@@ -5,19 +5,20 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { logger } from '../../utils/logger.js';
+import { buildApiRateLimiter } from '../../middleware/rate-limit.js';
 import { DEFAULT_DOCS_DIR } from '../../constants/service_config.js';
 import { DocsPaths } from '../../constants/api_paths.js';
 import { DocsTreeResponse, DocsFileResponse, ErrorResponse } from '../../models/response_models.js';
+
+const docsRateLimiter = buildApiRateLimiter('Docs');
 
 /**
  * @param {Object} options
  * @param {Object} options.config - Platform configuration object
  * @param {Object} options.authMiddleware - Auth middleware object
- * @param {Object} options.rateLimiters - Rate limiter objects
  */
-export function createDocsRouter({ config, authMiddleware, rateLimiters }) {
+export function createDocsRouter({ config, authMiddleware }) {
     const { optionalAuth } = authMiddleware;
-    const { apiRateLimiter } = rateLimiters;
     const router = express.Router();
 
     const docsDir = config.docs_dir || DEFAULT_DOCS_DIR;
@@ -49,7 +50,7 @@ export function createDocsRouter({ config, authMiddleware, rateLimiters }) {
         return nodes;
     }
 
-    router.get(DocsPaths.TREE, apiRateLimiter, (req, res, next) => {
+    router.get(DocsPaths.TREE, docsRateLimiter, (req, res, next) => {
         try {
             if (!fs.existsSync(docsDir)) {
                 return res.status(503).json(new ErrorResponse({ error: 'Docs directory not available' }).forClient());
@@ -65,7 +66,7 @@ export function createDocsRouter({ config, authMiddleware, rateLimiters }) {
         }
     });
 
-    router.get(DocsPaths.FILE, apiRateLimiter, optionalAuth, (req, res, next) => {
+    router.get(DocsPaths.FILE, docsRateLimiter, optionalAuth, (req, res, next) => {
         const filePath = req.query.path;
         if (!filePath) {
             return res.status(400).json(new ErrorResponse({ error: 'Missing path parameter' }).forClient());
