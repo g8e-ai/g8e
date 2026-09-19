@@ -12,8 +12,6 @@ pytestmark = [pytest.mark.integration, pytest.mark.requires_operator]
 @pytest.mark.asyncio
 async def test_dispatch_inference_reaches_gateway_validation_over_real_mtls():
     settings = SettingsService().get_local_settings()
-    if not settings.component_urls.client_url:
-        pytest.skip("Gateway URL is not configured for live mTLS integration")
     if not settings.ca_cert_path:
         pytest.skip("Gateway CA bundle is not available for live mTLS integration")
     if not settings.client_cert_path or not settings.client_key_path:
