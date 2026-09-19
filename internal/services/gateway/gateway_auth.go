@@ -194,6 +194,7 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// path). The explicit classification documents the requirement.
 	r.addExact(constants.APIPaths.AuthCLIRefresh, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.AuthCLIBind, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.AuthCLIUnbind, RouteAuthMTLS)
 
 	// CLI session info — mTLS only. Returns the authenticated session's
 	// persisted operator binding so the CLI can resync local credentials.
@@ -849,7 +850,7 @@ func matchesCertificateFingerprint(cert *x509.Certificate, expected string) bool
 }
 
 func isCLISessionLifecyclePath(path string) bool {
-	return path == constants.APIPaths.AuthCLIRefresh || path == constants.APIPaths.AuthCLIBind
+	return path == constants.APIPaths.AuthCLIRefresh || path == constants.APIPaths.AuthCLIBind || path == constants.APIPaths.AuthCLIUnbind
 }
 
 // handleCLIRefreshAuth is the fail-closed auth path for the CLI session

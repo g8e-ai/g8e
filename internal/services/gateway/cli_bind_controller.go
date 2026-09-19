@@ -162,3 +162,100 @@ func (c *CLIRefreshController) handleBind(w http.ResponseWriter, r *http.Request
 		OperatorID:        op.ID,
 	})
 }
+
+// handleUnbind clears the authenticated CLI session's operator binding.
+// When the session is already unbound, the current session is returned
+// without issuing a replacement.
+//
+// POST /api/v1/auth/cli/unbind  (RouteAuthMTLS)
+func (c *CLIRefreshController) handleUnbind(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
+	if !ok || userID == "" {
+		c.logger.Warn("CLI unbind: missing authenticated user context")
+		c.responder.Error(w, http.StatusUnauthorized, "mTLS authentication required")
+		return
+	}
+	oldCLISessionID, _ := r.Context().Value(constants.ContextKeyCLISessionID).(string)
+
+	user, err := c.userSvc.GetByID(userID)
+	if err != nil {
+		c.logger.Error("CLI unbind: failed to look up user", "error", err, "user_id", userID)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
+		return
+	}
+	if user == nil || !user.IsActive() {
+		c.logger.Warn("CLI unbind: user is not active", "user_id", userID)
+		c.responder.Error(w, http.StatusForbidden, "user is not active")
+		return
+	}
+
+	var oldSession *models.CLISession
+	if oldCLISessionID != "" {
+		oldSession, err = c.cliSessionSvc.loadCLISession(oldCLISessionID)
+		if err != nil && !errors.Is(err, constants.ErrCLISessionNotFound) {
+			c.logger.Error("CLI unbind: failed to load old session",
+				"error", err,
+				"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+			)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to load CLI session")
+			return
+		}
+	}
+	if oldSession != nil && oldSession.IsActive && oldSession.OperatorSessionID == "" {
+		c.responder.JSON(w, http.StatusOK, models.CLIUnbindResponse{
+			Success:        true,
+			CLISessionID:   oldCLISessionID,
+			UserID:         userID,
+			AlreadyUnbound: true,
+		})
+		return
+	}
+
+	var systemFingerprint, certFingerprint, certSerial, loginMethod string
+	if oldSession != nil {
+		systemFingerprint = oldSession.SystemFingerprint
+		certFingerprint = oldSession.CertFingerprint
+		certSerial = oldSession.CertSerial
+		loginMethod = oldSession.LoginMethod
+	}
+
+	newCLISessionID := uuid.NewString()
+	_, err = c.cliSessionSvc.UnbindCLISession(
+		oldCLISessionID,
+		newCLISessionID,
+		CLISessionFields{
+			UserID:            userID,
+			SystemFingerprint: systemFingerprint,
+			CertFingerprint:   certFingerprint,
+			CertSerial:        certSerial,
+			LoginMethod:       loginMethod,
+		},
+	)
+	if err != nil {
+		c.logger.Warn("CLI unbind: UnbindCLISession failed",
+			"error", err,
+			"user_id", userID,
+			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+			"new_cli_session_id_prefix", safeTruncateID(newCLISessionID, 8),
+		)
+		c.writeRefreshError(w, err)
+		return
+	}
+
+	c.logger.Info("CLI session unbound from operator via controller",
+		"user_id", userID,
+		"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+		"new_cli_session_id_prefix", safeTruncateID(newCLISessionID, 8),
+	)
+
+	c.responder.JSON(w, http.StatusCreated, models.CLIUnbindResponse{
+		Success:      true,
+		CLISessionID: newCLISessionID,
+		UserID:       userID,
+	})
+}

@@ -93,6 +93,50 @@ func TestCLIRefreshController_Bind_AlreadyBound(t *testing.T) {
 	assert.Equal(t, oldSessionID, resp.CLISessionID)
 }
 
+func unbindRequestWithContext(t *testing.T, userID, oldCLISessionID string) *http.Request {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthCLIUnbind, nil)
+	ctx := context.WithValue(req.Context(), constants.ContextKeyUserID, userID)
+	ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, oldCLISessionID)
+	return req.WithContext(ctx)
+}
+
+func TestCLIRefreshController_Unbind_Success(t *testing.T) {
+	c, user := setupTestCLIRefreshController(t)
+	oldSessionID := "unbind-ctrl-old-1"
+	targetSessionID := "unbind-ctrl-target-1"
+	persistOperatorForBindController(t, c, user.ID, "unbind-op-1", targetSessionID)
+	persistCLISessionForController(t, c, user.ID, oldSessionID, targetSessionID)
+
+	req := unbindRequestWithContext(t, user.ID, oldSessionID)
+	rr := httptest.NewRecorder()
+	c.handleUnbind(rr, req)
+
+	require.Equal(t, http.StatusCreated, rr.Code, rr.Body.String())
+	var resp models.CLIUnbindResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.True(t, resp.Success)
+	assert.NotEmpty(t, resp.CLISessionID)
+	assert.NotEqual(t, oldSessionID, resp.CLISessionID)
+}
+
+func TestCLIRefreshController_Unbind_AlreadyUnbound(t *testing.T) {
+	c, user := setupTestCLIRefreshController(t)
+	oldSessionID := "unbind-ctrl-old-2"
+	persistCLISessionForController(t, c, user.ID, oldSessionID, "")
+
+	req := unbindRequestWithContext(t, user.ID, oldSessionID)
+	rr := httptest.NewRecorder()
+	c.handleUnbind(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	var resp models.CLIUnbindResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.True(t, resp.Success)
+	assert.True(t, resp.AlreadyUnbound)
+	assert.Equal(t, oldSessionID, resp.CLISessionID)
+}
+
 func TestCLIRefreshController_Bind_RejectsForeignOperator(t *testing.T) {
 	c, user := setupTestCLIRefreshController(t)
 	oldSessionID := "bind-ctrl-old-3"

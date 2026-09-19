@@ -25,16 +25,32 @@ import (
 )
 
 type stubOperatorBindClient struct {
-	result auth.CLISessionBind
-	err    error
-	called bool
-	arg    string
+	result      auth.CLISessionBind
+	unbind      auth.CLISessionUnbind
+	sessionInfo auth.CLISessionInfo
+	err         error
+	unbindErr   error
+	sessionErr  error
+	called      bool
+	unbindCalled bool
+	sessionCalled bool
+	arg         string
 }
 
 func (s *stubOperatorBindClient) Bind(_ context.Context, _ fs.RuntimeFileService, operatorSessionID string) (auth.CLISessionBind, error) {
 	s.called = true
 	s.arg = operatorSessionID
 	return s.result, s.err
+}
+
+func (s *stubOperatorBindClient) Unbind(_ context.Context, _ fs.RuntimeFileService) (auth.CLISessionUnbind, error) {
+	s.unbindCalled = true
+	return s.unbind, s.unbindErr
+}
+
+func (s *stubOperatorBindClient) SessionInfo(_ context.Context, _ fs.RuntimeFileService) (auth.CLISessionInfo, error) {
+	s.sessionCalled = true
+	return s.sessionInfo, s.sessionErr
 }
 
 func TestOperatorBindCmdWithConfig_Success(t *testing.T) {
@@ -148,4 +164,99 @@ func TestOperatorBindCmdWithConfig_BindError(t *testing.T) {
 	err = cmd.Execute()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "gateway rejected bind")
+}
+
+func TestOperatorBindCmdWithConfig_ListBoundOperator(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+
+	listBody, err := json.Marshal(models.OperatorSlotResponse{
+		Success: true,
+		Operators: []models.OperatorDocumentGo{{
+			ID:                "op-data",
+			OperatorSessionID: "899b5d27-4599-4b5c-ac5a-beb86b256e7d",
+			OperatorType:      constants.OperatorTypeRemote,
+			Status:            constants.OperatorStatusActive,
+		}},
+	})
+	require.NoError(t, err)
+
+	stub := &stubOperatorBindClient{sessionInfo: auth.CLISessionInfo{
+		CLISessionID:      "cli-current",
+		UserID:            "user-001",
+		OperatorSessionID: "899b5d27-4599-4b5c-ac5a-beb86b256e7d",
+		OperatorID:        "op-data",
+	}}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	cmd := operatorBindCmdWithConfig(
+		loader,
+		mockClientFactory(&mockAPIClient{getResp: listBody}),
+		func(*config.Config) operatorBindClient { return stub },
+		fileSvcFactoryFor(fileSvc),
+	)
+	cmd.SetArgs([]string{"list"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.Execute())
+	assert.True(t, stub.sessionCalled)
+	assert.Contains(t, buf.String(), "Bound operators (1)")
+	assert.Contains(t, buf.String(), "899b5d27-4599-4b5c-ac5a-beb86b256e7d")
+}
+
+func TestOperatorBindCmdWithConfig_ListUnbound(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+
+	stub := &stubOperatorBindClient{sessionInfo: auth.CLISessionInfo{
+		CLISessionID: "cli-current",
+		UserID:       "user-001",
+	}}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	cmd := operatorBindCmdWithConfig(
+		loader,
+		mockClientFactory(&mockAPIClient{}),
+		func(*config.Config) operatorBindClient { return stub },
+		fileSvcFactoryFor(fileSvc),
+	)
+	cmd.SetArgs([]string{"list"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, buf.String(), "No operators bound to this CLI session.")
+}
+
+func TestOperatorBindCmdWithConfig_UnbindSuccess(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	saveTestCredentials(t, fileSvc, cfg, "user-001")
+
+	stub := &stubOperatorBindClient{unbind: auth.CLISessionUnbind{
+		CLISessionID: "cli-unbound",
+		UserID:       "user-001",
+	}}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	cmd := operatorBindCmdWithConfig(
+		loader,
+		mockClientFactory(&mockAPIClient{}),
+		func(*config.Config) operatorBindClient { return stub },
+		fileSvcFactoryFor(fileSvc),
+	)
+	cmd.SetArgs([]string{"unbind", "--yes"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.Execute())
+	assert.True(t, stub.unbindCalled)
+	assert.Contains(t, buf.String(), "CLI session unbound from operator.")
+
+	loaded, err := auth.LoadCredentials(fileSvc, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.Equal(t, "cli-unbound", loaded.CLISessionID)
+	assert.Empty(t, loaded.OperatorSessionID)
+	assert.Empty(t, loaded.OperatorID)
 }

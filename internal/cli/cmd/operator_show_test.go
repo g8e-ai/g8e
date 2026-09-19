@@ -75,7 +75,7 @@ func TestParseOperatorHeartbeatView_PythonFormat(t *testing.T) {
 	require.NotNil(t, view)
 	assert.Equal(t, "web-server-1", view.SystemIdentity.Hostname)
 	assert.Equal(t, 5.0, view.PerformanceMetrics.CPUPercent)
-	assert.Equal(t, 120, view.UptimeInfo.UptimeSeconds)
+	assert.Equal(t, int64(120), view.UptimeInfo.UptimeSeconds)
 	assert.Equal(t, []string{"eth0"}, view.NetworkInfo.Interfaces)
 }
 

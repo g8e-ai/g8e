@@ -404,6 +404,110 @@ type CLISessionBind struct {
 	AlreadyBound      bool
 }
 
+// Unbind clears the authenticated CLI session's operator binding
+// (POST /api/v1/auth/cli/unbind over the public HTTPS surface). When a
+// binding was present, a replacement CLI session is issued with a fresh TTL.
+func (c *EnrollmentClient) Unbind(ctx context.Context, fileSvc fs.RuntimeFileService) (CLISessionUnbind, error) {
+	mtlsClient, err := BuildMTLSClient(fileSvc, c.cfg, httpTimeout)
+	if err != nil {
+		return CLISessionUnbind{}, err
+	}
+
+	publicURL := c.cfg.OperatorPublicURL()
+
+	store := NewCredentialStore(fileSvc, c.cfg)
+	creds, _ := store.LoadCredentials(ctx)
+	headers := map[string]string{}
+	if creds != nil && creds.CLISessionID != "" {
+		headers[constants.HeaderCLISessionID] = creds.CLISessionID
+	}
+
+	var resp models.CLIUnbindResponse
+	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIUnbind, models.CLIUnbindRequest{}, &resp, headers); err != nil {
+		return CLISessionUnbind{}, err
+	}
+	if !resp.Success {
+		return CLISessionUnbind{}, fmt.Errorf("%w: unbind unsuccessful", constants.ErrCLIRefreshFailed)
+	}
+	if resp.CLISessionID == "" || resp.UserID == "" {
+		return CLISessionUnbind{}, constants.ErrMissingRequiredField
+	}
+	return CLISessionUnbind{
+		CLISessionID:   resp.CLISessionID,
+		UserID:         resp.UserID,
+		AlreadyUnbound: resp.AlreadyUnbound,
+	}, nil
+}
+
+// SessionInfo returns the authenticated CLI session's persisted identity
+// binding (GET /api/v1/auth/cli/session over the public HTTPS surface).
+func (c *EnrollmentClient) SessionInfo(ctx context.Context, fileSvc fs.RuntimeFileService) (CLISessionInfo, error) {
+	mtlsClient, err := BuildMTLSClient(fileSvc, c.cfg, httpTimeout)
+	if err != nil {
+		return CLISessionInfo{}, err
+	}
+
+	publicURL := c.cfg.OperatorPublicURL()
+
+	store := NewCredentialStore(fileSvc, c.cfg)
+	creds, _ := store.LoadCredentials(ctx)
+	headers := map[string]string{}
+	if creds != nil && creds.CLISessionID != "" {
+		headers[constants.HeaderCLISessionID] = creds.CLISessionID
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, publicURL+constants.APIPaths.AuthCLISession, nil)
+	if err != nil {
+		return CLISessionInfo{}, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
+	}
+	for key, value := range headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	resp, err := mtlsClient.Do(httpReq)
+	if err != nil {
+		return CLISessionInfo{}, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return CLISessionInfo{}, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return CLISessionInfo{}, fmt.Errorf("%w: status %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(body))
+	}
+
+	var info models.CLISessionInfoResponse
+	if err := json.Unmarshal(body, &info); err != nil {
+		return CLISessionInfo{}, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	if !info.Success || info.CLISessionID == "" || info.UserID == "" {
+		return CLISessionInfo{}, constants.ErrMissingRequiredField
+	}
+	return CLISessionInfo{
+		CLISessionID:      info.CLISessionID,
+		UserID:            info.UserID,
+		OperatorSessionID: info.OperatorSessionID,
+		OperatorID:        info.OperatorID,
+	}, nil
+}
+
+// CLISessionUnbind is the result of a successful CLI operator unbind.
+type CLISessionUnbind struct {
+	CLISessionID   string
+	UserID         string
+	AlreadyUnbound bool
+}
+
+// CLISessionInfo is the authoritative CLI session identity binding.
+type CLISessionInfo struct {
+	CLISessionID      string
+	UserID            string
+	OperatorSessionID string
+	OperatorID        string
+}
+
 // CLISessionRefresh is the result of a successful CLI session refresh.
 // It carries the full session/operator binding so the caller can persist
 // the authoritative pair back to local credentials.

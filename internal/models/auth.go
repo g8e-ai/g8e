@@ -668,6 +668,21 @@ type CLIBindResponse struct {
 	AlreadyBound      bool   `json:"already_bound,omitempty"`
 }
 
+// CLIUnbindRequest is the wire request for POST /api/v1/auth/cli/unbind.
+// This is an mTLS-protected endpoint; the current user and CLI session are
+// derived from the authenticated certificate context. The caller clears the
+// CLI session's operator binding, issuing a replacement CLI session when
+// a binding was present.
+type CLIUnbindRequest struct{}
+
+// CLIUnbindResponse is the wire response for POST /api/v1/auth/cli/unbind.
+type CLIUnbindResponse struct {
+	Success         bool   `json:"success"`
+	CLISessionID    string `json:"cli_session_id"`
+	UserID          string `json:"user_id"`
+	AlreadyUnbound  bool   `json:"already_unbound,omitempty"`
+}
+
 // CLISessionInfoResponse is the wire response for
 // GET /api/v1/auth/cli/session. It reports the authenticated CLI session's
 // persisted identity binding verbatim: the operator session the session was

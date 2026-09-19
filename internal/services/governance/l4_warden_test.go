@@ -135,6 +135,11 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 			ProviderAttemptId: "attempt-1",
 			Phase:             evalv1.ProviderBoundaryObservationPhase_PROVIDER_BOUNDARY_OBSERVATION_PHASE_BEGIN,
 		}
+	case constants.ActionTypeModelProvenanceObservation:
+		msg = &evalv1.ModelProvenanceObservationCommand{
+			ProviderAttemptId: "attempt-1",
+			Phase:             evalv1.ModelProvenanceObservationPhase_MODEL_PROVENANCE_OBSERVATION_PHASE_BEGIN,
+		}
 	case constants.ActionTypePlatformEnrollmentCreate,
 		constants.ActionTypePlatformEnrollmentDecide,
 		constants.ActionTypePlatformEnrollmentIssue,
