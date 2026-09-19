@@ -1,7 +1,6 @@
 # g8e Release Process
 
-Last Updated: 2026-09-18
-Version: v2.1.8
+Last Updated: 2026-09-19
 
 The primary purpose of a release is to inventory every change since the last release and ensure that all affected documentation accurately reflects the current state of the code. Version bumps and CHANGELOG entries follow this documentation reconciliation; they do not replace it.
 
@@ -13,48 +12,11 @@ The protocol Go and Python packages and the platform binary share the same versi
 
 ## Release Checklist
 
-Each release keeps a version-specific checklist in this section. Check items off as they are completed. This is a soft gate — nothing enforces it in code — but **do not run `make release` until every applicable item is checked**.
+Each release uses the [Standard Checklist Template](#standard-checklist-template) below. Check items off in a **version-specific working tracker** (for example `.local.dev/docs/plans/in-progress/vX.Y.Z-readiness.md`), not in this file. This document stays release-agnostic; when a release ships, archive or delete that tracker — do not replace prose here with the next version's checked boxes.
 
-When a release ships, replace this section with the next version's checklist. The [Standard Checklist Template](#standard-checklist-template) below lists the generic steps to copy for future releases.
+Large releases also require the conditional gates in [Large Release Gates](#large-release-gates). Complete every standard item plus every large-release item that applies to the change inventory.
 
-Large releases also require the conditional gates in [Large Release Gates](#large-release-gates). For v2.1.8, complete every standard item plus every large-release item that applies to the change inventory.
-
-### Checklist for v2.1.8
-
-**Release range:** `v2.1.7..HEAD` (previous tag → merge commit)
-
-#### Agent prep (feature branch — do not commit, push, or tag)
-
-- [x] **Change inventory** — Release owner provided the complete changed-file and change inventory for `v2.1.7..HEAD`; every change is categorized (see [Change Inventory](#change-inventory))
-- [x] **Documentation reconciliation** — Every affected [Documentation Catalog](docs.md#documentation-catalog) surface is mapped, audited end to end, corrected, cross-linked, validated, and recorded (see [Documentation Reconciliation](#documentation-reconciliation)) — *53 maintained prose files reconciled (architecture, guides, ensemble, reference, devs, root README, demos README, protocol constants); evidence JSON under `docs/evidence/readme/` left scope-bound; generated protobuf API refs verified via `make proto`*
-- [x] **Release notes** — `docs/release_notes/v2.1.x/v2.1.8.md` exists and reflects the full inventory (see [Release Notes](#release-notes))
-- [x] **Compliance evidence** — `g8e compliance release-evidence` produced `v2.1.8-compliance-evidence.md` and `.csv`; release notes include a `### Compliance Evidence` cross-reference (see [Compliance Evidence Generation](#compliance-evidence-generation))
-- [x] **`VERSION`** — Set to `v2.1.8`
-- [x] **Python package sync** — `protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` entry in `protocol/python/uv.lock` all read `2.1.8`
-- [x] **Downstream lockfile** — `make proto` regenerated `ensemble/uv.lock` with `g8e` at `2.1.8`
-- [x] **`CHANGELOG.md`** — Row added under `## v2.1.x` linking to the release notes
-- [x] **Document metadata** — Every edited document has finalized `Last Updated` / `Version` metadata; untouched documents were not blanket-bumped (see [Documentation Metadata](#documentation-metadata)) — *metadata updated last on every reconciled maintained doc; component guides without version headers left unchanged per catalog convention*
-- [x] **Verification** — All [Verification](#verification) checks pass for the edited-document set and release version
-- [x] **Agent handoff** — Working tree prepared; agent did **not** `git commit`, `git push`, open a PR, or run `make release`
-
-#### Large-release gates (v2.1.8 — complete every item that applies)
-
-- [ ] **Native eval acceptance** — If native evaluation runtime behavior changed, `core-execution-boundary` run/verify/show retained (see [Native Evaluation Acceptance](#native-evaluation-acceptance))
-- [ ] **Automated test matrix** — `./g8e test unit`, `./g8e test integration`, `./g8e test lint`, `./g8e test coverage`, ensemble `make test` / `make lint`, adapter `npm test` / `npm run lint` / contract-pack check all pass
-- [ ] **Eval campaign evidence** — Bounded v2.1.8 pipeline-integrity campaign executed; bundle verified and published through the campaign-aware observe path (see release notes)
-- [ ] **Owner-operated browser gates** — Real-browser CORS, WebAuthn, session cookies, mTLS producers, observe reads, and SSE delivery recorded or explicitly deferred with honest gaps
-- [ ] **Builder acceptance** — At least one supported builder consumed the contract pack and produced a deployable SPA through the audited adapter, or gap recorded
-- [ ] **Cross-platform trust** — Linux, macOS, and Windows trust installation and browser-restart behavior recorded or gap recorded
-- [ ] **`gw connect` acceptance** — Exact-origin connection, CORS, Local Network Access, trust, passkey, cookies, and SSE credentials verified on a real browser or gap recorded
-- [ ] **E2E human gate** — `./g8e test e2e` with owner credentials, if required for this release's surface changes
-
-#### Release owner (commit, merge, tag)
-
-- [ ] **PR opened** — Release prep committed (`release: v2.1.8`), pushed, and PR opened on GitHub
-- [ ] **PR merged** — Review complete; PR merged to `main`
-- [ ] **CI green on `main`** — Lint, tests, and version sync checks pass
-- [ ] **`make release` on `main`** — After `git checkout main && git pull`, run `make release` (creates and pushes `v2.1.8` and `protocol/v2.1.8`)
-- [ ] **Release workflows succeed** — `release-binary.yml` and `release-python-protocol.yml` complete; binaries, GitHub release, and PyPI publish verified
+---
 
 ## Separation of Duties
 
@@ -82,7 +44,7 @@ The Python package files (`pyproject.toml`, `__init__.py`, and the editable pack
 
 ## How to Use This Document
 
-Work through the [Release Checklist](#release-checklist) for the target version. The sections below explain each checklist item in detail:
+Work through the [Standard Checklist Template](#standard-checklist-template) in a version-specific working tracker. The sections below explain each checklist item in detail:
 
 1. **[Change Inventory](#change-inventory)** — Release owner establishes the range and categorizes every change. Everything else depends on this.
 2. **[Documentation Reconciliation](#documentation-reconciliation)** — Map changes through the full [Documentation Catalog](docs.md#documentation-catalog); audit every affected document end to end.
@@ -348,7 +310,7 @@ Flags:
 
 ### When to run it
 
-Run compliance evidence generation after release notes and before version files (see the [Release Checklist](#release-checklist) agent-prep order). The command needs the release version string, which is determined during the change inventory, and writes into the release notes directory, which is created with the release notes.
+Run compliance evidence generation after release notes and before version files (see the [Standard Checklist Template](#standard-checklist-template) agent-prep order). The command needs the release version string, which is determined during the change inventory, and writes into the release notes directory, which is created with the release notes.
 
 The command reads runtime evidence from the `.g8e/` tree of the deployment it runs against. For release prep, run it against a deployment with current demo evidence persisted (e.g. after `./g8e demos scenarios run` has produced evidence-grade demo runs). If no demo evidence is persisted, the report records "No demo runs persisted" — this is an honest gap, not a failure.
 
@@ -366,20 +328,20 @@ Per-release compliance evidence for vX.Y.Z is in [vX.Y.Z-compliance-evidence.md]
 
 ## Large Release Gates
 
-Use this section when a release spans multiple subsystems, new user-facing surfaces, or owner-operated acceptance paths. Not every item applies to every release — the change inventory determines which gates are in scope. Each applicable gate must appear on the version checklist and be checked off or explicitly recorded as an honest gap before `make release`.
+Use this section when a release spans multiple subsystems, new user-facing surfaces, or owner-operated acceptance paths. **Not every item applies to every release** — the change inventory determines which gates are in scope. Automated test matrix and code gates are release blockers; owner-operated, live-stack, and optional eval-demo gates are not unless the release notes claim they were demonstrated.
 
 | Gate | When required | Reference |
 |------|---------------|-----------|
-| Native eval acceptance | Native evaluation runtime behavior changed | [Native Evaluation Acceptance](#native-evaluation-acceptance) |
 | Full automated test matrix | Any platform, ensemble, dashboard, or protocol surface changed | `./g8e test *`, ensemble `make test`/`make lint`, adapter npm scripts |
-| Eval campaign / pipeline integrity | Eval-native evidence, campaign CLI, or observe publication changed | Release notes, `docs/ensemble/evals.md` |
-| Owner-operated browser gates | Browser-scoped observe API, WebAuthn, CORS, SSE, or adapter contract pack changed | Release notes owner-operated section |
-| Builder acceptance | Contract pack or generator-neutral frontend path changed | `dashboard/g8e-adapter/contract-pack/` |
-| Cross-platform trust | `gw connect`, trust installation, or certificate flows changed | Release notes security section |
+| Native eval acceptance | Native evaluation runtime behavior changed **and** release notes claim a live boundary run | [Native Evaluation Acceptance](#native-evaluation-acceptance) |
+| Eval campaign live demo | Release notes or compliance prose claim a completed live campaign (verify + publish) | Release notes, `docs/ensemble/evals.md` — **not required** for code-only eval infrastructure releases |
+| Owner-operated browser gates | Browser-scoped observe API, WebAuthn, CORS, SSE, or adapter contract pack changed | Release notes owner-operated section — defer with honest gaps when not run |
+| Builder acceptance | Contract pack or generator-neutral frontend path changed | `dashboard/g8e-adapter/contract-pack/` — defer when not run |
+| Cross-platform trust | `gw connect`, trust installation, or certificate flows changed | Release notes security section — defer when not run |
 | Clean offline acceptance | Signed compliance report contract or verifier changed | [Standard Checklist Template](#standard-checklist-template), release notes |
-| E2E with owner credentials | CLI or gateway flows requiring enrolled identity changed | `./g8e test e2e` |
+| E2E with owner credentials | CLI or gateway flows requiring enrolled identity changed | `./g8e test e2e` — defer when not run |
 
-Record owner-operated and human gates in the release notes (`### Deferred` or a dedicated acceptance subsection) when they cannot be satisfied before tag. Do not claim passing results that were not demonstrated.
+Record owner-operated and human gates in the release notes (`### Deferred` or a dedicated acceptance subsection) when they cannot be satisfied before tag. Do not claim passing results that were not demonstrated. **Do not block ship on optional live eval demos** unless release notes explicitly assert they completed.
 
 ---
 
@@ -483,7 +445,7 @@ Do not maintain a hard-coded list of versioned documents here. The [Documentatio
 
 ## Standard Checklist Template
 
-Copy this template into [Release Checklist](#release-checklist) when starting the next release. Replace `vX.Y.Z`, `X.Y.Z`, and the release range placeholder.
+Copy this template into a version-specific working tracker when starting a release (for example `.local.dev/docs/plans/in-progress/vX.Y.Z-readiness.md`). Replace `vX.Y.Z`, `X.Y.Z`, and the release range placeholder. **Do not paste checked progress back into this file.**
 
 ### Checklist for vX.Y.Z
 
@@ -506,7 +468,8 @@ Copy this template into [Release Checklist](#release-checklist) when starting th
 
 #### Large-release gates (when applicable)
 
-- [ ] Complete every applicable gate from [Large Release Gates](#large-release-gates)
+- [ ] **Automated test matrix** — `./g8e test unit`, `./g8e test integration`, `./g8e test lint`, `./g8e test coverage`, ensemble `make test` / `make lint`, adapter `npm test` / `npm run lint` / contract-pack check
+- [ ] Complete every other applicable gate from [Large Release Gates](#large-release-gates), or record an honest deferral in release notes
 
 #### Release owner (commit, merge, tag)
 
