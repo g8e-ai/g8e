@@ -379,8 +379,8 @@ func TestPrintPlatformEnrollmentInstructions_UsesSplitDemoPorts(t *testing.T) {
 			output := buf.String()
 			endpointFlags := " -e localhost:" + tt.httpPort + " --port " + tt.httpsPort
 			assert.Contains(t, output, "./g8e auth enroll user"+endpointFlags)
-			assert.Contains(t, output, "./g8e auth pending-platform-enrollments"+endpointFlags)
-			assert.Contains(t, output, "./g8e auth approve-platform-enrollment <request-id> --yes"+endpointFlags)
+			assert.Contains(t, output, "./g8e auth enroll pending"+endpointFlags)
+			assert.Contains(t, output, "./g8e auth enroll approve <request-id> --yes"+endpointFlags)
 		})
 	}
 }
@@ -442,7 +442,7 @@ func TestRunScenario(t *testing.T) {
 
 func TestRunAllScenarios(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for org without scenarios", func(t *testing.T) {
-		err := runAllScenarios(context.Background(), nil, &cobra.Command{}, "unknown-org", "/tmp", demoTestRunID)
+		err := runAllScenarios(context.Background(), nil, silentCobraCommand(), "unknown-org", "/tmp", demoTestRunID)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
@@ -536,7 +536,7 @@ func TestSummarizeScenarioResults(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := &cobra.Command{}
+			cmd := silentCobraCommand()
 			err := summarizeScenarioResults(cmd, "fedramp", tc.results)
 			if tc.wantErr {
 				require.Error(t, err)
@@ -582,25 +582,6 @@ func TestGetProjectRoot(t *testing.T) {
 		root := getProjectRoot()
 		assert.NotEmpty(t, root)
 		assert.IsType(t, "", root)
-	})
-}
-
-func TestBinaryPathConstruction(t *testing.T) {
-	t.Run("uses .exe extension on Windows", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			binPath := filepath.Join(constants.DemosDirname, constants.BinDirname, "g8e.exe")
-			assert.True(t, strings.HasSuffix(binPath, ".exe"))
-		} else {
-			binPath := filepath.Join(constants.DemosDirname, constants.BinDirname, "g8e")
-			assert.False(t, strings.HasSuffix(binPath, ".exe"))
-		}
-	})
-
-	t.Run("uses no extension on non-Windows", func(t *testing.T) {
-		if runtime.GOOS != "windows" {
-			binPath := filepath.Join(constants.DemosDirname, constants.BinDirname, "g8e")
-			assert.False(t, strings.HasSuffix(binPath, ".exe"))
-		}
 	})
 }
 

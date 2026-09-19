@@ -10,12 +10,8 @@ from __future__ import annotations
 import pytest
 
 from app.utils.security import (
-    DEFAULT_KEY_DERIVATION_ITERATIONS,
-    DEFAULT_KEY_DERIVATION_SALT,
     derive_key_identifier,
     hash_password,
-    is_shell_required,
-    validate_safe_path,
     verify_password,
 )
 

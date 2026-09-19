@@ -101,6 +101,8 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             investigation_id=investigation.id,
             web_session_id=request.web_session_id,
             user_id=request.user_id,
+            operator_id=request.operator_id,
+            operator_session_id=request.operator_session_id,
             payload=DocumentUpdateRequestPayload(
                 collection=self.collection,
                 document_id=investigation.id,

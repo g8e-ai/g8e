@@ -22,11 +22,12 @@ Run these commands from the repository root:
 
 The start command launches the Gateway, Operator, ensemble, and dashboard. On a fresh deployment, it enrolls the first owner and prompts for approval of each platform workload. The ensemble generates its own key and certificate signing request, then remains unavailable until an enrolled owner approves its request.
 
-The automated walkthrough checks each workload once. If the ensemble request is not available when checked, list and approve it manually:
+The automated walkthrough checks each workload once. If the ensemble request is not available when checked, list and decide it manually:
 
 ```bash
-./g8e auth pending-platform-enrollments
-./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+./g8e auth enroll pending
+./g8e auth enroll approve <ensemble-request-id> --yes
+# or: ./g8e auth enroll deny <ensemble-request-id> --yes
 ```
 
 Approve the Operator before the ensemble when both are pending. Governed submissions use the enrolled Operator identity, while other ensemble connections use the ensemble workload identity.
@@ -69,12 +70,11 @@ G8E_GATEWAY_HTTP_URL=http://localhost:8080
 G8E_GATEWAY_URL=https://localhost:8443
 G8E_OPERATOR_URL=https://localhost:8443
 G8E_OPERATOR_PUBSUB_URL=wss://localhost:8443
-G8E_OPERATOR_BLOB_URL=https://localhost:8443
 ```
 
 Configure a model provider and model before using chat. Environment variables provide bootstrap defaults, while stored platform settings and request-specific values take precedence. See [LLM Providers](llm-providers.md) for the supported providers and exact configuration keys.
 
-Governed collection mutations require an Operator-bound identity. Set `G8E_GOVERNANCE_OPERATOR_CERT` and `G8E_GOVERNANCE_OPERATOR_KEY` to the enrolled Operator certificate and key paths. Without both values, the ensemble starts with its app identity but governed submissions fail closed at the Gateway.
+Governed collection mutations use the ensemble's enrolled app identity for transport and carry the authenticated user's operator binding as delegated authority. The gateway verifies the app certificate against `acting_app_id` and validates the delegated operator session independently.
 
 Start the development server from `ensemble/` with the virtual environment active:
 

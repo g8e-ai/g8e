@@ -307,6 +307,462 @@ class TestOllamaProviderGeneration:
         assert response.usage_metadata is not None
 
 
+class TestOllamaNativeDurations:
+    """Ollama native nanosecond durations map to seconds on UsageMetadata.
+
+    Ollama responses and terminal stream chunks carry eval_duration,
+    prompt_eval_duration, total_duration, and load_duration in
+    nanoseconds. The provider adapter converts them to seconds at the
+    boundary. Absent fields stay None — never synthesized. Streaming
+    calls additionally stamp time_to_first_token_seconds from first
+    content/thinking/tool_calls chunk arrival.
+    """
+
+    @pytest.fixture
+    def provider(self):
+        mock_client = MagicMock()
+        with patch(PATCH_TARGET, return_value=mock_client):
+            provider = OllamaProvider(
+                endpoint="http://localhost:11434",
+                api_key="test-key",
+            )
+            yield provider, mock_client
+
+    @staticmethod
+    def _primary_settings() -> PrimaryLLMSettings:
+        return PrimaryLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            thinking_config=ThinkingConfig(
+                thinking_level=ThinkingLevel.OFF, include_thoughts=False
+            ),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
+        )
+
+    @staticmethod
+    def _set_durations(response, *, prompt_eval_ns, eval_ns, total_ns, load_ns):
+        response.prompt_eval_duration = prompt_eval_ns
+        response.eval_duration = eval_ns
+        response.total_duration = total_ns
+        response.load_duration = load_ns
+
+    @pytest.mark.asyncio
+    async def test_generate_content_primary_maps_native_durations_to_seconds(self, provider):
+        provider, mock_client = provider
+        mock_response = MagicMock()
+        mock_response.message.content = "Hello World"
+        mock_response.message.thinking = None
+        mock_response.message.tool_calls = None
+        mock_response.done_reason = "stop"
+        mock_response.prompt_eval_count = 10
+        mock_response.eval_count = 5
+        self._set_durations(
+            mock_response,
+            prompt_eval_ns=10_000_000,
+            eval_ns=40_000_000,
+            total_ns=52_000_000,
+            load_ns=2_000_000,
+        )
+        mock_client.chat = AsyncMock(return_value=mock_response)
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        response = await provider.generate_content_primary(
+            "llama3", contents, self._primary_settings()
+        )
+
+        usage = response.usage_metadata
+        assert usage.prompt_eval_duration_seconds == 0.01
+        assert usage.eval_duration_seconds == 0.04
+        assert usage.total_duration_seconds == 0.052
+        assert usage.load_duration_seconds == 0.002
+        # Non-streaming boundary cannot measure TTFT
+        assert usage.time_to_first_token_seconds is None
+
+    @pytest.mark.asyncio
+    async def test_generate_content_primary_absent_durations_stay_none(self, provider):
+        provider, mock_client = provider
+        mock_response = MagicMock()
+        mock_response.message.content = "Hello World"
+        mock_response.message.thinking = None
+        mock_response.message.tool_calls = None
+        mock_response.done_reason = "stop"
+        mock_response.prompt_eval_count = 10
+        mock_response.eval_count = 5
+        self._set_durations(
+            mock_response, prompt_eval_ns=None, eval_ns=None, total_ns=None, load_ns=None
+        )
+        mock_client.chat = AsyncMock(return_value=mock_response)
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        response = await provider.generate_content_primary(
+            "llama3", contents, self._primary_settings()
+        )
+
+        usage = response.usage_metadata
+        assert usage.prompt_eval_duration_seconds is None
+        assert usage.eval_duration_seconds is None
+        assert usage.total_duration_seconds is None
+        assert usage.load_duration_seconds is None
+        # Token counts still map
+        assert usage.prompt_token_count == 10
+        assert usage.candidates_token_count == 5
+        assert usage.usage_reported is True
+
+    @pytest.mark.asyncio
+    async def test_generate_content_assistant_maps_native_durations(self, provider):
+        provider, mock_client = provider
+        mock_response = MagicMock()
+        mock_response.message.content = "Hello World"
+        mock_response.done_reason = "stop"
+        mock_response.prompt_eval_count = 10
+        mock_response.eval_count = 5
+        self._set_durations(
+            mock_response,
+            prompt_eval_ns=5_000_000,
+            eval_ns=20_000_000,
+            total_ns=30_000_000,
+            load_ns=1_000_000,
+        )
+        mock_client.chat = AsyncMock(return_value=mock_response)
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = AssistantLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            response_format=ResponseFormat(
+                json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")
+            ),
+        )
+        response = await provider.generate_content_assistant("llama3", contents, settings)
+
+        usage = response.usage_metadata
+        assert usage.prompt_eval_duration_seconds == 0.005
+        assert usage.eval_duration_seconds == 0.02
+        assert usage.total_duration_seconds == 0.03
+        assert usage.load_duration_seconds == 0.001
+        assert usage.time_to_first_token_seconds is None
+
+    @pytest.mark.asyncio
+    async def test_generate_content_lite_maps_native_durations(self, provider):
+        provider, mock_client = provider
+        mock_response = MagicMock()
+        mock_response.message.content = "Hello World"
+        mock_response.done_reason = "stop"
+        mock_response.prompt_eval_count = 10
+        mock_response.eval_count = 5
+        self._set_durations(
+            mock_response,
+            prompt_eval_ns=5_000_000,
+            eval_ns=20_000_000,
+            total_ns=30_000_000,
+            load_ns=1_000_000,
+        )
+        mock_client.chat = AsyncMock(return_value=mock_response)
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = LiteLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            response_format=ResponseFormat(
+                json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")
+            ),
+        )
+        response = await provider.generate_content_lite("llama3", contents, settings)
+
+        usage = response.usage_metadata
+        assert usage.prompt_eval_duration_seconds == 0.005
+        assert usage.eval_duration_seconds == 0.02
+        assert usage.total_duration_seconds == 0.03
+        assert usage.load_duration_seconds == 0.001
+        assert usage.time_to_first_token_seconds is None
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_stamps_ttft_and_maps_durations(self, provider):
+        provider, mock_client = provider
+
+        mock_chunk1 = MagicMock()
+        mock_chunk1.message.content = "Hello"
+        mock_chunk1.message.thinking = None
+        mock_chunk1.message.tool_calls = None
+        mock_chunk1.done = False
+
+        mock_chunk2 = MagicMock()
+        mock_chunk2.message.content = " World"
+        mock_chunk2.message.thinking = None
+        mock_chunk2.message.tool_calls = None
+        mock_chunk2.done = True
+        mock_chunk2.done_reason = "stop"
+        mock_chunk2.prompt_eval_count = 10
+        mock_chunk2.eval_count = 5
+        self._set_durations(
+            mock_chunk2,
+            prompt_eval_ns=10_000_000,
+            eval_ns=40_000_000,
+            total_ns=52_000_000,
+            load_ns=2_000_000,
+        )
+
+        async def mock_stream():
+            yield mock_chunk1
+            yield mock_chunk2
+
+        mock_client.chat = AsyncMock(return_value=mock_stream())
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "llama3", contents, self._primary_settings()
+            )
+        ]
+
+        terminal = chunks[-1]
+        usage = terminal.usage_metadata
+        assert usage is not None
+        assert usage.time_to_first_token_seconds is not None
+        assert usage.time_to_first_token_seconds >= 0.0
+        assert usage.prompt_eval_duration_seconds == 0.01
+        assert usage.eval_duration_seconds == 0.04
+        assert usage.total_duration_seconds == 0.052
+        assert usage.load_duration_seconds == 0.002
+        assert usage.prompt_token_count == 10
+        assert usage.candidates_token_count == 5
+        assert usage.usage_reported is True
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_thinking_chunk_counts_as_first_token(self, provider):
+        """A thinking-only first chunk is first-token evidence."""
+        provider, mock_client = provider
+
+        mock_chunk1 = MagicMock()
+        mock_chunk1.message.content = None
+        mock_chunk1.message.thinking = "reasoning..."
+        mock_chunk1.message.tool_calls = None
+        mock_chunk1.done = False
+
+        mock_chunk2 = MagicMock()
+        mock_chunk2.message.content = "answer"
+        mock_chunk2.message.thinking = None
+        mock_chunk2.message.tool_calls = None
+        mock_chunk2.done = True
+        mock_chunk2.done_reason = "stop"
+        mock_chunk2.prompt_eval_count = 10
+        mock_chunk2.eval_count = 5
+        self._set_durations(
+            mock_chunk2,
+            prompt_eval_ns=10_000_000,
+            eval_ns=40_000_000,
+            total_ns=52_000_000,
+            load_ns=2_000_000,
+        )
+
+        async def mock_stream():
+            yield mock_chunk1
+            yield mock_chunk2
+
+        mock_client.chat = AsyncMock(return_value=mock_stream())
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "llama3", contents, self._primary_settings()
+            )
+        ]
+
+        terminal = chunks[-1]
+        assert terminal.usage_metadata.time_to_first_token_seconds is not None
+        assert terminal.usage_metadata.time_to_first_token_seconds >= 0.0
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_tool_call_chunk_counts_as_first_token(self, provider):
+        """A tool_calls-only first chunk is first-token evidence."""
+        provider, mock_client = provider
+
+        tool_call = MagicMock()
+        tool_call.function.name = "run_cmd"
+        tool_call.function.arguments = {"cmd": "ls"}
+
+        mock_chunk1 = MagicMock()
+        mock_chunk1.message.content = None
+        mock_chunk1.message.thinking = None
+        mock_chunk1.message.tool_calls = [tool_call]
+        mock_chunk1.done = False
+
+        mock_chunk2 = MagicMock()
+        mock_chunk2.message.content = None
+        mock_chunk2.message.thinking = None
+        mock_chunk2.message.tool_calls = None
+        mock_chunk2.done = True
+        mock_chunk2.done_reason = "stop"
+        mock_chunk2.prompt_eval_count = 10
+        mock_chunk2.eval_count = 0
+        self._set_durations(
+            mock_chunk2,
+            prompt_eval_ns=10_000_000,
+            eval_ns=1_000_000,
+            total_ns=12_000_000,
+            load_ns=1_000_000,
+        )
+
+        async def mock_stream():
+            yield mock_chunk1
+            yield mock_chunk2
+
+        mock_client.chat = AsyncMock(return_value=mock_stream())
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "llama3", contents, self._primary_settings()
+            )
+        ]
+
+        terminal = chunks[-1]
+        assert terminal.usage_metadata.time_to_first_token_seconds is not None
+        assert terminal.usage_metadata.time_to_first_token_seconds >= 0.0
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_ttft_none_when_no_token_chunks(self, provider):
+        """A stream with only a done chunk has no first-token observation."""
+        provider, mock_client = provider
+
+        mock_chunk = MagicMock()
+        mock_chunk.message.content = None
+        mock_chunk.message.thinking = None
+        mock_chunk.message.tool_calls = None
+        mock_chunk.done = True
+        mock_chunk.done_reason = "stop"
+        mock_chunk.prompt_eval_count = 10
+        mock_chunk.eval_count = 0
+        self._set_durations(
+            mock_chunk,
+            prompt_eval_ns=10_000_000,
+            eval_ns=1_000_000,
+            total_ns=12_000_000,
+            load_ns=1_000_000,
+        )
+
+        async def mock_stream():
+            yield mock_chunk
+
+        mock_client.chat = AsyncMock(return_value=mock_stream())
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_primary(
+                "llama3", contents, self._primary_settings()
+            )
+        ]
+
+        terminal = chunks[-1]
+        assert terminal.usage_metadata.time_to_first_token_seconds is None
+        assert terminal.usage_metadata.eval_duration_seconds == 0.001
+
+    @pytest.mark.asyncio
+    async def test_stream_assistant_stamps_ttft_and_maps_durations(self, provider):
+        provider, mock_client = provider
+
+        mock_chunk1 = MagicMock()
+        mock_chunk1.message.content = "Hello"
+        mock_chunk1.done = False
+
+        mock_chunk2 = MagicMock()
+        mock_chunk2.message.content = " World"
+        mock_chunk2.done = True
+        mock_chunk2.done_reason = "stop"
+        mock_chunk2.prompt_eval_count = 10
+        mock_chunk2.eval_count = 5
+        self._set_durations(
+            mock_chunk2,
+            prompt_eval_ns=10_000_000,
+            eval_ns=40_000_000,
+            total_ns=52_000_000,
+            load_ns=2_000_000,
+        )
+
+        async def mock_stream():
+            yield mock_chunk1
+            yield mock_chunk2
+
+        mock_client.chat = AsyncMock(return_value=mock_stream())
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = AssistantLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            response_format=ResponseFormat(
+                json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")
+            ),
+        )
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_assistant(
+                "llama3", contents, settings
+            )
+        ]
+
+        terminal = chunks[-1]
+        assert terminal.usage_metadata.time_to_first_token_seconds is not None
+        assert terminal.usage_metadata.time_to_first_token_seconds >= 0.0
+        assert terminal.usage_metadata.eval_duration_seconds == 0.04
+
+    @pytest.mark.asyncio
+    async def test_stream_lite_stamps_ttft_and_maps_durations(self, provider):
+        provider, mock_client = provider
+
+        mock_chunk1 = MagicMock()
+        mock_chunk1.message.content = "Hello"
+        mock_chunk1.done = False
+
+        mock_chunk2 = MagicMock()
+        mock_chunk2.message.content = " World"
+        mock_chunk2.done = True
+        mock_chunk2.done_reason = "stop"
+        mock_chunk2.prompt_eval_count = 10
+        mock_chunk2.eval_count = 5
+        self._set_durations(
+            mock_chunk2,
+            prompt_eval_ns=10_000_000,
+            eval_ns=40_000_000,
+            total_ns=52_000_000,
+            load_ns=2_000_000,
+        )
+
+        async def mock_stream():
+            yield mock_chunk1
+            yield mock_chunk2
+
+        mock_client.chat = AsyncMock(return_value=mock_stream())
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = LiteLLMSettings(
+            system_instructions="You are a helpful assistant",
+            max_output_tokens=1000,
+            response_format=ResponseFormat(
+                json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")
+            ),
+        )
+        chunks = [
+            chunk
+            async for chunk in provider.generate_content_stream_lite(
+                "llama3", contents, settings
+            )
+        ]
+
+        terminal = chunks[-1]
+        assert terminal.usage_metadata.time_to_first_token_seconds is not None
+        assert terminal.usage_metadata.time_to_first_token_seconds >= 0.0
+        assert terminal.usage_metadata.eval_duration_seconds == 0.04
+
+
 class TestOllamaEmptyResponseError:
     """Test that OllamaEmptyResponseError is raised for empty responses."""
 

@@ -118,7 +118,7 @@ class TestToTimestamp:
         assert isinstance(result, float)
 
     def test_naive_datetime_treated_as_utc(self):
-        naive = datetime(2026, 3, 3, 19, 5, 0)  # noqa: DTZ001
+        naive = datetime(2026, 3, 3, 19, 5, 0)
         aware = datetime(2026, 3, 3, 19, 5, 0, tzinfo=UTC)
         assert abs(to_timestamp(naive) - to_timestamp(aware)) < 1e-6
 
@@ -162,7 +162,7 @@ class TestParseIso:
 
 class TestEnsureUtc:
     def test_naive_datetime_gets_utc(self):
-        naive = datetime(2026, 1, 1, 0, 0, 0)  # noqa: DTZ001
+        naive = datetime(2026, 1, 1, 0, 0, 0)
         result = ensure_utc(naive)
         assert result.tzinfo == UTC
 
@@ -219,7 +219,7 @@ class TestIsExpired:
         assert is_expired(future) is False
 
     def test_naive_past_treated_as_expired(self):
-        naive_past = datetime.now() - timedelta(seconds=10)  # noqa: DTZ005
+        naive_past = datetime.now() - timedelta(seconds=10)
         assert is_expired(naive_past) is True
 
 
@@ -320,7 +320,7 @@ class TestTimeUntil:
         assert result == "in 1 day"
 
     def test_naive_datetime_accepted(self):
-        future = datetime.now() + timedelta(seconds=60)  # noqa: DTZ005
+        future = datetime.now() + timedelta(seconds=60)
         result = time_until(future)
         assert isinstance(result, str)
 
@@ -347,7 +347,7 @@ class TestFormatForDisplay:
         assert result == "15/03/2026"
 
     def test_naive_datetime_treated_as_utc(self):
-        naive = datetime(2026, 3, 15, 12, 0, 0)  # noqa: DTZ001
+        naive = datetime(2026, 3, 15, 12, 0, 0)
         result = format_for_display(naive)
         assert "2026-03-15" in result
 

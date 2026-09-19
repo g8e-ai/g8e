@@ -75,15 +75,16 @@ func TestAuditReceiptsCmd_API_JSONOutput(t *testing.T) {
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditReceiptsCmdWithConfig(loader, factory, newFileSvc)
+	enableGlobalJSON(t, cmd)
 	cmd.Flags().Set("session", "op-sess-test")
-	cmd.Flags().Set("json", "true")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
 	err := cmd.RunE(cmd, []string{})
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), rawJSON)
+	assert.Contains(t, buf.String(), `"receipts"`)
+	assert.Contains(t, buf.String(), `[]`)
 }
 
 func TestAuditReceiptsCmd_API_EmptyReceipts(t *testing.T) {
@@ -332,15 +333,16 @@ func TestAuditEventsCmd_API_JSONOutput(t *testing.T) {
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditEventsCmdWithConfig(loader, factory, newFileSvc)
+	enableGlobalJSON(t, cmd)
 	cmd.Flags().Set("session", "op-sess-test")
-	cmd.Flags().Set("json", "true")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
 	err := cmd.RunE(cmd, []string{})
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), rawJSON)
+	assert.Contains(t, buf.String(), `"events"`)
+	assert.Contains(t, buf.String(), `"count": 0`)
 }
 
 func TestAuditEventsCmd_API_EmptyEvents(t *testing.T) {

@@ -453,7 +453,7 @@ class TestSingletonGetter:
 
 class TestConvenienceFunctions:
     def test_validate_command_against_whitelist_delegates(self, monkeypatch, whitelist_path):
-        import app.utils.whitelist_validator as wv_module  # noqa: PLC0415
+        import app.utils.whitelist_validator as wv_module
 
         fresh = CommandWhitelistValidator(whitelist_path=whitelist_path)
         monkeypatch.setattr(wv_module, "_validator_instance", fresh)

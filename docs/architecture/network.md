@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-08-26
-Version: v2.0.2
+Last Updated: 2026-09-19
+Version: v2.1.8
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -114,6 +114,9 @@ The old `handleCLIEnrollment` endpoint (`/api/v1/auth/cli/enroll`) and the trust
 - `POST /api/v1/auth/cli/recovery/approve-cli` is HTTPS-only and mTLS-only; it is the headless counterpart to the browser approve endpoint. An already-enrolled CLI authorizes the new CLI via `g8e auth approve-recovery <token>`, and the approver user ID is derived from the verified mTLS certificate URI SAN by the unified auth middleware. It is never registered on the plain HTTP router.
 - `POST /api/v1/auth/cli/rotate` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. Identity is derived from the verified client certificate, and only one replacement is performed per run.
 - `POST /api/v1/auth/cli/refresh` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. It allows a CLI with a valid certificate but an expired or missing session to re-establish its session without rotating the certificate. Identity is derived from the verified client certificate URI SAN.
+- `GET /api/v1/auth/cli/session` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. It returns the authenticated CLI session's persisted identity binding (`cli_session_id`, `user_id`, `operator_session_id`, and `operator_id`) resolved from the session record and the operators collection, never from request headers. A session with no operator binding reports empty operator fields; `g8e auth context` uses the response to resync local credentials against server-side state.
+- `POST /api/v1/auth/cli/bind` and `POST /api/v1/auth/cli/unbind` are HTTPS-only and mTLS-only. They pin or clear the authenticated CLI session's operator binding. A successful bind or unbind issues a replacement CLI session server-side; local credentials must be updated to the returned `cli_session_id`. The target operator session must be active and belong to the authenticated user.
+- `POST /api/v1/operators/commands` is HTTPS-only and mTLS-only. Enrolled CLI callers submit typed dispatch requests with an explicit `target_operator_session_id`; the gateway constructs the governed envelope, publishes to the target operator's `cmd:` channel, and blocks until a terminal command result arrives. `g8e operator run` is the supported CLI surface for parallel `EXECUTE_BASH` fan-out to multiple operator sessions.
 
 The recovery request, status, and complete endpoints are reachable over both plain HTTP and HTTPS so a new CLI without trusted TLS can initiate recovery. The approve endpoint is HTTPS-only because it requires a web-session cookie, which is only set over TLS. The approve-cli endpoint is HTTPS-only and mTLS-only because the approver must already hold a valid CLI certificate.
 
@@ -128,6 +131,16 @@ Platform enrollment allows unenrolled workloads (dashboard, ensemble, operator) 
 - `POST /api/v1/auth/platform-enrollments/decision` is HTTPS-only and requires owner authentication (web session cookie or mTLS CLI); the controller enforces active-first-user authorization after the middleware stamps the user ID.
 
 The request, status, and complete endpoints are reachable over both plain HTTP and HTTPS so an unenrolled workload without a client certificate can initiate enrollment. The pending and decision endpoints are HTTPS-only because they require owner authentication, which is only available over TLS.
+
+### Cross-Gateway Enrollment
+
+The platform enrollment protocol does not screen requester identity. The request endpoint is unauthenticated (`RouteAuthNone`), validation checks only CSR key material and format, and the upstream owner's manual approval is the sole admission gate. Nothing in the request validation, CSR signing, or channel ACL paths inspects whether the requester is itself a gateway or rejects gateway-originated certificates. This is permissive by design and is covered by integration and Docker E2E tests in `test/e2e/cross_enrollment_e2e_test.go`.
+
+Because the gateway binary runs the same `operator start -e <upstream-gateway>` path as any standalone operator, a gateway can enroll as an operator of another gateway. The enrolling gateway submits an operator CSR through the platform enrollment protocol, the upstream owner approves it through the same pending-list and operator-registry surfaces as any standalone operator, and the enrolling gateway receives operator and CLI leaf certificates signed by the upstream gateway's Operator intermediate CA. The issued identity is `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` — the standard operator identity path, not the gateway peer PKI tier.
+
+The enrolled gateway-as-operator then dials out to the upstream gateway over outbound-only mTLS, subscribes to its session-specific command channel, and executes governed commands through its own L4 Warden and L5 Actuator. It re-verifies the L1-L3 proofs attached by the upstream gateway before the Actuator executes, exactly as a standalone operator does. The upstream owner discovers, approves, denies, and manages the gateway-as-operator through the same surfaces as any standalone operator; denial produces no active operator and leaves the upstream gateway healthy.
+
+This enables cascading outbound-only topologies. A gateway deployed at the absolute edge — where the data lives — enrolls outbound-only to an upstream gateway, which may itself enroll outbound-only to a gateway further in, and so on to a root gateway. Every hop is an outbound mTLS connection, no edge device opens an inbound management port, and the operator at each edge re-verifies the full L1-L3 proof chain before execution. Cross-gateway enrollment uses the operator identity path and is distinct from the gateway peer PKI tier (`spiffe://g8e.local/gateway/<gateway_id>`), which is a separate federated communication tier for peer-to-peer gateway messaging. See [Operator Architecture](./operator.md#cross-gateway-enrollment-cascading-outbound-topologies) for the operator-side re-verification behavior.
 
 ### Passkey Enrollment Routes
 
@@ -207,6 +220,9 @@ The docker-compose stack starts two first-party services alongside the gateway. 
 | --- | --- | --- |
 | **Ensemble (g8ee)** | `8000` | Python/FastAPI agentic ensemble; connects to the gateway over mTLS and streams events via SSE. See [Ensemble (g8ee)](./ensemble.md). |
 | **Dashboard (g8ed)** | `3000` | Node.js/Express operator dashboard UI. See [Dashboard (g8ed)](./dashboard.md). |
+| **Public spectator private ingest** | `8081` (loopback default) | Authenticated public-feed batch and proof ingest when `--public-spectator` is enabled. Not part of the primary mTLS execution boundary. |
+| **Public spectator public read** | `8082` (loopback default) | Anonymous bootstrap, history, SSE, and proof downloads for the in-process mirror. Cloudflared targets this listener only. |
+| **Evaluation explorer (dev)** | `5173` | Checked-in SPA for campaign observation against the public mirror. See [Public Spectator Architecture](./public_spectator.md). |
 
 ---
 
@@ -236,7 +252,7 @@ When `g8e.local` does not resolve via system DNS, the `mcp stdio` path falls bac
 
 ### Outbound-Only WebSocket Connectivity
 
-The Governed Operator uses dial-out WebSocket pub/sub connections with zero inbound port requirements. The operator establishes a persistent WebSocket connection to the gateway's `/api/v1/pubsub/stream` endpoint using mTLS. This eliminates the need to open inbound ports on managed hosts, reducing the attack surface.
+The Governed Operator uses dial-out WebSocket pub/sub connections with zero inbound port requirements. The operator establishes a persistent WebSocket connection to the gateway's `/api/v1/pubsub/stream` endpoint using mTLS. This eliminates the need to open inbound ports on managed hosts, reducing the attack surface. A gateway enrolled as an operator of another gateway uses the same outbound path, so cascading topologies preserve the zero-inbound-port property at every edge hop.
 
 ### WebSocket Pub/Sub
 
@@ -252,7 +268,7 @@ When configured, the Governed Operator can receive work via an alternative inbou
 
 ### Server-Sent Events (SSE)
 
-The gateway provides real-time event streaming from app workloads to browser and CLI clients via dedicated push, polling, and live stream endpoints. Events are routed by session or user identity. See [SSE Streaming](./sse.md) for details.
+The gateway provides real-time event streaming from app workloads to browser and CLI clients via dedicated push, polling, and live stream endpoints. Events are routed by session or user identity. The observe read API (`GET /api/v1/observe/*`) and mTLS producer endpoints (`POST /api/v1/observe/producer/agent-state`, `POST /api/v1/observe/producer/run-state`) complement SSE for browser observability. See [SSE Streaming](./sse.md) for details.
 
 ### Agent Integration
 
@@ -287,3 +303,4 @@ This information is used for certificate SAN generation and peer discovery. The 
 - [g8e Operator](./operator.md)
 - [Ensemble (g8ee)](./ensemble.md)
 - [Dashboard (g8ed)](./dashboard.md)
+- [Public Spectator Architecture](./public_spectator.md)

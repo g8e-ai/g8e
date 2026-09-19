@@ -9,9 +9,10 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
-	"net/url"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -56,6 +57,9 @@ func authContextCmdWithConfig(
 				if err := resolveClientOperatorContext(client, context); err != nil {
 					return err
 				}
+				if err := persistClientOperatorContext(fileSvc, cfg, context); err != nil {
+					return err
+				}
 			}
 			if err := json.NewEncoder(cmd.OutOrStdout()).Encode(context); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
@@ -67,32 +71,49 @@ func authContextCmdWithConfig(
 	return cmd
 }
 
+// resolveClientOperatorContext resolves the authoritative operator binding
+// from the gateway's persisted CLI session record (GET
+// /api/v1/auth/cli/session). The persisted binding is authoritative — it is
+// stamped at session issuance and enforced by the auth middleware — so this
+// endpoint, not an operator listing query, is the source of truth.
 func resolveClientOperatorContext(client apiClient, context *auth.ClientAuthContext) error {
-	query := url.Values{"user_id": {context.UserID}}
-	response, err := client.Get(constants.APIPaths.Operators + "?" + query.Encode())
+	response, err := client.Get(constants.APIPaths.AuthCLISession)
 	if err != nil {
-		return fmt.Errorf("auth context: resolve operator: %w", err)
+		// A stale local operator binding is rejected with 403 before the
+		// session record can be returned; direct the user to the refresh
+		// path that resyncs the binding.
+		if errors.Is(err, constants.ErrHTTPStatusError) && strings.Contains(err.Error(), constants.ErrOperatorBindingMismatch.Error()) {
+			return fmt.Errorf("%w: %s", constants.ErrNotAuthenticated, constants.ErrOperatorBindingMismatch.Error())
+		}
+		return fmt.Errorf("auth context: resolve CLI session: %w", err)
 	}
-	var slots models.OperatorSlotResponse
-	if err := json.Unmarshal(response, &slots); err != nil {
+	var info models.CLISessionInfoResponse
+	if err := json.Unmarshal(response, &info); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
-	matches := make([]models.OperatorDocumentGo, 0, len(slots.Operators))
-	for _, operator := range slots.Operators {
-		if operator.OperatorSessionID == "" {
-			continue
-		}
-		if operator.Status == constants.OperatorStatusTerminated {
-			continue
-		}
-		if context.OperatorID == "" || operator.ID == context.OperatorID {
-			matches = append(matches, operator)
-		}
+	if info.OperatorSessionID == "" || info.OperatorID == "" {
+		return fmt.Errorf("%w: CLI session has no operator binding; run './g8e auth refresh' or re-enroll with './g8e auth enroll user'", constants.ErrNotAuthenticated)
 	}
-	if len(matches) != 1 {
-		return fmt.Errorf("%w: expected one active operator binding, found %d", constants.ErrNotAuthenticated, len(matches))
+	context.OperatorID = info.OperatorID
+	context.OperatorSessionID = info.OperatorSessionID
+	return nil
+}
+
+// persistClientOperatorContext writes the authoritative operator binding
+// resolved by resolveClientOperatorContext back to the local credentials
+// file so subsequent requests send matching operator headers.
+func persistClientOperatorContext(fileSvc fs.RuntimeFileService, cfg *config.Config, context *auth.ClientAuthContext) error {
+	creds, err := auth.LoadCredentials(fileSvc, cfg)
+	if err != nil {
+		return fmt.Errorf("auth context: %w", err)
 	}
-	context.OperatorID = matches[0].ID
-	context.OperatorSessionID = matches[0].OperatorSessionID
+	if creds == nil {
+		return fmt.Errorf("%w: local CLI credentials are absent; run './g8e auth enroll user'", constants.ErrNotAuthenticated)
+	}
+	creds.OperatorID = context.OperatorID
+	creds.OperatorSessionID = context.OperatorSessionID
+	if err := auth.SaveCredentials(fileSvc, cfg, creds); err != nil {
+		return fmt.Errorf("auth context: save credentials: %w", err)
+	}
 	return nil
 }

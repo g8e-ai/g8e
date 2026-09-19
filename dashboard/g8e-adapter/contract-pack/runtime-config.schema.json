@@ -1,0 +1,58 @@
+{
+  "$id": "https://g8e/contract-pack/runtime-config.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "app_name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "documentation_base_url": {
+      "description": "Optional docs origin. HTTPS or loopback http only.",
+      "pattern": "^https://[^/?#]+$|^http://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:\\d+)?/?$",
+      "type": "string"
+    },
+    "features": {
+      "additionalProperties": false,
+      "properties": {
+        "design_preview": {
+          "type": "boolean"
+        },
+        "downloads": {
+          "type": "boolean"
+        },
+        "eval_publication": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "gateway_base_url": {
+      "description": "Absolute Gateway origin. HTTPS required except loopback http (localhost, 127.0.0.1, [::1]). No userinfo, fragment, path, or query.",
+      "pattern": "^https://[^/?#]+$|^http://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:\\d+)?/?$",
+      "type": "string"
+    },
+    "passkey_rp_id": {
+      "description": "Bare domain (no protocol, port, path, fragment, or userinfo).",
+      "pattern": "^[^/?#:@]+$",
+      "type": "string"
+    },
+    "passkey_rp_name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "gateway_base_url",
+    "passkey_rp_id",
+    "passkey_rp_name",
+    "app_name"
+  ],
+  "title": "FrontendRuntimeConfig",
+  "type": "object"
+}

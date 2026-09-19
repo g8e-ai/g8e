@@ -366,6 +366,479 @@ func (DeterministicStageOutcome) EnumDescriptor() ([]byte, []int) {
 	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{5}
 }
 
+// ReceiptFailureCode is the typed classification of a FAILED ActionReceipt.
+// The L5 actuator stamps it at finalization so verifiers can distinguish
+// governance rejections, client faults, and provider failures without
+// string-matching the result_summary. It is bound into the receipt signature.
+type ReceiptFailureCode int32
+
+const (
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED ReceiptFailureCode = 0
+	// The transaction failed governance verification before execution
+	// (L1 doctrine, L2 consensus, L3 notary, identity, replay, expiry).
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED ReceiptFailureCode = 1
+	// The request model did not equal the configured role model.
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED ReceiptFailureCode = 2
+	// The request carried an unspecified or unknown model role.
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_ROLE_INVALID ReceiptFailureCode = 3
+	// The request carried a malformed model reference.
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REF_INVALID ReceiptFailureCode = 4
+	// The inference backend was unreachable or not registered.
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE ReceiptFailureCode = 5
+	// The inference backend request timed out.
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT ReceiptFailureCode = 6
+	// The inference backend failed generation.
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATE_FAILED ReceiptFailureCode = 7
+	// Any other execution failure.
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_EXECUTION_FAILED ReceiptFailureCode = 8
+	// The requested or configured model is absent from the provider's model store.
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND ReceiptFailureCode = 9
+	// The provider returned a malformed or oversized response.
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID  ReceiptFailureCode = 10
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID ReceiptFailureCode = 11
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED     ReceiptFailureCode = 12
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED  ReceiptFailureCode = 13
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH          ReceiptFailureCode = 14
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH      ReceiptFailureCode = 15
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID      ReceiptFailureCode = 16
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID     ReceiptFailureCode = 17
+	ReceiptFailureCode_RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID   ReceiptFailureCode = 18
+)
+
+// Enum value maps for ReceiptFailureCode.
+var (
+	ReceiptFailureCode_name = map[int32]string{
+		0:  "RECEIPT_FAILURE_CODE_UNSPECIFIED",
+		1:  "RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED",
+		2:  "RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED",
+		3:  "RECEIPT_FAILURE_CODE_ROLE_INVALID",
+		4:  "RECEIPT_FAILURE_CODE_MODEL_REF_INVALID",
+		5:  "RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE",
+		6:  "RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT",
+		7:  "RECEIPT_FAILURE_CODE_GENERATE_FAILED",
+		8:  "RECEIPT_FAILURE_CODE_EXECUTION_FAILED",
+		9:  "RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND",
+		10: "RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID",
+		11: "RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID",
+		12: "RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED",
+		13: "RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED",
+		14: "RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH",
+		15: "RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH",
+		16: "RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID",
+		17: "RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID",
+		18: "RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID",
+	}
+	ReceiptFailureCode_value = map[string]int32{
+		"RECEIPT_FAILURE_CODE_UNSPECIFIED":                0,
+		"RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED":        1,
+		"RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED":      2,
+		"RECEIPT_FAILURE_CODE_ROLE_INVALID":               3,
+		"RECEIPT_FAILURE_CODE_MODEL_REF_INVALID":          4,
+		"RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE":        5,
+		"RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT":            6,
+		"RECEIPT_FAILURE_CODE_GENERATE_FAILED":            7,
+		"RECEIPT_FAILURE_CODE_EXECUTION_FAILED":           8,
+		"RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND":            9,
+		"RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID":  10,
+		"RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID": 11,
+		"RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED":     12,
+		"RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED":  13,
+		"RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH":          14,
+		"RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH":      15,
+		"RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID":      16,
+		"RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID":     17,
+		"RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID":   18,
+	}
+)
+
+func (x ReceiptFailureCode) Enum() *ReceiptFailureCode {
+	p := new(ReceiptFailureCode)
+	*p = x
+	return p
+}
+
+func (x ReceiptFailureCode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ReceiptFailureCode) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_operator_v1_operator_proto_enumTypes[6].Descriptor()
+}
+
+func (ReceiptFailureCode) Type() protoreflect.EnumType {
+	return &file_g8e_operator_v1_operator_proto_enumTypes[6]
+}
+
+func (x ReceiptFailureCode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ReceiptFailureCode.Descriptor instead.
+func (ReceiptFailureCode) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{6}
+}
+
+// ModelRole identifies the chat-tier role for a governed inference request.
+// Maps directly to the three tiers in ensemble's LLMSettings.
+type ModelRole int32
+
+const (
+	ModelRole_MODEL_ROLE_UNSPECIFIED ModelRole = 0
+	ModelRole_MODEL_ROLE_PRIMARY     ModelRole = 1
+	ModelRole_MODEL_ROLE_ASSISTANT   ModelRole = 2
+	ModelRole_MODEL_ROLE_LITE        ModelRole = 3
+)
+
+// Enum value maps for ModelRole.
+var (
+	ModelRole_name = map[int32]string{
+		0: "MODEL_ROLE_UNSPECIFIED",
+		1: "MODEL_ROLE_PRIMARY",
+		2: "MODEL_ROLE_ASSISTANT",
+		3: "MODEL_ROLE_LITE",
+	}
+	ModelRole_value = map[string]int32{
+		"MODEL_ROLE_UNSPECIFIED": 0,
+		"MODEL_ROLE_PRIMARY":     1,
+		"MODEL_ROLE_ASSISTANT":   2,
+		"MODEL_ROLE_LITE":        3,
+	}
+)
+
+func (x ModelRole) Enum() *ModelRole {
+	p := new(ModelRole)
+	*p = x
+	return p
+}
+
+func (x ModelRole) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ModelRole) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_operator_v1_operator_proto_enumTypes[7].Descriptor()
+}
+
+func (ModelRole) Type() protoreflect.EnumType {
+	return &file_g8e_operator_v1_operator_proto_enumTypes[7]
+}
+
+func (x ModelRole) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ModelRole.Descriptor instead.
+func (ModelRole) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{7}
+}
+
+// InferenceMessageRole identifies the semantic role of one ordered conversation turn.
+type InferenceMessageRole int32
+
+const (
+	InferenceMessageRole_INFERENCE_MESSAGE_ROLE_UNSPECIFIED InferenceMessageRole = 0
+	InferenceMessageRole_INFERENCE_MESSAGE_ROLE_SYSTEM      InferenceMessageRole = 1
+	InferenceMessageRole_INFERENCE_MESSAGE_ROLE_USER        InferenceMessageRole = 2
+	InferenceMessageRole_INFERENCE_MESSAGE_ROLE_ASSISTANT   InferenceMessageRole = 3
+	InferenceMessageRole_INFERENCE_MESSAGE_ROLE_TOOL        InferenceMessageRole = 4
+)
+
+// Enum value maps for InferenceMessageRole.
+var (
+	InferenceMessageRole_name = map[int32]string{
+		0: "INFERENCE_MESSAGE_ROLE_UNSPECIFIED",
+		1: "INFERENCE_MESSAGE_ROLE_SYSTEM",
+		2: "INFERENCE_MESSAGE_ROLE_USER",
+		3: "INFERENCE_MESSAGE_ROLE_ASSISTANT",
+		4: "INFERENCE_MESSAGE_ROLE_TOOL",
+	}
+	InferenceMessageRole_value = map[string]int32{
+		"INFERENCE_MESSAGE_ROLE_UNSPECIFIED": 0,
+		"INFERENCE_MESSAGE_ROLE_SYSTEM":      1,
+		"INFERENCE_MESSAGE_ROLE_USER":        2,
+		"INFERENCE_MESSAGE_ROLE_ASSISTANT":   3,
+		"INFERENCE_MESSAGE_ROLE_TOOL":        4,
+	}
+)
+
+func (x InferenceMessageRole) Enum() *InferenceMessageRole {
+	p := new(InferenceMessageRole)
+	*p = x
+	return p
+}
+
+func (x InferenceMessageRole) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (InferenceMessageRole) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_operator_v1_operator_proto_enumTypes[8].Descriptor()
+}
+
+func (InferenceMessageRole) Type() protoreflect.EnumType {
+	return &file_g8e_operator_v1_operator_proto_enumTypes[8]
+}
+
+func (x InferenceMessageRole) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use InferenceMessageRole.Descriptor instead.
+func (InferenceMessageRole) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{8}
+}
+
+type InferenceToolChoiceMode int32
+
+const (
+	InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_UNSPECIFIED InferenceToolChoiceMode = 0
+	InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_AUTO        InferenceToolChoiceMode = 1
+	InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_NONE        InferenceToolChoiceMode = 2
+	InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_REQUIRED    InferenceToolChoiceMode = 3
+)
+
+// Enum value maps for InferenceToolChoiceMode.
+var (
+	InferenceToolChoiceMode_name = map[int32]string{
+		0: "INFERENCE_TOOL_CHOICE_MODE_UNSPECIFIED",
+		1: "INFERENCE_TOOL_CHOICE_MODE_AUTO",
+		2: "INFERENCE_TOOL_CHOICE_MODE_NONE",
+		3: "INFERENCE_TOOL_CHOICE_MODE_REQUIRED",
+	}
+	InferenceToolChoiceMode_value = map[string]int32{
+		"INFERENCE_TOOL_CHOICE_MODE_UNSPECIFIED": 0,
+		"INFERENCE_TOOL_CHOICE_MODE_AUTO":        1,
+		"INFERENCE_TOOL_CHOICE_MODE_NONE":        2,
+		"INFERENCE_TOOL_CHOICE_MODE_REQUIRED":    3,
+	}
+)
+
+func (x InferenceToolChoiceMode) Enum() *InferenceToolChoiceMode {
+	p := new(InferenceToolChoiceMode)
+	*p = x
+	return p
+}
+
+func (x InferenceToolChoiceMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (InferenceToolChoiceMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_operator_v1_operator_proto_enumTypes[9].Descriptor()
+}
+
+func (InferenceToolChoiceMode) Type() protoreflect.EnumType {
+	return &file_g8e_operator_v1_operator_proto_enumTypes[9]
+}
+
+func (x InferenceToolChoiceMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use InferenceToolChoiceMode.Descriptor instead.
+func (InferenceToolChoiceMode) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{9}
+}
+
+type InferenceTimingSource int32
+
+const (
+	InferenceTimingSource_INFERENCE_TIMING_SOURCE_UNSPECIFIED InferenceTimingSource = 0
+	InferenceTimingSource_INFERENCE_TIMING_SOURCE_PROVIDER    InferenceTimingSource = 1
+)
+
+// Enum value maps for InferenceTimingSource.
+var (
+	InferenceTimingSource_name = map[int32]string{
+		0: "INFERENCE_TIMING_SOURCE_UNSPECIFIED",
+		1: "INFERENCE_TIMING_SOURCE_PROVIDER",
+	}
+	InferenceTimingSource_value = map[string]int32{
+		"INFERENCE_TIMING_SOURCE_UNSPECIFIED": 0,
+		"INFERENCE_TIMING_SOURCE_PROVIDER":    1,
+	}
+)
+
+func (x InferenceTimingSource) Enum() *InferenceTimingSource {
+	p := new(InferenceTimingSource)
+	*p = x
+	return p
+}
+
+func (x InferenceTimingSource) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (InferenceTimingSource) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_operator_v1_operator_proto_enumTypes[10].Descriptor()
+}
+
+func (InferenceTimingSource) Type() protoreflect.EnumType {
+	return &file_g8e_operator_v1_operator_proto_enumTypes[10]
+}
+
+func (x InferenceTimingSource) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use InferenceTimingSource.Descriptor instead.
+func (InferenceTimingSource) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{10}
+}
+
+type InferenceLoadState int32
+
+const (
+	InferenceLoadState_INFERENCE_LOAD_STATE_UNSPECIFIED InferenceLoadState = 0
+	InferenceLoadState_INFERENCE_LOAD_STATE_COLD        InferenceLoadState = 1
+	InferenceLoadState_INFERENCE_LOAD_STATE_WARM        InferenceLoadState = 2
+	InferenceLoadState_INFERENCE_LOAD_STATE_UNAVAILABLE InferenceLoadState = 3
+)
+
+// Enum value maps for InferenceLoadState.
+var (
+	InferenceLoadState_name = map[int32]string{
+		0: "INFERENCE_LOAD_STATE_UNSPECIFIED",
+		1: "INFERENCE_LOAD_STATE_COLD",
+		2: "INFERENCE_LOAD_STATE_WARM",
+		3: "INFERENCE_LOAD_STATE_UNAVAILABLE",
+	}
+	InferenceLoadState_value = map[string]int32{
+		"INFERENCE_LOAD_STATE_UNSPECIFIED": 0,
+		"INFERENCE_LOAD_STATE_COLD":        1,
+		"INFERENCE_LOAD_STATE_WARM":        2,
+		"INFERENCE_LOAD_STATE_UNAVAILABLE": 3,
+	}
+)
+
+func (x InferenceLoadState) Enum() *InferenceLoadState {
+	p := new(InferenceLoadState)
+	*p = x
+	return p
+}
+
+func (x InferenceLoadState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (InferenceLoadState) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_operator_v1_operator_proto_enumTypes[11].Descriptor()
+}
+
+func (InferenceLoadState) Type() protoreflect.EnumType {
+	return &file_g8e_operator_v1_operator_proto_enumTypes[11]
+}
+
+func (x InferenceLoadState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use InferenceLoadState.Descriptor instead.
+func (InferenceLoadState) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{11}
+}
+
+type InferenceRetryClassification int32
+
+const (
+	InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED               InferenceRetryClassification = 0
+	InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_NONE                      InferenceRetryClassification = 1
+	InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT InferenceRetryClassification = 2
+)
+
+// Enum value maps for InferenceRetryClassification.
+var (
+	InferenceRetryClassification_name = map[int32]string{
+		0: "INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED",
+		1: "INFERENCE_RETRY_CLASSIFICATION_NONE",
+		2: "INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT",
+	}
+	InferenceRetryClassification_value = map[string]int32{
+		"INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED":               0,
+		"INFERENCE_RETRY_CLASSIFICATION_NONE":                      1,
+		"INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT": 2,
+	}
+)
+
+func (x InferenceRetryClassification) Enum() *InferenceRetryClassification {
+	p := new(InferenceRetryClassification)
+	*p = x
+	return p
+}
+
+func (x InferenceRetryClassification) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (InferenceRetryClassification) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_operator_v1_operator_proto_enumTypes[12].Descriptor()
+}
+
+func (InferenceRetryClassification) Type() protoreflect.EnumType {
+	return &file_g8e_operator_v1_operator_proto_enumTypes[12]
+}
+
+func (x InferenceRetryClassification) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use InferenceRetryClassification.Descriptor instead.
+func (InferenceRetryClassification) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{12}
+}
+
+type InferenceProviderAttemptStatus int32
+
+const (
+	InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED InferenceProviderAttemptStatus = 0
+	InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS InferenceProviderAttemptStatus = 1
+	InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED   InferenceProviderAttemptStatus = 2
+	InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED      InferenceProviderAttemptStatus = 3
+)
+
+// Enum value maps for InferenceProviderAttemptStatus.
+var (
+	InferenceProviderAttemptStatus_name = map[int32]string{
+		0: "INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED",
+		1: "INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS",
+		2: "INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED",
+		3: "INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED",
+	}
+	InferenceProviderAttemptStatus_value = map[string]int32{
+		"INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED": 0,
+		"INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS": 1,
+		"INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED":   2,
+		"INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED":      3,
+	}
+)
+
+func (x InferenceProviderAttemptStatus) Enum() *InferenceProviderAttemptStatus {
+	p := new(InferenceProviderAttemptStatus)
+	*p = x
+	return p
+}
+
+func (x InferenceProviderAttemptStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (InferenceProviderAttemptStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_operator_v1_operator_proto_enumTypes[13].Descriptor()
+}
+
+func (InferenceProviderAttemptStatus) Type() protoreflect.EnumType {
+	return &file_g8e_operator_v1_operator_proto_enumTypes[13]
+}
+
+func (x InferenceProviderAttemptStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use InferenceProviderAttemptStatus.Descriptor instead.
+func (InferenceProviderAttemptStatus) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{13}
+}
+
 // Payload for g8e.v1.operator.command.requested
 type CommandRequested struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -3118,7 +3591,6 @@ type OperatorDocument struct {
 	IsSlot             bool                   `protobuf:"varint,12,opt,name=is_slot,json=isSlot,proto3" json:"is_slot,omitempty"`
 	Claimed            bool                   `protobuf:"varint,13,opt,name=claimed,proto3" json:"claimed,omitempty"`
 	OperatorType       string                 `protobuf:"bytes,14,opt,name=operator_type,json=operatorType,proto3" json:"operator_type,omitempty"`
-	CloudSubtype       string                 `protobuf:"bytes,15,opt,name=cloud_subtype,json=cloudSubtype,proto3" json:"cloud_subtype,omitempty"`
 	SystemFingerprint  string                 `protobuf:"bytes,16,opt,name=system_fingerprint,json=systemFingerprint,proto3" json:"system_fingerprint,omitempty"`
 	CreatedAtUnixMs    int64                  `protobuf:"varint,17,opt,name=created_at_unix_ms,json=createdAtUnixMs,proto3" json:"created_at_unix_ms,omitempty"`
 	UpdatedAtUnixMs    int64                  `protobuf:"varint,18,opt,name=updated_at_unix_ms,json=updatedAtUnixMs,proto3" json:"updated_at_unix_ms,omitempty"`
@@ -3250,13 +3722,6 @@ func (x *OperatorDocument) GetClaimed() bool {
 func (x *OperatorDocument) GetOperatorType() string {
 	if x != nil {
 		return x.OperatorType
-	}
-	return ""
-}
-
-func (x *OperatorDocument) GetCloudSubtype() string {
-	if x != nil {
-		return x.CloudSubtype
 	}
 	return ""
 }
@@ -4121,8 +4586,11 @@ type ActionReceipt struct {
 	L3Status                    L3Status                       `protobuf:"varint,12,opt,name=l3_status,json=l3Status,proto3,enum=g8e.operator.v1.L3Status" json:"l3_status,omitempty"`
 	DeterministicStageEvidence  []*DeterministicStageEvidence  `protobuf:"bytes,13,rep,name=deterministic_stage_evidence,json=deterministicStageEvidence,proto3" json:"deterministic_stage_evidence,omitempty"`
 	FinalPersistenceAttestation *ReceiptPersistenceAttestation `protobuf:"bytes,14,opt,name=final_persistence_attestation,json=finalPersistenceAttestation,proto3" json:"final_persistence_attestation,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	// Typed classification of a FAILED receipt. UNSPECIFIED on non-failed
+	// receipts. Bound into the signature via canonicalization.
+	FailureCode   ReceiptFailureCode `protobuf:"varint,15,opt,name=failure_code,json=failureCode,proto3,enum=g8e.operator.v1.ReceiptFailureCode" json:"failure_code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ActionReceipt) Reset() {
@@ -4244,6 +4712,13 @@ func (x *ActionReceipt) GetFinalPersistenceAttestation() *ReceiptPersistenceAtte
 		return x.FinalPersistenceAttestation
 	}
 	return nil
+}
+
+func (x *ActionReceipt) GetFailureCode() ReceiptFailureCode {
+	if x != nil {
+		return x.FailureCode
+	}
+	return ReceiptFailureCode_RECEIPT_FAILURE_CODE_UNSPECIFIED
 }
 
 // CommitmentAttestation is the Auditor's signed record that a verified
@@ -8502,6 +8977,2079 @@ func (x *RevokePasskeyCredentialResult) GetRemaining() int32 {
 	return 0
 }
 
+// InferenceToolCall carries a model-requested function invocation. arguments_json is a canonical JSON object.
+type InferenceToolCall struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CallId        string                 `protobuf:"bytes,1,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	ArgumentsJson string                 `protobuf:"bytes,3,opt,name=arguments_json,json=argumentsJson,proto3" json:"arguments_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceToolCall) Reset() {
+	*x = InferenceToolCall{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[102]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceToolCall) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceToolCall) ProtoMessage() {}
+
+func (x *InferenceToolCall) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[102]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceToolCall.ProtoReflect.Descriptor instead.
+func (*InferenceToolCall) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{102}
+}
+
+func (x *InferenceToolCall) GetCallId() string {
+	if x != nil {
+		return x.CallId
+	}
+	return ""
+}
+
+func (x *InferenceToolCall) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *InferenceToolCall) GetArgumentsJson() string {
+	if x != nil {
+		return x.ArgumentsJson
+	}
+	return ""
+}
+
+// InferenceToolResult carries a tool continuation value. result_json is a canonical JSON value.
+type InferenceToolResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CallId        string                 `protobuf:"bytes,1,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	ResultJson    string                 `protobuf:"bytes,3,opt,name=result_json,json=resultJson,proto3" json:"result_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceToolResult) Reset() {
+	*x = InferenceToolResult{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[103]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceToolResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceToolResult) ProtoMessage() {}
+
+func (x *InferenceToolResult) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[103]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceToolResult.ProtoReflect.Descriptor instead.
+func (*InferenceToolResult) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{103}
+}
+
+func (x *InferenceToolResult) GetCallId() string {
+	if x != nil {
+		return x.CallId
+	}
+	return ""
+}
+
+func (x *InferenceToolResult) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *InferenceToolResult) GetResultJson() string {
+	if x != nil {
+		return x.ResultJson
+	}
+	return ""
+}
+
+// InferenceMessagePart carries exactly one typed part of a conversation turn.
+type InferenceMessagePart struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Part:
+	//
+	//	*InferenceMessagePart_Text
+	//	*InferenceMessagePart_ToolCall
+	//	*InferenceMessagePart_ToolResult
+	Part          isInferenceMessagePart_Part `protobuf_oneof:"part"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceMessagePart) Reset() {
+	*x = InferenceMessagePart{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[104]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceMessagePart) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceMessagePart) ProtoMessage() {}
+
+func (x *InferenceMessagePart) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[104]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceMessagePart.ProtoReflect.Descriptor instead.
+func (*InferenceMessagePart) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{104}
+}
+
+func (x *InferenceMessagePart) GetPart() isInferenceMessagePart_Part {
+	if x != nil {
+		return x.Part
+	}
+	return nil
+}
+
+func (x *InferenceMessagePart) GetText() string {
+	if x != nil {
+		if x, ok := x.Part.(*InferenceMessagePart_Text); ok {
+			return x.Text
+		}
+	}
+	return ""
+}
+
+func (x *InferenceMessagePart) GetToolCall() *InferenceToolCall {
+	if x != nil {
+		if x, ok := x.Part.(*InferenceMessagePart_ToolCall); ok {
+			return x.ToolCall
+		}
+	}
+	return nil
+}
+
+func (x *InferenceMessagePart) GetToolResult() *InferenceToolResult {
+	if x != nil {
+		if x, ok := x.Part.(*InferenceMessagePart_ToolResult); ok {
+			return x.ToolResult
+		}
+	}
+	return nil
+}
+
+type isInferenceMessagePart_Part interface {
+	isInferenceMessagePart_Part()
+}
+
+type InferenceMessagePart_Text struct {
+	Text string `protobuf:"bytes,1,opt,name=text,proto3,oneof"`
+}
+
+type InferenceMessagePart_ToolCall struct {
+	ToolCall *InferenceToolCall `protobuf:"bytes,2,opt,name=tool_call,json=toolCall,proto3,oneof"`
+}
+
+type InferenceMessagePart_ToolResult struct {
+	ToolResult *InferenceToolResult `protobuf:"bytes,3,opt,name=tool_result,json=toolResult,proto3,oneof"`
+}
+
+func (*InferenceMessagePart_Text) isInferenceMessagePart_Part() {}
+
+func (*InferenceMessagePart_ToolCall) isInferenceMessagePart_Part() {}
+
+func (*InferenceMessagePart_ToolResult) isInferenceMessagePart_Part() {}
+
+// InferenceMessage preserves one ordered conversation turn without prompt flattening.
+type InferenceMessage struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Role          InferenceMessageRole    `protobuf:"varint,1,opt,name=role,proto3,enum=g8e.operator.v1.InferenceMessageRole" json:"role,omitempty"`
+	Parts         []*InferenceMessagePart `protobuf:"bytes,2,rep,name=parts,proto3" json:"parts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceMessage) Reset() {
+	*x = InferenceMessage{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[105]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceMessage) ProtoMessage() {}
+
+func (x *InferenceMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[105]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceMessage.ProtoReflect.Descriptor instead.
+func (*InferenceMessage) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{105}
+}
+
+func (x *InferenceMessage) GetRole() InferenceMessageRole {
+	if x != nil {
+		return x.Role
+	}
+	return InferenceMessageRole_INFERENCE_MESSAGE_ROLE_UNSPECIFIED
+}
+
+func (x *InferenceMessage) GetParts() []*InferenceMessagePart {
+	if x != nil {
+		return x.Parts
+	}
+	return nil
+}
+
+// InferenceToolDeclaration defines one callable function. json_schema is a canonical strict JSON Schema object.
+type InferenceToolDeclaration struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	JsonSchema    string                 `protobuf:"bytes,3,opt,name=json_schema,json=jsonSchema,proto3" json:"json_schema,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceToolDeclaration) Reset() {
+	*x = InferenceToolDeclaration{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[106]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceToolDeclaration) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceToolDeclaration) ProtoMessage() {}
+
+func (x *InferenceToolDeclaration) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[106]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceToolDeclaration.ProtoReflect.Descriptor instead.
+func (*InferenceToolDeclaration) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{106}
+}
+
+func (x *InferenceToolDeclaration) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *InferenceToolDeclaration) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *InferenceToolDeclaration) GetJsonSchema() string {
+	if x != nil {
+		return x.JsonSchema
+	}
+	return ""
+}
+
+type InferenceResponseFormat struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MediaType     string                 `protobuf:"bytes,1,opt,name=media_type,json=mediaType,proto3" json:"media_type,omitempty"`
+	JsonSchema    string                 `protobuf:"bytes,2,opt,name=json_schema,json=jsonSchema,proto3" json:"json_schema,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceResponseFormat) Reset() {
+	*x = InferenceResponseFormat{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[107]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceResponseFormat) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceResponseFormat) ProtoMessage() {}
+
+func (x *InferenceResponseFormat) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[107]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceResponseFormat.ProtoReflect.Descriptor instead.
+func (*InferenceResponseFormat) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{107}
+}
+
+func (x *InferenceResponseFormat) GetMediaType() string {
+	if x != nil {
+		return x.MediaType
+	}
+	return ""
+}
+
+func (x *InferenceResponseFormat) GetJsonSchema() string {
+	if x != nil {
+		return x.JsonSchema
+	}
+	return ""
+}
+
+type InferenceToolChoice struct {
+	state            protoimpl.MessageState  `protogen:"open.v1"`
+	Mode             InferenceToolChoiceMode `protobuf:"varint,1,opt,name=mode,proto3,enum=g8e.operator.v1.InferenceToolChoiceMode" json:"mode,omitempty"`
+	AllowedToolNames []string                `protobuf:"bytes,2,rep,name=allowed_tool_names,json=allowedToolNames,proto3" json:"allowed_tool_names,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *InferenceToolChoice) Reset() {
+	*x = InferenceToolChoice{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[108]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceToolChoice) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceToolChoice) ProtoMessage() {}
+
+func (x *InferenceToolChoice) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[108]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceToolChoice.ProtoReflect.Descriptor instead.
+func (*InferenceToolChoice) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{108}
+}
+
+func (x *InferenceToolChoice) GetMode() InferenceToolChoiceMode {
+	if x != nil {
+		return x.Mode
+	}
+	return InferenceToolChoiceMode_INFERENCE_TOOL_CHOICE_MODE_UNSPECIFIED
+}
+
+func (x *InferenceToolChoice) GetAllowedToolNames() []string {
+	if x != nil {
+		return x.AllowedToolNames
+	}
+	return nil
+}
+
+type InferenceThinkingControl struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Mode:
+	//
+	//	*InferenceThinkingControl_Enabled
+	//	*InferenceThinkingControl_Level
+	Mode            isInferenceThinkingControl_Mode `protobuf_oneof:"mode"`
+	IncludeThoughts bool                            `protobuf:"varint,3,opt,name=include_thoughts,json=includeThoughts,proto3" json:"include_thoughts,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *InferenceThinkingControl) Reset() {
+	*x = InferenceThinkingControl{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[109]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceThinkingControl) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceThinkingControl) ProtoMessage() {}
+
+func (x *InferenceThinkingControl) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[109]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceThinkingControl.ProtoReflect.Descriptor instead.
+func (*InferenceThinkingControl) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{109}
+}
+
+func (x *InferenceThinkingControl) GetMode() isInferenceThinkingControl_Mode {
+	if x != nil {
+		return x.Mode
+	}
+	return nil
+}
+
+func (x *InferenceThinkingControl) GetEnabled() bool {
+	if x != nil {
+		if x, ok := x.Mode.(*InferenceThinkingControl_Enabled); ok {
+			return x.Enabled
+		}
+	}
+	return false
+}
+
+func (x *InferenceThinkingControl) GetLevel() string {
+	if x != nil {
+		if x, ok := x.Mode.(*InferenceThinkingControl_Level); ok {
+			return x.Level
+		}
+	}
+	return ""
+}
+
+func (x *InferenceThinkingControl) GetIncludeThoughts() bool {
+	if x != nil {
+		return x.IncludeThoughts
+	}
+	return false
+}
+
+type isInferenceThinkingControl_Mode interface {
+	isInferenceThinkingControl_Mode()
+}
+
+type InferenceThinkingControl_Enabled struct {
+	Enabled bool `protobuf:"varint,1,opt,name=enabled,proto3,oneof"`
+}
+
+type InferenceThinkingControl_Level struct {
+	Level string `protobuf:"bytes,2,opt,name=level,proto3,oneof"`
+}
+
+func (*InferenceThinkingControl_Enabled) isInferenceThinkingControl_Mode() {}
+
+func (*InferenceThinkingControl_Level) isInferenceThinkingControl_Mode() {}
+
+// InferenceResponsePart carries exactly one typed model response part.
+type InferenceResponsePart struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Part:
+	//
+	//	*InferenceResponsePart_Text
+	//	*InferenceResponsePart_ToolCall
+	//	*InferenceResponsePart_Thinking
+	Part          isInferenceResponsePart_Part `protobuf_oneof:"part"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceResponsePart) Reset() {
+	*x = InferenceResponsePart{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[110]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceResponsePart) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceResponsePart) ProtoMessage() {}
+
+func (x *InferenceResponsePart) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[110]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceResponsePart.ProtoReflect.Descriptor instead.
+func (*InferenceResponsePart) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{110}
+}
+
+func (x *InferenceResponsePart) GetPart() isInferenceResponsePart_Part {
+	if x != nil {
+		return x.Part
+	}
+	return nil
+}
+
+func (x *InferenceResponsePart) GetText() string {
+	if x != nil {
+		if x, ok := x.Part.(*InferenceResponsePart_Text); ok {
+			return x.Text
+		}
+	}
+	return ""
+}
+
+func (x *InferenceResponsePart) GetToolCall() *InferenceToolCall {
+	if x != nil {
+		if x, ok := x.Part.(*InferenceResponsePart_ToolCall); ok {
+			return x.ToolCall
+		}
+	}
+	return nil
+}
+
+func (x *InferenceResponsePart) GetThinking() string {
+	if x != nil {
+		if x, ok := x.Part.(*InferenceResponsePart_Thinking); ok {
+			return x.Thinking
+		}
+	}
+	return ""
+}
+
+type isInferenceResponsePart_Part interface {
+	isInferenceResponsePart_Part()
+}
+
+type InferenceResponsePart_Text struct {
+	Text string `protobuf:"bytes,1,opt,name=text,proto3,oneof"`
+}
+
+type InferenceResponsePart_ToolCall struct {
+	ToolCall *InferenceToolCall `protobuf:"bytes,2,opt,name=tool_call,json=toolCall,proto3,oneof"`
+}
+
+type InferenceResponsePart_Thinking struct {
+	Thinking string `protobuf:"bytes,3,opt,name=thinking,proto3,oneof"`
+}
+
+func (*InferenceResponsePart_Text) isInferenceResponsePart_Part() {}
+
+func (*InferenceResponsePart_ToolCall) isInferenceResponsePart_Part() {}
+
+func (*InferenceResponsePart_Thinking) isInferenceResponsePart_Part() {}
+
+type InferenceModelVariant struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Model         string                 `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Digest        string                 `protobuf:"bytes,2,opt,name=digest,proto3" json:"digest,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceModelVariant) Reset() {
+	*x = InferenceModelVariant{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[111]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceModelVariant) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceModelVariant) ProtoMessage() {}
+
+func (x *InferenceModelVariant) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[111]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceModelVariant.ProtoReflect.Descriptor instead.
+func (*InferenceModelVariant) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{111}
+}
+
+func (x *InferenceModelVariant) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *InferenceModelVariant) GetDigest() string {
+	if x != nil {
+		return x.Digest
+	}
+	return ""
+}
+
+// Payload for g8e.v1.operator.inference.requested. The handler receives an ordered typed conversation, validates and scrubs every data-bearing part, and sends only the normalized request across the provider boundary.
+type InferenceRequested struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Chat-tier role for this request (primary, assistant, lite).
+	Role ModelRole `protobuf:"varint,1,opt,name=role,proto3,enum=g8e.operator.v1.ModelRole" json:"role,omitempty"`
+	// Ollama model name (e.g., "gemma3:4b"). Encodes the role; Ollama routes by
+	// model name in the API call.
+	Model string `protobuf:"bytes,2,opt,name=model,proto3" json:"model,omitempty"`
+	// Generation temperature override (0 = use backend default).
+	Temperature float32 `protobuf:"fixed32,4,opt,name=temperature,proto3" json:"temperature,omitempty"`
+	// Maximum tokens to generate (0 = use backend default).
+	MaxTokens int32 `protobuf:"varint,5,opt,name=max_tokens,json=maxTokens,proto3" json:"max_tokens,omitempty"`
+	// Ollama keep-alive duration override (empty = use config default).
+	KeepAlive string `protobuf:"bytes,6,opt,name=keep_alive,json=keepAlive,proto3" json:"keep_alive,omitempty"`
+	// Ordered conversation turns sent to the backend.
+	Messages []*InferenceMessage `protobuf:"bytes,7,rep,name=messages,proto3" json:"messages,omitempty"`
+	// Ordered callable function declarations available to the model.
+	Tools                []*InferenceToolDeclaration `protobuf:"bytes,8,rep,name=tools,proto3" json:"tools,omitempty"`
+	TopP                 *float32                    `protobuf:"fixed32,9,opt,name=top_p,json=topP,proto3,oneof" json:"top_p,omitempty"`
+	TopK                 *int32                      `protobuf:"varint,10,opt,name=top_k,json=topK,proto3,oneof" json:"top_k,omitempty"`
+	StopSequences        []string                    `protobuf:"bytes,11,rep,name=stop_sequences,json=stopSequences,proto3" json:"stop_sequences,omitempty"`
+	ResponseFormat       *InferenceResponseFormat    `protobuf:"bytes,12,opt,name=response_format,json=responseFormat,proto3" json:"response_format,omitempty"`
+	RequestSchemaVersion string                      `protobuf:"bytes,13,opt,name=request_schema_version,json=requestSchemaVersion,proto3" json:"request_schema_version,omitempty"`
+	ToolChoice           *InferenceToolChoice        `protobuf:"bytes,14,opt,name=tool_choice,json=toolChoice,proto3" json:"tool_choice,omitempty"`
+	ParallelToolCalls    *bool                       `protobuf:"varint,15,opt,name=parallel_tool_calls,json=parallelToolCalls,proto3,oneof" json:"parallel_tool_calls,omitempty"`
+	Thinking             *InferenceThinkingControl   `protobuf:"bytes,16,opt,name=thinking,proto3" json:"thinking,omitempty"`
+	ContextLimit         *int32                      `protobuf:"varint,17,opt,name=context_limit,json=contextLimit,proto3,oneof" json:"context_limit,omitempty"`
+	ProviderAttemptId    string                      `protobuf:"bytes,18,opt,name=provider_attempt_id,json=providerAttemptId,proto3" json:"provider_attempt_id,omitempty"`
+	ModelDigest          string                      `protobuf:"bytes,19,opt,name=model_digest,json=modelDigest,proto3" json:"model_digest,omitempty"`
+	CampaignId           string                      `protobuf:"bytes,20,opt,name=campaign_id,json=campaignId,proto3" json:"campaign_id,omitempty"`
+	RunId                string                      `protobuf:"bytes,21,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	AssignmentId         string                      `protobuf:"bytes,22,opt,name=assignment_id,json=assignmentId,proto3" json:"assignment_id,omitempty"`
+	EvaluationAttemptId  string                      `protobuf:"bytes,23,opt,name=evaluation_attempt_id,json=evaluationAttemptId,proto3" json:"evaluation_attempt_id,omitempty"`
+	ScenarioId           string                      `protobuf:"bytes,24,opt,name=scenario_id,json=scenarioId,proto3" json:"scenario_id,omitempty"`
+	ModelRegistry        []*InferenceModelVariant    `protobuf:"bytes,25,rep,name=model_registry,json=modelRegistry,proto3" json:"model_registry,omitempty"`
+	ModelRegistryDigest  string                      `protobuf:"bytes,26,opt,name=model_registry_digest,json=modelRegistryDigest,proto3" json:"model_registry_digest,omitempty"`
+	// When true, the Inference Node publishes bounded InferenceProgressEvent
+	// telemetry on the results channel while the provider stream is active.
+	// Progress events are delivery telemetry only; the signed
+	// InferenceCompletion remains the sole authoritative terminal outcome.
+	Stream bool `protobuf:"varint,27,opt,name=stream,proto3" json:"stream,omitempty"`
+	// Zero-based retry ordinal for this provider attempt. Each retry uses a
+	// distinct provider_attempt_id and is durably retained.
+	RetryCount uint32 `protobuf:"varint,28,opt,name=retry_count,json=retryCount,proto3" json:"retry_count,omitempty"`
+	// Optional deterministic generation seed forwarded to the provider when
+	// supported. Absent means use the provider default.
+	Seed          *int32 `protobuf:"varint,29,opt,name=seed,proto3,oneof" json:"seed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceRequested) Reset() {
+	*x = InferenceRequested{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[112]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceRequested) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceRequested) ProtoMessage() {}
+
+func (x *InferenceRequested) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[112]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceRequested.ProtoReflect.Descriptor instead.
+func (*InferenceRequested) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{112}
+}
+
+func (x *InferenceRequested) GetRole() ModelRole {
+	if x != nil {
+		return x.Role
+	}
+	return ModelRole_MODEL_ROLE_UNSPECIFIED
+}
+
+func (x *InferenceRequested) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *InferenceRequested) GetTemperature() float32 {
+	if x != nil {
+		return x.Temperature
+	}
+	return 0
+}
+
+func (x *InferenceRequested) GetMaxTokens() int32 {
+	if x != nil {
+		return x.MaxTokens
+	}
+	return 0
+}
+
+func (x *InferenceRequested) GetKeepAlive() string {
+	if x != nil {
+		return x.KeepAlive
+	}
+	return ""
+}
+
+func (x *InferenceRequested) GetMessages() []*InferenceMessage {
+	if x != nil {
+		return x.Messages
+	}
+	return nil
+}
+
+func (x *InferenceRequested) GetTools() []*InferenceToolDeclaration {
+	if x != nil {
+		return x.Tools
+	}
+	return nil
+}
+
+func (x *InferenceRequested) GetTopP() float32 {
+	if x != nil && x.TopP != nil {
+		return *x.TopP
+	}
+	return 0
+}
+
+func (x *InferenceRequested) GetTopK() int32 {
+	if x != nil && x.TopK != nil {
+		return *x.TopK
+	}
+	return 0
+}
+
+func (x *InferenceRequested) GetStopSequences() []string {
+	if x != nil {
+		return x.StopSequences
+	}
+	return nil
+}
+
+func (x *InferenceRequested) GetResponseFormat() *InferenceResponseFormat {
+	if x != nil {
+		return x.ResponseFormat
+	}
+	return nil
+}
+
+func (x *InferenceRequested) GetRequestSchemaVersion() string {
+	if x != nil {
+		return x.RequestSchemaVersion
+	}
+	return ""
+}
+
+func (x *InferenceRequested) GetToolChoice() *InferenceToolChoice {
+	if x != nil {
+		return x.ToolChoice
+	}
+	return nil
+}
+
+func (x *InferenceRequested) GetParallelToolCalls() bool {
+	if x != nil && x.ParallelToolCalls != nil {
+		return *x.ParallelToolCalls
+	}
+	return false
+}
+
+func (x *InferenceRequested) GetThinking() *InferenceThinkingControl {
+	if x != nil {
+		return x.Thinking
+	}
+	return nil
+}
+
+func (x *InferenceRequested) GetContextLimit() int32 {
+	if x != nil && x.ContextLimit != nil {
+		return *x.ContextLimit
+	}
+	return 0
+}
+
+func (x *InferenceRequested) GetProviderAttemptId() string {
+	if x != nil {
+		return x.ProviderAttemptId
+	}
+	return ""
+}
+
+func (x *InferenceRequested) GetModelDigest() string {
+	if x != nil {
+		return x.ModelDigest
+	}
+	return ""
+}
+
+func (x *InferenceRequested) GetCampaignId() string {
+	if x != nil {
+		return x.CampaignId
+	}
+	return ""
+}
+
+func (x *InferenceRequested) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *InferenceRequested) GetAssignmentId() string {
+	if x != nil {
+		return x.AssignmentId
+	}
+	return ""
+}
+
+func (x *InferenceRequested) GetEvaluationAttemptId() string {
+	if x != nil {
+		return x.EvaluationAttemptId
+	}
+	return ""
+}
+
+func (x *InferenceRequested) GetScenarioId() string {
+	if x != nil {
+		return x.ScenarioId
+	}
+	return ""
+}
+
+func (x *InferenceRequested) GetModelRegistry() []*InferenceModelVariant {
+	if x != nil {
+		return x.ModelRegistry
+	}
+	return nil
+}
+
+func (x *InferenceRequested) GetModelRegistryDigest() string {
+	if x != nil {
+		return x.ModelRegistryDigest
+	}
+	return ""
+}
+
+func (x *InferenceRequested) GetStream() bool {
+	if x != nil {
+		return x.Stream
+	}
+	return false
+}
+
+func (x *InferenceRequested) GetRetryCount() uint32 {
+	if x != nil {
+		return x.RetryCount
+	}
+	return 0
+}
+
+func (x *InferenceRequested) GetSeed() int32 {
+	if x != nil && x.Seed != nil {
+		return *x.Seed
+	}
+	return 0
+}
+
+// InferenceProviderAttemptRecord is the durable operator-local record for one
+// governed provider attempt. It is written before provider contact and
+// finalized only after terminal receipt/result evidence is available.
+type InferenceProviderAttemptRecord struct {
+	state               protoimpl.MessageState         `protogen:"open.v1"`
+	ProviderAttemptId   string                         `protobuf:"bytes,1,opt,name=provider_attempt_id,json=providerAttemptId,proto3" json:"provider_attempt_id,omitempty"`
+	TransactionId       string                         `protobuf:"bytes,2,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	RetryCount          uint32                         `protobuf:"varint,3,opt,name=retry_count,json=retryCount,proto3" json:"retry_count,omitempty"`
+	RetryClassification InferenceRetryClassification   `protobuf:"varint,4,opt,name=retry_classification,json=retryClassification,proto3,enum=g8e.operator.v1.InferenceRetryClassification" json:"retry_classification,omitempty"`
+	Status              InferenceProviderAttemptStatus `protobuf:"varint,5,opt,name=status,proto3,enum=g8e.operator.v1.InferenceProviderAttemptStatus" json:"status,omitempty"`
+	StartedAtUnixMs     int64                          `protobuf:"varint,6,opt,name=started_at_unix_ms,json=startedAtUnixMs,proto3" json:"started_at_unix_ms,omitempty"`
+	CompletedAtUnixMs   int64                          `protobuf:"varint,7,opt,name=completed_at_unix_ms,json=completedAtUnixMs,proto3" json:"completed_at_unix_ms,omitempty"`
+	ResultDigest        string                         `protobuf:"bytes,8,opt,name=result_digest,json=resultDigest,proto3" json:"result_digest,omitempty"`
+	FailureSummary      string                         `protobuf:"bytes,9,opt,name=failure_summary,json=failureSummary,proto3" json:"failure_summary,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *InferenceProviderAttemptRecord) Reset() {
+	*x = InferenceProviderAttemptRecord{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[113]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceProviderAttemptRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceProviderAttemptRecord) ProtoMessage() {}
+
+func (x *InferenceProviderAttemptRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[113]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceProviderAttemptRecord.ProtoReflect.Descriptor instead.
+func (*InferenceProviderAttemptRecord) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{113}
+}
+
+func (x *InferenceProviderAttemptRecord) GetProviderAttemptId() string {
+	if x != nil {
+		return x.ProviderAttemptId
+	}
+	return ""
+}
+
+func (x *InferenceProviderAttemptRecord) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *InferenceProviderAttemptRecord) GetRetryCount() uint32 {
+	if x != nil {
+		return x.RetryCount
+	}
+	return 0
+}
+
+func (x *InferenceProviderAttemptRecord) GetRetryClassification() InferenceRetryClassification {
+	if x != nil {
+		return x.RetryClassification
+	}
+	return InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED
+}
+
+func (x *InferenceProviderAttemptRecord) GetStatus() InferenceProviderAttemptStatus {
+	if x != nil {
+		return x.Status
+	}
+	return InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED
+}
+
+func (x *InferenceProviderAttemptRecord) GetStartedAtUnixMs() int64 {
+	if x != nil {
+		return x.StartedAtUnixMs
+	}
+	return 0
+}
+
+func (x *InferenceProviderAttemptRecord) GetCompletedAtUnixMs() int64 {
+	if x != nil {
+		return x.CompletedAtUnixMs
+	}
+	return 0
+}
+
+func (x *InferenceProviderAttemptRecord) GetResultDigest() string {
+	if x != nil {
+		return x.ResultDigest
+	}
+	return ""
+}
+
+func (x *InferenceProviderAttemptRecord) GetFailureSummary() string {
+	if x != nil {
+		return x.FailureSummary
+	}
+	return ""
+}
+
+// InferenceResult carries ordered response parts, usage metadata, and the finish reason returned by the backend. The governed envelope carries this for the receipt and audit chain.
+type InferenceResult struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Number of prompt tokens consumed.
+	PromptTokens int32 `protobuf:"varint,2,opt,name=prompt_tokens,json=promptTokens,proto3" json:"prompt_tokens,omitempty"`
+	// Number of completion tokens generated.
+	CompletionTokens int32 `protobuf:"varint,3,opt,name=completion_tokens,json=completionTokens,proto3" json:"completion_tokens,omitempty"`
+	// Total tokens (prompt + completion).
+	TotalTokens int32 `protobuf:"varint,4,opt,name=total_tokens,json=totalTokens,proto3" json:"total_tokens,omitempty"`
+	// Finish reason (e.g., "stop", "length").
+	FinishReason string `protobuf:"bytes,5,opt,name=finish_reason,json=finishReason,proto3" json:"finish_reason,omitempty"`
+	// Model that produced the result (echoed from the request or resolved by
+	// the backend).
+	Model string `protobuf:"bytes,6,opt,name=model,proto3" json:"model,omitempty"`
+	// Canonical digest of the complete result: lowercase hex SHA-256 over the
+	// deterministic protobuf serialization of this message with result_digest
+	// cleared. The Inference Node computes it at execution time; the signed
+	// ActionReceipt's result_summary binds it, and the User Gateway verifies
+	// digest equality before returning success to the caller.
+	ResultDigest string `protobuf:"bytes,7,opt,name=result_digest,json=resultDigest,proto3" json:"result_digest,omitempty"`
+	// Ordered model response parts covered by result_digest.
+	Parts                 []*InferenceResponsePart     `protobuf:"bytes,8,rep,name=parts,proto3" json:"parts,omitempty"`
+	UsageReported         bool                         `protobuf:"varint,9,opt,name=usage_reported,json=usageReported,proto3" json:"usage_reported,omitempty"`
+	ThinkingTokens        *int32                       `protobuf:"varint,10,opt,name=thinking_tokens,json=thinkingTokens,proto3,oneof" json:"thinking_tokens,omitempty"`
+	CacheTokens           *int32                       `protobuf:"varint,11,opt,name=cache_tokens,json=cacheTokens,proto3,oneof" json:"cache_tokens,omitempty"`
+	LoadDurationNs        *int64                       `protobuf:"varint,12,opt,name=load_duration_ns,json=loadDurationNs,proto3,oneof" json:"load_duration_ns,omitempty"`
+	PromptEvalDurationNs  *int64                       `protobuf:"varint,13,opt,name=prompt_eval_duration_ns,json=promptEvalDurationNs,proto3,oneof" json:"prompt_eval_duration_ns,omitempty"`
+	GenerationDurationNs  *int64                       `protobuf:"varint,14,opt,name=generation_duration_ns,json=generationDurationNs,proto3,oneof" json:"generation_duration_ns,omitempty"`
+	TotalDurationNs       *int64                       `protobuf:"varint,15,opt,name=total_duration_ns,json=totalDurationNs,proto3,oneof" json:"total_duration_ns,omitempty"`
+	TimeToFirstTokenNs    *int64                       `protobuf:"varint,16,opt,name=time_to_first_token_ns,json=timeToFirstTokenNs,proto3,oneof" json:"time_to_first_token_ns,omitempty"`
+	TimingSource          InferenceTimingSource        `protobuf:"varint,17,opt,name=timing_source,json=timingSource,proto3,enum=g8e.operator.v1.InferenceTimingSource" json:"timing_source,omitempty"`
+	ProviderAttemptId     string                       `protobuf:"bytes,18,opt,name=provider_attempt_id,json=providerAttemptId,proto3" json:"provider_attempt_id,omitempty"`
+	RequestedModel        string                       `protobuf:"bytes,19,opt,name=requested_model,json=requestedModel,proto3" json:"requested_model,omitempty"`
+	RequestedModelDigest  string                       `protobuf:"bytes,20,opt,name=requested_model_digest,json=requestedModelDigest,proto3" json:"requested_model_digest,omitempty"`
+	ServedModelDigest     string                       `protobuf:"bytes,21,opt,name=served_model_digest,json=servedModelDigest,proto3" json:"served_model_digest,omitempty"`
+	NormalizedRequestHash string                       `protobuf:"bytes,22,opt,name=normalized_request_hash,json=normalizedRequestHash,proto3" json:"normalized_request_hash,omitempty"`
+	OutputHash            string                       `protobuf:"bytes,23,opt,name=output_hash,json=outputHash,proto3" json:"output_hash,omitempty"`
+	CampaignId            string                       `protobuf:"bytes,24,opt,name=campaign_id,json=campaignId,proto3" json:"campaign_id,omitempty"`
+	RunId                 string                       `protobuf:"bytes,25,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	AssignmentId          string                       `protobuf:"bytes,26,opt,name=assignment_id,json=assignmentId,proto3" json:"assignment_id,omitempty"`
+	EvaluationAttemptId   string                       `protobuf:"bytes,27,opt,name=evaluation_attempt_id,json=evaluationAttemptId,proto3" json:"evaluation_attempt_id,omitempty"`
+	ScenarioId            string                       `protobuf:"bytes,28,opt,name=scenario_id,json=scenarioId,proto3" json:"scenario_id,omitempty"`
+	ModelRegistryDigest   string                       `protobuf:"bytes,29,opt,name=model_registry_digest,json=modelRegistryDigest,proto3" json:"model_registry_digest,omitempty"`
+	RetryCount            uint32                       `protobuf:"varint,30,opt,name=retry_count,json=retryCount,proto3" json:"retry_count,omitempty"`
+	LoadState             InferenceLoadState           `protobuf:"varint,31,opt,name=load_state,json=loadState,proto3,enum=g8e.operator.v1.InferenceLoadState" json:"load_state,omitempty"`
+	RetryClassification   InferenceRetryClassification `protobuf:"varint,32,opt,name=retry_classification,json=retryClassification,proto3,enum=g8e.operator.v1.InferenceRetryClassification" json:"retry_classification,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *InferenceResult) Reset() {
+	*x = InferenceResult{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[114]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceResult) ProtoMessage() {}
+
+func (x *InferenceResult) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[114]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceResult.ProtoReflect.Descriptor instead.
+func (*InferenceResult) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{114}
+}
+
+func (x *InferenceResult) GetPromptTokens() int32 {
+	if x != nil {
+		return x.PromptTokens
+	}
+	return 0
+}
+
+func (x *InferenceResult) GetCompletionTokens() int32 {
+	if x != nil {
+		return x.CompletionTokens
+	}
+	return 0
+}
+
+func (x *InferenceResult) GetTotalTokens() int32 {
+	if x != nil {
+		return x.TotalTokens
+	}
+	return 0
+}
+
+func (x *InferenceResult) GetFinishReason() string {
+	if x != nil {
+		return x.FinishReason
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetResultDigest() string {
+	if x != nil {
+		return x.ResultDigest
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetParts() []*InferenceResponsePart {
+	if x != nil {
+		return x.Parts
+	}
+	return nil
+}
+
+func (x *InferenceResult) GetUsageReported() bool {
+	if x != nil {
+		return x.UsageReported
+	}
+	return false
+}
+
+func (x *InferenceResult) GetThinkingTokens() int32 {
+	if x != nil && x.ThinkingTokens != nil {
+		return *x.ThinkingTokens
+	}
+	return 0
+}
+
+func (x *InferenceResult) GetCacheTokens() int32 {
+	if x != nil && x.CacheTokens != nil {
+		return *x.CacheTokens
+	}
+	return 0
+}
+
+func (x *InferenceResult) GetLoadDurationNs() int64 {
+	if x != nil && x.LoadDurationNs != nil {
+		return *x.LoadDurationNs
+	}
+	return 0
+}
+
+func (x *InferenceResult) GetPromptEvalDurationNs() int64 {
+	if x != nil && x.PromptEvalDurationNs != nil {
+		return *x.PromptEvalDurationNs
+	}
+	return 0
+}
+
+func (x *InferenceResult) GetGenerationDurationNs() int64 {
+	if x != nil && x.GenerationDurationNs != nil {
+		return *x.GenerationDurationNs
+	}
+	return 0
+}
+
+func (x *InferenceResult) GetTotalDurationNs() int64 {
+	if x != nil && x.TotalDurationNs != nil {
+		return *x.TotalDurationNs
+	}
+	return 0
+}
+
+func (x *InferenceResult) GetTimeToFirstTokenNs() int64 {
+	if x != nil && x.TimeToFirstTokenNs != nil {
+		return *x.TimeToFirstTokenNs
+	}
+	return 0
+}
+
+func (x *InferenceResult) GetTimingSource() InferenceTimingSource {
+	if x != nil {
+		return x.TimingSource
+	}
+	return InferenceTimingSource_INFERENCE_TIMING_SOURCE_UNSPECIFIED
+}
+
+func (x *InferenceResult) GetProviderAttemptId() string {
+	if x != nil {
+		return x.ProviderAttemptId
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetRequestedModel() string {
+	if x != nil {
+		return x.RequestedModel
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetRequestedModelDigest() string {
+	if x != nil {
+		return x.RequestedModelDigest
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetServedModelDigest() string {
+	if x != nil {
+		return x.ServedModelDigest
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetNormalizedRequestHash() string {
+	if x != nil {
+		return x.NormalizedRequestHash
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetOutputHash() string {
+	if x != nil {
+		return x.OutputHash
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetCampaignId() string {
+	if x != nil {
+		return x.CampaignId
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetAssignmentId() string {
+	if x != nil {
+		return x.AssignmentId
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetEvaluationAttemptId() string {
+	if x != nil {
+		return x.EvaluationAttemptId
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetScenarioId() string {
+	if x != nil {
+		return x.ScenarioId
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetModelRegistryDigest() string {
+	if x != nil {
+		return x.ModelRegistryDigest
+	}
+	return ""
+}
+
+func (x *InferenceResult) GetRetryCount() uint32 {
+	if x != nil {
+		return x.RetryCount
+	}
+	return 0
+}
+
+func (x *InferenceResult) GetLoadState() InferenceLoadState {
+	if x != nil {
+		return x.LoadState
+	}
+	return InferenceLoadState_INFERENCE_LOAD_STATE_UNSPECIFIED
+}
+
+func (x *InferenceResult) GetRetryClassification() InferenceRetryClassification {
+	if x != nil {
+		return x.RetryClassification
+	}
+	return InferenceRetryClassification_INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED
+}
+
+// InferenceProgressEvent carries bounded incremental provider output for
+// live cross-boundary delivery telemetry. It is not authoritative; the
+// signed InferenceCompletion remains the sole terminal outcome.
+type InferenceProgressEvent struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Stable provider-attempt identity copied from the governed request.
+	ProviderAttemptId string `protobuf:"bytes,1,opt,name=provider_attempt_id,json=providerAttemptId,proto3" json:"provider_attempt_id,omitempty"`
+	// Monotonic sequence number for this attempt, starting at 1.
+	Sequence uint32 `protobuf:"varint,2,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	// Ordered response parts emitted by this provider stream event.
+	Parts []*InferenceResponsePart `protobuf:"bytes,3,rep,name=parts,proto3" json:"parts,omitempty"`
+	// Measured time from immediately before the provider request to the first
+	// observable thinking, text, or tool-call event. Present only on the first
+	// progress event that carries observable output for the attempt.
+	TimeToFirstTokenNs *int64 `protobuf:"varint,4,opt,name=time_to_first_token_ns,json=timeToFirstTokenNs,proto3,oneof" json:"time_to_first_token_ns,omitempty"`
+	// Provider-served model tag when known from the stream event.
+	ServedModel   string `protobuf:"bytes,5,opt,name=served_model,json=servedModel,proto3" json:"served_model,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceProgressEvent) Reset() {
+	*x = InferenceProgressEvent{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[115]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceProgressEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceProgressEvent) ProtoMessage() {}
+
+func (x *InferenceProgressEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[115]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceProgressEvent.ProtoReflect.Descriptor instead.
+func (*InferenceProgressEvent) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{115}
+}
+
+func (x *InferenceProgressEvent) GetProviderAttemptId() string {
+	if x != nil {
+		return x.ProviderAttemptId
+	}
+	return ""
+}
+
+func (x *InferenceProgressEvent) GetSequence() uint32 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
+}
+
+func (x *InferenceProgressEvent) GetParts() []*InferenceResponsePart {
+	if x != nil {
+		return x.Parts
+	}
+	return nil
+}
+
+func (x *InferenceProgressEvent) GetTimeToFirstTokenNs() int64 {
+	if x != nil && x.TimeToFirstTokenNs != nil {
+		return *x.TimeToFirstTokenNs
+	}
+	return 0
+}
+
+func (x *InferenceProgressEvent) GetServedModel() string {
+	if x != nil {
+		return x.ServedModel
+	}
+	return ""
+}
+
+// InferenceCompletion is the protocol-owned completion publication for a
+// governed inference request. The Inference Node publishes it to the
+// results channel only after the L5 Actuator has finalized and signed the
+// ActionReceipt, so the complete result and its verified receipt are a
+// single correlated outcome. A failed execution carries the FAILED receipt
+// and no result, which terminates the Gateway's dispatch wait immediately
+// instead of at the dispatch deadline.
+type InferenceCompletion struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The signed final ActionReceipt for the inference transaction.
+	Receipt *ActionReceipt `protobuf:"bytes,1,opt,name=receipt,proto3" json:"receipt,omitempty"`
+	// The complete inference result. Absent when the receipt status is not
+	// EXECUTION_STATUS_COMPLETED.
+	Result        *InferenceResult `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceCompletion) Reset() {
+	*x = InferenceCompletion{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[116]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceCompletion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceCompletion) ProtoMessage() {}
+
+func (x *InferenceCompletion) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[116]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceCompletion.ProtoReflect.Descriptor instead.
+func (*InferenceCompletion) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{116}
+}
+
+func (x *InferenceCompletion) GetReceipt() *ActionReceipt {
+	if x != nil {
+		return x.Receipt
+	}
+	return nil
+}
+
+func (x *InferenceCompletion) GetResult() *InferenceResult {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+// InferenceDispatchRequest is the protocol-owned request body for
+// POST /api/v1/inference/dispatch, the mTLS-protected platform-internal
+// endpoint the ensemble chat pipeline calls to dispatch a governed
+// inference request to the Inference Node.
+type InferenceDispatchRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Chat-tier role for this request (primary, assistant, lite).
+	Role ModelRole `protobuf:"varint,1,opt,name=role,proto3,enum=g8e.operator.v1.ModelRole" json:"role,omitempty"`
+	// Requested provider model. A campaign Inference Operator accepts it only
+	// when the exact model and digest occur in the frozen registry committed by
+	// model_registry_digest; standard inference uses the configured role model.
+	Model string `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	// Generation temperature override (0 = use backend default).
+	Temperature float32 `protobuf:"fixed32,4,opt,name=temperature,proto3" json:"temperature,omitempty"`
+	// Maximum tokens to generate (0 = use backend default).
+	MaxTokens int32 `protobuf:"varint,5,opt,name=max_tokens,json=maxTokens,proto3" json:"max_tokens,omitempty"`
+	// Ollama keep-alive duration override (empty = use config default).
+	KeepAlive string `protobuf:"bytes,6,opt,name=keep_alive,json=keepAlive,proto3" json:"keep_alive,omitempty"`
+	// Explicit Inference Node target. When empty, the gateway requires exactly
+	// one enrolled inference-capable operator for the requestor; zero or
+	// multiple matches are rejected.
+	TargetOperatorSessionId string `protobuf:"bytes,7,opt,name=target_operator_session_id,json=targetOperatorSessionId,proto3" json:"target_operator_session_id,omitempty"`
+	// Application that initiated the inference request.
+	ActingAppId string `protobuf:"bytes,8,opt,name=acting_app_id,json=actingAppId,proto3" json:"acting_app_id,omitempty"`
+	// Application context propagated from the chat turn.
+	CaseId          string `protobuf:"bytes,9,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
+	InvestigationId string `protobuf:"bytes,10,opt,name=investigation_id,json=investigationId,proto3" json:"investigation_id,omitempty"`
+	TaskId          string `protobuf:"bytes,11,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	WebSessionId    string `protobuf:"bytes,12,opt,name=web_session_id,json=webSessionId,proto3" json:"web_session_id,omitempty"`
+	CliSessionId    string `protobuf:"bytes,13,opt,name=cli_session_id,json=cliSessionId,proto3" json:"cli_session_id,omitempty"`
+	// Ordered conversation turns sent to the Inference Node. The node validates and re-scrubs every data-bearing part before crossing the provider boundary.
+	Messages []*InferenceMessage `protobuf:"bytes,14,rep,name=messages,proto3" json:"messages,omitempty"`
+	// Ordered callable function declarations available to the model.
+	Tools                []*InferenceToolDeclaration `protobuf:"bytes,15,rep,name=tools,proto3" json:"tools,omitempty"`
+	TopP                 *float32                    `protobuf:"fixed32,16,opt,name=top_p,json=topP,proto3,oneof" json:"top_p,omitempty"`
+	TopK                 *int32                      `protobuf:"varint,17,opt,name=top_k,json=topK,proto3,oneof" json:"top_k,omitempty"`
+	StopSequences        []string                    `protobuf:"bytes,18,rep,name=stop_sequences,json=stopSequences,proto3" json:"stop_sequences,omitempty"`
+	ResponseFormat       *InferenceResponseFormat    `protobuf:"bytes,19,opt,name=response_format,json=responseFormat,proto3" json:"response_format,omitempty"`
+	RequestSchemaVersion string                      `protobuf:"bytes,20,opt,name=request_schema_version,json=requestSchemaVersion,proto3" json:"request_schema_version,omitempty"`
+	ToolChoice           *InferenceToolChoice        `protobuf:"bytes,21,opt,name=tool_choice,json=toolChoice,proto3" json:"tool_choice,omitempty"`
+	ParallelToolCalls    *bool                       `protobuf:"varint,22,opt,name=parallel_tool_calls,json=parallelToolCalls,proto3,oneof" json:"parallel_tool_calls,omitempty"`
+	Thinking             *InferenceThinkingControl   `protobuf:"bytes,23,opt,name=thinking,proto3" json:"thinking,omitempty"`
+	ContextLimit         *int32                      `protobuf:"varint,24,opt,name=context_limit,json=contextLimit,proto3,oneof" json:"context_limit,omitempty"`
+	ProviderAttemptId    string                      `protobuf:"bytes,25,opt,name=provider_attempt_id,json=providerAttemptId,proto3" json:"provider_attempt_id,omitempty"`
+	ModelDigest          string                      `protobuf:"bytes,26,opt,name=model_digest,json=modelDigest,proto3" json:"model_digest,omitempty"`
+	CampaignId           string                      `protobuf:"bytes,27,opt,name=campaign_id,json=campaignId,proto3" json:"campaign_id,omitempty"`
+	RunId                string                      `protobuf:"bytes,28,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	AssignmentId         string                      `protobuf:"bytes,29,opt,name=assignment_id,json=assignmentId,proto3" json:"assignment_id,omitempty"`
+	EvaluationAttemptId  string                      `protobuf:"bytes,30,opt,name=evaluation_attempt_id,json=evaluationAttemptId,proto3" json:"evaluation_attempt_id,omitempty"`
+	ScenarioId           string                      `protobuf:"bytes,31,opt,name=scenario_id,json=scenarioId,proto3" json:"scenario_id,omitempty"`
+	ModelRegistry        []*InferenceModelVariant    `protobuf:"bytes,32,rep,name=model_registry,json=modelRegistry,proto3" json:"model_registry,omitempty"`
+	ModelRegistryDigest  string                      `protobuf:"bytes,33,opt,name=model_registry_digest,json=modelRegistryDigest,proto3" json:"model_registry_digest,omitempty"`
+	// When true, the Gateway forwards live InferenceProgressEvent telemetry
+	// to the caller while waiting for the authoritative terminal completion.
+	Stream bool `protobuf:"varint,34,opt,name=stream,proto3" json:"stream,omitempty"`
+	// Zero-based retry ordinal for this provider attempt.
+	RetryCount uint32 `protobuf:"varint,35,opt,name=retry_count,json=retryCount,proto3" json:"retry_count,omitempty"`
+	// Optional deterministic generation seed forwarded to the provider when
+	// supported. Absent means use the provider default.
+	Seed          *int32 `protobuf:"varint,36,opt,name=seed,proto3,oneof" json:"seed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceDispatchRequest) Reset() {
+	*x = InferenceDispatchRequest{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[117]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceDispatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceDispatchRequest) ProtoMessage() {}
+
+func (x *InferenceDispatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[117]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceDispatchRequest.ProtoReflect.Descriptor instead.
+func (*InferenceDispatchRequest) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{117}
+}
+
+func (x *InferenceDispatchRequest) GetRole() ModelRole {
+	if x != nil {
+		return x.Role
+	}
+	return ModelRole_MODEL_ROLE_UNSPECIFIED
+}
+
+func (x *InferenceDispatchRequest) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetTemperature() float32 {
+	if x != nil {
+		return x.Temperature
+	}
+	return 0
+}
+
+func (x *InferenceDispatchRequest) GetMaxTokens() int32 {
+	if x != nil {
+		return x.MaxTokens
+	}
+	return 0
+}
+
+func (x *InferenceDispatchRequest) GetKeepAlive() string {
+	if x != nil {
+		return x.KeepAlive
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetTargetOperatorSessionId() string {
+	if x != nil {
+		return x.TargetOperatorSessionId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetActingAppId() string {
+	if x != nil {
+		return x.ActingAppId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetCaseId() string {
+	if x != nil {
+		return x.CaseId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetInvestigationId() string {
+	if x != nil {
+		return x.InvestigationId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetWebSessionId() string {
+	if x != nil {
+		return x.WebSessionId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetCliSessionId() string {
+	if x != nil {
+		return x.CliSessionId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetMessages() []*InferenceMessage {
+	if x != nil {
+		return x.Messages
+	}
+	return nil
+}
+
+func (x *InferenceDispatchRequest) GetTools() []*InferenceToolDeclaration {
+	if x != nil {
+		return x.Tools
+	}
+	return nil
+}
+
+func (x *InferenceDispatchRequest) GetTopP() float32 {
+	if x != nil && x.TopP != nil {
+		return *x.TopP
+	}
+	return 0
+}
+
+func (x *InferenceDispatchRequest) GetTopK() int32 {
+	if x != nil && x.TopK != nil {
+		return *x.TopK
+	}
+	return 0
+}
+
+func (x *InferenceDispatchRequest) GetStopSequences() []string {
+	if x != nil {
+		return x.StopSequences
+	}
+	return nil
+}
+
+func (x *InferenceDispatchRequest) GetResponseFormat() *InferenceResponseFormat {
+	if x != nil {
+		return x.ResponseFormat
+	}
+	return nil
+}
+
+func (x *InferenceDispatchRequest) GetRequestSchemaVersion() string {
+	if x != nil {
+		return x.RequestSchemaVersion
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetToolChoice() *InferenceToolChoice {
+	if x != nil {
+		return x.ToolChoice
+	}
+	return nil
+}
+
+func (x *InferenceDispatchRequest) GetParallelToolCalls() bool {
+	if x != nil && x.ParallelToolCalls != nil {
+		return *x.ParallelToolCalls
+	}
+	return false
+}
+
+func (x *InferenceDispatchRequest) GetThinking() *InferenceThinkingControl {
+	if x != nil {
+		return x.Thinking
+	}
+	return nil
+}
+
+func (x *InferenceDispatchRequest) GetContextLimit() int32 {
+	if x != nil && x.ContextLimit != nil {
+		return *x.ContextLimit
+	}
+	return 0
+}
+
+func (x *InferenceDispatchRequest) GetProviderAttemptId() string {
+	if x != nil {
+		return x.ProviderAttemptId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetModelDigest() string {
+	if x != nil {
+		return x.ModelDigest
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetCampaignId() string {
+	if x != nil {
+		return x.CampaignId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetAssignmentId() string {
+	if x != nil {
+		return x.AssignmentId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetEvaluationAttemptId() string {
+	if x != nil {
+		return x.EvaluationAttemptId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetScenarioId() string {
+	if x != nil {
+		return x.ScenarioId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetModelRegistry() []*InferenceModelVariant {
+	if x != nil {
+		return x.ModelRegistry
+	}
+	return nil
+}
+
+func (x *InferenceDispatchRequest) GetModelRegistryDigest() string {
+	if x != nil {
+		return x.ModelRegistryDigest
+	}
+	return ""
+}
+
+func (x *InferenceDispatchRequest) GetStream() bool {
+	if x != nil {
+		return x.Stream
+	}
+	return false
+}
+
+func (x *InferenceDispatchRequest) GetRetryCount() uint32 {
+	if x != nil {
+		return x.RetryCount
+	}
+	return 0
+}
+
+func (x *InferenceDispatchRequest) GetSeed() int32 {
+	if x != nil && x.Seed != nil {
+		return *x.Seed
+	}
+	return 0
+}
+
+// InferenceDispatchStreamFailure is the protocol-owned terminal failure
+// frame for a streaming dispatch that already started NDJSON delivery.
+// Reason is a public-safe centralized sentinel; it never carries raw
+// prompts, model output, or receipt bodies.
+type InferenceDispatchStreamFailure struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceDispatchStreamFailure) Reset() {
+	*x = InferenceDispatchStreamFailure{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[118]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceDispatchStreamFailure) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceDispatchStreamFailure) ProtoMessage() {}
+
+func (x *InferenceDispatchStreamFailure) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[118]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceDispatchStreamFailure.ProtoReflect.Descriptor instead.
+func (*InferenceDispatchStreamFailure) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{118}
+}
+
+func (x *InferenceDispatchStreamFailure) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+// InferenceDispatchStreamFrame is one NDJSON line in a streaming dispatch
+// response. Progress frames are delivery telemetry only. The completion
+// frame carries the verified terminal result and signed receipt. A failure
+// frame is the explicit terminal outcome when cancellation, disconnect,
+// backpressure, or event-to-terminal hash reconciliation prevents a
+// verified completion after the HTTP response has started.
+type InferenceDispatchStreamFrame struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Frame:
+	//
+	//	*InferenceDispatchStreamFrame_Progress
+	//	*InferenceDispatchStreamFrame_Completion
+	//	*InferenceDispatchStreamFrame_Failure
+	Frame         isInferenceDispatchStreamFrame_Frame `protobuf_oneof:"frame"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceDispatchStreamFrame) Reset() {
+	*x = InferenceDispatchStreamFrame{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[119]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceDispatchStreamFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceDispatchStreamFrame) ProtoMessage() {}
+
+func (x *InferenceDispatchStreamFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[119]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceDispatchStreamFrame.ProtoReflect.Descriptor instead.
+func (*InferenceDispatchStreamFrame) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{119}
+}
+
+func (x *InferenceDispatchStreamFrame) GetFrame() isInferenceDispatchStreamFrame_Frame {
+	if x != nil {
+		return x.Frame
+	}
+	return nil
+}
+
+func (x *InferenceDispatchStreamFrame) GetProgress() *InferenceProgressEvent {
+	if x != nil {
+		if x, ok := x.Frame.(*InferenceDispatchStreamFrame_Progress); ok {
+			return x.Progress
+		}
+	}
+	return nil
+}
+
+func (x *InferenceDispatchStreamFrame) GetCompletion() *InferenceDispatchResponse {
+	if x != nil {
+		if x, ok := x.Frame.(*InferenceDispatchStreamFrame_Completion); ok {
+			return x.Completion
+		}
+	}
+	return nil
+}
+
+func (x *InferenceDispatchStreamFrame) GetFailure() *InferenceDispatchStreamFailure {
+	if x != nil {
+		if x, ok := x.Frame.(*InferenceDispatchStreamFrame_Failure); ok {
+			return x.Failure
+		}
+	}
+	return nil
+}
+
+type isInferenceDispatchStreamFrame_Frame interface {
+	isInferenceDispatchStreamFrame_Frame()
+}
+
+type InferenceDispatchStreamFrame_Progress struct {
+	Progress *InferenceProgressEvent `protobuf:"bytes,1,opt,name=progress,proto3,oneof"`
+}
+
+type InferenceDispatchStreamFrame_Completion struct {
+	Completion *InferenceDispatchResponse `protobuf:"bytes,2,opt,name=completion,proto3,oneof"`
+}
+
+type InferenceDispatchStreamFrame_Failure struct {
+	Failure *InferenceDispatchStreamFailure `protobuf:"bytes,3,opt,name=failure,proto3,oneof"`
+}
+
+func (*InferenceDispatchStreamFrame_Progress) isInferenceDispatchStreamFrame_Frame() {}
+
+func (*InferenceDispatchStreamFrame_Completion) isInferenceDispatchStreamFrame_Frame() {}
+
+func (*InferenceDispatchStreamFrame_Failure) isInferenceDispatchStreamFrame_Frame() {}
+
+// InferenceDispatchResponse is the protocol-owned success response for
+// POST /api/v1/inference/dispatch. The Gateway returns it only after
+// verifying the final receipt signature, persistence attestation,
+// transaction identity, and result digest equality. Failure responses use
+// the gateway's standard typed error envelope with a public-safe code.
+type InferenceDispatchResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Transaction ID correlating the dispatch with the audit chain.
+	TransactionId string `protobuf:"bytes,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	// The complete inference result whose result_digest is bound into the
+	// signed receipt.
+	Result *InferenceResult `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
+	// The verified final signed ActionReceipt for the transaction.
+	Receipt       *ActionReceipt `protobuf:"bytes,3,opt,name=receipt,proto3" json:"receipt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InferenceDispatchResponse) Reset() {
+	*x = InferenceDispatchResponse{}
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[120]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InferenceDispatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InferenceDispatchResponse) ProtoMessage() {}
+
+func (x *InferenceDispatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[120]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InferenceDispatchResponse.ProtoReflect.Descriptor instead.
+func (*InferenceDispatchResponse) Descriptor() ([]byte, []int) {
+	return file_g8e_operator_v1_operator_proto_rawDescGZIP(), []int{120}
+}
+
+func (x *InferenceDispatchResponse) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *InferenceDispatchResponse) GetResult() *InferenceResult {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+func (x *InferenceDispatchResponse) GetReceipt() *ActionReceipt {
+	if x != nil {
+		return x.Receipt
+	}
+	return nil
+}
+
 type PasskeyRegisterChallengeResult_RelyingParty struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -8512,7 +11060,7 @@ type PasskeyRegisterChallengeResult_RelyingParty struct {
 
 func (x *PasskeyRegisterChallengeResult_RelyingParty) Reset() {
 	*x = PasskeyRegisterChallengeResult_RelyingParty{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[103]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8524,7 +11072,7 @@ func (x *PasskeyRegisterChallengeResult_RelyingParty) String() string {
 func (*PasskeyRegisterChallengeResult_RelyingParty) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult_RelyingParty) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[103]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8565,7 +11113,7 @@ type PasskeyRegisterChallengeResult_UserInfo struct {
 
 func (x *PasskeyRegisterChallengeResult_UserInfo) Reset() {
 	*x = PasskeyRegisterChallengeResult_UserInfo{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[104]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8577,7 +11125,7 @@ func (x *PasskeyRegisterChallengeResult_UserInfo) String() string {
 func (*PasskeyRegisterChallengeResult_UserInfo) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult_UserInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[104]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8624,7 +11172,7 @@ type PasskeyRegisterChallengeResult_PublicKeyCredentialParameters struct {
 
 func (x *PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) Reset() {
 	*x = PasskeyRegisterChallengeResult_PublicKeyCredentialParameters{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[105]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8636,7 +11184,7 @@ func (x *PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) String() 
 func (*PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult_PublicKeyCredentialParameters) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[105]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8676,7 +11224,7 @@ type PasskeyRegisterChallengeResult_AuthenticatorSelection struct {
 
 func (x *PasskeyRegisterChallengeResult_AuthenticatorSelection) Reset() {
 	*x = PasskeyRegisterChallengeResult_AuthenticatorSelection{}
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[106]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8688,7 +11236,7 @@ func (x *PasskeyRegisterChallengeResult_AuthenticatorSelection) String() string 
 func (*PasskeyRegisterChallengeResult_AuthenticatorSelection) ProtoMessage() {}
 
 func (x *PasskeyRegisterChallengeResult_AuthenticatorSelection) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_operator_v1_operator_proto_msgTypes[106]
+	mi := &file_g8e_operator_v1_operator_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8954,7 +11502,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1f\n" +
 	"\voperator_id\x18\x02 \x01(\tR\n" +
 	"operatorId\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\x8d\x05\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xfd\x04\n" +
 	"\x10OperatorDocument\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12'\n" +
@@ -8971,11 +11519,10 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"slotNumber\x12\x17\n" +
 	"\ais_slot\x18\f \x01(\bR\x06isSlot\x12\x18\n" +
 	"\aclaimed\x18\r \x01(\bR\aclaimed\x12#\n" +
-	"\roperator_type\x18\x0e \x01(\tR\foperatorType\x12#\n" +
-	"\rcloud_subtype\x18\x0f \x01(\tR\fcloudSubtype\x12-\n" +
+	"\roperator_type\x18\x0e \x01(\tR\foperatorType\x12-\n" +
 	"\x12system_fingerprint\x18\x10 \x01(\tR\x11systemFingerprint\x12+\n" +
 	"\x12created_at_unix_ms\x18\x11 \x01(\x03R\x0fcreatedAtUnixMs\x12+\n" +
-	"\x12updated_at_unix_ms\x18\x12 \x01(\x03R\x0fupdatedAtUnixMs\"+\n" +
+	"\x12updated_at_unix_ms\x18\x12 \x01(\x03R\x0fupdatedAtUnixMsJ\x04\b\x0f\x10\x10R\rcloud_subtype\"+\n" +
 	"\x11ShutdownRequested\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"~\n" +
 	"\x13EvalAnswerRequested\x12\x1b\n" +
@@ -9041,7 +11588,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\x14persisted_at_unix_ms\x18\x03 \x01(\x03R\x11persistedAtUnixMs\x12&\n" +
 	"\x0faudit_record_id\x18\x04 \x01(\tR\rauditRecordId\x12\"\n" +
 	"\rsigner_key_id\x18\x05 \x01(\tR\vsignerKeyId\x12\x1c\n" +
-	"\tsignature\x18\x06 \x01(\tR\tsignature\"\xdc\x05\n" +
+	"\tsignature\x18\x06 \x01(\tR\tsignature\"\xa4\x06\n" +
 	"\rActionReceipt\x12%\n" +
 	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x12)\n" +
 	"\x10transaction_hash\x18\x02 \x01(\tR\x0ftransactionHash\x128\n" +
@@ -9055,7 +11602,8 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\tl2_status\x18\v \x01(\x0e2\x19.g8e.operator.v1.L2StatusR\bl2Status\x126\n" +
 	"\tl3_status\x18\f \x01(\x0e2\x19.g8e.operator.v1.L3StatusR\bl3Status\x12m\n" +
 	"\x1cdeterministic_stage_evidence\x18\r \x03(\v2+.g8e.operator.v1.DeterministicStageEvidenceR\x1adeterministicStageEvidence\x12r\n" +
-	"\x1dfinal_persistence_attestation\x18\x0e \x01(\v2..g8e.operator.v1.ReceiptPersistenceAttestationR\x1bfinalPersistenceAttestation\"\xcc\x04\n" +
+	"\x1dfinal_persistence_attestation\x18\x0e \x01(\v2..g8e.operator.v1.ReceiptPersistenceAttestationR\x1bfinalPersistenceAttestation\x12F\n" +
+	"\ffailure_code\x18\x0f \x01(\x0e2#.g8e.operator.v1.ReceiptFailureCodeR\vfailureCode\"\xcc\x04\n" +
 	"\x15CommitmentAttestation\x12%\n" +
 	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x12)\n" +
 	"\x10transaction_hash\x18\x02 \x01(\tR\x0ftransactionHash\x122\n" +
@@ -9477,7 +12025,220 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x14\n" +
 	"\x05found\x18\x03 \x01(\bR\x05found\x12\x1c\n" +
-	"\tremaining\x18\x04 \x01(\x05R\tremaining*\xce\x01\n" +
+	"\tremaining\x18\x04 \x01(\x05R\tremaining\"g\n" +
+	"\x11InferenceToolCall\x12\x17\n" +
+	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12%\n" +
+	"\x0earguments_json\x18\x03 \x01(\tR\rargumentsJson\"c\n" +
+	"\x13InferenceToolResult\x12\x17\n" +
+	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1f\n" +
+	"\vresult_json\x18\x03 \x01(\tR\n" +
+	"resultJson\"\xc0\x01\n" +
+	"\x14InferenceMessagePart\x12\x14\n" +
+	"\x04text\x18\x01 \x01(\tH\x00R\x04text\x12A\n" +
+	"\ttool_call\x18\x02 \x01(\v2\".g8e.operator.v1.InferenceToolCallH\x00R\btoolCall\x12G\n" +
+	"\vtool_result\x18\x03 \x01(\v2$.g8e.operator.v1.InferenceToolResultH\x00R\n" +
+	"toolResultB\x06\n" +
+	"\x04part\"\x8a\x01\n" +
+	"\x10InferenceMessage\x129\n" +
+	"\x04role\x18\x01 \x01(\x0e2%.g8e.operator.v1.InferenceMessageRoleR\x04role\x12;\n" +
+	"\x05parts\x18\x02 \x03(\v2%.g8e.operator.v1.InferenceMessagePartR\x05parts\"q\n" +
+	"\x18InferenceToolDeclaration\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x1f\n" +
+	"\vjson_schema\x18\x03 \x01(\tR\n" +
+	"jsonSchema\"Y\n" +
+	"\x17InferenceResponseFormat\x12\x1d\n" +
+	"\n" +
+	"media_type\x18\x01 \x01(\tR\tmediaType\x12\x1f\n" +
+	"\vjson_schema\x18\x02 \x01(\tR\n" +
+	"jsonSchema\"\x81\x01\n" +
+	"\x13InferenceToolChoice\x12<\n" +
+	"\x04mode\x18\x01 \x01(\x0e2(.g8e.operator.v1.InferenceToolChoiceModeR\x04mode\x12,\n" +
+	"\x12allowed_tool_names\x18\x02 \x03(\tR\x10allowedToolNames\"\x81\x01\n" +
+	"\x18InferenceThinkingControl\x12\x1a\n" +
+	"\aenabled\x18\x01 \x01(\bH\x00R\aenabled\x12\x16\n" +
+	"\x05level\x18\x02 \x01(\tH\x00R\x05level\x12)\n" +
+	"\x10include_thoughts\x18\x03 \x01(\bR\x0fincludeThoughtsB\x06\n" +
+	"\x04mode\"\x96\x01\n" +
+	"\x15InferenceResponsePart\x12\x14\n" +
+	"\x04text\x18\x01 \x01(\tH\x00R\x04text\x12A\n" +
+	"\ttool_call\x18\x02 \x01(\v2\".g8e.operator.v1.InferenceToolCallH\x00R\btoolCall\x12\x1c\n" +
+	"\bthinking\x18\x03 \x01(\tH\x00R\bthinkingB\x06\n" +
+	"\x04part\"E\n" +
+	"\x15InferenceModelVariant\x12\x14\n" +
+	"\x05model\x18\x01 \x01(\tR\x05model\x12\x16\n" +
+	"\x06digest\x18\x02 \x01(\tR\x06digest\"\xba\n" +
+	"\n" +
+	"\x12InferenceRequested\x12.\n" +
+	"\x04role\x18\x01 \x01(\x0e2\x1a.g8e.operator.v1.ModelRoleR\x04role\x12\x14\n" +
+	"\x05model\x18\x02 \x01(\tR\x05model\x12 \n" +
+	"\vtemperature\x18\x04 \x01(\x02R\vtemperature\x12\x1d\n" +
+	"\n" +
+	"max_tokens\x18\x05 \x01(\x05R\tmaxTokens\x12\x1d\n" +
+	"\n" +
+	"keep_alive\x18\x06 \x01(\tR\tkeepAlive\x12=\n" +
+	"\bmessages\x18\a \x03(\v2!.g8e.operator.v1.InferenceMessageR\bmessages\x12?\n" +
+	"\x05tools\x18\b \x03(\v2).g8e.operator.v1.InferenceToolDeclarationR\x05tools\x12\x18\n" +
+	"\x05top_p\x18\t \x01(\x02H\x00R\x04topP\x88\x01\x01\x12\x18\n" +
+	"\x05top_k\x18\n" +
+	" \x01(\x05H\x01R\x04topK\x88\x01\x01\x12%\n" +
+	"\x0estop_sequences\x18\v \x03(\tR\rstopSequences\x12Q\n" +
+	"\x0fresponse_format\x18\f \x01(\v2(.g8e.operator.v1.InferenceResponseFormatR\x0eresponseFormat\x124\n" +
+	"\x16request_schema_version\x18\r \x01(\tR\x14requestSchemaVersion\x12E\n" +
+	"\vtool_choice\x18\x0e \x01(\v2$.g8e.operator.v1.InferenceToolChoiceR\n" +
+	"toolChoice\x123\n" +
+	"\x13parallel_tool_calls\x18\x0f \x01(\bH\x02R\x11parallelToolCalls\x88\x01\x01\x12E\n" +
+	"\bthinking\x18\x10 \x01(\v2).g8e.operator.v1.InferenceThinkingControlR\bthinking\x12(\n" +
+	"\rcontext_limit\x18\x11 \x01(\x05H\x03R\fcontextLimit\x88\x01\x01\x12.\n" +
+	"\x13provider_attempt_id\x18\x12 \x01(\tR\x11providerAttemptId\x12!\n" +
+	"\fmodel_digest\x18\x13 \x01(\tR\vmodelDigest\x12\x1f\n" +
+	"\vcampaign_id\x18\x14 \x01(\tR\n" +
+	"campaignId\x12\x15\n" +
+	"\x06run_id\x18\x15 \x01(\tR\x05runId\x12#\n" +
+	"\rassignment_id\x18\x16 \x01(\tR\fassignmentId\x122\n" +
+	"\x15evaluation_attempt_id\x18\x17 \x01(\tR\x13evaluationAttemptId\x12\x1f\n" +
+	"\vscenario_id\x18\x18 \x01(\tR\n" +
+	"scenarioId\x12M\n" +
+	"\x0emodel_registry\x18\x19 \x03(\v2&.g8e.operator.v1.InferenceModelVariantR\rmodelRegistry\x122\n" +
+	"\x15model_registry_digest\x18\x1a \x01(\tR\x13modelRegistryDigest\x12\x16\n" +
+	"\x06stream\x18\x1b \x01(\bR\x06stream\x12\x1f\n" +
+	"\vretry_count\x18\x1c \x01(\rR\n" +
+	"retryCount\x12\x17\n" +
+	"\x04seed\x18\x1d \x01(\x05H\x04R\x04seed\x88\x01\x01B\b\n" +
+	"\x06_top_pB\b\n" +
+	"\x06_top_kB\x16\n" +
+	"\x14_parallel_tool_callsB\x10\n" +
+	"\x0e_context_limitB\a\n" +
+	"\x05_seedJ\x04\b\x03\x10\x04R\x06prompt\"\xef\x03\n" +
+	"\x1eInferenceProviderAttemptRecord\x12.\n" +
+	"\x13provider_attempt_id\x18\x01 \x01(\tR\x11providerAttemptId\x12%\n" +
+	"\x0etransaction_id\x18\x02 \x01(\tR\rtransactionId\x12\x1f\n" +
+	"\vretry_count\x18\x03 \x01(\rR\n" +
+	"retryCount\x12`\n" +
+	"\x14retry_classification\x18\x04 \x01(\x0e2-.g8e.operator.v1.InferenceRetryClassificationR\x13retryClassification\x12G\n" +
+	"\x06status\x18\x05 \x01(\x0e2/.g8e.operator.v1.InferenceProviderAttemptStatusR\x06status\x12+\n" +
+	"\x12started_at_unix_ms\x18\x06 \x01(\x03R\x0fstartedAtUnixMs\x12/\n" +
+	"\x14completed_at_unix_ms\x18\a \x01(\x03R\x11completedAtUnixMs\x12#\n" +
+	"\rresult_digest\x18\b \x01(\tR\fresultDigest\x12'\n" +
+	"\x0ffailure_summary\x18\t \x01(\tR\x0efailureSummary\"\xf1\f\n" +
+	"\x0fInferenceResult\x12#\n" +
+	"\rprompt_tokens\x18\x02 \x01(\x05R\fpromptTokens\x12+\n" +
+	"\x11completion_tokens\x18\x03 \x01(\x05R\x10completionTokens\x12!\n" +
+	"\ftotal_tokens\x18\x04 \x01(\x05R\vtotalTokens\x12#\n" +
+	"\rfinish_reason\x18\x05 \x01(\tR\ffinishReason\x12\x14\n" +
+	"\x05model\x18\x06 \x01(\tR\x05model\x12#\n" +
+	"\rresult_digest\x18\a \x01(\tR\fresultDigest\x12<\n" +
+	"\x05parts\x18\b \x03(\v2&.g8e.operator.v1.InferenceResponsePartR\x05parts\x12%\n" +
+	"\x0eusage_reported\x18\t \x01(\bR\rusageReported\x12,\n" +
+	"\x0fthinking_tokens\x18\n" +
+	" \x01(\x05H\x00R\x0ethinkingTokens\x88\x01\x01\x12&\n" +
+	"\fcache_tokens\x18\v \x01(\x05H\x01R\vcacheTokens\x88\x01\x01\x12-\n" +
+	"\x10load_duration_ns\x18\f \x01(\x03H\x02R\x0eloadDurationNs\x88\x01\x01\x12:\n" +
+	"\x17prompt_eval_duration_ns\x18\r \x01(\x03H\x03R\x14promptEvalDurationNs\x88\x01\x01\x129\n" +
+	"\x16generation_duration_ns\x18\x0e \x01(\x03H\x04R\x14generationDurationNs\x88\x01\x01\x12/\n" +
+	"\x11total_duration_ns\x18\x0f \x01(\x03H\x05R\x0ftotalDurationNs\x88\x01\x01\x127\n" +
+	"\x16time_to_first_token_ns\x18\x10 \x01(\x03H\x06R\x12timeToFirstTokenNs\x88\x01\x01\x12K\n" +
+	"\rtiming_source\x18\x11 \x01(\x0e2&.g8e.operator.v1.InferenceTimingSourceR\ftimingSource\x12.\n" +
+	"\x13provider_attempt_id\x18\x12 \x01(\tR\x11providerAttemptId\x12'\n" +
+	"\x0frequested_model\x18\x13 \x01(\tR\x0erequestedModel\x124\n" +
+	"\x16requested_model_digest\x18\x14 \x01(\tR\x14requestedModelDigest\x12.\n" +
+	"\x13served_model_digest\x18\x15 \x01(\tR\x11servedModelDigest\x126\n" +
+	"\x17normalized_request_hash\x18\x16 \x01(\tR\x15normalizedRequestHash\x12\x1f\n" +
+	"\voutput_hash\x18\x17 \x01(\tR\n" +
+	"outputHash\x12\x1f\n" +
+	"\vcampaign_id\x18\x18 \x01(\tR\n" +
+	"campaignId\x12\x15\n" +
+	"\x06run_id\x18\x19 \x01(\tR\x05runId\x12#\n" +
+	"\rassignment_id\x18\x1a \x01(\tR\fassignmentId\x122\n" +
+	"\x15evaluation_attempt_id\x18\x1b \x01(\tR\x13evaluationAttemptId\x12\x1f\n" +
+	"\vscenario_id\x18\x1c \x01(\tR\n" +
+	"scenarioId\x122\n" +
+	"\x15model_registry_digest\x18\x1d \x01(\tR\x13modelRegistryDigest\x12\x1f\n" +
+	"\vretry_count\x18\x1e \x01(\rR\n" +
+	"retryCount\x12B\n" +
+	"\n" +
+	"load_state\x18\x1f \x01(\x0e2#.g8e.operator.v1.InferenceLoadStateR\tloadState\x12`\n" +
+	"\x14retry_classification\x18  \x01(\x0e2-.g8e.operator.v1.InferenceRetryClassificationR\x13retryClassificationB\x12\n" +
+	"\x10_thinking_tokensB\x0f\n" +
+	"\r_cache_tokensB\x13\n" +
+	"\x11_load_duration_nsB\x1a\n" +
+	"\x18_prompt_eval_duration_nsB\x19\n" +
+	"\x17_generation_duration_nsB\x14\n" +
+	"\x12_total_duration_nsB\x19\n" +
+	"\x17_time_to_first_token_nsJ\x04\b\x01\x10\x02R\x04text\"\x99\x02\n" +
+	"\x16InferenceProgressEvent\x12.\n" +
+	"\x13provider_attempt_id\x18\x01 \x01(\tR\x11providerAttemptId\x12\x1a\n" +
+	"\bsequence\x18\x02 \x01(\rR\bsequence\x12<\n" +
+	"\x05parts\x18\x03 \x03(\v2&.g8e.operator.v1.InferenceResponsePartR\x05parts\x127\n" +
+	"\x16time_to_first_token_ns\x18\x04 \x01(\x03H\x00R\x12timeToFirstTokenNs\x88\x01\x01\x12!\n" +
+	"\fserved_model\x18\x05 \x01(\tR\vservedModelB\x19\n" +
+	"\x17_time_to_first_token_ns\"\x89\x01\n" +
+	"\x13InferenceCompletion\x128\n" +
+	"\areceipt\x18\x01 \x01(\v2\x1e.g8e.operator.v1.ActionReceiptR\areceipt\x128\n" +
+	"\x06result\x18\x02 \x01(\v2 .g8e.operator.v1.InferenceResultR\x06result\"\xca\f\n" +
+	"\x18InferenceDispatchRequest\x12.\n" +
+	"\x04role\x18\x01 \x01(\x0e2\x1a.g8e.operator.v1.ModelRoleR\x04role\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12 \n" +
+	"\vtemperature\x18\x04 \x01(\x02R\vtemperature\x12\x1d\n" +
+	"\n" +
+	"max_tokens\x18\x05 \x01(\x05R\tmaxTokens\x12\x1d\n" +
+	"\n" +
+	"keep_alive\x18\x06 \x01(\tR\tkeepAlive\x12;\n" +
+	"\x1atarget_operator_session_id\x18\a \x01(\tR\x17targetOperatorSessionId\x12\"\n" +
+	"\racting_app_id\x18\b \x01(\tR\vactingAppId\x12\x17\n" +
+	"\acase_id\x18\t \x01(\tR\x06caseId\x12)\n" +
+	"\x10investigation_id\x18\n" +
+	" \x01(\tR\x0finvestigationId\x12\x17\n" +
+	"\atask_id\x18\v \x01(\tR\x06taskId\x12$\n" +
+	"\x0eweb_session_id\x18\f \x01(\tR\fwebSessionId\x12$\n" +
+	"\x0ecli_session_id\x18\r \x01(\tR\fcliSessionId\x12=\n" +
+	"\bmessages\x18\x0e \x03(\v2!.g8e.operator.v1.InferenceMessageR\bmessages\x12?\n" +
+	"\x05tools\x18\x0f \x03(\v2).g8e.operator.v1.InferenceToolDeclarationR\x05tools\x12\x18\n" +
+	"\x05top_p\x18\x10 \x01(\x02H\x00R\x04topP\x88\x01\x01\x12\x18\n" +
+	"\x05top_k\x18\x11 \x01(\x05H\x01R\x04topK\x88\x01\x01\x12%\n" +
+	"\x0estop_sequences\x18\x12 \x03(\tR\rstopSequences\x12Q\n" +
+	"\x0fresponse_format\x18\x13 \x01(\v2(.g8e.operator.v1.InferenceResponseFormatR\x0eresponseFormat\x124\n" +
+	"\x16request_schema_version\x18\x14 \x01(\tR\x14requestSchemaVersion\x12E\n" +
+	"\vtool_choice\x18\x15 \x01(\v2$.g8e.operator.v1.InferenceToolChoiceR\n" +
+	"toolChoice\x123\n" +
+	"\x13parallel_tool_calls\x18\x16 \x01(\bH\x02R\x11parallelToolCalls\x88\x01\x01\x12E\n" +
+	"\bthinking\x18\x17 \x01(\v2).g8e.operator.v1.InferenceThinkingControlR\bthinking\x12(\n" +
+	"\rcontext_limit\x18\x18 \x01(\x05H\x03R\fcontextLimit\x88\x01\x01\x12.\n" +
+	"\x13provider_attempt_id\x18\x19 \x01(\tR\x11providerAttemptId\x12!\n" +
+	"\fmodel_digest\x18\x1a \x01(\tR\vmodelDigest\x12\x1f\n" +
+	"\vcampaign_id\x18\x1b \x01(\tR\n" +
+	"campaignId\x12\x15\n" +
+	"\x06run_id\x18\x1c \x01(\tR\x05runId\x12#\n" +
+	"\rassignment_id\x18\x1d \x01(\tR\fassignmentId\x122\n" +
+	"\x15evaluation_attempt_id\x18\x1e \x01(\tR\x13evaluationAttemptId\x12\x1f\n" +
+	"\vscenario_id\x18\x1f \x01(\tR\n" +
+	"scenarioId\x12M\n" +
+	"\x0emodel_registry\x18  \x03(\v2&.g8e.operator.v1.InferenceModelVariantR\rmodelRegistry\x122\n" +
+	"\x15model_registry_digest\x18! \x01(\tR\x13modelRegistryDigest\x12\x16\n" +
+	"\x06stream\x18\" \x01(\bR\x06stream\x12\x1f\n" +
+	"\vretry_count\x18# \x01(\rR\n" +
+	"retryCount\x12\x17\n" +
+	"\x04seed\x18$ \x01(\x05H\x04R\x04seed\x88\x01\x01B\b\n" +
+	"\x06_top_pB\b\n" +
+	"\x06_top_kB\x16\n" +
+	"\x14_parallel_tool_callsB\x10\n" +
+	"\x0e_context_limitB\a\n" +
+	"\x05_seedJ\x04\b\x02\x10\x03R\x06prompt\"8\n" +
+	"\x1eInferenceDispatchStreamFailure\x12\x16\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"\x89\x02\n" +
+	"\x1cInferenceDispatchStreamFrame\x12E\n" +
+	"\bprogress\x18\x01 \x01(\v2'.g8e.operator.v1.InferenceProgressEventH\x00R\bprogress\x12L\n" +
+	"\n" +
+	"completion\x18\x02 \x01(\v2*.g8e.operator.v1.InferenceDispatchResponseH\x00R\n" +
+	"completion\x12K\n" +
+	"\afailure\x18\x03 \x01(\v2/.g8e.operator.v1.InferenceDispatchStreamFailureH\x00R\afailureB\a\n" +
+	"\x05frame\"\xb6\x01\n" +
+	"\x19InferenceDispatchResponse\x12%\n" +
+	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x128\n" +
+	"\x06result\x18\x02 \x01(\v2 .g8e.operator.v1.InferenceResultR\x06result\x128\n" +
+	"\areceipt\x18\x03 \x01(\v2\x1e.g8e.operator.v1.ActionReceiptR\areceipt*\xce\x01\n" +
 	"\x0fExecutionStatus\x12 \n" +
 	"\x1cEXECUTION_STATUS_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aEXECUTION_STATUS_EXECUTING\x10\x01\x12\x1e\n" +
@@ -9513,7 +12274,61 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"$DETERMINISTIC_STAGE_OUTCOME_VERIFIED\x10\x01\x12,\n" +
 	"(DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED\x10\x02\x12)\n" +
 	"%DETERMINISTIC_STAGE_OUTCOME_COMPLETED\x10\x03\x12&\n" +
-	"\"DETERMINISTIC_STAGE_OUTCOME_FAILED\x10\x042\xb8\x03\n" +
+	"\"DETERMINISTIC_STAGE_OUTCOME_FAILED\x10\x04*\x80\a\n" +
+	"\x12ReceiptFailureCode\x12$\n" +
+	" RECEIPT_FAILURE_CODE_UNSPECIFIED\x10\x00\x12,\n" +
+	"(RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED\x10\x01\x12.\n" +
+	"*RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED\x10\x02\x12%\n" +
+	"!RECEIPT_FAILURE_CODE_ROLE_INVALID\x10\x03\x12*\n" +
+	"&RECEIPT_FAILURE_CODE_MODEL_REF_INVALID\x10\x04\x12,\n" +
+	"(RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE\x10\x05\x12(\n" +
+	"$RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT\x10\x06\x12(\n" +
+	"$RECEIPT_FAILURE_CODE_GENERATE_FAILED\x10\a\x12)\n" +
+	"%RECEIPT_FAILURE_CODE_EXECUTION_FAILED\x10\b\x12(\n" +
+	"$RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND\x10\t\x122\n" +
+	".RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID\x10\n" +
+	"\x123\n" +
+	"/RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID\x10\v\x12/\n" +
+	"+RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED\x10\f\x122\n" +
+	".RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED\x10\r\x12*\n" +
+	"&RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH\x10\x0e\x12.\n" +
+	"*RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH\x10\x0f\x12.\n" +
+	"*RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID\x10\x10\x12/\n" +
+	"+RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID\x10\x11\x121\n" +
+	"-RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID\x10\x12*n\n" +
+	"\tModelRole\x12\x1a\n" +
+	"\x16MODEL_ROLE_UNSPECIFIED\x10\x00\x12\x16\n" +
+	"\x12MODEL_ROLE_PRIMARY\x10\x01\x12\x18\n" +
+	"\x14MODEL_ROLE_ASSISTANT\x10\x02\x12\x13\n" +
+	"\x0fMODEL_ROLE_LITE\x10\x03*\xc9\x01\n" +
+	"\x14InferenceMessageRole\x12&\n" +
+	"\"INFERENCE_MESSAGE_ROLE_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dINFERENCE_MESSAGE_ROLE_SYSTEM\x10\x01\x12\x1f\n" +
+	"\x1bINFERENCE_MESSAGE_ROLE_USER\x10\x02\x12$\n" +
+	" INFERENCE_MESSAGE_ROLE_ASSISTANT\x10\x03\x12\x1f\n" +
+	"\x1bINFERENCE_MESSAGE_ROLE_TOOL\x10\x04*\xb8\x01\n" +
+	"\x17InferenceToolChoiceMode\x12*\n" +
+	"&INFERENCE_TOOL_CHOICE_MODE_UNSPECIFIED\x10\x00\x12#\n" +
+	"\x1fINFERENCE_TOOL_CHOICE_MODE_AUTO\x10\x01\x12#\n" +
+	"\x1fINFERENCE_TOOL_CHOICE_MODE_NONE\x10\x02\x12'\n" +
+	"#INFERENCE_TOOL_CHOICE_MODE_REQUIRED\x10\x03*f\n" +
+	"\x15InferenceTimingSource\x12'\n" +
+	"#INFERENCE_TIMING_SOURCE_UNSPECIFIED\x10\x00\x12$\n" +
+	" INFERENCE_TIMING_SOURCE_PROVIDER\x10\x01*\x9e\x01\n" +
+	"\x12InferenceLoadState\x12$\n" +
+	" INFERENCE_LOAD_STATE_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19INFERENCE_LOAD_STATE_COLD\x10\x01\x12\x1d\n" +
+	"\x19INFERENCE_LOAD_STATE_WARM\x10\x02\x12$\n" +
+	" INFERENCE_LOAD_STATE_UNAVAILABLE\x10\x03*\xb5\x01\n" +
+	"\x1cInferenceRetryClassification\x12.\n" +
+	"*INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED\x10\x00\x12'\n" +
+	"#INFERENCE_RETRY_CLASSIFICATION_NONE\x10\x01\x12<\n" +
+	"8INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT\x10\x02*\xe5\x01\n" +
+	"\x1eInferenceProviderAttemptStatus\x121\n" +
+	"-INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED\x10\x00\x121\n" +
+	"-INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS\x10\x01\x12/\n" +
+	"+INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED\x10\x02\x12,\n" +
+	"(INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED\x10\x032\xb8\x03\n" +
 	"\x0fOperatorService\x12S\n" +
 	"\x0eExecuteCommand\x12!.g8e.operator.v1.CommandRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12X\n" +
 	"\rCancelCommand\x12'.g8e.operator.v1.CommandCancelRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12N\n" +
@@ -9533,8 +12348,8 @@ func file_g8e_operator_v1_operator_proto_rawDescGZIP() []byte {
 	return file_g8e_operator_v1_operator_proto_rawDescData
 }
 
-var file_g8e_operator_v1_operator_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_g8e_operator_v1_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 107)
+var file_g8e_operator_v1_operator_proto_enumTypes = make([]protoimpl.EnumInfo, 14)
+var file_g8e_operator_v1_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 126)
 var file_g8e_operator_v1_operator_proto_goTypes = []any{
 	(ExecutionStatus)(0),                                // 0: g8e.operator.v1.ExecutionStatus
 	(L3Status)(0),                                       // 1: g8e.operator.v1.L3Status
@@ -9542,180 +12357,242 @@ var file_g8e_operator_v1_operator_proto_goTypes = []any{
 	(HeartbeatType)(0),                                  // 3: g8e.operator.v1.HeartbeatType
 	(DeterministicStageKind)(0),                         // 4: g8e.operator.v1.DeterministicStageKind
 	(DeterministicStageOutcome)(0),                      // 5: g8e.operator.v1.DeterministicStageOutcome
-	(*CommandRequested)(nil),                            // 6: g8e.operator.v1.CommandRequested
-	(*CommandCancelRequested)(nil),                      // 7: g8e.operator.v1.CommandCancelRequested
-	(*FileEditRequested)(nil),                           // 8: g8e.operator.v1.FileEditRequested
-	(*FsListRequested)(nil),                             // 9: g8e.operator.v1.FsListRequested
-	(*FsReadRequested)(nil),                             // 10: g8e.operator.v1.FsReadRequested
-	(*HeartbeatRequested)(nil),                          // 11: g8e.operator.v1.HeartbeatRequested
-	(*FsGrepRequested)(nil),                             // 12: g8e.operator.v1.FsGrepRequested
-	(*CheckPortRequested)(nil),                          // 13: g8e.operator.v1.CheckPortRequested
-	(*FetchLogsRequested)(nil),                          // 14: g8e.operator.v1.FetchLogsRequested
-	(*FetchHistoryRequested)(nil),                       // 15: g8e.operator.v1.FetchHistoryRequested
-	(*FetchFileHistoryRequested)(nil),                   // 16: g8e.operator.v1.FetchFileHistoryRequested
-	(*FetchFileDiffRequested)(nil),                      // 17: g8e.operator.v1.FetchFileDiffRequested
-	(*RestoreFileRequested)(nil),                        // 18: g8e.operator.v1.RestoreFileRequested
-	(*DirectCommandAuditRequested)(nil),                 // 19: g8e.operator.v1.DirectCommandAuditRequested
-	(*DirectCommandResultAuditRequested)(nil),           // 20: g8e.operator.v1.DirectCommandResultAuditRequested
-	(*AuditMsgRequested)(nil),                           // 21: g8e.operator.v1.AuditMsgRequested
-	(*DocumentUpdateRequested)(nil),                     // 22: g8e.operator.v1.DocumentUpdateRequested
-	(*DocumentDeleteRequested)(nil),                     // 23: g8e.operator.v1.DocumentDeleteRequested
-	(*SignCertificateRequested)(nil),                    // 24: g8e.operator.v1.SignCertificateRequested
-	(*SignCertificateResult)(nil),                       // 25: g8e.operator.v1.SignCertificateResult
-	(*RevokeCertificateRequested)(nil),                  // 26: g8e.operator.v1.RevokeCertificateRequested
-	(*RevokeCertificateResult)(nil),                     // 27: g8e.operator.v1.RevokeCertificateResult
-	(*GetRevocationBundleRequested)(nil),                // 28: g8e.operator.v1.GetRevocationBundleRequested
-	(*GetRevocationBundleResult)(nil),                   // 29: g8e.operator.v1.GetRevocationBundleResult
-	(*CreateDeviceLinkRequested)(nil),                   // 30: g8e.operator.v1.CreateDeviceLinkRequested
-	(*DeviceLink)(nil),                                  // 31: g8e.operator.v1.DeviceLink
-	(*DeviceLinkResult)(nil),                            // 32: g8e.operator.v1.DeviceLinkResult
-	(*ListDeviceLinksRequested)(nil),                    // 33: g8e.operator.v1.ListDeviceLinksRequested
-	(*ListDeviceLinksResult)(nil),                       // 34: g8e.operator.v1.ListDeviceLinksResult
-	(*DeleteDeviceLinkRequested)(nil),                   // 35: g8e.operator.v1.DeleteDeviceLinkRequested
-	(*TerminateOperatorRequested)(nil),                  // 36: g8e.operator.v1.TerminateOperatorRequested
-	(*TerminateOperatorResult)(nil),                     // 37: g8e.operator.v1.TerminateOperatorResult
-	(*ListOperatorSlotsRequested)(nil),                  // 38: g8e.operator.v1.ListOperatorSlotsRequested
-	(*ListOperatorSlotsResult)(nil),                     // 39: g8e.operator.v1.ListOperatorSlotsResult
-	(*BindOperatorsRequested)(nil),                      // 40: g8e.operator.v1.BindOperatorsRequested
-	(*BindOperatorsResult)(nil),                         // 41: g8e.operator.v1.BindOperatorsResult
-	(*UnbindOperatorsRequested)(nil),                    // 42: g8e.operator.v1.UnbindOperatorsRequested
-	(*UnbindOperatorsResult)(nil),                       // 43: g8e.operator.v1.UnbindOperatorsResult
-	(*SetTargetContextRequested)(nil),                   // 44: g8e.operator.v1.SetTargetContextRequested
-	(*SetTargetContextResult)(nil),                      // 45: g8e.operator.v1.SetTargetContextResult
-	(*OperatorDocument)(nil),                            // 46: g8e.operator.v1.OperatorDocument
-	(*ShutdownRequested)(nil),                           // 47: g8e.operator.v1.ShutdownRequested
-	(*EvalAnswerRequested)(nil),                         // 48: g8e.operator.v1.EvalAnswerRequested
-	(*McpCallRequested)(nil),                            // 49: g8e.operator.v1.McpCallRequested
-	(*A2ACallRequested)(nil),                            // 50: g8e.operator.v1.A2aCallRequested
-	(*McpResourceListRequested)(nil),                    // 51: g8e.operator.v1.McpResourceListRequested
-	(*McpResourceReadRequested)(nil),                    // 52: g8e.operator.v1.McpResourceReadRequested
-	(*McpPromptListRequested)(nil),                      // 53: g8e.operator.v1.McpPromptListRequested
-	(*McpPromptGetRequested)(nil),                       // 54: g8e.operator.v1.McpPromptGetRequested
-	(*DeterministicStageEvidence)(nil),                  // 55: g8e.operator.v1.DeterministicStageEvidence
-	(*ReceiptPersistenceAttestation)(nil),               // 56: g8e.operator.v1.ReceiptPersistenceAttestation
-	(*ActionReceipt)(nil),                               // 57: g8e.operator.v1.ActionReceipt
-	(*CommitmentAttestation)(nil),                       // 58: g8e.operator.v1.CommitmentAttestation
-	(*CommandResult)(nil),                               // 59: g8e.operator.v1.CommandResult
-	(*FsEntry)(nil),                                     // 60: g8e.operator.v1.FsEntry
-	(*FsListResult)(nil),                                // 61: g8e.operator.v1.FsListResult
-	(*FsReadResult)(nil),                                // 62: g8e.operator.v1.FsReadResult
-	(*FsGrepMatch)(nil),                                 // 63: g8e.operator.v1.FsGrepMatch
-	(*FsGrepResult)(nil),                                // 64: g8e.operator.v1.FsGrepResult
-	(*FileEditResult)(nil),                              // 65: g8e.operator.v1.FileEditResult
-	(*ExecutionStatusUpdate)(nil),                       // 66: g8e.operator.v1.ExecutionStatusUpdate
-	(*PortCheckEntry)(nil),                              // 67: g8e.operator.v1.PortCheckEntry
-	(*PortCheckResult)(nil),                             // 68: g8e.operator.v1.PortCheckResult
-	(*FetchLogsResult)(nil),                             // 69: g8e.operator.v1.FetchLogsResult
-	(*AuditWebSession)(nil),                             // 70: g8e.operator.v1.AuditWebSession
-	(*AuditFileMutation)(nil),                           // 71: g8e.operator.v1.AuditFileMutation
-	(*AuditEvent)(nil),                                  // 72: g8e.operator.v1.AuditEvent
-	(*FetchHistoryResult)(nil),                          // 73: g8e.operator.v1.FetchHistoryResult
-	(*FileHistoryEntry)(nil),                            // 74: g8e.operator.v1.FileHistoryEntry
-	(*FetchFileHistoryResult)(nil),                      // 75: g8e.operator.v1.FetchFileHistoryResult
-	(*RestoreFileResult)(nil),                           // 76: g8e.operator.v1.RestoreFileResult
-	(*FileDiffEntry)(nil),                               // 77: g8e.operator.v1.FileDiffEntry
-	(*FetchFileDiffResult)(nil),                         // 78: g8e.operator.v1.FetchFileDiffResult
-	(*HeartbeatResult)(nil),                             // 79: g8e.operator.v1.HeartbeatResult
-	(*SystemIdentity)(nil),                              // 80: g8e.operator.v1.SystemIdentity
-	(*NetworkInterface)(nil),                            // 81: g8e.operator.v1.NetworkInterface
-	(*NetworkInfo)(nil),                                 // 82: g8e.operator.v1.NetworkInfo
-	(*CapabilityFlags)(nil),                             // 83: g8e.operator.v1.CapabilityFlags
-	(*VersionInfo)(nil),                                 // 84: g8e.operator.v1.VersionInfo
-	(*UptimeInfo)(nil),                                  // 85: g8e.operator.v1.UptimeInfo
-	(*PerformanceMetrics)(nil),                          // 86: g8e.operator.v1.PerformanceMetrics
-	(*OSDetails)(nil),                                   // 87: g8e.operator.v1.OSDetails
-	(*UserDetails)(nil),                                 // 88: g8e.operator.v1.UserDetails
-	(*DiskDetails)(nil),                                 // 89: g8e.operator.v1.DiskDetails
-	(*MemoryDetails)(nil),                               // 90: g8e.operator.v1.MemoryDetails
-	(*EnvironmentDetails)(nil),                          // 91: g8e.operator.v1.EnvironmentDetails
-	(*FingerprintDetails)(nil),                          // 92: g8e.operator.v1.FingerprintDetails
-	(*PasskeyCredential)(nil),                           // 93: g8e.operator.v1.PasskeyCredential
-	(*PasskeyRegisterChallengeRequested)(nil),           // 94: g8e.operator.v1.PasskeyRegisterChallengeRequested
-	(*PasskeyRegisterChallengeResult)(nil),              // 95: g8e.operator.v1.PasskeyRegisterChallengeResult
-	(*AttestationResponse)(nil),                         // 96: g8e.operator.v1.AttestationResponse
-	(*PasskeyRegisterVerifyRequested)(nil),              // 97: g8e.operator.v1.PasskeyRegisterVerifyRequested
-	(*PasskeyRegisterVerifyResult)(nil),                 // 98: g8e.operator.v1.PasskeyRegisterVerifyResult
-	(*PasskeyAuthChallengeRequested)(nil),               // 99: g8e.operator.v1.PasskeyAuthChallengeRequested
-	(*PasskeyAuthChallengeResult)(nil),                  // 100: g8e.operator.v1.PasskeyAuthChallengeResult
-	(*AssertionResponse)(nil),                           // 101: g8e.operator.v1.AssertionResponse
-	(*PasskeyAuthVerifyRequested)(nil),                  // 102: g8e.operator.v1.PasskeyAuthVerifyRequested
-	(*PasskeyAuthVerifyResult)(nil),                     // 103: g8e.operator.v1.PasskeyAuthVerifyResult
-	(*ListPasskeyCredentialsRequested)(nil),             // 104: g8e.operator.v1.ListPasskeyCredentialsRequested
-	(*ListPasskeyCredentialsResult)(nil),                // 105: g8e.operator.v1.ListPasskeyCredentialsResult
-	(*RevokePasskeyCredentialRequested)(nil),            // 106: g8e.operator.v1.RevokePasskeyCredentialRequested
-	(*RevokePasskeyCredentialResult)(nil),               // 107: g8e.operator.v1.RevokePasskeyCredentialResult
-	nil,                                                 // 108: g8e.operator.v1.CommandRequested.EnvironmentEntry
-	(*PasskeyRegisterChallengeResult_RelyingParty)(nil), // 109: g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
-	(*PasskeyRegisterChallengeResult_UserInfo)(nil),     // 110: g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
-	(*PasskeyRegisterChallengeResult_PublicKeyCredentialParameters)(nil), // 111: g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
-	(*PasskeyRegisterChallengeResult_AuthenticatorSelection)(nil),        // 112: g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
-	(*structpb.Struct)(nil), // 113: google.protobuf.Struct
+	(ReceiptFailureCode)(0),                             // 6: g8e.operator.v1.ReceiptFailureCode
+	(ModelRole)(0),                                      // 7: g8e.operator.v1.ModelRole
+	(InferenceMessageRole)(0),                           // 8: g8e.operator.v1.InferenceMessageRole
+	(InferenceToolChoiceMode)(0),                        // 9: g8e.operator.v1.InferenceToolChoiceMode
+	(InferenceTimingSource)(0),                          // 10: g8e.operator.v1.InferenceTimingSource
+	(InferenceLoadState)(0),                             // 11: g8e.operator.v1.InferenceLoadState
+	(InferenceRetryClassification)(0),                   // 12: g8e.operator.v1.InferenceRetryClassification
+	(InferenceProviderAttemptStatus)(0),                 // 13: g8e.operator.v1.InferenceProviderAttemptStatus
+	(*CommandRequested)(nil),                            // 14: g8e.operator.v1.CommandRequested
+	(*CommandCancelRequested)(nil),                      // 15: g8e.operator.v1.CommandCancelRequested
+	(*FileEditRequested)(nil),                           // 16: g8e.operator.v1.FileEditRequested
+	(*FsListRequested)(nil),                             // 17: g8e.operator.v1.FsListRequested
+	(*FsReadRequested)(nil),                             // 18: g8e.operator.v1.FsReadRequested
+	(*HeartbeatRequested)(nil),                          // 19: g8e.operator.v1.HeartbeatRequested
+	(*FsGrepRequested)(nil),                             // 20: g8e.operator.v1.FsGrepRequested
+	(*CheckPortRequested)(nil),                          // 21: g8e.operator.v1.CheckPortRequested
+	(*FetchLogsRequested)(nil),                          // 22: g8e.operator.v1.FetchLogsRequested
+	(*FetchHistoryRequested)(nil),                       // 23: g8e.operator.v1.FetchHistoryRequested
+	(*FetchFileHistoryRequested)(nil),                   // 24: g8e.operator.v1.FetchFileHistoryRequested
+	(*FetchFileDiffRequested)(nil),                      // 25: g8e.operator.v1.FetchFileDiffRequested
+	(*RestoreFileRequested)(nil),                        // 26: g8e.operator.v1.RestoreFileRequested
+	(*DirectCommandAuditRequested)(nil),                 // 27: g8e.operator.v1.DirectCommandAuditRequested
+	(*DirectCommandResultAuditRequested)(nil),           // 28: g8e.operator.v1.DirectCommandResultAuditRequested
+	(*AuditMsgRequested)(nil),                           // 29: g8e.operator.v1.AuditMsgRequested
+	(*DocumentUpdateRequested)(nil),                     // 30: g8e.operator.v1.DocumentUpdateRequested
+	(*DocumentDeleteRequested)(nil),                     // 31: g8e.operator.v1.DocumentDeleteRequested
+	(*SignCertificateRequested)(nil),                    // 32: g8e.operator.v1.SignCertificateRequested
+	(*SignCertificateResult)(nil),                       // 33: g8e.operator.v1.SignCertificateResult
+	(*RevokeCertificateRequested)(nil),                  // 34: g8e.operator.v1.RevokeCertificateRequested
+	(*RevokeCertificateResult)(nil),                     // 35: g8e.operator.v1.RevokeCertificateResult
+	(*GetRevocationBundleRequested)(nil),                // 36: g8e.operator.v1.GetRevocationBundleRequested
+	(*GetRevocationBundleResult)(nil),                   // 37: g8e.operator.v1.GetRevocationBundleResult
+	(*CreateDeviceLinkRequested)(nil),                   // 38: g8e.operator.v1.CreateDeviceLinkRequested
+	(*DeviceLink)(nil),                                  // 39: g8e.operator.v1.DeviceLink
+	(*DeviceLinkResult)(nil),                            // 40: g8e.operator.v1.DeviceLinkResult
+	(*ListDeviceLinksRequested)(nil),                    // 41: g8e.operator.v1.ListDeviceLinksRequested
+	(*ListDeviceLinksResult)(nil),                       // 42: g8e.operator.v1.ListDeviceLinksResult
+	(*DeleteDeviceLinkRequested)(nil),                   // 43: g8e.operator.v1.DeleteDeviceLinkRequested
+	(*TerminateOperatorRequested)(nil),                  // 44: g8e.operator.v1.TerminateOperatorRequested
+	(*TerminateOperatorResult)(nil),                     // 45: g8e.operator.v1.TerminateOperatorResult
+	(*ListOperatorSlotsRequested)(nil),                  // 46: g8e.operator.v1.ListOperatorSlotsRequested
+	(*ListOperatorSlotsResult)(nil),                     // 47: g8e.operator.v1.ListOperatorSlotsResult
+	(*BindOperatorsRequested)(nil),                      // 48: g8e.operator.v1.BindOperatorsRequested
+	(*BindOperatorsResult)(nil),                         // 49: g8e.operator.v1.BindOperatorsResult
+	(*UnbindOperatorsRequested)(nil),                    // 50: g8e.operator.v1.UnbindOperatorsRequested
+	(*UnbindOperatorsResult)(nil),                       // 51: g8e.operator.v1.UnbindOperatorsResult
+	(*SetTargetContextRequested)(nil),                   // 52: g8e.operator.v1.SetTargetContextRequested
+	(*SetTargetContextResult)(nil),                      // 53: g8e.operator.v1.SetTargetContextResult
+	(*OperatorDocument)(nil),                            // 54: g8e.operator.v1.OperatorDocument
+	(*ShutdownRequested)(nil),                           // 55: g8e.operator.v1.ShutdownRequested
+	(*EvalAnswerRequested)(nil),                         // 56: g8e.operator.v1.EvalAnswerRequested
+	(*McpCallRequested)(nil),                            // 57: g8e.operator.v1.McpCallRequested
+	(*A2ACallRequested)(nil),                            // 58: g8e.operator.v1.A2aCallRequested
+	(*McpResourceListRequested)(nil),                    // 59: g8e.operator.v1.McpResourceListRequested
+	(*McpResourceReadRequested)(nil),                    // 60: g8e.operator.v1.McpResourceReadRequested
+	(*McpPromptListRequested)(nil),                      // 61: g8e.operator.v1.McpPromptListRequested
+	(*McpPromptGetRequested)(nil),                       // 62: g8e.operator.v1.McpPromptGetRequested
+	(*DeterministicStageEvidence)(nil),                  // 63: g8e.operator.v1.DeterministicStageEvidence
+	(*ReceiptPersistenceAttestation)(nil),               // 64: g8e.operator.v1.ReceiptPersistenceAttestation
+	(*ActionReceipt)(nil),                               // 65: g8e.operator.v1.ActionReceipt
+	(*CommitmentAttestation)(nil),                       // 66: g8e.operator.v1.CommitmentAttestation
+	(*CommandResult)(nil),                               // 67: g8e.operator.v1.CommandResult
+	(*FsEntry)(nil),                                     // 68: g8e.operator.v1.FsEntry
+	(*FsListResult)(nil),                                // 69: g8e.operator.v1.FsListResult
+	(*FsReadResult)(nil),                                // 70: g8e.operator.v1.FsReadResult
+	(*FsGrepMatch)(nil),                                 // 71: g8e.operator.v1.FsGrepMatch
+	(*FsGrepResult)(nil),                                // 72: g8e.operator.v1.FsGrepResult
+	(*FileEditResult)(nil),                              // 73: g8e.operator.v1.FileEditResult
+	(*ExecutionStatusUpdate)(nil),                       // 74: g8e.operator.v1.ExecutionStatusUpdate
+	(*PortCheckEntry)(nil),                              // 75: g8e.operator.v1.PortCheckEntry
+	(*PortCheckResult)(nil),                             // 76: g8e.operator.v1.PortCheckResult
+	(*FetchLogsResult)(nil),                             // 77: g8e.operator.v1.FetchLogsResult
+	(*AuditWebSession)(nil),                             // 78: g8e.operator.v1.AuditWebSession
+	(*AuditFileMutation)(nil),                           // 79: g8e.operator.v1.AuditFileMutation
+	(*AuditEvent)(nil),                                  // 80: g8e.operator.v1.AuditEvent
+	(*FetchHistoryResult)(nil),                          // 81: g8e.operator.v1.FetchHistoryResult
+	(*FileHistoryEntry)(nil),                            // 82: g8e.operator.v1.FileHistoryEntry
+	(*FetchFileHistoryResult)(nil),                      // 83: g8e.operator.v1.FetchFileHistoryResult
+	(*RestoreFileResult)(nil),                           // 84: g8e.operator.v1.RestoreFileResult
+	(*FileDiffEntry)(nil),                               // 85: g8e.operator.v1.FileDiffEntry
+	(*FetchFileDiffResult)(nil),                         // 86: g8e.operator.v1.FetchFileDiffResult
+	(*HeartbeatResult)(nil),                             // 87: g8e.operator.v1.HeartbeatResult
+	(*SystemIdentity)(nil),                              // 88: g8e.operator.v1.SystemIdentity
+	(*NetworkInterface)(nil),                            // 89: g8e.operator.v1.NetworkInterface
+	(*NetworkInfo)(nil),                                 // 90: g8e.operator.v1.NetworkInfo
+	(*CapabilityFlags)(nil),                             // 91: g8e.operator.v1.CapabilityFlags
+	(*VersionInfo)(nil),                                 // 92: g8e.operator.v1.VersionInfo
+	(*UptimeInfo)(nil),                                  // 93: g8e.operator.v1.UptimeInfo
+	(*PerformanceMetrics)(nil),                          // 94: g8e.operator.v1.PerformanceMetrics
+	(*OSDetails)(nil),                                   // 95: g8e.operator.v1.OSDetails
+	(*UserDetails)(nil),                                 // 96: g8e.operator.v1.UserDetails
+	(*DiskDetails)(nil),                                 // 97: g8e.operator.v1.DiskDetails
+	(*MemoryDetails)(nil),                               // 98: g8e.operator.v1.MemoryDetails
+	(*EnvironmentDetails)(nil),                          // 99: g8e.operator.v1.EnvironmentDetails
+	(*FingerprintDetails)(nil),                          // 100: g8e.operator.v1.FingerprintDetails
+	(*PasskeyCredential)(nil),                           // 101: g8e.operator.v1.PasskeyCredential
+	(*PasskeyRegisterChallengeRequested)(nil),           // 102: g8e.operator.v1.PasskeyRegisterChallengeRequested
+	(*PasskeyRegisterChallengeResult)(nil),              // 103: g8e.operator.v1.PasskeyRegisterChallengeResult
+	(*AttestationResponse)(nil),                         // 104: g8e.operator.v1.AttestationResponse
+	(*PasskeyRegisterVerifyRequested)(nil),              // 105: g8e.operator.v1.PasskeyRegisterVerifyRequested
+	(*PasskeyRegisterVerifyResult)(nil),                 // 106: g8e.operator.v1.PasskeyRegisterVerifyResult
+	(*PasskeyAuthChallengeRequested)(nil),               // 107: g8e.operator.v1.PasskeyAuthChallengeRequested
+	(*PasskeyAuthChallengeResult)(nil),                  // 108: g8e.operator.v1.PasskeyAuthChallengeResult
+	(*AssertionResponse)(nil),                           // 109: g8e.operator.v1.AssertionResponse
+	(*PasskeyAuthVerifyRequested)(nil),                  // 110: g8e.operator.v1.PasskeyAuthVerifyRequested
+	(*PasskeyAuthVerifyResult)(nil),                     // 111: g8e.operator.v1.PasskeyAuthVerifyResult
+	(*ListPasskeyCredentialsRequested)(nil),             // 112: g8e.operator.v1.ListPasskeyCredentialsRequested
+	(*ListPasskeyCredentialsResult)(nil),                // 113: g8e.operator.v1.ListPasskeyCredentialsResult
+	(*RevokePasskeyCredentialRequested)(nil),            // 114: g8e.operator.v1.RevokePasskeyCredentialRequested
+	(*RevokePasskeyCredentialResult)(nil),               // 115: g8e.operator.v1.RevokePasskeyCredentialResult
+	(*InferenceToolCall)(nil),                           // 116: g8e.operator.v1.InferenceToolCall
+	(*InferenceToolResult)(nil),                         // 117: g8e.operator.v1.InferenceToolResult
+	(*InferenceMessagePart)(nil),                        // 118: g8e.operator.v1.InferenceMessagePart
+	(*InferenceMessage)(nil),                            // 119: g8e.operator.v1.InferenceMessage
+	(*InferenceToolDeclaration)(nil),                    // 120: g8e.operator.v1.InferenceToolDeclaration
+	(*InferenceResponseFormat)(nil),                     // 121: g8e.operator.v1.InferenceResponseFormat
+	(*InferenceToolChoice)(nil),                         // 122: g8e.operator.v1.InferenceToolChoice
+	(*InferenceThinkingControl)(nil),                    // 123: g8e.operator.v1.InferenceThinkingControl
+	(*InferenceResponsePart)(nil),                       // 124: g8e.operator.v1.InferenceResponsePart
+	(*InferenceModelVariant)(nil),                       // 125: g8e.operator.v1.InferenceModelVariant
+	(*InferenceRequested)(nil),                          // 126: g8e.operator.v1.InferenceRequested
+	(*InferenceProviderAttemptRecord)(nil),              // 127: g8e.operator.v1.InferenceProviderAttemptRecord
+	(*InferenceResult)(nil),                             // 128: g8e.operator.v1.InferenceResult
+	(*InferenceProgressEvent)(nil),                      // 129: g8e.operator.v1.InferenceProgressEvent
+	(*InferenceCompletion)(nil),                         // 130: g8e.operator.v1.InferenceCompletion
+	(*InferenceDispatchRequest)(nil),                    // 131: g8e.operator.v1.InferenceDispatchRequest
+	(*InferenceDispatchStreamFailure)(nil),              // 132: g8e.operator.v1.InferenceDispatchStreamFailure
+	(*InferenceDispatchStreamFrame)(nil),                // 133: g8e.operator.v1.InferenceDispatchStreamFrame
+	(*InferenceDispatchResponse)(nil),                   // 134: g8e.operator.v1.InferenceDispatchResponse
+	nil,                                                 // 135: g8e.operator.v1.CommandRequested.EnvironmentEntry
+	(*PasskeyRegisterChallengeResult_RelyingParty)(nil), // 136: g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
+	(*PasskeyRegisterChallengeResult_UserInfo)(nil),     // 137: g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
+	(*PasskeyRegisterChallengeResult_PublicKeyCredentialParameters)(nil), // 138: g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
+	(*PasskeyRegisterChallengeResult_AuthenticatorSelection)(nil),        // 139: g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
+	(*structpb.Struct)(nil), // 140: google.protobuf.Struct
 }
 var file_g8e_operator_v1_operator_proto_depIdxs = []int32{
-	108, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
-	113, // 1: g8e.operator.v1.DocumentUpdateRequested.updates:type_name -> google.protobuf.Struct
-	31,  // 2: g8e.operator.v1.DeviceLinkResult.link:type_name -> g8e.operator.v1.DeviceLink
-	31,  // 3: g8e.operator.v1.ListDeviceLinksResult.links:type_name -> g8e.operator.v1.DeviceLink
-	46,  // 4: g8e.operator.v1.ListOperatorSlotsResult.operators:type_name -> g8e.operator.v1.OperatorDocument
+	135, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
+	140, // 1: g8e.operator.v1.DocumentUpdateRequested.updates:type_name -> google.protobuf.Struct
+	39,  // 2: g8e.operator.v1.DeviceLinkResult.link:type_name -> g8e.operator.v1.DeviceLink
+	39,  // 3: g8e.operator.v1.ListDeviceLinksResult.links:type_name -> g8e.operator.v1.DeviceLink
+	54,  // 4: g8e.operator.v1.ListOperatorSlotsResult.operators:type_name -> g8e.operator.v1.OperatorDocument
 	4,   // 5: g8e.operator.v1.DeterministicStageEvidence.kind:type_name -> g8e.operator.v1.DeterministicStageKind
 	5,   // 6: g8e.operator.v1.DeterministicStageEvidence.outcome:type_name -> g8e.operator.v1.DeterministicStageOutcome
 	0,   // 7: g8e.operator.v1.ActionReceipt.status:type_name -> g8e.operator.v1.ExecutionStatus
 	2,   // 8: g8e.operator.v1.ActionReceipt.l2_status:type_name -> g8e.operator.v1.L2Status
 	1,   // 9: g8e.operator.v1.ActionReceipt.l3_status:type_name -> g8e.operator.v1.L3Status
-	55,  // 10: g8e.operator.v1.ActionReceipt.deterministic_stage_evidence:type_name -> g8e.operator.v1.DeterministicStageEvidence
-	56,  // 11: g8e.operator.v1.ActionReceipt.final_persistence_attestation:type_name -> g8e.operator.v1.ReceiptPersistenceAttestation
-	0,   // 12: g8e.operator.v1.CommandResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	0,   // 13: g8e.operator.v1.FsListResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	60,  // 14: g8e.operator.v1.FsListResult.entries:type_name -> g8e.operator.v1.FsEntry
-	0,   // 15: g8e.operator.v1.FsReadResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	0,   // 16: g8e.operator.v1.FsGrepResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	63,  // 17: g8e.operator.v1.FsGrepResult.matches:type_name -> g8e.operator.v1.FsGrepMatch
-	0,   // 18: g8e.operator.v1.FileEditResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	0,   // 19: g8e.operator.v1.ExecutionStatusUpdate.status:type_name -> g8e.operator.v1.ExecutionStatus
-	0,   // 20: g8e.operator.v1.PortCheckResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	67,  // 21: g8e.operator.v1.PortCheckResult.results:type_name -> g8e.operator.v1.PortCheckEntry
-	71,  // 22: g8e.operator.v1.AuditEvent.file_mutations:type_name -> g8e.operator.v1.AuditFileMutation
-	70,  // 23: g8e.operator.v1.FetchHistoryResult.web_session:type_name -> g8e.operator.v1.AuditWebSession
-	72,  // 24: g8e.operator.v1.FetchHistoryResult.events:type_name -> g8e.operator.v1.AuditEvent
-	74,  // 25: g8e.operator.v1.FetchFileHistoryResult.history:type_name -> g8e.operator.v1.FileHistoryEntry
-	77,  // 26: g8e.operator.v1.FetchFileDiffResult.diffs:type_name -> g8e.operator.v1.FileDiffEntry
-	77,  // 27: g8e.operator.v1.FetchFileDiffResult.diff:type_name -> g8e.operator.v1.FileDiffEntry
-	80,  // 28: g8e.operator.v1.HeartbeatResult.system_identity:type_name -> g8e.operator.v1.SystemIdentity
-	82,  // 29: g8e.operator.v1.HeartbeatResult.network_info:type_name -> g8e.operator.v1.NetworkInfo
-	84,  // 30: g8e.operator.v1.HeartbeatResult.version_info:type_name -> g8e.operator.v1.VersionInfo
-	85,  // 31: g8e.operator.v1.HeartbeatResult.uptime_info:type_name -> g8e.operator.v1.UptimeInfo
-	86,  // 32: g8e.operator.v1.HeartbeatResult.performance_metrics:type_name -> g8e.operator.v1.PerformanceMetrics
-	87,  // 33: g8e.operator.v1.HeartbeatResult.os_details:type_name -> g8e.operator.v1.OSDetails
-	88,  // 34: g8e.operator.v1.HeartbeatResult.user_details:type_name -> g8e.operator.v1.UserDetails
-	89,  // 35: g8e.operator.v1.HeartbeatResult.disk_details:type_name -> g8e.operator.v1.DiskDetails
-	90,  // 36: g8e.operator.v1.HeartbeatResult.memory_details:type_name -> g8e.operator.v1.MemoryDetails
-	91,  // 37: g8e.operator.v1.HeartbeatResult.environment:type_name -> g8e.operator.v1.EnvironmentDetails
-	83,  // 38: g8e.operator.v1.HeartbeatResult.capability_flags:type_name -> g8e.operator.v1.CapabilityFlags
-	92,  // 39: g8e.operator.v1.HeartbeatResult.fingerprint_details:type_name -> g8e.operator.v1.FingerprintDetails
-	81,  // 40: g8e.operator.v1.NetworkInfo.connectivity_status:type_name -> g8e.operator.v1.NetworkInterface
-	109, // 41: g8e.operator.v1.PasskeyRegisterChallengeResult.rp:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
-	110, // 42: g8e.operator.v1.PasskeyRegisterChallengeResult.user:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
-	111, // 43: g8e.operator.v1.PasskeyRegisterChallengeResult.pub_key_cred_params:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
-	112, // 44: g8e.operator.v1.PasskeyRegisterChallengeResult.authenticator_selection:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
-	96,  // 45: g8e.operator.v1.PasskeyRegisterVerifyRequested.attestation_response:type_name -> g8e.operator.v1.AttestationResponse
-	93,  // 46: g8e.operator.v1.PasskeyRegisterVerifyResult.credential:type_name -> g8e.operator.v1.PasskeyCredential
-	101, // 47: g8e.operator.v1.PasskeyAuthVerifyRequested.assertion_response:type_name -> g8e.operator.v1.AssertionResponse
-	93,  // 48: g8e.operator.v1.ListPasskeyCredentialsResult.credentials:type_name -> g8e.operator.v1.PasskeyCredential
-	6,   // 49: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
-	7,   // 50: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
-	8,   // 51: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
-	9,   // 52: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
-	10,  // 53: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
-	59,  // 54: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
-	59,  // 55: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
-	59,  // 56: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
-	59,  // 57: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
-	59,  // 58: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
-	54,  // [54:59] is the sub-list for method output_type
-	49,  // [49:54] is the sub-list for method input_type
-	49,  // [49:49] is the sub-list for extension type_name
-	49,  // [49:49] is the sub-list for extension extendee
-	0,   // [0:49] is the sub-list for field type_name
+	63,  // 10: g8e.operator.v1.ActionReceipt.deterministic_stage_evidence:type_name -> g8e.operator.v1.DeterministicStageEvidence
+	64,  // 11: g8e.operator.v1.ActionReceipt.final_persistence_attestation:type_name -> g8e.operator.v1.ReceiptPersistenceAttestation
+	6,   // 12: g8e.operator.v1.ActionReceipt.failure_code:type_name -> g8e.operator.v1.ReceiptFailureCode
+	0,   // 13: g8e.operator.v1.CommandResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	0,   // 14: g8e.operator.v1.FsListResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	68,  // 15: g8e.operator.v1.FsListResult.entries:type_name -> g8e.operator.v1.FsEntry
+	0,   // 16: g8e.operator.v1.FsReadResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	0,   // 17: g8e.operator.v1.FsGrepResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	71,  // 18: g8e.operator.v1.FsGrepResult.matches:type_name -> g8e.operator.v1.FsGrepMatch
+	0,   // 19: g8e.operator.v1.FileEditResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	0,   // 20: g8e.operator.v1.ExecutionStatusUpdate.status:type_name -> g8e.operator.v1.ExecutionStatus
+	0,   // 21: g8e.operator.v1.PortCheckResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	75,  // 22: g8e.operator.v1.PortCheckResult.results:type_name -> g8e.operator.v1.PortCheckEntry
+	79,  // 23: g8e.operator.v1.AuditEvent.file_mutations:type_name -> g8e.operator.v1.AuditFileMutation
+	78,  // 24: g8e.operator.v1.FetchHistoryResult.web_session:type_name -> g8e.operator.v1.AuditWebSession
+	80,  // 25: g8e.operator.v1.FetchHistoryResult.events:type_name -> g8e.operator.v1.AuditEvent
+	82,  // 26: g8e.operator.v1.FetchFileHistoryResult.history:type_name -> g8e.operator.v1.FileHistoryEntry
+	85,  // 27: g8e.operator.v1.FetchFileDiffResult.diffs:type_name -> g8e.operator.v1.FileDiffEntry
+	85,  // 28: g8e.operator.v1.FetchFileDiffResult.diff:type_name -> g8e.operator.v1.FileDiffEntry
+	88,  // 29: g8e.operator.v1.HeartbeatResult.system_identity:type_name -> g8e.operator.v1.SystemIdentity
+	90,  // 30: g8e.operator.v1.HeartbeatResult.network_info:type_name -> g8e.operator.v1.NetworkInfo
+	92,  // 31: g8e.operator.v1.HeartbeatResult.version_info:type_name -> g8e.operator.v1.VersionInfo
+	93,  // 32: g8e.operator.v1.HeartbeatResult.uptime_info:type_name -> g8e.operator.v1.UptimeInfo
+	94,  // 33: g8e.operator.v1.HeartbeatResult.performance_metrics:type_name -> g8e.operator.v1.PerformanceMetrics
+	95,  // 34: g8e.operator.v1.HeartbeatResult.os_details:type_name -> g8e.operator.v1.OSDetails
+	96,  // 35: g8e.operator.v1.HeartbeatResult.user_details:type_name -> g8e.operator.v1.UserDetails
+	97,  // 36: g8e.operator.v1.HeartbeatResult.disk_details:type_name -> g8e.operator.v1.DiskDetails
+	98,  // 37: g8e.operator.v1.HeartbeatResult.memory_details:type_name -> g8e.operator.v1.MemoryDetails
+	99,  // 38: g8e.operator.v1.HeartbeatResult.environment:type_name -> g8e.operator.v1.EnvironmentDetails
+	91,  // 39: g8e.operator.v1.HeartbeatResult.capability_flags:type_name -> g8e.operator.v1.CapabilityFlags
+	100, // 40: g8e.operator.v1.HeartbeatResult.fingerprint_details:type_name -> g8e.operator.v1.FingerprintDetails
+	89,  // 41: g8e.operator.v1.NetworkInfo.connectivity_status:type_name -> g8e.operator.v1.NetworkInterface
+	136, // 42: g8e.operator.v1.PasskeyRegisterChallengeResult.rp:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty
+	137, // 43: g8e.operator.v1.PasskeyRegisterChallengeResult.user:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo
+	138, // 44: g8e.operator.v1.PasskeyRegisterChallengeResult.pub_key_cred_params:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters
+	139, // 45: g8e.operator.v1.PasskeyRegisterChallengeResult.authenticator_selection:type_name -> g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection
+	104, // 46: g8e.operator.v1.PasskeyRegisterVerifyRequested.attestation_response:type_name -> g8e.operator.v1.AttestationResponse
+	101, // 47: g8e.operator.v1.PasskeyRegisterVerifyResult.credential:type_name -> g8e.operator.v1.PasskeyCredential
+	109, // 48: g8e.operator.v1.PasskeyAuthVerifyRequested.assertion_response:type_name -> g8e.operator.v1.AssertionResponse
+	101, // 49: g8e.operator.v1.ListPasskeyCredentialsResult.credentials:type_name -> g8e.operator.v1.PasskeyCredential
+	116, // 50: g8e.operator.v1.InferenceMessagePart.tool_call:type_name -> g8e.operator.v1.InferenceToolCall
+	117, // 51: g8e.operator.v1.InferenceMessagePart.tool_result:type_name -> g8e.operator.v1.InferenceToolResult
+	8,   // 52: g8e.operator.v1.InferenceMessage.role:type_name -> g8e.operator.v1.InferenceMessageRole
+	118, // 53: g8e.operator.v1.InferenceMessage.parts:type_name -> g8e.operator.v1.InferenceMessagePart
+	9,   // 54: g8e.operator.v1.InferenceToolChoice.mode:type_name -> g8e.operator.v1.InferenceToolChoiceMode
+	116, // 55: g8e.operator.v1.InferenceResponsePart.tool_call:type_name -> g8e.operator.v1.InferenceToolCall
+	7,   // 56: g8e.operator.v1.InferenceRequested.role:type_name -> g8e.operator.v1.ModelRole
+	119, // 57: g8e.operator.v1.InferenceRequested.messages:type_name -> g8e.operator.v1.InferenceMessage
+	120, // 58: g8e.operator.v1.InferenceRequested.tools:type_name -> g8e.operator.v1.InferenceToolDeclaration
+	121, // 59: g8e.operator.v1.InferenceRequested.response_format:type_name -> g8e.operator.v1.InferenceResponseFormat
+	122, // 60: g8e.operator.v1.InferenceRequested.tool_choice:type_name -> g8e.operator.v1.InferenceToolChoice
+	123, // 61: g8e.operator.v1.InferenceRequested.thinking:type_name -> g8e.operator.v1.InferenceThinkingControl
+	125, // 62: g8e.operator.v1.InferenceRequested.model_registry:type_name -> g8e.operator.v1.InferenceModelVariant
+	12,  // 63: g8e.operator.v1.InferenceProviderAttemptRecord.retry_classification:type_name -> g8e.operator.v1.InferenceRetryClassification
+	13,  // 64: g8e.operator.v1.InferenceProviderAttemptRecord.status:type_name -> g8e.operator.v1.InferenceProviderAttemptStatus
+	124, // 65: g8e.operator.v1.InferenceResult.parts:type_name -> g8e.operator.v1.InferenceResponsePart
+	10,  // 66: g8e.operator.v1.InferenceResult.timing_source:type_name -> g8e.operator.v1.InferenceTimingSource
+	11,  // 67: g8e.operator.v1.InferenceResult.load_state:type_name -> g8e.operator.v1.InferenceLoadState
+	12,  // 68: g8e.operator.v1.InferenceResult.retry_classification:type_name -> g8e.operator.v1.InferenceRetryClassification
+	124, // 69: g8e.operator.v1.InferenceProgressEvent.parts:type_name -> g8e.operator.v1.InferenceResponsePart
+	65,  // 70: g8e.operator.v1.InferenceCompletion.receipt:type_name -> g8e.operator.v1.ActionReceipt
+	128, // 71: g8e.operator.v1.InferenceCompletion.result:type_name -> g8e.operator.v1.InferenceResult
+	7,   // 72: g8e.operator.v1.InferenceDispatchRequest.role:type_name -> g8e.operator.v1.ModelRole
+	119, // 73: g8e.operator.v1.InferenceDispatchRequest.messages:type_name -> g8e.operator.v1.InferenceMessage
+	120, // 74: g8e.operator.v1.InferenceDispatchRequest.tools:type_name -> g8e.operator.v1.InferenceToolDeclaration
+	121, // 75: g8e.operator.v1.InferenceDispatchRequest.response_format:type_name -> g8e.operator.v1.InferenceResponseFormat
+	122, // 76: g8e.operator.v1.InferenceDispatchRequest.tool_choice:type_name -> g8e.operator.v1.InferenceToolChoice
+	123, // 77: g8e.operator.v1.InferenceDispatchRequest.thinking:type_name -> g8e.operator.v1.InferenceThinkingControl
+	125, // 78: g8e.operator.v1.InferenceDispatchRequest.model_registry:type_name -> g8e.operator.v1.InferenceModelVariant
+	129, // 79: g8e.operator.v1.InferenceDispatchStreamFrame.progress:type_name -> g8e.operator.v1.InferenceProgressEvent
+	134, // 80: g8e.operator.v1.InferenceDispatchStreamFrame.completion:type_name -> g8e.operator.v1.InferenceDispatchResponse
+	132, // 81: g8e.operator.v1.InferenceDispatchStreamFrame.failure:type_name -> g8e.operator.v1.InferenceDispatchStreamFailure
+	128, // 82: g8e.operator.v1.InferenceDispatchResponse.result:type_name -> g8e.operator.v1.InferenceResult
+	65,  // 83: g8e.operator.v1.InferenceDispatchResponse.receipt:type_name -> g8e.operator.v1.ActionReceipt
+	14,  // 84: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
+	15,  // 85: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
+	16,  // 86: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
+	17,  // 87: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
+	18,  // 88: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
+	67,  // 89: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
+	67,  // 90: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
+	67,  // 91: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
+	67,  // 92: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
+	67,  // 93: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
+	89,  // [89:94] is the sub-list for method output_type
+	84,  // [84:89] is the sub-list for method input_type
+	84,  // [84:84] is the sub-list for extension type_name
+	84,  // [84:84] is the sub-list for extension extendee
+	0,   // [0:84] is the sub-list for field type_name
 }
 
 func init() { file_g8e_operator_v1_operator_proto_init() }
@@ -9723,13 +12600,36 @@ func file_g8e_operator_v1_operator_proto_init() {
 	if File_g8e_operator_v1_operator_proto != nil {
 		return
 	}
+	file_g8e_operator_v1_operator_proto_msgTypes[104].OneofWrappers = []any{
+		(*InferenceMessagePart_Text)(nil),
+		(*InferenceMessagePart_ToolCall)(nil),
+		(*InferenceMessagePart_ToolResult)(nil),
+	}
+	file_g8e_operator_v1_operator_proto_msgTypes[109].OneofWrappers = []any{
+		(*InferenceThinkingControl_Enabled)(nil),
+		(*InferenceThinkingControl_Level)(nil),
+	}
+	file_g8e_operator_v1_operator_proto_msgTypes[110].OneofWrappers = []any{
+		(*InferenceResponsePart_Text)(nil),
+		(*InferenceResponsePart_ToolCall)(nil),
+		(*InferenceResponsePart_Thinking)(nil),
+	}
+	file_g8e_operator_v1_operator_proto_msgTypes[112].OneofWrappers = []any{}
+	file_g8e_operator_v1_operator_proto_msgTypes[114].OneofWrappers = []any{}
+	file_g8e_operator_v1_operator_proto_msgTypes[115].OneofWrappers = []any{}
+	file_g8e_operator_v1_operator_proto_msgTypes[117].OneofWrappers = []any{}
+	file_g8e_operator_v1_operator_proto_msgTypes[119].OneofWrappers = []any{
+		(*InferenceDispatchStreamFrame_Progress)(nil),
+		(*InferenceDispatchStreamFrame_Completion)(nil),
+		(*InferenceDispatchStreamFrame_Failure)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_operator_v1_operator_proto_rawDesc), len(file_g8e_operator_v1_operator_proto_rawDesc)),
-			NumEnums:      6,
-			NumMessages:   107,
+			NumEnums:      14,
+			NumMessages:   126,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

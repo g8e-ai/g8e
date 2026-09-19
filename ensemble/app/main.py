@@ -24,7 +24,6 @@ Bootstrap responsibilities (this file):
 """
 
 import logging
-import os
 from typing import cast
 from contextlib import asynccontextmanager
 
@@ -74,7 +73,6 @@ from .constants import (
     G8EE_APP_TITLE,
 )
 from .constants.generated_paths import PortConstants
-from .constants.env_vars import EnvVar
 from .models.state import G8eeAppState
 from .models.settings import TLSConfig
 from .db.blob_service import BlobService
@@ -90,7 +88,7 @@ from .errors import ConfigurationError
 from .services.infra.app_enrollment_service import AppEnrollmentService
 from .services.infra.settings_service import SettingsService
 from .services.service_factory import ServiceFactory
-from .llm.factory import set_settings
+from .llm.factory import set_settings, set_internal_http_client
 from .utils.service_init import initialize_g8e_service
 from .utils.version import get_version
 from .llm import clear_provider_cache
@@ -215,36 +213,8 @@ async def lifespan(app: FastAPI):
         logger.info("Platform settings merged: port=%s", settings.port)
 
         # -- Phase 4.5: GovernanceClient for governed collection writes --
-        # The gateway's PrivilegedRouteRegistry blocks app certificates from
-        # the governance envelope endpoint. The ensemble must use the
-        # operator's mTLS cert (whose SPIFFE URI carries the operator session
-        # ID) to submit governance envelopes. The operator cert is shared via
-        # a read-only volume mount (see docker-compose.yml). When the env vars
-        # are not set, fall back to the app tls_config (which will fail-closed
-        # at the gateway with ErrPrivilegedEndpointAccess).
-        gov_operator_cert = os.environ.get(EnvVar.GOVERNANCE_OPERATOR_CERT)
-        gov_operator_key = os.environ.get(EnvVar.GOVERNANCE_OPERATOR_KEY)
-        if gov_operator_cert and gov_operator_key:
-            governance_tls_config = TLSConfig(
-                ca_cert_path=app_identity.ca_cert_path,
-                client_cert_path=gov_operator_cert,
-                client_key_path=gov_operator_key,
-            )
-            logger.info(
-                "GovernanceClient using operator mTLS cert for governance "
-                "submissions (cert=%s)",
-                gov_operator_cert,
-            )
-        else:
-            governance_tls_config = tls_config
-            logger.warning(
-                "GovernanceClient falling back to app cert for governance "
-                "submissions — gateway will reject with ErrPrivilegedEndpointAccess "
-                "unless G8E_GOVERNANCE_OPERATOR_CERT/G8E_GOVERNANCE_OPERATOR_KEY "
-                "are set"
-            )
         governance_client = GovernanceClient(
-            tls_config=governance_tls_config,
+            tls_config=tls_config,
             operator_session_id=settings.auth.operator_session_id,
             gateway_settings=settings.gateway,
         )
@@ -262,6 +232,14 @@ async def lifespan(app: FastAPI):
         )
         ServiceFactory.bind_to_app_state(app, all_services)
         logger.info("All domain services created and bound to app state")
+
+        # Inject the InternalHttpClient singleton into the LLM provider
+        # factory so the G8E governed-dispatch provider can route inference
+        # through the gateway's /api/v1/inference/dispatch endpoint. The
+        # client is owned by the application lifecycle; the factory does
+        # not own it.
+        set_internal_http_client(all_services.internal_http_client)
+        logger.info("InternalHttpClient injected into LLM provider factory")
 
         # -- Phase 6: Lifecycle start --
         await ServiceFactory.start_services(all_services)

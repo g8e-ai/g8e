@@ -626,6 +626,53 @@ class TestEnrollPlatformEnrollment:
         # Pending state removed after completion.
         assert not pending_path.exists()
 
+    async def test_expired_persisted_pending_state_submits_new_request(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
+        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
+
+        stale_key = ec.generate_private_key(ec.SECP256R1())
+        stale_key_pem = stale_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode("utf-8")
+        pending_dir = pki_dir / "pending-enrollment"
+        pending_dir.mkdir(parents=True, exist_ok=True)
+        pending_path = pending_dir / "g8ee.json"
+        pending_path.write_text(
+            json.dumps(
+                {
+                    "request_id": "expired-request",
+                    "token": "expired-token",
+                    "fingerprint": "expired-fingerprint",
+                    "key_pem": stale_key_pem,
+                    "expires_at": (
+                        _dt.datetime.now(_dt.UTC) - _dt.timedelta(minutes=1)
+                    ).isoformat(),
+                    "instance_id": "ensemble-expired-request",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cert_pem, _ = _self_signed_cert(
+            _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=365)
+        )
+        handler, captured = _mock_platform_enrollment_handler(
+            request_id="replacement-request", app_cert=cert_pem, state="approved"
+        )
+        _patch_httpx_with_mock_transport(monkeypatch, handler)
+
+        identity = await AppEnrollmentService(
+            instance_id="ensemble-expired-request", hostname="test.local"
+        ).enroll()
+
+        assert identity.app_id == "spiffe://g8e.local/app/g8ee"
+        assert captured["request_submitted"] is True
+        assert not pending_path.exists()
+
     async def test_denial_raises_configuration_error(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:

@@ -28,6 +28,9 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
@@ -315,23 +318,100 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("g8eo: failed to initialize scrubbing service: %w", err)
 	}
 
+	// Initialize the inference backend and governed execution handler when
+	// cfg.Inference.Enabled is true. The backend is an HTTP client to the
+	// remote Ollama provider; the handler is wired into the
+	// OperatorPubSubService config alongside the existing ExecutionService
+	// and FileEditService. The handler is dispatched by event type, not by
+	// replacing the command service. Startup fails closed when the provider
+	// is unreachable, responds with a malformed status, or lacks a
+	// configured role model.
+	var inferenceHandler *inference.InferenceExecutionHandler
+	var inferenceAttemptStore inference.AttemptStore
+	if vs.config.Inference.Enabled {
+		ollamaBackend, err := inference.NewOllamaBackend(vs.config.Inference.OllamaEndpoint, vs.logger)
+		if err != nil {
+			return fmt.Errorf("g8eo: inference backend: %w", err)
+		}
+		if err := inference.VerifyProviderReady(ctx, ollamaBackend, vs.config.Inference); err != nil {
+			return fmt.Errorf("g8eo: %w", err)
+		}
+		inferenceHandler = inference.NewInferenceExecutionHandler(ollamaBackend, vs.config, scrubbingService, vs.logger)
+		inferenceAttemptStore, err = inference.NewAttemptStore(vs.fileSvc)
+		if err != nil {
+			return fmt.Errorf("g8eo: inference attempt store: %w", err)
+		}
+		vs.logger.Info("Inference backend initialized",
+			"backend", vs.config.Inference.Backend,
+			"endpoint", vs.config.Inference.OllamaEndpoint,
+			"primary_model", vs.config.Inference.PrimaryModel,
+			"assistant_model", vs.config.Inference.AssistantModel,
+			"lite_model", vs.config.Inference.LiteModel)
+	}
+
+	var providerBoundaryObserver *provider_observer.Handler
+	if vs.config.ProviderBoundaryObserver.Enabled {
+		tracker, err := provider_observer.NewTracker(provider_observer.TrackerConfig{
+			ObserverID: vs.config.ProviderBoundaryObserver.ObserverID,
+			Collector:  provider_observer.DefaultCollector(),
+		})
+		if err != nil {
+			return fmt.Errorf("g8eo: provider boundary observer tracker: %w", err)
+		}
+		providerBoundaryObserver, err = provider_observer.NewHandler(tracker, vs.pubSubResults, vs.logger)
+		if err != nil {
+			return fmt.Errorf("g8eo: provider boundary observer handler: %w", err)
+		}
+		vs.logger.Info("Provider-boundary observer enabled",
+			"observer_id", vs.config.ProviderBoundaryObserver.ObserverID)
+	}
+
+	var modelProvenanceOperator *model_provenance.Handler
+	if vs.config.ProvenanceOperator.Enabled {
+		attestor, err := model_provenance.NewOllamaStorageAttestor(
+			vs.config.ProvenanceOperator.ModelStorageRoot,
+			vs.config.ProvenanceOperator.OperatorID,
+		)
+		if err != nil {
+			return fmt.Errorf("g8eo: model provenance attestor: %w", err)
+		}
+		tracker, err := model_provenance.NewTracker(model_provenance.TrackerConfig{
+			OperatorID: vs.config.ProvenanceOperator.OperatorID,
+			Attestor:   attestor,
+		})
+		if err != nil {
+			return fmt.Errorf("g8eo: model provenance tracker: %w", err)
+		}
+		modelProvenanceOperator, err = model_provenance.NewHandler(tracker, vs.pubSubResults, vs.logger)
+		if err != nil {
+			return fmt.Errorf("g8eo: model provenance handler: %w", err)
+		}
+		vs.logger.Info("Model provenance operator enabled",
+			"operator_id", vs.config.ProvenanceOperator.OperatorID,
+			"model_storage_root", vs.config.ProvenanceOperator.ModelStorageRoot)
+	}
+
 	// OperatorPubSubService Construction
 	psConfig := pubsub.CommandServiceConfig{
-		Config:             vs.config,
-		Logger:             vs.logger,
-		Execution:          vs.execution,
-		FileEdit:           vs.fileEdit,
-		PubSubClient:       vs.pubSubClient,
-		ResultsService:     vs.pubSubResults,
-		ExecutionVault:     vs.executionVault,
-		AuditStore:         auditStore,
-		Ledger:             vs.ledger,
-		HistoryHandler:     vs.historyHandler,
-		Scrubbing:          scrubbingService,
-		ActuatorSigningKey: actuatorPriv,
-		ActuatorKeyID:      actuatorKeyID,
-		AuditorSigningKey:  auditorPriv,
-		AuditorKeyID:       auditorKeyID,
+		Config:                   vs.config,
+		Logger:                   vs.logger,
+		Execution:                vs.execution,
+		FileEdit:                 vs.fileEdit,
+		PubSubClient:             vs.pubSubClient,
+		ResultsService:           vs.pubSubResults,
+		ExecutionVault:           vs.executionVault,
+		AuditStore:               auditStore,
+		Ledger:                   vs.ledger,
+		HistoryHandler:           vs.historyHandler,
+		Scrubbing:                scrubbingService,
+		Inference:                inferenceHandler,
+		InferenceAttemptStore:    inferenceAttemptStore,
+		ProviderBoundaryObserver: providerBoundaryObserver,
+		ModelProvenanceOperator:  modelProvenanceOperator,
+		ActuatorSigningKey:       actuatorPriv,
+		ActuatorKeyID:            actuatorKeyID,
+		AuditorSigningKey:        auditorPriv,
+		AuditorKeyID:             auditorKeyID,
 	}
 
 	outboundDeps, err := pubsub.NewOutboundModeDeps(pubsub.OutboundModeDeps{

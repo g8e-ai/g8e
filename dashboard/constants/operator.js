@@ -33,8 +33,8 @@ export const OperatorStatus = Object.freeze({
  * Canonical values from protocol/constants/status.json operator.type.
  */
 export const OperatorType = Object.freeze({
-    SYSTEM: _STATUS['operator.type']['system'],
-    CLOUD:  _STATUS['operator.type']['cloud'],
+    EMBEDDED: _STATUS['operator.type']['embedded'],
+    REMOTE:   _STATUS['operator.type']['remote'],
 });
 
 export const ExecutionStatus = Object.freeze({
@@ -47,17 +47,6 @@ export const ExecutionStatus = Object.freeze({
     CANCEL_REQUESTED: _STATUS['execution.status']['cancel.requested'],
     DENIED:           _STATUS['execution.status']['denied'],
     FEEDBACK:         _STATUS['execution.status']['feedback'],
-});
-
-/**
- * Cloud Operator Subtypes
- * Further classifies cloud operators by provider.
- * Canonical values from protocol/constants/status.json cloud.subtype.
- */
-export const CloudOperatorSubtype = Object.freeze({
-    AWS:      _STATUS['cloud.subtype']['aws'],
-    GCP:      _STATUS['cloud.subtype']['gcp'],
-    AZURE:    _STATUS['cloud.subtype']['azure'],
 });
 
 /**

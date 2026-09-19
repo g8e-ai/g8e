@@ -24,7 +24,6 @@ from app.models.agents.tribunal import (
     CandidateCommand,
 )
 from app.models.http_context import G8eHttpContext
-from app.models.tribunal_commands import TribunalGenerationRequest
 from app.services.ai.generator import generate_command
 from tests.fakes.agent_helpers import (
     make_agent_run_args,

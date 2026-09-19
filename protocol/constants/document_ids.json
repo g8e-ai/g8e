@@ -1,6 +1,10 @@
 {
   "description": "Canonical document IDs used throughout the platform for identifying documents in the governance system.",
   "document_ids": {
+    "embedded_operator": {
+      "_go_const": "DocIDEmbeddedOperator",
+      "value": "embedded-operator"
+    },
     "platform_settings": {
       "_go_const": "DocIDPlatformSettings",
       "value": "platform_settings"

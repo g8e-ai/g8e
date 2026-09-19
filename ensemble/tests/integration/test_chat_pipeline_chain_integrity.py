@@ -141,7 +141,7 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
     )
 
     # Add history entry
-    
+
 
     history_details = ConversationMessageMetadata()
     await investigation_data_service.add_history_entry(

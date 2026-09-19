@@ -280,7 +280,7 @@ class TestExecuteCommandTargetSystems:
             user_id="user-1",
             operator_session_id=operator_session_id,
             current_hostname=hostname,
-            operator_type=OperatorType.SYSTEM,
+            operator_type=OperatorType.REMOTE,
             bound_web_session_id="ws-1",
         )
 

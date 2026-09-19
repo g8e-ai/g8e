@@ -56,6 +56,7 @@ from app.models.internal_api import (
     CaseResponse,
     ChatMessageRequest,
     ChatStartedResponse,
+    EvaluationTraceResponse,
     DirectCommandRequest,
     DirectCommandSentResponse,
     OperatorApprovalResponse,
@@ -135,6 +136,7 @@ from app.constants.message_sender import MessageSender
 if TYPE_CHECKING:
     from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
 
+from app.services.evaluation.trace_service import EvaluationTraceService, validated_trace_ids
 from app.dependencies import (
     get_g8ee_app_settings,
     get_g8ee_approval_service,
@@ -171,9 +173,7 @@ async def _generate_and_update_title(
     message: str,
     case_id: str,
     investigation_id: str,
-    web_session_id: str | None,
-    user_id: str | None,
-    organization_id: str | None,
+    context: RequestContext,
     user_settings: G8eeUserSettings,
     case_service: CaseDataService,
     investigation_service: InvestigationService,
@@ -182,14 +182,8 @@ async def _generate_and_update_title(
         case_result = await generate_case_title(message, settings=user_settings)
         ai_title = case_result.generated_title
 
-        # Build context for internal update call
-        context = RequestContext(
-            web_session_id=web_session_id,
-            user_id=user_id,
-            organization_id=organization_id,
-            case_id=case_id,
-            investigation_id=investigation_id,
-            source_component=G8EE_COMPONENT,
+        context = context.model_copy(
+            update={"case_id": case_id, "investigation_id": investigation_id}
         )
 
         updated_case = await case_service.update_case(
@@ -198,15 +192,15 @@ async def _generate_and_update_title(
         await investigation_service.update_investigation(
             investigation_id, InvestigationUpdateRequest(context=context, case_title=ai_title)
         )
-        if web_session_id:
+        if context.web_session_id:
             await case_service.publish_case_update_sse(
                 case_id=case_id,
-                web_session_id=web_session_id,
+                web_session_id=context.web_session_id,
                 payload=CaseEventPayload(
                     updated_at=updated_case.updated_at,
                     title=ai_title,
                 ),
-                user_id=user_id,
+                user_id=context.user_id,
             )
     except Exception as e:
         logger.error(
@@ -242,6 +236,12 @@ async def internal_chat(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
+    if request.evaluation_context is not None:
+        g8e_context = g8e_context.model_copy(
+            update={"evaluation_context": request.evaluation_context}
+        )
+        chat_pipeline.evaluation_trace_service.begin(g8e_context)
+
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,
@@ -301,6 +301,8 @@ async def internal_chat(
             user_id=g8e_context.user_id,
             web_session_id=g8e_context.web_session_id,
             organization_id=g8e_context.organization_id,
+            operator_id=g8e_context.operator_id,
+            operator_session_id=g8e_context.operator_session_id,
         )
         case = await case_service.create_case(case_create_data, generated_title=None)
 
@@ -314,6 +316,8 @@ async def internal_chat(
             priority=Priority(case.priority) if isinstance(case.priority, str) else case.priority,
             user_email=case.user_email,
             user_id=case.user_id,
+            operator_id=g8e_context.operator_id,
+            operator_session_id=g8e_context.operator_session_id,
             sentinel_mode=request.sentinel_mode,
             created_with_case=True,
             case_source=case.source,
@@ -350,9 +354,7 @@ async def internal_chat(
                     message=request.message,
                     case_id=g8e_context.case_id,
                     investigation_id=g8e_context.investigation_id,
-                    web_session_id=g8e_context.web_session_id,
-                    user_id=g8e_context.user_id,
-                    organization_id=g8e_context.organization_id,
+                    context=RequestContext.from_app_context(g8e_context),
                     user_settings=user_settings,
                     case_service=case_service,
                     investigation_service=investigation_service,
@@ -1000,7 +1002,6 @@ async def create_operator_slot(
             name=f"{request.name_prefix}-{request.slot_number}",
             slot_number=request.slot_number,
             operator_type=request.operator_type,
-            cloud_subtype=request.cloud_subtype,
             status=OperatorStatus.OFFLINE,
             api_key=api_key,
             created_at=now(),
@@ -1781,6 +1782,29 @@ async def get_investigation(
         )
 
     return investigation
+
+
+@router.get(
+    InternalAPIPaths.G8EE_EVALUATION_TRACE,
+    response_model=EvaluationTraceResponse,
+)
+async def get_evaluation_trace(
+    trace_ids: tuple[str, str] = Depends(validated_trace_ids),
+    _: G8eHttpContext = Depends(require_authenticated_context),
+):
+    """Authenticated read-only lookup for a persisted evaluation assignment trace."""
+    assignment_id, evaluation_attempt_id = trace_ids
+    trace_service = EvaluationTraceService()
+    try:
+        trace = trace_service.load(assignment_id, evaluation_attempt_id)
+    except FileNotFoundError:
+        raise ResourceNotFoundError(
+            f"Evaluation trace not found for assignment {assignment_id}",
+            resource_type="evaluation_trace",
+            resource_id=f"{assignment_id}/{evaluation_attempt_id}",
+            component="g8ee",
+        )
+    return EvaluationTraceResponse(trace=trace.model_dump(mode="json"))
 
 
 @router.get(InternalAPIPaths.G8EE_HEALTH)

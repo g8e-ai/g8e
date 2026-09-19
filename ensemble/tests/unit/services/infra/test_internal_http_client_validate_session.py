@@ -24,9 +24,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.clients.http_client import AiohttpResponse
+from app.clients.http_client import AiohttpResponse, GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG
 from app.constants.api_paths import GatewayAPIPaths
-from app.models.auth import OperatorSessionValidationRequest, OperatorSessionValidationResponse
+from app.models.auth import OperatorSessionValidationRequest
 from app.services.infra.internal_http_client import InternalHttpClient
 
 
@@ -87,6 +87,7 @@ async def test_validate_operator_session_posts_typed_request_to_exact_path():
     client._http.post.assert_awaited_once()
     call_args = client._http.post.call_args
     assert call_args.args[0] == GatewayAPIPaths.OPERATORS_VALIDATE
+    assert call_args.kwargs["retry_config"] is GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG
     sent = call_args.kwargs["json_data"]
     assert isinstance(sent, OperatorSessionValidationRequest)
     assert sent.operator_session_id == "op-session"
@@ -117,7 +118,7 @@ async def test_validate_operator_session_forbidden_returns_none():
 @pytest.mark.asyncio
 async def test_validate_operator_session_malformed_response_returns_none():
     client = _make_client()
-    client._http.post = AsyncMock(return_value=_make_response(200, b'not-json'))
+    client._http.post = AsyncMock(return_value=_make_response(200, b"not-json"))
 
     with pytest.raises(Exception):
         await client.validate_operator_session("op-session", "cli-session", "user-1")

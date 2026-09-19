@@ -23,4 +23,5 @@ type DocumentID string
 const (
 	DocIDPlatformSettings   DocumentID = "platform_settings"
 	DocIDUserSettingsPrefix DocumentID = "user_settings_"
+	DocIDEmbeddedOperator   DocumentID = "embedded-operator"
 )

@@ -16,7 +16,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
@@ -102,7 +101,6 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 
 	var req struct {
 		Name              string              `json:"name"`
-		CSRPEM            string              `json:"csr_pem"`
 		CLICSRPEM         string              `json:"cli_csr_pem,omitempty"`
 		SystemFingerprint string              `json:"system_fingerprint"`
 		LocalOSUser       *models.LocalOSUser `json:"local_os_user,omitempty"`
@@ -111,11 +109,6 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
-
-	// Check if operator CSR signing is requested for rotation.
-	// CLI CSR is handled by the dedicated /api/v1/auth/cli/enroll endpoint
-	// to avoid conflating CLI identity with operator identity.
-	csrRequested := req.CSRPEM != ""
 
 	// Defense-in-depth: refuse if any user already exists, so bootstrap can
 	// only run on a genuinely empty system. The first `auth enroll user`
@@ -151,65 +144,12 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 		UserID:  user.ID,
 	}
 
-	// If CSR is requested, sign and return the operator cert
-	var operatorID, operatorSessionID, orgID string
-	if csrRequested {
-		// Create Operator slot for the first user
-		operatorID = uuid.NewString()
-		operatorSessionID = uuid.NewString()
-		orgID = user.ID // Use user ID as org ID for bootstrap
-		now := time.Now().UTC()
-
-		operator := &models.OperatorDocumentGo{
-			ID:                operatorID,
-			UserID:            user.ID,
-			OrganizationID:    orgID,
-			Component:         constants.ComponentNameG8EO,
-			Name:              "bootstrap-operator",
-			Status:            constants.OperatorStatusActive,
-			OperatorSessionID: operatorSessionID,
-			OperatorType:      constants.OperatorTypeSystem,
-			SystemFingerprint: req.SystemFingerprint,
-			Claimed:           true,
-			ClaimedAt:         &now,
-			CreatedAt:         now,
-			UpdatedAt:         now,
-		}
-
-		// Sign the CSR
-		certPEM, chainPEM, err := c.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, operatorSessionID, "")
-		if err != nil {
-			c.logger.Error("Failed to sign bootstrap CSR", "error", err, "user_id", user.ID)
-			c.responder.Error(w, http.StatusInternalServerError, "failed to sign CSR")
-			return
-		}
-
-		operator.OperatorCert = certPEM
-
-		// Persist Operator document
-		opBytes, err := json.Marshal(operator)
-		if err != nil {
-			c.logger.Error("Failed to marshal Operator document", "error", err)
-			c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
-			return
-		}
-		if err := c.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
-			c.logger.Error("Failed to persist Operator document", "error", err)
-			c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
-			return
-		}
-
-		response.OperatorCert = certPEM
-		response.OperatorCertChain = chainPEM
-		response.OperatorSessionID = operatorSessionID
-		response.OperatorID = operatorID
-	}
-
-	// CLI certificate generation (if provided)
+	// CLI certificate generation (if provided). Signing runs before any
+	// session or operator document writes so a signing failure strands
+	// nothing (a signing failure must not leave an orphaned document).
 	var cliCertPEM, cliCertChainPEM string
 	var cliCertFingerprint, cliCertSerial string
 
-	// Always create a CLI session ID for CLI-only bootstrap (user_id binding is required)
 	cliSessionID := uuid.NewString()
 
 	if req.CLICSRPEM != "" {
@@ -236,13 +176,40 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 		response.CLICertChain = cliCertChainPEM
 	}
 
-	// Always persist CLI session (even without certificate for CLI-only bootstrap)
-	// This ensures user_id binding exists for later CLI enrollment
+	// Claim the gateway's embedded operator. The first user's bootstrap is
+	// the explicit human act that enrolls and binds the embedded operator:
+	// it sets the owner binding and mints the operator session ID every
+	// bootstrap-issued session is bound to. The embedded operator is
+	// certless — no CSR is signed for it.
+	operatorID, operatorSessionID, err := claimEmbeddedOperator(c.docStore, user.ID, req.SystemFingerprint, time.Now().UTC())
+	if err != nil {
+		c.logger.Error("Failed to claim embedded operator during bootstrap", "error", err, "user_id", user.ID)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to bind embedded operator")
+		return
+	}
+
+	// Persist the operator session the CLI session binds to.
+	err = c.operatorSessionSvc.PersistOperatorSession(
+		operatorSessionID,
+		user.ID,
+		user.ID, // Use user ID as org ID for bootstrap
+		operatorID,
+		string(constants.HeartbeatTypeBootstrap),
+	)
+	if err != nil {
+		c.logger.Error("Failed to persist operator session during bootstrap", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator session")
+		return
+	}
+
+	// Always persist the CLI session bound to the embedded operator's
+	// session. The persisted binding is authoritative: the auth middleware
+	// stamps operator identity from it, never from request headers.
 	err = c.cliSessionSvc.PersistCLISession(
 		cliSessionID,
-		operatorSessionID, // Empty if no operator CSR
+		operatorSessionID,
 		user.ID,
-		"bootstrap-cli",
+		req.SystemFingerprint,
 		cliCertFingerprint,
 		cliCertSerial,
 		string(constants.HeartbeatTypeBootstrap),
@@ -254,27 +221,10 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 	}
 
 	response.CLISessionID = cliSessionID
+	response.OperatorID = operatorID
+	response.OperatorSessionID = operatorSessionID
 
-	// Persist operator session only if operator CSR was requested
-	if csrRequested {
-		err = c.operatorSessionSvc.PersistOperatorSession(
-			operatorSessionID,
-			user.ID,
-			orgID,
-			operatorID,
-			string(constants.HeartbeatTypeBootstrap),
-		)
-		if err != nil {
-			c.logger.Error("Failed to persist operator session during bootstrap", "error", err)
-			c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator session")
-			return
-		}
-		c.logger.Info("[BOOTSTRAP] System initialized with user, operator and CLI session", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
-	} else if req.CLICSRPEM != "" {
-		c.logger.Info("[BOOTSTRAP] System initialized with user and CLI cert (no operator)", "user_id", user.ID, "cli_session_id_prefix", cliSessionID[:8])
-	} else {
-		c.logger.Info("[BOOTSTRAP] System initialized with user and CLI session (no CSR)", "user_id", user.ID, "cli_session_id_prefix", cliSessionID[:8])
-	}
+	c.logger.Info("[BOOTSTRAP] System initialized with user, embedded operator and CLI session", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", safeTruncateID(cliSessionID, 8))
 
 	c.responder.JSON(w, http.StatusCreated, response)
 }

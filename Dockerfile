@@ -65,8 +65,10 @@ COPY docs/reference/ ./docs/reference/
 # targets. CGO_ENABLED=0 is intentional: the Go FIPS module is pure Go and
 # does not require CGO. Binaries are written to /build/bin/g8e-{os}-{arch}.
 ARG BUILD_ID=unknown
+ARG SOURCE_REVISION=unknown
+ARG SOURCE_TREE_HASH=unknown
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    make build-all BUILD_ID="${BUILD_ID}"
+    make build-all BUILD_ID="${BUILD_ID}" SOURCE_REVISION="${SOURCE_REVISION}" SOURCE_TREE_HASH="${SOURCE_TREE_HASH}"
 
 # Verify the linux/amd64 binary built and runs.
 RUN /build/bin/g8e-linux-amd64 --help

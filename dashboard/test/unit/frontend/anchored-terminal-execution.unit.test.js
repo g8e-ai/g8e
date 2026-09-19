@@ -870,34 +870,35 @@ describe('TerminalExecutionMixin [UNIT - jsdom]', () => {
         it('renders system list with hostnames', () => {
             const ctx = createMixinContext();
             const html = ctx._buildTargetSystemsHtml([
-                { hostname: 'host1', operator_type: 'system' },
-                { hostname: 'host2', operator_type: 'system' },
+                { hostname: 'host1', operator_type: 'remote' },
+                { hostname: 'host2', operator_type: 'remote' },
             ]);
             expect(html).toContain('host1');
             expect(html).toContain('host2');
         });
 
-        it('renders cloud operator type with cloud icon', () => {
+        it('renders embedded operator type with dns icon', () => {
             const ctx = createMixinContext();
             const html = ctx._buildTargetSystemsHtml([
-                { hostname: 'cloud-host', operator_type: 'cloud' },
+                { hostname: 'embedded-host', operator_type: 'embedded' },
             ]);
-            expect(html).toContain('cloud');
+            expect(html).toContain('embedded');
+            expect(html).toContain('dns');
         });
 
-        it('renders system operator type with computer icon', () => {
+        it('renders remote operator type with computer icon', () => {
             const ctx = createMixinContext();
             const html = ctx._buildTargetSystemsHtml([
-                { hostname: 'linux-host', operator_type: 'system' },
+                { hostname: 'linux-host', operator_type: 'remote' },
             ]);
             expect(html).toContain('computer');
-            expect(html).toContain('system');
+            expect(html).toContain('remote');
         });
 
         it('shows "unknown" hostname when missing', () => {
             const ctx = createMixinContext();
             const html = ctx._buildTargetSystemsHtml([
-                { operator_type: 'system' },
+                { operator_type: 'remote' },
             ]);
             expect(html).toContain('unknown');
         });
@@ -905,7 +906,7 @@ describe('TerminalExecutionMixin [UNIT - jsdom]', () => {
         it('escapes HTML in hostname', () => {
             const ctx = createMixinContext();
             const html = ctx._buildTargetSystemsHtml([
-                { hostname: '<script>alert("xss")</script>', operator_type: 'system' },
+                { hostname: '<script>alert("xss")</script>', operator_type: 'remote' },
             ]);
             expect(html).toContain('&lt;script&gt;');
         });
@@ -913,9 +914,9 @@ describe('TerminalExecutionMixin [UNIT - jsdom]', () => {
         it('shows system count in header', () => {
             const ctx = createMixinContext();
             const html = ctx._buildTargetSystemsHtml([
-                { hostname: 'host1', operator_type: 'system' },
-                { hostname: 'host2', operator_type: 'system' },
-                { hostname: 'host3', operator_type: 'system' },
+                { hostname: 'host1', operator_type: 'remote' },
+                { hostname: 'host2', operator_type: 'remote' },
+                { hostname: 'host3', operator_type: 'remote' },
             ]);
             expect(html).toContain('Impacted Systems (3)');
         });

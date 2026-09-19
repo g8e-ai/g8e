@@ -379,7 +379,10 @@ message OperatorDocument {
   bool is_slot = 12;
   bool claimed = 13;
   string operator_type = 14;
-  string cloud_subtype = 15;
+  // Field 15 and the name cloud_subtype are reserved: the cloud subtype
+  // taxonomy was removed when operator types migrated to embedded/remote.
+  reserved 15;
+  reserved "cloud_subtype";
   string system_fingerprint = 16;
   int64 created_at_unix_ms = 17;
   int64 updated_at_unix_ms = 18;
@@ -529,6 +532,43 @@ message ReceiptPersistenceAttestation {
   string signature = 6;
 }
 
+// ReceiptFailureCode is the typed classification of a FAILED ActionReceipt.
+// The L5 actuator stamps it at finalization so verifiers can distinguish
+// governance rejections, client faults, and provider failures without
+// string-matching the result_summary. It is bound into the receipt signature.
+enum ReceiptFailureCode {
+  RECEIPT_FAILURE_CODE_UNSPECIFIED = 0;
+  // The transaction failed governance verification before execution
+  // (L1 doctrine, L2 consensus, L3 notary, identity, replay, expiry).
+  RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED = 1;
+  // The request model did not equal the configured role model.
+  RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED = 2;
+  // The request carried an unspecified or unknown model role.
+  RECEIPT_FAILURE_CODE_ROLE_INVALID = 3;
+  // The request carried a malformed model reference.
+  RECEIPT_FAILURE_CODE_MODEL_REF_INVALID = 4;
+  // The inference backend was unreachable or not registered.
+  RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE = 5;
+  // The inference backend request timed out.
+  RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT = 6;
+  // The inference backend failed generation.
+  RECEIPT_FAILURE_CODE_GENERATE_FAILED = 7;
+  // Any other execution failure.
+  RECEIPT_FAILURE_CODE_EXECUTION_FAILED = 8;
+  // The requested or configured model is absent from the provider's model store.
+  RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND = 9;
+  // The provider returned a malformed or oversized response.
+  RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID = 10;
+  RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID = 11;
+  RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED = 12;
+  RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED = 13;
+  RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH = 14;
+  RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH = 15;
+  RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID = 16;
+  RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID = 17;
+  RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID = 18;
+}
+
 // ActionReceipt is the signed proof of an executing, completed, or failed mutation. L5 emits and persists it before execution, then updates and attests it after execution.
 message ActionReceipt {
   // Original GovernanceEnvelope ID
@@ -568,6 +608,10 @@ message ActionReceipt {
 
   repeated DeterministicStageEvidence deterministic_stage_evidence = 13;
   ReceiptPersistenceAttestation final_persistence_attestation = 14;
+
+  // Typed classification of a FAILED receipt. UNSPECIFIED on non-failed
+  // receipts. Bound into the signature via canonicalization.
+  ReceiptFailureCode failure_code = 15;
 }
 
 // CommitmentAttestation is the Auditor's signed record that a verified
@@ -1116,4 +1160,413 @@ message RevokePasskeyCredentialResult {
   string error = 2;
   bool found = 3;
   int32 remaining = 4;
+}
+
+// ---------------------------------------------------------------------------
+// Inference (g8ellama)
+// ---------------------------------------------------------------------------
+
+// ModelRole identifies the chat-tier role for a governed inference request.
+// Maps directly to the three tiers in ensemble's LLMSettings.
+enum ModelRole {
+  MODEL_ROLE_UNSPECIFIED = 0;
+  MODEL_ROLE_PRIMARY = 1;
+  MODEL_ROLE_ASSISTANT = 2;
+  MODEL_ROLE_LITE = 3;
+}
+
+// InferenceMessageRole identifies the semantic role of one ordered conversation turn.
+enum InferenceMessageRole {
+  INFERENCE_MESSAGE_ROLE_UNSPECIFIED = 0;
+  INFERENCE_MESSAGE_ROLE_SYSTEM = 1;
+  INFERENCE_MESSAGE_ROLE_USER = 2;
+  INFERENCE_MESSAGE_ROLE_ASSISTANT = 3;
+  INFERENCE_MESSAGE_ROLE_TOOL = 4;
+}
+
+// InferenceToolCall carries a model-requested function invocation. arguments_json is a canonical JSON object.
+message InferenceToolCall {
+  string call_id = 1;
+  string name = 2;
+  string arguments_json = 3;
+}
+
+// InferenceToolResult carries a tool continuation value. result_json is a canonical JSON value.
+message InferenceToolResult {
+  string call_id = 1;
+  string name = 2;
+  string result_json = 3;
+}
+
+// InferenceMessagePart carries exactly one typed part of a conversation turn.
+message InferenceMessagePart {
+  oneof part {
+    string text = 1;
+    InferenceToolCall tool_call = 2;
+    InferenceToolResult tool_result = 3;
+  }
+}
+
+// InferenceMessage preserves one ordered conversation turn without prompt flattening.
+message InferenceMessage {
+  InferenceMessageRole role = 1;
+  repeated InferenceMessagePart parts = 2;
+}
+
+// InferenceToolDeclaration defines one callable function. json_schema is a canonical strict JSON Schema object.
+message InferenceToolDeclaration {
+  string name = 1;
+  string description = 2;
+  string json_schema = 3;
+}
+
+message InferenceResponseFormat {
+  string media_type = 1;
+  string json_schema = 2;
+}
+
+enum InferenceToolChoiceMode {
+  INFERENCE_TOOL_CHOICE_MODE_UNSPECIFIED = 0;
+  INFERENCE_TOOL_CHOICE_MODE_AUTO = 1;
+  INFERENCE_TOOL_CHOICE_MODE_NONE = 2;
+  INFERENCE_TOOL_CHOICE_MODE_REQUIRED = 3;
+}
+
+message InferenceToolChoice {
+  InferenceToolChoiceMode mode = 1;
+  repeated string allowed_tool_names = 2;
+}
+
+message InferenceThinkingControl {
+  oneof mode {
+    bool enabled = 1;
+    string level = 2;
+  }
+  bool include_thoughts = 3;
+}
+
+// InferenceResponsePart carries exactly one typed model response part.
+message InferenceResponsePart {
+  oneof part {
+    string text = 1;
+    InferenceToolCall tool_call = 2;
+    string thinking = 3;
+  }
+}
+
+message InferenceModelVariant {
+  string model = 1;
+  string digest = 2;
+}
+
+// Payload for g8e.v1.operator.inference.requested. The handler receives an ordered typed conversation, validates and scrubs every data-bearing part, and sends only the normalized request across the provider boundary.
+message InferenceRequested {
+  // Chat-tier role for this request (primary, assistant, lite).
+  ModelRole role = 1;
+
+  // Ollama model name (e.g., "gemma3:4b"). Encodes the role; Ollama routes by
+  // model name in the API call.
+  string model = 2;
+
+  reserved 3;
+  reserved "prompt";
+
+  // Generation temperature override (0 = use backend default).
+  float temperature = 4;
+
+  // Maximum tokens to generate (0 = use backend default).
+  int32 max_tokens = 5;
+
+  // Ollama keep-alive duration override (empty = use config default).
+  string keep_alive = 6;
+
+  // Ordered conversation turns sent to the backend.
+  repeated InferenceMessage messages = 7;
+
+  // Ordered callable function declarations available to the model.
+  repeated InferenceToolDeclaration tools = 8;
+
+  optional float top_p = 9;
+  optional int32 top_k = 10;
+  repeated string stop_sequences = 11;
+  InferenceResponseFormat response_format = 12;
+  string request_schema_version = 13;
+  InferenceToolChoice tool_choice = 14;
+  optional bool parallel_tool_calls = 15;
+  InferenceThinkingControl thinking = 16;
+  optional int32 context_limit = 17;
+  string provider_attempt_id = 18;
+  string model_digest = 19;
+  string campaign_id = 20;
+  string run_id = 21;
+  string assignment_id = 22;
+  string evaluation_attempt_id = 23;
+  string scenario_id = 24;
+  repeated InferenceModelVariant model_registry = 25;
+  string model_registry_digest = 26;
+
+  // When true, the Inference Node publishes bounded InferenceProgressEvent
+  // telemetry on the results channel while the provider stream is active.
+  // Progress events are delivery telemetry only; the signed
+  // InferenceCompletion remains the sole authoritative terminal outcome.
+  bool stream = 27;
+
+  // Zero-based retry ordinal for this provider attempt. Each retry uses a
+  // distinct provider_attempt_id and is durably retained.
+  uint32 retry_count = 28;
+
+  // Optional deterministic generation seed forwarded to the provider when
+  // supported. Absent means use the provider default.
+  optional int32 seed = 29;
+}
+
+enum InferenceTimingSource {
+  INFERENCE_TIMING_SOURCE_UNSPECIFIED = 0;
+  INFERENCE_TIMING_SOURCE_PROVIDER = 1;
+}
+
+enum InferenceLoadState {
+  INFERENCE_LOAD_STATE_UNSPECIFIED = 0;
+  INFERENCE_LOAD_STATE_COLD = 1;
+  INFERENCE_LOAD_STATE_WARM = 2;
+  INFERENCE_LOAD_STATE_UNAVAILABLE = 3;
+}
+
+enum InferenceRetryClassification {
+  INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED = 0;
+  INFERENCE_RETRY_CLASSIFICATION_NONE = 1;
+  INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT = 2;
+}
+
+enum InferenceProviderAttemptStatus {
+  INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED = 0;
+  INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS = 1;
+  INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED = 2;
+  INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED = 3;
+}
+
+// InferenceProviderAttemptRecord is the durable operator-local record for one
+// governed provider attempt. It is written before provider contact and
+// finalized only after terminal receipt/result evidence is available.
+message InferenceProviderAttemptRecord {
+  string provider_attempt_id = 1;
+  string transaction_id = 2;
+  uint32 retry_count = 3;
+  InferenceRetryClassification retry_classification = 4;
+  InferenceProviderAttemptStatus status = 5;
+  int64 started_at_unix_ms = 6;
+  int64 completed_at_unix_ms = 7;
+  string result_digest = 8;
+  string failure_summary = 9;
+}
+
+// InferenceResult carries ordered response parts, usage metadata, and the finish reason returned by the backend. The governed envelope carries this for the receipt and audit chain.
+message InferenceResult {
+  reserved 1;
+  reserved "text";
+
+  // Number of prompt tokens consumed.
+  int32 prompt_tokens = 2;
+
+  // Number of completion tokens generated.
+  int32 completion_tokens = 3;
+
+  // Total tokens (prompt + completion).
+  int32 total_tokens = 4;
+
+  // Finish reason (e.g., "stop", "length").
+  string finish_reason = 5;
+
+  // Model that produced the result (echoed from the request or resolved by
+  // the backend).
+  string model = 6;
+
+  // Canonical digest of the complete result: lowercase hex SHA-256 over the
+  // deterministic protobuf serialization of this message with result_digest
+  // cleared. The Inference Node computes it at execution time; the signed
+  // ActionReceipt's result_summary binds it, and the User Gateway verifies
+  // digest equality before returning success to the caller.
+  string result_digest = 7;
+
+  // Ordered model response parts covered by result_digest.
+  repeated InferenceResponsePart parts = 8;
+
+  bool usage_reported = 9;
+  optional int32 thinking_tokens = 10;
+  optional int32 cache_tokens = 11;
+  optional int64 load_duration_ns = 12;
+  optional int64 prompt_eval_duration_ns = 13;
+  optional int64 generation_duration_ns = 14;
+  optional int64 total_duration_ns = 15;
+  optional int64 time_to_first_token_ns = 16;
+  InferenceTimingSource timing_source = 17;
+  string provider_attempt_id = 18;
+  string requested_model = 19;
+  string requested_model_digest = 20;
+  string served_model_digest = 21;
+  string normalized_request_hash = 22;
+  string output_hash = 23;
+  string campaign_id = 24;
+  string run_id = 25;
+  string assignment_id = 26;
+  string evaluation_attempt_id = 27;
+  string scenario_id = 28;
+  string model_registry_digest = 29;
+  uint32 retry_count = 30;
+  InferenceLoadState load_state = 31;
+  InferenceRetryClassification retry_classification = 32;
+}
+
+// InferenceProgressEvent carries bounded incremental provider output for
+// live cross-boundary delivery telemetry. It is not authoritative; the
+// signed InferenceCompletion remains the sole terminal outcome.
+message InferenceProgressEvent {
+  // Stable provider-attempt identity copied from the governed request.
+  string provider_attempt_id = 1;
+
+  // Monotonic sequence number for this attempt, starting at 1.
+  uint32 sequence = 2;
+
+  // Ordered response parts emitted by this provider stream event.
+  repeated InferenceResponsePart parts = 3;
+
+  // Measured time from immediately before the provider request to the first
+  // observable thinking, text, or tool-call event. Present only on the first
+  // progress event that carries observable output for the attempt.
+  optional int64 time_to_first_token_ns = 4;
+
+  // Provider-served model tag when known from the stream event.
+  string served_model = 5;
+}
+
+// InferenceCompletion is the protocol-owned completion publication for a
+// governed inference request. The Inference Node publishes it to the
+// results channel only after the L5 Actuator has finalized and signed the
+// ActionReceipt, so the complete result and its verified receipt are a
+// single correlated outcome. A failed execution carries the FAILED receipt
+// and no result, which terminates the Gateway's dispatch wait immediately
+// instead of at the dispatch deadline.
+message InferenceCompletion {
+  // The signed final ActionReceipt for the inference transaction.
+  ActionReceipt receipt = 1;
+
+  // The complete inference result. Absent when the receipt status is not
+  // EXECUTION_STATUS_COMPLETED.
+  InferenceResult result = 2;
+}
+
+// InferenceDispatchRequest is the protocol-owned request body for
+// POST /api/v1/inference/dispatch, the mTLS-protected platform-internal
+// endpoint the ensemble chat pipeline calls to dispatch a governed
+// inference request to the Inference Node.
+message InferenceDispatchRequest {
+  // Chat-tier role for this request (primary, assistant, lite).
+  ModelRole role = 1;
+
+  reserved 2;
+  reserved "prompt";
+
+  // Requested provider model. A campaign Inference Operator accepts it only
+  // when the exact model and digest occur in the frozen registry committed by
+  // model_registry_digest; standard inference uses the configured role model.
+  string model = 3;
+
+  // Generation temperature override (0 = use backend default).
+  float temperature = 4;
+
+  // Maximum tokens to generate (0 = use backend default).
+  int32 max_tokens = 5;
+
+  // Ollama keep-alive duration override (empty = use config default).
+  string keep_alive = 6;
+
+  // Explicit Inference Node target. When empty, the gateway requires exactly
+  // one enrolled inference-capable operator for the requestor; zero or
+  // multiple matches are rejected.
+  string target_operator_session_id = 7;
+
+  // Application that initiated the inference request.
+  string acting_app_id = 8;
+
+  // Application context propagated from the chat turn.
+  string case_id = 9;
+  string investigation_id = 10;
+  string task_id = 11;
+  string web_session_id = 12;
+  string cli_session_id = 13;
+
+  // Ordered conversation turns sent to the Inference Node. The node validates and re-scrubs every data-bearing part before crossing the provider boundary.
+  repeated InferenceMessage messages = 14;
+
+  // Ordered callable function declarations available to the model.
+  repeated InferenceToolDeclaration tools = 15;
+
+  optional float top_p = 16;
+  optional int32 top_k = 17;
+  repeated string stop_sequences = 18;
+  InferenceResponseFormat response_format = 19;
+  string request_schema_version = 20;
+  InferenceToolChoice tool_choice = 21;
+  optional bool parallel_tool_calls = 22;
+  InferenceThinkingControl thinking = 23;
+  optional int32 context_limit = 24;
+  string provider_attempt_id = 25;
+  string model_digest = 26;
+  string campaign_id = 27;
+  string run_id = 28;
+  string assignment_id = 29;
+  string evaluation_attempt_id = 30;
+  string scenario_id = 31;
+  repeated InferenceModelVariant model_registry = 32;
+  string model_registry_digest = 33;
+
+  // When true, the Gateway forwards live InferenceProgressEvent telemetry
+  // to the caller while waiting for the authoritative terminal completion.
+  bool stream = 34;
+
+  // Zero-based retry ordinal for this provider attempt.
+  uint32 retry_count = 35;
+
+  // Optional deterministic generation seed forwarded to the provider when
+  // supported. Absent means use the provider default.
+  optional int32 seed = 36;
+}
+
+// InferenceDispatchStreamFailure is the protocol-owned terminal failure
+// frame for a streaming dispatch that already started NDJSON delivery.
+// Reason is a public-safe centralized sentinel; it never carries raw
+// prompts, model output, or receipt bodies.
+message InferenceDispatchStreamFailure {
+  string reason = 1;
+}
+
+// InferenceDispatchStreamFrame is one NDJSON line in a streaming dispatch
+// response. Progress frames are delivery telemetry only. The completion
+// frame carries the verified terminal result and signed receipt. A failure
+// frame is the explicit terminal outcome when cancellation, disconnect,
+// backpressure, or event-to-terminal hash reconciliation prevents a
+// verified completion after the HTTP response has started.
+message InferenceDispatchStreamFrame {
+  oneof frame {
+    InferenceProgressEvent progress = 1;
+    InferenceDispatchResponse completion = 2;
+    InferenceDispatchStreamFailure failure = 3;
+  }
+}
+
+// InferenceDispatchResponse is the protocol-owned success response for
+// POST /api/v1/inference/dispatch. The Gateway returns it only after
+// verifying the final receipt signature, persistence attestation,
+// transaction identity, and result digest equality. Failure responses use
+// the gateway's standard typed error envelope with a public-safe code.
+message InferenceDispatchResponse {
+  // Transaction ID correlating the dispatch with the audit chain.
+  string transaction_id = 1;
+
+  // The complete inference result whose result_digest is bound into the
+  // signed receipt.
+  InferenceResult result = 2;
+
+  // The verified final signed ActionReceipt for the transaction.
+  ActionReceipt receipt = 3;
 }

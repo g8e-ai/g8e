@@ -23,6 +23,7 @@ import (
 	pubsubtest "github.com/g8e-ai/g8e/v2/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,6 +49,9 @@ func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, e
 type mockResultsPublisher struct {
 	publishHeartbeatCalled bool
 	publishHeartbeatError  error
+
+	inferenceCompletions   []*operatorv1.InferenceCompletion
+	inferenceCompletionErr error
 }
 
 func (m *mockResultsPublisher) PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
@@ -67,6 +71,23 @@ func (m *mockResultsPublisher) PublishFsListResult(ctx context.Context, result p
 }
 
 func (m *mockResultsPublisher) PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
+	return nil
+}
+
+func (m *mockResultsPublisher) PublishInferenceCompletion(ctx context.Context, env *commonv1.GovernanceEnvelope, completion *operatorv1.InferenceCompletion) error {
+	m.inferenceCompletions = append(m.inferenceCompletions, completion)
+	return m.inferenceCompletionErr
+}
+
+func (m *mockResultsPublisher) PublishInferenceProgress(ctx context.Context, originalMsg *PubSubCommandMessage, progress *operatorv1.InferenceProgressEvent) error {
+	return nil
+}
+
+func (m *mockResultsPublisher) PublishProviderBoundaryObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ProviderBoundaryObservationCompleted) error {
+	return nil
+}
+
+func (m *mockResultsPublisher) PublishModelProvenanceObservationCompleted(ctx context.Context, originalMsgID string, completion *evalv1.ModelProvenanceObservationCompleted) error {
 	return nil
 }
 
@@ -183,7 +204,7 @@ func TestHeartbeatService_Build(t *testing.T) {
 		assert.Positive(t, heartbeat.SystemIdentity.MemoryMB)
 	})
 
-	t.Run("includes network info", func(t *testing.T) {
+	t.Run("includes network info from gateway ports", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		cfg.Gateway.HTTPPort = 8080
@@ -192,10 +213,23 @@ func TestHeartbeatService_Build(t *testing.T) {
 		svc := NewHeartbeatService(cfg, logger, nil)
 
 		heartbeat := svc.Build(models.HeartbeatTypeRequested)
-		assert.NotZero(t, heartbeat.NetworkInfo.HTTPPort)
-		assert.NotZero(t, heartbeat.NetworkInfo.HTTPSPort)
+		assert.Equal(t, 8080, heartbeat.NetworkInfo.HTTPPort)
+		assert.Equal(t, 8443, heartbeat.NetworkInfo.HTTPSPort)
 		assert.NotEmpty(t, heartbeat.NetworkInfo.Interfaces)
 		assert.NotEmpty(t, heartbeat.NetworkInfo.ConnectivityStatus)
+	})
+
+	t.Run("includes network info from operator dial ports when gateway ports unset", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		cfg.HTTPPort = 8080
+		cfg.HTTPSPort = 8443
+		logger := testutil.NewTestLogger()
+		svc := NewHeartbeatService(cfg, logger, nil)
+
+		heartbeat := svc.Build(models.HeartbeatTypeRequested)
+		assert.Equal(t, 8080, heartbeat.NetworkInfo.HTTPPort)
+		assert.Equal(t, 8443, heartbeat.NetworkInfo.HTTPSPort)
 	})
 
 	t.Run("includes version info", func(t *testing.T) {

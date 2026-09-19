@@ -13,7 +13,6 @@ from g8e.enums import (
     ApprovalErrorType,
     ApprovalType,
     AttachmentType,
-    CloudSubtype,
     ConversationStatus,
     EscalationRisk,
     ExecutionStatus,
@@ -56,6 +55,7 @@ class LLMProvider(StrEnum):
     ANTHROPIC = "anthropic"
     LLAMACPP = "llamacpp"
     FAKE = "fake"
+    G8E = "g8e"
 
 
 class ThinkingLevel(StrEnum):
@@ -464,6 +464,7 @@ CACHE_TTL_ORGS = 7200
 
 AGENT_MAX_RETRIES = 3
 AGENT_RETRY_DELAY_SECONDS = 3.0
+EVALUATION_BACKGROUND_BARRIER_TIMEOUT_SECONDS = 120.0
 AGENT_RETRY_BACKOFF_MULTIPLIER = 1.5
 AGENT_MAX_TOOL_TURNS = 25
 AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS = 600

@@ -121,15 +121,8 @@
       "operator_type": {
         "type": "string",
         "required": true,
-        "default": "system",
-        "values": ["system", "cloud"],
-        "description": "Operator deployment type. See status.json operator.type."
-      },
-      "cloud_subtype": {
-        "type": "string",
-        "required": false,
-        "values": ["aws", "gcp", "azure"],
-        "description": "Cloud provider. Only set when operator_type is cloud. See status.json cloud.subtype."
+        "values": ["embedded", "remote"],
+        "description": "Operator deployment type. 'embedded' is the gateway's own in-process operator substrate; 'remote' is any operator enrolled from another host or process. See status.json operator.type."
       },
       "consumed_by_operator_id": {
         "type": "string",
@@ -158,7 +151,12 @@
         "local_storage_enabled":{ "type": "boolean", "description": "True when local SQLite storage is enabled (--local-storage flag)" },
         "no_git":               { "type": "boolean", "description": "True when ledger is disabled (--no-git flag)" },
         "log_level":            { "type": "string",  "description": "Active log level (info, debug, error)" },
-        "http_port":            { "type": "integer", "description": "HTTPS port dialled on Operator for auth/bootstrap" }
+        "http_port":            { "type": "integer", "description": "HTTPS port dialled on Operator for auth/bootstrap" },
+        "inference_enabled":         { "type": "boolean", "description": "True when Operator started with --inference-enabled, marking it as an Inference Node (g8ellama). The User Gateway's inference dispatch service resolves the Inference Node by this field." },
+        "inference_ollama_endpoint": { "type": "string",  "description": "Approved remote Ollama provider URL configured when the Inference Node started with --inference-ollama-endpoint." },
+        "provider_boundary_observer_enabled": { "type": "boolean", "description": "True when the Operator started with --provider-boundary-observer-enabled." },
+        "provider_boundary_observer_ollama_enabled": { "type": "boolean", "description": "True when the provider-boundary Observer Operator started with --ollama, opting in to remote Ollama service lifecycle commands on the provider host." },
+        "platform": { "type": "string", "description": "Operator host GOOS recorded at startup (for example linux or windows)." }
       }
     },
 
@@ -196,7 +194,6 @@
       },
       "operator_type": { "type": "string", "required": false },
       "granted_intents": { "type": "array", "items": "string", "required": true, "default": [], "description": "Active intent names (string projection of GrantedIntent objects). Always an array, empty when no intents are granted." },
-      "cloud_subtype": { "type": "string", "required": false },
       "current_hostname": {
         "type": "string",
         "required": false,

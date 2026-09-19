@@ -16,6 +16,7 @@ from app.constants.prompts import AgentMode
 from app.models.attachments import AttachmentMetadata
 from app.models.investigations import ConversationHistoryMessage
 from app.models.model_telemetry import ModelCallTelemetry
+from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eeUserSettings
 
 
@@ -33,6 +34,10 @@ class TriageRequest(G8eBaseModel):
     settings: G8eeUserSettings = Field(description="The user's LLM and platform settings.")
     model_override: str | None = Field(
         default=None, description="Optional model override for the triage operation."
+    )
+    g8e_context: G8eHttpContext | None = Field(
+        default=None,
+        description="Request-scoped context for governed-provider evaluation attribution.",
     )
 
 

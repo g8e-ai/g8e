@@ -431,9 +431,15 @@ func (c *CLIRecoveryController) handleRecoveryComplete(w http.ResponseWriter, r 
 	c.responder.JSON(w, http.StatusCreated, resp)
 }
 
-// issueCLIIdentity signs the stored CLI CSR, creates an operator slot and
-// sessions, and returns the typed completion response. The new identity is
-// bound to the approving user (not the bootstrap user).
+// issueCLIIdentity signs the stored CLI CSR, binds the new CLI session to
+// the user's operator session, and returns the typed completion response.
+// The new identity is bound to the approving user (not the bootstrap user).
+//
+// Operator binding: an existing active operator session is reused — the
+// embedded operator's session when present — so recovery rebinds the CLI
+// to the gateway's canonical operator instead of accumulating a new
+// operator document on every recovery. Only when no active operator
+// session exists does recovery mint a fresh remote recovery operator.
 func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest) (models.CLIRecoveryCompleteResponse, error) {
 	userID := req.ApprovingUserID
 	if userID == "" {
@@ -449,11 +455,28 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 		return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("approving user is not active")
 	}
 
-	operatorID := uuid.NewString()
-	operatorSessionID := uuid.NewString()
 	cliSessionID := uuid.NewString()
 	orgID := user.ID // Use user ID as org ID (matches bootstrap/CLI-enroll pattern)
 	now := time.Now().UTC()
+
+	// Resolve the operator binding before any writes. Reusing an active
+	// operator session requires no new operator document or session.
+	var operatorID, operatorSessionID string
+	if c.operatorSessionSvc != nil {
+		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(user.ID)
+		if opErr != nil {
+			return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("look up active operator session: %w", opErr)
+		}
+		if opSession != nil {
+			operatorID = opSession.OperatorID
+			operatorSessionID = opSession.ID
+		}
+	}
+	mintRecoveryOperator := operatorSessionID == ""
+	if mintRecoveryOperator {
+		operatorID = uuid.NewString()
+		operatorSessionID = uuid.NewString()
+	}
 
 	// Sign the CLI CSR stored in the recovery request BEFORE persisting any
 	// documents. A signing failure must not leave an orphaned operator
@@ -466,28 +489,40 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 	cliCertFingerprint := calculateFingerprintFromPEM(cliCertPEM)
 	cliCertSerial := calculateSerialFromPEM(cliCertPEM)
 
-	// Create operator slot associated with this recovered CLI identity.
-	operator := &models.OperatorDocumentGo{
-		ID:                operatorID,
-		UserID:            user.ID,
-		OrganizationID:    orgID,
-		Component:         constants.ComponentNameG8EO,
-		Name:              "cli-recovery-" + safePrefix(user.ID),
-		Status:            constants.OperatorStatusActive,
-		OperatorSessionID: operatorSessionID,
-		OperatorType:      constants.OperatorTypeSystem,
-		SystemFingerprint: req.SystemFingerprint,
-		Claimed:           true,
-		ClaimedAt:         &now,
-		CreatedAt:         now,
-		UpdatedAt:         now,
-	}
-	opBytes, err := json.Marshal(operator)
-	if err != nil {
-		return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("marshal operator document: %w", err)
-	}
-	if err := c.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
-		return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("persist operator document: %w", err)
+	if mintRecoveryOperator {
+		// No active operator session exists: mint a fresh remote recovery
+		// operator so the recovered CLI session still has a binding.
+		operator := &models.OperatorDocumentGo{
+			ID:                operatorID,
+			UserID:            user.ID,
+			OrganizationID:    orgID,
+			Component:         constants.ComponentNameG8EO,
+			Name:              "cli-recovery-" + safePrefix(user.ID),
+			Status:            constants.OperatorStatusActive,
+			OperatorSessionID: operatorSessionID,
+			OperatorType:      constants.OperatorTypeRemote,
+			SystemFingerprint: req.SystemFingerprint,
+			Claimed:           true,
+			ClaimedAt:         &now,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+		opBytes, err := json.Marshal(operator)
+		if err != nil {
+			return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("marshal operator document: %w", err)
+		}
+		if err := c.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+			return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("persist operator document: %w", err)
+		}
+		if err := c.operatorSessionSvc.PersistOperatorSession(
+			operatorSessionID,
+			user.ID,
+			orgID,
+			operatorID,
+			string(constants.HeartbeatTypeBootstrap),
+		); err != nil {
+			return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("persist operator session: %w", err)
+		}
 	}
 
 	// Persist CLI session linked to the operator session.
@@ -501,17 +536,6 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 		string(constants.HeartbeatTypeBootstrap),
 	); err != nil {
 		return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("persist CLI session: %w", err)
-	}
-
-	// Persist operator session.
-	if err := c.operatorSessionSvc.PersistOperatorSession(
-		operatorSessionID,
-		user.ID,
-		orgID,
-		operatorID,
-		string(constants.HeartbeatTypeBootstrap),
-	); err != nil {
-		return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("persist operator session: %w", err)
 	}
 
 	// Fetch the full runtime trust bundle.

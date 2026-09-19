@@ -15,7 +15,6 @@ description = "Skip test fixtures and demo data"
 paths = [
   '''internal/services/gateway/pki/issued/.*''',
   '''demos/.*/target-data/.*''',
-  '''ensemble/evals/gold_sets/.*''',
 ]
 
 [[allowlists]]
@@ -108,4 +107,16 @@ paths = [
   '''ensemble/app/constants/env_vars\.py''',
   '''ensemble/\.env\.example''',
   '''dashboard/models/settings_model\.js''',
+]
+
+[[allowlists]]
+description = "Skip evaluation gold-set fixture keys (task IDs, not credentials)"
+paths = [
+  '''ensemble/evals/gold_sets/.*''',
+]
+
+[[allowlists]]
+description = "Skip evaluation explorer mock fixture data"
+paths = [
+  '''dashboard/g8e-adapter/evaluation-explorer/src/fixtures/.*''',
 ]

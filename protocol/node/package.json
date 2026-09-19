@@ -7,9 +7,11 @@
   },
   "devDependencies": {
     "@bufbuild/protoc-gen-es": "2.14.0",
+    "tsx": "^4.20.5",
     "typescript": "5.9.3"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext src/gen/g8e/*/v1/*_pb.ts"
+    "typecheck": "tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext src/gen/g8e/*/v1/*_pb.ts",
+    "test": "tsx --test tests/*.test.ts"
   }
 }

@@ -27,5 +27,4 @@ ensemble/.ruff_cache/
 ensemble/.mypy_cache/
 ensemble/__pycache__/
 ensemble/tests/
-ensemble/evals/
 ensemble/g8ee.egg-info/

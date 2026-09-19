@@ -106,7 +106,6 @@ export class SystemInfo extends VSOBaseModel {
         interfaces:             { type: F.array,   default: () => [] },
         current_user:           { type: F.string,  default: null },
         cloud_provider:         { type: F.string,  default: null },
-        is_cloud_operator:      { type: F.boolean, default: false },
         system_fingerprint:     { type: F.string,  default: null },
         fingerprint_details:    { type: F.any,     default: null },
         os_details:             { type: F.any,     default: null },
@@ -145,7 +144,6 @@ export class SystemInfo extends VSOBaseModel {
             interfaces:            networkInfo.interfaces || prev.interfaces || [],
             current_user:          systemIdentity.current_user || prev.current_user || null,
             cloud_provider:        prev.cloud_provider || null,
-            is_cloud_operator:     prev.is_cloud_operator || false,
             system_fingerprint:    prev.system_fingerprint || null,
             fingerprint_details:   prev.fingerprint_details || null,
             os_details:            hb.os_details || prev.os_details || null,
@@ -154,16 +152,6 @@ export class SystemInfo extends VSOBaseModel {
             memory_details:        hb.memory_details || prev.memory_details || null,
             environment:           hb.environment || prev.environment || null,
             local_storage_enabled: capabilityFlags.local_storage_enabled ?? prev.local_storage_enabled ?? true,
-        });
-    }
-
-    static forCloudOperator(subtype) {
-        if (!subtype) {
-            throw new Error('SystemInfo.forCloudOperator() requires an explicit cloud subtype');
-        }
-        return SystemInfo.parse({
-            cloud_provider:    subtype,
-            is_cloud_operator: true,
         });
     }
 }
@@ -264,7 +252,6 @@ export class OperatorStatusInfo extends VSOBaseModel {
         is_active:                 { type: F.boolean, default: false },
         operator_type:             { type: F.string, default: null },
         granted_intents:           { type: F.array,  default: () => [] },
-        cloud_subtype:             { type: F.string, default: null },
         current_hostname:          { type: F.string, default: null },
         session_token:             { type: F.string, default: null },
         session_expires_at:        { type: F.date,   default: null },
@@ -286,7 +273,6 @@ export class OperatorStatusInfo extends VSOBaseModel {
             is_active:                 operator.status === OperatorStatus.ACTIVE,
             operator_type:             operator.operator_type ?? null,
             granted_intents:           Array.isArray(operator.granted_intents) ? operator.granted_intents : [],
-            cloud_subtype:             operator.cloud_subtype ?? null,
             current_hostname:          operator.system_info?.hostname ?? null,
             session_token:             operator.session_token ?? null,
             session_expires_at:        operator.session_expires_at ?? null,
@@ -325,8 +311,7 @@ export class OperatorDocument extends VSOIdentifiableModel {
         slot_number:                  { type: F.any,     default: null },
         is_slot:                      { type: F.boolean, default: false },
         claimed:                      { type: F.boolean, default: false },
-        operator_type:                { type: F.string,  default: OperatorType.SYSTEM },
-        cloud_subtype:                { type: F.string,  default: null },
+        operator_type:                { type: F.string,  default: OperatorType.REMOTE },
         slot_cost:                    { type: F.number,  default: 1 },
         consumed_by_operator_id:      { type: F.string,  default: null },
         case_id:                      { type: F.string,  default: null },
@@ -398,8 +383,7 @@ export class OperatorDocument extends VSOIdentifiableModel {
             fingerprint_details:       systemInfo.fingerprint_details,
             system_info:               systemInfo,
             slot_number:               data.slot_number ?? null,
-            operator_type:             data.operator_type || OperatorType.SYSTEM,
-            cloud_subtype:             data.cloud_subtype ?? null,
+            operator_type:             data.operator_type || OperatorType.REMOTE,
             slot_cost:                 1,
             history_trail:             [new HistoryEntry({
                 timestamp:  _now,
@@ -416,12 +400,7 @@ export class OperatorDocument extends VSOIdentifiableModel {
 
     static forSlot(data) {
         const _now = now();
-        const isCloud = data.operatorType === OperatorType.CLOUD;
-        const systemInfo = isCloud && data.cloudSubtype
-            ? SystemInfo.forCloudOperator(data.cloudSubtype)
-            : isCloud
-                ? new SystemInfo({ is_cloud_operator: true })
-                : new SystemInfo({});
+        const systemInfo = new SystemInfo({});
 
         return new OperatorDocument({
             operator_id:               data.operator_id,
@@ -436,19 +415,18 @@ export class OperatorDocument extends VSOIdentifiableModel {
             slot_number:               data.slotNumber,
             is_slot:                   true,
             claimed:                   false,
-            operator_type:             data.operatorType || OperatorType.SYSTEM,
-            cloud_subtype:             data.cloudSubtype ?? null,
+            operator_type:             data.operatorType || OperatorType.REMOTE,
             slot_cost:                 1,
             system_info:               systemInfo,
             runtime_config:            {},
             history_trail:             [new HistoryEntry({
                 timestamp:  _now,
                 event_type: HistoryEventType.SLOT_CREATED,
-                summary:    `${isCloud ? 'Cloud operator' : 'Operator'} slot ${data.slotNumber} created`,
+                summary:    `Operator slot ${data.slotNumber} created`,
                 actor:      SourceComponent.g8ed,
                 details:    {
                     slot_number:   data.slotNumber,
-                    operator_type: data.operatorType || OperatorType.SYSTEM,
+                    operator_type: data.operatorType || OperatorType.REMOTE,
                 },
             })],
         });
@@ -464,8 +442,7 @@ export class OperatorDocument extends VSOIdentifiableModel {
             component:                 SourceComponent.VSA,
             name:                      data.name,
             slot_number:               data.slotNumber,
-            operator_type:             data.operatorType || OperatorType.SYSTEM,
-            cloud_subtype:             data.cloudSubtype ?? null,
+            operator_type:             data.operatorType || OperatorType.REMOTE,
             slot_cost:                 data.slotCost ?? 1,
             status:                    OperatorStatus.AVAILABLE,
             created_at:                _now,
@@ -486,7 +463,7 @@ export class OperatorDocument extends VSOIdentifiableModel {
                 details:    {
                     predecessor_operator_id: data.oldOperatorId,
                     slot_number:             data.slotNumber,
-                    operator_type:           data.operatorType || OperatorType.SYSTEM,
+                    operator_type:           data.operatorType || OperatorType.REMOTE,
                     slot_cost:               data.slotCost ?? 1,
                     old_cert_serial:         data.oldCertSerial ? data.oldCertSerial.substring(0, 16) + '...' : null,
                     new_cert_serial:         data.certInfo?.serial ? data.certInfo.serial.substring(0, 16) + '...' : null,

@@ -25,24 +25,28 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-func TestBootstrapFlow(t *testing.T) {
-	h, _, _ := setupTestHTTPHandler(t)
+// loadEmbeddedOperatorDoc fetches and unmarshals the embedded-operator
+// document for assertions.
+func loadEmbeddedOperatorDoc(t *testing.T, docStore *DocumentStoreService) *models.OperatorDocumentGo {
+	t.Helper()
+	doc, err := docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), string(constants.DocIDEmbeddedOperator))
+	require.NoError(t, err)
+	require.NotNil(t, doc, "embedded operator document must exist")
+	b, err := json.Marshal(doc.Data)
+	require.NoError(t, err)
+	var op models.OperatorDocumentGo
+	require.NoError(t, json.Unmarshal(b, &op))
+	op.ID = doc.ID
+	return &op
+}
 
-	// Generate real CSRs for the test
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	csrTemplate := x509.CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:   "g8e-operator-test",
-			Organization: []string{"g8e"},
-		},
-	}
-	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &csrTemplate, priv)
-	require.NoError(t, err)
-	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrBytes})
+func TestBootstrapFlow(t *testing.T) {
+	h, _, infra := setupTestHTTPHandler(t)
 
 	cliPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
@@ -65,9 +69,9 @@ func TestBootstrapFlow(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &statusResp))
 	assert.False(t, statusResp.Bootstrapped, "bootstrapped is false on a fresh gateway with no users")
 
-	// 2. Perform bootstrap (creates the first real user, the gateway admin)
+	// 2. Perform bootstrap (creates the first real user, the gateway admin).
+	// The embedded operator is certless: the request carries only the CLI CSR.
 	bootstrapBody := map[string]string{
-		"csr_pem":            string(csrPEM),
 		"cli_csr_pem":        string(cliCsrPEM),
 		"system_fingerprint": "test-fingerprint",
 	}
@@ -82,8 +86,7 @@ func TestBootstrapFlow(t *testing.T) {
 	var resp models.BootstrapResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 	require.True(t, resp.Success, "Bootstrap response success: %v", resp)
-	require.NotEmpty(t, resp.OperatorCert, "operator_cert is missing: %v", resp)
-	require.NotEmpty(t, resp.OperatorCertChain, "operator_cert_chain is missing: %v", resp)
+	assert.Equal(t, string(constants.DocIDEmbeddedOperator), resp.OperatorID, "bootstrap binds the embedded operator: %v", resp)
 	require.NotEmpty(t, resp.HubTrustBundle, "hub_trust_bundle is missing: %v", resp)
 	require.NotEmpty(t, resp.OperatorSessionID, "operator_session_id is missing: %v", resp)
 	require.NotEmpty(t, resp.CLISessionID, "cli_session_id is missing: %v", resp)
@@ -95,6 +98,26 @@ func TestBootstrapFlow(t *testing.T) {
 	require.NotEmpty(t, cliSessionID, "cli_session_id must be non-empty")
 	require.NotEqual(t, bootstrapSessionID, cliSessionID,
 		"cli_session_id MUST be a distinct identifier from operator_session_id - session types are strictly disjoint")
+
+	// The bootstrap claim bound the embedded operator to the first user and
+	// minted the operator session the CLI session is bound to.
+	op := loadEmbeddedOperatorDoc(t, infra.DocStore)
+	assert.True(t, op.Claimed, "embedded operator is claimed by bootstrap")
+	assert.Equal(t, bootstrapUserID, op.UserID)
+	assert.Equal(t, bootstrapSessionID, op.OperatorSessionID)
+	assert.Equal(t, constants.OperatorTypeEmbedded, op.OperatorType)
+	assert.Equal(t, "test-fingerprint", op.SystemFingerprint)
+
+	opSession, err := infra.OperatorSessionSvc.GetActiveSessionForUser(bootstrapUserID)
+	require.NoError(t, err)
+	require.NotNil(t, opSession, "operator_sessions document must exist for the bootstrap session")
+	assert.Equal(t, bootstrapSessionID, opSession.ID)
+	assert.Equal(t, string(constants.DocIDEmbeddedOperator), opSession.OperatorID)
+
+	cliSession, err := infra.CLISessionSvc.loadCLISession(cliSessionID)
+	require.NoError(t, err)
+	assert.Equal(t, bootstrapSessionID, cliSession.OperatorSessionID,
+		"cli_sessions document binds the bootstrap operator session")
 
 	// 3. Status - now bootstrapped (the first user exists)
 	req = httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
@@ -115,9 +138,9 @@ func TestBootstrapFlow(t *testing.T) {
 	assert.True(t, isFirst, "the bootstrap-created user is the first user (admin)")
 
 	// 5. Verify the user can authenticate via the operator session
-	op, err := h.authMiddleware.ValidateOperatorSession(bootstrapSessionID)
+	validatedOp, err := h.authMiddleware.ValidateOperatorSession(bootstrapSessionID)
 	require.NoError(t, err)
-	assert.Equal(t, bootstrapUserID, op.UserID)
+	assert.Equal(t, bootstrapUserID, validatedOp.UserID)
 
 	// 6. Verify the user remains active (no retirement). The old
 	// create-then-retire dance is gone; the first user is a real user that

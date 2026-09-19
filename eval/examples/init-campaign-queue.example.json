@@ -1,0 +1,26 @@
+{
+  "pattern": "eval-init-<variant_id>",
+  "cells_per_run": 75,
+  "inventory_dir": ".g8e/eval/inventories",
+  "generate_command": "./g8e eval rollout init --materialize --merge",
+  "models": [
+    {
+      "variant_id": "example-lite",
+      "served_model_tag": "example:lite",
+      "campaign_id": "eval-init-example-lite",
+      "inventory_file": ".g8e/eval/inventories/eval-init-example-lite.json",
+      "model_registry_digest": "<from inventory freeze or per-model materialization>",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "example-mid",
+      "served_model_tag": "example:mid",
+      "campaign_id": "eval-init-example-mid",
+      "inventory_file": ".g8e/eval/inventories/eval-init-example-mid.json",
+      "model_registry_digest": "<from inventory freeze or per-model materialization>",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    }
+  ]
+}

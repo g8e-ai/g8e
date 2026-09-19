@@ -1,0 +1,279 @@
+{
+  "_comment": "Dashboard classification inventory for registered event types. Each event is classified by its relationship to the browser observability frontend. Classification is based on actual production emission paths, not on constant registration alone. Updated when producers or payloads change.",
+  "_authority": "protocol",
+  "_consumers": ["browser", "cli", "gateway"],
+  "_classification_legend": {
+    "produced_to_sse": "A real production path emits this event through the SSE push endpoint with a typed payload. Browser consumers can observe it on the live stream.",
+    "governed_record_only": "The event is a governed document mutation or audit record. It is persisted but not emitted as a browser telemetry event. Dashboard state derives from projections, not from these events directly.",
+    "dashboard_safe": "The event carries a protocol-owned typed payload suitable for direct browser rendering in the live narrative stream. Restricted content is redacted or summarized by the event presentation registry.",
+    "unsupported": "The event is registered but has no real producer, no protocol-owned payload schema, or contains content unsuitable for browser display. It remains inspectable in diagnostic views but never updates derived dashboard state."
+  },
+  "_note": "The four observability dashboard events (app.agent.status.updated, app.run.status.updated, ai.eval.run.completed, ai.eval.metric.recorded) are dashboard_safe by definition. The Gateway mTLS producer endpoints emit app.agent.status.updated and app.run.status.updated. The native evaluation system does not yet publish ai.eval.run.completed or ai.eval.metric.recorded to the dashboard.",
+  "families": {
+    "g8e.v1.ai.agent": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Agent conflict and continue-approval events. Emitted by the ensemble during multi-agent coordination. Safe for narrative display as non-actionable notices."
+    },
+    "g8e.v1.ai.consensus": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Consensus session, voting, and audit events. Emitted by the consensus service. Safe for narrative display; approvals shown as non-actionable notices."
+    },
+    "g8e.v1.ai.eval": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "ai.eval.run.completed and ai.eval.metric.recorded remain reserved dashboard-safe event contracts and currently have no native evaluation producer. The live campaign events are emitted by the observe producer after persisting the corresponding projection. Each live event carries a monotonic source_sequence and a unique event_id for ordering, replay, and duplicate suppression."
+    },
+    "g8e.v1.public.feed": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Public feed events (batch.exported, batch.acknowledged, proof.published, key.rotated) emitted by the Gateway outbound publisher. The publisher signs append-only batches and exports them to a hosted mirror over outbound HTTPS. Safe for narrative display; export status, acknowledgment, proof availability, and key rotation shown as non-actionable notices."
+    },
+    "g8e.v1.ai.llm": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Chat iteration, tool lifecycle, and LLM lifecycle events. Emitted by the ensemble. Safe for narrative display with phase labels; thinking payloads shown as phase summaries, not chain-of-thought."
+    },
+    "g8e.v1.ai.reputation": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Reputation state updates. Emitted by the reputation service. Safe for narrative display."
+    },
+    "g8e.v1.ai.triage": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Triage clarification events. Emitted by the triage agent. Safe for narrative display."
+    },
+    "g8e.v1.app.agent": {
+      "classification": "mixed",
+      "dashboard_safe": true,
+      "description": "app.agent.activity.recorded is a governed document update for AgentActivityMetadata (governed_record_only). app.agent.status.updated is a dashboard_safe event with a protocol-owned payload, produced through the Gateway mTLS producer endpoint POST /api/v1/observe/producer/agent-state and verified by real HTTP integration tests."
+    },
+    "g8e.v1.app.case": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Case lifecycle events. Emitted by the case service. Safe for narrative display."
+    },
+    "g8e.v1.app.investigation": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Investigation lifecycle and chat message events. Emitted by the investigation service. Chat messages require redaction of restricted content by the presentation registry."
+    },
+    "g8e.v1.app.memory": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Memory creation and update events. Emitted by the memory service. Safe for narrative display."
+    },
+    "g8e.v1.app.run": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "app.run.status.updated is produced through the Gateway mTLS producer endpoint POST /api/v1/observe/producer/run-state with a protocol-owned payload, verified by real HTTP integration tests."
+    },
+    "g8e.v1.app.task": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Task lifecycle events. Emitted by the task service. Safe for narrative display."
+    },
+    "g8e.v1.operator.a2a": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "A2A call requests. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.audit": {
+      "classification": "governed_record_only",
+      "dashboard_safe": false,
+      "description": "Audit record events. Persisted as governed records, not emitted as browser telemetry. Dashboard state derives from projections."
+    },
+    "g8e.v1.operator.bootstrap": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Bootstrap lifecycle events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.bound": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Operator bound event. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.command": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Command lifecycle and status events. Emitted by the operator. Safe for narrative display; approvals shown as non-actionable notices."
+    },
+    "g8e.v1.operator.context": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Context change events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.device": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Device registration events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.eval": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Eval answer request events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.field": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Field read access events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.file": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "File edit, history, diff, restore, and filesystem events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.filesystem": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Filesystem list, read, and grep events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.heartbeat": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Heartbeat lifecycle events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.history": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "History fetch events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.intent": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Intent grant, revoke, and approval events. Emitted by the operator. Safe for narrative display; approvals shown as non-actionable notices."
+    },
+    "g8e.v1.operator.logs": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Log fetch events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.mcp": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "MCP call request events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.network": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Network ping and port check events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.notary": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Notary approval and transaction expiry events. Emitted by the operator. Safe for narrative display; approvals shown as non-actionable notices."
+    },
+    "g8e.v1.operator.panel": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Panel list update events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.port": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Port check request events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.receipt": {
+      "classification": "governed_record_only",
+      "dashboard_safe": false,
+      "description": "Receipt recorded events. Persisted as governed records, not emitted as browser telemetry. Dashboard state derives from projections."
+    },
+    "g8e.v1.operator.reputation": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Reputation commitment, state, slash, and stake resolution events. Emitted by the reputation service. Safe for narrative display."
+    },
+    "g8e.v1.operator.shutdown": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Shutdown request and acknowledgement events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.slot": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Slot initialization failure events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.status": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Operator status update events. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.operator.stream": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Stream approval events. Emitted by the operator. Safe for narrative display; approvals shown as non-actionable notices."
+    },
+    "g8e.v1.operator.terminal": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Terminal thinking, approval, and auth state events. Emitted by the operator. Safe for narrative display; thinking shown as phase summaries."
+    },
+    "g8e.v1.operator.unbound": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Operator unbound event. Emitted by the operator. Safe for narrative display."
+    },
+    "g8e.v1.platform.auth": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Platform authentication events. Emitted by the gateway. Safe for narrative display."
+    },
+    "g8e.v1.platform.console": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Console audit events. Emitted by the gateway console. Safe for narrative display."
+    },
+    "g8e.v1.platform.external": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "External platform events. Emitted by the gateway. Safe for narrative display."
+    },
+    "g8e.v1.platform.notification": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Platform notification events. Emitted by the gateway. Safe for narrative display."
+    },
+    "g8e.v1.platform.sentinel": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Platform sentinel events. Emitted by the gateway. Safe for narrative display."
+    },
+    "g8e.v1.platform.sse": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "SSE stream lifecycle events. Emitted by the gateway. Safe for narrative display."
+    },
+    "g8e.v1.platform.telemetry": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Platform telemetry events. Emitted by the gateway. Safe for narrative display."
+    },
+    "g8e.v1.platform.terminal": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Platform terminal events. Emitted by the gateway. Safe for narrative display."
+    },
+    "g8e.v1.platform.usage": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Platform usage events. Emitted by the gateway. Safe for narrative display."
+    },
+    "g8e.v1.source.ai": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "AI source events. Emitted by the ensemble. Safe for narrative display."
+    },
+    "g8e.v1.source.system": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "System source events. Emitted by the gateway. Safe for narrative display."
+    },
+    "g8e.v1.source.user": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "User source events. Emitted by the gateway. Safe for narrative display."
+    }
+  }
+}

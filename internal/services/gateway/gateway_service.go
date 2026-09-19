@@ -38,6 +38,9 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
@@ -56,36 +59,40 @@ type GatewayModeService struct {
 	fileSvc  fs.RuntimeFileService
 	doctrine *governance.L1Doctrine
 
-	db                    *CanonicalDBService
-	docStore              *DocumentStoreService
-	consensusStore        *ConsensusStoreService
-	signerStore           *SignerStoreService
-	auditStore            *storage.SQLAuditStore
-	stateRootSvc          *StateRootService
-	kvStore               *KVStoreService
-	replayStore           *ReplayStoreService
-	sseStore              *SSEEventService
-	blobStore             *BlobStoreService
-	pubsub                *GatewayWebSocketHandler
-	auth                  *AuthService
-	pki                   *PKIAuthority
-	reg                   *RegistrationService
-	passkey               *PasskeyHandler
-	enrollmentTokenSvc    *EnrollmentTokenService
-	userSvc               *UserService
-	cliSessionSvc         *CLISessionService
-	operatorSessionSvc    *OperatorSessionService
-	webSessionSvc         *WebSessionService
-	suspendedTxService    *storage.SuspendedTransactionService
-	mcpGateway            *mcp.GatewayService
-	cmdSvc                *pubsub.OperatorPubSubService
-	envProc               governance.EnvelopeProcessor
-	platformEnrollmentSvc *PlatformEnrollmentService
-	consensusSvc          *consensus.ConsensusService
-	dispatchSvc           *DispatchService
-	responder             *response.Writer
-	server                *http.Server
-	publicServer          *http.Server
+	db                       *CanonicalDBService
+	docStore                 *DocumentStoreService
+	consensusStore           *ConsensusStoreService
+	signerStore              *SignerStoreService
+	auditStore               *storage.SQLAuditStore
+	stateRootSvc             *StateRootService
+	kvStore                  *KVStoreService
+	replayStore              *ReplayStoreService
+	sseStore                 *SSEEventService
+	blobStore                *BlobStoreService
+	pubsub                   *GatewayWebSocketHandler
+	auth                     *AuthService
+	pki                      *PKIAuthority
+	reg                      *RegistrationService
+	passkey                  *PasskeyHandler
+	enrollmentTokenSvc       *EnrollmentTokenService
+	userSvc                  *UserService
+	cliSessionSvc            *CLISessionService
+	operatorSessionSvc       *OperatorSessionService
+	webSessionSvc            *WebSessionService
+	suspendedTxService       *storage.SuspendedTransactionService
+	mcpGateway               *mcp.GatewayService
+	cmdSvc                   *pubsub.OperatorPubSubService
+	envProc                  governance.EnvelopeProcessor
+	platformEnrollmentSvc    *PlatformEnrollmentService
+	consensusSvc             *consensus.ConsensusService
+	dispatchSvc              *DispatchService
+	inferenceDispatchSvc     *dispatch.DispatchService
+	providerObservationCoord *ProviderBoundaryObservationCoordinator
+	observeProducer          *ObserveProducerService
+	responder                *response.Writer
+	server                   *http.Server
+	publicServer             *http.Server
+	publicSpectator          *PublicSpectatorRuntime
 
 	handler *HTTPHandler
 
@@ -195,12 +202,6 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	auth := NewAuthService(docStore, pki, logger, userSvc, personaSvc, res, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
 	userSvc.SetAuthService(auth)
 
-	// Wire the pubsub command relay dependencies: the gateway intercepts
-	// app-published command intent on cmd: channels, validates the target
-	// operator session, fetches the current state root, and constructs the
-	// governed GovernanceEnvelope before fan-out.
-	wsHandler.SetCommandRelayDeps(stateRootSvc, auth, string(cfg.Gateway.Posture))
-
 	// Wire the pubsub receipt relay dependencies: the gateway intercepts
 	// operator-published signed ActionReceipts on receipts: channels,
 	// verifies the receipt signature against the operator's actuator public
@@ -211,6 +212,14 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	cliSessionSvc := NewCLISessionService(docStore, logger)
 	operatorSessionSvc := NewOperatorSessionService(docStore, logger)
 	webSessionSvc := NewWebSessionService(docStore, logger)
+
+	// Register the pending embedded-operator document. The gateway's
+	// in-process operator substrate is enrolled and bound only by the
+	// explicit first-user enrollment act; until then it exists as an
+	// unclaimed pending record. Idempotent across restarts.
+	if err := registerPendingEmbeddedOperator(docStore, logger); err != nil {
+		return nil, err
+	}
 
 	// --- Certificate identity and PKI initialization ---
 	extraIPs, extraDNSNames, err := resolveGatewayCertificateIdentity(cfg.Gateway.CertMode, cfg.Gateway.NetworkIdentityFile, network.NewDetector(logger), logger)
@@ -270,6 +279,14 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gateway: load doctrine: %w", err)
 	}
+
+	// Wire the pubsub command relay dependencies: the gateway intercepts
+	// app-published command intent on cmd: channels, validates the target
+	// operator session, fetches the current state root, and constructs the
+	// governed GovernanceEnvelope (with L1 screening) before fan-out. This
+	// runs after the L1 doctrine is loaded so the relay has a doctrine to
+	// screen against.
+	wsHandler.SetCommandRelayDeps(stateRootSvc, auth, string(cfg.Gateway.Posture), doctrine)
 
 	actuatorPriv, actuatorKeyID, err := sm.GetActuatorKey()
 	if err != nil {
@@ -409,50 +426,109 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		Service:            passkey,
 		WebSessionSvc:      webSessionSvc,
 		EnrollmentTokenSvc: enrollmentTokenSvc,
+		OperatorBinder:     reg,
+		OperatorClaimer:    newEmbeddedOperatorService(docStore, operatorSessionSvc),
 		Responder:          res,
 		MaxPayload:         cfg.Gateway.MaxPayloadBytes,
 		Orchestrator:       passkeyOrchestrator,
 	})
 
+	// Construct the command dispatch service and the inference dispatch
+	// service. The inference dispatch service wraps the command dispatch
+	// service and the registration service through adapters that implement
+	// the dispatch package's interfaces, breaking the import cycle. The
+	// dispatch service is wired with the L1 doctrine (for envelope L1
+	// screening) and the L2 consensus deliberator (for postures that require
+	// L2 signatures). Under postures that require L3 proof (ratify, notary),
+	// mutation dispatches are rejected at envelope construction because the
+	// gateway dispatch path cannot mint human proofs.
+	dispatchSvc := NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture), doctrine, l2Deliberator, signerStore)
+	inferenceDispatchSvc := dispatch.NewDispatchService(
+		&gatewayDispatcherAdapter{svc: dispatchSvc},
+		&gatewayOperatorListerAdapter{svc: reg},
+		logger,
+	)
+	ownerOperatorLister := &registrationOwnerOperatorLister{reg: reg, userSvc: userSvc}
+	providerObservationCoord := NewProviderBoundaryObservationCoordinator(dispatchSvc, ownerOperatorLister, wsHandler, nil, logger)
+	if windowStore, err := provider_observer.NewWindowStore(b.fileSvc); err == nil {
+		providerObservationCoord = NewProviderBoundaryObservationCoordinator(dispatchSvc, ownerOperatorLister, wsHandler, windowStore, logger)
+		inferenceDispatchSvc.SetProviderObservationNotifier(providerObservationCoord)
+	} else {
+		logger.Warn("Provider-boundary observation window store unavailable", "error", err)
+	}
+	if provenanceWindowStore, err := model_provenance.NewWindowStore(b.fileSvc); err == nil {
+		modelProvenanceCoord := NewModelProvenanceObservationCoordinator(dispatchSvc, ownerOperatorLister, wsHandler, provenanceWindowStore, logger)
+		inferenceDispatchSvc.SetProvenanceObservationNotifier(modelProvenanceCoord)
+	} else {
+		logger.Warn("Model provenance attestation window store unavailable", "error", err)
+	}
+
 	ls := &GatewayModeService{
-		cfg:                   cfg,
-		logger:                logger,
-		fileSvc:               b.fileSvc,
-		doctrine:              doctrine,
-		db:                    db,
-		docStore:              docStore,
-		consensusStore:        consensusStore,
-		signerStore:           signerStore,
-		auditStore:            auditStore,
-		stateRootSvc:          stateRootSvc,
-		kvStore:               kvStore,
-		replayStore:           replayStore,
-		sseStore:              sseStore,
-		blobStore:             blobStore,
-		pubsub:                wsHandler,
-		auth:                  auth,
-		pki:                   pki,
-		reg:                   reg,
-		passkey:               passkeyHandler,
-		enrollmentTokenSvc:    enrollmentTokenSvc,
-		userSvc:               userSvc,
-		cliSessionSvc:         cliSessionSvc,
-		operatorSessionSvc:    operatorSessionSvc,
-		webSessionSvc:         webSessionSvc,
-		suspendedTxService:    suspendedTxService,
-		extraIPs:              extraIPs,
-		mcpGateway:            mcpGateway,
-		cmdSvc:                cmdSvc,
-		envProc:               cmdSvc,
-		platformEnrollmentSvc: platformEnrollmentSvc,
-		consensusSvc:          consensusSvc,
-		dispatchSvc:           NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture)),
-		responder:             res,
+		cfg:                      cfg,
+		logger:                   logger,
+		fileSvc:                  b.fileSvc,
+		doctrine:                 doctrine,
+		db:                       db,
+		docStore:                 docStore,
+		consensusStore:           consensusStore,
+		signerStore:              signerStore,
+		auditStore:               auditStore,
+		stateRootSvc:             stateRootSvc,
+		kvStore:                  kvStore,
+		replayStore:              replayStore,
+		sseStore:                 sseStore,
+		blobStore:                blobStore,
+		pubsub:                   wsHandler,
+		auth:                     auth,
+		pki:                      pki,
+		reg:                      reg,
+		passkey:                  passkeyHandler,
+		enrollmentTokenSvc:       enrollmentTokenSvc,
+		userSvc:                  userSvc,
+		cliSessionSvc:            cliSessionSvc,
+		operatorSessionSvc:       operatorSessionSvc,
+		webSessionSvc:            webSessionSvc,
+		suspendedTxService:       suspendedTxService,
+		extraIPs:                 extraIPs,
+		mcpGateway:               mcpGateway,
+		cmdSvc:                   cmdSvc,
+		envProc:                  cmdSvc,
+		platformEnrollmentSvc:    platformEnrollmentSvc,
+		consensusSvc:             consensusSvc,
+		dispatchSvc:              dispatchSvc,
+		inferenceDispatchSvc:     inferenceDispatchSvc,
+		providerObservationCoord: providerObservationCoord,
+		observeProducer:          NewObserveProducerService(docStore, sseStore, wsHandler, b.fileSvc, logger),
+		responder:                res,
 	}
 
 	// Build the HTTP handler and servers now that all dependencies are constructed.
 	if err := ls.initHTTPHandler(); err != nil {
 		return nil, fmt.Errorf("gateway: initialize HTTP handler: %w", err)
+	}
+
+	if cfg.Gateway.PublicSpectatorEnabled {
+		spectatorCfg := DefaultPublicSpectatorConfig()
+		if cfg.Gateway.PublicSpectatorPrivateAddr != "" {
+			spectatorCfg.PrivateListenAddress = cfg.Gateway.PublicSpectatorPrivateAddr
+		}
+		if cfg.Gateway.PublicSpectatorPublicAddr != "" {
+			spectatorCfg.PublicListenAddress = cfg.Gateway.PublicSpectatorPublicAddr
+		}
+		if cfg.Gateway.EvalExplorerAddr != "" {
+			spectatorCfg.ExplorerListenAddress = cfg.Gateway.EvalExplorerAddr
+		}
+		if cfg.Gateway.EvalExplorerRoot != "" {
+			spectatorCfg.ExplorerRoot = cfg.Gateway.EvalExplorerRoot
+		}
+		if cfg.Gateway.PublicBaseURL != "" {
+			spectatorCfg.PublicBaseURL = cfg.Gateway.PublicBaseURL
+		}
+		spectator, err := NewPublicSpectatorRuntime(spectatorCfg, b.fileSvc, logger)
+		if err != nil {
+			return nil, fmt.Errorf("gateway: initialize public spectator: %w", err)
+		}
+		ls.publicSpectator = spectator
 	}
 
 	return ls, nil
@@ -584,6 +660,10 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	// Initialize AppEnrollmentService for external app enrollment
 	appEnrollment := NewAppEnrollmentService(ls.docStore, pki, logger)
 
+	providerObservationDeps := providerObservationControllerDeps(logger, ls.responder, ls.fileSvc)
+	providerObservationDeps.ObservationCoordinator = ls.providerObservationCoord
+	modelProvenanceDeps := modelProvenanceControllerDeps(logger, ls.responder, ls.fileSvc)
+
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:    cfg,
 		Logger: logger,
@@ -653,8 +733,14 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Logger:             logger,
 			CLISessionSvc:      cliSessionSvc,
 			OperatorSessionSvc: operatorSessionSvc,
+			Reg:                ls.reg,
+			Auth:               ls.auth,
 			UserSvc:            userSvc,
 			Responder:          ls.responder,
+		},
+		CLISessionControllerDeps: CLISessionControllerDeps{
+			Logger:    logger,
+			Responder: ls.responder,
 		},
 		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
 			Cfg:                cfg,
@@ -694,6 +780,12 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			DispatchSvc: ls.dispatchSvc,
 			Responder:   ls.responder,
 			Logger:      logger,
+		},
+		InferenceDispatchControllerDeps: InferenceDispatchControllerDeps{
+			DispatchSvc: ls.inferenceDispatchSvc,
+			Responder:   ls.responder,
+			Logger:      logger,
+			MaxPayload:  cfg.Gateway.MaxPayloadBytes,
 		},
 		SSEControllerDeps: SSEControllerDeps{
 			Cfg:       cfg,
@@ -737,6 +829,32 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			UserSvc:   userSvc,
 			Responder: ls.responder,
 		},
+		ObserveControllerDeps: ObserveControllerDeps{
+			Cfg:              cfg,
+			Logger:           logger,
+			ObserveSvc:       NewObserveService(ls.docStore, logger),
+			DownloadStreamer: ls.GetObserveProducerService(),
+			Responder:        ls.responder,
+		},
+		ObserveProducerControllerDeps: ObserveProducerControllerDeps{
+			Cfg:          cfg,
+			Logger:       logger,
+			ProducerSvc:  ls.GetObserveProducerService(),
+			Responder:    ls.responder,
+			MaxBodyBytes: cfg.Gateway.MaxPayloadBytes,
+		},
+		PublicFeedControllerDeps: PublicFeedControllerDeps{
+			Logger:    logger,
+			Responder: ls.responder,
+			Spectator: func() *PublicSpectatorRuntime { return ls.publicSpectator },
+		},
+		EvalCampaignPublicationControllerDeps: EvalCampaignPublicationControllerDeps{
+			Logger:    logger,
+			Responder: ls.responder,
+			Service:   NewEvalCampaignPublicationService(ls.docStore),
+		},
+		ProviderObservationControllerDeps: providerObservationDeps,
+		ModelProvenanceControllerDeps:     modelProvenanceDeps,
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)
@@ -897,6 +1015,21 @@ func (ls *GatewayModeService) GetDispatchService() *DispatchService {
 	return ls.dispatchSvc
 }
 
+// GetInferenceDispatchService returns the platform-internal inference
+// dispatch service for routing governed inference requests to the Inference
+// Node. Called by the ensemble chat pipeline; not AI-visible.
+func (ls *GatewayModeService) GetInferenceDispatchService() *dispatch.DispatchService {
+	return ls.inferenceDispatchSvc
+}
+
+// GetObserveProducerService returns the observe producer service that
+// persists agent and run state projections and emits typed SSE events after
+// successful persistence. Activity handlers call this to report state changes
+// through the persist-before-publish ordering.
+func (ls *GatewayModeService) GetObserveProducerService() *ObserveProducerService {
+	return ls.observeProducer
+}
+
 // GetHTTPPort returns the actual HTTP port the server is listening on.
 // After Start(), this reflects the dynamically assigned port when configured as 0.
 func (ls *GatewayModeService) GetHTTPPort() int {
@@ -990,6 +1123,16 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 		"data_dir", ls.cfg.Gateway.DataDir)
 
 	ls.logger.Info("Gateway servers starting", "http_port", ls.cfg.Gateway.HTTPPort, "https_port", ls.cfg.Gateway.HTTPSPort)
+
+	if ls.publicSpectator != nil {
+		if err := ls.publicSpectator.Start(ctx); err != nil {
+			return fmt.Errorf("gateway: start public spectator: %w", err)
+		}
+		ls.logger.Info("Public spectator stack started",
+			"mirror_private", ls.publicSpectator.cfg.PrivateListenAddress,
+			"mirror_public", ls.publicSpectator.cfg.PublicListenAddress,
+			"public_base_url", ls.publicSpectator.cfg.PublicBaseURL)
+	}
 
 	// Start background maintenance for MCP gateway
 	go ls.mcpGateway.RunMaintenance(ctx)
@@ -1091,6 +1234,11 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 				ls.logger.Error("Failed to shutdown public server", "error", err)
 			}
 		}
+		if ls.publicSpectator != nil {
+			if err := ls.publicSpectator.Stop(shutdownCtx); err != nil {
+				ls.logger.Error("Failed to shutdown public spectator", "error", err)
+			}
+		}
 	}()
 
 	return <-errChan
@@ -1121,6 +1269,12 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	if ls.publicSpectator != nil {
+		if err := ls.publicSpectator.Stop(shutdownCtx); err != nil {
+			ls.logger.Error("Public spectator shutdown error", "error", err)
+		}
+	}
+
 	if err := ls.server.Shutdown(shutdownCtx); err != nil {
 		if shutdownCtx.Err() == context.DeadlineExceeded {
 			ls.logger.Error("HTTP server shutdown timeout - forcing exit to prevent zombie process")
@@ -1148,6 +1302,9 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 // All close methods are idempotent, so this is safe to call even if some
 // resources have already been closed.
 func (ls *GatewayModeService) closeResources() {
+	if ls.providerObservationCoord != nil {
+		ls.providerObservationCoord.Stop()
+	}
 	if ls.platformEnrollmentSvc != nil {
 		ls.platformEnrollmentSvc.StopCleanup()
 	}

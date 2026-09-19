@@ -4,7 +4,7 @@
 
 The g8e Agentic Ensemble (`g8ee`) is an optional first-party client of the g8e governance platform. It generates and evaluates operational intent, but it remains outside the trusted execution boundary. Tribunal agreement, Auditor review, application risk classification, and user approval inside g8ee do not authorize a platform transaction by themselves.
 
-An operation becomes governed when g8ee submits typed intent through a g8e ingress. The Gateway constructs or accepts a canonical `GovernanceEnvelope`, and the executing Warden and Actuator apply the verification required by the envelope's posture. Native client tools, direct filesystem access, network access, and other paths that do not traverse a g8e ingress are outside this boundary.
+An operation becomes governed when g8ee submits typed intent through a g8e ingress. The Gateway constructs or accepts a canonical `GovernanceEnvelope`, and the executing L4 Warden and L5 Actuator apply the verification required by the envelope's posture. Native client tools, direct filesystem access, network access, and other paths that do not traverse a g8e ingress are outside this boundary.
 
 See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for all supported agent integration paths and their limits.
 
@@ -14,7 +14,7 @@ The **Governance Gateway** is the Policy Decision Point. It authenticates client
 
 The **Governed Operator** is the Policy Execution Point on a managed host. It opens an outbound mTLS connection to the Gateway, receives envelopes for its exact Operator session, verifies each envelope locally, and executes accepted operations through the L5 Actuator. The Gateway also has an in-process Operator substrate for locally executed MCP, A2A, and direct-envelope operations.
 
-The posture is embedded in each envelope so the executing Warden applies the Gateway-selected policy. Missing or invalid posture metadata fails closed.
+The posture is embedded in each envelope so the executing L4 Warden applies the Gateway-selected policy. Missing or invalid posture metadata fails closed.
 
 ## Application Controls Before Governance
 
@@ -32,9 +32,9 @@ Tribunal voting is application-level model agreement. It does not produce the Ed
 
 ### Command risk and audit
 
-When a response analyzer is configured, the command-risk Warden evaluates the winning command before the Auditor. An unavailable model, empty response, analysis error, or inconclusive command-risk result inside that analyzer becomes `HIGH` risk and blocks the command. The first high-risk result returns contextual feedback so Sage can propose a safer alternative; a second high-risk result for the same investigation reports an agent conflict and requires human intervention. If no response analyzer is configured, g8ee skips this stage.
+When a response analyzer is configured, Marshal evaluates the winning command before the Auditor. An unavailable model, empty response, analysis error, or inconclusive command-risk result inside that analyzer becomes `HIGH` risk and blocks the command. The first high-risk result returns contextual feedback so Sage can propose a safer alternative; a second high-risk result for the same investigation reports an agent conflict and requires human intervention. If no response analyzer is configured, g8ee skips this stage.
 
-When enabled, the Auditor reviews the winning command and anonymized alternatives after command-risk analysis. It can accept the winner, revise it, or select another candidate. A successful audit creates a reputation commitment; failure to create that commitment stops the verdict.
+When enabled, the Auditor reviews the winning command and anonymized alternatives after Marshal risk analysis. It can accept the winner, revise it, or select another candidate. A successful audit creates a reputation commitment; failure to create that commitment stops the verdict.
 
 File writes and replacements use a separate file-risk analysis and g8ee approval flow before dispatch. A file-risk analysis failure is logged and the operation continues to the approval gate. Error analysis classifies failed commands and controls bounded retry or escalation. These application approval and retry decisions are distinct from L3 Notary authorization.
 
@@ -94,7 +94,7 @@ Use Gateway MCP or A2A when the Gateway must coordinate protocol consensus or hu
 
 For governed platform records such as cases, investigations, memories, and agent activity, g8ee uses its `GovernanceClient` to submit a complete envelope to the synchronous governance endpoint. This is a privileged, Operator-credential path in the unified deployment, not the normal public app ingress.
 
-The client obtains the current state root, serializes the typed payload, generates replay and expiry fields, binds requestor and acting-app attribution into the transaction hash, and submits canonical JSON over mTLS. The Gateway binds the envelope identity to the certificate SPIFFE identity, supplies the active posture when the envelope omits it, and sends the envelope through the in-process Warden and Actuator.
+The client obtains the current state root, serializes the typed payload, generates replay and expiry fields, binds requestor and acting-app attribution into the transaction hash, and submits canonical JSON over mTLS. The Gateway binds the envelope identity to the certificate SPIFFE identity, supplies the active posture when the envelope omits it, and sends the envelope through the in-process L4 Warden and L5 Actuator.
 
 The client serializes submissions to reduce state-root races. If the Gateway rejects a submission because another transaction changed the state root, the client fetches the new root, rebuilds the envelope, and retries up to three times after the initial attempt.
 
@@ -106,7 +106,7 @@ A successful submission returns a signed `ActionReceipt`. `GovernanceClient` exp
 
 The canonical transaction hash binds action type, target resource, typed payload, state root, nonce, expiry, structured intent, requestor identity, and acting-app identity. Both the envelope ID and transaction hash must equal the recomputed SHA-256 digest. L3 proof and posture metadata are outside this hash because L2 signs the transaction before human authorization and the Gateway supplies posture as policy metadata.
 
-The Warden also requires a known action type, a decodable payload, a current state root, a live expiry, and a nonce that is neither reserved nor previously consumed. These checks fail closed in every posture. See [Protocol](protocol.md) for the canonical envelope and hashing rules.
+The L4 Warden also requires a known action type, a decodable payload, a current state root, a live expiry, and a nonce that is neither reserved nor previously consumed. These checks fail closed in every posture. See [Protocol](protocol.md) for the canonical envelope and hashing rules.
 
 ## Security Properties and Limits
 
@@ -126,7 +126,7 @@ The Warden also requires a known action type, a decodable payload, a current sta
 - [Operator Architecture](../architecture/operator.md): Outbound Operator transport, local verification, execution, and audit storage.
 - [Authentication and Authorization](../architecture/auth.md): mTLS identities, delegated credentials, sessions, and WebAuthn.
 - [Consensus](../architecture/consensus.md): Protocol L2 policy, enrollment, deliberation, and vote verification.
-- [Agents](agents.md): g8ee personas, Tribunal members, Auditor, and application Warden.
+- [Agents](agents.md): g8ee personas, Tribunal members, Auditor, and Marshal.
 - [Architecture](architecture.md): Ensemble components, protocol surfaces, and runtime flow.
 - [Protocol](protocol.md): Ensemble-facing protocol models and transaction hashing.
 - [Storage](storage.md): Ensemble data services and governed platform records.

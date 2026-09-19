@@ -1,0 +1,164 @@
+/* Mobile-first reference frontend styles. Non-color status labels, visible
+   focus, reduced motion support, semantic layout. */
+
+:root {
+  --bg: #0f1115;
+  --fg: #e4e6eb;
+  --muted: #8b8f99;
+  --card-bg: #1a1d24;
+  --border: #2a2e38;
+  --accent: #4a9eff;
+  --focus-ring: #66b3ff;
+  --error: #ff6b6b;
+  --stale: #f0ad4e;
+  --unavailable: #6b7280;
+  --success: #5cb85c;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.5;
+  font-size: 16px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--accent);
+  color: #fff;
+  padding: 0.5rem 1rem;
+  z-index: 100;
+}
+.skip-link:focus { left: 0; }
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+}
+.site-header h1 { font-size: 1.25rem; }
+.watch-live-btn {
+  padding: 0.5rem 1rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.watch-live-btn:hover { opacity: 0.9; }
+
+.section-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0.5rem 1rem;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+}
+.section-nav a {
+  color: var(--accent);
+  text-decoration: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+.section-nav a:hover { background: var(--border); }
+
+main { padding: 1rem; max-width: 1200px; margin: 0 auto; }
+
+section { margin-bottom: 1.5rem; }
+section h2 { font-size: 1.1rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
+
+.status-label { font-weight: 500; }
+.status-label[data-status="loading"]::before { content: "⏳ "; }
+.status-label[data-status="empty"]::before { content: "📭 "; }
+.status-label[data-status="stale"] { color: var(--stale); }
+.status-label[data-status="stale"]::before { content: "⚠ "; }
+.status-label[data-status="unavailable"], .state-unavailable { color: var(--unavailable); }
+.status-label[data-status="error"] { color: var(--error); }
+.status-label[data-status="ready"], .status-label[data-status="authenticated"] { color: var(--success); }
+
+.overview-grid, .measurements-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@media (min-width: 640px) {
+  .overview-grid, .measurements-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.metric-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.metric-card.unavailable { opacity: 0.6; }
+.metric-label { font-size: 0.8rem; color: var(--muted); }
+.metric-value { font-size: 1.5rem; font-weight: 600; }
+.metric-freshness { font-size: 0.75rem; color: var(--muted); }
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.data-table th, .data-table td {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.data-table th { font-weight: 600; color: var(--muted); font-size: 0.8rem; }
+
+.narrative-list {
+  list-style: none;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+}
+.narrative-row {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.narrative-row[data-recognized="false"] { opacity: 0.6; }
+.narrative-label { font-weight: 600; min-width: 120px; }
+.narrative-detail { color: var(--muted); }
+
+.design-preview-banner {
+  background: var(--stale);
+  color: #000;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.error { color: var(--error); }
+.state-loading { color: var(--muted); }

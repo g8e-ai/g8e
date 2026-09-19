@@ -21,6 +21,9 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
+// logTimestampFormat renders timestamps with millisecond precision in local time.
+const logTimestampFormat = "2006-01-02T15:04:05.000Z07:00"
+
 // parseLogLevel validates and converts CLI input into slog levels.
 func parseLogLevel(level string) (slog.Level, error) {
 	switch strings.ToLower(strings.TrimSpace(level)) {
@@ -57,7 +60,7 @@ func (h *logHandler) Enabled(_ context.Context, level slog.Level) bool {
 }
 
 func (h *logHandler) Handle(_ context.Context, r slog.Record) error {
-	timestamp := r.Time.In(time.Local).Format(time.RFC3339)
+	timestamp := r.Time.In(time.Local).Format(logTimestampFormat)
 	levelStr := strings.ToUpper(r.Level.String())
 
 	msg := fmt.Sprintf("%s %s: %s", timestamp, levelStr, r.Message)

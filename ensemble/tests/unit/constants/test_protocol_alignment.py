@@ -17,7 +17,7 @@ should be, or if a re-export breaks identity with the protocol symbol.
 import ast
 import importlib
 import json
-from enum import Enum, StrEnum
+from enum import Enum
 from pathlib import Path
 
 import pytest

@@ -10,6 +10,7 @@ package platform
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/logging"
 )
@@ -146,6 +148,26 @@ func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, er
 	return 0, fmt.Errorf("%w: starting from %d after %d attempts", constants.ErrPortUnavailable, startPort, MaxPortAttempts)
 }
 
+// ReadPIDFile reads a PID from the runtime pid directory.
+func (pm *ProcessManager) ReadPIDFile(filename string) (int, error) {
+	return pm.readPID(filename)
+}
+
+// WritePIDFile writes a PID into the runtime pid directory.
+func (pm *ProcessManager) WritePIDFile(filename string, pid int) error {
+	return pm.writePID(filename, pid)
+}
+
+// DeletePIDFile removes a PID file from the runtime pid directory.
+func (pm *ProcessManager) DeletePIDFile(filename string) error {
+	return pm.deletePID(filename)
+}
+
+// IsProcessRunning reports whether the given PID is alive.
+func (pm *ProcessManager) IsProcessRunning(pid int) bool {
+	return pm.isProcessRunning(pid)
+}
+
 func (pm *ProcessManager) readPID(filename string) (int, error) {
 	relPath := filepath.Join(constants.PidDirname, filename)
 	pidData, err := pm.fileSvc.ReadFile(context.Background(), relPath)
@@ -172,38 +194,6 @@ func (pm *ProcessManager) writePID(filename string, pid int) error {
 func (pm *ProcessManager) deletePID(filename string) error {
 	relPath := filepath.Join(constants.PidDirname, filename)
 	return pm.fileSvc.Remove(context.Background(), relPath)
-}
-
-func (pm *ProcessManager) writePosture(posture string) error {
-	relPath := filepath.Join(constants.PidDirname, constants.OperatorPostureFilename)
-	return pm.fileSvc.WriteFile(context.Background(), relPath, []byte(posture), constants.PermFilePrivate)
-}
-
-func (pm *ProcessManager) readPosture() (string, error) {
-	relPath := filepath.Join(constants.PidDirname, constants.OperatorPostureFilename)
-	postureData, err := pm.fileSvc.ReadFile(context.Background(), relPath)
-	if err != nil {
-		if errors.Is(err, constants.ErrNotFound) {
-			return "", nil
-		}
-		return "", fmt.Errorf("%w: %w", constants.ErrPostureReadFailed, err)
-	}
-	posture := string(postureData)
-	// Validate posture is one of the allowed values
-	_, validPosture := constants.GetGovernancePostureRequirements(posture)
-	if posture != "" && !validPosture {
-		return "", fmt.Errorf("%w: invalid value '%s': must be %s, %s, %s, or %s", constants.ErrInvalidPosture, posture, constants.PostureDoctrine, constants.PostureConsensus, constants.PostureRatify, constants.PostureNotary)
-	}
-	return posture, nil
-}
-
-func (pm *ProcessManager) deletePosture() error {
-	relPath := filepath.Join(constants.PidDirname, constants.OperatorPostureFilename)
-	return pm.fileSvc.Remove(context.Background(), relPath)
-}
-
-func (pm *ProcessManager) ReadPosture() (string, error) {
-	return pm.readPosture()
 }
 
 // operatorBinaryName returns the canonical filename for the copied operator
@@ -338,10 +328,53 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 		args = append(args, "--doctrine-dir", opts.DoctrineDir)
 	}
 
+	args = append(args, "--public-spectator", strconv.FormatBool(opts.PublicSpectatorEnabled))
+	if opts.PublicSpectatorPrivateAddr != "" {
+		args = append(args, "--public-spectator-private-listen", opts.PublicSpectatorPrivateAddr)
+	}
+	if opts.PublicSpectatorPublicAddr != "" {
+		args = append(args, "--public-spectator-public-listen", opts.PublicSpectatorPublicAddr)
+	}
+	if opts.EvalExplorerAddr != "" {
+		args = append(args, "--eval-explorer-listen", opts.EvalExplorerAddr)
+	}
+	if opts.EvalExplorerRoot != "" {
+		args = append(args, "--eval-explorer-root", opts.EvalExplorerRoot)
+	}
+
 	return args, nil
 }
 
-func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
+func stopFailedStart(cmd *exec.Cmd) error {
+	killErr := cmd.Process.Kill()
+	_, waitErr := cmd.Process.Wait()
+	if killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+		return fmt.Errorf("kill process: %w", killErr)
+	}
+	var exitErr *exec.ExitError
+	if waitErr != nil && !errors.As(waitErr, &exitErr) && !errors.Is(waitErr, os.ErrProcessDone) {
+		return fmt.Errorf("wait for process: %w", waitErr)
+	}
+	return nil
+}
+
+// maxHealthResponseBytes bounds the health-check response body read during
+// start verification.
+const maxHealthResponseBytes = 8192
+
+// healthResponseIsFromChild reports whether a 200 health response was
+// produced by the just-started child process. The gateway reports its own
+// PID in the health body; a foreign listener on the same port must not
+// satisfy the check.
+func healthResponseIsFromChild(body io.Reader, childPID int) bool {
+	var hr models.HealthResponse
+	if err := json.NewDecoder(io.LimitReader(body, maxHealthResponseBytes)).Decode(&hr); err != nil {
+		return false
+	}
+	return hr.PID != 0 && hr.PID == childPID
+}
+
+func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 	if err := pm.CreateDirectories(); err != nil {
 		return err
 	}
@@ -389,7 +422,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 	// Find the first available port starting from httpPort
 	availableHTTPPort, err := pm.findAvailablePort(effectiveHTTPPort, "Operator HTTP")
 	if err != nil {
-		return fmt.Errorf("%w: HTTP port: %v", constants.ErrPortUnavailable, err)
+		return fmt.Errorf("%w: HTTP port: %w", constants.ErrPortUnavailable, err)
 	}
 
 	// Calculate offset from original httpPort to maintain port spacing
@@ -398,7 +431,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 
 	// Verify the calculated HTTPS port is available
 	if err := pm.checkPortAvailable(availableHTTPSPort, "Operator HTTPS"); err != nil {
-		return fmt.Errorf("%w: HTTPS port %d: %v", constants.ErrPortUnavailable, availableHTTPSPort, err)
+		return fmt.Errorf("%w: HTTPS port %d: %w", constants.ErrPortUnavailable, availableHTTPSPort, err)
 	}
 
 	binPath, err := pm.copyBinaryToBinDir()
@@ -408,7 +441,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 
 	logHandle, err := pm.logSvc.OpenLogForAppend(context.Background())
 	if err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
+		return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 	}
 	logPath := pm.logSvc.LogFilePath()
 
@@ -425,10 +458,10 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 	opts.RateLimitBurst = effectiveRateLimitBurst
 	opts.LogLevel = effectiveLogLevel
 
-	args, err := pm.BuildReExecArgs(opts)
+	args, err := pm.BuildReExecArgs(*opts)
 	if err != nil {
 		if closeErr := logHandle.Close(); closeErr != nil {
-			return fmt.Errorf("%w: %v (additionally failed to close log file: %v)", constants.ErrPathValidation, err, closeErr)
+			return fmt.Errorf("%w: build arguments: %w; close log: %w", constants.ErrPathValidation, err, closeErr)
 		}
 		return err
 	}
@@ -440,50 +473,74 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 
 	if err := cmd.Start(); err != nil {
 		if closeErr := logHandle.Close(); closeErr != nil {
-			return fmt.Errorf("%w: %v (additionally failed to close log file: %v)", constants.ErrProcessStartFailed, err, closeErr)
+			return fmt.Errorf("%w: start: %w; close log: %w", constants.ErrProcessStartFailed, err, closeErr)
 		}
-		return fmt.Errorf("%w: %v", constants.ErrProcessStartFailed, err)
+		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
 
 	if err := pm.writePID(constants.OperatorPIDFilename, cmd.Process.Pid); err != nil {
-		_ = cmd.Process.Kill()
+		stopErr := stopFailedStart(cmd)
 		if closeErr := logHandle.Close(); closeErr != nil {
-			return fmt.Errorf("%w: %v (additionally failed to close log file: %v)", constants.ErrPIDWriteFailed, err, closeErr)
+			if stopErr != nil {
+				return fmt.Errorf("%w: %w; stop failed start: %w; close log: %w", constants.ErrPIDWriteFailed, err, stopErr, closeErr)
+			}
+			return fmt.Errorf("%w: %w; close log: %w", constants.ErrPIDWriteFailed, err, closeErr)
 		}
-		return fmt.Errorf("%w: %v", constants.ErrPIDWriteFailed, err)
-	}
-
-	if err := pm.writePosture(string(opts.Posture)); err != nil {
-		_ = cmd.Process.Kill()
-		_ = pm.deletePID(constants.OperatorPIDFilename)
-		if closeErr := logHandle.Close(); closeErr != nil {
-			return fmt.Errorf("%w: %v (additionally failed to close log file: %v)", constants.ErrPostureWriteFailed, err, closeErr)
+		if stopErr != nil {
+			return fmt.Errorf("%w: %w; stop failed start: %w", constants.ErrPIDWriteFailed, err, stopErr)
 		}
-		return fmt.Errorf("%w: %v", constants.ErrPostureWriteFailed, err)
+		return fmt.Errorf("%w: %w", constants.ErrPIDWriteFailed, err)
 	}
 
 	if err := logHandle.Close(); err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
+		cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))
+		if cleanupErr != nil {
+			return fmt.Errorf("%w: close log: %w; cleanup: %w", constants.ErrPathValidation, err, cleanupErr)
+		}
+		return fmt.Errorf("%w: close log: %w", constants.ErrPathValidation, err)
+	}
+
+	// Reap and observe the child directly: an exited child stays a zombie
+	// until waited on, and signal-0 liveness checks report zombies as running.
+	waitCh := make(chan error, 1)
+	go func() { waitCh <- cmd.Wait() }()
+
+	failStart := func() error {
+		cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))
+		if cleanupErr != nil {
+			return fmt.Errorf("%w: check %s: cleanup: %w", constants.ErrProcessStartFailed, logPath, cleanupErr)
+		}
+		return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, logPath)
 	}
 
 	healthURL := fmt.Sprintf("http://%s:%d%s", constants.LocalhostIP, availableHTTPPort, constants.APIPaths.Health)
 	client := &http.Client{Timeout: HealthCheckInterval}
 	for i := 0; i < MaxHealthChecks; i++ {
-		if !pm.isProcessRunning(cmd.Process.Pid) {
-			_ = pm.deletePID(constants.OperatorPIDFilename)
-			return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, logPath)
+		select {
+		case <-waitCh:
+			return failStart()
+		default:
 		}
 		resp, err := client.Get(healthURL)
 		if err == nil {
+			healthy := resp.StatusCode == http.StatusOK &&
+				healthResponseIsFromChild(resp.Body, cmd.Process.Pid)
 			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
+			if healthy {
 				return nil
 			}
 		}
-		time.Sleep(HealthCheckInterval)
+		select {
+		case <-waitCh:
+			return failStart()
+		case <-time.After(HealthCheckInterval):
+		}
 	}
 
-	_ = pm.deletePID(constants.OperatorPIDFilename)
+	cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))
+	if cleanupErr != nil {
+		return fmt.Errorf("%w: gateway did not become healthy, check %s: cleanup: %w", constants.ErrProcessStartFailed, logPath, cleanupErr)
+	}
 	return fmt.Errorf("%w: gateway did not become healthy, check %s", constants.ErrProcessStartFailed, logPath)
 }
 
@@ -519,7 +576,7 @@ func (pm *ProcessManager) StopOperator() error {
 		return err
 	}
 
-	return pm.deletePosture()
+	return nil
 }
 
 func (pm *ProcessManager) OperatorStatus() (bool, int, error) {

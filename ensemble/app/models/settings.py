@@ -350,6 +350,7 @@ class LLMSettings(_ProtocolLLMSettings):
                 LLMProvider.GEMINI: self.gemini_model,
                 LLMProvider.OLLAMA: self.ollama_model,
                 LLMProvider.LLAMACPP: self.llamacpp_model,
+                LLMProvider.G8E: self.ollama_model,
             }
             return provider_models.get(self.primary_provider)
         return None
@@ -367,6 +368,7 @@ class LLMSettings(_ProtocolLLMSettings):
                 LLMProvider.GEMINI: self.gemini_model,
                 LLMProvider.OLLAMA: self.ollama_model,
                 LLMProvider.LLAMACPP: self.llamacpp_model,
+                LLMProvider.G8E: self.ollama_model,
             }
             return provider_models.get(self.assistant_provider)
         return None
@@ -391,6 +393,7 @@ class LLMSettings(_ProtocolLLMSettings):
                 LLMProvider.GEMINI: self.gemini_model,
                 LLMProvider.OLLAMA: self.ollama_model,
                 LLMProvider.LLAMACPP: self.llamacpp_model,
+                LLMProvider.G8E: self.ollama_model,
             }
             provider_default = provider_models.get(self.lite_provider)
             if provider_default:
@@ -472,6 +475,7 @@ class LLMSettings(_ProtocolLLMSettings):
                     self.llamacpp_endpoint,
                     self.llamacpp_model,
                 ),
+                LLMProvider.G8E.value: (None, None, self.ollama_model),
             }
 
             p_key, p_endpoint, p_model = provider_defaults.get(

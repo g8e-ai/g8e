@@ -97,7 +97,7 @@ class TestOperatorAuthService:
         operator_doc.id = operator_id
         operator_doc.user_id = user_id
         operator_doc.status = OperatorStatus.OFFLINE
-        operator_doc.operator_type = "system"
+        operator_doc.operator_type = "remote"
         operator_doc.bound_web_session_id = "web-session"
         mock_operator_data_service.get_operator.return_value = operator_doc
 
@@ -223,7 +223,7 @@ class TestOperatorAuthService:
             operator_id=operator_id,
             user_id=user_id,
             organization_id="org-1",
-            operator_type="system",
+            operator_type="remote",
             device_link_token=None,
             system_fingerprint=None,
             request_context={},
@@ -278,7 +278,7 @@ class TestOperatorAuthService:
             operator_id=None,
             user_id=user_id,
             organization_id=None,
-            operator_type="system",
+            operator_type="remote",
             device_link_token=token,
             system_fingerprint="fp-123",
             request_context={},
@@ -339,7 +339,7 @@ class TestOperatorAuthService:
             operator_id=None,
             user_id=user_id,
             organization_id=None,
-            operator_type="system",
+            operator_type="remote",
             device_link_token=token,
             system_fingerprint="fp-123",
             request_context={},
@@ -366,7 +366,7 @@ class TestOperatorAuthService:
             operator_id="op-1",
             user_id="user-1",
             organization_id=None,
-            operator_type="system",
+            operator_type="remote",
             device_link_token=None,
             system_fingerprint=None,
             request_context={},

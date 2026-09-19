@@ -46,7 +46,7 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 	var targetOperatorID string
 	var targetSessionID string
 	for _, op := range operators.Operators {
-		if op.Status == constants.OperatorStatusActive {
+		if op.Status == constants.OperatorStatusActive && op.OperatorType == constants.OperatorTypeRemote {
 			targetOperatorID = op.ID
 			targetSessionID = op.OperatorSessionID
 			break
@@ -73,9 +73,11 @@ func TestEnsemble_ChatFileCreate(t *testing.T) {
 
 	chatReq := EnsembleChatRequest{
 		Context: EnsembleRequestContext{
-			CLISessionID:    e2eClient.cliSessionID,
-			UserID:          e2eClient.userID,
-			SourceComponent: "CLIENT",
+			CLISessionID:      e2eClient.cliSessionID,
+			UserID:            e2eClient.userID,
+			OperatorID:        e2eClient.operatorID,
+			OperatorSessionID: e2eClient.operatorSessionID,
+			SourceComponent:   "CLIENT",
 			BoundOperators: []EnsembleBoundOperator{
 				{
 					OperatorID:        targetOperatorID,

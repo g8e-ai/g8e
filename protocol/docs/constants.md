@@ -1,5 +1,8 @@
 # Constants System
 
+Last Updated: 2026-09-19
+Version: v2.1.8
+
 ## Overview
 
 The g8e constants system maintains canonical constant definitions across the platform. Go source files in `internal/constants/` are the single source of truth (SSOT) for the platform. JSON schemas in `protocol/constants/` provide protocol-level reference documentation and external protocol definitions for SDKs and other consumers.
@@ -65,7 +68,7 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. The file d
 - Platform External Service: configured
 - Platform Telemetry: health reported, performance recorded, error logged, audit logged
 - Platform Console Log: entry received, connected confirmed
-- AI Consensus Session: started, completed, disabled, generation failed, model not configured, provider unavailable, system error, auditor failed, warden blocked
+- AI Consensus Session: started, completed, disabled, generation failed, model not configured, provider unavailable, system error, auditor failed, marshal blocked
 - AI Consensus Voting: pass completed, consensus reached/not reached/failed, round started/completed, round 2 started/consensus reached/consensus failed, dissent recorded, audit started/completed
 - App Memory: `EventAppMemoryCreated`, `EventAppMemoryUpdated`
 - App Case/Investigation Deletion: `EventAppCaseDeleted`, `EventAppInvestigationDeleted`
@@ -81,7 +84,7 @@ The file also provides a hierarchical `Event` struct accessor (`Event.Operator.*
 HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with JSON tags:
 
 - Prefixes: `InternalPrefix` (`/api/v1`), `OperatorPrefix` (`/api`)
-- Client map: `chat` (`/api/v1/chat`), `health` (`/api/v1/health`), `sse_events` (`/api/v1/internal/sse/events`), `sse_stream` (`/api/v1/internal/sse/stream`)
+- Client map: `chat` (`/api/v1/chat`), `health` (`/api/v1/health`), `sse_events` (`/api/v1/sse/events`), `sse_stream` (`/api/v1/sse/stream`)
 - MCP: `MCPEndpoint` (`/mcp`)
 - A2A: `A2ACall` (`/api/v1/a2a/call`), `A2APrefix` (`/api/v1/a2a/`)
 - Governance: `GovernanceEnvelopes`, `GovernanceSigners`, `GovernanceSignersByID`, `GovernanceSignersPrefix`
@@ -90,10 +93,12 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - KV: `KV` (`/api/v1/kv/`), `KVPrefix` (`/api/v1/kv/`)
 - PubSub: `PubSubPublish`, `PubSubStream`, `PubSubWebSocket` (`/ws/pubsub`)
 - SSE: `SSEPush`, `SSEEvents`, `SSEStream`
+- Observe (browser read-only): `ObservePrefix` (`/api/v1/observe/`), `ObserveBootstrap`, `ObserveRuns`, `ObserveRunsByID`, `ObserveEvals`, `ObserveEvalsByID`, `ObserveDownloads`, `ObserveDownloadsByID`
+- Observe producers (mTLS, ensemble-only): `ObserveProducerPrefix` (`/api/v1/observe/producer/`), `ObserveProducerAgentState` (`/api/v1/observe/producer/agent-state`), `ObserveProducerRunState` (`/api/v1/observe/producer/run-state`)
 - PKI: `PKICSRSign`, `PKIDevicesEnroll`, `PKIAppsDelegated`, `PKICertificatesRevoke`, `PKIRevocationBundle`, `PKICRL`, `PKICABundle`, `PKIFingerprint`
 - Audit: `AuditReceipts`, `AuditReceiptsExport`, `AuditEvents`, `AuditSummary`, `AuditReport`, `AuditStream`
 - User: `Users`, `UsersMe`, `UsersPrefix`
-- Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIRecoveryRequest`, `AuthCLIRecoveryStatus`, `AuthCLIRecoveryApprove`, `AuthCLIRecoveryApproveCLI`, `AuthCLIRecoveryComplete`, `AuthCLIRotate`, `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthPasskeysEnrollmentRegisterChallenge`, `AuthPasskeysEnrollmentRegisterVerify`, `AuthPasskeysEnrollmentPrefix`, `AuthSessionsMe`, `AuthSessionsPrefix`, `AuthEnrollmentTokenGenerate`, `AuthEnrollmentTokenValidate`, `AuthPlatformEnrollmentRequest` (`/api/v1/auth/platform-enrollments/request`), `AuthPlatformEnrollmentStatus` (`/api/v1/auth/platform-enrollments/status`), `AuthPlatformEnrollmentComplete` (`/api/v1/auth/platform-enrollments/complete`), `AuthPlatformEnrollmentPending` (`/api/v1/auth/platform-enrollments/pending`), `AuthPlatformEnrollmentDecision` (`/api/v1/auth/platform-enrollments/decision`)
+- Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIRecoveryRequest`, `AuthCLIRecoveryStatus`, `AuthCLIRecoveryApprove`, `AuthCLIRecoveryApproveCLI`, `AuthCLIRecoveryComplete`, `AuthCLIRotate`, `AuthCLIRefresh`, `AuthCLISession`, `AuthCLIBind` (`/api/v1/auth/cli/bind`), `AuthCLIUnbind` (`/api/v1/auth/cli/unbind`), `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthPasskeysEnrollmentRegisterChallenge`, `AuthPasskeysEnrollmentRegisterVerify`, `AuthPasskeysEnrollmentPrefix`, `AuthSessionsMe`, `AuthSessionsPrefix`, `AuthEnrollmentTokenGenerate`, `AuthEnrollmentTokenValidate`, `AuthPlatformEnrollmentRequest` (`/api/v1/auth/platform-enrollments/request`), `AuthPlatformEnrollmentStatus` (`/api/v1/auth/platform-enrollments/status`), `AuthPlatformEnrollmentComplete` (`/api/v1/auth/platform-enrollments/complete`), `AuthPlatformEnrollmentPending` (`/api/v1/auth/platform-enrollments/pending`), `AuthPlatformEnrollmentDecision` (`/api/v1/auth/platform-enrollments/decision`)
 - Approval: `Approvals`, `ApprovalsByID`, `ApprovalsPrefix`, `ApprovePage`, `ApprovePagePrefix`, `ApprovalsVerifyAction`, `ApprovalsCLIStatus`, `ApprovalsCLIList`
 - Admin: `AdminAppPoliciesBySigner`, `AdminAppsRevoke`, `AdminAppPoliciesPrefix`, `AdminConsensus`, `AdminConsensusByID`, `AdminConsensusPrefix`
 - Consensus: `ConsensusDeliberate` (`/consensus/v1/deliberate`)
@@ -144,8 +149,7 @@ Internal enumeration constants, each defined as a typed string:
 - `FileOperation`: `FileOperationCreate`, `FileOperationDelete`, `FileOperationInsert`, `FileOperationPatch`, `FileOperationRead`, `FileOperationReplace`, `FileOperationUpdate`, `FileOperationWrite`
 - `ConnectionState`: `ConnectionStateClosed`, `ConnectionStateConnected`, `ConnectionStateConnecting`, `ConnectionStateDisconnected`, `ConnectionStateError`, `ConnectionStateReconnecting`
 - `OperatorStatus`: `OperatorStatusActive`, `OperatorStatusAvailable`, `OperatorStatusBound`, `OperatorStatusOffline`, `OperatorStatusStale`, `OperatorStatusStopped`, `OperatorStatusTerminated`, `OperatorStatusUnavailable`
-- `OperatorType`: `OperatorTypeCloud`, `OperatorTypeSystem`
-- `CloudSubtype`: `CloudSubtypeAWS`, `CloudSubtypeAzure`, `CloudSubtypeGCP`, `CloudSubtypeG8EP`
+- `OperatorType`: `OperatorTypeEmbedded`, `OperatorTypeRemote`
 - `UserStatus`: `UserStatusActive`, `UserStatusDisabled`
 - `AuthProvider`: `AuthProviderJWT`, `AuthProviderLocal`, `AuthProviderPasskey`
 - `ApprovalType`: `ApprovalTypeAgentContinue` (`agent.continue`), `ApprovalTypeCommand` (`command`), `ApprovalTypeFileEdit` (`file.edit`), `ApprovalTypeIntent` (`intent`), `ApprovalTypeStream` (`stream`). Values use dot-separated format consistent with `EventType` naming conventions.
@@ -241,7 +245,7 @@ Filesystem paths for Operator data, certificates, ledger, system paths, and conf
 - PKI filesystem constants: directory names (`PkiDirname`, `PkiSubdirRoot`, `PkiSubdirAuthorities`, `PkiSubdirIssued`, `PkiSubdirTrust`, `PkiSubdirRevocation`, `PkiSubdirBinaries`, `PkiSubdirClient`, `PkiSubdirHub`, `PkiSubdirGatewayPeer`, `PkiSubdirApps`, `PkiSubdirTrustedSigners`, `PkiSubdirPendingEnroll`), file extensions (`FileExtCert`, `FileExtKey`, `FileExtPEM`, `FileExtJSON`), CA and bundle filenames (`PkiFileRootCA`, `PkiFileRootCAKey`, `PkiFileHubCA`, `PkiFileOperatorCA`, `PkiFileGatewayPeerCA`, `PkiFileGatewayBundle`, `PkiFileRootBundle`, `PkiFileOperatorBundle`, `PkiFileTrustDomainJSON`, `PkiFileWardenPub`, `PkiFileBootstrapCA`, `PkiFileBootstrapBundle`), operator credentials (`PkiFileOperatorCert`, `PkiFileOperatorKey`, `PkiFileOperatorChain`), gateway credentials (`PkiFileGatewayCert`, `PkiFileGatewayKey`, `PkiFileGatewayChain`), peer certificates (`PeerCertFilename`, `PeerKeyFilename`, `PeerChainFilename`, `PeerSubdir`), CLI credentials (`CliCertFilename`, `CliKeyFilename`, `CredentialsFilename`), and pending enrollment state files (`PendingEnrollmentFileOperator` `g8eo.json`, `PendingEnrollmentFileDashboard` `g8ed.json`, `PendingEnrollmentFileEnsemble` `g8ee.json`)
 - Database filenames: `DbFilename` (`g8e.db`), `VaultKeyFilename`, `VaultNewKeyFilename`, `VaultHeaderFilename`, `SuspendedTxFilename`, `ReceiptsFilename`, `ReceiptsExportFilename`, `ReplayStoreDBFilename`, `ExecutionVaultDBFilename`, `LocalStateDBFilename`, `AuditVaultDBFilename`, `MasterKeyFilename`, `PublicKeySuffix`
 - Secrets filenames: `SecretsFileSessionEncryptionKey`, `SecretsFileBootstrapDigest`, `SecretsFileActuatorSigningKey`, `SecretsFileActuatorKeyID`, `SecretsFileAuditorHMACKey`, `SecretsFileNotarySigningKey`, `SecretsFileOperatorPrivateKey`, `SecretsFileCLIPrivateKey`, `SecretsFileSessionToken`, `SecretsFileConsensusMemberKeyPrefix`
-- Demos: `DemosDirname`, `DemosComposeFile`, `DemosBinDirname`, `DemosBinaryName`, `DemosTargetDataDir`, `DemosDoctrineDir`, `DemosPARequestsFile`, `DemosHIPAADoctrineFile`, `DemosDHSDoctrineFile`, `DemosFedRAMPDoctrineFile`, `DemosImagesManifestFile`, `DemosOrgHealthcare`, `DemosOrgFinance`, `DemosOrgDHS`, `DemosOrgFedRAMP`
+- Demos: `DemosDirname`, `DemosComposeFile`, `DemosTargetDataDir`, `DemosDoctrineDir`, `DemosPARequestsFile`, `DemosHIPAADoctrineFile`, `DemosDHSDoctrineFile`, `DemosFedRAMPDoctrineFile`, `DemosImagesManifestFile`, `DemosOrgHealthcare`, `DemosOrgFinance`, `DemosOrgDHS`, `DemosOrgFedRAMP`
 - Container paths: Docker exec paths for demo environments (`ContainerRootG8E`, `ContainerPKIDir`, `ContainerOperatorCert`, `ContainerOperatorKey`, `ContainerCABundle`, `ContainerDataDir`, `ContainerAuditVaultDB`, `ContainerExecutionVaultDB`, `ContainerLedgerFilesDir`, `ContainerDoctrineDir`, `ContainerEnsembleSeed`, and verification script paths)
 - Local binary names: `LocalBinaryName` (`./g8e`), `LocalBinaryNameWindows` (`./g8e.exe`), `BinaryImageName`, `BinaryImageNameWindows`
 - Deploy script filenames: `DeployScriptFilenameLinux` (`g8e-deploy.sh`), `DeployScriptFilenameWindows` (`g8e-deploy.ps1`)

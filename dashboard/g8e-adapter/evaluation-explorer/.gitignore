@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.legacy-storefront/
+*.local
+scripts/.generated/
+scripts/.bridge/

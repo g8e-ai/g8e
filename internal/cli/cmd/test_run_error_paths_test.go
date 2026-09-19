@@ -94,13 +94,22 @@ func TestTestE2ECmd_PropagatesArgumentsAndRaceFlag(t *testing.T) {
 	assert.Contains(t, captured, "-tags=e2e")
 	assert.Contains(t, captured, "-count=1")
 	assert.Contains(t, captured, "-parallel=1")
+	assert.Contains(t, captured, "-v")
 	assert.Contains(t, captured, "./test/e2e/...")
 	// -race is present on non-Windows platforms.
 	if runtime.GOOS != "windows" {
 		assert.Contains(t, captured, "-race")
 	}
-	// --run is omitted when unset.
-	assert.NotContains(t, captured, "-run")
+	idx := -1
+	for i, a := range captured {
+		if a == "-run" {
+			idx = i
+			break
+		}
+	}
+	require.GreaterOrEqual(t, idx, 0, "captured args should contain the approved-stack default -run: %v", captured)
+	require.True(t, len(captured) > idx+1, "captured args should have a value after -run: %v", captured)
+	assert.Equal(t, "^(TestApprovedRestart_|TestAuth_|TestCommandRoundtrip_|TestCompliance_|TestDashboard_|TestEnsemble_|TestGateway_|TestGovernance_|TestOperatorRegistry_|TestPlatform_FullBootstrap$|TestPubSub_|TestSSE_)", captured[idx+1])
 }
 
 func TestTestE2ECmd_RunFlagAppendsRegexp(t *testing.T) {
@@ -196,4 +205,66 @@ func TestTestIntegrationCmd_StructureAndFlags(t *testing.T) {
 	cmd := testIntegrationCmd()
 	assert.Equal(t, "integration", cmd.Use)
 	assert.NotNil(t, cmd.RunE)
+	runFlag := cmd.Flags().Lookup("run")
+	require.NotNil(t, runFlag)
+	assert.Equal(t, "", runFlag.DefValue)
+	pkgFlag := cmd.Flags().Lookup("pkg")
+	require.NotNil(t, pkgFlag)
+	assert.Equal(t, "./...", pkgFlag.DefValue)
+}
+
+func TestTestIntegrationCmd_RunFlagAppendsRegexp(t *testing.T) {
+	var captured []string
+	cmd := testIntegrationCmdWithRunner(recordingE2ERunner(0, nil, &captured))
+	require.NoError(t, cmd.Flags().Set("pkg", "./internal/services/gateway"))
+	require.NoError(t, cmd.Flags().Set("run", "TestPublicMirror|TestPublicPublisher"))
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	assert.Contains(t, captured, "-tags=integration")
+	assert.Contains(t, captured, "-count=1")
+	assert.Contains(t, captured, "./internal/services/gateway")
+	assert.NotContains(t, captured, "./...")
+	if runtime.GOOS != "windows" {
+		assert.Contains(t, captured, "-race")
+	}
+	idx := -1
+	for i, arg := range captured {
+		if arg == "-run" {
+			idx = i
+			break
+		}
+	}
+	require.GreaterOrEqual(t, idx, 0)
+	require.True(t, len(captured) > idx+1)
+	assert.Equal(t, "TestPublicMirror|TestPublicPublisher", captured[idx+1])
+}
+
+func TestTestIntegrationCmd_DefaultOmitsRunFlag(t *testing.T) {
+	var captured []string
+	cmd := testIntegrationCmdWithRunner(recordingE2ERunner(0, nil, &captured))
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	assert.NotContains(t, captured, "-run")
+}
+
+func TestTestIntegrationCmd_RunnerFailureWrapsIntegrationError(t *testing.T) {
+	runnerErr := errors.New("child process failed")
+	cmd := testIntegrationCmdWithRunner(recordingE2ERunner(2, runnerErr, &[]string{}))
+
+	err := cmd.RunE(cmd, nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrIntegrationTestsFailed)
+	assert.ErrorIs(t, err, runnerErr)
+}
+
+func TestTestIntegrationCmd_NonzeroExitWrapsIntegrationError(t *testing.T) {
+	cmd := testIntegrationCmdWithRunner(recordingE2ERunner(2, nil, &[]string{}))
+
+	err := cmd.RunE(cmd, nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrIntegrationTestsFailed)
 }

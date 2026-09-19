@@ -37,23 +37,22 @@ from app.constants import (
     AGENT_RETRY_DELAY_SECONDS,
     AITaskId,
     DEFAULT_FINISH_REASON,
+    ReasoningAgent,
 )
-from app.llm.model_evidence import (
-    model_boundary_hash,
-    recorded_model_boundary_hash,
-    recorded_model_boundary_privacy,
-)
+from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.provider import LLMProvider
+from app.llm.providers.g8e import G8EProvider
 from app.models.agent import (
     AgentInputs,
     AgentStreamState,
-    ModelCallTelemetry,
     ToolCallResponse,
     StreamChunkData,
     StreamChunkFromModel,
     StreamChunkFromModelType,
     TokenUsage,
 )
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.grounding import GroundingMetadata
 from app.models.operators import AgentContinueApprovalRequest
 from app.services.ai.agent_tool_loop import (
@@ -61,6 +60,7 @@ from app.services.ai.agent_tool_loop import (
     merge_grounding,
 )
 from app.services.ai.agent_sse import deliver_via_sse
+from app.services.evaluation.trace_service import EvaluationTraceService
 from app.services.ai.agent_turn import (
     GatedTurnResult,
     consolidate_model_parts,
@@ -74,6 +74,65 @@ from app.services.protocols import ApprovalServiceProtocol
 from app.utils.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_agent_model_role(inputs: AgentInputs) -> str:
+    if inputs.designated_model_role:
+        return inputs.designated_model_role
+    return (
+        "assistant"
+        if inputs.active_agent == ReasoningAgent.DASH
+        else "primary"
+    )
+
+
+def _agent_generation_stream(
+    llm_provider: LLMProvider,
+    *,
+    inputs: AgentInputs,
+    model_name: str,
+    contents: list[types.Content],
+    generation_config: types.PrimaryLLMSettings,
+):
+    model_role = _resolve_agent_model_role(inputs)
+    if isinstance(llm_provider, G8EProvider):
+        return llm_provider.generate_content_stream_scored_role(
+            model_role,
+            model_name,
+            contents,
+            generation_config,
+        )
+    if model_role == "assistant":
+        assistant_settings = types.AssistantLLMSettings(
+            max_output_tokens=generation_config.max_output_tokens,
+            top_p_nucleus_sampling=generation_config.top_p_nucleus_sampling,
+            top_k_filtering=generation_config.top_k_filtering,
+            stop_sequences=generation_config.stop_sequences,
+            system_instructions=generation_config.system_instructions,
+        )
+        return llm_provider.generate_content_stream_assistant(
+            model=model_name,
+            contents=contents,
+            assistant_llm_settings=assistant_settings,
+        )
+    if model_role == "lite":
+        lite_settings = types.LiteLLMSettings(
+            max_output_tokens=generation_config.max_output_tokens,
+            top_p_nucleus_sampling=generation_config.top_p_nucleus_sampling,
+            top_k_filtering=generation_config.top_k_filtering,
+            stop_sequences=generation_config.stop_sequences,
+            system_instructions=generation_config.system_instructions,
+        )
+        return llm_provider.generate_content_stream_lite(
+            model=model_name,
+            contents=contents,
+            lite_llm_settings=lite_settings,
+        )
+    return llm_provider.generate_content_stream_primary(
+        model=model_name,
+        contents=contents,
+        primary_llm_settings=generation_config,
+    )
 
 
 class g8eEnsemble:
@@ -200,6 +259,7 @@ class g8eEnsemble:
         event_service: EventService,
         llm_provider: LLMProvider,
         on_iteration_text: Callable[[str], Awaitable[None]] | None = None,
+        evaluation_trace_service: EvaluationTraceService | None = None,
     ) -> None:
         """
         SSE chat path - runs stream_response and delivers events to the browser.
@@ -257,6 +317,7 @@ class g8eEnsemble:
             state=state,
             event_service=event_service,
             on_iteration_text=on_iteration_text,
+            evaluation_trace_service=evaluation_trace_service,
         )
 
     async def _stream_with_tool_loop(
@@ -353,18 +414,27 @@ class g8eEnsemble:
                     investigation_id,
                 )
 
-                llm_provider.clear_input_artifact_hash()
-                input_artifact_hash = model_boundary_hash({
-                    "model": model_name,
-                    "contents": contents,
-                    "settings": generation_config,
-                })
+                prepare_provider_call(
+                    llm_provider,
+                    g8e_context=inputs.g8e_context,
+                    retry_count=retry_count,
+                )
+                input_artifact_hash = model_boundary_hash(
+                    {
+                        "model": model_name,
+                        "contents": contents,
+                        "settings": generation_config,
+                    }
+                )
                 monotonic_start = time.monotonic()
+                model_role = _resolve_agent_model_role(inputs)
                 try:
-                    stream_response = llm_provider.generate_content_stream_primary(
-                        model=model_name,
+                    stream_response = _agent_generation_stream(
+                        llm_provider,
+                        inputs=inputs,
+                        model_name=model_name,
                         contents=contents,
-                        primary_llm_settings=generation_config,
+                        generation_config=generation_config,
                     )
 
                     gated_result_out: list[GatedTurnResult] = []
@@ -374,42 +444,50 @@ class g8eEnsemble:
                         yield chunk
 
                     gated = gated_result_out[0]
-                    input_artifact_hash = recorded_model_boundary_hash(llm_provider, input_artifact_hash)
                 except Exception as exc:
-                    input_artifact_hash = recorded_model_boundary_hash(llm_provider, input_artifact_hash)
-                    model_calls.append(ModelCallTelemetry(
-                        agent_role=inputs.agent_mode.value,
-                        provider=type(llm_provider).__name__,
-                        model=model_name,
-                        monotonic_start=monotonic_start,
-                        monotonic_end=time.monotonic(),
-                        retry_count=retry_count,
-                        succeeded=False,
-                        error_type=type(exc).__name__,
-                        input_artifact_hash=input_artifact_hash,
-                        model_boundary_privacy=recorded_model_boundary_privacy(llm_provider),
-                    ))
+                    model_calls.append(
+                        build_model_call_telemetry(
+                            provider=llm_provider,
+                            agent_role=inputs.active_agent.value
+                            if inputs.active_agent
+                            else "unknown",
+                            model_role=model_role,
+                            model=model_name,
+                            monotonic_start=monotonic_start,
+                            input_artifact_hash=input_artifact_hash,
+                            retry_count=retry_count,
+                            succeeded=False,
+                            error_type=type(exc).__name__,
+                        )
+                    )
                     raise
                 turn_result = gated.turn_result
                 monotonic_end = time.monotonic()
-                model_calls.append(ModelCallTelemetry(
-                    agent_role=inputs.agent_mode.value,
-                    provider=type(llm_provider).__name__,
-                    model=model_name,
-                    monotonic_start=monotonic_start,
-                    monotonic_end=monotonic_end,
-                    input_tokens=turn_result.input_tokens,
-                    output_tokens=turn_result.output_tokens,
-                    thinking_tokens=turn_result.thinking_tokens,
-                    cache_tokens=turn_result.cache_tokens,
-                    total_tokens=turn_result.total_tokens,
-                    usage_reported=turn_result.usage_reported,
-                    finish_reason=turn_result.finish_reason,
-                    retry_count=retry_count,
-                    input_artifact_hash=input_artifact_hash,
-                    output_artifact_hash=model_boundary_hash(turn_result.model_response_parts),
-                    model_boundary_privacy=recorded_model_boundary_privacy(llm_provider),
-                ))
+                model_calls.append(
+                    build_model_call_telemetry(
+                        provider=llm_provider,
+                        agent_role=inputs.active_agent.value if inputs.active_agent else "unknown",
+                        model_role=model_role,
+                        model=model_name,
+                        monotonic_start=monotonic_start,
+                        monotonic_end=monotonic_end,
+                        input_artifact_hash=input_artifact_hash,
+                        input_tokens=turn_result.input_tokens,
+                        output_tokens=turn_result.output_tokens,
+                        thinking_tokens=turn_result.thinking_tokens,
+                        cache_tokens=turn_result.cache_tokens,
+                        total_tokens=turn_result.total_tokens,
+                        usage_reported=turn_result.usage_reported,
+                        finish_reason=turn_result.finish_reason,
+                        time_to_first_token_seconds=turn_result.time_to_first_token_seconds,
+                        generation_duration_seconds=turn_result.eval_duration_seconds,
+                        prompt_eval_duration_seconds=turn_result.prompt_eval_duration_seconds,
+                        total_duration_seconds=turn_result.total_duration_seconds,
+                        load_duration_seconds=turn_result.load_duration_seconds,
+                        retry_count=retry_count,
+                        output_artifact_hash=model_boundary_hash(turn_result.model_response_parts),
+                    )
+                )
 
                 total_input_tokens += turn_result.input_tokens
                 total_output_tokens += turn_result.output_tokens
@@ -473,7 +551,7 @@ class g8eEnsemble:
                 for r in fc_responses:
                     response_str = str(r.flattened_response)
                     tool_response_sizes.append(len(response_str))
-                contents.append(types.Content(role=types.Role.USER, parts=tool_response_parts))
+                contents.append(types.Content(role=types.Role.TOOL, parts=tool_response_parts))
                 logger.info("[AGENT] Added %d tool responses, looping...", len(tool_response_parts))
         except asyncio.CancelledError:
             logger.info(

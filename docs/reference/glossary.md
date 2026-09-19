@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-19
+Version: v2.1.8
 
 Core terminology for the g8e Governance Suite, including the protocol, Governance Gateway, Governed Operator, g8ee ensemble, g8ed dashboard, compliance evidence, and MCP and A2A integrations. Terms are organized alphabetically.
 
@@ -65,6 +65,12 @@ A just-in-time, single-action permission minted by L5 from a verified transactio
 
 ---
 
+## CLI Operator Session Binding
+
+The persisted pair of `operator_session_id` and `operator_id` stamped on an authenticated CLI session. `g8e operator bind` pins the CLI session to one active operator session owned by the same user through `POST /api/v1/auth/cli/bind`; `bind unbind` clears it through `POST /api/v1/auth/cli/unbind`. Binding changes issue a replacement CLI session server-side. Refresh, rotation, and recovery inherit the prior binding when present. The unified auth middleware derives operator identity from the session record and rejects contradictory request headers.
+
+---
+
 ## Command Intent
 
 The pre-governance protobuf `g8e.common.v1.CommandIntent` published by an app workload to a bound Operator's command channel. It carries routing identity, action classification, typed Operator payload bytes, and application context. The Gateway validates the Operator-session binding, obtains the current state root, and converts the intent into a **Governance Envelope**; a command intent is not itself authorization to execute.
@@ -98,6 +104,12 @@ A named L2 governance body defined by a `ConsensusPolicy`. Its enrolled members 
 ## Control Assertion
 
 A framework-neutral, atomic statement of technical behavior in the protocol compliance assertion catalog. Each assertion declares its scope, responsibility, applicable actions, required evidence and verifier types, minimum evidence level, validation cycle, missing-evidence policy, and passing rule. Typed crosswalks map these assertions to external framework controls without treating a supporting mapping as certification.
+
+---
+
+## Danny-as-Code (DaC)
+
+A tongue-in-cheek counterpart to Infrastructure-as-Code (IaC): the operating method the author developed over thirty years of incident response, expressed as a machine-verifiable separation of proposal, authorization, execution, and evidence. The "Danny" is the author, who is real.
 
 ---
 
@@ -263,9 +275,29 @@ The architecture in which each target host remains authoritative for raw executi
 
 ---
 
+## Marshal
+
+The g8ee application-layer defender persona (`marshal`, *The Order Keeper*). Marshal coordinates pre-envelope risk classification for shell commands, file operations, and command failures before a `GovernanceEnvelope` is constructed. Specialized sub-agents (`marshal_command`, `marshal_error`, `marshal_file`) emit advisory `LOW` / `MEDIUM` / `HIGH` risk labels, drive the application approval UI, and stake reputation on classification accuracy. Marshal is distinct from the protocol **L4 Warden**, which performs deterministic pre-dispatch verification on the Operator substrate.
+
+---
+
 ## MCP (Model Context Protocol)
 
 The JSON-RPC tool protocol exposed by g8e for compatible AI clients. The Gateway supports tool discovery and calls, converts governed calls into typed Operator protobuf payloads and **Governance Envelopes**, and returns structured results or an approval suspension. Native Operator tools and configured downstream MCP servers execute only after governance admission.
+
+---
+
+## Model Roles (Primary, Assistant, Lite)
+
+The three independently configurable chat-tier model roles in g8ee and governed inference dispatch. Each role has a lowercase wire value used in APIs, settings, telemetry, and persisted records, and a title-case display label used in user-facing copy.
+
+| Wire value | Display label | Responsibility |
+| --- | --- | --- |
+| `primary` | Primary | Complex chat turns, tool-capable agent loops, and primary reasoning work |
+| `assistant` | Assistant | Simple chat turns and bounded technical work delegated from Primary |
+| `lite` | Lite | Triage, Tribunal generation, risk analysis, title generation, memory extraction, and other concise or structured tasks |
+
+Display labels are always the title-case form of the wire value. Do not use synonyms such as "Light" for the `lite` role. See [LLM Providers](../ensemble/llm-providers.md) for configuration and provider behavior.
 
 ---
 
@@ -278,6 +310,12 @@ TLS authentication in which both peers present and verify certificates. g8e uses
 ## Observed-State Root
 
 A separate SHA-256 commitment over active observed-tier KV and blob rows. It does not gate transaction admission, so telemetry and environmental readings do not make in-flight envelopes stale. Audit evidence can chain this root to make observations tamper-evident.
+
+---
+
+## Operator Run Dispatch
+
+The enrolled-CLI automation path for governed shell execution on one or more remote Operators. `g8e operator run` posts typed dispatch requests to `POST /api/v1/operators/commands` with an explicit `target_operator_session_id` per target, fans out `EXECUTE_BASH` in parallel, and waits for a terminal `CommandResult` per session. The gateway dispatch service constructs the envelope, screens the payload with L1 Doctrine, applies posture-aware L3 gating, publishes to each target's `cmd:` channel, and returns stdout, stderr, and exit code to the caller.
 
 ---
 
@@ -337,7 +375,7 @@ A g8ee Auditor record that binds a Tribunal verdict to the current agent-reputat
 
 ## Reputation Staking
 
-The g8ee mechanism that updates each agent's reputation scalar in the range 0.0 through 1.0 using an exponential moving average after outcomes resolve. Typed stake-resolution records capture rewards, slash tiers, and unbonding state; reputation affects ensemble influence, not L2 cryptographic signature validity in the platform Warden.
+The g8ee mechanism that updates each agent's reputation scalar in the range 0.0 through 1.0 using an exponential moving average after outcomes resolve. Typed stake-resolution records capture rewards, slash tiers, and unbonding state; reputation affects ensemble influence, not L2 cryptographic signature validity at the L4 Warden.
 
 ---
 

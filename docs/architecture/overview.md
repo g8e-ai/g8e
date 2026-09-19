@@ -5,8 +5,8 @@ parent: Architecture
 
 # Platform Architecture Overview
 
-Last Updated: 2026-09-02
-Version: v2.1.3
+Last Updated: 2026-09-19
+Version: v2.1.8
 
 ## What g8e Is
 
@@ -73,6 +73,8 @@ The practical flow for an AI client is:
 8. The gateway returns the receipt to the AI client through the original MCP/A2A response or SSE channel.
 
 Only the operator bound to the envelope receives the work. The gateway binds the envelope to the authenticated operator session and publishes to that operator's unique command channel. No broadcast occurs. For the visual sequence, see the [principal-ensemble-gateway-operator sequence diagram](../diagrams/sequence-principal-ensemble-gateway-operator-v3.md). For the agent-facing surface, see [AI Agents and the g8e Governance Boundary](./agents.md).
+
+Enrolled CLI owners can also pin their session to a specific operator (`g8e operator bind`) and fan out governed `EXECUTE_BASH` commands to one or more explicit operator sessions in parallel (`g8e operator run`). The gateway dispatch service constructs envelopes and waits for terminal results per target. See [Operator Architecture](./operator.md#3-cli-directed-command-dispatch).
 
 ---
 
@@ -174,6 +176,8 @@ g8e provides platform-specific bootstrap scripts for local development, gateway-
 | [AI Agents and the g8e Governance Boundary](./agents.md) | AI client surface (MCP, A2A), native tool playbook, intent-to-execution flow, security boundaries summary. |
 | [Gateway Architecture](./gateway.md) | Gateway service stack, operating modes, port topology, MCP/A2A endpoints, pub/sub brokering, in-process Operator substrate. |
 | [Operator Architecture](./operator.md) | Operator execution boundary, L4 Warden and L5 Actuator, native tool playbook, local audit vault. |
+| [Evaluations](./evals.md) | Go-native execution-boundary suite, model campaign scoring, Observer and Provenance Operator roles, evidence, and verification. |
+| [Model Provenance](./model-provenance.md) | Zero-trust model weight attestation, Provenance Operator, and chain-of-custody for scored inference. |
 | [Ensemble (g8ee)](./ensemble.md) | First-party agentic ensemble: role, connection model, in-tree protocol dependency, build and test. |
 | [Dashboard (g8ed)](./dashboard.md) | Browser dashboard: static-host boundary, browser and container identities, gateway-direct requests, SSE, build, and test. |
 | [Governance](./governance.md) | Five-layer interlock sequence, GovernanceEnvelope structure, posture configurations, transaction flow. |
@@ -183,6 +187,7 @@ g8e provides platform-specific bootstrap scripts for local development, gateway-
 | [Encryption Architecture](./encryption.md) | Vault lifecycle, three-tier key hierarchy, platform keystore, TLS and mTLS, FIPS 140-3 compliance. |
 | [Storage Architecture](./storage.md) | Audit store, ledger, execution vault, replay store, suspended transaction store, commitment ledger, runtime file I/O. |
 | [SSE Streaming](./sse.md) | SSE push, poll, and stream endpoints for agentic ensembles and platform workflows. |
+| [Public Spectator Architecture and Threat Model](./public_spectator.md) | Public-mirror observation mode, outbound-only export, closed allowlist, threat model, and availability boundaries. |
 | [Protocol Library](./protocol.md) | Go and Python protocol packages, constants registries, JSON model schemas, protobuf code generation, release workflow. |
 | [Scripts](./scripts.md) | Dev bootstrap, smoke test, CI guard, remote deploy, and air-gapped demo scripts. |
 

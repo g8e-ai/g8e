@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>g8e Adapter Host</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; background: #111; color: #eee; }
+    .state { padding: 0.5rem 1rem; border-radius: 4px; display: inline-block; margin: 0.25rem 0; }
+    .state-loading, .state-connecting { background: #334; }
+    .state-ready, .state-connected { background: #2a5; }
+    .state-error, .state-unauthenticated, .state-disconnected { background: #933; }
+    .state-stale, .state-partial_verification { background: #a73; }
+    .state-unavailable, .state-unsupported, .state-empty { background: #555; }
+    .section { margin: 1rem 0; padding: 1rem; border: 1px solid #333; border-radius: 8px; }
+    .section h2 { margin-top: 0; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .row { padding: 0.25rem 0; border-bottom: 1px solid #222; font-size: 0.875rem; }
+    .unavailable { color: #888; font-style: italic; }
+    #narrative { max-height: 300px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <h1>g8e Adapter Host</h1>
+  <p>Minimal host for browser contract tests. Not a generated UI.</p>
+
+  <div id="connection-state" class="state state-disconnected">Disconnected</div>
+  <div id="auth-state" class="state state-unauthenticated">Unauthenticated</div>
+
+  <div class="section">
+    <h2>Overview</h2>
+    <div id="overview"><span class="unavailable">Loading…</span></div>
+  </div>
+
+  <div class="section">
+    <h2>Agents</h2>
+    <div id="agents"><span class="unavailable">Loading…</span></div>
+  </div>
+
+  <div class="section">
+    <h2>Recent Runs</h2>
+    <div id="runs"><span class="unavailable">Loading…</span></div>
+  </div>
+
+  <div class="section">
+    <h2>Latest Evals</h2>
+    <div id="evals"><span class="unavailable">No evals available</span></div>
+  </div>
+
+  <div class="section">
+    <h2>Live Narrative</h2>
+    <div id="narrative"><span class="unavailable">No events</span></div>
+  </div>
+
+  <!-- Runtime config is injected via a JSON script tag. In browser contract
+       tests, the test harness sets this before loading the page. -->
+  <script type="application/json" id="g8e-runtime-config">
+  {
+    "schema_version": "1.0.0",
+    "gateway_base_url": "https://localhost:8443",
+    "passkey_rp_id": "localhost",
+    "passkey_rp_name": "g8e",
+    "app_name": "g8e"
+  }
+  </script>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

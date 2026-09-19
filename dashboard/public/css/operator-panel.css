@@ -829,7 +829,7 @@
   color: var(--primary-color);
 }
 
-.operator-type-icon.cloud-operator {
+.operator-type-icon.embedded-operator {
   background: rgba(var(--accent-purple-dark-rgb), 0.15);
   color: var(--accent-purple);
 }
@@ -839,7 +839,7 @@
   color: var(--accent-blue);
 }
 
-[data-theme="light"] .operator-type-icon.cloud-operator {
+[data-theme="light"] .operator-type-icon.embedded-operator {
   background: rgba(var(--accent-purple-dark-rgb), 0.12);
   color: var(--accent-purple-dark);
 }

@@ -53,6 +53,10 @@ g8e ships two Docker Compose deployment modes that serve different purposes and 
 
 The two modes share the repo-root `Dockerfile` (the Go gateway/operator image) but are otherwise independent: the unified compose adds the ensemble and dashboard services and uses a single flat network, while the per-demo composes use isolated multi-network topologies and are scoped to a single org.
 
+## Browser Frontend Connection
+
+The demo composes exercise containerized governance scenarios driven by the CLI; they do not cover browser frontend connection. To connect a browser-hosted frontend (React, Lovable, Vue) running on the same computer as a local Gateway, run `./g8e gw connect <frontend-origin>`. The guided command validates the origin, derives the passkey RP ID, starts or restarts the Gateway with the correct CORS and passkey settings, installs local certificate trust with consent, and verifies HTTPS and CORS against the running process. See [Connect a Lovable App](../docs/guides/lovable.md) for the minimal one-command journey and [Build a g8e-Compatible Frontend](../docs/guides/build_frontend.md) for the full frontend reference.
+
 ## Network Topology
 
 Each org deploys five isolated networks:
@@ -103,7 +107,7 @@ Each org demonstrates different compliance requirements and use cases:
 ### Prerequisites
 
 - Docker and Docker Compose installed
-- g8e binary built and copied to `demos/bin/`
+- g8e binary built at the repository root (`./g8e`)
 
 ### Build the g8e binary
 
@@ -113,7 +117,7 @@ From the repository root:
 make build
 ```
 
-`make build` automatically copies the binary to `demos/bin/g8e`. Demo compose files build the g8e container image from the repo-root `Dockerfile` (via `context: ../..`), which compiles the binary inside the container with FIPS 140-3 approved mode enabled (`GOFIPS140=v1.0.0`). The `demos/bin/g8e` binary is not used by the container image — it is consumed only by `g8e demos` CLI commands that run on the host.
+`make build` copies the host binary to `./g8e` at the repository root. Demo compose files build the g8e container image from the repo-root `Dockerfile` (via `context: ../..`), which compiles the binary inside the container with FIPS 140-3 approved mode enabled (`GOFIPS140=v1.0.0`). Host-side `g8e demos` commands use the same `./g8e` binary (or whichever `g8e` is on your PATH), matching the eval workflow.
 
 ### Using the g8e CLI (recommended)
 
@@ -163,17 +167,17 @@ g8e demos pull
 
 ### Owner-approved platform bootstrap
 
-Every demo boots the gateway with zero users. The operator (and any service that depends on it) starts not-ready and remains not-ready until its owner-approved platform enrollment request is approved. After `g8e demos start <org>` completes, the CLI prints the bootstrap instructions: enroll the first owner, list pending platform enrollment requests, and approve the operator's request by exact request ID.
+Every demo boots the gateway with zero users. The operator (and any service that depends on it) starts not-ready and remains not-ready until its owner-approved platform enrollment request is approved. After `g8e demos start <org>` completes, the CLI prints the bootstrap instructions: enroll the first owner, list pending platform enrollment requests with `g8e auth enroll pending`, and approve or deny each request with `g8e auth enroll approve <request-id>` or `g8e auth enroll deny <request-id>`.
 
 ```bash
 # 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start <org>`).
 ./g8e auth enroll user -e localhost:<demo-http-port> --port <demo-https-port>
 
 # 2. List pending platform enrollment requests.
-./g8e auth pending-platform-enrollments -e localhost:<demo-http-port> --port <demo-https-port>
+./g8e auth enroll pending -e localhost:<demo-http-port> --port <demo-https-port>
 
 # 3. Approve the operator's request by exact request ID.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:<demo-http-port> --port <demo-https-port>
+./g8e auth enroll approve <operator-request-id> --yes -e localhost:<demo-http-port> --port <demo-https-port>
 
 # 4. Wait for the operator and its dependents to become healthy.
 g8e demos status <org>
@@ -244,10 +248,11 @@ docker compose up -d g8e-gateway
 docker compose --profile bootstrapped up -d
 
 # 4. Approve the workload enrollment requests.
-./g8e auth pending-platform-enrollments
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
-./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
-./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
+./g8e auth enroll pending
+./g8e auth enroll approve <operator-request-id> --yes
+./g8e auth enroll approve <ensemble-request-id> --yes
+./g8e auth enroll approve <dashboard-request-id> --yes
+# ./g8e auth enroll deny <request-id> --yes
 
 # 5. Refresh the owner CLI session after Operator enrollment.
 ./g8e auth refresh
@@ -272,8 +277,8 @@ The `--ensemble-url` flag points the harness at the ensemble (g8ee) HTTP surface
 
 - `ensemble-chat-file-create` - AI creates a governed file via the `file_create` tool. Verifies a `FILE_EDIT` receipt with `COMPLETED` status appears in the audit vault.
 - `ensemble-chat-file-write` - AI writes content to an existing file via the `file_write` tool. Verifies a `FILE_EDIT` receipt.
-- `ensemble-document-update` - AI triggers a case/investigation create via the ensemble. Verifies a `DOCUMENT_UPDATE` envelope was admitted by L1 and persisted via the document store handler.
-- `ensemble-document-delete` - AI triggers a document delete. Verifies a `DOCUMENT_DELETE` envelope was admitted and the document was removed.
+- `ensemble-document-update` - Submits governed `DOCUMENT_UPDATE` envelopes directly (create with `merge=false`, then partial patch with `merge=true`). Verifies untouched fields survive the merge. Does not call the ensemble or an LLM.
+- `ensemble-document-delete` - Submits governed `DOCUMENT_UPDATE` (create) and `DOCUMENT_DELETE` envelopes directly. Verifies the document is removed from the store. Does not call the ensemble or an LLM.
 
 **LLM provider selection:**
 
@@ -363,7 +368,7 @@ Then:
 cd demos/neworg && docker compose up
 ```
 
-Demo compose files build from the repo-root `Dockerfile` via `context: ../..`. There is no demo-specific Dockerfile; demos use the same production image that ships to deployment. Run `make build` first to produce the host-side `demos/bin/g8e` binary used by `g8e demos` CLI commands (the container image builds its own binary from source).
+Demo compose files build from the repo-root `Dockerfile` via `context: ../..`. There is no demo-specific Dockerfile; demos use the same production image that ships to deployment. Run `make build` first to produce the host-side `./g8e` binary used by `g8e demos` CLI commands (the container image builds its own binary from source).
 
 ## Invariants
 

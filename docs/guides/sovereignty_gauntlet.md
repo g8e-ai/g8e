@@ -1,7 +1,7 @@
 # Sovereignty Gauntlet Evidence and Social Content Guide
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 This runbook gives a coding agent a repeatable process for generating, preserving, and explaining g8e proof artifacts for social posts, articles, demonstrations, and technical review. The campaign message is:
 
@@ -13,7 +13,7 @@ The guide separates evidence that the repository generates today from the public
 
 When asked to run this guide, the agent:
 
-1. Reads this guide, [Evals](../ensemble/evals.md), [Headless End-to-End UX Smoke Test](ux_smoke_test.md), [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md), and the relevant demo README before executing commands.
+1. Reads this guide, [Evaluations](../architecture/evals.md), [Headless End-to-End UX Smoke Test](ux_smoke_test.md), [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md), and the relevant demo README before executing commands.
 2. Creates a new timestamped campaign directory. It never overwrites or deletes a prior run.
 3. Asks for explicit confirmation before `g8e docker clean`, `g8e demos clean`, Docker volume removal, or any other command that destroys retained state.
 4. Records whether every model is real, local, or deterministic fake; whether every target is real or synthetic; and which enforcement, storage, and verification paths are real.
@@ -30,10 +30,10 @@ The current repository supports four complementary evidence lanes. Demo evidence
 | --- | --- | --- | --- |
 | Unified-stack proof | Developer, AI, security, and product posts | Real or fake model-driven governed mutations, signed receipt export, CSV store exports, and integrity verification | Publish measured scenario outcomes and passing checks with the provider clearly identified |
 | FedRAMP and DHS demos | Compliance, public-sector, defense, and event demonstrations | Concise or verbose typed scenario results, persisted manifests, content-addressed receipts, persistence attestations and state observations, independent demo-run verification, bound KSI evidence when supplied with the required assessment context, and tactical TUI output | Publish as a labeled demonstration; state that target resources and data are synthetic |
-| Evidence-grade evals | Engineering diagnostics, model comparison, and future campaign input | Real-provider `ifeval_subset` reports and deterministic synthetic suites with immutable manifests, typed tasks, attempts, metrics, observations, receipts where applicable, and compatibility summaries | State whether the run used real providers or a synthetic local system; do not use either as the unimplemented flagship matrix |
+| Evidence-grade evals | Engineering diagnostics and future campaign input | Go-native `core-execution-boundary` reports with canonical `report.json`, `verification.json`, content-addressed evidence, 10 required invariants, and independent `g8e eval boundary verify` | State that the run used the native execution-boundary suite; do not use it as the unimplemented flagship matrix |
 | Signed compliance report bundle | Point-in-time, scope-bound offline review | Canonical analysis, framework profiles, deterministic JSON, OSCAL, Markdown, HTML, and CLI renderers, protected source inventories, a signed bundle, and a canonical offline verification report | Publish the exact verified bundle scope and external trust inputs; do not relabel point-in-time report integrity as certification, recurring effectiveness, or eval-native verification |
 
-The real-provider `g8e-evals run` command supports the curated `ifeval_subset` suite. The separate `g8e-evals bench-synthetic` command supports `privacy_token_lifecycle`, `governance_adversarial`, `privacy_boundary_leakage`, `policy_attack`, `benign_overblock`, `tool_sequence`, `factual_qa`, `citation_backed`, `partial_milestone`, `final_state`, `ledger_consistency`, `reliability`, and `economics_performance`; these runs exercise deterministic observers and graders against local production-shaped systems without a real LLM, g8ee, gateway, Operator, or authenticated governance path. `g8e-evals verify-receipts` verifies canonical receipt signatures and final persistence attestations but does not verify a complete eval bundle, commitment ledger, trust root, all record references, or all input hashes.
+The Go-native `g8e eval boundary run` command exercises the authenticated Gateway ingress, one exact remote Operator, and an independent networkless target observer. `g8e eval boundary verify` independently verifies the complete persisted report and content-addressed evidence without executing another mutation.
 
 The compliance CLI separately implements `g8e compliance evidence-graph verify`, signed `g8e compliance report generate`, and complete offline `g8e compliance report verify`. The report verifier independently replays the protected demo, eval, KSI, commitment, customer or assessor attestation, audit, ledger, and build or configuration sources represented in that signed report bundle, reproduces analysis and renderers, and requires external assessed trust. It is not an eval-native verifier and does not turn the available suites into the planned frozen utility/privacy/policy/protocol experiment. The preregistered minimum 25-scenario flagship matrix, generated proof card, eval-native canonical analysis and signed bundle, statistical release gate, and complete eval-native verifier remain unimplemented. Until those capabilities exist and all publication gates pass, describe this work as a **Sovereignty Gauntlet demonstration** or **rehearsal**, not the completed publication-grade flagship experiment.
 
@@ -63,7 +63,7 @@ docker compose version > "${CAMPAIGN_DIR}/metadata/docker-compose-version.txt"
 printf '%s\n' "${CAMPAIGN_DIR}"
 ```
 
-Keep the same shell for the run so `CAMPAIGN_DIR`, identity values, provider settings, `pipefail`, and the evidence-key location remain available. The binary version and digest identify the executable used, not the source tree that produced it. The repository rules prohibit agents from invoking Git, so `source-provenance-status.txt` remains `not-collected` unless the user supplies an approved provenance artifact or directs the release-owner provenance workflow in [Release Process](../devs/release_process.md#stage-2-reproduction-and-provenance). Do not claim source reproducibility from the binary version or digest alone.
+Keep the same shell for the run so `CAMPAIGN_DIR`, identity values, provider settings, `pipefail`, and the evidence-key location remain available. The binary version and digest identify the executable used, not the source tree that produced it. The repository rules prohibit agents from invoking Git, so `source-provenance-status.txt` remains `not-collected` unless the user supplies an approved provenance artifact or directs the release-owner workflow in [Release Process](../devs/release_process.md). Do not claim source reproducibility from the binary version or digest alone.
 
 Record the current capability boundary before continuing:
 
@@ -121,15 +121,16 @@ Start the gateway, enroll the owner, then start the remaining workloads:
 docker exec g8e-gateway /g8e version --fips | tee "${CAMPAIGN_DIR}/metadata/gateway-fips.txt"
 ./g8e auth enroll user --headless -e localhost 2>&1 | tee "${CAMPAIGN_DIR}/logs/owner-enrollment.log"
 ./g8e docker start --profile bootstrapped --skip-enroll 2>&1 | tee "${CAMPAIGN_DIR}/logs/docker-start-workloads.log"
-./g8e auth pending-platform-enrollments | tee "${CAMPAIGN_DIR}/logs/pending-platform-enrollments.txt"
+./g8e auth enroll pending | tee "${CAMPAIGN_DIR}/logs/pending.txt"
 ```
 
-Approve the operator, ensemble, and dashboard requests using the exact request IDs printed by the pending-enrollments command:
+Approve or deny the operator, ensemble, and dashboard requests using the exact request IDs printed by the pending-enrollments command:
 
 ```bash
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
-./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
-./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
+./g8e auth enroll approve <operator-request-id> --yes
+./g8e auth enroll approve <ensemble-request-id> --yes
+./g8e auth enroll approve <dashboard-request-id> --yes
+# ./g8e auth enroll deny <request-id> --yes
 ```
 
 Wait until all four services are healthy. The initial owner CLI session predates the Operator session, so refresh it after Operator enrollment to bind the canonical CLI session to the active Operator session. Then capture the canonical authentication context:
@@ -217,9 +218,8 @@ Verify every exported receipt's canonical signature and final persistence attest
 mkdir -p "${CAMPAIGN_DIR}/unified/verifier-pki"
 docker cp g8e-gateway:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem"
 docker cp g8e-operator:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem"
-cd "${REPO_ROOT}/ensemble/evals"
-uv sync --locked
-uv run python - "${CAMPAIGN_DIR}/unified/receipts-export.json" "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem" "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem" <<'PY' | tee "${CAMPAIGN_DIR}/unified/receipt-verification.txt"
+cd "${REPO_ROOT}"
+ensemble/.venv/bin/python - "${CAMPAIGN_DIR}/unified/receipts-export.json" "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem" "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem" <<'PY' | tee "${CAMPAIGN_DIR}/unified/receipt-verification.txt"
 import binascii
 import json
 import sys
@@ -372,96 +372,24 @@ Require a zero exit status and `"valid":true` before claiming that the persisted
 
 Say “simulated coalition datalink” and “synthetic data.” Do not claim cloud-model inference continued during disconnection unless the recorded run actually uses a reachable local model during that interval. Scenario 2 verifies network detachment after the datalink is severed, runs a governed ingest during the disconnected interval, checks that the Git ledger directory and SQLite audit vault are non-empty with real existence checks, and reports datalink restoration failure separately from the continuity claim. Scenario 4 includes an independent post-rejection verification that the operator audit vault DB is still present and non-empty after the blocked wipe attempt.
 
-## 5. Run evidence-grade evals as diagnostics
+## 5. Run the native execution-boundary evaluation
 
-Use `g8e-evals run` to generate typed real-provider or fake-provider evidence for the curated `ifeval_subset` benchmark. Use `g8e-evals bench-synthetic` to exercise the 13 deterministic local suites listed in [What is runnable today](#what-is-runnable-today). Synthetic suites run without a real LLM, g8ee, gateway, Operator, authentication context, or production governance posture, so label their outputs as observer and grader pipeline diagnostics rather than model or real-stack results. Neither command implements the frozen, repeated, publication-grade Sovereignty Gauntlet matrix.
-
-Create an owner-only evidence key outside the campaign directory. The key never enters the published bundle:
+Run the Go-native suite against the healthy unified stack with one active remote Operator:
 
 ```bash
-EVIDENCE_KEY_FILE="$HOME/.config/g8e/eval-evidence-key.json"
-mkdir -p "$(dirname "${EVIDENCE_KEY_FILE}")"
-if test -e "${EVIDENCE_KEY_FILE}"; then
-  printf '%s\n' "Reusing existing evidence key: ${EVIDENCE_KEY_FILE}"
-else
-  umask 077
-  python3 -c 'import base64,json,secrets,sys; json.dump({"version":1,"key_id":"eval-owner-1","key_b64":base64.b64encode(secrets.token_bytes(32)).decode()},open(sys.argv[1],"w"))' "${EVIDENCE_KEY_FILE}"
-  chmod 600 "${EVIDENCE_KEY_FILE}"
-fi
+./g8e eval boundary run
 ```
 
-If an existing key must be replaced, preserve it or choose a new versioned key ID deliberately; do not overwrite retained key material without user approval.
+The command submits one allowed typed file mutation through the authenticated Gateway command ingress and the exact remote Operator session, observes the controlled target through the networkless Compose observer, then submits the doctrine-prohibited equivalent and proves rejection without another effect. It persists `report.json`, `verification.json`, and digest-named evidence files under `.g8e/data/eval/runs/<run-id>/`.
 
-Copy the producing actuators' public keys to a verifier directory. Receipts in a unified-stack run are signed by both the gateway actuator and the operator actuator, so the verifier needs both keys. This is public verification material, not the private evidence key. Set the app and gateway trust-bundle paths separately; the eval transport fails closed when either bundle is missing:
+Re-run verification and inspect the report in separate read-only invocations:
 
 ```bash
-mkdir -p "${CAMPAIGN_DIR}/evals/verifier-pki"
-docker cp g8e-gateway:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/evals/verifier-pki/gateway-Actuator_pub.pem"
-docker cp g8e-operator:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/evals/verifier-pki/operator-Actuator_pub.pem"
-export G8E_GATEWAY_PKI_DIR="${CAMPAIGN_DIR}/evals/verifier-pki"
-export G8E_APP_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
-export G8E_GATEWAY_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
+./g8e eval boundary verify <run-id>
+./g8e eval boundary show <run-id>
 ```
 
-From `ensemble/evals/`, install the locked environment and run a diagnostic arm against the healthy unified stack. Declare provider and model flags explicitly when the fresh stack has no saved user settings. Set `--idle-timeout` above the measured interval between events for the selected model; the example uses 180 seconds for a local 12B model whose measured responses exceeded the 10-second default:
-
-```bash
-cd "${REPO_ROOT}/ensemble/evals"
-uv sync --locked --extra test
-uv run g8e-evals run \
-  --suite ifeval_subset \
-  --arm doctrine \
-  --idle-timeout 180 \
-  --g8ee-url http://localhost:8000 \
-  --operator-url https://localhost:8443 \
-  --g8e-cli "${REPO_ROOT}/g8e" \
-  --auth-project-root "${REPO_ROOT}" \
-  --provider ollama \
-  --model '<declared-local-model>' \
-  --primary-endpoint '<declared-local-endpoint>' \
-  --evidence-key-file "${EVIDENCE_KEY_FILE}" \
-  --output-dir "${CAMPAIGN_DIR}/evals" \
-  2>&1 | tee "${CAMPAIGN_DIR}/logs/evals-doctrine.log"
-```
-
-Provider, model, endpoint, API-key, judge, task-limit, headless, and timeout options are listed by `uv run g8e-evals run --help`. Record exact model-role mappings from `manifest.json`; never describe an omitted or fake role as a real frontier model.
-
-Run a synthetic suite separately, with its own output directory and classification:
-
-```bash
-uv run g8e-evals bench-synthetic \
-  --suite governance_adversarial \
-  --output-dir "${CAMPAIGN_DIR}/evals/synthetic"
-```
-
-Use `uv run g8e-evals bench-synthetic --help` for the complete suite list. Preserve the generated manifest, tasks, attempts, suite-specific typed observations, metrics, receipts where applicable, restricted-evidence index, and summary. Do not combine synthetic and real-provider denominators or describe a synthetic suite as proof that a live gateway rejected an attack.
-
-Locate the generated report and verify receipt signatures and final persistence attestations:
-
-```bash
-EVAL_REPORT_DIR="$(ls -dt "${CAMPAIGN_DIR}"/evals/ifeval_subset-*/ | head -n 1)"
-uv run g8e-evals verify-receipts "${EVAL_REPORT_DIR}" --pki-dir "${G8E_GATEWAY_PKI_DIR}" | tee "${CAMPAIGN_DIR}/logs/eval-receipt-verification.txt"
-printf '%s\n' "${EVAL_REPORT_DIR}"
-```
-
-The public key must come from the producing environment; copying it proves provenance but does not independently establish trust in it. Require the command to report a non-zero receipt total, zero failures, and equal total and verified counts before making any receipt-verification claim. A missing key, missing `receipts.jsonl`, or zero bound receipts is not a receipt-verification pass even when the command exits zero. The current `ifeval_subset` tasks can complete as answer-only turns with no ActionReceipt; that run remains a model and eval-system diagnostic, reports zero receipt coverage, and supports no signed-receipt claim. The command is receipt-only verification, not complete eval-bundle or signed compliance report-bundle verification.
-
-The useful eval files are:
-
-| Artifact | Use |
-| --- | --- |
-| `manifest.json` | Exact source, suite, hashes, roles, model identities, posture request, and environment |
-| `tasks.jsonl` | Assigned denominator and content-addressed task definitions |
-| `attempts.jsonl` | Terminal outcomes, correlation IDs, and evidence references |
-| `stages.jsonl` | Model, governance, privacy, persistence, commitment, and grading timeline |
-| `metrics.jsonl` | Typed measured values linked to attempts and evidence |
-| `receipts.jsonl` | Canonical signed receipt observations for governed attempts |
-| `final-state-observations.jsonl` | Receipt-bound state-root observations |
-| `state-observations.jsonl` | Independently collected typed state observations when an integration supplies an observer |
-| `rehydration-observations.jsonl` | Exact local restoration observations when an integration supplies an observer |
-| `secret-detection-observations.jsonl` | Typed detector confusion-matrix observations when an integration supplies an observer |
-| `evidence-index.jsonl` | Authenticated metadata for encrypted restricted evidence |
-| `summary.json` | Compatibility summary suitable for quick orientation, not the authoritative source for extraordinary claims |
+Acceptance requires 10/10 required invariants, valid verification with zero failures, exactly one allowed marker, no prohibited additional effect, valid receipt and persistence signatures, a valid deterministic protocol chain, exact Operator and session binding, and Gateway L1 attribution for the prohibited attempt. See [Evaluations](../architecture/evals.md) for the complete evidence and trust-boundary model.
 
 ## 6. Where the juicy data is
 
@@ -477,7 +405,7 @@ Use this order when choosing screenshots, excerpts, and post material:
 | 6 | `${CAMPAIGN_DIR}/fedramp/scenarios-verbose.txt` | Authorized provision/revert success and unauthorized evidence-destruction rejection | Compliance/security video |
 | 7 | `${CAMPAIGN_DIR}/fedramp/ksi-result.json` and `demo-run-verification.json` | Measured KSI counts plus the typed independent verification result for the persisted FedRAMP demo evidence | Compliance post or article |
 | 8 | `${CAMPAIGN_DIR}/dhs/scenarios-verbose.txt` and `demo-run-verification.json` | Disconnected continuity, blocked wipe, governed purge, and the typed independent verification result | Defense/edge video |
-| 9 | `${EVAL_REPORT_DIR}/manifest.json`, `attempts.jsonl`, `stages.jsonl`, and `metrics.jsonl` | Exact configuration, denominators, grader outcomes, usage, latency, and evidence linkage | Technical appendix |
+| 9 | `${REPO_ROOT}/.g8e/data/eval/runs/<run-id>/report.json` and `verification.json` | Suite and version, active posture, lane, allowed and prohibited scenario results, 10 required invariant verdicts, verification validity and failure count, and content-addressed evidence bindings | Technical appendix |
 | 10 | `<verified-report-bundle>` and its retained canonical `ComplianceVerificationReport` | Signed bundle scope, protected source inventory, reproduced analysis and renderers, external trust identities, verification time, and exact failures | Point-in-time compliance evidence appendix |
 | 11 | `${CAMPAIGN_DIR}/metadata/` | Binary version and digest, source-provenance status or approved provenance artifact, FIPS and Docker versions, provider classification, and campaign capability boundary | Methodology footer |
 
@@ -647,37 +575,14 @@ Recommended post
 
 The agent also calls out any `FAIL`, `SKIPPED`, empty report, missing observer, fake-provider role, missing source provenance, synthetic target, unavailable KSI binding, or incomplete verification before presenting positive claims.
 
-## README evidence refresh
+## README evidence
 
-The root `README.md` is generated by `scripts/generate_readme.py` from `docs/templates/README.md.tmpl` and the public proof snapshot in `docs/evidence/readme/current/`. Refreshing the public snapshot is a reviewed publication operation, not a routine build step. The generator itself is offline, deterministic, and credential-free; it does not start services, run evals, spend provider budget, read `.g8e/` runtime state, or decrypt restricted evidence.
-
-The Stage 1 release profile and exact attended sequence live in [Release Process](../devs/release_process.md#stage-1-real-agent-readme-evidence). Use this guide for full-stack startup, workload enrollment, authenticated context, and health checks, then return to that fixed profile for evidence collection. Stage 1 runs the five pinned `ifeval_subset` tasks exactly once through `doctrine` with real primary, assistant, and lite providers, no task limit, no judge, and a 180-second idle timeout. Preserve every failure and timeout.
-
-The release-owner v2.1.5 profile uses Ollama tags `gemma4:12b`, `gemma4:e4b`, and `gemma4:e2b`. Reproducing operators supply an endpoint reachable from the eval process and may substitute model tags only when the reproduction manifest records those substitutions. Never copy the release owner's or a reproducing operator's exact endpoint, inventory response, local paths, evidence key, raw prompts, or raw outputs into public evidence.
-
-Stage 1 publication proceeds in two separate operations:
-
-1. Local attended collection starts the real stack and provider, creates a new immutable private campaign directory and owner-only evidence key, retains the Ollama inventory privately, executes all five tasks once, and validates complete typed task, attempt, stage, and metric relationships. Zero receipts are recorded as unavailable and support no receipt, mutation, persistence, state, governance, or compliance claim.
-2. Offline candidate projection runs `scripts/project_readme_evidence.py` against the completed private report. It emits only safe manifest, task, attempt, stage, metric, summary, evidence-index, reproduction-manifest, empty receipt, receipt-unavailable, and checksum index projections into a new candidate directory. It rejects fake providers, incomplete populations, checksum failures, raw or restricted fields, exact private topology, machine-specific paths, and undeclared artifacts.
-
-The release owner reviews the candidate before promotion. Do not write directly into `docs/evidence/readme/current/`, do not promote automatically after collection, and do not regenerate `README.md` until the candidate is explicitly approved. After promotion, run `make readme`, `make readme-test`, and `make readme-check` plus the relevant eval, lint, platform, and release verification lanes. CI performs only offline validation and drift checks; it never calls Ollama, runs real agents, owns private evidence, or selects evidence.
-
-Stage 2 for v2.1.6 uses this same stack setup for one fresh, separately invoked complete run. Before the run, the release owner binds the versioned profile to an explicit deterministic source inclusion manifest, component and image digests, and public operating system, architecture, hardware, Python, and container-runtime identities. Projection preserves the v2.1.5 run as Stage 1 and compares both complete populations without causal or statistical attribution. Promotion requires explicit release-owner approval of the exact canonical candidate tree digest; a mismatch leaves the current snapshot unchanged. See [Stage 2 Reproduction and Provenance](../devs/release_process.md#stage-2-reproduction-and-provenance) for the commands and approval boundary.
-
-Later README evidence stages may publish governed-action receipts and state proof, eval-native complete-bundle verification, statistical comparisons, and compliance analysis. Those stages do not retroactively strengthen or relabel a Stage 1 claim. Repository publication of actuator verification keys does not independently establish an external trust root.
-
-### Publication ownership and approvals
-
-The README evidence refresh is a reviewed publication operation with four distinct approval roles. No single person holds all four; the roles may be staffed by the same individual only in solo-development contexts where that individual explicitly self-attests to each role separately.
-
-1. **Narrative and template review** — Approves changes to `docs/templates/README.md.tmpl` and the closed claim-label and caveat vocabularies. This role owns product prose, diagram accuracy, quick-start instructions, and the marker set. It does not approve evidence content.
-2. **Eval evidence review** — Approves the selection of eval runs, the eligibility and verification status of every displayed metric row, the receipt verification result, and the preservation of failed and invalid attempts in the analytical population. This role confirms that no cherry-picking occurred and that every displayed metric is reproducible from eligible typed rows.
-3. **Compliance verification review** — Approves the selection of demo runs and the canonical `ComplianceVerificationReport` records. This role confirms that every selected report has `"valid": true` with zero failures, that scenario outcomes match expected allow/block results, and that demo resources and data are labeled synthetic or simulated.
-4. **Final publication and security review** — Approves the complete `docs/evidence/readme/current/` snapshot before `make readme` regenerates the root README. This role confirms that SHA-256 checksums match, that no private keys, credential fields, raw canary values, absolute paths, or undeclared artifacts are present, that restricted evidence remains encrypted and out of the snapshot, and that every displayed claim links to its source artifact. This is the gate that merges the evidence snapshot; the other three approvals are prerequisites.
+The root `README.md` is hand-maintained. It states the current native evaluation boundary and links to [Evaluations](../architecture/evals.md) for acceptance invariants, trust boundaries, and JSON output. The native evaluation proof table row reflects the Go-native `core-execution-boundary` suite result against the unified Docker stack. Update the README directly when its current behavior or evidence summary changes, then review it end to end and validate its links.
 
 ## Related documentation
 
-- [Evals](../ensemble/evals.md) — current evidence schema, real-provider benchmark, experiment arms, run command, and receipt-verifier scope.
+- [Evaluations](../architecture/evals.md) — Go-native execution-boundary commands, model campaign evidence, Observer and Provenance Operator witness roles, verification, and the connected evaluation explorer projection.
+- [Model Provenance](../architecture/model-provenance.md) — Storage-side weight attestation and chain-of-custody for scored inference.
 - [Headless End-to-End UX Smoke Test](ux_smoke_test.md) — authoritative unified-stack enrollment, scenario, report, and troubleshooting sequence.
 - [Unified Docker Stack](unified_stack.md) — component topology, identity, storage, and lifecycle.
 - [Demo Environments](../../demos/README.md) — per-demo architecture, commands, scenarios, and real-versus-display boundaries.

@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,11 +35,13 @@ import (
 // session header when authenticated, limits response reads, checks status
 // codes, decodes a typed response, and returns contextual errors.
 type E2EClient struct {
-	publicClient *http.Client // no client cert, for health/CA bundle endpoints
-	mtlsClient   *http.Client // owner CLI cert, for authenticated endpoints
-	cliSessionID string
-	userID       string
-	gatewayHTTPS string
+	publicClient      *http.Client // no client cert, for health/CA bundle endpoints
+	mtlsClient        *http.Client // owner CLI cert, for authenticated endpoints
+	cliSessionID      string
+	userID            string
+	operatorID        string
+	operatorSessionID string
+	gatewayHTTPS      string
 }
 
 // newAuthenticatedRequest builds an HTTP request with the CLI session header
@@ -322,7 +325,7 @@ func (c *E2EClient) GetAuditEvents(ctx context.Context) (models.AuditEventsRespo
 	return decodeJSON[models.AuditEventsResponse](body, "audit events")
 }
 
-// dispatchFsRead discovers the first active operator, dispatches an FS_READ
+// dispatchFsRead discovers the first active remote operator, dispatches an FS_READ
 // command for /etc/hostname, polls until the dispatch succeeds, and returns
 // the dispatch response. It is the shared action used by tests that need a
 // governed command to have executed before asserting on its consequences
@@ -339,7 +342,7 @@ func (c *E2EClient) dispatchFsRead(t *testing.T, ctx context.Context) dispatchRe
 
 	var target *models.OperatorDocumentGo
 	for i := range operators.Operators {
-		if operators.Operators[i].Status == constants.OperatorStatusActive {
+		if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
 			target = &operators.Operators[i]
 			break
 		}
@@ -375,4 +378,63 @@ func (c *E2EClient) dispatchFsRead(t *testing.T, ctx context.Context) dispatchRe
 		"dispatch did not succeed within 90s; last response: %+v", resp)
 
 	return resp
+}
+
+// DiscoverPendingOperatorByHostname polls GetPendingEnrollments and returns
+// the first pending operator request whose Hostname or InstanceID contains
+// the given substring. It is used by cross-enrollment tests to find the
+// secondary gateway's pending operator request without duplicating the
+// filter loop across tests. The caller owns the context; this helper uses
+// require.Eventually for polling so it must be called from a test goroutine.
+func (c *E2EClient) DiscoverPendingOperatorByHostname(t *testing.T, ctx context.Context, hostnameSubstring string) models.PlatformEnrollmentPendingRequest {
+	t.Helper()
+	var found models.PlatformEnrollmentPendingRequest
+	require.Eventually(t, func() bool {
+		pending, err := c.GetPendingEnrollments(ctx)
+		if err != nil {
+			t.Logf("pending list attempt error: %v", err)
+			return false
+		}
+		for _, r := range pending.Requests {
+			if r.ComponentKind != models.PlatformComponentOperator {
+				continue
+			}
+			if strings.Contains(r.Hostname, hostnameSubstring) || strings.Contains(r.InstanceID, hostnameSubstring) {
+				found = r
+				return true
+			}
+		}
+		return false
+	}, 120*time.Second, 3*time.Second,
+		"no pending operator request matching %q found within 120s", hostnameSubstring)
+	return found
+}
+
+// DiscoverActiveOperatorByName polls ListOperators and returns the first
+// active operator whose Name contains the given substring. It is used by
+// cross-enrollment tests to find the secondary gateway's operator after
+// approval. The caller owns the context; this helper uses require.Eventually
+// for polling so it must be called from a test goroutine.
+func (c *E2EClient) DiscoverActiveOperatorByName(t *testing.T, ctx context.Context, nameSubstring string) models.OperatorDocumentGo {
+	t.Helper()
+	var found models.OperatorDocumentGo
+	require.Eventually(t, func() bool {
+		operators, err := c.ListOperators(ctx)
+		if err != nil {
+			t.Logf("operator list attempt error: %v", err)
+			return false
+		}
+		for i := range operators.Operators {
+			if operators.Operators[i].Status != constants.OperatorStatusActive {
+				continue
+			}
+			if strings.Contains(operators.Operators[i].Name, nameSubstring) {
+				found = operators.Operators[i]
+				return true
+			}
+		}
+		return false
+	}, 180*time.Second, 3*time.Second,
+		"no active operator matching %q found within 180s", nameSubstring)
+	return found
 }

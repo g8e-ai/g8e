@@ -53,7 +53,7 @@ The demo includes 8 trading control doctrine rules covering:
 make build
 ```
 
-This builds the g8e binary and copies it to `demos/bin/g8e`.
+This builds the g8e binary at the repository root (`./g8e`).
 
 ### Start the finance demo
 
@@ -75,17 +75,17 @@ until curl -fsS http://localhost:8082/api/v1/health >/dev/null 2>&1; do sleep 2;
 # 2. Enroll the first owner. This creates the first user and a usable CLI mTLS identity.
 ./g8e auth enroll user -e localhost:8082 --port 8445
 
-# 3. List pending platform enrollment requests.
-./g8e auth pending-platform-enrollments -e localhost:8082 --port 8445
+# 3. List pending platform enrollment requests and approve or deny each request as needed.
+./g8e auth enroll pending -e localhost:8082 --port 8445
 
 # 4. Approve the operator's request by exact request ID.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:8082 --port 8445
+./g8e auth enroll approve <operator-request-id> --yes -e localhost:8082 --port 8445
 
 # 5. Wait for the operator and its dependents to become healthy.
 docker compose ps
 ```
 
-The `g8e demos start finance` CLI path prints these bootstrap instructions automatically, including the demo gateway port and the exact `g8e auth approve-platform-enrollment <request-id>` command to run.
+The `g8e demos start finance` CLI path prints these bootstrap instructions automatically, including the demo gateway port and the exact `g8e auth enroll approve <request-id>` command to run.
 
 Alternatively, use the g8e CLI from the repository root:
 

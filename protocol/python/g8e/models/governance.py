@@ -11,12 +11,14 @@ Provides pydantic models matching the GovernanceEnvelope wire format and a
 ``compute_transaction_hash()`` function implementing the SHA-256 algorithm
 described in the protocol specification.
 
-The hash is a SHA-256 digest over canonicalized fields in protocol field order:
-action_type, target_resource, payload (base64), state_merkle_root, nonce,
-expires_at (normalized to fixed microsecond UTC), intent_data (canonicalized
-``key=value`` map), requestor_user_id, acting_app_id.  Empty fields are
-omitted; a trailing ``|`` follows each present field.  This matches Go's
-``GenerateMessageID`` canonicalization exactly.
+The hash is a SHA-256 digest over canonicalized fields in the documented spec
+order: action_type, target_resource, payload (base64), state_merkle_root,
+nonce, expires_at (normalized to fixed microsecond UTC), intent_data
+(canonicalized ``key=value`` map), requestor_user_id, acting_app_id,
+operator_id, operator_session_id, case_id, investigation_id, task_id,
+web_session_id, cli_session_id.  Empty fields are omitted; a trailing ``|``
+follows each present field.  This matches Go's ``GenerateMessageID``
+canonicalization exactly.
 
 L3 proof is intentionally excluded from the hash so that L2 consensus can sign
 before the human notary is asked.
@@ -285,13 +287,22 @@ def compute_transaction_hash(
     intent_data: dict[str, Any],
     requestor_user_id: str | None = None,
     acting_app_id: str | None = None,
+    operator_id: str | None = None,
+    operator_session_id: str | None = None,
+    case_id: str | None = None,
+    investigation_id: str | None = None,
+    task_id: str | None = None,
+    web_session_id: str | None = None,
+    cli_session_id: str | None = None,
 ) -> str:
     """Compute the deterministic SHA-256 transaction hash for a GovernanceEnvelope.
 
-    The hash is computed over the following fields in protocol field order:
-    action_type, target_resource, payload (base64-encoded), state_merkle_root,
-    nonce, expires_at (normalized to fixed microsecond UTC), intent_data
-    (canonicalized ``key=value`` map), requestor_user_id, acting_app_id.
+    The hash is computed over the following fields in the documented spec
+    order: action_type, target_resource, payload (base64-encoded),
+    state_merkle_root, nonce, expires_at (normalized to fixed microsecond
+    UTC), intent_data (canonicalized ``key=value`` map), requestor_user_id,
+    acting_app_id, operator_id, operator_session_id, case_id,
+    investigation_id, task_id, web_session_id, cli_session_id.
 
     Empty/None fields are omitted entirely (no value, no separator).  A
     trailing ``|`` is appended after each present field, matching Go's
@@ -312,6 +323,13 @@ def compute_transaction_hash(
         intent_data: Structured JSON view of the intent.  Empty dict is omitted.
         requestor_user_id: Human delegator user ID.  None/empty omitted.
         acting_app_id: Delegate tool/app ID.  None/empty omitted.
+        operator_id: Target operator identity.  None/empty omitted.
+        operator_session_id: Bound operator session ID.  None/empty omitted.
+        case_id: Owning case ID.  None/empty omitted.
+        investigation_id: Owning investigation ID.  None/empty omitted.
+        task_id: Owning task ID.  None/empty omitted.
+        web_session_id: Bound web session ID.  None/empty omitted.
+        cli_session_id: Bound CLI session ID.  None/empty omitted.
 
     Returns:
         Hex-encoded SHA-256 digest string.
@@ -337,6 +355,20 @@ def compute_transaction_hash(
         parts.append(requestor_user_id + "|")
     if acting_app_id:
         parts.append(acting_app_id + "|")
+    if operator_id:
+        parts.append(operator_id + "|")
+    if operator_session_id:
+        parts.append(operator_session_id + "|")
+    if case_id:
+        parts.append(case_id + "|")
+    if investigation_id:
+        parts.append(investigation_id + "|")
+    if task_id:
+        parts.append(task_id + "|")
+    if web_session_id:
+        parts.append(web_session_id + "|")
+    if cli_session_id:
+        parts.append(cli_session_id + "|")
 
     message = "".join(parts)
     return hashlib.sha256(message.encode("utf-8")).hexdigest()

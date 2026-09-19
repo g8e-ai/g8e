@@ -56,6 +56,75 @@ class DeterministicStageOutcome(int, metaclass=_enum_type_wrapper.EnumTypeWrappe
     DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED: _ClassVar[DeterministicStageOutcome]
     DETERMINISTIC_STAGE_OUTCOME_COMPLETED: _ClassVar[DeterministicStageOutcome]
     DETERMINISTIC_STAGE_OUTCOME_FAILED: _ClassVar[DeterministicStageOutcome]
+
+class ReceiptFailureCode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    RECEIPT_FAILURE_CODE_UNSPECIFIED: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_ROLE_INVALID: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_MODEL_REF_INVALID: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_GENERATE_FAILED: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_EXECUTION_FAILED: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID: _ClassVar[ReceiptFailureCode]
+    RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID: _ClassVar[ReceiptFailureCode]
+
+class ModelRole(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    MODEL_ROLE_UNSPECIFIED: _ClassVar[ModelRole]
+    MODEL_ROLE_PRIMARY: _ClassVar[ModelRole]
+    MODEL_ROLE_ASSISTANT: _ClassVar[ModelRole]
+    MODEL_ROLE_LITE: _ClassVar[ModelRole]
+
+class InferenceMessageRole(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    INFERENCE_MESSAGE_ROLE_UNSPECIFIED: _ClassVar[InferenceMessageRole]
+    INFERENCE_MESSAGE_ROLE_SYSTEM: _ClassVar[InferenceMessageRole]
+    INFERENCE_MESSAGE_ROLE_USER: _ClassVar[InferenceMessageRole]
+    INFERENCE_MESSAGE_ROLE_ASSISTANT: _ClassVar[InferenceMessageRole]
+    INFERENCE_MESSAGE_ROLE_TOOL: _ClassVar[InferenceMessageRole]
+
+class InferenceToolChoiceMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    INFERENCE_TOOL_CHOICE_MODE_UNSPECIFIED: _ClassVar[InferenceToolChoiceMode]
+    INFERENCE_TOOL_CHOICE_MODE_AUTO: _ClassVar[InferenceToolChoiceMode]
+    INFERENCE_TOOL_CHOICE_MODE_NONE: _ClassVar[InferenceToolChoiceMode]
+    INFERENCE_TOOL_CHOICE_MODE_REQUIRED: _ClassVar[InferenceToolChoiceMode]
+
+class InferenceTimingSource(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    INFERENCE_TIMING_SOURCE_UNSPECIFIED: _ClassVar[InferenceTimingSource]
+    INFERENCE_TIMING_SOURCE_PROVIDER: _ClassVar[InferenceTimingSource]
+
+class InferenceLoadState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    INFERENCE_LOAD_STATE_UNSPECIFIED: _ClassVar[InferenceLoadState]
+    INFERENCE_LOAD_STATE_COLD: _ClassVar[InferenceLoadState]
+    INFERENCE_LOAD_STATE_WARM: _ClassVar[InferenceLoadState]
+    INFERENCE_LOAD_STATE_UNAVAILABLE: _ClassVar[InferenceLoadState]
+
+class InferenceRetryClassification(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED: _ClassVar[InferenceRetryClassification]
+    INFERENCE_RETRY_CLASSIFICATION_NONE: _ClassVar[InferenceRetryClassification]
+    INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT: _ClassVar[InferenceRetryClassification]
+
+class InferenceProviderAttemptStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED: _ClassVar[InferenceProviderAttemptStatus]
+    INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS: _ClassVar[InferenceProviderAttemptStatus]
+    INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED: _ClassVar[InferenceProviderAttemptStatus]
+    INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED: _ClassVar[InferenceProviderAttemptStatus]
 EXECUTION_STATUS_UNSPECIFIED: ExecutionStatus
 EXECUTION_STATUS_EXECUTING: ExecutionStatus
 EXECUTION_STATUS_COMPLETED: ExecutionStatus
@@ -86,6 +155,51 @@ DETERMINISTIC_STAGE_OUTCOME_VERIFIED: DeterministicStageOutcome
 DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED: DeterministicStageOutcome
 DETERMINISTIC_STAGE_OUTCOME_COMPLETED: DeterministicStageOutcome
 DETERMINISTIC_STAGE_OUTCOME_FAILED: DeterministicStageOutcome
+RECEIPT_FAILURE_CODE_UNSPECIFIED: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_MODEL_OVERRIDE_DENIED: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_ROLE_INVALID: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_MODEL_REF_INVALID: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_BACKEND_UNAVAILABLE: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_BACKEND_TIMEOUT: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_GENERATE_FAILED: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_EXECUTION_FAILED: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_MODEL_NOT_FOUND: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_PROVIDER_RESPONSE_INVALID: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_GENERATION_OPTIONS_INVALID: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_CAPABILITY_UNSUPPORTED: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_PROVIDER_ATTEMPT_REQUIRED: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_IDENTITY_MISMATCH: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_MODEL_DIGEST_MISMATCH: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_EVIDENCE_HASH_INVALID: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_MODEL_REGISTRY_INVALID: ReceiptFailureCode
+RECEIPT_FAILURE_CODE_CAMPAIGN_BINDING_INVALID: ReceiptFailureCode
+MODEL_ROLE_UNSPECIFIED: ModelRole
+MODEL_ROLE_PRIMARY: ModelRole
+MODEL_ROLE_ASSISTANT: ModelRole
+MODEL_ROLE_LITE: ModelRole
+INFERENCE_MESSAGE_ROLE_UNSPECIFIED: InferenceMessageRole
+INFERENCE_MESSAGE_ROLE_SYSTEM: InferenceMessageRole
+INFERENCE_MESSAGE_ROLE_USER: InferenceMessageRole
+INFERENCE_MESSAGE_ROLE_ASSISTANT: InferenceMessageRole
+INFERENCE_MESSAGE_ROLE_TOOL: InferenceMessageRole
+INFERENCE_TOOL_CHOICE_MODE_UNSPECIFIED: InferenceToolChoiceMode
+INFERENCE_TOOL_CHOICE_MODE_AUTO: InferenceToolChoiceMode
+INFERENCE_TOOL_CHOICE_MODE_NONE: InferenceToolChoiceMode
+INFERENCE_TOOL_CHOICE_MODE_REQUIRED: InferenceToolChoiceMode
+INFERENCE_TIMING_SOURCE_UNSPECIFIED: InferenceTimingSource
+INFERENCE_TIMING_SOURCE_PROVIDER: InferenceTimingSource
+INFERENCE_LOAD_STATE_UNSPECIFIED: InferenceLoadState
+INFERENCE_LOAD_STATE_COLD: InferenceLoadState
+INFERENCE_LOAD_STATE_WARM: InferenceLoadState
+INFERENCE_LOAD_STATE_UNAVAILABLE: InferenceLoadState
+INFERENCE_RETRY_CLASSIFICATION_UNSPECIFIED: InferenceRetryClassification
+INFERENCE_RETRY_CLASSIFICATION_NONE: InferenceRetryClassification
+INFERENCE_RETRY_CLASSIFICATION_INFRASTRUCTURE_PRE_RESULT: InferenceRetryClassification
+INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED: InferenceProviderAttemptStatus
+INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS: InferenceProviderAttemptStatus
+INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED: InferenceProviderAttemptStatus
+INFERENCE_PROVIDER_ATTEMPT_STATUS_FAILED: InferenceProviderAttemptStatus
 
 class CommandRequested(_message.Message):
     __slots__ = ("command", "execution_id", "justification", "vault_mode", "timeout_seconds", "intent", "environment", "working_directory")
@@ -573,7 +687,7 @@ class SetTargetContextResult(_message.Message):
     def __init__(self, success: _Optional[bool] = ..., operator_id: _Optional[str] = ..., error: _Optional[str] = ...) -> None: ...
 
 class OperatorDocument(_message.Message):
-    __slots__ = ("id", "user_id", "organization_id", "component", "name", "status", "operator_session_id", "bound_web_session_id", "operator_cert", "operator_cert_serial", "slot_number", "is_slot", "claimed", "operator_type", "cloud_subtype", "system_fingerprint", "created_at_unix_ms", "updated_at_unix_ms")
+    __slots__ = ("id", "user_id", "organization_id", "component", "name", "status", "operator_session_id", "bound_web_session_id", "operator_cert", "operator_cert_serial", "slot_number", "is_slot", "claimed", "operator_type", "system_fingerprint", "created_at_unix_ms", "updated_at_unix_ms")
     ID_FIELD_NUMBER: _ClassVar[int]
     USER_ID_FIELD_NUMBER: _ClassVar[int]
     ORGANIZATION_ID_FIELD_NUMBER: _ClassVar[int]
@@ -588,7 +702,6 @@ class OperatorDocument(_message.Message):
     IS_SLOT_FIELD_NUMBER: _ClassVar[int]
     CLAIMED_FIELD_NUMBER: _ClassVar[int]
     OPERATOR_TYPE_FIELD_NUMBER: _ClassVar[int]
-    CLOUD_SUBTYPE_FIELD_NUMBER: _ClassVar[int]
     SYSTEM_FINGERPRINT_FIELD_NUMBER: _ClassVar[int]
     CREATED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
     UPDATED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
@@ -606,11 +719,10 @@ class OperatorDocument(_message.Message):
     is_slot: bool
     claimed: bool
     operator_type: str
-    cloud_subtype: str
     system_fingerprint: str
     created_at_unix_ms: int
     updated_at_unix_ms: int
-    def __init__(self, id: _Optional[str] = ..., user_id: _Optional[str] = ..., organization_id: _Optional[str] = ..., component: _Optional[str] = ..., name: _Optional[str] = ..., status: _Optional[str] = ..., operator_session_id: _Optional[str] = ..., bound_web_session_id: _Optional[str] = ..., operator_cert: _Optional[str] = ..., operator_cert_serial: _Optional[str] = ..., slot_number: _Optional[int] = ..., is_slot: _Optional[bool] = ..., claimed: _Optional[bool] = ..., operator_type: _Optional[str] = ..., cloud_subtype: _Optional[str] = ..., system_fingerprint: _Optional[str] = ..., created_at_unix_ms: _Optional[int] = ..., updated_at_unix_ms: _Optional[int] = ...) -> None: ...
+    def __init__(self, id: _Optional[str] = ..., user_id: _Optional[str] = ..., organization_id: _Optional[str] = ..., component: _Optional[str] = ..., name: _Optional[str] = ..., status: _Optional[str] = ..., operator_session_id: _Optional[str] = ..., bound_web_session_id: _Optional[str] = ..., operator_cert: _Optional[str] = ..., operator_cert_serial: _Optional[str] = ..., slot_number: _Optional[int] = ..., is_slot: _Optional[bool] = ..., claimed: _Optional[bool] = ..., operator_type: _Optional[str] = ..., system_fingerprint: _Optional[str] = ..., created_at_unix_ms: _Optional[int] = ..., updated_at_unix_ms: _Optional[int] = ...) -> None: ...
 
 class ShutdownRequested(_message.Message):
     __slots__ = ("reason",)
@@ -757,7 +869,7 @@ class ReceiptPersistenceAttestation(_message.Message):
     def __init__(self, transaction_id: _Optional[str] = ..., receipt_signature_digest: _Optional[str] = ..., persisted_at_unix_ms: _Optional[int] = ..., audit_record_id: _Optional[str] = ..., signer_key_id: _Optional[str] = ..., signature: _Optional[str] = ...) -> None: ...
 
 class ActionReceipt(_message.Message):
-    __slots__ = ("transaction_id", "transaction_hash", "status", "result_summary", "state_root_before", "state_root_after", "executed_at_unix_ms", "signer_key_id", "signature", "l2_status", "l3_status", "deterministic_stage_evidence", "final_persistence_attestation")
+    __slots__ = ("transaction_id", "transaction_hash", "status", "result_summary", "state_root_before", "state_root_after", "executed_at_unix_ms", "signer_key_id", "signature", "l2_status", "l3_status", "deterministic_stage_evidence", "final_persistence_attestation", "failure_code")
     TRANSACTION_ID_FIELD_NUMBER: _ClassVar[int]
     TRANSACTION_HASH_FIELD_NUMBER: _ClassVar[int]
     STATUS_FIELD_NUMBER: _ClassVar[int]
@@ -771,6 +883,7 @@ class ActionReceipt(_message.Message):
     L3_STATUS_FIELD_NUMBER: _ClassVar[int]
     DETERMINISTIC_STAGE_EVIDENCE_FIELD_NUMBER: _ClassVar[int]
     FINAL_PERSISTENCE_ATTESTATION_FIELD_NUMBER: _ClassVar[int]
+    FAILURE_CODE_FIELD_NUMBER: _ClassVar[int]
     transaction_id: str
     transaction_hash: str
     status: ExecutionStatus
@@ -784,7 +897,8 @@ class ActionReceipt(_message.Message):
     l3_status: L3Status
     deterministic_stage_evidence: _containers.RepeatedCompositeFieldContainer[DeterministicStageEvidence]
     final_persistence_attestation: ReceiptPersistenceAttestation
-    def __init__(self, transaction_id: _Optional[str] = ..., transaction_hash: _Optional[str] = ..., status: _Optional[_Union[ExecutionStatus, str]] = ..., result_summary: _Optional[str] = ..., state_root_before: _Optional[str] = ..., state_root_after: _Optional[str] = ..., executed_at_unix_ms: _Optional[int] = ..., signer_key_id: _Optional[str] = ..., signature: _Optional[str] = ..., l2_status: _Optional[_Union[L2Status, str]] = ..., l3_status: _Optional[_Union[L3Status, str]] = ..., deterministic_stage_evidence: _Optional[_Iterable[_Union[DeterministicStageEvidence, _Mapping]]] = ..., final_persistence_attestation: _Optional[_Union[ReceiptPersistenceAttestation, _Mapping]] = ...) -> None: ...
+    failure_code: ReceiptFailureCode
+    def __init__(self, transaction_id: _Optional[str] = ..., transaction_hash: _Optional[str] = ..., status: _Optional[_Union[ExecutionStatus, str]] = ..., result_summary: _Optional[str] = ..., state_root_before: _Optional[str] = ..., state_root_after: _Optional[str] = ..., executed_at_unix_ms: _Optional[int] = ..., signer_key_id: _Optional[str] = ..., signature: _Optional[str] = ..., l2_status: _Optional[_Union[L2Status, str]] = ..., l3_status: _Optional[_Union[L3Status, str]] = ..., deterministic_stage_evidence: _Optional[_Iterable[_Union[DeterministicStageEvidence, _Mapping]]] = ..., final_persistence_attestation: _Optional[_Union[ReceiptPersistenceAttestation, _Mapping]] = ..., failure_code: _Optional[_Union[ReceiptFailureCode, str]] = ...) -> None: ...
 
 class CommitmentAttestation(_message.Message):
     __slots__ = ("transaction_id", "transaction_hash", "prior_commitment_hash", "state_root_at_commit", "l2_signature_digest", "warden_intent_signature_digest", "human_signature_digest", "action_type", "target_resource", "committed_at_unix_ms", "auditor_key_id", "signature", "hash")
@@ -1623,3 +1737,365 @@ class RevokePasskeyCredentialResult(_message.Message):
     found: bool
     remaining: int
     def __init__(self, success: _Optional[bool] = ..., error: _Optional[str] = ..., found: _Optional[bool] = ..., remaining: _Optional[int] = ...) -> None: ...
+
+class InferenceToolCall(_message.Message):
+    __slots__ = ("call_id", "name", "arguments_json")
+    CALL_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    ARGUMENTS_JSON_FIELD_NUMBER: _ClassVar[int]
+    call_id: str
+    name: str
+    arguments_json: str
+    def __init__(self, call_id: _Optional[str] = ..., name: _Optional[str] = ..., arguments_json: _Optional[str] = ...) -> None: ...
+
+class InferenceToolResult(_message.Message):
+    __slots__ = ("call_id", "name", "result_json")
+    CALL_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    RESULT_JSON_FIELD_NUMBER: _ClassVar[int]
+    call_id: str
+    name: str
+    result_json: str
+    def __init__(self, call_id: _Optional[str] = ..., name: _Optional[str] = ..., result_json: _Optional[str] = ...) -> None: ...
+
+class InferenceMessagePart(_message.Message):
+    __slots__ = ("text", "tool_call", "tool_result")
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    TOOL_CALL_FIELD_NUMBER: _ClassVar[int]
+    TOOL_RESULT_FIELD_NUMBER: _ClassVar[int]
+    text: str
+    tool_call: InferenceToolCall
+    tool_result: InferenceToolResult
+    def __init__(self, text: _Optional[str] = ..., tool_call: _Optional[_Union[InferenceToolCall, _Mapping]] = ..., tool_result: _Optional[_Union[InferenceToolResult, _Mapping]] = ...) -> None: ...
+
+class InferenceMessage(_message.Message):
+    __slots__ = ("role", "parts")
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    PARTS_FIELD_NUMBER: _ClassVar[int]
+    role: InferenceMessageRole
+    parts: _containers.RepeatedCompositeFieldContainer[InferenceMessagePart]
+    def __init__(self, role: _Optional[_Union[InferenceMessageRole, str]] = ..., parts: _Optional[_Iterable[_Union[InferenceMessagePart, _Mapping]]] = ...) -> None: ...
+
+class InferenceToolDeclaration(_message.Message):
+    __slots__ = ("name", "description", "json_schema")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    JSON_SCHEMA_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    description: str
+    json_schema: str
+    def __init__(self, name: _Optional[str] = ..., description: _Optional[str] = ..., json_schema: _Optional[str] = ...) -> None: ...
+
+class InferenceResponseFormat(_message.Message):
+    __slots__ = ("media_type", "json_schema")
+    MEDIA_TYPE_FIELD_NUMBER: _ClassVar[int]
+    JSON_SCHEMA_FIELD_NUMBER: _ClassVar[int]
+    media_type: str
+    json_schema: str
+    def __init__(self, media_type: _Optional[str] = ..., json_schema: _Optional[str] = ...) -> None: ...
+
+class InferenceToolChoice(_message.Message):
+    __slots__ = ("mode", "allowed_tool_names")
+    MODE_FIELD_NUMBER: _ClassVar[int]
+    ALLOWED_TOOL_NAMES_FIELD_NUMBER: _ClassVar[int]
+    mode: InferenceToolChoiceMode
+    allowed_tool_names: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, mode: _Optional[_Union[InferenceToolChoiceMode, str]] = ..., allowed_tool_names: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class InferenceThinkingControl(_message.Message):
+    __slots__ = ("enabled", "level", "include_thoughts")
+    ENABLED_FIELD_NUMBER: _ClassVar[int]
+    LEVEL_FIELD_NUMBER: _ClassVar[int]
+    INCLUDE_THOUGHTS_FIELD_NUMBER: _ClassVar[int]
+    enabled: bool
+    level: str
+    include_thoughts: bool
+    def __init__(self, enabled: _Optional[bool] = ..., level: _Optional[str] = ..., include_thoughts: _Optional[bool] = ...) -> None: ...
+
+class InferenceResponsePart(_message.Message):
+    __slots__ = ("text", "tool_call", "thinking")
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    TOOL_CALL_FIELD_NUMBER: _ClassVar[int]
+    THINKING_FIELD_NUMBER: _ClassVar[int]
+    text: str
+    tool_call: InferenceToolCall
+    thinking: str
+    def __init__(self, text: _Optional[str] = ..., tool_call: _Optional[_Union[InferenceToolCall, _Mapping]] = ..., thinking: _Optional[str] = ...) -> None: ...
+
+class InferenceModelVariant(_message.Message):
+    __slots__ = ("model", "digest")
+    MODEL_FIELD_NUMBER: _ClassVar[int]
+    DIGEST_FIELD_NUMBER: _ClassVar[int]
+    model: str
+    digest: str
+    def __init__(self, model: _Optional[str] = ..., digest: _Optional[str] = ...) -> None: ...
+
+class InferenceRequested(_message.Message):
+    __slots__ = ("role", "model", "temperature", "max_tokens", "keep_alive", "messages", "tools", "top_p", "top_k", "stop_sequences", "response_format", "request_schema_version", "tool_choice", "parallel_tool_calls", "thinking", "context_limit", "provider_attempt_id", "model_digest", "campaign_id", "run_id", "assignment_id", "evaluation_attempt_id", "scenario_id", "model_registry", "model_registry_digest", "stream", "retry_count", "seed")
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    MODEL_FIELD_NUMBER: _ClassVar[int]
+    TEMPERATURE_FIELD_NUMBER: _ClassVar[int]
+    MAX_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    KEEP_ALIVE_FIELD_NUMBER: _ClassVar[int]
+    MESSAGES_FIELD_NUMBER: _ClassVar[int]
+    TOOLS_FIELD_NUMBER: _ClassVar[int]
+    TOP_P_FIELD_NUMBER: _ClassVar[int]
+    TOP_K_FIELD_NUMBER: _ClassVar[int]
+    STOP_SEQUENCES_FIELD_NUMBER: _ClassVar[int]
+    RESPONSE_FORMAT_FIELD_NUMBER: _ClassVar[int]
+    REQUEST_SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
+    TOOL_CHOICE_FIELD_NUMBER: _ClassVar[int]
+    PARALLEL_TOOL_CALLS_FIELD_NUMBER: _ClassVar[int]
+    THINKING_FIELD_NUMBER: _ClassVar[int]
+    CONTEXT_LIMIT_FIELD_NUMBER: _ClassVar[int]
+    PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    CAMPAIGN_ID_FIELD_NUMBER: _ClassVar[int]
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    ASSIGNMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    EVALUATION_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_REGISTRY_FIELD_NUMBER: _ClassVar[int]
+    MODEL_REGISTRY_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    STREAM_FIELD_NUMBER: _ClassVar[int]
+    RETRY_COUNT_FIELD_NUMBER: _ClassVar[int]
+    SEED_FIELD_NUMBER: _ClassVar[int]
+    role: ModelRole
+    model: str
+    temperature: float
+    max_tokens: int
+    keep_alive: str
+    messages: _containers.RepeatedCompositeFieldContainer[InferenceMessage]
+    tools: _containers.RepeatedCompositeFieldContainer[InferenceToolDeclaration]
+    top_p: float
+    top_k: int
+    stop_sequences: _containers.RepeatedScalarFieldContainer[str]
+    response_format: InferenceResponseFormat
+    request_schema_version: str
+    tool_choice: InferenceToolChoice
+    parallel_tool_calls: bool
+    thinking: InferenceThinkingControl
+    context_limit: int
+    provider_attempt_id: str
+    model_digest: str
+    campaign_id: str
+    run_id: str
+    assignment_id: str
+    evaluation_attempt_id: str
+    scenario_id: str
+    model_registry: _containers.RepeatedCompositeFieldContainer[InferenceModelVariant]
+    model_registry_digest: str
+    stream: bool
+    retry_count: int
+    seed: int
+    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., model: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ..., messages: _Optional[_Iterable[_Union[InferenceMessage, _Mapping]]] = ..., tools: _Optional[_Iterable[_Union[InferenceToolDeclaration, _Mapping]]] = ..., top_p: _Optional[float] = ..., top_k: _Optional[int] = ..., stop_sequences: _Optional[_Iterable[str]] = ..., response_format: _Optional[_Union[InferenceResponseFormat, _Mapping]] = ..., request_schema_version: _Optional[str] = ..., tool_choice: _Optional[_Union[InferenceToolChoice, _Mapping]] = ..., parallel_tool_calls: _Optional[bool] = ..., thinking: _Optional[_Union[InferenceThinkingControl, _Mapping]] = ..., context_limit: _Optional[int] = ..., provider_attempt_id: _Optional[str] = ..., model_digest: _Optional[str] = ..., campaign_id: _Optional[str] = ..., run_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., model_registry: _Optional[_Iterable[_Union[InferenceModelVariant, _Mapping]]] = ..., model_registry_digest: _Optional[str] = ..., stream: _Optional[bool] = ..., retry_count: _Optional[int] = ..., seed: _Optional[int] = ...) -> None: ...
+
+class InferenceProviderAttemptRecord(_message.Message):
+    __slots__ = ("provider_attempt_id", "transaction_id", "retry_count", "retry_classification", "status", "started_at_unix_ms", "completed_at_unix_ms", "result_digest", "failure_summary")
+    PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    TRANSACTION_ID_FIELD_NUMBER: _ClassVar[int]
+    RETRY_COUNT_FIELD_NUMBER: _ClassVar[int]
+    RETRY_CLASSIFICATION_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    STARTED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    COMPLETED_AT_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    RESULT_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    FAILURE_SUMMARY_FIELD_NUMBER: _ClassVar[int]
+    provider_attempt_id: str
+    transaction_id: str
+    retry_count: int
+    retry_classification: InferenceRetryClassification
+    status: InferenceProviderAttemptStatus
+    started_at_unix_ms: int
+    completed_at_unix_ms: int
+    result_digest: str
+    failure_summary: str
+    def __init__(self, provider_attempt_id: _Optional[str] = ..., transaction_id: _Optional[str] = ..., retry_count: _Optional[int] = ..., retry_classification: _Optional[_Union[InferenceRetryClassification, str]] = ..., status: _Optional[_Union[InferenceProviderAttemptStatus, str]] = ..., started_at_unix_ms: _Optional[int] = ..., completed_at_unix_ms: _Optional[int] = ..., result_digest: _Optional[str] = ..., failure_summary: _Optional[str] = ...) -> None: ...
+
+class InferenceResult(_message.Message):
+    __slots__ = ("prompt_tokens", "completion_tokens", "total_tokens", "finish_reason", "model", "result_digest", "parts", "usage_reported", "thinking_tokens", "cache_tokens", "load_duration_ns", "prompt_eval_duration_ns", "generation_duration_ns", "total_duration_ns", "time_to_first_token_ns", "timing_source", "provider_attempt_id", "requested_model", "requested_model_digest", "served_model_digest", "normalized_request_hash", "output_hash", "campaign_id", "run_id", "assignment_id", "evaluation_attempt_id", "scenario_id", "model_registry_digest", "retry_count", "load_state", "retry_classification")
+    PROMPT_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    COMPLETION_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    FINISH_REASON_FIELD_NUMBER: _ClassVar[int]
+    MODEL_FIELD_NUMBER: _ClassVar[int]
+    RESULT_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    PARTS_FIELD_NUMBER: _ClassVar[int]
+    USAGE_REPORTED_FIELD_NUMBER: _ClassVar[int]
+    THINKING_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    CACHE_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    LOAD_DURATION_NS_FIELD_NUMBER: _ClassVar[int]
+    PROMPT_EVAL_DURATION_NS_FIELD_NUMBER: _ClassVar[int]
+    GENERATION_DURATION_NS_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_DURATION_NS_FIELD_NUMBER: _ClassVar[int]
+    TIME_TO_FIRST_TOKEN_NS_FIELD_NUMBER: _ClassVar[int]
+    TIMING_SOURCE_FIELD_NUMBER: _ClassVar[int]
+    PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    REQUESTED_MODEL_FIELD_NUMBER: _ClassVar[int]
+    REQUESTED_MODEL_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    SERVED_MODEL_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    NORMALIZED_REQUEST_HASH_FIELD_NUMBER: _ClassVar[int]
+    OUTPUT_HASH_FIELD_NUMBER: _ClassVar[int]
+    CAMPAIGN_ID_FIELD_NUMBER: _ClassVar[int]
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    ASSIGNMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    EVALUATION_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_REGISTRY_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    RETRY_COUNT_FIELD_NUMBER: _ClassVar[int]
+    LOAD_STATE_FIELD_NUMBER: _ClassVar[int]
+    RETRY_CLASSIFICATION_FIELD_NUMBER: _ClassVar[int]
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    finish_reason: str
+    model: str
+    result_digest: str
+    parts: _containers.RepeatedCompositeFieldContainer[InferenceResponsePart]
+    usage_reported: bool
+    thinking_tokens: int
+    cache_tokens: int
+    load_duration_ns: int
+    prompt_eval_duration_ns: int
+    generation_duration_ns: int
+    total_duration_ns: int
+    time_to_first_token_ns: int
+    timing_source: InferenceTimingSource
+    provider_attempt_id: str
+    requested_model: str
+    requested_model_digest: str
+    served_model_digest: str
+    normalized_request_hash: str
+    output_hash: str
+    campaign_id: str
+    run_id: str
+    assignment_id: str
+    evaluation_attempt_id: str
+    scenario_id: str
+    model_registry_digest: str
+    retry_count: int
+    load_state: InferenceLoadState
+    retry_classification: InferenceRetryClassification
+    def __init__(self, prompt_tokens: _Optional[int] = ..., completion_tokens: _Optional[int] = ..., total_tokens: _Optional[int] = ..., finish_reason: _Optional[str] = ..., model: _Optional[str] = ..., result_digest: _Optional[str] = ..., parts: _Optional[_Iterable[_Union[InferenceResponsePart, _Mapping]]] = ..., usage_reported: _Optional[bool] = ..., thinking_tokens: _Optional[int] = ..., cache_tokens: _Optional[int] = ..., load_duration_ns: _Optional[int] = ..., prompt_eval_duration_ns: _Optional[int] = ..., generation_duration_ns: _Optional[int] = ..., total_duration_ns: _Optional[int] = ..., time_to_first_token_ns: _Optional[int] = ..., timing_source: _Optional[_Union[InferenceTimingSource, str]] = ..., provider_attempt_id: _Optional[str] = ..., requested_model: _Optional[str] = ..., requested_model_digest: _Optional[str] = ..., served_model_digest: _Optional[str] = ..., normalized_request_hash: _Optional[str] = ..., output_hash: _Optional[str] = ..., campaign_id: _Optional[str] = ..., run_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., model_registry_digest: _Optional[str] = ..., retry_count: _Optional[int] = ..., load_state: _Optional[_Union[InferenceLoadState, str]] = ..., retry_classification: _Optional[_Union[InferenceRetryClassification, str]] = ...) -> None: ...
+
+class InferenceProgressEvent(_message.Message):
+    __slots__ = ("provider_attempt_id", "sequence", "parts", "time_to_first_token_ns", "served_model")
+    PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    PARTS_FIELD_NUMBER: _ClassVar[int]
+    TIME_TO_FIRST_TOKEN_NS_FIELD_NUMBER: _ClassVar[int]
+    SERVED_MODEL_FIELD_NUMBER: _ClassVar[int]
+    provider_attempt_id: str
+    sequence: int
+    parts: _containers.RepeatedCompositeFieldContainer[InferenceResponsePart]
+    time_to_first_token_ns: int
+    served_model: str
+    def __init__(self, provider_attempt_id: _Optional[str] = ..., sequence: _Optional[int] = ..., parts: _Optional[_Iterable[_Union[InferenceResponsePart, _Mapping]]] = ..., time_to_first_token_ns: _Optional[int] = ..., served_model: _Optional[str] = ...) -> None: ...
+
+class InferenceCompletion(_message.Message):
+    __slots__ = ("receipt", "result")
+    RECEIPT_FIELD_NUMBER: _ClassVar[int]
+    RESULT_FIELD_NUMBER: _ClassVar[int]
+    receipt: ActionReceipt
+    result: InferenceResult
+    def __init__(self, receipt: _Optional[_Union[ActionReceipt, _Mapping]] = ..., result: _Optional[_Union[InferenceResult, _Mapping]] = ...) -> None: ...
+
+class InferenceDispatchRequest(_message.Message):
+    __slots__ = ("role", "model", "temperature", "max_tokens", "keep_alive", "target_operator_session_id", "acting_app_id", "case_id", "investigation_id", "task_id", "web_session_id", "cli_session_id", "messages", "tools", "top_p", "top_k", "stop_sequences", "response_format", "request_schema_version", "tool_choice", "parallel_tool_calls", "thinking", "context_limit", "provider_attempt_id", "model_digest", "campaign_id", "run_id", "assignment_id", "evaluation_attempt_id", "scenario_id", "model_registry", "model_registry_digest", "stream", "retry_count", "seed")
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    MODEL_FIELD_NUMBER: _ClassVar[int]
+    TEMPERATURE_FIELD_NUMBER: _ClassVar[int]
+    MAX_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    KEEP_ALIVE_FIELD_NUMBER: _ClassVar[int]
+    TARGET_OPERATOR_SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    ACTING_APP_ID_FIELD_NUMBER: _ClassVar[int]
+    CASE_ID_FIELD_NUMBER: _ClassVar[int]
+    INVESTIGATION_ID_FIELD_NUMBER: _ClassVar[int]
+    TASK_ID_FIELD_NUMBER: _ClassVar[int]
+    WEB_SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    CLI_SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    MESSAGES_FIELD_NUMBER: _ClassVar[int]
+    TOOLS_FIELD_NUMBER: _ClassVar[int]
+    TOP_P_FIELD_NUMBER: _ClassVar[int]
+    TOP_K_FIELD_NUMBER: _ClassVar[int]
+    STOP_SEQUENCES_FIELD_NUMBER: _ClassVar[int]
+    RESPONSE_FORMAT_FIELD_NUMBER: _ClassVar[int]
+    REQUEST_SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
+    TOOL_CHOICE_FIELD_NUMBER: _ClassVar[int]
+    PARALLEL_TOOL_CALLS_FIELD_NUMBER: _ClassVar[int]
+    THINKING_FIELD_NUMBER: _ClassVar[int]
+    CONTEXT_LIMIT_FIELD_NUMBER: _ClassVar[int]
+    PROVIDER_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    CAMPAIGN_ID_FIELD_NUMBER: _ClassVar[int]
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    ASSIGNMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    EVALUATION_ATTEMPT_ID_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_REGISTRY_FIELD_NUMBER: _ClassVar[int]
+    MODEL_REGISTRY_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    STREAM_FIELD_NUMBER: _ClassVar[int]
+    RETRY_COUNT_FIELD_NUMBER: _ClassVar[int]
+    SEED_FIELD_NUMBER: _ClassVar[int]
+    role: ModelRole
+    model: str
+    temperature: float
+    max_tokens: int
+    keep_alive: str
+    target_operator_session_id: str
+    acting_app_id: str
+    case_id: str
+    investigation_id: str
+    task_id: str
+    web_session_id: str
+    cli_session_id: str
+    messages: _containers.RepeatedCompositeFieldContainer[InferenceMessage]
+    tools: _containers.RepeatedCompositeFieldContainer[InferenceToolDeclaration]
+    top_p: float
+    top_k: int
+    stop_sequences: _containers.RepeatedScalarFieldContainer[str]
+    response_format: InferenceResponseFormat
+    request_schema_version: str
+    tool_choice: InferenceToolChoice
+    parallel_tool_calls: bool
+    thinking: InferenceThinkingControl
+    context_limit: int
+    provider_attempt_id: str
+    model_digest: str
+    campaign_id: str
+    run_id: str
+    assignment_id: str
+    evaluation_attempt_id: str
+    scenario_id: str
+    model_registry: _containers.RepeatedCompositeFieldContainer[InferenceModelVariant]
+    model_registry_digest: str
+    stream: bool
+    retry_count: int
+    seed: int
+    def __init__(self, role: _Optional[_Union[ModelRole, str]] = ..., model: _Optional[str] = ..., temperature: _Optional[float] = ..., max_tokens: _Optional[int] = ..., keep_alive: _Optional[str] = ..., target_operator_session_id: _Optional[str] = ..., acting_app_id: _Optional[str] = ..., case_id: _Optional[str] = ..., investigation_id: _Optional[str] = ..., task_id: _Optional[str] = ..., web_session_id: _Optional[str] = ..., cli_session_id: _Optional[str] = ..., messages: _Optional[_Iterable[_Union[InferenceMessage, _Mapping]]] = ..., tools: _Optional[_Iterable[_Union[InferenceToolDeclaration, _Mapping]]] = ..., top_p: _Optional[float] = ..., top_k: _Optional[int] = ..., stop_sequences: _Optional[_Iterable[str]] = ..., response_format: _Optional[_Union[InferenceResponseFormat, _Mapping]] = ..., request_schema_version: _Optional[str] = ..., tool_choice: _Optional[_Union[InferenceToolChoice, _Mapping]] = ..., parallel_tool_calls: _Optional[bool] = ..., thinking: _Optional[_Union[InferenceThinkingControl, _Mapping]] = ..., context_limit: _Optional[int] = ..., provider_attempt_id: _Optional[str] = ..., model_digest: _Optional[str] = ..., campaign_id: _Optional[str] = ..., run_id: _Optional[str] = ..., assignment_id: _Optional[str] = ..., evaluation_attempt_id: _Optional[str] = ..., scenario_id: _Optional[str] = ..., model_registry: _Optional[_Iterable[_Union[InferenceModelVariant, _Mapping]]] = ..., model_registry_digest: _Optional[str] = ..., stream: _Optional[bool] = ..., retry_count: _Optional[int] = ..., seed: _Optional[int] = ...) -> None: ...
+
+class InferenceDispatchStreamFailure(_message.Message):
+    __slots__ = ("reason",)
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    reason: str
+    def __init__(self, reason: _Optional[str] = ...) -> None: ...
+
+class InferenceDispatchStreamFrame(_message.Message):
+    __slots__ = ("progress", "completion", "failure")
+    PROGRESS_FIELD_NUMBER: _ClassVar[int]
+    COMPLETION_FIELD_NUMBER: _ClassVar[int]
+    FAILURE_FIELD_NUMBER: _ClassVar[int]
+    progress: InferenceProgressEvent
+    completion: InferenceDispatchResponse
+    failure: InferenceDispatchStreamFailure
+    def __init__(self, progress: _Optional[_Union[InferenceProgressEvent, _Mapping]] = ..., completion: _Optional[_Union[InferenceDispatchResponse, _Mapping]] = ..., failure: _Optional[_Union[InferenceDispatchStreamFailure, _Mapping]] = ...) -> None: ...
+
+class InferenceDispatchResponse(_message.Message):
+    __slots__ = ("transaction_id", "result", "receipt")
+    TRANSACTION_ID_FIELD_NUMBER: _ClassVar[int]
+    RESULT_FIELD_NUMBER: _ClassVar[int]
+    RECEIPT_FIELD_NUMBER: _ClassVar[int]
+    transaction_id: str
+    result: InferenceResult
+    receipt: ActionReceipt
+    def __init__(self, transaction_id: _Optional[str] = ..., result: _Optional[_Union[InferenceResult, _Mapping]] = ..., receipt: _Optional[_Union[ActionReceipt, _Mapping]] = ...) -> None: ...

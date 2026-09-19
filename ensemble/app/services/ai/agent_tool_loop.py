@@ -217,7 +217,7 @@ class TribunalInvoker:
             expected_output_lines=sage_request.expected_output_lines,
             timeout_seconds=sage_request.timeout_seconds,
             correlation_id=gen_result.correlation_id,
-            risk_analysis=gen_result.warden_risk_analysis,  # Pass risk analysis to executor
+            risk_analysis=gen_result.marshal_risk_analysis,  # Pass risk analysis to executor
         )
         return executor_args, gen_result
 
@@ -420,25 +420,25 @@ async def orchestrate_tool_execution(
         and tool_name == OperatorToolName.RUN_COMMANDS
         and isinstance(result, CommandExecutionResult)
     ):
-        # Reset warden block count on successful command (new turn starts fresh)
+        # Reset marshal block count on successful command (new turn starts fresh)
         if result.success and investigation and investigation.current_state:
-            investigation.current_state.warden_block_count = 0
+            investigation.current_state.marshal_block_count = 0
             logger.info(
-                "[WARDEN-CIRCUIT-BREAKER] Reset warden block count for investigation=%s after successful command",
+                "[MARSHAL-CIRCUIT-BREAKER] Reset marshal block count for investigation=%s after successful command",
                 investigation.id,
             )
 
         # Schedule fire-and-forget reputation resolution
         async def _resolve_and_emit():
             try:
-                warden_blocked = result.error_type == CommandErrorType.RISK_ANALYSIS_BLOCKED
+                marshal_blocked = result.error_type == CommandErrorType.RISK_ANALYSIS_BLOCKED
                 res = await tool_executor.reputation_service.resolve_stakes(
                     tribunal_command_id=gen_result.correlation_id,
                     investigation_id=investigation.id,
                     gen_result=gen_result,
                     execution_result=result,
-                    warden_risk=result.warden_risk,
-                    warden_blocked=warden_blocked,
+                    marshal_risk=result.marshal_risk,
+                    marshal_blocked=marshal_blocked,
                     context=RequestContext.from_app_context(g8e_context),
                 )
 
@@ -574,6 +574,7 @@ async def _process_single_tool_call(
         raise
     except Exception as exc:
         logger.error("[TOOL_EXEC] Function call %d (%s) failed: %s", idx, fc.name, exc)
+        execution_id = generate_command_execution_id()
         _exc_result = CommandExecutionResult(
             success=False,
             error=str(exc),
@@ -582,12 +583,12 @@ async def _process_single_tool_call(
             tool_name=fc.name or "",
             call_info=StreamChunkData(
                 tool_name=fc.name,
-                execution_id=None,
+                execution_id=execution_id,
                 command="",
                 is_operator_tool=False,
             ),
             result_info=StreamChunkData(
-                execution_id=None,
+                execution_id=execution_id,
                 success=False,
                 result=_exc_result,
                 error_type=CommandErrorType.EXECUTION_ERROR,

@@ -17,14 +17,13 @@ from app.models.settings import G8eeUserSettings
 from app.errors import OllamaEmptyResponseError
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
 from app.llm import get_llm_provider, Role
-from app.llm.model_evidence import (
-    model_boundary_hash,
-    recorded_model_boundary_hash,
-    recorded_model_boundary_privacy,
-)
+from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
 from app.llm.structured import parse_structured_response
 from app.models.base import G8eBaseModel
-from app.models.model_telemetry import ModelBoundaryPrivacyAttestation, ModelCallTelemetry
+from app.llm.provider import LLMProvider
+from app.models.http_context import G8eHttpContext
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.tool_results import (
     CommandRiskAnalysis,
     CommandRiskContext,
@@ -60,13 +59,13 @@ SYSTEM_PATH_PREFIXES = tuple(
 HIGH_RISK_SYSTEM_FILES = _SECURITY_CONSTRAINTS.get("high_risk_system_files", {})
 
 
-def _build_warden_command_risk_template(
+def _build_marshal_command_template(
     command: str,
     justification: str,
     working_dir: str,
     investigation_context: str = "",
 ) -> str:
-    """Build the Warden command risk analysis template using centralized XML formatting.
+    """Build the Marshal command risk analysis template using centralized XML formatting.
 
     Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
     """
@@ -85,7 +84,7 @@ def _build_warden_command_risk_template(
     return "\n\n".join(parts)
 
 
-def _build_warden_error_template(
+def _build_marshal_error_template(
     command: str,
     exit_code: int | None,
     stdout: str,
@@ -93,7 +92,7 @@ def _build_warden_error_template(
     retry_count: int,
     working_dir: str,
 ) -> str:
-    """Build the Warden error analysis template using centralized XML formatting.
+    """Build the Marshal error analysis template using centralized XML formatting.
 
     Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
     """
@@ -129,14 +128,14 @@ Working Directory: {working_dir}"""
     return "\n\n".join(parts)
 
 
-def _build_warden_file_risk_template(
+def _build_marshal_file_template(
     operation: str,
     file_path: str,
     content_preview: str,
     git_status: str,
     backup_available: bool,
 ) -> str:
-    """Build the Warden file operation risk template using centralized XML formatting.
+    """Build the Marshal file operation risk template using centralized XML formatting.
 
     Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
     """
@@ -196,6 +195,7 @@ class AIResponseAnalyzer:
         log_context: str,
         agent_role: str,
         post_process: Callable[[T], None] | None = None,
+        g8e_context: G8eHttpContext | None = None,
     ) -> T:
         if not lite_model:
             logger.warning("%s: no lite_model configured", log_context)
@@ -212,7 +212,7 @@ class AIResponseAnalyzer:
                 response_format=types.ResponseFormat.from_pydantic_schema(response_schema),
             )
             contents = [types.Content(role=Role.USER, parts=[types.Part(text=prompt)])]
-            client.clear_input_artifact_hash()
+            prepare_provider_call(client, g8e_context=g8e_context)
             input_artifact_hash = model_boundary_hash({
                 "model": lite_model,
                 "contents": contents,
@@ -231,26 +231,23 @@ class AIResponseAnalyzer:
                 contents=contents,
                 lite_llm_settings=config,
             )
-            input_artifact_hash = recorded_model_boundary_hash(client, input_artifact_hash)
             monotonic_end = time.monotonic()
             logger.info(
-                "[WARDEN-LLM] %s LLM call duration_ms=%.2f",
+                "[MARSHAL-LLM] %s LLM call duration_ms=%.2f",
                 log_context,
                 (monotonic_end - monotonic_start) * 1000,
             )
             response_text = response.text or ""
             analysis = parse_structured_response(response_text, response_model)
         except Exception as exc:
-            input_artifact_hash = recorded_model_boundary_hash(client, input_artifact_hash)
             monotonic_end = time.monotonic()
-            telemetry = self._model_call_telemetry(
+            telemetry = AIResponseAnalyzer._model_call_telemetry(
+                provider=client,
                 agent_role=agent_role,
-                provider=type(client).__name__,
                 model=lite_model,
                 monotonic_start=monotonic_start,
                 monotonic_end=monotonic_end,
                 input_artifact_hash=input_artifact_hash,
-                model_boundary_privacy=recorded_model_boundary_privacy(client),
                 response=response,
                 response_text=response_text,
                 error=exc,
@@ -262,13 +259,12 @@ class AIResponseAnalyzer:
             return fallback_exception(exc).model_copy(update={"model_call": telemetry})
 
         telemetry = self._model_call_telemetry(
+            provider=client,
             agent_role=agent_role,
-            provider=type(client).__name__,
             model=lite_model,
             monotonic_start=monotonic_start,
             monotonic_end=monotonic_end,
             input_artifact_hash=input_artifact_hash,
-            model_boundary_privacy=recorded_model_boundary_privacy(client),
             response=response,
             response_text=response_text,
         )
@@ -280,25 +276,27 @@ class AIResponseAnalyzer:
 
     @staticmethod
     def _model_call_telemetry(
+        *,
+        provider: LLMProvider,
         agent_role: str,
-        provider: str,
         model: str,
         monotonic_start: float,
         monotonic_end: float,
         input_artifact_hash: str,
-        model_boundary_privacy: ModelBoundaryPrivacyAttestation | None,
         response: types.GenerateContentResponse | None,
         response_text: str,
         error: Exception | None = None,
     ) -> ModelCallTelemetry:
         usage = response.usage_metadata if response else types.UsageMetadata()
         finish_reason = response.candidates[0].finish_reason if response and response.candidates else None
-        return ModelCallTelemetry(
-            agent_role=agent_role,
+        return build_model_call_telemetry(
             provider=provider,
+            agent_role=agent_role,
+            model_role="lite",
             model=model,
             monotonic_start=monotonic_start,
             monotonic_end=monotonic_end,
+            input_artifact_hash=input_artifact_hash,
             input_tokens=usage.prompt_token_count,
             output_tokens=usage.candidates_token_count,
             thinking_tokens=usage.thinking_token_count,
@@ -306,11 +304,13 @@ class AIResponseAnalyzer:
             total_tokens=usage.total_token_count,
             usage_reported=usage.usage_reported,
             finish_reason=finish_reason,
+            generation_duration_seconds=usage.eval_duration_seconds,
+            prompt_eval_duration_seconds=usage.prompt_eval_duration_seconds,
+            total_duration_seconds=usage.total_duration_seconds,
+            load_duration_seconds=usage.load_duration_seconds,
             succeeded=error is None,
             error_type=type(error).__name__ if error else None,
-            input_artifact_hash=input_artifact_hash,
             output_artifact_hash=model_boundary_hash(response_text),
-            model_boundary_privacy=model_boundary_privacy,
         )
 
     async def analyze_command_risk(
@@ -327,8 +327,8 @@ class AIResponseAnalyzer:
         resolved_settings = settings
 
         prompt_build_start = time.time()
-        command_risk_persona = get_agent_persona("warden_command_risk")
-        template = _build_warden_command_risk_template(
+        command_risk_persona = get_agent_persona("marshal_command")
+        template = _build_marshal_command_template(
             command=command,
             justification=justification,
             working_dir=working_dir,
@@ -337,7 +337,7 @@ class AIResponseAnalyzer:
         prompt = f"{command_risk_persona.get_system_prompt()}\n\n{template}"
         prompt_build_duration_ms = (time.time() - prompt_build_start) * 1000
         logger.info(
-            "[WARDEN-COMMAND-RISK] command=%r prompt_build_duration_ms=%.2f",
+            "[MARSHAL-COMMAND] command=%r prompt_build_duration_ms=%.2f",
             command[:60],
             prompt_build_duration_ms,
         )
@@ -347,7 +347,7 @@ class AIResponseAnalyzer:
         def log_result(analysis: CommandRiskAnalysis) -> None:
             total_duration_ms = (time.time() - analysis_start_time) * 1000
             logger.info(
-                "[WARDEN-COMMAND-RISK] Completed command=%r risk_level=%s total_duration_ms=%.2f",
+                "[MARSHAL-COMMAND] Completed command=%r risk_level=%s total_duration_ms=%.2f",
                 command[:60],
                 analysis.risk_level,
                 total_duration_ms,
@@ -362,7 +362,7 @@ class AIResponseAnalyzer:
             fallback_no_response=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             fallback_exception=lambda e: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             log_context="Command risk analysis",
-            agent_role="warden_command_risk",
+            agent_role="marshal_command",
             post_process=log_result,
         )
 
@@ -397,8 +397,8 @@ class AIResponseAnalyzer:
             )
 
         prompt_build_start = time.time()
-        error_persona = get_agent_persona("warden_error")
-        template = _build_warden_error_template(
+        error_persona = get_agent_persona("marshal_error")
+        template = _build_marshal_error_template(
             command=command,
             exit_code=exit_code,
             stdout=stdout[:1000],
@@ -409,7 +409,7 @@ class AIResponseAnalyzer:
         prompt = f"{error_persona.get_system_prompt()}\n\n{template}"
         prompt_build_duration_ms = (time.time() - prompt_build_start) * 1000
         logger.info(
-            "[WARDEN-ERROR] command=%r retry_count=%d prompt_build_duration_ms=%.2f",
+            "[MARSHAL-ERROR] command=%r retry_count=%d prompt_build_duration_ms=%.2f",
             command[:60],
             retry_count,
             prompt_build_duration_ms,
@@ -426,7 +426,7 @@ class AIResponseAnalyzer:
                 ) + " (Retry limit reached - escalating to prevent infinite loop)"
             total_duration_ms = (time.time() - analysis_start_time) * 1000
             logger.info(
-                "[WARDEN-ERROR] Completed command=%r error_category=%s can_auto_fix=%s should_escalate=%s total_duration_ms=%.2f",
+                "[MARSHAL-ERROR] Completed command=%r error_category=%s can_auto_fix=%s should_escalate=%s total_duration_ms=%.2f",
                 command[:60],
                 analysis.error_category,
                 analysis.can_auto_fix,
@@ -464,7 +464,7 @@ class AIResponseAnalyzer:
                 user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
             ),
             log_context="Error analysis",
-            agent_role="warden_error",
+            agent_role="marshal_error",
             post_process=post_process,
         )
 
@@ -485,8 +485,8 @@ class AIResponseAnalyzer:
         content_preview = content[:500] if content else "N/A"
 
         prompt_build_start = time.time()
-        file_risk_persona = get_agent_persona("warden_file_risk")
-        template = _build_warden_file_risk_template(
+        file_risk_persona = get_agent_persona("marshal_file")
+        template = _build_marshal_file_template(
             operation=operation,
             file_path=file_path,
             content_preview=content_preview,
@@ -496,7 +496,7 @@ class AIResponseAnalyzer:
         prompt = f"{file_risk_persona.get_system_prompt()}\n\n{template}"
         prompt_build_duration_ms = (time.time() - prompt_build_start) * 1000
         logger.info(
-            "[WARDEN-FILE-RISK] operation=%s file_path=%r prompt_build_duration_ms=%.2f",
+            "[MARSHAL-FILE] operation=%s file_path=%r prompt_build_duration_ms=%.2f",
             operation,
             file_path[:60],
             prompt_build_duration_ms,
@@ -508,7 +508,7 @@ class AIResponseAnalyzer:
             analysis.is_system_file = any(file_path.startswith(p) for p in SYSTEM_PATH_PREFIXES)
 
             # System files are blocked if HIGH risk, UNLESS a backup is available.
-            # This follows Warden's discipline: "A sed -i on a config file is MEDIUM if a .bak was just created."
+            # This follows Marshal's discipline: "A sed -i on a config file is MEDIUM if a .bak was just created."
             if (
                 analysis.risk_level == RiskLevel.HIGH
                 and analysis.is_system_file
@@ -518,7 +518,7 @@ class AIResponseAnalyzer:
 
             total_duration_ms = (time.time() - analysis_start_time) * 1000
             logger.info(
-                "[WARDEN-FILE-RISK] Completed operation=%s file_path=%r risk_level=%s is_system_file=%s safe_to_proceed=%s total_duration_ms=%.2f",
+                "[MARSHAL-FILE] Completed operation=%s file_path=%r risk_level=%s is_system_file=%s safe_to_proceed=%s total_duration_ms=%.2f",
                 operation,
                 file_path,
                 analysis.risk_level,
@@ -550,6 +550,6 @@ class AIResponseAnalyzer:
                 approval_prompt=f"Risk analysis failed. File operation: {operation} on {file_path}\nProceed with extreme caution?",
             ),
             log_context="File operation risk analysis",
-            agent_role="warden_file_risk",
+            agent_role="marshal_file",
             post_process=post_process,
         )

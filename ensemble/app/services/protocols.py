@@ -44,7 +44,12 @@ from app.models.memory import InvestigationMemory
 from app.models.sessions import CliSessionDocument
 from app.models.internal_api import (
     DirectCommandRequest,
+    InferenceDispatchRequest,
+    InferenceDispatchResponse,
     IntentOperationResult,
+    ObserveProducerAgentStateRequest,
+    ObserveProducerRunStateRequest,
+    ObserveProducerResponse,
     OperatorApprovalResponse,
     SSEPushResponse,
 )
@@ -160,6 +165,28 @@ class EventServiceProtocol(Protocol):
         cli_session_id: str | None = None,
     ) -> None:
         """Publish an investigation-related event."""
+        raise NotImplementedError
+
+    async def publish_agent_state(
+        self, request: ObserveProducerAgentStateRequest
+    ) -> None:
+        """Best-effort agent-state projection push to the gateway observe producer.
+
+        Catches transport/network failures from the low-level client, logs one
+        warning with safe identifiers, and returns without raising. Cancellation
+        (asyncio.CancelledError) continues to propagate. Targetless requests
+        (no web_session_id and no cli_session_id) are skipped, mirroring the
+        SSE targetless-skip contract.
+        """
+        raise NotImplementedError
+
+    async def publish_run_state(
+        self, request: ObserveProducerRunStateRequest
+    ) -> None:
+        """Best-effort run-state projection push to the gateway observe producer.
+
+        Same best-effort and targetless-skip semantics as publish_agent_state.
+        """
         raise NotImplementedError
 
 
@@ -535,6 +562,7 @@ class InvestigationDataServiceProtocol(Protocol):
         sender: str,
         content: str,
         metadata: ConversationMessageMetadata,
+        context: RequestContext | None = None,
     ) -> bool:
         raise NotImplementedError
 
@@ -648,6 +676,21 @@ class G8eClientProtocol(Protocol):
     async def revoke_intent(
         self, operator_id: str, intent: str, context: G8eHttpContext
     ) -> IntentOperationResult:
+        raise NotImplementedError
+
+    async def push_agent_state(
+        self, request: ObserveProducerAgentStateRequest
+    ) -> ObserveProducerResponse:
+        raise NotImplementedError
+
+    async def push_run_state(
+        self, request: ObserveProducerRunStateRequest
+    ) -> ObserveProducerResponse:
+        raise NotImplementedError
+
+    async def dispatch_inference(
+        self, request: InferenceDispatchRequest
+    ) -> InferenceDispatchResponse:
         raise NotImplementedError
 
 

@@ -1,0 +1,88 @@
+# Evaluation artifacts (`eval/`)
+
+Checked-in evaluation program data and templates live here. **Runtime** campaign state (provider freezes, per-model inventories, rollout progress) lives under `.g8e/eval/` on the campaign host and is gitignored.
+
+## Checked-in program inventory
+
+| Path | Purpose |
+| --- | --- |
+| `eval/base-model-inventory.json` | **Default genesis program inventory** — 35 init-campaign models (3 roles × 25 scenarios = **2625** cells when run homogeneously) |
+| `eval/base-init-campaign-queue.json` | Template rollout queue for all 35 models (`status: pending`) |
+| `eval/examples/init-campaign-queue.example.json` | Minimal queue shape reference |
+
+The base inventory is the canonical 35-model genesis program set from the first init-campaign rollout. Campaign ID: `eval-genesis-homogeneous`. Digests are a reference provider snapshot; re-freeze from your Ollama host before scored runs on release code.
+
+### 35-model program set
+
+| Family | Models |
+| --- | --- |
+| DeepSeek | `deepseek-r1:7b` |
+| Gemma | `gemma2:9b`, `gemma3:270m`, `gemma3:1b`, `gemma3:4b`, `gemma4:e2b`, `gemma4:e4b` |
+| Granite | `granite3.3:2b`, `granite3.3:8b` |
+| Hermes | `hermes3:8b` |
+| Llama | `llama3.1:8b`, `llama3.2:1b`, `llama3.2:3b`, `tinyllama:1.1b` |
+| Mistral | `mistral:7b`, `ministral-3:3b`, `ministral-3:8b` |
+| Phi | `phi4-mini:3.8b`, `phi4-mini-reasoning:3.8b` |
+| Qwen | `qwen2.5:0.5b`, `qwen2.5:3b`, `qwen2.5:7b`, `qwen2.5-coder:7b`, `qwen3:0.6b`, `qwen3:1.7b`, `qwen3:4b`, `qwen3:8b` |
+| SmolLM | `smollm2:135m`, `smollm2:360m`, `smollm2:1.7b`, `Impulse2000/smollm3:3b-q4_k_m` |
+| Other | `Randomblock1/nemotron-nano:8b`, `sam860/LFM2:350m`, `sam860/LFM2:700m`, `sam860/LFM2:2.6b` |
+
+Per-model campaigns use `eval-init-<variant_id>` (legacy exception: `gemma4:e4b` → `init-campaign`). Each single-model run is **75** cells.
+
+## Runtime files (campaign host)
+
+| Path | Purpose |
+| --- | --- |
+| `.g8e/eval/model-inventory.json` | Full provider freeze from `g8e eval models freeze` |
+| `.g8e/eval/inventories/*.json` | Per-model campaign inventory files |
+| `.g8e/eval/init-campaign-queue.json` | Rollout queue manifest |
+
+## Typical workflow
+
+```bash
+# 1. Freeze provider inventory (recommended before scored runs on release code)
+./g8e eval models freeze \
+  --campaign-id eval-genesis-homogeneous \
+  --ollama-endpoint "$G8E_OLLAMA_ENDPOINT" \
+  --output .g8e/eval/model-inventory.json
+
+./g8e eval models list
+
+# 2. Build rollout queue from the base program inventory (default)
+./g8e eval rollout init --materialize --merge
+
+# Or reconcile live digests: freeze first, then filter runtime to base program tags
+./g8e eval rollout init --from .g8e/eval/model-inventory.json --materialize --merge
+
+./g8e eval rollout run --tier-a --skip-verified --skip-variant granite3-3-2b
+
+# Or materialize one combined inventory for a multi-model smoke campaign
+./g8e eval models materialize --tags qwen3:0.6b,qwen3:4b,gemma3:4b \
+  --campaign-id eval-smoke-mini \
+  --output .g8e/eval/inventories/eval-smoke-mini.json
+```
+
+Regenerate checked-in base files after changing the program model set:
+
+```bash
+go run ./.local.dev/tools/gen-base-model-inventory
+```
+
+## CLI reference
+
+| Command | Purpose |
+| --- | --- |
+| `g8e eval models freeze` | Discover and freeze all models from the provider |
+| `g8e eval models list` | List variants in a frozen inventory file |
+| `g8e eval models materialize` | Write per-model or combined campaign inventory files |
+| `g8e eval rollout init` | Build `.g8e/eval/init-campaign-queue.json` |
+| `g8e eval rollout run` | Unattended rollout: start → verify for every queued model |
+| `g8e eval rollout list` | Inspect queue entries |
+| `g8e eval rollout next` | Show the next pending model |
+| `g8e eval rollout mark` | Manually record verify progress for one entry |
+
+See [Unified Docker Stack Guide](../../docs/guides/unified_stack.md) and [Evaluations architecture](../../docs/architecture/evals.md) for full campaign operations.
+
+## License
+
+Source in this repository is licensed under the Business Source License 1.1 (BSL 1.1). It converts to Apache 2.0 on 2030-08-18. See the repository [LICENSE](../../LICENSE) for details.

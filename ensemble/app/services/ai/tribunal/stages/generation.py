@@ -23,12 +23,10 @@ from app.llm.prompts import (
     build_tribunal_prompt_fields,
 )
 from app.llm.llm_types import Content, GenerateContentResponse, Part, Role, ResponseFormat
-from app.llm.model_evidence import (
-    model_boundary_hash,
-    recorded_model_boundary_hash,
-    recorded_model_boundary_privacy,
-)
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.llm.model_evidence import model_boundary_hash
 from app.llm.provider import LLMProvider
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.agents.tribunal import (
     CandidateCommand,
     AuditorClusterInfo,
@@ -56,6 +54,44 @@ class TribunalResponse(G8eBaseModel):
     command: str
 
 
+def _pass_model_call(
+    provider: LLMProvider,
+    model: str,
+    response: GenerateContentResponse | None,
+    monotonic_start: float,
+    input_artifact_hash: str,
+    error: str | None = None,
+    error_type: str | None = None,
+) -> ModelCallTelemetry:
+    usage = response.usage_metadata if response else None
+    candidates = response.candidates if response and isinstance(response.candidates, list) else []
+    finish_reason = candidates[0].finish_reason if candidates else None
+    response_text = response.text if response else ""
+    return build_model_call_telemetry(
+        provider=provider,
+        agent_role="tribunal",
+        model_role="lite",
+        model=model,
+        monotonic_start=monotonic_start,
+        monotonic_end=time.monotonic(),
+        input_artifact_hash=input_artifact_hash,
+        input_tokens=usage.prompt_token_count if usage else 0,
+        output_tokens=usage.candidates_token_count if usage else 0,
+        thinking_tokens=usage.thinking_token_count if usage else 0,
+        cache_tokens=usage.cache_token_count if usage else 0,
+        total_tokens=usage.total_token_count if usage else 0,
+        usage_reported=usage.usage_reported if usage else False,
+        finish_reason=finish_reason if isinstance(finish_reason, str) else None,
+        generation_duration_seconds=usage.eval_duration_seconds if usage else None,
+        prompt_eval_duration_seconds=usage.prompt_eval_duration_seconds if usage else None,
+        total_duration_seconds=usage.total_duration_seconds if usage else None,
+        load_duration_seconds=usage.load_duration_seconds if usage else None,
+        succeeded=error is None,
+        error_type=error_type,
+        output_artifact_hash=model_boundary_hash(response_text or ""),
+    )
+
+
 async def _emit_pass_observation(
     emitter: TribunalEmitter,
     pass_index: int,
@@ -69,14 +105,15 @@ async def _emit_pass_observation(
     error: str | None = None,
     error_type: str | None = None,
 ) -> None:
-    usage = response.usage_metadata if response else None
-    input_tokens = getattr(usage, "prompt_token_count", 0)
-    output_tokens = getattr(usage, "candidates_token_count", 0)
-    thinking_tokens = getattr(usage, "thinking_token_count", 0)
-    cache_tokens = getattr(usage, "cache_token_count", 0)
-    candidates = response.candidates if response and isinstance(response.candidates, list) else []
-    finish_reason = candidates[0].finish_reason if candidates else None
-    response_text = response.text if response else ""
+    model_call = _pass_model_call(
+        provider,
+        model,
+        response,
+        monotonic_start,
+        input_artifact_hash,
+        error=error,
+        error_type=error_type,
+    )
     await emitter.emit(
         EventType.AI_CONSENSUS_VOTING_PASS_COMPLETED,
         TribunalPassCompletedPayload(
@@ -87,19 +124,20 @@ async def _emit_pass_observation(
             error=error,
             provider=type(provider).__name__,
             model=model,
-            input_tokens=input_tokens if isinstance(input_tokens, int) else 0,
-            output_tokens=output_tokens if isinstance(output_tokens, int) else 0,
-            thinking_tokens=thinking_tokens if isinstance(thinking_tokens, int) else 0,
-            cache_tokens=cache_tokens if isinstance(cache_tokens, int) else 0,
-            usage_reported=usage.usage_reported if usage else False,
-            finish_reason=finish_reason if isinstance(finish_reason, str) else None,
+            input_tokens=model_call.input_tokens,
+            output_tokens=model_call.output_tokens,
+            thinking_tokens=model_call.thinking_tokens,
+            cache_tokens=model_call.cache_tokens,
+            usage_reported=model_call.usage_reported,
+            finish_reason=model_call.finish_reason,
             monotonic_start=monotonic_start,
-            monotonic_end=time.monotonic(),
+            monotonic_end=model_call.monotonic_end,
             input_artifact_hash=input_artifact_hash,
-            output_artifact_hash=model_boundary_hash(response_text or ""),
-            model_boundary_privacy=recorded_model_boundary_privacy(provider),
+            output_artifact_hash=model_call.output_artifact_hash,
+            model_boundary_privacy=model_call.model_boundary_privacy,
             succeeded=error is None,
             error_type=error_type,
+            model_calls=[model_call],
         ),
     )
 
@@ -175,7 +213,7 @@ async def _run_generation_pass(
     )
 
     contents = [Content(role=Role.USER, parts=[Part.from_text(prompt)])]
-    provider.clear_input_artifact_hash()
+    prepare_provider_call(provider, g8e_context=emitter.g8e_context)
     input_artifact_hash = model_boundary_hash({
         "model": model,
         "contents": contents,
@@ -189,7 +227,6 @@ async def _run_generation_pass(
             contents=contents,
             lite_llm_settings=settings,
         )
-        input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
         if not response.text or not response.text.strip():
             error_msg = f"Pass {pass_index} ({member.value}): empty response"
             pass_errors.append(error_msg)
@@ -262,7 +299,6 @@ async def _run_generation_pass(
         return normalised
 
     except OllamaEmptyResponseError as exc:
-        input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
         error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
         pass_errors.append(error_msg)
         logger.error("[TRIBUNAL-PASS] %s", error_msg)
@@ -272,7 +308,6 @@ async def _run_generation_pass(
         )
         return None
     except Exception as exc:
-        input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
         error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
         pass_errors.append(error_msg)
         logger.error("[TRIBUNAL-PASS] %s", error_msg, exc_info=True)

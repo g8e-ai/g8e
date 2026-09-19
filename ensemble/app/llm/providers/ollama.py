@@ -7,6 +7,7 @@
 
 import json
 import logging
+import time
 from collections.abc import AsyncGenerator
 
 from ollama import AsyncClient, Message as OllamaMessage
@@ -38,6 +39,61 @@ from app.llm.utils import schema_to_dict
 from app.llm.providers._capability import translate_capability_error
 
 logger = logging.getLogger(__name__)
+
+# Ollama reports durations in nanoseconds on both unary responses and the
+# terminal stream chunk. Provider-specific unit knowledge stays in this
+# adapter.
+NANOSECONDS_PER_SECOND = 1_000_000_000
+
+
+def _nanoseconds_to_seconds(value: object) -> float | None:
+    """Convert an Ollama native nanosecond duration to seconds.
+
+    Returns None when the field is absent or not a real number; a
+    measured zero stays a measured zero.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value / NANOSECONDS_PER_SECOND
+
+
+def _ollama_usage_metadata(response) -> UsageMetadata:
+    """Map an Ollama response or terminal stream chunk into UsageMetadata.
+
+    Token counts populate only when both prompt_eval_count and eval_count
+    are reported (usage_reported=True). The four native durations convert
+    independently so partially reported responses still surface what the
+    provider measured.
+    """
+    usage = UsageMetadata(
+        prompt_eval_duration_seconds=_nanoseconds_to_seconds(
+            getattr(response, "prompt_eval_duration", None)
+        ),
+        eval_duration_seconds=_nanoseconds_to_seconds(getattr(response, "eval_duration", None)),
+        total_duration_seconds=_nanoseconds_to_seconds(getattr(response, "total_duration", None)),
+        load_duration_seconds=_nanoseconds_to_seconds(getattr(response, "load_duration", None)),
+    )
+    prompt_eval_count = getattr(response, "prompt_eval_count", None)
+    eval_count = getattr(response, "eval_count", None)
+    if prompt_eval_count is not None and eval_count is not None:
+        usage.prompt_token_count = prompt_eval_count
+        usage.candidates_token_count = eval_count
+        usage.total_token_count = prompt_eval_count + eval_count
+        usage.usage_reported = True
+    return usage
+
+
+def _first_token_seen(msg) -> bool:
+    """Whether a stream chunk carries first-token evidence.
+
+    Thinking, content, and tool_calls chunks all represent the first
+    observable model output at the streaming boundary.
+    """
+    return bool(
+        getattr(msg, "thinking", None)
+        or getattr(msg, "content", None)
+        or getattr(msg, "tool_calls", None)
+    )
 
 
 def _contents_to_messages(
@@ -304,6 +360,7 @@ class OllamaProvider(LLMProvider):
         )
         try:
             self._record_model_boundary(chat_kwargs)
+            request_start = time.monotonic()
             stream = await self._client.chat(**chat_kwargs)
         except Exception as e:
             translate_capability_error(
@@ -319,9 +376,12 @@ class OllamaProvider(LLMProvider):
             raise
 
         thinking_buffer = []
+        first_token_at: float | None = None
 
         async for chunk in stream:
             msg = chunk.message
+            if first_token_at is None and _first_token_seen(msg):
+                first_token_at = time.monotonic()
             if getattr(msg, "thinking", None):
                 thinking = msg.thinking
                 if thinking and "\\n" in thinking:
@@ -361,19 +421,11 @@ class OllamaProvider(LLMProvider):
                         yield StreamChunkFromModel(text=combined, thought=True)
                     thinking_buffer.clear()
 
-                usage = None
-                if (
-                    getattr(chunk, "prompt_eval_count", None) is not None
-                    and getattr(chunk, "eval_count", None) is not None
-                ):
-                    usage = UsageMetadata(
-                        prompt_token_count=chunk.prompt_eval_count,
-                        candidates_token_count=chunk.eval_count,
-                        total_token_count=chunk.prompt_eval_count + chunk.eval_count,
-                        usage_reported=True,
-                    )
+                usage = _ollama_usage_metadata(chunk)
+                if first_token_at is not None:
+                    usage.time_to_first_token_seconds = first_token_at - request_start
                 yield StreamChunkFromModel(
-                    finish_reason=chunk.done_reason or "stop", usage_metadata=usage or UsageMetadata()
+                    finish_reason=chunk.done_reason or "stop", usage_metadata=usage
                 )
 
     async def generate_content_primary(
@@ -440,17 +492,7 @@ class OllamaProvider(LLMProvider):
                     )
                 )
 
-        usage = None
-        if (
-            getattr(response, "prompt_eval_count", None) is not None
-            and getattr(response, "eval_count", None) is not None
-        ):
-            usage = UsageMetadata(
-                prompt_token_count=response.prompt_eval_count,
-                candidates_token_count=response.eval_count,
-                total_token_count=response.prompt_eval_count + response.eval_count,
-                usage_reported=True,
-            )
+        usage = _ollama_usage_metadata(response)
 
         return GenerateContentResponse(
             candidates=[
@@ -459,7 +501,7 @@ class OllamaProvider(LLMProvider):
                     finish_reason=response.done_reason or "stop",
                 )
             ],
-            usage_metadata=usage or UsageMetadata(),
+            usage_metadata=usage,
         )
 
     async def generate_content_stream_assistant(
@@ -492,27 +534,23 @@ class OllamaProvider(LLMProvider):
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
         self._record_model_boundary(chat_kwargs)
+        request_start = time.monotonic()
         stream = await self._client.chat(**chat_kwargs)
 
+        first_token_at: float | None = None
         async for chunk in stream:
             msg = chunk.message
+            if first_token_at is None and _first_token_seen(msg):
+                first_token_at = time.monotonic()
             if getattr(msg, "content", None):
                 yield StreamChunkFromModel(text=msg.content)
 
             if chunk.done:
-                usage = None
-                if (
-                    getattr(chunk, "prompt_eval_count", None) is not None
-                    and getattr(chunk, "eval_count", None) is not None
-                ):
-                    usage = UsageMetadata(
-                        prompt_token_count=chunk.prompt_eval_count,
-                        candidates_token_count=chunk.eval_count,
-                        total_token_count=chunk.prompt_eval_count + chunk.eval_count,
-                        usage_reported=True,
-                    )
+                usage = _ollama_usage_metadata(chunk)
+                if first_token_at is not None:
+                    usage.time_to_first_token_seconds = first_token_at - request_start
                 yield StreamChunkFromModel(
-                    finish_reason=chunk.done_reason or "stop", usage_metadata=usage or UsageMetadata()
+                    finish_reason=chunk.done_reason or "stop", usage_metadata=usage
                 )
 
     async def generate_content_assistant(
@@ -559,17 +597,7 @@ class OllamaProvider(LLMProvider):
         if getattr(response.message, "content", None):
             parts.append(Part(text=response.message.content))
 
-        usage = None
-        if (
-            getattr(response, "prompt_eval_count", None) is not None
-            and getattr(response, "eval_count", None) is not None
-        ):
-            usage = UsageMetadata(
-                prompt_token_count=response.prompt_eval_count,
-                candidates_token_count=response.eval_count,
-                total_token_count=response.prompt_eval_count + response.eval_count,
-                usage_reported=True,
-            )
+        usage = _ollama_usage_metadata(response)
 
         return GenerateContentResponse(
             candidates=[
@@ -578,7 +606,7 @@ class OllamaProvider(LLMProvider):
                     finish_reason=response.done_reason or "stop",
                 )
             ],
-            usage_metadata=usage or UsageMetadata(),
+            usage_metadata=usage,
         )
 
     async def generate_content_stream_lite(
@@ -611,27 +639,23 @@ class OllamaProvider(LLMProvider):
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
         self._record_model_boundary(chat_kwargs)
+        request_start = time.monotonic()
         stream = await self._client.chat(**chat_kwargs)
 
+        first_token_at: float | None = None
         async for chunk in stream:
             msg = chunk.message
+            if first_token_at is None and _first_token_seen(msg):
+                first_token_at = time.monotonic()
             if getattr(msg, "content", None):
                 yield StreamChunkFromModel(text=msg.content)
 
             if chunk.done:
-                usage = None
-                if (
-                    getattr(chunk, "prompt_eval_count", None) is not None
-                    and getattr(chunk, "eval_count", None) is not None
-                ):
-                    usage = UsageMetadata(
-                        prompt_token_count=chunk.prompt_eval_count,
-                        candidates_token_count=chunk.eval_count,
-                        total_token_count=chunk.prompt_eval_count + chunk.eval_count,
-                        usage_reported=True,
-                    )
+                usage = _ollama_usage_metadata(chunk)
+                if first_token_at is not None:
+                    usage.time_to_first_token_seconds = first_token_at - request_start
                 yield StreamChunkFromModel(
-                    finish_reason=chunk.done_reason or "stop", usage_metadata=usage or UsageMetadata()
+                    finish_reason=chunk.done_reason or "stop", usage_metadata=usage
                 )
 
     async def generate_content_lite(
@@ -678,17 +702,7 @@ class OllamaProvider(LLMProvider):
         if getattr(response.message, "content", None):
             parts.append(Part(text=response.message.content))
 
-        usage = None
-        if (
-            getattr(response, "prompt_eval_count", None) is not None
-            and getattr(response, "eval_count", None) is not None
-        ):
-            usage = UsageMetadata(
-                prompt_token_count=response.prompt_eval_count,
-                candidates_token_count=response.eval_count,
-                total_token_count=response.prompt_eval_count + response.eval_count,
-                usage_reported=True,
-            )
+        usage = _ollama_usage_metadata(response)
 
         return GenerateContentResponse(
             candidates=[
@@ -697,5 +711,5 @@ class OllamaProvider(LLMProvider):
                     finish_reason=response.done_reason or "stop",
                 )
             ],
-            usage_metadata=usage or UsageMetadata(),
+            usage_metadata=usage,
         )

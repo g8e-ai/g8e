@@ -88,7 +88,7 @@ class SafeWaitForMock:
             An async function suitable for use with mock.patch(side_effect=...)
         """
 
-        async def _side_effect(coro: Coroutine, timeout: float) -> Any:  # noqa: ASYNC109
+        async def _side_effect(coro: Coroutine, timeout: float) -> Any:
             self._captured_coros.append(coro)
             result = None
             with contextlib.suppress(Exception):

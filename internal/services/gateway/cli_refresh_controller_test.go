@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,6 +39,8 @@ func setupTestCLIRefreshController(t *testing.T) (*CLIRefreshController, *models
 		Logger:             infra.Logger,
 		CLISessionSvc:      infra.CLISessionSvc,
 		OperatorSessionSvc: infra.OperatorSessionSvc,
+		Reg:                infra.Reg,
+		Auth:               infra.Auth,
 		UserSvc:            infra.UserSvc,
 		Responder:          infra.Responder,
 	})
@@ -241,6 +244,104 @@ func TestCLIRefreshController_Refresh_StaleOperatorSession_FallsBackToActive(t *
 		"new session must bind to the active operator session, not the stale one")
 }
 
+// TestCLIRefreshController_Refresh_PrefersRegistryActiveDataOperator verifies
+// that refresh binds to the active governed tool Operator recorded in the
+// operator registry even when a stale operator_sessions row still matches the
+// old CLI session binding.
+func TestCLIRefreshController_Refresh_SkipsProvenanceOperatorBinding(t *testing.T) {
+	c, user := setupTestCLIRefreshController(t)
+
+	provenanceSessionID := "op-refresh-provenance"
+	dataSessionID := "op-refresh-data"
+	now := time.Now().UTC()
+
+	provenanceBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID:                "op-id-provenance",
+		UserID:            user.ID,
+		Status:            constants.OperatorStatusActive,
+		OperatorType:      constants.OperatorTypeRemote,
+		OperatorSessionID: provenanceSessionID,
+		RuntimeConfig:     &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	})
+	require.NoError(t, err)
+	require.NoError(t, c.cliSessionSvc.db.DocSet(
+		marshaler.CollectionName(constants.CollectionOperators), "op-id-provenance", provenanceBytes,
+	))
+
+	dataBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID:                "op-id-data",
+		UserID:            user.ID,
+		Status:            constants.OperatorStatusActive,
+		OperatorType:      constants.OperatorTypeRemote,
+		OperatorSessionID: dataSessionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	})
+	require.NoError(t, err)
+	require.NoError(t, c.cliSessionSvc.db.DocSet(
+		marshaler.CollectionName(constants.CollectionOperators), "op-id-data", dataBytes,
+	))
+
+	oldSessionID := "refresh-ctrl-provenance-skip"
+	persistCLISessionForController(t, c, user.ID, oldSessionID, provenanceSessionID)
+
+	req := refreshRequestWithContext(t, user.ID, oldSessionID)
+	rr := httptest.NewRecorder()
+	c.handleRefresh(rr, req)
+
+	resp := parseRefreshResponse(t, rr)
+	assert.Equal(t, dataSessionID, resp.OperatorSessionID)
+	assert.Equal(t, "op-id-data", resp.OperatorID)
+}
+
+func TestCLIRefreshController_Refresh_PrefersRegistryActiveDataOperator(t *testing.T) {
+	c, user := setupTestCLIRefreshController(t)
+
+	staleSessionID := "op-refresh-stale-registry"
+	activeSessionID := "op-refresh-registry-active"
+	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(
+		staleSessionID, user.ID, "org-1", "op-id-stale", "mTLS",
+	))
+
+	now := time.Now().UTC()
+	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID:                "op-id-registry-active",
+		UserID:            user.ID,
+		Status:            constants.OperatorStatusActive,
+		OperatorType:      constants.OperatorTypeRemote,
+		OperatorSessionID: activeSessionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	})
+	require.NoError(t, err)
+	require.NoError(t, c.cliSessionSvc.db.DocSet(
+		marshaler.CollectionName(constants.CollectionOperators), "op-id-registry-active", opBytes,
+	))
+
+	oldSessionID := "refresh-ctrl-registry-stale"
+	persistCLISessionForController(t, c, user.ID, oldSessionID, staleSessionID)
+
+	req := refreshRequestWithContext(t, user.ID, oldSessionID)
+	rr := httptest.NewRecorder()
+	c.handleRefresh(rr, req)
+
+	resp := parseRefreshResponse(t, rr)
+	newDoc, err := c.cliSessionSvc.db.DocGet(
+		marshaler.CollectionName(constants.CollectionCLISessions), resp.CLISessionID)
+	require.NoError(t, err)
+	require.NotNil(t, newDoc)
+	var newSession models.CLISession
+	dataBytes, err := json.Marshal(newDoc.Data)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(dataBytes, &newSession))
+	assert.Equal(t, activeSessionID, newSession.OperatorSessionID,
+		"new CLI session must bind to registry-active data operator")
+	assert.Equal(t, activeSessionID, resp.OperatorSessionID)
+	assert.Equal(t, "op-id-registry-active", resp.OperatorID)
+}
+
 // ---------------------------------------------------------------------------
 // handleRefresh — error paths
 // ---------------------------------------------------------------------------
@@ -289,4 +390,41 @@ func TestCLIRefreshController_Refresh_MethodNotAllowed(t *testing.T) {
 	rr := httptest.NewRecorder()
 	c.handleRefresh(rr, req)
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+}
+
+// TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded verifies
+// the binding-recovery path: an old CLI session persisted before the
+// operator-binding work (empty operator_session_id) is rebound to the
+// user's active embedded operator session on refresh, and the new session
+// persists the recovered binding.
+func TestCLIRefreshController_Refresh_UnboundOldSession_BindsEmbedded(t *testing.T) {
+	c, user := setupTestCLIRefreshController(t)
+
+	// The user has an active embedded operator session — the canonical
+	// local binding — but the old CLI session predates the binding work
+	// and carries no operator_session_id.
+	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(
+		"embedded-sess-refresh", user.ID, user.ID, string(constants.DocIDEmbeddedOperator), string(constants.HeartbeatTypeBootstrap)))
+	oldSessionID := "refresh-ctrl-unbound-old"
+	persistCLISessionForController(t, c, user.ID, oldSessionID, "")
+
+	req := refreshRequestWithContext(t, user.ID, oldSessionID)
+	rr := httptest.NewRecorder()
+	c.handleRefresh(rr, req)
+
+	resp := parseRefreshResponse(t, rr)
+	assert.Equal(t, "embedded-sess-refresh", resp.OperatorSessionID)
+	assert.Equal(t, string(constants.DocIDEmbeddedOperator), resp.OperatorID)
+
+	// The new session persists the recovered binding.
+	newDoc, err := c.cliSessionSvc.db.DocGet(
+		marshaler.CollectionName(constants.CollectionCLISessions), resp.CLISessionID)
+	require.NoError(t, err)
+	require.NotNil(t, newDoc)
+	var newSession models.CLISession
+	dataBytes, err := json.Marshal(newDoc.Data)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(dataBytes, &newSession))
+	assert.Equal(t, "embedded-sess-refresh", newSession.OperatorSessionID,
+		"new session persists the recovered embedded binding")
 }

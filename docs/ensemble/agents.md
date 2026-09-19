@@ -2,7 +2,7 @@
 
 ## Overview
 
-The g8e Agentic Ensemble (`g8ee`) uses a structured multi-agent architecture where specialized agents collaborate across defined operational stages. Each agent operates under a concrete persona model that defines its role, model tier, tool availability, autonomy boundary, and output contract. The architecture enforces separation of concerns: reasoning agents formulate high-level intent without raw shell syntax, a five-member Tribunal derives and validates exact commands under information isolation, defensive filters assess execution risk, and support agents manage lifecycle metadata, memory, and performance evaluation.
+The g8e Agentic Ensemble (`g8ee`) uses a structured multi-agent architecture where specialized agents collaborate across defined operational stages. Each agent operates under a concrete persona model that defines its role, model tier, tool availability, autonomy boundary, and output contract. The architecture enforces separation of concerns: reasoning agents formulate high-level intent without raw shell syntax, a five-member Tribunal derives and validates exact commands under information isolation, Marshal assesses pre-envelope execution risk, and support agents manage lifecycle metadata, memory, and performance evaluation.
 
 ## Persona Architecture
 
@@ -15,7 +15,7 @@ Each persona defines:
 - **`icon`** — Material icon identifier representing the persona.
 - **`description`** — Summary of the agent's responsibilities.
 - **`role`** — Functional classification within the ensemble (`classifier`, `reasoner`, `responder`, `tribunal_member`, `arbitrator`, `auditor`, `defender`, `summarizer`, `analyzer`, `evaluator`).
-- **`model_tier`** — Assigned LLM capacity tier (`primary`, `assistant`, `lite`).
+- **`model_tier`** — Assigned LLM model role wire value (`primary`, `assistant`, `lite`). User-facing copy displays these as Primary, Assistant, and Lite.
 - **`tools`** — Whitelist of tool names available to the persona during execution.
 - **`identity`** — System prompt guidelines specifying behavioral principles, voice, and discipline, structured via canonical XML tags (`<role>`, `<identity>`, `<purpose>`, `<autonomy>`, `<output_contract>`).
 - **`purpose`** — Operational charter defining what the agent accomplishes in the workflow pipeline.
@@ -51,12 +51,12 @@ Every Tribunal member emits strictly a shell command string without commentary o
 
 - **Auditor (`auditor`)** — The Tribunal judge and quality gate (`model_tier="primary"`, `role="auditor"`). The Auditor inspects anonymized candidate command clusters produced by the Tribunal members against Sage's intent. Operating across unanimous (5/5), majority (3-4), or tied modes, the Auditor emits one of three structured verdicts: `ok` (approves the top candidate), `revised:<command>` (corrects syntax or whitelist violations), or `swap:<cluster_id>` (selects a superior dissenting candidate).
 
-### Pre-Generation Risk Filter (Warden)
+### Pre-Generation Defense (Marshal)
 
-- **LLM Risk Filter / Warden (`warden`)** — Pre-generation risk coordinator (`model_tier="lite"`, `role="defender"`). Consolidates risk assessments before a `GovernanceEnvelope` is constructed:
-  - **Command Risk Analyzer (`warden_command_risk`)** — Evaluates shell command blast radius, reversibility, and failure impact (`LOW`, `MEDIUM`, `HIGH`). Stakes reputation on assessment accuracy.
-  - **Error Analyzer (`warden_error`)** — Analyzes command execution failures and classifies recovery as `AUTO_FIXABLE`, `ESCALATE`, or `RETRY_LIMIT`.
-  - **File Operation Risk Analyzer (`warden_file_risk`)** — Assesses file mutation risks based on path sensitivity, reversibility, and Git repository state (`LOW`, `MEDIUM`, `HIGH`). Stakes reputation on assessment accuracy.
+- **Marshal (`marshal`)** — The Order Keeper (`model_tier="lite"`, `role="defender"`). Pre-generation risk coordinator that consolidates risk assessments before a `GovernanceEnvelope` is constructed:
+  - **Command Risk Analyzer (`marshal_command`)** — Evaluates shell command blast radius, reversibility, and failure impact (`LOW`, `MEDIUM`, `HIGH`). Stakes reputation on assessment accuracy.
+  - **Error Analyzer (`marshal_error`)** — Analyzes command execution failures and classifies recovery as `AUTO_FIXABLE`, `ESCALATE`, or `RETRY_LIMIT`.
+  - **File Operation Risk Analyzer (`marshal_file`)** — Assesses file mutation risks based on path sensitivity, reversibility, and Git repository state (`LOW`, `MEDIUM`, `HIGH`). Stakes reputation on assessment accuracy.
 
 ### Support and Evaluation Agents
 
@@ -70,7 +70,7 @@ The interaction between agents follows strict architectural invariants:
 
 1. **Intent vs. Command Separation** — The caller-facing model `SageOperatorRequest` does not contain a `command` field; reasoning agents articulate what to accomplish rather than shell commands. The Tribunal derives the exact syntax, which is injected into `ExecutorCommandArgs` after consensus and auditor verification.
 2. **Information Isolation** — Tribunal members run without knowledge of each other's candidate outputs or identities, preventing premature convergence.
-3. **Fail-Closed Risk Analysis** — Warden sub-agents fail closed to `HIGH` risk on ambiguous or inconclusive data.
+3. **Fail-Closed Risk Analysis** — Marshal sub-agents fail closed to `HIGH` risk on ambiguous or inconclusive data.
 4. **Interrogation Gate** — When Sage or Dash encounters ambiguity, it emits an `<interrogation>` block with exactly three binary YES/NO questions. Tool execution pauses until the user provides answers.
 5. **Reputation Staking** — Risk analyzer agents stake reputation on classification decisions, penalizing unwarranted blocks of benign operations while rewarding accurate detection of hazardous operations.
 

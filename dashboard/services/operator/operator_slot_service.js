@@ -36,8 +36,7 @@ export class OperatorSlotService {
                     userId,
                     organizationId,
                     slotNumber,
-                    operatorType: OperatorType.CLOUD,
-                    cloudSubtype: null,
+                    operatorType: OperatorType.REMOTE,
                     namePrefix: 'operator',
                 });
                 if (creationResponse.success && creationResponse.operator_id) {
@@ -98,8 +97,7 @@ export class OperatorSlotService {
             organizationId: oldOperator.organization_id,
             name: oldOperator.name || `operator-${slotNumber}`,
             slotNumber,
-            operatorType: oldOperator.operator_type || OperatorType.SYSTEM,
-            cloudSubtype: oldOperator.cloud_subtype || null,
+            operatorType: oldOperator.operator_type || OperatorType.REMOTE,
             slotCost: oldOperator.slot_cost ?? 1,
             newApiKey,
             certInfo: newCertInfo,
@@ -126,7 +124,7 @@ export class OperatorSlotService {
     }
 
     async createOperatorSlot(params) {
-        const { userId, organizationId, slotNumber, operatorType, cloudSubtype, namePrefix } = params;
+        const { userId, organizationId, slotNumber, operatorType, namePrefix } = params;
         const operatorId = `${userId}_operator_${slotNumber}_${Date.now()}_${crypto.randomUUID()}`;
         const apiKey = this.generateOperatorApiKey(operatorId);
 
@@ -147,7 +145,6 @@ export class OperatorSlotService {
             namePrefix,
             slotNumber,
             operatorType,
-            cloudSubtype,
             operatorApiKey: apiKey,
             certInfo
         });

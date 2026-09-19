@@ -23,7 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.generated_paths import PathConstants, PortConstants
+from app.constants.generated_paths import PortConstants
 from fastapi import FastAPI
 
 from app.main import lifespan
@@ -131,6 +131,7 @@ def _configure_factory(mocks):
     mock_services.approval_service = MagicMock()
     mock_services.db_service = MagicMock()
     mock_services.db_service.close = AsyncMock()
+    mock_services.internal_http_client = MagicMock()
 
     factory.create_all_services.return_value = mock_services
     factory.bind_to_app_state = MagicMock()
@@ -213,6 +214,25 @@ class TestLifespanStartup:
 
             settings_svc.get_app_settings.assert_called_once()
             mocks["set_settings"].assert_called_once()
+        finally:
+            for p in patches:
+                p.stop()
+
+    async def test_governance_client_uses_app_identity_when_operator_cert_env_is_set(
+        self, mock_app, monkeypatch
+    ):
+        monkeypatch.setenv("G8E_GOVERNANCE_OPERATOR_CERT", "/operator-state/pki/operator.crt")
+        monkeypatch.setenv("G8E_GOVERNANCE_OPERATOR_KEY", "/operator-state/pki/operator.key")
+        mocks, patches = _build_mocks()
+        _configure_settings(mocks)
+        _configure_factory(mocks)
+        try:
+            async with lifespan(mock_app):
+                pass
+
+            tls_config = mocks["GovernanceClient"].call_args.kwargs["tls_config"]
+            assert tls_config.client_cert_path == "/tmp/test-app-cert.pem"
+            assert tls_config.client_key_path == "/tmp/test-app-key.pem"
         finally:
             for p in patches:
                 p.stop()

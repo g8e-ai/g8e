@@ -15,7 +15,7 @@ from app.constants.collections import (
     USER_SETTINGS_DOC_PREFIX,
 )
 from app.constants.env_vars import EnvVar
-from app.constants.generated_paths import PathConstants, PortConstants
+from app.constants.generated_paths import PortConstants
 from app.models.settings import G8eeAppSettings
 from app.services.infra.settings_service import SettingsService
 

@@ -23,10 +23,14 @@ Message Fields (for operator pub/sub messages):
 - request_nonce: Unique identifier in message metadata
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
-from app.services.cache.cache_aside import CacheAsideService
+if TYPE_CHECKING:
+    from app.services.cache.cache_aside import CacheAsideService
 
 from app.constants import (
     NONCE_TTL_SECONDS,

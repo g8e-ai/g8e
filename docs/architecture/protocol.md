@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Protocol Library
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-19
+Version: v2.1.8
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building compatible clients and services. Every mutation passing through the platform flows through a 5-layer interlock sequence:
 
@@ -59,7 +59,7 @@ The Go protocol package requires Go 1.26.6 or later. Direct dependencies include
 Install or update the Go module using standard Go tooling:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.7
+go get github.com/g8e-ai/g8e/v2@v2.1.8
 ```
 
 To fetch the latest release:
@@ -125,7 +125,7 @@ pip install g8e
 To pin a specific release version:
 
 ```bash
-pip install g8e==2.1.7
+pip install g8e==2.1.8
 ```
 
 ### Python Package Overview
@@ -150,7 +150,9 @@ Pydantic v2 models in `g8e.models` define protocol structures with strict field 
 
 - **Request Context (`g8e.models.context`)**: Validates session identity and operator bindings for client requests (`RequestContext`, `BoundOperator`).
 - **Internal API Models (`g8e.models.internal_api`)**: Defines payloads for chat sessions, message streaming, and LLM overrides (`ChatMessageRequest`, `ChatStartedResponse`, `ResourceCreationRequest`, `LLMOverrides`).
-- **Event Models (`g8e.models.events`)**: Defines event payload structures for streaming session events, background execution, tool lifecycles, thinking phases, and chat completions (`SessionEventWire`, `BackgroundEventWire`, `AiProcessingStoppedPayload`, `AIToolLifecyclePayload`, `ChatCitationsReadyPayload`, `ChatErrorPayload`, `ChatProcessingStartedPayload`, `ChatResponseChunkPayload`, `ChatResponseCompletePayload`, `ChatRetryPayload`, `ChatThinkingPayload`, `ChatTurnCompletePayload`, `TriageClarificationQuestionsPayload`).
+- **Event Models (`g8e.models.events`)**: Defines event payload structures for streaming session events, background execution, tool lifecycles, thinking phases, chat completions, and observe telemetry (`SessionEventWire`, `BackgroundEventWire`, `AiProcessingStoppedPayload`, `AIToolLifecyclePayload`, `ChatCitationsReadyPayload`, `ChatErrorPayload`, `ChatProcessingStartedPayload`, `ChatResponseChunkPayload`, `ChatResponseCompletePayload`, `ChatRetryPayload`, `ChatThinkingPayload`, `ChatTurnCompletePayload`, `TriageClarificationQuestionsPayload`, `AgentStatusUpdatedPayload`, `RunStatusUpdatedPayload`, `EvalRunCompletedPayload`, `EvalMetricRecordedPayload`, `ObservedMeasurement`).
+- **Observe API Models (`g8e.models.observe_api`)**: Defines browser-facing read projections and mTLS producer request/response types for the observe API (`ObserveBootstrapSnapshot`, `RunDetail`, `EvalDetail`, `DownloadArtifact`, `ObserveProducerAgentStateRequest`, `ObserveProducerRunStateRequest`, `ObserveProducerResponse`). Producer models use `extra="forbid"` for unknown-field rejection.
+- **Public Feed Models (`g8e.models.public_feed`)**: Defines outbound public-spectator batch, snapshot, ingest, proof-catalog, and cursor-page types (`PublicFeedBatch`, `PublicFeedSnapshot`, `PublicFeedBootstrap`, `PublicIngestRequest`, `PublicProofManifest`).
 - **Governance Envelope (`g8e.models.governance`)**: Represents the canonical transaction container, carrying identity, intent, state Merkle roots, and governance proofs (`GovernanceEnvelope`, `GovernanceMetadata`, `GovernanceL1`, `GovernanceL2`, `GovernanceL2Vote`, `GovernanceL3`, `GovernanceL3Proof`, `CommandIntent`, `compute_transaction_hash`).
 - **Settings Models (`g8e.models.settings`)**: Represents platform and user configuration parameters for search, evaluation judges, command validation, batch execution, and execution limits (`PlatformSettings`, `G8eeUserSettings`, `LLMSettings`, `SearchSettings`, `EvalJudgeSettings`, `CommandValidationSettings`, `BatchExecutionSettings`).
 
@@ -179,11 +181,17 @@ JSON files in `protocol/constants/` serve as the single source of truth for prot
 
 Registries cover event names (`events.json`), status codes (`status.json`), database collections (`collections.json`), API paths (`api_paths.json`), authentication parameters (`auth.json`), HTTP headers (`headers.json`), key-value keys (`kv_keys.json`), channels (`channels.json`), pubsub definitions (`pubsub.json`), intents (`intents.json`), prompt templates (`prompts.json`), agent roles (`agents.json`), platform settings (`platform.json`), platform enrollment parameters and transcript vectors (`platform_enrollment.json`, `platform_enrollment_completion_transcript_vectors.json`), compliance artifact paths and digest-verified assertion, framework, crosswalk, and demo-scenario catalogs (`compliance_paths.json`, `compliance/`), senders (`senders.json`), exit codes (`exit_codes.json`), field paths (`field_paths.json`), document types (`document_ids.json`), network parameters (`network.json`), output formats (`output.json`), default ports (`ports.json`), timestamp formats (`timestamp.json`), and environment variable names (`env_vars.json`). Threat detection pattern registries in `protocol/constants/doctrine/` define forbidden execution patterns, blacklist/whitelist rules, Gitleaks patterns, OWASP CRS rules, and MCP attack vector patterns for L1 Doctrine evaluation.
 
+The event dashboard classification inventory (`protocol/constants/event_dashboard_classification.json`) classifies every registered event family by its relationship to the browser observability frontend: `produced_to_sse` (a real production path emits this event through the SSE push endpoint with a typed payload), `governed_record_only` (persisted but not emitted as browser telemetry), `mixed` (some events in the family are produced to SSE, others are governed records), and `unsupported` (registered but no real producer or no protocol-owned payload schema). The `g8e.v1.app.agent` family is `mixed` because `app.agent.activity.recorded` is `governed_record_only` while `app.agent.status.updated` is `produced_to_sse` through the Gateway mTLS producer endpoint. The `g8e.v1.app.run` family is `produced_to_sse` because `app.run.status.updated` is produced through the Gateway mTLS producer endpoint and verified by real HTTP integration tests. The `g8e.v1.ai.eval` family is `produced_to_sse` and `dashboard_safe`: live campaign events (`ai.eval.cycle.started`, `ai.eval.assignment.completed`, `ai.eval.publication.completed`, and related types) are emitted by the in-process observe producer after persisting projections; gateway live tests verify emission. Reserved dashboard contracts `ai.eval.run.completed` and `ai.eval.metric.recorded` remain typed payloads without a native evaluation HTTP producer at v2.1.8. The `g8e.v1.public.feed` family is `produced_to_sse` for outbound public-spectator export events. Coverage and value tests in `internal/constants/event_dashboard_classification_test.go` enforce that classifications correspond to actual producer evidence.
+
 ### JSON Model Schemas
 
-JSON Schema files in `protocol/models/` define structural validation rules for data structures across the platform. Managed schemas include account locks, agent activity metadata, application policies, approvals, authentication administrative audits, bound sessions, cases, chat messages, CLI sessions, consensus configurations, console audits, conversations, conversation messages, enrollment tokens, execution results, file edits, filesystem grep/list operations, governance containers, heartbeats, investigations, local OS users, login audits, memories, operator documents, operator sessions, operator usage records, organizations, passkey challenges, passkey credentials, personas, platform enrollments, platform settings, reputation commitments, reputation states, request contexts, revoked certificates, runtime configurations, security constraints, SSE event payloads, SSE event wire representations, SSE push payloads, stake resolutions, tasks, terminal outputs, tool results, trusted signers, users, user settings, web sessions, and WebAuthn responses. Python error category and code definitions are defined in `protocol/models/errors.py`.
+JSON Schema files in `protocol/models/` define structural validation rules for data structures across the platform. Managed schemas include account locks, agent activity metadata, application policies, approvals, authentication administrative audits, bound sessions, cases, chat messages, CLI sessions, consensus configurations, console audits, conversations, conversation messages, enrollment tokens, execution results, file edits, filesystem grep/list operations, governance containers, heartbeats, investigations, local OS users, login audits, memories, observe API read and producer models, observe event payloads, operator documents, operator sessions, operator usage records, organizations, passkey challenges, passkey credentials, personas, platform enrollments, platform settings, public spectator feed batches and proofs, reputation commitments, reputation states, request contexts, revoked certificates, runtime configurations, security constraints, SSE event payloads, SSE event wire representations, SSE push payloads, stake resolutions, tasks, terminal outputs, tool results, trusted signers, users, user settings, web sessions, and WebAuthn responses. Python error category and code definitions are defined in `protocol/models/errors.py`.
 
-Per-agent role schemas in `protocol/models/agents/` define tailored models for primary (`primary.json`), assistant (`assistant.json`), lite (`lite.json`), triage (`triage.json`), title generator (`title_generator.json`), and agent harness (`agent_harness.json`) roles.
+The observe API models (`protocol/models/observe_api.json`) define the browser-facing read models (`ObserveBootstrapSnapshot`, `ObservePage`, `RunDetail`, `EvalDetail`, `DownloadArtifact`) and the mTLS-internal producer request/response models (`observe_producer_agent_state_request`, `observe_producer_run_state_request`, `observe_producer_response`). The producer request models use typed lifecycle enums (`AgentLifecycleStatus`, `RunLifecycleStatus`, `RunKind`) and require exactly one routing target (`web_session_id` or `cli_session_id`). The producer response is a typed `{ "accepted": true }` object. The Python protocol package (`protocol/python/g8e/models/observe_api.py`) provides `ObserveProducerAgentStateRequest`, `ObserveProducerRunStateRequest`, and `ObserveProducerResponse` with `extra="forbid"` for unknown-field rejection.
+
+The observe event payloads (`protocol/models/observe_event_payloads.json`) define dashboard and campaign event payloads, including `app.agent.status.updated`, `app.run.status.updated`, `ai.eval.run.completed`, `ai.eval.metric.recorded`, and the live campaign types (`ai.eval.cycle.started`, `ai.eval.assignment.completed`, `ai.eval.publication.completed`, and related `g8e.v1.ai.eval.*` payloads).
+
+Per-agent role schemas in `protocol/models/agents/` define tailored models for primary (`primary.json`), assistant (`assistant.json`), lite (`lite.json`, displayed as Lite), triage (`triage.json`), title generator (`title_generator.json`), and agent harness (`agent_harness.json`) roles.
 
 ### MCP Server Configurations
 
@@ -280,6 +288,16 @@ The protocol implementation is organized into functional subdirectories within t
 - `protocol/python/`: Python package implementation (`g8e`), including constants loaders, dynamic enums, Pydantic models, and bundled package data.
 - `protocol/examples/`: Sample programs demonstrating envelope construction, workload identity, and MCP server configurations.
 - `protocol/docs/`: Protocol specification documents, JSON-RPC schemas, template files, and generated API reference documentation in `reference/api/`.
+
+---
+
+## TypeScript Generation
+
+The deterministic contract pack generator at `dashboard/g8e-adapter/generator/gen-contract-pack.mjs` produces TypeScript models, validators, and fixtures from canonical protocol JSON. It reads `protocol/models/observe_api.json`, `protocol/models/observe_event_payloads.json`, `protocol/constants/event_dashboard_classification.json`, and the compiled adapter dist. It generates `contract-pack/models.ts` with typed interfaces, enums, type guards, and structural validators for all browser-facing read models and event payloads. Inline object models are discovered during resolution and emitted as named interfaces. Producer request/response models are excluded (mTLS-internal). The generated `models.ts` type-checks cleanly under strict TypeScript (`tsc --noEmit` with `strict`, `noUnusedLocals`, `noUnusedParameters`).
+
+The generator is self-contained: it uses only Node built-ins (`node:crypto`, `node:fs/promises`, `node:path`, `node:url`) plus the compiled adapter dist. No new dependencies are introduced. Re-running against identical inputs produces byte-identical files. A `--check` mode regenerates in memory and compares to committed files without rewriting them, exiting non-zero if any output is stale or missing.
+
+See [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md) for the contract pack workflow and acceptance commands.
 
 ---
 

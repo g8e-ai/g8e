@@ -1,0 +1,40 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
+package gateway
+
+import (
+	"testing"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+)
+
+func TestValidateOllamaServiceDispatch(t *testing.T) {
+	payload, err := proto.Marshal(&operatorv1.CommandRequested{Command: operatorcapability.OllamaServiceCommandStop, ExecutionId: "exec-1"})
+	require.NoError(t, err)
+
+	capable := &models.OperatorDocumentGo{
+		RuntimeConfig: &models.RuntimeConfig{
+			ProviderBoundaryObserverEnabled:       true,
+			ProviderBoundaryObserverOllamaEnabled: true,
+		},
+	}
+	require.NoError(t, validateOllamaServiceDispatch(capable, string(constants.ActionTypeExecuteBash), payload))
+
+	incapable := &models.OperatorDocumentGo{
+		RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+	}
+	err = validateOllamaServiceDispatch(incapable, string(constants.ActionTypeExecuteBash), payload)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrProviderBoundaryObserverOllamaNotCapable)
+}

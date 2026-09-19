@@ -21,17 +21,24 @@ import (
 
 // hashVector is a single test case from the shared hash_vectors.json file.
 type hashVector struct {
-	Name            string         `json:"name"`
-	ActionType      string         `json:"action_type"`
-	TargetResource  string         `json:"target_resource"`
-	PayloadB64      string         `json:"payload_b64"`
-	StateMerkleRoot string         `json:"state_merkle_root"`
-	Nonce           string         `json:"nonce"`
-	ExpiresAt       string         `json:"expires_at"`
-	IntentData      map[string]any `json:"intent_data"`
-	RequestorUserID *string        `json:"requestor_user_id"`
-	ActingAppID     *string        `json:"acting_app_id"`
-	ExpectedHash    string         `json:"expected_hash"`
+	Name              string         `json:"name"`
+	ActionType        string         `json:"action_type"`
+	TargetResource    string         `json:"target_resource"`
+	PayloadB64        string         `json:"payload_b64"`
+	StateMerkleRoot   string         `json:"state_merkle_root"`
+	Nonce             string         `json:"nonce"`
+	ExpiresAt         string         `json:"expires_at"`
+	IntentData        map[string]any `json:"intent_data"`
+	RequestorUserID   *string        `json:"requestor_user_id"`
+	ActingAppID       *string        `json:"acting_app_id"`
+	OperatorID        *string        `json:"operator_id"`
+	OperatorSessionID *string        `json:"operator_session_id"`
+	CaseID            *string        `json:"case_id"`
+	InvestigationID   *string        `json:"investigation_id"`
+	TaskID            *string        `json:"task_id"`
+	WebSessionID      *string        `json:"web_session_id"`
+	CliSessionID      *string        `json:"cli_session_id"`
+	ExpectedHash      string         `json:"expected_hash"`
 }
 
 type hashVectorsFile struct {
@@ -174,6 +181,27 @@ func buildEnvelopeFromVector(t *testing.T, v hashVector) *GovernanceEnvelope {
 	}
 	if v.ActingAppID != nil && *v.ActingAppID != "" {
 		env.ActingAppId = *v.ActingAppID
+	}
+	if v.OperatorID != nil && *v.OperatorID != "" {
+		env.OperatorId = *v.OperatorID
+	}
+	if v.OperatorSessionID != nil && *v.OperatorSessionID != "" {
+		env.OperatorSessionId = *v.OperatorSessionID
+	}
+	if v.CaseID != nil && *v.CaseID != "" {
+		env.CaseId = *v.CaseID
+	}
+	if v.InvestigationID != nil && *v.InvestigationID != "" {
+		env.InvestigationId = *v.InvestigationID
+	}
+	if v.TaskID != nil && *v.TaskID != "" {
+		env.TaskId = *v.TaskID
+	}
+	if v.WebSessionID != nil && *v.WebSessionID != "" {
+		env.WebSessionId = *v.WebSessionID
+	}
+	if v.CliSessionID != nil && *v.CliSessionID != "" {
+		env.CliSessionId = *v.CliSessionID
 	}
 
 	return env

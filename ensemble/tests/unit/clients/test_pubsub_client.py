@@ -13,7 +13,6 @@ import pytest
 
 from app.clients.pubsub_client import PubSubClient
 from app.constants import (
-    ComponentName,
     G8EE_COMPONENT,
     PubSubAction,
     PubSubField,

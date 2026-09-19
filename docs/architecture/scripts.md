@@ -1,9 +1,9 @@
 # g8e Scripts
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-18
+Version: v2.1.8
 
-This document catalogs the executable automation under `scripts/`, the deploy-script templates embedded in the Gateway, and the script-backed `g8e demos` image-transfer workflow. The root `Makefile` owns build and validation orchestration; the [Documentation Guide](../devs/docs.md) and [Release Process](../devs/release_process.md) own the generated README and public-evidence procedures.
+This document catalogs the executable automation under `scripts/`, the deploy-script templates embedded in the Gateway, and the script-backed `g8e demos` image-transfer workflow. The root `Makefile` owns build and validation orchestration.
 
 ## Inventory
 
@@ -16,10 +16,6 @@ This document catalogs the executable automation under `scripts/`, the deploy-sc
 | Package smoke test | `scripts/smoke-test-python.sh` | Installs the local Python protocol package in a virtual environment and runs its public imports and examples |
 | Data validation | `scripts/validate-cosais-overlays.sh` | Checks detector references for overlays marked finalized in the checked-in COSAiS catalog |
 | Make target audit | `scripts/validate-make-targets.sh` | Runs selected groups of root Makefile targets and summarizes their results |
-| README rendering | `scripts/generate_readme.py` | Validates the promoted public proof snapshot and renders or checks the generated root README |
-| Evidence projection | `scripts/project_readme_evidence.py` | Projects a private evaluation report into a sanitized README evidence candidate |
-| Provenance collection | `scripts/collect_readme_provenance.py` | Produces a canonical, checksum-bound source, component, image, and environment manifest |
-| Evidence promotion | `scripts/promote_readme_evidence.py` | Validates an approved candidate tree digest and atomically replaces the promoted README evidence snapshot |
 | Remote Operator bootstrap | `/g8e-deploy.sh` and `/g8e-deploy.ps1` | Public Gateway HTTP routes that render embedded scripts for binary download and Operator startup |
 | Air-gap image transfer | `g8e demos pull`, `export`, `import`, and `images` | Transfers the digest-pinned external images declared in `demos/images.json` |
 
@@ -37,7 +33,7 @@ Each script performs three steps:
 
 1. It checks for `make` and `go`. Its version check accepts Go 1.26 or any later major or minor release; the root `go.mod` is the authoritative build requirement and currently declares Go 1.26.6.
 2. If a checked dependency is missing or too old, it asks before invoking a supported package manager. Linux supports `apt-get`, `dnf`, `pacman`, or `zypper`; macOS uses Homebrew; Windows prefers `winget` and otherwise uses Chocolatey. The package manager is necessary only when the script must install a dependency.
-3. It runs `make build`, which writes the platform binary and SHA-256 file under `bin/`, copies the host executable to the repository root, and copies the executable to `demos/bin/g8e`.
+3. It runs `make build`, which writes the platform binary and SHA-256 file under `bin/` and copies the host executable to the repository root.
 
 The Linux and macOS scripts append the repository root to `~/.zshrc`, `~/.bashrc`, or `~/.profile`, based on the current shell. The Windows script updates the user-level `Path`. These are persistent user-environment mutations. The scripts also update their own process environment, but that child-process update does not alter the invoking shell. Open a new terminal or source the selected profile, then run `g8e --version`.
 
@@ -81,17 +77,6 @@ PHASE=lint bash scripts/validate-make-targets.sh
 ```
 
 The script groups targets into help, build, protocol, lint, test, Python, dashboard, Docker, CI, doctrine, and cleanup phases. It suppresses each target’s output, continues after failures, and exits nonzero after printing the aggregate summary when any target failed. It always skips `release`, but an unfiltered run still invokes targets that require local services, Docker, external credentials, or network access, and its final cleanup phase runs state-removing Make targets. Review the phase definitions before using the unfiltered mode. This audit is not wired into the primary CI workflow.
-
-## README and Public-Evidence Tooling
-
-The README tools form one controlled pipeline rather than independent editing utilities:
-
-1. `collect_readme_provenance.py` writes a new canonical provenance record for an explicit source-file list and supplied component, image, campaign, and environment records. It rejects an existing output path.
-2. `project_readme_evidence.py` validates and sanitizes a private evaluation report into a new candidate directory. Stage 2 projection also binds a baseline candidate and collected provenance.
-3. `promote_readme_evidence.py` computes the candidate tree digest, requires an exact release-owner-approved digest, validates the candidate with the README reader, and atomically replaces `docs/evidence/readme/current/`.
-4. `generate_readme.py` validates the promoted snapshot and `docs/templates/README.md.tmpl`, then writes `README.md`. Its `--check` mode renders in memory and fails on drift without modifying the output.
-
-Use `make readme`, `make readme-test`, and `make readme-check` for normal rendering and validation. Candidate creation and promotion are attended release operations; follow the exact inputs, review boundaries, and approval process in the [Release Process](../devs/release_process.md). Do not edit `README.md` or `docs/evidence/readme/current/` directly.
 
 ## Gateway-Served Operator Bootstrap
 

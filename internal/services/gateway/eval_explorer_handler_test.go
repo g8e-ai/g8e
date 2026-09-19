@@ -1,0 +1,120 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
+package gateway
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestEvalExplorerHandler_ServesEmbeddedAssetsAndRuntime(t *testing.T) {
+	handler, err := NewEvalExplorerHandler("", "https://opendevops.ai", false)
+	require.NoError(t, err)
+
+	indexReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	indexRes := httptest.NewRecorder()
+	handler.ServeHTTP(indexRes, indexReq)
+	require.Equal(t, http.StatusOK, indexRes.Code)
+	assert.Contains(t, indexRes.Body.String(), "<!doctype html>")
+	assert.Empty(t, indexRes.Header().Get("Content-Security-Policy"))
+	assert.Equal(t, "no-referrer", indexRes.Header().Get("Referrer-Policy"))
+	assert.Equal(t, "nosniff", indexRes.Header().Get("X-Content-Type-Options"))
+	assert.Equal(t, "DENY", indexRes.Header().Get("X-Frame-Options"))
+	assert.Equal(t, "public, max-age=0, must-revalidate", indexRes.Header().Get("Cache-Control"))
+
+	localRuntimeReq := httptest.NewRequest(http.MethodGet, "/runtime.json", nil)
+	localRuntimeReq.Host = "127.0.0.1:8082"
+	localRuntimeRes := httptest.NewRecorder()
+	handler.ServeHTTP(localRuntimeRes, localRuntimeReq)
+	require.Equal(t, http.StatusOK, localRuntimeRes.Code)
+
+	var localPayload map[string]string
+	require.NoError(t, json.Unmarshal(localRuntimeRes.Body.Bytes(), &localPayload))
+	assert.Equal(t, "http://127.0.0.1:8082", localPayload["mirror_origin"])
+	assert.Empty(t, localRuntimeRes.Header().Get("Content-Security-Policy"))
+
+	publicRuntimeReq := httptest.NewRequest(http.MethodGet, "/runtime.json", nil)
+	publicRuntimeReq.Host = "opendevops.ai"
+	publicRuntimeReq.Header.Set("X-Forwarded-Proto", "https")
+	publicRuntimeRes := httptest.NewRecorder()
+	handler.ServeHTTP(publicRuntimeRes, publicRuntimeReq)
+	require.Equal(t, http.StatusOK, publicRuntimeRes.Code)
+
+	var publicPayload map[string]string
+	require.NoError(t, json.Unmarshal(publicRuntimeRes.Body.Bytes(), &publicPayload))
+	assert.Equal(t, "https://opendevops.ai", publicPayload["mirror_origin"])
+}
+
+func TestCombinePublicSpectatorHandler_RoutesMirrorAndExplorer(t *testing.T) {
+	explorer, err := NewEvalExplorerHandler("", "https://opendevops.ai", false)
+	require.NoError(t, err)
+	mirror := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	handler := combinePublicSpectatorHandler(mirror, explorer)
+
+	bootstrapReq := httptest.NewRequest(http.MethodGet, "/bootstrap", nil)
+	bootstrapRes := httptest.NewRecorder()
+	handler.ServeHTTP(bootstrapRes, bootstrapReq)
+	require.Equal(t, http.StatusOK, bootstrapRes.Code)
+	body, err := io.ReadAll(bootstrapRes.Body)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"ok":true}`, string(body))
+
+	indexReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	indexRes := httptest.NewRecorder()
+	handler.ServeHTTP(indexRes, indexReq)
+	require.Equal(t, http.StatusOK, indexRes.Code)
+	assert.Contains(t, indexRes.Body.String(), "<!doctype html>")
+
+	ingestReq := httptest.NewRequest(http.MethodPost, "/ingest", strings.NewReader("{}"))
+	ingestRes := httptest.NewRecorder()
+	handler.ServeHTTP(ingestRes, ingestReq)
+	require.Equal(t, http.StatusNotFound, ingestRes.Code)
+}
+
+func TestResolveEvalExplorerMirrorOrigin_PrefersPublicBaseURL(t *testing.T) {
+	assert.Equal(t, "https://opendevops.ai", resolveEvalExplorerMirrorOrigin("https://opendevops.ai", "127.0.0.1:8082"))
+	assert.Equal(t, "http://127.0.0.1:8082", resolveEvalExplorerMirrorOrigin("", "127.0.0.1:8082"))
+}
+
+func TestResolveRequestMirrorOrigin_LocalUsesRequestOrigin(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/runtime.json", nil)
+	req.Host = "127.0.0.1:8082"
+	assert.Equal(t, "http://127.0.0.1:8082", resolveRequestMirrorOrigin(req, "https://opendevops.ai"))
+}
+
+func TestResolveRequestMirrorOrigin_PublicHostUsesConfiguredOrigin(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/runtime.json", nil)
+	req.Host = "opendevops.ai"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	assert.Equal(t, "https://opendevops.ai", resolveRequestMirrorOrigin(req, "https://opendevops.ai"))
+}
+
+func TestEvalExplorerHandler_DedicatedPortUsesConfiguredMirrorOrigin(t *testing.T) {
+	handler, err := NewEvalExplorerHandler("", "http://127.0.0.1:8082", true)
+	require.NoError(t, err)
+
+	runtimeReq := httptest.NewRequest(http.MethodGet, "/runtime.json", nil)
+	runtimeReq.Host = "127.0.0.1:5173"
+	runtimeRes := httptest.NewRecorder()
+	handler.ServeHTTP(runtimeRes, runtimeReq)
+	require.Equal(t, http.StatusOK, runtimeRes.Code)
+
+	var payload map[string]string
+	require.NoError(t, json.Unmarshal(runtimeRes.Body.Bytes(), &payload))
+	assert.Equal(t, "http://127.0.0.1:8082", payload["mirror_origin"])
+}

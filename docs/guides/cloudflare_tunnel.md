@@ -5,8 +5,8 @@ parent: Guides
 
 # Cloudflare Tunnel Integration
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-09-18
+Version: v2.1.8
 
 ---
 
@@ -14,7 +14,7 @@ Version: v1.7.6
 
 A Cloudflare Tunnel securely exposes the g8e Gateway's HTTPS console to the internet without opening firewall ports or managing public DNS records. The tunnel runs `cloudflared` as a separate foreground process on the same host as the gateway. Cloudflare terminates TLS at the edge; the tunnel forwards traffic to the gateway's HTTPS listener on `localhost:8443`.
 
-For a Lovable app running in a browser on the same computer as the Gateway, see [Connect a Lovable App](./lovable.md) before configuring a tunnel.
+For a Lovable app running in a browser on the same computer as the Gateway, run `./g8e gw connect <frontend-origin>` instead of configuring a tunnel. A tunnel is only needed for public access; see [Connect a Lovable App](./lovable.md).
 
 ### Architecture
 
@@ -248,7 +248,7 @@ curl -s https://console.g8e.ai/api/v1/health \
 
 ## Lovable Frontend Integration
 
-When configuring the Gateway for a Lovable frontend, use the Lovable app's exact origin for `--cors-origin` and `--passkey-rp-origin`, use its hostname for `--passkey-rp-id`, and use the tunnel URL for `--public-base-url`. The `http2Origin: true` setting supports SSE streaming through the tunnel. A tunnel is optional for a Lovable app running in a browser on the same computer as the Gateway; see [Connect a Lovable App](./lovable.md). For WebAuthn flows and the API reference, see [Build a g8e-Compatible Frontend](./build_frontend.md).
+When configuring the Gateway for a Lovable frontend, use the Lovable app's exact origin for `--cors-origin` and `--passkey-rp-origin`, use its hostname for `--passkey-rp-id`, and use the tunnel URL for `--public-base-url`. The `http2Origin: true` setting supports SSE streaming through the tunnel. A tunnel is optional for a Lovable app running in a browser on the same computer as the Gateway; run `./g8e gw connect <frontend-origin>` for the local one-command workflow (see [Connect a Lovable App](./lovable.md)). For WebAuthn flows and the API reference, see [Build a g8e-Compatible Frontend](./build_frontend.md).
 
 ---
 

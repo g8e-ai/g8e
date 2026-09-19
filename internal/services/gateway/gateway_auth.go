@@ -91,6 +91,11 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// and CLI identities; the caller does not yet have a validated session,
 	// so the route is RouteAuthNone and the handler enforces mTLS directly
 	// (requires a client certificate and extracts the user ID from it).
+	r.addExact(constants.APIPaths.PublicFeedBatches, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.PublicFeedSnapshot, RouteAuthMTLS)
+	r.addPrefix(constants.APIPaths.EvalCampaignPublicationStateByRun, RouteAuthMTLS)
+	r.addPrefix(constants.APIPaths.InferenceProviderObservations, RouteAuthMTLS)
+	r.addPrefix(constants.APIPaths.InferenceModelProvenanceAttestations, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.PKICSRSign, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.PKIDevicesEnroll, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthBootstrap, RouteAuthNone)
@@ -134,6 +139,22 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addPrefix(constants.APIPaths.Approvals, RouteAuthWebSession)
 	r.addPrefix(constants.APIPaths.AuthPasskeys, RouteAuthWebSession)
 
+	// Observe API — passkey-scoped, read-only observability surface. Every
+	// observe route requires a validated web session cookie. The middleware
+	// stamps user_id into context; controllers apply ownership scoping.
+	r.addPrefix(constants.APIPaths.ObservePrefix, RouteAuthWebSession)
+
+	// Observe producer endpoints — mTLS-authenticated app workload only,
+	// never browser-accessible. The producer prefix is longer than
+	// ObservePrefix so it takes precedence in the longest-prefix match,
+	// ensuring producer paths fail closed to mTLS instead of inheriting
+	// the observe prefix's web-session classification. The two exact
+	// producer paths are also classified explicitly so they are matched at
+	// the highest priority (exact match before prefix match).
+	r.addPrefix(constants.APIPaths.ObserveProducerPrefix, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.ObserveProducerAgentState, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.ObserveProducerRunState, RouteAuthMTLS)
+
 	// CLI recovery approval — browser console, authenticated existing user.
 	r.addExact(constants.APIPaths.AuthCLIRecoveryApprove, RouteAuthWebSession)
 
@@ -172,6 +193,14 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// no persisted session (handled by the controller's oldSession=nil
 	// path). The explicit classification documents the requirement.
 	r.addExact(constants.APIPaths.AuthCLIRefresh, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.AuthCLIBind, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.AuthCLIUnbind, RouteAuthMTLS)
+
+	// CLI session info — mTLS only. Returns the authenticated session's
+	// persisted operator binding so the CLI can resync local credentials.
+	// An expired or missing session fails closed (401) like every other
+	// session-bound route; the caller recovers via the refresh endpoint.
+	r.addExact(constants.APIPaths.AuthCLISession, RouteAuthMTLS)
 
 	// JIT passkey routes: RouteAuthNone when JWKS is enabled (JWT middleware handles auth),
 	// RouteAuthMTLS when JWKS is disabled (not accessible without mTLS).
@@ -247,8 +276,8 @@ func NewPrivilegedRouteRegistry() *PrivilegedRouteRegistry {
 		prefixes: make(map[string]struct{}),
 	}
 
-	// Governance envelope submission requires operator/CLI auth
-	r.addPrefix(constants.APIPaths.GovernanceEnvelopes)
+	// Governance envelope submission admits policy-authorized apps and enforces
+	// transport identity plus the five-layer verification gauntlet in its handler.
 
 	// Query endpoints require operator/CLI auth
 	r.addPrefix(constants.APIPaths.QueryPrefix)
@@ -448,12 +477,16 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 		return nil, &AuthError{Message: constants.ErrOperatorIdentityDisabled.Error(), Status: http.StatusUnauthorized}
 	}
 
-	// Enforce session expiry (TTL)
-	// Default session TTL is 24h if not specified.
-	sessionTTL := 24 * time.Hour
-	// We use the Document store's authoritative CreatedAt for TTL enforcement.
-	if !docs[0].CreatedAt.IsZero() && time.Since(docs[0].CreatedAt) > sessionTTL {
-		return nil, &AuthError{Message: constants.ErrOperatorSessionExpired.Error(), Status: http.StatusUnauthorized}
+	// Enforce session expiry (TTL) for remote operators. Default session
+	// TTL is 24h if not specified. The embedded operator is the gateway's
+	// own in-process substrate — its document persists for the lifetime of
+	// the gateway deployment and is exempt from the document-age TTL.
+	if op.OperatorType != constants.OperatorTypeEmbedded {
+		sessionTTL := 24 * time.Hour
+		// We use the Document store's authoritative CreatedAt for TTL enforcement.
+		if !docs[0].CreatedAt.IsZero() && time.Since(docs[0].CreatedAt) > sessionTTL {
+			return nil, &AuthError{Message: constants.ErrOperatorSessionExpired.Error(), Status: http.StatusUnauthorized}
+		}
 	}
 
 	// Check if the linked user is active (plan §4.6)
@@ -695,7 +728,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			// missing session is the refresh endpoint, where the cert is
 			// the proof of identity and the session may have been lost
 			// (e.g., gateway volume reset). All other paths fail closed.
-			if r.URL.Path == constants.APIPaths.AuthCLIRefresh {
+			if isCLISessionLifecyclePath(r.URL.Path) {
 				return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
 			}
 			s.logger.Warn("gateway: auth: CLI session not found", "cli_session_id", cliSessionID)
@@ -722,7 +755,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			// the proof of identity and the session expiry is the
 			// condition being recovered from. All other paths fail
 			// closed.
-			if r.URL.Path == constants.APIPaths.AuthCLIRefresh {
+			if isCLISessionLifecyclePath(r.URL.Path) {
 				return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
 			}
 			s.logger.Warn("gateway: auth: CLI session expired", "cli_session_id", cliSessionID)
@@ -761,14 +794,44 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			s.responder.Error(w, http.StatusForbidden, constants.ErrMTLSIdentityMismatch.Error())
 			return true
 		}
-		// Stamp context with user_id, cli_session_id, and optional operator session info (for MCP proxying)
+		// Stamp context with user_id and cli_session_id. Operator identity
+		// is stamped from the persisted session binding — never from
+		// request headers, which are client-controlled and not
+		// authoritative.
 		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, cliSession.UserID)
 		ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, cliSessionID)
-		if opID := r.Header.Get(constants.HeaderOperatorID); opID != "" {
-			ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, opID)
-		}
-		if opSessionID := r.Header.Get(constants.HeaderOperatorSessionID); opSessionID != "" {
-			ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, opSessionID)
+
+		headerOpID := r.Header.Get(constants.HeaderOperatorID)
+		headerOpSessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+
+		if cliSession.OperatorSessionID != "" {
+			op, err := s.ValidateOperatorSession(cliSession.OperatorSessionID)
+			if err != nil {
+				if ae, ok := err.(*AuthError); ok {
+					s.logger.Warn("gateway: auth: persisted operator binding invalid", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
+					s.responder.Error(w, ae.Status, ae.Message)
+				} else {
+					s.logger.Error("gateway: auth: resolve persisted operator binding", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
+					s.responder.Error(w, http.StatusInternalServerError, constants.ErrIdentityValidationFailed.Error())
+				}
+				return true
+			}
+			if (headerOpID != "" && headerOpID != op.ID) || (headerOpSessionID != "" && headerOpSessionID != cliSession.OperatorSessionID) {
+				s.logger.Warn("gateway: auth: operator headers mismatch persisted CLI session binding",
+					"path", r.URL.Path,
+					"cli_session_id", cliSessionID,
+					"persisted_operator_session_id", safeTruncateID(cliSession.OperatorSessionID, 8))
+				s.responder.Error(w, http.StatusForbidden, constants.ErrOperatorBindingMismatch.Error())
+				return true
+			}
+			ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, op.ID)
+			ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, cliSession.OperatorSessionID)
+		} else if headerOpID != "" || headerOpSessionID != "" {
+			// No persisted binding: the caller must not assert an operator
+			// identity the session does not carry.
+			s.logger.Warn("gateway: auth: operator headers sent but CLI session has no operator binding", "path", r.URL.Path, "cli_session_id", cliSessionID)
+			s.responder.Error(w, http.StatusForbidden, constants.ErrOperatorBindingMismatch.Error())
+			return true
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 		return true
@@ -786,12 +849,16 @@ func matchesCertificateFingerprint(cert *x509.Certificate, expected string) bool
 	return subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) == 1
 }
 
+func isCLISessionLifecyclePath(path string) bool {
+	return path == constants.APIPaths.AuthCLIRefresh || path == constants.APIPaths.AuthCLIBind || path == constants.APIPaths.AuthCLIUnbind
+}
+
 // handleCLIRefreshAuth is the fail-closed auth path for the CLI session
-// refresh endpoint. It is called from handleCLIAuth when the session is
-// expired or missing — the exact condition the refresh endpoint recovers
-// from. The cert is the proof of identity: it was already verified by the
-// mTLS handshake (revocation check, chain validation, expiry check) in
-// handleMTLSAuth before handleCLIAuth was called.
+// refresh and bind endpoints. It is called from handleCLIAuth when the
+// session is expired or missing — the exact condition those endpoints
+// recover from. The cert is the proof of identity: it was already verified
+// by the mTLS handshake (revocation check, chain validation, expiry check)
+// in handleMTLSAuth before handleCLIAuth was called.
 //
 // Security guarantees:
 //   - The cert is verified (revocation, chain, expiry) by handleMTLSAuth.

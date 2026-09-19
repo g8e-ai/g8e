@@ -21,6 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/cli/stream"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -38,6 +39,9 @@ func operatorCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		operatorListCmd(),
+		operatorShowCmd(),
+		operatorBindCmd(),
+		operatorRunCmd(),
 		operatorStartCmd(),
 		operatorCpCmd(),
 		operatorScpCmd(),
@@ -90,16 +94,52 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 
 			operators := slotResp.Operators
 			if len(operators) == 0 {
+				if output.JSONEnabled(cmd) {
+					return output.WriteJSON(cmd.OutOrStdout(), map[string]any{"operators": []any{}})
+				}
 				cmd.Println("No operators found")
 				return nil
 			}
 
+			if output.JSONEnabled(cmd) {
+				entries := make([]map[string]any, 0, len(operators))
+				for _, op := range operators {
+					entry := map[string]any{
+						"operator_id":         op.ID,
+						"operator_session_id": op.OperatorSessionID,
+						"operator_type":       op.OperatorType,
+						"status":              op.Status,
+						"component":           op.Component,
+					}
+					if hostname := operatorHostnameValue(op); hostname != "" {
+						entry["hostname"] = hostname
+					}
+					if op.Name != "" {
+						entry["name"] = op.Name
+					}
+					if op.RuntimeConfig != nil {
+						entry["inference_enabled"] = op.RuntimeConfig.InferenceEnabled
+						if op.RuntimeConfig.InferenceOllamaEndpoint != "" {
+							entry["inference_ollama_endpoint"] = op.RuntimeConfig.InferenceOllamaEndpoint
+						}
+						entry["provider_boundary_observer_enabled"] = op.RuntimeConfig.ProviderBoundaryObserverEnabled
+						entry["provider_boundary_observer_ollama_enabled"] = op.RuntimeConfig.ProviderBoundaryObserverOllamaEnabled
+						entry["provenance_operator_enabled"] = op.RuntimeConfig.ProvenanceOperatorEnabled
+						if op.RuntimeConfig.ProvenanceOperatorModelStorageRoot != "" {
+							entry["provenance_operator_model_storage_root"] = op.RuntimeConfig.ProvenanceOperatorModelStorageRoot
+						}
+					}
+					entries = append(entries, entry)
+				}
+				return output.WriteJSON(cmd.OutOrStdout(), map[string]any{"operators": entries})
+			}
+
 			cmd.Printf("Operators (%d total)\n", len(operators))
-			cmd.Println(strings.Repeat("=", 125))
-			cmd.Printf("  %-36s  %-12s  %-10s  %-36s  %-15s\n", "ID", "Type", "Cloud", "Session ID", "Status")
-			cmd.Println(strings.Repeat("-", 125))
+			cmd.Println(strings.Repeat("=", 140))
+			cmd.Printf("  %-36s  %-12s  %-24s  %-36s  %-15s\n", "ID", "Type", "Hostname", "Session ID", "Status")
+			cmd.Println(strings.Repeat("-", 140))
 			for _, op := range operators {
-				cmd.Printf("  %-36s  %-12s  %-10s  %-36s  %-15s\n", op.ID, op.OperatorType, op.CloudSubtype, op.OperatorSessionID, op.Status)
+				cmd.Printf("  %-36s  %-12s  %-24s  %-36s  %-15s\n", op.ID, op.OperatorType, operatorHostnameDisplay(op), op.OperatorSessionID, op.Status)
 			}
 
 			return nil
@@ -125,6 +165,20 @@ func operatorStartCmd() *cobra.Command {
 	var latticeSandboxesToken string
 	var latticeEntityName string
 	var latticePostureFloor string
+	var inferenceEnabled bool
+	var inferenceOllamaEndpoint string
+	var inferencePrimaryModel string
+	var inferenceAssistantModel string
+	var inferenceLiteModel string
+	var inferenceKeepAlive string
+	var inferenceCampaignID string
+	var inferenceModelRegistryDigest string
+	var providerBoundaryObserverEnabled bool
+	var providerBoundaryObserverID string
+	var providerBoundaryObserverOllamaEnabled bool
+	var provenanceOperatorEnabled bool
+	var provenanceOperatorID string
+	var provenanceOperatorModelStorageRoot string
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -133,18 +187,33 @@ func operatorStartCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			endpoint, _ := cmd.Flags().GetString("endpoint")
 			opts := serve.ServeOperatorOptions{
-				LogLevel:          logLevel,
-				Endpoint:          endpoint,
-				TrustBundlePath:   trustBundle,
-				PrivateKey:        key,
-				ClientCert:        clientCert,
-				WorkingDir:        workingDir,
-				LaunchDir:         workingDir,
-				CloudMode:         cloud,
-				CloudProvider:     provider,
-				ExecutionVault:    executionVault,
-				NoGit:             noGit,
-				HeartbeatInterval: time.Duration(heartbeatInterval) * time.Second,
+				LogLevel:                              logLevel,
+				Endpoint:                              endpoint,
+				TrustBundlePath:                       trustBundle,
+				PrivateKey:                            key,
+				ClientCert:                            clientCert,
+				WorkingDir:                            workingDir,
+				LaunchDir:                             workingDir,
+				CloudMode:                             cloud,
+				CloudProvider:                         provider,
+				ExecutionVault:                        executionVault,
+				NoGit:                                 noGit,
+				HeartbeatInterval:                     time.Duration(heartbeatInterval) * time.Second,
+				InferenceEnabled:                      inferenceEnabled,
+				InferenceOllamaEndpoint:               inferenceOllamaEndpoint,
+				InferencePrimaryModel:                 inferencePrimaryModel,
+				InferenceAssistantModel:               inferenceAssistantModel,
+				InferenceLiteModel:                    inferenceLiteModel,
+				InferenceKeepAlive:                    inferenceKeepAlive,
+				InferenceCampaignID:                   inferenceCampaignID,
+				InferenceModelRegistryDigest:          inferenceModelRegistryDigest,
+				ProviderBoundaryObserverEnabled:       providerBoundaryObserverEnabled,
+				ProviderBoundaryObserverID:            providerBoundaryObserverID,
+				ProviderBoundaryObserverOllamaEnabled: providerBoundaryObserverOllamaEnabled,
+
+				ProvenanceOperatorEnabled:          provenanceOperatorEnabled,
+				ProvenanceOperatorID:               provenanceOperatorID,
+				ProvenanceOperatorModelStorageRoot: provenanceOperatorModelStorageRoot,
 			}
 
 			// Run operator (this blocks until shutdown)
@@ -169,6 +238,23 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&latticeSandboxesToken, "lattice-sandboxes-token", "", "Sandbox authorization token")
 	cmd.Flags().StringVar(&latticeEntityName, "lattice-entity-name", "", "Entity display name")
 	cmd.Flags().StringVar(&latticePostureFloor, "lattice-posture-floor", "consensus", "Minimum governance posture")
+
+	// Inference (g8ellama) flags. Enable when the operator runs as an
+	// Inference Node calling the configured remote Ollama provider.
+	cmd.Flags().BoolVar(&inferenceEnabled, "inference-enabled", false, "Enable governed LLM inference backend (g8ellama)")
+	cmd.Flags().StringVar(&inferenceOllamaEndpoint, "inference-ollama-endpoint", "", "Remote Ollama provider endpoint (default: http://127.0.0.1:11434)")
+	cmd.Flags().StringVar(&inferencePrimaryModel, "inference-primary-model", "", "Ollama model name for the Primary chat tier")
+	cmd.Flags().StringVar(&inferenceAssistantModel, "inference-assistant-model", "", "Ollama model name for the Assistant chat tier")
+	cmd.Flags().StringVar(&inferenceLiteModel, "inference-lite-model", "", "Ollama model name for the Lite chat tier")
+	cmd.Flags().StringVar(&inferenceKeepAlive, "inference-keep-alive", "", "Ollama keep-alive duration (default: -1 for infinite)")
+	cmd.Flags().StringVar(&inferenceCampaignID, "inference-campaign-id", "", "Frozen evaluation campaign authorized by this inference operator")
+	cmd.Flags().StringVar(&inferenceModelRegistryDigest, "inference-model-registry-digest", "", "SHA-256 digest of the frozen campaign model registry")
+	cmd.Flags().BoolVar(&providerBoundaryObserverEnabled, "provider-boundary-observer-enabled", false, "Enable read-only provider-boundary hardware observation on the approved provider host")
+	cmd.Flags().StringVar(&providerBoundaryObserverID, "provider-boundary-observer-id", "", "Stable observer identity pseudonym")
+	cmd.Flags().BoolVar(&providerBoundaryObserverOllamaEnabled, "ollama", false, "Allow remote Ollama CLI commands (stop/serve/ps) on this provider-boundary observer host")
+	cmd.Flags().BoolVar(&provenanceOperatorEnabled, "provenance-operator-enabled", false, "Enable storage-side model provenance attestation at the model file site")
+	cmd.Flags().StringVar(&provenanceOperatorID, "provenance-operator-id", "", "Stable provenance operator identity pseudonym")
+	cmd.Flags().StringVar(&provenanceOperatorModelStorageRoot, "model-storage-root", "", "Root directory containing content-addressed model weight blobs (for example ~/.ollama/models)")
 
 	return cmd
 }

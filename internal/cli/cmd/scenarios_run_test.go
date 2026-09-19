@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
@@ -56,12 +57,16 @@ func TestDemosScenariosRunCmd(t *testing.T) {
 		cmd := demosScenariosRunCmd()
 		require.NotNil(t, cmd)
 
-		flags := []string{"config", "mtls-url", "public-url", "approval-url", "cert", "key", "ca", "api-key", "operator-session", "out", "verbose", "phase", "json"}
+		flags := []string{"config", "mtls-url", "public-url", "approval-url", "cert", "key", "ca", "api-key", "operator-session", "out", "verbose", "phase"}
 
 		for _, flagName := range flags {
 			flag := cmd.Flags().Lookup(flagName)
 			assert.NotNil(t, flag, "scenarios run should have --%s flag", flagName)
 		}
+
+		root := NewRootCmd("dev", serve.VersionInfo{})
+		jsonFlag := root.PersistentFlags().Lookup("json")
+		assert.NotNil(t, jsonFlag, "root should expose global --json flag")
 	})
 
 	t.Run("scenarios run phase flag has default value", func(t *testing.T) {

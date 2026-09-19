@@ -90,6 +90,33 @@ type LoadOptions struct {
 
 	// Lattice adapter (nil when disabled)
 	Lattice *latticeconfig.LatticeConfig
+
+	// Inference backend (g8ellama). Disabled when InferenceEnabled is false.
+	InferenceEnabled             bool
+	InferenceBackend             string
+	InferenceOllamaEndpoint      string
+	InferencePrimaryModel        string
+	InferenceAssistantModel      string
+	InferenceLiteModel           string
+	InferenceKeepAlive           string
+	InferenceCampaignID          string
+	InferenceModelRegistryDigest string
+
+	// ProviderBoundaryObserverEnabled marks the operator as the remote
+	// read-only provider-boundary hardware observer.
+	ProviderBoundaryObserverEnabled bool
+	ProviderBoundaryObserverID      string
+	// ProviderBoundaryObserverOllamaEnabled opts the observer into remote
+	// Ollama service lifecycle commands on the provider host.
+	ProviderBoundaryObserverOllamaEnabled bool
+
+	// ProvenanceOperatorEnabled marks the operator as the storage-side model
+	// provenance attestor at the model file site.
+	ProvenanceOperatorEnabled bool
+	ProvenanceOperatorID      string
+	// ProvenanceOperatorModelStorageRoot is the root directory containing
+	// content-addressed model weight blobs (for example ~/.ollama/models).
+	ProvenanceOperatorModelStorageRoot string
 }
 
 // GatewayConfig holds configuration for gateway mode.
@@ -144,9 +171,82 @@ type GatewayConfig struct {
 	// Empty means hardcoded MITRE patterns only.
 	DoctrineDir string
 
+	// PublicSpectatorEnabled starts the in-process public mirror and evaluation
+	// explorer static host when the gateway boots.
+	PublicSpectatorEnabled bool
+	// PublicSpectatorPrivateAddr is the authenticated mirror ingest listener.
+	PublicSpectatorPrivateAddr string
+	// PublicSpectatorPublicAddr is the anonymous mirror read/SSE listener.
+	PublicSpectatorPublicAddr string
+	// EvalExplorerAddr is the loopback listener for the evaluation explorer SPA.
+	EvalExplorerAddr string
+	// EvalExplorerRoot overrides the built explorer dist directory.
+	EvalExplorerRoot string
+
 	// Distributed lock retry configuration
 	LockMaxRetries int           // Maximum retry attempts for distributed lock acquisition (default: 30)
 	LockRetryDelay time.Duration // Base delay for lock retry backoff (default: 50ms)
+}
+
+// InferenceConfig holds configuration for the inference backend
+// (g8ellama). The remote Ollama provider owns process lifecycle, VRAM
+// management, model eviction, and multi-model residency; the gateway's
+// responsibility is limited to acting as an HTTP client to Ollama's
+// /api/chat endpoint.
+// The three model fields map directly to the three tiers in ensemble's
+// LLMSettings.
+type InferenceConfig struct {
+	Enabled bool
+
+	// Backend selects the inference backend implementation. Currently only
+	// "ollama" is supported.
+	Backend string
+
+	// OllamaEndpoint is the HTTP endpoint of the configured Ollama provider
+	// (default: http://127.0.0.1:<InferenceOllamaDefaultPort>). For this
+	// release the provider is remote; nothing here manages a local daemon.
+	OllamaEndpoint string
+
+	// ModelsDir is the relative path to the governed model store directory,
+	// resolved via fileSvc.Resolve(constants.DefaultModelsDir) at the
+	// boundary. Not stored as an absolute path on the config struct.
+	ModelsDir string
+
+	// PrimaryModel, AssistantModel, LiteModel map each chat-tier role to an
+	// Ollama model name. Ollama routes by model name in the API call, so
+	// role routing is a config-and-payload concern.
+	PrimaryModel   string
+	AssistantModel string
+	LiteModel      string
+
+	CampaignID          string
+	ModelRegistryDigest string
+
+	// MaxContextTokens bounds the prompt context window (0 = backend default).
+	MaxContextTokens int
+
+	// KeepAlive is the Ollama keep-alive duration passed to /api/chat per
+	// request. Default "-1" pins all three chat roles in memory on the
+	// remote provider.
+	KeepAlive string
+}
+
+// ProviderBoundaryObserverConfig holds configuration for the remote
+// provider-boundary hardware observer operator.
+type ProviderBoundaryObserverConfig struct {
+	Enabled    bool
+	ObserverID string
+	// OllamaEnabled opts the observer into remote Ollama service lifecycle
+	// Ollama CLI commands (stop/serve/ps) on the provider host.
+	OllamaEnabled bool
+}
+
+// ProvenanceOperatorConfig holds configuration for the storage-side model
+// provenance attestor operator.
+type ProvenanceOperatorConfig struct {
+	Enabled          bool
+	OperatorID       string
+	ModelStorageRoot string
 }
 
 // Config holds all configuration for g8eo
@@ -225,6 +325,19 @@ type Config struct {
 
 	// Lattice adapter configuration (nil when disabled)
 	Lattice *latticeconfig.LatticeConfig
+
+	// Inference configuration for the inference backend (g8ellama).
+	// Disabled by default; enabled when the operator runs as an Inference
+	// Node calling the configured remote Ollama provider.
+	Inference InferenceConfig
+
+	// ProviderBoundaryObserver configuration for the remote read-only
+	// hardware observer on the approved provider host.
+	ProviderBoundaryObserver ProviderBoundaryObserverConfig
+
+	// ProvenanceOperator configuration for the storage-side model provenance
+	// attestor at the model file site.
+	ProvenanceOperator ProvenanceOperatorConfig
 }
 
 // FindProjectRoot returns the current working directory.
@@ -557,6 +670,15 @@ func Load(opts LoadOptions) (*Config, error) {
 
 		// Lattice adapter (nil when disabled)
 		Lattice: opts.Lattice,
+
+		// Inference backend (g8ellama). Disabled by default; enabled when
+		// the operator runs as an Inference Node calling the configured
+		// remote Ollama provider. The model store directory is resolved at the boundary via
+		// fileSvc.Resolve(constants.DefaultModelsDir), not stored as an
+		// absolute path here.
+		Inference:                newInferenceConfig(opts),
+		ProviderBoundaryObserver: newProviderBoundaryObserverConfig(opts),
+		ProvenanceOperator:       newProvenanceOperatorConfig(opts),
 	}
 
 	// Default PKIDir to .g8e/pki if not explicitly set
@@ -594,6 +716,62 @@ func heartbeatIntervalOrDefault(d time.Duration) time.Duration {
 	return 30 * time.Second
 }
 
+// newInferenceConfig builds an InferenceConfig from LoadOptions, applying
+// defaults for unset fields. The Ollama endpoint defaults to loopback on the
+// canonical Ollama port. The model store directory is the relative constant
+// (constants.DefaultModelsDir); callers resolve it to an absolute path via
+// fileSvc.Resolve at the I/O boundary.
+func newInferenceConfig(opts LoadOptions) InferenceConfig {
+	endpoint := opts.InferenceOllamaEndpoint
+	if endpoint == "" {
+		endpoint = fmt.Sprintf("http://127.0.0.1:%d", constants.InferenceOllamaDefaultPort)
+	}
+	backend := opts.InferenceBackend
+	if backend == "" {
+		backend = "ollama"
+	}
+	keepAlive := opts.InferenceKeepAlive
+	if keepAlive == "" {
+		keepAlive = "-1"
+	}
+	return InferenceConfig{
+		Enabled:             opts.InferenceEnabled,
+		Backend:             backend,
+		OllamaEndpoint:      endpoint,
+		ModelsDir:           constants.DefaultModelsDir,
+		PrimaryModel:        opts.InferencePrimaryModel,
+		AssistantModel:      opts.InferenceAssistantModel,
+		LiteModel:           opts.InferenceLiteModel,
+		KeepAlive:           keepAlive,
+		CampaignID:          opts.InferenceCampaignID,
+		ModelRegistryDigest: opts.InferenceModelRegistryDigest,
+	}
+}
+
+func newProviderBoundaryObserverConfig(opts LoadOptions) ProviderBoundaryObserverConfig {
+	observerID := opts.ProviderBoundaryObserverID
+	if observerID == "" {
+		observerID = "g8e-provider-boundary-observer"
+	}
+	return ProviderBoundaryObserverConfig{
+		Enabled:       opts.ProviderBoundaryObserverEnabled,
+		ObserverID:    observerID,
+		OllamaEnabled: opts.ProviderBoundaryObserverOllamaEnabled,
+	}
+}
+
+func newProvenanceOperatorConfig(opts LoadOptions) ProvenanceOperatorConfig {
+	operatorID := opts.ProvenanceOperatorID
+	if operatorID == "" {
+		operatorID = "g8e-model-provenance-operator"
+	}
+	return ProvenanceOperatorConfig{
+		Enabled:          opts.ProvenanceOperatorEnabled,
+		OperatorID:       operatorID,
+		ModelStorageRoot: opts.ProvenanceOperatorModelStorageRoot,
+	}
+}
+
 // buildPubSubURL creates a WebSocket URL using the HTTPS port (WSS runs over TLS).
 // Uses tlsServerName for the hostname when provided (for IP-to-g8e.local mapping).
 func buildPubSubURL(endpoint string, tlsServerName string, httpsPort int) string {
@@ -619,6 +797,26 @@ func httpsPortOrDefault(p int) int {
 		return p
 	}
 	return constants.Ports.OperatorHttps
+}
+
+// ReportedHTTPPort returns the HTTP port for heartbeat reporting and logging.
+// Gateway mode uses Gateway.HTTPPort; remote operator mode uses the dial port
+// on Config.HTTPPort (defaults applied at load time).
+func (c *Config) ReportedHTTPPort() int {
+	if c.Gateway.HTTPPort > 0 {
+		return c.Gateway.HTTPPort
+	}
+	return c.HTTPPort
+}
+
+// ReportedHTTPSPort returns the HTTPS port for heartbeat reporting and logging.
+// Gateway mode uses Gateway.HTTPSPort; remote operator mode uses the dial port
+// on Config.HTTPSPort (defaults applied at load time).
+func (c *Config) ReportedHTTPSPort() int {
+	if c.Gateway.HTTPSPort > 0 {
+		return c.Gateway.HTTPSPort
+	}
+	return c.HTTPSPort
 }
 
 // tlsServerName returns the TLS ServerName override to use when endpoint is a

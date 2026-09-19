@@ -35,6 +35,7 @@ from app.constants import (
     AGENT_RETRY_BACKOFF_MULTIPLIER,
     AGENT_RETRY_DELAY_SECONDS,
     DEFAULT_FINISH_REASON,
+    ReasoningAgent,
 )
 from app.errors import ValidationError
 from app.models.agent import (
@@ -701,6 +702,7 @@ class TestTokenAccumulation:
         context = make_agent_inputs()
         context.generation_config = make_gen_config()
         context.model_to_use = "test-model"
+        context.active_agent = ReasoningAgent.SAGE
         event_service = make_event_service()
 
         chunks = []
@@ -718,7 +720,8 @@ class TestTokenAccumulation:
         assert complete_chunk.data.token_usage.thinking_tokens == 2
         assert complete_chunk.data.token_usage.total_tokens == 15
         assert len(complete_chunk.data.model_calls) == 1
-        assert complete_chunk.data.model_calls[0].agent_role == context.agent_mode.value
+        assert complete_chunk.data.model_calls[0].agent_role == ReasoningAgent.SAGE.value
+        assert complete_chunk.data.model_calls[0].model_role == "primary"
         assert complete_chunk.data.model_calls[0].model == "test-model"
         assert complete_chunk.data.model_calls[0].input_tokens == 10
         assert complete_chunk.data.model_calls[0].output_tokens == 5

@@ -4,7 +4,7 @@
 
 g8ee uses the g8e protocol library for typed messages, canonical JSON, workload identity, governance envelopes, and signed execution receipts. It uses two governed operation paths: a command relay for work on a bound Operator and direct envelope submission for designated application records. The Gateway MCP and A2A interfaces are separate public integration paths and are not part of g8ee's internal transport.
 
-g8ee remains outside the trusted execution boundary. Model output, Tribunal agreement, application approval, and application Warden results can shape intent, but they do not replace protocol consensus, human authorization, Operator verification, or signed receipts. See [Platform Protocol](../architecture/protocol.md) for the protocol packages and canonical wire contracts.
+g8ee remains outside the trusted execution boundary. Model output, Tribunal agreement, application approval, and Marshal risk results can shape intent, but they do not replace protocol consensus, human authorization, Operator verification, or signed receipts. See [Platform Protocol](../architecture/protocol.md) for the protocol packages and canonical wire contracts.
 
 ## Transport Identity
 
@@ -36,7 +36,7 @@ g8ee uses direct envelopes for designated record mutations, including cases, inv
 1. The application converts the requested mutation to its typed protocol payload.
 2. g8ee reads the current Gateway state root and constructs a canonical `GovernanceEnvelope` containing the request identity, target, nonce, expiry, and typed payload.
 3. g8ee computes the transaction hash over the protocol-defined intent fields and submits canonical JSON over the privileged mTLS transport.
-4. The Gateway binds the envelope to the authenticated Operator identity, supplies its active posture when the envelope omits it, and passes the request to its local Warden and Actuator.
+4. The Gateway binds the envelope to the authenticated Operator identity, supplies its active posture when the envelope omits it, and passes the request to its local L4 Warden and L5 Actuator.
 5. The Gateway returns the signed `ActionReceipt` for the verified execution attempt. A receipt can report either successful or failed handler execution.
 
 The direct route verifies the evidence supplied in the envelope but does not create missing L2 votes or L3 authorization. A certificate fingerprint alone is not a complete L3 proof; signed CLI authorization also requires a transaction signature, while browser authorization uses WebAuthn. Direct mutations therefore fail closed when the active posture requires evidence g8ee did not supply.

@@ -21,9 +21,6 @@ ensemble now publishes raw command intent to ``cmd:`` and lets the gateway
 construct the governed envelope.
 """
 
-import hashlib
-import json
-
 import pytest
 
 from app.constants.api_paths import GatewayAPIPaths
@@ -55,7 +52,6 @@ class TestGovernanceClientMTLS:
         import inspect
 
         from app.clients.governance_client import GovernanceClient
-        from app.models.settings import TLSConfig
 
         sig = inspect.signature(GovernanceClient.__init__)
         assert "tls_config" in sig.parameters
@@ -91,7 +87,7 @@ class TestCanonicalJson:
 
     def test_utf8_preserved(self):
         result = canonical_json({"name": "café"})
-        assert "café".encode("utf-8") in result
+        assert "café".encode() in result
 
 
 class TestDeadPubSubClientsRemoved:
@@ -240,6 +236,67 @@ class TestDataServicesUseGovernanceEnvelopes:
         assert "governance_client" in source
         assert "submit_envelope" in source
         assert "update_governed_doc" in source
+
+    @pytest.mark.asyncio
+    async def test_new_memory_write_preserves_delegated_operator_authority(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        from app.models.http_context import RequestContext
+        from app.models.investigations import InvestigationModel
+        from app.services.investigation.memory_data_service import MemoryDataService
+
+        governance_client = MagicMock()
+        governance_client.submit_envelope = AsyncMock()
+        service = MemoryDataService(MagicMock(), governance_client)
+        investigation = InvestigationModel(
+            id="investigation-1",
+            case_id="case-1",
+            user_id="user-1",
+            sentinel_mode=False,
+        )
+        context = RequestContext(
+            cli_session_id="cli-session-1",
+            user_id="user-1",
+            operator_id="operator-1",
+            operator_session_id="operator-session-1",
+        )
+
+        await service.create_memory(investigation, context)
+
+        message = governance_client.submit_envelope.await_args.args[0]
+        assert message.operator_id == "operator-1"
+        assert message.operator_session_id == "operator-session-1"
+
+    @pytest.mark.asyncio
+    async def test_new_generated_memory_save_preserves_delegated_operator_authority(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        from app.models.http_context import RequestContext
+        from app.models.memory import InvestigationMemory
+        from app.services.investigation.memory_data_service import MemoryDataService
+
+        governance_client = MagicMock()
+        governance_client.submit_envelope = AsyncMock()
+        service = MemoryDataService(MagicMock(), governance_client)
+        context = RequestContext(
+            cli_session_id="cli-session-1",
+            user_id="user-1",
+            operator_id="operator-1",
+            operator_session_id="operator-session-1",
+        )
+        memory = InvestigationMemory(
+            case_id="case-1",
+            investigation_id="investigation-1",
+            user_id="user-1",
+            status="Open",
+            case_title="Case 1",
+        )
+
+        await service.save_memory(memory, is_new=True, context=context)
+
+        message = governance_client.submit_envelope.await_args.args[0]
+        assert message.operator_id == "operator-1"
+        assert message.operator_session_id == "operator-session-1"
 
     def test_reputation_data_service_uses_governance(self):
         import inspect

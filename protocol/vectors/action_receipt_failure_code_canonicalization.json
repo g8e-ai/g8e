@@ -1,0 +1,19 @@
+{
+  "name": "failed_with_governance_rejected_failure_code",
+  "receipt": {
+    "transaction_id": "tx-failure-code-001",
+    "transaction_hash": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "status": "EXECUTION_STATUS_FAILED",
+    "result_summary": "rejected: model override denied",
+    "state_root_before": "sha256:before-fc",
+    "state_root_after": "sha256:after-fc",
+    "executed_at_unix_ms": "1777777777456",
+    "signer_key_id": "warden-failure-code-key",
+    "signature": "c8a6445b486178a22165656b3cad93976507a3ff236a44a00d7c424bb40d6b305c6ffca008306cacd54fa23ac45a2c8c8fd0f147fca361e9794ebed359dbee0a",
+    "l2_status": "L2_STATUS_REQUIRED_VALID",
+    "l3_status": "L3_STATUS_NOT_REQUIRED",
+    "failure_code": "RECEIPT_FAILURE_CODE_GOVERNANCE_REJECTED"
+  },
+  "canonical_utf8": "{\"transaction_id\":\"tx-failure-code-001\",\"transaction_hash\":\"sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\",\"status\":3,\"result_summary\":\"rejected: model override denied\",\"state_root_before\":\"sha256:before-fc\",\"state_root_after\":\"sha256:after-fc\",\"executed_at_unix_ms\":1777777777456,\"signer_key_id\":\"warden-failure-code-key\",\"l2_status\":2,\"l3_status\":1,\"failure_code\":1}",
+  "public_key_hex": "93d07e4719a9df707af8b11e7fa209792cbcedfd07ff3c3b42dbfd9ed63c6e1c"
+}

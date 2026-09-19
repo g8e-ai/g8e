@@ -38,7 +38,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.constants import (
-    CloudSubtype,
     InvestigationStatus,
     OperatorType,
 )
@@ -153,8 +152,7 @@ def sample_investigation():
                 "id": "op-123",
                 "user_id": "user-303",
                 "operator_session_id": "session-456",
-                "operator_type": OperatorType.CLOUD,
-                "cloud_subtype": CloudSubtype.AWS,
+                "operator_type": OperatorType.REMOTE,
                 "latest_heartbeat_snapshot": HeartbeatSnapshot(
                     system_identity=HeartbeatSystemIdentity(
                         os="linux", hostname="g8ebuntu", current_user="g8e", architecture="amd64"

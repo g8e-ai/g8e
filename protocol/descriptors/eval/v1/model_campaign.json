@@ -1,0 +1,489 @@
+{
+  "schema_version": "1.0.0",
+  "protobuf_package": "g8e.eval.v1",
+  "enums": {
+    "EvaluationAssignmentLifecycleStatus": [
+      "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED",
+      "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_ESCALATED",
+      "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_FAILED",
+      "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_GRADER_FAILED",
+      "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PARTIAL",
+      "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_POLICY_REJECTED",
+      "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED",
+      "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED",
+      "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING",
+      "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_STOPPED",
+      "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_UNAVAILABLE",
+      "EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_UNSPECIFIED"
+    ],
+    "EvaluationGradingMethod": [
+      "EVALUATION_GRADING_METHOD_DETERMINISTIC",
+      "EVALUATION_GRADING_METHOD_SEMANTIC_JUDGE",
+      "EVALUATION_GRADING_METHOD_UNSPECIFIED"
+    ],
+    "EvaluationLane": [
+      "EVALUATION_LANE_MODEL_ROLE",
+      "EVALUATION_LANE_PLATFORM",
+      "EVALUATION_LANE_SYSTEM",
+      "EVALUATION_LANE_UNSPECIFIED"
+    ],
+    "EvaluationLoadState": [
+      "EVALUATION_LOAD_STATE_COLD",
+      "EVALUATION_LOAD_STATE_UNAVAILABLE",
+      "EVALUATION_LOAD_STATE_UNSPECIFIED",
+      "EVALUATION_LOAD_STATE_WARM"
+    ],
+    "EvaluationScenarioCategory": [
+      "EVALUATION_SCENARIO_CATEGORY_FINAL_RESPONSE",
+      "EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE",
+      "EVALUATION_SCENARIO_CATEGORY_RECOVERY",
+      "EVALUATION_SCENARIO_CATEGORY_ROUTING_DELEGATION",
+      "EVALUATION_SCENARIO_CATEGORY_SECURITY_POLICY",
+      "EVALUATION_SCENARIO_CATEGORY_TECHNICAL_ANALYSIS",
+      "EVALUATION_SCENARIO_CATEGORY_TOOL_ARGUMENT",
+      "EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION",
+      "EVALUATION_SCENARIO_CATEGORY_UNSPECIFIED",
+      "EVALUATION_SCENARIO_CATEGORY_VERIFICATION"
+    ],
+    "EvaluationUsageAvailability": [
+      "EVALUATION_USAGE_AVAILABILITY_REPORTED",
+      "EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE",
+      "EVALUATION_USAGE_AVAILABILITY_UNSPECIFIED"
+    ],
+    "ModelCampaignRole": [
+      "MODEL_CAMPAIGN_ROLE_ASSISTANT",
+      "MODEL_CAMPAIGN_ROLE_LITE",
+      "MODEL_CAMPAIGN_ROLE_PRIMARY",
+      "MODEL_CAMPAIGN_ROLE_UNSPECIFIED"
+    ],
+    "ModelCapabilityKind": [
+      "MODEL_CAPABILITY_KIND_COMPLETION",
+      "MODEL_CAPABILITY_KIND_CONTEXT_LIMIT",
+      "MODEL_CAPABILITY_KIND_STRUCTURED_OUTPUT",
+      "MODEL_CAPABILITY_KIND_THINKING",
+      "MODEL_CAPABILITY_KIND_TOOL_CALLING",
+      "MODEL_CAPABILITY_KIND_UNSPECIFIED"
+    ]
+  },
+  "messages": {
+    "DecomposedScoreRecord": {
+      "visibility": "private",
+      "fields": [
+        "dimension",
+        "direction",
+        "missing_data_policy",
+        "score_id",
+        "unit",
+        "value"
+      ]
+    },
+    "DeterministicGrade": {
+      "visibility": "private",
+      "fields": [
+        "criterion_id",
+        "detail",
+        "grade_id",
+        "score",
+        "status"
+      ]
+    },
+    "EscalationRecord": {
+      "visibility": "private",
+      "fields": [
+        "assignment_id",
+        "escalation_id",
+        "from_role",
+        "justified",
+        "reason_code",
+        "to_role"
+      ]
+    },
+    "EvaluationAssignment": {
+      "visibility": "private",
+      "fields": [
+        "assignment_id",
+        "campaign_id",
+        "completed_at",
+        "deterministic_identity",
+        "lane",
+        "lifecycle_status",
+        "queued_at",
+        "repetition",
+        "run_id",
+        "scenario_id",
+        "scenario_ref",
+        "schema_version",
+        "started_at"
+      ],
+      "oneof_groups": [
+        "target"
+      ]
+    },
+    "EvaluationAssignmentResult": {
+      "visibility": "private",
+      "fields": [
+        "assignment_id",
+        "campaign_id",
+        "completed_at",
+        "decomposed_scores",
+        "deterministic_grades",
+        "escalations",
+        "evidence_refs",
+        "governed_actions",
+        "grader_calls",
+        "handoffs",
+        "lane",
+        "lifecycle_status",
+        "model_inferences",
+        "recoveries",
+        "result_digest",
+        "run_id",
+        "schema_version",
+        "semantic_grades",
+        "tool_calls",
+        "tool_decisions"
+      ]
+    },
+    "EvaluationCampaignSpec": {
+      "visibility": "private",
+      "fields": [
+        "campaign_digest",
+        "campaign_id",
+        "catalog_digest",
+        "catalog_ref",
+        "governance_posture",
+        "model_registry",
+        "model_registry_digest",
+        "repetition_count",
+        "scenario_count",
+        "schema_version"
+      ]
+    },
+    "EvaluationScenarioCatalog": {
+      "visibility": "private",
+      "fields": [
+        "catalog_digest",
+        "catalog_ref",
+        "scenarios",
+        "schema_version"
+      ]
+    },
+    "EvaluationScenarioDefinition": {
+      "visibility": "private",
+      "fields": [
+        "allowed_tools",
+        "category",
+        "expected_tools",
+        "forbidden_tools",
+        "gold_criteria_ref",
+        "grading_method",
+        "input_fixture_ref",
+        "public_description",
+        "required_concepts",
+        "scenario_id",
+        "scenario_version"
+      ]
+    },
+    "EvaluationVerificationReport": {
+      "visibility": "private",
+      "fields": [
+        "assignment_id",
+        "failure_count",
+        "failure_reasons",
+        "report_digest_ref",
+        "report_id",
+        "run_id",
+        "schema_version",
+        "status",
+        "verified_at"
+      ]
+    },
+    "GovernedActionBinding": {
+      "visibility": "private",
+      "fields": [
+        "assignment_id",
+        "binding_id",
+        "effect_observation_ref",
+        "operator_id",
+        "operator_session_id",
+        "persistence_attestation_ref",
+        "policy_decision",
+        "receipt_ref",
+        "transaction_id"
+      ]
+    },
+    "GraderModelCallRecord": {
+      "visibility": "private",
+      "fields": [
+        "assignment_id",
+        "grader_call_id",
+        "inference_record_ref",
+        "judge_variant_id"
+      ]
+    },
+    "HandoffRecord": {
+      "visibility": "private",
+      "fields": [
+        "assignment_id",
+        "from_role",
+        "handoff_id",
+        "reason_code",
+        "to_role"
+      ]
+    },
+    "HeterogeneousAssignmentTarget": {
+      "visibility": "private",
+      "fields": [
+        "stack"
+      ]
+    },
+    "HeterogeneousStackDefinition": {
+      "visibility": "private",
+      "fields": [
+        "assistant_slot",
+        "lite_slot",
+        "primary_slot",
+        "stack_digest",
+        "stack_id"
+      ]
+    },
+    "HomogeneousAssignmentTarget": {
+      "visibility": "private",
+      "fields": [
+        "candidate_variant",
+        "designated_role"
+      ]
+    },
+    "ModelCampaignBinding": {
+      "visibility": "private",
+      "fields": [
+        "campaign_digest",
+        "campaign_id",
+        "catalog_digest",
+        "catalog_ref",
+        "data_operator_session_id",
+        "inference_operator_session_id",
+        "model_registry_digest"
+      ]
+    },
+    "ModelCapabilityObservation": {
+      "visibility": "private",
+      "fields": [
+        "capability",
+        "observation_detail",
+        "outcome"
+      ]
+    },
+    "ModelInferenceRecord": {
+      "visibility": "private",
+      "fields": [
+        "agent_persona",
+        "assignment_id",
+        "cache_tokens",
+        "call_site",
+        "completion_tokens",
+        "evaluation_attempt_id",
+        "finish_reason",
+        "first_token_at_unix_nanos",
+        "generation_duration_nanos",
+        "governed_receipt_ref",
+        "inference_record_id",
+        "input_hash",
+        "load_duration_nanos",
+        "load_state",
+        "max_output_tokens",
+        "model_role",
+        "model_variant",
+        "output_hash",
+        "privacy_attested",
+        "prompt_tokens",
+        "provider_attempt_id",
+        "provider_boundary_observation_ref",
+        "request_started_at_unix_nanos",
+        "result_digest",
+        "retry_count",
+        "seed",
+        "temperature",
+        "thinking_tokens",
+        "top_k",
+        "top_p",
+        "total_duration_nanos",
+        "usage_availability"
+      ]
+    },
+    "ModelVariant": {
+      "visibility": "private",
+      "fields": [
+        "capability_observations",
+        "context_limit",
+        "model_digest",
+        "model_family",
+        "parameter_count",
+        "provider_class",
+        "quantization",
+        "served_model_tag",
+        "variant_id"
+      ]
+    },
+    "PublicAssignmentLifecycleRecord": {
+      "visibility": "public",
+      "fields": [
+        "assignment_id",
+        "designated_role",
+        "lane",
+        "lifecycle_status",
+        "observed_at",
+        "repetition",
+        "run_id",
+        "scenario_category",
+        "scenario_id",
+        "stack_id",
+        "variant_id"
+      ]
+    },
+    "PublicAssignmentResultProjection": {
+      "visibility": "public",
+      "fields": [
+        "assignment_id",
+        "completed_at",
+        "decomposed_scores",
+        "designated_role",
+        "lane",
+        "lifecycle_status",
+        "result_digest",
+        "run_id",
+        "scenario_category",
+        "scenario_id",
+        "summary_status",
+        "unavailable_metric_reasons",
+        "variant_id",
+        "verification_status"
+      ],
+      "prohibited_fields": [
+        "prompt",
+        "output",
+        "thinking",
+        "receipt",
+        "transaction_id",
+        "operator_session_id",
+        "operator_id",
+        "governed_receipt_ref",
+        "model_inferences",
+        "tool_calls",
+        "governed_actions"
+      ]
+    },
+    "PublicCampaignIdentity": {
+      "visibility": "public",
+      "fields": [
+        "campaign_digest",
+        "campaign_id",
+        "catalog_digest",
+        "catalog_id",
+        "catalog_version",
+        "lane",
+        "model_registry_digest"
+      ]
+    },
+    "PublicModelCallSummary": {
+      "visibility": "public",
+      "fields": [
+        "agent_persona",
+        "assignment_id",
+        "completion_tokens",
+        "finish_reason",
+        "first_token_at_unix_nanos",
+        "generation_duration_nanos",
+        "inference_record_id",
+        "input_hash",
+        "load_state",
+        "model_role",
+        "output_hash",
+        "prompt_tokens",
+        "usage_availability",
+        "variant_id"
+      ]
+    },
+    "PublicModelVariantIdentity": {
+      "visibility": "public",
+      "fields": [
+        "model_digest",
+        "model_family",
+        "quantization",
+        "served_model_tag",
+        "variant_id"
+      ]
+    },
+    "RecoveryRecord": {
+      "visibility": "private",
+      "fields": [
+        "assignment_id",
+        "detail",
+        "outcome",
+        "recovery_id",
+        "recovery_kind"
+      ]
+    },
+    "RoleAssignment": {
+      "visibility": "private",
+      "fields": [
+        "designated_role",
+        "variant_id"
+      ]
+    },
+    "SemanticGrade": {
+      "visibility": "private",
+      "fields": [
+        "criterion_id",
+        "detail",
+        "grade_id",
+        "grader_call_ref",
+        "judge_variant_id",
+        "status"
+      ]
+    },
+    "ToolCallRecord": {
+      "visibility": "private",
+      "fields": [
+        "arguments_hash",
+        "assignment_id",
+        "call_id",
+        "governed_binding_ref",
+        "schema_outcome",
+        "semantic_outcome",
+        "tool_name"
+      ]
+    },
+    "ToolDecisionRecord": {
+      "visibility": "private",
+      "fields": [
+        "assignment_id",
+        "decision_id",
+        "outcome",
+        "permission_compliant",
+        "recognized",
+        "selected",
+        "tool_name",
+        "unnecessary"
+      ]
+    }
+  },
+  "canonical_vectors": [
+    {
+      "message_type": "EvaluationReport",
+      "vector_path": "vectors/eval/phase1_report.json"
+    },
+    {
+      "message_type": "EvaluationCampaignSpec",
+      "vector_path": "vectors/eval/model_campaign_spec.json"
+    },
+    {
+      "message_type": "EvaluationAssignmentResult",
+      "vector_path": "vectors/eval/model_assignment_result.json"
+    },
+    {
+      "message_type": "PublicAssignmentResultProjection",
+      "vector_path": "vectors/eval/public_assignment_result.json"
+    }
+  ]
+}

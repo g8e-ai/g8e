@@ -976,3 +976,80 @@ func TestHandleRecoveryApproveCLI_FullLifecycle(t *testing.T) {
 	// 5. Status is now completed and the token is consumed.
 	assert.Equal(t, models.CLIRecoveryStateCompleted, recoveryStatus(t, h.cliRecoveryController, createResp.Token))
 }
+
+// ---------------------------------------------------------------------------
+// issueCLIIdentity — operator binding
+// ---------------------------------------------------------------------------
+
+// TestCLIRecoveryController_IssueCLIIdentity_ReusesEmbeddedSession verifies
+// that when the approving user has an active embedded operator session —
+// the gateway's canonical operator — recovery binds the new CLI session to
+// it and mints no new operator document.
+func TestCLIRecoveryController_IssueCLIIdentity_ReusesEmbeddedSession(t *testing.T) {
+	c, user := setupTestCLIRecoveryController(t)
+	csrPEM, _, _ := generateTestCSR(t, "recovery-embedded-cli")
+
+	// Claim the embedded operator for the user: the same state the first
+	// user's bootstrap produces.
+	operatorID, operatorSessionID, err := newEmbeddedOperatorService(c.docStore, c.operatorSessionSvc).ClaimEmbeddedOperator(user.ID)
+	require.NoError(t, err)
+	require.Equal(t, string(constants.DocIDEmbeddedOperator), operatorID)
+
+	resp, err := c.issueCLIIdentity(&models.CLIRecoveryRequest{
+		ApprovingUserID:   user.ID,
+		CLICSRPEM:         csrPEM,
+		SystemFingerprint: "test-sys-fp",
+	})
+	require.NoError(t, err)
+	assert.True(t, resp.Success)
+	assert.Equal(t, operatorID, resp.OperatorID)
+	assert.Equal(t, operatorSessionID, resp.OperatorSessionID)
+
+	// No new operator document was minted — only the embedded one exists.
+	docs, err := c.docStore.DocList(marshaler.CollectionName(constants.CollectionOperators))
+	require.NoError(t, err)
+	assert.Len(t, docs, 1)
+
+	// The new CLI session is bound to the embedded operator session.
+	cliSession, err := c.cliSessionSvc.loadCLISession(resp.CLISessionID)
+	require.NoError(t, err)
+	assert.Equal(t, operatorSessionID, cliSession.OperatorSessionID)
+}
+
+// TestCLIRecoveryController_IssueCLIIdentity_MintsRemoteRecoveryOperator
+// verifies the fallback: with no active operator session for the user,
+// recovery mints a remote cli-recovery-<user> operator and binds the new
+// CLI session to its minted session.
+func TestCLIRecoveryController_IssueCLIIdentity_MintsRemoteRecoveryOperator(t *testing.T) {
+	c, user := setupTestCLIRecoveryController(t)
+	csrPEM, _, _ := generateTestCSR(t, "recovery-remote-cli")
+
+	resp, err := c.issueCLIIdentity(&models.CLIRecoveryRequest{
+		ApprovingUserID:   user.ID,
+		CLICSRPEM:         csrPEM,
+		SystemFingerprint: "test-sys-fp",
+	})
+	require.NoError(t, err)
+	require.True(t, resp.Success)
+	require.NotEmpty(t, resp.OperatorID)
+	require.NotEmpty(t, resp.OperatorSessionID)
+	assert.NotEqual(t, string(constants.DocIDEmbeddedOperator), resp.OperatorID)
+
+	// A remote recovery operator document was minted for the binding.
+	doc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), resp.OperatorID)
+	require.NoError(t, err)
+	require.NotNil(t, doc)
+	var op models.OperatorDocumentGo
+	b, err := json.Marshal(doc.Data)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(b, &op))
+	assert.Equal(t, constants.OperatorTypeRemote, op.OperatorType)
+	assert.Equal(t, "cli-recovery-"+safePrefix(user.ID), op.Name)
+	assert.Equal(t, resp.OperatorSessionID, op.OperatorSessionID)
+	assert.Equal(t, user.ID, op.UserID)
+
+	// The new CLI session is bound to the minted session.
+	cliSession, err := c.cliSessionSvc.loadCLISession(resp.CLISessionID)
+	require.NoError(t, err)
+	assert.Equal(t, resp.OperatorSessionID, cliSession.OperatorSessionID)
+}

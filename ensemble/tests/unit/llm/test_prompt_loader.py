@@ -202,32 +202,11 @@ class TestLoadModePrompts:
             assert isinstance(prompts[key], str)
             assert len(prompts[key]) > 0, f"Empty {key} prompt for operator_bound"
 
-    def test_cloud_operator_bound_mode(self):
-        prompts = load_mode_prompts(operator_bound=True, is_cloud_operator=True)
-
-        assert isinstance(prompts, dict)
-        assert "capabilities" in prompts
-        assert "execution" in prompts
-        assert "tools" in prompts
-
-        for key in ["capabilities", "execution", "tools"]:
-            assert isinstance(prompts[key], str)
-            assert len(prompts[key]) > 0, f"Empty {key} prompt for cloud_operator_bound"
-
     def test_modes_produce_different_content(self):
         not_bound = load_mode_prompts(operator_bound=False)
         bound = load_mode_prompts(operator_bound=True)
-        cloud = load_mode_prompts(operator_bound=True, is_cloud_operator=True)
 
         assert not_bound != bound
-        assert bound != cloud
-        assert not_bound != cloud
-
-    def test_cloud_false_same_as_default(self):
-        default = load_mode_prompts(operator_bound=True)
-        explicit = load_mode_prompts(operator_bound=True, is_cloud_operator=False)
-
-        assert default == explicit
 
     def test_mode_prompts_are_cached(self):
         first = load_mode_prompts(operator_bound=True)
@@ -242,7 +221,7 @@ class TestLoadModePrompts:
         assert bound is not not_bound
 
     def test_mode_directories_exist_on_disk(self):
-        for mode_dir in ["operator_not_bound", "operator_bound", "cloud_operator_bound"]:
+        for mode_dir in ["operator_not_bound", "operator_bound"]:
             mode_path = PROMPTS_DIR / "modes" / mode_dir
             assert mode_path.exists(), f"Missing mode directory: {mode_dir}"
             for prompt_file in ["capabilities.txt", "execution.txt", "tools.txt"]:
@@ -258,7 +237,7 @@ class TestLoadModePrompts:
                 component="g8ee",
             )
 
-            prompts = load_mode_prompts.__wrapped__(operator_bound=True, is_cloud_operator=False)
+            prompts = load_mode_prompts.__wrapped__(operator_bound=True)
 
             assert prompts["capabilities"] == ""
             assert prompts["execution"] == ""

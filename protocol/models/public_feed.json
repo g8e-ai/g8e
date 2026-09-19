@@ -1,0 +1,171 @@
+{
+  "_comment": "Canonical typed wire models for the public spectator feed protocol. The Gateway outbound publisher signs and sends append-only batches to a hosted mirror's authenticated ingest endpoint. Public browsers connect to the mirror's anonymous read-only endpoints (bootstrap, cursor-paginated history, replayable SSE, content-addressed proof downloads). The private Gateway receives no public connection. All models exclude null fields on the wire.",
+  "_authority": "gateway",
+  "_consumers": ["browser", "mirror", "offline-verifier"],
+
+  "public_feed_protocol_version": {
+    "_description": "The public observer feed protocol version. Bumped when the batch, snapshot, or proof schema changes in a backward-incompatible way.",
+    "version": {"type": "string", "required": true, "description": "Semver protocol version (e.g. 1.0.0)"}
+  },
+
+  "public_feed_record": {
+    "_description": "One record in a signed batch. A record is a serialized projection or event payload with its SHA-256 content hash. The record type identifies whether it is a live projection, an event payload, a proof manifest, or a key revocation record.",
+    "sequence": {"type": "integer", "required": true, "description": "Monotonic sequence number assigned by the source"},
+    "record_type": {"type": "string", "required": true, "description": "Record type from the closed vocabulary", "enum": ["projection", "event", "proof_manifest", "key_revocation"]},
+    "record_hash": {"type": "string", "required": true, "description": "SHA-256 of the canonical record bytes (64-char hex)"},
+    "record_bytes": {"type": "string", "required": true, "description": "Canonical JSON bytes of the record, UTF-8 encoded"}
+  },
+
+  "public_feed_batch": {
+    "_description": "A signed append-only batch binding source, protocol version, schema version, monotonic sequence range, prior-batch hash, record hashes, generated time, content hash, signing key ID, and Ed25519 signature. The first batch carries a fixed zero hash for previous_batch_hash. The mirror rejects any batch whose first sequence is less than or equal to the last accepted sequence.",
+    "protocol_version": {"type": "string", "required": true, "description": "Public feed protocol version"},
+    "schema_version": {"type": "string", "required": true, "description": "Projection schema version"},
+    "source_id": {"type": "string", "required": true, "description": "Pseudonymous source deployment identifier. Not the real hostname, IP, or PKI identity."},
+    "first_sequence": {"type": "integer", "required": true, "description": "Monotonic sequence number of the first record in the batch"},
+    "last_sequence": {"type": "integer", "required": true, "description": "Monotonic sequence number of the last record in the batch"},
+    "previous_batch_hash": {"type": "string", "required": true, "description": "SHA-256 of the previous accepted batch. The first batch carries a fixed zero hash (64-char hex of 32 zero bytes)."},
+    "record_hashes": {"type": "array", "items": "string", "required": true, "description": "SHA-256 of each record in the batch, in order"},
+    "generated_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp when the batch was produced"},
+    "content_hash": {"type": "string", "required": true, "description": "SHA-256 over the canonical encoding of all record hashes and batch metadata (64-char hex)"},
+    "signing_key_id": {"type": "string", "required": true, "description": "Identifier of the signing key used to produce the signature"},
+    "signature": {"type": "string", "required": true, "description": "Ed25519 signature over the content hash, hex-encoded"},
+    "records": {"type": "array", "items": "public_feed_record", "required": true, "description": "Records in this batch, in sequence order"}
+  },
+
+  "public_feed_snapshot": {
+    "_description": "A snapshot binding the high-water sequence (the last accepted sequence) and the feed-chain hash (the content hash of the last accepted batch). A public client reconciles against the snapshot to establish a consistent cursor.",
+    "protocol_version": {"type": "string", "required": true, "description": "Public feed protocol version"},
+    "source_id": {"type": "string", "required": true, "description": "Pseudonymous source deployment identifier"},
+    "high_water_sequence": {"type": "integer", "required": true, "description": "The last accepted monotonic sequence number"},
+    "feed_chain_hash": {"type": "string", "required": true, "description": "Content hash of the last accepted batch (64-char hex)"},
+    "batch_count": {"type": "integer", "required": true, "description": "Total number of accepted batches"},
+    "generated_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp when the snapshot was produced"},
+    "freshness": {"type": "string", "required": true, "description": "Source freshness label", "enum": ["active", "delayed", "stale", "intentionally_stopped", "safety_stopped", "source_offline"]}
+  },
+
+  "public_feed_bootstrap": {
+    "_description": "One bounded initial snapshot for public first paint. Contains the feed snapshot, current source freshness, recent projections, and proof catalog summary. SSE provides incremental change notifications after the snapshot.",
+    "protocol_version": {"type": "string", "required": true, "description": "Public feed protocol version"},
+    "snapshot": {"type": "object", "required": true, "model": "public_feed_snapshot", "description": "Current feed snapshot with high-water sequence and feed-chain hash"},
+    "source_freshness": {"type": "string", "required": true, "description": "Source freshness label", "enum": ["active", "delayed", "stale", "intentionally_stopped", "safety_stopped", "source_offline"]},
+    "recent_projections": {"type": "array", "required": true, "description": "Bounded list of recent public projections (JSON objects). Each carries only allowlisted fields."},
+    "proof_catalog_summary": {"type": "object", "required": true, "model": "public_proof_catalog_summary", "description": "Summary of the available public proof packages"},
+    "generated_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp when the bootstrap was produced"}
+  },
+
+  "public_feed_cursor_page": {
+    "_description": "Cursor-paginated page of public records (projections, events, or proof manifests). Uses stable cursors and bounded page sizes (1-100, default 20). Anonymous reads are bounded by the rate policy.",
+    "protocol_version": {"type": "string", "required": true, "description": "Public feed protocol version"},
+    "items": {"type": "array", "required": true, "description": "Page items. Each item is a JSON object with only allowlisted fields."},
+    "cursor": {"type": "string", "required": false, "description": "Opaque cursor for the next page. Omitted when there are no more results."},
+    "has_more": {"type": "boolean", "required": true},
+    "limit": {"type": "integer", "required": true, "description": "Page size applied to this response"}
+  },
+
+  "public_ingest_request": {
+    "_description": "Authenticated ingest request from the Gateway outbound publisher to the hosted mirror. Carries the signed batch. The mirror verifies the signature, checks the sequence range against the high-water mark, validates the prior-batch hash chain, and accepts or rejects idempotently.",
+    "batch": {"type": "object", "required": true, "model": "public_feed_batch", "description": "The signed append-only batch to ingest"}
+  },
+
+  "public_ingest_response": {
+    "_description": "Authenticated ingest response from the mirror. Carries the accepted flag, the updated high-water sequence, and the updated feed-chain hash. A rejected batch carries a typed rejection reason.",
+    "accepted": {"type": "boolean", "required": true, "description": "Whether the mirror accepted the batch"},
+    "high_water_sequence": {"type": "integer", "required": false, "description": "Updated high-water sequence after acceptance. Omitted when rejected."},
+    "feed_chain_hash": {"type": "string", "required": false, "description": "Updated feed-chain hash after acceptance. Omitted when rejected."},
+    "rejection_reason": {"type": "string", "required": false, "description": "Typed rejection reason when accepted is false", "enum": ["signature_invalid", "sequence_out_of_order", "hash_chain_mismatch", "duplicate_sequence", "equivocation", "oversized_batch", "revoked_key", "unknown_key"]}
+  },
+
+  "public_key_registration_request": {
+    "_description": "Authenticated pre-registration request for a replacement source signing key. The active key signs the complete request before the mirror admits the replacement key for the overlap window.",
+    "source_id": {"type": "string", "required": true, "description": "Pseudonymous source deployment identifier"},
+    "current_key_id": {"type": "string", "required": true, "description": "Identifier of the active signing key authorizing registration"},
+    "new_key_id": {"type": "string", "required": true, "description": "SHA-256 identifier of the replacement public key"},
+    "public_key": {"type": "string", "required": true, "description": "Replacement Ed25519 public key, hex-encoded"},
+    "signature": {"type": "string", "required": true, "description": "Ed25519 signature by the active key over the canonical registration request, hex-encoded"}
+  },
+
+  "public_key_registration_response": {
+    "_description": "Authenticated mirror response for replacement-key pre-registration.",
+    "accepted": {"type": "boolean", "required": true, "description": "Whether the mirror durably admitted the replacement key"}
+  },
+
+  "public_key_revocation_record": {
+    "_description": "A key revocation record published as a signed batch record after the replacement key is admitted and before the old key is deactivated. The active old key signs both the batch and the source-bound revocation record.",
+    "source_id": {"type": "string", "required": true, "description": "Pseudonymous source deployment identifier"},
+    "revoked_key_id": {"type": "string", "required": true, "description": "Identifier of the revoked signing key"},
+    "revoked_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp when the revocation was issued"},
+    "new_key_id": {"type": "string", "required": true, "description": "Identifier of the pre-registered replacement signing key"},
+    "revocation_signature": {"type": "string", "required": true, "description": "Ed25519 signature over the source-bound revocation record from the active old key, hex-encoded"}
+  },
+
+  "public_proof_manifest": {
+    "_description": "Root manifest for a public proof package. Binds the proof root SHA-256, campaign identity, verified index generation hash, artifact count, artifact catalog, verifier instructions, and generation time. A network-disabled verifier reproduces the root from the manifest and the listed artifacts.",
+    "schema_version": {"type": "string", "required": true, "description": "Proof manifest schema version"},
+    "proof_root_sha256": {"type": "string", "required": true, "description": "SHA-256 over the canonical encoding of all artifact hashes and manifest metadata (64-char hex)"},
+    "campaign_id": {"type": "string", "required": true, "description": "Campaign identity from the campaign manifest"},
+    "campaign_revision": {"type": "string", "required": true, "description": "Campaign revision from the frozen profile hash"},
+    "verified_index_generation_hash": {"type": "string", "required": true, "description": "SHA-256 of the verified index generation's content hash (64-char hex)"},
+    "verification_ok": {"type": "boolean", "required": true, "description": "True when the campaign verification report passed"},
+    "artifact_count": {"type": "integer", "required": true, "description": "Number of artifacts in the proof package"},
+    "artifacts": {"type": "array", "items": "public_proof_catalog_entry", "required": true, "description": "Catalog entries for every artifact in the proof package"},
+    "verifier_instructions": {"type": "string", "required": true, "description": "Human-readable offline verification instructions"},
+    "generated_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp when the proof package was generated"},
+    "signing_key_id": {"type": "string", "required": true, "description": "Identifier of the signing key used to sign the proof root"},
+    "signature": {"type": "string", "required": true, "description": "Ed25519 signature over the proof root SHA-256, hex-encoded"}
+  },
+
+  "public_proof_catalog_entry": {
+    "_description": "One entry in the public proof catalog. Each artifact is served under an immutable content-addressed identity derived from its SHA-256. Catalog metadata includes filename, media type, bytes, SHA-256, signature and trust metadata, campaign and run source, generated time, classification, verification command, and immutable URL.",
+    "artifact_id": {"type": "string", "required": true, "description": "Content-addressed artifact identifier (derived from SHA-256)"},
+    "filename": {"type": "string", "required": true, "description": "Human-readable filename"},
+    "media_type": {"type": "string", "required": true, "description": "IANA media type of the artifact content"},
+    "byte_size": {"type": "integer", "required": true, "description": "Byte length of the artifact content"},
+    "sha256": {"type": "string", "required": true, "description": "SHA-256 of the artifact content (64-char hex)"},
+    "classification": {"type": "string", "required": true, "description": "Disclosure classification", "enum": ["public_safe"]},
+    "campaign_id": {"type": "string", "required": true, "description": "Campaign identity from the campaign manifest"},
+    "source_run_id": {"type": "string", "required": false, "description": "Source eval run identity. Omitted for campaign-level artifacts."},
+    "generated_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp when the artifact was generated"},
+    "verification_command": {"type": "string", "required": true, "description": "Offline verification command for this artifact"},
+    "immutable_url": {"type": "string", "required": true, "description": "Immutable content-addressed URL path relative to the mirror base URL"}
+  },
+
+  "public_proof_catalog": {
+    "_description": "The full public proof catalog listing every available proof package artifact. Served as a bounded anonymous read. Public retention uses append-only tombstones rather than rewriting history.",
+    "schema_version": {"type": "string", "required": true, "description": "Proof catalog schema version"},
+    "entries": {"type": "array", "items": "public_proof_catalog_entry", "required": true, "description": "Catalog entries for every available proof artifact"},
+    "generated_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp when the catalog was generated"}
+  },
+
+  "public_proof_catalog_summary": {
+    "_description": "Summary of the public proof catalog for bootstrap responses. Carries the total artifact count, total byte size, and the most recent generation time.",
+    "artifact_count": {"type": "integer", "required": true, "description": "Total number of proof artifacts in the catalog"},
+    "total_byte_size": {"type": "integer", "required": true, "description": "Total byte size of all proof artifacts"},
+    "last_generated_at": {"type": "string", "format": "iso8601", "required": false, "description": "UTC timestamp of the most recently generated proof artifact. Omitted when the catalog is empty."}
+  },
+
+  "public_export_config": {
+    "_description": "Owner-only export configuration for the outbound publisher. Carries the allowlisted HTTPS origin, signing key ID, pseudonymous source ID, batch size limit, and retry policy. Secrets never appear in frontend runtime JSON, logs, events, reports, proofs, or contract packs. The private key is stored in the Gateway runtime tree, not in this configuration.",
+    "enabled": {"type": "boolean", "required": true, "description": "Whether the outbound publisher is enabled"},
+    "mirror_origin": {"type": "string", "required": true, "description": "Allowlisted HTTPS origin for the hosted mirror ingest endpoint"},
+    "source_id": {"type": "string", "required": true, "description": "Pseudonymous source deployment identifier"},
+    "signing_key_id": {"type": "string", "required": true, "description": "Identifier of the active signing key"},
+    "batch_max_records": {"type": "integer", "required": true, "description": "Maximum number of records per batch"},
+    "batch_max_bytes": {"type": "integer", "required": true, "description": "Maximum total bytes per batch"},
+    "retry_max_attempts": {"type": "integer", "required": true, "description": "Maximum retry attempts for a failed batch transmission"},
+    "retry_initial_backoff_seconds": {"type": "integer", "required": true, "description": "Initial retry backoff in seconds"},
+    "retry_max_backoff_seconds": {"type": "integer", "required": true, "description": "Maximum retry backoff in seconds"},
+    "ack_confirmation_window_seconds": {"type": "integer", "required": true, "description": "Seconds to retain acknowledged batches before removal from the outbox"}
+  },
+
+  "public_outbox_entry": {
+    "_description": "One entry in the durable ordered outbox. The outbound publisher writes each batch to the outbox before network transmission. Acknowledged batches are removed after the confirmation window. The outbox survives process restarts and mirror outages.",
+    "sequence": {"type": "integer", "required": true, "description": "Monotonic sequence number of the first record in the batch"},
+    "batch_hash": {"type": "string", "required": true, "description": "Content hash of the batch (64-char hex)"},
+    "batch_bytes": {"type": "string", "required": true, "description": "Canonical JSON bytes of the signed batch, UTF-8 encoded"},
+    "status": {"type": "string", "required": true, "description": "Outbox entry status", "enum": ["pending", "sent", "acknowledged", "failed"]},
+    "attempts": {"type": "integer", "required": true, "description": "Number of transmission attempts"},
+    "last_attempt_at": {"type": "string", "format": "iso8601", "required": false, "description": "UTC timestamp of the last transmission attempt. Omitted when no attempt has been made."},
+    "acknowledged_at": {"type": "string", "format": "iso8601", "required": false, "description": "UTC timestamp when the mirror acknowledged the batch. Omitted when not acknowledged."},
+    "created_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp when the outbox entry was created"}
+  }
+}

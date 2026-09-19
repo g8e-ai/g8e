@@ -14,7 +14,6 @@ from app.models.agent import OperatorContext
 from app.models.agents.tribunal import TribunalGenerationFailedError
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.services.ai.generator import TribunalEmitter, generate_command
-from app.models.tribunal_commands import TribunalGenerationRequest
 from app.utils.command import normalise_command
 from app.utils.safety import validate_command_safety
 from tests.unit.services.ai.tribunal.conftest import make_tribunal_generation_request

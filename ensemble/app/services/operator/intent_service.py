@@ -23,7 +23,6 @@ from app.constants import EventType, G8EE_COMPONENT
 from app.constants.generated_status import (
     AITaskId,
     CommandErrorType,
-    OperatorType,
 )
 from app.constants.config import ExecutionStatus
 from app.constants.intents import (
@@ -55,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 
 class OperatorIntentService:
-    """Intent permission grant and revocation for Cloud Operators (AWS Two-Role IAM)."""
+    """Intent permission grant and revocation for Operators (AWS Two-Role IAM)."""
 
     def __init__(
         self,
@@ -162,11 +161,11 @@ class OperatorIntentService:
             if investigation and investigation.operator_documents
             else None
         )
-        if not op_doc or op_doc.operator_type != OperatorType.CLOUD:
+        if not op_doc or not op_doc.operator_session_id:
             return IntentPermissionResult(
                 success=False,
-                error="Intent permissions require a Cloud Operator",
-                error_type=CommandErrorType.CLOUD_OPERATOR_REQUIRED,
+                error="Operator offline",
+                error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
             )
 
         operator_id = op_doc.id

@@ -85,8 +85,8 @@ func oscalTestAnalysis() *compliancev1.ComplianceAnalysis {
 			{AssessmentId: "framework-assessment:sha256:" + metricDigest, ScopeId: "scope-1", FrameworkRef: &compliancev1.VersionedReference{Id: "fedramp-20x", Version: "CR26-2026-06-24"}, ControlId: "KSI-MLA-07", Status: "not_satisfied", Responsibility: "shared", AssertionAssessmentRefs: []string{secondAssessmentID}, EvidenceLevel: "L2"},
 		},
 		EvidenceResources: []*compliancev1.ComplianceEvidenceReference{
-			{ArtifactId: receiptID, ArtifactType: "action-receipt", Sha256: receiptDigest, MediaType: constants.MediaTypeJSON, SchemaRef: "g8e.operator.v1.ActionReceipt", ProducerIdentity: "gateway", ScopeId: "scope-1", VerificationStatus: "verified", VerifierId: constants.ReceiptEvidenceVerifierID, VerifierVersion: constants.ReceiptEvidenceVerifierVersion, BundlePath: constants.EvalRunReceiptsFilename},
-			{ArtifactId: metricID, ArtifactType: "eval-metric", Sha256: metricDigest, MediaType: constants.MediaTypeJSON, SchemaRef: "g8e_evals.schema.MetricObservation", ProducerIdentity: "policy_outcome@1.0.0", ScopeId: "scope-1", VerificationStatus: "verified", VerifierId: constants.EvalRunVerifierID, VerifierVersion: constants.EvalRunVerifierVersion, BundlePath: constants.EvalRunMetricsFilename},
+			{ArtifactId: receiptID, ArtifactType: "action-receipt", Sha256: receiptDigest, MediaType: constants.MediaTypeJSON, SchemaRef: "g8e.operator.v1.ActionReceipt", ProducerIdentity: "gateway", ScopeId: "scope-1", VerificationStatus: "verified", VerifierId: constants.ReceiptEvidenceVerifierID, VerifierVersion: constants.ReceiptEvidenceVerifierVersion, BundlePath: constants.EvaluationReportFilename},
+			{ArtifactId: metricID, ArtifactType: "eval-metric", Sha256: metricDigest, MediaType: constants.MediaTypeJSON, SchemaRef: "g8e.eval.v1.EvaluationMetric", ProducerIdentity: "policy_outcome@1.0.0", ScopeId: "scope-1", VerificationStatus: "verified", VerifierId: constants.EvalRunVerifierID, VerifierVersion: constants.EvalRunVerifierVersion, BundlePath: constants.EvaluationReportFilename},
 		},
 		EvidenceGraphValid: true,
 	}
@@ -501,7 +501,7 @@ func TestOSCALExporter_GenerateAssessmentResultsFromCanonicalAnalysis_ResolvesEv
 			VerificationStatus: "verified",
 			VerifierId:         constants.ReceiptEvidenceVerifierID,
 			VerifierVersion:    constants.ReceiptEvidenceVerifierVersion,
-			BundlePath:         constants.EvalRunReceiptsFilename,
+			BundlePath:         constants.EvaluationReportFilename,
 		}},
 		EvidenceGraphValid: true,
 	}

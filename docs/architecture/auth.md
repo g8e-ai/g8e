@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-19
+Version: v2.1.8
 
 ## Overview
 
@@ -81,11 +81,42 @@ Run `g8e auth refresh` when the CLI certificate is still valid but its server-si
 
 ### Authentication Context and Logout
 
-`g8e auth context` emits the local CLI identity, CLI and operator session binding, and certificate and key paths as typed JSON for automation. If local metadata lacks an operator binding, the command accepts exactly one active operator resolved through the gateway and fails closed when the binding is missing or ambiguous.
+`g8e auth context` emits the local CLI identity, CLI and operator session binding, and certificate and key paths as typed JSON for automation. If local metadata lacks an operator binding, the command resolves the persisted binding through `GET /api/v1/auth/cli/session`, writes the returned pair back to local credentials, and fails closed with refresh guidance when the session reports no binding.
+
+### CLI Operator Session Binding
+
+`g8e operator bind` manages the authenticated CLI session's persisted operator binding independently of enrollment or refresh:
+
+| Subcommand | Purpose |
+| --- | --- |
+| `bind <operator-session-id>` | Pin the CLI session to one active operator session owned by the same user |
+| `bind list` | Show the operator currently bound to the CLI session |
+| `bind unbind` | Clear the operator binding from the CLI session |
+
+Binding changes call `POST /api/v1/auth/cli/bind` or `POST /api/v1/auth/cli/unbind` over mTLS. The gateway validates that the target operator session is active and belongs to the authenticated user, then issues a replacement CLI session server-side and returns the new `cli_session_id`. Local credentials are updated immediately. Re-binding to the same operator session is idempotent and does not rotate the CLI session.
+
+Use `./g8e operator list` to discover operator session IDs and `./g8e operator show <operator-id-or-session-id>` to inspect host heartbeat details before binding. Eval and chat automation paths can refresh stale bindings automatically; pass `--no-auto-refresh` on supported eval commands to skip that step.
 
 `g8e auth logout` removes the local CLI credentials, certificate, and private key. It does not revoke the gateway-side session or certificate, and it does not remove the shared gateway root CA from the operating-system trust store. Use gateway administration and certificate revocation when server-side invalidation is required.
 
 On Windows, interactive enrollment also imports the signed CLI certificate into the current user's certificate store. CLI private keys remain file-backed ECDSA P-256 keys on every platform.
+
+Browser-hosted frontend connection no longer uses a separate `auth enroll gui` command family. Run `./g8e gw connect <frontend-origin>` to validate the origin, configure WebAuthn and CORS, start or restart the Gateway with consent, install local trust when needed, and verify HTTPS and CORS against the running process. See [Build a g8e-Compatible Frontend](../guides/build_frontend.md) and [Connect a Lovable App](../guides/lovable.md).
+
+### Platform Enrollment Commands
+
+`g8e auth enroll` groups human CLI enrollment and platform workload enrollment review:
+
+| Subcommand | Purpose |
+| --- | --- |
+| `user` | Enroll or repair the local CLI identity |
+| `pending` | List pending platform workload enrollment requests |
+| `approve <request-id>` | Approve a pending request |
+| `deny <request-id>` | Deny a pending request |
+
+`pending`, `approve`, and `deny` use the enrolled host CLI identity over mTLS. They accept request IDs only; requester tokens, CSRs, and certificates never pass through these commands. Both `approve` and `deny` support `--yes` for non-interactive automation and `--reason` for an optional bounded decision note. Use `--endpoint` and `--port` when the gateway HTTP and HTTPS ports are remapped.
+
+Bare `g8e auth enroll` prints help and exits non-zero. Select an explicit subcommand.
 
 ## Browser Authentication
 
@@ -123,8 +154,8 @@ The workload enrollment flow is:
 
 1. The workload generates its private keys locally and submits its certificate requests with a system fingerprint.
 2. The gateway creates a token-scoped request that expires after 30 minutes.
-3. The active first user reviews the request in the Console or with `g8e auth pending-platform-enrollments`.
-4. The owner approves or denies the request. CLI approval uses `g8e auth approve-platform-enrollment <request-id> --yes`.
+3. The active first user reviews the request in the Console or with `g8e auth enroll pending`.
+4. The owner approves or denies the request. CLI approval uses `g8e auth enroll approve <request-id> --yes`; denial uses `g8e auth enroll deny <request-id> --yes`.
 5. After approval, the workload proves possession of every requested private key and receives its certificate, trust bundle, and session or application policy.
 6. A retry after successful completion returns the same issued identity rather than minting a second one.
 
@@ -135,6 +166,16 @@ The operator, dashboard, and ensemble submit independent requests. Their recomme
 mTLS certificates carry SPIFFE identities in URI SANs. The gateway validates certificate revocation, extracts the principal type, and matches the certificate identity to the referenced CLI, operator, or application session before accepting a request. Disabled users, terminated operators, expired sessions, revoked certificates, duplicate bindings, and identity mismatches fail closed.
 
 A CLI command can carry a chain from CLI certificate to CLI session, user, operator session, and operator. Browser events bind to the user and browser session. Delegated application certificates bind an application identity to the human user who requested the credential. These bindings prevent caller-supplied identifiers from overriding the authenticated transport identity.
+
+### The Embedded Operator
+
+Operators carry one of two types. A `remote` operator is an enrolled workload that dials out to the gateway and holds its own certificate and session lease. The `embedded` operator is the gateway's in-process operator substrate: it holds no certificate, and its `operators` document is a binding record that anchors the first user's sessions rather than an enrollment lease.
+
+At startup the gateway registers a pending embedded-operator document under the deterministic ID `embedded-operator` with `claimed=false` and empty `user_id` and `operator_session_id`. The empty fields keep it unclaimable by device registration, which matches on `user_id`, and unauthenticated by operator session validation, which matches on `operator_session_id`. First-user bootstrap claims it, whether the first user is created through the CLI `auth enroll` bootstrap or the browser bootstrap path: the document records the claiming user as `user_id` and `organization_id`, transitions to active, stores the system fingerprint when the bootstrap supplies one, and mints the operator session ID that binds the substrate to that user. The claim is the explicit human enrollment act for the embedded operator. It belongs to exactly one user for its lifetime: a same-user re-claim returns the existing binding unchanged, and a different user's claim is rejected.
+
+Bootstrap also persists an `operator_sessions` record and stamps the new CLI session's `operator_session_id` with the minted value. That persisted binding is authoritative. The unified auth middleware stamps operator identity from the session record rather than request headers, rejects operator headers that contradict the persisted pair, and rejects operator headers on a session that carries no binding. `GET /api/v1/auth/cli/session` reports the persisted binding verbatim so `g8e auth context` can resync local credentials against server-side state.
+
+Session lifecycle paths preserve the binding. CLI session refresh and rotation inherit the prior session's operator binding, the refresh fallback and CLI recovery prefer the embedded operator's active session, and recovery mints a `remote` `cli-recovery-<user>` operator only when the user has no active operator session. Passkey ceremonies that create a web session bind the user's claimed embedded operator to that session. Because the embedded document is a binding record and not an enrollment lease, it is exempt from the 24-hour document-age check applied to remote operators.
 
 For PKI hierarchy, SPIFFE formats, trust bundles, revocation, and port topology, see [Network Architecture](./network.md).
 

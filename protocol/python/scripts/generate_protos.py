@@ -1,3 +1,10 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
 #!/usr/bin/env python3
 
 """Generate or verify the canonical Python protobuf modules."""
@@ -17,6 +24,7 @@ PROTO_ROOT = PYTHON_ROOT.parent / "proto"
 PROTO_FILES = (
     Path("g8e/common/v1/common.proto"),
     Path("g8e/compliance/v1/compliance.proto"),
+    Path("g8e/eval/v1/eval.proto"),
     Path("g8e/operator/v1/operator.proto"),
     Path("g8e/pubsub/v1/pubsub.proto"),
 )

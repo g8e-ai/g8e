@@ -370,6 +370,79 @@ func (s *CLISessionService) RefreshCLISession(oldSessionID, newSessionID string,
 	return &created, nil
 }
 
+// UnbindCLISession issues a new active CLI session for the authenticated user
+// with no operator binding, deactivating the old session when it still exists.
+// The caller's cert is not rotated. oldSessionID may be empty when the cert's
+// URI SAN session ID does not match any persisted session.
+func (s *CLISessionService) UnbindCLISession(oldSessionID, newSessionID string, fields CLISessionFields) (*models.CLISession, error) {
+	if newSessionID == "" {
+		return nil, fmt.Errorf("unbind CLI session: missing new session ID")
+	}
+	if fields.UserID == "" {
+		return nil, fmt.Errorf("unbind CLI session: missing user")
+	}
+
+	if oldSessionID != "" {
+		oldDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), oldSessionID)
+		if err != nil {
+			return nil, fmt.Errorf("unbind CLI session: load old: %w", err)
+		}
+		if oldDoc != nil {
+			oldSession, err := decodeCLISession(oldDoc)
+			if err != nil {
+				return nil, fmt.Errorf("unbind CLI session: decode old: %w", err)
+			}
+			if oldSession.IsActive {
+				applied, err := s.db.DocConditionalUpdate(
+					marshaler.CollectionName(constants.CollectionCLISessions),
+					oldSessionID,
+					map[string]interface{}{"is_active": false},
+					"is_active", true,
+				)
+				if err != nil {
+					return nil, fmt.Errorf("unbind CLI session: deactivate old: %w", err)
+				}
+				if !applied {
+					s.logger.Info("UnbindCLISession: old session already deactivated by concurrent caller",
+						"old_session_id_prefix", safeTruncateID(oldSessionID, 8),
+					)
+				}
+			}
+		}
+	}
+
+	cliExpiry := time.Now().UTC().Add(constants.CLISessionTTL)
+	created := models.CLISession{
+		ID:                newSessionID,
+		UserID:            fields.UserID,
+		OperatorSessionID: "",
+		SystemFingerprint: fields.SystemFingerprint,
+		CertFingerprint:   fields.CertFingerprint,
+		CertSerial:        fields.CertSerial,
+		CreatedAt:         time.Now().UTC(),
+		ExpiresAt:         cliExpiry,
+		AbsoluteExpiresAt: cliExpiry,
+		IdleExpiresAt:     cliExpiry,
+		SessionType:       string(constants.SessionTypeCLI),
+		IsActive:          true,
+		LoginMethod:       fields.LoginMethod,
+	}
+	createdBytes, err := json.Marshal(created)
+	if err != nil {
+		return nil, fmt.Errorf("unbind CLI session: marshal new: %w", err)
+	}
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), newSessionID, createdBytes); err != nil {
+		return nil, fmt.Errorf("unbind CLI session: persist new: %w", err)
+	}
+
+	s.logger.Info("CLI session unbound from operator",
+		"old_session_id_prefix", safeTruncateID(oldSessionID, 8),
+		"new_session_id_prefix", safeTruncateID(newSessionID, 8),
+		"user_id", fields.UserID,
+	)
+	return &created, nil
+}
+
 // decodeCLISession deserializes a Document into a CLISession.
 func decodeCLISession(doc *models.Document) (*models.CLISession, error) {
 	dataBytes, err := json.Marshal(doc.Data)

@@ -13,7 +13,7 @@ import pytest
 
 from app.constants import EventType, HeartbeatType, OperatorStatus, PubSubChannel
 from app.errors import ConfigurationError
-from app.models.events import BackgroundEvent, SessionEvent
+from app.models.events import SessionEvent
 from app.models.operators import (
     HeartbeatSnapshot,
     HeartbeatSSEEnvelope,

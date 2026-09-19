@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { devLogger } from '../utils/dev-logger.js';
-import { OperatorStatus } from '../constants/operator-constants.js';
+import { OperatorStatus, OperatorType } from '../constants/operator-constants.js';
 import { templateLoader } from '../utils/template-loader.js';
 import { timeAgo, parseISOString } from '../utils/timestamp.js';
 import { operatorPanelService } from '../utils/operator-panel-service.js';
@@ -141,9 +141,10 @@ export const OperatorListMixin = {
                 </div>
             `;
 
-            const operatorTypeIcon = 'terminal';
-            const operatorTypeClass = 'binary-operator';
-            const operatorTypeTitle = 'Operator';
+            const isEmbedded = operator.operator_type === OperatorType.EMBEDDED;
+            const operatorTypeIcon = isEmbedded ? 'dns' : 'terminal';
+            const operatorTypeClass = isEmbedded ? 'embedded-operator' : 'binary-operator';
+            const operatorTypeTitle = isEmbedded ? 'Embedded Operator' : 'Operator';
 
             const isAvailable = operator.status === OperatorStatus.AVAILABLE;
             const hostnameDisplay = isAvailable ? 'Available' : hostnameFull;

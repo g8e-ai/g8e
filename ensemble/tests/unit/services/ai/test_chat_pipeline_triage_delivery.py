@@ -76,6 +76,7 @@ def _make_pipeline() -> ChatPipelineService:
     svc.memory_generation_service.update_memory_from_conversation = AsyncMock()
     svc.agent_activity_data_service = MagicMock()
     svc.agent_activity_data_service.record_activity = AsyncMock()
+    svc.evaluation_trace_service = MagicMock()
     svc.triage_agent = MagicMock()
     return svc
 

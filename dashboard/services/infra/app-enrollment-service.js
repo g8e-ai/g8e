@@ -1141,7 +1141,7 @@ export class AppEnrollmentService {
                 );
             }
             console.log(
-                `AppEnrollmentService: Approve with: g8e auth approve-platform-enrollment ${requestId}`
+                `AppEnrollmentService: Approve with: g8e auth enroll approve ${requestId}`
             );
         }
 

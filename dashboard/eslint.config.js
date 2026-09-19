@@ -1,17 +1,22 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 import js from '@eslint/js';
 import globals from 'globals';
 
 export default [
     {
         ignores: [
-            'coverage/**',
-            'node_modules/**',
+            '**/coverage/**',
+            '**/dist/**',
+            '**/node_modules/**',
+            'g8e-adapter/evaluation-explorer/**',
             'public/js/vendor/**',
         ],
     },
     js.configs.recommended,
     {
-        files: ['**/*.js'],
+        files: ['**/*.{js,mjs}'],
         languageOptions: {
             ecmaVersion: 'latest',
             sourceType: 'module',

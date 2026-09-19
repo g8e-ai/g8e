@@ -10,6 +10,7 @@
 import pytest
 from pydantic import ValidationError
 
+from app.constants import PersonaCapability
 from app.llm.prompts import PromptFile, build_tribunal_auditor_context
 from app.prompts_data.loader import load_prompt
 from app.services.ai.auditor_service import AuditorInput
@@ -350,6 +351,45 @@ class TestSharpenedTribunalPersonas:
         assert "adversarial" in nemesis.identity.lower()
 
 
+class TestPersonaCapabilities:
+    """Persona capability declarations: an upper bound intersected with user
+    settings and model support before the pipeline enables a behavior."""
+
+    def test_tribunal_members_declare_local_syntax_check(self):
+        """All five Tribunal seats declare the local syntax-check capability."""
+        for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
+            member = get_tribunal_member(member_id)
+            assert PersonaCapability.LOCAL_SYNTAX_CHECK in member.capabilities, (
+                f"{member_id} must declare local_syntax_check"
+            )
+
+    def test_non_member_personas_have_no_capabilities(self):
+        """Personas that perform no local validation declare no capabilities."""
+        for persona_id in ("triage", "sage", "dash", "tribunal", "auditor", "marshal"):
+            persona = get_agent_persona(persona_id)
+            assert persona.capabilities == frozenset(), (
+                f"{persona_id} unexpectedly declares capabilities: {persona.capabilities}"
+            )
+
+    def test_capabilities_default_to_empty_frozenset(self):
+        """AgentPersona validates without a capabilities field."""
+        persona = AgentPersona.model_validate(
+            {
+                "id": "stub",
+                "display_name": "Stub",
+                "icon": "x",
+                "description": "stub",
+                "role": "stub",
+                "model_tier": "primary",
+                "tools": [],
+                "identity": "I am a stub.",
+                "purpose": "To be replaced.",
+                "autonomy": "none",
+            }
+        )
+        assert persona.capabilities == frozenset()
+
+
 class TestListAllAgents:
     """Tests for list_all_agents function."""
 
@@ -371,14 +411,14 @@ class TestListAllAgents:
         assert "nemesis" in agents
         assert "codex" in agents
         assert "judge" in agents
-        assert "warden" in agents
+        assert "marshal" in agents
 
     def test_list_all_agents_includes_sub_agents(self):
-        """Test that list_all_agents includes warden sub-agents."""
+        """Test that list_all_agents includes marshal sub-agents."""
         agents = list_all_agents()
-        assert "warden_command_risk" in agents
-        assert "warden_error" in agents
-        assert "warden_file_risk" in agents
+        assert "marshal_command" in agents
+        assert "marshal_error" in agents
+        assert "marshal_file" in agents
 
 
 class TestAgentPersonaValidation:

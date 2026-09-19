@@ -60,6 +60,25 @@ func (h *PasskeyHandler) setWebSessionCookie(w http.ResponseWriter, webSession *
 	http.SetCookie(w, cookie)
 }
 
+// bindEmbeddedOperatorSession binds the gateway's claimed embedded
+// operator to a freshly created web session so browser sessions carry the
+// same operator binding as CLI sessions. A missing or unclaimed embedded
+// operator (e.g., a remote-only owner) is skipped silently; binding
+// failures are logged as warnings and never fail the passkey ceremony.
+func (h *PasskeyHandler) bindEmbeddedOperatorSession(userID, webSessionID string) {
+	if h.operatorBinder == nil {
+		return
+	}
+	bound, err := h.operatorBinder.BindEmbeddedOperatorToWebSession(userID, webSessionID)
+	if err != nil {
+		h.logger.Warn("Failed to bind embedded operator to web session", "error", err, "user_id", userID)
+		return
+	}
+	if bound {
+		h.logger.Info("Bound embedded operator to web session", "user_id", userID, "web_session_id", safeTruncateID(webSessionID, 8))
+	}
+}
+
 // enforceFirstCred checks whether a new registration is allowed. Returns (true, code, msg) to signal forbidden.
 func (h *PasskeyHandler) enforceFirstCred(r *http.Request, userID string, cfg passkeyHandlerConfig) (forbidden bool, code int, msg string) {
 	user, err := h.getUser(userID)
@@ -192,6 +211,16 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 			req.UserID = newUser.ID
 			createdUserID = newUser.ID
 			h.logger.Info("[BOOTSTRAP] Auto-created user for browser passkey enrollment", "user_id", newUser.ID)
+			// Creating the first user is the explicit human enrollment act:
+			// claim the embedded operator and persist its operator session so
+			// a browser-first deployment binds the same way CLI bootstrap does.
+			if h.operatorClaimer != nil {
+				if _, _, err := h.operatorClaimer.ClaimEmbeddedOperator(newUser.ID); err != nil {
+					h.logger.Error("Failed to claim embedded operator during browser bootstrap", "error", err, "user_id", newUser.ID)
+					h.responder.Error(w, http.StatusInternalServerError, "failed to bind embedded operator")
+					return
+				}
+			}
 		}
 
 		if cfg.enforceFirstCredentialOnly {
@@ -317,6 +346,7 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 				if cfg.setCookie {
 					h.setWebSessionCookie(w, webSession)
 				}
+				h.bindEmbeddedOperatorSession(req.UserID, webSession.ID)
 			}
 
 			h.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
@@ -385,6 +415,7 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 			if cfg.setCookie {
 				h.setWebSessionCookie(w, webSession)
 			}
+			h.bindEmbeddedOperatorSession(req.UserID, webSession.ID)
 		}
 
 		h.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
@@ -559,6 +590,7 @@ func (h *PasskeyHandler) AuthenticateVerify(cfg passkeyHandlerConfig) http.Handl
 					ExpiresAtUnixMs: webSession.ExpiresAtUnixMs,
 				}
 			}
+			h.bindEmbeddedOperatorSession(userID, webSession.ID)
 		}
 
 		h.responder.JSON(w, http.StatusOK, resp)

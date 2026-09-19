@@ -153,6 +153,10 @@ func (s *recordingBundleFileService) Stat(context.Context, string) (os.FileInfo,
 	panic("unexpected Stat")
 }
 
+func (s *recordingBundleFileService) Lstat(context.Context, string) (os.FileInfo, error) {
+	panic("unexpected Lstat")
+}
+
 func (s *recordingBundleFileService) WriteFile(_ context.Context, relPath string, data []byte, _ os.FileMode) error {
 	s.writes = append(s.writes, relPath)
 	if relPath == s.writeErrPath {
@@ -634,7 +638,7 @@ func TestAssembleBundle_IncludesManifestReferencedSourceArtifacts(t *testing.T) 
 
 func TestAssembleBundle_PreservesEmptyEvalSourceArtifacts(t *testing.T) {
 	request, _ := bundleAssemblyFixture(t)
-	emptyPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, "eval-run-1", constants.ComplianceBundleSourceRuntimeDirname, constants.EvalRunReceiptsFilename)
+	emptyPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, "eval-run-1", constants.ComplianceBundleSourceRuntimeDirname, constants.EvaluationReportFilename)
 	request.SourceArtifacts = append(request.SourceArtifacts, SourceArtifact{BundlePath: emptyPath, Body: []byte{}, MediaType: constants.MediaTypeJSON})
 
 	result, err := AssembleBundle(request)

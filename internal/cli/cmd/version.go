@@ -14,7 +14,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/buildinfo"
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // versionCmd reports g8e build metadata. With --fips it additionally runs a
@@ -33,6 +36,12 @@ func versionCmd() *cobra.Command {
 		Short: "Print g8e build version information",
 		Long: `Print g8e build version information (version, build ID, build time, platform).
 
+With --json, the same fields are emitted as a JSON object along with the
+source provenance stamp (source_revision, source_tree_state_hash, and
+source_tree_modified when the toolchain recorded VCS state). This is the
+machine-readable surface the evals provenance bridge consumes instead of
+environment variables.
+
 With --fips, also report the FIPS 140-3 status of the running binary by
 querying the Go Cryptographic Module (crypto/fips140). A binary built with
 GOFIPS140=v1.0.0 enters FIPS approved mode by default; this flag confirms
@@ -46,14 +55,51 @@ for operators, not a failure. CI/release gates that require the strict
 posture should run the binary under GODEBUG=fips140=only (see 'make
 verify-fips').`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runVersion(cmd.OutOrStdout(), versionInfoFromCmd(cmd), fips)
+			return runVersion(cmd.OutOrStdout(), versionInfoFromCmd(cmd), fips, output.JSONEnabled(cmd))
 		},
 	}
 	cmd.Flags().BoolVar(&fips, "fips", false, "report FIPS 140-3 module status; exit non-zero only if approved mode is not active")
 	return cmd
 }
 
-func runVersion(w io.Writer, vi serve.VersionInfo, fips bool) error {
+// fipsStatusJSON is the FIPS 140-3 block of `version --json` output.
+type fipsStatusJSON struct {
+	Enabled       bool   `json:"enabled"`
+	Enforced      bool   `json:"enforced"`
+	ModuleVersion string `json:"module_version"`
+}
+
+// versionJSON is the `version --json` output contract. Snake_case field
+// names match the canonical JSON convention used by `auth context` and are
+// consumed by the evals provenance bridge. Unstamped fields are omitted
+// rather than emitted as sentinel strings.
+type versionJSON struct {
+	Version             string          `json:"version"`
+	BuildID             string          `json:"build_id,omitempty"`
+	BuildTime           string          `json:"build_time,omitempty"`
+	Platform            string          `json:"platform,omitempty"`
+	SourceRevision      string          `json:"source_revision,omitempty"`
+	SourceTreeStateHash string          `json:"source_tree_state_hash,omitempty"`
+	SourceTreeModified  *bool           `json:"source_tree_modified,omitempty"`
+	FIPS140             *fipsStatusJSON `json:"fips140,omitempty"`
+}
+
+// effectiveSourceRevision prefers the ldflags stamp and falls back to the
+// toolchain-embedded VCS revision so a plain `go build` still carries a
+// source identity.
+func effectiveSourceRevision(vi serve.VersionInfo, vcs buildinfo.VCSStamp) string {
+	if vi.SourceRevision != "" && vi.SourceRevision != string(constants.SystemHealthUnknown) {
+		return vi.SourceRevision
+	}
+	return vcs.Revision
+}
+
+func runVersion(w io.Writer, vi serve.VersionInfo, fips bool, asJSON bool) error {
+	vcs := buildinfo.ReadVCSStamp()
+	if asJSON {
+		return writeVersionJSON(w, vi, vcs, fips)
+	}
+
 	fmt.Fprintf(w, "g8e version %s\n", vi.Version)
 	if vi.BuildID != "" {
 		fmt.Fprintf(w, "build id:    %s\n", vi.BuildID)
@@ -63,6 +109,15 @@ func runVersion(w io.Writer, vi serve.VersionInfo, fips bool) error {
 	}
 	if vi.Platform != "" {
 		fmt.Fprintf(w, "platform:    %s\n", vi.Platform)
+	}
+	if rev := effectiveSourceRevision(vi, vcs); rev != "" && rev != string(constants.SystemHealthUnknown) {
+		fmt.Fprintf(w, "source rev:  %s\n", rev)
+	}
+	if isHex64(vi.SourceTreeStateHash) {
+		fmt.Fprintf(w, "source tree: %s\n", vi.SourceTreeStateHash)
+	}
+	if vcs.Present && vcs.Modified {
+		fmt.Fprintln(w, "source state: modified (uncommitted changes at build time)")
 	}
 
 	if !fips {
@@ -83,7 +138,7 @@ func runVersion(w io.Writer, vi serve.VersionInfo, fips bool) error {
 		fmt.Fprint(w, "FIPS 140-3 approved mode is NOT active. Build with GOFIPS140=v1.0.0 to link\n")
 		fmt.Fprint(w, "the Go Cryptographic Module (CMVP Cert #5247) and enable approved mode by\n")
 		fmt.Fprint(w, "default (e.g. `make build-fips` or the Dockerfile builder stage).\n")
-		return fmt.Errorf("fips 140-3 mode is not active")
+		return constants.ErrFIPSModeNotActive
 	}
 	if !enforced {
 		// Approved mode is active but enforcement is off. This is the common
@@ -98,6 +153,56 @@ func runVersion(w io.Writer, vi serve.VersionInfo, fips bool) error {
 		fmt.Fprint(w, "(e.g. `GODEBUG=fips140=only ./g8e version --fips`).\n")
 	}
 	return nil
+}
+
+// writeVersionJSON emits the machine-readable version record. The FIPS
+// block is included only when requested; the same exit contract applies —
+// approved-mode-inactive still returns an error after the JSON is written.
+func writeVersionJSON(w io.Writer, vi serve.VersionInfo, vcs buildinfo.VCSStamp, fips bool) error {
+	out := versionJSON{
+		Version:   vi.Version,
+		BuildID:   vi.BuildID,
+		BuildTime: vi.BuildTime,
+		Platform:  vi.Platform,
+	}
+	if rev := effectiveSourceRevision(vi, vcs); rev != "" && rev != string(constants.SystemHealthUnknown) {
+		out.SourceRevision = rev
+	}
+	if isHex64(vi.SourceTreeStateHash) {
+		out.SourceTreeStateHash = vi.SourceTreeStateHash
+	}
+	if vcs.Present {
+		modified := vcs.Modified
+		out.SourceTreeModified = &modified
+	}
+	var fipsErr error
+	if fips {
+		enabled := fips140.Enabled()
+		out.FIPS140 = &fipsStatusJSON{
+			Enabled:       enabled,
+			Enforced:      fips140.Enforced(),
+			ModuleVersion: fips140.Version(),
+		}
+		if !enabled {
+			fipsErr = constants.ErrFIPSModeNotActive
+		}
+	}
+	if err := output.WriteJSON(w, out); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	return fipsErr
+}
+
+func isHex64(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func fipsBoolStr(b bool) string {

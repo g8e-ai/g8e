@@ -13,6 +13,7 @@ Centralized loader for AI agent persona definitions from code models in app/mode
 """
 
 import logging
+from app.constants import PersonaCapability
 from app.models.base import BaseModel, ConfigDict, Field
 from app.models.personas import get_persona, list_persona_ids, AgentPersonaModel
 
@@ -29,6 +30,9 @@ class AgentPersona(BaseModel):
     role: str = Field(..., alias="role")
     model_tier: str = Field(..., alias="model_tier")
     tools: list[str] = Field(default_factory=list, alias="tools")
+    capabilities: frozenset[PersonaCapability] = Field(
+        default_factory=frozenset, alias="capabilities"
+    )
     identity: str = Field(..., alias="identity")
     purpose: str = Field(..., alias="purpose")
     autonomy: str = Field(..., alias="autonomy")
@@ -47,6 +51,7 @@ class AgentPersona(BaseModel):
             role=model.role,
             model_tier=model.model_tier,
             tools=model.tools,
+            capabilities=model.capabilities,
             identity=model.identity,
             purpose=model.purpose,
             autonomy=model.autonomy,

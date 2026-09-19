@@ -158,8 +158,8 @@ class ConsoleMetricsService {
             };
 
             const typeDistribution = {
-                [OperatorType.SYSTEM]: 0,
-                [OperatorType.CLOUD]: 0
+                [OperatorType.EMBEDDED]: 0,
+                [OperatorType.REMOTE]: 0
             };
 
             let healthyCount = 0;
@@ -175,7 +175,7 @@ class ConsoleMetricsService {
                     statusDistribution[status]++;
                 }
 
-                const type = op.operator_type || OperatorType.SYSTEM;
+                const type = op.operator_type || OperatorType.REMOTE;
                 if (Object.prototype.hasOwnProperty.call(typeDistribution, type)) {
                     typeDistribution[type]++;
                 }

@@ -269,6 +269,13 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
+	if req.RuntimeConfig != nil {
+		if err := c.reg.UpdateOperatorRuntimeConfig(op.ID, req.RuntimeConfig); err != nil {
+			c.logger.Error("gateway: persist operator runtime config", "operator_id", op.ID, "error", err)
+			c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
+			return
+		}
+	}
 
 	// Build BootstrapConfig with default values
 	bootstrapConfig := map[string]interface{}{

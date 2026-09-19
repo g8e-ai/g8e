@@ -74,21 +74,16 @@ const (
 )
 
 // OperatorType is a typed string for Operator type.
+//   - embedded: the gateway's in-process operator substrate, claimed by the
+//     first user's bootstrap act. Certless; its operator_session_id is a
+//     binding record, not a remote enrollment lease.
+//   - remote: an operator enrolled from a remote host via CSR or platform
+//     enrollment.
 type OperatorType string
 
 const (
-	OperatorTypeCloud  OperatorType = "cloud"
-	OperatorTypeSystem OperatorType = "system"
-)
-
-// CloudSubtype is a typed string for cloud subtype.
-type CloudSubtype string
-
-const (
-	CloudSubtypeAWS   CloudSubtype = "aws"
-	CloudSubtypeAzure CloudSubtype = "azure"
-	CloudSubtypeGCP   CloudSubtype = "gcp"
-	CloudSubtypeG8EP  CloudSubtype = "g8ep"
+	OperatorTypeEmbedded OperatorType = "embedded"
+	OperatorTypeRemote   OperatorType = "remote"
 )
 
 // UserStatus is a typed string for user status.

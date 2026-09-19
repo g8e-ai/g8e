@@ -49,7 +49,6 @@ import pytest
 import pytest_asyncio
 
 from app.constants import (
-    CloudSubtype,
     InvestigationStatus,
     OperatorStatus,
     OperatorType,
@@ -96,42 +95,10 @@ def cache_aside_service(fake_cache_aside_service):
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def all_services(cache_aside_service, test_settings):
-    from unittest.mock import AsyncMock, MagicMock
+    from unittest.mock import MagicMock
 
     from app.services.service_factory import ServiceFactory
-
-    governance_client = MagicMock()
-
-    async def _submit_write_through(message):
-        payload = message.payload
-        if payload is not None and hasattr(payload, "case_id"):
-            data = payload.model_dump(mode="json")
-            data["id"] = message.id
-            data["created_at"] = datetime.now(UTC).isoformat()
-            await cache_aside_service.db_client.create_document(
-                collection="investigations",
-                document_id=message.id,
-                data=data,
-            )
-        elif payload is not None and hasattr(payload, "collection") and hasattr(payload, "updates"):
-            await cache_aside_service.db_client.create_document(
-                collection=payload.collection,
-                document_id=payload.document_id,
-                data=payload.updates,
-            )
-        return {"status": "accepted"}
-
-    async def _update_write_through(collection, document_id, updates, **kwargs):
-        return await cache_aside_service.db_client.update_document(
-            collection=collection,
-            document_id=document_id,
-            data=updates,
-            merge=kwargs.get("merge", True),
-        )
-
-    governance_client.submit_envelope = AsyncMock(side_effect=_submit_write_through)
-    governance_client.update_governed_doc = AsyncMock(side_effect=_update_write_through)
-    governance_client.delete_governed_doc = AsyncMock(return_value={"status": "accepted"})
+    from tests.integration.conftest import make_write_through_governance_client
 
     services = ServiceFactory.create_all_services(
         test_settings,
@@ -139,7 +106,7 @@ async def all_services(cache_aside_service, test_settings):
         db_service=MagicMock(),
         kv_service=MagicMock(),
         blob_service=MagicMock(),
-        governance_client=governance_client,
+        governance_client=make_write_through_governance_client(cache_aside_service),
     )
     yield services
     await ServiceFactory.stop_services(services)
@@ -812,21 +779,20 @@ class TestOperatorEnrichment:
         # Cleanup
         cleanup.track_investigation(created_investigation.id)
 
-    async def test_cloud_operator_context_extraction(
+    async def test_remote_operator_context_extraction(
         self, cache_aside_service, test_settings, all_services, cleanup
     ):
-        """Cloud operator context includes cloud-specific fields."""
+        """Remote operator context includes granted intents."""
         # Setup services properly using real infrastructure
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
         operator_data_service = all_services.operator_data_service
 
-        # Create cloud operator with intents
-        cloud_operator = build_production_operator_document(
-            operator_type=OperatorType.CLOUD,
+        # Create remote operator with intents
+        remote_operator = build_production_operator_document(
+            operator_type=OperatorType.REMOTE,
         )
-        cloud_operator.cloud_subtype = CloudSubtype.AWS
-        cloud_operator.granted_intents = ["ec2_discovery", "s3_read"]
+        remote_operator.granted_intents = ["ec2_discovery", "s3_read"]
 
         investigation = create_investigation_data()
         # Create the actual investigation with the same IDs
@@ -838,12 +804,12 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        await operator_data_service.create_operator(cloud_operator)
+        await operator_data_service.create_operator(remote_operator)
 
         # Create g8e context and enrich
         bound_operator = BoundOperator(
-            operator_id=cloud_operator.id,
-            operator_session_id=cloud_operator.operator_session_id,
+            operator_id=remote_operator.id,
+            operator_session_id=remote_operator.operator_session_id,
             status=OperatorStatus.BOUND,
         )
         g8e_context = build_g8e_http_context(bound_operators=[bound_operator])
@@ -861,15 +827,14 @@ class TestOperatorEnrichment:
             g8e_context=g8e_context,
         )
 
-        # Verify cloud-specific context
+        # Verify operator context
         assert len(enriched_context.operator_documents) == 1
         op_doc = enriched_context.operator_documents[0]
-        assert op_doc.operator_type == OperatorType.CLOUD
-        assert op_doc.cloud_subtype == "aws"
+        assert op_doc.operator_type == OperatorType.REMOTE
         assert op_doc.granted_intents == ["ec2_discovery", "s3_read"]
 
         # Cleanup
-        cleanup.track_operator(cloud_operator.id)
+        cleanup.track_operator(remote_operator.id)
         cleanup.track_investigation(created_investigation.id)
 
 
@@ -1172,8 +1137,7 @@ class TestAIContextExtraction:
         assert context.cpu_count == 4
         assert context.memory_mb == 8192
         assert context.public_ip == "192.168.1.100"
-        assert context.operator_type == OperatorType.SYSTEM
-        assert context.is_cloud_operator is False
+        assert context.operator_type == OperatorType.REMOTE
 
         # Heartbeat-derived fields
         assert context.distro == "Ubuntu"
@@ -1227,17 +1191,16 @@ class TestAIContextExtraction:
         linux_operator = build_production_operator_document(
             operator_id="op-linux-001",
             hostname="linux-server",
-            operator_type=OperatorType.SYSTEM,
+            operator_type=OperatorType.REMOTE,
         )
         linux_operator.granted_intents = []
 
-        cloud_operator = build_production_operator_document(
-            operator_id="op-cloud-001",
+        intents_operator = build_production_operator_document(
+            operator_id="op-intents-001",
             hostname="aws-instance",
-            operator_type=OperatorType.CLOUD,
+            operator_type=OperatorType.REMOTE,
         )
-        cloud_operator.cloud_subtype = CloudSubtype.AWS
-        cloud_operator.granted_intents = ["ec2_discovery", "s3_read"]
+        intents_operator.granted_intents = ["ec2_discovery", "s3_read"]
 
         investigation = EnrichedInvestigationContext(
             id="inv-multi-ops",
@@ -1251,7 +1214,7 @@ class TestAIContextExtraction:
             updated_at=datetime.now(UTC),
             history_trail=[],
             conversation_history=[],
-            operator_documents=[linux_operator, cloud_operator],
+            operator_documents=[linux_operator, intents_operator],
         )
 
         # Test extraction
@@ -1266,19 +1229,16 @@ class TestAIContextExtraction:
         assert isinstance(linux_ctx, OperatorContext)
         assert linux_ctx.operator_id == "op-linux-001"
         assert linux_ctx.hostname == "linux-server"
-        assert linux_ctx.operator_type == OperatorType.SYSTEM
-        assert linux_ctx.is_cloud_operator is False
+        assert linux_ctx.operator_type == OperatorType.REMOTE
         assert linux_ctx.granted_intents == []
 
-        # Check second operator (Cloud)
-        cloud_ctx = contexts[1]
-        assert isinstance(cloud_ctx, OperatorContext)
-        assert cloud_ctx.operator_id == "op-cloud-001"
-        assert cloud_ctx.hostname == "aws-instance"
-        assert cloud_ctx.operator_type == OperatorType.CLOUD
-        assert cloud_ctx.is_cloud_operator is True
-        assert cloud_ctx.cloud_subtype == "aws"
-        assert cloud_ctx.granted_intents == ["ec2_discovery", "s3_read"]
+        # Check second operator (remote with granted intents)
+        intents_ctx = contexts[1]
+        assert isinstance(intents_ctx, OperatorContext)
+        assert intents_ctx.operator_id == "op-intents-001"
+        assert intents_ctx.hostname == "aws-instance"
+        assert intents_ctx.operator_type == OperatorType.REMOTE
+        assert intents_ctx.granted_intents == ["ec2_discovery", "s3_read"]
 
     async def test_extract_all_operators_context_none_investigation(self, cache_aside_service):
         """extract_all_operators_context returns None with None investigation."""

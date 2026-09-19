@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 from pathlib import Path
 import secrets
 
@@ -17,6 +18,42 @@ DEFAULT_PASSWORD_HASH_ITERATIONS = 600_000
 DEFAULT_KEY_DERIVATION_ITERATIONS = 100_000
 DEFAULT_KEY_DERIVATION_SALT = b"g8e_api_key_v1"
 PASSWORD_HASH_PREFIX = "$pbkdf2-sha256$"
+
+
+def validate_safe_filename(value: str, *, label: str = "filename") -> str:
+    """Validate a single path segment with no directory separators."""
+    if not value or value in {".", ".."} or "/" in value or "\\" in value:
+        raise ValueError(f"invalid {label}")
+    return value
+
+
+def resolve_safe_path_segments(
+    root: str | Path,
+    *segments: str,
+    segment_labels: tuple[str, ...] | None = None,
+) -> Path:
+    """Validate single-segment path components and resolve them under root."""
+    if not segments:
+        raise ValueError("At least one path segment is required")
+
+    root_path = Path(root).resolve()
+    safe_segments: list[str] = []
+    for index, segment in enumerate(segments):
+        label = (
+            segment_labels[index]
+            if segment_labels is not None and index < len(segment_labels)
+            else f"path segment {index + 1}"
+        )
+        safe_segments.append(validate_safe_filename(segment, label=label))
+
+    target_path = root_path.joinpath(*safe_segments).resolve()
+    try:
+        target_path.relative_to(root_path)
+    except ValueError as exc:
+        joined = "/".join(safe_segments)
+        raise ValueError(f"Path traversal detected: {joined} is outside of {root}") from exc
+
+    return target_path
 
 
 def validate_safe_path(path: str | Path, root: str | Path) -> Path:
@@ -37,25 +74,19 @@ def validate_safe_path(path: str | Path, root: str | Path) -> Path:
         raise ValueError("Empty path provided")
 
     root_path = Path(root).resolve()
+    path_obj = Path(os.fspath(path))
 
-    # Clean and resolve the target path
-    # Path.resolve() handles '..' segments and redundant slashes
-    try:
-        if Path(path).is_absolute():
-            target_path = Path(path).resolve()
-        else:
-            target_path = (root_path / path).resolve()
-    except Exception as e:
-        raise ValueError(f"Invalid path format: {e}")
+    if path_obj.is_absolute():
+        target_path = path_obj.resolve()
+        try:
+            target_path.relative_to(root_path)
+        except ValueError as exc:
+            raise ValueError(f"Path traversal detected: {path} is outside of {root}") from exc
+        return target_path
 
-    # Security check: Ensure target_path is within root_path
-    try:
-        # relative_to raises ValueError if target_path is not under root_path
-        target_path.relative_to(root_path)
-    except ValueError:
+    if any(part in {"", ".."} for part in path_obj.parts):
         raise ValueError(f"Path traversal detected: {path} is outside of {root}")
-
-    return target_path
+    return resolve_safe_path_segments(root_path, *path_obj.parts)
 
 
 def is_shell_required(command: str) -> bool:

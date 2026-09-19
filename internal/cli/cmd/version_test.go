@@ -10,6 +10,7 @@ package cmd
 import (
 	"bytes"
 	"crypto/fips140"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 func TestVersionCmd_RegisteredOnRoot(t *testing.T) {
@@ -37,7 +39,7 @@ func TestRunVersion_PlainPrintsBuildInfo(t *testing.T) {
 		Platform:  "linux/amd64",
 	}
 	var buf bytes.Buffer
-	require.NoError(t, runVersion(&buf, vi, false))
+	require.NoError(t, runVersion(&buf, vi, false, false))
 
 	out := buf.String()
 	assert.Contains(t, out, "g8e version 1.2.3")
@@ -49,7 +51,7 @@ func TestRunVersion_PlainPrintsBuildInfo(t *testing.T) {
 
 func TestRunVersion_PlainOmitsEmptyFields(t *testing.T) {
 	var buf bytes.Buffer
-	require.NoError(t, runVersion(&buf, serve.VersionInfo{}, false))
+	require.NoError(t, runVersion(&buf, serve.VersionInfo{}, false, false))
 
 	out := buf.String()
 	assert.Contains(t, out, "g8e version ")
@@ -61,7 +63,7 @@ func TestRunVersion_PlainOmitsEmptyFields(t *testing.T) {
 func TestRunVersion_FIPSReportsModuleStatus(t *testing.T) {
 	vi := serve.VersionInfo{Version: "1.2.3", Platform: "linux/amd64"}
 	var buf bytes.Buffer
-	err := runVersion(&buf, vi, true)
+	err := runVersion(&buf, vi, true, false)
 
 	out := buf.String()
 	assert.Contains(t, out, "FIPS 140-3 mode:")
@@ -101,4 +103,84 @@ func TestVersionCmd_HasFipsFlag(t *testing.T) {
 	f := cmd.Flags().Lookup("fips")
 	require.NotNil(t, f)
 	assert.Equal(t, "false", f.DefValue)
+}
+
+func TestVersionCmd_HasJSONFlag(t *testing.T) {
+	rootCmd := NewRootCmd("dev", serve.VersionInfo{})
+	f := rootCmd.PersistentFlags().Lookup("json")
+	require.NotNil(t, f)
+	assert.Equal(t, "false", f.DefValue)
+}
+
+func TestRunVersion_JSONEmitsProvenanceFields(t *testing.T) {
+	vi := serve.VersionInfo{
+		Version:             "2.1.8",
+		BuildID:             "abc123",
+		BuildTime:           "2026-09-12T00:00:00Z",
+		Platform:            "linux_amd64",
+		SourceRevision:      "deadbeef" + strings.Repeat("0", 32),
+		SourceTreeStateHash: "a" + strings.Repeat("1", 63),
+	}
+	var buf bytes.Buffer
+	require.NoError(t, runVersion(&buf, vi, false, true))
+
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
+	assert.Equal(t, "2.1.8", out["version"])
+	assert.Equal(t, "abc123", out["build_id"])
+	assert.Equal(t, "deadbeef"+strings.Repeat("0", 32), out["source_revision"])
+	assert.Equal(t, "a"+strings.Repeat("1", 63), out["source_tree_state_hash"])
+	_, hasFIPS := out["fips140"]
+	assert.False(t, hasFIPS, "fips140 must be omitted unless --fips is passed")
+}
+
+func TestRunVersion_JSONOmitsUnstampedSentinels(t *testing.T) {
+	vi := serve.VersionInfo{
+		Version:             "2.1.8",
+		SourceRevision:      string(constants.SystemHealthUnknown),
+		SourceTreeStateHash: "not-a-hash",
+	}
+	var buf bytes.Buffer
+	require.NoError(t, runVersion(&buf, vi, false, true))
+
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
+	_, hasRev := out["source_revision"]
+	_, hasHash := out["source_tree_state_hash"]
+	// A test binary carries no ldflags stamp; source_revision may still be
+	// populated from toolchain VCS info, but a sentinel or malformed value
+	// must never be emitted.
+	if hasRev {
+		assert.NotEqual(t, string(constants.SystemHealthUnknown), out["source_revision"])
+	}
+	assert.False(t, hasHash, "malformed tree-state hash must be omitted, not emitted")
+}
+
+func TestRunVersion_JSONPrefersStampedRevisionOverVCS(t *testing.T) {
+	vi := serve.VersionInfo{Version: "2.1.8", SourceRevision: "stamped-revision"}
+	var buf bytes.Buffer
+	require.NoError(t, runVersion(&buf, vi, false, true))
+
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
+	assert.Equal(t, "stamped-revision", out["source_revision"])
+}
+
+func TestRunVersion_JSONFIPSIncludesModuleBlock(t *testing.T) {
+	vi := serve.VersionInfo{Version: "1.2.3"}
+	var buf bytes.Buffer
+	err := runVersion(&buf, vi, true, true)
+
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
+	fipsBlock, hasFIPS := out["fips140"].(map[string]any)
+	require.True(t, hasFIPS, "--json --fips must include the fips140 block")
+	assert.Contains(t, fipsBlock, "enabled")
+	assert.Contains(t, fipsBlock, "module_version")
+
+	if !fips140.Enabled() {
+		require.Error(t, err)
+		return
+	}
+	require.NoError(t, err)
 }

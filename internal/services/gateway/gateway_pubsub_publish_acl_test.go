@@ -17,11 +17,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	pubsubv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/pubsub/v1"
 )
 
@@ -178,16 +181,19 @@ func TestVerifyPublishACL(t *testing.T) {
 // --- BuildGovernanceEnvelope unit tests ---
 
 func TestBuildGovernanceEnvelope_Success(t *testing.T) {
+	payload, err := proto.Marshal(&operatorv1.FsReadRequested{Path: "/etc/hostname", ExecutionId: "exec-1"})
+	require.NoError(t, err)
 	env, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
 		OperatorID:        "op-001",
 		OperatorSessionID: "sess-001",
-		ActionType:        string(constants.ActionTypeFileEdit),
-		Payload:           []byte("file-edit-payload"),
+		ActionType:        string(constants.ActionTypeFsRead),
+		Payload:           payload,
 		TargetResource:    "/etc/hostname",
 		RequestorUserID:   "user-001",
 		ActingAppID:       "spiffe://g8e.local/app/g8ee",
 		StateMerkleRoot:   "root-abc",
 		Posture:           "doctrine",
+		Doctrine:          governance.NewL1Doctrine(),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, env)
@@ -195,9 +201,9 @@ func TestBuildGovernanceEnvelope_Success(t *testing.T) {
 	assert.Equal(t, "1.0", env.ProtocolVersion)
 	assert.Equal(t, "op-001", env.OperatorId)
 	assert.Equal(t, "sess-001", env.OperatorSessionId)
-	assert.Equal(t, string(constants.ActionTypeFileEdit), env.ActionType)
+	assert.Equal(t, string(constants.ActionTypeFsRead), env.ActionType)
 	assert.Equal(t, "/etc/hostname", env.TargetResource)
-	assert.Equal(t, []byte("file-edit-payload"), env.Payload)
+	assert.Equal(t, payload, env.Payload)
 	assert.Equal(t, "root-abc", env.StateMerkleRoot)
 	assert.NotEmpty(t, env.Nonce, "envelope must have a nonce")
 	assert.NotEmpty(t, env.Id, "envelope must have an Id (transaction hash)")
@@ -207,7 +213,7 @@ func TestBuildGovernanceEnvelope_Success(t *testing.T) {
 	assert.Equal(t, "doctrine", env.Posture, "envelope must carry the gateway posture")
 	require.NotNil(t, env.Governance)
 	require.NotNil(t, env.Governance.L1)
-	assert.True(t, env.Governance.L1.Validated, "L1 doctrine validation marker must be set")
+	assert.True(t, env.Governance.L1.Validated, "L1 doctrine validation marker must be set after screening")
 	assert.NotNil(t, env.Timestamp)
 	assert.NotNil(t, env.ExpiresAt)
 }
@@ -215,16 +221,19 @@ func TestBuildGovernanceEnvelope_Success(t *testing.T) {
 func TestBuildGovernanceEnvelope_DeterministicTxHash(t *testing.T) {
 	// Same params (except nonce which is random) produce different tx hashes
 	// because the nonce differs. But the envelope structure is consistent.
+	payload, err := proto.Marshal(&operatorv1.FsReadRequested{Path: "/etc/hostname", ExecutionId: "exec-1"})
+	require.NoError(t, err)
 	params := BuildEnvelopeParams{
 		OperatorID:        "op-001",
 		OperatorSessionID: "sess-001",
 		ActionType:        string(constants.ActionTypeFsRead),
-		Payload:           []byte("read-payload"),
+		Payload:           payload,
 		TargetResource:    "/etc/hostname",
 		RequestorUserID:   "user-001",
 		ActingAppID:       "spiffe://g8e.local/app/g8ee",
 		StateMerkleRoot:   "root-abc",
 		Posture:           "doctrine",
+		Doctrine:          governance.NewL1Doctrine(),
 	}
 
 	env1, err := BuildGovernanceEnvelope(params)
@@ -248,13 +257,16 @@ func TestBuildGovernanceEnvelope_DeterministicTxHash(t *testing.T) {
 // cfg.Gateway.Posture), and the operator would reject it per-transaction
 // anyway — fail closed at construction time.
 func TestBuildGovernanceEnvelope_MissingPostureFailsClosed(t *testing.T) {
-	_, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
+	payload, err := proto.Marshal(&operatorv1.FsReadRequested{Path: "/etc/hostname", ExecutionId: "exec-1"})
+	require.NoError(t, err)
+	_, err = BuildGovernanceEnvelope(BuildEnvelopeParams{
 		OperatorID:        "op-001",
 		OperatorSessionID: "sess-001",
-		ActionType:        string(constants.ActionTypeFileEdit),
-		Payload:           []byte("file-edit-payload"),
+		ActionType:        string(constants.ActionTypeFsRead),
+		Payload:           payload,
 		TargetResource:    "/etc/hostname",
 		StateMerkleRoot:   "root-abc",
+		Doctrine:          governance.NewL1Doctrine(),
 		// Posture intentionally omitted.
 	})
 	require.Error(t, err)
@@ -271,6 +283,22 @@ func marshalCommandIntent(t *testing.T, intent *commonv1.CommandIntent) []byte {
 	wire, err := protojson.Marshal(intent)
 	require.NoError(t, err)
 	return wire
+}
+
+// fileEditPayload marshals a valid FileEditRequested for use as a command
+// intent payload. The envelope builder decodes the typed payload for L1
+// doctrine screening, so cmd: relay tests must carry real proto-marshaled
+// payloads rather than opaque byte strings.
+func fileEditPayload(t *testing.T) []byte {
+	t.Helper()
+	payload, err := proto.Marshal(&operatorv1.FileEditRequested{
+		FilePath:    "/etc/hostname",
+		Operation:   "write",
+		Content:     "relay test content",
+		ExecutionId: "exec-1",
+	})
+	require.NoError(t, err)
+	return payload
 }
 
 // newCommandIntent builds a commonv1.CommandIntent with the supplied fields.
@@ -292,7 +320,7 @@ func newRelayTestBroker(t *testing.T, stateRoot string, op *models.OperatorDocum
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 	validator := &stubOperatorSessionValidator{op: op}
-	broker.SetCommandRelayDeps(&stubStateRootProvider{root: stateRoot}, validator, "doctrine")
+	broker.SetCommandRelayDeps(&stubStateRootProvider{root: stateRoot}, validator, "doctrine", governance.NewL1Doctrine())
 	return broker, validator
 }
 
@@ -341,11 +369,12 @@ func TestHandlePublish_AppCommandIntentTransformedToGovernanceEnvelope(t *testin
 	})
 	defer unregister()
 
+	payload := fileEditPayload(t)
 	intent := &commonv1.CommandIntent{
 		OperatorId:        op.ID,
 		OperatorSessionId: op.OperatorSessionID,
 		ActionType:        string(constants.ActionTypeFileEdit),
-		Payload:           []byte("file-edit-payload"),
+		Payload:           payload,
 		TargetResource:    "/etc/hostname",
 		RequestorUserId:   "user-001",
 		CaseId:            "case-1",
@@ -375,7 +404,7 @@ func TestHandlePublish_AppCommandIntentTransformedToGovernanceEnvelope(t *testin
 	assert.Equal(t, op.OperatorSessionID, env.OperatorSessionId)
 	assert.Equal(t, string(constants.ActionTypeFileEdit), env.ActionType)
 	assert.Equal(t, "/etc/hostname", env.TargetResource)
-	assert.Equal(t, []byte("file-edit-payload"), env.Payload)
+	assert.Equal(t, payload, env.Payload)
 	assert.Equal(t, "user-001", env.RequestorUserId)
 	assert.Equal(t, "spiffe://g8e.local/app/g8ee", env.ActingAppId)
 	assert.Equal(t, "case-1", env.CaseId, "context fields must propagate from CommandIntent")
@@ -572,7 +601,7 @@ func TestHandlePublish_InvalidOperatorSessionDroppedFailClosed(t *testing.T) {
 	})
 	defer unregister()
 
-	intent := newCommandIntent("op-001", "sess-001", string(constants.ActionTypeFileEdit), []byte("payload"))
+	intent := newCommandIntent("op-001", "sess-001", string(constants.ActionTypeFileEdit), fileEditPayload(t))
 	intent.TargetResource = "/etc/hostname"
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
@@ -597,6 +626,7 @@ func TestHandlePublish_StateRootErrorDroppedFailClosed(t *testing.T) {
 		&stubStateRootProvider{err: errors.New("state root unavailable")},
 		&stubOperatorSessionValidator{op: op},
 		"doctrine",
+		governance.NewL1Doctrine(),
 	)
 	handler := newAppSessionHandler(broker, "g8ee")
 
@@ -608,7 +638,7 @@ func TestHandlePublish_StateRootErrorDroppedFailClosed(t *testing.T) {
 	})
 	defer unregister()
 
-	intent := newCommandIntent(op.ID, op.OperatorSessionID, string(constants.ActionTypeFileEdit), []byte("payload"))
+	intent := newCommandIntent(op.ID, op.OperatorSessionID, string(constants.ActionTypeFileEdit), fileEditPayload(t))
 	intent.TargetResource = "/etc/hostname"
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
@@ -639,7 +669,7 @@ func TestHandlePublish_CommandIntentMissingOperatorIDDropped(t *testing.T) {
 	defer unregister()
 
 	// Intent with missing operator_id.
-	intent := newCommandIntent("", "sess-001", string(constants.ActionTypeFileEdit), []byte("payload"))
+	intent := newCommandIntent("", "sess-001", string(constants.ActionTypeFileEdit), fileEditPayload(t))
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
 
@@ -669,7 +699,7 @@ func TestHandlePublish_CommandIntentChannelMismatchDropped(t *testing.T) {
 	})
 	defer unregister()
 
-	intent := newCommandIntent("op-002", "sess-002", string(constants.ActionTypeFileEdit), []byte("payload"))
+	intent := newCommandIntent("op-002", "sess-002", string(constants.ActionTypeFileEdit), fileEditPayload(t))
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
 
@@ -696,7 +726,7 @@ func TestHandlePublish_RelayDisabledWhenDepsNotConfigured(t *testing.T) {
 	})
 	defer unregister()
 
-	intent := newCommandIntent("op-001", "sess-001", string(constants.ActionTypeFileEdit), []byte("payload"))
+	intent := newCommandIntent("op-001", "sess-001", string(constants.ActionTypeFileEdit), fileEditPayload(t))
 	intent.RequestorUserId = "user-001"
 	intentJSON := marshalCommandIntent(t, intent)
 
@@ -743,15 +773,18 @@ func TestSetCommandRelayDeps(t *testing.T) {
 	assert.Nil(t, broker.stateRootProvider, "state root provider must be nil before SetCommandRelayDeps")
 	assert.Nil(t, broker.sessionValidator, "session validator must be nil before SetCommandRelayDeps")
 	assert.Empty(t, broker.posture, "posture must be empty before SetCommandRelayDeps")
+	assert.Nil(t, broker.doctrine, "doctrine must be nil before SetCommandRelayDeps")
 
 	provider := &stubStateRootProvider{root: "root-1"}
 	validator := &stubOperatorSessionValidator{op: &models.OperatorDocumentGo{ID: "op-1"}}
-	broker.SetCommandRelayDeps(provider, validator, "doctrine")
+	doctrine := governance.NewL1Doctrine()
+	broker.SetCommandRelayDeps(provider, validator, "doctrine", doctrine)
 
 	broker.mu.RLock()
 	assert.NotNil(t, broker.stateRootProvider)
 	assert.NotNil(t, broker.sessionValidator)
 	assert.Equal(t, "doctrine", broker.posture)
+	assert.Equal(t, doctrine, broker.doctrine)
 	broker.mu.RUnlock()
 }
 

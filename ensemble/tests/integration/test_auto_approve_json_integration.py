@@ -31,7 +31,6 @@ import pytest
 
 from app.constants.generated_status import EventType
 from app.constants import G8EE_COMPONENT
-from app.constants.generated_status import ComponentName
 from app.models.agent import ExecutorCommandArgs
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -62,7 +61,7 @@ def _make_operator() -> OperatorDocument:
         user_id="user-1",
         operator_session_id="sess-1",
         current_hostname="host-1",
-        operator_type=OperatorType.SYSTEM,
+        operator_type=OperatorType.REMOTE,
         bound_web_session_id="ws-1",
     )
 

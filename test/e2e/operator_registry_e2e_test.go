@@ -44,7 +44,7 @@ func TestOperatorRegistry_ActiveOperator(t *testing.T) {
 
 	var active *models.OperatorDocumentGo
 	for i := range operators.Operators {
-		if operators.Operators[i].Status == constants.OperatorStatusActive {
+		if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
 			active = &operators.Operators[i]
 			break
 		}
@@ -84,7 +84,7 @@ func TestOperatorRegistry_HeartbeatTimestampSet(t *testing.T) {
 
 	var active *models.OperatorDocumentGo
 	for i := range operators.Operators {
-		if operators.Operators[i].Status == constants.OperatorStatusActive {
+		if operators.Operators[i].Status == constants.OperatorStatusActive && operators.Operators[i].OperatorType == constants.OperatorTypeRemote {
 			active = &operators.Operators[i]
 			break
 		}

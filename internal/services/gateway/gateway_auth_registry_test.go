@@ -20,7 +20,6 @@ func TestPrivilegedRouteRegistry_PrivilegedPaths(t *testing.T) {
 	registry := NewPrivilegedRouteRegistry()
 
 	privilegedPaths := []string{
-		constants.APIPaths.GovernanceEnvelopes,
 		constants.APIPaths.QueryPrefix,
 		constants.APIPaths.QueryPrefix + "/some-query",
 		constants.APIPaths.QueryPrefix + "/operators",
@@ -36,6 +35,7 @@ func TestPrivilegedRouteRegistry_NonPrivilegedPaths(t *testing.T) {
 	registry := NewPrivilegedRouteRegistry()
 
 	nonPrivilegedPaths := []string{
+		constants.APIPaths.GovernanceEnvelopes,
 		constants.APIPaths.Health,
 		constants.APIPaths.State,
 		constants.APIPaths.MCPEndpoint,
@@ -56,8 +56,8 @@ func TestPrivilegedRouteRegistry_CanonicalCoverage(t *testing.T) {
 
 	registry := NewPrivilegedRouteRegistry()
 
-	assert.True(t, registry.IsPrivileged(constants.APIPaths.GovernanceEnvelopes),
-		"Governance envelopes must be privileged (app certs blocked)")
+	assert.False(t, registry.IsPrivileged(constants.APIPaths.GovernanceEnvelopes),
+		"Governance envelopes admit policy-authorized app certificates")
 	assert.True(t, registry.IsPrivileged(constants.APIPaths.QueryPrefix),
 		"Query prefix must be privileged (app certs blocked)")
 }

@@ -18,6 +18,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/output"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -49,7 +50,6 @@ func auditReceiptsCmd() *cobra.Command {
 func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var txID string
-	var jsonOutput bool
 
 	cmd := &cobra.Command{
 		Use:   "receipts",
@@ -100,9 +100,8 @@ transaction hash, and --json to output raw JSON instead of a table.`,
 				return fmt.Errorf("audit: fetch receipts: %w", err)
 			}
 
-			if jsonOutput {
-				cmd.Println(string(resp))
-				return nil
+			if output.JSONEnabled(cmd) {
+				return output.WriteRawJSON(cmd.OutOrStdout(), resp)
 			}
 
 			var receiptsResp models.AuditReceiptsResponse
@@ -160,7 +159,6 @@ transaction hash, and --json to output raw JSON instead of a table.`,
 
 	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Operator session ID (auto-discovers if omitted)")
 	cmd.Flags().StringVar(&txID, "tx-id", "", "Get a single receipt by transaction ID")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Raw JSON output")
 
 	return cmd
 }
@@ -328,7 +326,6 @@ func auditEventsCmd() *cobra.Command {
 func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var limit int
-	var jsonOutput bool
 
 	cmd := &cobra.Command{
 		Use:   "events",
@@ -382,9 +379,8 @@ filter by operator session ID, --limit to control the number of results, and
 				return fmt.Errorf("audit: fetch events: %w", err)
 			}
 
-			if jsonOutput {
-				cmd.Println(string(resp))
-				return nil
+			if output.JSONEnabled(cmd) {
+				return output.WriteRawJSON(cmd.OutOrStdout(), resp)
 			}
 
 			var eventsResp models.AuditEventsResponse
@@ -435,7 +431,6 @@ filter by operator session ID, --limit to control the number of results, and
 
 	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Filter by operator session ID (shows all if omitted)")
 	cmd.Flags().IntVar(&limit, "limit", 100, "Max rows")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Raw JSON output")
 
 	return cmd
 }

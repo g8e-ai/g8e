@@ -29,11 +29,9 @@ from typing import Any
 from app.models.base import BaseModel, Field, field_validator
 
 from app.llm.llm_types import Content, GenerateContentResponse, Part, ResponseFormat, Role, LiteLLMSettings, UsageMetadata
-from app.llm.model_evidence import (
-    model_boundary_hash,
-    recorded_model_boundary_hash,
-    recorded_model_boundary_privacy,
-)
+from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_call_attribution import build_model_call_telemetry, prepare_provider_call
+from app.models.http_context import G8eHttpContext
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import EvalJudgeSettings
@@ -161,11 +159,13 @@ class EvalJudge:
         provider: LLMProviderBase | None = None,
         model: str | None = None,
         settings: EvalJudgeSettings | None = None,
+        g8e_context: G8eHttpContext | None = None,
     ):
         if provider is None:
             raise EvalJudgeError("EvalJudge requires a configured LLM provider instance")
 
         self._provider = provider
+        self._g8e_context = g8e_context
         self._settings = settings or EvalJudgeSettings(
             eval_judge_model=None,
             eval_judge_max_tokens=4096,
@@ -258,7 +258,11 @@ class EvalJudge:
         """Make the LLM call and parse the response into an EvalGrade."""
         if not self._model:
             raise EvalJudgeError("Model is not set", model_calls=model_calls)
-        self._provider.clear_input_artifact_hash()
+        prepare_provider_call(
+            self._provider,
+            g8e_context=self._g8e_context,
+            retry_count=retry_count,
+        )
         input_artifact_hash = model_boundary_hash({
             "model": self._model,
             "contents": contents,
@@ -271,9 +275,7 @@ class EvalJudge:
                 contents=contents,
                 lite_llm_settings=settings,
             )
-            input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
         except Exception as exc:
-            input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
             model_calls.append(self._model_call_telemetry(
                 response=None,
                 response_text="",
@@ -342,12 +344,13 @@ class EvalJudge:
     ) -> ModelCallTelemetry:
         usage = response.usage_metadata if response else UsageMetadata()
         finish_reason = response.candidates[0].finish_reason if response and response.candidates else None
-        return ModelCallTelemetry(
+        return build_model_call_telemetry(
+            provider=self._provider,
             agent_role="judge",
-            provider=type(self._provider).__name__,
+            model_role="lite",
             model=self._model or "",
             monotonic_start=monotonic_start,
-            monotonic_end=time.monotonic(),
+            input_artifact_hash=input_artifact_hash,
             input_tokens=usage.prompt_token_count,
             output_tokens=usage.candidates_token_count,
             thinking_tokens=usage.thinking_token_count,
@@ -355,10 +358,12 @@ class EvalJudge:
             total_tokens=usage.total_token_count,
             usage_reported=usage.usage_reported,
             finish_reason=finish_reason,
+            generation_duration_seconds=usage.eval_duration_seconds,
+            prompt_eval_duration_seconds=usage.prompt_eval_duration_seconds,
+            total_duration_seconds=usage.total_duration_seconds,
+            load_duration_seconds=usage.load_duration_seconds,
             retry_count=retry_count,
             succeeded=error is None,
             error_type=type(error).__name__ if error else None,
-            input_artifact_hash=input_artifact_hash,
             output_artifact_hash=model_boundary_hash(response_text),
-            model_boundary_privacy=recorded_model_boundary_privacy(self._provider),
         )

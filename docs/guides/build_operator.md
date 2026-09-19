@@ -5,8 +5,8 @@ parent: Guides
 
 # Build and Run a g8e Operator
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-19
+Version: v2.1.8
 
 ---
 
@@ -42,7 +42,7 @@ cd g8e
 make build
 ```
 
-`make build` creates the platform-specific binary and checksum under `bin/`, copies the host binary to `./g8e` (or `./g8e.exe` on Windows), and copies it to `demos/bin/g8e`.
+`make build` creates the platform-specific binary and checksum under `bin/` and copies the host binary to `./g8e` (or `./g8e.exe` on Windows).
 
 The build sets `CGO_ENABLED=0`, uses the `netgo` and `osusergo` build tags, strips symbol and debug data, and embeds the platform version, build ID, build time, and target platform. The resulting binary does not require a Go toolchain or a system SQLite library on the target host.
 
@@ -107,6 +107,8 @@ On the target host, start the Operator with the Gateway discovery endpoint:
 
 When no installed Operator credentials exist, `--endpoint` starts the owner-approved platform enrollment protocol. The Operator fetches the Gateway trust bundle from the HTTP discovery endpoint, creates Operator and CLI certificate requests, persists pending enrollment state, waits for Gateway-owner approval, verifies the completion transcript, and writes the issued credentials and canonical trust bundle into `.g8e/pki/`. Restarting the process resumes the same pending enrollment request and key material.
 
+The enrolled owner reviews pending requests with `g8e auth enroll pending`, approves with `g8e auth enroll approve <request-id>`, or denies with `g8e auth enroll deny <request-id>`. See [Authentication and Authorization](../architecture/auth.md) for the full platform enrollment command reference.
+
 After enrollment, the Operator loads `.g8e/pki/operator.crt` and `.g8e/pki/operator.key`, connects to the Gateway over mTLS, requests bootstrap configuration, initializes encrypted local services, subscribes to its command channel, and starts automatic heartbeats. The canonical trust bundle is `.g8e/pki/trust/g8eg-ca-bundle.pem`.
 
 For pre-provisioned credentials, pass explicit paths:
@@ -136,6 +138,10 @@ The current worker path applies these options:
 | `-G, --no-git` | Disables the git-backed file ledger while retaining the encrypted audit store. |
 | `-l, --log <level>` | Sets `info`, `error`, or `debug` logging. |
 | `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds. |
+| `--inference-campaign-id <id>` | Selects dedicated campaign authorization mode and requires every governed inference request to carry this exact campaign identity and complete assignment correlation. |
+| `--inference-model-registry-digest <sha256>` | Commits the dedicated campaign Operator to one immutable model registry. The Operator recomputes the digest over the request registry and rejects malformed registries, absent models, digest changes, and incomplete campaign bindings. |
+
+Campaign registry digests are lowercase hexadecimal SHA-256 over deterministic protobuf serialization of an `InferenceRequested` containing only the campaign ID and model registry, with registry entries sorted by model and digest. Each entry binds an exact provider tag to its immutable provider digest. Both campaign flags are required together; ordinary inference omits both and retains the configured role-model authority.
 
 Use `./g8e operator start --help` as the command-surface reference. The Lattice-named flags currently appear in Cobra help but are not copied into `ServeOperatorOptions` by `operatorStartCmd`; setting those flags does not enable the adapter. The adapter's environment-variable path exists in the service layer, but its task handler currently records receipt of a task without dispatching it. Do not treat the Lattice path as an implemented Operator execution integration.
 
@@ -161,6 +167,42 @@ The `g8e vault` commands provide explicit administration:
 - `g8e vault reset [--vault-dir <dir>] [--confirm]`
 
 `vault unlock` validates that a key opens the vault in that process; it does not leave a daemon or persistent unlocked process behind. `operator start` opens and unlocks its own vault instance.
+
+---
+
+## Operate Remote Operators from the CLI
+
+After enrolling the host CLI with `g8e auth enroll user` and starting one or more remote Operators with `g8e operator start --endpoint <gateway-host>`, use these commands from the owner CLI:
+
+### Discover operators
+
+```bash
+./g8e operator list
+./g8e operator show <operator-id-or-session-id>
+```
+
+`operator list` prints operator ID, type, hostname (from the latest heartbeat), session ID, and status. `operator show` accepts either the operator ID or the session ID from the list and prints operator metadata plus the latest heartbeat snapshot.
+
+### Bind the CLI session to an operator
+
+```bash
+./g8e operator bind <operator-session-id>
+./g8e operator bind list
+./g8e operator bind unbind
+```
+
+Binding pins the authenticated CLI session to one active operator session owned by the same user. A successful bind issues a replacement CLI session server-side and updates local credentials. Use `bind list` to confirm the current binding and `bind unbind` to clear it. `g8e auth context` and `GET /api/v1/auth/cli/session` report the persisted binding for automation.
+
+### Run a governed shell command on one or more operators
+
+```bash
+./g8e operator run <operator-session-id> [<operator-session-id>...] \
+  --cmd "echo hello from $(hostname)"
+```
+
+`operator run` fans out governed `EXECUTE_BASH` dispatches in parallel through `POST /api/v1/operators/commands`. Each target must belong to the authenticated user and be `active`. The gateway constructs the envelope, publishes to the operator `cmd:` channel, waits for a terminal result, and returns per-target stdout, stderr, exit code, and transaction ID. Use `--timeout` to override the per-operator dispatch timeout (default 30 seconds, maximum 300).
+
+This path is the supported owner automation surface for multi-host shell execution. It is distinct from MCP/A2A ingress and from manual `GovernanceEnvelope` submission.
 
 ---
 
@@ -210,7 +252,7 @@ The Operator uses a SPIFFE URI SAN in its mTLS certificate and a host-local Ed25
 The public Go module is the repository root module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.7
+go get github.com/g8e-ai/g8e/v2@v2.1.8
 ```
 
 Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The key packages are:
@@ -222,7 +264,7 @@ Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/
 The Python package includes generated protobuf modules, constants, dynamic enums, Pydantic models, and receipt verification helpers:
 
 ```bash
-pip install g8e==2.1.7
+pip install g8e==2.1.8
 ```
 
 See [Protocol Library](../architecture/protocol.md) for package contents, schemas, examples, and generation commands.

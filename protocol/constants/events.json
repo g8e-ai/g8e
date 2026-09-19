@@ -720,6 +720,10 @@
       "_go_const": "EventOperatorMcpCallRequested",
       "value": "g8e.v1.operator.mcp.call.requested"
     },
+    "OperatorInferenceRequested": {
+      "_go_const": "EventOperatorInferenceRequested",
+      "value": "g8e.v1.operator.inference.requested"
+    },
     "OperatorNetworkPingCompleted": {
       "_go_const": "EventOperatorNetworkPingCompleted",
       "value": "g8e.v1.operator.network.ping.completed"
@@ -1112,9 +1116,9 @@
       "_go_const": "EventAiConsensusSessionAuditorFailed",
       "value": "g8e.v1.ai.consensus.session.auditor.failed"
     },
-    "AiConsensusSessionWardenBlocked": {
-      "_go_const": "EventAiConsensusSessionWardenBlocked",
-      "value": "g8e.v1.ai.consensus.session.warden.blocked"
+    "AiConsensusSessionMarshalBlocked": {
+      "_go_const": "EventAiConsensusSessionMarshalBlocked",
+      "value": "g8e.v1.ai.consensus.session.marshal.blocked"
     },
     "AiConsensusVotingPassCompleted": {
       "_go_const": "EventAiConsensusVotingPassCompleted",
@@ -1199,6 +1203,94 @@
     "OperatorReceiptRecorded": {
       "_go_const": "EventOperatorReceiptRecorded",
       "value": "g8e.v1.operator.receipt.recorded"
+    },
+    "AppAgentStatusUpdated": {
+      "_go_const": "EventAppAgentStatusUpdated",
+      "value": "g8e.v1.app.agent.status.updated"
+    },
+    "AppRunStatusUpdated": {
+      "_go_const": "EventAppRunStatusUpdated",
+      "value": "g8e.v1.app.run.status.updated"
+    },
+    "AiEvalRunCompleted": {
+      "_go_const": "EventAiEvalRunCompleted",
+      "value": "g8e.v1.ai.eval.run.completed"
+    },
+    "AiEvalMetricRecorded": {
+      "_go_const": "EventAiEvalMetricRecorded",
+      "value": "g8e.v1.ai.eval.metric.recorded"
+    },
+    "AiEvalCycleStarted": {
+      "_go_const": "EventAiEvalCycleStarted",
+      "value": "g8e.v1.ai.eval.cycle.started"
+    },
+    "AiEvalCycleCompleted": {
+      "_go_const": "EventAiEvalCycleCompleted",
+      "value": "g8e.v1.ai.eval.cycle.completed"
+    },
+    "AiEvalAssignmentStarted": {
+      "_go_const": "EventAiEvalAssignmentStarted",
+      "value": "g8e.v1.ai.eval.assignment.started"
+    },
+    "AiEvalAssignmentCompleted": {
+      "_go_const": "EventAiEvalAssignmentCompleted",
+      "value": "g8e.v1.ai.eval.assignment.completed"
+    },
+    "AiEvalModelRoleInvoked": {
+      "_go_const": "EventAiEvalModelRoleInvoked",
+      "value": "g8e.v1.ai.eval.model_role.invoked"
+    },
+    "AiEvalMetricAvailable": {
+      "_go_const": "EventAiEvalMetricAvailable",
+      "value": "g8e.v1.ai.eval.metric.available"
+    },
+    "AiEvalVerifierCompleted": {
+      "_go_const": "EventAiEvalVerifierCompleted",
+      "value": "g8e.v1.ai.eval.verifier.completed"
+    },
+    "AiEvalProofAvailable": {
+      "_go_const": "EventAiEvalProofAvailable",
+      "value": "g8e.v1.ai.eval.proof.available"
+    },
+    "AiEvalPublicationCompleted": {
+      "_go_const": "EventAiEvalPublicationCompleted",
+      "value": "g8e.v1.ai.eval.publication.completed"
+    },
+    "AiEvalHeartbeat": {
+      "_go_const": "EventAiEvalHeartbeat",
+      "value": "g8e.v1.ai.eval.heartbeat"
+    },
+    "AiEvalStopRequested": {
+      "_go_const": "EventAiEvalStopRequested",
+      "value": "g8e.v1.ai.eval.stop.requested"
+    },
+    "PublicFeedBatchExported": {
+      "_go_const": "EventPublicFeedBatchExported",
+      "value": "g8e.v1.public.feed.batch.exported"
+    },
+    "PublicFeedBatchAcknowledged": {
+      "_go_const": "EventPublicFeedBatchAcknowledged",
+      "value": "g8e.v1.public.feed.batch.acknowledged"
+    },
+    "PublicFeedProofPublished": {
+      "_go_const": "EventPublicFeedProofPublished",
+      "value": "g8e.v1.public.feed.proof.published"
+    },
+    "PublicFeedKeyRotated": {
+      "_go_const": "EventPublicFeedKeyRotated",
+      "value": "g8e.v1.public.feed.key.rotated"
+    },
+    "OperatorInferenceProgressUpdated": {
+      "_go_const": "EventOperatorInferenceProgressUpdated",
+      "value": "g8e.v1.operator.inference.progress.updated"
+    },
+    "OperatorInferenceCompleted": {
+      "_go_const": "EventOperatorInferenceCompleted",
+      "value": "g8e.v1.operator.inference.completed"
+    },
+    "OperatorInferenceFailed": {
+      "_go_const": "EventOperatorInferenceFailed",
+      "value": "g8e.v1.operator.inference.failed"
     }
   }
 }

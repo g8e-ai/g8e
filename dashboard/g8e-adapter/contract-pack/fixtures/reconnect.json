@@ -1,0 +1,23 @@
+{
+  "description": "Reconnect after a dropped connection. The adapter reopens EventSource with since_id and reconciles the snapshot.",
+  "events": [
+    {
+      "id": 20,
+      "payload": {
+        "agent_id": "user-a:sage",
+        "display_name": "Sage",
+        "observed_at": "2026-09-09T12:00:00Z",
+        "role": "sage",
+        "schema_version": "1.0.0",
+        "status": "waiting"
+      },
+      "recognized": true,
+      "type": "app.agent.status.updated"
+    }
+  ],
+  "scenario": "reconnect",
+  "transport": {
+    "connection_state": "reconnecting",
+    "last_event_id": 20
+  }
+}

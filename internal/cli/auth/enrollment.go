@@ -38,7 +38,7 @@ type OutputFunc func(format string, args ...any)
 // coordinator. The concrete *EnrollmentClient satisfies this interface;
 // tests inject a mock to avoid network I/O.
 type EnrollmentGateway interface {
-	Bootstrap(ctx context.Context, cliCSR string, cliKey *ecdsa.PrivateKey, operatorCSR, caFingerprint, baseURL string) (EnrollmentArtifacts, error)
+	Bootstrap(ctx context.Context, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint, baseURL string) (EnrollmentArtifacts, error)
 	CreateRecoveryRequest(ctx context.Context, cliCSR, baseURL string) (requestID, token, approvalURL string, expiresAt time.Time, err error)
 	RecoveryStatus(ctx context.Context, token, baseURL string) (models.CLIRecoveryState, error)
 	CompleteRecovery(ctx context.Context, requestID, token string, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint, baseURL string) (EnrollmentArtifacts, error)
@@ -595,9 +595,10 @@ func (c *EnrollmentCoordinator) handleBootstrap(ctx context.Context, opts Enroll
 	if err != nil {
 		return EnrollmentArtifacts{}, err
 	}
-	// No operator CSR for local CLI enrollment (per §5.1: do not make
-	// auth enroll user depend on an operator certificate it does not need).
-	return c.gateway.Bootstrap(ctx, csrPEM, cliKey, "", opts.CAFingerprint, "")
+	// No operator CSR for local CLI enrollment: bootstrap claims the
+	// gateway's certless embedded operator and binds the new CLI session
+	// to it. The operator identity is never carried by a certificate.
+	return c.gateway.Bootstrap(ctx, csrPEM, cliKey, opts.CAFingerprint, "")
 }
 
 // handleRecovery creates a CLI recovery request, opens the browser for
@@ -851,22 +852,17 @@ func (c *EnrollmentCoordinator) installSystemTrust(ctx context.Context, artifact
 		bundlePEM = []byte(artifacts.TrustBundlePEM)
 	}
 
-	// Step 2: Extract root anchors + primary fingerprint via the pure
-	// platform helpers. This is the KEEP fingerprint — it MUST come from
-	// the live bundle when discovery succeeded; the R5 warning above fires
-	// when it cannot.
-	rootAnchors, err := platform.ExtractRootAnchors(bundlePEM, c.clock)
+	// Step 2: Validate the bundle via the shared ValidateTrustBundle
+	// function so root selection, chain verification, and fingerprint
+	// formatting have one implementation. This is the KEEP fingerprint —
+	// it MUST come from the live bundle when discovery succeeded; the R5
+	// warning above fires when it cannot.
+	bundleResult, err := ValidateTrustBundle(bundlePEM, c.clock)
 	if err != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, err)
+		return false, err
 	}
-	if len(rootAnchors) == 0 {
-		return false, constants.ErrSystemTrustInvalidAnchor
-	}
-	if vErr := platform.VerifyRootUsable(rootAnchors, bundlePEM, c.clock); vErr != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, vErr)
-	}
-	primary := rootAnchors[0]
-	keepFingerprint := platform.CertFingerprint(primary)
+	primary := bundleResult.PrimaryRoot
+	keepFingerprint := bundleResult.Fingerprint
 	// Prefer the live fingerprint from discovery (the source of truth) over
 	// the bundle's own fingerprint. When discovery was unreachable,
 	// keepFingerprint stays as the bundle's own fingerprint — this preserves

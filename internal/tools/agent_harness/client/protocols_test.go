@@ -18,8 +18,102 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
+
+func TestDispatchCommand_UsesTypedAuthenticatedIngressAndRecordsExchange(t *testing.T) {
+	var received DispatchCommandRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, constants.APIPaths.OperatorsCommands, r.URL.Path)
+		assert.Equal(t, "cli-1", r.Header.Get(constants.HeaderCLISessionID))
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&received))
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(`{"success":true,"transaction_id":"tx-1","action_type":"FILE_EDIT","result_payload":"cmVzdWx0"}`))
+		require.NoError(t, err)
+	}))
+	defer server.Close()
+
+	client, err := New(config.Config{MTLSBaseURL: server.URL})
+	require.NoError(t, err)
+	exchanges := []Exchange{}
+	client.Record(&exchanges)
+	request := DispatchCommandRequest{
+		TargetOperatorSessionID: "session-1",
+		ActionType:              "FILE_EDIT",
+		Payload:                 []byte("payload"),
+		CaseID:                  "run-1",
+		InvestigationID:         "scenario-1",
+		TaskID:                  "attempt-1",
+		CLISessionID:            "cli-1",
+	}
+	status, response, raw, err := client.DispatchCommand(context.Background(), Persona{ID: "evaluation", CLISessionID: "cli-1"}, request)
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, request, received)
+	assert.Equal(t, "tx-1", response.TransactionID)
+	assert.Equal(t, []byte("result"), response.ResultPayload)
+	assert.JSONEq(t, `{"success":true,"transaction_id":"tx-1","action_type":"FILE_EDIT","result_payload":"cmVzdWx0"}`, string(raw))
+	require.Len(t, exchanges, 1)
+	assert.Equal(t, constants.APIPaths.OperatorsCommands, exchanges[0].URL[len(server.URL):])
+}
+
+func TestHealth_ReturnsTypedPostureAndRecordsExchange(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, constants.APIPaths.Health, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(`{"status":"ok","mode":"gateway","version":"2.1.8","pid":1,"governance_ready":true,"posture":"doctrine"}`))
+		require.NoError(t, err)
+	}))
+	t.Cleanup(server.Close)
+	client, err := New(config.Config{MTLSBaseURL: server.URL})
+	require.NoError(t, err)
+	exchanges := []Exchange{}
+	client.Record(&exchanges)
+
+	health, raw, err := client.Health(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, "doctrine", health.Posture)
+	assert.True(t, health.GovernanceReady)
+	assert.JSONEq(t, `{"status":"ok","mode":"gateway","version":"2.1.8","pid":1,"governance_ready":true,"posture":"doctrine"}`, string(raw))
+	require.Len(t, exchanges, 1)
+	assert.Equal(t, constants.APIPaths.Health, exchanges[0].URL[len(server.URL):])
+}
+
+func TestAuditReceiptRecords_ReturnsCanonicalTypedRecords(t *testing.T) {
+	expected := &models.ActionReceiptRecord{
+		TransactionID: "tx-1", OperatorID: "operator-1", OperatorSessionID: "session-1",
+		ActionReceipt: &operatorv1.ActionReceipt{TransactionId: "tx-1"},
+	}
+	body, err := json.Marshal(models.AuditReceiptsResponse{Success: true, Receipts: []*models.ActionReceiptRecord{expected}})
+	require.NoError(t, err)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, constants.APIPaths.AuditReceipts, r.URL.Path)
+		assert.Equal(t, "session-1", r.URL.Query().Get("operator_session_id"))
+		assert.Equal(t, "cli-1", r.Header.Get(constants.HeaderCLISessionID))
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write(body)
+		require.NoError(t, writeErr)
+	}))
+	t.Cleanup(server.Close)
+	client, err := New(config.Config{MTLSBaseURL: server.URL, CLISessionID: "cli-1"})
+	require.NoError(t, err)
+
+	records, raw, err := client.AuditReceiptRecords(context.Background(), "session-1")
+
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	assert.Equal(t, expected.TransactionID, records[0].TransactionID)
+	assert.Equal(t, expected.ActionReceipt.TransactionId, records[0].ActionReceipt.TransactionId)
+	assert.Equal(t, body, raw)
+}
 
 func TestMCPToolsList(t *testing.T) {
 	tests := []struct {

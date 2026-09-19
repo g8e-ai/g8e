@@ -125,7 +125,7 @@ class TestG8eCommandPayloadToProtobufContract:
     def test_all_command_payloads_have_to_protobuf(self):
         missing = []
         for cls in get_args(G8eCommandPayload):
-            if not hasattr(cls, "to_protobuf") or not callable(getattr(cls, "to_protobuf")):
+            if not hasattr(cls, "to_protobuf") or not callable(cls.to_protobuf):
                 missing.append(cls.__name__)
         assert not missing, (
             f"Payloads missing to_protobuf(): {missing}. Every payload in "

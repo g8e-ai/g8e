@@ -212,9 +212,13 @@ async def test_generate_and_update_title_success():
             message="some message",
             case_id="case-123",
             investigation_id="inv-123",
-            web_session_id="session-123",
-            user_id="user-123",
-            organization_id="org-123",
+            context=RequestContext(
+                web_session_id="session-123",
+                user_id="user-123",
+                organization_id="org-123",
+                operator_id="operator-123",
+                operator_session_id="operator-session-123",
+            ),
             user_settings=mock_user_settings,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,
@@ -223,8 +227,14 @@ async def test_generate_and_update_title_success():
         mock_generate.assert_called_once_with("some message", settings=mock_user_settings)
         mock_case_service.update_case.assert_called_once()
         assert mock_case_service.update_case.call_args[0][0] == "case-123"
+        case_context = mock_case_service.update_case.call_args[0][1].context
         assert mock_case_service.update_case.call_args[0][1].title == "My AI Title"
+        assert case_context.operator_id == "operator-123"
+        assert case_context.operator_session_id == "operator-session-123"
         mock_investigation_service.update_investigation.assert_called_once()
+        investigation_context = mock_investigation_service.update_investigation.call_args[0][1].context
+        assert investigation_context.operator_id == "operator-123"
+        assert investigation_context.operator_session_id == "operator-session-123"
         assert mock_investigation_service.update_investigation.call_args[0][0] == "inv-123"
         assert (
             mock_investigation_service.update_investigation.call_args[0][1].case_title
@@ -249,9 +259,13 @@ async def test_generate_and_update_title_error():
             message="some message",
             case_id="case-123",
             investigation_id="inv-123",
-            web_session_id="session-123",
-            user_id="user-123",
-            organization_id="org-123",
+            context=RequestContext(
+                web_session_id="session-123",
+                user_id="user-123",
+                organization_id="org-123",
+                operator_id="operator-123",
+                operator_session_id="operator-session-123",
+            ),
             user_settings=mock_user_settings,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,
@@ -412,8 +426,7 @@ async def test_create_operator_slot_success(request_context, g8e_context):
     request = OperatorSlotCreationRequest(
         context=request_context,
         slot_number=1,
-        operator_type="cloud",
-        cloud_subtype="aws",
+        operator_type="remote",
         name_prefix="operator",
     )
 
@@ -448,7 +461,7 @@ async def test_claim_operator_slot_success(request_context, g8e_context):
         operator_id="op-123",
         operator_session_id="session-123",
         bound_web_session_id="web-session-123",
-        operator_type="CLOUD",
+        operator_type="REMOTE",
     )
 
     mock_operator_lifecycle_service = MagicMock()

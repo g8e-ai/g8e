@@ -114,6 +114,13 @@ class UsageMetadata:
     thinking_token_count: int = 0
     cache_token_count: int = 0
     usage_reported: bool = False
+    # Timing fields (seconds). None means the boundary could not measure
+    # or the provider did not report the value; zero is a measured zero.
+    time_to_first_token_seconds: float | None = None
+    prompt_eval_duration_seconds: float | None = None
+    eval_duration_seconds: float | None = None
+    total_duration_seconds: float | None = None
+    load_duration_seconds: float | None = None
 
 
 @dataclass
