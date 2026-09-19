@@ -54,20 +54,42 @@ func panickingNativeEvalDeps(t *testing.T) nativeEvalDeps {
 	}
 }
 
-func TestEvalCmd_ContainsOnlyNativeCommands(t *testing.T) {
+func TestEvalCmd_ContainsProgramGroups(t *testing.T) {
 	command := evalCmdWithConfig(panickingNativeEvalDeps(t))
 	names := make([]string, 0, len(command.Commands()))
 	for _, child := range command.Commands() {
 		names = append(names, child.Name())
 	}
 	assert.ElementsMatch(t, []string{
-		"run", "verify", "show", "inference", "chat", "inventory", "campaign", "queue", "provider-observer",
+		"boundary", "campaign", "models", "rollout", "gate", "dev",
 	}, names)
-	assert.Len(t, names, 9)
+	assert.Len(t, names, 6)
 	assert.Contains(t, command.Aliases, "evals")
 
-	var inference *cobra.Command
+	var boundary *cobra.Command
 	for _, child := range command.Commands() {
+		if child.Name() == "boundary" {
+			boundary = child
+			break
+		}
+	}
+	require.NotNil(t, boundary)
+	boundaryNames := make([]string, 0, len(boundary.Commands()))
+	for _, child := range boundary.Commands() {
+		boundaryNames = append(boundaryNames, child.Name())
+	}
+	assert.ElementsMatch(t, []string{"run", "verify", "show"}, boundaryNames)
+
+	var gate *cobra.Command
+	for _, child := range command.Commands() {
+		if child.Name() == "gate" {
+			gate = child
+			break
+		}
+	}
+	require.NotNil(t, gate)
+	var inference *cobra.Command
+	for _, child := range gate.Commands() {
 		if child.Name() == "inference" {
 			inference = child
 			break
@@ -78,10 +100,10 @@ func TestEvalCmd_ContainsOnlyNativeCommands(t *testing.T) {
 	for _, child := range inference.Commands() {
 		inferenceNames = append(inferenceNames, child.Name())
 	}
-	assert.ElementsMatch(t, []string{"status", "freeze-registry", "probe", "accept"}, inferenceNames)
+	assert.ElementsMatch(t, []string{"status", "probe", "run"}, inferenceNames)
 
 	var chat *cobra.Command
-	for _, child := range command.Commands() {
+	for _, child := range gate.Commands() {
 		if child.Name() == "chat" {
 			chat = child
 			break
@@ -92,15 +114,24 @@ func TestEvalCmd_ContainsOnlyNativeCommands(t *testing.T) {
 	for _, child := range chat.Commands() {
 		chatNames = append(chatNames, child.Name())
 	}
-	assert.ElementsMatch(t, []string{"accept"}, chatNames)
+	assert.ElementsMatch(t, []string{"run"}, chatNames)
 }
 
-func TestEvalRun_RejectsUnsupportedSuiteBeforeDependencies(t *testing.T) {
-	command := evalCmdWithConfig(panickingNativeEvalDeps(t))
-	command.SetArgs([]string{"run", "removed-python-suite"})
+func TestBoundaryEvalRun_AbsentCLIIdentityFailsBeforeClientCreation(t *testing.T) {
+	deps := nativeEvalCommandDeps(t, &nativeEvalStoreStub{}, nil, nil)
+	deps.authLoader = func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error) {
+		return nil, constants.ErrNotAuthenticated
+	}
+	deps.clientFactory = func(harnessconfig.Config) (*harnessclient.Client, error) {
+		t.Fatal("client factory called")
+		return nil, nil
+	}
+	command := evalCmdWithConfig(deps)
+	command.SetArgs([]string{"boundary", "run"})
+
 	err := command.Execute()
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrEvaluationSuiteUnsupported)
+	assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
 }
 
 func TestWriteNativeEvalRun_JSONEmitsCanonicalReportOnly(t *testing.T) {
@@ -199,24 +230,7 @@ func nativeEvalCommandDeps(t *testing.T, store nativeEvalStore, runner nativeEva
 	}
 }
 
-func TestEvalRun_AbsentCLIIdentityFailsBeforeClientCreation(t *testing.T) {
-	deps := nativeEvalCommandDeps(t, &nativeEvalStoreStub{}, nil, nil)
-	deps.authLoader = func(fs.RuntimeFileService, *config.Config) (*auth.ClientAuthContext, error) {
-		return nil, constants.ErrNotAuthenticated
-	}
-	deps.clientFactory = func(harnessconfig.Config) (*harnessclient.Client, error) {
-		t.Fatal("client factory called")
-		return nil, nil
-	}
-	command := evalCmdWithConfig(deps)
-	command.SetArgs([]string{"run", evaluation.CoreExecutionBoundarySuiteID})
-
-	err := command.Execute()
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
-}
-
-func TestEvalShow_JSONLoadsPersistedReportAndEmitsCanonicalProtojson(t *testing.T) {
+func TestBoundaryEvalShow_JSONLoadsPersistedReportAndEmitsCanonicalProtojson(t *testing.T) {
 	report := nativeEvalTestReport("run-1")
 	store := &nativeEvalStoreStub{loadReport: func(_ context.Context, runID string) (*evalv1.EvaluationReport, error) {
 		assert.Equal(t, "run-1", runID)
@@ -227,7 +241,7 @@ func TestEvalShow_JSONLoadsPersistedReportAndEmitsCanonicalProtojson(t *testing.
 	var output bytes.Buffer
 	root.SetOut(&output)
 	root.SetErr(&output)
-	root.SetArgs([]string{"eval", "show", "run-1"})
+	root.SetArgs([]string{"eval", "boundary", "show", "run-1"})
 
 	require.NoError(t, root.Execute())
 	expected, err := evalv1.MarshalCanonical(report)
@@ -235,7 +249,7 @@ func TestEvalShow_JSONLoadsPersistedReportAndEmitsCanonicalProtojson(t *testing.
 	assert.Equal(t, string(expected)+"\n", output.String())
 }
 
-func TestEvalVerify_JSONPrintsInvalidTypedReportBeforeNonzeroExit(t *testing.T) {
+func TestBoundaryEvalVerify_JSONPrintsInvalidTypedReportBeforeNonzeroExit(t *testing.T) {
 	report := &compliancev1.ComplianceVerificationReport{ReportId: "run-1", Valid: false}
 	verifier := nativeEvalVerifierStub{verify: func(_ context.Context, runID string) (*compliancev1.ComplianceVerificationReport, error) {
 		assert.Equal(t, "run-1", runID)
@@ -248,7 +262,7 @@ func TestEvalVerify_JSONPrintsInvalidTypedReportBeforeNonzeroExit(t *testing.T) 
 	root.SetErr(&output)
 	root.SilenceErrors = true
 	root.SilenceUsage = true
-	root.SetArgs([]string{"eval", "verify", "run-1"})
+	root.SetArgs([]string{"eval", "boundary", "verify", "run-1"})
 
 	err := root.Execute()
 	require.Error(t, err)
@@ -258,7 +272,7 @@ func TestEvalVerify_JSONPrintsInvalidTypedReportBeforeNonzeroExit(t *testing.T) 
 	assert.Equal(t, string(expected)+"\n", output.String())
 }
 
-func TestEvalRun_PersistsAndPrintsFailureReportsWithExactSessionBinding(t *testing.T) {
+func TestBoundaryEvalRun_PersistsAndPrintsFailureReportsWithExactSessionBinding(t *testing.T) {
 	testCases := []struct {
 		name              string
 		runErr            error
@@ -290,7 +304,7 @@ func TestEvalRun_PersistsAndPrintsFailureReportsWithExactSessionBinding(t *testi
 			root.SetErr(&output)
 			root.SilenceErrors = true
 			root.SilenceUsage = true
-			root.SetArgs([]string{"eval", "run", evaluation.CoreExecutionBoundarySuiteID, "--operator-session", "operator-session-exact"})
+			root.SetArgs([]string{"eval", "boundary", "run", "--operator-session", "operator-session-exact"})
 
 			err := root.Execute()
 			require.Error(t, err)

@@ -44,7 +44,7 @@ type chatEvalDeps struct {
 	newID                func() string
 }
 
-func chatEvalCmd(deps nativeEvalDeps) *cobra.Command {
+func gateChatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	shared := chatEvalDeps{
 		configLoader:         deps.configLoader,
 		fileSvcFactory:       deps.fileSvcFactory,
@@ -54,12 +54,12 @@ func chatEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		now:                  deps.now,
 		newID:                deps.newID,
 	}
-	cmd := &cobra.Command{Use: "chat", Short: "Run Phase 1A production chat-path acceptance gates"}
-	cmd.AddCommand(chatEvalAcceptCmd(shared))
+	cmd := &cobra.Command{Use: "chat", Short: "Production chat-path vertical acceptance"}
+	cmd.AddCommand(gateChatEvalRunCmd(shared))
 	return cmd
 }
 
-func chatEvalAcceptCmd(deps chatEvalDeps) *cobra.Command {
+func gateChatEvalRunCmd(deps chatEvalDeps) *cobra.Command {
 	var operatorSessionID string
 	var dataOperatorSessionID string
 	var model string
@@ -70,8 +70,8 @@ func chatEvalAcceptCmd(deps chatEvalDeps) *cobra.Command {
 	var casesCSV string
 	var noAutoRefresh bool
 	cmd := &cobra.Command{
-		Use:   "accept",
-		Short: "Run the Phase 1A chat-path vertical acceptance matrix through production POST /api/v1/chat",
+		Use:   "run",
+		Short: "Run the chat-path vertical acceptance matrix through production POST /api/v1/chat",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if model == "" {
 				return fmt.Errorf("evaluation: chat accept: --model is required")
@@ -228,13 +228,13 @@ func chatEvalAcceptCmd(deps chatEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&operatorSessionID, "operator-session", "", "Pin acceptance to one exact inference Operator session")
-	cmd.Flags().StringVar(&dataOperatorSessionID, "data-operator-session", "", "Pin chat binding to one exact data Operator session")
+	cmd.Flags().StringVar(&operatorSessionID, "inference-session", "", "Pin acceptance to one exact inference Operator session")
+	cmd.Flags().StringVar(&dataOperatorSessionID, "data-session", "", "Pin chat binding to one exact data Operator session")
 	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before acceptance")
 	cmd.Flags().StringVar(&model, "model", "", "Frozen campaign model tag for all chat roles")
 	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID")
 	cmd.Flags().StringVar(&registryDigest, "registry-digest", "", "Frozen campaign model registry digest")
-	cmd.Flags().StringVar(&registryFile, "registry-file", "", "JSON file produced by eval inference freeze-registry --json")
+	cmd.Flags().StringVar(&registryFile, "registry-file", "", "JSON file produced by eval models freeze --output --json")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
 	cmd.Flags().StringVar(&casesCSV, "cases", "", "Comma-separated case IDs (default: full Phase 1A chat matrix)")
 	return cmd
@@ -506,7 +506,7 @@ func chatEvalResolveDataOperator(
 		return evaluation.SelectDataOperator(operators, pinnedSessionID)
 	}
 	if authContext.OperatorSessionID == "" {
-		return nil, fmt.Errorf("evaluation: chat accept requires enrolled CLI operator session; run './g8e auth refresh' or pass --data-operator-session")
+		return nil, fmt.Errorf("evaluation: chat accept requires enrolled CLI operator session; run './g8e auth refresh' or pass --data-session")
 	}
 	selected, err := evaluation.SelectDataOperator(operators, authContext.OperatorSessionID)
 	if err != nil {

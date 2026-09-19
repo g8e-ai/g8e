@@ -16,8 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/output"
-	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 func campaignEvalStartCmd(deps nativeEvalDeps) *cobra.Command {
@@ -42,6 +41,7 @@ func campaignEvalStartCmd(deps nativeEvalDeps) *cobra.Command {
 	var waitForProviderIdle bool
 	var providerIdlePoll time.Duration
 	var providerSettle time.Duration
+	var tierA bool
 	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Initialize, schedule, and execute one homogeneous campaign run",
@@ -51,136 +51,61 @@ initialize the campaign, schedule assignments, and execute them in one flow.
 Examples:
   g8e eval campaign start --model gemma3:4b --publish --daemon
   g8e eval campaign start --models qwen3:0.6b,qwen3:4b,gemma3:4b --publish --daemon
-  g8e eval campaign start --queue next --publish --daemon --verify`,
+  g8e eval campaign start --queue next --publish --daemon --verify --tier-a`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			if tierA {
+				requireProviderObservation = true
+				requireModelProvenance = true
+			}
+			flowOpts := campaignStartFlowOptions{
+				ModelTag:                   modelTag,
+				ModelTags:                  splitCSVModelTags(modelTags),
+				QueueRef:                   queueRef,
+				CampaignID:                 campaignID,
+				InventoryFile:              inventoryFile,
+				RunID:                      runID,
+				InferenceSessionID:         inferenceSessionID,
+				DataSessionID:              dataSessionID,
+				EnsembleURL:                ensembleURL,
+				OllamaEndpoint:             ollamaEndpoint,
+				DryRun:                     dryRun,
+				PrintPlan:                  !dryRun,
+				PrepareOnly:                prepareOnly,
+				Publish:                    publish,
+				Daemon:                     daemon,
+				Verify:                     verify,
+				RequireProviderObservation: requireProviderObservation,
+				RequireModelProvenance:     requireModelProvenance,
+				NoAutoRefresh:              noAutoRefresh,
+				WaitForProviderIdle:        waitForProviderIdle,
+				ProviderIdlePoll:           providerIdlePoll,
+				ProviderSettle:             providerSettle,
+				JSONOutput:                 output.JSONEnabled(cmd),
+			}
+			result, err := runCampaignStartFlow(cmd, deps, flowOpts)
 			if err != nil {
 				return err
 			}
-			plan, err := evaluation.ResolveCampaignStartPlan(evaluation.CampaignStartPlanRequest{
-				ProjectRoot:   cfg.ProjectRoot,
-				ModelTag:      modelTag,
-				ModelTags:     splitCSVModelTags(modelTags),
-				QueueRef:      queueRef,
-				CampaignID:    campaignID,
-				InventoryFile: inventoryFile,
-				RunID:         runID,
-				Now:           deps.now().UTC(),
-			})
-			if err != nil {
-				return err
-			}
-			sessions, err := resolveCampaignOperatorSessions(cmd, deps, cfg, inferenceSessionID, dataSessionID)
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign start: %w", err)
-			}
-			if dryRun {
-				return writeCampaignStartPlan(cmd.OutOrStdout(), plan, sessions, output.JSONEnabled(cmd))
-			}
-			if err := writeCampaignStartPlan(cmd.OutOrStdout(), plan, sessions, output.JSONEnabled(cmd)); err != nil {
-				return err
-			}
-			startedAt := deps.now().UTC()
-			if err := initializeCampaignRun(cmd, deps, plan, sessions); err != nil {
-				return err
-			}
-			if !output.JSONEnabled(cmd) {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Initialized campaign %s run %s\n", plan.CampaignID, plan.RunID)
-			}
-			assignmentCount, err := scheduleHomogeneousCampaignRun(cmd, deps, plan.RunID, publish)
-			if err != nil {
-				return err
-			}
-			if !output.JSONEnabled(cmd) {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Scheduled %d assignments for run %s\n", assignmentCount, plan.RunID)
-			}
-			if err := persistActiveCampaignRun(cfg.ProjectRoot, plan, startedAt); err != nil {
-				return err
-			}
-			if prepareOnly {
-				if output.JSONEnabled(cmd) {
-					payload, err := json.MarshalIndent(map[string]any{
-						"campaign_id":      plan.CampaignID,
-						"run_id":           plan.RunID,
-						"assignment_count": assignmentCount,
-						"prepared":         true,
-					}, "", "  ")
-					if err != nil {
-						return err
-					}
-					_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
-					return err
-				}
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Prepared run %s (%d assignments). Run:\n  ./g8e eval campaign execute --run-id %s --publish --daemon\n", plan.RunID, assignmentCount, plan.RunID)
-				return err
-			}
-			executed, err := runCampaignExecute(cmd, deps, campaignExecuteOptions{
-				RunID:               plan.RunID,
-				Publish:             publish,
-				Daemon:              daemon,
-				InferenceSessionID:  sessions.InferenceSessionID,
-				DataSessionID:       sessions.DataSessionID,
-				EnsembleURL:         ensembleURL,
-				OllamaEndpoint:      ollamaEndpoint,
-				NoAutoRefresh:       noAutoRefresh,
-				WaitForProviderIdle: waitForProviderIdle,
-				ProviderIdlePoll:    providerIdlePoll,
-				ProviderSettle:      providerSettle,
-				JSONOutput:          output.JSONEnabled(cmd),
-			})
-			if err != nil {
-				return err
-			}
-			if !output.JSONEnabled(cmd) {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Executed %d assignment(s) for run %s\n", executed, plan.RunID)
-			}
-			if !verify {
-				if output.JSONEnabled(cmd) {
-					payload, err := json.MarshalIndent(map[string]any{
-						"campaign_id": plan.CampaignID,
-						"run_id":      plan.RunID,
-						"executed":    executed,
-						"verified":    false,
-					}, "", "  ")
-					if err != nil {
-						return err
-					}
-					_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
-					return err
-				}
-				return nil
-			}
-			report, err := verifyCampaignRun(cmd, deps, plan.RunID, requireProviderObservation, requireModelProvenance, output.JSONEnabled(cmd))
-			if err != nil {
-				return err
-			}
-			if output.JSONEnabled(cmd) {
+			if output.JSONEnabled(cmd) && result != nil && !dryRun {
 				payload, err := json.MarshalIndent(map[string]any{
-					"campaign_id":     plan.CampaignID,
-					"run_id":          plan.RunID,
-					"executed":        executed,
-					"verified":        true,
-					"verify_status":   report.GetStatus().String(),
-					"failure_count":   report.GetFailureCount(),
-					"failure_reasons": report.GetFailureReasons(),
+					"campaign_id":     result.Plan.CampaignID,
+					"run_id":          result.Plan.RunID,
+					"executed":        result.Executed,
+					"verified":        result.Report != nil,
+					"verify_status":   verificationStatusString(result.Report),
+					"failure_count":   verificationFailureCount(result.Report),
+					"failure_reasons": verificationFailureReasons(result.Report),
+					"prepared":        prepareOnly,
 				}, "", "  ")
 				if err != nil {
 					return err
 				}
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
-				if err != nil {
-					return err
-				}
-			} else {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Run %s verification: %s (%d failure(s))\n", plan.RunID, report.GetStatus().String(), report.GetFailureCount())
-				if report.GetFailureCount() > 0 {
-					for _, reason := range report.GetFailureReasons() {
-						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "- %s\n", reason)
-					}
-				}
+				return err
 			}
-			if report.GetFailureCount() > 0 {
-				return constants.ErrEvalRunVerificationFailed
+			if prepareOnly && result != nil {
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Prepared run %s. Run:\n  ./g8e eval campaign execute --run-id %s --publish --daemon\n", result.Plan.RunID, result.Plan.RunID)
+				return err
 			}
 			return nil
 		},
@@ -202,6 +127,7 @@ Examples:
 	cmd.Flags().BoolVar(&verify, "verify", false, "Run campaign verify after execute completes")
 	cmd.Flags().BoolVar(&requireProviderObservation, "require-provider-observation", false, "Fail verify when provider-boundary observation windows are missing")
 	cmd.Flags().BoolVar(&requireModelProvenance, "require-model-provenance", false, "Fail verify when model provenance attestation windows are missing or digest_match is false")
+	cmd.Flags().BoolVar(&tierA, "tier-a", false, "Tier-A verify preset: require provider observation and model provenance")
 	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
 	cmd.Flags().BoolVar(&waitForProviderIdle, "wait-for-provider-idle", true, "Wait for Ollama to become idle before each assignment")
 	cmd.Flags().DurationVar(&providerIdlePoll, "provider-idle-poll", 2*time.Second, "Poll interval while waiting for Ollama idle")
@@ -221,4 +147,25 @@ func splitCSVModelTags(raw string) []string {
 		}
 	}
 	return tags
+}
+
+func verificationStatusString(report *evalv1.EvaluationVerificationReport) string {
+	if report == nil {
+		return ""
+	}
+	return report.GetStatus().String()
+}
+
+func verificationFailureCount(report *evalv1.EvaluationVerificationReport) int {
+	if report == nil {
+		return 0
+	}
+	return int(report.GetFailureCount())
+}
+
+func verificationFailureReasons(report *evalv1.EvaluationVerificationReport) []string {
+	if report == nil {
+		return nil
+	}
+	return report.GetFailureReasons()
 }

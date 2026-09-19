@@ -94,7 +94,7 @@ func campaignEvalMirrorRestoreCmd(deps nativeEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&queue, "queue", false, "Restore every verified run listed in .local.dev/init-campaign-queue.json")
+	cmd.Flags().BoolVar(&queue, "queue", false, "Restore every verified run listed in .g8e/eval/init-campaign-queue.json")
 	cmd.Flags().StringVar(&runID, "run-id", "", "Restore one canonical campaign run")
 	return cmd
 }

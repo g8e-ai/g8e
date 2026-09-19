@@ -412,6 +412,159 @@ func verifyCampaignRun(
 	return report, nil
 }
 
+type campaignStartFlowOptions struct {
+	ModelTag                   string
+	ModelTags                  []string
+	QueueRef                   string
+	CampaignID                 string
+	InventoryFile              string
+	RunID                      string
+	InferenceSessionID         string
+	DataSessionID              string
+	EnsembleURL                string
+	OllamaEndpoint             string
+	DryRun                     bool
+	PrintPlan                  bool
+	PrepareOnly                bool
+	Publish                    bool
+	Daemon                     bool
+	Verify                     bool
+	RequireProviderObservation bool
+	RequireModelProvenance     bool
+	NoAutoRefresh              bool
+	WaitForProviderIdle        bool
+	ProviderIdlePoll           time.Duration
+	ProviderSettle             time.Duration
+	JSONOutput                 bool
+}
+
+type campaignStartFlowResult struct {
+	Plan     *evaluation.CampaignStartPlan
+	Executed int
+	Report   *evalv1.EvaluationVerificationReport
+}
+
+func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaignStartFlowOptions) (*campaignStartFlowResult, error) {
+	cfg, _, err := nativeEvalEnvironment(cmd, deps)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := evaluation.ResolveCampaignStartPlan(evaluation.CampaignStartPlanRequest{
+		ProjectRoot:   cfg.ProjectRoot,
+		ModelTag:      opts.ModelTag,
+		ModelTags:     opts.ModelTags,
+		QueueRef:      opts.QueueRef,
+		CampaignID:    opts.CampaignID,
+		InventoryFile: opts.InventoryFile,
+		RunID:         opts.RunID,
+		Now:           deps.now().UTC(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	sessions, err := resolveCampaignOperatorSessions(cmd, deps, cfg, opts.InferenceSessionID, opts.DataSessionID)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: campaign start: %w", err)
+	}
+	if opts.PrintPlan || opts.DryRun {
+		if err := writeCampaignStartPlan(cmd.OutOrStdout(), plan, sessions, opts.JSONOutput); err != nil {
+			return nil, err
+		}
+	}
+	if opts.DryRun {
+		return &campaignStartFlowResult{Plan: plan}, nil
+	}
+	startedAt := deps.now().UTC()
+	if err := initializeCampaignRun(cmd, deps, plan, sessions); err != nil {
+		return nil, err
+	}
+	if !opts.JSONOutput {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Initialized campaign %s run %s\n", plan.CampaignID, plan.RunID)
+	}
+	assignmentCount, err := scheduleHomogeneousCampaignRun(cmd, deps, plan.RunID, opts.Publish)
+	if err != nil {
+		return nil, err
+	}
+	if !opts.JSONOutput {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Scheduled %d assignments for run %s\n", assignmentCount, plan.RunID)
+	}
+	if err := persistActiveCampaignRun(cfg.ProjectRoot, plan, startedAt); err != nil {
+		return nil, err
+	}
+	result := &campaignStartFlowResult{Plan: plan}
+	if opts.PrepareOnly {
+		return result, nil
+	}
+	executed, err := runCampaignExecute(cmd, deps, campaignExecuteOptions{
+		RunID:               plan.RunID,
+		Publish:             opts.Publish,
+		Daemon:              opts.Daemon,
+		InferenceSessionID:  sessions.InferenceSessionID,
+		DataSessionID:       sessions.DataSessionID,
+		EnsembleURL:         opts.EnsembleURL,
+		OllamaEndpoint:      opts.OllamaEndpoint,
+		NoAutoRefresh:       opts.NoAutoRefresh,
+		WaitForProviderIdle: opts.WaitForProviderIdle,
+		ProviderIdlePoll:    opts.ProviderIdlePoll,
+		ProviderSettle:      opts.ProviderSettle,
+		JSONOutput:          opts.JSONOutput,
+	})
+	if err != nil {
+		return result, err
+	}
+	result.Executed = executed
+	if !opts.JSONOutput {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Executed %d assignment(s) for run %s\n", executed, plan.RunID)
+	}
+	if !opts.Verify {
+		return result, nil
+	}
+	report, err := verifyCampaignRun(cmd, deps, plan.RunID, opts.RequireProviderObservation, opts.RequireModelProvenance, opts.JSONOutput)
+	if err != nil {
+		return result, err
+	}
+	result.Report = report
+	if !opts.JSONOutput {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Run %s verification: %s (%d failure(s))\n", plan.RunID, report.GetStatus().String(), report.GetFailureCount())
+		if report.GetFailureCount() > 0 {
+			for _, reason := range report.GetFailureReasons() {
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "- %s\n", reason)
+			}
+		}
+	}
+	if report.GetFailureCount() > 0 {
+		return result, constants.ErrEvalRunVerificationFailed
+	}
+	if err := markQueueEntryVerifiedAfterPass(cfg.ProjectRoot, plan, report, opts.RequireProviderObservation && opts.RequireModelProvenance); err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+func markQueueEntryVerifiedAfterPass(projectRoot string, plan *evaluation.CampaignStartPlan, report *evalv1.EvaluationVerificationReport, tierA bool) error {
+	if plan == nil || plan.QueueEntry == nil || report == nil {
+		return nil
+	}
+	if report.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+		return nil
+	}
+	notes := "75/75 verify PASS; run " + plan.RunID
+	if tierA {
+		notes = evaluation.TierAVerifyNotes(plan.RunID)
+	}
+	_, err := evaluation.MarkCampaignQueueEntry(evaluation.MarkCampaignQueueEntryRequest{
+		ProjectRoot:    projectRoot,
+		VariantID:      plan.QueueEntry.VariantID,
+		Status:         "verified",
+		VerifiedRunID:  plan.RunID,
+		Notes:          notes,
+	})
+	if err != nil {
+		return fmt.Errorf("evaluation: update init campaign queue: %w", err)
+	}
+	return nil
+}
+
 func writeCampaignStartPlan(out io.Writer, plan *evaluation.CampaignStartPlan, sessions campaignOperatorSessions, jsonOutput bool) error {
 	if jsonOutput {
 		payload, err := json.MarshalIndent(map[string]any{

@@ -21,16 +21,25 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 )
 
-func inventoryEvalCmd(_ nativeEvalDeps) *cobra.Command {
+func modelsEvalCmd(deps nativeEvalDeps) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "models",
+		Short: "Discover, freeze, and materialize evaluation model inventories",
+	}
+	cmd.AddCommand(
+		modelsEvalFreezeCmd(),
+		modelsEvalListCmd(deps),
+		modelsEvalMaterializeCmd(deps),
+	)
+	return cmd
+}
+
+func modelsEvalFreezeCmd() *cobra.Command {
 	var campaignID string
 	var ollamaEndpoint string
 	var outputPath string
 	var probeCapabilities bool
 	cmd := &cobra.Command{
-		Use:   "inventory",
-		Short: "Discover and freeze the complete provider model inventory",
-	}
-	freezeCmd := &cobra.Command{
 		Use:   "freeze",
 		Short: "Freeze the model registry from a live provider inventory",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -92,12 +101,188 @@ func inventoryEvalCmd(_ nativeEvalDeps) *cobra.Command {
 			return err
 		},
 	}
-	freezeCmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID")
-	freezeCmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint (default: G8E_OLLAMA_ENDPOINT)")
-	freezeCmd.Flags().StringVar(&outputPath, "output", "", "Write the inventory freeze JSON to this path")
-	freezeCmd.Flags().BoolVar(&probeCapabilities, "probe-capabilities", false, "Run bounded non-scored capability probes for each discovered model")
-	cmd.AddCommand(freezeCmd)
+	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID")
+	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint (default: G8E_OLLAMA_ENDPOINT)")
+	cmd.Flags().StringVar(&outputPath, "output", "", "Write the inventory freeze JSON to this path")
+	cmd.Flags().BoolVar(&probeCapabilities, "probe-capabilities", false, "Run bounded non-scored capability probes for each discovered model")
 	return cmd
+}
+
+func modelsEvalListCmd(deps nativeEvalDeps) *cobra.Command {
+	var fromPath string
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List model variants from a frozen inventory file",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			if fromPath == "" {
+				fromPath = evaluation.DefaultModelInventoryRelPath
+			}
+			variants, err := evaluation.LoadFrozenVariants(evaluation.ResolveEvalPath(cfg.ProjectRoot, fromPath))
+			if err != nil {
+				return fmt.Errorf("evaluation: inventory list: %w", err)
+			}
+			if output.JSONEnabled(cmd) {
+				rows := make([]map[string]string, 0, len(variants))
+				for _, variant := range variants {
+					rows = append(rows, map[string]string{
+						"served_model_tag": variant.GetServedModelTag(),
+						"variant_id":       variant.GetVariantId(),
+						"model_digest":     variant.GetModelDigest(),
+					})
+				}
+				payload, err := json.MarshalIndent(map[string]any{"variants": rows}, "", "  ")
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+				return err
+			}
+			for _, variant := range variants {
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", variant.GetServedModelTag(), variant.GetVariantId(), variant.GetModelDigest()); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&fromPath, "from", "", "Frozen inventory JSON path (default: .g8e/eval/model-inventory.json)")
+	return cmd
+}
+
+func modelsEvalMaterializeCmd(deps nativeEvalDeps) *cobra.Command {
+	var fromPath string
+	var tag string
+	var tags string
+	var all bool
+	var campaignID string
+	var outputPath string
+	var outputDir string
+	cmd := &cobra.Command{
+		Use:   "materialize",
+		Short: "Write per-model or multi-model inventory freeze files from a source inventory",
+		Long: `Materialize campaign inventory files from a frozen provider inventory.
+
+Examples:
+  g8e eval models materialize --tag qwen3:4b
+  g8e eval models materialize --all
+  g8e eval models materialize --tags qwen3:0.6b,qwen3:4b,gemma3:4b \
+    --campaign-id eval-smoke-mini --output .g8e/eval/inventories/eval-smoke-mini.json`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, _, err := nativeEvalEnvironment(cmd, deps)
+			if err != nil {
+				return err
+			}
+			if fromPath == "" {
+				fromPath = evaluation.DefaultModelInventoryRelPath
+			}
+			sourceVariants, err := evaluation.LoadFrozenVariants(evaluation.ResolveEvalPath(cfg.ProjectRoot, fromPath))
+			if err != nil {
+				return fmt.Errorf("evaluation: inventory materialize: %w", err)
+			}
+
+			selectedTags := splitCSVModelTags(tags)
+			if tag != "" {
+				selectedTags = append(selectedTags, tag)
+			}
+			selected := sourceVariants
+			switch {
+			case len(selectedTags) > 0:
+				selected, err = evaluation.VariantsByTags(sourceVariants, selectedTags)
+				if err != nil {
+					return fmt.Errorf("evaluation: inventory materialize: %w", err)
+				}
+			case all:
+				// keep full source inventory
+			case campaignID != "" && outputPath != "":
+				return fmt.Errorf("evaluation: inventory materialize: specify --tag, --tags, or --all")
+			default:
+				return fmt.Errorf("evaluation: inventory materialize: specify --tag, --tags, or --all")
+			}
+
+			if campaignID != "" {
+				if outputPath == "" {
+					return fmt.Errorf("evaluation: inventory materialize: --output is required with --campaign-id")
+				}
+				freeze, relPath, err := evaluation.MaterializeCampaignInventory(evaluation.MaterializeCampaignInventoryRequest{
+					ProjectRoot: cfg.ProjectRoot,
+					CampaignID:  campaignID,
+					OutputPath:  outputPath,
+					Variants:    selected,
+				})
+				if err != nil {
+					return fmt.Errorf("evaluation: inventory materialize: %w", err)
+				}
+				return writeInventoryMaterializeResult(cmd, []inventoryMaterializeLine{{
+					CampaignID:   campaignID,
+					ServedModelTag: fmt.Sprintf("%d models", len(selected)),
+					RegistryDigest: freeze.RegistryDigest,
+					CellCount:    freeze.HomogeneousCellCount,
+					InventoryFile: relPath,
+				}}, output.JSONEnabled(cmd))
+			}
+
+			if outputDir == "" {
+				outputDir = evaluation.DefaultCampaignInventoryRelDirname
+			}
+			lines := make([]inventoryMaterializeLine, 0, len(selected))
+			for _, variant := range selected {
+				entry, err := evaluation.MaterializeInitCampaignInventory(evaluation.MaterializeInitCampaignInventoryRequest{
+					ProjectRoot:     cfg.ProjectRoot,
+					InventoryRelDir: outputDir,
+					Variant:         variant,
+				})
+				if err != nil {
+					return fmt.Errorf("evaluation: inventory materialize: %w", err)
+				}
+				lines = append(lines, inventoryMaterializeLine{
+					CampaignID:     entry.CampaignID,
+					ServedModelTag: entry.ServedModelTag,
+					RegistryDigest: entry.ModelRegistryDigest,
+					CellCount:      entry.HomogeneousCellCount,
+					InventoryFile:  entry.InventoryFile,
+				})
+			}
+			return writeInventoryMaterializeResult(cmd, lines, output.JSONEnabled(cmd))
+		},
+	}
+	cmd.Flags().StringVar(&fromPath, "from", "", "Source inventory JSON path (default: .g8e/eval/model-inventory.json)")
+	cmd.Flags().StringVar(&tag, "tag", "", "Materialize one served model tag")
+	cmd.Flags().StringVar(&tags, "tags", "", "Materialize multiple served model tags (comma-separated)")
+	cmd.Flags().BoolVar(&all, "all", false, "Materialize every variant in the source inventory")
+	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Write one combined multi-model inventory for this campaign ID")
+	cmd.Flags().StringVar(&outputPath, "output", "", "Output path for --campaign-id combined inventory")
+	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Directory for per-model inventories (default: .g8e/eval/inventories)")
+	return cmd
+}
+
+type inventoryMaterializeLine struct {
+	CampaignID     string `json:"campaign_id"`
+	ServedModelTag string `json:"served_model_tag"`
+	RegistryDigest string `json:"model_registry_digest"`
+	CellCount      uint64 `json:"homogeneous_cell_count"`
+	InventoryFile  string `json:"inventory_file"`
+}
+
+func writeInventoryMaterializeResult(cmd *cobra.Command, lines []inventoryMaterializeLine, jsonOutput bool) error {
+	if jsonOutput {
+		payload, err := json.MarshalIndent(map[string]any{"inventories": lines}, "", "  ")
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+		return err
+	}
+	for _, line := range lines {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "campaign_id=%s tag=%s registry_digest=%s cell_count=%d file=%s\n",
+			line.CampaignID, line.ServedModelTag, line.RegistryDigest, line.CellCount, line.InventoryFile); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeModelInventoryFreezeFile(path string, freeze *evaluation.ModelInventoryFreeze) error {

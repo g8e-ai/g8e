@@ -14,7 +14,7 @@ g8e owns the platform evaluation programs: the Go-native **execution-boundary** 
 
 g8ee participates in model campaigns as the production chat path (`POST /api/v1/chat`) but does not own platform evidence, verification, or campaign orchestration. See [Ensemble Evaluations](../ensemble/evals.md) for how g8ee uses these programs.
 
-Operational deployment (Compose profiles, enrollment order, smoke workflows, troubleshooting) lives in the [Unified Docker Stack Guide](../guides/unified_stack.md).
+Operational deployment (Compose profiles, enrollment order, smoke workflows, troubleshooting) lives in the [Unified Docker Stack Guide](../guides/unified_stack.md). Runtime campaign inventories and rollout queues live under `.g8e/eval/` (gitignored); checked-in templates and the public/private boundary are documented in [eval/examples/README.md](../../eval/examples/README.md).
 
 ---
 
@@ -25,7 +25,7 @@ Operational deployment (Compose profiles, enrollment order, smoke workflows, tro
 | **Execution-boundary** | `core-execution-boundary@1.0.0` | One allowed governed mutation and one doctrine-prohibited equivalent through the real Gateway and remote Operator | g8ee, model providers, campaigns, synthetic simulators |
 | **Model campaign** | `north-star-25@1.0.0` (standard scenario catalog) | Governed model scoring through production inference, tool scenarios, provider-boundary hardware telemetry, and storage-side model weight attestation | Direct Ollama calls from the campaign CLI or g8ee |
 
-Both programs persist canonical, content-addressed evidence beneath `.g8e/data/eval/runs/`. Verification is independent of execution: `g8e eval verify` and `g8e eval campaign verify` recompute bindings and signatures without mutating the platform.
+Both programs persist canonical, content-addressed evidence beneath `.g8e/data/eval/runs/`. Verification is independent of execution: `g8e eval boundary verify` and `g8e eval campaign verify` recompute bindings and signatures without mutating the platform.
 
 ---
 
@@ -35,14 +35,14 @@ The `g8e eval` command tree (alias `g8e evals`) groups platform evaluation comma
 
 | Command group | Purpose |
 | --- | --- |
-| `g8e eval run core-execution-boundary` | Run the native execution-boundary suite |
-| `g8e eval verify <run-id>` / `g8e eval show <run-id>` | Verify or inspect a native run |
+| `g8e eval boundary run` | Run the native execution-boundary suite |
+| `g8e eval boundary verify <run-id>` / `g8e eval boundary show <run-id>` | Verify or inspect a native run |
 | `g8e eval campaign …` | Initialize, schedule, execute, publish, verify, and export evaluation model campaigns |
-| `g8e eval inference …` | Inference-operator status, registry freeze, probe, and acceptance gates |
-| `g8e eval chat accept` | Phase 1A chat-path vertical acceptance through production `POST /api/v1/chat` |
-| `g8e eval inventory …` | Model inventory and registry helpers |
-| `g8e eval queue …` | Campaign queue inspection and orchestration |
-| `g8e eval provider-observer run` | Legacy co-located dev observer only; production uses the enrolled Observer Operator |
+| `g8e eval gate inference …` | Inference-operator status, probe, and acceptance gates |
+| `g8e eval gate chat run` | Chat-path vertical acceptance through production `POST /api/v1/chat` |
+| `g8e eval models …` | Model inventory freeze, list, and materialize helpers |
+| `g8e eval rollout …` | Campaign rollout queue init, run, list, next, and mark helpers |
+| `g8e eval dev provider-observer run` | Legacy co-located dev observer only; production uses the enrolled Observer Operator |
 
 Campaign lifecycle commands include `init`, `schedule`, `execute`, `publish`, `verify`, `status`, `show`, `export`, `mirror restore`, and repair helpers. Use `./g8e eval campaign --help` as the command-surface reference.
 
@@ -57,13 +57,13 @@ The Phase 1 suite is `core-execution-boundary@1.0.0`. It requires doctrine postu
 Start and enroll the unified stack with one active remote Operator, then run:
 
 ```bash
-./g8e eval run core-execution-boundary
+./g8e eval boundary run
 ```
 
 Pin an exact active remote Operator session when more than one remote Operator is available:
 
 ```bash
-./g8e eval run core-execution-boundary --operator-session <session-id>
+./g8e eval boundary run --operator-session <session-id>
 ```
 
 The suite performs two attempts. The allowed attempt writes one run-specific marker through the authenticated Gateway command ingress and the bound remote Operator. The prohibited equivalent traverses the same ingress and must be rejected by L1 without another effect. Required verdicts cover independent effect counts, target identity, terminal receipt status, receipt durability, deterministic protocol-chain validity, rejection, absence of another completed execution, and Gateway L1 attribution.
@@ -73,8 +73,8 @@ The suite performs two attempts. The allowed attempt writes one run-specific mar
 Each run persists `report.json`, `verification.json`, and digest-named evidence files under `.g8e/data/eval/runs/<run-id>/`. Re-run verification without executing another mutation:
 
 ```bash
-./g8e eval verify <run-id>
-./g8e eval show <run-id>
+./g8e eval boundary verify <run-id>
+./g8e eval boundary show <run-id>
 ```
 
 Add `--json` to emit canonical protojson. Verification resolves every declared artifact, recomputes content addresses, validates report and attempt bindings, verifies receipt and persistence signatures, validates deterministic stage evidence, reconstructs typed observations, recomputes verdicts and metrics, and rejects missing, substituted, contradictory, misbound, or undeclared evidence.
@@ -260,12 +260,12 @@ See [Model Provenance](model-provenance.md) for the full zero-trust weight attes
 
 | Artifact | Path | Owner |
 | --- | --- | --- |
-| Native run report and verification | `.g8e/data/eval/runs/<run-id>/report.json`, `verification.json`, digest-named evidence | `g8e eval run` / `g8e eval verify` |
+| Native run report and verification | `.g8e/data/eval/runs/<run-id>/report.json`, `verification.json`, digest-named evidence | `g8e eval boundary run` / `g8e eval boundary verify` |
 | Campaign run state and results | `.g8e/data/eval/runs/<run-id>/` (campaign-scoped lifecycle, assignment, trace, and aggregate records) | `g8e eval campaign …` |
 | Provider observation windows (ingested) | Gateway volume under `data/inference/provider-observer/windows/` | Gateway ingest from Observer Operator results |
 | Model provenance attestation windows (ingested) | Gateway volume under `data/inference/model-provenance/windows/` | Gateway ingest from Provenance Operator results |
 
-Native verification is owned by `g8e eval verify`. Campaign verification is owned by `g8e eval campaign verify`, with `--require-provider-observation` enforcing hardware-window coverage through the Gateway read API when local evidence is missing. Model provenance attestation windows are verified through the campaign assignment verifier when strict provenance policy is enabled (see [Model Provenance](model-provenance.md)).
+Native verification is owned by `g8e eval boundary verify`. Campaign verification is owned by `g8e eval campaign verify`, with `--require-provider-observation` enforcing hardware-window coverage through the Gateway read API when local evidence is missing. Model provenance attestation windows are verified through the campaign assignment verifier when strict provenance policy is enabled (see [Model Provenance](model-provenance.md)).
 
 ### Public spectator projection
 

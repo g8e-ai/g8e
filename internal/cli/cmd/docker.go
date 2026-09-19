@@ -377,7 +377,7 @@ already-enrolled CLI.`,
 			cmd.Println("Unified stack init complete.")
 			printDockerSpectatorEndpoints(cmd)
 			cmd.Println("Run 'g8e docker status' to check service status.")
-			cmd.Println("Run 'g8e operator list' and 'g8e eval inference status --json' to verify operators.")
+			cmd.Println("Run 'g8e operator list' and 'g8e eval gate inference status --json' to verify operators.")
 			return nil
 		},
 	}

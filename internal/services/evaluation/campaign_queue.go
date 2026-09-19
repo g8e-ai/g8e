@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	DefaultInitCampaignQueueRelPath    = ".local.dev/init-campaign-queue.json"
-	DefaultModelInventoryRelPath       = ".local.dev/model-inventory.json"
+	// Runtime operator data lives under .g8e/ (gitignored). Checked-in templates: eval/examples/.
+	DefaultInitCampaignQueueRelPath    = ".g8e/eval/init-campaign-queue.json"
+	DefaultModelInventoryRelPath       = ".g8e/eval/model-inventory.json"
 	DefaultCampaignInventoryRelDirname = ".g8e/eval/inventories"
 )
 

@@ -29,7 +29,7 @@ func TestQueueEvalNext_PrintsPendingEntry(t *testing.T) {
 	queue := evaluation.CampaignQueue{
 		Models: []evaluation.CampaignQueueModel{
 			{ServedModelTag: "gemma3:4b", VariantID: "gemma3-4b", CampaignID: "eval-init-gemma3-4b", Status: "verified"},
-			{ServedModelTag: "deepseek-r1:7b", VariantID: "deepseek-r1-7b", CampaignID: "eval-init-deepseek-r1-7b", Status: "pending", InventoryFile: ".local.dev/inventories/eval-init-deepseek-r1-7b.json", ModelRegistryDigest: "digest", HomogeneousCellCount: 75},
+			{ServedModelTag: "deepseek-r1:7b", VariantID: "deepseek-r1-7b", CampaignID: "eval-init-deepseek-r1-7b", Status: "pending", InventoryFile: ".g8e/eval/inventories/eval-init-deepseek-r1-7b.json", ModelRegistryDigest: "digest", HomogeneousCellCount: 75},
 		},
 	}
 	queuePath := filepath.Join(root, evaluation.DefaultInitCampaignQueueRelPath)
@@ -48,7 +48,7 @@ func TestQueueEvalNext_PrintsPendingEntry(t *testing.T) {
 	command := evalCmdWithConfig(deps)
 	var output bytes.Buffer
 	command.SetOut(&output)
-	command.SetArgs([]string{"queue", "next", "--project-root", root})
+	command.SetArgs([]string{"rollout", "next", "--project-root", root})
 	require.NoError(t, command.Execute())
 	assert.Contains(t, output.String(), "deepseek-r1:7b")
 	assert.Contains(t, output.String(), "campaign start --queue next")

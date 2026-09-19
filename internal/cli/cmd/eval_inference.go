@@ -42,7 +42,7 @@ type inferenceEvalDeps struct {
 	newID            func() string
 }
 
-func inferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
+func gateInferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 	shared := inferenceEvalDeps{
 		configLoader:     deps.configLoader,
 		fileSvcFactory:   deps.fileSvcFactory,
@@ -52,17 +52,16 @@ func inferenceEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		now:              deps.now,
 		newID:            deps.newID,
 	}
-	cmd := &cobra.Command{Use: "inference", Short: "Inspect and probe the campaign Inference Operator"}
+	cmd := &cobra.Command{Use: "inference", Short: "Inference Operator status, probe, and acceptance"}
 	cmd.AddCommand(
-		inferenceEvalStatusCmd(shared),
-		inferenceEvalFreezeRegistryCmd(shared),
-		inferenceEvalProbeCmd(shared),
-		inferenceEvalAcceptCmd(shared),
+		gateInferenceEvalStatusCmd(shared),
+		gateInferenceEvalProbeCmd(shared),
+		gateInferenceEvalRunCmd(shared),
 	)
 	return cmd
 }
 
-func inferenceEvalStatusCmd(deps inferenceEvalDeps) *cobra.Command {
+func gateInferenceEvalStatusCmd(deps inferenceEvalDeps) *cobra.Command {
 	var operatorSessionID string
 	cmd := &cobra.Command{
 		Use:   "status",
@@ -98,60 +97,11 @@ func inferenceEvalStatusCmd(deps inferenceEvalDeps) *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&operatorSessionID, "operator-session", "", "Pin the status check to one exact inference Operator session")
+	cmd.Flags().StringVar(&operatorSessionID, "inference-session", "", "Pin the status check to one exact inference Operator session")
 	return cmd
 }
 
-func inferenceEvalFreezeRegistryCmd(deps inferenceEvalDeps) *cobra.Command {
-	var campaignID string
-	var ollamaEndpoint string
-	cmd := &cobra.Command{
-		Use:   "freeze-registry",
-		Short: "Freeze the campaign model registry from a live Ollama inventory",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if campaignID == "" {
-				return fmt.Errorf("evaluation: freeze registry: %w", constants.ErrMissingRequiredField)
-			}
-			if ollamaEndpoint == "" {
-				ollamaEndpoint = os.Getenv("G8E_OLLAMA_ENDPOINT")
-			}
-			if ollamaEndpoint == "" {
-				return fmt.Errorf("evaluation: freeze registry: set --ollama-endpoint or G8E_OLLAMA_ENDPOINT")
-			}
-			freeze, err := evaluation.FreezeModelRegistryFromProvider(cmd.Context(), ollamaEndpoint, campaignID, slog.Default())
-			if err != nil {
-				return fmt.Errorf("evaluation: freeze registry: %w", err)
-			}
-			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{
-					"campaign_id":           freeze.CampaignID,
-					"model_registry_digest": freeze.Digest,
-					"model_count":           len(freeze.Variants),
-					"variants":              freeze.Variants,
-				}, "", "  ")
-				if err != nil {
-					return err
-				}
-				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
-				return err
-			}
-			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Campaign: %s\nRegistry digest: %s\nModels: %d\n", freeze.CampaignID, freeze.Digest, len(freeze.Variants)); err != nil {
-				return err
-			}
-			for _, variant := range freeze.Variants {
-				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "- %s %s\n", variant.GetModel(), variant.GetDigest()); err != nil {
-					return err
-				}
-			}
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID")
-	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint (default: G8E_OLLAMA_ENDPOINT)")
-	return cmd
-}
-
-func inferenceEvalProbeCmd(deps inferenceEvalDeps) *cobra.Command {
+func gateInferenceEvalProbeCmd(deps inferenceEvalDeps) *cobra.Command {
 	var operatorSessionID string
 	var model string
 	var role string
@@ -194,19 +144,19 @@ func inferenceEvalProbeCmd(deps inferenceEvalDeps) *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&operatorSessionID, "operator-session", "", "Pin the probe to one exact inference Operator session")
+	cmd.Flags().StringVar(&operatorSessionID, "inference-session", "", "Pin the probe to one exact inference Operator session")
 	cmd.Flags().StringVar(&model, "model", "", "Requested provider model tag")
 	cmd.Flags().StringVar(&role, "role", "primary", "Governed model role: primary, assistant, or lite")
 	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID for campaign-mode probes")
 	cmd.Flags().StringVar(&registryDigest, "registry-digest", "", "Frozen campaign model registry digest")
-	cmd.Flags().StringVar(&registryFile, "registry-file", "", "JSON file produced by eval inference freeze-registry --json")
+	cmd.Flags().StringVar(&registryFile, "registry-file", "", "JSON file produced by eval models freeze --output --json")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Probe prompt (default: Reply with exactly: probe-ok)")
 	cmd.Flags().Int32Var(&seed, "seed", -1, "Optional deterministic generation seed (omit for provider default)")
 	cmd.Flags().BoolVar(&stream, "stream", false, "Request live NDJSON progress telemetry during generation")
 	return cmd
 }
 
-func inferenceEvalAcceptCmd(deps inferenceEvalDeps) *cobra.Command {
+func gateInferenceEvalRunCmd(deps inferenceEvalDeps) *cobra.Command {
 	var operatorSessionID string
 	var model string
 	var role string
@@ -215,8 +165,8 @@ func inferenceEvalAcceptCmd(deps inferenceEvalDeps) *cobra.Command {
 	var registryFile string
 	var casesCSV string
 	cmd := &cobra.Command{
-		Use:   "accept",
-		Short: "Run the Phase 1A inference-only vertical acceptance matrix through the exact Inference Operator session",
+		Use:   "run",
+		Short: "Run the inference-only vertical acceptance matrix",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if model == "" {
 				return fmt.Errorf("evaluation: inference accept: --model is required")
@@ -299,12 +249,12 @@ func inferenceEvalAcceptCmd(deps inferenceEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&operatorSessionID, "operator-session", "", "Pin acceptance to one exact inference Operator session")
+	cmd.Flags().StringVar(&operatorSessionID, "inference-session", "", "Pin acceptance to one exact inference Operator session")
 	cmd.Flags().StringVar(&model, "model", "", "Requested provider model tag")
 	cmd.Flags().StringVar(&role, "role", "primary", "Default governed model role for cases that do not override it")
 	cmd.Flags().StringVar(&campaignID, "campaign-id", "", "Frozen evaluation campaign ID for campaign-mode acceptance")
 	cmd.Flags().StringVar(&registryDigest, "registry-digest", "", "Frozen campaign model registry digest")
-	cmd.Flags().StringVar(&registryFile, "registry-file", "", "JSON file produced by eval inference freeze-registry --json")
+	cmd.Flags().StringVar(&registryFile, "registry-file", "", "JSON file produced by eval models freeze --output --json")
 	cmd.Flags().StringVar(&casesCSV, "cases", "", "Comma-separated case IDs (default: full Phase 1A inference matrix)")
 	return cmd
 }

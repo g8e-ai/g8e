@@ -50,7 +50,7 @@ func TestResolveCampaignStartPlanFromQueue(t *testing.T) {
 				VariantID:            "gemma3-4b",
 				ServedModelTag:       "gemma3:4b",
 				CampaignID:           "eval-init-gemma3-4b",
-				InventoryFile:        ".local.dev/inventories/eval-init-gemma3-4b.json",
+				InventoryFile:        ".g8e/eval/inventories/eval-init-gemma3-4b.json",
 				ModelRegistryDigest:  "digest",
 				HomogeneousCellCount: 75,
 				Status:               "pending",
@@ -106,7 +106,7 @@ func TestActiveCampaignRunRoundTrip(t *testing.T) {
 	run := ActiveCampaignRun{
 		RunID:         "eval-init-gemma3-4b-1789669555",
 		CampaignID:    "eval-init-gemma3-4b",
-		InventoryFile: ".local.dev/inventories/eval-init-gemma3-4b.json",
+		InventoryFile: ".g8e/eval/inventories/eval-init-gemma3-4b.json",
 		ModelTags:     []string{"gemma3:4b"},
 		StartedAt:     time.Unix(1789669555, 0).UTC(),
 	}

@@ -88,33 +88,68 @@ func evalCmdWithConfig(deps nativeEvalDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "eval",
 		Aliases: []string{"evals"},
-		Short:   "Run and verify native g8e evaluations",
+		Short:   "Run and verify g8e evaluation programs",
+		Long: `Platform evaluation programs and their supporting workflows.
+
+  boundary   Native execution-boundary suite (no models)
+  campaign   Model scoring through production chat/inference
+  models     Provider inventory freeze and materialize
+  rollout    Per-model init qualification queue
+  gate       Pre-campaign acceptance gates
+  dev        Local development utilities`,
 	}
 	cmd.PersistentFlags().String("project-root", "", "Override the repository root (defaults to cwd)")
 	cmd.AddCommand(
-		nativeEvalRunCmd(deps),
-		nativeEvalVerifyCmd(deps),
-		nativeEvalShowCmd(deps),
-		inferenceEvalCmd(deps),
-		chatEvalCmd(deps),
-		inventoryEvalCmd(deps),
+		boundaryEvalCmd(deps),
 		campaignEvalCmd(deps),
-		queueEvalCmd(deps),
-		providerObserverEvalCmd(deps),
+		modelsEvalCmd(deps),
+		rolloutEvalCmd(deps),
+		gateEvalCmd(deps),
+		devEvalCmd(deps),
 	)
 	return cmd
 }
 
-func nativeEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
+func boundaryEvalCmd(deps nativeEvalDeps) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "boundary",
+		Short: "Native execution-boundary suite (no models)",
+	}
+	cmd.AddCommand(
+		boundaryEvalRunCmd(deps),
+		boundaryEvalVerifyCmd(deps),
+		boundaryEvalShowCmd(deps),
+	)
+	return cmd
+}
+
+func gateEvalCmd(deps nativeEvalDeps) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gate",
+		Short: "Pre-campaign acceptance gates",
+	}
+	cmd.AddCommand(
+		gateInferenceEvalCmd(deps),
+		gateChatEvalCmd(deps),
+	)
+	return cmd
+}
+
+func devEvalCmd(deps nativeEvalDeps) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dev",
+		Short: "Local development utilities",
+	}
+	cmd.AddCommand(providerObserverEvalCmd(deps))
+	return cmd
+}
+
+func boundaryEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 	var operatorSessionID string
 	command := &cobra.Command{
-		Use:   "run core-execution-boundary",
-		Short: "Run the native core execution-boundary evaluation",
-		Args:  cobra.ExactArgs(1),
+		Use:   "run",
+		Short: "Run core-execution-boundary@1.0.0",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if args[0] != evaluation.CoreExecutionBoundarySuiteID {
-				return fmt.Errorf("%w: %s", constants.ErrEvaluationSuiteUnsupported, args[0])
-			}
 			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
 				return err
@@ -166,10 +201,10 @@ func nativeEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 	return command
 }
 
-func nativeEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
+func boundaryEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "verify <run-id>",
-		Short: "Independently re-verify a persisted native evaluation run",
+		Short: "Re-verify persisted execution-boundary evidence",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
@@ -192,10 +227,10 @@ func nativeEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 	return command
 }
 
-func nativeEvalShowCmd(deps nativeEvalDeps) *cobra.Command {
+func boundaryEvalShowCmd(deps nativeEvalDeps) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "show <run-id>",
-		Short: "Show a persisted native evaluation report",
+		Short: "Show a persisted execution-boundary report",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)

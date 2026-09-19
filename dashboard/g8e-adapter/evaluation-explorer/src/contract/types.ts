@@ -3,10 +3,9 @@
 // This is the single typed source shared by fixture generation, projector
 // output, replay events, bridge output, and frontend validators. Worker 0
 // (Integration lead) owns this module; no consumer hand-defines enums or
-// record shapes. The enum values are reconciled against the real source data
-// in .local.dev/campaign/overnight-baseline/run-20260914-r2/ so Worker 1's
-// projector can emit faithful records without remapping. See
-// src/contract/CONTRACT.md for the ownership map and integration decisions.
+// record shapes. Enum values are reconciled against canonical protocol vectors
+// and checked-in explorer fixtures. See src/contract/CONTRACT.md for the
+// ownership map and integration decisions.
 //
 // FROZEN at schema_version 1.3.0 on 2026-09-15. A change to any enum value
 // or required field is a contract revision: bump VIEW_SCHEMA_VERSION and

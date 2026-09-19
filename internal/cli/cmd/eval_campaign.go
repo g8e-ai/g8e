@@ -36,16 +36,14 @@ func campaignEvalCmd(deps nativeEvalDeps) *cobra.Command {
 		campaignEvalInitCmd(deps),
 		campaignEvalListCmd(deps),
 		campaignEvalScheduleCmd(deps),
-		campaignEvalStacksGenerateCmd(deps),
-		campaignEvalScheduleHeterogeneousCmd(deps),
+		campaignEvalStacksCmd(deps),
 		campaignEvalExecuteCmd(deps),
 		campaignEvalPublishCmd(deps),
 		campaignEvalMirrorCmd(deps),
 		campaignEvalVerifyCmd(deps),
-		campaignEvalCheckMatrixCmd(deps),
+		campaignEvalAccountCmd(deps),
 		campaignEvalExportCmd(deps),
-		campaignEvalRepairResultsCmd(deps),
-		campaignEvalRepairTraceDigestsCmd(deps),
+		campaignEvalRepairCmd(deps),
 		campaignEvalShowCmd(deps),
 		campaignEvalStatusCmd(deps),
 	)
@@ -278,15 +276,24 @@ func collectCampaignListRows(
 	return rows, nil
 }
 
+func campaignEvalStacksCmd(deps nativeEvalDeps) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "stacks",
+		Short: "Heterogeneous stack generation for one campaign",
+	}
+	cmd.AddCommand(campaignEvalStacksGenerateCmd(deps))
+	return cmd
+}
+
 func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
 	var campaignID string
 	var seed uint64
 	cmd := &cobra.Command{
-		Use:   "stacks-generate",
+		Use:   "generate",
 		Short: "Generate and persist the preregistered heterogeneous stack set for one campaign",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if campaignID == "" {
-				return fmt.Errorf("evaluation: campaign stacks-generate: %w", constants.ErrMissingRequiredField)
+				return fmt.Errorf("evaluation: campaign stacks generate: %w", constants.ErrMissingRequiredField)
 			}
 			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
@@ -295,7 +302,7 @@ func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
 			controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
 			stackSet, err := controller.GenerateHeterogeneousStackSet(cmd.Context(), campaignID, seed)
 			if err != nil {
-				return fmt.Errorf("evaluation: campaign stacks-generate: %w", err)
+				return fmt.Errorf("evaluation: campaign stacks generate: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
@@ -330,58 +337,13 @@ func campaignEvalStacksGenerateCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
-func campaignEvalScheduleHeterogeneousCmd(deps nativeEvalDeps) *cobra.Command {
-	var runID string
-	var publish bool
-	cmd := &cobra.Command{
-		Use:   "schedule-heterogeneous [run-id]",
-		Short: "Materialize and persist the heterogeneous system-lane assignment matrix for one run",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			var err error
-			runID, err = resolveCampaignRunID(cmd, "schedule-heterogeneous", runID, args)
-			if err != nil {
-				return err
-			}
-			_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
-			if err != nil {
-				return err
-			}
-			controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
-			if publish {
-				publication, err := newCampaignPublicationCoordinator(cmd, fileSvc)
-				if err != nil {
-					return fmt.Errorf("evaluation: campaign schedule-heterogeneous: %w", err)
-				}
-				controller = controller.WithPublication(publication)
-			}
-			count, err := controller.ScheduleHeterogeneousRun(cmd.Context(), runID)
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign schedule-heterogeneous: %w", err)
-			}
-			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "assignment_count": count}, "", "  ")
-				if err != nil {
-					return err
-				}
-				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
-				return err
-			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Scheduled %d heterogeneous assignments for run %s\n", count, runID)
-			return err
-		},
-	}
-	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
-	cmd.Flags().BoolVar(&publish, "publish", false, "Publish queued assignment lifecycle projections to the public mirror")
-	return cmd
-}
-
 func campaignEvalScheduleCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
 	var publish bool
+	var heterogeneous bool
 	cmd := &cobra.Command{
 		Use:   "schedule [run-id]",
-		Short: "Materialize and persist the homogeneous assignment matrix for one run",
+		Short: "Materialize and persist the assignment matrix for one run",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
@@ -401,24 +363,34 @@ func campaignEvalScheduleCmd(deps nativeEvalDeps) *cobra.Command {
 				}
 				controller = controller.WithPublication(publication)
 			}
-			count, err := controller.ScheduleHomogeneousRun(cmd.Context(), runID)
+			var count int
+			if heterogeneous {
+				count, err = controller.ScheduleHeterogeneousRun(cmd.Context(), runID)
+			} else {
+				count, err = controller.ScheduleHomogeneousRun(cmd.Context(), runID)
+			}
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign schedule: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
-				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "assignment_count": count}, "", "  ")
+				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "assignment_count": count, "heterogeneous": heterogeneous}, "", "  ")
 				if err != nil {
 					return err
 				}
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(payload))
 				return err
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Scheduled %d homogeneous assignments for run %s\n", count, runID)
+			lane := "homogeneous"
+			if heterogeneous {
+				lane = "heterogeneous"
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Scheduled %d %s assignments for run %s\n", count, lane, runID)
 			return err
 		},
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
 	cmd.Flags().BoolVar(&publish, "publish", false, "Publish queued assignment lifecycle projections to the public mirror")
+	cmd.Flags().BoolVar(&heterogeneous, "heterogeneous", false, "Materialize the heterogeneous system-lane assignment matrix")
 	return cmd
 }
 
@@ -868,16 +840,15 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
-func campaignEvalCheckMatrixCmd(deps nativeEvalDeps) *cobra.Command {
+func campaignEvalAccountCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
 	cmd := &cobra.Command{
-		Use:     "check-matrix [run-id]",
-		Aliases: []string{"account"},
-		Short:   "Verify homogeneous matrix population coverage for one campaign run",
-		Args:    cobra.MaximumNArgs(1),
+		Use:   "account [run-id]",
+		Short: "Verify matrix population coverage for one campaign run",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID(cmd, "check-matrix", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "account", runID, args)
 			if err != nil {
 				return err
 			}
@@ -888,15 +859,15 @@ func campaignEvalCheckMatrixCmd(deps nativeEvalDeps) *cobra.Command {
 			store := evaluation.NewStore(fileSvc)
 			run, err := store.LoadRun(cmd.Context(), runID)
 			if err != nil {
-				return fmt.Errorf("evaluation: campaign check-matrix: %w", err)
+				return fmt.Errorf("evaluation: campaign account: %w", err)
 			}
 			catalog, err := store.LoadScenarioCatalog(cmd.Context(), run.GetCampaignBinding().GetCampaignId())
 			if err != nil {
-				return fmt.Errorf("evaluation: campaign check-matrix: %w", err)
+				return fmt.Errorf("evaluation: campaign account: %w", err)
 			}
 			report, err := evaluation.NewCampaignPopulationAccountant(deps.now).AccountRun(cmd.Context(), store, runID, catalog)
 			if err != nil {
-				return fmt.Errorf("evaluation: campaign check-matrix: %w", err)
+				return fmt.Errorf("evaluation: campaign account: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{
@@ -1009,15 +980,27 @@ func campaignEvalExportCmd(deps nativeEvalDeps) *cobra.Command {
 	return cmd
 }
 
+func campaignEvalRepairCmd(deps nativeEvalDeps) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "repair",
+		Short: "Backfill or recompute persisted campaign assignment records",
+	}
+	cmd.AddCommand(
+		campaignEvalRepairResultsCmd(deps),
+		campaignEvalRepairTraceDigestsCmd(deps),
+	)
+	return cmd
+}
+
 func campaignEvalRepairTraceDigestsCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
 	cmd := &cobra.Command{
-		Use:   "repair-trace-digests [run-id]",
+		Use:   "trace-digests [run-id]",
 		Short: "Recompute persisted chat-probe trace digests using authoritative g8e canonical JSON",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID(cmd, "repair-trace-digests", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "repair trace-digests", runID, args)
 			if err != nil {
 				return err
 			}
@@ -1028,7 +1011,7 @@ func campaignEvalRepairTraceDigestsCmd(deps nativeEvalDeps) *cobra.Command {
 			controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
 			repaired, err := controller.RepairAssignmentTraceDigests(cmd.Context(), runID)
 			if err != nil {
-				return fmt.Errorf("evaluation: campaign repair-trace-digests: %w", err)
+				return fmt.Errorf("evaluation: campaign repair trace-digests: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "repaired_trace_digests": repaired}, "", "  ")
@@ -1049,12 +1032,12 @@ func campaignEvalRepairTraceDigestsCmd(deps nativeEvalDeps) *cobra.Command {
 func campaignEvalRepairResultsCmd(deps nativeEvalDeps) *cobra.Command {
 	var runID string
 	cmd := &cobra.Command{
-		Use:   "repair-results [run-id]",
+		Use:   "results [run-id]",
 		Short: "Backfill persisted terminal results for assignments missing result records",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			runID, err = resolveCampaignRunID(cmd, "repair-results", runID, args)
+			runID, err = resolveCampaignRunID(cmd, "repair results", runID, args)
 			if err != nil {
 				return err
 			}
@@ -1064,12 +1047,12 @@ func campaignEvalRepairResultsCmd(deps nativeEvalDeps) *cobra.Command {
 			}
 			_, artifacts, err := evaluation.LoadScenarioCatalog()
 			if err != nil {
-				return fmt.Errorf("evaluation: campaign repair-results: %w", err)
+				return fmt.Errorf("evaluation: campaign repair results: %w", err)
 			}
 			controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
 			repaired, err := controller.RepairAssignmentsWithoutResults(cmd.Context(), runID, artifacts)
 			if err != nil {
-				return fmt.Errorf("evaluation: campaign repair-results: %w", err)
+				return fmt.Errorf("evaluation: campaign repair results: %w", err)
 			}
 			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{"run_id": runID, "repaired_results": repaired}, "", "  ")

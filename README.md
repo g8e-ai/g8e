@@ -16,7 +16,7 @@ g8e separates measured evidence from architecture claims. Published results rema
 
 | Proof | Published result | Boundary |
 | --- | --- | --- |
-| [Native core execution-boundary evaluation](docs/architecture/evals.md) | The Go-native suite passed 10/10 required invariants against the unified Docker stack, and an independent `g8e eval verify` invocation returned valid with zero failures. | One doctrine-posture deployment, one exact remote Operator session, one controlled target, and one networkless observer. |
+| [Native core execution-boundary evaluation](docs/architecture/evals.md) | The Go-native suite passed 10/10 required invariants against the unified Docker stack, and an independent `g8e eval boundary verify` invocation returned valid with zero failures. | One doctrine-posture deployment, one exact remote Operator session, one controlled target, and one networkless observer. |
 | [Clean offline compliance verification](docs/release_notes/v2.1.x/v2.1.7-offline-acceptance.md) | A fresh network-disabled, read-only container reproduced a signed compliance bundle and passed all 10 verification checks. Four protected-source, renderer, and signature mutations failed closed. | One v2.1.7 candidate and one point-in-time assessment scope. This is not certification or recurring operating effectiveness. |
 | [Compliance evidence model](docs/reference/compliance-evidence.md) | Typed assertions, evidence-grade scenarios, explicit control classifications, and fail-closed verification. | Catalog and verifier coverage do not imply customer compliance, authorization, or external attestation. |
 | [Live CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) | Build and test status is published as a live external signal. | Live CI is not frozen release evidence. |
@@ -61,9 +61,9 @@ Read the [governance architecture](docs/architecture/governance.md) for posture 
 The native evaluator proves the remote execution boundary against the real unified stack. It does not invoke Python, g8ee, a model provider, synthetic simulators, or a compatibility reader.
 
 ```bash
-./g8e eval run core-execution-boundary
-./g8e eval verify <run-id>
-./g8e eval show <run-id>
+./g8e eval boundary run
+./g8e eval boundary verify <run-id>
+./g8e eval boundary show <run-id>
 ```
 
 The run command selects one exact active remote Operator, submits an allowed typed mutation through the authenticated Gateway ingress, proves exactly one effect through a separate networkless Compose observer, submits the doctrine-prohibited equivalent through the same ingress, and proves rejection without another effect. It persists canonical `report.json`, `verification.json`, and digest-named evidence under `.g8e/data/eval/runs/<run-id>/`.
@@ -75,9 +75,27 @@ See [Evaluations](docs/architecture/evals.md) for acceptance invariants, trust b
 Scored model campaigns run on the unified Docker stack with a remote Ollama provider, an Inference Operator on the campaign host, and optional Observer and Provenance Operators on the provider host. Campaign authority travels on each governed dispatch; leave `G8E_INFERENCE_CAMPAIGN_ID` and `G8E_INFERENCE_MODEL_REGISTRY_DIGEST` unset in `.env`.
 
 ```bash
-./g8e eval queue next
-./g8e eval campaign start --queue next --publish --daemon --verify --require-provider-observation
+# Freeze models from your provider (runtime data under .g8e/eval/, gitignored)
+./g8e eval models freeze \
+  --campaign-id eval-genesis-homogeneous \
+  --output .g8e/eval/model-inventory.json
+
+# One model, full pipeline
+./g8e eval campaign start --model qwen3:4b \
+  --publish --daemon \
+  --verify \
+  --require-provider-observation \
+  --require-model-provenance
 ```
+
+Optional queue workflow:
+
+```bash
+./g8e eval rollout init --materialize --merge
+./g8e eval rollout run --tier-a --skip-verified
+```
+
+See [Evaluation data layout](eval/examples/README.md) for what belongs in the repo vs on your machine.
 
 See the [Unified Docker Stack guide](docs/guides/unified_stack.md) for topology, witness enrollment, and troubleshooting.
 

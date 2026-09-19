@@ -10,10 +10,10 @@ For the platform evaluation model — execution-boundary suite, model campaign t
 
 | Concern | Owner | g8ee role |
 | --- | --- | --- |
-| Execution-boundary suite (`core-execution-boundary@1.0.0`) | `g8e eval run` | Not involved. The suite proves the remote Operator boundary without Python, g8ee, or a model provider. |
+| Execution-boundary suite (`core-execution-boundary@1.0.0`) | `g8e eval boundary run` | Not involved. The suite proves the remote Operator boundary without Python, g8ee, or a model provider. |
 | Model campaign scoring | `g8e eval campaign …` | Production inference path. Campaign execute dispatches scored assignments through governed `POST /api/v1/chat`. |
-| Chat-path acceptance | `g8e eval chat accept` | Direct vertical acceptance of the production chat API before or alongside campaign work. |
-| Evidence and verification | `g8e eval verify`, `g8e eval campaign verify` | g8ee emits trace and telemetry records consumed by the campaign controller; verification is always platform-owned. |
+| Chat-path acceptance | `g8e eval gate chat run` | Direct vertical acceptance of the production chat API before or alongside campaign work. |
+| Evidence and verification | `g8e eval boundary verify`, `g8e eval campaign verify` | g8ee emits trace and telemetry records consumed by the campaign controller; verification is always platform-owned. |
 
 g8ee remains outside the trusted execution boundary. Model output, Tribunal agreement, and application approval do not authorize host mutation. The Gateway and target Operators apply the active governance posture before any operation executes.
 
@@ -50,7 +50,7 @@ Trace records align with protocol types in `g8e.eval.v1` and are written beneath
 Before or alongside full campaign execution, run the Phase 1A chat-path vertical acceptance matrix:
 
 ```bash
-./g8e eval chat accept \
+./g8e eval gate chat run \
   --model <ollama-model> \
   --campaign-id <campaign-id> \
   --registry-file <registry-freeze.json>

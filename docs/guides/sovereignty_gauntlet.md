@@ -30,10 +30,10 @@ The current repository supports four complementary evidence lanes. Demo evidence
 | --- | --- | --- | --- |
 | Unified-stack proof | Developer, AI, security, and product posts | Real or fake model-driven governed mutations, signed receipt export, CSV store exports, and integrity verification | Publish measured scenario outcomes and passing checks with the provider clearly identified |
 | FedRAMP and DHS demos | Compliance, public-sector, defense, and event demonstrations | Concise or verbose typed scenario results, persisted manifests, content-addressed receipts, persistence attestations and state observations, independent demo-run verification, bound KSI evidence when supplied with the required assessment context, and tactical TUI output | Publish as a labeled demonstration; state that target resources and data are synthetic |
-| Evidence-grade evals | Engineering diagnostics and future campaign input | Go-native `core-execution-boundary` reports with canonical `report.json`, `verification.json`, content-addressed evidence, 10 required invariants, and independent `g8e eval verify` | State that the run used the native execution-boundary suite; do not use it as the unimplemented flagship matrix |
+| Evidence-grade evals | Engineering diagnostics and future campaign input | Go-native `core-execution-boundary` reports with canonical `report.json`, `verification.json`, content-addressed evidence, 10 required invariants, and independent `g8e eval boundary verify` | State that the run used the native execution-boundary suite; do not use it as the unimplemented flagship matrix |
 | Signed compliance report bundle | Point-in-time, scope-bound offline review | Canonical analysis, framework profiles, deterministic JSON, OSCAL, Markdown, HTML, and CLI renderers, protected source inventories, a signed bundle, and a canonical offline verification report | Publish the exact verified bundle scope and external trust inputs; do not relabel point-in-time report integrity as certification, recurring effectiveness, or eval-native verification |
 
-The Go-native `g8e eval run core-execution-boundary` command exercises the authenticated Gateway ingress, one exact remote Operator, and an independent networkless target observer. `g8e eval verify` independently verifies the complete persisted report and content-addressed evidence without executing another mutation.
+The Go-native `g8e eval boundary run` command exercises the authenticated Gateway ingress, one exact remote Operator, and an independent networkless target observer. `g8e eval boundary verify` independently verifies the complete persisted report and content-addressed evidence without executing another mutation.
 
 The compliance CLI separately implements `g8e compliance evidence-graph verify`, signed `g8e compliance report generate`, and complete offline `g8e compliance report verify`. The report verifier independently replays the protected demo, eval, KSI, commitment, customer or assessor attestation, audit, ledger, and build or configuration sources represented in that signed report bundle, reproduces analysis and renderers, and requires external assessed trust. It is not an eval-native verifier and does not turn the available suites into the planned frozen utility/privacy/policy/protocol experiment. The preregistered minimum 25-scenario flagship matrix, generated proof card, eval-native canonical analysis and signed bundle, statistical release gate, and complete eval-native verifier remain unimplemented. Until those capabilities exist and all publication gates pass, describe this work as a **Sovereignty Gauntlet demonstration** or **rehearsal**, not the completed publication-grade flagship experiment.
 
@@ -377,7 +377,7 @@ Say “simulated coalition datalink” and “synthetic data.” Do not claim cl
 Run the Go-native suite against the healthy unified stack with one active remote Operator:
 
 ```bash
-./g8e eval run core-execution-boundary
+./g8e eval boundary run
 ```
 
 The command submits one allowed typed file mutation through the authenticated Gateway command ingress and the exact remote Operator session, observes the controlled target through the networkless Compose observer, then submits the doctrine-prohibited equivalent and proves rejection without another effect. It persists `report.json`, `verification.json`, and digest-named evidence files under `.g8e/data/eval/runs/<run-id>/`.
@@ -385,8 +385,8 @@ The command submits one allowed typed file mutation through the authenticated Ga
 Re-run verification and inspect the report in separate read-only invocations:
 
 ```bash
-./g8e eval verify <run-id>
-./g8e eval show <run-id>
+./g8e eval boundary verify <run-id>
+./g8e eval boundary show <run-id>
 ```
 
 Acceptance requires 10/10 required invariants, valid verification with zero failures, exactly one allowed marker, no prohibited additional effect, valid receipt and persistence signatures, a valid deterministic protocol chain, exact Operator and session binding, and Gateway L1 attribution for the prohibited attempt. See [Evaluations](../architecture/evals.md) for the complete evidence and trust-boundary model.

@@ -26,7 +26,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
-	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
@@ -835,9 +834,9 @@ func TestEvalCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 		name string
 		args []string
 	}{
-		{name: "run", args: []string{"run", evaluation.CoreExecutionBoundarySuiteID}},
-		{name: "verify", args: []string{"verify", "run-id"}},
-		{name: "show", args: []string{"show", "run-id"}},
+		{name: "run", args: []string{"boundary", "run"}},
+		{name: "verify", args: []string{"boundary", "verify", "run-id"}},
+		{name: "show", args: []string{"boundary", "show", "run-id"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

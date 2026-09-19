@@ -13,7 +13,7 @@ This is the single typed source of truth for the public-safe read model the brow
 
 ## Frozen enums
 
-The enum values are reconciled against the real source data in `.local.dev/campaign/overnight-baseline/run-20260914-r2/` so Worker 1's projector emits faithful records without remapping.
+The enum values are reconciled against canonical protocol vectors and checked-in explorer fixtures so the projector emits faithful records without remapping.
 
 - `QualityState`: `verified_public`, `exploratory_verified`, `exploratory_partial`, `live_in_progress`, `terminal_failed`, `dead_evidence`, `not_evaluated`, `unavailable`. Matches the plan's data quality model table exactly. Inventory-only models use the `inventory_only` boolean flag on `ModelSummary` plus `quality_state: not_evaluated`; `inventory_only` is not a quality state.
 - `DatasetKind`: `exploratory_baseline`, `verified_public_snapshot`, `live_run`. The site never averages across datasets.

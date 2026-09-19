@@ -388,9 +388,9 @@ Record owner-operated and human gates in the release notes (`### Deferred` or a 
 A release that changes native evaluation runtime behavior runs the Go-native `core-execution-boundary` suite against a healthy unified stack with one active remote Operator. Documentation-only changes and isolated unit-test changes do not require another mutation run when an accepted runtime result already covers the unchanged implementation.
 
 ```bash
-./g8e eval run core-execution-boundary
-./g8e eval verify <run-id>
-./g8e eval show <run-id>
+./g8e eval boundary run
+./g8e eval boundary verify <run-id>
+./g8e eval boundary show <run-id>
 ```
 
 The run command must report 10/10 required invariants, a passing summary, valid verification, and one exact Operator and session. The separate verification invocation must report `Valid: true` with zero failures, and `show` must return the same suite, Operator, session, status, and summary. Retain the run ID and command outputs in the release acceptance record. The persisted authority is the canonical `report.json`, `verification.json`, and digest-named evidence under `.g8e/data/eval/runs/<run-id>/`.
