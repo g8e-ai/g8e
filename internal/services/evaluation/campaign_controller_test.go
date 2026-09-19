@@ -112,3 +112,22 @@ func TestCampaignControllerInitializeScheduleAndResume(t *testing.T) {
 	require.True(t, ok)
 	assert.NotEqual(t, first.GetAssignmentId(), resumed.GetAssignmentId())
 }
+
+func TestCampaignControllerRunSummaryCountsAssignments(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	controller := NewCampaignController(store, nil, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+	req := testCampaignInitRequest(t)
+	_, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	count, err := controller.ScheduleHomogeneousRun(context.Background(), req.RunID)
+	require.NoError(t, err)
+	require.Greater(t, count, 0)
+
+	summary, err := controller.RunSummary(context.Background(), req.RunID)
+	require.NoError(t, err)
+	require.NotNil(t, summary)
+	assert.Equal(t, req.RunID, summary.Run.GetRunId())
+	assert.Greater(t, summary.ExpectedAssignment, uint64(0))
+	assert.Equal(t, uint32(count), summary.QueuedCount)
+}

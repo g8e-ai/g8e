@@ -170,7 +170,7 @@ func TestWriteModelInventoryFreezeFile_WritesJSON(t *testing.T) {
 	path := filepath.Join(root, "inventory-freeze.json")
 	freeze := &evaluation.ModelInventoryFreeze{
 		CampaignID:           "eval-init-qwen3-4b",
-		RegistryDigest:         "digest-1",
+		RegistryDigest:       "digest-1",
 		HomogeneousCellCount: 75,
 		Variants:             []*evalv1.ModelVariant{{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "digest"}},
 	}
@@ -220,6 +220,37 @@ func TestCheckHTTPReachable_RejectsMissingURLAndNon2xx(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	require.Error(t, checkHTTPReachable(context.Background(), server.URL))
+}
+
+func TestWriteCampaignQueueRunPlan_TextAndJSON(t *testing.T) {
+	plan := []evaluation.CampaignQueueModel{
+		{VariantID: "qwen3-4b", ServedModelTag: "qwen3:4b", Status: "pending"},
+	}
+	command := &cobra.Command{}
+	var output bytes.Buffer
+	command.SetOut(&output)
+	require.NoError(t, writeCampaignQueueRunPlan(command, plan, false))
+	assert.Contains(t, output.String(), "qwen3-4b")
+
+	command = evalCmdWithConfig(testNativeEvalDeps(t.TempDir()))
+	enableGlobalJSON(t, command)
+	output.Reset()
+	command.SetOut(&output)
+	require.NoError(t, writeCampaignQueueRunPlan(command, plan, true))
+	assert.Contains(t, output.String(), `"models"`)
+}
+
+func TestCampaignWitnessStatus_UsesOperatorList(t *testing.T) {
+	_, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
+	defer cleanup()
+
+	cfg, err := deps.configLoader("")
+	require.NoError(t, err)
+
+	status, err := campaignWitnessStatus(cmd, deps, cfg)
+	require.NoError(t, err)
+	assert.Zero(t, status.ActiveObserverCount)
+	assert.Zero(t, status.ActiveProvenanceCount)
 }
 
 func testNativeEvalDeps(root string) nativeEvalDeps {

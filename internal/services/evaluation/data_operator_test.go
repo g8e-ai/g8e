@@ -97,3 +97,21 @@ func TestSelectCampaignDataOperator_ResolvesBySessionID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "sess-data-2", selected.OperatorSessionID)
 }
+
+func TestSelectDataOperator_ResolvesSingleActiveOperator(t *testing.T) {
+	t.Parallel()
+	operators := []models.OperatorDocumentGo{
+		{
+			ID:                "data-1",
+			OperatorSessionID: "sess-data-1",
+			Status:            constants.OperatorStatusActive,
+			OperatorType:      constants.OperatorTypeRemote,
+		},
+	}
+	selected, err := SelectDataOperator(operators, "")
+	require.NoError(t, err)
+	assert.Equal(t, "sess-data-1", selected.OperatorSessionID)
+
+	_, err = SelectDataOperator(operators, "missing")
+	require.Error(t, err)
+}

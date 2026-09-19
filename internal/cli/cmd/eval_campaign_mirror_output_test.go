@@ -19,11 +19,11 @@ import (
 func TestWriteCampaignMirrorRestoreQueueResult(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	writeCampaignMirrorRestoreQueueResult(&stdout, &stderr, &evaluation.CampaignMirrorReconcileResult{
-		RestoredRunIDs:    []string{"run-1"},
-		PublishedRecords:  12,
-		SkippedRunIDs:     []string{"run-2"},
-		HostAbsentRunIDs:  []string{"run-3"},
-		FailedRuns:        map[string]string{"run-4": "mirror unavailable"},
+		RestoredRunIDs:   []string{"run-1"},
+		PublishedRecords: 12,
+		SkippedRunIDs:    []string{"run-2"},
+		HostAbsentRunIDs: []string{"run-3"},
+		FailedRuns:       map[string]string{"run-4": "mirror unavailable"},
 	})
 	out := stdout.String()
 	assert.Contains(t, out, "Restored 1 verified dataset(s)")

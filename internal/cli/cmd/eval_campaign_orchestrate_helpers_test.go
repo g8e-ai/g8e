@@ -27,9 +27,9 @@ func TestWriteCampaignStartPlan_TextAndJSON(t *testing.T) {
 	plan := &evaluation.CampaignStartPlan{
 		CampaignID:           "eval-init-qwen3-4b",
 		RunID:                "run-123",
-		InventoryPath:          ".g8e/eval/inventories/eval-init-qwen3-4b.json",
+		InventoryPath:        ".g8e/eval/inventories/eval-init-qwen3-4b.json",
 		ModelTags:            []string{"qwen3:4b"},
-		RegistryDigest:         "digest-1",
+		RegistryDigest:       "digest-1",
 		HomogeneousCellCount: 75,
 	}
 	sessions := campaignOperatorSessions{
@@ -103,8 +103,8 @@ func TestResolveCampaignRunID(t *testing.T) {
 			want:      "run-flag",
 		},
 		{
-			name:    "conflicting flag and positional",
-			command: "verify",
+			name:      "conflicting flag and positional",
+			command:   "verify",
 			flagValue: "run-a",
 			args:      []string{"run-b"},
 			wantErr:   "conflicting run ID",

@@ -52,3 +52,7 @@ func TestCampaignWitnessStatusFromOperators(t *testing.T) {
 	assert.Equal(t, 1, status.ActiveProvenanceCount)
 	assert.Equal(t, 1, status.ActiveObserverOllamaCount)
 }
+
+func TestTierAVerifyNotes(t *testing.T) {
+	assert.Equal(t, "75/75 Tier-A verify PASS (--require-provider-observation --require-model-provenance); run run-abc", TierAVerifyNotes("run-abc"))
+}

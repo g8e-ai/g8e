@@ -604,3 +604,194 @@ func TestObserveController_HandleListDownloads_ReturnsPage(t *testing.T) {
 	c.handleListDownloads(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 }
+
+func seedObserveRunProjection(t *testing.T, svc *ObserveService, userID, runID string, observedAt time.Time) {
+	t.Helper()
+	proj := runProjection{
+		UserID:         userID,
+		SchemaVersion:  constants.ObserveAPIReadModelSchemaVersion,
+		RunID:          runID,
+		RunKind:        models.RunKindInvestigation,
+		DisplayName:    "run " + runID,
+		Status:         models.RunLifecycleStatusRunning,
+		TotalTasks:     2,
+		CompletedTasks: 1,
+		ObservedAt:     observedAt,
+	}
+	payload, err := json.Marshal(proj)
+	require.NoError(t, err)
+	require.NoError(t, svc.docStore.DocSet(marshaler.CollectionName(constants.CollectionObserveRuns), runID, payload))
+}
+
+func TestObserveController_HandleListRuns_ReturnsPage(t *testing.T) {
+	svc := newObserveServiceUnitTest(t)
+	seedObserveRunProjection(t, svc, "user-1", "run-1", time.Now().UTC())
+	c := &ObserveController{
+		logger:     testutil.NewTestLogger(),
+		observeSvc: svc,
+		responder:  response.NewWriter(testutil.NewTestLogger()),
+	}
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveRuns, nil)
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
+	rec := httptest.NewRecorder()
+	c.handleListRuns(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var page models.ObservePage
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &page))
+	assert.Equal(t, constants.ObserveAPIReadModelSchemaVersion, page.SchemaVersion)
+}
+
+func TestObserveController_HandleListRuns_RequiresAuth(t *testing.T) {
+	c := newTestObserveController(t)
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveRuns, nil)
+	rec := httptest.NewRecorder()
+	c.handleListRuns(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestObserveController_HandleGetRun_ReturnsDetail(t *testing.T) {
+	svc := newObserveServiceUnitTest(t)
+	seedObserveRunProjection(t, svc, "user-1", "run-detail-1", time.Now().UTC())
+	c := &ObserveController{
+		logger:     testutil.NewTestLogger(),
+		observeSvc: svc,
+		responder:  response.NewWriter(testutil.NewTestLogger()),
+	}
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveRunsByID+"run-detail-1", nil)
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
+	rec := httptest.NewRecorder()
+	c.handleGetRun(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var detail models.RunDetail
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &detail))
+	assert.Equal(t, "run-detail-1", detail.RunID)
+}
+
+func TestObserveController_HandleGetRun_NotFound(t *testing.T) {
+	svc := newObserveServiceUnitTest(t)
+	c := &ObserveController{
+		logger:     testutil.NewTestLogger(),
+		observeSvc: svc,
+		responder:  response.NewWriter(testutil.NewTestLogger()),
+	}
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveRunsByID+"missing-run", nil)
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
+	rec := httptest.NewRecorder()
+	c.handleGetRun(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestObserveController_HandleGetEval_ReturnsDetail(t *testing.T) {
+	svc := newObserveServiceUnitTest(t)
+	seedObserveEvalProjection(t, svc, "user-1", "eval-detail-1", time.Now().UTC())
+	c := &ObserveController{
+		logger:     testutil.NewTestLogger(),
+		observeSvc: svc,
+		responder:  response.NewWriter(testutil.NewTestLogger()),
+	}
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveEvalsByID+"eval-detail-1", nil)
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
+	rec := httptest.NewRecorder()
+	c.handleGetEval(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var detail models.EvalDetail
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &detail))
+	assert.Equal(t, "eval-detail-1", detail.RunID)
+}
+
+func TestObserveController_HandleGetDownload_ReturnsMetadata(t *testing.T) {
+	svc := newObserveServiceUnitTest(t)
+	seedObserveDownloadProjection(t, svc, "user-1", "artifact-meta-1", time.Now().UTC())
+	c := &ObserveController{
+		logger:     testutil.NewTestLogger(),
+		observeSvc: svc,
+		responder:  response.NewWriter(testutil.NewTestLogger()),
+	}
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveDownloadsByID+"artifact-meta-1", nil)
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
+	rec := httptest.NewRecorder()
+	c.handleGetDownload(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var artifact models.DownloadArtifact
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &artifact))
+	assert.Equal(t, "artifact-meta-1", artifact.ArtifactID)
+}
+
+type stubDownloadStreamer struct {
+	err error
+}
+
+func (s *stubDownloadStreamer) StreamDownload(_ context.Context, _ string, artifactID string, w http.ResponseWriter) error {
+	if s.err != nil {
+		return s.err
+	}
+	w.WriteHeader(http.StatusOK)
+	_, err := w.Write([]byte("payload-" + artifactID))
+	return err
+}
+
+func TestObserveController_HandleGetDownload_StreamsWhenRequested(t *testing.T) {
+	svc := newObserveServiceUnitTest(t)
+	seedObserveDownloadProjection(t, svc, "user-1", "artifact-stream-1", time.Now().UTC())
+	c := &ObserveController{
+		logger:           testutil.NewTestLogger(),
+		observeSvc:       svc,
+		responder:        response.NewWriter(testutil.NewTestLogger()),
+		downloadStreamer: &stubDownloadStreamer{},
+	}
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveDownloadsByID+"artifact-stream-1?download=1", nil)
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
+	rec := httptest.NewRecorder()
+	c.handleGetDownload(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "payload-artifact-stream-1", rec.Body.String())
+}
+
+func TestObserveController_HandleBootstrap_ReturnsSnapshot(t *testing.T) {
+	svc := newObserveServiceUnitTest(t)
+	seedObserveRunProjection(t, svc, "user-1", "run-bootstrap-1", time.Now().UTC())
+	c := &ObserveController{
+		logger:     testutil.NewTestLogger(),
+		observeSvc: svc,
+		responder:  response.NewWriter(testutil.NewTestLogger()),
+	}
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveBootstrap, nil)
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
+	rec := httptest.NewRecorder()
+	c.handleBootstrap(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var snapshot models.ObserveBootstrapSnapshot
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &snapshot))
+	assert.Equal(t, constants.ObserveAPIReadModelSchemaVersion, snapshot.SchemaVersion)
+}
+
+func TestSortEvals_DescByObservedAtThenRunID(t *testing.T) {
+	t1 := time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
+	evals := []evalProjection{
+		{EvalDetail: models.EvalDetail{RunID: "b", ObservedAt: t1}},
+		{EvalDetail: models.EvalDetail{RunID: "c", ObservedAt: t1}},
+		{EvalDetail: models.EvalDetail{RunID: "a", ObservedAt: t1.Add(-time.Hour)}},
+	}
+	sortEvals(evals)
+	assert.Equal(t, "c", evals[0].RunID)
+	assert.Equal(t, "b", evals[1].RunID)
+	assert.Equal(t, "a", evals[2].RunID)
+}
+
+func TestSortDownloads_DescByGeneratedAtThenArtifactID(t *testing.T) {
+	t1 := time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
+	downloads := []downloadProjection{
+		{DownloadArtifact: models.DownloadArtifact{ArtifactID: "art-b", GeneratedAt: t1}},
+		{DownloadArtifact: models.DownloadArtifact{ArtifactID: "art-c", GeneratedAt: t1}},
+		{DownloadArtifact: models.DownloadArtifact{ArtifactID: "art-a", GeneratedAt: t1.Add(-time.Hour)}},
+	}
+	sortDownloads(downloads)
+	assert.Equal(t, "art-c", downloads[0].ArtifactID)
+	assert.Equal(t, "art-b", downloads[1].ArtifactID)
+	assert.Equal(t, "art-a", downloads[2].ArtifactID)
+}
