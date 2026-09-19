@@ -44,7 +44,14 @@ def _trace_root() -> Path:
     return (base / "data" / "evaluation" / "traces").resolve()
 
 
+def _validate_trace_segment(value: str, label: str) -> None:
+    if not value or value in {".", ".."} or "/" in value or "\\" in value:
+        raise ValueError(f"invalid {label}")
+
+
 def _trace_path(assignment_id: str, evaluation_attempt_id: str) -> Path:
+    _validate_trace_segment(assignment_id, "assignment_id")
+    _validate_trace_segment(evaluation_attempt_id, "evaluation_attempt_id")
     return _trace_root() / assignment_id / f"{evaluation_attempt_id}.json"
 
 

@@ -176,6 +176,9 @@ func (fs *localFS) ReadFile(ctx context.Context, relPath string) ([]byte, error)
 		return nil, err
 	}
 	absPath := fs.Resolve(relPath)
+	if !fs.isWithinRuntimeDir(absPath) {
+		return nil, fmt.Errorf("%w: %s", constants.ErrPathValidation, absPath)
+	}
 	f, err := os.Open(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {

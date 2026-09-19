@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -430,7 +431,7 @@ func (s *ObserveProducerService) emitSSEEvent(route SSERoute, eventType string, 
 // correct Content-Type, Content-Length, and Content-Disposition headers before
 // streaming the artifact bytes.
 func (s *ObserveProducerService) StreamDownload(ctx context.Context, userID, artifactID string, w http.ResponseWriter) error {
-	if artifactID == "" {
+	if artifactID == "" || strings.Contains(artifactID, "/") || strings.Contains(artifactID, "\\") {
 		return fmt.Errorf("observe producer: stream download: %w", constants.ErrObserveDownloadNotFound)
 	}
 

@@ -345,6 +345,12 @@ jobs:
         working-directory: dashboard
         run: npm ci
 
+      - name: Build g8e-adapter
+        working-directory: dashboard/g8e-adapter
+        run: |
+          npm ci
+          npm run build
+
       - name: Run ESLint
         working-directory: dashboard
         run: npm run lint

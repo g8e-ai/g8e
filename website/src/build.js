@@ -22,7 +22,11 @@ const LOCAL_IMAGES = new Map([
 ]);
 
 export function slugify(value) {
-  return value.toLowerCase().trim().replace(/<[^>]*>/g, '').replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-').replace(/-+/g, '-');
+  let cleaned = value.toLowerCase().trim();
+  while (/<[^>]*>/.test(cleaned)) {
+    cleaned = cleaned.replace(/<[^>]*>/g, '');
+  }
+  return cleaned.replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-').replace(/-+/g, '-');
 }
 
 export function repositoryLink(href) {
