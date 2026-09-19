@@ -56,6 +56,21 @@ g8eg and g8eo share one statically linked Go binary running in separate modes. g
 
 Read the [governance architecture](docs/architecture/governance.md) for posture semantics and the [protocol specification](protocol/docs/spec.md) for the canonical wire contract.
 
+## Confidential edge execution
+
+The same Gateway + Operator topology that powers evaluations is an architecture for **Confidential Edge Execution with Governed State Mutation**: local artifact provenance, runtime telemetry observation, a central Policy Decision Point (Gateway), and outbound-only state-mutation Operators at the data owner's boundary.
+
+Evaluations exercise this pattern in a read-only telemetry mode — proving that allowed mutations succeed, prohibited ones fail closed, and independent observers can attest terminal state without network access. When AI **actively alters system state** from local inference — merging a patch, actuating industrial controls, writing diagnostic notes to an EHR, or executing a trade — zero-trust provenance and outbound-only telemetry scale with the consequence of each mutation.
+
+| Role | What it attests or enforces |
+| --- | --- |
+| **Provenance Operator** | Cryptographic integrity of local artifacts (code trees, firmware, model weights, market feeds) before inference or mutation |
+| **Observer** | Runtime telemetry at the execution boundary (tests, sensors, PHI isolation, execution latency) without mutating target state |
+| **Data Operator** | Governed state mutation at the owner's boundary (PR merges, SCADA actuation, EHR writes, ledger execution) |
+| **Gateway (PDP)** | Central policy gates that admit or block mutations based on provenance proofs, observer telemetry, and posture-required authorization |
+
+The reference implementation ships evaluation programs that prove this topology end to end. The same separation applies to DevSecOps auto-remediation, OT/SCADA anomaly response, confidential healthcare AI, and sovereign financial risk management. See [Evaluations](docs/architecture/evals.md#beyond-evaluations) and the [position paper](docs/core/position_paper.md#57-confidential-edge-execution-with-governed-state-mutation) for domain mirrors and the common pattern across workflows.
+
 ## Native evaluations
 
 The native evaluator proves the remote execution boundary against the real unified stack. It does not invoke Python, g8ee, a model provider, synthetic simulators, or a compatibility reader.
@@ -121,7 +136,7 @@ The boundary governs operations that traverse g8e. It does not sandbox an AI cli
 | Install and operate g8e | [Getting Started](docs/guides/getting_started.md), [Unified Stack](docs/guides/unified_stack.md), [Operator Connection](docs/guides/connect_operator_to_gateway.md), and [Connect a browser app](docs/guides/lovable.md) (`g8e gw connect`) |
 | Understand trust and execution | [Architecture Overview](docs/architecture/overview.md), [Governance](docs/architecture/governance.md), [AI Agent Boundary](docs/architecture/agents.md), [Authentication](docs/architecture/auth.md), and [Network](docs/architecture/network.md) |
 | Build an integration | [Build Apps](docs/guides/build_apps.md), [Connect Apps](docs/guides/connect_apps_to_gateway.md), [MCP](protocol/docs/mcp.md), and [A2A](protocol/docs/a2a.md) |
-| Evaluate execution | [Evaluations](docs/architecture/evals.md) |
+| Evaluate execution and governed-edge topology | [Evaluations](docs/architecture/evals.md) (includes domain mirrors beyond model scoring) |
 | Evaluate evidence and claims | [Compliance Evidence](docs/reference/compliance-evidence.md), [Compliance Alignment](docs/reference/compliance-alignment.md), and [Sovereignty Gauntlet](docs/guides/sovereignty_gauntlet.md) |
 | Develop and release | [Developer Guidelines](docs/devs/devs.md), [Code Map](docs/devs/codemap.md), [Testing](docs/devs/tests.md), and [Release Process](docs/devs/release_process.md) |
 

@@ -5,16 +5,139 @@ parent: Architecture
 
 # Evaluations
 
-Last Updated: 2026-09-18
+Last Updated: 2026-09-19
 Version: v2.1.8
 
 ## Scope
 
-g8e owns the platform evaluation programs: the Go-native **execution-boundary** suite and **model campaign** scoring that exercises real models through governed inference, tool dispatch, provider-boundary hardware observation, and storage-side model provenance attestation. The evaluator, campaign controller, evidence store, and verifier live in the `g8e` binary under `internal/services/evaluation/` and the `g8e eval` CLI.
+g8e owns the platform evaluation programs: the Go-native **execution-boundary** suite and **model campaign** scoring that exercises real models through governed inference, tool dispatch, provider-boundary hardware observation, and storage-side model provenance attestation. These programs are the reference proof of the Gateway + Operator topology described in [Beyond evaluations](#beyond-evaluations); evaluations exercise that topology in a read-only telemetry mode, but the same provenance, observation, PDP, and outbound-mutation separation applies to state-altering workflows well outside model scoring. The evaluator, campaign controller, evidence store, and verifier live in the `g8e` binary under `internal/services/evaluation/` and the `g8e eval` CLI.
 
 g8ee participates in model campaigns as the production chat path (`POST /api/v1/chat`) but does not own platform evidence, verification, or campaign orchestration. See [Ensemble Evaluations](../ensemble/evals.md) for how g8ee uses these programs.
 
 Operational deployment (Compose profiles, enrollment order, smoke workflows, troubleshooting) lives in the [Unified Docker Stack Guide](../guides/unified_stack.md). Runtime campaign inventories and rollout queues live under `.g8e/eval/` (gitignored); checked-in templates and the public/private boundary are documented in [eval/examples/README.md](../../eval/examples/README.md).
+
+---
+
+## Beyond evaluations
+
+g8e evaluation programs exercise one instance of a broader architecture: **Confidential Edge Execution with Governed State Mutation**. The same Gateway + Operator topology combines local artifact provenance, runtime telemetry observation, a central Policy Decision Point (Gateway), and outbound-only state-mutation Operators at the data owner's boundary.
+
+Evaluations are predominantly a **read-only telemetry use case**. They prove that:
+
+- allowed governed mutations succeed through the real Gateway and remote Operator;
+- doctrine-prohibited equivalents fail closed without another effect;
+- independent observers can attest terminal state without network access or write authority; and
+- Provenance and Observer Operators can witness model weights and provider-boundary hardware separately from the inference executor.
+
+When AI **actively alters system state** from local inference — not merely scores model output — the value of zero-trust provenance and outbound-only telemetry scales with the consequence of each mutation. The evaluation topology is the reference proof of that separation; the domain mirrors below show where the same pattern applies in production workflows.
+
+### Common topology
+
+Every mirror deployment separates four roles:
+
+| Role | Evaluation instance | General responsibility |
+| --- | --- | --- |
+| **Provenance Operator** | Storage-side model weight attestation | Hashes local artifacts inference depends on (code, firmware, scans, feeds, weights) |
+| **Observer** | Provider-boundary GPU/RAM sampling; networkless fixture reader | Captures runtime telemetry at the execution boundary without mutating target state |
+| **Data Operator** | Campaign host tool/filesystem/process boundary | Mutates authoritative state at the owner's boundary (PRs, actuators, EHR, trades) |
+| **Gateway (PDP)** | Campaign and boundary-suite policy admission | Enforces central policy from provenance proofs, observer telemetry, and posture-required authorization |
+
+All Operators connect outbound-only over mTLS. The Gateway admits work; each Operator independently verifies envelopes before any local side effect or witness publication.
+
+### Domain mirrors
+
+The following workflows reuse the same topology with different artifacts, observers, mutators, and policy gates. They are architectural mappings — not claims that g8e ships turnkey sector products — but they explain why evaluation witness separation generalizes.
+
+#### 1. Autonomous zero-trust DevSecOps and auto-remediation
+
+Instead of scoring models, the system acts as an autonomous tier-3 DevSecOps engineer remediating critical vulnerabilities in air-gapped repositories.
+
+```text
+[Local Code Repo] ---> (Provenance Operator: hashes Git tree and SAST binaries)
+                              | outbound
+                              v
+   [Inference Engine] ---> [g8e Gateway] <--- (Data Operator: pushes verified Git PRs)
+   (runs local codegen)       ^
+                              | outbound
+[Compiler / Sandbox] ---> (Observer: captures test and memory telemetry)
+```
+
+- **Workflow:** A scanner flags a zero-day. A local coding agent generates a patch, compiles it, and runs unit tests.
+- **Provenance Operator:** Hashes the codebase, compiler binary, and local LLM so the patch environment has not been tampered with.
+- **Observer:** Captures execution telemetry, memory behavior, and test pass/fail metrics inside a local sandbox.
+- **Data Operator:** Mutates state by opening a cryptographically signed pull request or merging into the enterprise repository.
+- **Gateway value:** SecOps policy blocks code mutation on the primary branch unless provenance confirms pristine source hashes and the observer confirms 100% test pass without unauthorized network egress.
+
+#### 2. Critical infrastructure and OT/SCADA cyber-physical response
+
+In operational technology, SCADA, and industrial IoT, cloud latency and internet ingress are often unacceptable due to safety and physical security constraints.
+
+```text
+[PLC Firmware / Logic] ---> (Provenance Operator: hashes sensor baselines and edge weights)
+                                   | outbound
+                                   v
+    [Edge GPU Inference] ---> [g8e Gateway] <--- (Data Operator: actuates PLC valves/breakers)
+    (runs anomaly model)           ^
+                                   | outbound
+  [Physical OT Sensors] ---> (Observer: monitors voltage, pressure, temp telemetry)
+```
+
+- **Workflow:** Local sensors detect vibration anomalies in a hydro turbine. An edge model decides whether to drop load or adjust valve pressure.
+- **Provenance Operator:** Hashes PLC configuration, sensor calibrations, and edge model weights against supply-chain or firmware tampering.
+- **Observer:** Monitors GPU load, physical sensor telemetry, and reaction latency.
+- **Data Operator:** Mutates physical state through low-level actuation commands to the SCADA controller.
+- **Gateway value:** Central industrial safety policy verifies automated physical changes stay within pre-approved engineering envelopes while the SOC receives outbound plant telemetry.
+
+#### 3. Confidential healthcare AI and local EHR state mutation
+
+Healthcare deployments must keep PHI on premises while still using AI on DICOM images and clinical notes.
+
+```text
+[DICOM Medical Scans] ---> (Provenance Operator: hashes patient data headers and model identity)
+                                   | outbound
+                                   v
+  [Hospital Edge GPU]  ---> [g8e Gateway] <--- (Data Operator: mutates central EHR record)
+  (runs diagnostic AI)             ^
+                                   | outbound
+   [Local Inference]   ---> (Observer: monitors confidence and memory isolation)
+```
+
+- **Workflow:** A hospital GPU runs an oncology diagnostic model on fresh CT scans, drafting notes and flagging urgent cases.
+- **Provenance Operator:** Proves DICOM scan header integrity and confirms the diagnostic model matches FDA/compliance certification.
+- **Observer:** Tracks confidence thresholds, processing speed, and verifies PHI did not leak into ephemeral temp directories.
+- **Data Operator:** Appends approved diagnostic notes to the hospital's central EHR.
+- **Gateway value:** CISOs and HIPAA auditors receive an immutable audit trail that inference used certified models without patient data traversing external networks.
+
+#### 4. Sovereign financial risk management and autonomous ledger execution
+
+High-frequency trading and treasury management execute automated trades or rebalance exposure from local model outputs over confidential order books.
+
+```text
+[Confidential Order Book] ---> (Provenance Operator: hashes financial feeds and model weights)
+                                      | outbound
+                                      v
+     [High-Spec GPU Host] ---> [g8e Gateway] <--- (Data Operator: executes ledger/broker trade)
+     (runs risk engine)               ^
+                                      | outbound
+     [Execution Runtime]  ---> (Observer: tracks order slippage and execution speed)
+```
+
+- **Workflow:** A trading firm runs local risk models that rebalance portfolios or issue margin calls.
+- **Provenance Operator:** Verifies integrity of market data feeds and proprietary model weights before order generation.
+- **Observer:** Captures execution latency, slippage, and node stability during volatile markets.
+- **Data Operator:** Executes trade orders against exchange APIs or blockchain smart contracts.
+- **Gateway value:** Regulatory and risk policy blocks state-mutating transactions that exceed pre-set dollar limits or risk ratios even if a local agent misbehaves during market panic.
+
+### Pattern across domains
+
+| Layer | DevSecOps | OT / SCADA | Healthcare | FinTech |
+| --- | --- | --- | --- | --- |
+| **Provenance** | Git tree and compiler | PLC configs and firmware | DICOM scans and FDA weights | Order book and risk weights |
+| **Observer** | Test execution and build | Sensor heat, pressure, latency | PHI isolation and confidence | Latency and slippage |
+| **Data Operator** | Merge pull requests | Actuate valves / breakers | Mutate central EHR | Execute trades |
+| **Gateway (PDP)** | Code release policy | Physical safety policy | HIPAA / FDA compliance | Treasury / risk limits |
+
+The evaluation programs below instantiate this topology on the reference stack. Model campaigns add Provenance and Observer witness Operators; the native execution-boundary suite adds a networkless target observer. See the [position paper](../core/position_paper.md#57-confidential-edge-execution-with-governed-state-mutation) for the research framing and claim boundaries.
 
 ---
 
@@ -288,6 +411,7 @@ Provider-boundary sampling runs in the Observer Operator through `internal/servi
 
 ## Related documentation
 
+- [Position Paper](../core/position_paper.md) — Research framing for confidential edge execution and governed state mutation
 - [Unified Docker Stack Guide](../guides/unified_stack.md) — Compose profiles, enrollment order, campaign workflows, and troubleshooting
 - [Ensemble Evaluations](../ensemble/evals.md) — How g8ee uses g8e evals through the production chat path
 - [Ensemble (g8ee)](./ensemble.md) — g8ee's role in the platform and trust boundaries
