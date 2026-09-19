@@ -184,7 +184,7 @@ When reasoning agents (Sage or Dash) encounter underspecified requests or missin
 
 ## AI Tribunal Consensus Lifecycle
 
-The 5-member AI Tribunal (Axiom, Concord, Variance, Pragma, Nemesis) and the Auditor emit fine-grained SSE events during command derivation and consensus deliberation. Events are managed by `TribunalEmitter` (`app/services/ai/tribunal/emitter.py`).
+The 5-member AI Tribunal (Axiom, Concord, Variance, Pragma, Nemesis), Marshal, and the Auditor emit fine-grained SSE events during command derivation and consensus deliberation. Events are managed by `TribunalEmitter` (`app/services/ai/tribunal/emitter.py`).
 
 ### Fail-Closed Terminal vs. Progress Events
 
@@ -200,10 +200,13 @@ The `TribunalEmitter` classifies events into terminal and progress categories:
 2. AI_CONSENSUS_VOTING_PASS_COMPLETED    (Emitted as each member finishes command generation)
 3. AI_CONSENSUS_VOTING_CONSENSUS_REACHED (Cluster analysis resolves winning command)
    -- or AI_CONSENSUS_VOTING_CONSENSUS_FAILED / AI_CONSENSUS_VOTING_DISSENT_RECORDED
-4. AI_CONSENSUS_VOTING_AUDIT_STARTED     (Auditor reviews winning command candidate)
-5. AI_CONSENSUS_VOTING_AUDIT_COMPLETED   (Auditor issues ok, revised, or swap verdict)
-6. AI_CONSENSUS_SESSION_COMPLETED        (Final approved command ready for execution)
+4. AI_CONSENSUS_SESSION_MARSHAL_BLOCKED  (Optional: Marshal classifies HIGH risk and returns feedback)
+5. AI_CONSENSUS_VOTING_AUDIT_STARTED     (Auditor reviews winning command candidate)
+6. AI_CONSENSUS_VOTING_AUDIT_COMPLETED   (Auditor issues ok, revised, or swap verdict)
+7. AI_CONSENSUS_SESSION_COMPLETED        (Final approved command ready for execution)
 ```
+
+`AI_CONSENSUS_SESSION_MARSHAL_BLOCKED` uses wire value `g8e.v1.ai.consensus.session.marshal.blocked`. A second HIGH-risk block for the same investigation emits `AI_AGENT_CONFLICT_DETECTED` instead.
 
 ## Observe Lifecycle Producers
 

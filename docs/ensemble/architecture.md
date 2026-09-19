@@ -64,7 +64,7 @@ The target Operator performs the authoritative pre-dispatch verification and exe
 
 For designated application records, g8ee constructs a canonical `GovernanceEnvelope`, binds the current Gateway state root, identity, nonce, expiry, and typed payload into its transaction hash, and submits it through the privileged governance surface. Concurrent state changes can make the bound root stale; g8ee serializes submissions and retries a state-mismatch rejection with a fresh root up to three times.
 
-The unified deployment uses the Operator certificate for this transport because app certificates cannot access the privileged route. The Gateway binds the envelope to the authenticated Operator identity, supplies the active posture when needed, and processes the operation through its local Warden and Actuator. The route verifies supplied evidence but does not create missing L2 votes or human L3 authorization.
+The unified deployment uses the Operator certificate for this transport because app certificates cannot access the privileged route. The Gateway binds the envelope to the authenticated Operator identity, supplies the active posture when needed, and processes the operation through its local L4 Warden and L5 Actuator. The route verifies supplied evidence but does not create missing L2 votes or human L3 authorization.
 
 The certificate fingerprint carried by g8ee is transport evidence, not a complete L3 proof. Postures requiring CLI authorization also require a signature over the transaction, while browser authorization uses WebAuthn. Direct application-record mutations therefore fail under a posture whose required proof is absent.
 

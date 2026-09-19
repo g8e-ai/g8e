@@ -269,6 +269,12 @@ The architecture in which each target host remains authoritative for raw executi
 
 ---
 
+## Marshal
+
+The g8ee application-layer defender persona (`marshal`, *The Order Keeper*). Marshal coordinates pre-envelope risk classification for shell commands, file operations, and command failures before a `GovernanceEnvelope` is constructed. Specialized sub-agents (`marshal_command`, `marshal_error`, `marshal_file`) emit advisory `LOW` / `MEDIUM` / `HIGH` risk labels, drive the application approval UI, and stake reputation on classification accuracy. Marshal is distinct from the protocol **L4 Warden**, which performs deterministic pre-dispatch verification on the Operator substrate.
+
+---
+
 ## MCP (Model Context Protocol)
 
 The JSON-RPC tool protocol exposed by g8e for compatible AI clients. The Gateway supports tool discovery and calls, converts governed calls into typed Operator protobuf payloads and **Governance Envelopes**, and returns structured results or an approval suspension. Native Operator tools and configured downstream MCP servers execute only after governance admission.
@@ -357,7 +363,7 @@ A g8ee Auditor record that binds a Tribunal verdict to the current agent-reputat
 
 ## Reputation Staking
 
-The g8ee mechanism that updates each agent's reputation scalar in the range 0.0 through 1.0 using an exponential moving average after outcomes resolve. Typed stake-resolution records capture rewards, slash tiers, and unbonding state; reputation affects ensemble influence, not L2 cryptographic signature validity in the platform Warden.
+The g8ee mechanism that updates each agent's reputation scalar in the range 0.0 through 1.0 using an exponential moving average after outcomes resolve. Typed stake-resolution records capture rewards, slash tiers, and unbonding state; reputation affects ensemble influence, not L2 cryptographic signature validity at the L4 Warden.
 
 ---
 

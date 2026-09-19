@@ -310,7 +310,7 @@ An agentic application can add any internal reasoning, generation, voting, risk 
 
 The in-tree g8ee application currently uses two dispatch paths:
 
-- For host operations, its five-member Tribunal generates candidate commands, requires two matching candidates, uses deterministic tie breaking, performs a second anonymized peer-review round when needed, runs Warden risk analysis, and sends the audited result as `CommandIntent` over pub/sub. The Gateway constructs the `GovernanceEnvelope` and owns protocol L2 deliberation.
+- For host operations, its five-member Tribunal generates candidate commands, requires two matching candidates, uses deterministic tie breaking, performs a second anonymized peer-review round when needed, runs Marshal risk analysis, and sends the audited result as `CommandIntent` over pub/sub. The Gateway constructs the `GovernanceEnvelope` and owns protocol L2 deliberation.
 - For governed platform records such as cases, investigations, memories, and reputation state, `GovernanceClient` builds direct envelopes. Because app certificates cannot access the direct endpoint, the unified stack mounts the Operator certificate read-only for this dedicated governance transport. Normal g8ee traffic continues to use its enrolled `spiffe://g8e.local/app/g8ee` identity.
 
 This distinction is security-critical: g8ee’s Tribunal consensus improves command generation, but it does not currently emit protocol L2 signatures. The Gateway’s enrolled consensus service produces and verifies those votes according to posture.

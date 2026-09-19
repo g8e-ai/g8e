@@ -57,7 +57,7 @@ The command relay does not obtain missing protocol L2 votes or L3 authorization 
 
 For designated application records, g8ee constructs a canonical `GovernanceEnvelope`, binds the current state root, identity, nonce, expiry, and typed payload into its transaction hash, and submits it to the Gateway's privileged governance surface. The unified deployment uses the Operator certificate only for this transport because app certificates cannot access the privileged route. Other Gateway traffic continues to use the g8ee app identity.
 
-The Gateway binds the envelope to the authenticated Operator identity, supplies the active posture when the client leaves it unset, and verifies the envelope through its local Warden and Actuator. This route also does not create missing L2 votes or human L3 authorization. A certificate fingerprint is transport evidence and does not replace a posture-required WebAuthn or signed CLI proof.
+The Gateway binds the envelope to the authenticated Operator identity, supplies the active posture when the client leaves it unset, and verifies the envelope through its local L4 Warden and L5 Actuator. This route also does not create missing L2 votes or human L3 authorization. A certificate fingerprint is transport evidence and does not replace a posture-required WebAuthn or signed CLI proof.
 
 ## Five-Layer Interlock
 
@@ -107,6 +107,6 @@ The native Go evaluator runs independently of g8ee and does not consume applicat
 - [Operator Architecture](./operator.md): Remote Operator verification, execution, results, and audit.
 - [SSE Streaming](./sse.md): Approval and application event delivery.
 - [Authentication and Authorization](./auth.md): Workload identities, platform enrollment, and human authorization.
-- [g8ee Agents](../ensemble/agents.md): Triage, Dash, Sage, Tribunal, Auditor, Warden, and support agents.
+- [g8ee Agents](../ensemble/agents.md): Triage, Dash, Sage, Tribunal, Auditor, Marshal, and support agents.
 - [Build Apps](../guides/build_apps.md): Public integration and enrollment choices for third-party applications.
 - [Unified Docker Stack](../guides/unified_stack.md): Deployment and startup workflow for Gateway, Operator, dashboard, and g8ee.

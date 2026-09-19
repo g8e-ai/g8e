@@ -2,7 +2,7 @@
 
 ## Overview
 
-The g8e Agentic Ensemble (`g8ee`) uses a structured multi-agent architecture where specialized agents collaborate across defined operational stages. Each agent operates under a concrete persona model that defines its role, model tier, tool availability, autonomy boundary, and output contract. The architecture enforces separation of concerns: reasoning agents formulate high-level intent without raw shell syntax, a five-member Tribunal derives and validates exact commands under information isolation, defensive filters assess execution risk, and support agents manage lifecycle metadata, memory, and performance evaluation.
+The g8e Agentic Ensemble (`g8ee`) uses a structured multi-agent architecture where specialized agents collaborate across defined operational stages. Each agent operates under a concrete persona model that defines its role, model tier, tool availability, autonomy boundary, and output contract. The architecture enforces separation of concerns: reasoning agents formulate high-level intent without raw shell syntax, a five-member Tribunal derives and validates exact commands under information isolation, Marshal assesses pre-envelope execution risk, and support agents manage lifecycle metadata, memory, and performance evaluation.
 
 ## Persona Architecture
 

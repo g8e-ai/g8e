@@ -95,7 +95,7 @@ Every governed operation reaches the same L4/L5 verification and execution bound
 
 ### L1 Doctrine
 
-L1 decodes the typed payload and applies protobuf field constraints, forbidden-pattern rules, and MITRE ATT&CK-oriented threat detection. L1 is mandatory in every posture. The executing Warden performs this validation before dispatch.
+L1 decodes the typed payload and applies protobuf field constraints, forbidden-pattern rules, and MITRE ATT&CK-oriented threat detection. L1 is mandatory in every posture. The executing L4 Warden performs this validation before dispatch.
 
 ### L2 Consensus
 

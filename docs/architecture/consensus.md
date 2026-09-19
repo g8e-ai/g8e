@@ -35,7 +35,7 @@ The active posture determines whether L2 is a required gate:
 | `ratify` | Not required; supplied evidence is non-gating. |
 | `notary` | Required for non-bootstrap transactions. |
 
-When L2 is not required, missing or invalid votes do not reject a transaction. The Warden evaluates supplied votes only when the vote set, signer store, and policy store are available. The signed action receipt reports L2 as not required even when optional vote evidence is valid.
+When L2 is not required, missing or invalid votes do not reject a transaction. The L4 Warden evaluates supplied votes only when the vote set, signer store, and policy store are available. The signed action receipt reports L2 as not required even when optional vote evidence is valid.
 
 ---
 
