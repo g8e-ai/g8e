@@ -9,9 +9,7 @@ package evaluation
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -110,7 +108,7 @@ func (s *fallbackModelProvenanceReader) Load(ctx context.Context, providerAttemp
 }
 
 func isModelProvenanceEvidenceNotFound(err error) bool {
-	return errors.Is(err, constants.ErrNotFound) || errors.Is(err, os.ErrNotExist)
+	return isGatewayEvidenceNotFound(err)
 }
 
 // VerifyAssignmentModelProvenance independently checks model provenance

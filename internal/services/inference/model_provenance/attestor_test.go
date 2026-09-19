@@ -58,3 +58,61 @@ func TestOllamaStorageAttestor_AttestMatchesManifestDigest(t *testing.T) {
 	assert.Len(t, window.GetWeightAttestations(), 1)
 	assert.Equal(t, layerDigest, window.GetWeightAttestations()[0].GetBlobDigest())
 }
+
+func TestOllamaStorageAttestor_AttestNamespacedModelTag(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	modelTag := "Impulse2000/smollm3:3b-q4_k_m"
+	layerBytes := []byte("namespaced gguf payload")
+	layerDigest := models.SHA256Hex(layerBytes)
+
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "blobs"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "blobs", "sha256-"+layerDigest), layerBytes, 0o600))
+
+	manifest := map[string]interface{}{
+		"schemaVersion": 2,
+		"layers": []map[string]interface{}{
+			{
+				"digest":    "sha256:" + layerDigest,
+				"mediaType": "application/vnd.ollama.image.model",
+				"size":      len(layerBytes),
+			},
+		},
+	}
+	manifestBytes, err := json.Marshal(manifest)
+	require.NoError(t, err)
+	manifestPath := filepath.Join(root, "manifests", "registry.ollama.ai", "Impulse2000", "smollm3", "3b-q4_k_m")
+	require.NoError(t, os.MkdirAll(filepath.Dir(manifestPath), 0o755))
+	require.NoError(t, os.WriteFile(manifestPath, manifestBytes, 0o600))
+
+	expectedDigest := models.SHA256Hex(manifestBytes)
+	attestor, err := NewOllamaStorageAttestor(root, "test-provenance-operator")
+	require.NoError(t, err)
+
+	window, err := attestor.Attest(context.Background(), modelTag, expectedDigest, time.UnixMilli(1_700_000_000_000))
+	require.NoError(t, err)
+	assert.True(t, window.GetDigestMatch())
+	assert.Equal(t, modelTag, window.GetServedModelTag())
+}
+
+func TestResolveOllamaManifestPath_NamespacedVsLibrary(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	libraryPath := filepath.Join(root, "manifests", "registry.ollama.ai", "library", "probe-model", "7b")
+	require.NoError(t, os.MkdirAll(filepath.Dir(libraryPath), 0o755))
+	require.NoError(t, os.WriteFile(libraryPath, []byte("{}"), 0o600))
+
+	libraryResolved, err := resolveOllamaManifestPath(root, "probe-model:7b")
+	require.NoError(t, err)
+	assert.Equal(t, libraryPath, libraryResolved)
+
+	namespacedPath := filepath.Join(root, "manifests", "registry.ollama.ai", "Impulse2000", "smollm3", "3b-q4_k_m")
+	require.NoError(t, os.MkdirAll(filepath.Dir(namespacedPath), 0o755))
+	require.NoError(t, os.WriteFile(namespacedPath, []byte("{}"), 0o600))
+
+	namespacedResolved, err := resolveOllamaManifestPath(root, "Impulse2000/smollm3:3b-q4_k_m")
+	require.NoError(t, err)
+	assert.Equal(t, namespacedPath, namespacedResolved)
+}

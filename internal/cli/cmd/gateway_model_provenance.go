@@ -11,6 +11,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
@@ -78,4 +80,71 @@ func newCampaignModelProvenanceReader(fileSvc fs.RuntimeFileService, cfg *config
 		return nil, err
 	}
 	return evaluation.NewCampaignModelProvenanceReaderWithRemote(fileSvc, remote)
+}
+
+func preflightModelProvenanceDelivery(fileSvc fs.RuntimeFileService, cfg *config.Config) error {
+	if !isGatewayHealthy() {
+		return constants.ErrEvaluationObservationUnavailable
+	}
+	client, err := defaultAPIClientFactory(fileSvc, cfg)
+	if err != nil {
+		return fmt.Errorf("model provenance preflight: create gateway client: %w", err)
+	}
+	body, err := client.Get(constants.APIPaths.InferenceModelProvenanceAttestations + "_preflight")
+	if err != nil {
+		return fmt.Errorf("model provenance preflight: %w", err)
+	}
+	var resp struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	if resp.Status != "ready" {
+		return fmt.Errorf("model provenance preflight: unexpected status %q", resp.Status)
+	}
+	return nil
+}
+
+func preflightModelProvenanceAttestation(fileSvc fs.RuntimeFileService, cfg *config.Config, servedModelTag, expectedModelDigest string) error {
+	if !isGatewayHealthy() {
+		return constants.ErrEvaluationObservationUnavailable
+	}
+	client, err := defaultAPIClientFactory(fileSvc, cfg)
+	if err != nil {
+		return fmt.Errorf("model provenance attestation preflight: create gateway client: %w", err)
+	}
+	query := url.Values{}
+	query.Set("served_model_tag", servedModelTag)
+	query.Set("expected_model_digest", expectedModelDigest)
+	path := constants.APIPaths.InferenceModelProvenanceAttestations + "_attest?" + query.Encode()
+	body, err := client.Get(path)
+	if err != nil {
+		return fmt.Errorf("model provenance attestation preflight for %q: %w", servedModelTag, err)
+	}
+	var resp struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	if resp.Status != "ready" {
+		return fmt.Errorf("model provenance attestation preflight for %q: unexpected status %q", servedModelTag, resp.Status)
+	}
+	return nil
+}
+
+func preflightCampaignModelProvenance(fileSvc fs.RuntimeFileService, cfg *config.Config, bindings []evaluation.CampaignModelBinding) error {
+	if err := preflightModelProvenanceDelivery(fileSvc, cfg); err != nil {
+		return err
+	}
+	for _, binding := range bindings {
+		if strings.TrimSpace(binding.ServedModelTag) == "" || strings.TrimSpace(binding.ModelDigest) == "" {
+			continue
+		}
+		if err := preflightModelProvenanceAttestation(fileSvc, cfg, binding.ServedModelTag, binding.ModelDigest); err != nil {
+			return err
+		}
+	}
+	return nil
 }

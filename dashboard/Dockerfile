@@ -51,4 +51,6 @@ USER g8e
 
 EXPOSE 3000
 
-ENTRYPOINT ["./entrypoint.sh"]
+# Invoke via /bin/sh: the script's shebang follows the license header, so the
+# exec-form entrypoint cannot run it directly (kernel sees "# Copyright…").
+ENTRYPOINT ["/bin/sh", "./entrypoint.sh"]

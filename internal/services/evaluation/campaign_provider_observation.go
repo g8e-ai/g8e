@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -197,7 +196,7 @@ func (s *fallbackProviderObservationAttempts) Get(ctx context.Context, providerA
 }
 
 func isProviderEvidenceNotFound(err error) bool {
-	return errors.Is(err, constants.ErrNotFound) || errors.Is(err, os.ErrNotExist)
+	return isGatewayEvidenceNotFound(err)
 }
 
 // BindProviderBoundaryObservationRefs attaches observation evidence references

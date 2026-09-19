@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -42,13 +43,20 @@ type ModelProvenanceController struct {
 	logger    *slog.Logger
 	responder *response.Writer
 	windows   model_provenance.WindowStore
+	preflight modelProvenancePreflight
+}
+
+type modelProvenancePreflight interface {
+	PreflightCommandDelivery(ctx context.Context) error
+	PreflightStorageAttestation(ctx context.Context, servedModelTag, expectedModelDigest string) error
 }
 
 // ModelProvenanceControllerDeps groups dependencies for ModelProvenanceController.
 type ModelProvenanceControllerDeps struct {
-	Logger    *slog.Logger
-	Responder *response.Writer
-	Windows   model_provenance.WindowStore
+	Logger                 *slog.Logger
+	Responder              *response.Writer
+	Windows                model_provenance.WindowStore
+	ProvenanceCoordinator  modelProvenancePreflight
 }
 
 func newModelProvenanceController(d ModelProvenanceControllerDeps) *ModelProvenanceController {
@@ -56,6 +64,7 @@ func newModelProvenanceController(d ModelProvenanceControllerDeps) *ModelProvena
 		logger:    d.Logger,
 		responder: d.Responder,
 		windows:   d.Windows,
+		preflight: d.ProvenanceCoordinator,
 	}
 }
 
@@ -70,6 +79,15 @@ func newModelProvenanceController(d ModelProvenanceControllerDeps) *ModelProvena
 // @Failure		503	{string}	string	"Model provenance store unavailable"
 // @Router			/api/v1/inference/model-provenance/attestations/{provider_attempt_id} [get]
 func (c *ModelProvenanceController) handleModelProvenance(w http.ResponseWriter, r *http.Request) {
+	suffix := strings.TrimPrefix(r.URL.Path, constants.APIPaths.InferenceModelProvenanceAttestations)
+	switch suffix {
+	case "_preflight":
+		c.handleModelProvenancePreflight(w, r)
+		return
+	case "_attest":
+		c.handleModelProvenanceAttestPreflight(w, r)
+		return
+	}
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
@@ -79,7 +97,7 @@ func (c *ModelProvenanceController) handleModelProvenance(w http.ResponseWriter,
 		return
 	}
 
-	providerAttemptID := strings.TrimPrefix(r.URL.Path, constants.APIPaths.InferenceModelProvenanceAttestations)
+	providerAttemptID := suffix
 	if providerAttemptID == "" || strings.Contains(providerAttemptID, "/") {
 		c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 		return
@@ -101,4 +119,59 @@ func (c *ModelProvenanceController) handleModelProvenance(w http.ResponseWriter,
 		return
 	}
 	c.responder.JSON(w, http.StatusOK, models.ModelProvenanceResponse{Window: body})
+}
+
+func (c *ModelProvenanceController) handleModelProvenancePreflight(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	if c.preflight == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrServiceUnavailable.Error())
+		return
+	}
+	if err := c.preflight.PreflightCommandDelivery(r.Context()); err != nil {
+		if errors.Is(err, constants.ErrEvaluationObservationUnavailable) ||
+			errors.Is(err, constants.ErrProvenanceOperatorNotFound) ||
+			errors.Is(err, constants.ErrProvenanceOperatorAmbiguous) {
+			c.responder.Error(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, map[string]string{"status": "ready"})
+}
+
+func (c *ModelProvenanceController) handleModelProvenanceAttestPreflight(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	if c.preflight == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrServiceUnavailable.Error())
+		return
+	}
+	servedModelTag := strings.TrimSpace(r.URL.Query().Get("served_model_tag"))
+	expectedModelDigest := strings.TrimSpace(r.URL.Query().Get("expected_model_digest"))
+	if servedModelTag == "" || expectedModelDigest == "" {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
+		return
+	}
+	if err := c.preflight.PreflightStorageAttestation(r.Context(), servedModelTag, expectedModelDigest); err != nil {
+		if errors.Is(err, constants.ErrEvaluationObservationUnavailable) ||
+			errors.Is(err, constants.ErrProvenanceOperatorNotFound) ||
+			errors.Is(err, constants.ErrProvenanceOperatorAmbiguous) ||
+			errors.Is(err, constants.ErrMissingRequiredField) {
+			c.responder.Error(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, map[string]string{
+		"status":               "ready",
+		"served_model_tag":     servedModelTag,
+		"expected_model_digest": expectedModelDigest,
+	})
 }

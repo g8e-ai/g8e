@@ -550,6 +550,13 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 			if err := preflightProviderObservationDelivery(fileSvc, cfg); err != nil {
 				return fmt.Errorf("evaluation: campaign execute: %w", err)
 			}
+			modelBindings, err := evaluation.CampaignModelBindingsFromSpec(spec)
+			if err != nil {
+				return fmt.Errorf("evaluation: campaign execute: %w", err)
+			}
+			if err := preflightCampaignModelProvenance(fileSvc, cfg, modelBindings); err != nil {
+				return fmt.Errorf("evaluation: campaign execute: %w", err)
+			}
 			iterations := int(limit)
 			if daemon {
 				iterations = 1<<31 - 1

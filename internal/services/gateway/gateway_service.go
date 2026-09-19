@@ -88,6 +88,7 @@ type GatewayModeService struct {
 	dispatchSvc              *DispatchService
 	inferenceDispatchSvc     *dispatch.DispatchService
 	providerObservationCoord *ProviderBoundaryObservationCoordinator
+	modelProvenanceCoord     *ModelProvenanceObservationCoordinator
 	observeProducer          *ObserveProducerService
 	responder                *response.Writer
 	server                   *http.Server
@@ -456,8 +457,9 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	} else {
 		logger.Warn("Provider-boundary observation window store unavailable", "error", err)
 	}
+	var modelProvenanceCoord *ModelProvenanceObservationCoordinator
 	if provenanceWindowStore, err := model_provenance.NewWindowStore(b.fileSvc); err == nil {
-		modelProvenanceCoord := NewModelProvenanceObservationCoordinator(dispatchSvc, ownerOperatorLister, wsHandler, provenanceWindowStore, logger)
+		modelProvenanceCoord = NewModelProvenanceObservationCoordinator(dispatchSvc, ownerOperatorLister, wsHandler, provenanceWindowStore, logger)
 		inferenceDispatchSvc.SetProvenanceObservationNotifier(modelProvenanceCoord)
 	} else {
 		logger.Warn("Model provenance attestation window store unavailable", "error", err)
@@ -498,6 +500,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		dispatchSvc:              dispatchSvc,
 		inferenceDispatchSvc:     inferenceDispatchSvc,
 		providerObservationCoord: providerObservationCoord,
+		modelProvenanceCoord:     modelProvenanceCoord,
 		observeProducer:          NewObserveProducerService(docStore, sseStore, wsHandler, b.fileSvc, logger),
 		responder:                res,
 	}
@@ -663,6 +666,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	providerObservationDeps := providerObservationControllerDeps(logger, ls.responder, ls.fileSvc)
 	providerObservationDeps.ObservationCoordinator = ls.providerObservationCoord
 	modelProvenanceDeps := modelProvenanceControllerDeps(logger, ls.responder, ls.fileSvc)
+	modelProvenanceDeps.ProvenanceCoordinator = ls.modelProvenanceCoord
 
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:    cfg,
@@ -1304,6 +1308,9 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 func (ls *GatewayModeService) closeResources() {
 	if ls.providerObservationCoord != nil {
 		ls.providerObservationCoord.Stop()
+	}
+	if ls.modelProvenanceCoord != nil {
+		ls.modelProvenanceCoord.Stop()
 	}
 	if ls.platformEnrollmentSvc != nil {
 		ls.platformEnrollmentSvc.StopCleanup()
