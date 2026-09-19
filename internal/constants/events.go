@@ -302,7 +302,7 @@ const EventAiConsensusSessionModelNotConfigured EventType = "g8e.v1.ai.consensus
 const EventAiConsensusSessionProviderUnavailable EventType = "g8e.v1.ai.consensus.session.provider.unavailable"
 const EventAiConsensusSessionSystemError EventType = "g8e.v1.ai.consensus.session.system.error"
 const EventAiConsensusSessionAuditorFailed EventType = "g8e.v1.ai.consensus.session.auditor.failed"
-const EventAiConsensusSessionWardenBlocked EventType = "g8e.v1.ai.consensus.session.warden.blocked"
+const EventAiConsensusSessionMarshalBlocked EventType = "g8e.v1.ai.consensus.session.marshal.blocked"
 
 // AI Consensus voting events
 const EventAiConsensusVotingPassCompleted EventType = "g8e.v1.ai.consensus.voting.pass.completed"

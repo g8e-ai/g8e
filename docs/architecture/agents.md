@@ -130,7 +130,7 @@ g8ee is an optional first-party client, not part of the Gateway or Operator trus
 
 1. Triage classifies a turn and selects the fast Dash path or the primary Sage path.
 2. The selected model streams a response and may request tools through a sequential ReAct loop.
-3. Host-command requests pass through the five-member Tribunal, candidate clustering and audit, and application-level Warden risk analysis before dispatch.
+3. Host-command requests pass through the five-member Tribunal, candidate clustering and audit, and Marshal risk analysis before dispatch.
 4. The tool result returns to the model for another turn until the model stops requesting tools.
 5. Reaching the configured tool-turn limit requires an explicit continuation decision before the loop can continue.
 6. The ensemble publishes typed progress and result events through the Gateway SSE event bridge.
@@ -181,7 +181,7 @@ SSE events are delivery telemetry, not governance state, and do not alter the st
 - [Network Architecture](./network.md): TLS surfaces, pub/sub transport, and Operator channels.
 - [SSE Streaming](./sse.md): Approval and application event delivery.
 - [Ensemble Architecture](./ensemble.md): The first-party g8ee deployment and connection model.
-- [g8ee Agents](../ensemble/agents.md): Persona hierarchy, Tribunal, Warden, and support agents.
+- [g8ee Agents](../ensemble/agents.md): Persona hierarchy, Tribunal, Marshal, and support agents.
 - [Build Apps](../guides/build_apps.md): Public integration paths and application-owned state.
 - [Generator-Neutral Builder Guide](../guides/build_observe_frontend.md): Audited `g8e-adapter`, observe API, and contract pack for generated frontends.
 - [Evaluations](./evals.md): Platform evaluation programs and campaign orchestration.

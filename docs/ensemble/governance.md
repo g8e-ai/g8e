@@ -32,7 +32,7 @@ Tribunal voting is application-level model agreement. It does not produce the Ed
 
 ### Command risk and audit
 
-When a response analyzer is configured, the command-risk Warden evaluates the winning command before the Auditor. An unavailable model, empty response, analysis error, or inconclusive command-risk result inside that analyzer becomes `HIGH` risk and blocks the command. The first high-risk result returns contextual feedback so Sage can propose a safer alternative; a second high-risk result for the same investigation reports an agent conflict and requires human intervention. If no response analyzer is configured, g8ee skips this stage.
+When a response analyzer is configured, Marshal evaluates the winning command before the Auditor. An unavailable model, empty response, analysis error, or inconclusive command-risk result inside that analyzer becomes `HIGH` risk and blocks the command. The first high-risk result returns contextual feedback so Sage can propose a safer alternative; a second high-risk result for the same investigation reports an agent conflict and requires human intervention. If no response analyzer is configured, g8ee skips this stage.
 
 When enabled, the Auditor reviews the winning command and anonymized alternatives after command-risk analysis. It can accept the winner, revise it, or select another candidate. A successful audit creates a reputation commitment; failure to create that commitment stops the verdict.
 
@@ -126,7 +126,7 @@ The Warden also requires a known action type, a decodable payload, a current sta
 - [Operator Architecture](../architecture/operator.md): Outbound Operator transport, local verification, execution, and audit storage.
 - [Authentication and Authorization](../architecture/auth.md): mTLS identities, delegated credentials, sessions, and WebAuthn.
 - [Consensus](../architecture/consensus.md): Protocol L2 policy, enrollment, deliberation, and vote verification.
-- [Agents](agents.md): g8ee personas, Tribunal members, Auditor, and application Warden.
+- [Agents](agents.md): g8ee personas, Tribunal members, Auditor, and Marshal.
 - [Architecture](architecture.md): Ensemble components, protocol surfaces, and runtime flow.
 - [Protocol](protocol.md): Ensemble-facing protocol models and transaction hashing.
 - [Storage](storage.md): Ensemble data services and governed platform records.

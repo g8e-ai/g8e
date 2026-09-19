@@ -68,7 +68,7 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. The file d
 - Platform External Service: configured
 - Platform Telemetry: health reported, performance recorded, error logged, audit logged
 - Platform Console Log: entry received, connected confirmed
-- AI Consensus Session: started, completed, disabled, generation failed, model not configured, provider unavailable, system error, auditor failed, warden blocked
+- AI Consensus Session: started, completed, disabled, generation failed, model not configured, provider unavailable, system error, auditor failed, marshal blocked
 - AI Consensus Voting: pass completed, consensus reached/not reached/failed, round started/completed, round 2 started/consensus reached/consensus failed, dissent recorded, audit started/completed
 - App Memory: `EventAppMemoryCreated`, `EventAppMemoryUpdated`
 - App Case/Investigation Deletion: `EventAppCaseDeleted`, `EventAppInvestigationDeleted`

@@ -4,7 +4,7 @@
 
 g8ee uses the g8e protocol library for typed messages, canonical JSON, workload identity, governance envelopes, and signed execution receipts. It uses two governed operation paths: a command relay for work on a bound Operator and direct envelope submission for designated application records. The Gateway MCP and A2A interfaces are separate public integration paths and are not part of g8ee's internal transport.
 
-g8ee remains outside the trusted execution boundary. Model output, Tribunal agreement, application approval, and application Warden results can shape intent, but they do not replace protocol consensus, human authorization, Operator verification, or signed receipts. See [Platform Protocol](../architecture/protocol.md) for the protocol packages and canonical wire contracts.
+g8ee remains outside the trusted execution boundary. Model output, Tribunal agreement, application approval, and Marshal risk results can shape intent, but they do not replace protocol consensus, human authorization, Operator verification, or signed receipts. See [Platform Protocol](../architecture/protocol.md) for the protocol packages and canonical wire contracts.
 
 ## Transport Identity
 

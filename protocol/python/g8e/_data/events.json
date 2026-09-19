@@ -1116,9 +1116,9 @@
       "_go_const": "EventAiConsensusSessionAuditorFailed",
       "value": "g8e.v1.ai.consensus.session.auditor.failed"
     },
-    "AiConsensusSessionWardenBlocked": {
-      "_go_const": "EventAiConsensusSessionWardenBlocked",
-      "value": "g8e.v1.ai.consensus.session.warden.blocked"
+    "AiConsensusSessionMarshalBlocked": {
+      "_go_const": "EventAiConsensusSessionMarshalBlocked",
+      "value": "g8e.v1.ai.consensus.session.marshal.blocked"
     },
     "AiConsensusVotingPassCompleted": {
       "_go_const": "EventAiConsensusVotingPassCompleted",

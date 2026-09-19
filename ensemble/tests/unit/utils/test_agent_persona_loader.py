@@ -365,7 +365,7 @@ class TestPersonaCapabilities:
 
     def test_non_member_personas_have_no_capabilities(self):
         """Personas that perform no local validation declare no capabilities."""
-        for persona_id in ("triage", "sage", "dash", "tribunal", "auditor", "warden"):
+        for persona_id in ("triage", "sage", "dash", "tribunal", "auditor", "marshal"):
             persona = get_agent_persona(persona_id)
             assert persona.capabilities == frozenset(), (
                 f"{persona_id} unexpectedly declares capabilities: {persona.capabilities}"
@@ -411,14 +411,14 @@ class TestListAllAgents:
         assert "nemesis" in agents
         assert "codex" in agents
         assert "judge" in agents
-        assert "warden" in agents
+        assert "marshal" in agents
 
     def test_list_all_agents_includes_sub_agents(self):
-        """Test that list_all_agents includes warden sub-agents."""
+        """Test that list_all_agents includes marshal sub-agents."""
         agents = list_all_agents()
-        assert "warden_command_risk" in agents
-        assert "warden_error" in agents
-        assert "warden_file_risk" in agents
+        assert "marshal_command" in agents
+        assert "marshal_error" in agents
+        assert "marshal_file" in agents
 
 
 class TestAgentPersonaValidation:

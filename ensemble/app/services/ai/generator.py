@@ -60,7 +60,7 @@ from app.services.ai.tribunal.stages.generation import (
     _run_generation_stage,
 )
 from app.services.ai.tribunal.stages.voting import _run_voting_stage
-from app.services.ai.tribunal.stages.warden import _run_warden_stage
+from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
 from app.services.ai.tribunal.utils import (
     member_for_pass,
     resolve_model,
@@ -125,7 +125,7 @@ async def _build_and_emit_result(
     operator_context: OperatorContext | None = None,
     correlation_id: str | None = None,
     reputation_commitment_id: str | None = None,
-    warden_risk_analysis: CommandRiskAnalysis | None = None,
+    marshal_risk_analysis: CommandRiskAnalysis | None = None,
     round_2_candidates: list[CandidateCommand] | None = None,
     round_2_vote_breakdown: VoteBreakdown | None = None,
 ) -> CommandGenerationResult:
@@ -159,7 +159,7 @@ async def _build_and_emit_result(
         auditor_passed=auditor_passed,
         auditor_revision=auditor_revision,
         auditor_reason=auditor_reason,
-        warden_risk_analysis=warden_risk_analysis,
+        marshal_risk_analysis=marshal_risk_analysis,
         correlation_id=correlation_id,
         reputation_commitment_id=reputation_commitment_id,
         round_2_candidates=round_2_candidates,
@@ -173,8 +173,8 @@ async def _build_and_emit_result(
             final_command=final_command or "",
             outcome=outcome,
             vote_score=vote_score or 0.0,
-            model_calls=[warden_risk_analysis.model_call]
-            if warden_risk_analysis and warden_risk_analysis.model_call
+            model_calls=[marshal_risk_analysis.model_call]
+            if marshal_risk_analysis and marshal_risk_analysis.model_call
             else [],
         ),
     )
@@ -442,7 +442,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         # Auditor failure is non-fatal if consensus was reached, but here we can't even start it
         auditor_provider = None
 
-    warden_risk_analysis = await _run_warden_stage(
+    marshal_risk_analysis = await _run_marshal_stage(
         request=request.request,
         guidelines=request.guidelines,
         vote_winner=vote_winner,
@@ -495,7 +495,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         operator_context=request.operator_context,
         correlation_id=correlation_id,
         reputation_commitment_id=audit_result.reputation_commitment_id,
-        warden_risk_analysis=warden_risk_analysis,
+        marshal_risk_analysis=marshal_risk_analysis,
         round_2_candidates=round_2_candidates,
         round_2_vote_breakdown=round_2_vote_breakdown,
     )

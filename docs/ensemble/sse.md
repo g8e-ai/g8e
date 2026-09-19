@@ -191,7 +191,7 @@ The 5-member AI Tribunal (Axiom, Concord, Variance, Pragma, Nemesis) and the Aud
 The `TribunalEmitter` classifies events into terminal and progress categories:
 
 - **Terminal Events** — Events that define the ultimate success or failure of a consensus session (`AI_CONSENSUS_SESSION_STARTED`, `AI_CONSENSUS_SESSION_COMPLETED`, `AI_CONSENSUS_SESSION_DISABLED`, `AI_CONSENSUS_SESSION_MODEL_NOT_CONFIGURED`, `AI_CONSENSUS_SESSION_PROVIDER_UNAVAILABLE`, `AI_CONSENSUS_SESSION_SYSTEM_ERROR`, `AI_CONSENSUS_SESSION_GENERATION_FAILED`, `AI_CONSENSUS_SESSION_AUDITOR_FAILED`). If publishing a terminal event fails, `TribunalEmitter` re-raises the exception to fail closed.
-- **Progress Events** — Intermediate telemetry events (`AI_CONSENSUS_VOTING_PASS_COMPLETED`, `AI_CONSENSUS_VOTING_CONSENSUS_REACHED`, `AI_CONSENSUS_VOTING_CONSENSUS_NOT_REACHED`, `AI_CONSENSUS_VOTING_CONSENSUS_FAILED`, `AI_CONSENSUS_VOTING_DISSENT_RECORDED`, `AI_CONSENSUS_VOTING_AUDIT_STARTED`, `AI_CONSENSUS_VOTING_AUDIT_COMPLETED`, `AI_CONSENSUS_SESSION_WARDEN_BLOCKED`). Failures to publish progress events are logged as warnings and swallowed to allow deliberation to continue.
+- **Progress Events** — Intermediate telemetry events (`AI_CONSENSUS_VOTING_PASS_COMPLETED`, `AI_CONSENSUS_VOTING_CONSENSUS_REACHED`, `AI_CONSENSUS_VOTING_CONSENSUS_NOT_REACHED`, `AI_CONSENSUS_VOTING_CONSENSUS_FAILED`, `AI_CONSENSUS_VOTING_DISSENT_RECORDED`, `AI_CONSENSUS_VOTING_AUDIT_STARTED`, `AI_CONSENSUS_VOTING_AUDIT_COMPLETED`, `AI_CONSENSUS_SESSION_MARSHAL_BLOCKED`). Failures to publish progress events are logged as warnings and swallowed to allow deliberation to continue.
 
 ### Tribunal Event Sequence
 

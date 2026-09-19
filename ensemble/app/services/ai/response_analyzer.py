@@ -59,13 +59,13 @@ SYSTEM_PATH_PREFIXES = tuple(
 HIGH_RISK_SYSTEM_FILES = _SECURITY_CONSTRAINTS.get("high_risk_system_files", {})
 
 
-def _build_warden_command_risk_template(
+def _build_marshal_command_template(
     command: str,
     justification: str,
     working_dir: str,
     investigation_context: str = "",
 ) -> str:
-    """Build the Warden command risk analysis template using centralized XML formatting.
+    """Build the Marshal command risk analysis template using centralized XML formatting.
 
     Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
     """
@@ -84,7 +84,7 @@ def _build_warden_command_risk_template(
     return "\n\n".join(parts)
 
 
-def _build_warden_error_template(
+def _build_marshal_error_template(
     command: str,
     exit_code: int | None,
     stdout: str,
@@ -92,7 +92,7 @@ def _build_warden_error_template(
     retry_count: int,
     working_dir: str,
 ) -> str:
-    """Build the Warden error analysis template using centralized XML formatting.
+    """Build the Marshal error analysis template using centralized XML formatting.
 
     Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
     """
@@ -128,14 +128,14 @@ Working Directory: {working_dir}"""
     return "\n\n".join(parts)
 
 
-def _build_warden_file_risk_template(
+def _build_marshal_file_template(
     operation: str,
     file_path: str,
     content_preview: str,
     git_status: str,
     backup_available: bool,
 ) -> str:
-    """Build the Warden file operation risk template using centralized XML formatting.
+    """Build the Marshal file operation risk template using centralized XML formatting.
 
     Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
     """
@@ -233,7 +233,7 @@ class AIResponseAnalyzer:
             )
             monotonic_end = time.monotonic()
             logger.info(
-                "[WARDEN-LLM] %s LLM call duration_ms=%.2f",
+                "[MARSHAL-LLM] %s LLM call duration_ms=%.2f",
                 log_context,
                 (monotonic_end - monotonic_start) * 1000,
             )
@@ -327,8 +327,8 @@ class AIResponseAnalyzer:
         resolved_settings = settings
 
         prompt_build_start = time.time()
-        command_risk_persona = get_agent_persona("warden_command_risk")
-        template = _build_warden_command_risk_template(
+        command_risk_persona = get_agent_persona("marshal_command")
+        template = _build_marshal_command_template(
             command=command,
             justification=justification,
             working_dir=working_dir,
@@ -337,7 +337,7 @@ class AIResponseAnalyzer:
         prompt = f"{command_risk_persona.get_system_prompt()}\n\n{template}"
         prompt_build_duration_ms = (time.time() - prompt_build_start) * 1000
         logger.info(
-            "[WARDEN-COMMAND-RISK] command=%r prompt_build_duration_ms=%.2f",
+            "[MARSHAL-COMMAND] command=%r prompt_build_duration_ms=%.2f",
             command[:60],
             prompt_build_duration_ms,
         )
@@ -347,7 +347,7 @@ class AIResponseAnalyzer:
         def log_result(analysis: CommandRiskAnalysis) -> None:
             total_duration_ms = (time.time() - analysis_start_time) * 1000
             logger.info(
-                "[WARDEN-COMMAND-RISK] Completed command=%r risk_level=%s total_duration_ms=%.2f",
+                "[MARSHAL-COMMAND] Completed command=%r risk_level=%s total_duration_ms=%.2f",
                 command[:60],
                 analysis.risk_level,
                 total_duration_ms,
@@ -362,7 +362,7 @@ class AIResponseAnalyzer:
             fallback_no_response=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             fallback_exception=lambda e: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             log_context="Command risk analysis",
-            agent_role="warden_command_risk",
+            agent_role="marshal_command",
             post_process=log_result,
         )
 
@@ -397,8 +397,8 @@ class AIResponseAnalyzer:
             )
 
         prompt_build_start = time.time()
-        error_persona = get_agent_persona("warden_error")
-        template = _build_warden_error_template(
+        error_persona = get_agent_persona("marshal_error")
+        template = _build_marshal_error_template(
             command=command,
             exit_code=exit_code,
             stdout=stdout[:1000],
@@ -409,7 +409,7 @@ class AIResponseAnalyzer:
         prompt = f"{error_persona.get_system_prompt()}\n\n{template}"
         prompt_build_duration_ms = (time.time() - prompt_build_start) * 1000
         logger.info(
-            "[WARDEN-ERROR] command=%r retry_count=%d prompt_build_duration_ms=%.2f",
+            "[MARSHAL-ERROR] command=%r retry_count=%d prompt_build_duration_ms=%.2f",
             command[:60],
             retry_count,
             prompt_build_duration_ms,
@@ -426,7 +426,7 @@ class AIResponseAnalyzer:
                 ) + " (Retry limit reached - escalating to prevent infinite loop)"
             total_duration_ms = (time.time() - analysis_start_time) * 1000
             logger.info(
-                "[WARDEN-ERROR] Completed command=%r error_category=%s can_auto_fix=%s should_escalate=%s total_duration_ms=%.2f",
+                "[MARSHAL-ERROR] Completed command=%r error_category=%s can_auto_fix=%s should_escalate=%s total_duration_ms=%.2f",
                 command[:60],
                 analysis.error_category,
                 analysis.can_auto_fix,
@@ -464,7 +464,7 @@ class AIResponseAnalyzer:
                 user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
             ),
             log_context="Error analysis",
-            agent_role="warden_error",
+            agent_role="marshal_error",
             post_process=post_process,
         )
 
@@ -485,8 +485,8 @@ class AIResponseAnalyzer:
         content_preview = content[:500] if content else "N/A"
 
         prompt_build_start = time.time()
-        file_risk_persona = get_agent_persona("warden_file_risk")
-        template = _build_warden_file_risk_template(
+        file_risk_persona = get_agent_persona("marshal_file")
+        template = _build_marshal_file_template(
             operation=operation,
             file_path=file_path,
             content_preview=content_preview,
@@ -496,7 +496,7 @@ class AIResponseAnalyzer:
         prompt = f"{file_risk_persona.get_system_prompt()}\n\n{template}"
         prompt_build_duration_ms = (time.time() - prompt_build_start) * 1000
         logger.info(
-            "[WARDEN-FILE-RISK] operation=%s file_path=%r prompt_build_duration_ms=%.2f",
+            "[MARSHAL-FILE] operation=%s file_path=%r prompt_build_duration_ms=%.2f",
             operation,
             file_path[:60],
             prompt_build_duration_ms,
@@ -508,7 +508,7 @@ class AIResponseAnalyzer:
             analysis.is_system_file = any(file_path.startswith(p) for p in SYSTEM_PATH_PREFIXES)
 
             # System files are blocked if HIGH risk, UNLESS a backup is available.
-            # This follows Warden's discipline: "A sed -i on a config file is MEDIUM if a .bak was just created."
+            # This follows Marshal's discipline: "A sed -i on a config file is MEDIUM if a .bak was just created."
             if (
                 analysis.risk_level == RiskLevel.HIGH
                 and analysis.is_system_file
@@ -518,7 +518,7 @@ class AIResponseAnalyzer:
 
             total_duration_ms = (time.time() - analysis_start_time) * 1000
             logger.info(
-                "[WARDEN-FILE-RISK] Completed operation=%s file_path=%r risk_level=%s is_system_file=%s safe_to_proceed=%s total_duration_ms=%.2f",
+                "[MARSHAL-FILE] Completed operation=%s file_path=%r risk_level=%s is_system_file=%s safe_to_proceed=%s total_duration_ms=%.2f",
                 operation,
                 file_path,
                 analysis.risk_level,
@@ -550,6 +550,6 @@ class AIResponseAnalyzer:
                 approval_prompt=f"Risk analysis failed. File operation: {operation} on {file_path}\nProceed with extreme caution?",
             ),
             log_context="File operation risk analysis",
-            agent_role="warden_file_risk",
+            agent_role="marshal_file",
             post_process=post_process,
         )

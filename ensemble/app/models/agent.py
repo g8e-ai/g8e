@@ -135,7 +135,7 @@ class ExecutorCommandArgs(TargetedOperatorBase):
         default=300, description="Maximum seconds to wait for command completion before timing out."
     )
     risk_analysis: CommandRiskAnalysis | None = Field(
-        default=None, description="Risk analysis from Warden (if available)"
+        default=None, description="Risk analysis from Marshal (if available)"
     )
 
 

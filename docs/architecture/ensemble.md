@@ -33,7 +33,7 @@ A conversation turn follows this flow:
 1. g8ee authenticates the caller, validates the request context, loads platform and user settings, and reads the relevant case, investigation history, attachments, Operator state, and memories.
 2. Triage classifies the turn. Simple turns use the Dash assistant role, while complex turns use the Sage primary role.
 3. The selected model streams a response and can request tools through a sequential ReAct loop. Tool results return to the model for the next turn until the model stops requesting tools.
-4. A host-command request enters the five-member Tribunal. The members generate candidates independently, the ensemble clusters and votes on the candidates, the optional Auditor checks the selected command, and the application Warden assesses execution risk.
+4. A host-command request enters the five-member Tribunal. The members generate candidates independently, the ensemble clusters and votes on the candidates, the optional Auditor checks the selected command, and Marshal assesses execution risk.
 5. The command passes deterministic command constraints and the g8ee approval workflow. Configured auto-approved commands skip this application prompt only after the command passes the hard safety checks.
 6. g8ee sends a typed `CommandIntent` for each target Operator. The Gateway binds current state, posture, identity, replay controls, and the exact Operator session into a `GovernanceEnvelope`, then relays it to that Operator.
 7. The Operator verifies the envelope and executes an accepted operation through its Actuator. Results return on the session-specific result channel, and g8ee publishes the corresponding client event and returns the result to the model when the tool loop continues.
@@ -41,7 +41,7 @@ A conversation turn follows this flow:
 
 When the model reaches the configured tool-turn limit, g8ee requests an explicit continuation decision. Approval resets the turn counter, while denial stops the loop. Clarification questions similarly pause progress until the caller answers, skips, or times out.
 
-See [g8ee Agents](../ensemble/agents.md) for the persona roster, Tribunal stages, and application Warden behavior.
+See [g8ee Agents](../ensemble/agents.md) for the persona roster, Tribunal stages, and Marshal behavior.
 
 ## Governance Paths
 
@@ -94,7 +94,7 @@ The native Go evaluator runs independently of g8ee and does not consume applicat
 - g8ee does not open a management path to a target host. Host operations execute only through the bound Operator.
 - The Gateway binds a relayed command to an exact Operator and session instead of broadcasting it.
 - The target Operator independently applies L1 through L4 before L5 execution, even though g8ee generated the intent.
-- Tribunal agreement, Auditor approval, reputation, and application Warden output remain advisory to protocol governance.
+- Tribunal agreement, Auditor approval, reputation, and Marshal output remain advisory to protocol governance.
 - Application approval and auto-approval do not satisfy protocol L3.
 - Direct-envelope and command-relay paths fail when the active posture requires proofs they do not supply.
 - SSE events report progress and outcomes but do not authorize execution or alter the governance state root.

@@ -29,9 +29,9 @@ def test_call_site_inventory_covers_required_personas():
         "memory_codex",
         "tribunal_generation",
         "tribunal_auditor",
-        "warden_command_risk",
-        "warden_error_analysis",
-        "warden_file_operation",
+        "marshal_command",
+        "marshal_error",
+        "marshal_file",
         "eval_judge",
     }
     assert required == set(CALL_SITE_BY_NAME)

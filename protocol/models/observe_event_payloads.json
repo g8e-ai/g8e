@@ -24,7 +24,7 @@
     "role": {
       "type": "string",
       "required": true,
-      "description": "Agent role or persona (e.g. triage, sage, dash, auditor, warden, scribe, judge)"
+      "description": "Agent role or persona (e.g. triage, sage, dash, auditor, marshal, scribe, judge)"
     },
     "status": {
       "type": "string",

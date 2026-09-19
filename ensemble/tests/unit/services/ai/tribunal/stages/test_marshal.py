@@ -10,13 +10,13 @@ import pytest
 from app.constants import ErrorAnalysisCategory, EventType, RiskLevel
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import CommandRiskAnalysis, ErrorAnalysisResult
-from app.models.agents.tribunal import TribunalWardenBlockedError
+from app.models.agents.tribunal import TribunalMarshalBlockedError
 from app.services.ai.tribunal.emitter import TribunalEmitter
-from app.services.ai.tribunal.stages.warden import _run_warden_stage
+from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
 
 
 @pytest.mark.asyncio
-class TestRunWardenStage:
+class TestRunMarshalStage:
     async def test_returns_analysis_on_low_risk(self, mock_g8e_context, mock_operator_context):
         analyzer = MagicMock()
         analyzer.analyze_command_risk = AsyncMock(
@@ -25,7 +25,7 @@ class TestRunWardenStage:
         emitter = TribunalEmitter(None, mock_g8e_context)
         settings = G8eeUserSettings(llm=LLMSettings())
 
-        result = await _run_warden_stage(
+        result = await _run_marshal_stage(
             request="list files",
             guidelines="",
             vote_winner="ls -la",
@@ -60,10 +60,10 @@ class TestRunWardenStage:
 
         settings = G8eeUserSettings(llm=LLMSettings())
         investigation_state = MagicMock()
-        investigation_state.warden_block_count = 0
+        investigation_state.marshal_block_count = 0
 
-        with pytest.raises(TribunalWardenBlockedError):
-            await _run_warden_stage(
+        with pytest.raises(TribunalMarshalBlockedError):
+            await _run_marshal_stage(
                 request="danger",
                 guidelines="",
                 vote_winner="rm -rf /",
@@ -75,5 +75,5 @@ class TestRunWardenStage:
                 investigation_state=investigation_state,
             )
 
-        assert investigation_state.warden_block_count == 1
-        emitter.emit.assert_called_with(EventType.AI_CONSENSUS_SESSION_WARDEN_BLOCKED, ANY)
+        assert investigation_state.marshal_block_count == 1
+        emitter.emit.assert_called_with(EventType.AI_CONSENSUS_SESSION_MARSHAL_BLOCKED, ANY)

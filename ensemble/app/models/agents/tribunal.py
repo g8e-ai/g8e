@@ -181,11 +181,11 @@ class TribunalDisabledError(TribunalError):
         )
 
 
-class TribunalWardenBlockedError(TribunalError):
-    """Raised when the Warden blocks a command produced by the Tribunal.
+class TribunalMarshalBlockedError(TribunalError):
+    """Raised when Marshal blocks a command produced by the Tribunal.
 
     This error indicates that the command was classified as HIGH risk and
-    the Warden blocked it. This can be either a first strike (contextual
+    the Marshal blocked it. This can be either a first strike (contextual
     feedback generated) or a second strike (agent conflict).
     """
 
@@ -390,8 +390,8 @@ class CommandGenerationResult(G8eBaseModel):
     auditor_reason: AuditorReason | None = Field(
         default=None, description="The auditor's stated reason."
     )
-    warden_risk_analysis: CommandRiskAnalysis | None = Field(
-        default=None, description="Warden-classified risk analysis from the audit stage."
+    marshal_risk_analysis: CommandRiskAnalysis | None = Field(
+        default=None, description="Marshal-classified risk analysis from the audit stage."
     )
     correlation_id: str | None = Field(
         default=None,
@@ -549,10 +549,10 @@ class TribunalSessionGenerationFailedPayload(G8eBaseModel):
     pass_errors: list[str]
 
 
-class TribunalWardenBlockedPayload(G8eBaseModel):
-    """SSE payload for TRIBUNAL_SESSION_WARDEN_BLOCKED.
+class TribunalMarshalBlockedPayload(G8eBaseModel):
+    """SSE payload for AI_CONSENSUS_SESSION_MARSHAL_BLOCKED.
 
-    Emitted when the Warden blocks a command produced by the Tribunal.
+    Emitted when Marshal blocks a command produced by the Tribunal.
     """
 
     request: str
@@ -657,7 +657,7 @@ class TribunalSessionCompletedPayload(G8eBaseModel):
 
 def rebuild_models():
     CommandGenerationResult.model_rebuild()
-    TribunalWardenBlockedPayload.model_rebuild()
+    TribunalMarshalBlockedPayload.model_rebuild()
 
 
 rebuild_models()

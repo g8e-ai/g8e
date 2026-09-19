@@ -50,8 +50,8 @@ from app.models.agents.tribunal import (
     TribunalSessionStartedPayload,
     TribunalSessionSystemErrorPayload,
     TribunalSystemError,
-    TribunalWardenBlockedError,
-    TribunalWardenBlockedPayload,
+    TribunalMarshalBlockedError,
+    TribunalMarshalBlockedPayload,
     VoteBreakdown,
 )
 from app.models.http_context import G8eHttpContext
@@ -78,7 +78,7 @@ from app.services.ai.generator import (
 from app.services.ai.tribunal.utils import member_for_pass
 from app.services.ai.tribunal.stages.generation import _run_generation_pass
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor
-from app.services.ai.tribunal.stages.warden import _run_warden_stage
+from app.services.ai.tribunal.stages.marshal import _run_marshal_stage
 from app.utils.agent_persona_loader import get_agent_persona
 
 _TEST_HMAC_KEY = "a" * 64
@@ -888,10 +888,10 @@ class TestTribunalAuditorFailedError:
         assert exc_info.value.request == "list files"
 
 
-class TestRunAuditStageWardenRiskAnalysis:
-    """TribunalAuditor exercises Warden risk analysis before the Auditor.
+class TestRunAuditStageMarshalRiskAnalysis:
+    """TribunalAuditor exercises Marshal risk analysis before the Auditor.
 
-    Regression coverage for the Warden command-risk path: ``CommandRiskAnalysis``
+    Regression coverage for the Marshal command-risk path: ``CommandRiskAnalysis``
     only carries ``risk_level``. Touching any other attribute on the analysis
     object inside ``_run_audit_stage`` is a bug. These tests cover both the
     LOW-risk pass-through and the HIGH-risk Two-Strike Circuit Breaker paths
@@ -923,7 +923,7 @@ class TestRunAuditStageWardenRiskAnalysis:
                 root_cause="HIGH-risk command",
                 can_auto_fix=False,
                 should_escalate=True,
-                reasoning="warden block",
+                reasoning="marshal block",
                 user_message=error_user_message or "Use a safer alternative.",
                 suggested_fix=error_suggested_fix,
             )
@@ -937,12 +937,12 @@ class TestRunAuditStageWardenRiskAnalysis:
         Regression: the post-analysis log statement must only reference
         attributes that exist on ``CommandRiskAnalysis``. Before the fix it
         accessed ``risk_score`` and ``reason``, both removed when the
-        Warden contract was simplified to ``risk_level`` only.
+        Marshal contract was simplified to ``risk_level`` only.
         """
         analyzer = self._make_analyzer(RiskLevel.LOW)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        risk_analysis = await _run_warden_stage(
+        risk_analysis = await _run_marshal_stage(
             request="list files",
             guidelines="",
             vote_winner="ls -la",
@@ -959,7 +959,7 @@ class TestRunAuditStageWardenRiskAnalysis:
         assert risk_analysis.risk_level == RiskLevel.LOW
 
     @pytest.mark.asyncio
-    async def test_high_risk_first_strike_emits_warden_blocked_and_increments_counter(self):
+    async def test_high_risk_first_strike_emits_marshal_blocked_and_increments_counter(self):
         """HIGH risk on a fresh investigation raises a first-strike block."""
         from app.constants import EventType
 
@@ -971,14 +971,14 @@ class TestRunAuditStageWardenRiskAnalysis:
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
         emitter = TribunalEmitter(
-            mock_event_service, _make_mock_g8e_context(), correlation_id="corr-warden-1"
+            mock_event_service, _make_mock_g8e_context(), correlation_id="corr-marshal-1"
         )
 
         investigation_state = MagicMock()
-        investigation_state.warden_block_count = 0
+        investigation_state.marshal_block_count = 0
 
-        with pytest.raises(TribunalWardenBlockedError) as exc_info:
-            await _run_warden_stage(
+        with pytest.raises(TribunalMarshalBlockedError) as exc_info:
+            await _run_marshal_stage(
                 request="purge logs",
                 guidelines="",
                 vote_winner="rm -rf /var/log",
@@ -991,21 +991,21 @@ class TestRunAuditStageWardenRiskAnalysis:
             )
 
         assert exc_info.value.risk_level == RiskLevel.HIGH
-        assert investigation_state.warden_block_count == 1
+        assert investigation_state.marshal_block_count == 1
         analyzer.analyze_error_and_suggest_fix.assert_awaited_once()
 
         emitted_types = [
             call.args[0].event_type for call in mock_event_service.publish.call_args_list
         ]
-        assert EventType.AI_CONSENSUS_SESSION_WARDEN_BLOCKED in emitted_types
-        warden_payloads = [
+        assert EventType.AI_CONSENSUS_SESSION_MARSHAL_BLOCKED in emitted_types
+        marshal_payloads = [
             call.args[0].payload
             for call in mock_event_service.publish.call_args_list
-            if call.args[0].event_type == EventType.AI_CONSENSUS_SESSION_WARDEN_BLOCKED
+            if call.args[0].event_type == EventType.AI_CONSENSUS_SESSION_MARSHAL_BLOCKED
         ]
-        assert len(warden_payloads) == 1
-        payload = warden_payloads[0]
-        assert isinstance(payload, TribunalWardenBlockedPayload)
+        assert len(marshal_payloads) == 1
+        payload = marshal_payloads[0]
+        assert isinstance(payload, TribunalMarshalBlockedPayload)
         assert payload.risk_level == RiskLevel.HIGH
         assert payload.is_conflict is False
 
@@ -1018,14 +1018,14 @@ class TestRunAuditStageWardenRiskAnalysis:
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
         emitter = TribunalEmitter(
-            mock_event_service, _make_mock_g8e_context(), correlation_id="corr-warden-2"
+            mock_event_service, _make_mock_g8e_context(), correlation_id="corr-marshal-2"
         )
 
         investigation_state = MagicMock()
-        investigation_state.warden_block_count = 1
+        investigation_state.marshal_block_count = 1
 
-        with pytest.raises(TribunalWardenBlockedError) as exc_info:
-            await _run_warden_stage(
+        with pytest.raises(TribunalMarshalBlockedError) as exc_info:
+            await _run_marshal_stage(
                 request="purge logs",
                 guidelines="",
                 vote_winner="rm -rf /var/log",
@@ -1038,7 +1038,7 @@ class TestRunAuditStageWardenRiskAnalysis:
             )
 
         assert exc_info.value.risk_level == RiskLevel.HIGH
-        assert investigation_state.warden_block_count == 0
+        assert investigation_state.marshal_block_count == 0
         analyzer.analyze_error_and_suggest_fix.assert_not_awaited()
 
         emitted_types = [
@@ -1052,7 +1052,7 @@ class TestRunAuditStageWardenRiskAnalysis:
         ]
         assert len(conflict_payloads) == 1
         payload = conflict_payloads[0]
-        assert isinstance(payload, TribunalWardenBlockedPayload)
+        assert isinstance(payload, TribunalMarshalBlockedPayload)
         assert payload.risk_level == RiskLevel.HIGH
         assert payload.is_conflict is True
 

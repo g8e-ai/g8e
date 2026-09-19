@@ -29,7 +29,7 @@ func TestNewConsensusEventConstants(t *testing.T) {
 		{EventAiConsensusSessionProviderUnavailable, "g8e.v1.ai.consensus.session.provider.unavailable"},
 		{EventAiConsensusSessionSystemError, "g8e.v1.ai.consensus.session.system.error"},
 		{EventAiConsensusSessionAuditorFailed, "g8e.v1.ai.consensus.session.auditor.failed"},
-		{EventAiConsensusSessionWardenBlocked, "g8e.v1.ai.consensus.session.warden.blocked"},
+		{EventAiConsensusSessionMarshalBlocked, "g8e.v1.ai.consensus.session.marshal.blocked"},
 		{EventAiConsensusVotingPassCompleted, "g8e.v1.ai.consensus.voting.pass.completed"},
 		{EventAiConsensusVotingConsensusReached, "g8e.v1.ai.consensus.voting.consensus.reached"},
 		{EventAiConsensusVotingConsensusNotReached, "g8e.v1.ai.consensus.voting.consensus.not.reached"},

@@ -60,7 +60,7 @@
         "type": "string"
       },
       "role": {
-        "description": "Agent role or persona (e.g. triage, sage, dash, auditor, warden, scribe, judge)",
+        "description": "Agent role or persona (e.g. triage, sage, dash, auditor, marshal, scribe, judge)",
         "required": true,
         "type": "string"
       },

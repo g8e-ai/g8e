@@ -11,8 +11,8 @@ from app.constants import EventType, RiskLevel
 from app.models.agent import OperatorContext
 from app.models.settings import G8eeUserSettings
 from app.models.agents.tribunal import (
-    TribunalWardenBlockedError,
-    TribunalWardenBlockedPayload,
+    TribunalMarshalBlockedError,
+    TribunalMarshalBlockedPayload,
 )
 from app.models.tool_results import (
     CommandRiskAnalysis,
@@ -25,7 +25,7 @@ from app.services.ai.tribunal.emitter import TribunalEmitter
 logger = logging.getLogger(__name__)
 
 
-async def _run_warden_stage(
+async def _run_marshal_stage(
     request: str,
     guidelines: str,
     vote_winner: str,
@@ -37,17 +37,17 @@ async def _run_warden_stage(
     investigation_state: Any | None,
     investigation_context: str = "",
 ) -> CommandRiskAnalysis | None:
-    """Stage 3a: Warden risk analysis on the consensus winner.
+    """Stage 3a: Marshal risk analysis on the consensus winner.
 
-    Runs Warden command-risk analysis before the Auditor sees the command.
+    Runs Marshal command-risk analysis before the Auditor sees the command.
     Returns the analysis (or None if no analyzer is configured or the
     analyzer returned no result).
 
     Raises:
-        TribunalWardenBlockedError: When Warden classifies the command as
+        TribunalMarshalBlockedError: When Marshal classifies the command as
             HIGH risk. The Two-Strike Circuit Breaker decides the variant:
             on the first strike for an investigation, emits
-            ``TRIBUNAL_SESSION_WARDEN_BLOCKED`` with contextual feedback so
+            ``AI_CONSENSUS_SESSION_MARSHAL_BLOCKED`` with contextual feedback so
             Sage can propose a safer alternative; on the second strike,
             emits ``AI_AGENT_CONFLICT_DETECTED`` signalling that the AI
             agents cannot agree on a safe approach and human intervention
@@ -57,7 +57,7 @@ async def _run_warden_stage(
         return None
 
     logger.info(
-        "[LLM-RISK-FILTER] Starting risk analysis for command: %r",
+        "[MARSHAL] Starting risk analysis for command: %r",
         vote_winner[:200] + "..." if len(vote_winner) > 200 else vote_winner,
     )
 
@@ -82,55 +82,55 @@ async def _run_warden_stage(
         return None
 
     model_calls = [risk_analysis.model_call] if risk_analysis.model_call else []
-    logger.info("[LLM-RISK-FILTER] Risk analysis complete: level=%s", risk_analysis.risk_level)
+    logger.info("[MARSHAL] Risk analysis complete: level=%s", risk_analysis.risk_level)
 
     if risk_analysis.risk_level != RiskLevel.HIGH:
         return risk_analysis
 
-    block_count = investigation_state.warden_block_count if investigation_state else 0
+    block_count = investigation_state.marshal_block_count if investigation_state else 0
 
     if block_count >= 1:
         logger.warning(
-            "[WARDEN-CIRCUIT-BREAKER] Second warden block detected for investigation=%s - triggering AGENT_CONFLICT",
+            "[MARSHAL-CIRCUIT-BREAKER] Second marshal block detected for investigation=%s - triggering AGENT_CONFLICT",
             investigation_id,
         )
         logger.warning(
-            "[LLM-RISK-FILTER] Blocking command due to repeated HIGH risk detection: %r",
+            "[MARSHAL] Blocking command due to repeated HIGH risk detection: %r",
             vote_winner,
         )
         if investigation_state:
-            investigation_state.warden_block_count = 0
+            investigation_state.marshal_block_count = 0
 
         await emitter.emit(
             EventType.AI_AGENT_CONFLICT_DETECTED,
-            TribunalWardenBlockedPayload(
+            TribunalMarshalBlockedPayload(
                 request=request,
                 command=vote_winner,
                 risk_level=risk_analysis.risk_level,
-                error="AGENT CONFLICT: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach. Human intervention required.",
+                error="AGENT CONFLICT: Marshal blocked Sage's command twice. The AI agents cannot agree on a safe approach. Human intervention required.",
                 is_conflict=True,
                 model_calls=model_calls,
             ),
         )
-        raise TribunalWardenBlockedError(
+        raise TribunalMarshalBlockedError(
             request=request,
-            error_message="Agent Conflict: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach.",
+            error_message="Agent Conflict: Marshal blocked Sage's command twice. The AI agents cannot agree on a safe approach.",
             risk_level=risk_analysis.risk_level,
         )
 
     logger.info(
-        "[WARDEN-CIRCUIT-BREAKER] First warden block for investigation=%s - generating contextual feedback",
+        "[MARSHAL-CIRCUIT-BREAKER] First marshal block for investigation=%s - generating contextual feedback",
         investigation_id,
     )
-    logger.info("[LLM-RISK-FILTER] Blocking command due to HIGH risk detection: %r", vote_winner)
+    logger.info("[MARSHAL] Blocking command due to HIGH risk detection: %r", vote_winner)
     if investigation_state:
-        investigation_state.warden_block_count = block_count + 1
+        investigation_state.marshal_block_count = block_count + 1
 
     error_analysis = await ai_response_analyzer.analyze_error_and_suggest_fix(
         command=vote_winner,
         exit_code=None,
         stdout="",
-        stderr=f"WARDEN BLOCK: Command classified as HIGH risk. Justification: {justification}",
+        stderr=f"MARSHAL BLOCK: Command classified as HIGH risk. Justification: {justification}",
         context=ErrorAnalysisContext(
             retry_count=0,
             working_directory=operator_context.working_directory if operator_context else "",
@@ -148,20 +148,20 @@ async def _run_warden_stage(
     if error_analysis and error_analysis.suggested_fix:
         feedback_msg += f" Suggestion: {error_analysis.suggested_fix}"
 
-    logger.info("[LLM-RISK-FILTER] Feedback for Sage: %s", feedback_msg)
+    logger.info("[MARSHAL] Feedback for Sage: %s", feedback_msg)
 
     await emitter.emit(
-        EventType.AI_CONSENSUS_SESSION_WARDEN_BLOCKED,
-        TribunalWardenBlockedPayload(
+        EventType.AI_CONSENSUS_SESSION_MARSHAL_BLOCKED,
+        TribunalMarshalBlockedPayload(
             request=request,
             command=vote_winner,
             risk_level=risk_analysis.risk_level,
-            error=f"WARDEN BLOCK: {feedback_msg}",
+            error=f"MARSHAL BLOCK: {feedback_msg}",
             is_conflict=False,
             model_calls=model_calls,
         ),
     )
-    raise TribunalWardenBlockedError(
+    raise TribunalMarshalBlockedError(
         request=request,
         error_message=f"Risk analysis blocked command: {feedback_msg}",
         risk_level=risk_analysis.risk_level,

@@ -8,7 +8,7 @@
     "schema_version": {"type": "string", "required": true, "description": "Projection schema version identifier"},
     "agent_id": {"type": "string", "required": true, "description": "Stable agent identifier matching the persona registry"},
     "display_name": {"type": "string", "required": true, "description": "Human-readable agent name"},
-    "role": {"type": "string", "required": true, "description": "Agent role or persona (e.g. triage, sage, dash, auditor, warden, scribe, judge)"},
+    "role": {"type": "string", "required": true, "description": "Agent role or persona (e.g. triage, sage, dash, auditor, marshal, scribe, judge)"},
     "status": {"type": "string", "required": true, "description": "Agent lifecycle state", "enum": ["idle", "queued", "running", "waiting", "completed", "failed", "offline"]},
     "run_id": {"type": "string", "required": false, "description": "Owning run identifier when the agent is bound to a run"},
     "task_id": {"type": "string", "required": false, "description": "Active task identifier when the agent is executing a task"},

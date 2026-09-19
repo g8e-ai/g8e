@@ -388,10 +388,10 @@ class InvestigationCurrentState(G8eBaseModel):
     collaboration_status: dict[str, ComponentStatus] = Field(
         default_factory=dict, description="Component collaboration status"
     )
-    warden_block_count: int = Field(
+    marshal_block_count: int = Field(
         default=0,
         ge=0,
-        description="Count of warden blocks in current turn (Two-Strike Circuit Breaker)",
+        description="Count of marshal blocks in current turn (Two-Strike Circuit Breaker)",
     )
 
 

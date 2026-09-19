@@ -226,7 +226,7 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `AiLLMToolG8eWebSearchCompleted`, `AiLLMToolG8eWebSearchFailed`, `AiLLMToolG8eWebSearchReceived`, `AiLLMToolG8eWebSearchRequested`
 - `AiReputationStateUpdated`
 - `AiTriageClarificationAnswered`, `AiTriageClarificationQuestions`, `AiTriageClarificationSkipped`, `AiTriageClarificationTimeout`
-- `AiConsensusSessionStarted`, `AiConsensusSessionCompleted`, `AiConsensusSessionDisabled`, `AiConsensusSessionGenerationFailed`, `AiConsensusSessionModelNotConfigured`, `AiConsensusSessionProviderUnavailable`, `AiConsensusSessionSystemError`, `AiConsensusSessionAuditorFailed`, `AiConsensusSessionWardenBlocked`
+- `AiConsensusSessionStarted`, `AiConsensusSessionCompleted`, `AiConsensusSessionDisabled`, `AiConsensusSessionGenerationFailed`, `AiConsensusSessionModelNotConfigured`, `AiConsensusSessionProviderUnavailable`, `AiConsensusSessionSystemError`, `AiConsensusSessionAuditorFailed`, `AiConsensusSessionMarshalBlocked`
 - `AiConsensusVotingPassCompleted`, `AiConsensusVotingConsensusReached`, `AiConsensusVotingConsensusNotReached`, `AiConsensusVotingConsensusFailed`, `AiConsensusVotingRoundStarted`, `AiConsensusVotingRoundCompleted`, `AiConsensusVotingRound2Started`, `AiConsensusVotingRound2ConsensusReached`, `AiConsensusVotingRound2ConsensusFailed`, `AiConsensusVotingDissentRecorded`, `AiConsensusVotingAuditStarted`, `AiConsensusVotingAuditCompleted`
 
 ### Application Events
