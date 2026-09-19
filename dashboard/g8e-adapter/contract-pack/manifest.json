@@ -54,7 +54,7 @@
     },
     {
       "path": "models.ts",
-      "sha256": "a63e16d96d45fba3497dadaf00236b06dcf752082bffde849be32fef7932a453"
+      "sha256": "1a0ceb0aa26891faf0fd9662e88ce6e2b168649b10e925267465fb054de183cf"
     },
     {
       "path": "observe.openapi.json",
@@ -94,11 +94,11 @@
     },
     {
       "path": "public/manifest.json",
-      "sha256": "6831b51aed47e0d5bb7a272469a8034782b07147fd51b4bcbf00f840181215a4"
+      "sha256": "3a19347d7844b011acafab42add08643f4d5aa22399633733fd423f9f6fac939"
     },
     {
       "path": "public/models.ts",
-      "sha256": "dffd38460cb08f40a073d7b563165df7e75d85072bb3e1a0eba995f720816650"
+      "sha256": "4e0eee77766c42110c71a7463e3dc39eab8a6408a48bfc902d5d5cbab70f2b0b"
     },
     {
       "path": "public/offline-verifier.md",

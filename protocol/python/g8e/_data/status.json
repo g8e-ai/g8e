@@ -103,6 +103,16 @@
         "_python_const": "INFERENCE",
         "value": "INFERENCE"
       },
+      "PROVIDER_BOUNDARY_OBSERVATION": {
+        "_go_const": "ActionTypeProviderBoundaryObservation",
+        "_python_const": "PROVIDER_BOUNDARY_OBSERVATION",
+        "value": "PROVIDER_BOUNDARY_OBSERVATION"
+      },
+      "MODEL_PROVENANCE_OBSERVATION": {
+        "_go_const": "ActionTypeModelProvenanceObservation",
+        "_python_const": "MODEL_PROVENANCE_OBSERVATION",
+        "value": "MODEL_PROVENANCE_OBSERVATION"
+      },
       "DOCUMENT_UPDATE": {
         "_go_const": "ActionTypeDocumentUpdate",
         "_mutation": true,

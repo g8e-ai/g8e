@@ -14,7 +14,12 @@ web_session_id or cli_session_id). The gateway derives user_id from the mTLS
 peer certificate, never from the request body.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 
 import pytest
 from pydantic import ValidationError

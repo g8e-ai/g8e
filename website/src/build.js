@@ -117,7 +117,7 @@ async function build() {
   ]);
   const html = renderWebsite(readme, template);
   if (process.argv.includes('--check')) {
-    if (!html.includes('id="proof-not-promises"') || !html.includes('id="four-components-one-governance-boundary"') || !html.includes('class="mermaid"') || html.includes('href="docs/')) throw new Error('generated website validation failed');
+    if (!html.includes('id="proof-not-promises"') || !html.includes('id="four-components-one-governance-boundary"') || !html.includes('id="how-it-works"') || html.includes('href="docs/')) throw new Error('generated website validation failed');
     return;
   }
   await rm(OUTPUT_DIRECTORY, { recursive: true, force: true });

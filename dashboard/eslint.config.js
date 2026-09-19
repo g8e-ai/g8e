@@ -10,6 +10,7 @@ export default [
             '**/coverage/**',
             '**/dist/**',
             '**/node_modules/**',
+            'g8e-adapter/evaluation-explorer/**',
             'public/js/vendor/**',
         ],
     },
