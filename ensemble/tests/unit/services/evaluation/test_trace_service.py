@@ -7,6 +7,7 @@
 
 import pytest
 
+from app.errors import ValidationError
 from app.models.evaluation_trace import EvaluationAssignmentTrace
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
@@ -103,9 +104,9 @@ def test_trace_finalize_persists_designated_role_output(trace_service):
 
 
 def test_trace_load_rejects_path_traversal(trace_service):
-    with pytest.raises(ValueError, match="invalid assignment_id"):
+    with pytest.raises(ValidationError, match="invalid assignment_id"):
         trace_service.load("../etc", "attempt-1")
-    with pytest.raises(ValueError, match="invalid evaluation_attempt_id"):
+    with pytest.raises(ValidationError, match="invalid evaluation_attempt_id"):
         trace_service.load("assignment-1", "../secret")
 
 

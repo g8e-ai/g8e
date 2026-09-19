@@ -74,6 +74,23 @@ Generated Python protobuf stubs from the g8e protocol `.proto` definitions are p
 
 ## Development Commands
 
+Ensemble dependencies are installed into a virtualenv, not system Python. Bare `python` or `python3` usually resolves to the system interpreter and fails with missing modules such as `openai`.
+
+Use the Make targets below. They select `ensemble/.venv/bin/python` when that venv exists. For one-off commands, call that interpreter explicitly:
+
+```bash
+ensemble/.venv/bin/python -m pytest tests/unit/services/evaluation/test_trace_service.py -v
+```
+
+The repository root also has a `.venv` used by `make ensemble-test` and `make ensemble-lint`. Keep both venvs current after changing `protocol/python/`:
+
+```bash
+pip install -e protocol/python
+pip install -e 'ensemble[dev,test]'
+```
+
+When working on ensemble code, prefer `cd ensemble && make test|lint|check` over root `make ensemble-test` unless you maintain the root venv deliberately.
+
 ### From the Repository Root
 
 ```bash

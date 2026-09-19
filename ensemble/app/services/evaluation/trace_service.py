@@ -14,6 +14,7 @@ from pathlib import Path
 from g8e.eval.v1.trace_digest import compute_chat_probe_trace_digest, marshal_canonical_json
 
 from app.constants.env_vars import EnvVar
+from app.errors import ValidationError
 from app.models.evaluation_trace import (
     EvaluationAssignmentTrace,
     EvaluationControlledRoleAssignment,
@@ -29,6 +30,7 @@ from app.models.evaluation_trace import (
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
 from app.utils.path import resolve_project_root
+from app.utils.security import validate_safe_filename, validate_safe_path
 from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
@@ -44,21 +46,20 @@ def _trace_root() -> Path:
     return (base / "data" / "evaluation" / "traces").resolve()
 
 
-def _validate_trace_segment(value: str, label: str) -> None:
-    if not value or value in {".", ".."} or "/" in value or "\\" in value:
-        raise ValueError(f"invalid {label}")
-
-
 def _trace_path(assignment_id: str, evaluation_attempt_id: str) -> Path:
-    _validate_trace_segment(assignment_id, "assignment_id")
-    _validate_trace_segment(evaluation_attempt_id, "evaluation_attempt_id")
-    root = _trace_root()
-    target = (root / assignment_id / f"{evaluation_attempt_id}.json").resolve()
     try:
-        target.relative_to(root)
+        safe_assignment_id = validate_safe_filename(assignment_id, label="assignment_id")
+        safe_attempt_id = validate_safe_filename(
+            evaluation_attempt_id,
+            label="evaluation_attempt_id",
+        )
+        root = _trace_root()
+        return validate_safe_path(
+            f"{safe_assignment_id}/{safe_attempt_id}.json",
+            root,
+        )
     except ValueError as exc:
-        raise ValueError("Path traversal detected for evaluation trace path") from exc
-    return target
+        raise ValidationError(str(exc), component="g8ee") from exc
 
 
 def compute_trace_digest(trace: EvaluationAssignmentTrace) -> str:

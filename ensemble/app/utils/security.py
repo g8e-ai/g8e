@@ -20,6 +20,13 @@ DEFAULT_KEY_DERIVATION_SALT = b"g8e_api_key_v1"
 PASSWORD_HASH_PREFIX = "$pbkdf2-sha256$"
 
 
+def validate_safe_filename(value: str, *, label: str = "filename") -> str:
+    """Validate a single path segment with no directory separators."""
+    if not value or value in {".", ".."} or "/" in value or "\\" in value:
+        raise ValueError(f"invalid {label}")
+    return value
+
+
 def validate_safe_path(path: str | Path, root: str | Path) -> Path:
     """
     Ensures a path is safe and stays within the specified root directory.
