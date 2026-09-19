@@ -121,6 +121,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "-q",
+    "-rs",
 ]
 
 
