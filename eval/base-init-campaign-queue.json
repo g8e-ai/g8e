@@ -1,0 +1,288 @@
+{
+  "pattern": "eval-init-\u003cvariant_id\u003e (legacy init-campaign for gemma4:e4b)",
+  "cells_per_run": 75,
+  "inventory_dir": ".g8e/eval/inventories",
+  "generate_command": "./g8e eval rollout init --from eval/base-model-inventory.json --materialize --merge",
+  "models": [
+    {
+      "variant_id": "deepseek-r1-7b",
+      "served_model_tag": "deepseek-r1:7b",
+      "campaign_id": "eval-init-deepseek-r1-7b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-deepseek-r1-7b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "gemma2-9b",
+      "served_model_tag": "gemma2:9b",
+      "campaign_id": "eval-init-gemma2-9b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-gemma2-9b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "gemma3-1b",
+      "served_model_tag": "gemma3:1b",
+      "campaign_id": "eval-init-gemma3-1b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-gemma3-1b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "gemma3-270m",
+      "served_model_tag": "gemma3:270m",
+      "campaign_id": "eval-init-gemma3-270m",
+      "inventory_file": ".g8e/eval/inventories/eval-init-gemma3-270m.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "gemma3-4b",
+      "served_model_tag": "gemma3:4b",
+      "campaign_id": "eval-init-gemma3-4b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-gemma3-4b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "gemma4-e2b",
+      "served_model_tag": "gemma4:e2b",
+      "campaign_id": "eval-init-gemma4-e2b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-gemma4-e2b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "gemma4-e4b",
+      "served_model_tag": "gemma4:e4b",
+      "campaign_id": "init-campaign",
+      "inventory_file": ".g8e/eval/inventories/init-campaign.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "granite3-3-2b",
+      "served_model_tag": "granite3.3:2b",
+      "campaign_id": "eval-init-granite3-3-2b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-granite3-3-2b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "granite3-3-8b",
+      "served_model_tag": "granite3.3:8b",
+      "campaign_id": "eval-init-granite3-3-8b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-granite3-3-8b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "hermes3-8b",
+      "served_model_tag": "hermes3:8b",
+      "campaign_id": "eval-init-hermes3-8b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-hermes3-8b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "impulse2000-smollm3-3b-q4-k-m",
+      "served_model_tag": "Impulse2000/smollm3:3b-q4_k_m",
+      "campaign_id": "eval-init-impulse2000-smollm3-3b-q4-k-m",
+      "inventory_file": ".g8e/eval/inventories/eval-init-impulse2000-smollm3-3b-q4-k-m.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "llama3-1-8b",
+      "served_model_tag": "llama3.1:8b",
+      "campaign_id": "eval-init-llama3-1-8b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-llama3-1-8b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "llama3-2-1b",
+      "served_model_tag": "llama3.2:1b",
+      "campaign_id": "eval-init-llama3-2-1b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-llama3-2-1b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "llama3-2-3b",
+      "served_model_tag": "llama3.2:3b",
+      "campaign_id": "eval-init-llama3-2-3b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-llama3-2-3b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "ministral-3-3b",
+      "served_model_tag": "ministral-3:3b",
+      "campaign_id": "eval-init-ministral-3-3b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-ministral-3-3b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "ministral-3-8b",
+      "served_model_tag": "ministral-3:8b",
+      "campaign_id": "eval-init-ministral-3-8b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-ministral-3-8b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "mistral-7b",
+      "served_model_tag": "mistral:7b",
+      "campaign_id": "eval-init-mistral-7b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-mistral-7b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "phi4-mini-3-8b",
+      "served_model_tag": "phi4-mini:3.8b",
+      "campaign_id": "eval-init-phi4-mini-3-8b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-phi4-mini-3-8b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "phi4-mini-reasoning-3-8b",
+      "served_model_tag": "phi4-mini-reasoning:3.8b",
+      "campaign_id": "eval-init-phi4-mini-reasoning-3-8b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-phi4-mini-reasoning-3-8b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen2-5-0-5b",
+      "served_model_tag": "qwen2.5:0.5b",
+      "campaign_id": "eval-init-qwen2-5-0-5b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen2-5-0-5b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen2-5-3b",
+      "served_model_tag": "qwen2.5:3b",
+      "campaign_id": "eval-init-qwen2-5-3b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen2-5-3b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen2-5-7b",
+      "served_model_tag": "qwen2.5:7b",
+      "campaign_id": "eval-init-qwen2-5-7b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen2-5-7b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen2-5-coder-7b",
+      "served_model_tag": "qwen2.5-coder:7b",
+      "campaign_id": "eval-init-qwen2-5-coder-7b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen2-5-coder-7b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-0-6b",
+      "served_model_tag": "qwen3:0.6b",
+      "campaign_id": "eval-init-qwen3-0-6b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-0-6b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-1-7b",
+      "served_model_tag": "qwen3:1.7b",
+      "campaign_id": "eval-init-qwen3-1-7b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-1-7b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-4b",
+      "served_model_tag": "qwen3:4b",
+      "campaign_id": "eval-init-qwen3-4b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-4b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-8b",
+      "served_model_tag": "qwen3:8b",
+      "campaign_id": "eval-init-qwen3-8b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-8b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "randomblock1-nemotron-nano-8b",
+      "served_model_tag": "Randomblock1/nemotron-nano:8b",
+      "campaign_id": "eval-init-randomblock1-nemotron-nano-8b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-randomblock1-nemotron-nano-8b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "sam860-lfm2-2-6b",
+      "served_model_tag": "sam860/LFM2:2.6b",
+      "campaign_id": "eval-init-sam860-lfm2-2-6b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-sam860-lfm2-2-6b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "sam860-lfm2-350m",
+      "served_model_tag": "sam860/LFM2:350m",
+      "campaign_id": "eval-init-sam860-lfm2-350m",
+      "inventory_file": ".g8e/eval/inventories/eval-init-sam860-lfm2-350m.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "sam860-lfm2-700m",
+      "served_model_tag": "sam860/LFM2:700m",
+      "campaign_id": "eval-init-sam860-lfm2-700m",
+      "inventory_file": ".g8e/eval/inventories/eval-init-sam860-lfm2-700m.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "smollm2-1-7b",
+      "served_model_tag": "smollm2:1.7b",
+      "campaign_id": "eval-init-smollm2-1-7b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-smollm2-1-7b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "smollm2-135m",
+      "served_model_tag": "smollm2:135m",
+      "campaign_id": "eval-init-smollm2-135m",
+      "inventory_file": ".g8e/eval/inventories/eval-init-smollm2-135m.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "smollm2-360m",
+      "served_model_tag": "smollm2:360m",
+      "campaign_id": "eval-init-smollm2-360m",
+      "inventory_file": ".g8e/eval/inventories/eval-init-smollm2-360m.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "tinyllama-1-1b",
+      "served_model_tag": "tinyllama:1.1b",
+      "campaign_id": "eval-init-tinyllama-1-1b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-tinyllama-1-1b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    }
+  ]
+}

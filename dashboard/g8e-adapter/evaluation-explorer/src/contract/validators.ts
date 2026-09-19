@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Strict runtime validation for public records and feed transport payloads.
 // Every guard fails closed: an unknown field, wrong type, or out-of-enum
 // value throws a typed ValidationError that the store surfaces as a

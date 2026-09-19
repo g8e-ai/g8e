@@ -15,13 +15,12 @@ name is derived from the disclosure-safe case title only.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.constants import (
     G8EE_COMPONENT,
-    HistoryActor,
     InvestigationStatus,
     Priority,
     Severity,

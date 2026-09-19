@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Credentialed fetch helper that enforces the endpoint allowlist. This is the
 // only request surface components use; there is no generic arbitrary-path
 // request helper. Every fetch uses credentials: 'include' against the absolute

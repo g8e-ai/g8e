@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Derived read-model helpers for the detail views. These compute display
 // aggregates from normalized store records — never from transport payloads.
 // Every derivation is pure and deterministic so Worker 7 can unit-test it.

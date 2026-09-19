@@ -256,7 +256,7 @@ async def _load_settings_from_operator(timeout: float = 5.0):
 
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
-    from app.models.settings import G8eeAppSettings, TLSConfig
+    from app.models.settings import TLSConfig
     from app.services.cache.cache_aside import CacheAsideService
     from app.services.infra.settings_service import SettingsService
 
@@ -797,7 +797,7 @@ def provider_config():
 async def cache_aside_service(test_settings):
     from app.clients.db_client import DBClient
     from app.clients.kv_cache_client import KVCacheClient
-    
+
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
     from app.models.settings import TLSConfig
@@ -849,7 +849,7 @@ async def db_client(cache_aside_service):
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def pubsub_service(test_settings):
     from app.clients.pubsub_client import PubSubClient
-    
+
 
     settings = test_settings
 

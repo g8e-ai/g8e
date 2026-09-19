@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EvalStore } from '../src/state/store';
 import { allFixtureSnapshotRecords, fixtureLiveEvents } from '../src/fixtures/fixtures';

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 export const PUBLIC_RUNTIME_CONFIG_SCHEMA_VERSION = '1.0.0';
 
 export interface PublicRuntimeConfig {

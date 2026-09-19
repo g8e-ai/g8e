@@ -11,16 +11,21 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -49,7 +54,7 @@ func TestQueueEvalRunDryRun(t *testing.T) {
 
 func TestQueueEvalInitMaterialize(t *testing.T) {
 	root := t.TempDir()
-	writeTestFrozenInventory(t, root, evaluation.DefaultModelInventoryRelPath,
+	writeTestFrozenInventory(t, root, evaluation.DefaultBaseModelInventoryRelPath,
 		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "digest", ProviderClass: "ollama"},
 	)
 
@@ -126,6 +131,95 @@ func writeTestFrozenInventory(t *testing.T, root, relPath string, variants ...*e
 	payload, err := json.Marshal(map[string]any{"variants": bodies})
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, payload, 0o600))
+}
+
+func TestInventoryEvalList_PrintsFrozenVariants(t *testing.T) {
+	root := t.TempDir()
+	writeTestFrozenInventory(t, root, evaluation.DefaultModelInventoryRelPath,
+		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "digest", ProviderClass: "ollama"},
+	)
+
+	deps := testNativeEvalDeps(root)
+	command := evalCmdWithConfig(deps)
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"models", "list", "--project-root", root})
+	require.NoError(t, command.Execute())
+	assert.Contains(t, output.String(), "qwen3:4b")
+	assert.Contains(t, output.String(), "qwen3-4b")
+}
+
+func TestInventoryEvalFreeze_RequiresCampaignID(t *testing.T) {
+	command := evalCmdWithConfig(testNativeEvalDeps(t.TempDir()))
+	command.SilenceUsage = true
+	command.SilenceErrors = true
+	command.SetArgs([]string{"models", "freeze", "--ollama-endpoint", "http://127.0.0.1:11434"})
+	err := command.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
+
+func TestModelInventoryFreezeJSON_RejectsNilFreeze(t *testing.T) {
+	_, err := modelInventoryFreezeJSON(nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
+
+func TestWriteModelInventoryFreezeFile_WritesJSON(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "inventory-freeze.json")
+	freeze := &evaluation.ModelInventoryFreeze{
+		CampaignID:           "eval-init-qwen3-4b",
+		RegistryDigest:         "digest-1",
+		HomogeneousCellCount: 75,
+		Variants:             []*evalv1.ModelVariant{{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "digest"}},
+	}
+	require.NoError(t, writeModelInventoryFreezeFile(path, freeze))
+	assert.FileExists(t, path)
+	payload, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(payload), "eval-init-qwen3-4b")
+}
+
+func TestFinishCampaignQueueRun_TextAndJSON(t *testing.T) {
+	command := &cobra.Command{}
+	var output bytes.Buffer
+	command.SetOut(&output)
+
+	result := campaignQueueRunResult{Planned: 2, Succeeded: 2, Failed: 0, LogDir: "/tmp/logs"}
+	require.NoError(t, finishCampaignQueueRun(command, "/queue/path", result, nil))
+	assert.Contains(t, output.String(), "planned=2")
+	assert.Contains(t, output.String(), "/tmp/logs")
+
+	command = evalCmdWithConfig(testNativeEvalDeps(t.TempDir()))
+	enableGlobalJSON(t, command)
+	output.Reset()
+	command.SetOut(&output)
+	result = campaignQueueRunResult{Planned: 2, Succeeded: 1, Failed: 1}
+	err := finishCampaignQueueRun(command, "/queue/path", result, errors.New("boom"))
+	require.Error(t, err)
+	var payload campaignQueueRunResult
+	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))
+	assert.Equal(t, 2, payload.Planned)
+}
+
+func TestCheckHTTPReachable_AcceptsHealthyEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
+	require.NoError(t, checkHTTPReachable(context.Background(), server.URL))
+}
+
+func TestCheckHTTPReachable_RejectsMissingURLAndNon2xx(t *testing.T) {
+	require.Error(t, checkHTTPReachable(context.Background(), ""))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(server.Close)
+	require.Error(t, checkHTTPReachable(context.Background(), server.URL))
 }
 
 func testNativeEvalDeps(root string) nativeEvalDeps {

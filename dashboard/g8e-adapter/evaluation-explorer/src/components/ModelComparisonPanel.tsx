@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Inline side-by-side comparison for two to four models from the same dataset.
 
 import { Link } from 'react-router-dom';

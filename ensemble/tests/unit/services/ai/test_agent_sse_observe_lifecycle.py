@@ -17,9 +17,8 @@ ordinary chat completion.
 from __future__ import annotations
 
 import pytest
-from g8e.models.events import ScrubbingTelemetry
 
-from app.constants import EventType, ReasoningAgent, StreamChunkFromModelType
+from app.constants import ReasoningAgent, StreamChunkFromModelType
 from app.models.agent import StreamChunkData, StreamChunkFromModel
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import make_agent_run_args

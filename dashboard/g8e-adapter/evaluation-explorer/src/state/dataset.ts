@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Dataset selection and URL state. The site never averages across datasets.
 // The active dataset is encoded in the hash route so it survives reload and
 // is shareable. User preferences (filters, sort, comparison list) persist in

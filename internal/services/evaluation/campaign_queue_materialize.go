@@ -18,7 +18,7 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-const initCampaignQueueGenerateCommand = "./g8e eval rollout init --from .g8e/eval/model-inventory.json --materialize --merge"
+const initCampaignQueueGenerateCommand = "./g8e eval rollout init --materialize --merge"
 
 // ResolveEvalPath joins projectRoot with a relative eval data path.
 func ResolveEvalPath(projectRoot, path string) string {
@@ -127,12 +127,12 @@ type InitCampaignQueueRequest struct {
 
 // InitCampaignQueueResult summarizes queue initialization output.
 type InitCampaignQueueResult struct {
-	QueuePath     string `json:"queue_path"`
-	InventoryDir  string `json:"inventory_dir"`
-	ModelCount    int    `json:"model_count"`
-	Materialized  int    `json:"materialized"`
-	Preserved     int    `json:"preserved_verified"`
-	Queue         *CampaignQueue
+	QueuePath    string `json:"queue_path"`
+	InventoryDir string `json:"inventory_dir"`
+	ModelCount   int    `json:"model_count"`
+	Materialized int    `json:"materialized"`
+	Preserved    int    `json:"preserved_verified"`
+	Queue        *CampaignQueue
 }
 
 // InitCampaignQueue materializes per-model inventories and writes the rollout queue manifest.
@@ -140,16 +140,21 @@ func InitCampaignQueue(req InitCampaignQueueRequest) (*InitCampaignQueueResult, 
 	if req.ProjectRoot == "" {
 		return nil, fmt.Errorf("evaluation: init campaign queue: missing required field")
 	}
-	sourcePath := req.SourceInventoryPath
-	if sourcePath == "" {
-		sourcePath = DefaultModelInventoryRelPath
-	}
-	variants, err := LoadFrozenVariants(ResolveEvalPath(req.ProjectRoot, sourcePath))
+	inventoryPath := ResolveModelInventoryPath(req.ProjectRoot, req.SourceInventoryPath)
+	variants, err := LoadFrozenVariants(inventoryPath)
 	if err != nil {
 		return nil, err
 	}
-	if len(req.Tags) > 0 {
-		variants, err = VariantsByTags(variants, req.Tags)
+	tags := req.Tags
+	runtimeInventoryPath := ResolveEvalPath(req.ProjectRoot, DefaultModelInventoryRelPath)
+	if len(tags) == 0 && inventoryPath == runtimeInventoryPath {
+		tags, err = BaseModelInventoryTags(req.ProjectRoot)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(tags) > 0 {
+		variants, err = VariantsByTags(variants, tags)
 		if err != nil {
 			return nil, err
 		}
@@ -264,13 +269,13 @@ func (queue *CampaignQueue) MergePreservingVerifiedStatus(existingQueuePath stri
 
 // MarkCampaignQueueEntryRequest updates one queue entry after verification.
 type MarkCampaignQueueEntryRequest struct {
-	ProjectRoot     string
-	QueuePath       string
-	VariantID       string
-	ServedModelTag  string
-	Status          string
-	VerifiedRunID   string
-	Notes           string
+	ProjectRoot    string
+	QueuePath      string
+	VariantID      string
+	ServedModelTag string
+	Status         string
+	VerifiedRunID  string
+	Notes          string
 }
 
 // MarkCampaignQueueEntry updates and persists one queue entry.

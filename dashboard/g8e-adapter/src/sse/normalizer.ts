@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // NormalizedGatewayEvent boundary. Parses the outer push envelope, parses a
 // nested string event when needed, validates recognized type/data/version
 // pairs, reads the durable ID from lastEventId, and prevents routing IDs from

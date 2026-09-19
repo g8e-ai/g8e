@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Evaluation detail view. Per the plan: status, quality, suite, execution
 // arm, model-role mapping, start/end/elapsed, assignment progress, live
 // timeline while active, terminal outcome counts, metric cards with

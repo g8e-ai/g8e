@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 export type PublicFreshness = 'active' | 'delayed' | 'stale' | 'intentionally_stopped' | 'safety_stopped' | 'source_offline';
 export type PublicDisplayState = 'active' | 'delayed' | 'stale' | 'stopped' | 'safety-stopped' | 'offline';
 

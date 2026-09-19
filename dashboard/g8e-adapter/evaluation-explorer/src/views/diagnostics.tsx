@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Diagnostics disclosure. Surfaces the known data-quality issues for the
 // selected dataset — verifier-failed suites and assignments missing
 // observations — so a user can see why some cells are insufficient rather

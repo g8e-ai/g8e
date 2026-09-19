@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // FrontendRuntimeConfig is the audited runtime configuration a generated SPA
 // consumes. It contains only the schema version, Gateway base URL, passkey RP
 // identity, app name, optional docs URL, and feature flags. It rejects

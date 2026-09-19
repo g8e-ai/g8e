@@ -22,7 +22,6 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from app.constants import FileOperation, G8EE_COMPONENT
-from app.constants.generated_status import AITaskId, EventType
 from app.models.command_request_payloads import (
     FileEditRequestPayload,
     FsGrepRequestPayload,

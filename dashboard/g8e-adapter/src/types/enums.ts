@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Typed observe/enum models mirroring the Go contracts in
 // internal/models/observe.go and the protocol JSON in
 // protocol/models/observe_event_payloads.json. Field names and enum values

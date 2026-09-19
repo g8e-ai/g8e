@@ -10,6 +10,7 @@ package gateway
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -20,7 +21,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/marshaler"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
@@ -426,4 +430,177 @@ func TestRouteAuthRegistry_GenericRoutesRemainMTLS(t *testing.T) {
 		assert.Equal(t, RouteAuthMTLS, registry.AuthMode(path),
 			"generic route %s must remain RouteAuthMTLS (fail-closed)", path)
 	}
+}
+
+func TestObserveService_PaginateEvals(t *testing.T) {
+	svc := &ObserveService{}
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	evals := []models.EvalSummary{
+		{RunID: "run-1", ObservedAt: now},
+		{RunID: "run-2", ObservedAt: now.Add(-time.Minute)},
+		{RunID: "run-3", ObservedAt: now.Add(-2 * time.Minute)},
+	}
+	page, err := svc.paginateEvals(evals, 2)
+	require.NoError(t, err)
+	require.NotNil(t, page)
+	assert.True(t, page.HasMore)
+	assert.Equal(t, 2, page.Limit)
+	assert.NotEmpty(t, page.Cursor)
+
+	var decoded []models.EvalSummary
+	require.NoError(t, json.Unmarshal(page.Items, &decoded))
+	require.Len(t, decoded, 2)
+}
+
+func TestObserveService_PaginateDownloads(t *testing.T) {
+	svc := &ObserveService{}
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	downloads := []models.DownloadArtifact{
+		{ArtifactID: "art-1", GeneratedAt: now},
+		{ArtifactID: "art-2", GeneratedAt: now.Add(-time.Minute)},
+	}
+	page, err := svc.paginateDownloads(downloads, 1)
+	require.NoError(t, err)
+	require.NotNil(t, page)
+	assert.True(t, page.HasMore)
+	assert.NotEmpty(t, page.Cursor)
+}
+
+func TestObserveController_MapDownloadStreamError(t *testing.T) {
+	c := newTestObserveController(t)
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "not found", err: constants.ErrObserveDownloadNotFound, wantStatus: http.StatusNotFound},
+		{name: "restricted", err: constants.ErrObserveDownloadRestrictedArtifact, wantStatus: http.StatusNotFound},
+		{name: "internal", err: errors.New("unexpected"), wantStatus: http.StatusInternalServerError},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c.mapDownloadStreamError(rec, test.err, "user-1", "art-1")
+			assert.Equal(t, test.wantStatus, rec.Code)
+		})
+	}
+}
+
+func TestObserveController_HandleListEvals_RequiresAuth(t *testing.T) {
+	c := newTestObserveController(t)
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveEvals, nil)
+	rec := httptest.NewRecorder()
+	c.handleListEvals(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestObserveController_HandleListEvals_RejectsNonGet(t *testing.T) {
+	c := newTestObserveController(t)
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveEvals, nil)
+	rec := httptest.NewRecorder()
+	c.handleListEvals(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func newObserveServiceUnitTest(t *testing.T) *ObserveService {
+	t.Helper()
+	logger := testutil.NewTestLogger()
+	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(":memory:"), logger)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.Exec(gatewaySchema)
+	require.NoError(t, err)
+	return NewObserveService(NewDocumentStoreService(db, logger), logger)
+}
+
+func seedObserveEvalProjection(t *testing.T, svc *ObserveService, userID, runID string, observedAt time.Time) {
+	t.Helper()
+	proj := evalProjection{
+		UserID: userID,
+		EvalDetail: models.EvalDetail{
+			SchemaVersion:      constants.ObserveAPIReadModelSchemaVersion,
+			RunID:              runID,
+			SuiteID:            "ifeval_subset",
+			SuiteVersion:       "1.0.0",
+			Status:             models.RunLifecycleStatusCompleted,
+			VerificationStatus: models.EvalVerificationProjectionValidated,
+			ObservedAt:         observedAt,
+		},
+	}
+	payload, err := json.Marshal(proj)
+	require.NoError(t, err)
+	require.NoError(t, svc.docStore.DocSet(marshaler.CollectionName(constants.CollectionObserveEvals), runID, payload))
+}
+
+func seedObserveDownloadProjection(t *testing.T, svc *ObserveService, userID, artifactID string, generatedAt time.Time) {
+	t.Helper()
+	proj := downloadProjection{
+		UserID: userID,
+		DownloadArtifact: models.DownloadArtifact{
+			SchemaVersion:         constants.ObserveAPIReadModelSchemaVersion,
+			ArtifactID:            artifactID,
+			Filename:              artifactID + ".jsonl",
+			MediaType:             "application/jsonl",
+			ByteSize:              128,
+			SHA256:                "abc123",
+			PrivacyClassification: models.DownloadPrivacyPublicSafe,
+			SourceRunID:           "eval-run-1",
+			DownloadURL:           constants.APIPaths.ObserveDownloadsByID + artifactID,
+			GeneratedAt:           generatedAt,
+		},
+	}
+	payload, err := json.Marshal(proj)
+	require.NoError(t, err)
+	require.NoError(t, svc.docStore.DocSet(marshaler.CollectionName(constants.CollectionObserveDownloads), artifactID, payload))
+}
+
+func TestObserveService_ListEvalsAndDownloads(t *testing.T) {
+	svc := newObserveServiceUnitTest(t)
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	seedObserveEvalProjection(t, svc, "user-1", "eval-run-1", now)
+	seedObserveDownloadProjection(t, svc, "user-1", "artifact-1", now)
+
+	evals, err := svc.ListEvals(context.Background(), "user-1", "", 20)
+	require.NoError(t, err)
+	require.NotNil(t, evals)
+	assert.False(t, evals.HasMore)
+
+	downloads, err := svc.ListDownloads(context.Background(), "user-1", "", 20)
+	require.NoError(t, err)
+	require.NotNil(t, downloads)
+	assert.False(t, downloads.HasMore)
+}
+
+func TestObserveController_HandleListEvals_ReturnsPage(t *testing.T) {
+	svc := newObserveServiceUnitTest(t)
+	seedObserveEvalProjection(t, svc, "user-1", "eval-run-1", time.Now().UTC())
+	c := &ObserveController{
+		logger:     testutil.NewTestLogger(),
+		observeSvc: svc,
+		responder:  response.NewWriter(testutil.NewTestLogger()),
+	}
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveEvals, nil)
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
+	rec := httptest.NewRecorder()
+	c.handleListEvals(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var page models.ObservePage
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &page))
+	assert.Equal(t, constants.ObserveAPIReadModelSchemaVersion, page.SchemaVersion)
+}
+
+func TestObserveController_HandleListDownloads_ReturnsPage(t *testing.T) {
+	svc := newObserveServiceUnitTest(t)
+	seedObserveDownloadProjection(t, svc, "user-1", "artifact-1", time.Now().UTC())
+	c := &ObserveController{
+		logger:     testutil.NewTestLogger(),
+		observeSvc: svc,
+		responder:  response.NewWriter(testutil.NewTestLogger()),
+	}
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.ObserveDownloads, nil)
+	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
+	rec := httptest.NewRecorder()
+	c.handleListDownloads(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
 }

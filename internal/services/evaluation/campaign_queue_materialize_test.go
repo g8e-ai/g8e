@@ -71,10 +71,15 @@ func TestInitCampaignQueueMaterializeAndMerge(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(queuePath, body, 0o600))
 
+	writeFrozenVariants(t, root, DefaultBaseModelInventoryRelPath,
+		&evalv1.ModelVariant{VariantId: "gemma3-4b", ServedModelTag: "gemma3:4b", ModelDigest: "d1", ProviderClass: "ollama"},
+		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "d2", ProviderClass: "ollama"},
+	)
 	result, err := InitCampaignQueue(InitCampaignQueueRequest{
-		ProjectRoot:   root,
-		Materialize:   true,
-		MergeExisting: true,
+		ProjectRoot:         root,
+		SourceInventoryPath: DefaultModelInventoryRelPath,
+		Materialize:         true,
+		MergeExisting:       true,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.ModelCount)
@@ -105,11 +110,11 @@ func TestMarkCampaignQueueEntry(t *testing.T) {
 	require.NoError(t, SaveInitCampaignQueue(queuePath, &queue))
 
 	entry, err := MarkCampaignQueueEntry(MarkCampaignQueueEntryRequest{
-		ProjectRoot:   root,
+		ProjectRoot:    root,
 		ServedModelTag: "gemma3:4b",
-		Status:        "verified",
-		VerifiedRunID: "eval-init-gemma3-4b-123",
-		Notes:         "Tier-A PASS",
+		Status:         "verified",
+		VerifiedRunID:  "eval-init-gemma3-4b-123",
+		Notes:          "Tier-A PASS",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "verified", entry.Status)

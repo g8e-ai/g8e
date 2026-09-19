@@ -14,7 +14,7 @@ from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
 from app.constants import LLMProvider
 from app.models.settings import EvalJudgeSettings, G8eeUserSettings, LLMSettings
-from app.services.ai.eval_judge import EvalGrade, EvalJudgeError
+from app.services.ai.eval_judge import EvalGrade
 from app.services.evaluation.semantic_grader import (
     _resolve_eval_judge_model,
     grade_campaign_assignment_semantically,

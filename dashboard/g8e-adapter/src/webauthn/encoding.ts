@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Unpadded base64url binary conversion, matching the embedded console's
 // b64urlToBuf and bufToB64url exactly. The WebAuthn API uses ArrayBuffer for
 // challenge and credential IDs, but the wire uses unpadded base64url strings.

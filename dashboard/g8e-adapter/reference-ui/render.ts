@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Pure render functions for the reference frontend. These map typed AdapterState
 // to safe HTML strings using the audited presentation registry. No DOM access,
 // no network calls, no side effects. Every dynamic value is escaped and bounded.

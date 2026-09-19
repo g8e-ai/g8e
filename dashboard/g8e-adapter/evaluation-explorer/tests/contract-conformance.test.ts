@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Contract conformance: every deterministic fixture validates against the
 // frozen guards, and every enum value the fixtures use is a member of the
 // closed enum set. This is Worker 0's acceptance test for the frozen contract.

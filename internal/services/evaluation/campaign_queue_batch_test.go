@@ -36,7 +36,7 @@ func TestCampaignWitnessStatusFromOperators(t *testing.T) {
 		{
 			Status: constants.OperatorStatusActive,
 			RuntimeConfig: &models.RuntimeConfig{
-				ProviderBoundaryObserverEnabled:     true,
+				ProviderBoundaryObserverEnabled:       true,
 				ProviderBoundaryObserverOllamaEnabled: true,
 			},
 		},

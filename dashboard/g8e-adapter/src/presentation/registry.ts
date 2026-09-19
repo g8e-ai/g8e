@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Safe event presentation registry. Recognized renderers use escaped bounded
 // fields and safe labels. Thinking events become phase labels, never raw
 // chain-of-thought. Unknown valid events appear only in a bounded diagnostic

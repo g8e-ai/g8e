@@ -26,12 +26,12 @@ import (
 )
 
 type campaignQueueRunResult struct {
-	Planned   int                          `json:"planned"`
-	Succeeded int                          `json:"succeeded"`
-	Failed    int                          `json:"failed"`
-	Failures  []campaignQueueRunFailure    `json:"failures,omitempty"`
-	Runs      []campaignQueueRunSuccess    `json:"runs,omitempty"`
-	LogDir    string                       `json:"log_dir,omitempty"`
+	Planned   int                       `json:"planned"`
+	Succeeded int                       `json:"succeeded"`
+	Failed    int                       `json:"failed"`
+	Failures  []campaignQueueRunFailure `json:"failures,omitempty"`
+	Runs      []campaignQueueRunSuccess `json:"runs,omitempty"`
+	LogDir    string                    `json:"log_dir,omitempty"`
 }
 
 type campaignQueueRunFailure struct {

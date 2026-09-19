@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Evaluations view — cross-dataset evaluation history. Each row shows dataset,
 // run/campaign identity, suite, progress, outcomes, verifier state, and metrics.
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Named endpoint allowlist for the audited adapter. Operational code exports
 // only runtime-config reads, public bootstrap status, passkey ceremony POSTs,
 // session restoration, logout, observe GETs, authenticated downloads, SSE

@@ -26,7 +26,7 @@ import pytest
 
 from app.clients.http_client import AiohttpResponse, GATEWAY_IDEMPOTENT_POST_RETRY_CONFIG
 from app.constants.api_paths import GatewayAPIPaths
-from app.models.auth import OperatorSessionValidationRequest, OperatorSessionValidationResponse
+from app.models.auth import OperatorSessionValidationRequest
 from app.services.infra.internal_http_client import InternalHttpClient
 
 
@@ -118,7 +118,7 @@ async def test_validate_operator_session_forbidden_returns_none():
 @pytest.mark.asyncio
 async def test_validate_operator_session_malformed_response_returns_none():
     client = _make_client()
-    client._http.post = AsyncMock(return_value=_make_response(200, b'not-json'))
+    client._http.post = AsyncMock(return_value=_make_response(200, b"not-json"))
 
     with pytest.raises(Exception):
         await client.validate_operator_session("op-session", "cli-session", "user-1")

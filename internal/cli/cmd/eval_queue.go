@@ -46,7 +46,8 @@ func rolloutEvalInitCmd(deps nativeEvalDeps) *cobra.Command {
 
 Examples:
   g8e eval rollout init --materialize --merge
-  g8e eval rollout init --from .g8e/eval/model-inventory.json --tags qwen3:4b,gemma3:4b`,
+  g8e eval rollout init --from .g8e/eval/model-inventory.json --tags qwen3:4b,gemma3:4b
+  g8e eval rollout init --materialize --merge`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, _, err := nativeEvalEnvironment(cmd, deps)
 			if err != nil {
@@ -90,7 +91,7 @@ Examples:
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&fromPath, "from", "", "Source inventory JSON path (default: .g8e/eval/model-inventory.json)")
+	cmd.Flags().StringVar(&fromPath, "from", "", "Source inventory JSON path (default: eval/base-model-inventory.json; runtime freeze filters to base tags when passed explicitly)")
 	cmd.Flags().StringVar(&outputPath, "output", "", "Queue manifest path (default: .g8e/eval/init-campaign-queue.json)")
 	cmd.Flags().StringVar(&inventoryDir, "inventory-dir", "", "Per-model inventory directory (default: .g8e/eval/inventories)")
 	cmd.Flags().StringVar(&tags, "tags", "", "Include only these served model tags (comma-separated)")

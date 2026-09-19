@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Accessible sortable table built on TanStack Table. Renders semantic
 // <table> markup with proper <th scope>, sort announcements, and a
 // screen-reader table alternative is provided by the semantic markup itself.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Feed-transport regression tests. These cover the three real mirror wire
 // shapes (/bootstrap recent_projections, /history items, /stream SSE),
 // the history-backfill boot order, and cross-dataset record keying. They

@@ -22,7 +22,7 @@ from app.constants import (
 )
 from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser, OperatorSessionValidationResponse
-from app.models.http_context import BoundOperator, G8eHttpContext, RequestContext
+from app.models.http_context import BoundOperator, G8eHttpContext
 from app.services.auth.auth_service import AuthService
 
 

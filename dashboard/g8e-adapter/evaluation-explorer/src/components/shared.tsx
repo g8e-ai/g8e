@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Shared UI components for the evaluation explorer. Each component is
 // accessible, keyboard-navigable, and renders a real text label in addition
 // to any color cue. No component depends on hover for essential information.

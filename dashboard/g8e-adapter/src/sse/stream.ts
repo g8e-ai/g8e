@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // SSE stream connection and reconciliation. Opens an absolute configured
 // /api/v1/sse/stream EventSource with credentials, implements polling fallback
 // using serialized stored push envelopes, and reconciles snapshots after

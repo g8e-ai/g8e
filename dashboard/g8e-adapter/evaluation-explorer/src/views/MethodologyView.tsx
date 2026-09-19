@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Docs view — what's shipped, where this is headed, and how to read the feed.
 // Static copy for first-time visitors; live methodology data for metrics,
 // datasets, suites, and active limitations.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Minimal host entry point. Wires the audited adapter modules together to
 // exercise them against a real Gateway fixture in browser contract tests.
 // This is NOT a generated UI — it renders honest states from typed stores

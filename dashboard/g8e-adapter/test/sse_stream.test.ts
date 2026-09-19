@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 import type { FrontendRuntimeConfig } from '../src/config/runtime_config';

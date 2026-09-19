@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Assignment detail view. Shows task ID, variant, role, repetition,
 // lifecycle status, eligible metric values, missingness reason, safe stage
 // names and durations, resource observations, and verification disposition.

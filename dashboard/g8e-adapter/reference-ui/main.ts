@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Reference frontend entry point. Wires the audited g8e-adapter modules to
 // render the homepage matrix from typed stores. This is a reference
 // implementation that a builder can replace; the audited adapter code in src/

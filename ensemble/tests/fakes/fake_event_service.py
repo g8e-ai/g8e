@@ -98,7 +98,7 @@ class FakeEventService:
         """Typed fake for publish_investigation_event."""
         # We can just record this as a SessionEvent in self.published
         from app.models.http_context import RequestContext
-        
+
 
         ctx = RequestContext(
             web_session_id=web_session_id,

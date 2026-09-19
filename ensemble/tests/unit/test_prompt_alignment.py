@@ -35,7 +35,6 @@ tool files, or an enum value with no tool description file).
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 

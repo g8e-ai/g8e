@@ -35,7 +35,6 @@ from app.constants import (
 from app.constants.message_sender import MessageSender
 from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.investigations import ConversationHistoryMessage
-from app.models.model_telemetry import ModelCallTelemetry
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.utils.agent_persona_loader import get_agent_persona, AgentPersona
 

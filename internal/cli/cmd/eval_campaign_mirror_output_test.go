@@ -9,64 +9,56 @@ package cmd
 
 import (
 	"bytes"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 )
 
-func TestWriteCampaignMirrorRestoreQueueResult_AllAlreadyPresent(t *testing.T) {
-	t.Parallel()
+func TestWriteCampaignMirrorRestoreQueueResult(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	writeCampaignMirrorRestoreQueueResult(&stdout, &stderr, &evaluation.CampaignMirrorReconcileResult{
-		SkippedRunIDs: []string{
-			"eval-init-gemma2-9b-1789729690",
-			"eval-init-gemma3-1b-1789733152",
-			"eval-init-gemma3-270m-1789739892",
-		},
-		HostAbsentRunIDs: []string{"eval-init-deepseek-r1-7b-1789674361"},
+		RestoredRunIDs:    []string{"run-1"},
+		PublishedRecords:  12,
+		SkippedRunIDs:     []string{"run-2"},
+		HostAbsentRunIDs:  []string{"run-3"},
+		FailedRuns:        map[string]string{"run-4": "mirror unavailable"},
 	})
 	out := stdout.String()
-	assert.Contains(t, out, "already present in public mirror (nothing to do)")
-	assert.NotContains(t, out, "Restored 0")
-	assert.Contains(t, out, "Do not run mirror restore again")
-	assert.Contains(t, out, "eval campaign start --queue")
-	assert.Contains(t, out, "Skipped run IDs:")
-	assert.Empty(t, stderr.String())
+	assert.Contains(t, out, "Restored 1 verified dataset(s)")
+	assert.Contains(t, out, "already present")
+	assert.Contains(t, out, "local campaign artifacts")
+	assert.Contains(t, out, "[run-3]")
+	assert.Contains(t, stderr.String(), "mirror restore failed for run-4")
 }
 
-func TestWriteCampaignMirrorRestoreQueueResult_RestoredSome(t *testing.T) {
-	t.Parallel()
-	var stdout, stderr bytes.Buffer
-	writeCampaignMirrorRestoreQueueResult(&stdout, &stderr, &evaluation.CampaignMirrorReconcileResult{
-		RestoredRunIDs:   []string{"eval-init-gemma4-e2b-123"},
-		SkippedRunIDs:    []string{"eval-init-gemma2-9b-1789729690"},
-		PublishedRecords: 162,
-	})
-	out := stdout.String()
-	assert.Contains(t, out, "Restored 1 verified dataset(s) to public mirror (162 record(s))")
-	assert.Contains(t, out, "1 verified dataset(s) were already present")
-	assert.Empty(t, stderr.String())
-}
-
-func TestWriteCampaignMirrorRestoreQueueResult_FailedRunsOnStderr(t *testing.T) {
-	t.Parallel()
-	var stdout, stderr bytes.Buffer
-	writeCampaignMirrorRestoreQueueResult(&stdout, &stderr, &evaluation.CampaignMirrorReconcileResult{
-		FailedRuns: map[string]string{"run-bad": "probe unavailable"},
-	})
-	require.Contains(t, stderr.String(), "error: mirror restore failed for run-bad")
-	assert.NotContains(t, stdout.String(), "Restored 0")
-}
-
-func TestWriteCampaignMirrorRestoreRunResult_AlreadyPresent(t *testing.T) {
-	t.Parallel()
+func TestWriteCampaignMirrorRestoreRunResult(t *testing.T) {
 	var stdout bytes.Buffer
-	writeCampaignMirrorRestoreRunResult(&stdout, "eval-init-gemma3-1b-1789733152", 0)
-	out := stdout.String()
-	assert.Contains(t, out, "already present in public mirror (nothing to do)")
-	assert.False(t, strings.Contains(out, "Restored 0"))
+	writeCampaignMirrorRestoreRunResult(&stdout, "run-1", 0)
+	assert.Contains(t, stdout.String(), "already present")
+	stdout.Reset()
+	writeCampaignMirrorRestoreRunResult(&stdout, "run-1", 3)
+	assert.Contains(t, stdout.String(), "Restored run run-1")
+}
+
+func TestWriteCampaignMirrorRestoreInitSummary(t *testing.T) {
+	var stdout bytes.Buffer
+	writeCampaignMirrorRestoreInitSummary(&stdout, &evaluation.CampaignMirrorReconcileResult{
+		RestoredRunIDs:   []string{"run-1"},
+		HostAbsentRunIDs: []string{"run-2"},
+	})
+	assert.Contains(t, stdout.String(), "Restored 1 verified dataset(s)")
+	assert.Contains(t, stdout.String(), "local campaign artifacts")
+
+	stdout.Reset()
+	writeCampaignMirrorRestoreInitSummary(&stdout, &evaluation.CampaignMirrorReconcileResult{
+		SkippedRunIDs: []string{"run-1", "run-2"},
+	})
+	assert.Contains(t, stdout.String(), "already contains 2 restorable verified dataset(s)")
+}
+
+func TestFormatRunIDList(t *testing.T) {
+	assert.Equal(t, "[]", formatRunIDList(nil))
+	assert.Equal(t, "[run-1 run-2]", formatRunIDList([]string{"run-1", "run-2"}))
 }

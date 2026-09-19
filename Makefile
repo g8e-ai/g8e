@@ -187,6 +187,7 @@ help:
 	@echo ""
 	@echo "Lint & Quality:"
 	@echo "  lint          Run all linting and quality checks"
+	@echo "  check-bsl-headers  Verify first-party source files carry BSL 1.1 headers"
 	@echo "  vulncheck     Run Operator vulnerability check"
 	@echo "  validate-doctrines Validate doctrine JSON schema"
 	@echo "  validate-cosais     Validate COSAiS overlay coverage (Phase 8 CI guard)"
@@ -824,7 +825,7 @@ ci: ci-platform ci-ensemble ci-dashboard
 	@echo "CI complete."
 
 .PHONY: ci-platform
-ci-platform: _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test
+ci-platform: _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test check-bsl-headers
 	@echo "Platform CI complete."
 
 .PHONY: ci-ensemble
@@ -834,6 +835,10 @@ ci-ensemble: ensemble-lint ensemble-test
 .PHONY: ci-dashboard
 ci-dashboard: dashboard-lint dashboard-test
 	@echo "Dashboard CI complete."
+
+.PHONY: check-bsl-headers
+check-bsl-headers:
+	@python3 scripts/check-bsl-headers.py
 
 .PHONY: _ci-verify-proto
 _ci-verify-proto:

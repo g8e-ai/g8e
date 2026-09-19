@@ -23,7 +23,6 @@ import pytest
 from app.constants import (
     AuditorReason,
     CommandGenerationOutcome,
-    ComponentName,
     ConsensusMember,
     EventType,
     G8EE_COMPONENT,
@@ -36,7 +35,6 @@ from app.models.agents.tribunal import (
 from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.reputation import ReputationState
 from app.services.ai.generator import generate_command
-from app.models.tribunal_commands import TribunalGenerationRequest
 from app.services.data.reputation_data_service import ReputationDataService
 from tests.fakes.agent_helpers import (
     make_agent_run_args,
@@ -134,7 +132,6 @@ class TestCommandGeneratorWithCommitment:
                     correlation_id=correlation_id,
                 )
                 from app.models.http_context import RequestContext
-                from app.constants import ComponentName
 
                 ctx = RequestContext(
                     web_session_id=inputs.web_session_id,
@@ -333,7 +330,6 @@ class TestCommandGeneratorWithCommitment:
                     correlation_id=correlation_id,
                 )
                 from app.models.http_context import RequestContext
-                from app.constants import ComponentName
 
                 ctx = RequestContext(
                     web_session_id=inputs.web_session_id,

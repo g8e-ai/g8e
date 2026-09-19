@@ -766,7 +766,6 @@ class TestMemoryMergeLogic:
                 ai_response.problem_solving_approach or memory.problem_solving_approach
             )
             memory.interaction_style = ai_response.interaction_style or memory.interaction_style
-            return None
 
         service._ai_update_memory = mock_ai_update
 
@@ -844,7 +843,6 @@ class TestMemoryMergeLogic:
                 ai_response.problem_solving_approach or memory.problem_solving_approach
             )
             memory.interaction_style = ai_response.interaction_style or memory.interaction_style
-            return None
 
         service._ai_update_memory = mock_ai_update
 

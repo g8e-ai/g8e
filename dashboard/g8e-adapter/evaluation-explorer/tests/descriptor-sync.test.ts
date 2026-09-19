@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Descriptor sync: the machine-readable descriptor.json (the cross-language
 // mirror Go publication and the frontend campaign adapter consume) must
 // exactly match the authoritative TypeScript enum constants in types.ts.

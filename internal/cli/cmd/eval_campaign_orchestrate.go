@@ -553,11 +553,11 @@ func markQueueEntryVerifiedAfterPass(projectRoot string, plan *evaluation.Campai
 		notes = evaluation.TierAVerifyNotes(plan.RunID)
 	}
 	_, err := evaluation.MarkCampaignQueueEntry(evaluation.MarkCampaignQueueEntryRequest{
-		ProjectRoot:    projectRoot,
-		VariantID:      plan.QueueEntry.VariantID,
-		Status:         "verified",
-		VerifiedRunID:  plan.RunID,
-		Notes:          notes,
+		ProjectRoot:   projectRoot,
+		VariantID:     plan.QueueEntry.VariantID,
+		Status:        "verified",
+		VerifiedRunID: plan.RunID,
+		Notes:         notes,
 	})
 	if err != nil {
 		return fmt.Errorf("evaluation: update init campaign queue: %w", err)

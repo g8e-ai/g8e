@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Feed-state classification. The UI must clearly distinguish:
 //   - Feed offline: the mirror transport is unreachable
 //   - No data: the feed is live but no records have been published

@@ -13,7 +13,6 @@ PubSubClient) can connect to and interact with MockGateway.
 
 import asyncio
 import pytest
-import pytest_asyncio
 
 from app.clients.blob_client import BlobClient
 from app.clients.db_client import DBClient

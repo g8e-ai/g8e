@@ -11,7 +11,6 @@ import pytest
 
 from app.constants import (
     CommandGenerationOutcome,
-    ComponentName,
     EventType,
     G8EE_COMPONENT,
     LLMProvider,
@@ -21,11 +20,9 @@ from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.generator import (
     generate_command,
 )
-from app.models.tribunal_commands import TribunalGenerationRequest
 from tests.unit.services.ai.tribunal.conftest import (
     make_tribunal_generation_request,
     _make_mock_provider,
-    _make_mock_operator_context,
 )
 
 

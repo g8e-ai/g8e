@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // WebAuthn registration, authentication, and enrollment ceremonies. These
 // translate the embedded console's contract exactly:
 // - options.publicKey for challenge/response

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Maps Go campaign publication envelopes (Phase 8) into explorer view records
 // for assignment results and live events. evaluation_summary, catalog, model,
 // and methodology snapshots are published only by the Go projector.

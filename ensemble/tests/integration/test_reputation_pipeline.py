@@ -22,7 +22,6 @@ import pytest
 
 from app.constants import (
     CommandGenerationOutcome,
-    ComponentName,
     EventType,
     ExecutionStatus,
     G8EE_COMPONENT,

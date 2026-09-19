@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Design-preview fixture loader. When features.design_preview is enabled in
 // the runtime config, the reference frontend loads typed fixtures from the
 // contract pack instead of connecting to a live Gateway. Fixtures never mix

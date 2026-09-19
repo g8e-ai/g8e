@@ -32,7 +32,6 @@ from app.services.ai.generator import generate_command
 from tests.fakes.fake_event_service import FakeEventService
 from tests.unit.services.ai.tribunal.conftest import (
     make_tribunal_generation_request,
-    _make_mock_operator_context,
 )
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]

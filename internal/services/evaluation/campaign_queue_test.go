@@ -75,6 +75,50 @@ func TestResolveCampaignStartPlanFromQueue(t *testing.T) {
 	assert.Equal(t, []string{"gemma3:4b"}, plan.ModelTags)
 }
 
+func TestResolveModelInventoryPathDefaultsToBaseInventory(t *testing.T) {
+	root := t.TempDir()
+	basePath := ResolveBaseModelInventoryPath(root)
+	require.NoError(t, os.MkdirAll(filepath.Dir(basePath), 0o755))
+	require.NoError(t, os.WriteFile(basePath, []byte(`{"variants":[]}`), 0o600))
+
+	assert.Equal(t, basePath, ResolveModelInventoryPath(root, ""))
+	assert.Equal(t, filepath.Join(root, "custom.json"), ResolveModelInventoryPath(root, "custom.json"))
+}
+
+func TestInitCampaignQueueFiltersRuntimeFreezeToBaseTags(t *testing.T) {
+	root := t.TempDir()
+	writeFrozenVariantsForQueueTest(t, root, DefaultBaseModelInventoryRelPath,
+		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "d1", ProviderClass: "ollama"},
+	)
+	writeFrozenVariantsForQueueTest(t, root, DefaultModelInventoryRelPath,
+		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "d1", ProviderClass: "ollama"},
+		&evalv1.ModelVariant{VariantId: "extra-model", ServedModelTag: "extra:model", ModelDigest: "d2", ProviderClass: "ollama"},
+	)
+
+	result, err := InitCampaignQueue(InitCampaignQueueRequest{
+		ProjectRoot:         root,
+		SourceInventoryPath: DefaultModelInventoryRelPath,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.ModelCount)
+	assert.Equal(t, "qwen3-4b", result.Queue.Models[0].VariantID)
+}
+
+func writeFrozenVariantsForQueueTest(t *testing.T, root, relPath string, variants ...*evalv1.ModelVariant) {
+	t.Helper()
+	bodies := make([]json.RawMessage, 0, len(variants))
+	for _, variant := range variants {
+		raw, err := protojson.Marshal(variant)
+		require.NoError(t, err)
+		bodies = append(bodies, raw)
+	}
+	path := filepath.Join(root, relPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	payload, err := json.Marshal(map[string]any{"variants": bodies})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, payload, 0o600))
+}
+
 func TestResolveCampaignStartPlanForModelTags(t *testing.T) {
 	root := t.TempDir()
 	variant := &evalv1.ModelVariant{

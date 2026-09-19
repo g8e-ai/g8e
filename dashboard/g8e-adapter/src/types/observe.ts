@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Typed observe read models and event payloads mirroring the Go contracts in
 // internal/models/observe.go. Field names and JSON tags match the Go wire
 // shapes byte-for-byte. Optional Go fields (omitempty with pointer or zero

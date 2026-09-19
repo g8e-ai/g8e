@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Startup orchestrator. Implements the required boot order:
 //   1. load runtime config
 //   2. fetch bootstrap (snapshot seal target + bounded recent projections)

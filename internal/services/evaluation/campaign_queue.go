@@ -27,6 +27,11 @@ const (
 	DefaultInitCampaignQueueRelPath    = ".g8e/eval/init-campaign-queue.json"
 	DefaultModelInventoryRelPath       = ".g8e/eval/model-inventory.json"
 	DefaultCampaignInventoryRelDirname = ".g8e/eval/inventories"
+
+	// Checked-in genesis program inventory (35 init-campaign models).
+	DefaultBaseModelInventoryRelPath      = "eval/base-model-inventory.json"
+	DefaultBaseInitCampaignQueueRelPath   = "eval/base-init-campaign-queue.json"
+	DefaultGenesisHomogeneousCampaignID   = "eval-genesis-homogeneous"
 )
 
 // CampaignQueueModel summarizes one init-campaign queue entry.
@@ -135,6 +140,55 @@ func (queue *CampaignQueue) FilterByStatus(status string) []CampaignQueueModel {
 		}
 	}
 	return filtered
+}
+
+// ResolveBaseModelInventoryPath returns the checked-in genesis program inventory.
+func ResolveBaseModelInventoryPath(projectRoot string) string {
+	return ResolveEvalPath(projectRoot, DefaultBaseModelInventoryRelPath)
+}
+
+// ResolveModelInventoryPath picks an inventory file for rollout queue initialization.
+// When explicitPath is empty, use the checked-in genesis base inventory.
+func ResolveModelInventoryPath(projectRoot, explicitPath string) string {
+	explicitPath = strings.TrimSpace(explicitPath)
+	if explicitPath != "" {
+		return ResolveEvalPath(projectRoot, explicitPath)
+	}
+	return ResolveBaseModelInventoryPath(projectRoot)
+}
+
+// ResolveRuntimeModelInventoryPath picks an inventory file for ad-hoc campaign starts.
+// When explicitPath is empty, prefer the runtime provider freeze when present,
+// otherwise fall back to the checked-in genesis base inventory.
+func ResolveRuntimeModelInventoryPath(projectRoot, explicitPath string) string {
+	explicitPath = strings.TrimSpace(explicitPath)
+	if explicitPath != "" {
+		return ResolveEvalPath(projectRoot, explicitPath)
+	}
+	runtimePath := ResolveEvalPath(projectRoot, DefaultModelInventoryRelPath)
+	if _, err := os.Stat(runtimePath); err == nil {
+		return runtimePath
+	}
+	return ResolveBaseModelInventoryPath(projectRoot)
+}
+
+// BaseModelInventoryTags returns served model tags from the checked-in base inventory.
+func BaseModelInventoryTags(projectRoot string) ([]string, error) {
+	variants, err := LoadFrozenVariants(ResolveEvalPath(projectRoot, DefaultBaseModelInventoryRelPath))
+	if err != nil {
+		return nil, err
+	}
+	tags := make([]string, 0, len(variants))
+	for _, variant := range variants {
+		if variant == nil || variant.GetServedModelTag() == "" {
+			continue
+		}
+		tags = append(tags, variant.GetServedModelTag())
+	}
+	if len(tags) == 0 {
+		return nil, fmt.Errorf("evaluation: base model inventory tags: %w", constants.ErrMissingRequiredField)
+	}
+	return tags, nil
 }
 
 // LoadFrozenVariants reads a frozen model inventory export.
@@ -282,8 +336,7 @@ func resolveCampaignStartPlanForTags(req CampaignStartPlanRequest, tags []string
 		}
 	}
 
-	northStarPath := filepath.Join(req.ProjectRoot, DefaultModelInventoryRelPath)
-	variants, err := LoadFrozenVariants(northStarPath)
+	variants, err := LoadFrozenVariants(ResolveRuntimeModelInventoryPath(req.ProjectRoot, ""))
 	if err != nil {
 		return nil, err
 	}

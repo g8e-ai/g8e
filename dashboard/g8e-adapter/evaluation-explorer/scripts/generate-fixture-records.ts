@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Generate mirror-ready JSONL from the deterministic fixtures.
 //
 // Each output line is a publish input record: {"record_type":"...","record_bytes":"..."}.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 import { expect, test } from '@playwright/test';
 
 const mirrorOrigin = process.env.G8E_PUBLIC_MIRROR_ORIGIN ?? 'http://127.0.0.1:8082';

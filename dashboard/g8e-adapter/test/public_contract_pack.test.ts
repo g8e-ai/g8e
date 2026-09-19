@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 import { describe, expect, it } from 'vitest';
 import { createHash, createPublicKey, verify } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';

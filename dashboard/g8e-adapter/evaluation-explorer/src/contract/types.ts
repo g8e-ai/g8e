@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Frozen local public view contract for the OpenDevOps.ai evaluation explorer.
 //
 // This is the single typed source shared by fixture generation, projector

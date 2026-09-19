@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 import { defineConfig } from 'vite';
 
 // Minimal vite config for the adapter host. The host exists purely to

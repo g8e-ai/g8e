@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Shared copy for how OpenDevOps.ai deploys and presents g8e.
 // Used by the landing System overview and the Docs architecture section.
 

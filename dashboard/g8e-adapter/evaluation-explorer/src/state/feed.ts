@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Public mirror feed client. Runtime validation, anonymous fetch construction,
 // endpoint allowlisting, and SSE transport come from the audited g8e adapter.
 // Explorer-specific validators normalize the mirror wire shapes into the

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Normalized client store. Page components never parse transport records
 // directly; they read normalized slices from this store. The store ingests
 // projection records, decodes and validates them, indexes by identity, and

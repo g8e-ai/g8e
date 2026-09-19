@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Overview view — the landing page. Layout mirrors the OpenDevOps.ai
 // surface: the live event stream, a system overview
 // with dataset coverage, recent campaigns, and the

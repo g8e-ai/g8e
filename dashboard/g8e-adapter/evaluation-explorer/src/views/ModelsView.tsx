@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Models view — the model catalog. Contains all 31 required registry models
 // (evaluated and not-evaluated) plus inventory-only entries. Provides text
 // search, role/provider/evaluated/quality-state/suite filters, sorting,

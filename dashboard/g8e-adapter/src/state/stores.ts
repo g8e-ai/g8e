@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Typed state stores for the audited adapter. Separate stores for auth,
 // projections, narrative rows, transport/cursor state, and runtime features.
 // Reducers are pure functions: (state, action) -> state. No side effects, no

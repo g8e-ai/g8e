@@ -3,7 +3,7 @@
 // included in the LICENSE file.
 //
 // As of the Change Date listed in the LICENSE file, this software is
-// released under the Apache License, Version.0.
+// released under the Apache License, Version 2.0.
 
 // Package frontendverify provides a read-only verifier that checks HTTPS
 // health and CORS preflight against a running Gateway. It accepts a typed

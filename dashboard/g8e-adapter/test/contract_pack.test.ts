@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Contract pack tests (Packet 8A). Verifies that every fixture parses through
 // the generated validators, that regeneration is deterministic, that the
 // stale-output check passes, and that no fixture contains fabricated

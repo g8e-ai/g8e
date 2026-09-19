@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Live SSE event feed for the overview page. Newest events at the top inside a
 // grid-matched scroll region so progress ticks do not move the page.
 

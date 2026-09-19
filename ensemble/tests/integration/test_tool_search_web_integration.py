@@ -120,7 +120,7 @@ async def _collect_sse_events(chunks, inputs=None, state=None):
         if call.kwargs:
             from app.models.events import SessionEvent
             from app.models.http_context import RequestContext
-            
+
 
             ctx = RequestContext(
                 web_session_id=call.kwargs.get("web_session_id"),

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Dataset selector. The site never averages across datasets. Switching
 // datasets updates the URL so the selection is shareable and survives reload.
 

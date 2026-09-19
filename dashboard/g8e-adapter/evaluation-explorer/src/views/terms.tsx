@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Plain-language inline definitions for metric and quality terms. The Term
 // component renders a focusable abbreviation with the definition in its
 // title; the methodology page carries the same definitions in full so no

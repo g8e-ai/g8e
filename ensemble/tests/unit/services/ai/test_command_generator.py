@@ -14,7 +14,6 @@ import pytest
 from app.constants import (
     AuditorReason,
     CommandGenerationOutcome,
-    ComponentName,
     ConsensusMember,
     ErrorAnalysisCategory,
     EventType,
@@ -55,9 +54,7 @@ from app.models.agents.tribunal import (
     VoteBreakdown,
 )
 from app.models.http_context import G8eHttpContext
-from app.models.reputation import ReputationCommitment
 from app.models.settings import G8eeUserSettings, LLMSettings
-from app.models.tribunal_commands import TribunalGenerationRequest
 from tests.unit.services.ai.tribunal.conftest import (
     _MOCK_USER_SETTINGS,
     _make_mock_reputation_service,
@@ -67,9 +64,6 @@ from app.models.tool_results import (
     CommandRiskAnalysis,
     ErrorAnalysisResult,
 )
-from app.models.whitelist import WhitelistedCommand
-from app.services.data.reputation_data_service import ReputationDataService
-from app.services.protocols import AIResponseAnalyzerProtocol, EventServiceProtocol
 from app.services.ai.generator import (
     TribunalEmitter,
     _build_and_emit_result,

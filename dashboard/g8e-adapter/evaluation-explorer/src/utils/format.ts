@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Formatting helpers for numbers, durations, and metric values.
 // All formatters are pure and unit-tested. They never fabricate a value
 // when data is missing; callers render UnavailableValue instead.

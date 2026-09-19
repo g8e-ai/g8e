@@ -2,7 +2,7 @@
   "pattern": "eval-init-<variant_id>",
   "cells_per_run": 75,
   "inventory_dir": ".g8e/eval/inventories",
-  "generate_command": "./g8e eval queue init --from .g8e/eval/model-inventory.json --materialize --merge",
+  "generate_command": "./g8e eval rollout init --materialize --merge",
   "models": [
     {
       "variant_id": "example-lite",

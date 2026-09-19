@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Accessible hand-authored bar visualizations. Every bar carries its value
 // as visible text and an aria-label; the adjacent table is the full
 // screen-reader alternative. Unlike-unit metrics are never combined in one

@@ -259,6 +259,9 @@ jobs:
           fi
           echo "License compliance OK"
 
+      - name: Check BSL 1.1 source headers
+        run: python3 scripts/check-bsl-headers.py
+
   conformance:
     name: Protocol Conformance
     runs-on: ubuntu-latest

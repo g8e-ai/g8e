@@ -12,7 +12,7 @@ wired with typed fakes. Use the individual fake constructors directly when
 testing a sub-service in isolation.
 """
 
-from app.constants.generated_paths import PathConstants, PortConstants
+from app.constants.generated_paths import PortConstants
 from app.constants import G8EE_COMPONENT
 from app.models.cache import CacheOperationResult
 from app.models.settings import G8eeAppSettings
@@ -81,7 +81,7 @@ def create_pure_mock_cache_aside():
 
 def create_mock_cache_aside_service(kv_cache_client=None, db_client=None):
     """Wired CacheAsideService with fake KV/DB for tests."""
-    
+
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
     from app.services.cache.cache_aside import CacheAsideService

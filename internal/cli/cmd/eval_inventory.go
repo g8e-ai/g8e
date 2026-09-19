@@ -118,10 +118,8 @@ func modelsEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if fromPath == "" {
-				fromPath = evaluation.DefaultModelInventoryRelPath
-			}
-			variants, err := evaluation.LoadFrozenVariants(evaluation.ResolveEvalPath(cfg.ProjectRoot, fromPath))
+			inventoryPath := evaluation.ResolveRuntimeModelInventoryPath(cfg.ProjectRoot, fromPath)
+			variants, err := evaluation.LoadFrozenVariants(inventoryPath)
 			if err != nil {
 				return fmt.Errorf("evaluation: inventory list: %w", err)
 			}
@@ -149,7 +147,7 @@ func modelsEvalListCmd(deps nativeEvalDeps) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&fromPath, "from", "", "Frozen inventory JSON path (default: .g8e/eval/model-inventory.json)")
+	cmd.Flags().StringVar(&fromPath, "from", "", "Frozen inventory JSON path (default: runtime freeze when present, else eval/base-model-inventory.json)")
 	return cmd
 }
 
@@ -176,10 +174,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			if fromPath == "" {
-				fromPath = evaluation.DefaultModelInventoryRelPath
-			}
-			sourceVariants, err := evaluation.LoadFrozenVariants(evaluation.ResolveEvalPath(cfg.ProjectRoot, fromPath))
+			sourceVariants, err := evaluation.LoadFrozenVariants(evaluation.ResolveRuntimeModelInventoryPath(cfg.ProjectRoot, fromPath))
 			if err != nil {
 				return fmt.Errorf("evaluation: inventory materialize: %w", err)
 			}
@@ -217,11 +212,11 @@ Examples:
 					return fmt.Errorf("evaluation: inventory materialize: %w", err)
 				}
 				return writeInventoryMaterializeResult(cmd, []inventoryMaterializeLine{{
-					CampaignID:   campaignID,
+					CampaignID:     campaignID,
 					ServedModelTag: fmt.Sprintf("%d models", len(selected)),
 					RegistryDigest: freeze.RegistryDigest,
-					CellCount:    freeze.HomogeneousCellCount,
-					InventoryFile: relPath,
+					CellCount:      freeze.HomogeneousCellCount,
+					InventoryFile:  relPath,
 				}}, output.JSONEnabled(cmd))
 			}
 
@@ -249,7 +244,7 @@ Examples:
 			return writeInventoryMaterializeResult(cmd, lines, output.JSONEnabled(cmd))
 		},
 	}
-	cmd.Flags().StringVar(&fromPath, "from", "", "Source inventory JSON path (default: .g8e/eval/model-inventory.json)")
+	cmd.Flags().StringVar(&fromPath, "from", "", "Source inventory JSON path (default: runtime freeze when present, else eval/base-model-inventory.json)")
 	cmd.Flags().StringVar(&tag, "tag", "", "Materialize one served model tag")
 	cmd.Flags().StringVar(&tags, "tags", "", "Materialize multiple served model tags (comma-separated)")
 	cmd.Flags().BoolVar(&all, "all", false, "Materialize every variant in the source inventory")

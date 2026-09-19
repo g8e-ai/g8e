@@ -6,7 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 

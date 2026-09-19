@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Deterministic fixtures for every snapshot record kind and live event kind.
 // These let every route render before the real projector or mirror is wired.
 // Fixtures exercise all quality states so the UX shell proves every state

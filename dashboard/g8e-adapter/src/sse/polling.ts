@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Polling fallback for SSE. When EventSource is unavailable or fails
 // repeatedly, this module polls the stored-events HTTP endpoint
 // `GET /api/v1/sse/events?since_id=<id>&limit=<n>` to fetch retained events.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Observe API client. Credentialed reads against the allowlisted observe GET
 // endpoints with stable cursor pagination and typed response validation.
 // Every fetch uses the credentialed fetch helper, so credentials: 'include'

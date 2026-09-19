@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Canonical Primary / Assistant / Lite role names and scope copy.
 // Wire values remain primary, assistant, lite per the public view contract.
 

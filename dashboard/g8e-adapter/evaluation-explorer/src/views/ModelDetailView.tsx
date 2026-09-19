@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Model detail view. Per the plan: identity and role metadata, data-quality
 // banner and limitations, overall metric summary, pass-rate confidence
 // interval, suite-by-suite table, repeatability breakdown, agreement,

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Business Source License 1.1 — see LICENSE for details.
+
 // Reference frontend render tests (Packet 8C). Verifies that pure render
 // functions produce safe HTML from typed state, that every absent typed
 // source produces an explicit unavailable/stale/empty state, that no
