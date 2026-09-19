@@ -29,6 +29,7 @@ definitions:
     - PLATFORM_ENROLLMENT_CREATE_SESSION
     - PORT_CHECK
     - PROVIDER_BOUNDARY_OBSERVATION
+    - MODEL_PROVENANCE_OBSERVATION
     - RESTORE_FILE
     - SHUTDOWN
     type: string
@@ -61,6 +62,7 @@ definitions:
     - ActionTypePlatformEnrollmentCreateSession
     - ActionTypePortCheck
     - ActionTypeProviderBoundaryObservation
+    - ActionTypeModelProvenanceObservation
     - ActionTypeRestoreFile
     - ActionTypeShutdown
   constants.GatewayMode:
@@ -453,6 +455,13 @@ definitions:
     - MeasurementStatusStale
     - MeasurementStatusUnavailable
     - MeasurementStatusUnsupported
+  models.ModelProvenanceResponse:
+    properties:
+      window:
+        items:
+          type: integer
+        type: array
+    type: object
   models.ObserveBootstrapSnapshot:
     properties:
       active_run:
@@ -2661,6 +2670,38 @@ paths:
           schema:
             type: string
       summary: Dispatch a governed inference request
+      tags:
+      - inference
+  /api/v1/inference/model-provenance/attestations/{provider_attempt_id}:
+    get:
+      description: Returns the canonical model provenance attestation window for one
+        provider attempt ID (mTLS owner CLI only).
+      parameters:
+      - description: Provider attempt ID
+        in: path
+        name: provider_attempt_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ModelProvenanceResponse'
+        "404":
+          description: Model provenance evidence not found
+          schema:
+            type: string
+        "405":
+          description: Method Not Allowed
+          schema:
+            type: string
+        "503":
+          description: Model provenance store unavailable
+          schema:
+            type: string
+      summary: Get model provenance attestation evidence
       tags:
       - inference
   /api/v1/inference/provider-observations/{provider_attempt_id}:

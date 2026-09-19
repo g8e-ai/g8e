@@ -788,6 +788,53 @@
                 }
             }
         },
+        "/api/v1/inference/model-provenance/attestations/{provider_attempt_id}": {
+            "get": {
+                "description": "Returns the canonical model provenance attestation window for one provider attempt ID (mTLS owner CLI only).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inference"
+                ],
+                "summary": "Get model provenance attestation evidence",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider attempt ID",
+                        "name": "provider_attempt_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ModelProvenanceResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Model provenance evidence not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Model provenance store unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/inference/provider-observations/{provider_attempt_id}": {
             "get": {
                 "description": "Returns the canonical provider-boundary observation window and durable provider-attempt record for one provider attempt ID (mTLS owner CLI only).",
@@ -1982,6 +2029,7 @@
                 "PLATFORM_ENROLLMENT_CREATE_SESSION",
                 "PORT_CHECK",
                 "PROVIDER_BOUNDARY_OBSERVATION",
+                "MODEL_PROVENANCE_OBSERVATION",
                 "RESTORE_FILE",
                 "SHUTDOWN"
             ],
@@ -2014,6 +2062,7 @@
                 "ActionTypePlatformEnrollmentCreateSession",
                 "ActionTypePortCheck",
                 "ActionTypeProviderBoundaryObservation",
+                "ActionTypeModelProvenanceObservation",
                 "ActionTypeRestoreFile",
                 "ActionTypeShutdown"
             ]
@@ -2587,6 +2636,17 @@
                 "MeasurementStatusUnavailable",
                 "MeasurementStatusUnsupported"
             ]
+        },
+        "models.ModelProvenanceResponse": {
+            "type": "object",
+            "properties": {
+                "window": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
         },
         "models.ObserveBootstrapSnapshot": {
             "type": "object",

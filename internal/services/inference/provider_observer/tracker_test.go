@@ -37,8 +37,8 @@ func TestTracker_BeginRejectsInvalidCommands(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name      string
-		command   *evalv1.ProviderBoundaryObservationCommand
+		name       string
+		command    *evalv1.ProviderBoundaryObservationCommand
 		wantSubstr string
 	}{
 		{name: "nil command", command: nil},

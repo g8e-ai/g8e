@@ -110,7 +110,7 @@ func TestVerifyObservationCoverage(t *testing.T) {
 			wantFailures: []string{"non-positive duration"},
 		},
 		{
-			name: "attempt start timestamp mismatch",
+			name:   "attempt start timestamp mismatch",
 			window: baseWindow,
 			attempt: &operatorv1.InferenceProviderAttemptRecord{
 				ProviderAttemptId: "attempt-1",

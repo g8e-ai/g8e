@@ -87,12 +87,12 @@ func TestHandler_HandleCommand(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0).UTC()
 
 	tests := []struct {
-		name        string
-		setup       func(t *testing.T, handler *Handler) []byte
-		wantID      string
-		wantErr     bool
-		wantSubstr  string
-		wantPubs    int
+		name       string
+		setup      func(t *testing.T, handler *Handler) []byte
+		wantID     string
+		wantErr    bool
+		wantSubstr string
+		wantPubs   int
 	}{
 		{
 			name: "begin returns provider attempt id",

@@ -34,10 +34,10 @@ func TestExtractJSONObject_RejectsMalformedPayload(t *testing.T) {
 func TestNumericValue_AcceptsSupportedTypes(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name  string
-		raw   any
-		want  int64
-		ok    bool
+		name string
+		raw  any
+		want int64
+		ok   bool
 	}{
 		{name: "float64", raw: float64(12), want: 12, ok: true},
 		{name: "int", raw: int(7), want: 7, ok: true},

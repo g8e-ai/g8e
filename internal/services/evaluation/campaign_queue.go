@@ -29,9 +29,9 @@ const (
 	DefaultCampaignInventoryRelDirname = ".g8e/eval/inventories"
 
 	// Checked-in genesis program inventory (35 init-campaign models).
-	DefaultBaseModelInventoryRelPath      = "eval/base-model-inventory.json"
-	DefaultBaseInitCampaignQueueRelPath   = "eval/base-init-campaign-queue.json"
-	DefaultGenesisHomogeneousCampaignID   = "eval-genesis-homogeneous"
+	DefaultBaseModelInventoryRelPath    = "eval/base-model-inventory.json"
+	DefaultBaseInitCampaignQueueRelPath = "eval/base-init-campaign-queue.json"
+	DefaultGenesisHomogeneousCampaignID = "eval-genesis-homogeneous"
 )
 
 // CampaignQueueModel summarizes one init-campaign queue entry.

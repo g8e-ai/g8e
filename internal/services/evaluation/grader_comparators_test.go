@@ -128,7 +128,7 @@ func TestBuildRecoveredTerminalAssignmentResult_RejectsNonTerminalLifecycle(t *t
 func graderIntegerObservation(id string, value int64) *evalv1.EvaluationObservation {
 	return &evalv1.EvaluationObservation{
 		ObservationId:   id,
-		ObservationType:   versioned("target-count", RegistryVersion),
+		ObservationType: versioned("target-count", RegistryVersion),
 		Authority:       evalv1.EvaluationEvidenceAuthority_EVALUATION_EVIDENCE_AUTHORITY_INDEPENDENT_TARGET_STATE,
 		Value:           &evalv1.EvaluationValue{Value: &evalv1.EvaluationValue_IntegerValue{IntegerValue: value}},
 		EvidenceRefs:    []*compliancev1.ComplianceEvidenceReference{testEvidenceReference(id)},

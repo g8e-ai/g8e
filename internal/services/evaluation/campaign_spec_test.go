@@ -44,10 +44,10 @@ func TestMaterializeCampaignSpec_RejectsMissingInputs(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name        string
-		campaignID  string
-		catalog     *evalv1.EvaluationScenarioCatalog
-		inventory   *ModelInventoryFreeze
+		name       string
+		campaignID string
+		catalog    *evalv1.EvaluationScenarioCatalog
+		inventory  *ModelInventoryFreeze
 	}{
 		{name: "empty campaign id", campaignID: "", catalog: catalog, inventory: inventory},
 		{name: "nil catalog", campaignID: "north-star-smoke", catalog: nil, inventory: inventory},
