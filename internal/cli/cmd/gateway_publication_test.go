@@ -11,6 +11,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 
@@ -129,4 +131,69 @@ func TestShouldPublishViaGatewayReturnsFalseWhenGatewayUnhealthy(t *testing.T) {
 
 	assert.False(t, isHostPublicFeedConfigured(context.Background(), fileSvc))
 	assert.False(t, shouldPublishViaGateway(context.Background(), fileSvc))
+}
+
+func TestMirrorCatalogDatasetPresent(t *testing.T) {
+	assert.True(t, mirrorCatalogDatasetPresent(map[string]any{
+		"kind":       "catalog_snapshot",
+		"dataset_id": "eval-run-1",
+	}, "eval-run-1"))
+	assert.False(t, mirrorCatalogDatasetPresent(map[string]any{
+		"kind":       "catalog_snapshot",
+		"dataset_id": "other-run",
+	}, "eval-run-1"))
+	assert.True(t, mirrorCatalogDatasetPresent(map[string]any{
+		"record": map[string]any{
+			"kind":       "catalog_snapshot",
+			"dataset_id": "nested-run",
+		},
+	}, "nested-run"))
+}
+
+func TestMirrorProjectionHasDataset(t *testing.T) {
+	projections := []map[string]any{
+		{"kind": "other", "dataset_id": "missing"},
+		{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"},
+	}
+	assert.True(t, mirrorProjectionHasDataset(projections, "eval-run-1"))
+	assert.False(t, mirrorProjectionHasDataset(projections, "eval-run-2"))
+}
+
+func TestHTTPCampaignMirrorProbe_DatasetPresentFromBootstrap(t *testing.T) {
+	bootstrapServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedBootstrap{
+			Snapshot: models.PublicFeedSnapshot{HighWaterSequence: 1},
+			RecentProjections: []map[string]any{
+				{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"},
+			},
+		}))
+	}))
+	t.Cleanup(bootstrapServer.Close)
+
+	originalBootstrap := publicMirrorBootstrapURL
+	originalHistory := publicMirrorHistoryURL
+	publicMirrorBootstrapURL = bootstrapServer.URL
+	publicMirrorHistoryURL = bootstrapServer.URL + "/history"
+	t.Cleanup(func() {
+		publicMirrorBootstrapURL = originalBootstrap
+		publicMirrorHistoryURL = originalHistory
+	})
+
+	probe := newHTTPCampaignMirrorProbe(context.Background())
+	present, err := probe.DatasetPresent(context.Background(), "eval-run-1")
+	require.NoError(t, err)
+	assert.True(t, present)
+}
+
+func TestIsPublicFeedSequenceOutOfOrder(t *testing.T) {
+	assert.True(t, isPublicFeedSequenceOutOfOrder(fmt.Errorf("gateway export batch: %w", constants.ErrPublicFeedSequenceOutOfOrder)))
+	assert.False(t, isPublicFeedSequenceOutOfOrder(nil))
+	assert.False(t, isPublicFeedSequenceOutOfOrder(fmt.Errorf("other error")))
+}
+
+func TestIsPublicFeedSnapshotNotFound(t *testing.T) {
+	assert.True(t, isPublicFeedSnapshotNotFound(fmt.Errorf("snapshot lookup: %w", constants.ErrPublicFeedSnapshotNotFound)))
+	assert.False(t, isPublicFeedSnapshotNotFound(nil))
 }

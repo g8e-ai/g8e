@@ -331,6 +331,21 @@ func TestMarshalAssignmentResultProjectionEnvelope_IncludesBenchmarkObservations
 	assert.Equal(t, 4096.0, peak["value"])
 }
 
+func TestCampaignRunVerifier_WithReaders(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	reader, err := NewCampaignProviderObservationReader(files)
+	require.NoError(t, err)
+	provenanceReader, err := NewCampaignModelProvenanceReader(files)
+	require.NoError(t, err)
+
+	verifier := NewCampaignRunVerifier(func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }).
+		WithProviderObservationReader(reader, ProviderObservationPolicyInterim).
+		WithModelProvenanceReader(provenanceReader, ModelProvenancePolicyInterim)
+	require.NotNil(t, verifier)
+	assert.Equal(t, ProviderObservationPolicyInterim, verifier.providerObservationPolicy)
+	assert.Equal(t, ModelProvenancePolicyInterim, verifier.modelProvenancePolicy)
+}
+
 func writeProviderAttemptRecord(ctx context.Context, fileSvc fs.RuntimeFileService, record *operatorv1.InferenceProviderAttemptRecord) error {
 	dir := filepath.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname)
 	if err := fileSvc.MkdirAll(ctx, dir, constants.PermDirStandard); err != nil {
