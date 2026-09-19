@@ -1,8 +1,5 @@
-import os
-
 import pytest
 
-from app.constants.env_vars import EnvVar
 from app.errors import NetworkError
 from app.models.internal_api import InferenceDispatchRequest
 from app.services.infra.internal_http_client import InternalHttpClient
@@ -14,10 +11,9 @@ pytestmark = [pytest.mark.integration, pytest.mark.requires_operator]
 
 @pytest.mark.asyncio
 async def test_dispatch_inference_reaches_gateway_validation_over_real_mtls():
-    if not os.environ.get(EnvVar.GATEWAY_URL):
-        pytest.skip("Gateway URL is not configured for live mTLS integration")
-
     settings = SettingsService().get_local_settings()
+    if not settings.component_urls.client_url:
+        pytest.skip("Gateway URL is not configured for live mTLS integration")
     if not settings.ca_cert_path:
         pytest.skip("Gateway CA bundle is not available for live mTLS integration")
     if not settings.client_cert_path or not settings.client_key_path:
