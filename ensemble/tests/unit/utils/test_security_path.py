@@ -11,7 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from app.utils.security import validate_safe_filename, validate_safe_path
+from app.utils.security import (
+    resolve_safe_path_segments,
+    validate_safe_filename,
+    validate_safe_path,
+)
 
 
 def test_validate_safe_filename_accepts_simple_segment() -> None:
@@ -42,3 +46,33 @@ def test_validate_safe_path_resolves_under_root(tmp_path: Path) -> None:
 def test_validate_safe_path_rejects_traversal(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="Path traversal detected"):
         validate_safe_path("../outside.json", tmp_path)
+
+
+def test_resolve_safe_path_segments_resolves_under_root(tmp_path: Path) -> None:
+    resolved = resolve_safe_path_segments(
+        tmp_path,
+        "assignment-1",
+        "attempt-1.json",
+        segment_labels=("assignment_id", "evaluation_attempt_id"),
+    )
+    assert resolved == (tmp_path / "assignment-1" / "attempt-1.json").resolve()
+
+
+def test_resolve_safe_path_segments_rejects_unsafe_assignment_id(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="invalid assignment_id"):
+        resolve_safe_path_segments(
+            tmp_path,
+            "../etc",
+            "attempt-1.json",
+            segment_labels=("assignment_id", "evaluation_attempt_id"),
+        )
+
+
+def test_resolve_safe_path_segments_rejects_unsafe_attempt_id(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="invalid evaluation_attempt_id"):
+        resolve_safe_path_segments(
+            tmp_path,
+            "assignment-1",
+            "../secret.json",
+            segment_labels=("assignment_id", "evaluation_attempt_id"),
+        )

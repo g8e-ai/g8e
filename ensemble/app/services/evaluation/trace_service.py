@@ -30,7 +30,7 @@ from app.models.evaluation_trace import (
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
 from app.utils.path import resolve_project_root
-from app.utils.security import validate_safe_filename, validate_safe_path
+from app.utils.security import resolve_safe_path_segments, validate_safe_filename
 from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
@@ -46,17 +46,24 @@ def _trace_root() -> Path:
     return (base / "data" / "evaluation" / "traces").resolve()
 
 
-def _trace_path(assignment_id: str, evaluation_attempt_id: str) -> Path:
+def validated_trace_ids(assignment_id: str, evaluation_attempt_id: str) -> tuple[str, str]:
+    """Validate evaluation trace path parameters before filesystem access."""
     try:
-        safe_assignment_id = validate_safe_filename(assignment_id, label="assignment_id")
-        safe_attempt_id = validate_safe_filename(
-            evaluation_attempt_id,
-            label="evaluation_attempt_id",
+        return (
+            validate_safe_filename(assignment_id, label="assignment_id"),
+            validate_safe_filename(evaluation_attempt_id, label="evaluation_attempt_id"),
         )
-        root = _trace_root()
-        return validate_safe_path(
-            f"{safe_assignment_id}/{safe_attempt_id}.json",
-            root,
+    except ValueError as exc:
+        raise ValidationError(str(exc), component="g8ee") from exc
+
+
+def _resolve_trace_path(assignment_id: str, evaluation_attempt_id: str) -> Path:
+    safe_assignment_id, safe_attempt_id = validated_trace_ids(assignment_id, evaluation_attempt_id)
+    try:
+        return resolve_safe_path_segments(
+            _trace_root(),
+            safe_assignment_id,
+            f"{safe_attempt_id}.json",
         )
     except ValueError as exc:
         raise ValidationError(str(exc), component="g8ee") from exc
@@ -71,7 +78,7 @@ class EvaluationTraceService:
     """Persist immutable evaluation assignment traces before lifecycle delivery."""
 
     def trace_file(self, assignment_id: str, evaluation_attempt_id: str) -> Path:
-        return _trace_path(assignment_id, evaluation_attempt_id)
+        return _resolve_trace_path(assignment_id, evaluation_attempt_id)
 
     def begin(
         self,
@@ -142,7 +149,11 @@ class EvaluationTraceService:
         return trace
 
     def load(self, assignment_id: str, evaluation_attempt_id: str) -> EvaluationAssignmentTrace:
-        path = self.trace_file(assignment_id, evaluation_attempt_id)
+        path = _resolve_trace_path(assignment_id, evaluation_attempt_id)
+        return self._read_trace(path)
+
+    @staticmethod
+    def _read_trace(path: Path) -> EvaluationAssignmentTrace:
         raw = path.read_text(encoding="utf-8")
         trace = EvaluationAssignmentTrace.model_validate_json(raw)
         expected = compute_trace_digest(trace.model_copy(update={"trace_digest": ""}))

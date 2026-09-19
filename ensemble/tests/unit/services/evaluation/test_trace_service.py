@@ -11,7 +11,11 @@ from app.errors import ValidationError
 from app.models.evaluation_trace import EvaluationAssignmentTrace
 from app.models.http_context import G8eHttpContext
 from app.models.model_telemetry import ModelCallTelemetry
-from app.services.evaluation.trace_service import EvaluationTraceService, compute_trace_digest
+from app.services.evaluation.trace_service import (
+    EvaluationTraceService,
+    compute_trace_digest,
+    validated_trace_ids,
+)
 from g8e.models.internal_api import EvaluationInferenceContext, InferenceModelVariant
 
 
@@ -108,6 +112,17 @@ def test_trace_load_rejects_path_traversal(trace_service):
         trace_service.load("../etc", "attempt-1")
     with pytest.raises(ValidationError, match="invalid evaluation_attempt_id"):
         trace_service.load("assignment-1", "../secret")
+
+
+def test_validated_trace_ids_rejects_unsafe_segments():
+    with pytest.raises(ValidationError, match="invalid assignment_id"):
+        validated_trace_ids("../etc", "attempt-1")
+    with pytest.raises(ValidationError, match="invalid evaluation_attempt_id"):
+        validated_trace_ids("assignment-1", "../secret")
+
+
+def test_validated_trace_ids_accepts_safe_segments():
+    assert validated_trace_ids("assignment-1", "attempt-1") == ("assignment-1", "attempt-1")
 
 
 def test_trace_digest_changes_when_model_calls_change():

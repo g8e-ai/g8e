@@ -27,6 +27,35 @@ def validate_safe_filename(value: str, *, label: str = "filename") -> str:
     return value
 
 
+def resolve_safe_path_segments(
+    root: str | Path,
+    *segments: str,
+    segment_labels: tuple[str, ...] | None = None,
+) -> Path:
+    """Validate single-segment path components and resolve them under root."""
+    if not segments:
+        raise ValueError("At least one path segment is required")
+
+    root_path = Path(root).resolve()
+    safe_segments: list[str] = []
+    for index, segment in enumerate(segments):
+        label = (
+            segment_labels[index]
+            if segment_labels is not None and index < len(segment_labels)
+            else f"path segment {index + 1}"
+        )
+        safe_segments.append(validate_safe_filename(segment, label=label))
+
+    target_path = root_path.joinpath(*safe_segments).resolve()
+    try:
+        target_path.relative_to(root_path)
+    except ValueError as exc:
+        joined = "/".join(safe_segments)
+        raise ValueError(f"Path traversal detected: {joined} is outside of {root}") from exc
+
+    return target_path
+
+
 def validate_safe_path(path: str | Path, root: str | Path) -> Path:
     """
     Ensures a path is safe and stays within the specified root directory.
@@ -49,19 +78,15 @@ def validate_safe_path(path: str | Path, root: str | Path) -> Path:
 
     if path_obj.is_absolute():
         target_path = path_obj.resolve()
-    else:
-        if any(part in {"", ".."} for part in path_obj.parts):
-            raise ValueError(f"Path traversal detected: {path} is outside of {root}")
-        target_path = root_path.joinpath(*path_obj.parts).resolve()
+        try:
+            target_path.relative_to(root_path)
+        except ValueError as exc:
+            raise ValueError(f"Path traversal detected: {path} is outside of {root}") from exc
+        return target_path
 
-    # Security check: Ensure target_path is within root_path
-    try:
-        # relative_to raises ValueError if target_path is not under root_path
-        target_path.relative_to(root_path)
-    except ValueError as exc:
-        raise ValueError(f"Path traversal detected: {path} is outside of {root}") from exc
-
-    return target_path
+    if any(part in {"", ".."} for part in path_obj.parts):
+        raise ValueError(f"Path traversal detected: {path} is outside of {root}")
+    return resolve_safe_path_segments(root_path, *path_obj.parts)
 
 
 def is_shell_required(command: str) -> bool:

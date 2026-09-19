@@ -136,7 +136,7 @@ from app.constants.message_sender import MessageSender
 if TYPE_CHECKING:
     from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
 
-from app.services.evaluation.trace_service import EvaluationTraceService
+from app.services.evaluation.trace_service import EvaluationTraceService, validated_trace_ids
 from app.dependencies import (
     get_g8ee_app_settings,
     get_g8ee_approval_service,
@@ -1789,11 +1789,11 @@ async def get_investigation(
     response_model=EvaluationTraceResponse,
 )
 async def get_evaluation_trace(
-    assignment_id: str,
-    evaluation_attempt_id: str,
+    trace_ids: tuple[str, str] = Depends(validated_trace_ids),
     _: G8eHttpContext = Depends(require_authenticated_context),
 ):
     """Authenticated read-only lookup for a persisted evaluation assignment trace."""
+    assignment_id, evaluation_attempt_id = trace_ids
     trace_service = EvaluationTraceService()
     try:
         trace = trace_service.load(assignment_id, evaluation_attempt_id)
