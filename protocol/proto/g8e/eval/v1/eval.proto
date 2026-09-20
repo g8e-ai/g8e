@@ -84,6 +84,81 @@ enum EvaluationUsageAvailability {
   EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE = 2;
 }
 
+enum EvaluationPolicyDecisionOutcome {
+  EVALUATION_POLICY_DECISION_OUTCOME_UNSPECIFIED = 0;
+  EVALUATION_POLICY_DECISION_OUTCOME_ALLOW = 1;
+  EVALUATION_POLICY_DECISION_OUTCOME_DENY = 2;
+  EVALUATION_POLICY_DECISION_OUTCOME_REFUSED = 3;
+}
+
+enum PublicGradeExplanationCode {
+  PUBLIC_GRADE_EXPLANATION_CODE_UNSPECIFIED = 0;
+  PUBLIC_GRADE_EXPLANATION_CODE_CRITERION_PASSED = 1;
+  PUBLIC_GRADE_EXPLANATION_CODE_CRITERION_FAILED = 2;
+  PUBLIC_GRADE_EXPLANATION_CODE_EVIDENCE_UNAVAILABLE = 3;
+  PUBLIC_GRADE_EXPLANATION_CODE_UNSUPPORTED = 4;
+  PUBLIC_GRADE_EXPLANATION_CODE_INVALID_EVIDENCE = 5;
+  PUBLIC_GRADE_EXPLANATION_CODE_GRADER_UNAVAILABLE = 6;
+}
+
+enum PublicActivityAvailability {
+  PUBLIC_ACTIVITY_AVAILABILITY_UNSPECIFIED = 0;
+  PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED = 1;
+  PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE = 2;
+  PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE = 3;
+}
+
+enum PublicUnavailableReason {
+  PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED = 0;
+  PUBLIC_UNAVAILABLE_REASON_HISTORICAL_NOT_CAPTURED = 1;
+  PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED = 2;
+  PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE = 3;
+  PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE = 4;
+  PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE = 5;
+  PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS = 6;
+}
+
+enum PublicFinishState {
+  PUBLIC_FINISH_STATE_UNSPECIFIED = 0;
+  PUBLIC_FINISH_STATE_STOP = 1;
+  PUBLIC_FINISH_STATE_LENGTH = 2;
+  PUBLIC_FINISH_STATE_TOOL_CALL = 3;
+  PUBLIC_FINISH_STATE_ERROR = 4;
+  PUBLIC_FINISH_STATE_UNAVAILABLE = 5;
+}
+
+enum PublicEvidenceSource {
+  PUBLIC_EVIDENCE_SOURCE_UNSPECIFIED = 0;
+  PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED = 1;
+  PUBLIC_EVIDENCE_SOURCE_BOUND_PUBLIC_PROOF = 2;
+}
+
+enum PublicVerificationProvenance {
+  PUBLIC_VERIFICATION_PROVENANCE_UNSPECIFIED = 0;
+  PUBLIC_VERIFICATION_PROVENANCE_BOUND = 1;
+  PUBLIC_VERIFICATION_PROVENANCE_LEGACY_UNBOUND = 2;
+}
+
+enum PublicReceiptStatus {
+  PUBLIC_RECEIPT_STATUS_UNSPECIFIED = 0;
+  PUBLIC_RECEIPT_STATUS_UNAVAILABLE = 1;
+  PUBLIC_RECEIPT_STATUS_REPORTED = 2;
+}
+
+enum PublicToolScoreDimension {
+  PUBLIC_TOOL_SCORE_DIMENSION_UNSPECIFIED = 0;
+  PUBLIC_TOOL_SCORE_DIMENSION_TOOL_RECOGNITION = 1;
+  PUBLIC_TOOL_SCORE_DIMENSION_TOOL_SELECTION = 2;
+  PUBLIC_TOOL_SCORE_DIMENSION_ARGUMENT_SCHEMA = 3;
+  PUBLIC_TOOL_SCORE_DIMENSION_ARGUMENT_SEMANTICS = 4;
+  PUBLIC_TOOL_SCORE_DIMENSION_PERMISSION_COMPLIANCE = 5;
+  PUBLIC_TOOL_SCORE_DIMENSION_RESULT_INTERPRETATION = 6;
+  PUBLIC_TOOL_SCORE_DIMENSION_FOLLOW_UP_DECISION = 7;
+  PUBLIC_TOOL_SCORE_DIMENSION_UNNECESSARY_TOOL_CALLS = 8;
+  PUBLIC_TOOL_SCORE_DIMENSION_LOOPING = 9;
+  PUBLIC_TOOL_SCORE_DIMENSION_RECOVERY = 10;
+}
+
 enum ProviderHardwareMetricAvailability {
   PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNSPECIFIED = 0;
   PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED = 1;
@@ -340,6 +415,19 @@ message EvaluationScenarioCatalog {
   repeated EvaluationScenarioDefinition scenarios = 4;
 }
 
+message PublicScenarioCriterion {
+  string criterion_id = 1;
+  string public_label = 2;
+  string public_description = 3;
+  EvaluationGradingMethod grading_method = 4;
+  bool required = 5;
+}
+
+message PublicToolScoreDimensionRequirement {
+  PublicToolScoreDimension dimension = 1;
+  bool required = 2;
+}
+
 // EvaluationScenarioDefinition describes one frozen typed scenario.
 message EvaluationScenarioDefinition {
   string scenario_id = 1;
@@ -353,6 +441,8 @@ message EvaluationScenarioDefinition {
   g8e.compliance.v1.ComplianceEvidenceReference input_fixture_ref = 9;
   repeated string required_concepts = 10;
   g8e.compliance.v1.ComplianceEvidenceReference gold_criteria_ref = 11;
+  repeated PublicScenarioCriterion public_criteria = 12;
+  repeated PublicToolScoreDimensionRequirement public_tool_score_dimensions = 13;
 }
 
 // ModelVariant is one frozen provider-backed model identity in a campaign.
@@ -597,7 +687,7 @@ message ModelInferenceRecord {
   uint64 total_duration_nanos = 24;
   uint64 load_duration_nanos = 25;
   EvaluationLoadState load_state = 26;
-  uint32 retry_count = 27;
+  optional uint32 retry_count = 27;
   string finish_reason = 28;
   bool privacy_attested = 29;
   g8e.compliance.v1.ComplianceEvidenceReference governed_receipt_ref = 30;
@@ -696,6 +786,14 @@ message GraderModelCallRecord {
   g8e.compliance.v1.ComplianceEvidenceReference inference_record_ref = 4;
 }
 
+message PolicyDecisionRecord {
+  string decision_id = 1;
+  string assignment_id = 2;
+  string tool_name = 3;
+  EvaluationPolicyDecisionOutcome outcome = 4;
+  string detail = 5;
+}
+
 // EvaluationAssignmentResult is the private terminal result for one assignment.
 message EvaluationAssignmentResult {
   string schema_version = 1;
@@ -718,6 +816,12 @@ message EvaluationAssignmentResult {
   repeated GraderModelCallRecord grader_calls = 18;
   repeated g8e.compliance.v1.ComplianceEvidenceReference evidence_refs = 19;
   google.protobuf.Timestamp completed_at = 20;
+  repeated PolicyDecisionRecord policy_decisions = 21;
+  bool tool_decisions_captured = 22;
+  bool tool_calls_captured = 23;
+  bool governed_actions_captured = 24;
+  bool policy_decisions_captured = 25;
+  optional uint64 scored_inference_span_nanos = 26;
 }
 
 // EvaluationVerificationReport independently verifies one run or assignment.
@@ -731,6 +835,41 @@ message EvaluationVerificationReport {
   repeated string failure_reasons = 7;
   g8e.compliance.v1.ComplianceEvidenceReference report_digest_ref = 8;
   google.protobuf.Timestamp verified_at = 9;
+  string verifier_release_version = 10;
+  string verifier_contract_version = 11;
+  string verified_population_digest = 12;
+  uint32 verified_assignment_count = 13;
+  uint32 expected_assignment_count = 14;
+  string campaign_digest = 15;
+  string catalog_digest = 16;
+  string model_registry_digest = 17;
+}
+
+message EvaluationVerifiedPopulationEntry {
+  string assignment_id = 1;
+  string deterministic_identity = 2;
+  string scenario_id = 3;
+  string scenario_version = 4;
+  uint32 repetition = 5;
+  EvaluationAssignmentLifecycleStatus lifecycle_status = 6;
+  string result_digest = 7;
+  string trace_digest = 8;
+  string variant_id = 9;
+  ModelCampaignRole designated_role = 10;
+  string stack_id = 11;
+}
+
+message EvaluationVerifiedPopulation {
+  string schema_version = 1;
+  string run_id = 2;
+  string campaign_id = 3;
+  string campaign_digest = 4;
+  g8e.compliance.v1.VersionedReference catalog_ref = 5;
+  string catalog_digest = 6;
+  string model_registry_digest = 7;
+  EvaluationLane lane = 8;
+  uint32 expected_assignment_count = 9;
+  repeated EvaluationVerifiedPopulationEntry entries = 10;
 }
 
 // Public projection records expose only disclosure-approved fields.
@@ -784,6 +923,126 @@ message PublicModelCallSummary {
   string output_hash = 14;
 }
 
+message PublicScenarioSummary {
+  string scenario_id = 1;
+  string scenario_version = 2;
+  EvaluationScenarioCategory category = 3;
+  string public_description = 4;
+  EvaluationGradingMethod grading_method = 5;
+  repeated string allowed_tools = 6;
+  repeated string expected_tools = 7;
+  repeated string forbidden_tools = 8;
+  repeated PublicScenarioCriterion criteria = 9;
+  repeated PublicToolScoreDimensionRequirement tool_score_dimensions = 10;
+}
+
+message PublicSemanticGradeSummary {
+  string criterion_id = 1;
+  EvaluationVerdictStatus status = 2;
+  EvaluationGradingMethod grading_method = 3;
+  string judge_variant_id = 4;
+  PublicGradeExplanationCode explanation_code = 5;
+}
+
+message PublicModelActivityRecord {
+  ModelCampaignRole model_role = 1;
+  string agent_persona = 2;
+  string variant_id = 3;
+  EvaluationUsageAvailability usage_availability = 4;
+  uint64 input_tokens = 5;
+  uint64 output_tokens = 6;
+  uint64 thinking_tokens = 7;
+  uint64 cache_tokens = 8;
+  uint64 total_duration_nanos = 9;
+  uint64 generation_duration_nanos = 10;
+  optional uint32 retry_count = 11;
+  PublicFinishState finish_state = 12;
+  EvaluationLoadState load_state = 13;
+}
+
+message PublicToolDecisionActivityRecord {
+  string tool_label = 1;
+  bool recognized = 2;
+  bool selected = 3;
+  bool permission_compliant = 4;
+  bool unnecessary = 5;
+  EvaluationVerdictStatus outcome = 6;
+  PublicEvidenceSource evidence_source = 7;
+}
+
+message PublicToolCallActivityRecord {
+  string tool_label = 1;
+  EvaluationVerdictStatus execution_outcome = 2;
+  EvaluationVerdictStatus semantic_outcome = 3;
+  PublicEvidenceSource evidence_source = 4;
+}
+
+message PublicPolicyDecisionActivityRecord {
+  string tool_label = 1;
+  EvaluationPolicyDecisionOutcome outcome = 2;
+  PublicEvidenceSource evidence_source = 3;
+}
+
+message PublicGovernedActionActivityRecord {
+  string action_label = 1;
+  EvaluationPolicyDecisionOutcome reported_policy_outcome = 2;
+  PublicReceiptStatus receipt_status = 3;
+  PublicEvidenceSource evidence_source = 4;
+}
+
+message PublicModelActivity {
+  PublicActivityAvailability availability = 1;
+  PublicUnavailableReason unavailable_reason = 2;
+  repeated PublicModelActivityRecord records = 3;
+}
+
+message PublicToolDecisionActivity {
+  PublicActivityAvailability availability = 1;
+  PublicUnavailableReason unavailable_reason = 2;
+  repeated PublicToolDecisionActivityRecord records = 3;
+}
+
+message PublicToolCallActivity {
+  PublicActivityAvailability availability = 1;
+  PublicUnavailableReason unavailable_reason = 2;
+  repeated PublicToolCallActivityRecord records = 3;
+}
+
+message PublicPolicyDecisionActivity {
+  PublicActivityAvailability availability = 1;
+  PublicUnavailableReason unavailable_reason = 2;
+  repeated PublicPolicyDecisionActivityRecord records = 3;
+}
+
+message PublicGovernedActionActivity {
+  PublicActivityAvailability availability = 1;
+  PublicUnavailableReason unavailable_reason = 2;
+  repeated PublicGovernedActionActivityRecord records = 3;
+}
+
+message PublicAssignmentActivitySummary {
+  PublicModelActivity model_activity = 1;
+  PublicToolDecisionActivity tool_decisions = 2;
+  PublicToolCallActivity tool_calls = 3;
+  PublicPolicyDecisionActivity policy_decisions = 4;
+  PublicGovernedActionActivity governed_actions = 5;
+}
+
+message PublicEvidenceBinding {
+  string sha256 = 1;
+  string schema_ref = 2;
+  string kind = 3;
+}
+
+message PublicVerificationMetadata {
+  PublicVerificationProvenance provenance = 1;
+  EvaluationVerdictStatus verifier_state = 2;
+  string verifier_release_version = 3;
+  string verifier_contract_version = 4;
+  string report_digest = 5;
+  string population_digest = 6;
+}
+
 message PublicAssignmentResultProjection {
   string assignment_id = 1;
   string run_id = 2;
@@ -799,4 +1058,9 @@ message PublicAssignmentResultProjection {
   string verification_status = 12;
   repeated string unavailable_metric_reasons = 13;
   google.protobuf.Timestamp completed_at = 14;
+  PublicScenarioSummary scenario_summary = 15;
+  repeated PublicSemanticGradeSummary semantic_grade_summaries = 16;
+  PublicAssignmentActivitySummary activity_summary = 17;
+  repeated PublicEvidenceBinding evidence_bindings = 18;
+  PublicVerificationMetadata verification_metadata = 19;
 }

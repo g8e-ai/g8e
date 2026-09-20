@@ -7,6 +7,7 @@
 // renders. Real campaign publication replaces these with live projected records
 // published through the mirror; the store treats both identically.
 
+import type { CampaignProjectionEnvelope } from '../contract/campaign-wire';
 import type {
   AssignmentResult,
   CatalogSnapshot,
@@ -507,6 +508,141 @@ export const fixtureAssignmentResults: AssignmentResult[] = [
   },
 ];
 
+export const fixtureEnrichedAssignmentResult: AssignmentResult = {
+  ...fixtureAssignmentResults[0]!,
+  schema_version: '1.4.0',
+  task_id: 'instruction-exact-format',
+  scenario_id: 'instruction-exact-format',
+  scenario_summary: {
+    scenario_id: 'instruction-exact-format',
+    scenario_version: '1.0.0',
+    category: 'instruction_adherence',
+    public_description: 'Follows a bounded response-format instruction.',
+    grading_method: 'deterministic',
+    allowed_tools: [],
+    expected_tools: [],
+    forbidden_tools: [],
+    criteria: [
+      {
+        criterion_id: 'format',
+        public_label: 'Format compliance',
+        public_description: 'The response follows the published format requirement.',
+        grading_method: 'deterministic',
+        required: true,
+      },
+    ],
+    tool_score_dimensions: [],
+  },
+  semantic_grade_summaries: [
+    {
+      criterion_id: 'format',
+      status: 'pass',
+      grading_method: 'deterministic',
+      explanation_code: 'criterion_passed',
+    },
+  ],
+  activity_summary: {
+    model_activity: {
+      availability: 'observed',
+      records: [
+        {
+          model_role: 'primary',
+          variant_id: 'gemma4-e4b',
+          usage_availability: 'reported',
+          input_tokens: { value: 420 },
+          output_tokens: { value: 180 },
+          thinking_tokens: { unavailable_reason: 'no_scored_calls' },
+          cache_tokens: { unavailable_reason: 'source_not_captured' },
+          total_duration_nanos: { value: 780000000 },
+          generation_duration_nanos: { value: 600000000 },
+          retry_count: { value: 0 },
+          finish_state: 'stop',
+          load_state: 'warm',
+        },
+      ],
+    },
+    tool_decisions: { availability: 'not_applicable', unavailable_reason: 'scenario_not_applicable', records: [] },
+    tool_calls: { availability: 'not_applicable', unavailable_reason: 'scenario_not_applicable', records: [] },
+    policy_decisions: { availability: 'not_applicable', unavailable_reason: 'scenario_not_applicable', records: [] },
+    governed_actions: { availability: 'unavailable', unavailable_reason: 'source_not_captured', records: [] },
+  },
+  evidence_bindings: [
+    {
+      sha256: 'a'.repeat(64),
+      schema_ref: 'g8e.eval.v1.PublicAssignmentResultProjection',
+      kind: 'evaluation_projection',
+    },
+  ],
+  resource_summary: {
+    latency_ms: { value: 780 },
+    input_tokens: { value: 420 },
+    output_tokens: { value: 180 },
+    thinking_tokens: { unavailable_reason: 'no_scored_calls' },
+    cache_tokens: { unavailable_reason: 'source_not_captured' },
+    retries: { value: 0 },
+  },
+  verification_metadata: {
+    provenance: 'bound',
+    verifier_state: 'passed',
+    verifier_release_version: 'v2.1.10',
+    verifier_contract_version: '2.0.0',
+    report_digest: 'b'.repeat(64),
+    population_digest: 'c'.repeat(64),
+  },
+};
+
+export const fixtureCampaignResultEnvelope: CampaignProjectionEnvelope = {
+  schema_version: '1.1.0',
+  message_type: 'PublicAssignmentResultProjection',
+  idempotency_key: 'run-1:assign-1:result:enriched',
+  record: {
+    assignment_id: 'assign-1',
+    run_id: 'run-1',
+    scenario_id: 'instruction-exact-format',
+    scenario_category: 'EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE',
+    lane: 'EVALUATION_LANE_MODEL_ROLE',
+    designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
+    variant_id: 'qwen3-4b',
+    lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+    summary_status: 'EVALUATION_VERDICT_STATUS_PASS',
+    result_digest: 'd'.repeat(64),
+    verification_status: 'verified',
+    completed_at: '2026-09-20T14:00:00Z',
+    decomposed_scores: [{ score_id: 'task_score', value: 1 }],
+    scenario_summary: {
+      scenario_id: 'instruction-exact-format',
+      scenario_version: '1.0.0',
+      category: 'EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE',
+      public_description: 'Follows a bounded response-format instruction.',
+      grading_method: 'EVALUATION_GRADING_METHOD_DETERMINISTIC',
+      allowed_tools: [],
+      expected_tools: [],
+      forbidden_tools: [],
+      criteria: [],
+      tool_score_dimensions: [],
+    },
+    semantic_grade_summaries: [],
+    activity_summary: {
+      model_activity: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED', records: [] },
+      tool_decisions: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE', records: [] },
+      tool_calls: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE', records: [] },
+      policy_decisions: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED', records: [] },
+      governed_actions: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED', records: [] },
+    },
+    evidence_bindings: [{ sha256: 'e'.repeat(64), schema_ref: 'g8e.eval.v1.PublicAssignmentResultProjection', kind: 'evaluation_projection' }],
+    verification_metadata: {
+      provenance: 'PUBLIC_VERIFICATION_PROVENANCE_BOUND',
+      verifier_state: 'EVALUATION_VERDICT_STATUS_PASS',
+      verifier_release_version: 'v2.1.10',
+      verifier_contract_version: '2.0.0',
+      report_digest: 'f'.repeat(64),
+      population_digest: '1'.repeat(64),
+    },
+    benchmark_observations: { unavailable_reasons: [] },
+    resource_summary: { latency_ms: { value: 780 }, input_tokens: { value: 420 }, output_tokens: { value: 180 }, retries: { value: 0 } },
+  },
+};
+
 export const fixtureMethodology: MethodologySnapshot = {
   schema_version: '1.2.0',
   kind: 'methodology_snapshot',
@@ -965,6 +1101,7 @@ export const allFixtureSnapshotRecords = [
   ...fixtureVerifiedEvaluationSummaries,
   fixtureLiveEvaluationSummary,
   ...fixtureAssignmentResults,
+  fixtureEnrichedAssignmentResult,
   ...fixtureVerifiedAssignmentResults,
   fixtureMethodology,
 ];

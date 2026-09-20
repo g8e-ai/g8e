@@ -29,6 +29,9 @@ PHASE1_REPORT_VECTOR_FILENAME = "phase1_report.json"
 MODEL_CAMPAIGN_SPEC_VECTOR_FILENAME = "model_campaign_spec.json"
 MODEL_ASSIGNMENT_RESULT_VECTOR_FILENAME = "model_assignment_result.json"
 PUBLIC_ASSIGNMENT_RESULT_VECTOR_FILENAME = "public_assignment_result.json"
+ENRICHED_MODEL_ASSIGNMENT_RESULT_VECTOR_FILENAME = "model_assignment_result_enriched.json"
+ENRICHED_PUBLIC_ASSIGNMENT_RESULT_VECTOR_FILENAME = "public_assignment_result_enriched.json"
+BOUND_VERIFICATION_REPORT_VECTOR_FILENAME = "run_verification_bound.json"
 CHAT_PROBE_TRACE_VECTOR_FILENAME = "chat_probe_trace.json"
 PROTOCOL_ROOT = Path(__file__).resolve().parents[2]
 EVAL_VECTOR_DIR = PROTOCOL_ROOT / VECTORS_DIRECTORY_NAME / EVALUATION_DIRECTORY_NAME
@@ -36,6 +39,9 @@ PHASE1_REPORT_VECTOR_PATH = EVAL_VECTOR_DIR / PHASE1_REPORT_VECTOR_FILENAME
 MODEL_CAMPAIGN_SPEC_VECTOR_PATH = EVAL_VECTOR_DIR / MODEL_CAMPAIGN_SPEC_VECTOR_FILENAME
 MODEL_ASSIGNMENT_RESULT_VECTOR_PATH = EVAL_VECTOR_DIR / MODEL_ASSIGNMENT_RESULT_VECTOR_FILENAME
 PUBLIC_ASSIGNMENT_RESULT_VECTOR_PATH = EVAL_VECTOR_DIR / PUBLIC_ASSIGNMENT_RESULT_VECTOR_FILENAME
+ENRICHED_MODEL_ASSIGNMENT_RESULT_VECTOR_PATH = EVAL_VECTOR_DIR / ENRICHED_MODEL_ASSIGNMENT_RESULT_VECTOR_FILENAME
+ENRICHED_PUBLIC_ASSIGNMENT_RESULT_VECTOR_PATH = EVAL_VECTOR_DIR / ENRICHED_PUBLIC_ASSIGNMENT_RESULT_VECTOR_FILENAME
+BOUND_VERIFICATION_REPORT_VECTOR_PATH = EVAL_VECTOR_DIR / BOUND_VERIFICATION_REPORT_VECTOR_FILENAME
 CHAT_PROBE_TRACE_VECTOR_PATH = EVAL_VECTOR_DIR / CHAT_PROBE_TRACE_VECTOR_FILENAME
 MODEL_CAMPAIGN_DESCRIPTOR_PATH = (
     PROTOCOL_ROOT / "descriptors" / EVALUATION_DIRECTORY_NAME / "v1" / "model_campaign.json"
@@ -101,6 +107,36 @@ def test_public_assignment_result_projection_canonicalization_matches_cross_lang
     assert projection.verification_status == "verified"
 
 
+def test_enriched_evaluation_assignment_result_preserves_presence_and_bindings():
+    vector, result = _assert_vector_round_trip(
+        ENRICHED_MODEL_ASSIGNMENT_RESULT_VECTOR_PATH, EvaluationAssignmentResult
+    )
+    assert vector["message_type"] == "EvaluationAssignmentResult"
+    assert result.model_inferences[0].HasField("retry_count")
+    assert result.model_inferences[0].retry_count == 0
+    assert result.scored_inference_span_nanos == 500000000
+    assert len(result.policy_decisions) == 1
+
+
+def test_enriched_public_assignment_result_includes_approved_families():
+    vector, projection = _assert_vector_round_trip(
+        ENRICHED_PUBLIC_ASSIGNMENT_RESULT_VECTOR_PATH, PublicAssignmentResultProjection
+    )
+    assert vector["message_type"] == "PublicAssignmentResultProjection"
+    assert projection.scenario_summary.scenario_id == "tool-selection-1"
+    assert len(projection.activity_summary.model_activity.records) == 1
+    assert projection.verification_metadata.provenance == eval_pb2.PUBLIC_VERIFICATION_PROVENANCE_BOUND
+
+
+def test_bound_verification_report_includes_population_binding():
+    vector, report = _assert_vector_round_trip(
+        BOUND_VERIFICATION_REPORT_VECTOR_PATH, eval_pb2.EvaluationVerificationReport
+    )
+    assert vector["message_type"] == "EvaluationVerificationReport"
+    assert report.verifier_contract_version == "2.0.0"
+    assert report.verified_assignment_count == report.expected_assignment_count == 25
+
+
 def _live_message_field_names(message_descriptor):
     field_names = []
     oneof_groups = set()
@@ -119,7 +155,7 @@ def test_evaluation_model_campaign_descriptor_matches_protobuf():
     descriptor = json.loads(MODEL_CAMPAIGN_DESCRIPTOR_PATH.read_text())
     assert descriptor["schema_version"] == "1.0.0"
     assert descriptor["protobuf_package"] == "g8e.eval.v1"
-    assert len(descriptor["canonical_vectors"]) == 4
+    assert len(descriptor["canonical_vectors"]) == 7
 
     for enum_name, values in descriptor["enums"].items():
         live_enum = eval_pb2.DESCRIPTOR.enum_types_by_name[enum_name]

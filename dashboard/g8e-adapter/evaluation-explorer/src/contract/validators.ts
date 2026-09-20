@@ -39,6 +39,19 @@ import {
   type EvaluationSummary,
   type AssignmentResult,
   type MethodologySnapshot,
+  ACTIVITY_AVAILABILITIES,
+  PUBLIC_ACTIVITY_EVIDENCE_SOURCES,
+  PUBLIC_EVIDENCE_KINDS,
+  PUBLIC_FINISH_STATES,
+  PUBLIC_GRADE_EXPLANATION_CODES,
+  PUBLIC_LOAD_STATES,
+  PUBLIC_RECEIPT_STATUSES,
+  PUBLIC_SEMANTIC_OUTCOMES,
+  PUBLIC_TOOL_EXECUTION_OUTCOMES,
+  PUBLIC_TOOL_OUTCOMES,
+  PUBLIC_USAGE_AVAILABILITIES,
+  PUBLIC_UNAVAILABLE_REASONS,
+  SUPPORTED_VIEW_SCHEMA_VERSIONS,
   TERMINAL_STATUSES,
   TOOL_SCORE_DIMENSIONS,
   VERIFIER_STATES,
@@ -84,6 +97,11 @@ function assert(condition: unknown, path: string, message: string): asserts cond
 
 function assertString(value: unknown, path: string): asserts value is string {
   assert(isString(value), path, `expected string`);
+}
+
+function assertPublicIdentifier(value: unknown, path: string): asserts value is string {
+  assertString(value, path);
+  assert(new TextEncoder().encode(value).byteLength <= 128, path, 'expected at most 128 UTF-8 bytes');
 }
 
 function assertNumber(value: unknown, path: string): asserts value is number {
@@ -163,7 +181,7 @@ function assertEnvelope(
   kindSet: readonly string[],
 ): void {
   assertString(value.schema_version, `${path}.schema_version`);
-  assert(['1.0.0', '1.1.0', '1.2.0', '1.3.0'].includes(value.schema_version), `${path}.schema_version`, `expected a supported schema version`);
+  assert((SUPPORTED_VIEW_SCHEMA_VERSIONS as readonly string[]).includes(value.schema_version), `${path}.schema_version`, `expected a supported schema version`);
   assertEnum(value.kind, kindSet, `${path}.kind`);
   assertString(value.dataset_id, `${path}.dataset_id`);
   assertEnum(value.quality_state, QUALITY_STATES, `${path}.quality_state`);
@@ -217,7 +235,7 @@ function assertMetricRecord(value: unknown, allowed: readonly string[], path: st
 function assertGradeSummaries(value: unknown, path: string): void {
   assert(Array.isArray(value), path, 'expected array');
   for (let i = 0; i < value.length; i++) {
-    const summary = value[i];
+    const summary: unknown = value[i];
     assertObject(summary, `${path}[${i}]`);
     rejectUnknown(summary, ['criterion_id', 'status', 'detail'], `${path}[${i}]`);
     assertString(summary.criterion_id, `${path}[${i}].criterion_id`);
@@ -458,13 +476,236 @@ export function isEvaluationSummary(value: unknown): asserts value is Evaluation
   }
 }
 
+function assertPublicMetricValue(value: unknown, path: string): void {
+  assertMetricValue(value, path);
+  if (isObject(value) && value.unavailable_reason !== undefined) {
+    assertEnum(value.unavailable_reason, PUBLIC_UNAVAILABLE_REASONS, `${path}.unavailable_reason`);
+  }
+}
+
+function assertPublicStringArray(value: unknown, path: string, maxItems: number, maxBytes = 128): void {
+  assert(Array.isArray(value), path, 'expected array');
+  assert(value.length <= maxItems, path, `expected at most ${maxItems} entries`);
+  for (let index = 0; index < value.length; index++) {
+    assertString(value[index], `${path}[${index}]`);
+    assert(new TextEncoder().encode(value[index]).byteLength <= maxBytes, `${path}[${index}]`, `expected at most ${maxBytes} UTF-8 bytes`);
+    assert(!/[\\u0000-\\u001f\\u007f]/u.test(value[index]), `${path}[${index}]`, 'control characters are not allowed');
+  }
+}
+
+function assertPublicScenarioSummary(value: unknown, path: string): void {
+  assertObject(value, path);
+  rejectUnknown(value, ['scenario_id', 'scenario_version', 'category', 'public_description', 'grading_method', 'allowed_tools', 'expected_tools', 'forbidden_tools', 'criteria', 'tool_score_dimensions'], path);
+  assertPublicIdentifier(value.scenario_id, `${path}.scenario_id`);
+  assertPublicIdentifier(value.scenario_version, `${path}.scenario_version`);
+  assertEnum(value.category, SCENARIO_CATEGORIES, `${path}.category`);
+  assertString(value.public_description, `${path}.public_description`);
+  assert(new TextEncoder().encode(value.public_description).byteLength <= 512, `${path}.public_description`, 'expected at most 512 UTF-8 bytes');
+  assertEnum(value.grading_method, ['deterministic', 'semantic_judge'], `${path}.grading_method`);
+  for (const field of ['allowed_tools', 'expected_tools', 'forbidden_tools'] as const) {
+    assertPublicStringArray(value[field], `${path}.${field}`, 64);
+  }
+  assert(Array.isArray(value.criteria), `${path}.criteria`, 'expected array');
+  assert(value.criteria.length <= 64, `${path}.criteria`, 'expected at most 64 entries');
+  const criterionIds = new Set<string>();
+  for (let index = 0; index < value.criteria.length; index++) {
+    const criterionPath = `${path}.criteria[${index}]`;
+    const criterion: unknown = value.criteria[index];
+    assertObject(criterion, criterionPath);
+    rejectUnknown(criterion, ['criterion_id', 'public_label', 'public_description', 'grading_method', 'required'], criterionPath);
+    assertPublicIdentifier(criterion.criterion_id, `${criterionPath}.criterion_id`);
+    assert(!criterionIds.has(criterion.criterion_id), `${criterionPath}.criterion_id`, 'duplicate criterion id');
+    criterionIds.add(criterion.criterion_id);
+    assertPublicIdentifier(criterion.public_label, `${criterionPath}.public_label`);
+    assertString(criterion.public_description, `${criterionPath}.public_description`);
+    assert(new TextEncoder().encode(criterion.public_description).byteLength <= 512, `${criterionPath}.public_description`, 'expected at most 512 UTF-8 bytes');
+    assertEnum(criterion.grading_method, ['deterministic', 'semantic_judge'], `${criterionPath}.grading_method`);
+    assertBoolean(criterion.required, `${criterionPath}.required`);
+  }
+  assert(Array.isArray(value.tool_score_dimensions), `${path}.tool_score_dimensions`, 'expected array');
+  assert(value.tool_score_dimensions.length <= 64, `${path}.tool_score_dimensions`, 'expected at most 64 entries');
+  for (let index = 0; index < value.tool_score_dimensions.length; index++) {
+    const dimensionPath = `${path}.tool_score_dimensions[${index}]`;
+    const dimension: unknown = value.tool_score_dimensions[index];
+    assertObject(dimension, dimensionPath);
+    rejectUnknown(dimension, ['dimension', 'required'], dimensionPath);
+    assertEnum(dimension.dimension, TOOL_SCORE_DIMENSIONS, `${dimensionPath}.dimension`);
+    assertBoolean(dimension.required, `${dimensionPath}.required`);
+  }
+}
+
+function assertPublicActivityFamily(value: unknown, path: string, validateRecord: (value: unknown, path: string) => void): void {
+  assertObject(value, path);
+  rejectUnknown(value, ['availability', 'unavailable_reason', 'records'], path);
+  assertEnum(value.availability, ACTIVITY_AVAILABILITIES, `${path}.availability`);
+  if (value.availability === 'observed') {
+    assert(value.unavailable_reason === undefined, `${path}.unavailable_reason`, 'observed activity cannot have unavailable_reason');
+  } else {
+    assertEnum(value.unavailable_reason, PUBLIC_UNAVAILABLE_REASONS, `${path}.unavailable_reason`);
+    if (value.availability === 'not_applicable') assert(value.unavailable_reason === 'scenario_not_applicable', `${path}.unavailable_reason`, 'not_applicable activity requires scenario_not_applicable');
+  }
+  assert(Array.isArray(value.records), `${path}.records`, 'expected array');
+  assert(value.records.length <= 128, `${path}.records`, 'expected at most 128 entries');
+  for (let index = 0; index < value.records.length; index++) validateRecord(value.records[index], `${path}.records[${index}]`);
+  if (value.availability !== 'observed') assert(value.records.length === 0, `${path}.records`, 'unavailable activity cannot contain records');
+}
+
+function assertPublicModelActivityRecord(value: unknown, path: string): void {
+  assertObject(value, path);
+  rejectUnknown(value, ['model_role', 'agent_persona', 'variant_id', 'usage_availability', 'input_tokens', 'output_tokens', 'thinking_tokens', 'cache_tokens', 'total_duration_nanos', 'generation_duration_nanos', 'retry_count', 'finish_state', 'load_state'], path);
+  assertEnum(value.model_role, MODEL_ROLES, `${path}.model_role`);
+  assertOptional(value.agent_persona, `${path}.agent_persona`, assertPublicIdentifier);
+  assertPublicIdentifier(value.variant_id, `${path}.variant_id`);
+  assertEnum(value.usage_availability, PUBLIC_USAGE_AVAILABILITIES, `${path}.usage_availability`);
+  for (const field of ['input_tokens', 'output_tokens', 'thinking_tokens', 'cache_tokens', 'total_duration_nanos', 'generation_duration_nanos'] as const) {
+    if (value[field] !== undefined) {
+      assertPublicMetricValue(value[field], `${path}.${field}`);
+      if (isObject(value[field]) && typeof value[field].value === 'number' && value[field].value !== undefined) {
+        assert(Number.isSafeInteger(value[field].value), `${path}.${field}.value`, 'token and duration values must be safe integers');
+      }
+    }
+  }
+  if (value.retry_count !== undefined) {
+    assertPublicMetricValue(value.retry_count, `${path}.retry_count`);
+    if (isObject(value.retry_count) && typeof value.retry_count.value === 'number') assert(value.retry_count.value <= 1000, `${path}.retry_count.value`, 'must be <= 1000');
+  }
+  assertEnum(value.finish_state, PUBLIC_FINISH_STATES, `${path}.finish_state`);
+  assertEnum(value.load_state, PUBLIC_LOAD_STATES, `${path}.load_state`);
+}
+
+function assertPublicToolDecisionRecord(value: unknown, path: string): void {
+  assertObject(value, path);
+  rejectUnknown(value, ['tool_label', 'recognized', 'selected', 'permission_compliant', 'unnecessary', 'outcome', 'evidence_source'], path);
+  assertPublicIdentifier(value.tool_label, `${path}.tool_label`);
+  assertBoolean(value.recognized, `${path}.recognized`);
+  assertBoolean(value.selected, `${path}.selected`);
+  assertBoolean(value.permission_compliant, `${path}.permission_compliant`);
+  assertBoolean(value.unnecessary, `${path}.unnecessary`);
+  assertEnum(value.outcome, PUBLIC_SEMANTIC_OUTCOMES, `${path}.outcome`);
+  assert(value.evidence_source === 'application_reported', `${path}.evidence_source`, 'tool decisions require application-reported evidence');
+}
+
+function assertPublicToolCallRecord(value: unknown, path: string): void {
+  assertObject(value, path);
+  rejectUnknown(value, ['tool_label', 'execution_outcome', 'semantic_outcome', 'evidence_source'], path);
+  assertPublicIdentifier(value.tool_label, `${path}.tool_label`);
+  assertEnum(value.execution_outcome, PUBLIC_TOOL_EXECUTION_OUTCOMES, `${path}.execution_outcome`);
+  assertEnum(value.semantic_outcome, PUBLIC_SEMANTIC_OUTCOMES, `${path}.semantic_outcome`);
+  assert(value.evidence_source === 'application_reported', `${path}.evidence_source`, 'tool calls require application-reported evidence');
+}
+
+function assertPublicPolicyDecisionRecord(value: unknown, path: string): void {
+  assertObject(value, path);
+  rejectUnknown(value, ['tool_label', 'outcome', 'evidence_source'], path);
+  assertPublicIdentifier(value.tool_label, `${path}.tool_label`);
+  assertEnum(value.outcome, PUBLIC_TOOL_OUTCOMES, `${path}.outcome`);
+  assert(value.evidence_source === 'application_reported', `${path}.evidence_source`, 'policy decisions require application-reported evidence');
+}
+
+function assertPublicGovernedActionRecord(value: unknown, path: string): void {
+  assertObject(value, path);
+  rejectUnknown(value, ['action_label', 'reported_policy_outcome', 'receipt_status', 'evidence_source'], path);
+  assert(value.action_label === 'governed action', `${path}.action_label`, 'unexpected governed action label');
+  assertEnum(value.reported_policy_outcome, PUBLIC_TOOL_OUTCOMES, `${path}.reported_policy_outcome`);
+  assertEnum(value.receipt_status, PUBLIC_RECEIPT_STATUSES, `${path}.receipt_status`);
+  assertEnum(value.evidence_source, PUBLIC_ACTIVITY_EVIDENCE_SOURCES, `${path}.evidence_source`);
+  if (value.receipt_status === 'reported') assert(value.evidence_source === 'bound_public_proof', `${path}.evidence_source`, 'reported receipt status requires bound public proof');
+}
+
+function assertPublicActivitySummary(value: unknown, path: string): void {
+  assertObject(value, path);
+  rejectUnknown(value, ['model_activity', 'tool_decisions', 'tool_calls', 'policy_decisions', 'governed_actions'], path);
+  assertPublicActivityFamily(value.model_activity, `${path}.model_activity`, assertPublicModelActivityRecord);
+  assertPublicActivityFamily(value.tool_decisions, `${path}.tool_decisions`, assertPublicToolDecisionRecord);
+  assertPublicActivityFamily(value.tool_calls, `${path}.tool_calls`, assertPublicToolCallRecord);
+  assertPublicActivityFamily(value.policy_decisions, `${path}.policy_decisions`, assertPublicPolicyDecisionRecord);
+  assertPublicActivityFamily(value.governed_actions, `${path}.governed_actions`, assertPublicGovernedActionRecord);
+}
+
+function assertPublicEvidenceBindings(value: unknown, path: string): void {
+  assert(Array.isArray(value), path, 'expected array');
+  assert(value.length <= 32, path, 'expected at most 32 entries');
+  const identities = new Set<string>();
+  for (let index = 0; index < value.length; index++) {
+    const bindingPath = `${path}[${index}]`;
+    const binding: unknown = value[index];
+    assertObject(binding, bindingPath);
+    rejectUnknown(binding, ['sha256', 'schema_ref', 'kind'], bindingPath);
+    assertString(binding.sha256, `${bindingPath}.sha256`);
+    assert(/^[0-9a-f]{64}$/u.test(binding.sha256), `${bindingPath}.sha256`, 'expected lowercase SHA-256');
+    assertString(binding.schema_ref, `${bindingPath}.schema_ref`);
+    assert(new TextEncoder().encode(binding.schema_ref).byteLength <= 128, `${bindingPath}.schema_ref`, 'expected at most 128 UTF-8 bytes');
+    assertEnum(binding.kind, PUBLIC_EVIDENCE_KINDS, `${bindingPath}.kind`);
+    assert(!identities.has(binding.sha256), `${bindingPath}.sha256`, 'duplicate evidence identity');
+    identities.add(binding.sha256);
+  }
+}
+
+function assertPublicVerificationMetadata(value: unknown, path: string): void {
+  assertObject(value, path);
+  rejectUnknown(value, ['provenance', 'verifier_state', 'verifier_release_version', 'verifier_contract_version', 'report_digest', 'population_digest'], path);
+  assertEnum(value.provenance, ['bound', 'legacy_unbound'], `${path}.provenance`);
+  assertEnum(value.verifier_state, VERIFIER_STATES, `${path}.verifier_state`);
+  assertOptional(value.verifier_release_version, `${path}.verifier_release_version`, assertString);
+  assertOptional(value.verifier_contract_version, `${path}.verifier_contract_version`, assertString);
+  for (const field of ['report_digest', 'population_digest'] as const) {
+    if (value[field] !== undefined) {
+      assertString(value[field], `${path}.${field}`);
+      assert(/^[0-9a-f]{64}$/u.test(value[field]), `${path}.${field}`, 'expected lowercase SHA-256');
+    }
+  }
+  if (value.provenance === 'bound') {
+    assertString(value.verifier_release_version, `${path}.verifier_release_version`);
+    assertString(value.verifier_contract_version, `${path}.verifier_contract_version`);
+    assertString(value.report_digest, `${path}.report_digest`);
+    assertString(value.population_digest, `${path}.population_digest`);
+  }
+}
+
+function assertPublicSemanticGrades(value: unknown, path: string): void {
+  assert(Array.isArray(value), path, 'expected array');
+  assert(value.length <= 64, path, 'expected at most 64 entries');
+  const criterionIds = new Set<string>();
+  for (let index = 0; index < value.length; index++) {
+    const gradePath = `${path}[${index}]`;
+    const grade: unknown = value[index];
+    assertObject(grade, gradePath);
+    rejectUnknown(grade, ['criterion_id', 'status', 'grading_method', 'judge_variant_id', 'explanation_code'], gradePath);
+    assertPublicIdentifier(grade.criterion_id, `${gradePath}.criterion_id`);
+    assert(!criterionIds.has(grade.criterion_id), `${gradePath}.criterion_id`, 'duplicate criterion id');
+    criterionIds.add(grade.criterion_id);
+    assertEnum(grade.status, NATIVE_RESULT_STATUSES, `${gradePath}.status`);
+    assertEnum(grade.grading_method, ['deterministic', 'semantic_judge'], `${gradePath}.grading_method`);
+    assertOptional(grade.judge_variant_id, `${gradePath}.judge_variant_id`, assertPublicIdentifier);
+    assertEnum(grade.explanation_code, PUBLIC_GRADE_EXPLANATION_CODES, `${gradePath}.explanation_code`);
+  }
+}
+
+function assertPublicResourceSummary(value: unknown, path: string): void {
+  assertObject(value, path);
+  rejectUnknown(value, ['latency_ms', 'input_tokens', 'output_tokens', 'thinking_tokens', 'cache_tokens', 'retries'], path);
+  for (const [key, metric] of Object.entries(value)) {
+    assertPublicMetricValue(metric, `${path}.${key}`);
+    if (['input_tokens', 'output_tokens', 'thinking_tokens', 'cache_tokens', 'retries'].includes(key) && isObject(metric) && typeof metric.value === 'number' && metric.value !== undefined) {
+      assert(Number.isSafeInteger(metric.value), `${path}.${key}.value`, 'token and retry values must be safe integers');
+    }
+    if (key === 'retries' && isObject(metric) && typeof metric.value === 'number' && metric.value !== undefined) {
+      assert(metric.value <= 1000, `${path}.${key}.value`, 'must be <= 1000');
+    }
+  }
+}
+
 export function isAssignmentResult(value: unknown): asserts value is AssignmentResult {
   assertObject(value, 'assignment_result');
-  rejectUnknown(value, [...ENVELOPE_FIELDS, 'assignment_id', 'run_id', 'task_id', 'variant_id', 'role', 'repetition', 'scenario_category', 'evaluation_unit', 'stack_id', 'benchmark_observations', 'terminal_status', 'metric_values', 'missingness_reason', 'stage_summary', 'resource_summary', 'verification_disposition'], 'assignment_result');
+  rejectUnknown(value, [...ENVELOPE_FIELDS, 'assignment_id', 'run_id', 'task_id', 'scenario_id', 'variant_id', 'role', 'repetition', 'scenario_category', 'evaluation_unit', 'stack_id', 'scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'benchmark_observations', 'terminal_status', 'metric_values', 'missingness_reason', 'stage_summary', 'resource_summary', 'verification_disposition', 'verification_metadata'], 'assignment_result');
   assertEnvelope(value, 'assignment_result', ['assignment_result']);
   assertString(value.assignment_id, 'assignment_result.assignment_id');
   assertString(value.run_id, 'assignment_result.run_id');
   assertString(value.task_id, 'assignment_result.task_id');
+  if (value.scenario_id !== undefined) {
+    assertPublicIdentifier(value.scenario_id, 'assignment_result.scenario_id');
+    assert(value.scenario_id === value.task_id, 'assignment_result.scenario_id', 'must equal task_id when both scenario identity fields are present');
+  }
   assertString(value.variant_id, 'assignment_result.variant_id');
   assertEnum(value.role, MODEL_ROLES, 'assignment_result.role');
   assertInteger(value.repetition, 'assignment_result.repetition');
@@ -472,14 +713,33 @@ export function isAssignmentResult(value: unknown): asserts value is AssignmentR
   assertOptional(value.evaluation_unit, 'assignment_result.evaluation_unit', (v, p) => assertEnum(v, EVALUATION_UNITS, p));
   assertOptional(value.stack_id, 'assignment_result.stack_id', assertString);
   if (value.benchmark_observations !== undefined) assertBenchmarkObservations(value.benchmark_observations, 'assignment_result.benchmark_observations');
+  if (value.schema_version !== '1.4.0') {
+    for (const field of ['scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'verification_metadata'] as const) {
+      assert(value[field] === undefined, `assignment_result.${field}`, 'field requires schema 1.4.0');
+    }
+  } else {
+    if (value.scenario_summary !== undefined) assertPublicScenarioSummary(value.scenario_summary, 'assignment_result.scenario_summary');
+    if (value.semantic_grade_summaries !== undefined) assertPublicSemanticGrades(value.semantic_grade_summaries, 'assignment_result.semantic_grade_summaries');
+    if (value.activity_summary !== undefined) assertPublicActivitySummary(value.activity_summary, 'assignment_result.activity_summary');
+    if (value.evidence_bindings !== undefined) assertPublicEvidenceBindings(value.evidence_bindings, 'assignment_result.evidence_bindings');
+    if (value.verification_metadata !== undefined) assertPublicVerificationMetadata(value.verification_metadata, 'assignment_result.verification_metadata');
+  }
   assertEnum(value.terminal_status, [...TERMINAL_STATUSES, 'running', 'queued'], 'assignment_result.terminal_status');
   assertObject(value.metric_values, 'assignment_result.metric_values');
   for (const [key, metric] of Object.entries(value.metric_values)) assertMetricValue(metric, `assignment_result.metric_values.${key}`);
   assertOptional(value.missingness_reason, 'assignment_result.missingness_reason', assertString);
   assert(Array.isArray(value.stage_summary), 'assignment_result.stage_summary', 'expected array');
-  if (value.resource_summary !== undefined) {
-    assertObject(value.resource_summary, 'assignment_result.resource_summary');
+  assert(value.stage_summary.length <= 128, 'assignment_result.stage_summary', 'expected at most 128 entries');
+  for (let index = 0; index < value.stage_summary.length; index++) {
+    const stagePath = `assignment_result.stage_summary[${index}]`;
+    const stage = value.stage_summary[index];
+    assertObject(stage, stagePath);
+    rejectUnknown(stage, ['name', 'duration_seconds'], stagePath);
+    assertString(stage.name, `${stagePath}.name`);
+    assertNumber(stage.duration_seconds, `${stagePath}.duration_seconds`);
+    assert(stage.duration_seconds >= 0 && stage.duration_seconds <= 604800, `${stagePath}.duration_seconds`, 'must be within seven days');
   }
+  if (value.resource_summary !== undefined) assertPublicResourceSummary(value.resource_summary, 'assignment_result.resource_summary');
   assertOptional(value.verification_disposition, 'assignment_result.verification_disposition', (v, p) =>
     assertEnum(v, VERIFIER_STATES, p),
   );

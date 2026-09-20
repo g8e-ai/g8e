@@ -13,6 +13,7 @@ import {
 } from '../src/contract/validators';
 import {
   fixtureAssignmentResults,
+  fixtureEnrichedAssignmentResult,
   fixtureCatalogExploratory,
   fixtureModelSummaries,
   fixtureLiveEvents,
@@ -234,6 +235,48 @@ describe('benchmark observation contract', () => {
       },
     };
     expect(() => decodeViewRecord('assignment_result', bad)).toThrow(ValidationError);
+  });
+});
+
+describe('schema 1.4 assignment contract', () => {
+  it('accepts the enriched assignment fixture with observed zero and unavailable metrics', () => {
+    expect(() => decodeViewRecord('assignment_result', fixtureEnrichedAssignmentResult)).not.toThrow();
+  });
+
+  it('rejects a conflicting scenario alias', () => {
+    expect(() =>
+      decodeViewRecord('assignment_result', { ...fixtureEnrichedAssignmentResult, scenario_id: 'different-scenario' }),
+    ).toThrow(ValidationError);
+  });
+
+  it('rejects an unknown nested activity field', () => {
+    const bad = {
+      ...fixtureEnrichedAssignmentResult,
+      activity_summary: {
+        ...fixtureEnrichedAssignmentResult.activity_summary!,
+        model_activity: {
+          ...fixtureEnrichedAssignmentResult.activity_summary!.model_activity,
+          records: [{ ...fixtureEnrichedAssignmentResult.activity_summary!.model_activity.records[0]!, private_inference_id: 'secret' }],
+        },
+      },
+    };
+    expect(() => decodeViewRecord('assignment_result', bad)).toThrow(ValidationError);
+  });
+
+  it('rejects an unavailable activity family without a closed reason', () => {
+    const bad = {
+      ...fixtureEnrichedAssignmentResult,
+      activity_summary: {
+        ...fixtureEnrichedAssignmentResult.activity_summary!,
+        tool_calls: { availability: 'unavailable', unavailable_reason: 'because', records: [] },
+      },
+    };
+    expect(() => decodeViewRecord('assignment_result', bad)).toThrow(ValidationError);
+  });
+
+  it('continues to accept historical assignment records without scenario_id', () => {
+    const historical = { ...fixtureAssignmentResults[0]!, schema_version: '1.3.0', scenario_id: undefined };
+    expect(() => decodeViewRecord('assignment_result', historical)).not.toThrow();
   });
 });
 

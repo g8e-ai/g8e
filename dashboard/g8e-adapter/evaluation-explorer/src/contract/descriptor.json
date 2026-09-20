@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.3.0",
+  "schema_version": "1.4.0",
   "enums": {
     "QualityState": [
       "verified_public",
@@ -157,6 +157,85 @@
       "intentionally_stopped",
       "safety_stopped",
       "source_offline"
+    ],
+    "ActivityAvailability": [
+      "observed",
+      "unavailable",
+      "not_applicable"
+    ],
+    "PublicUnavailableReason": [
+      "historical_not_captured",
+      "source_not_captured",
+      "source_unavailable",
+      "scenario_not_applicable",
+      "incomplete_contributor_evidence",
+      "no_scored_calls"
+    ],
+    "PublicGradeExplanationCode": [
+      "criterion_passed",
+      "criterion_failed",
+      "evidence_unavailable",
+      "unsupported",
+      "invalid_evidence",
+      "grader_unavailable"
+    ],
+    "PublicFinishState": [
+      "stop",
+      "length",
+      "tool_call",
+      "error",
+      "unavailable"
+    ],
+    "PublicLoadState": [
+      "cold",
+      "warm",
+      "unavailable"
+    ],
+    "PublicEvidenceKind": [
+      "campaign_profile",
+      "model_registry",
+      "verification_report",
+      "evaluation_projection",
+      "comparison_row",
+      "efficiency_observation",
+      "statistical_analysis",
+      "source_manifest"
+    ],
+    "PublicActivityEvidenceSource": [
+      "application_reported",
+      "bound_public_proof"
+    ],
+    "PublicUsageAvailability": [
+      "reported",
+      "unavailable"
+    ],
+    "PublicToolOutcome": [
+      "allow",
+      "deny",
+      "refused"
+    ],
+    "PublicToolExecutionOutcome": [
+      "pass",
+      "fail",
+      "unavailable",
+      "unsupported",
+      "invalid_evidence"
+    ],
+    "PublicSemanticOutcome": [
+      "pass",
+      "fail",
+      "unavailable",
+      "unsupported",
+      "invalid_evidence"
+    ],
+    "PublicReportedPolicyOutcome": [
+      "allow",
+      "deny",
+      "refused"
+    ],
+    "PublicReceiptStatus": [
+      "unavailable",
+      "reported"
     ]
   }
 }

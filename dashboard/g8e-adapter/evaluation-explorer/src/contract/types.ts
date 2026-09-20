@@ -10,11 +10,75 @@
 // and checked-in explorer fixtures. See src/contract/CONTRACT.md for the
 // ownership map and integration decisions.
 //
-// FROZEN at schema_version 1.3.0 on 2026-09-15. A change to any enum value
+// FROZEN at schema_version 1.4.0 on 2026-09-20. A change to any enum value
 // or required field is a contract revision: bump VIEW_SCHEMA_VERSION and
 // update descriptor.json and validators.
 
-export const VIEW_SCHEMA_VERSION = '1.3.0' as const;
+export const VIEW_SCHEMA_VERSION = '1.4.0' as const;
+export const SUPPORTED_VIEW_SCHEMA_VERSIONS = ['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0'] as const;
+export type ViewSchemaVersion = (typeof SUPPORTED_VIEW_SCHEMA_VERSIONS)[number];
+
+export const ACTIVITY_AVAILABILITIES = ['observed', 'unavailable', 'not_applicable'] as const;
+export type ActivityAvailability = (typeof ACTIVITY_AVAILABILITIES)[number];
+
+export const PUBLIC_UNAVAILABLE_REASONS = [
+  'historical_not_captured',
+  'source_not_captured',
+  'source_unavailable',
+  'scenario_not_applicable',
+  'incomplete_contributor_evidence',
+  'no_scored_calls',
+] as const;
+export type PublicUnavailableReason = (typeof PUBLIC_UNAVAILABLE_REASONS)[number];
+
+export const PUBLIC_GRADE_EXPLANATION_CODES = [
+  'criterion_passed',
+  'criterion_failed',
+  'evidence_unavailable',
+  'unsupported',
+  'invalid_evidence',
+  'grader_unavailable',
+] as const;
+export type PublicGradeExplanationCode = (typeof PUBLIC_GRADE_EXPLANATION_CODES)[number];
+
+export const PUBLIC_FINISH_STATES = ['stop', 'length', 'tool_call', 'error', 'unavailable'] as const;
+export type PublicFinishState = (typeof PUBLIC_FINISH_STATES)[number];
+
+export const PUBLIC_LOAD_STATES = ['cold', 'warm', 'unavailable'] as const;
+export type PublicLoadState = (typeof PUBLIC_LOAD_STATES)[number];
+
+export const PUBLIC_EVIDENCE_KINDS = [
+  'campaign_profile',
+  'model_registry',
+  'verification_report',
+  'evaluation_projection',
+  'comparison_row',
+  'efficiency_observation',
+  'statistical_analysis',
+  'source_manifest',
+] as const;
+export type PublicEvidenceKind = (typeof PUBLIC_EVIDENCE_KINDS)[number];
+
+export const PUBLIC_ACTIVITY_EVIDENCE_SOURCES = ['application_reported', 'bound_public_proof'] as const;
+export type PublicActivityEvidenceSource = (typeof PUBLIC_ACTIVITY_EVIDENCE_SOURCES)[number];
+
+export const PUBLIC_USAGE_AVAILABILITIES = ['reported', 'unavailable'] as const;
+export type PublicUsageAvailability = (typeof PUBLIC_USAGE_AVAILABILITIES)[number];
+
+export const PUBLIC_TOOL_OUTCOMES = ['allow', 'deny', 'refused'] as const;
+export type PublicToolOutcome = (typeof PUBLIC_TOOL_OUTCOMES)[number];
+
+export const PUBLIC_TOOL_EXECUTION_OUTCOMES = ['pass', 'fail', 'unavailable', 'unsupported', 'invalid_evidence'] as const;
+export type PublicToolExecutionOutcome = (typeof PUBLIC_TOOL_EXECUTION_OUTCOMES)[number];
+
+export const PUBLIC_SEMANTIC_OUTCOMES = ['pass', 'fail', 'unavailable', 'unsupported', 'invalid_evidence'] as const;
+export type PublicSemanticOutcome = (typeof PUBLIC_SEMANTIC_OUTCOMES)[number];
+
+export const PUBLIC_REPORTED_POLICY_OUTCOMES = ['allow', 'deny', 'refused'] as const;
+export type PublicReportedPolicyOutcome = (typeof PUBLIC_REPORTED_POLICY_OUTCOMES)[number];
+
+export const PUBLIC_RECEIPT_STATUSES = ['unavailable', 'reported'] as const;
+export type PublicReceiptStatus = (typeof PUBLIC_RECEIPT_STATUSES)[number];
 
 /** Quality state for every dataset, run, metric, and task shown in the site. */
 export const QUALITY_STATES = [
@@ -413,18 +477,133 @@ export interface EvaluationSummary extends ViewRecordEnvelope {
   native_result?: NativeEvaluationResult;
 }
 
+export interface PublicScenarioCriterion {
+  criterion_id: string;
+  public_label: string;
+  public_description: string;
+  grading_method: 'deterministic' | 'semantic_judge';
+  required: boolean;
+}
+
+export interface PublicToolScoreDimensionRequirement {
+  dimension: ToolScoreDimension;
+  required: boolean;
+}
+
+export interface PublicScenarioSummary {
+  scenario_id: string;
+  scenario_version: string;
+  category: ScenarioCategory;
+  public_description: string;
+  grading_method: 'deterministic' | 'semantic_judge';
+  allowed_tools: string[];
+  expected_tools: string[];
+  forbidden_tools: string[];
+  criteria: PublicScenarioCriterion[];
+  tool_score_dimensions: PublicToolScoreDimensionRequirement[];
+}
+
+export interface PublicSemanticGradeSummary {
+  criterion_id: string;
+  status: NativeResultStatus;
+  grading_method: 'deterministic' | 'semantic_judge';
+  judge_variant_id?: string;
+  explanation_code: PublicGradeExplanationCode;
+}
+
+export interface PublicModelActivityRecord {
+  model_role: ModelRole;
+  agent_persona?: string;
+  variant_id: string;
+  usage_availability: PublicUsageAvailability;
+  input_tokens?: MetricValue<number>;
+  output_tokens?: MetricValue<number>;
+  thinking_tokens?: MetricValue<number>;
+  cache_tokens?: MetricValue<number>;
+  total_duration_nanos?: MetricValue<number>;
+  generation_duration_nanos?: MetricValue<number>;
+  retry_count?: MetricValue<number>;
+  finish_state: PublicFinishState;
+  load_state: PublicLoadState;
+}
+
+export interface PublicToolDecisionActivityRecord {
+  tool_label: string;
+  recognized: boolean;
+  selected: boolean;
+  permission_compliant: boolean;
+  unnecessary: boolean;
+  outcome: PublicSemanticOutcome;
+  evidence_source: PublicActivityEvidenceSource;
+}
+
+export interface PublicToolCallActivityRecord {
+  tool_label: string;
+  execution_outcome: PublicToolExecutionOutcome;
+  semantic_outcome: PublicSemanticOutcome;
+  evidence_source: PublicActivityEvidenceSource;
+}
+
+export interface PublicPolicyDecisionActivityRecord {
+  tool_label: string;
+  outcome: PublicToolOutcome;
+  evidence_source: PublicActivityEvidenceSource;
+}
+
+export interface PublicGovernedActionActivityRecord {
+  action_label: 'governed action';
+  reported_policy_outcome: PublicReportedPolicyOutcome;
+  receipt_status: PublicReceiptStatus;
+  evidence_source: PublicActivityEvidenceSource;
+}
+
+export interface PublicActivityFamily<T> {
+  availability: ActivityAvailability;
+  unavailable_reason?: PublicUnavailableReason;
+  records: T[];
+}
+
+export interface PublicAssignmentActivity {
+  model_activity: PublicActivityFamily<PublicModelActivityRecord>;
+  tool_decisions: PublicActivityFamily<PublicToolDecisionActivityRecord>;
+  tool_calls: PublicActivityFamily<PublicToolCallActivityRecord>;
+  policy_decisions: PublicActivityFamily<PublicPolicyDecisionActivityRecord>;
+  governed_actions: PublicActivityFamily<PublicGovernedActionActivityRecord>;
+}
+
+export interface PublicEvidenceBinding {
+  sha256: string;
+  schema_ref: string;
+  kind: PublicEvidenceKind;
+}
+
+export interface PublicVerificationMetadata {
+  provenance: 'bound' | 'legacy_unbound';
+  verifier_state: VerifierState;
+  verifier_release_version?: string;
+  verifier_contract_version?: string;
+  report_digest?: string;
+  population_digest?: string;
+}
+
 /** 5. assignment_result: public assignment identity and safe summaries. */
 export interface AssignmentResult extends ViewRecordEnvelope {
   kind: 'assignment_result';
   assignment_id: string;
   run_id: string;
   task_id: string;
+  /** Exact scenario identity. Historical records may omit it; new records set it to task_id. */
+  scenario_id?: string;
   variant_id: string;
   role: ModelRole;
   repetition: number;
   scenario_category?: ScenarioCategory;
   evaluation_unit?: EvaluationUnit;
   stack_id?: string;
+  scenario_summary?: PublicScenarioSummary;
+  semantic_grade_summaries?: PublicSemanticGradeSummary[];
+  activity_summary?: PublicAssignmentActivity;
+  evidence_bindings?: PublicEvidenceBinding[];
   benchmark_observations?: BenchmarkObservations;
   terminal_status: TerminalStatus | 'running' | 'queued';
   metric_values: Record<string, MetricValue>;
@@ -434,9 +613,12 @@ export interface AssignmentResult extends ViewRecordEnvelope {
     latency_ms?: MetricValue<number>;
     input_tokens?: MetricValue<number>;
     output_tokens?: MetricValue<number>;
+    thinking_tokens?: MetricValue<number>;
+    cache_tokens?: MetricValue<number>;
     retries?: MetricValue<number>;
   };
   verification_disposition?: VerifierState;
+  verification_metadata?: PublicVerificationMetadata;
 }
 
 /** 6. methodology_snapshot: metric definitions and user-facing explanation. */

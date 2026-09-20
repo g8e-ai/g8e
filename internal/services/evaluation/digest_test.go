@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
@@ -168,4 +169,90 @@ func TestComputeAssignmentResultDigest_IsStableAndValidated(t *testing.T) {
 	require.NoError(t, ValidateAssignmentResultDigest(result))
 	result.ResultDigest = repeatHex('0', 64)
 	assert.Error(t, ValidateAssignmentResultDigest(result))
+}
+
+func TestComputeAssignmentResultDigestIncludesEnrichedCaptureFields(t *testing.T) {
+	base := &evalv1.EvaluationAssignmentResult{
+		SchemaVersion:   CampaignSchemaVersion,
+		AssignmentId:    "assign-enriched",
+		RunId:           "run-enriched",
+		CampaignId:      "phase1a-smoke",
+		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+	}
+	baseline, err := ComputeAssignmentResultDigest(base)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name   string
+		mutate func(*evalv1.EvaluationAssignmentResult)
+	}{
+		{
+			name: "policy decision",
+			mutate: func(result *evalv1.EvaluationAssignmentResult) {
+				result.PolicyDecisions = []*evalv1.PolicyDecisionRecord{{
+					DecisionId:   "decision-1",
+					AssignmentId: result.GetAssignmentId(),
+					ToolName:     "read_file",
+					Outcome:      evalv1.EvaluationPolicyDecisionOutcome_EVALUATION_POLICY_DECISION_OUTCOME_ALLOW,
+				}}
+			},
+		},
+		{
+			name: "tool decision capture",
+			mutate: func(result *evalv1.EvaluationAssignmentResult) {
+				result.ToolDecisionsCaptured = true
+			},
+		},
+		{
+			name: "tool call capture",
+			mutate: func(result *evalv1.EvaluationAssignmentResult) {
+				result.ToolCallsCaptured = true
+			},
+		},
+		{
+			name: "governed action capture",
+			mutate: func(result *evalv1.EvaluationAssignmentResult) {
+				result.GovernedActionsCaptured = true
+			},
+		},
+		{
+			name: "policy decision capture",
+			mutate: func(result *evalv1.EvaluationAssignmentResult) {
+				result.PolicyDecisionsCaptured = true
+			},
+		},
+		{
+			name: "scored inference span",
+			mutate: func(result *evalv1.EvaluationAssignmentResult) {
+				result.ScoredInferenceSpanNanos = proto.Uint64(500000000)
+			},
+		},
+		{
+			name: "model retry presence",
+			mutate: func(result *evalv1.EvaluationAssignmentResult) {
+				result.ModelInferences = []*evalv1.ModelInferenceRecord{{RetryCount: proto.Uint32(0)}}
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := proto.Clone(base).(*evalv1.EvaluationAssignmentResult)
+			test.mutate(result)
+			changed, err := ComputeAssignmentResultDigest(result)
+			require.NoError(t, err)
+			assert.NotEqual(t, baseline, changed)
+		})
+	}
+
+	absent := proto.Clone(base).(*evalv1.EvaluationAssignmentResult)
+	absent.ModelInferences = []*evalv1.ModelInferenceRecord{{}}
+	absentDigest, err := ComputeAssignmentResultDigest(absent)
+	require.NoError(t, err)
+	zero := proto.Clone(base).(*evalv1.EvaluationAssignmentResult)
+	zero.ModelInferences = []*evalv1.ModelInferenceRecord{{RetryCount: proto.Uint32(0)}}
+	zeroDigest, err := ComputeAssignmentResultDigest(zero)
+	require.NoError(t, err)
+	assert.NotEqual(t, absentDigest, zeroDigest)
 }

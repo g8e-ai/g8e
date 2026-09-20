@@ -23,7 +23,14 @@ import {
   formatTokens,
   formatNumber,
 } from '../components/shared';
-import { assignmentLifecycleEvents, assignmentMetricEntries, assignmentMetricFormatter, roleLabel } from './derived';
+import {
+  assignmentLifecycleEvents,
+  assignmentMetricEntries,
+  assignmentMetricFormatter,
+  isScenarioNotApplicableMetric,
+  roleLabel,
+  siblingRepetitions,
+} from './derived';
 
 function observationLabel(value: string): string {
   return value.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
@@ -51,12 +58,19 @@ export function AssignmentDetailView() {
         )
       : [],
   );
+  const siblingAssignments = useStoreState((state) =>
+    assignment ? siblingRepetitions(assignment, Array.from(state.assignments.values())) : [],
+  );
   const connection = useStoreState((state) => state.connection);
 
   if (!assignmentId || !runId) return <ErrorState message="No assignment selected." />;
   if (!assignment) return <EmptyState hasRecords={false} hasFilters={false} connection={connection} />;
 
   const eligibleMetrics = assignmentMetricEntries(assignment.metric_values);
+  const toolScorecard = assignment.benchmark_observations?.tool_scorecard;
+  const toolScorecardEntries = toolScorecard
+    ? Object.entries(toolScorecard).filter(([, metric]) => !isScenarioNotApplicableMetric(metric))
+    : [];
 
   return (
     <div className="assignment-detail">
@@ -83,7 +97,7 @@ export function AssignmentDetailView() {
           <DetailRow label="Run ID">
             <Link to={`/evaluations/${activeDatasetId}/${assignment.run_id}`}>{assignment.run_id}</Link>
           </DetailRow>
-          <DetailRow label="Task ID">{assignment.task_id}</DetailRow>
+          <DetailRow label="Scenario">{assignment.task_id}</DetailRow>
           <DetailRow label="Variant">
             <Link to={`/models/${activeDatasetId}/${assignment.variant_id}`}>{assignment.variant_id}</Link>
           </DetailRow>
@@ -104,13 +118,17 @@ export function AssignmentDetailView() {
         </dl>
 
         <h3>Tool-calling scorecard</h3>
-        {assignment.benchmark_observations?.tool_scorecard && Object.keys(assignment.benchmark_observations.tool_scorecard).length > 0 ? (
+        {!toolScorecard || Object.keys(toolScorecard).length === 0 ? (
+          <p className="benchmark-empty">Not observed in this dataset</p>
+        ) : toolScorecardEntries.length === 0 ? (
+          <p className="benchmark-empty">Not applicable to this scenario</p>
+        ) : (
           <div className="metric-grid">
-            {Object.entries(assignment.benchmark_observations.tool_scorecard).map(([key, metric]) => (
+            {toolScorecardEntries.map(([key, metric]) => (
               <MetricCard key={key} label={observationLabel(key)} metric={metric} formatter={formatNumber} />
             ))}
           </div>
-        ) : <p className="benchmark-empty">Not observed in this dataset</p>}
+        )}
 
         <h3>Failure why</h3>
         {assignment.benchmark_observations?.grade_summaries && assignment.benchmark_observations.grade_summaries.length > 0 ? (
@@ -164,7 +182,7 @@ export function AssignmentDetailView() {
       </section>
 
       <section className="assignment-metrics">
-        <h2>Eligible metric values</h2>
+        <h2>Scoring summary</h2>
         {eligibleMetrics.length === 0 ? (
           <p>No eligible metric values for this assignment.</p>
         ) : (
@@ -193,25 +211,44 @@ export function AssignmentDetailView() {
 
       <section className="assignment-stages">
         <h2>Stages</h2>
-        <ul className="stage-list">
-          {assignment.stage_summary.map((stage, i) => (
-            <li key={i}>
-              <span className="stage-name">{stage.name}</span>
-              <span className="stage-duration">{formatDuration(stage.duration_seconds)}</span>
-            </li>
-          ))}
-        </ul>
+        {assignment.stage_summary.length === 0 ? (
+          <p className="benchmark-empty">Stage timeline not published for this assignment.</p>
+        ) : (
+          <ul className="stage-list">
+            {assignment.stage_summary.map((stage, i) => (
+              <li key={i}>
+                <span className="stage-name">{stage.name}</span>
+                <span className="stage-duration">{formatDuration(stage.duration_seconds)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
-      {assignment.resource_summary ? (
-        <section className="assignment-resources">
-          <h2>Resource observations</h2>
-          <div className="metric-grid">
-            <MetricCard label="Latency" metric={assignment.resource_summary.latency_ms} formatter={formatLatency} />
-            <MetricCard label="Input tokens" metric={assignment.resource_summary.input_tokens} formatter={formatTokens} />
-            <MetricCard label="Output tokens" metric={assignment.resource_summary.output_tokens} formatter={formatTokens} />
-            <MetricCard label="Retries" metric={assignment.resource_summary.retries} formatter={formatNumber} />
-          </div>
+      <section className="assignment-resources">
+        <h2>Resource observations</h2>
+        <div className="metric-grid">
+          <MetricCard label="Latency" metric={assignment.resource_summary?.latency_ms} formatter={formatLatency} />
+          <MetricCard label="Input tokens" metric={assignment.resource_summary?.input_tokens} formatter={formatTokens} />
+          <MetricCard label="Output tokens" metric={assignment.resource_summary?.output_tokens} formatter={formatTokens} />
+          <MetricCard label="Retries" metric={assignment.resource_summary?.retries} formatter={formatNumber} />
+        </div>
+      </section>
+
+      {siblingAssignments.length > 0 ? (
+        <section className="assignment-repetitions">
+          <h2>Sibling repetitions</h2>
+          <ul className="assignment-list">
+            {siblingAssignments.map((sibling) => (
+              <li key={sibling.assignment_id}>
+                <Link to={`/evaluations/${sibling.dataset_id}/${sibling.run_id}/assignments/${sibling.assignment_id}`}>
+                  {sibling.assignment_id}
+                </Link>
+                <span>rep {sibling.repetition}</span>
+                <span>{sibling.terminal_status}</span>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
     </div>

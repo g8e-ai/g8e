@@ -1,13 +1,14 @@
 # OpenDevOps.ai local evaluation view contract
 
-Status: frozen at schema_version 1.1.0 on 2026-09-14 by Worker 0 (Integration lead). Schema 1.1 producers emit benchmark observations, and the browser continues to read durable schema 1.0 records already accepted by the append-only local mirror.
+Status: frozen at schema_version 1.4.0 on 2026-09-20. Explorer records emit 1.4.0; the validator continues to decode historical view records from 1.0.0 through 1.3.0. Campaign lifecycle envelopes remain 1.0.0, while enriched campaign result envelopes emit 1.1.0 and historical result envelopes from 1.0.0 remain readable.
 
 This is the single typed source of truth for the public-safe read model the browser renders. The Go evaluation publication service, the frontend `campaign-adapter`, the mock replay producer, the deterministic fixtures, and the frontend validators all consume this contract. No consumer hand-defines enums or record shapes. A change to any enum value or required field is a contract revision: bump `VIEW_SCHEMA_VERSION` in `types.ts`, update `descriptor.json`, and update the Go projector plus frontend adapter together.
 
 ## Canonical sources
 
 - `src/contract/types.ts` is the authoritative TypeScript source. The frontend, fixtures, and validators import enums and interfaces from here.
-- `src/contract/validators.ts` is the strict runtime validation layer. Every guard fails closed: an unknown field, wrong type, or out-of-enum value throws a typed `ValidationError` that the store surfaces as a fail-closed error state rather than rendering partial data.
+- `src/contract/validators.ts` is the strict runtime validation layer for explorer view records. Every guard fails closed: an unknown field, wrong type, out-of-enum value, contradictory alias, malformed hash, or out-of-bounds value throws a typed `ValidationError` rather than rendering partial data.
+- `src/contract/campaign-wire.ts` is the strict runtime validation layer for raw Go campaign envelopes. It dispatches lifecycle 1.0.0 versus result 1.0.0/1.1.0 shapes, validates canonical protobuf enum names and decimal uint64 strings, and rejects enriched fields on historical result envelopes.
 - `src/contract/descriptor.json` is the machine-readable cross-language mirror for Go and TypeScript consumers. `tests/descriptor-sync.test.ts` asserts that the descriptor's enum values exactly match `types.ts`, so the two never drift silently.
 - `src/fixtures/fixtures.ts` is the deterministic fixture set. Every snapshot record kind and every live event kind has at least one fixture. `tests/contract-conformance.test.ts` validates every fixture against the guards and asserts full kind coverage.
 
@@ -59,7 +60,9 @@ The full field-level shapes live in `src/contract/types.ts`. Each snapshot recor
 
 `MetricValue<T>` wraps any metric that may be unavailable: `{ value?: T; unavailable_reason?: string }`. A metric requires either a value or an unavailable reason; the UI never renders an unavailable metric as zero. `ConfidenceInterval` carries `{ estimate, lower, upper, denominator }` for pass-rate intervals.
 
-Schema 1.1 adds `evaluation_unit`, optional `stack_id`, Primary invocation share, correlated failure rate, and typed unavailability to `evaluation_summary`. It adds `scenario_category`, `evaluation_unit`, optional `stack_id`, and `benchmark_observations` to `assignment_result`. Benchmark observations contain public-safe `grade_summaries` (per-criterion pass/fail detail), escalation disposition, decomposed tool scorecard metrics, security/privacy event counts, model-load/TTFT/generation/whole-task timing, GPU memory/utilization/temperature/power/clock values, optional correlated-failure identity, and explicit unavailable reasons. Historical projectors emit every category and explicit missingness; they do not infer unobserved telemetry. The live bridge labels complete heterogeneous runs as system evaluations and binds a deterministic stack identity.
+Schema 1.1 through 1.3 retain the historical assignment shape and benchmark observations. Schema 1.4 adds the optional `scenario_id` alias and the rich assignment families: `scenario_summary`, `semantic_grade_summaries`, `activity_summary`, `evidence_bindings`, `resource_summary`, and `verification_metadata`. New 1.4 producers set `scenario_id === task_id`; historical records and pre-adapter 1.4 records may omit the alias, while any record that supplies both fields must keep them equal. Scenario descriptions and criteria are explicit public fields, never copies of private prompts or gold criteria. Grade explanations are closed codes, activity families preserve observed-empty versus unavailable versus scenario-not-applicable, resource values preserve explicit zero, and evidence bindings are lowercase SHA-256 content bindings rather than links or proof of individual verification. `resource_summary.latency_ms` is the elapsed scored-inference span; it is not a lifecycle duration or a sum of call durations.
+
+All new arrays and strings are bounded. New public unavailable reasons are `historical_not_captured`, `source_not_captured`, `source_unavailable`, `scenario_not_applicable`, `incomplete_contributor_evidence`, and `no_scored_calls`. Unknown nested fields, duplicate criterion/evidence identities, non-finite or negative numbers, unsupported enum values, malformed hashes, and conflicting scenario identities fail closed. The live bridge labels complete heterogeneous runs as system evaluations and binds a deterministic stack identity.
 
 The live event payload is a single flat `LiveEvent` interface with optional per-kind fields (`assignment_id`, `task_id`, `variant_id`, `stage_label`, `metric_delta`). This matches the plan's description: each live event carries a stable identity, run id, optional assignment/task/model identity, lifecycle status, completed/total counts, a safe metric delta or stage label, timestamp, and quality state. The projector deduplicates by `event_id`; a bridge restart against the same report produces no duplicate logical event.
 
@@ -76,7 +79,7 @@ The publisher rejects any record whose JSON contains a prohibited field. The pro
 
 Workers do not edit the same files concurrently. Worker 0 assigns concrete file ownership here. Cross-worker changes are proposed through a fixture or contract change and integrated by Worker 0.
 
-- Worker 0 (Integration lead): `src/contract/types.ts`, `src/contract/validators.ts`, `src/contract/descriptor.json`, `src/contract/CONTRACT.md`, `src/fixtures/fixtures.ts`, `tests/contract-conformance.test.ts`, `tests/descriptor-sync.test.ts`, `tests/setup.ts`.
+- Worker 1B (Explorer contracts): `src/contract/types.ts`, `src/contract/validators.ts`, `src/contract/campaign-wire.ts`, `src/contract/descriptor.json`, `src/contract/CONTRACT.md`, `src/fixtures/fixtures.ts`, `tests/validators.test.ts`, `tests/contract-conformance.test.ts`, `tests/descriptor-sync.test.ts`, and `tests/campaign-wire.test.ts`.
 - Go evaluation publication (`internal/services/evaluation/campaign_publication.go` and related projection builders): emits public-safe envelopes from canonical campaign state.
 - Worker 2 (Mirror and local runtime): `dev.mjs`, `scripts/seed.mjs`, `scripts/replay.mjs`, local mirror startup, and the runtime fixture. Worker 2 does not edit contract or fixture files.
 - Worker 3 (UX shell and navigation): `src/App.tsx`, `src/main.tsx`, `src/state/*`, `src/components/*`, `src/utils/*`, global styles, and the route shell. Worker 3 imports enums and types from `src/contract/types.ts` and never redefines them.
@@ -107,4 +110,4 @@ cd /home/bob/g8e/dashboard/g8e-adapter/evaluation-explorer
 npx vitest run tests/contract-conformance.test.ts tests/descriptor-sync.test.ts
 ```
 
-All 107 focused contract assertions pass. The contract conformance test validates every fixture and all 1,221 generated historical records against the guards and asserts full kind coverage. The descriptor sync test asserts every enum in descriptor.json matches `types.ts`. The complete frontend suite currently passes 192 tests.
+The focused contract suite validates every fixture and generated historical record against the guards, asserts full kind coverage, and checks that every descriptor enum matches `types.ts`. Campaign wire tests separately cover lifecycle 1.0.0, historical result 1.0.0, enriched result 1.1.0, canonical enum conversion inputs, and fail-closed malformed nested data.

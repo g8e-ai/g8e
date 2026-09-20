@@ -666,6 +666,12 @@ export function readWorkingSelection(catalog: CatalogSnapshot | undefined): Work
 
 /** Other repetitions of the same task for the same variant within the run —
  *  the repeatability context for an assignment detail page. */
+export const SCENARIO_NOT_APPLICABLE_REASON = 'tool use not required by this scenario';
+
+export function isScenarioNotApplicableMetric(metric: MetricValue): boolean {
+  return metric.value === undefined && metric.unavailable_reason === SCENARIO_NOT_APPLICABLE_REASON;
+}
+
 export function siblingRepetitions(
   assignment: AssignmentResult,
   assignments: AssignmentResult[],
@@ -677,9 +683,10 @@ export function siblingRepetitions(
         a.run_id === assignment.run_id &&
         a.task_id === assignment.task_id &&
         a.variant_id === assignment.variant_id &&
+        a.role === assignment.role &&
         a.dataset_id === assignment.dataset_id,
     )
-    .sort((a, b) => a.repetition - b.repetition);
+    .sort((a, b) => a.repetition - b.repetition || a.assignment_id.localeCompare(b.assignment_id));
 }
 
 /** Sum of observed provider retries for a variant — used by the model
