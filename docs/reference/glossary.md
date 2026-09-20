@@ -5,7 +5,7 @@ title: Glossary
 # g8e Glossary
 
 Last Updated: 2026-09-19
-Version: v2.1.8
+Version: v2.1.9
 
 Core terminology for the g8e Governance Suite, including the protocol, Governance Gateway, Governed Operator, g8ee ensemble, g8ed dashboard, compliance evidence, and MCP and A2A integrations. Terms are organized alphabetically.
 
