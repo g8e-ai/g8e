@@ -1,7 +1,7 @@
 # Encryption Architecture
 
 Last Updated: 2026-09-18
-Version: v2.1.8
+Version: v2.1.9
 
 ## Overview
 

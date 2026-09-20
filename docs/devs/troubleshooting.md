@@ -1,7 +1,7 @@
 # Developer Troubleshooting
 
 Last Updated: 2026-09-18
-Version: v2.1.8
+Version: v2.1.9
 
 This guide covers common contributor setup, build, test, Gateway, authentication, governance, and local deployment failures. Run the commands from the repository root unless a section says otherwise. See the [Getting Started guide](../guides/getting_started.md) for the supported setup sequence, the [Code Map](codemap.md) for implementation ownership, and the [Documentation Guide](docs.md) for the standards used to maintain this page.
 

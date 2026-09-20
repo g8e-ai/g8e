@@ -6,7 +6,7 @@ parent: Architecture
 # Public Spectator Architecture and Threat Model
 
 Last Updated: 2026-09-18
-Version: v2.1.8
+Version: v2.1.9
 
 ## Purpose
 

@@ -1,8 +1,8 @@
 # Compliance Alignment
 
-**Document Version:** 2.1.8
-**Last Updated:** 2026-09-18
-**Platform:** g8e v2.1.8
+**Document Version:** 2.1.9
+**Last Updated:** 2026-09-19
+**Platform:** g8e v2.1.9
 **Maintained by:** Lateralus Labs, LLC.
 
 ## Purpose and claim boundary
@@ -104,6 +104,8 @@ g8e compliance demo-run verify <run-id>
 
 Assessment results belong in generated artifacts, not this document. The repository currently retains these generated release-evidence projections:
 
+- [v2.1.9 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.9-compliance-evidence.md)
+- [v2.1.9 release evidence (CSV)](../release_notes/v2.1.x/v2.1.9-compliance-evidence.csv)
 - [v2.1.8 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.8-compliance-evidence.md)
 - [v2.1.8 release evidence (CSV)](../release_notes/v2.1.x/v2.1.8-compliance-evidence.csv)
 - [v2.1.7 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.7-compliance-evidence.md)

@@ -5,8 +5,8 @@ parent: Architecture
 
 # Zero Trust Model Provenance
 
-Last Updated: 2026-09-18
-Version: v2.1.8
+Last Updated: 2026-09-19
+Version: v2.1.9
 
 ## Scope
 
@@ -35,7 +35,7 @@ The Observer and Provenance Operator may run on the same physical host (for exam
 
 When a model is present in the enterprise registry, the Provenance Operator acts as gatekeeper and attestor for model weights:
 
-1. **Cryptographic hashing** — On `FINALIZE`, the operator reads the Ollama manifest for the served model tag, hashes every referenced content-addressed blob under `--model-storage-root`, and records per-blob `ModelWeightAttestation` entries.
+1. **Cryptographic hashing** — On `FINALIZE`, the operator reads the Ollama manifest for the served model tag, hashes every referenced content-addressed blob under `--model-storage-root`, and records per-blob `ModelWeightAttestation` entries. Unqualified tags resolve under `manifests/registry.ollama.ai/library/<model>/<tag>`; namespaced tags such as `Impulse2000/smollm3:3b-q4_k_m` resolve under `manifests/registry.ollama.ai/Impulse2000/smollm3/3b-q4_k_m`.
 2. **Digest verification** — The manifest digest (SHA-256 of manifest bytes) is compared to the `expected_model_digest` carried in the governed `ModelProvenanceObservationCommand` from the frozen campaign registry. Mismatch fails closed.
 3. **Attestation window** — A `ModelProvenanceAttestationWindow` is minted, content-addressed by `attestation_digest`, and published on the operator results channel for gateway ingest.
 
@@ -60,6 +60,8 @@ For every scored inference dispatch in campaign mode:
 4. Gateway ingests attestation windows under `.g8e/data/inference/model-provenance/windows/`.
 
 If the Provenance Operator is enrolled and campaign bindings include a model digest, provenance command delivery failures fail closed the same way as provider-boundary observation gaps.
+
+Before execute begins, Tier-A campaigns can call gateway preflight endpoints to verify provenance command delivery and storage-side attestation for each frozen `served_model_tag` and `expected_model_digest` pair. Preflight failures stop the run before assignments complete with missing attestation windows that verify cannot backfill.
 
 ---
 
