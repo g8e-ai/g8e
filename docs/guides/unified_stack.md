@@ -1,7 +1,7 @@
 # Unified Docker Stack Guide
 
-Last Updated: 2026-09-19  
-Version: v2.1.9
+Last Updated: 2026-09-20  
+Version: v2.1.10
 
 This guide explains how to run the g8e platform from the repository root as one Docker Compose stack: Gateway, Data Operator, Inference Operator, ensemble (g8ee), and dashboard (g8ed). It also documents the evaluation campaign topology used for governed model scoring, the remote Ollama provider boundary, the provider-boundary **Observer Operator** (GPU/RAM witness), and the storage-side **Provenance Operator** (model weight attestation) that enroll from the provider host.
 
@@ -67,7 +67,7 @@ Provider host (Windows + Ollama)
 - The Observer Operator has **no** inference backend and **no** access to Inference Operator attempt files. It samples GPU/RAM locally and receives `ProviderBoundaryObservationCommand` BEGIN/FINALIZE over Gateway pub/sub.
 - The Provenance Operator has **no** inference backend and **no** GPU sampling. It hashes Ollama manifests and weight blobs at `--model-storage-root` and receives `ModelProvenanceObservationCommand` BEGIN/FINALIZE in parallel with the Observer.
 - Observer and Provenance may run on the **same physical host** but must enroll as **separate** governed operator sessions (separate terminals, separate `operator start` processes).
-- When the provider host owner starts the Observer with **`--ollama`**, the campaign pipeline may dispatch governed `ollama stop` / settle / `ollama ps` commands to that session between assignments. Without `--ollama`, those CLI commands are rejected by both the gateway and the operator.
+- When the provider host owner starts the Observer with **`--ollama`**, the campaign pipeline may dispatch a platform-specific governed Ollama reset to that session between assignments. Unix hosts stop Ollama, settle, restart the daemon through `systemctl` or a process/`ollama serve` fallback, wait for readiness, and run `ollama ps`; Windows hosts stop Ollama, settle, terminate `ollama.exe`, settle, start `ollama serve` in the background, wait for readiness, and run `ollama ps`. Without `--ollama`, Ollama service lifecycle commands are rejected by both the Gateway and the Operator.
 
 ## Campaign and run naming
 
@@ -312,7 +312,7 @@ After approval, confirm the observer appears in `./g8e operator list` with `prov
 3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
 4. Gateway ingests windows for `g8e eval campaign verify --require-provider-observation`.
 
-When enrolled with `--ollama`, `g8e eval campaign execute` also dispatches a governed reset sequence to the Observer **before each assignment**: `ollama stop`, a short settle delay (`sleep 5` on Linux, `timeout /t 5` on Windows), and `ollama ps` to confirm the provider is quiescent. This is separate from `--wait-for-provider-idle`, which still polls the remote HTTP `/api/ps` endpoint from the campaign host.
+When enrolled with `--ollama`, `g8e eval campaign execute` also dispatches a governed reset sequence to the Observer **before each assignment**. On Unix it runs `ollama stop`, `sleep 5`, a `systemctl restart ollama` command with a process/`ollama serve` fallback, `sleep 8`, and `ollama ps`. On Windows it runs `ollama stop`, `timeout /t 5`, `taskkill /IM ollama.exe /F`, `timeout /t 3`, `start /B ollama serve`, `timeout /t 8`, and `ollama ps`. This is separate from `--wait-for-provider-idle`, which still polls the remote HTTP `/api/ps` endpoint from the campaign host.
 
 The legacy filesystem runner `g8e eval dev provider-observer run` is for co-located dev tests only. Production uses the enrolled Observer Operator.
 
@@ -410,7 +410,7 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 \
 
 - `--daemon` runs the full matrix in one process.
 - `--provider-settle 8s` waits after each assignment for Ollama to go idle over HTTP (`/api/ps`).
-- When the enrolled Observer Operator has `provider_boundary_observer_ollama_enabled`, execute also quiesces the Ollama provider on the provider host before each assignment (`ollama stop`, settle, `ollama ps`; see [Provider-boundary Observer Operator](#provider-boundary-observer-operator-windows-ollama-host)).
+- When the enrolled Observer Operator has `provider_boundary_observer_ollama_enabled`, execute also runs the platform-specific governed Ollama reset on the provider host before each assignment; see [Provider-boundary Observer Operator](#provider-boundary-observer-operator-windows-ollama-host) for the exact Unix and Windows sequences.
 - **Never** run `g8e eval campaign publish` concurrently with `execute --publish`.
 
 ### Phase D — Monitor

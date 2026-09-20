@@ -11,10 +11,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
-	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 type stubOllamaServiceDispatcher struct {
@@ -29,8 +30,9 @@ func (s *stubOllamaServiceDispatcher) DispatchOllamaServiceCommand(ctx context.C
 
 func TestRestartOllamaViaObserver_SkipsWhenNotEnabled(t *testing.T) {
 	dispatcher := &stubOllamaServiceDispatcher{}
-	err := RestartOllamaViaObserver(t.Context(), &ProviderBoundaryObserverStatus{OllamaEnabled: false}, dispatcher, "run-1", func(prefix string) string { return prefix })
+	outcome, err := RestartOllamaViaObserver(t.Context(), &ProviderBoundaryObserverStatus{OllamaEnabled: false}, dispatcher, "run-1", func(prefix string) string { return prefix })
 	require.NoError(t, err)
+	assert.False(t, outcome.Performed)
 	assert.Empty(t, dispatcher.requests)
 }
 
@@ -41,12 +43,18 @@ func TestRestartOllamaViaObserver_DispatchesLifecycleSequence(t *testing.T) {
 		OllamaEnabled:     true,
 		Platform:          "windows",
 	}
-	err := RestartOllamaViaObserver(t.Context(), observer, dispatcher, "run-1", func(prefix string) string { return prefix + "-id" })
+	outcome, err := RestartOllamaViaObserver(t.Context(), observer, dispatcher, "run-1", func(prefix string) string { return prefix + "-id" })
 	require.NoError(t, err)
-	require.Len(t, dispatcher.requests, 3)
+	assert.True(t, outcome.Performed)
+	assert.Equal(t, 7, outcome.CommandCount)
+	require.Len(t, dispatcher.requests, 7)
 	assert.Equal(t, operatorcapability.OllamaServiceCommandStop, dispatcher.requests[0].Command)
 	assert.Equal(t, operatorcapability.RestartSettleCommand("windows"), dispatcher.requests[1].Command)
-	assert.Equal(t, operatorcapability.OllamaServiceCommandPS, dispatcher.requests[2].Command)
+	assert.Equal(t, operatorcapability.OllamaWindowsKillCommand, dispatcher.requests[2].Command)
+	assert.Equal(t, operatorcapability.RestartPostKillSettleCommand("windows"), dispatcher.requests[3].Command)
+	assert.Equal(t, operatorcapability.OllamaWindowsStartCommand, dispatcher.requests[4].Command)
+	assert.Equal(t, operatorcapability.OllamaRestartReadySettleCommand("windows"), dispatcher.requests[5].Command)
+	assert.Equal(t, operatorcapability.OllamaServiceCommandPS, dispatcher.requests[6].Command)
 }
 
 func operatorv1CompletedCommandResult() *operatorv1.CommandResult {

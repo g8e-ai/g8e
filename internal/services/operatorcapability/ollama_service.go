@@ -19,6 +19,11 @@ const (
 	OllamaServiceCommandStop  = "ollama stop"
 	OllamaServiceCommandServe = "ollama serve"
 	OllamaServiceCommandPS    = "ollama ps"
+
+	// OllamaWindowsKillCommand stops the Ollama daemon on Windows provider hosts.
+	OllamaWindowsKillCommand = "cmd.exe /C taskkill /IM ollama.exe /F"
+	// OllamaWindowsStartCommand starts the Ollama daemon in the background.
+	OllamaWindowsStartCommand = "cmd.exe /C start /B ollama serve"
 )
 
 // IsOllamaServiceCommand reports whether command is a governed Ollama CLI
@@ -33,16 +38,77 @@ func IsOllamaServiceCommand(command string) bool {
 	}
 }
 
-// RestartOllamaCommands returns the governed Ollama CLI sequence dispatched
+// RestartOllamaCommands returns the governed command sequence dispatched
 // before each campaign assignment when the observer started with --ollama.
-// stop unloads in-memory models; ps confirms the provider is quiescent. serve
-// is omitted because it blocks in the foreground and the provider daemon is
-// expected to stay running (Windows tray app or existing serve process).
+// The sequence unloads models, stops the daemon, starts it again, waits for
+// readiness, and confirms the provider is quiescent with ollama ps.
 func RestartOllamaCommands(platform string) []string {
-	return []string{
-		OllamaServiceCommandStop,
-		RestartSettleCommand(platform),
-		OllamaServiceCommandPS,
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case "windows":
+		return []string{
+			OllamaServiceCommandStop,
+			RestartSettleCommand("windows"),
+			OllamaWindowsKillCommand,
+			RestartPostKillSettleCommand("windows"),
+			OllamaWindowsStartCommand,
+			OllamaRestartReadySettleCommand("windows"),
+			OllamaServiceCommandPS,
+		}
+	default:
+		return []string{
+			OllamaServiceCommandStop,
+			RestartSettleCommand(platform),
+			RestartOllamaDaemonCommand(platform),
+			OllamaRestartReadySettleCommand(platform),
+			OllamaServiceCommandPS,
+		}
+	}
+}
+
+// RestartOllamaDaemonCommand restarts the Ollama daemon on Unix provider
+// hosts. systemctl is preferred when available; otherwise the process is
+// recycled and serve is launched in the background.
+func RestartOllamaDaemonCommand(platform string) string {
+	_ = platform
+	return `sh -c 'systemctl restart ollama 2>/dev/null || { pkill -x ollama 2>/dev/null; sleep 2; nohup ollama serve >/dev/null 2>&1 &; }'`
+}
+
+// RestartPostKillSettleCommand waits briefly after the daemon is stopped so
+// provider ports and GPU contexts can drain before restart.
+func RestartPostKillSettleCommand(platform string) string {
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case "windows":
+		return "cmd.exe /C timeout /t 3 /nobreak"
+	default:
+		return "sleep 3"
+	}
+}
+
+// OllamaRestartReadySettleCommand waits for the restarted daemon to accept RPCs.
+func OllamaRestartReadySettleCommand(platform string) string {
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case "windows":
+		return "cmd.exe /C timeout /t 8 /nobreak"
+	default:
+		return "sleep 8"
+	}
+}
+
+// ToleratedOllamaRestartExitCode reports whether a non-zero return code from
+// one restart lifecycle command can be ignored.
+func ToleratedOllamaRestartExitCode(command string, returnCode int32) bool {
+	if returnCode == 0 {
+		return true
+	}
+	switch strings.TrimSpace(command) {
+	case OllamaWindowsKillCommand:
+		// taskkill: process not found (already stopped).
+		return returnCode == 128
+	case OllamaWindowsStartCommand:
+		// start: daemon may already be running after tray auto-restart.
+		return returnCode == 1
+	default:
+		return false
 	}
 }
 

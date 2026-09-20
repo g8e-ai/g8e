@@ -44,15 +44,32 @@ type OllamaServiceDispatcher interface {
 	DispatchOllamaServiceCommand(context.Context, OllamaServiceDispatchRequest) (*OllamaServiceDispatchResult, error)
 }
 
-// RestartOllamaViaObserver stops loaded models, settles, and ps-checks the
-// local Ollama provider on the provider host through the enrolled observer
-// operator. The observer must have started with --ollama; otherwise this
-// returns immediately without dispatching.
-func RestartOllamaViaObserver(ctx context.Context, observer *ProviderBoundaryObserverStatus, dispatcher OllamaServiceDispatcher, runID string, newID func(string) string) error {
-	if observer == nil || dispatcher == nil || newID == nil || !observer.OllamaEnabled {
-		return nil
+// OllamaRestartOutcome summarizes whether a governed provider restart ran.
+type OllamaRestartOutcome struct {
+	Performed         bool
+	SkipReason        string
+	ObserverSessionID string
+	Platform          string
+	CommandCount      int
+}
+
+// RestartOllamaViaObserver gracefully restarts the local Ollama provider on the
+// provider host through the enrolled observer operator. The observer must have
+// started with --ollama; otherwise this returns immediately without dispatching.
+func RestartOllamaViaObserver(ctx context.Context, observer *ProviderBoundaryObserverStatus, dispatcher OllamaServiceDispatcher, runID string, newID func(string) string) (OllamaRestartOutcome, error) {
+	outcome := OllamaRestartOutcome{}
+	if observer == nil || dispatcher == nil || newID == nil {
+		outcome.SkipReason = "missing observer or dispatcher"
+		return outcome, nil
+	}
+	outcome.ObserverSessionID = observer.OperatorSessionID
+	outcome.Platform = observer.Platform
+	if !observer.OllamaEnabled {
+		outcome.SkipReason = "observer did not opt in with --ollama"
+		return outcome, nil
 	}
 	commands := operatorcapability.RestartOllamaCommands(observer.Platform)
+	outcome.CommandCount = len(commands)
 	for index, command := range commands {
 		result, err := dispatcher.DispatchOllamaServiceCommand(ctx, OllamaServiceDispatchRequest{
 			ObserverSessionID: observer.OperatorSessionID,
@@ -63,13 +80,14 @@ func RestartOllamaViaObserver(ctx context.Context, observer *ProviderBoundaryObs
 			TaskID:            newID("ollama-step"),
 		})
 		if err != nil {
-			return fmt.Errorf("evaluation: ollama service restart: %w", err)
+			return outcome, fmt.Errorf("evaluation: ollama service restart: %w", err)
 		}
 		if err := validateOllamaServiceDispatchResult(command, result); err != nil {
-			return err
+			return outcome, err
 		}
 	}
-	return nil
+	outcome.Performed = true
+	return outcome, nil
 }
 
 func validateOllamaServiceDispatchResult(command string, result *OllamaServiceDispatchResult) error {
@@ -85,8 +103,15 @@ func validateOllamaServiceDispatchResult(command string, result *OllamaServiceDi
 	if result.Result.GetStatus() != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
 		return fmt.Errorf("%w: ollama service command %q failed: %s", constants.ErrEvaluationDispatchFailed, command, result.Result.GetError())
 	}
-	if command == operatorcapability.OllamaServiceCommandPS && result.Result.GetReturnCode() != 0 {
-		return fmt.Errorf("%w: ollama ps exited with code %d", constants.ErrEvaluationDispatchFailed, result.Result.GetReturnCode())
+	returnCode := result.Result.GetReturnCode()
+	if operatorcapability.ToleratedOllamaRestartExitCode(command, returnCode) {
+		return nil
+	}
+	if command == operatorcapability.OllamaServiceCommandPS && returnCode != 0 {
+		return fmt.Errorf("%w: ollama ps exited with code %d", constants.ErrEvaluationDispatchFailed, returnCode)
+	}
+	if returnCode != 0 {
+		return fmt.Errorf("%w: ollama service command %q exited with code %d", constants.ErrEvaluationDispatchFailed, command, returnCode)
 	}
 	return nil
 }

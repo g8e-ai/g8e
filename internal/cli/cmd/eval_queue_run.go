@@ -152,6 +152,7 @@ Examples:
 						Tag:       entry.ServedModelTag,
 						Error:     runErr.Error(),
 					})
+					_, _ = fmt.Fprintf(teeErr, "Error: %v\n", runErr)
 					_, _ = fmt.Fprintf(stdout, "FAIL %s (%s) — see %s\n", entry.VariantID, entry.ServedModelTag, modelLogPath)
 					if closeErr != nil {
 						_, _ = fmt.Fprintf(stderr, "warning: close log file: %v\n", closeErr)

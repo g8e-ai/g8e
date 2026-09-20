@@ -31,7 +31,7 @@ Alternatively, running `make setup` from the `ensemble/` directory installs the 
 
 ## g8e Package Dependency
 
-g8ee depends on the `g8e` Python package as the single source of truth for protocol constants, enums, and models. In this repository, `protocol/python/` publishes `g8e` 2.1.8 and `ensemble/pyproject.toml` resolves it through `[tool.uv.sources]` to `../protocol/python`. In container builds, the Dockerfile installs `protocol/python/` before `ensemble/` so dependencies resolve to the local in-tree package without requiring external PyPI distribution.
+g8ee depends on the `g8e` Python package as the single source of truth for protocol constants, enums, and models. In this repository, the version in `protocol/python/` follows the root `VERSION` file, and `ensemble/pyproject.toml` resolves the package through `[tool.uv.sources]` to `../protocol/python`. In container builds, the Dockerfile installs `protocol/python/` before `ensemble/` so dependencies resolve to the local in-tree package without requiring external PyPI distribution.
 
 ## Model Hierarchy
 
