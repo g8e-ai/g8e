@@ -44,17 +44,13 @@ func TestValidateOllamaServiceCommand(t *testing.T) {
 
 func TestRestartOllamaCommands(t *testing.T) {
 	assert.Equal(t, []string{
-		OllamaServiceCommandStop,
-		"cmd.exe /C timeout /t 5 /nobreak",
 		OllamaWindowsKillCommand,
-		"cmd.exe /C timeout /t 3 /nobreak",
+		"cmd.exe /C %SystemRoot%/System32/timeout.exe /t 3 /nobreak",
 		OllamaWindowsStartCommand,
-		"cmd.exe /C timeout /t 8 /nobreak",
+		"cmd.exe /C %SystemRoot%/System32/timeout.exe /t 8 /nobreak",
 		OllamaServiceCommandPS,
 	}, RestartOllamaCommands("windows"))
 	assert.Equal(t, []string{
-		OllamaServiceCommandStop,
-		"sleep 5",
 		RestartOllamaDaemonCommand("linux"),
 		"sleep 8",
 		OllamaServiceCommandPS,
@@ -63,8 +59,9 @@ func TestRestartOllamaCommands(t *testing.T) {
 
 func TestRestartSettleCommand(t *testing.T) {
 	windowsSettle := RestartSettleCommand("windows")
-	assert.Equal(t, "cmd.exe /C timeout /t 5 /nobreak", windowsSettle)
+	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/timeout.exe /t 5 /nobreak", windowsSettle)
 	assert.False(t, security.IsShellRequired(windowsSettle), "windows settle must run without a POSIX shell")
+	assert.False(t, security.IsShellRequired(OllamaWindowsKillCommand), "windows kill must run without a POSIX shell")
 
 	assert.Equal(t, "sleep 5", RestartSettleCommand("linux"))
 }

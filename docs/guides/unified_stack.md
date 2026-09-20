@@ -294,7 +294,7 @@ In a dedicated working directory on the Windows provider host:
 
 The process submits a platform enrollment request. **Do not** pass `--inference-enabled`; this Operator is read-only hardware observation only.
 
-**`--ollama` (optional, provider-host owner decision):** opts this Observer session into remote Ollama CLI commands (`ollama stop`, `ollama serve`, `ollama ps`) on the machine where the operator runs. The flag is recorded in `runtime_config.provider_boundary_observer_ollama_enabled` at bootstrap. The gateway and operator both reject those commands when the session was **not** started with `--ollama`. Omit `--ollama` when you do not want the campaign host to manage Ollama remotely.
+**`--ollama` (optional, provider-host owner decision):** opts this Observer session into governed Ollama daemon reset and status commands on the machine where the operator runs. The flag is recorded in `runtime_config.provider_boundary_observer_ollama_enabled` at bootstrap. The gateway and operator reject Ollama service commands when the session was **not** started with `--ollama`. Omit `--ollama` when you do not want the campaign host to manage Ollama remotely.
 
 From the campaign host owner CLI:
 
@@ -312,7 +312,7 @@ After approval, confirm the observer appears in `./g8e operator list` with `prov
 3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
 4. Gateway ingests windows for `g8e eval campaign verify --require-provider-observation`.
 
-When enrolled with `--ollama`, `g8e eval campaign execute` also dispatches a governed reset sequence to the Observer **before each assignment**. On Unix it runs `ollama stop`, `sleep 5`, a `systemctl restart ollama` command with a process/`ollama serve` fallback, `sleep 8`, and `ollama ps`. On Windows it runs `ollama stop`, `timeout /t 5`, `taskkill /IM ollama.exe /F`, `timeout /t 3`, `start /B ollama serve`, `timeout /t 8`, and `ollama ps`. This is separate from `--wait-for-provider-idle`, which still polls the remote HTTP `/api/ps` endpoint from the campaign host.
+When enrolled with `--ollama`, `g8e eval campaign execute` also dispatches a governed reset sequence to the Observer **before each assignment**. On Unix it runs a `systemctl restart ollama` command with a process/`ollama serve` fallback, `sleep 8`, and `ollama ps`. On Windows it runs `%SystemRoot%/System32/taskkill.exe /IM ollama.exe /F`, `%SystemRoot%/System32/timeout.exe /t 3`, `start /B ollama serve`, `%SystemRoot%/System32/timeout.exe /t 8`, and `ollama ps`. The sequence does not use `ollama stop`, which requires a model name and unloads that model rather than stopping the daemon. This is separate from `--wait-for-provider-idle`, which still polls the remote HTTP `/api/ps` endpoint from the campaign host.
 
 The legacy filesystem runner `g8e eval dev provider-observer run` is for co-located dev tests only. Production uses the enrolled Observer Operator.
 
@@ -518,7 +518,7 @@ docker compose --profile evaluation up -d --force-recreate g8e-inference-operato
 
 - Confirm the Observer was started with `--ollama` and `./g8e operator list --json` shows `provider_boundary_observer_ollama_enabled: true`.
 - Restart the Observer process with `--ollama` and re-enroll if runtime config is stale.
-- Without `--ollama`, the gateway and operator reject remote `ollama stop` / `ollama serve` / `ollama ps` commands by design.
+- Without `--ollama`, the gateway and operator reject governed Ollama service commands by design.
 
 ### Public feed drift or out-of-order batches
 

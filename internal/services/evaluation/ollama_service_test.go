@@ -46,15 +46,13 @@ func TestRestartOllamaViaObserver_DispatchesLifecycleSequence(t *testing.T) {
 	outcome, err := RestartOllamaViaObserver(t.Context(), observer, dispatcher, "run-1", func(prefix string) string { return prefix + "-id" })
 	require.NoError(t, err)
 	assert.True(t, outcome.Performed)
-	assert.Equal(t, 7, outcome.CommandCount)
-	require.Len(t, dispatcher.requests, 7)
-	assert.Equal(t, operatorcapability.OllamaServiceCommandStop, dispatcher.requests[0].Command)
-	assert.Equal(t, operatorcapability.RestartSettleCommand("windows"), dispatcher.requests[1].Command)
-	assert.Equal(t, operatorcapability.OllamaWindowsKillCommand, dispatcher.requests[2].Command)
-	assert.Equal(t, operatorcapability.RestartPostKillSettleCommand("windows"), dispatcher.requests[3].Command)
-	assert.Equal(t, operatorcapability.OllamaWindowsStartCommand, dispatcher.requests[4].Command)
-	assert.Equal(t, operatorcapability.OllamaRestartReadySettleCommand("windows"), dispatcher.requests[5].Command)
-	assert.Equal(t, operatorcapability.OllamaServiceCommandPS, dispatcher.requests[6].Command)
+	assert.Equal(t, 5, outcome.CommandCount)
+	require.Len(t, dispatcher.requests, 5)
+	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/taskkill.exe /IM ollama.exe /F", dispatcher.requests[0].Command)
+	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/timeout.exe /t 3 /nobreak", dispatcher.requests[1].Command)
+	assert.Equal(t, operatorcapability.OllamaWindowsStartCommand, dispatcher.requests[2].Command)
+	assert.Equal(t, operatorcapability.OllamaRestartReadySettleCommand("windows"), dispatcher.requests[3].Command)
+	assert.Equal(t, operatorcapability.OllamaServiceCommandPS, dispatcher.requests[4].Command)
 }
 
 func operatorv1CompletedCommandResult() *operatorv1.CommandResult {

@@ -1,0 +1,241 @@
+{
+  "schema_version": "1.4.0",
+  "enums": {
+    "QualityState": [
+      "verified_public",
+      "exploratory_verified",
+      "exploratory_partial",
+      "live_in_progress",
+      "terminal_failed",
+      "dead_evidence",
+      "not_evaluated",
+      "unavailable"
+    ],
+    "DatasetKind": [
+      "exploratory_baseline",
+      "verified_public_snapshot",
+      "live_run"
+    ],
+    "ModelRole": [
+      "primary",
+      "assistant",
+      "lite"
+    ],
+    "ScenarioCategory": [
+      "instruction_adherence",
+      "tool_selection",
+      "tool_arguments",
+      "technical_analysis",
+      "routing_delegation",
+      "verification",
+      "security_policy",
+      "recovery",
+      "final_response"
+    ],
+    "EvaluationUnit": [
+      "model",
+      "system"
+    ],
+    "EnvironmentSource": [
+      "declared",
+      "observed"
+    ],
+    "EscalationDisposition": [
+      "correct_autonomous_completion",
+      "correct_escalation",
+      "false_escalation",
+      "missed_escalation"
+    ],
+    "ToolScoreDimension": [
+      "tool_recognition",
+      "tool_selection",
+      "argument_schema",
+      "argument_semantics",
+      "permission_compliance",
+      "result_interpretation",
+      "follow_up_decision",
+      "unnecessary_tool_calls",
+      "looping",
+      "recovery"
+    ],
+    "SecurityPrivacyEvent": [
+      "sensitive_data_present",
+      "sensitive_data_required",
+      "sensitive_data_sent_externally",
+      "unnecessary_data_sent_externally",
+      "policy_prevented_disclosure",
+      "model_attempted_unauthorized_access",
+      "tool_attempted_unauthorized_operation",
+      "authorization_correctly_enforced",
+      "audit_record_complete",
+      "audit_record_tampered",
+      "secret_redaction_successful"
+    ],
+    "TerminalStatus": [
+      "completed",
+      "model_failed",
+      "grader_failed",
+      "invalid_evidence",
+      "stopped"
+    ],
+    "LifecycleStatus": [
+      "queued",
+      "running",
+      "completed",
+      "failed",
+      "stopped"
+    ],
+    "RepeatabilityClass": [
+      "consistently_correct",
+      "consistently_wrong",
+      "inconsistent",
+      "insufficient"
+    ],
+    "VerifierState": [
+      "passed",
+      "failed",
+      "not_applicable"
+    ],
+    "NativePosture": [
+      "doctrine",
+      "consensus",
+      "ratify",
+      "notary"
+    ],
+    "NativeLane": [
+      "platform"
+    ],
+    "NativeResultStatus": [
+      "pass",
+      "fail",
+      "unavailable",
+      "unsupported",
+      "invalid_evidence"
+    ],
+    "NativeScenarioStatus": [
+      "completed",
+      "rejected",
+      "failed",
+      "unavailable",
+      "unsupported",
+      "invalid_evidence"
+    ],
+    "NativeMetricUnit": [
+      "count",
+      "ratio"
+    ],
+    "SnapshotKind": [
+      "catalog_snapshot",
+      "model_summary",
+      "suite_summary",
+      "evaluation_summary",
+      "assignment_result",
+      "methodology_snapshot"
+    ],
+    "LiveEventKind": [
+      "evaluation_queued",
+      "evaluation_started",
+      "assignment_started",
+      "stage_updated",
+      "assignment_completed",
+      "assignment_failed",
+      "metric_updated",
+      "evaluation_completed",
+      "evaluation_failed",
+      "evaluation_stopped"
+    ],
+    "FeedRecordType": [
+      "projection",
+      "event",
+      "proof_manifest",
+      "key_revocation"
+    ],
+    "FreshnessState": [
+      "active",
+      "delayed",
+      "stale",
+      "intentionally_stopped",
+      "safety_stopped",
+      "source_offline"
+    ],
+    "ActivityAvailability": [
+      "observed",
+      "unavailable",
+      "not_applicable"
+    ],
+    "PublicUnavailableReason": [
+      "historical_not_captured",
+      "source_not_captured",
+      "source_unavailable",
+      "scenario_not_applicable",
+      "incomplete_contributor_evidence",
+      "no_scored_calls"
+    ],
+    "PublicGradeExplanationCode": [
+      "criterion_passed",
+      "criterion_failed",
+      "evidence_unavailable",
+      "unsupported",
+      "invalid_evidence",
+      "grader_unavailable"
+    ],
+    "PublicFinishState": [
+      "stop",
+      "length",
+      "tool_call",
+      "error",
+      "unavailable"
+    ],
+    "PublicLoadState": [
+      "cold",
+      "warm",
+      "unavailable"
+    ],
+    "PublicEvidenceKind": [
+      "campaign_profile",
+      "model_registry",
+      "verification_report",
+      "evaluation_projection",
+      "comparison_row",
+      "efficiency_observation",
+      "statistical_analysis",
+      "source_manifest"
+    ],
+    "PublicActivityEvidenceSource": [
+      "application_reported",
+      "bound_public_proof"
+    ],
+    "PublicUsageAvailability": [
+      "reported",
+      "unavailable"
+    ],
+    "PublicToolOutcome": [
+      "allow",
+      "deny",
+      "refused"
+    ],
+    "PublicToolExecutionOutcome": [
+      "pass",
+      "fail",
+      "unavailable",
+      "unsupported",
+      "invalid_evidence"
+    ],
+    "PublicSemanticOutcome": [
+      "pass",
+      "fail",
+      "unavailable",
+      "unsupported",
+      "invalid_evidence"
+    ],
+    "PublicReportedPolicyOutcome": [
+      "allow",
+      "deny",
+      "refused"
+    ],
+    "PublicReceiptStatus": [
+      "unavailable",
+      "reported"
+    ]
+  }
+}

@@ -195,10 +195,14 @@ describe('history backfill', () => {
         scenario_id: 'instruction-exact-format',
         lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
         summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+        result_digest: '0'.repeat(64),
+        verification_status: 'unverified',
         completed_at: '2026-09-16T14:00:05Z',
       },
     };
     const recent = [
+      snapshotRecord(resultEnvelope, 3),
+      snapshotRecord(queuedEnvelope, 2),
       snapshotRecord(
         {
           schema_version: '1.3.0',
@@ -228,8 +232,6 @@ describe('history backfill', () => {
         },
         1,
       ),
-      snapshotRecord(queuedEnvelope, 2),
-      snapshotRecord(resultEnvelope, 3),
     ];
     const snapshot: FeedSnapshot = { ...SNAP, high_water_sequence: 3, batch_count: 1 };
 
@@ -280,7 +282,7 @@ describe('history backfill', () => {
             run_id: runId,
             scenario_id: 'instruction-exact-format',
             lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
-            observed_at: `2026-09-17T10:${String(sequence).padStart(2, '0')}:00Z`,
+            observed_at: new Date(Date.UTC(2026, 8, 17, 10, sequence)).toISOString(),
           },
         },
         sequence,

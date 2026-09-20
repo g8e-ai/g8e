@@ -511,8 +511,12 @@ function assertPublicStringArray(value: unknown, path: string, maxItems: number,
   assert(value.length <= maxItems, path, `expected at most ${maxItems} entries`);
   for (let index = 0; index < value.length; index++) {
     assertString(value[index], `${path}[${index}]`);
-    assert(new TextEncoder().encode(value[index]).byteLength <= maxBytes, `${path}[${index}]`, `expected at most ${maxBytes} UTF-8 bytes`);
-    assert(!/[\u0000-\u001f\u007f]/u.test(value[index]), `${path}[${index}]`, 'control characters are not allowed');
+    const item = value[index] as string;
+    assert(new TextEncoder().encode(item).byteLength <= maxBytes, `${path}[${index}]`, `expected at most ${maxBytes} UTF-8 bytes`);
+    assert(!Array.from(item).some((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return codePoint <= 0x1f || codePoint === 0x7f;
+    }), `${path}[${index}]`, 'control characters are not allowed');
   }
 }
 

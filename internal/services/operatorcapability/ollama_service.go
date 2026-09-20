@@ -21,7 +21,7 @@ const (
 	OllamaServiceCommandPS    = "ollama ps"
 
 	// OllamaWindowsKillCommand stops the Ollama daemon on Windows provider hosts.
-	OllamaWindowsKillCommand = "cmd.exe /C taskkill /IM ollama.exe /F"
+	OllamaWindowsKillCommand = "cmd.exe /C %SystemRoot%/System32/taskkill.exe /IM ollama.exe /F"
 	// OllamaWindowsStartCommand starts the Ollama daemon in the background.
 	OllamaWindowsStartCommand = "cmd.exe /C start /B ollama serve"
 )
@@ -40,14 +40,12 @@ func IsOllamaServiceCommand(command string) bool {
 
 // RestartOllamaCommands returns the governed command sequence dispatched
 // before each campaign assignment when the observer started with --ollama.
-// The sequence unloads models, stops the daemon, starts it again, waits for
-// readiness, and confirms the provider is quiescent with ollama ps.
+// The sequence stops the daemon, starts it again, waits for readiness, and
+// confirms the provider is quiescent with ollama ps.
 func RestartOllamaCommands(platform string) []string {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case "windows":
 		return []string{
-			OllamaServiceCommandStop,
-			RestartSettleCommand("windows"),
 			OllamaWindowsKillCommand,
 			RestartPostKillSettleCommand("windows"),
 			OllamaWindowsStartCommand,
@@ -56,8 +54,6 @@ func RestartOllamaCommands(platform string) []string {
 		}
 	default:
 		return []string{
-			OllamaServiceCommandStop,
-			RestartSettleCommand(platform),
 			RestartOllamaDaemonCommand(platform),
 			OllamaRestartReadySettleCommand(platform),
 			OllamaServiceCommandPS,
@@ -78,7 +74,7 @@ func RestartOllamaDaemonCommand(platform string) string {
 func RestartPostKillSettleCommand(platform string) string {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case "windows":
-		return "cmd.exe /C timeout /t 3 /nobreak"
+		return "cmd.exe /C %SystemRoot%/System32/timeout.exe /t 3 /nobreak"
 	default:
 		return "sleep 3"
 	}
@@ -88,7 +84,7 @@ func RestartPostKillSettleCommand(platform string) string {
 func OllamaRestartReadySettleCommand(platform string) string {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case "windows":
-		return "cmd.exe /C timeout /t 8 /nobreak"
+		return "cmd.exe /C %SystemRoot%/System32/timeout.exe /t 8 /nobreak"
 	default:
 		return "sleep 8"
 	}
@@ -138,7 +134,7 @@ func ValidateOllamaServiceCommand(cfg *models.RuntimeConfig, command string) err
 func RestartSettleCommand(platform string) string {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case "windows":
-		return "cmd.exe /C timeout /t 5 /nobreak"
+		return "cmd.exe /C %SystemRoot%/System32/timeout.exe /t 5 /nobreak"
 	default:
 		return "sleep 5"
 	}
