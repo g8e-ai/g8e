@@ -67,6 +67,22 @@ describe('campaign projection wire contract', () => {
     expect(decodeCampaignProjectionEnvelope(fixtureCampaignResultEnvelope)).toEqual(fixtureCampaignResultEnvelope);
   });
 
+  it('accepts protojson null for empty benchmark unavailable reasons', () => {
+    const record = fixtureCampaignResultEnvelope.record as CampaignResultRecord;
+    expect(() =>
+      decodeCampaignProjectionEnvelope({
+        ...fixtureCampaignResultEnvelope,
+        record: {
+          ...record,
+          benchmark_observations: {
+            ...record.benchmark_observations,
+            unavailable_reasons: null,
+          },
+        },
+      }),
+    ).not.toThrow();
+  });
+
   it('rejects enriched fields on historical result envelopes', () => {
     const enriched = fixtureCampaignResultEnvelope.record as CampaignResultRecord;
     expect(() =>
@@ -145,5 +161,29 @@ describe('campaign projection wire contract', () => {
   it('provides a non-throwing predicate for malformed input', () => {
     expect(isCampaignProjectionEnvelope(fixtureCampaignResultEnvelope)).toBe(true);
     expect(isCampaignProjectionEnvelope({ ...historicalResultEnvelope, record: { ...historicalResultEnvelope.record, result_digest: 'bad' } })).toBe(false);
+  });
+
+  it('accepts canonical wire unavailable reasons for tool scorecards and resource summaries', () => {
+    const record = fixtureCampaignResultEnvelope.record as CampaignResultRecord;
+    const observations = record.benchmark_observations ?? {};
+    expect(() =>
+      decodeCampaignProjectionEnvelope({
+        ...fixtureCampaignResultEnvelope,
+        record: {
+          ...record,
+          benchmark_observations: {
+            ...observations,
+            tool_scorecard: {
+              ...(observations.tool_scorecard ?? {}),
+              argument_schema: { unavailable_reason: 'scenario_not_applicable' },
+            },
+          },
+          resource_summary: {
+            ...record.resource_summary,
+            cache_tokens: { unavailable_reason: 'no_scored_calls' },
+          },
+        },
+      }),
+    ).not.toThrow();
   });
 });

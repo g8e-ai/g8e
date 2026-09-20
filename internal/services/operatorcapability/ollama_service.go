@@ -23,7 +23,7 @@ const (
 	// OllamaWindowsKillCommand stops the Ollama daemon on Windows provider hosts.
 	OllamaWindowsKillCommand = "cmd.exe /C %SystemRoot%/System32/taskkill.exe /IM ollama.exe /F"
 	// OllamaWindowsStartCommand starts the Ollama daemon in the background.
-	OllamaWindowsStartCommand = "cmd.exe /C start /B ollama serve"
+	OllamaWindowsStartCommand = "cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Process -FilePath %LOCALAPPDATA%/Programs/Ollama/ollama.exe -ArgumentList serve -WindowStyle Hidden"
 )
 
 // IsOllamaServiceCommand reports whether command is a governed Ollama CLI
@@ -74,7 +74,7 @@ func RestartOllamaDaemonCommand(platform string) string {
 func RestartPostKillSettleCommand(platform string) string {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case "windows":
-		return "cmd.exe /C %SystemRoot%/System32/timeout.exe /t 3 /nobreak"
+		return "cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 3"
 	default:
 		return "sleep 3"
 	}
@@ -84,7 +84,7 @@ func RestartPostKillSettleCommand(platform string) string {
 func OllamaRestartReadySettleCommand(platform string) string {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case "windows":
-		return "cmd.exe /C %SystemRoot%/System32/timeout.exe /t 8 /nobreak"
+		return "cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 8"
 	default:
 		return "sleep 8"
 	}
@@ -134,7 +134,7 @@ func ValidateOllamaServiceCommand(cfg *models.RuntimeConfig, command string) err
 func RestartSettleCommand(platform string) string {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case "windows":
-		return "cmd.exe /C %SystemRoot%/System32/timeout.exe /t 5 /nobreak"
+		return "cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 5"
 	default:
 		return "sleep 5"
 	}

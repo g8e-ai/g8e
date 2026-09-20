@@ -61,6 +61,12 @@ const UNAVAILABLE_REASONS = [
   'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE',
   'PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE',
   'PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS',
+  'historical_not_captured',
+  'source_not_captured',
+  'source_unavailable',
+  'scenario_not_applicable',
+  'incomplete_contributor_evidence',
+  'no_scored_calls',
 ] as const;
 const FINISH_STATES = [
   'PUBLIC_FINISH_STATE_STOP',
@@ -483,7 +489,14 @@ function assertActivityFamily(value: unknown, path: string, recordCheck: (value:
     assert(value.unavailable_reason === undefined, `${path}.unavailable_reason`, 'observed activity cannot have unavailable_reason');
   } else {
     assertEnum(value.unavailable_reason, UNAVAILABLE_REASONS, `${path}.unavailable_reason`);
-    if (value.availability === 'PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE') assert(value.unavailable_reason === 'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE', `${path}.unavailable_reason`, 'not_applicable activity requires scenario_not_applicable');
+    if (value.availability === 'PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE') {
+      assert(
+        value.unavailable_reason === 'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE' ||
+          value.unavailable_reason === 'scenario_not_applicable',
+        `${path}.unavailable_reason`,
+        'not_applicable activity requires scenario_not_applicable',
+      );
+    }
   }
   assert(Array.isArray(value.records), `${path}.records`, 'expected array');
   assert(value.records.length <= 128, `${path}.records`, 'expected at most 128 entries');
@@ -621,7 +634,7 @@ function assertBenchmarkObservations(value: unknown, path: string): void {
     rejectUnknown(value[family], fields, `${path}.${family}`);
     for (const [key, metric] of Object.entries(value[family])) assertMetric(metric, `${path}.${family}.${key}`);
   }
-  if (value.unavailable_reasons !== undefined) assertStringArray(value.unavailable_reasons, `${path}.unavailable_reasons`, 16, 512);
+  if (value.unavailable_reasons !== undefined && value.unavailable_reasons !== null) assertStringArray(value.unavailable_reasons, `${path}.unavailable_reasons`, 16, 512);
 }
 
 function assertExtensions(value: Record<string, unknown>, path: string): void {

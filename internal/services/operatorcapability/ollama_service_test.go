@@ -43,11 +43,12 @@ func TestValidateOllamaServiceCommand(t *testing.T) {
 }
 
 func TestRestartOllamaCommands(t *testing.T) {
+	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Process -FilePath %LOCALAPPDATA%/Programs/Ollama/ollama.exe -ArgumentList serve -WindowStyle Hidden", OllamaWindowsStartCommand)
 	assert.Equal(t, []string{
 		OllamaWindowsKillCommand,
-		"cmd.exe /C %SystemRoot%/System32/timeout.exe /t 3 /nobreak",
+		"cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 3",
 		OllamaWindowsStartCommand,
-		"cmd.exe /C %SystemRoot%/System32/timeout.exe /t 8 /nobreak",
+		"cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 8",
 		OllamaServiceCommandPS,
 	}, RestartOllamaCommands("windows"))
 	assert.Equal(t, []string{
@@ -59,7 +60,7 @@ func TestRestartOllamaCommands(t *testing.T) {
 
 func TestRestartSettleCommand(t *testing.T) {
 	windowsSettle := RestartSettleCommand("windows")
-	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/timeout.exe /t 5 /nobreak", windowsSettle)
+	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 5", windowsSettle)
 	assert.False(t, security.IsShellRequired(windowsSettle), "windows settle must run without a POSIX shell")
 	assert.False(t, security.IsShellRequired(OllamaWindowsKillCommand), "windows kill must run without a POSIX shell")
 

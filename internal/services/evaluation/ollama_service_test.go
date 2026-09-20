@@ -49,7 +49,7 @@ func TestRestartOllamaViaObserver_DispatchesLifecycleSequence(t *testing.T) {
 	assert.Equal(t, 5, outcome.CommandCount)
 	require.Len(t, dispatcher.requests, 5)
 	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/taskkill.exe /IM ollama.exe /F", dispatcher.requests[0].Command)
-	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/timeout.exe /t 3 /nobreak", dispatcher.requests[1].Command)
+	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 3", dispatcher.requests[1].Command)
 	assert.Equal(t, operatorcapability.OllamaWindowsStartCommand, dispatcher.requests[2].Command)
 	assert.Equal(t, operatorcapability.OllamaRestartReadySettleCommand("windows"), dispatcher.requests[3].Command)
 	assert.Equal(t, operatorcapability.OllamaServiceCommandPS, dispatcher.requests[4].Command)

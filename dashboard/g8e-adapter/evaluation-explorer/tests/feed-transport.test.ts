@@ -40,7 +40,7 @@ function historyItem(record: object, sequence: number, recordType: string = 'pro
 
 /** Build a /bootstrap recent_projections item: decoded payload + merged `sequence`. */
 function bootstrapItem(record: object, sequence: number): object {
-  return { ...record, sequence };
+  return { ...record, sequence, record_type: 'projection' };
 }
 
 const nativeEvaluation = {
@@ -104,6 +104,7 @@ describe('normalizeRecentProjection', () => {
     const decoded = JSON.parse(record.record_bytes);
     expect(decoded.kind).toBe('catalog_snapshot');
     expect('sequence' in decoded).toBe(false);
+    expect('record_type' in decoded).toBe(false);
   });
 
   it('rejects non-object input', () => {
