@@ -6,7 +6,7 @@ parent: Architecture
 # Ensemble (g8ee)
 
 Last Updated: 2026-09-18
-Version: v2.1.8
+Version: v2.1.9
 
 ## Scope
 

@@ -5,7 +5,7 @@ title: SSE Streaming
 # SSE Streaming
 
 Last Updated: 2026-09-18
-Version: v2.1.8
+Version: v2.1.9
 
 The Governance Gateway provides a Server-Sent Events (SSE) bridge for session-targeted application telemetry and platform workflow notifications. App workloads publish events over authenticated HTTPS, and browser, CLI, Operator, and test clients consume a session-scoped event history by polling or by opening a live stream. The Gateway also publishes completion events for passkey enrollment and L3 approval without calling its public push endpoint.
 

@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
 Last Updated: 2026-09-18
-Version: v2.1.8
+Version: v2.1.9
 
 This guide covers building the shared Gateway/Operator image, running a gateway-only container, and managing the repository's Docker Compose deployments. For the complete four-service product workflow, see the [Unified Docker Stack Guide](./unified_stack.md).
 
