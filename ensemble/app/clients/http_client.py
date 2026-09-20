@@ -443,6 +443,7 @@ class HTTPClient:
         context: G8eHttpContext | None = None,
         params: QueryParams | None = None,
         retry_config: RetryConfig | None = None,
+        timeout: float | None = None,
     ) -> AiohttpResponse:
         """
         Make an HTTP request with automatic retry and circuit breaking.
@@ -504,11 +505,18 @@ class HTTPClient:
         retry_count = 0
         effective_retry = retry_config or self.retry_config
         session = await self._get_http_session()
+        request_timeout = (
+            aiohttp.ClientTimeout(total=timeout) if timeout is not None else None
+        )
 
         while True:
             try:
                 async with session.request(
-                    method, final_url, headers=request_headers, **request_kwargs
+                    method,
+                    final_url,
+                    headers=request_headers,
+                    timeout=request_timeout,
+                    **request_kwargs,
                 ) as response:
                     body = await response.read()
                     status = response.status
@@ -767,6 +775,7 @@ class HTTPClient:
         headers: dict[str, str] | None = None,
         context: G8eHttpContext | None = None,
         retry_config: RetryConfig | None = None,
+        timeout: float | None = None,
     ) -> AiohttpResponse:
         return await self.request(
             "POST",
@@ -775,6 +784,7 @@ class HTTPClient:
             json_data=json_data,
             context=context,
             retry_config=retry_config,
+            timeout=timeout,
         )
 
     async def get(
@@ -794,6 +804,7 @@ class HTTPClient:
         json_data: JSONPayload | None = None,
         context: G8eHttpContext | None = None,
         chunk_size: int = 8192,
+        timeout: float | None = None,
     ) -> AsyncIterator[bytes]:
         """Stream response content chunk-by-chunk without buffering the full body.
 
@@ -824,9 +835,16 @@ class HTTPClient:
             )
 
         session = await self._get_http_session()
+        request_timeout = (
+            aiohttp.ClientTimeout(total=timeout) if timeout is not None else None
+        )
         try:
             async with session.request(
-                method, final_url, headers=request_headers, **request_kwargs
+                method,
+                final_url,
+                headers=request_headers,
+                timeout=request_timeout,
+                **request_kwargs,
             ) as response:
                 if response.status >= 400:
                     body = await response.read()

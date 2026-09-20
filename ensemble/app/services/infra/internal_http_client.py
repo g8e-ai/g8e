@@ -22,6 +22,7 @@ from app.constants import (
     DEFAULT_MAX_RETRIES,
     G8EE_COMPONENT,
     GatewayAPIPaths,
+    INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
     InternalAPIPaths,
     UNKNOWN_ERROR_MESSAGE,
 )
@@ -499,6 +500,7 @@ class InternalHttpClient:
                     request,
                     preserving_proto_field_name=True,
                 ),
+                timeout=INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
             )
         except NetworkError:
             raise
@@ -549,6 +551,7 @@ class InternalHttpClient:
                     request,
                     preserving_proto_field_name=True,
                 ),
+                timeout=INFERENCE_DISPATCH_HTTP_TIMEOUT_SECONDS,
             ):
                 buffer += chunk.decode("utf-8")
                 while "\n" in buffer:
