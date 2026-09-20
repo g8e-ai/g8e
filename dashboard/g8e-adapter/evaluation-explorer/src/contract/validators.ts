@@ -152,9 +152,18 @@ export function normalizeVerifierFailureSummary(value: unknown): string | undefi
   return combined.length > 500 ? `${combined.slice(0, 497)}...` : combined;
 }
 
-function assertStringArray(value: unknown, path: string): asserts value is string[] {
+function assertStringArray(value: unknown, path: string, maxItems = 128, maxBytes = 512): asserts value is string[] {
   assert(Array.isArray(value), path, 'expected array');
-  for (let i = 0; i < value.length; i++) assertString(value[i], `${path}[${i}]`);
+  assert(value.length <= maxItems, path, `expected at most ${maxItems} entries`);
+  for (let i = 0; i < value.length; i++) {
+    const itemPath = `${path}[${i}]`;
+    assertString(value[i], itemPath);
+    assert(new TextEncoder().encode(value[i]).byteLength <= maxBytes, itemPath, `expected at most ${maxBytes} UTF-8 bytes`);
+    for (const character of value[i]) {
+      const code = character.codePointAt(0) ?? 0;
+      assert(code > 0x1f && code !== 0x7f, itemPath, 'control characters are not allowed');
+    }
+  }
 }
 
 /** Reject unknown fields on a record to prevent silent shape drift. */
@@ -194,8 +203,10 @@ function assertMetricValue(value: unknown, path: string): asserts value is Metri
   rejectUnknown(value, ['value', 'unavailable_reason'], path);
   assertOptional(value.value, `${path}.value`, assertNumber);
   assertOptional(value.unavailable_reason, `${path}.unavailable_reason`, assertString);
-  if (value.value === undefined && value.unavailable_reason === undefined) {
-    throw new ValidationError('metric requires value or unavailable_reason', path);
+  const hasValue = value.value !== undefined;
+  const hasReason = value.unavailable_reason !== undefined;
+  if (hasValue === hasReason) {
+    throw new ValidationError('metric requires exactly one value or unavailable_reason', path);
   }
 }
 
@@ -325,6 +336,7 @@ export function isCatalogSnapshot(value: unknown): asserts value is CatalogSnaps
 
 export function isModelSummary(value: unknown): asserts value is ModelSummary {
   assertObject(value, 'model_summary');
+  rejectUnknown(value, [...ENVELOPE_FIELDS, 'variant_id', 'display_name', 'served_model_tag', 'role', 'backend_provider_class', 'quantization_weight_class', 'inventory_only', 'evaluation_coverage', 'pass_rate', 'agreement_pairwise', 'agreement_all_five', 'repeatability', 'latency_p50_ms', 'latency_p95_ms', 'output_throughput_p50', 'output_throughput_p95', 'input_tokens', 'output_tokens', 'thinking_tokens', 'cache_tokens', 'terminal_outcomes', 'unavailable_reasons'], 'model_summary');
   assertEnvelope(value, 'model_summary', ['model_summary']);
   assertString(value.variant_id, 'model_summary.variant_id');
   assertString(value.display_name, 'model_summary.display_name');
@@ -334,6 +346,7 @@ export function isModelSummary(value: unknown): asserts value is ModelSummary {
   assertOptional(value.quantization_weight_class, 'model_summary.quantization_weight_class', assertString);
   assertBoolean(value.inventory_only, 'model_summary.inventory_only');
   assertNumber(value.evaluation_coverage, 'model_summary.evaluation_coverage');
+  assert(value.evaluation_coverage >= 0 && value.evaluation_coverage <= 1, 'model_summary.evaluation_coverage', 'must be between zero and one');
   assertOptionalConfidenceInterval(value.pass_rate, 'model_summary.pass_rate');
   assertOptionalMetricValue(value.agreement_pairwise, 'model_summary.agreement_pairwise');
   assertOptionalMetricValue(value.agreement_all_five, 'model_summary.agreement_all_five');
@@ -344,6 +357,9 @@ export function isModelSummary(value: unknown): asserts value is ModelSummary {
     assertInteger(value.repeatability.consistently_wrong, 'model_summary.repeatability.consistently_wrong');
     assertInteger(value.repeatability.inconsistent, 'model_summary.repeatability.inconsistent');
     assertInteger(value.repeatability.insufficient, 'model_summary.repeatability.insufficient');
+    for (const key of ['consistently_correct', 'consistently_wrong', 'inconsistent', 'insufficient']) {
+      assert((value.repeatability[key] as number) >= 0, `model_summary.repeatability.${key}`, 'must be >= 0');
+    }
   }
   assertOptionalMetricValue(value.latency_p50_ms, 'model_summary.latency_p50_ms');
   assertOptionalMetricValue(value.latency_p95_ms, 'model_summary.latency_p95_ms');
@@ -355,25 +371,32 @@ export function isModelSummary(value: unknown): asserts value is ModelSummary {
   assertOptionalMetricValue(value.cache_tokens, 'model_summary.cache_tokens');
   if (value.terminal_outcomes !== undefined) {
     assertObject(value.terminal_outcomes, 'model_summary.terminal_outcomes');
+    rejectUnknown(value.terminal_outcomes, TERMINAL_STATUSES, 'model_summary.terminal_outcomes');
+    for (const [key, count] of Object.entries(value.terminal_outcomes)) {
+      assertInteger(count, `model_summary.terminal_outcomes.${key}`);
+      assert(count >= 0, `model_summary.terminal_outcomes.${key}`, 'must be >= 0');
+    }
   }
-  if (value.unavailable_reasons !== undefined) {
-    assert(Array.isArray(value.unavailable_reasons), 'model_summary.unavailable_reasons', 'expected array');
-  }
+  if (value.unavailable_reasons !== undefined) assertStringArray(value.unavailable_reasons, 'model_summary.unavailable_reasons');
 }
 
 export function isSuiteSummary(value: unknown): asserts value is SuiteSummary {
   assertObject(value, 'suite_summary');
+  rejectUnknown(value, [...ENVELOPE_FIELDS, 'suite_id', 'display_name', 'task_count', 'assignment_count', 'status', 'verifier_state', 'verifier_failure_summary', 'model_coverage', 'metric_summaries', 'limitations'], 'suite_summary');
   assertEnvelope(value, 'suite_summary', ['suite_summary']);
   assertString(value.suite_id, 'suite_summary.suite_id');
   assertString(value.display_name, 'suite_summary.display_name');
   assertInteger(value.task_count, 'suite_summary.task_count');
+  assert(value.task_count >= 0, 'suite_summary.task_count', 'must be >= 0');
   assertInteger(value.assignment_count, 'suite_summary.assignment_count');
+  assert(value.assignment_count >= 0, 'suite_summary.assignment_count', 'must be >= 0');
   assertEnum(value.status, LIFECYCLE_STATUSES, 'suite_summary.status');
   assertEnum(value.verifier_state, VERIFIER_STATES, 'suite_summary.verifier_state');
   assertOptional(value.verifier_failure_summary, 'suite_summary.verifier_failure_summary', assertString);
-  assert(Array.isArray(value.model_coverage), 'suite_summary.model_coverage', 'expected array');
+  assertStringArray(value.model_coverage, 'suite_summary.model_coverage');
   assertObject(value.metric_summaries, 'suite_summary.metric_summaries');
-  assert(Array.isArray(value.limitations), 'suite_summary.limitations', 'expected array');
+  for (const [key, metric] of Object.entries(value.metric_summaries)) assertMetricValue(metric, `suite_summary.metric_summaries.${key}`);
+  assertStringArray(value.limitations, 'suite_summary.limitations');
 }
 
 function assertNativeResult(value: unknown, path: string): void {
@@ -747,14 +770,39 @@ export function isAssignmentResult(value: unknown): asserts value is AssignmentR
 
 export function isMethodologySnapshot(value: unknown): asserts value is MethodologySnapshot {
   assertObject(value, 'methodology_snapshot');
+  rejectUnknown(value, [...ENVELOPE_FIELDS, 'metric_definitions', 'suite_definitions', 'limitations'], 'methodology_snapshot');
   assertEnvelope(value, 'methodology_snapshot', ['methodology_snapshot']);
   assert(Array.isArray(value.metric_definitions), 'methodology_snapshot.metric_definitions', 'expected array');
+  assert(value.metric_definitions.length <= 128, 'methodology_snapshot.metric_definitions', 'expected at most 128 entries');
+  for (let index = 0; index < value.metric_definitions.length; index++) {
+    const path = `methodology_snapshot.metric_definitions[${index}]`;
+    const definition: unknown = value.metric_definitions[index];
+    assertObject(definition, path);
+    rejectUnknown(definition, ['key', 'name', 'unit', 'direction', 'denominator', 'missing_value_behavior', 'aggregation', 'uncertainty_method', 'explanation'], path);
+    for (const field of ['key', 'name', 'unit', 'denominator', 'missing_value_behavior', 'aggregation', 'uncertainty_method', 'explanation'] as const) {
+      assertString(definition[field], `${path}.${field}`);
+    }
+    assertEnum(definition.direction, ['higher_is_better', 'lower_is_better'], `${path}.direction`);
+  }
   assert(Array.isArray(value.suite_definitions), 'methodology_snapshot.suite_definitions', 'expected array');
-  assert(Array.isArray(value.limitations), 'methodology_snapshot.limitations', 'expected array');
+  assert(value.suite_definitions.length <= 128, 'methodology_snapshot.suite_definitions', 'expected at most 128 entries');
+  for (let index = 0; index < value.suite_definitions.length; index++) {
+    const path = `methodology_snapshot.suite_definitions[${index}]`;
+    const definition: unknown = value.suite_definitions[index];
+    assertObject(definition, path);
+    rejectUnknown(definition, ['suite_id', 'display_name', 'task_count', 'description'], path);
+    assertString(definition.suite_id, `${path}.suite_id`);
+    assertString(definition.display_name, `${path}.display_name`);
+    assertInteger(definition.task_count, `${path}.task_count`);
+    assert(definition.task_count >= 0, `${path}.task_count`, 'must be >= 0');
+    assertString(definition.description, `${path}.description`);
+  }
+  assertStringArray(value.limitations, 'methodology_snapshot.limitations');
 }
 
 export function isLiveEvent(value: unknown): asserts value is LiveEvent {
   assertObject(value, 'live_event');
+  rejectUnknown(value, [...ENVELOPE_FIELDS, 'event_id', 'run_id', 'assignment_id', 'task_id', 'variant_id', 'role', 'lifecycle_status', 'completed', 'total', 'stage_label', 'metric_delta', 'feed_sequence'], 'live_event');
   assertEnvelope(value, 'live_event', LIVE_EVENT_KINDS as unknown as string[]);
   assertString(value.event_id, 'live_event.event_id');
   assertString(value.run_id, 'live_event.run_id');
@@ -765,8 +813,16 @@ export function isLiveEvent(value: unknown): asserts value is LiveEvent {
   assertEnum(value.lifecycle_status, LIFECYCLE_STATUSES, 'live_event.lifecycle_status');
   assertInteger(value.completed, 'live_event.completed');
   assertInteger(value.total, 'live_event.total');
+  assert(value.completed >= 0, 'live_event.completed', 'must be >= 0');
+  assert(value.total >= 0, 'live_event.total', 'must be >= 0');
+  assert(value.completed <= value.total, 'live_event', 'completed cannot exceed total');
   assertOptional(value.stage_label, 'live_event.stage_label', assertString);
-  if (value.metric_delta !== undefined) assertObject(value.metric_delta, 'live_event.metric_delta');
+  if (value.metric_delta !== undefined) {
+    assertObject(value.metric_delta, 'live_event.metric_delta');
+    for (const [key, metric] of Object.entries(value.metric_delta)) assertMetricValue(metric, `live_event.metric_delta.${key}`);
+  }
+  assertOptional(value.feed_sequence, 'live_event.feed_sequence', assertInteger);
+  if (value.feed_sequence !== undefined) assert(value.feed_sequence >= 0, 'live_event.feed_sequence', 'must be >= 0');
   assertString(value.observed_at, 'live_event.observed_at');
 }
 
@@ -812,10 +868,15 @@ export function isProjectionRecord(value: unknown): asserts value is ProjectionR
   assertInteger(value.sequence, 'projection.sequence');
   assert(value.sequence >= 1, 'projection.sequence', 'must be >= 1');
   assertEnum(value.record_type, FEED_RECORD_TYPES, 'projection.record_type');
-  assertOptional(value.record_hash, 'projection.record_hash', assertString);
+  if (value.record_hash !== undefined) {
+    assertString(value.record_hash, 'projection.record_hash');
+    assert(/^[0-9a-f]{64}$/u.test(value.record_hash), 'projection.record_hash', 'expected sha256 hex');
+  }
   assertString(value.record_bytes, 'projection.record_bytes');
   if (value.decoded !== undefined) {
     assertObject(value.decoded, 'projection.decoded');
+    assertString(value.decoded.kind, 'projection.decoded.kind');
+    decodeViewRecord(value.decoded.kind, value.decoded);
   }
 }
 
@@ -837,24 +898,34 @@ export function isFeedSnapshot(value: unknown): asserts value is FeedSnapshot {
 
 export function isFeedBootstrap(value: unknown): asserts value is FeedBootstrap {
   assertObject(value, 'feed_bootstrap');
+  rejectUnknown(value, ['protocol_version', 'snapshot', 'source_freshness', 'recent_projections', 'proof_catalog_summary', 'generated_at'], 'feed_bootstrap');
   assertString(value.protocol_version, 'feed_bootstrap.protocol_version');
   assert(value.protocol_version === '1.0.0', 'feed_bootstrap.protocol_version', 'expected 1.0.0');
   isFeedSnapshot(value.snapshot);
   assertEnum(value.source_freshness, FRESHNESS_STATES, 'feed_bootstrap.source_freshness');
   assert(value.source_freshness === value.snapshot.freshness, 'feed_bootstrap.source_freshness', 'must match snapshot.freshness');
   assert(Array.isArray(value.recent_projections), 'feed_bootstrap.recent_projections', 'expected array');
+  for (let index = 0; index < value.recent_projections.length; index++) isProjectionRecord(value.recent_projections[index]);
   assertObject(value.proof_catalog_summary, 'feed_bootstrap.proof_catalog_summary');
+  rejectUnknown(value.proof_catalog_summary, ['artifact_count', 'total_byte_size', 'last_generated_at'], 'feed_bootstrap.proof_catalog_summary');
   assertInteger(value.proof_catalog_summary.artifact_count, 'feed_bootstrap.proof_catalog_summary.artifact_count');
   assert(value.proof_catalog_summary.artifact_count >= 0, 'feed_bootstrap.proof_catalog_summary.artifact_count', 'must be >= 0');
+  assertInteger(value.proof_catalog_summary.total_byte_size, 'feed_bootstrap.proof_catalog_summary.total_byte_size');
+  assert(value.proof_catalog_summary.total_byte_size >= 0, 'feed_bootstrap.proof_catalog_summary.total_byte_size', 'must be >= 0');
+  assertOptional(value.proof_catalog_summary.last_generated_at, 'feed_bootstrap.proof_catalog_summary.last_generated_at', assertString);
   assertString(value.generated_at, 'feed_bootstrap.generated_at');
 }
 
 export function isFeedHistoryPage(value: unknown): asserts value is FeedHistoryPage {
   assertObject(value, 'feed_history');
+  rejectUnknown(value, ['protocol_version', 'items', 'cursor', 'has_more', 'limit'], 'feed_history');
   assertString(value.protocol_version, 'feed_history.protocol_version');
+  assert(value.protocol_version === '1.0.0', 'feed_history.protocol_version', 'expected 1.0.0');
   assert(Array.isArray(value.items), 'feed_history.items', 'expected array');
+  for (let index = 0; index < value.items.length; index++) isProjectionRecord(value.items[index]);
   assertBoolean(value.has_more, 'feed_history.has_more');
   assertInteger(value.limit, 'feed_history.limit');
+  assert(value.limit >= 0, 'feed_history.limit', 'must be >= 0');
   if (value.cursor !== undefined) assertString(value.cursor, 'feed_history.cursor');
 }
 
