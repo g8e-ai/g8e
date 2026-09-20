@@ -455,6 +455,7 @@ class TestNoCircularImport:
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
         assert result.returncode == 0, (
             f"Importing app.security failed:\n"

@@ -128,7 +128,7 @@ async def test_publish_agent_state_propagates_cancellation():
     http_client = AsyncMock()
 
     async def raise_cancelled(_request):
-        raise asyncio.CancelledError()
+        raise asyncio.CancelledError
 
     http_client.push_agent_state = AsyncMock(side_effect=raise_cancelled)
     service = EventService(http_client)
@@ -142,7 +142,7 @@ async def test_publish_run_state_propagates_cancellation():
     http_client = AsyncMock()
 
     async def raise_cancelled(_request):
-        raise asyncio.CancelledError()
+        raise asyncio.CancelledError
 
     http_client.push_run_state = AsyncMock(side_effect=raise_cancelled)
     service = EventService(http_client)

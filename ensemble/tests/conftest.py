@@ -331,9 +331,7 @@ def pytest_configure(config):
         from app.services.infra.settings_service import SettingsService
 
         settings = SettingsService().get_local_settings()
-        status = "down"
 
-    print(f"\noperator: {status}")
 
     set_settings(settings)
 

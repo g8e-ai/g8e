@@ -64,7 +64,7 @@ class TestEventType:
         assert EventType is G8eEventType
 
     @pytest.mark.parametrize(
-        "member_name,expected_value",
+        ("member_name", "expected_value"),
         [
             ("OPERATOR_INTENT_REQUESTED", "g8e.v1.operator.intent.requested"),
             ("OPERATOR_INTENT_REVOKE_REQUESTED", "g8e.v1.operator.intent.revoke.requested"),

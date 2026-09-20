@@ -126,7 +126,7 @@ def test_validated_trace_ids_accepts_safe_segments():
 
 
 def test_trace_digest_changes_when_model_calls_change():
-    context = _context()
+    _context()
     base = EvaluationAssignmentTrace(
         evaluation_context=_evaluation_context(),
         chat_execution_id="exec-1",
