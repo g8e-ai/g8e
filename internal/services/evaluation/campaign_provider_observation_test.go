@@ -122,7 +122,7 @@ func TestBuildToolScorecardObservations_FailingToolSelection(t *testing.T) {
 	})
 	require.NotNil(t, scorecard["tool_selection"])
 	assert.Equal(t, 0.0, *scorecard["tool_selection"].Value)
-	assert.Equal(t, "not required by this scenario", scorecard["tool_recognition"].UnavailableReason)
+	assert.Equal(t, "scenario_not_applicable", scorecard["tool_recognition"].UnavailableReason)
 }
 
 func TestBuildPublicBenchmarkObservations_AllUnavailableGPUMetrics(t *testing.T) {
@@ -186,17 +186,17 @@ func TestMarshalAssignmentResultProjectionEnvelope_IncludesToolScorecard(t *test
 	projection := &evalv1.PublicAssignmentResultProjection{
 		AssignmentId: "assign-1",
 		RunId:        "run-1",
+		ScenarioId:   "scenario-1",
 	}
-	body, err := MarshalAssignmentResultProjectionEnvelope("run-1:assign-1:result", projection, &PublicBenchmarkObservations{
+	body, err := MarshalAssignmentResultProjectionEnvelope("run-1:assign-1:result", &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: &PublicBenchmarkObservations{
 		GradeSummaries: []PublicGradeSummary{{
 			CriterionID: "tool-selection",
 			Status:      "fail",
-			Detail:      "expected tool selection evidence is missing",
 		}},
 		ToolScorecard: map[string]*PublicMetricValue{
 			"tool_selection": publicMetricValue(0),
 		},
-	})
+	}}})
 	require.NoError(t, err)
 	envelope := CampaignProjectionEnvelope{}
 	require.NoError(t, json.Unmarshal(body, &envelope))
@@ -310,13 +310,14 @@ func TestMarshalAssignmentResultProjectionEnvelope_IncludesBenchmarkObservations
 	projection := &evalv1.PublicAssignmentResultProjection{
 		AssignmentId: "assign-1",
 		RunId:        "run-1",
+		ScenarioId:   "scenario-1",
 	}
-	body, err := MarshalAssignmentResultProjectionEnvelope("run-1:assign-1:result", projection, &PublicBenchmarkObservations{
+	body, err := MarshalAssignmentResultProjectionEnvelope("run-1:assign-1:result", &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: &PublicBenchmarkObservations{
 		GPU: &PublicGPUObservation{
 			VRAMPeakBytes: publicMetricValue(4096),
 		},
-		UnavailableReasons: []string{"provider_boundary_observation_missing:attempt-1"},
-	})
+		UnavailableReasons: []string{"source_not_captured"},
+	}}})
 	require.NoError(t, err)
 	envelope := CampaignProjectionEnvelope{}
 	require.NoError(t, json.Unmarshal(body, &envelope))

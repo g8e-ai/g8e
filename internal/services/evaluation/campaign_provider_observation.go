@@ -285,6 +285,16 @@ func publicUnavailableMetricReasons(result *evalv1.EvaluationAssignmentResult) [
 // BuildPublicBenchmarkObservations derives disclosure-safe benchmark telemetry
 // from canonical assignment result records and provider-boundary windows.
 func (r *CampaignProviderObservationReader) BuildPublicBenchmarkObservations(ctx context.Context, result *evalv1.EvaluationAssignmentResult) (*PublicBenchmarkObservations, error) {
+	return r.buildPublicBenchmarkObservations(ctx, result, nil)
+}
+
+// BuildPublicBenchmarkObservationsForScenario applies the frozen scenario
+// requirements when producing the tool scorecard.
+func (r *CampaignProviderObservationReader) BuildPublicBenchmarkObservationsForScenario(ctx context.Context, result *evalv1.EvaluationAssignmentResult, scenario *PublicScenarioContext) (*PublicBenchmarkObservations, error) {
+	return r.buildPublicBenchmarkObservations(ctx, result, scenario)
+}
+
+func (r *CampaignProviderObservationReader) buildPublicBenchmarkObservations(ctx context.Context, result *evalv1.EvaluationAssignmentResult, scenario *PublicScenarioContext) (*PublicBenchmarkObservations, error) {
 	if result == nil {
 		return nil, fmt.Errorf("evaluation: build public benchmark observations: %w", constants.ErrMissingRequiredField)
 	}
@@ -298,7 +308,13 @@ func (r *CampaignProviderObservationReader) BuildPublicBenchmarkObservations(ctx
 	if gradeSummaries := buildPublicGradeSummaries(result); len(gradeSummaries) > 0 {
 		observations.GradeSummaries = gradeSummaries
 	}
-	if scorecard := buildToolScorecardObservations(result); len(scorecard) > 0 {
+	var scorecard map[string]*PublicMetricValue
+	if scenario == nil {
+		scorecard = buildToolScorecardObservations(result)
+	} else {
+		scorecard = buildToolScorecardForScenario(result, scenario)
+	}
+	if len(scorecard) > 0 {
 		observations.ToolScorecard = scorecard
 	}
 	if r == nil {
@@ -381,7 +397,7 @@ func buildToolScorecardObservations(result *evalv1.EvaluationAssignmentResult) m
 	scorecard := make(map[string]*PublicMetricValue, len(toolScorecardDimensions))
 	for _, dimension := range toolScorecardDimensions {
 		scorecard[dimension] = &PublicMetricValue{
-			UnavailableReason: "not required by this scenario",
+			UnavailableReason: "scenario_not_applicable",
 		}
 	}
 	if result == nil {

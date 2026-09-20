@@ -8,8 +8,10 @@
 package evaluation
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -20,6 +22,39 @@ const (
 	maxPublicDurationMS = uint64(604800000)
 	maxPublicRetryCount = uint64(1000)
 )
+
+func (metric PublicResourceMetric) MarshalJSON() ([]byte, error) {
+	value := struct {
+		Value             *float64 `json:"value,omitempty"`
+		UnavailableReason string   `json:"unavailable_reason,omitempty"`
+	}{Value: metric.Value}
+	if metric.UnavailableReason != evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED {
+		value.UnavailableReason = strings.ToLower(strings.TrimPrefix(metric.UnavailableReason.String(), "PUBLIC_UNAVAILABLE_REASON_"))
+	}
+	return json.Marshal(value)
+}
+
+func (summary PublicResourceSummary) MarshalJSON() ([]byte, error) {
+	value := struct {
+		LatencyMS      *PublicResourceMetric `json:"latency_ms,omitempty"`
+		InputTokens    *PublicResourceMetric `json:"input_tokens,omitempty"`
+		OutputTokens   *PublicResourceMetric `json:"output_tokens,omitempty"`
+		ThinkingTokens *PublicResourceMetric `json:"thinking_tokens,omitempty"`
+		CacheTokens    *PublicResourceMetric `json:"cache_tokens,omitempty"`
+		Retries        *PublicResourceMetric `json:"retries,omitempty"`
+	}{
+		LatencyMS: metricOrNil(summary.LatencyMS), InputTokens: metricOrNil(summary.InputTokens), OutputTokens: metricOrNil(summary.OutputTokens),
+		ThinkingTokens: metricOrNil(summary.ThinkingTokens), CacheTokens: metricOrNil(summary.CacheTokens), Retries: metricOrNil(summary.Retries),
+	}
+	return json.Marshal(value)
+}
+
+func metricOrNil(metric PublicResourceMetric) *PublicResourceMetric {
+	if metric.Value == nil && metric.UnavailableReason == evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED {
+		return nil
+	}
+	return &metric
+}
 
 // BuildPublicResourceSummary projects complete resource observations from scored
 // inference calls. Grader calls are not part of the assignment result's model

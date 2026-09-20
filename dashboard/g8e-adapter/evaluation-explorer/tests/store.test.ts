@@ -421,6 +421,40 @@ describe('EvalStore', () => {
     expect(store.getEvaluation(datasetId, runId)?.quality_state).toBe('exploratory_verified');
   });
 
+  it('rejects malformed campaign results atomically before indexing or progressing', () => {
+    const runId = 'run-atomic-reject';
+    const datasetId = `ds-live-${runId}`;
+    store.acceptProjection({
+      sequence: 1,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        schema_version: '1.1.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: `${runId}:assign-1:result`,
+        record: {
+          assignment_id: 'assign-1',
+          run_id: runId,
+          scenario_id: 'scenario-1',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
+          summary_status: 'EVALUATION_VERDICT_STATUS_PASS',
+          result_digest: '0'.repeat(64),
+          verification_status: 'verified',
+          completed_at: '2026-09-20T00:00:00Z',
+          activity_summary: {
+            model_activity: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED', records: [], unexpected: true },
+            tool_decisions: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED', records: [] },
+            tool_calls: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED', records: [] },
+            policy_decisions: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED', records: [] },
+            governed_actions: { availability: 'PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE', unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED', records: [] },
+          },
+        },
+      }),
+    });
+    expect(store.getAssignments(runId, datasetId)).toHaveLength(0);
+    expect(store.getEvents(runId, datasetId)).toHaveLength(0);
+    expect(store.getState().errors.length).toBe(1);
+  });
+
   it('indexes native scenario and verdict detail without fake assignments', () => {
     const native = {
       schema_version: '1.3.0', kind: 'evaluation_summary', dataset_id: 'native-core-execution-boundary', quality_state: 'verified_public', observed_at: '2026-09-15T23:38:22Z',

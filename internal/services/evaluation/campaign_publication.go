@@ -189,7 +189,10 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 		if err != nil {
 			return 0, err
 		}
-		body, err := MarshalAssignmentResultProjectionEnvelope(AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId()), projection, benchmark)
+		body, err := MarshalAssignmentResultProjectionEnvelope(AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId()), &PublicAssignmentRecord{
+			Projection: projection,
+			Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark},
+		})
 		if err != nil {
 			return 0, err
 		}
@@ -386,7 +389,10 @@ func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Conte
 }
 
 func (c *CampaignPublicationCoordinator) publishAssignmentResultEnvelope(ctx context.Context, runID, idempotencyKey string, projection *evalv1.PublicAssignmentResultProjection, benchmark *PublicBenchmarkObservations) error {
-	body, err := MarshalAssignmentResultProjectionEnvelope(idempotencyKey, projection, benchmark)
+	body, err := MarshalAssignmentResultProjectionEnvelope(idempotencyKey, &PublicAssignmentRecord{
+		Projection: projection,
+		Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark},
+	})
 	if err != nil {
 		return err
 	}

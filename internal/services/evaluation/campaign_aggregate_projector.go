@@ -93,6 +93,14 @@ func RunVerificationIdempotencyKey(runID string) string {
 	return runID + ":verification:summary:v2"
 }
 
+// VerifiedModelSummaryIdempotencyKey returns the deterministic publication key
+// for one verified variant-role revision. It is distinct from both aggregate
+// revisions and the run-level verification summary so backfill can publish
+// model rows when that summary already exists.
+func VerifiedModelSummaryIdempotencyKey(runID, variantID, role string) string {
+	return fmt.Sprintf("%s:verification:model:%s:%s:v1", runID, variantID, role)
+}
+
 // VerifierStateFromVerificationReport maps a persisted campaign verification
 // report to the explorer verifier_state enum.
 func VerifierStateFromVerificationReport(report *evalv1.EvaluationVerificationReport) string {
@@ -423,7 +431,7 @@ func buildCompletedMethodologySnapshotRecord(datasetID, observedAt string) map[s
 }
 
 // BuildRunVerificationViewRecords materializes the post-verify evaluation_summary
-// revision for one campaign run.
+// revision and eligible verified model-summary revisions for one campaign run.
 func BuildRunVerificationViewRecords(run *evalv1.EvaluationRun, state *runAggregateState, report *evalv1.EvaluationVerificationReport, observedAt time.Time) ([]CampaignViewRecord, error) {
 	if run == nil || state == nil || report == nil || report.GetRunId() != run.GetRunId() {
 		return nil, fmt.Errorf("evaluation: build run verification view records: %w", constants.ErrMissingRequiredField)
@@ -437,10 +445,59 @@ func BuildRunVerificationViewRecords(run *evalv1.EvaluationRun, state *runAggreg
 	if err != nil {
 		return nil, err
 	}
-	return []CampaignViewRecord{{
+	records := []CampaignViewRecord{{
 		IdempotencyKey: RunVerificationIdempotencyKey(run.GetRunId()),
 		Body:           summaryBody,
-	}}, nil
+	}}
+	if !verifiedModelSummariesEligible(state, report, run) {
+		return records, nil
+	}
+
+	keys := make([]string, 0, len(state.VariantRoles))
+	for key := range state.VariantRoles {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		bucket := state.VariantRoles[key]
+		if bucket == nil || bucket.Scheduled == 0 || bucket.Terminal < bucket.Scheduled {
+			continue
+		}
+		modelBody, err := marshalCanonicalViewRecord(buildVerifiedModelSummaryRecord(datasetID, observed, bucket))
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, CampaignViewRecord{
+			IdempotencyKey: VerifiedModelSummaryIdempotencyKey(run.GetRunId(), bucket.VariantID, bucket.Role),
+			Body:           modelBody,
+		})
+	}
+	return records, nil
+}
+
+func verifiedModelSummariesEligible(state *runAggregateState, report *evalv1.EvaluationVerificationReport, run *evalv1.EvaluationRun) bool {
+	if report == nil || run == nil {
+		return false
+	}
+	binding := run.GetCampaignBinding()
+	return binding != nil &&
+		report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS &&
+		report.GetVerifiedAt() != nil &&
+		report.GetVerifiedPopulationDigest() != "" &&
+		report.GetCampaignDigest() == binding.GetCampaignDigest() &&
+		report.GetCatalogDigest() == binding.GetCatalogDigest() &&
+		report.GetModelRegistryDigest() == binding.GetModelRegistryDigest() &&
+		state != nil &&
+		state.Scheduled > 0 &&
+		state.Terminal >= state.Scheduled &&
+		report.GetExpectedAssignmentCount() == state.Scheduled &&
+		report.GetVerifiedAssignmentCount() == state.Terminal
+}
+
+func buildVerifiedModelSummaryRecord(datasetID, observedAt string, bucket *variantRoleAggregate) map[string]any {
+	record := buildCompletedModelSummaryRecord(datasetID, observedAt, bucket)
+	record["quality_state"] = "exploratory_verified"
+	return record
 }
 
 func buildLiveEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observedAt string, state *runAggregateState) map[string]any {

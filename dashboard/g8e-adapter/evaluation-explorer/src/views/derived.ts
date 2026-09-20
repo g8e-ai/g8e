@@ -26,6 +26,8 @@ import type {
   MetricValue,
   ModelRole,
   ModelSummary,
+  PublicGradeExplanationCode,
+  PublicSemanticGradeSummary,
   QualityState,
   SuiteSummary,
   TerminalStatus,
@@ -339,6 +341,21 @@ export function assignmentMetricEntries(
       return byOrder !== 0 ? byOrder : left.localeCompare(right);
     })
     .map(([key, metric]) => ({ key, label: assignmentMetricLabel(key), metric }));
+}
+
+export function publicGradeExplanationLabel(code: PublicGradeExplanationCode): string {
+  switch (code) {
+    case 'criterion_passed': return 'Criterion passed';
+    case 'criterion_failed': return 'Criterion failed';
+    case 'evidence_unavailable': return 'Evidence unavailable';
+    case 'unsupported': return 'Unsupported';
+    case 'invalid_evidence': return 'Invalid evidence';
+    case 'grader_unavailable': return 'Grader unavailable';
+  }
+}
+
+export function publicGradeSummaries(assignment: AssignmentResult): PublicSemanticGradeSummary[] {
+  return [...(assignment.semantic_grade_summaries ?? [])].sort((left, right) => left.criterion_id.localeCompare(right.criterion_id));
 }
 
 /** Formatter for one assignment-level scoring metric card. */

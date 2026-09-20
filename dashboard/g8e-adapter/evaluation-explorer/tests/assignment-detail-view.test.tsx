@@ -139,6 +139,39 @@ describe('AssignmentDetailView', () => {
     expect(screen.getByText('required evidence not observed')).toBeInTheDocument();
   });
 
+  it('renders rich public context, activity, grades, and evidence without private detail', () => {
+    renderAssignment([
+      assignmentResult({
+        scenario_summary: {
+          scenario_id: 'scenario-1', scenario_version: '1.0.0', category: 'tool_selection',
+          public_description: 'Choose the approved tool.', grading_method: 'deterministic',
+          allowed_tools: ['search'], expected_tools: ['search'], forbidden_tools: [],
+          criteria: [{ criterion_id: 'selection', public_label: 'Tool choice', public_description: 'Select the matching tool.', grading_method: 'deterministic', required: true }],
+          tool_score_dimensions: [],
+        },
+        semantic_grade_summaries: [{ criterion_id: 'selection', status: 'pass', grading_method: 'deterministic', explanation_code: 'criterion_passed' }],
+        activity_summary: {
+          model_activity: { availability: 'observed', records: [{ model_role: 'primary', variant_id: 'model-1', usage_availability: 'reported', input_tokens: { value: 0 }, output_tokens: { value: 2 }, retry_count: { value: 0 }, finish_state: 'stop', load_state: 'warm' }] },
+          tool_decisions: { availability: 'observed', records: [] },
+          tool_calls: { availability: 'not_applicable', records: [] },
+          policy_decisions: { availability: 'unavailable', unavailable_reason: 'historical_not_captured', records: [] },
+          governed_actions: { availability: 'unavailable', unavailable_reason: 'source_not_captured', records: [] },
+        },
+        evidence_bindings: [{ sha256: 'a'.repeat(64), schema_ref: 'eval/v1', kind: 'evaluation_projection' }],
+        verification_metadata: { provenance: 'bound', verifier_state: 'passed', verifier_contract_version: '2.0.0' },
+      }),
+    ]);
+
+    expect(screen.getByRole('heading', { name: 'Assignment context' })).toBeInTheDocument();
+    expect(screen.getByText('Choose the approved tool.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What happened' })).toBeInTheDocument();
+    expect(screen.getByText('1 observed')).toBeInTheDocument();
+    expect(screen.getByText('Criterion passed')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Evidence and methodology' })).toBeInTheDocument();
+    expect(screen.getByText('Evaluation projection')).toBeInTheDocument();
+    expect(screen.queryByText('private')).not.toBeInTheDocument();
+  });
+
   it('renders isolated sibling repetitions in deterministic order', () => {
     renderAssignment([
       assignmentResult(),

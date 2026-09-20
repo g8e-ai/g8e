@@ -7,6 +7,9 @@
 // Never shows raw prompts, outputs, trails, or credentials.
 
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { AssignmentActivitySummary } from '../components/AssignmentActivitySummary';
+import { EvidenceBindingsPanel } from '../components/EvidenceBindingsPanel';
+import { ScenarioContextCard } from '../components/ScenarioContextCard';
 import { useActiveDatasetId } from '../state/dataset';
 import { recordKey, useStoreState } from '../state/store';
 import {
@@ -28,6 +31,8 @@ import {
   assignmentMetricEntries,
   assignmentMetricFormatter,
   isScenarioNotApplicableMetric,
+  publicGradeExplanationLabel,
+  publicGradeSummaries,
   roleLabel,
   siblingRepetitions,
 } from './derived';
@@ -71,6 +76,7 @@ export function AssignmentDetailView() {
   const toolScorecardEntries = toolScorecard
     ? Object.entries(toolScorecard).filter(([, metric]) => !isScenarioNotApplicableMetric(metric))
     : [];
+  const semanticGrades = publicGradeSummaries(assignment);
 
   return (
     <div className="assignment-detail">
@@ -108,14 +114,31 @@ export function AssignmentDetailView() {
         </dl>
       </section>
 
+      <ScenarioContextCard scenario={assignment.scenario_summary} />
+
+      <AssignmentActivitySummary activity={assignment.activity_summary} />
+
       <section className="assignment-benchmark">
-        <h2>Benchmark observations</h2>
+        <h2>How it scored</h2>
         <dl>
           <DetailRow label="Scenario category">{assignment.scenario_category ? observationLabel(assignment.scenario_category) : 'Not observed in this dataset'}</DetailRow>
           <DetailRow label="Evaluation unit">{assignment.evaluation_unit ? `${observationLabel(assignment.evaluation_unit)} evaluation` : 'Not observed in this dataset'}</DetailRow>
           <DetailRow label="Stack">{assignment.stack_id ?? 'Not applicable to model evaluation'}</DetailRow>
           <DetailRow label="Escalation">{assignment.benchmark_observations?.escalation_disposition ? observationLabel(assignment.benchmark_observations.escalation_disposition) : 'Not observed in this dataset'}</DetailRow>
         </dl>
+
+        <h3>Public grade summaries</h3>
+        {semanticGrades.length > 0 ? (
+          <ul className="grade-summary-list">
+            {semanticGrades.map((grade) => (
+              <li key={grade.criterion_id}>
+                <strong>{grade.criterion_id}</strong>
+                <span>{observationLabel(grade.status)} · {observationLabel(grade.grading_method)}</span>
+                <small>{publicGradeExplanationLabel(grade.explanation_code)}{grade.judge_variant_id ? ` · Judge ${grade.judge_variant_id}` : ''}</small>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="benchmark-empty">Public grade summaries not observed in this dataset.</p>}
 
         <h3>Tool-calling scorecard</h3>
         {!toolScorecard || Object.keys(toolScorecard).length === 0 ? (
@@ -136,7 +159,6 @@ export function AssignmentDetailView() {
             {assignment.benchmark_observations.grade_summaries.map((summary) => (
               <DetailRow key={summary.criterion_id} label={observationLabel(summary.criterion_id)}>
                 {observationLabel(summary.status)}
-                {summary.detail ? ` — ${summary.detail}` : null}
               </DetailRow>
             ))}
           </dl>
@@ -226,7 +248,8 @@ export function AssignmentDetailView() {
       </section>
 
       <section className="assignment-resources">
-        <h2>Resource observations</h2>
+        <h2>Performance and resources</h2>
+        <h3>Resource observations</h3>
         <div className="metric-grid">
           <MetricCard label="Latency" metric={assignment.resource_summary?.latency_ms} formatter={formatLatency} />
           <MetricCard label="Input tokens" metric={assignment.resource_summary?.input_tokens} formatter={formatTokens} />
@@ -234,6 +257,8 @@ export function AssignmentDetailView() {
           <MetricCard label="Retries" metric={assignment.resource_summary?.retries} formatter={formatNumber} />
         </div>
       </section>
+
+      <EvidenceBindingsPanel bindings={assignment.evidence_bindings} verification={assignment.verification_metadata} />
 
       {siblingAssignments.length > 0 ? (
         <section className="assignment-repetitions">

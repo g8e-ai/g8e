@@ -1083,3 +1083,28 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   .progress-fill { transition: none; }
   * { scroll-behavior: auto; }
 }
+
+/* Assignment evidence */
+.assignment-context, .assignment-activity, .assignment-benchmark, .assignment-metrics, .assignment-stages, .assignment-resources, .assignment-evidence, .assignment-repetitions {
+  padding: 16px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.panel-note, .benchmark-empty { color: var(--fg-muted); margin: 8px 0; }
+.context-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-top: 16px; }
+.context-lists h3, .context-criteria h3, .assignment-benchmark h3, .assignment-evidence h3 { font-size: 14px; margin: 0 0 8px; }
+.context-lists ul, .context-criteria ul, .evidence-binding-list { margin: 0; padding-left: 20px; }
+.context-criteria { margin-top: 16px; }
+.context-criteria li { display: grid; gap: 3px; margin-bottom: 10px; }
+.context-criteria small, .activity-record small, .evidence-binding-list small { color: var(--fg-dim); }
+.activity-families { display: grid; gap: 8px; }
+.activity-family { border: 1px solid var(--border); border-radius: 6px; background: var(--bg-elev2); }
+.activity-family summary { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; cursor: pointer; font-weight: 600; }
+.activity-availability { color: var(--fg-muted); font-size: 13px; font-weight: 400; }
+.activity-family ol { margin: 0; padding: 0 12px 10px 34px; }
+.activity-family li { padding: 8px 0; border-top: 1px solid var(--border); }
+.activity-record { display: grid; gap: 3px; font-size: 13px; }
+.grade-summary-list { display: grid; gap: 8px; list-style: none; padding: 0; margin: 0 0 16px; }
+.grade-summary-list li { display: grid; gap: 3px; padding: 10px 12px; background: var(--bg-elev2); border-radius: 6px; }
+.grade-summary-list span, .grade-summary-list small { color: var(--fg-muted); }
+.evidence-binding-list { display: grid; gap: 8px; }
+.evidence-binding-list li { display: grid; gap: 3px; }
+.evidence-binding-list code, .assignment-evidence code { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }

@@ -47,22 +47,22 @@ type PublicAssignmentActivity struct {
 }
 
 type PublicResourceMetric struct {
-	Value             *float64
-	UnavailableReason evalv1.PublicUnavailableReason
+	Value             *float64                       `json:"value,omitempty"`
+	UnavailableReason evalv1.PublicUnavailableReason `json:"unavailable_reason,omitempty"`
 }
 
 type PublicResourceSummary struct {
-	LatencyMS      PublicResourceMetric
-	InputTokens    PublicResourceMetric
-	OutputTokens   PublicResourceMetric
-	ThinkingTokens PublicResourceMetric
-	CacheTokens    PublicResourceMetric
-	Retries        PublicResourceMetric
+	LatencyMS      PublicResourceMetric `json:"latency_ms,omitempty"`
+	InputTokens    PublicResourceMetric `json:"input_tokens,omitempty"`
+	OutputTokens   PublicResourceMetric `json:"output_tokens,omitempty"`
+	ThinkingTokens PublicResourceMetric `json:"thinking_tokens,omitempty"`
+	CacheTokens    PublicResourceMetric `json:"cache_tokens,omitempty"`
+	Retries        PublicResourceMetric `json:"retries,omitempty"`
 }
 
 type PublicAssignmentRecordExtensions struct {
-	BenchmarkObservations *PublicBenchmarkObservations
-	ResourceSummary       *PublicResourceSummary
+	BenchmarkObservations *PublicBenchmarkObservations `json:"benchmark_observations,omitempty"`
+	ResourceSummary       *PublicResourceSummary       `json:"resource_summary,omitempty"`
 }
 
 type PublicAssignmentBuildInput struct {
@@ -73,6 +73,8 @@ type PublicAssignmentBuildInput struct {
 	Activity             *PublicAssignmentActivity
 	EvidenceBindings     []*evalv1.PublicEvidenceBinding
 	VerificationMetadata *evalv1.PublicVerificationMetadata
+	VerificationStatus   string
+	ObservationReader    *CampaignProviderObservationReader
 	Extensions           PublicAssignmentRecordExtensions
 }
 
