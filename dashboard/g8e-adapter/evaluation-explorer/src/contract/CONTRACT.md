@@ -39,7 +39,7 @@ The enum values are reconciled against canonical protocol vectors and checked-in
 - `verified_public_snapshot` maps to dataset id `verified-public-snapshot-current` with quality state `verified_public`.
 - `live_run` maps to dataset id `live-run` with quality state `live_in_progress`. A real live run uses a fresh dataset id per run; `live-run` is the fixture and replay default.
 
-The fixtures currently use `ds-exploratory-baseline-20260914-r2`, `ds-verified-public-20260914`, and `ds-live-demo-20260914` as concrete dataset id strings. Worker 1's projector emits the canonical ids above; the store keys by the `dataset_id` string, so the fixture ids and the projector ids must agree. Worker 1 owns the final dataset id strings and updates the fixtures when the projector lands.
+The fixtures currently use `ds-exploratory-baseline-20260914-r2`, `ds-verified-public-20260914`, and `ds-live-demo-20260914` as concrete dataset id strings. Production campaign projections use run-scoped dataset IDs such as `ds-live-<run-id>`; the store keys by the exact `dataset_id` string and never combines incompatible datasets. Fixture IDs and producer IDs must agree within their respective replay or live source.
 
 ## Routes
 
@@ -65,6 +65,8 @@ Schema 1.1 through 1.3 retain the historical assignment shape and benchmark obse
 All new arrays and strings are bounded. New public unavailable reasons are `historical_not_captured`, `source_not_captured`, `source_unavailable`, `scenario_not_applicable`, `incomplete_contributor_evidence`, and `no_scored_calls`. Unknown nested fields, duplicate criterion/evidence identities, non-finite or negative numbers, unsupported enum values, malformed hashes, and conflicting scenario identities fail closed. The live bridge labels complete heterogeneous runs as system evaluations and binds a deterministic stack identity.
 
 The live event payload is a single flat `LiveEvent` interface with optional per-kind fields (`assignment_id`, `task_id`, `variant_id`, `stage_label`, `metric_delta`). This matches the plan's description: each live event carries a stable identity, run id, optional assignment/task/model identity, lifecycle status, completed/total counts, a safe metric delta or stage label, timestamp, and quality state. The projector deduplicates by `event_id`; a bridge restart against the same report produces no duplicate logical event.
+
+Verified model quality is a stored publication result, not a browser inference. A passing and run-applicable verification report produces `exploratory_verified` model-summary revisions scoped to the exact dataset, variant, and role aggregates covered by the verified population. Report-scoped publication keys allow existing-run backfill even when the run-level verification summary was already published. Failed, incomplete, or mismatched reports do not promote model rows.
 
 ## Transport and publication
 

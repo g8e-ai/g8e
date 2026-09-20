@@ -394,6 +394,12 @@ Native verification is owned by `g8e eval boundary verify`. Campaign verificatio
 
 The checked-in evaluation explorer reads canonical native and campaign projections from persisted runs. A public-safe projector omits principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields before records enter the signed public feed. Native verification remains on the owner path; mirror availability is not verification evidence. See [Public Spectator Architecture](./public_spectator.md).
 
+Campaign assignment results use the enriched campaign projection envelope (`1.1.0`) for new records while historical result envelopes (`1.0.0`) remain readable. The enriched assignment record combines canonical protobuf JSON with named public extensions: scenario context, deterministic and semantic grade summaries, typed activity families, bounded resource metrics, verification metadata, and lowercase SHA-256 evidence bindings. Scenario descriptions and criterion labels come from the exact persisted campaign/catalog bindings; private prompts, gold answers, trace text, execution identifiers, receipt bodies, and artifact locations do not cross the boundary.
+
+Assignment activity preserves the distinction between an observed empty list, unavailable source capture, and scenario-not-applicable. Resource metrics preserve an observed zero and identify unavailable token, retry, or latency values explicitly. Reported tool and policy outcomes are application evidence, not independent protocol authorization or schema-validation claims. Evidence bindings identify approved content-addressed artifacts only; a binding does not prove that the artifact is publicly accessible or individually verified.
+
+A passing campaign verification report is applicable only when its run, campaign, catalog, model registry, completed population, and verified population match the persisted evidence. When applicable, publication emits report-scoped `exploratory_verified` model-summary revisions for each eligible dataset/variant/role aggregate and republishes verified assignment results. Existing runs can be backfilled through verified catch-up even when the run-level verification summary idempotency key already exists; distinct report-scoped model keys prevent that summary from suppressing model revisions. Failed or inapplicable verification never promotes model quality.
+
 ---
 
 ## Implementation

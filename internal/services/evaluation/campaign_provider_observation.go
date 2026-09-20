@@ -651,7 +651,7 @@ func (aggregate *gpuAggregate) observeClock(sample *evalv1.ProviderBoundaryHardw
 }
 
 func gpuMetricUnavailableReason(metric string) string {
-	return "provider gpu collector unavailable: " + metric
+	return "source_unavailable"
 }
 
 func (aggregate *gpuAggregate) hasValues() bool {

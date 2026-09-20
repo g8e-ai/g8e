@@ -507,21 +507,6 @@ func (c *CampaignPublicationCoordinator) loadRunAggregateState(ctx context.Conte
 	return run, assignments, results, state, nil
 }
 
-func (c *CampaignPublicationCoordinator) publishAssignmentResultEnvelope(ctx context.Context, runID, idempotencyKey string, projection *evalv1.PublicAssignmentResultProjection, benchmark *PublicBenchmarkObservations) error {
-	body, err := MarshalAssignmentResultProjectionEnvelope(idempotencyKey, &PublicAssignmentRecord{
-		Projection: projection,
-		Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark},
-	})
-	if err != nil {
-		return err
-	}
-	_, err = c.exportFeedRecords(ctx, runID, []campaignFeedPublishRequest{{
-		IdempotencyKey: idempotencyKey,
-		Body:           body,
-	}})
-	return err
-}
-
 func (c *CampaignPublicationCoordinator) publishEnvelope(ctx context.Context, runID, idempotencyKey, messageType string, record proto.Message) error {
 	body, err := MarshalCampaignProjectionEnvelope(messageType, idempotencyKey, record)
 	if err != nil {
