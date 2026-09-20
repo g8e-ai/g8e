@@ -249,6 +249,7 @@ func TestResolveCampaignOllamaEndpoint_UsesFlag(t *testing.T) {
 func TestCampaignEvalVerify_ViaCLIAfterExecute(t *testing.T) {
 	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
+	defer enableCampaignWitnessGateway(t, root, deps)()
 
 	lookup := &campaignTraceLookup{root: root, deps: deps}
 	ensemble := newTestEnsembleServer(lookup.resolve)

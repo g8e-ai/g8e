@@ -144,3 +144,32 @@ func InferenceVariantsFromEvalRegistry(variants []*evalv1.ModelVariant) []*opera
 	}
 	return out
 }
+
+// CampaignModelBinding describes one frozen served model tag and digest pair.
+type CampaignModelBinding struct {
+	ServedModelTag string
+	ModelDigest    string
+}
+
+// CampaignModelBindingsFromSpec returns attestation bindings for every frozen
+// model variant in one campaign spec.
+func CampaignModelBindingsFromSpec(spec *evalv1.EvaluationCampaignSpec) ([]CampaignModelBinding, error) {
+	if spec == nil {
+		return nil, fmt.Errorf("evaluation: campaign model bindings: %w", constants.ErrMissingRequiredField)
+	}
+	variants := spec.GetModelRegistry()
+	if len(variants) == 0 {
+		return nil, fmt.Errorf("evaluation: campaign model bindings: empty model registry")
+	}
+	bindings := make([]CampaignModelBinding, 0, len(variants))
+	for _, variant := range variants {
+		if variant == nil || variant.GetServedModelTag() == "" || variant.GetModelDigest() == "" {
+			return nil, fmt.Errorf("evaluation: campaign model bindings: %w", constants.ErrMissingRequiredField)
+		}
+		bindings = append(bindings, CampaignModelBinding{
+			ServedModelTag: variant.GetServedModelTag(),
+			ModelDigest:    variant.GetModelDigest(),
+		})
+	}
+	return bindings, nil
+}

@@ -185,7 +185,7 @@ async def test_cancellation_emits_idle_agent_state():
 
     async def _cancel_stream():
         yield _text("Working")
-        raise asyncio.CancelledError()
+        raise asyncio.CancelledError
 
     with pytest.raises(asyncio.CancelledError):
         await deliver_via_sse(

@@ -465,6 +465,9 @@ func setupCampaignExecuteGatewayEnv(t *testing.T) (root string, deps nativeEvalD
 	publicMirrorBootstrapURL = mirrorServer.URL
 
 	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if writeCampaignWitnessPreflightResponse(w, r) {
+			return
+		}
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == constants.APIPaths.Operators:
 			body, err := json.Marshal(models.OperatorSlotResponse{
@@ -474,9 +477,6 @@ func setupCampaignExecuteGatewayEnv(t *testing.T) (root string, deps nativeEvalD
 			require.NoError(t, err)
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write(body)
-		case r.Method == http.MethodGet && r.URL.Path == constants.APIPaths.InferenceProviderObservations+"_preflight":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"status":"ready"}`))
 		case r.URL.Path == constants.APIPaths.PublicFeedSnapshot:
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"high_water_sequence":0}`))

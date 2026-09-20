@@ -153,7 +153,7 @@ class TestBuildInvestigationRunStateRequest:
 
 class TestMapInvestigationStatusToRunLifecycle:
     @pytest.mark.parametrize(
-        "status,expected",
+        ("status", "expected"),
         [
             (InvestigationStatus.OPEN, "running"),
             (InvestigationStatus.ESCALATED, "running"),

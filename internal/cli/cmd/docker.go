@@ -210,7 +210,7 @@ func resolveDockerProfile(full bool, profile string) string {
 }
 
 func dockerInitCmd() *cobra.Command {
-	return dockerInitCmdWithConfig(loadConfig, newFileSvc, defaultAPIClientFactory, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
+	return dockerInitCmdWithConfig(loadConfig, newFileSvc, dockerInitAPIClientFactory, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 }
 
 func dockerInitCmdWithConfig(
@@ -814,6 +814,47 @@ func platformEnrollmentApprovalRank(req models.PlatformEnrollmentPendingRequest)
 	}
 }
 
+const dockerInitApprovalSlotCount = 4
+
+func dockerInitApprovalSlotName(slot int) string {
+	switch slot {
+	case 1:
+		return "data operator"
+	case 2:
+		return "dashboard"
+	case 3:
+		return "ensemble"
+	case 4:
+		return "inference operator"
+	default:
+		return "workload"
+	}
+}
+
+// nextDockerInitApprovalSlot returns the lowest approval slot (1-4) that has
+// not yet been approved.
+func nextDockerInitApprovalSlot(approvedSlots map[int]struct{}) int {
+	for slot := 1; slot <= dockerInitApprovalSlotCount; slot++ {
+		if _, ok := approvedSlots[slot]; !ok {
+			return slot
+		}
+	}
+	return 0
+}
+
+// selectDockerInitApprovalCandidate returns the pending request for the next
+// slot in the documented order. Lower-ranked workloads must be approved before
+// later ones, even if a later workload submits its request first.
+func selectDockerInitApprovalCandidate(pending []models.PlatformEnrollmentPendingRequest, nextSlot int) *models.PlatformEnrollmentPendingRequest {
+	for i := range pending {
+		req := pending[i]
+		if platformEnrollmentApprovalRank(req) == nextSlot {
+			return &req
+		}
+	}
+	return nil
+}
+
 // runDockerInitApprovals auto-approves pending platform enrollment requests in
 // the documented order until none remain or the readiness timeout elapses.
 func runDockerInitApprovals(cmd *cobra.Command, client apiClient) error {
@@ -821,32 +862,25 @@ func runDockerInitApprovals(cmd *cobra.Command, client apiClient) error {
 		maxRounds    = 90
 		pollInterval = 2 * time.Second
 	)
-	approved := make(map[string]struct{})
+	approvedSlots := make(map[int]struct{})
 	for round := 0; round < maxRounds; round++ {
 		pending, err := fetchPendingPlatformEnrollments(client)
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrDockerInitApprovalFailed, err)
 		}
-		var next *models.PlatformEnrollmentPendingRequest
-		bestRank := 100
-		for i := range pending {
-			req := pending[i]
-			if _, ok := approved[req.RequestID]; ok {
-				continue
+
+		nextSlot := nextDockerInitApprovalSlot(approvedSlots)
+		if nextSlot == 0 {
+			if err := waitForDockerEnsembleHealthy(cmd); err == nil {
+				cmd.Println("All platform enrollment requests approved.")
+				return nil
 			}
-			rank := platformEnrollmentApprovalRank(req)
-			if rank < bestRank {
-				bestRank = rank
-				next = &req
-			}
+			time.Sleep(pollInterval)
+			continue
 		}
+
+		next := selectDockerInitApprovalCandidate(pending, nextSlot)
 		if next == nil {
-			if len(pending) == 0 {
-				if err := waitForDockerEnsembleHealthy(cmd); err == nil {
-					cmd.Println("All platform enrollment requests approved.")
-					return nil
-				}
-			}
 			time.Sleep(pollInterval)
 			continue
 		}
@@ -860,9 +894,18 @@ func runDockerInitApprovals(cmd *cobra.Command, client apiClient) error {
 		if err != nil {
 			return fmt.Errorf("%w: approve %s (%s): %w", constants.ErrDockerInitApprovalFailed, next.ComponentKind, next.RequestID, err)
 		}
-		approved[next.RequestID] = struct{}{}
+		approvedSlots[nextSlot] = struct{}{}
 		cmd.Printf("Approved %s enrollment request %s (%s).\n", next.ComponentKind, next.RequestID, resp.State)
 		time.Sleep(pollInterval)
+	}
+
+	nextSlot := nextDockerInitApprovalSlot(approvedSlots)
+	if nextSlot > 0 {
+		return fmt.Errorf(
+			"%w: timed out waiting for %s enrollment request; check 'g8e docker logs' or rerun with --clean",
+			constants.ErrDockerInitApprovalFailed,
+			dockerInitApprovalSlotName(nextSlot),
+		)
 	}
 	return fmt.Errorf("%w: timed out waiting for platform enrollment approvals to complete", constants.ErrDockerInitApprovalFailed)
 }

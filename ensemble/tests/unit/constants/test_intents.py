@@ -81,7 +81,7 @@ class TestIntentValuesFromG8e:
     }
 
     @pytest.mark.parametrize(
-        "member,g8e_key",
+        ("member", "g8e_key"),
         list(_INTENT_MAP.items()),
         ids=[m.name for m in _INTENT_MAP],
     )

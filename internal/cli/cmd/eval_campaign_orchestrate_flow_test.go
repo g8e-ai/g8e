@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,6 +52,33 @@ func campaignOrchestrateOperators() []models.OperatorDocumentGo {
 	}
 }
 
+func writeCampaignWitnessPreflightResponse(w http.ResponseWriter, r *http.Request) bool {
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == constants.APIPaths.InferenceProviderObservations+"_preflight":
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ready"}`))
+		return true
+	case r.Method == http.MethodGet && r.URL.Path == constants.APIPaths.InferenceModelProvenanceAttestations+"_preflight":
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ready"}`))
+		return true
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, constants.APIPaths.InferenceModelProvenanceAttestations+"_attest"):
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ready"}`))
+		return true
+	default:
+		return false
+	}
+}
+
+func enableCampaignWitnessGateway(t *testing.T, root string, deps nativeEvalDeps) func() {
+	t.Helper()
+	writeCampaignExecuteGatewayCredentials(t, root, deps)
+	original := gatewayHealthCheck
+	gatewayHealthCheck = func() bool { return true }
+	return func() { gatewayHealthCheck = original }
+}
+
 func setupCampaignOrchestrateEnv(t *testing.T) (root string, deps nativeEvalDeps, cmd *cobra.Command, cleanup func()) {
 	t.Helper()
 	root = t.TempDir()
@@ -66,11 +94,24 @@ func setupCampaignOrchestrateEnv(t *testing.T) (root string, deps nativeEvalDeps
 	body, err := json.Marshal(models.OperatorSlotResponse{Success: true, Operators: operators})
 	require.NoError(t, err)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, constants.APIPaths.Operators, r.URL.Path)
-		w.Header().Set("Content-Type", "application/json")
-		_, writeErr := w.Write(body)
-		require.NoError(t, writeErr)
+		if writeCampaignWitnessPreflightResponse(w, r) {
+			return
+		}
+		if r.Method == http.MethodGet && r.URL.Path == constants.APIPaths.Operators {
+			w.Header().Set("Content-Type", "application/json")
+			_, writeErr := w.Write(body)
+			require.NoError(t, writeErr)
+			return
+		}
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, constants.APIPaths.InferenceProviderObservations) {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, constants.APIPaths.InferenceModelProvenanceAttestations) {
+			http.NotFound(w, r)
+			return
+		}
+		http.NotFound(w, r)
 	}))
 
 	paths := config.DefaultPathsConfig()

@@ -9,21 +9,27 @@ package gateway
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
 	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
+
+const modelProvenanceAttestationPreflightTimeout = 30 * time.Second
 
 // ModelProvenanceObservationCoordinator fans out BEGIN/FINALIZE provenance
 // commands to the remote storage-side Provenance Operator and ingests
@@ -162,6 +168,81 @@ func (c *ModelProvenanceObservationCoordinator) PreflightCommandDelivery(ctx con
 			constants.ErrEvaluationObservationUnavailable, cmdChannel)
 	}
 	return nil
+}
+
+// PreflightStorageAttestation verifies that the active provenance operator can
+// read and attest the expected Ollama manifest for one served model tag before
+// campaign execute burns scored assignments.
+func (c *ModelProvenanceObservationCoordinator) PreflightStorageAttestation(ctx context.Context, servedModelTag, expectedModelDigest string) error {
+	if servedModelTag == "" || expectedModelDigest == "" {
+		return fmt.Errorf("model provenance attestation preflight: %w", constants.ErrMissingRequiredField)
+	}
+	if !models.IsSHA256Hex(expectedModelDigest) {
+		return fmt.Errorf("model provenance attestation preflight: invalid expected digest")
+	}
+	if err := c.PreflightCommandDelivery(ctx); err != nil {
+		return fmt.Errorf("model provenance attestation preflight: %w", err)
+	}
+
+	probeID, err := newModelProvenancePreflightAttemptID()
+	if err != nil {
+		return fmt.Errorf("model provenance attestation preflight: %w", err)
+	}
+	now := time.Now().UTC().UnixMilli()
+	begin := &evalv1.ModelProvenanceObservationCommand{
+		ProviderAttemptId:      probeID,
+		Phase:                  evalv1.ModelProvenanceObservationPhase_MODEL_PROVENANCE_OBSERVATION_PHASE_BEGIN,
+		AttemptStartedAtUnixMs: now,
+		ServedModelTag:         servedModelTag,
+		ExpectedModelDigest:    expectedModelDigest,
+	}
+	if err := c.publishCommand(ctx, begin); err != nil {
+		return fmt.Errorf("model provenance attestation preflight: begin: %w", err)
+	}
+	finalize := &evalv1.ModelProvenanceObservationCommand{
+		ProviderAttemptId:        probeID,
+		Phase:                    evalv1.ModelProvenanceObservationPhase_MODEL_PROVENANCE_OBSERVATION_PHASE_FINALIZE,
+		AttemptStartedAtUnixMs:   now,
+		AttemptCompletedAtUnixMs: now,
+		AttemptStatus:            evalv1.ModelProvenanceObservationAttemptStatus_MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_COMPLETED,
+		ServedModelTag:           servedModelTag,
+		ExpectedModelDigest:      expectedModelDigest,
+	}
+	if err := c.publishCommand(ctx, finalize); err != nil {
+		return fmt.Errorf("model provenance attestation preflight: finalize: %w", err)
+	}
+
+	deadline := time.Now().Add(modelProvenanceAttestationPreflightTimeout)
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		window, loadErr := c.windows.Load(ctx, probeID)
+		if loadErr == nil {
+			if !window.GetDigestMatch() {
+				return fmt.Errorf("model provenance attestation preflight: digest mismatch for %q (observed %s)",
+					servedModelTag, window.GetObservedModelDigest())
+			}
+			return nil
+		}
+		if !errors.Is(loadErr, constants.ErrNotFound) {
+			return fmt.Errorf("model provenance attestation preflight: load probe window: %w", loadErr)
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return fmt.Errorf("model provenance attestation preflight: %w: operator did not attest %q (verify --model-storage-root and Ollama manifest layout)",
+		constants.ErrEvaluationObservationUnavailable, servedModelTag)
+}
+
+func newModelProvenancePreflightAttemptID() (string, error) {
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return "", err
+	}
+	return "preflight-provenance-" + hex.EncodeToString(suffix[:]), nil
 }
 
 // NotifyAttemptBegin delivers a BEGIN command with the expected model binding.

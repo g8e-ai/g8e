@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -110,4 +111,47 @@ func TestModelProvenanceControllerHandleModelProvenance_ReturnsWindow(t *testing
 	loaded := &evalv1.ModelProvenanceAttestationWindow{}
 	require.NoError(t, evalv1.UnmarshalCanonical(resp.Window, loaded))
 	assert.Equal(t, "attempt-1", loaded.GetProviderAttemptId())
+}
+
+type stubModelProvenancePreflight struct {
+	commandErr error
+	attestErr  error
+}
+
+func (s stubModelProvenancePreflight) PreflightCommandDelivery(context.Context) error {
+	return s.commandErr
+}
+
+func (s stubModelProvenancePreflight) PreflightStorageAttestation(context.Context, string, string) error {
+	return s.attestErr
+}
+
+func TestModelProvenanceControllerHandleModelProvenancePreflight_ReturnsReady(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	controller := newModelProvenanceController(ModelProvenanceControllerDeps{
+		Logger:                logger,
+		Responder:             response.NewWriter(logger),
+		ProvenanceCoordinator: stubModelProvenancePreflight{},
+	})
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.InferenceModelProvenanceAttestations+"_preflight", nil)
+	rr := httptest.NewRecorder()
+	controller.handleModelProvenance(rr, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"status":"ready"`)
+}
+
+func TestModelProvenanceControllerHandleModelProvenanceAttestPreflight_ReturnsReady(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	controller := newModelProvenanceController(ModelProvenanceControllerDeps{
+		Logger:                logger,
+		Responder:             response.NewWriter(logger),
+		ProvenanceCoordinator: stubModelProvenancePreflight{},
+	})
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.InferenceModelProvenanceAttestations+"_attest?served_model_tag=Impulse2000%2Fsmollm3%3A3b-q4_k_m&expected_model_digest="+strings.Repeat("a", 64), nil)
+	rr := httptest.NewRecorder()
+	controller.handleModelProvenance(rr, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), `"status":"ready"`)
 }

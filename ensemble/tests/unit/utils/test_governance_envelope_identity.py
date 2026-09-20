@@ -60,7 +60,7 @@ class TestSourceComponentToProtoEnum:
     """Bug 8: fail-closed mapping for source_component strings."""
 
     @pytest.mark.parametrize(
-        "internal,expected",
+        ("internal", "expected"),
         [
             ("g8ee", "COMPONENT_AGENT"),
             ("client", "COMPONENT_CLIENT"),

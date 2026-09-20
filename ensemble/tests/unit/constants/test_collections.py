@@ -40,7 +40,7 @@ class TestCollectionsFromG8e:
     """Verify shared collection names match g8e protocol constants."""
 
     @pytest.mark.parametrize(
-        "local,g8e_key",
+        ("local", "g8e_key"),
         [
             (DB_COLLECTION_SETTINGS, "settings"),
             (DB_COLLECTION_USERS, "users"),

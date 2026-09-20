@@ -528,7 +528,23 @@ docker compose --profile evaluation up -d --force-recreate g8e-inference-operato
 
 ### Mirror empty after `docker init --clean` but host run artifacts remain
 
-`docker init --clean` wipes the gateway mirror volume only. Host `public-projection-state.json` under `.g8e/data/eval/runs/<run-id>/` still lists `published_idempotency_keys`, so a plain `campaign publish` exports zero new records while the explorer mirror stays empty.
+`docker init --clean` wipes the gateway mirror volume only. Host campaign evidence under `.g8e/data/eval/runs/<run-id>/` and the rollout queue under `.g8e/eval/` are unchanged.
+
+Restore every verified queue entry to the gateway-owned mirror:
+
+```bash
+./g8e eval campaign mirror restore --queue
+```
+
+Or one run:
+
+```bash
+./g8e eval campaign mirror restore --run-id <run-id>
+```
+
+`docker init` attempts `--queue` restore automatically when the queue and run artifacts exist. Queue entries whose `verified_run_id` directory is missing are reported as host-absent and must be re-executed — mirror restore cannot recreate inference evidence.
+
+If host `public-projection-state.json` under `.g8e/data/eval/runs/<run-id>/` still lists `published_idempotency_keys`, a plain `campaign publish` exports zero new records while the explorer mirror stays empty.
 
 Republish without editing JSON:
 

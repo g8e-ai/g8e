@@ -57,7 +57,7 @@ class TestEnumReexportsAreProtocolIdentity:
     """Every enum re-exported from g8e.enums must be the same object (identity)."""
 
     @pytest.mark.parametrize(
-        "g8e_name,alias_name,_ensemble_name",
+        ("g8e_name", "alias_name", "_ensemble_name"),
         _g8e_enum_reexports(),
         ids=lambda v: v if isinstance(v, str) else "",
     )
@@ -69,7 +69,7 @@ class TestEnumReexportsAreProtocolIdentity:
         )
 
     def test_all_reexported_enums_are_enum_subclasses(self):
-        for g8e_name, alias_name, _ in _g8e_enum_reexports():
+        for _g8e_name, alias_name, _ in _g8e_enum_reexports():
             ens = getattr(gs, alias_name)
             assert issubclass(ens, Enum), f"gs.{alias_name} is not an Enum subclass"
 
@@ -155,7 +155,7 @@ class TestHttpHeaderReexports:
     """Every HTTP header re-exported in app.constants must match g8e.constants."""
 
     @pytest.mark.parametrize(
-        "ensemble_name,protocol_name",
+        ("ensemble_name", "protocol_name"),
         HEADER_PAIRS,
         ids=[e for e, _ in HEADER_PAIRS],
     )
@@ -222,7 +222,7 @@ class TestModelBaseReexports:
     """Model base symbols re-exported in app.models.base must be protocol identity."""
 
     @pytest.mark.parametrize(
-        "ensemble_name,protocol_name",
+        ("ensemble_name", "protocol_name"),
         BASE_REEXPORT_PAIRS,
         ids=[e for e, _ in BASE_REEXPORT_PAIRS],
     )
@@ -281,7 +281,7 @@ class TestModelSubclassing:
         assert issubclass(BackgroundEventWire, Proto)
 
     @pytest.mark.parametrize(
-        "ensemble_name,protocol_path",
+        ("ensemble_name", "protocol_path"),
         [
             ("G8eeUserSettings", "g8e.models.settings:G8eeUserSettings"),
             ("LLMSettings", "g8e.models.settings:LLMSettings"),
