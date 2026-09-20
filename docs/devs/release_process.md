@@ -1,6 +1,6 @@
 # g8e Release Process
 
-Last Updated: 2026-09-19
+Last Updated: 2026-09-20
 
 The primary purpose of a release is to inventory every change since the last release and ensure that all affected documentation accurately reflects the current state of the code. Version bumps and CHANGELOG entries follow this documentation reconciliation; they do not replace it.
 
@@ -124,7 +124,7 @@ grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" do
 git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/
 ```
 
-Any current-state document that references removed or renamed behavior is stale and must be updated. Any affected public behavior without an owning document is missing and must be added to the appropriate existing documentation surface. A maintained current-state installation command must reference the intended current release; historical release notes and scope-bound evidence retain the version they describe.
+Any current-state document that references removed or renamed behavior is stale and must be updated. Any affected public behavior without an owning document is missing and must be added to the appropriate existing documentation surface. The version-pin search is a candidate inventory, not an edit list: classify each match against the document's purpose and the release change, and update a current-state installation callout only when the complete-document audit confirms that it is intended to name the current release. Historical release notes, evidence-bearing documents, and unrelated accurate guides retain their declared version and metadata.
 
 ---
 
