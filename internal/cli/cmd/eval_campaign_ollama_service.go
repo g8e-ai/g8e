@@ -10,6 +10,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"google.golang.org/protobuf/proto"
 
@@ -90,17 +91,37 @@ func restartOllamaViaObserverIfEnabled(
 	authContext *auth.ClientAuthContext,
 	deps chatEvalDeps,
 	newID func(string) string,
-) error {
+	logOut io.Writer,
+	logErr io.Writer,
+) (evaluation.OllamaRestartOutcome, error) {
 	observer, err := evaluation.SelectProviderBoundaryObserver(operators, "")
 	if err != nil {
-		return nil
+		writeOllamaRestartSkip(logErr, err)
+		return evaluation.OllamaRestartOutcome{SkipReason: err.Error()}, nil
 	}
 	if observer == nil || !observer.OllamaEnabled {
-		return nil
+		reason := "no active observer with --ollama"
+		writeOllamaRestartSkip(logErr, fmt.Errorf("%s", reason))
+		return evaluation.OllamaRestartOutcome{SkipReason: reason}, nil
 	}
 	dispatcher, err := newHarnessOllamaServiceDispatcher(cfg, authContext, dataOperator, deps)
 	if err != nil {
-		return err
+		return evaluation.OllamaRestartOutcome{}, err
 	}
-	return evaluation.RestartOllamaViaObserver(ctx, observer, dispatcher, runID, newID)
+	outcome, err := evaluation.RestartOllamaViaObserver(ctx, observer, dispatcher, runID, newID)
+	if err != nil {
+		return outcome, err
+	}
+	if outcome.Performed && logOut != nil {
+		_, _ = fmt.Fprintf(logOut, "Ollama provider restarted via observer %s (%d commands, platform=%s)\n",
+			outcome.ObserverSessionID, outcome.CommandCount, outcome.Platform)
+	}
+	return outcome, nil
+}
+
+func writeOllamaRestartSkip(logErr io.Writer, err error) {
+	if logErr == nil || err == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(logErr, "warning: governed Ollama restart skipped: %v\n", err)
 }

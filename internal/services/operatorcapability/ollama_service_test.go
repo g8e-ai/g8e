@@ -10,11 +10,12 @@ package operatorcapability
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/security"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestIsOllamaServiceCommand(t *testing.T) {
@@ -45,11 +46,17 @@ func TestRestartOllamaCommands(t *testing.T) {
 	assert.Equal(t, []string{
 		OllamaServiceCommandStop,
 		"cmd.exe /C timeout /t 5 /nobreak",
+		OllamaWindowsKillCommand,
+		"cmd.exe /C timeout /t 3 /nobreak",
+		OllamaWindowsStartCommand,
+		"cmd.exe /C timeout /t 8 /nobreak",
 		OllamaServiceCommandPS,
 	}, RestartOllamaCommands("windows"))
 	assert.Equal(t, []string{
 		OllamaServiceCommandStop,
 		"sleep 5",
+		RestartOllamaDaemonCommand("linux"),
+		"sleep 8",
 		OllamaServiceCommandPS,
 	}, RestartOllamaCommands("linux"))
 }
@@ -60,4 +67,14 @@ func TestRestartSettleCommand(t *testing.T) {
 	assert.False(t, security.IsShellRequired(windowsSettle), "windows settle must run without a POSIX shell")
 
 	assert.Equal(t, "sleep 5", RestartSettleCommand("linux"))
+}
+
+func TestToleratedOllamaRestartExitCode(t *testing.T) {
+	assert.True(t, ToleratedOllamaRestartExitCode(OllamaWindowsKillCommand, 0))
+	assert.True(t, ToleratedOllamaRestartExitCode(OllamaWindowsKillCommand, 128))
+	assert.False(t, ToleratedOllamaRestartExitCode(OllamaWindowsKillCommand, 1))
+
+	assert.True(t, ToleratedOllamaRestartExitCode(OllamaWindowsStartCommand, 0))
+	assert.True(t, ToleratedOllamaRestartExitCode(OllamaWindowsStartCommand, 1))
+	assert.False(t, ToleratedOllamaRestartExitCode(OllamaWindowsStartCommand, 2))
 }

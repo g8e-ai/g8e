@@ -546,6 +546,18 @@ func (s *PublicPublisherService) VerifyBatch(batch models.PublicFeedBatch, pubKe
 	return nil
 }
 
+func isRepairableOutboxError(err error) bool {
+	return errors.Is(err, constants.ErrPublicFeedOutboxCorrupt) ||
+		errors.Is(err, constants.ErrPublicFeedOutboxEquivocation) ||
+		errors.Is(err, constants.ErrPublicFeedHashChainMismatch)
+}
+
+func resequencePublicFeedRecords(records []models.PublicFeedRecord, startSequence int64) {
+	for index := range records {
+		records[index].Sequence = startSequence + int64(index)
+	}
+}
+
 // ExportBatch builds a signed batch from records, durably writes it to the
 // outbox, transmits it to the mirror with idempotent retry, and advances
 // acknowledgment only after signed mirror acceptance.
@@ -560,6 +572,24 @@ func (s *PublicPublisherService) ExportBatch(ctx context.Context, records []mode
 		return constants.ErrPublicFeedBatchOversized
 	}
 
+	err := s.exportBatchOnce(ctx, records)
+	if err == nil || !isRepairableOutboxError(err) {
+		return err
+	}
+	if repairErr := s.RepairOutboxFromSnapshot(ctx); repairErr != nil {
+		return err
+	}
+	if reloadErr := s.loadSnapshotFromOutbox(ctx); reloadErr != nil {
+		return fmt.Errorf("public-feed: export batch: reload after repair: %w", reloadErr)
+	}
+	s.mu.Lock()
+	nextSequence := s.highWaterSeq + 1
+	s.mu.Unlock()
+	resequencePublicFeedRecords(records, nextSequence)
+	return s.exportBatchOnce(ctx, records)
+}
+
+func (s *PublicPublisherService) exportBatchOnce(ctx context.Context, records []models.PublicFeedRecord) error {
 	if err := s.loadSnapshotFromOutbox(ctx); err != nil {
 		return fmt.Errorf("public-feed: export batch: recover outbox: %w", err)
 	}
@@ -938,14 +968,14 @@ func (s *PublicPublisherService) RepairOutboxFromSnapshot(ctx context.Context) e
 			continue
 		}
 		if entry.Sequence != tipSequence+1 {
-			return fmt.Errorf("%w: sequence %d does not continue snapshot tip %d", constants.ErrPublicFeedOutboxCorrupt, entry.Sequence, tipSequence)
+			break
 		}
 		var batch models.PublicFeedBatch
 		if err := json.Unmarshal([]byte(entry.BatchBytes), &batch); err != nil {
-			return fmt.Errorf("%w: decode repair batch: %v", constants.ErrPublicFeedOutboxCorrupt, err)
+			break
 		}
 		if batch.FirstSequence != tipSequence+1 || batch.PreviousBatchHash != tipHash {
-			return fmt.Errorf("%w: sequence %d hash chain does not match snapshot tip", constants.ErrPublicFeedOutboxCorrupt, entry.Sequence)
+			break
 		}
 		retained = append(retained, entry)
 		tipSequence = entry.Sequence

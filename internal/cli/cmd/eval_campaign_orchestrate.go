@@ -295,15 +295,15 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		iterations = 1<<31 - 1
 	}
 	for i := 0; i < iterations; i++ {
-		restartCtx, restartCancel := context.WithTimeout(cmd.Context(), 5*time.Minute)
-		err := restartOllamaViaObserverIfEnabled(restartCtx, operators, opts.RunID, dataOperator, cfg, authContext, chatEvalDeps{
+		restartCtx, restartCancel := context.WithTimeout(cmd.Context(), 10*time.Minute)
+		_, err := restartOllamaViaObserverIfEnabled(restartCtx, operators, opts.RunID, dataOperator, cfg, authContext, chatEvalDeps{
 			configLoader:   deps.configLoader,
 			fileSvcFactory: deps.fileSvcFactory,
 			authLoader:     deps.authLoader,
 			clientFactory:  deps.clientFactory,
 			now:            deps.now,
 			newID:          deps.newID,
-		}, func(prefix string) string { return prefix + "-" + deps.newID() })
+		}, func(prefix string) string { return prefix + "-" + deps.newID() }, cmd.OutOrStdout(), cmd.ErrOrStderr())
 		restartCancel()
 		if err != nil {
 			return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
