@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -242,8 +243,7 @@ func (r *CampaignProviderObservationReader) VerifyAssignmentProviderObservations
 		window, err := r.windows.Load(ctx, attemptID)
 		if err != nil {
 			if errors.Is(err, constants.ErrNotFound) {
-				reason := fmt.Sprintf("provider_boundary_observation_missing:%s", attemptID)
-				unavailable = append(unavailable, reason)
+				unavailable = appendUniqueStrings(unavailable, "source_not_captured")
 				if policy == ProviderObservationPolicyStrict {
 					failures = append(failures, fmt.Sprintf("inference %s missing provider-boundary observation window", inferenceRecord.GetInferenceRecordId()))
 				}
@@ -265,12 +265,21 @@ func (r *CampaignProviderObservationReader) VerifyAssignmentProviderObservations
 		if report == nil || report.Complete {
 			continue
 		}
-		unavailable = append(unavailable, fmt.Sprintf("provider_boundary_observation_incomplete:%s", attemptID))
+		unavailable = appendUniqueStrings(unavailable, "incomplete_contributor_evidence")
 		for _, reason := range report.FailureReasons {
 			failures = append(failures, fmt.Sprintf("inference %s: %s", inferenceRecord.GetInferenceRecordId(), reason))
 		}
 	}
 	return failures, unavailable
+}
+
+func publicUnavailableMetricReasons(result *evalv1.EvaluationAssignmentResult) []string {
+	for _, inference := range result.GetModelInferences() {
+		if inference.GetUsageAvailability() == evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE {
+			return []string{"source_unavailable"}
+		}
+	}
+	return nil
 }
 
 // BuildPublicBenchmarkObservations derives disclosure-safe benchmark telemetry
@@ -280,13 +289,22 @@ func (r *CampaignProviderObservationReader) BuildPublicBenchmarkObservations(ctx
 		return nil, fmt.Errorf("evaluation: build public benchmark observations: %w", constants.ErrMissingRequiredField)
 	}
 	observations := &PublicBenchmarkObservations{
-		UnavailableReasons: append([]string(nil), collectUnavailableMetricReasons(result)...),
-	}
-	if r == nil {
-		observations.UnavailableReasons = appendUniqueStrings(observations.UnavailableReasons, "provider_boundary_observer_unconfigured")
-		return observations, nil
+		UnavailableReasons: publicUnavailableMetricReasons(result),
 	}
 	timing := deriveBenchmarkTiming(result)
+	if timing.hasValues() {
+		observations.Timing = timing.toPublic()
+	}
+	if gradeSummaries := buildPublicGradeSummaries(result); len(gradeSummaries) > 0 {
+		observations.GradeSummaries = gradeSummaries
+	}
+	if scorecard := buildToolScorecardObservations(result); len(scorecard) > 0 {
+		observations.ToolScorecard = scorecard
+	}
+	if r == nil {
+		observations.UnavailableReasons = appendUniqueStrings(observations.UnavailableReasons, "source_not_captured")
+		return observations, nil
+	}
 	gpu := &gpuAggregate{}
 	for _, inferenceRecord := range scoredModelInferences(result) {
 		attemptID := inferenceRecord.GetProviderAttemptId()
@@ -296,24 +314,15 @@ func (r *CampaignProviderObservationReader) BuildPublicBenchmarkObservations(ctx
 		window, err := r.windows.Load(ctx, attemptID)
 		if err != nil {
 			if isProviderEvidenceNotFound(err) {
-				observations.UnavailableReasons = appendUniqueStrings(observations.UnavailableReasons, "provider_boundary_observation_missing:"+attemptID)
+				observations.UnavailableReasons = appendUniqueStrings(observations.UnavailableReasons, "source_not_captured")
 				continue
 			}
 			return nil, fmt.Errorf("evaluation: build public benchmark observations: %w", err)
 		}
 		gpu.observeWindow(window)
 	}
-	if timing.hasValues() {
-		observations.Timing = timing.toPublic()
-	}
 	if gpu.hasValues() {
 		observations.GPU = gpu.toPublic()
-	}
-	if gradeSummaries := buildPublicGradeSummaries(result); len(gradeSummaries) > 0 {
-		observations.GradeSummaries = gradeSummaries
-	}
-	if scorecard := buildToolScorecardObservations(result); len(scorecard) > 0 {
-		observations.ToolScorecard = scorecard
 	}
 	if len(observations.UnavailableReasons) == 0 {
 		observations.UnavailableReasons = nil
@@ -321,26 +330,51 @@ func (r *CampaignProviderObservationReader) BuildPublicBenchmarkObservations(ctx
 	return observations, nil
 }
 
-func buildPublicGradeSummaries(result *evalv1.EvaluationAssignmentResult) []PublicGradeSummary {
-	if result == nil {
-		return nil
+func buildToolScorecardForScenario(result *evalv1.EvaluationAssignmentResult, scenario *PublicScenarioContext) map[string]*PublicMetricValue {
+	scorecard := make(map[string]*PublicMetricValue, len(toolScorecardDimensions))
+	required := make(map[string]bool, len(scenario.ToolScoreDimensions))
+	for _, requirement := range scenario.ToolScoreDimensions {
+		if requirement != nil {
+			required[requirement.GetDimension().String()] = requirement.GetRequired()
+		}
 	}
-	grades := result.GetDeterministicGrades()
-	if len(grades) == 0 {
-		return nil
-	}
-	summaries := make([]PublicGradeSummary, 0, len(grades))
-	for _, grade := range grades {
-		if grade == nil || grade.GetCriterionId() == "" {
+	for _, dimension := range toolScorecardDimensions {
+		if !required[toolScoreDimensionEnum(dimension).String()] {
+			scorecard[dimension] = &PublicMetricValue{UnavailableReason: "scenario_not_applicable"}
 			continue
 		}
-		summaries = append(summaries, PublicGradeSummary{
-			CriterionID: grade.GetCriterionId(),
-			Status:      publicVerdictStatus(grade.GetStatus()),
-			Detail:      grade.GetDetail(),
-		})
+		scorecard[dimension] = &PublicMetricValue{UnavailableReason: "source_not_captured"}
 	}
-	return summaries
+	for _, grade := range result.GetDeterministicGrades() {
+		if grade == nil {
+			continue
+		}
+		dimension, ok := gradeToToolScorecardDimension[grade.GetCriterionId()]
+		if ok && required[toolScoreDimensionEnum(dimension).String()] {
+			scorecard[dimension] = toolScorecardMetricFromGrade(grade)
+		}
+	}
+	return scorecard
+}
+
+func toolScoreDimensionEnum(dimension string) evalv1.PublicToolScoreDimension {
+	for _, candidate := range []evalv1.PublicToolScoreDimension{
+		evalv1.PublicToolScoreDimension_PUBLIC_TOOL_SCORE_DIMENSION_TOOL_RECOGNITION,
+		evalv1.PublicToolScoreDimension_PUBLIC_TOOL_SCORE_DIMENSION_TOOL_SELECTION,
+		evalv1.PublicToolScoreDimension_PUBLIC_TOOL_SCORE_DIMENSION_ARGUMENT_SCHEMA,
+		evalv1.PublicToolScoreDimension_PUBLIC_TOOL_SCORE_DIMENSION_ARGUMENT_SEMANTICS,
+		evalv1.PublicToolScoreDimension_PUBLIC_TOOL_SCORE_DIMENSION_PERMISSION_COMPLIANCE,
+		evalv1.PublicToolScoreDimension_PUBLIC_TOOL_SCORE_DIMENSION_RESULT_INTERPRETATION,
+		evalv1.PublicToolScoreDimension_PUBLIC_TOOL_SCORE_DIMENSION_FOLLOW_UP_DECISION,
+		evalv1.PublicToolScoreDimension_PUBLIC_TOOL_SCORE_DIMENSION_UNNECESSARY_TOOL_CALLS,
+		evalv1.PublicToolScoreDimension_PUBLIC_TOOL_SCORE_DIMENSION_LOOPING,
+		evalv1.PublicToolScoreDimension_PUBLIC_TOOL_SCORE_DIMENSION_RECOVERY,
+	} {
+		if candidate.String() == "PUBLIC_TOOL_SCORE_DIMENSION_"+strings.ToUpper(dimension) {
+			return candidate
+		}
+	}
+	return evalv1.PublicToolScoreDimension_PUBLIC_TOOL_SCORE_DIMENSION_UNSPECIFIED
 }
 
 func buildToolScorecardObservations(result *evalv1.EvaluationAssignmentResult) map[string]*PublicMetricValue {
@@ -409,7 +443,7 @@ func scoredModelInferences(result *evalv1.EvaluationAssignmentResult) []*evalv1.
 	}
 	records := make([]*evalv1.ModelInferenceRecord, 0, len(result.GetModelInferences()))
 	for _, record := range result.GetModelInferences() {
-		if record == nil || record.GetProviderAttemptId() == "" {
+		if record == nil {
 			continue
 		}
 		records = append(records, record)

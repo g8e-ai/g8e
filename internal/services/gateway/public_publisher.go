@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/publicdisclosure"
 )
 
 // prohibitedRecordFields are field names that must never appear in a public
@@ -450,6 +451,11 @@ func (s *PublicPublisherService) BuildBatch(records []models.PublicFeedRecord) (
 		}
 		if err := checkProhibitedFields(r.RecordBytes); err != nil {
 			return models.PublicFeedBatch{}, fmt.Errorf("public-feed: build batch: %w", err)
+		}
+		if r.RecordType == models.PublicFeedRecordTypeProjection {
+			if err := publicdisclosure.ValidateAssignmentRecord("", []byte(r.RecordBytes)); err != nil {
+				return models.PublicFeedBatch{}, fmt.Errorf("public-feed: build assignment record: %w", err)
+			}
 		}
 	}
 

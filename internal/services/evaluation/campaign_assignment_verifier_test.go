@@ -76,6 +76,38 @@ func TestCampaignAssignmentVerifier_FailsWhenStoredGradesDrift(t *testing.T) {
 	assert.NotZero(t, report.GetFailureCount())
 }
 
+func TestCampaignAssignmentVerifier_FailsWhenCapturedTelemetryDriftsFromTrace(t *testing.T) {
+	t.Parallel()
+	trace := completedHomogeneousTrace("primary")
+	call := trace["model_calls"].([]any)[0].(map[string]any)
+	call["usage_reported"] = true
+	call["input_tokens"] = float64(1)
+	call["output_tokens"] = float64(2)
+	call["thinking_tokens"] = float64(3)
+	call["cache_tokens"] = float64(4)
+	digest, err := ComputeChatProbeTraceDigest(trace)
+	require.NoError(t, err)
+	trace["trace_digest"] = digest
+	req := homogeneousAssignmentExecutionRequest("primary")
+	result, err := ImportAssignmentResultFromTrace(req, trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	result.ModelInferences[0].PromptTokens = 99
+	result.ResultDigest, err = ComputeAssignmentResultDigest(result)
+	require.NoError(t, err)
+
+	report, err := NewCampaignAssignmentVerifier(func() time.Time { return time.Unix(1_700_000_100, 0).UTC() }).Verify(context.Background(), CampaignAssignmentVerificationRequest{
+		Assignment:    req.Assignment,
+		Result:        result,
+		ScenarioInput: req.ScenarioInput,
+		ScenarioGold:  req.ScenarioGold,
+		GradingMethod: req.GradingMethod,
+		Trace:         trace,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, report.GetStatus())
+	assert.Contains(t, report.GetFailureReasons(), "imported evidence does not match trace: model inference 0 mismatch")
+}
+
 func loadScenarioGold(scenarioID string) ScenarioGoldCriteria {
 	_, artifacts, err := BuildScenarioCatalog()
 	if err != nil {

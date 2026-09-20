@@ -108,7 +108,7 @@ func TestBuildPublicGradeSummaries_FromDeterministicGrades(t *testing.T) {
 	require.Len(t, summaries, 1)
 	assert.Equal(t, "tool-selection", summaries[0].CriterionID)
 	assert.Equal(t, "fail", summaries[0].Status)
-	assert.Equal(t, "expected tool selection evidence is missing", summaries[0].Detail)
+	assert.Empty(t, summaries[0].Detail)
 }
 
 func TestBuildToolScorecardObservations_FailingToolSelection(t *testing.T) {
@@ -228,7 +228,7 @@ func TestCampaignProviderObservationReader_VerifyAssignmentProviderObservations_
 	}
 	failures, unavailable := reader.VerifyAssignmentProviderObservations(ctx, result, ProviderObservationPolicyInterim)
 	assert.Empty(t, failures)
-	assert.Equal(t, []string{"provider_boundary_observation_missing:attempt-missing"}, unavailable)
+	assert.Equal(t, []string{"source_not_captured"}, unavailable)
 }
 
 type stubProviderObservationRemote struct {
@@ -302,7 +302,7 @@ func TestCampaignProviderObservationReader_VerifyAssignmentProviderObservations_
 	}
 	failures, unavailable := reader.VerifyAssignmentProviderObservations(ctx, result, ProviderObservationPolicyStrict)
 	assert.NotEmpty(t, failures)
-	assert.Equal(t, []string{"provider_boundary_observation_missing:attempt-missing"}, unavailable)
+	assert.Equal(t, []string{"source_not_captured"}, unavailable)
 }
 
 func TestMarshalAssignmentResultProjectionEnvelope_IncludesBenchmarkObservations(t *testing.T) {
@@ -344,6 +344,16 @@ func TestCampaignRunVerifier_WithReaders(t *testing.T) {
 	require.NotNil(t, verifier)
 	assert.Equal(t, ProviderObservationPolicyInterim, verifier.providerObservationPolicy)
 	assert.Equal(t, ModelProvenancePolicyInterim, verifier.modelProvenancePolicy)
+}
+
+func TestBuildPublicBenchmarkObservations_UnconfiguredObserverKeepsResultTelemetry(t *testing.T) {
+	t.Parallel()
+	result := &evalv1.EvaluationAssignmentResult{ModelInferences: []*evalv1.ModelInferenceRecord{{LoadDurationNanos: 1_000_000, GenerationDurationNanos: 2_000_000, TotalDurationNanos: 3_000_000}}}
+	benchmark, err := (*CampaignProviderObservationReader)(nil).BuildPublicBenchmarkObservations(context.Background(), result)
+	require.NoError(t, err)
+	require.NotNil(t, benchmark.Timing)
+	assert.Equal(t, 1.0, *benchmark.Timing.ModelLoadMS.Value)
+	assert.Contains(t, benchmark.UnavailableReasons, "source_not_captured")
 }
 
 func writeProviderAttemptRecord(ctx context.Context, fileSvc fs.RuntimeFileService, record *operatorv1.InferenceProviderAttemptRecord) error {
