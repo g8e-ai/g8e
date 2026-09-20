@@ -53,10 +53,10 @@ type modelProvenancePreflight interface {
 
 // ModelProvenanceControllerDeps groups dependencies for ModelProvenanceController.
 type ModelProvenanceControllerDeps struct {
-	Logger                 *slog.Logger
-	Responder              *response.Writer
-	Windows                model_provenance.WindowStore
-	ProvenanceCoordinator  modelProvenancePreflight
+	Logger                *slog.Logger
+	Responder             *response.Writer
+	Windows               model_provenance.WindowStore
+	ProvenanceCoordinator modelProvenancePreflight
 }
 
 func newModelProvenanceController(d ModelProvenanceControllerDeps) *ModelProvenanceController {
@@ -170,8 +170,8 @@ func (c *ModelProvenanceController) handleModelProvenanceAttestPreflight(w http.
 		return
 	}
 	c.responder.JSON(w, http.StatusOK, map[string]string{
-		"status":               "ready",
-		"served_model_tag":     servedModelTag,
+		"status":                "ready",
+		"served_model_tag":      servedModelTag,
 		"expected_model_digest": expectedModelDigest,
 	})
 }

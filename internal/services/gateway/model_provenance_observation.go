@@ -203,7 +203,7 @@ func (c *ModelProvenanceObservationCoordinator) PreflightStorageAttestation(ctx 
 		ProviderAttemptId:        probeID,
 		Phase:                    evalv1.ModelProvenanceObservationPhase_MODEL_PROVENANCE_OBSERVATION_PHASE_FINALIZE,
 		AttemptStartedAtUnixMs:   now,
-		AttemptCompletedAtUnixMs:   now,
+		AttemptCompletedAtUnixMs: now,
 		AttemptStatus:            evalv1.ModelProvenanceObservationAttemptStatus_MODEL_PROVENANCE_OBSERVATION_ATTEMPT_STATUS_COMPLETED,
 		ServedModelTag:           servedModelTag,
 		ExpectedModelDigest:      expectedModelDigest,
