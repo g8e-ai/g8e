@@ -47,7 +47,7 @@ func (e *remoteGatewayCampaignFeedExporter) ExportBatch(ctx context.Context, rec
 		if err == nil {
 			return nil
 		}
-		if attempt == 1 || !isPublicFeedSequenceOutOfOrder(err) {
+		if attempt == 1 || !isPublicFeedPublicationRetryable(err) {
 			return err
 		}
 		e.invalidateHighWater()
@@ -61,6 +61,20 @@ func (e *remoteGatewayCampaignFeedExporter) ExportBatch(ctx context.Context, rec
 		}
 	}
 	return fmt.Errorf("campaign publication: gateway export batch: sequence retry exhausted")
+}
+
+func isPublicFeedPublicationRetryable(err error) bool {
+	return isPublicFeedSequenceOutOfOrder(err) || isPublicFeedOutboxPublicationError(err)
+}
+
+func isPublicFeedOutboxPublicationError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, constants.ErrPublicFeedOutboxEquivocation.Error()) ||
+		strings.Contains(message, constants.ErrPublicFeedOutboxCorrupt.Error()) ||
+		strings.Contains(message, constants.ErrPublicFeedHashChainMismatch.Error())
 }
 
 func (e *remoteGatewayCampaignFeedExporter) exportBatchOnce(ctx context.Context, records []evaluation.CampaignPublicFeedRecord) error {

@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -369,6 +370,41 @@ func TestRepairOutboxFromSnapshot_CompactsPrefixGap(t *testing.T) {
 
 	_, err = publisher.outbox.List(context.Background())
 	require.ErrorIs(t, err, constants.ErrPublicFeedHashChainMismatch)
+
+	require.NoError(t, publisher.RepairOutboxFromSnapshot(context.Background()))
+
+	repaired, err := publisher.outbox.List(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, repaired)
+}
+
+func TestRepairOutboxFromSnapshot_DropsDiscontinuousTail(t *testing.T) {
+	publisher, _, fileSvc, _ := newPublicPublisherTestEnv(t)
+
+	snapshot := models.PublicFeedSnapshot{
+		SourceID:          publisher.cfg.SourceID,
+		HighWaterSequence: 10,
+		FeedChainHash:     "abc123",
+		BatchCount:        5,
+	}
+	snapBytes, err := json.Marshal(snapshot)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), constants.PublicFeedSnapshotPath, snapBytes, constants.PermFilePrivate))
+
+	records := []models.PublicFeedRecord{makeProjectionRecord(t, 15, map[string]any{"campaign_id": "orphan-tail"})}
+	batch, err := publisher.BuildBatch(records)
+	require.NoError(t, err)
+	batchBytes, err := json.Marshal(batch)
+	require.NoError(t, err)
+	entry := models.PublicOutboxEntry{
+		Sequence:   batch.LastSequence,
+		BatchHash:  batch.ContentHash,
+		BatchBytes: string(batchBytes),
+		Status:     models.PublicFeedOutboxStatusPending,
+		CreatedAt:  time.Now().UTC(),
+	}
+	rawStore := publisher.outbox.(*runtimePublicOutboxStore)
+	require.NoError(t, rawStore.Replace(context.Background(), []models.PublicOutboxEntry{entry}))
 
 	require.NoError(t, publisher.RepairOutboxFromSnapshot(context.Background()))
 

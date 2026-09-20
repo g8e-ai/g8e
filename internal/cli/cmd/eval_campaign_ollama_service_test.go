@@ -98,7 +98,7 @@ func TestNewHarnessOllamaServiceDispatcher_BuildsPersona(t *testing.T) {
 }
 
 func TestRestartOllamaViaObserverIfEnabled_SkipsWhenNoObserver(t *testing.T) {
-	err := restartOllamaViaObserverIfEnabled(
+	outcome, err := restartOllamaViaObserverIfEnabled(
 		context.Background(),
 		campaignOrchestrateOperators(),
 		"run-1",
@@ -107,8 +107,11 @@ func TestRestartOllamaViaObserverIfEnabled_SkipsWhenNoObserver(t *testing.T) {
 		&auth.ClientAuthContext{UserID: "user-1", CLISessionID: "cli-1"},
 		chatEvalDeps{},
 		func(prefix string) string { return prefix + "-1" },
+		nil,
+		nil,
 	)
 	require.NoError(t, err)
+	assert.False(t, outcome.Performed)
 }
 
 func TestRestartOllamaViaObserverIfEnabled_SkipsWhenDisabled(t *testing.T) {
@@ -123,7 +126,7 @@ func TestRestartOllamaViaObserverIfEnabled_SkipsWhenDisabled(t *testing.T) {
 			},
 		},
 	}
-	err := restartOllamaViaObserverIfEnabled(
+	outcome, err := restartOllamaViaObserverIfEnabled(
 		context.Background(),
 		operators,
 		"run-1",
@@ -132,6 +135,9 @@ func TestRestartOllamaViaObserverIfEnabled_SkipsWhenDisabled(t *testing.T) {
 		&auth.ClientAuthContext{UserID: "user-1", CLISessionID: "cli-1"},
 		chatEvalDeps{},
 		func(prefix string) string { return prefix + "-1" },
+		nil,
+		nil,
 	)
 	require.NoError(t, err)
+	assert.False(t, outcome.Performed)
 }
