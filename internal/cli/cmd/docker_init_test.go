@@ -99,6 +99,30 @@ func TestIsInferenceOperatorPendingRequest(t *testing.T) {
 	assert.True(t, isInferenceOperatorPendingRequest(&inferenceReq))
 }
 
+func TestNextDockerInitApprovalSlot(t *testing.T) {
+	assert.Equal(t, 1, nextDockerInitApprovalSlot(nil))
+	assert.Equal(t, 2, nextDockerInitApprovalSlot(map[int]struct{}{1: {}}))
+	assert.Equal(t, 0, nextDockerInitApprovalSlot(map[int]struct{}{1: {}, 2: {}, 3: {}, 4: {}}))
+}
+
+func TestSelectDockerInitApprovalCandidate(t *testing.T) {
+	inference := models.PlatformEnrollmentPendingRequest{
+		RequestID:     "inf-1",
+		ComponentKind: models.PlatformComponentOperator,
+		Hostname:      "inference-operator",
+	}
+	dataOp := models.PlatformEnrollmentPendingRequest{
+		RequestID:     "op-1",
+		ComponentKind: models.PlatformComponentOperator,
+		Hostname:      "g8e-operator",
+	}
+	pending := []models.PlatformEnrollmentPendingRequest{inference, dataOp}
+
+	assert.Nil(t, selectDockerInitApprovalCandidate(pending, 2))
+	assert.Equal(t, "op-1", selectDockerInitApprovalCandidate(pending, 1).RequestID)
+	assert.Equal(t, "inf-1", selectDockerInitApprovalCandidate(pending, 4).RequestID)
+}
+
 func TestPlatformEnrollmentApprovalRank(t *testing.T) {
 	tests := []struct {
 		name string

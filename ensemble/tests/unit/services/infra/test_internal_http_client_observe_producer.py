@@ -40,8 +40,7 @@ def _make_client() -> InternalHttpClient:
     settings.client_cert_path = None
     settings.client_key_path = None
     settings.auth.internal_api_key = None
-    client = InternalHttpClient(settings)
-    return client
+    return InternalHttpClient(settings)
 
 
 def _agent_request() -> ObserveProducerAgentStateRequest:

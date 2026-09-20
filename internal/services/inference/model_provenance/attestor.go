@@ -161,11 +161,17 @@ func (a *OllamaStorageAttestor) attestBlob(ctx context.Context, digestRef, media
 }
 
 func resolveOllamaManifestPath(storageRoot, servedModelTag string) (string, error) {
-	name, tag, ok := strings.Cut(servedModelTag, ":")
-	if !ok || name == "" || tag == "" {
+	modelRef, tag, ok := strings.Cut(servedModelTag, ":")
+	if !ok || modelRef == "" || tag == "" {
 		return "", fmt.Errorf("model provenance attestor: invalid served model tag %q", servedModelTag)
 	}
-	manifestPath := filepath.Join(storageRoot, "manifests", defaultOllamaManifestHost, defaultOllamaManifestNS, name, tag)
+	namespace := defaultOllamaManifestNS
+	modelName := modelRef
+	if ns, name, ok := strings.Cut(modelRef, "/"); ok && ns != "" && name != "" {
+		namespace = ns
+		modelName = name
+	}
+	manifestPath := filepath.Join(storageRoot, "manifests", defaultOllamaManifestHost, namespace, modelName, tag)
 	if _, err := os.Stat(manifestPath); err != nil {
 		return "", fmt.Errorf("model provenance attestor: manifest not found for %q: %w", servedModelTag, err)
 	}

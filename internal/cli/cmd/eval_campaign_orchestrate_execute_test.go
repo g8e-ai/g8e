@@ -142,8 +142,9 @@ func newTestEnsembleServer(traceFn func(assignmentID, attemptID string) map[stri
 }
 
 func TestRunCampaignExecute_ExecutesOneAssignment(t *testing.T) {
-	_, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
+	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
+	defer enableCampaignWitnessGateway(t, root, deps)()
 
 	runID, store := prepareCampaignRunForExecute(t, deps, cmd)
 	controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string {
@@ -195,8 +196,9 @@ func TestRunCampaignExecute_RejectsMissingRun(t *testing.T) {
 }
 
 func TestRunCampaignExecute_DefaultsLimitToOne(t *testing.T) {
-	_, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
+	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
+	defer enableCampaignWitnessGateway(t, root, deps)()
 
 	runID, store := prepareCampaignRunForExecute(t, deps, cmd)
 	controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string {
@@ -231,8 +233,9 @@ func TestRunCampaignExecute_DefaultsLimitToOne(t *testing.T) {
 }
 
 func TestVerifyCampaignRun_PersistsVerificationReport(t *testing.T) {
-	_, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
+	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
+	defer enableCampaignWitnessGateway(t, root, deps)()
 
 	runID, store := prepareCampaignRunForExecute(t, deps, cmd)
 	controller := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string {
@@ -321,6 +324,7 @@ func (l *campaignTraceLookup) resolve(assignmentID, attemptID string) map[string
 func TestRunCampaignStartFlow_ExecuteAndVerify(t *testing.T) {
 	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
+	defer enableCampaignWitnessGateway(t, root, deps)()
 
 	lookup := &campaignTraceLookup{root: root, deps: deps}
 	ensemble := newTestEnsembleServer(lookup.resolve)

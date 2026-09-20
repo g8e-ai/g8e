@@ -99,7 +99,8 @@ class TestDocumentPayloadToProtobuf:
         )
         proto = payload.to_protobuf()
         raw = proto.SerializeToString()
-        assert isinstance(raw, bytes) and len(raw) > 0
+        assert isinstance(raw, bytes)
+        assert len(raw) > 0
         # Round-trip parse
         parsed = operator_pb2.DocumentUpdateRequested()
         parsed.ParseFromString(raw)
@@ -110,7 +111,8 @@ class TestDocumentPayloadToProtobuf:
         payload = DocumentDeleteRequestPayload(collection="cases", document_id="case-1")
         proto = payload.to_protobuf()
         raw = proto.SerializeToString()
-        assert isinstance(raw, bytes) and len(raw) > 0
+        assert isinstance(raw, bytes)
+        assert len(raw) > 0
         parsed = operator_pb2.DocumentDeleteRequested()
         parsed.ParseFromString(raw)
         assert parsed.collection == "cases"
@@ -135,9 +137,8 @@ class TestG8eCommandPayloadToProtobufContract:
 
     def test_document_payloads_have_to_protobuf(self):
         for cls in (DocumentUpdateRequestPayload, DocumentDeleteRequestPayload):
-            assert hasattr(cls, "to_protobuf") and callable(cls.to_protobuf), (
-                f"{cls.__name__} must implement to_protobuf()"
-            )
+            assert hasattr(cls, "to_protobuf"), f"{cls.__name__} must implement to_protobuf()"
+            assert callable(cls.to_protobuf), f"{cls.__name__} must implement to_protobuf()"
 
 
 class TestPayloadTypeMappingContract:
@@ -146,7 +147,7 @@ class TestPayloadTypeMappingContract:
     """
 
     @pytest.mark.parametrize(
-        "discriminator,expected",
+        ("discriminator", "expected"),
         [
             ("command", "CommandRequested"),
             ("command_cancel", "CommandCancelRequested"),
@@ -197,7 +198,7 @@ class TestEventTypeToActionTypeContract:
     """
 
     @pytest.mark.parametrize(
-        "event_type,expected",
+        ("event_type", "expected"),
         [
             (EventType.APP_AGENT_ACTIVITY_RECORDED, "DOCUMENT_UPDATE"),
             (EventType.APP_CASE_CREATED, "DOCUMENT_UPDATE"),

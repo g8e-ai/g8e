@@ -26,7 +26,7 @@ class TestPromptSectionFromG8e:
     """Verify shared PromptSection values match g8e protocol constants."""
 
     @pytest.mark.parametrize(
-        "member,g8e_key",
+        ("member", "g8e_key"),
         [
             (PromptSection.CAPABILITIES, "SectionCapabilities"),
             (PromptSection.EXECUTION, "SectionExecution"),
@@ -59,7 +59,7 @@ class TestAgentModeFromG8e:
     """Verify AgentMode values match g8e protocol constants."""
 
     @pytest.mark.parametrize(
-        "member,g8e_key,expected",
+        ("member", "g8e_key", "expected"),
         [
             (AgentMode.G8E_BOUND, "AgentModeG8eBound", "g8e.bound"),
             (AgentMode.G8E_NOT_BOUND, "AgentModeG8eNotBound", "g8e.not.bound"),
@@ -84,7 +84,7 @@ class TestAgentModePromptFiles:
         assert set(AGENT_MODE_PROMPT_FILES.keys()) == set(AgentMode)
 
     @pytest.mark.parametrize(
-        "mode,expected_sections",
+        ("mode", "expected_sections"),
         [
             (AgentMode.G8E_BOUND, {PromptSection.CAPABILITIES, PromptSection.EXECUTION, PromptSection.TOOLS}),
             (AgentMode.G8E_NOT_BOUND, {PromptSection.CAPABILITIES, PromptSection.EXECUTION, PromptSection.TOOLS}),
@@ -120,7 +120,7 @@ class TestInvestigationContextLabel:
     """Verify InvestigationContextLabel values (g8ee-specific)."""
 
     @pytest.mark.parametrize(
-        "member,expected",
+        ("member", "expected"),
         [
             (InvestigationContextLabel.CASE, "Case"),
             (InvestigationContextLabel.DESCRIPTION, "Description"),

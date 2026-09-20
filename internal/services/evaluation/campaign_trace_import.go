@@ -104,6 +104,13 @@ func classifyCampaignTraceOutcome(req ChatProbeRequest, trace map[string]any) (e
 		Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
 		Detail:      "designated model role was not invoked",
 	}
+	modelCalls, _ := trace["model_calls"].([]any)
+	// A failed trace with zero model calls never reached governed inference — that
+	// is provider/infrastructure failure, not a scored capability miss.
+	if status == "failed" && len(modelCalls) == 0 {
+		grade.Detail = "g8ee assignment trace failed before model invocation"
+		return evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_PROVIDER_FAILED, grade
+	}
 	// Homogeneous model-role evaluation treats "could not invoke designated role"
 	// as a scored capability outcome, not an infrastructure/provider failure.
 	if roleOutcome == "role_not_invoked" {

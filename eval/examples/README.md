@@ -33,9 +33,12 @@ Per-model campaigns use `eval-init-<variant_id>` (legacy exception: `gemma4:e4b`
 
 | Path | Purpose |
 | --- | --- |
+| `.g8e/data/eval/runs/<run-id>/` | **Canonical campaign evidence** — assignments, verification, publication state (survives gateway volume wipe) |
 | `.g8e/eval/model-inventory.json` | Full provider freeze from `g8e eval models freeze` |
 | `.g8e/eval/inventories/*.json` | Per-model campaign inventory files |
 | `.g8e/eval/init-campaign-queue.json` | Rollout queue manifest |
+
+Gateway-owned public mirror state (SSE feed, explorer datasets) lives in the Docker `g8e-gateway-data` volume only. It is **not** on the host `.g8e/` tree. After a gateway volume wipe, republish from host run artifacts (see [Wipe recovery](#wipe-recovery)).
 
 ## Typical workflow
 
@@ -80,8 +83,63 @@ go run ./.local.dev/tools/gen-base-model-inventory
 | `g8e eval rollout list` | Inspect queue entries |
 | `g8e eval rollout next` | Show the next pending model |
 | `g8e eval rollout mark` | Manually record verify progress for one entry |
+| `g8e eval campaign export` | Export one run to a directory you choose (`--output-dir`) |
+| `g8e eval campaign mirror restore` | Republish verified runs to the gateway-owned public mirror |
 
 See [Unified Docker Stack Guide](../../docs/guides/unified_stack.md) and [Evaluations architecture](../../docs/architecture/evals.md) for full campaign operations.
+
+## Wipe recovery
+
+What survives depends on what you wipe:
+
+| Wipe scope | Host `.g8e/data/eval/runs/` | Host `.g8e/eval/` queue | Gateway mirror volume |
+| --- | --- | --- | --- |
+| `docker init --clean` / gateway volume only | **Kept** | **Kept** | **Lost** |
+| `./g8e docker clean` / full `.g8e` delete | **Lost** unless backed up | **Lost** unless backed up | **Lost** |
+
+### After gateway volume wipe (most common)
+
+Host evidence and queue remain. Restore the public mirror from verified queue entries:
+
+```bash
+curl -sf http://127.0.0.1:8082/bootstrap | jq '{freshness: .source_freshness, high_water: .snapshot.high_water_sequence}'
+
+./g8e eval campaign mirror restore --queue
+```
+
+`docker init` runs this automatically when the queue and run artifacts are present. For one run:
+
+```bash
+./g8e eval campaign mirror restore --run-id eval-init-granite3-3-2b-1789754079
+```
+
+If `campaign publish` exports zero records after a mirror wipe (host `public-projection-state.json` still lists old idempotency keys), use `--force` on publish instead — see [Unified Docker Stack Guide](../../docs/guides/unified_stack.md#mirror-empty-after-docker-init---clean-but-host-run-artifacts-remain).
+
+Runs marked `verified` in the queue but missing under `.g8e/data/eval/runs/<verified_run_id>/` cannot be mirror-restored. Mark them pending and re-run:
+
+```bash
+./g8e eval rollout mark --variant-id qwen3-0-6b --status pending --notes "redo after host artifact loss"
+./g8e eval campaign start --queue qwen3-0-6b --publish --daemon --verify --tier-a
+```
+
+### Archive evidence to a directory you choose
+
+Canonical evidence stays under `.g8e/data/eval/runs/` during execution. Export a portable bundle any time:
+
+```bash
+./g8e eval campaign export --output-dir ./my-eval-archive/granite-reference eval-init-granite3-3-2b-1789754079
+```
+
+Back up `.g8e/data/eval/runs/` and `.g8e/eval/` together before a full platform wipe if you want to resume without re-executing inference.
+
+### Custom queue or inventory paths
+
+Rollout flags accept repo-relative or absolute paths:
+
+```bash
+./g8e eval rollout init --output /data/my-queue.json --inventory-dir /data/my-inventories --materialize --merge
+./g8e eval rollout run --queue-file /data/my-queue.json --tier-a --skip-verified
+```
 
 ## License
 

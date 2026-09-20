@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -36,6 +37,15 @@ type apiClientFactory func(fs.RuntimeFileService, *config.Config) (apiClient, er
 
 func defaultAPIClientFactory(fileSvc fs.RuntimeFileService, cfg *config.Config) (apiClient, error) {
 	return api.NewClient(fileSvc, cfg)
+}
+
+// dockerInitAPIClientTimeout covers governance envelope submission during
+// platform enrollment approval. The default 5s CLI timeout is too short while
+// the gateway is still starting workloads and processing bootstrap mutations.
+const dockerInitAPIClientTimeout = 30 * time.Second
+
+func dockerInitAPIClientFactory(fileSvc fs.RuntimeFileService, cfg *config.Config) (apiClient, error) {
+	return api.NewClientWithTimeout(fileSvc, cfg, dockerInitAPIClientTimeout)
 }
 
 func approveCmd() *cobra.Command {

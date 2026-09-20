@@ -29,7 +29,7 @@ class TestSharedChannelsFromG8e:
     """Verify shared channel values match g8e protocol constants."""
 
     @pytest.mark.parametrize(
-        "local,g8e_key",
+        ("local", "g8e_key"),
         [
             (OperatorChannel.GOVERNANCE, "Governance"),
             (OperatorChannel.OPERATOR_INTENT, "OperatorIntent"),
@@ -50,7 +50,7 @@ class TestG8eeSpecificChannels:
     """Verify g8ee-specific channels are local strings not in g8e protocol."""
 
     @pytest.mark.parametrize(
-        "member,expected",
+        ("member", "expected"),
         [
             (OperatorChannel.CMD, "cmd"),
             (OperatorChannel.RESULTS, "results"),
@@ -140,7 +140,7 @@ class TestPubSubEnums:
     """Verify g8ee-specific pubsub enums have correct values."""
 
     @pytest.mark.parametrize(
-        "member,expected",
+        ("member", "expected"),
         [
             (PubSubAuthPrefix.AUTH_PUBLISH_PREFIX, "auth.publish:"),
             (PubSubAuthPrefix.AUTH_PUBLISH_SESSION_PREFIX, "auth.publish:session:"),
@@ -153,7 +153,7 @@ class TestPubSubEnums:
         assert member.value == expected
 
     @pytest.mark.parametrize(
-        "member,expected",
+        ("member", "expected"),
         [
             (PubSubAction.SUBSCRIBE, "subscribe"),
             (PubSubAction.PSUBSCRIBE, "psubscribe"),
@@ -165,7 +165,7 @@ class TestPubSubEnums:
         assert member.value == expected
 
     @pytest.mark.parametrize(
-        "member,expected",
+        ("member", "expected"),
         [
             (PubSubWireEventType.MESSAGE, "message"),
             (PubSubWireEventType.PMESSAGE, "pmessage"),
@@ -176,7 +176,7 @@ class TestPubSubEnums:
         assert member.value == expected
 
     @pytest.mark.parametrize(
-        "member,expected",
+        ("member", "expected"),
         [
             (PubSubField.ACTION, "action"),
             (PubSubField.CHANNEL, "channel"),
@@ -191,7 +191,7 @@ class TestPubSubEnums:
         assert member.value == expected
 
     @pytest.mark.parametrize(
-        "member,expected",
+        ("member", "expected"),
         [
             (PubSubMessageType.MESSAGE, "message"),
             (PubSubMessageType.EVENT, "event"),
