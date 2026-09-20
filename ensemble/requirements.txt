@@ -26,7 +26,7 @@ g8e>=2.17
 # LLM providers
 openai==3.13.0
 ollama==0.6.2
-google-genai==2.23.0
+google-genai==2.24.0
 anthropic==1.5.0
 
 # Retry primitives (used directly in app/llm/providers/gemini.py)
