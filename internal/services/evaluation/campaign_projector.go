@@ -77,7 +77,7 @@ func BuildAssignmentResultProjection(assignment *evalv1.EvaluationAssignment, re
 		return nil, fmt.Errorf("evaluation: build assignment result projection: %w", constants.ErrMissingRequiredField)
 	}
 	if assignment.GetAssignmentId() != result.GetAssignmentId() || assignment.GetRunId() != result.GetRunId() {
-		return nil, fmt.Errorf("evaluation: build assignment result projection: assignment/result binding mismatch")
+		return nil, fmt.Errorf("evaluation: build assignment result projection: %w", constants.ErrEvidenceScopeMismatch)
 	}
 	if verificationStatus == "" {
 		verificationStatus = "unverified"

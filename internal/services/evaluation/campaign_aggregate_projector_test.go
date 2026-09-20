@@ -10,6 +10,7 @@ package evaluation
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -210,12 +212,15 @@ func TestBuildRunVerificationViewRecords(t *testing.T) {
 		},
 	}
 	report := &evalv1.EvaluationVerificationReport{
-		SchemaVersion:            CampaignSchemaVersion,
+		SchemaVersion:            "2.0.0",
 		ReportId:                 "run-1",
 		RunId:                    "run-1",
 		Status:                   evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		ReportDigestRef:          &compliancev1.ComplianceEvidenceReference{Sha256: strings.Repeat("a", 64)},
 		VerifiedAt:               timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
-		VerifiedPopulationDigest: "population-digest",
+		VerifierReleaseVersion:   "v2.1.10",
+		VerifierContractVersion:  "2.0.0",
+		VerifiedPopulationDigest: strings.Repeat("b", 64),
 		CampaignDigest:           "campaign-digest",
 		CatalogDigest:            "catalog-digest",
 		ModelRegistryDigest:      "model-registry-digest",
@@ -296,10 +301,14 @@ func TestBuildRunVerificationViewRecordsEmitsEveryEligibleVariantRole(t *testing
 		},
 	}
 	report := &evalv1.EvaluationVerificationReport{
+		SchemaVersion:            "2.0.0",
 		RunId:                    run.GetRunId(),
 		Status:                   evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		ReportDigestRef:          &compliancev1.ComplianceEvidenceReference{Sha256: strings.Repeat("a", 64)},
 		VerifiedAt:               timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
-		VerifiedPopulationDigest: "population-digest",
+		VerifierReleaseVersion:   "v2.1.10",
+		VerifierContractVersion:  "2.0.0",
+		VerifiedPopulationDigest: strings.Repeat("b", 64),
 		CampaignDigest:           "campaign-digest",
 		CatalogDigest:            "catalog-digest",
 		ModelRegistryDigest:      "model-registry-digest",
@@ -319,10 +328,28 @@ func TestBuildRunVerificationViewRecordsEmitsEveryEligibleVariantRole(t *testing
 	assert.NotEqual(t, firstModel["variant_id"], secondModel["variant_id"])
 }
 
+func TestBuildRunVerificationViewRecordsBoundFailurePublishesPartialModelRevisions(t *testing.T) {
+	run := &evalv1.EvaluationRun{RunId: "run-failed", CampaignBinding: &evalv1.ModelCampaignBinding{CampaignDigest: "campaign", CatalogDigest: "catalog", ModelRegistryDigest: "registry"}}
+	state := &runAggregateState{Scheduled: 1, Terminal: 1, VariantRoles: map[string]*variantRoleAggregate{"model-a:primary": {VariantID: "model-a", Role: "primary", Scheduled: 1, Terminal: 1, Failed: 1, Outcomes: map[string]uint32{"model_failed": 1}}}}
+	report := &evalv1.EvaluationVerificationReport{SchemaVersion: "2.0.0", RunId: run.GetRunId(), Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, ReportDigestRef: &compliancev1.ComplianceEvidenceReference{Sha256: strings.Repeat("c", 64)}, VerifiedAt: timestamppb.New(time.Unix(1_700_000_200, 0).UTC()), VerifierReleaseVersion: "v2.1.10", VerifierContractVersion: "2.0.0", VerifiedPopulationDigest: strings.Repeat("d", 64), CampaignDigest: "campaign", CatalogDigest: "catalog", ModelRegistryDigest: "registry", ExpectedAssignmentCount: 1, VerifiedAssignmentCount: 1}
+	records, err := BuildRunVerificationViewRecords(run, state, report, time.Unix(1_700_000_200, 0).UTC())
+	require.NoError(t, err)
+	require.Len(t, records, 2)
+	model := map[string]any{}
+	require.NoError(t, json.Unmarshal(records[1].Body, &model))
+	assert.Equal(t, "exploratory_partial", model["quality_state"])
+}
+
+func TestBoundVerificationRevisionKeysAreReportScoped(t *testing.T) {
+	assert.NotEqual(t, BoundVerificationSummaryIdempotencyKey("run-1", "a"), BoundVerificationSummaryIdempotencyKey("run-1", "b"))
+	assert.NotEqual(t, VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "a"), VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "b"))
+}
+
 func TestVerifiedModelSummaryIdempotencyKeyIsDistinctAndScoped(t *testing.T) {
-	assert.NotEqual(t, RunVerificationIdempotencyKey("run-1"), VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary"))
-	assert.NotEqual(t, VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary"), VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "assistant"))
-	assert.NotEqual(t, VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary"), VerifiedModelSummaryIdempotencyKey("run-2", "model-1", "primary"))
+	assert.NotEqual(t, RunVerificationIdempotencyKey("run-1"), VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "a"))
+	assert.NotEqual(t, VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "a"), VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "assistant", "a"))
+	assert.NotEqual(t, VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "a"), VerifiedModelSummaryIdempotencyKey("run-2", "model-1", "primary", "a"))
+	assert.NotEqual(t, VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "a"), VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "b"))
 }
 
 func TestFormatCampaignVerifierFailureSummary(t *testing.T) {

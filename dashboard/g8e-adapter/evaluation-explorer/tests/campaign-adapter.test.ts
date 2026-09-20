@@ -28,13 +28,37 @@ describe('isCampaignProjectionEnvelope', () => {
         schema_version: '1.0.0',
         message_type: 'PublicAssignmentLifecycleRecord',
         idempotency_key: 'run-1:assign-1:lifecycle:queued',
-        record: { run_id: 'run-1', assignment_id: 'assign-1' },
+        record: {
+          run_id: 'run-1',
+          assignment_id: 'assign-1',
+          scenario_id: 'scenario-1',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
+          observed_at: '2026-09-16T14:00:00.000Z',
+        },
       }),
     ).toBe(true);
   });
 
   it('rejects explorer view records', () => {
     expect(isCampaignProjectionEnvelope({ kind: 'assignment_result', dataset_id: 'ds-live-run-1' })).toBe(false);
+  });
+
+  it('rejects unknown raw campaign fields before adaptation', () => {
+    expect(
+      isCampaignProjectionEnvelope({
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentLifecycleRecord',
+        idempotency_key: 'run-1:assign-1:lifecycle:queued',
+        record: {
+          assignment_id: 'assign-1',
+          run_id: 'run-1',
+          scenario_id: 'scenario-1',
+          lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED',
+          observed_at: '2026-09-16T14:00:00.000Z',
+          unexpected: true,
+        },
+      }),
+    ).toBe(false);
   });
 });
 
@@ -102,8 +126,11 @@ describe('adaptCampaignProjectionEnvelope', () => {
         record: {
           assignment_id: 'assign-1',
           run_id: 'run-1',
+          scenario_id: 'instruction-exact-format',
           lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
           summary_status: 'EVALUATION_VERDICT_STATUS_PASS',
+          result_digest: '0'.repeat(64),
+          verification_status: 'unverified',
           completed_at: '2026-09-16T14:05:00.000Z',
         },
       },
@@ -126,6 +153,8 @@ describe('adaptCampaignProjectionEnvelope', () => {
         scenario_id: 'instruction-exact-format',
         lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
         summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+        result_digest: '0'.repeat(64),
+        verification_status: 'unverified',
         completed_at: '2026-09-16T14:00:05Z',
       },
     };
@@ -169,6 +198,8 @@ describe('adaptCampaignProjectionEnvelope', () => {
           scenario_id: 'instruction-exact-format',
           lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
           summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+          result_digest: '0'.repeat(64),
+          verification_status: 'unverified',
           completed_at: '2026-09-16T14:00:05Z',
         },
       },
@@ -230,6 +261,8 @@ describe('adaptCampaignProjectionEnvelope', () => {
           variant_id: 'qwen30:6b',
           lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
           summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+          result_digest: '0'.repeat(64),
+          verification_status: 'unverified',
           completed_at: '2026-09-17T04:40:00Z',
         },
       },
@@ -299,6 +332,8 @@ describe('adaptCampaignProjectionEnvelope', () => {
           scenario_id: 'instruction-exact-format',
           lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
           summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+          result_digest: '0'.repeat(64),
+          verification_status: 'unverified',
           completed_at: '2026-09-16T14:00:05Z',
         },
       },
@@ -450,7 +485,7 @@ describe('adaptCampaignProjectionEnvelope', () => {
     const resultRecord = JSON.parse(publicResultVector.canonical_json) as Record<string, unknown>;
     const records = adaptCampaignProjectionEnvelope(
       {
-        schema_version: '1.0.0',
+        schema_version: '1.1.0',
         message_type: 'PublicAssignmentResultProjection',
         idempotency_key: 'run-1:assign-1:result',
         record: {
@@ -482,7 +517,7 @@ describe('adaptCampaignProjectionEnvelope', () => {
     expect(() => decodeViewRecord('assignment_result', assignment)).not.toThrow();
   });
 
-  it('forwards grade summaries and tool scorecard benchmark_observations fields', () => {
+  it('forwards disclosure-safe grade summaries and tool scorecard benchmark_observations fields', () => {
     const context = createCampaignAdaptContext();
     adaptCampaignProjectionEnvelope(
       {
@@ -507,7 +542,7 @@ describe('adaptCampaignProjectionEnvelope', () => {
     const resultRecord = JSON.parse(publicResultVector.canonical_json) as Record<string, unknown>;
     const records = adaptCampaignProjectionEnvelope(
       {
-        schema_version: '1.0.0',
+        schema_version: '1.1.0',
         message_type: 'PublicAssignmentResultProjection',
         idempotency_key: 'run-1:assign-1:result',
         record: {
@@ -517,12 +552,11 @@ describe('adaptCampaignProjectionEnvelope', () => {
               {
                 criterion_id: 'tool-selection',
                 status: 'fail',
-                detail: 'expected tool selection evidence is missing',
               },
             ],
             tool_scorecard: {
               tool_selection: { value: 0 },
-              tool_recognition: { unavailable_reason: 'not required by this scenario' },
+              tool_recognition: { unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE' },
             },
           },
         },
@@ -536,12 +570,11 @@ describe('adaptCampaignProjectionEnvelope', () => {
         {
           criterion_id: 'tool-selection',
           status: 'fail',
-          detail: 'expected tool selection evidence is missing',
         },
       ],
       tool_scorecard: {
         tool_selection: { value: 0 },
-        tool_recognition: { unavailable_reason: 'not required by this scenario' },
+        tool_recognition: { unavailable_reason: 'PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE' },
       },
     });
     expect(() => decodeViewRecord('assignment_result', assignment)).not.toThrow();
@@ -610,6 +643,8 @@ describe('EvalStore campaign ingest', () => {
           scenario_id: 'instruction-exact-format',
           lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
           summary_status: 'EVALUATION_VERDICT_STATUS_PASS',
+          result_digest: '0'.repeat(64),
+          verification_status: 'unverified',
           designated_role: 'MODEL_CAMPAIGN_ROLE_PRIMARY',
           variant_id: 'qwen3-4b',
           completed_at: '2026-09-16T14:00:05Z',
@@ -706,6 +741,8 @@ describe('EvalStore campaign ingest', () => {
           scenario_id: 'instruction-exact-format',
           lifecycle_status: 'EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED',
           summary_status: 'EVALUATION_VERDICT_STATUS_FAIL',
+          result_digest: '0'.repeat(64),
+          verification_status: 'unverified',
           completed_at: '2026-09-16T14:00:05Z',
         },
       }),

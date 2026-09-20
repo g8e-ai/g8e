@@ -144,7 +144,7 @@ describe('AssignmentDetailView', () => {
       assignmentResult({
         scenario_summary: {
           scenario_id: 'scenario-1', scenario_version: '1.0.0', category: 'tool_selection',
-          public_description: 'Choose the approved tool.', grading_method: 'deterministic',
+          public_description: '<b>Choose</b> the approved tool.', grading_method: 'deterministic',
           allowed_tools: ['search'], expected_tools: ['search'], forbidden_tools: [],
           criteria: [{ criterion_id: 'selection', public_label: 'Tool choice', public_description: 'Select the matching tool.', grading_method: 'deterministic', required: true }],
           tool_score_dimensions: [],
@@ -163,9 +163,11 @@ describe('AssignmentDetailView', () => {
     ]);
 
     expect(screen.getByRole('heading', { name: 'Assignment context' })).toBeInTheDocument();
-    expect(screen.getByText('Choose the approved tool.')).toBeInTheDocument();
+    expect(screen.getByText('<b>Choose</b> the approved tool.')).toBeInTheDocument();
+    expect(screen.queryByText('Choose', { selector: 'b' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'What happened' })).toBeInTheDocument();
     expect(screen.getByText('1 observed')).toBeInTheDocument();
+    expect(screen.getByText('Deterministic')).toBeInTheDocument();
     expect(screen.getByText('Criterion passed')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Evidence and methodology' })).toBeInTheDocument();
     expect(screen.getByText('Evaluation projection')).toBeInTheDocument();

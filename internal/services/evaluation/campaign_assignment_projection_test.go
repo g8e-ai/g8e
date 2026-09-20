@@ -10,11 +10,13 @@ package evaluation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -72,6 +74,59 @@ func TestMarshalPublicAssignmentRecordRejectsRestrictedBenchmarkDetail(t *testin
 		Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: &PublicBenchmarkObservations{GradeSummaries: []PublicGradeSummary{{CriterionID: "criterion-1", Status: "fail", Detail: "private detail"}}}},
 	})
 	assert.Error(t, err)
+}
+
+func TestBuildPublicAssignmentProjectionPreservesCanonicalZeroAndUint64Values(t *testing.T) {
+	t.Parallel()
+	assignment := &evalv1.EvaluationAssignment{AssignmentId: "assignment-1", RunId: "run-1", ScenarioId: "scenario-1"}
+	result := &evalv1.EvaluationAssignmentResult{
+		AssignmentId: "assignment-1", RunId: "run-1",
+		ModelInferences: []*evalv1.ModelInferenceRecord{{
+			InferenceRecordId: "inference-1", ModelRole: evalv1.ModelCampaignRole_MODEL_CAMPAIGN_ROLE_PRIMARY,
+			AgentPersona: "primary", ModelVariant: &evalv1.ModelVariant{VariantId: "variant-1"},
+			UsageAvailability: evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
+			PromptTokens:      7, CompletionTokens: 11, ThinkingTokens: 13, CacheTokens: 17,
+			FinishReason: "stop", LoadState: evalv1.EvaluationLoadState_EVALUATION_LOAD_STATE_COLD,
+			RetryCount: projectionUint32Ptr(0),
+		}},
+		ScoredInferenceSpanNanos: projectionUint64Ptr(0),
+	}
+	contextValue := &PublicScenarioContext{
+		ScenarioID: "scenario-1", ScenarioVersion: "1.0.0",
+		Category:          evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
+		PublicDescription: "Public", GradingMethod: evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC,
+		Criteria: []*evalv1.PublicScenarioCriterion{{CriterionId: "criterion-1", PublicLabel: "Criterion", PublicDescription: "Public criterion", GradingMethod: evalv1.EvaluationGradingMethod_EVALUATION_GRADING_METHOD_DETERMINISTIC}},
+	}
+	record, err := BuildPublicAssignmentProjection(context.Background(), PublicAssignmentBuildInput{Assignment: assignment, Result: result, ScenarioContext: contextValue})
+	require.NoError(t, err)
+	first, err := MarshalPublicAssignmentRecord(record)
+	require.NoError(t, err)
+	second, err := MarshalPublicAssignmentRecord(record)
+	require.NoError(t, err)
+	assert.Equal(t, first, second)
+	assert.Contains(t, string(first), `"input_tokens":"7"`)
+	assert.Contains(t, string(first), `"output_tokens":"11"`)
+	assert.Contains(t, string(first), `"retries":0`)
+	assert.Contains(t, string(first), `"latency_ms":{"value":0}`)
+}
+
+func TestBuildPublicAssignmentProjectionRejectsScopeMismatch(t *testing.T) {
+	t.Parallel()
+	_, err := BuildPublicAssignmentProjection(context.Background(), PublicAssignmentBuildInput{
+		Assignment:      &evalv1.EvaluationAssignment{AssignmentId: "assignment-1", RunId: "run-1", ScenarioId: "scenario-1"},
+		Result:          &evalv1.EvaluationAssignmentResult{AssignmentId: "assignment-2", RunId: "run-1"},
+		ScenarioContext: &PublicScenarioContext{ScenarioID: "scenario-1"},
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrEvidenceScopeMismatch))
+}
+
+func projectionUint32Ptr(value uint32) *uint32 {
+	return &value
+}
+
+func projectionUint64Ptr(value uint64) *uint64 {
+	return &value
 }
 
 func projectionStringValue(t *testing.T, raw json.RawMessage) string {

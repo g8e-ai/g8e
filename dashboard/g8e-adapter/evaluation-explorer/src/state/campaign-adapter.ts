@@ -33,27 +33,16 @@ export interface CampaignProjectionEnvelope {
 }
 
 export function isCampaignProjectionEnvelope(value: unknown): value is CampaignProjectionEnvelope {
-  if (!isRecord(value)) return false;
-  return typeof value.schema_version === 'string' && typeof value.message_type === 'string' && typeof value.idempotency_key === 'string' && isRecord(value.record);
+  try {
+    decodeCampaignProjectionEnvelope(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function validateCampaignEnvelope(value: unknown): CampaignProjectionEnvelope {
-  const envelope = asRecord(value);
-  const record = asRecord(envelope.record);
-  if (envelope.message_type === 'PublicAssignmentLifecycleRecord') {
-    return decodeCampaignProjectionEnvelope(value) as unknown as CampaignProjectionEnvelope;
-  }
-  const hasVersionedResultFields = envelope.message_type === 'PublicAssignmentResultProjection' && (
-    envelope.schema_version === '1.1.0' ||
-    record.scenario_summary !== undefined ||
-    record.semantic_grade_summaries !== undefined ||
-    record.activity_summary !== undefined ||
-    record.evidence_bindings !== undefined ||
-    record.resource_summary !== undefined ||
-    record.verification_metadata !== undefined
-  );
-  if (hasVersionedResultFields) return decodeCampaignProjectionEnvelope(value) as unknown as CampaignProjectionEnvelope;
-  return value as CampaignProjectionEnvelope;
+  return decodeCampaignProjectionEnvelope(value) as unknown as CampaignProjectionEnvelope;
 }
 
 export interface CampaignAdaptContext {
