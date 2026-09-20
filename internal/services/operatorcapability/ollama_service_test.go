@@ -15,64 +15,54 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/security"
 )
 
-func TestIsOllamaServiceCommand(t *testing.T) {
-	assert.True(t, IsOllamaServiceCommand("ollama stop"))
-	assert.True(t, IsOllamaServiceCommand("  OLLAMA SERVE  "))
-	assert.True(t, IsOllamaServiceCommand("ollama ps"))
-	assert.False(t, IsOllamaServiceCommand("ollama start"))
-	assert.False(t, IsOllamaServiceCommand("ollama status"))
-	assert.False(t, IsOllamaServiceCommand("curl http://127.0.0.1:11434/api/ps"))
-}
-
-func TestValidateOllamaServiceCommand(t *testing.T) {
-	capable := &models.RuntimeConfig{
-		ProviderBoundaryObserverEnabled:       true,
-		ProviderBoundaryObserverOllamaEnabled: true,
+func TestOllamaStopCommand_ValidatesServedModelTag(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		tag  string
+		want string
+		ok   bool
+	}{
+		{name: "namespaced tag", tag: "registry.example/team/qwen3:0.6b", want: "ollama stop registry.example/team/qwen3:0.6b", ok: true},
+		{name: "empty tag", tag: "", ok: false},
+		{name: "option-like tag", tag: "--all", ok: false},
+		{name: "shell metacharacter", tag: "qwen3:0.6b;whoami", ok: false},
+		{name: "whitespace", tag: "qwen3 0.6b", ok: false},
 	}
-	require.NoError(t, ValidateOllamaServiceCommand(capable, "ollama stop"))
-
-	incapable := &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true}
-	err := ValidateOllamaServiceCommand(incapable, "ollama serve")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrProviderBoundaryObserverOllamaNotCapable)
-
-	assert.NoError(t, ValidateOllamaServiceCommand(nil, "echo hello"))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			command, err := OllamaStopCommand(tt.tag)
+			if tt.ok {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, command)
+				return
+			}
+			require.ErrorIs(t, err, constants.ErrInferenceModelTagInvalid)
+		})
+	}
 }
 
-func TestRestartOllamaCommands(t *testing.T) {
-	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Process -FilePath %LOCALAPPDATA%/Programs/Ollama/ollama.exe -ArgumentList serve -WindowStyle Hidden", OllamaWindowsStartCommand)
-	assert.Equal(t, []string{
-		OllamaWindowsKillCommand,
-		"cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 3",
-		OllamaWindowsStartCommand,
-		"cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 8",
-		OllamaServiceCommandPS,
-	}, RestartOllamaCommands("windows"))
-	assert.Equal(t, []string{
-		RestartOllamaDaemonCommand("linux"),
-		"sleep 8",
-		OllamaServiceCommandPS,
-	}, RestartOllamaCommands("linux"))
-}
-
-func TestRestartSettleCommand(t *testing.T) {
-	windowsSettle := RestartSettleCommand("windows")
-	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 5", windowsSettle)
-	assert.False(t, security.IsShellRequired(windowsSettle), "windows settle must run without a POSIX shell")
-	assert.False(t, security.IsShellRequired(OllamaWindowsKillCommand), "windows kill must run without a POSIX shell")
-
-	assert.Equal(t, "sleep 5", RestartSettleCommand("linux"))
-}
-
-func TestToleratedOllamaRestartExitCode(t *testing.T) {
-	assert.True(t, ToleratedOllamaRestartExitCode(OllamaWindowsKillCommand, 0))
-	assert.True(t, ToleratedOllamaRestartExitCode(OllamaWindowsKillCommand, 128))
-	assert.False(t, ToleratedOllamaRestartExitCode(OllamaWindowsKillCommand, 1))
-
-	assert.True(t, ToleratedOllamaRestartExitCode(OllamaWindowsStartCommand, 0))
-	assert.True(t, ToleratedOllamaRestartExitCode(OllamaWindowsStartCommand, 1))
-	assert.False(t, ToleratedOllamaRestartExitCode(OllamaWindowsStartCommand, 2))
+func TestValidateWitnessCommand(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		cfg  *models.RuntimeConfig
+		want bool
+	}{
+		{name: "ordinary operator is allowed", cfg: &models.RuntimeConfig{}, want: true},
+		{name: "provider observer is rejected", cfg: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true}, want: false},
+		{name: "provenance operator is rejected", cfg: &models.RuntimeConfig{ProvenanceOperatorEnabled: true}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateWitnessCommand(tt.cfg, "ollama ps")
+			if tt.want {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, constants.ErrWitnessCommandNotCapable)
+		})
+	}
 }

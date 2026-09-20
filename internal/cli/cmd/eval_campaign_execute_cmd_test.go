@@ -46,7 +46,7 @@ func TestCampaignEvalExecute_RejectsPreflightWhenGatewayUnhealthy(t *testing.T) 
 	command := evalCmdWithConfig(deps)
 	command.SetArgs([]string{
 		"campaign", "execute", "--project-root", root,
-		"--no-auto-refresh", "--wait-for-provider-idle=false",
+		"--no-auto-refresh",
 		active.RunID,
 	})
 	err := command.Execute()
@@ -86,7 +86,7 @@ func TestCampaignEvalExecute_ExecutesOneAssignmentViaCLI(t *testing.T) {
 	command.SetArgs([]string{
 		"campaign", "execute", "--project-root", root,
 		"--ensemble-url", ensemble.URL,
-		"--no-auto-refresh", "--wait-for-provider-idle=false",
+		"--no-auto-refresh",
 		"--inference-session", "infer-session",
 		"--data-session", "data-session",
 		runID,
@@ -128,7 +128,7 @@ func TestCampaignEvalExecute_JSONOutput(t *testing.T) {
 	rootCmd.SetArgs([]string{
 		"eval", "campaign", "execute", "--project-root", root,
 		"--ensemble-url", ensemble.URL,
-		"--no-auto-refresh", "--wait-for-provider-idle=false",
+		"--no-auto-refresh",
 		"--inference-session", "infer-session",
 		"--data-session", "data-session",
 		runID,
@@ -296,7 +296,7 @@ func TestCampaignEvalExecute_WithPublishFlag(t *testing.T) {
 	command.SetArgs([]string{
 		"campaign", "execute", "--project-root", root,
 		"--ensemble-url", ensemble.URL,
-		"--no-auto-refresh", "--wait-for-provider-idle=false",
+		"--no-auto-refresh",
 		"--inference-session", "infer-session",
 		"--data-session", "data-session",
 		"--publish",

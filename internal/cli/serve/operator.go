@@ -67,9 +67,8 @@ type ServeOperatorOptions struct {
 	InferenceCampaignID          string
 	InferenceModelRegistryDigest string
 
-	ProviderBoundaryObserverEnabled       bool
-	ProviderBoundaryObserverID            string
-	ProviderBoundaryObserverOllamaEnabled bool
+	ProviderBoundaryObserverEnabled bool
+	ProviderBoundaryObserverID      string
 
 	ProvenanceOperatorEnabled          bool
 	ProvenanceOperatorID               string
@@ -265,9 +264,8 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 		InferenceCampaignID:          opts.InferenceCampaignID,
 		InferenceModelRegistryDigest: opts.InferenceModelRegistryDigest,
 
-		ProviderBoundaryObserverEnabled:       opts.ProviderBoundaryObserverEnabled,
-		ProviderBoundaryObserverID:            opts.ProviderBoundaryObserverID,
-		ProviderBoundaryObserverOllamaEnabled: opts.ProviderBoundaryObserverOllamaEnabled,
+		ProviderBoundaryObserverEnabled: opts.ProviderBoundaryObserverEnabled,
+		ProviderBoundaryObserverID:      opts.ProviderBoundaryObserverID,
 
 		ProvenanceOperatorEnabled:          opts.ProvenanceOperatorEnabled,
 		ProvenanceOperatorID:               opts.ProvenanceOperatorID,

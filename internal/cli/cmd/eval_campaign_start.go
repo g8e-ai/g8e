@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -38,9 +37,6 @@ func campaignEvalStartCmd(deps nativeEvalDeps) *cobra.Command {
 	var requireProviderObservation bool
 	var requireModelProvenance bool
 	var noAutoRefresh bool
-	var waitForProviderIdle bool
-	var providerIdlePoll time.Duration
-	var providerSettle time.Duration
 	var tierA bool
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -77,9 +73,6 @@ Examples:
 				RequireProviderObservation: requireProviderObservation,
 				RequireModelProvenance:     requireModelProvenance,
 				NoAutoRefresh:              noAutoRefresh,
-				WaitForProviderIdle:        waitForProviderIdle,
-				ProviderIdlePoll:           providerIdlePoll,
-				ProviderSettle:             providerSettle,
 				JSONOutput:                 output.JSONEnabled(cmd),
 			}
 			result, err := runCampaignStartFlow(cmd, deps, flowOpts)
@@ -129,9 +122,6 @@ Examples:
 	cmd.Flags().BoolVar(&requireModelProvenance, "require-model-provenance", false, "Fail verify when model provenance attestation windows are missing or digest_match is false")
 	cmd.Flags().BoolVar(&tierA, "tier-a", false, "Tier-A verify preset: require provider observation and model provenance")
 	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
-	cmd.Flags().BoolVar(&waitForProviderIdle, "wait-for-provider-idle", true, "Wait for Ollama to become idle before each assignment")
-	cmd.Flags().DurationVar(&providerIdlePoll, "provider-idle-poll", 2*time.Second, "Poll interval while waiting for Ollama idle")
-	cmd.Flags().DurationVar(&providerSettle, "provider-settle", 8*time.Second, "Required stable /api/ps window before starting the next assignment")
 	return cmd
 }
 

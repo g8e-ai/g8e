@@ -43,11 +43,6 @@ type RuntimeConfig struct {
 	// remote hardware observer on the approved provider host.
 	ProviderBoundaryObserverEnabled bool `json:"provider_boundary_observer_enabled"`
 
-	// ProviderBoundaryObserverOllamaEnabled is true when the provider-boundary
-	// Observer Operator started with --ollama, opting in to remote Ollama
-	// Ollama CLI commands (stop/serve/ps) on the provider host.
-	ProviderBoundaryObserverOllamaEnabled bool `json:"provider_boundary_observer_ollama_enabled,omitempty"`
-
 	// ProvenanceOperatorEnabled is true when the Operator started with
 	// --provenance-operator-enabled, marking it as the storage-side model
 	// provenance attestor at the model file site.

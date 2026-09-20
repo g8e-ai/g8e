@@ -22,7 +22,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
-	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
@@ -401,13 +400,9 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	var inferenceSessionID string
 	var dataSessionID string
 	var ensembleURL string
-	var ollamaEndpoint string
 	var noAutoRefresh bool
 	var publish bool
 	var daemon bool
-	var waitForProviderIdle bool
-	var providerIdlePoll time.Duration
-	var providerSettle time.Duration
 	cmd := &cobra.Command{
 		Use:   "execute [run-id]",
 		Short: "Execute one or more queued campaign assignments through production POST /api/v1/chat",
@@ -544,10 +539,6 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 			}
 			results := make([]map[string]any, 0, resultsCap)
 			executed := 0
-			resolvedOllamaEndpoint, err := resolveCampaignOllamaEndpoint(ollamaEndpoint, operators, selected.OperatorSessionID)
-			if err != nil {
-				return err
-			}
 			if err := preflightProviderObservationDelivery(fileSvc, cfg); err != nil {
 				return fmt.Errorf("evaluation: campaign execute: %w", err)
 			}
@@ -563,34 +554,6 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 				iterations = 1<<31 - 1
 			}
 			for i := 0; i < iterations; i++ {
-				restartCtx, restartCancel := context.WithTimeout(cmd.Context(), 10*time.Minute)
-				_, err := restartOllamaViaObserverIfEnabled(restartCtx, operators, runID, dataOperator, cfg, authContext, chatEvalDeps{
-					configLoader:   deps.configLoader,
-					fileSvcFactory: deps.fileSvcFactory,
-					authLoader:     deps.authLoader,
-					clientFactory:  deps.clientFactory,
-					now:            deps.now,
-					newID:          deps.newID,
-				}, func(prefix string) string { return prefix + "-" + deps.newID() }, cmd.OutOrStdout(), cmd.ErrOrStderr())
-				restartCancel()
-				if err != nil {
-					return fmt.Errorf("evaluation: campaign execute: %w", err)
-				}
-				if waitForProviderIdle {
-					idleCtx, idleCancel := context.WithTimeout(cmd.Context(), 15*time.Minute)
-					err := inference.WaitForProviderIdle(idleCtx, inference.ProviderIdleOptions{
-						Endpoint:       resolvedOllamaEndpoint,
-						PollInterval:   providerIdlePoll,
-						SettleDuration: providerSettle,
-					})
-					idleCancel()
-					if err != nil {
-						return fmt.Errorf("evaluation: campaign execute: %w", err)
-					}
-					if !output.JSONEnabled(cmd) {
-						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Provider idle at %s\n", resolvedOllamaEndpoint)
-					}
-				}
 				ctx, cancel := context.WithTimeout(cmd.Context(), 8*time.Minute)
 				result, ok, err := controller.ExecuteNextAssignment(ctx, runID, executionBinding, artifacts)
 				cancel()
@@ -598,6 +561,11 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 					return fmt.Errorf("evaluation: campaign execute: %w", err)
 				}
 				if !ok {
+					if executed > 0 {
+						if err := releaseCampaignModels(cmd, deps, campaignExecuteOptions{RunID: runID, JSONOutput: output.JSONEnabled(cmd)}, cfg, authContext, dataOperator, operators, selected.OperatorSessionID, spec); err != nil {
+							return fmt.Errorf("evaluation: campaign execute: %w", err)
+						}
+					}
 					if publication != nil {
 						completionCount, publishErr := publication.PublishRunCompletion(cmd.Context(), runID, deps.now().UTC())
 						if publishErr != nil {
@@ -644,11 +612,7 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Exact inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
-	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for provider-idle gating (default: active inference operator runtime_config, then G8E_OLLAMA_ENDPOINT, then loopback)")
 	cmd.Flags().BoolVar(&daemon, "daemon", false, "Run continuously until the queued matrix is exhausted")
-	cmd.Flags().BoolVar(&waitForProviderIdle, "wait-for-provider-idle", true, "Wait for Ollama to become idle before each assignment")
-	cmd.Flags().DurationVar(&providerIdlePoll, "provider-idle-poll", 2*time.Second, "Poll interval while waiting for Ollama idle")
-	cmd.Flags().DurationVar(&providerSettle, "provider-settle", 5*time.Second, "Required stable /api/ps window before starting the next assignment")
 	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
 	cmd.Flags().BoolVar(&publish, "publish", false, "Publish assignment lifecycle and terminal result projections to the public mirror")
 	return cmd

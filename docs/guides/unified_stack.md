@@ -56,7 +56,7 @@ Provider host (Windows + Ollama)
   ~/.ollama/models ................... content-addressed weight blobs
   g8e operator (Observer) ............ provider-boundary hardware observer
                                        (--provider-boundary-observer-enabled;
-                                        optional --ollama for governed provider quiesce)
+                                        read-only telemetry only)
   g8e operator (Provenance) .......... storage-side model weight attestor
                                        (--provenance-operator-enabled;
                                         --model-storage-root ~/.ollama/models)
@@ -67,7 +67,7 @@ Provider host (Windows + Ollama)
 - The Observer Operator has **no** inference backend and **no** access to Inference Operator attempt files. It samples GPU/RAM locally and receives `ProviderBoundaryObservationCommand` BEGIN/FINALIZE over Gateway pub/sub.
 - The Provenance Operator has **no** inference backend and **no** GPU sampling. It hashes Ollama manifests and weight blobs at `--model-storage-root` and receives `ModelProvenanceObservationCommand` BEGIN/FINALIZE in parallel with the Observer.
 - Observer and Provenance may run on the **same physical host** but must enroll as **separate** governed operator sessions (separate terminals, separate `operator start` processes).
-- When the provider host owner starts the Observer with **`--ollama`**, the campaign pipeline may dispatch a platform-specific governed Ollama reset to that session between assignments. Unix hosts stop Ollama, settle, restart the daemon through `systemctl` or a process/`ollama serve` fallback, wait for readiness, and run `ollama ps`; Windows hosts stop Ollama, settle, terminate `ollama.exe`, settle, start the installed Ollama executable with non-interactive PowerShell `Start-Process`, wait for readiness, and run `ollama ps`. Without `--ollama`, Ollama service lifecycle commands are rejected by both the Gateway and the Operator.
+- The Observer Operator is read-only telemetry. It does not manage Ollama or receive generic command execution; campaign-owned model maintenance targets the exact Inference Operator session.
 
 ## Campaign and run naming
 
@@ -288,13 +288,10 @@ In a dedicated working directory on the Windows provider host:
 .\g8e.exe operator start `
   --endpoint g8e.local `
   --provider-boundary-observer-enabled `
-  --provider-boundary-observer-id g8e-provider-boundary-observer `
-  --ollama
+  --provider-boundary-observer-id g8e-provider-boundary-observer
 ```
 
 The process submits a platform enrollment request. **Do not** pass `--inference-enabled`; this Operator is read-only hardware observation only.
-
-**`--ollama` (optional, provider-host owner decision):** opts this Observer session into governed Ollama daemon reset and status commands on the machine where the operator runs. The flag is recorded in `runtime_config.provider_boundary_observer_ollama_enabled` at bootstrap. The gateway and operator reject Ollama service commands when the session was **not** started with `--ollama`. Omit `--ollama` when you do not want the campaign host to manage Ollama remotely.
 
 From the campaign host owner CLI:
 
@@ -303,7 +300,7 @@ From the campaign host owner CLI:
 ./g8e auth enroll approve <observer-request-id> --yes
 ```
 
-After approval, confirm the observer appears in `./g8e operator list` with `provider_boundary_observer_enabled` in its runtime config. When started with `--ollama`, also confirm `provider_boundary_observer_ollama_enabled: true`.
+After approval, confirm the observer appears in `./g8e operator list` with `provider_boundary_observer_enabled: true` in its runtime config. The observer is a read-only witness and must not receive generic command execution.
 
 ### What the Observer does
 
@@ -312,7 +309,7 @@ After approval, confirm the observer appears in `./g8e operator list` with `prov
 3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
 4. Gateway ingests windows for `g8e eval campaign verify --require-provider-observation`.
 
-When enrolled with `--ollama`, `g8e eval campaign execute` also dispatches a governed reset sequence to the Observer **before each assignment**. On Unix it runs a `systemctl restart ollama` command with a process/`ollama serve` fallback, `sleep 8`, and `ollama ps`. On Windows it runs `%SystemRoot%/System32/taskkill.exe /IM ollama.exe /F`, `cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 3`, `cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Process -FilePath %LOCALAPPDATA%/Programs/Ollama/ollama.exe -ArgumentList serve -WindowStyle Hidden`, `cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 8`, and `ollama ps`. The sequence does not use `ollama stop`, which requires a model name and unloads that model rather than stopping the daemon. Windows settle commands use the explicit non-interactive `%SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep` form because `timeout.exe` returns a failure code under the Observer's redirected execution context. This is separate from `--wait-for-provider-idle`, which still polls the remote HTTP `/api/ps` endpoint from the campaign host.
+The Observer only samples provider-boundary telemetry between BEGIN and FINALIZE. It does not manage Ollama, restart the daemon, unload models, or execute generic commands. Model residency is owned by Ollama, and campaign model release uses an approved command dispatched to the exact Inference Operator after scored work completes.
 
 The legacy filesystem runner `g8e eval dev provider-observer run` is for co-located dev tests only. Production uses the enrolled Observer Operator.
 
@@ -405,12 +402,12 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 \
   ./g8e eval campaign execute \
   --run-id "$RUN_ID" \
   --ollama-endpoint http://192.168.1.2:11434 \
-  --publish --daemon --provider-settle 8s
+  --publish --daemon
 ```
 
 - `--daemon` runs the full matrix in one process.
-- `--provider-settle 8s` waits after each assignment for Ollama to go idle over HTTP (`/api/ps`).
-- When the enrolled Observer Operator has `provider_boundary_observer_ollama_enabled`, execute also runs the platform-specific governed Ollama reset on the provider host before each assignment; see [Provider-boundary Observer Operator](#provider-boundary-observer-operator-windows-ollama-host) for the exact Unix and Windows sequences.
+- Consecutive assignments keep the provider daemon running; no reset or stable-body `/api/ps` wait occurs between cells.
+- After the queue is exhausted, the controller reads typed `/api/ps` residency and dispatches validated `ollama stop <served-tag>` commands through the exact Inference Operator, then confirms the campaign-owned tags are absent.
 - **Never** run `g8e eval campaign publish` concurrently with `execute --publish`.
 
 ### Phase D — Monitor
@@ -514,11 +511,11 @@ docker compose --profile evaluation up -d --force-recreate g8e-inference-operato
 - Confirm the served model tag and digest in campaign inventory match what Ollama reports (`ollama show <tag> --verbose` or `/api/tags` on the provider).
 - Digest mismatch on FINALIZE is intentional fail-closed behavior when weights changed after campaign freeze.
 
-### Ollama service restart rejected during campaign execute
+### Campaign model release fails
 
-- Confirm the Observer was started with `--ollama` and `./g8e operator list --json` shows `provider_boundary_observer_ollama_enabled: true`.
-- Restart the Observer process with `--ollama` and re-enroll if runtime config is stale.
-- Without `--ollama`, the gateway and operator reject governed Ollama service commands by design.
+- Confirm the exact Inference Operator session is active and its configured provider endpoint matches `G8E_OLLAMA_ENDPOINT`.
+- Inspect typed provider residency at `/api/ps`; malformed responses, endpoint failures, and ambiguous residency fail closed.
+- Do not grant the Observer or Provenance Operator command authority. They are read-only witness boundaries; retry release only after the provider owner resolves the endpoint or Ollama client failure.
 
 ### Public feed drift or out-of-order batches
 

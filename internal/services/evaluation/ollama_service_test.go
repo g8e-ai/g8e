@@ -13,48 +13,64 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-type stubOllamaServiceDispatcher struct {
-	requests []OllamaServiceDispatchRequest
+type recordingOllamaModelCommandDispatcher struct {
+	requests []OllamaModelCommandDispatchRequest
 }
 
-func (s *stubOllamaServiceDispatcher) DispatchOllamaServiceCommand(ctx context.Context, request OllamaServiceDispatchRequest) (*OllamaServiceDispatchResult, error) {
-	_ = ctx
-	s.requests = append(s.requests, request)
-	return &OllamaServiceDispatchResult{Status: 200, Success: true, Result: operatorv1CompletedCommandResult()}, nil
+func (d *recordingOllamaModelCommandDispatcher) DispatchOllamaModelCommand(_ context.Context, request OllamaModelCommandDispatchRequest) (*OllamaModelCommandDispatchResult, error) {
+	d.requests = append(d.requests, request)
+	return &OllamaModelCommandDispatchResult{
+		Status:  200,
+		Success: true,
+		Result:  &operatorv1.CommandResult{Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
+	}, nil
 }
 
-func TestRestartOllamaViaObserver_SkipsWhenNotEnabled(t *testing.T) {
-	dispatcher := &stubOllamaServiceDispatcher{}
-	outcome, err := RestartOllamaViaObserver(t.Context(), &ProviderBoundaryObserverStatus{OllamaEnabled: false}, dispatcher, "run-1", func(prefix string) string { return prefix })
+func TestReleaseOllamaModels_TargetsExactInferenceSession(t *testing.T) {
+	t.Parallel()
+	dispatcher := &recordingOllamaModelCommandDispatcher{}
+	err := ReleaseOllamaModels(context.Background(), dispatcher, "inference-session", "run-1", []string{"qwen3:0.6b", "registry.example/team/gemma3:4b"}, map[string]string{"OLLAMA_HOST": "http://provider.example:11434"}, func(prefix string) string { return prefix + "-id" })
 	require.NoError(t, err)
-	assert.False(t, outcome.Performed)
-	assert.Empty(t, dispatcher.requests)
+	require.Len(t, dispatcher.requests, 2)
+	assert.Equal(t, "inference-session", dispatcher.requests[0].TargetOperatorSessionID)
+	assert.Equal(t, "ollama stop qwen3:0.6b", dispatcher.requests[0].Command)
+	assert.Equal(t, "ollama stop registry.example/team/gemma3:4b", dispatcher.requests[1].Command)
+	assert.Equal(t, "http://provider.example:11434", dispatcher.requests[0].Environment["OLLAMA_HOST"])
 }
 
-func TestRestartOllamaViaObserver_DispatchesLifecycleSequence(t *testing.T) {
-	dispatcher := &stubOllamaServiceDispatcher{}
-	observer := &ProviderBoundaryObserverStatus{
-		OperatorSessionID: "sess-obs-1",
-		OllamaEnabled:     true,
-		Platform:          "windows",
-	}
-	outcome, err := RestartOllamaViaObserver(t.Context(), observer, dispatcher, "run-1", func(prefix string) string { return prefix + "-id" })
+func TestMarshalOllamaModelCommandPayload_CarriesExecutionFields(t *testing.T) {
+	t.Parallel()
+	payload, err := MarshalOllamaModelCommandPayload(OllamaModelCommandDispatchRequest{
+		Command:          "ollama stop qwen3:0.6b",
+		ExecutionID:      "exec-1",
+		Environment:      map[string]string{"OLLAMA_HOST": "http://provider.example:11434"},
+		WorkingDirectory: "/root",
+		TimeoutSeconds:   30,
+	})
 	require.NoError(t, err)
-	assert.True(t, outcome.Performed)
-	assert.Equal(t, 5, outcome.CommandCount)
-	require.Len(t, dispatcher.requests, 5)
-	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/taskkill.exe /IM ollama.exe /F", dispatcher.requests[0].Command)
-	assert.Equal(t, "cmd.exe /C %SystemRoot%/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command Start-Sleep -Seconds 3", dispatcher.requests[1].Command)
-	assert.Equal(t, operatorcapability.OllamaWindowsStartCommand, dispatcher.requests[2].Command)
-	assert.Equal(t, operatorcapability.OllamaRestartReadySettleCommand("windows"), dispatcher.requests[3].Command)
-	assert.Equal(t, operatorcapability.OllamaServiceCommandPS, dispatcher.requests[4].Command)
+	var command operatorv1.CommandRequested
+	require.NoError(t, proto.Unmarshal(payload, &command))
+	assert.Equal(t, "ollama stop qwen3:0.6b", command.GetCommand())
+	assert.Equal(t, "exec-1", command.GetExecutionId())
+	assert.Equal(t, map[string]string{"OLLAMA_HOST": "http://provider.example:11434"}, command.GetEnvironment())
+	assert.Equal(t, "/root", command.GetWorkingDirectory())
+	assert.Equal(t, int32(30), command.GetTimeoutSeconds())
 }
 
-func operatorv1CompletedCommandResult() *operatorv1.CommandResult {
-	return &operatorv1.CommandResult{Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED}
+func TestValidateOllamaModelCommandResult_RejectsNonzeroExit(t *testing.T) {
+	t.Parallel()
+	err := ValidateOllamaModelCommandResult("ollama stop qwen3:0.6b", &OllamaModelCommandDispatchResult{
+		Status:  200,
+		Success: true,
+		Result: &operatorv1.CommandResult{
+			Status:     operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			ReturnCode: 1,
+		},
+	})
+	require.Error(t, err)
 }

@@ -16,8 +16,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
@@ -31,19 +33,16 @@ type campaignOperatorSessions struct {
 }
 
 type campaignExecuteOptions struct {
-	RunID               string
-	Publish             bool
-	Daemon              bool
-	Limit               uint32
-	InferenceSessionID  string
-	DataSessionID       string
-	EnsembleURL         string
-	OllamaEndpoint      string
-	NoAutoRefresh       bool
-	WaitForProviderIdle bool
-	ProviderIdlePoll    time.Duration
-	ProviderSettle      time.Duration
-	JSONOutput          bool
+	RunID              string
+	Publish            bool
+	Daemon             bool
+	Limit              uint32
+	InferenceSessionID string
+	DataSessionID      string
+	EnsembleURL        string
+	OllamaEndpoint     string
+	NoAutoRefresh      bool
+	JSONOutput         bool
 }
 
 func resolveCampaignOperatorSessions(
@@ -276,10 +275,6 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		ModelRegistry:              evaluation.InferenceVariantsFromEvalRegistry(spec.GetModelRegistry()),
 	}
 	executed := 0
-	resolvedOllamaEndpoint, err := resolveCampaignOllamaEndpoint(opts.OllamaEndpoint, operators, selected.OperatorSessionID)
-	if err != nil {
-		return executed, err
-	}
 	if err := preflightProviderObservationDelivery(fileSvc, cfg); err != nil {
 		return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
 	}
@@ -295,34 +290,6 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 		iterations = 1<<31 - 1
 	}
 	for i := 0; i < iterations; i++ {
-		restartCtx, restartCancel := context.WithTimeout(cmd.Context(), 10*time.Minute)
-		_, err := restartOllamaViaObserverIfEnabled(restartCtx, operators, opts.RunID, dataOperator, cfg, authContext, chatEvalDeps{
-			configLoader:   deps.configLoader,
-			fileSvcFactory: deps.fileSvcFactory,
-			authLoader:     deps.authLoader,
-			clientFactory:  deps.clientFactory,
-			now:            deps.now,
-			newID:          deps.newID,
-		}, func(prefix string) string { return prefix + "-" + deps.newID() }, cmd.OutOrStdout(), cmd.ErrOrStderr())
-		restartCancel()
-		if err != nil {
-			return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
-		}
-		if opts.WaitForProviderIdle {
-			idleCtx, idleCancel := context.WithTimeout(cmd.Context(), 15*time.Minute)
-			err := inference.WaitForProviderIdle(idleCtx, inference.ProviderIdleOptions{
-				Endpoint:       resolvedOllamaEndpoint,
-				PollInterval:   opts.ProviderIdlePoll,
-				SettleDuration: opts.ProviderSettle,
-			})
-			idleCancel()
-			if err != nil {
-				return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
-			}
-			if !opts.JSONOutput {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Provider idle at %s\n", resolvedOllamaEndpoint)
-			}
-		}
 		ctx, cancel := context.WithTimeout(cmd.Context(), 8*time.Minute)
 		result, ok, err := controller.ExecuteNextAssignment(ctx, opts.RunID, executionBinding, artifacts)
 		cancel()
@@ -330,15 +297,6 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 			return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
 		}
 		if !ok {
-			if publication != nil {
-				completionCount, publishErr := publication.PublishRunCompletion(cmd.Context(), opts.RunID, deps.now().UTC())
-				if publishErr != nil {
-					return executed, fmt.Errorf("evaluation: campaign execute: %w", publishErr)
-				}
-				if completionCount > 0 && !opts.JSONOutput {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d completion projection record(s) for run %s\n", completionCount, opts.RunID)
-				}
-			}
 			break
 		}
 		executed++
@@ -346,7 +304,91 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Executed %s: %s\n", result.GetAssignmentId(), result.GetLifecycleStatus().String())
 		}
 	}
+
+	summary, err = controller.RunSummary(cmd.Context(), opts.RunID)
+	if err != nil {
+		return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
+	}
+	if summary.QueuedCount == 0 && summary.RunningCount == 0 {
+		if err := releaseCampaignModels(cmd, deps, opts, cfg, authContext, dataOperator, operators, selected.OperatorSessionID, spec); err != nil {
+			return executed, fmt.Errorf("evaluation: campaign execute: %w", err)
+		}
+		if publication != nil {
+			completionCount, publishErr := publication.PublishRunCompletion(cmd.Context(), opts.RunID, deps.now().UTC())
+			if publishErr != nil {
+				return executed, fmt.Errorf("evaluation: campaign execute: %w", publishErr)
+			}
+			if completionCount > 0 && !opts.JSONOutput {
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d completion projection record(s) for run %s\n", completionCount, opts.RunID)
+			}
+		}
+	}
 	return executed, nil
+}
+
+func releaseCampaignModels(
+	cmd *cobra.Command,
+	deps nativeEvalDeps,
+	opts campaignExecuteOptions,
+	cfg *config.Config,
+	authContext *auth.ClientAuthContext,
+	dataOperator *evaluation.DataOperatorStatus,
+	operators []models.OperatorDocumentGo,
+	inferenceSessionID string,
+	spec *evalv1.EvaluationCampaignSpec,
+) error {
+	if inferenceSessionID == "" || spec == nil || len(spec.GetModelRegistry()) == 0 {
+		return nil
+	}
+	endpoint, err := resolveCampaignOllamaEndpoint(opts.OllamaEndpoint, operators, inferenceSessionID)
+	if err != nil {
+		return err
+	}
+	modelTags := make([]string, 0, len(spec.GetModelRegistry()))
+	for _, variant := range spec.GetModelRegistry() {
+		if variant != nil && variant.GetServedModelTag() != "" {
+			modelTags = append(modelTags, variant.GetServedModelTag())
+		}
+	}
+	residency, err := inference.ReadProviderResidency(cmd.Context(), inference.ProviderResidencyOptions{Endpoint: endpoint})
+	if err != nil {
+		return err
+	}
+	residentTags := make([]string, 0, len(modelTags))
+	for _, tag := range modelTags {
+		for _, resident := range residency.Models {
+			if resident.Name == tag {
+				residentTags = append(residentTags, tag)
+				break
+			}
+		}
+	}
+	if len(residentTags) == 0 {
+		return nil
+	}
+	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, chatEvalDeps{
+		configLoader:   deps.configLoader,
+		fileSvcFactory: deps.fileSvcFactory,
+		authLoader:     deps.authLoader,
+		clientFactory:  deps.clientFactory,
+		now:            deps.now,
+		newID:          deps.newID,
+	})
+	if err != nil {
+		return err
+	}
+	if err := evaluation.ReleaseOllamaModels(cmd.Context(), dispatcher, inferenceSessionID, opts.RunID, residentTags, modelCommandEnvironment(endpoint), func(prefix string) string { return prefix + "-" + deps.newID() }); err != nil {
+		return err
+	}
+	waitCtx, cancel := context.WithTimeout(cmd.Context(), 2*time.Minute)
+	defer cancel()
+	if err := inference.WaitForProviderModelsAbsent(waitCtx, inference.ProviderResidencyOptions{Endpoint: endpoint}, residentTags); err != nil {
+		return err
+	}
+	if !opts.JSONOutput {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Released %d campaign model(s) at %s\n", len(residentTags), endpoint)
+	}
+	return nil
 }
 
 func verifyCampaignRun(
@@ -442,9 +484,6 @@ type campaignStartFlowOptions struct {
 	RequireProviderObservation bool
 	RequireModelProvenance     bool
 	NoAutoRefresh              bool
-	WaitForProviderIdle        bool
-	ProviderIdlePoll           time.Duration
-	ProviderSettle             time.Duration
 	JSONOutput                 bool
 }
 
@@ -506,18 +545,15 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 		return result, nil
 	}
 	executed, err := runCampaignExecute(cmd, deps, campaignExecuteOptions{
-		RunID:               plan.RunID,
-		Publish:             opts.Publish,
-		Daemon:              opts.Daemon,
-		InferenceSessionID:  sessions.InferenceSessionID,
-		DataSessionID:       sessions.DataSessionID,
-		EnsembleURL:         opts.EnsembleURL,
-		OllamaEndpoint:      opts.OllamaEndpoint,
-		NoAutoRefresh:       opts.NoAutoRefresh,
-		WaitForProviderIdle: opts.WaitForProviderIdle,
-		ProviderIdlePoll:    opts.ProviderIdlePoll,
-		ProviderSettle:      opts.ProviderSettle,
-		JSONOutput:          opts.JSONOutput,
+		RunID:              plan.RunID,
+		Publish:            opts.Publish,
+		Daemon:             opts.Daemon,
+		InferenceSessionID: sessions.InferenceSessionID,
+		DataSessionID:      sessions.DataSessionID,
+		EnsembleURL:        opts.EnsembleURL,
+		OllamaEndpoint:     opts.OllamaEndpoint,
+		NoAutoRefresh:      opts.NoAutoRefresh,
+		JSONOutput:         opts.JSONOutput,
 	})
 	if err != nil {
 		return result, err

@@ -12,29 +12,29 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/services/operatorcapability"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
 
-func TestValidateOllamaServiceDispatch(t *testing.T) {
-	payload, err := proto.Marshal(&operatorv1.CommandRequested{Command: operatorcapability.OllamaServiceCommandStop, ExecutionId: "exec-1"})
+func TestValidateWitnessCommandDispatch(t *testing.T) {
+	payload, err := proto.Marshal(&operatorv1.CommandRequested{Command: "ollama stop qwen3:0.6b", ExecutionId: "exec-1"})
 	require.NoError(t, err)
 
-	capable := &models.OperatorDocumentGo{
-		RuntimeConfig: &models.RuntimeConfig{
-			ProviderBoundaryObserverEnabled:       true,
-			ProviderBoundaryObserverOllamaEnabled: true,
-		},
+	ordinary := &models.OperatorDocumentGo{
+		RuntimeConfig: &models.RuntimeConfig{InferenceEnabled: true},
 	}
-	require.NoError(t, validateOllamaServiceDispatch(capable, string(constants.ActionTypeExecuteBash), payload))
+	require.NoError(t, validateWitnessCommandDispatch(ordinary, string(constants.ActionTypeExecuteBash), payload))
 
-	incapable := &models.OperatorDocumentGo{
+	observer := &models.OperatorDocumentGo{
 		RuntimeConfig: &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
 	}
-	err = validateOllamaServiceDispatch(incapable, string(constants.ActionTypeExecuteBash), payload)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrProviderBoundaryObserverOllamaNotCapable)
+	err = validateWitnessCommandDispatch(observer, string(constants.ActionTypeExecuteBash), payload)
+	require.ErrorIs(t, err, constants.ErrWitnessCommandNotCapable)
+
+	provenance := &models.OperatorDocumentGo{
+		RuntimeConfig: &models.RuntimeConfig{ProvenanceOperatorEnabled: true},
+	}
+	err = validateWitnessCommandDispatch(provenance, string(constants.ActionTypeExecuteBash), payload)
+	require.ErrorIs(t, err, constants.ErrWitnessCommandNotCapable)
 }

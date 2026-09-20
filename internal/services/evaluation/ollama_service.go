@@ -19,113 +19,104 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-// OllamaServiceDispatchRequest carries one governed EXECUTE_BASH dispatch to
-// the provider-boundary observer operator on the Ollama host.
-type OllamaServiceDispatchRequest struct {
-	ObserverSessionID string
-	Command           string
-	ExecutionID       string
-	CaseID            string
-	InvestigationID   string
-	TaskID            string
+// OllamaModelCommandDispatchRequest carries one governed, unscored model
+// maintenance command to the exact Inference Operator session.
+type OllamaModelCommandDispatchRequest struct {
+	TargetOperatorSessionID string
+	Command                 string
+	Environment             map[string]string
+	WorkingDirectory        string
+	TimeoutSeconds          int32
+	ExecutionID             string
+	CaseID                  string
+	InvestigationID         string
+	TaskID                  string
 }
 
-// OllamaServiceDispatchResult is the operator command outcome for one dispatch.
-type OllamaServiceDispatchResult struct {
+// OllamaModelCommandDispatchResult is the Operator outcome for one model
+// maintenance command.
+type OllamaModelCommandDispatchResult struct {
 	Status       int
 	Success      bool
 	Result       *operatorv1.CommandResult
 	ResponseBody []byte
 }
 
-// OllamaServiceDispatcher executes governed shell commands on the observer
-// operator session.
-type OllamaServiceDispatcher interface {
-	DispatchOllamaServiceCommand(context.Context, OllamaServiceDispatchRequest) (*OllamaServiceDispatchResult, error)
+// OllamaModelCommandDispatcher sends governed model maintenance commands to
+// one exact Operator session.
+type OllamaModelCommandDispatcher interface {
+	DispatchOllamaModelCommand(context.Context, OllamaModelCommandDispatchRequest) (*OllamaModelCommandDispatchResult, error)
 }
 
-// OllamaRestartOutcome summarizes whether a governed provider restart ran.
-type OllamaRestartOutcome struct {
-	Performed         bool
-	SkipReason        string
-	ObserverSessionID string
-	Platform          string
-	CommandCount      int
-}
-
-// RestartOllamaViaObserver gracefully restarts the local Ollama provider on the
-// provider host through the enrolled observer operator. The observer must have
-// started with --ollama; otherwise this returns immediately without dispatching.
-func RestartOllamaViaObserver(ctx context.Context, observer *ProviderBoundaryObserverStatus, dispatcher OllamaServiceDispatcher, runID string, newID func(string) string) (OllamaRestartOutcome, error) {
-	outcome := OllamaRestartOutcome{}
-	if observer == nil || dispatcher == nil || newID == nil {
-		outcome.SkipReason = "missing observer or dispatcher"
-		return outcome, nil
-	}
-	outcome.ObserverSessionID = observer.OperatorSessionID
-	outcome.Platform = observer.Platform
-	if !observer.OllamaEnabled {
-		outcome.SkipReason = "observer did not opt in with --ollama"
-		return outcome, nil
-	}
-	commands := operatorcapability.RestartOllamaCommands(observer.Platform)
-	outcome.CommandCount = len(commands)
-	for index, command := range commands {
-		result, err := dispatcher.DispatchOllamaServiceCommand(ctx, OllamaServiceDispatchRequest{
-			ObserverSessionID: observer.OperatorSessionID,
-			Command:           command,
-			ExecutionID:       newID(fmt.Sprintf("ollama-restart-%d", index)),
-			CaseID:            runID,
-			InvestigationID:   "ollama-service-restart",
-			TaskID:            newID("ollama-step"),
-		})
-		if err != nil {
-			return outcome, fmt.Errorf("evaluation: ollama service restart: %w", err)
-		}
-		if err := validateOllamaServiceDispatchResult(command, result); err != nil {
-			return outcome, err
-		}
-	}
-	outcome.Performed = true
-	return outcome, nil
-}
-
-func validateOllamaServiceDispatchResult(command string, result *OllamaServiceDispatchResult) error {
+// ValidateOllamaModelCommandResult validates the HTTP and Operator result for
+// one model maintenance command.
+func ValidateOllamaModelCommandResult(command string, result *OllamaModelCommandDispatchResult) error {
 	if result == nil {
-		return fmt.Errorf("%w: ollama service command %q returned no result", constants.ErrEvaluationDispatchFailed, command)
+		return fmt.Errorf("%w: Ollama model command %q returned no result", constants.ErrEvaluationDispatchFailed, command)
 	}
 	if result.Status != http.StatusOK || !result.Success {
-		return fmt.Errorf("%w: ollama service command %q rejected with status %d", constants.ErrEvaluationDispatchFailed, command, result.Status)
+		return fmt.Errorf("%w: Ollama model command %q rejected with status %d", constants.ErrEvaluationDispatchFailed, command, result.Status)
 	}
 	if result.Result == nil {
-		return fmt.Errorf("%w: ollama service command %q missing command result", constants.ErrEvaluationDispatchFailed, command)
+		return fmt.Errorf("%w: Ollama model command %q missing command result", constants.ErrEvaluationDispatchFailed, command)
 	}
 	if result.Result.GetStatus() != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
-		return fmt.Errorf("%w: ollama service command %q failed: %s", constants.ErrEvaluationDispatchFailed, command, result.Result.GetError())
+		return fmt.Errorf("%w: Ollama model command %q failed: %s", constants.ErrEvaluationDispatchFailed, command, result.Result.GetError())
 	}
-	returnCode := result.Result.GetReturnCode()
-	if operatorcapability.ToleratedOllamaRestartExitCode(command, returnCode) {
-		return nil
-	}
-	if command == operatorcapability.OllamaServiceCommandPS && returnCode != 0 {
-		return fmt.Errorf("%w: ollama ps exited with code %d", constants.ErrEvaluationDispatchFailed, returnCode)
-	}
-	if returnCode != 0 {
-		return fmt.Errorf("%w: ollama service command %q exited with code %d", constants.ErrEvaluationDispatchFailed, command, returnCode)
+	if result.Result.GetReturnCode() != 0 {
+		return fmt.Errorf("%w: Ollama model command %q exited with code %d", constants.ErrEvaluationDispatchFailed, command, result.Result.GetReturnCode())
 	}
 	return nil
 }
 
-// MarshalOllamaServiceCommandPayload builds the EXECUTE_BASH payload for one
-// Ollama service lifecycle command.
-func MarshalOllamaServiceCommandPayload(command, executionID string) ([]byte, error) {
+// MarshalOllamaModelCommandPayload builds the typed EXECUTE_BASH payload for
+// one unscored model maintenance command.
+func MarshalOllamaModelCommandPayload(request OllamaModelCommandDispatchRequest) ([]byte, error) {
+	if request.Command == "" || request.ExecutionID == "" {
+		return nil, fmt.Errorf("%w: model command and execution ID are required", constants.ErrMissingRequiredField)
+	}
 	payload, err := proto.Marshal(&operatorv1.CommandRequested{
-		Command:       command,
-		ExecutionId:   executionID,
-		Justification: "evaluation campaign ollama service restart",
+		Command:          request.Command,
+		ExecutionId:      request.ExecutionID,
+		Justification:    "evaluation campaign model maintenance",
+		Environment:      request.Environment,
+		WorkingDirectory: request.WorkingDirectory,
+		TimeoutSeconds:   request.TimeoutSeconds,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: marshal ollama service command: %v", constants.ErrEvaluationDispatchFailed, err)
+		return nil, fmt.Errorf("%w: marshal Ollama model command: %v", constants.ErrEvaluationDispatchFailed, err)
 	}
 	return payload, nil
+}
+
+// ReleaseOllamaModels unloads only the validated campaign-owned model tags
+// through the exact Inference Operator session after scored work is complete.
+func ReleaseOllamaModels(ctx context.Context, dispatcher OllamaModelCommandDispatcher, targetOperatorSessionID, runID string, modelTags []string, environment map[string]string, newID func(string) string) error {
+	if dispatcher == nil || targetOperatorSessionID == "" || runID == "" || newID == nil {
+		return fmt.Errorf("evaluation: release Ollama models: %w", constants.ErrMissingRequiredField)
+	}
+	for index, modelTag := range modelTags {
+		command, err := operatorcapability.OllamaStopCommand(modelTag)
+		if err != nil {
+			return fmt.Errorf("evaluation: release Ollama models: %w", err)
+		}
+		request := OllamaModelCommandDispatchRequest{
+			TargetOperatorSessionID: targetOperatorSessionID,
+			Command:                 command,
+			Environment:             environment,
+			TimeoutSeconds:          60,
+			ExecutionID:             newID(fmt.Sprintf("ollama-release-%d", index)),
+			CaseID:                  runID,
+			InvestigationID:         "ollama-model-release",
+			TaskID:                  newID("ollama-release"),
+		}
+		result, err := dispatcher.DispatchOllamaModelCommand(ctx, request)
+		if err != nil {
+			return fmt.Errorf("evaluation: release Ollama models: %w", err)
+		}
+		if err := ValidateOllamaModelCommandResult(command, result); err != nil {
+			return fmt.Errorf("evaluation: release Ollama models: %w", err)
+		}
+	}
+	return nil
 }
