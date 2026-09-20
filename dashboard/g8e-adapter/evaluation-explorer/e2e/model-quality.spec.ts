@@ -130,25 +130,25 @@ test('replaces partial model revisions with verified revisions and keeps scope i
   await page.goto('/evaluations');
   await expect(page.getByRole('heading', { name: 'Evaluation runs' })).toBeVisible();
   await expect(page.getByTestId('quality-exploratory_verified')).toBeVisible();
-  await expect(page.getByText('Exploratory · verifier passed')).toBeVisible();
+  await expect(page.getByTestId('quality-exploratory_verified')).toHaveText('Exploratory · verifier passed');
 
   await page.goto('/models');
-  await expect(page.getByRole('link', { name: 'Quality Model' })).toBeVisible();
+  await expect(page.locator(`a[href="/models/${verifiedDataset}/quality-model?role=primary"]`)).toBeVisible();
   await expect(page.getByTestId('quality-exploratory_verified')).toBeVisible();
-  await expect(page.getByText('Exploratory · verifier passed')).toBeVisible();
+  await expect(page.getByTestId('quality-exploratory_verified')).toHaveText('Exploratory · verifier passed');
   await expect(page.getByText('Quality Model Assistant')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Quality Model Assistant' }).locator('..')).toContainText('Exploratory · partial');
+  await expect(page.locator('tr').filter({ has: page.getByRole('link', { name: 'Quality Model Assistant' }) })).toContainText('Exploratory · partial');
   await expect(
     page.locator('tr').filter({ has: page.locator(`a[href="/models/${partialDataset}/quality-model?role=primary"]`) }),
   ).toContainText('Exploratory · partial');
 
-  await page.goto('/models?quality=exploratory_verified');
-  await expect(page.getByRole('link', { name: 'Quality Model' })).toBeVisible();
+  await page.getByLabel('Filter by quality state').selectOption('exploratory_verified');
+  await expect(page.locator(`a[href="/models/${verifiedDataset}/quality-model?role=primary"]`)).toBeVisible();
   await expect(page.getByRole('link', { name: 'Quality Model Assistant' })).not.toBeVisible();
   await expect(page.getByText('Quality Model Assistant')).not.toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole('link', { name: 'Quality Model' })).toBeVisible();
+  await expect(page.locator(`a[href="/models/${verifiedDataset}/quality-model?role=primary"]`)).toBeVisible();
   await expect(page.getByTestId('quality-exploratory_verified')).toBeVisible();
   expectPublicOnly(requests);
 });

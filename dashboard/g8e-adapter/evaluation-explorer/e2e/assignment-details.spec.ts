@@ -166,6 +166,7 @@ test('preserves legacy and unavailable evidence without rendering private fields
     assignment_id: 'legacy-assignment',
     scenario_id: undefined,
     scenario_summary: undefined,
+    semantic_grade_summaries: undefined,
     activity_summary: undefined,
     evidence_bindings: undefined,
     resource_summary: undefined,
@@ -176,11 +177,11 @@ test('preserves legacy and unavailable evidence without rendering private fields
   const requests = await installMirror(page, [evaluation(), legacy]);
 
   await page.goto(`/evaluations/${datasetId}/${runId}/assignments/legacy-assignment`);
-  await expect(page.getByText('Historical evidence was not captured.')).toBeVisible();
+  await expect(page.getByText('Historical evidence was not captured.', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Evidence and methodology' })).toBeVisible();
-  await expect(page.getByText('No public proof bindings were published for this assignment.')).toBeVisible();
+  await expect(page.getByText('No approved public proof bindings were published for this assignment.')).toBeVisible();
   await expect(page.getByText('Stage timeline not published for this assignment.')).toBeVisible();
-  await expect(page.getByTestId('metric-latency')).toContainText('Unavailable');
+  await expect(page.locator('.assignment-resources [data-testid="metric-latency"]')).toContainText('Unavailable');
   await expect(page.getByText('private_prompt')).not.toBeVisible();
   expectPublicOnly(requests);
 });
@@ -193,7 +194,7 @@ test('rejects a malicious assignment record before rendering it', async ({ page 
   await page.goto(`/evaluations/${datasetId}/${runId}/assignments/assignment-1`);
   await expect(page.getByText('never render this prompt')).not.toBeVisible();
   await expect(page.getByText('No assignment selected.')).not.toBeVisible();
-  await expect(page.getByText('No records available.')).toBeVisible();
+  await expect(page.getByText('The public mirror is unreachable. Last accepted data remains visible below.')).toBeVisible();
   await expect(page.getByRole('alert')).toContainText('Feed validation errors');
   expectPublicOnly(requests);
 });
