@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 license = {text = "BUSL-1.1"}
 dependencies = [
     # HTTP server
-    "fastapi==0.140.0",
+    "fastapi==0.141.1",
     "uvicorn==0.51.0",
     # Data validation and modeling
     "pydantic==2.13.4",
@@ -25,16 +25,16 @@ dependencies = [
     # for the local path override; the Dockerfile installs protocol/python
     # before ensemble so pip resolves g8e from the already-installed local
     # package instead of PyPI)
-    "g8e>=1.7.8",
+    "g8e>=2.17",
     # LLM providers
-    "openai==2.48.0",
+    "openai==3.13.0",
     "ollama==0.6.2",
-    "google-genai==2.20.0",
-    "anthropic==1.2.0",
+    "google-genai==2.23.0",
+    "anthropic==1.5.0",
     # Retry primitives
     "tenacity==9.1.4",
     # Vertex AI Search grounding
-    "google-cloud-discoveryengine==0.20.2",
+    "google-cloud-discoveryengine==0.20.3",
     # Documentation
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.5.0",
@@ -46,8 +46,8 @@ embeddings = [
     "sentence-transformers>=6.0.0",
 ]
 dev = [
-    "ruff==0.16.5",
-    "pyright==1.1.411",
+    "ruff==0.16.7",
+    "pyright==1.1.414",
     "pre-commit>=3.0.0",
 ]
 test = [
@@ -57,8 +57,8 @@ test = [
     "pytest-mock>=3.15.1",
     "pytest-timeout>=2.4.0",
     "pytest-xdist[psutil]>=3.8.0",
-    "ruff==0.16.5",
-    "pyright==1.1.411",
+    "ruff==0.16.7",
+    "pyright==1.1.414",
 ]
 docs = [
     "mkdocs>=1.6.1",
