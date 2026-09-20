@@ -105,6 +105,16 @@ const EVIDENCE_KINDS = [
   'source_manifest',
 ] as const;
 const TOOL_DIMENSIONS = [
+  'PUBLIC_TOOL_SCORE_DIMENSION_TOOL_RECOGNITION',
+  'PUBLIC_TOOL_SCORE_DIMENSION_TOOL_SELECTION',
+  'PUBLIC_TOOL_SCORE_DIMENSION_ARGUMENT_SCHEMA',
+  'PUBLIC_TOOL_SCORE_DIMENSION_ARGUMENT_SEMANTICS',
+  'PUBLIC_TOOL_SCORE_DIMENSION_PERMISSION_COMPLIANCE',
+  'PUBLIC_TOOL_SCORE_DIMENSION_RESULT_INTERPRETATION',
+  'PUBLIC_TOOL_SCORE_DIMENSION_FOLLOW_UP_DECISION',
+  'PUBLIC_TOOL_SCORE_DIMENSION_UNNECESSARY_TOOL_CALLS',
+  'PUBLIC_TOOL_SCORE_DIMENSION_LOOPING',
+  'PUBLIC_TOOL_SCORE_DIMENSION_RECOVERY',
   'TOOL_SCORE_DIMENSION_TOOL_RECOGNITION',
   'TOOL_SCORE_DIMENSION_TOOL_SELECTION',
   'TOOL_SCORE_DIMENSION_ARGUMENT_SCHEMA',
@@ -126,6 +136,9 @@ interface WireScore {
   score_id: string;
   dimension?: string;
   value?: number;
+  unit?: string;
+  direction?: string;
+  missing_data_policy?: string;
 }
 
 interface WireScenarioCriterion {
@@ -175,10 +188,10 @@ interface WireModelActivityRecord {
 
 interface WireToolDecisionActivityRecord {
   tool_label: string;
-  recognized: boolean;
-  selected: boolean;
-  permission_compliant: boolean;
-  unnecessary: boolean;
+  recognized?: boolean;
+  selected?: boolean;
+  permission_compliant?: boolean;
+  unnecessary?: boolean;
   outcome: (typeof SEMANTIC_OUTCOMES)[number];
   evidence_source: (typeof EVIDENCE_SOURCES)[number];
 }
@@ -370,6 +383,10 @@ function assertBoolean(value: unknown, path: string): asserts value is boolean {
   assert(typeof value === 'boolean', path, 'expected boolean');
 }
 
+function assertOptionalBoolean(value: unknown, path: string): asserts value is boolean | undefined {
+  if (value !== undefined) assertBoolean(value, path);
+}
+
 function assertLifecycleRecord(value: unknown, path: string): asserts value is CampaignLifecycleRecord {
   assertObject(value, path);
   rejectUnknown(value, LIFECYCLE_FIELDS, path);
@@ -388,13 +405,16 @@ function assertLifecycleRecord(value: unknown, path: string): asserts value is C
 
 function assertScore(value: unknown, path: string): asserts value is WireScore {
   assertObject(value, path);
-  rejectUnknown(value, ['score_id', 'dimension', 'value'], path);
+  rejectUnknown(value, ['score_id', 'dimension', 'value', 'unit', 'direction', 'missing_data_policy'], path);
   assertString(value.score_id, `${path}.score_id`);
   assertOptionalString(value.dimension, `${path}.dimension`);
   if (value.value !== undefined) {
     assert(typeof value.value === 'number' && Number.isFinite(value.value), `${path}.value`, 'expected finite number');
     assert(value.value >= 0, `${path}.value`, 'must be nonnegative');
   }
+  assertOptionalString(value.unit, `${path}.unit`);
+  assertOptionalString(value.direction, `${path}.direction`);
+  assertOptionalString(value.missing_data_policy, `${path}.missing_data_policy`);
 }
 
 function assertScenarioSummary(value: unknown, path: string): void {
@@ -502,10 +522,10 @@ function assertToolDecisionRecord(value: unknown, path: string): void {
   assertObject(value, path);
   rejectUnknown(value, ['tool_label', 'recognized', 'selected', 'permission_compliant', 'unnecessary', 'outcome', 'evidence_source'], path);
   assertString(value.tool_label, `${path}.tool_label`);
-  assertBoolean(value.recognized, `${path}.recognized`);
-  assertBoolean(value.selected, `${path}.selected`);
-  assertBoolean(value.permission_compliant, `${path}.permission_compliant`);
-  assertBoolean(value.unnecessary, `${path}.unnecessary`);
+  assertOptionalBoolean(value.recognized, `${path}.recognized`);
+  assertOptionalBoolean(value.selected, `${path}.selected`);
+  assertOptionalBoolean(value.permission_compliant, `${path}.permission_compliant`);
+  assertOptionalBoolean(value.unnecessary, `${path}.unnecessary`);
   assertEnum(value.outcome, SEMANTIC_OUTCOMES, `${path}.outcome`);
   assert(value.evidence_source === 'PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED', `${path}.evidence_source`, 'tool decisions require application-reported evidence');
 }
@@ -654,7 +674,7 @@ export function decodeCampaignProjectionEnvelope(value: unknown): CampaignProjec
   rejectUnknown(value, ENVELOPE_FIELDS, path);
   assertString(value.schema_version, `${path}.schema_version`);
   assertEnum(value.message_type, CAMPAIGN_MESSAGE_TYPES, `${path}.message_type`);
-  assertString(value.idempotency_key, `${path}.idempotency_key`);
+  assertString(value.idempotency_key, `${path}.idempotency_key`, 512);
   assertObject(value.record, `${path}.record`);
   if (value.message_type === 'PublicAssignmentLifecycleRecord') {
     assert(value.schema_version === CAMPAIGN_LIFECYCLE_SCHEMA_VERSION, `${path}.schema_version`, 'lifecycle records require envelope 1.0.0');

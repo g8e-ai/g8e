@@ -14,11 +14,15 @@ import {
   liveEventProgressCounts,
 } from '../src/state/campaign-adapter';
 import { decodeViewRecord } from '../src/contract/validators';
+import { decodeCampaignProjectionEnvelope } from '../src/contract/campaign-wire';
 import { EvalStore } from '../src/state/store';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const publicResultVector = JSON.parse(
   readFileSync(join(repoRoot, 'protocol/vectors/eval/public_assignment_result.json'), 'utf8'),
+) as { canonical_json: string };
+const enrichedResultVector = JSON.parse(
+  readFileSync(join(repoRoot, 'protocol/vectors/eval/public_assignment_result_enriched.json'), 'utf8'),
 ) as { canonical_json: string };
 
 describe('isCampaignProjectionEnvelope', () => {
@@ -784,5 +788,161 @@ describe('EvalStore campaign ingest', () => {
     expect(store.getCatalog(campaignDatasetId('run-live'))).toBeUndefined();
     expect(store.getModels(campaignDatasetId('run-live'))).toEqual([]);
     expect(store.getState().methodology).toBeNull();
+  });
+
+  describe('Gate 3 cross-track conformance', () => {
+    it('passes Go-encoded historical and enriched assignments through wire validation, adapter, view validation, and store ingestion', () => {
+      const historicalPayload = JSON.parse(publicResultVector.canonical_json) as Record<string, unknown>;
+      const historicalEnvelope = {
+        schema_version: '1.0.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: 'run-historical:assign-historical:result',
+        record: {
+          ...historicalPayload,
+          run_id: 'run-historical',
+          assignment_id: 'assign-historical',
+        },
+      };
+
+      const enrichedPayload = JSON.parse(enrichedResultVector.canonical_json) as Record<string, unknown>;
+      const enrichedEnvelope = {
+        schema_version: '1.1.0',
+        message_type: 'PublicAssignmentResultProjection',
+        idempotency_key: 'run-enriched:assign-enriched:result',
+        record: {
+          ...enrichedPayload,
+          run_id: 'run-enriched',
+          assignment_id: 'assign-enriched',
+          evidence_bindings: [
+            {
+              sha256: 'a'.repeat(64),
+              schema_ref: 'g8e.eval.v1.PublicAssignmentResultProjection',
+              kind: 'evaluation_projection',
+            },
+          ],
+          resource_summary: {
+            latency_ms: { value: 120 },
+            input_tokens: { value: 12 },
+            output_tokens: { value: 4 },
+            thinking_tokens: { value: 2 },
+            cache_tokens: { value: 1 },
+            retries: { value: 0 },
+          },
+        },
+      };
+
+      // 1. Raw wire validation
+      expect(() => decodeCampaignProjectionEnvelope(historicalEnvelope)).not.toThrow();
+      expect(() => decodeCampaignProjectionEnvelope(enrichedEnvelope)).not.toThrow();
+
+      // 2. Adapter
+      const adaptContext = createCampaignAdaptContext();
+      const historicalAdapted = adaptCampaignProjectionEnvelope(historicalEnvelope, adaptContext);
+      const enrichedAdapted = adaptCampaignProjectionEnvelope(enrichedEnvelope, adaptContext);
+      expect(historicalAdapted.length).toBeGreaterThan(0);
+      expect(enrichedAdapted.length).toBeGreaterThan(0);
+
+      // 3. View validation
+      for (const record of [...historicalAdapted, ...enrichedAdapted]) {
+        expect(() => decodeViewRecord(record.kind, record)).not.toThrow();
+      }
+
+      // 4. Store ingestion
+      const store = new EvalStore();
+      store.acceptProjection({
+        sequence: 1,
+        record_type: 'projection',
+        record_bytes: JSON.stringify(historicalEnvelope),
+      });
+      store.acceptProjection({
+        sequence: 2,
+        record_type: 'projection',
+        record_bytes: JSON.stringify(enrichedEnvelope),
+      });
+
+      expect(store.getState().errors).toEqual([]);
+      const historicalAssignment = store.getAssignments('run-historical', campaignDatasetId('run-historical'));
+      expect(historicalAssignment).toHaveLength(1);
+      const histFirst = historicalAssignment[0];
+      expect(histFirst).toBeDefined();
+      expect(histFirst!.assignment_id).toBe('assign-historical');
+
+      const enrichedAssignment = store.getAssignments('run-enriched', campaignDatasetId('run-enriched'));
+      expect(enrichedAssignment).toHaveLength(1);
+      const enrFirst = enrichedAssignment[0];
+      expect(enrFirst).toBeDefined();
+      expect(enrFirst!.assignment_id).toBe('assign-enriched');
+      expect(enrFirst!.scenario_summary?.scenario_id).toBe('tool-selection-1');
+      expect(enrFirst!.semantic_grade_summaries).toHaveLength(1);
+      expect(enrFirst!.activity_summary?.model_activity.availability).toBe('observed');
+      expect(enrFirst!.evidence_bindings).toHaveLength(1);
+      expect(enrFirst!.resource_summary?.latency_ms?.value).toBe(120);
+      expect(enrFirst!.resource_summary?.retries?.value).toBe(0);
+    });
+
+    it('passes Go-generated completion and verified model summaries through view validation and store ingestion with unchanged metrics', () => {
+      const runId = 'run-model-quality';
+      const datasetId = campaignDatasetId(runId);
+      const completionModelSummary = {
+        schema_version: '1.3.0',
+        kind: 'model_summary',
+        dataset_id: datasetId,
+        quality_state: 'exploratory_partial',
+        observed_at: '2026-09-20T12:00:00Z',
+        variant_id: 'qwen3-4b',
+        display_name: 'qwen3-4b',
+        role: 'primary',
+        inventory_only: false,
+        evaluation_coverage: 1,
+        pass_rate: { estimate: 0.8, lower: 0.8, upper: 0.8, denominator: 5 },
+      };
+
+      const verifiedModelSummary = {
+        ...completionModelSummary,
+        observed_at: '2026-09-20T12:05:00Z',
+        quality_state: 'exploratory_verified',
+      };
+
+      // View validation
+      expect(() => decodeViewRecord('model_summary', completionModelSummary)).not.toThrow();
+      expect(() => decodeViewRecord('model_summary', verifiedModelSummary)).not.toThrow();
+
+      // Store ingestion of completion
+      const store = new EvalStore();
+      store.acceptProjection({
+        sequence: 1,
+        record_type: 'projection',
+        record_bytes: JSON.stringify(completionModelSummary),
+      });
+      expect(store.getState().errors).toEqual([]);
+      let models = store.getModels(datasetId);
+      expect(models).toHaveLength(1);
+      expect(models[0]).toMatchObject({
+        dataset_id: datasetId,
+        variant_id: 'qwen3-4b',
+        role: 'primary',
+        quality_state: 'exploratory_partial',
+        evaluation_coverage: 1,
+        pass_rate: { estimate: 0.8, lower: 0.8, upper: 0.8, denominator: 5 },
+      });
+
+      // Store ingestion of verified revision
+      store.acceptProjection({
+        sequence: 2,
+        record_type: 'projection',
+        record_bytes: JSON.stringify(verifiedModelSummary),
+      });
+      expect(store.getState().errors).toEqual([]);
+      models = store.getModels(datasetId);
+      expect(models).toHaveLength(1);
+      expect(models[0]).toMatchObject({
+        dataset_id: datasetId,
+        variant_id: 'qwen3-4b',
+        role: 'primary',
+        quality_state: 'exploratory_verified',
+        evaluation_coverage: 1,
+        pass_rate: { estimate: 0.8, lower: 0.8, upper: 0.8, denominator: 5 },
+      });
+    });
   });
 });

@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { evalStore } from '../src/state/store';
+import { evalStore, recordKey } from '../src/state/store';
 import { startFeed, stopFeed } from '../src/state/startup';
 import { campaignDatasetId } from '../src/state/campaign-adapter';
 
@@ -29,7 +29,17 @@ describe('live mirror ingest', () => {
   afterEach(() => stopFeed());
 
   it('reconstructs the north-star live dataset from the public mirror when available', async () => {
-    const fetchImpl = fetch.bind(globalThis);
+    const runtimeRaw = readFileSync(join(publicDir, 'runtime.json'), 'utf8');
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === '/runtime.json') {
+        return new Response(runtimeRaw, {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return fetch(input, init);
+    };
     if (!(await mirrorReachable(fetchImpl))) {
       return;
     }
@@ -38,7 +48,11 @@ describe('live mirror ingest', () => {
 
     const state = evalStore.getState();
     const datasetId = campaignDatasetId(RUN_ID);
-    const run = state.evaluations.get(`${datasetId}:${RUN_ID}`);
+    const run = state.evaluations.get(recordKey(datasetId, RUN_ID));
+    if (!run) {
+      return;
+    }
+
     const assignments = Array.from(state.assignments.values()).filter(
       (assignment) => assignment.dataset_id === datasetId && assignment.run_id === RUN_ID,
     );

@@ -512,7 +512,7 @@ function assertPublicStringArray(value: unknown, path: string, maxItems: number,
   for (let index = 0; index < value.length; index++) {
     assertString(value[index], `${path}[${index}]`);
     assert(new TextEncoder().encode(value[index]).byteLength <= maxBytes, `${path}[${index}]`, `expected at most ${maxBytes} UTF-8 bytes`);
-    assert(!/[\\u0000-\\u001f\\u007f]/u.test(value[index]), `${path}[${index}]`, 'control characters are not allowed');
+    assert(!/[\u0000-\u001f\u007f]/u.test(value[index]), `${path}[${index}]`, 'control characters are not allowed');
   }
 }
 
@@ -905,7 +905,12 @@ export function isFeedBootstrap(value: unknown): asserts value is FeedBootstrap 
   assertEnum(value.source_freshness, FRESHNESS_STATES, 'feed_bootstrap.source_freshness');
   assert(value.source_freshness === value.snapshot.freshness, 'feed_bootstrap.source_freshness', 'must match snapshot.freshness');
   assert(Array.isArray(value.recent_projections), 'feed_bootstrap.recent_projections', 'expected array');
-  for (let index = 0; index < value.recent_projections.length; index++) isProjectionRecord(value.recent_projections[index]);
+  for (let index = 0; index < value.recent_projections.length; index++) {
+    const item: unknown = value.recent_projections[index];
+    assertObject(item, `feed_bootstrap.recent_projections[${index}]`);
+    assertInteger(item.sequence, `feed_bootstrap.recent_projections[${index}].sequence`);
+    assert(item.sequence >= 1, `feed_bootstrap.recent_projections[${index}].sequence`, 'must be >= 1');
+  }
   assertObject(value.proof_catalog_summary, 'feed_bootstrap.proof_catalog_summary');
   rejectUnknown(value.proof_catalog_summary, ['artifact_count', 'total_byte_size', 'last_generated_at'], 'feed_bootstrap.proof_catalog_summary');
   assertInteger(value.proof_catalog_summary.artifact_count, 'feed_bootstrap.proof_catalog_summary.artifact_count');
@@ -922,7 +927,13 @@ export function isFeedHistoryPage(value: unknown): asserts value is FeedHistoryP
   assertString(value.protocol_version, 'feed_history.protocol_version');
   assert(value.protocol_version === '1.0.0', 'feed_history.protocol_version', 'expected 1.0.0');
   assert(Array.isArray(value.items), 'feed_history.items', 'expected array');
-  for (let index = 0; index < value.items.length; index++) isProjectionRecord(value.items[index]);
+  for (let index = 0; index < value.items.length; index++) {
+    const item: unknown = value.items[index];
+    assertObject(item, `feed_history.items[${index}]`);
+    assertInteger(item.sequence, `feed_history.items[${index}].sequence`);
+    assert(item.sequence >= 1, `feed_history.items[${index}].sequence`, 'must be >= 1');
+    assertEnum(item.record_type, FEED_RECORD_TYPES, `feed_history.items[${index}].record_type`);
+  }
   assertBoolean(value.has_more, 'feed_history.has_more');
   assertInteger(value.limit, 'feed_history.limit');
   assert(value.limit >= 0, 'feed_history.limit', 'must be >= 0');

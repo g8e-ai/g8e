@@ -696,12 +696,23 @@ export interface FeedSnapshot {
   freshness: FreshnessState;
 }
 
+export interface FeedBootstrapRecentProjection {
+  sequence: number;
+  [field: string]: unknown;
+}
+
+export interface FeedHistoryItem {
+  sequence: number;
+  record_type: FeedRecordType;
+  [field: string]: unknown;
+}
+
 /** Public feed bootstrap response. */
 export interface FeedBootstrap {
   protocol_version: string;
   snapshot: FeedSnapshot;
   source_freshness: FreshnessState;
-  recent_projections: ProjectionRecord[];
+  recent_projections: FeedBootstrapRecentProjection[];
   proof_catalog_summary: { artifact_count: number; total_byte_size: number; last_generated_at?: string };
   generated_at: string;
 }
@@ -709,7 +720,7 @@ export interface FeedBootstrap {
 /** Public feed history cursor page. */
 export interface FeedHistoryPage {
   protocol_version: string;
-  items: ProjectionRecord[];
+  items: FeedHistoryItem[];
   cursor?: string;
   has_more: boolean;
   limit: number;

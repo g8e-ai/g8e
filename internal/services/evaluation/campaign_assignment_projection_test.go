@@ -106,7 +106,8 @@ func TestBuildPublicAssignmentProjectionPreservesCanonicalZeroAndUint64Values(t 
 	assert.Equal(t, first, second)
 	assert.Contains(t, string(first), `"input_tokens":"7"`)
 	assert.Contains(t, string(first), `"output_tokens":"11"`)
-	assert.Contains(t, string(first), `"retries":0`)
+	assert.Contains(t, string(first), `"retry_count":0`)
+	assert.Contains(t, string(first), `"retries":{"value":0}`)
 	assert.Contains(t, string(first), `"latency_ms":{"value":0}`)
 }
 
