@@ -379,7 +379,7 @@ func TestRepairOutboxFromSnapshot_CompactsPrefixGap(t *testing.T) {
 }
 
 func TestRepairOutboxFromSnapshot_DropsDiscontinuousTail(t *testing.T) {
-	publisher, _, fileSvc, _ := newPublicPublisherTestEnv(t)
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
 
 	snapshot := models.PublicFeedSnapshot{
 		SourceID:          publisher.cfg.SourceID,
@@ -389,7 +389,7 @@ func TestRepairOutboxFromSnapshot_DropsDiscontinuousTail(t *testing.T) {
 	}
 	snapBytes, err := json.Marshal(snapshot)
 	require.NoError(t, err)
-	require.NoError(t, fileSvc.WriteFile(context.Background(), constants.PublicFeedSnapshotPath, snapBytes, constants.PermFilePrivate))
+	require.NoError(t, publisher.fileSvc.WriteFile(context.Background(), constants.PublicFeedSnapshotPath, snapBytes, constants.PermFilePrivate))
 
 	records := []models.PublicFeedRecord{makeProjectionRecord(t, 15, map[string]any{"campaign_id": "orphan-tail"})}
 	batch, err := publisher.BuildBatch(records)
