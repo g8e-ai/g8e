@@ -66,6 +66,14 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	assert.Equal(t, uint32(3), report.AssignmentCount)
 	assert.Equal(t, uint32(1), report.TerminalResultCount)
 	assert.Len(t, report.Files, 7)
+	var assignmentFile CampaignExportFile
+	for _, file := range report.Files {
+		if file.Name == "assignments.jsonl" {
+			assignmentFile = file
+			break
+		}
+	}
+	assert.Equal(t, uint32(1), assignmentFile.RecordCount)
 
 	assignmentsJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, "assignments.jsonl"))
 	require.NoError(t, err)
@@ -95,6 +103,59 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	var modelSummaryCount int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM model_summaries`).Scan(&modelSummaryCount))
 	assert.Equal(t, 3, modelSummaryCount)
+}
+
+func TestCampaignExporter_JSONLUsesCanonicalProtoJSONAndRichExtensions(t *testing.T) {
+	body, err := marshalJSONL([]CampaignExportAssignmentRecord{{
+		SchemaVersion: campaignExportSchemaVersion,
+		RecordType:    publicMessageTypeAssignmentResult,
+		Projection: &evalv1.PublicAssignmentResultProjection{
+			AssignmentId:    "assignment-rich",
+			RunId:           "run-rich",
+			ActivitySummary: &evalv1.PublicAssignmentActivitySummary{ModelActivity: &evalv1.PublicModelActivity{Records: []*evalv1.PublicModelActivityRecord{{InputTokens: 7}}}},
+		},
+		ResourceSummary: &PublicResourceSummary{Retries: PublicResourceMetric{UnavailableReason: evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED}},
+	}})
+	require.NoError(t, err)
+	assert.Contains(t, string(body), `"assignment_id":"assignment-rich"`)
+	assert.Contains(t, string(body), `"source_not_captured"`)
+	assert.NotContains(t, string(body), `"InputTokens"`)
+}
+
+func TestCampaignExporter_BuildAssignmentExportRecordIncludesGradeOnlyObservations(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	reader, err := NewCampaignProviderObservationReader(files)
+	require.NoError(t, err)
+
+	result := &evalv1.EvaluationAssignmentResult{
+		AssignmentId:    "assignment-grade-only",
+		RunId:           "run-grade-only",
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
+		DeterministicGrades: []*evalv1.DeterministicGrade{{
+			CriterionId: "tool-selection",
+			Status:      evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
+			Detail:      "private grading detail",
+		}},
+	}
+	record, err := (&CampaignExporter{}).buildAssignmentExportRecord(
+		context.Background(),
+		NewStore(files),
+		&evalv1.EvaluationRun{RunId: "run-grade-only"},
+		&evalv1.EvaluationScenarioCatalog{CatalogDigest: "historical-catalog"},
+		&evalv1.EvaluationAssignment{AssignmentId: "assignment-grade-only", RunId: "run-grade-only"},
+		result,
+		evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_TOOL_SELECTION,
+		reader,
+		false,
+		nil,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, record.BenchmarkObservations)
+	require.Len(t, record.BenchmarkObservations.GradeSummaries, 1)
+	assert.Equal(t, "tool-selection", record.BenchmarkObservations.GradeSummaries[0].CriterionID)
+	assert.Empty(t, record.BenchmarkObservations.GradeSummaries[0].Detail)
+	require.NotNil(t, record.BenchmarkObservations.ToolScorecard["tool_selection"])
+	assert.Equal(t, 0.0, *record.BenchmarkObservations.ToolScorecard["tool_selection"].Value)
 }
 
 func TestCampaignExporter_ExportRunRequiresRunID(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -107,15 +108,60 @@ func (c *CampaignPublicationCoordinator) publishAssignmentResultWithKey(
 	if c == nil || c.store == nil || c.files == nil || c.exporter == nil || assignment == nil || result == nil || idempotencyKey == "" {
 		return fmt.Errorf("evaluation: publish assignment result: %w", constants.ErrMissingRequiredField)
 	}
-	projection, err := BuildAssignmentResultProjection(assignment, result, scenarioCategory, DerivePublicSummaryStatus(result), verificationStatus)
+	run, err := c.store.LoadRun(ctx, assignment.GetRunId())
+	if err != nil {
+		return fmt.Errorf("evaluation: publish assignment result: load run: %w", err)
+	}
+	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
 	if err != nil {
 		return err
+	}
+	_, artifacts, err := LoadScenarioCatalog()
+	if err != nil {
+		return fmt.Errorf("evaluation: publish assignment result: load scenario artifacts: %w", err)
+	}
+	store, ok := c.store.(*Store)
+	if !ok {
+		return fmt.Errorf("evaluation: publish assignment result: resolve scenario context: %w", constants.ErrEvidenceScopeMismatch)
+	}
+	scenario, scenarioErr := ResolvePublicScenarioContext(ctx, store, run, catalog, assignment, artifacts)
+	if scenarioErr != nil && !errors.Is(scenarioErr, constants.ErrEvidenceArtifactMalformed) {
+		return scenarioErr
 	}
 	benchmark, err := c.buildAssignmentBenchmarkObservations(ctx, result)
 	if err != nil {
 		return err
 	}
-	return c.publishAssignmentResultEnvelope(ctx, assignment.GetRunId(), idempotencyKey, projection, benchmark)
+	resources, err := BuildPublicResourceSummary(result)
+	if err != nil {
+		return err
+	}
+	var record *PublicAssignmentRecord
+	if scenarioErr == nil {
+		record, err = BuildPublicAssignmentProjection(ctx, PublicAssignmentBuildInput{
+			Assignment:         assignment,
+			Result:             result,
+			ScenarioContext:    scenario,
+			VerificationStatus: verificationStatus,
+			Extensions:         PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources},
+		})
+	} else {
+		projection, projectionErr := BuildAssignmentResultProjection(assignment, result, scenarioCategory, DerivePublicSummaryStatus(result), verificationStatus)
+		if projectionErr != nil {
+			return projectionErr
+		}
+		projection.VerificationMetadata = nil
+		record = &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources}}
+	}
+	if err != nil {
+		return err
+	}
+	body, err := MarshalAssignmentResultProjectionEnvelope(idempotencyKey, record)
+	if err != nil {
+		return err
+	}
+	_, err = c.exportFeedRecords(ctx, assignment.GetRunId(), []campaignFeedPublishRequest{{IdempotencyKey: idempotencyKey, Body: body}})
+	return err
 }
 
 func (c *CampaignPublicationCoordinator) buildAssignmentBenchmarkObservations(ctx context.Context, result *evalv1.EvaluationAssignmentResult) (*PublicBenchmarkObservations, error) {
@@ -163,43 +209,85 @@ func (c *CampaignPublicationCoordinator) PublishRunVerification(ctx context.Cont
 	if err != nil {
 		return 0, err
 	}
-	observedAt := time.Now().UTC()
-	if report.GetVerifiedAt() != nil {
-		observedAt = report.GetVerifiedAt().AsTime().UTC()
+	spec, err := c.store.LoadCampaignSpec(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return 0, fmt.Errorf("evaluation: publish run verification: load campaign spec: %w", err)
 	}
 	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
 	if err != nil {
 		return 0, err
 	}
+	applicability, err := BuildRunVerificationApplicability(run, spec, catalog, assignments, results, report)
+	if err != nil {
+		return 0, err
+	}
+	verified := report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
+	if verified && !applicability.Applicable {
+		return 0, fmt.Errorf("evaluation: publish run verification: report does not apply to persisted run evidence: %w", constants.ErrEvidenceScopeMismatch)
+	}
+	observedAt := time.Now().UTC()
+	if report.GetVerifiedAt() != nil {
+		observedAt = report.GetVerifiedAt().AsTime().UTC()
+	}
 	verifiedRequests := make([]campaignFeedPublishRequest, 0, len(assignments))
-	for _, assignment := range assignments {
-		result := results[assignment.GetAssignmentId()]
-		if result == nil {
-			continue
-		}
-		category, err := ScenarioCategoryForAssignment(catalog, assignment)
+	if verified {
+		_, artifacts, err := LoadScenarioCatalog()
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("evaluation: publish run verification: load scenario artifacts: %w", err)
 		}
-		projection, err := BuildAssignmentResultProjection(assignment, result, category, DerivePublicSummaryStatus(result), "verified")
-		if err != nil {
-			return 0, err
+		store, ok := c.store.(*Store)
+		if !ok {
+			return 0, fmt.Errorf("evaluation: publish run verification: resolve scenario context: %w", constants.ErrEvidenceScopeMismatch)
 		}
-		benchmark, err := c.buildAssignmentBenchmarkObservations(ctx, result)
-		if err != nil {
-			return 0, err
+		for _, assignment := range assignments {
+			result := results[assignment.GetAssignmentId()]
+			if result == nil {
+				continue
+			}
+			scenario, scenarioErr := ResolvePublicScenarioContext(ctx, store, run, catalog, assignment, artifacts)
+			if scenarioErr != nil && !errors.Is(scenarioErr, constants.ErrEvidenceArtifactMalformed) {
+				return 0, scenarioErr
+			}
+			benchmark, err := c.buildAssignmentBenchmarkObservations(ctx, result)
+			if err != nil {
+				return 0, err
+			}
+			resources, err := BuildPublicResourceSummary(result)
+			if err != nil {
+				return 0, err
+			}
+			key := AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId())
+			var record *PublicAssignmentRecord
+			if scenarioErr == nil {
+				record, err = BuildPublicAssignmentProjection(ctx, PublicAssignmentBuildInput{
+					Assignment:           assignment,
+					Result:               result,
+					ScenarioContext:      scenario,
+					VerificationMetadata: exportVerificationMetadata(report, true),
+					VerificationStatus:   "verified",
+					Extensions:           PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources},
+				})
+			} else {
+				category, categoryErr := ScenarioCategoryForAssignment(catalog, assignment)
+				if categoryErr != nil {
+					return 0, categoryErr
+				}
+				projection, projectionErr := BuildAssignmentResultProjection(assignment, result, category, DerivePublicSummaryStatus(result), "verified")
+				if projectionErr != nil {
+					return 0, projectionErr
+				}
+				projection.VerificationMetadata = exportVerificationMetadata(report, true)
+				record = &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark, ResourceSummary: resources}}
+			}
+			if err != nil {
+				return 0, err
+			}
+			body, err := MarshalAssignmentResultProjectionEnvelope(key, record)
+			if err != nil {
+				return 0, err
+			}
+			verifiedRequests = append(verifiedRequests, campaignFeedPublishRequest{IdempotencyKey: key, Body: body})
 		}
-		body, err := MarshalAssignmentResultProjectionEnvelope(AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId()), &PublicAssignmentRecord{
-			Projection: projection,
-			Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: benchmark},
-		})
-		if err != nil {
-			return 0, err
-		}
-		verifiedRequests = append(verifiedRequests, campaignFeedPublishRequest{
-			IdempotencyKey: AssignmentVerifiedResultIdempotencyKey(runID, assignment.GetAssignmentId()),
-			Body:           body,
-		})
 	}
 	published, err := c.exportFeedRecords(ctx, runID, verifiedRequests)
 	if err != nil {
@@ -262,11 +350,19 @@ func (c *CampaignPublicationCoordinator) ResetPublicationIdempotency(ctx context
 // PublishRunCatchUpWithVerification republishes one run and, when the persisted
 // verification report passed, emits the post-verify explorer revisions.
 func (c *CampaignPublicationCoordinator) PublishRunCatchUpWithVerification(ctx context.Context, runID string, report *evalv1.EvaluationVerificationReport) (int, error) {
+	if report != nil && report.GetRunId() != runID {
+		return 0, fmt.Errorf("evaluation: publish run catch-up with verification: report run mismatch: %w", constants.ErrEvidenceScopeMismatch)
+	}
+	if report != nil && report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+		if err := c.validateRunVerificationApplicability(ctx, runID, report); err != nil {
+			return 0, err
+		}
+	}
 	published, err := c.PublishRunCatchUp(ctx, runID)
 	if err != nil {
 		return published, err
 	}
-	if report == nil || report.GetRunId() != runID || report.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+	if report == nil || report.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
 		return published, nil
 	}
 	verificationCount, err := c.PublishRunVerification(ctx, runID, report)
@@ -274,6 +370,29 @@ func (c *CampaignPublicationCoordinator) PublishRunCatchUpWithVerification(ctx c
 		return published, err
 	}
 	return published + verificationCount, nil
+}
+
+func (c *CampaignPublicationCoordinator) validateRunVerificationApplicability(ctx context.Context, runID string, report *evalv1.EvaluationVerificationReport) error {
+	run, assignments, results, _, err := c.loadRunAggregateState(ctx, runID)
+	if err != nil {
+		return err
+	}
+	spec, err := c.store.LoadCampaignSpec(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return fmt.Errorf("evaluation: validate run verification applicability: load campaign spec: %w", err)
+	}
+	catalog, err := c.store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	if err != nil {
+		return err
+	}
+	applicability, err := BuildRunVerificationApplicability(run, spec, catalog, assignments, results, report)
+	if err != nil {
+		return err
+	}
+	if !applicability.Applicable {
+		return fmt.Errorf("evaluation: validate run verification applicability: %w", constants.ErrEvidenceScopeMismatch)
+	}
+	return nil
 }
 
 // PublishRunCatchUp scans one run and publishes any missing lifecycle and

@@ -10,6 +10,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -674,12 +675,17 @@ func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign publish: %w", err)
 			}
+			store := evaluation.NewStore(fileSvc)
+			report, reportErr := store.LoadCampaignVerification(cmd.Context(), runID)
+			if reportErr != nil && !errors.Is(reportErr, constants.ErrNotFound) {
+				return fmt.Errorf("evaluation: campaign publish: load verification report: %w", reportErr)
+			}
 			if force {
 				if err := publication.ResetPublicationIdempotency(cmd.Context(), runID); err != nil {
 					return fmt.Errorf("evaluation: campaign publish: %w", err)
 				}
 			}
-			count, err := publication.PublishRunCatchUp(cmd.Context(), runID)
+			count, err := publication.PublishRunCatchUpWithVerification(cmd.Context(), runID, report)
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign publish: %w", err)
 			}
