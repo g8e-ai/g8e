@@ -76,8 +76,16 @@ func complianceEvidenceExportCmdWithConfig(fileSvcFactory func(string, *slog.Log
 			}
 			inventory, err := evidence.ExportOperationalEvidence(ctx, snapshot, evidence.OperationalExportRequest{
 				ScopeID:              scope.GetScopeId(),
+				AdmissionID:          admission.GetAdmissionId(),
+				SourceKind:           admission.GetSourceKind(),
+				SourceVersion:        admission.GetSourceVersion(),
+				SourceScopeID:        admission.GetSourceScopeId(),
 				OwnerRuntimeBoundary: admission.GetOwnerRuntimeBoundary(),
 				AcquisitionBoundary:  admission.GetAcquisitionBoundary(),
+				RunID:                admission.GetRunId(),
+				SnapshotID:           admission.GetSnapshotId(),
+				VerifierID:           admission.GetVerifierRef().GetId(),
+				VerifierVersion:      admission.GetVerifierRef().GetVersion(),
 				WindowStart:          scope.GetAssessmentWindowStart().AsTime(),
 				WindowEnd:            scope.GetAssessmentWindowEnd().AsTime(),
 				MaxRows:              maxRows,

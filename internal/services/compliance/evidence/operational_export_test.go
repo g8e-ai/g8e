@@ -34,7 +34,14 @@ func TestExportOperationalEvidence_PreservesReceiptsPersistenceAndCommitments(t 
 		Commitments: []storage.OperationalCommitmentSource{{Sequence: 1, TransactionID: "tx-1", CommittedAt: executedAt.Add(2 * time.Second), Body: []byte(`{"transactionId":"tx-1"}`)}},
 	}, OperationalExportRequest{
 		ScopeID:              "scope-1",
+		AdmissionID:          "source-1",
+		SourceKind:           "operator-audit",
+		SourceVersion:        "1.0.0",
+		SourceScopeID:        "operator-scope-1",
 		OwnerRuntimeBoundary: "operator-1",
+		RunID:                "run-1",
+		VerifierID:           "operational-export",
+		VerifierVersion:      "1.0.0",
 		AcquisitionBoundary:  "operator-local-export",
 		WindowStart:          executedAt.Add(-time.Minute),
 		WindowEnd:            executedAt.Add(time.Minute),
@@ -42,6 +49,9 @@ func TestExportOperationalEvidence_PreservesReceiptsPersistenceAndCommitments(t 
 		OutputDir:            outputDir,
 	})
 	require.NoError(t, err)
+	assert.Equal(t, "source-1", inventory.AdmissionID)
+	assert.Equal(t, "operator-scope-1", inventory.SourceScopeID)
+	assert.Equal(t, "run-1", inventory.RunID)
 	assert.Equal(t, 1, inventory.ReceiptCount)
 	assert.Equal(t, 1, inventory.PersistenceCount)
 	assert.Equal(t, 1, inventory.CommitmentCount)
@@ -61,7 +71,14 @@ func TestExportOperationalEvidence_RecordsUnavailablePersistenceWithoutInventing
 		Receipts: []storage.OperationalReceiptSource{{TransactionID: "tx-1", ExecutedAt: executedAt, Body: []byte(`{"transactionId":"tx-1"}`)}},
 	}, OperationalExportRequest{
 		ScopeID:              "scope-1",
+		AdmissionID:          "source-1",
+		SourceKind:           "operator-audit",
+		SourceVersion:        "1.0.0",
+		SourceScopeID:        "operator-scope-1",
 		OwnerRuntimeBoundary: "operator-1",
+		RunID:                "run-1",
+		VerifierID:           "operational-export",
+		VerifierVersion:      "1.0.0",
 		AcquisitionBoundary:  "operator-local-export",
 		WindowStart:          executedAt.Add(-time.Minute),
 		WindowEnd:            executedAt.Add(time.Minute),

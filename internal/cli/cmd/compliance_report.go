@@ -706,6 +706,69 @@ type standaloneReportSourceInput struct {
 	buildConfig          string
 }
 
+func buildOperationalReportSources(ctx context.Context, sourceDirs []string, scope *compliancev1.AssessmentScope, trust evidence.AssessedSignerSource, assessmentAsOf time.Time) ([]compliancereport.GenerationSource, []compliancereport.SourceArtifact, error) {
+	if len(sourceDirs) == 0 {
+		return nil, nil, nil
+	}
+	if scope == nil || trust == nil || assessmentAsOf.IsZero() {
+		return nil, nil, fmt.Errorf("%w: operational sources require protected scope, assessed evidence trust, and assessment time", constants.ErrValidationFailed)
+	}
+	admissions := make(map[string]*compliancev1.AssessmentSourceAdmission, len(scope.GetSourceAdmissions()))
+	for _, admission := range scope.GetSourceAdmissions() {
+		admissions[admission.GetAdmissionId()] = admission
+	}
+	sources := make([]compliancereport.GenerationSource, 0, len(sourceDirs))
+	artifacts := make([]compliancereport.SourceArtifact, 0)
+	seen := make(map[string]struct{}, len(sourceDirs))
+	for _, sourceDir := range sourceDirs {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		inventoryBody, err := readComplianceReportInputFile(filepath.Join(sourceDir, constants.ComplianceOperationalInventoryFilename))
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: read operational source inventory: %w", constants.ErrEvidenceImporterFailed, err)
+		}
+		inventory := &evidence.OperationalSourceInventory{}
+		decoder := json.NewDecoder(bytes.NewReader(inventoryBody))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(inventory); err != nil {
+			return nil, nil, fmt.Errorf("%w: decode operational source inventory: %w", constants.ErrEvidenceArtifactMalformed, err)
+		}
+		admission := admissions[inventory.AdmissionID]
+		if admission == nil {
+			return nil, nil, fmt.Errorf("%w: operational source admission %s is not protected by the assessment scope", constants.ErrEvidenceScopeMismatch, inventory.AdmissionID)
+		}
+		if _, duplicate := seen[inventory.AdmissionID]; duplicate {
+			return nil, nil, fmt.Errorf("%w: duplicate operational source admission %s", constants.ErrEvidenceDuplicateID, inventory.AdmissionID)
+		}
+		seen[inventory.AdmissionID] = struct{}{}
+		sourceRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, inventory.AdmissionID)
+		inventoryPath := path.Join(sourceRoot, constants.ComplianceOperationalInventoryFilename)
+		bodies := map[string][]byte{inventoryPath: inventoryBody}
+		sourceArtifacts := []compliancereport.SourceArtifact{{BundlePath: inventoryPath, Body: inventoryBody, MediaType: constants.MediaTypeJSON}}
+		for _, artifact := range inventory.Artifacts {
+			if !evidence.ValidRelativePath(artifact.RelativePath) {
+				return nil, nil, fmt.Errorf("%w: invalid operational artifact path %s", constants.ErrPathValidation, artifact.RelativePath)
+			}
+			body, err := readComplianceReportInputFile(filepath.Join(sourceDir, artifact.RelativePath))
+			if err != nil {
+				return nil, nil, fmt.Errorf("%w: read operational source artifact: %w", constants.ErrEvidenceImporterFailed, err)
+			}
+			bundlePath := path.Join(sourceRoot, artifact.RelativePath)
+			if _, duplicate := bodies[bundlePath]; duplicate {
+				return nil, nil, fmt.Errorf("%w: duplicate operational source path %s", constants.ErrEvidenceDuplicateID, bundlePath)
+			}
+			bodies[bundlePath] = body
+			sourceArtifacts = append(sourceArtifacts, compliancereport.SourceArtifact{BundlePath: bundlePath, Body: body, MediaType: constants.MediaTypeJSON})
+		}
+		reader := &explicitSourceReader{bodies: bodies}
+		importer := evidence.NewOperationalExportImporter(reader, trust, inventoryPath, sourceRoot, scope.GetScopeId(), admission, assessmentAsOf, func() time.Time { return assessmentAsOf })
+		sources = append(sources, compliancereport.GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: importer})
+		artifacts = append(artifacts, sourceArtifacts...)
+	}
+	return sources, artifacts, nil
+}
+
 func appendStandaloneReportSourceArtifact(artifacts *[]compliancereport.SourceArtifact, bundlePath string, body []byte) error {
 	for _, artifact := range *artifacts {
 		if artifact.BundlePath == bundlePath {
@@ -899,6 +962,7 @@ func complianceReportGenerateCmdWithConfig(
 		scopePath            string
 		demoRuns             []string
 		evalRuns             []string
+		operationalSources   []string
 		reportID             string
 		bundleProfile        string
 		signingMetadata      string
@@ -934,7 +998,7 @@ func complianceReportGenerateCmdWithConfig(
 			if scopePath == "" {
 				return fmt.Errorf("%w: --scope is required", constants.ErrValidationFailed)
 			}
-			if len(demoRuns) == 0 && len(evalRuns) == 0 && ksiRunID == "" && ksiHistory == "" && ksiResults == "" && commitmentRunID == "" && commitment == "" && attestationRunID == "" && attestations == "" && auditRunID == "" && len(auditRecords) == 0 && ledgerRunID == "" && ledgerCommits == "" && ledgerState == "" && buildRunID == "" && buildConfig == "" {
+			if len(demoRuns) == 0 && len(evalRuns) == 0 && len(operationalSources) == 0 && ksiRunID == "" && ksiHistory == "" && ksiResults == "" && commitmentRunID == "" && commitment == "" && attestationRunID == "" && attestations == "" && auditRunID == "" && len(auditRecords) == 0 && ledgerRunID == "" && ledgerCommits == "" && ledgerState == "" && buildRunID == "" && buildConfig == "" {
 				return fmt.Errorf("%w: at least one demo, eval, or standalone platform source is required", constants.ErrValidationFailed)
 			}
 			if reportID == "" || signingMetadata == "" || signingPrivateKey == "" {
@@ -968,6 +1032,10 @@ func complianceReportGenerateCmdWithConfig(
 				if err != nil {
 					return err
 				}
+			}
+			operationalGenerationSources, operationalSourceArtifacts, err := buildOperationalReportSources(ctx, operationalSources, scope, evidenceTrust, assessmentAsOf)
+			if err != nil {
+				return err
 			}
 			source := provenanceSourceFactory(projectRoot)
 			importers, err := buildEvidenceGraphImporters(ctx, fileSvc, source, demoRuns, evalRuns, func() time.Time { return assessmentAsOf })
@@ -1016,14 +1084,28 @@ func complianceReportGenerateCmdWithConfig(
 				return fmt.Errorf("%w: %w", constants.ErrReportVerificationFailed, err)
 			}
 			sourceArtifacts = append(sourceArtifacts, evalSourceArtifacts...)
+			sourceArtifacts = append(sourceArtifacts, operationalSourceArtifacts...)
 			sourceArtifacts = append(sourceArtifacts, standaloneSourceArtifacts...)
 			sort.Slice(sourceArtifacts, func(i, j int) bool { return sourceArtifacts[i].BundlePath < sourceArtifacts[j].BundlePath })
-			if len(importers) != len(scope.GetSourceAdmissions()) {
+			if len(importers)+len(operationalGenerationSources) != len(scope.GetSourceAdmissions()) {
 				return fmt.Errorf("%w: selected source count does not match protected source admissions", constants.ErrValidationFailed)
 			}
-			generationSources := make([]compliancereport.GenerationSource, 0, len(importers))
-			for index, importer := range importers {
-				generationSources = append(generationSources, compliancereport.GenerationSource{AdmissionID: scope.GetSourceAdmissions()[index].GetAdmissionId(), Importer: importer})
+			operationalByAdmission := make(map[string]compliancereport.GenerationSource, len(operationalGenerationSources))
+			for _, source := range operationalGenerationSources {
+				operationalByAdmission[source.AdmissionID] = source
+			}
+			generationSources := make([]compliancereport.GenerationSource, 0, len(scope.GetSourceAdmissions()))
+			importerIndex := 0
+			for _, admission := range scope.GetSourceAdmissions() {
+				if source, exists := operationalByAdmission[admission.GetAdmissionId()]; exists {
+					generationSources = append(generationSources, source)
+					continue
+				}
+				if importerIndex >= len(importers) {
+					return fmt.Errorf("%w: source admission %s has no selected importer", constants.ErrValidationFailed, admission.GetAdmissionId())
+				}
+				generationSources = append(generationSources, compliancereport.GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: importers[importerIndex]})
+				importerIndex++
 			}
 			result, err := compliancereport.GenerateSignedComplianceBundle(ctx, compliancereport.SignedBundleGenerationRequest{
 				Generation: compliancereport.GenerationRequest{
@@ -1056,6 +1138,7 @@ func complianceReportGenerateCmdWithConfig(
 	cmd.Flags().StringVar(&scopePath, "scope", "", "Path to canonical protected assessment scope")
 	cmd.Flags().StringSliceVar(&demoRuns, "demo-run", nil, "Demo evidence run ID (repeatable)")
 	cmd.Flags().StringSliceVar(&evalRuns, "eval-run", nil, "Eval bundle run ID (repeatable)")
+	cmd.Flags().StringSliceVar(&operationalSources, "source", nil, "Operational evidence source package directory (repeatable)")
 	cmd.Flags().StringVar(&reportID, "report-id", "", "Immutable report bundle ID")
 	cmd.Flags().StringVar(&bundleProfile, "profile", string(compliancereport.ProfilePublic), "Bundle profile: public or restricted")
 	cmd.Flags().StringVar(&signingMetadata, "signing-metadata", "", "Path to canonical compliance report signing-key metadata")

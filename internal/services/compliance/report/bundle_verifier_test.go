@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -33,6 +34,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -91,6 +93,116 @@ func (r *bundleArtifactReaderStub) ListFiles(context.Context) ([]string, error) 
 	}
 	sort.Strings(paths)
 	return paths, nil
+}
+
+func TestBundleVerifier_VerifyOperationalSourcesReplaysProtectedInventory(t *testing.T) {
+	assessmentAsOf := time.UnixMilli(1_700_000_100_000).UTC()
+	publicKey, privateKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	signerKeyID := hex.EncodeToString(publicKey)
+	receipt := &operatorv1.ActionReceipt{TransactionId: "transaction-1", TransactionHash: "hash-1", SignerKeyId: signerKeyID, ExecutedAtUnixMs: assessmentAsOf.Add(-time.Minute).UnixMilli()}
+	payload, err := governance.CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+	receipt.Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
+	receiptBody, err := compliancev1.MarshalCanonical(receipt)
+	require.NoError(t, err)
+	scope := validGenerationScope(assessmentAsOf.Add(-time.Hour), assessmentAsOf)
+	scope.AssessmentAsOf = timestamppb.New(assessmentAsOf)
+	admission := scope.SourceAdmissions[0]
+	admission.SourceKind = "operator-audit"
+	admission.SourceVersion = "1.0.0"
+	admission.SourceScopeId = "operator-scope-1"
+	admission.OwnerRuntimeBoundary = "operator-1"
+	admission.AcquisitionBoundary = "operator-local-export"
+	admission.RunId = "run-1"
+	sourceDir := t.TempDir()
+	_, err = evidence.ExportOperationalEvidence(context.Background(), &storage.OperationalEvidenceSnapshot{Receipts: []storage.OperationalReceiptSource{{TransactionID: receipt.GetTransactionId(), ExecutedAt: time.UnixMilli(receipt.GetExecutedAtUnixMs()), Body: receiptBody}}}, evidence.OperationalExportRequest{
+		ScopeID:              scope.GetScopeId(),
+		AdmissionID:          admission.GetAdmissionId(),
+		SourceKind:           admission.GetSourceKind(),
+		SourceVersion:        admission.GetSourceVersion(),
+		SourceScopeID:        admission.GetSourceScopeId(),
+		OwnerRuntimeBoundary: admission.GetOwnerRuntimeBoundary(),
+		AcquisitionBoundary:  admission.GetAcquisitionBoundary(),
+		RunID:                admission.GetRunId(),
+		VerifierID:           admission.GetVerifierRef().GetId(),
+		VerifierVersion:      admission.GetVerifierRef().GetVersion(),
+		WindowStart:          scope.GetAssessmentWindowStart().AsTime(),
+		WindowEnd:            scope.GetAssessmentWindowEnd().AsTime(),
+		MaxRows:              10,
+		OutputDir:            sourceDir,
+	})
+	require.NoError(t, err)
+	sourceRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, admission.GetAdmissionId())
+	inventoryPath := path.Join(sourceRoot, constants.ComplianceOperationalInventoryFilename)
+	inventoryBody, err := os.ReadFile(filepath.Join(sourceDir, constants.ComplianceOperationalInventoryFilename))
+	require.NoError(t, err)
+	inventory := &evidence.OperationalSourceInventory{}
+	require.NoError(t, json.Unmarshal(inventoryBody, inventory))
+	bodies := map[string][]byte{inventoryPath: inventoryBody}
+	for _, artifact := range inventory.Artifacts {
+		body, readErr := os.ReadFile(filepath.Join(sourceDir, artifact.RelativePath))
+		require.NoError(t, readErr)
+		bodies[path.Join(sourceRoot, artifact.RelativePath)] = body
+	}
+	trust := &assessedEvidenceSignerStub{keys: map[string]ed25519.PublicKey{signerKeyID: publicKey}}
+	importer := evidence.NewOperationalExportImporter(&bundledSourceArtifactReader{bodies: bodies}, trust, inventoryPath, sourceRoot, scope.GetScopeId(), admission, assessmentAsOf, func() time.Time { return assessmentAsOf })
+	nodes, err := importer.Import(context.Background())
+	require.NoError(t, err)
+	resources := make([]*compliancev1.ComplianceEvidenceReference, 0, len(nodes))
+	for index := range nodes {
+		nodes[index].SourceAdmissionID = admission.GetAdmissionId()
+		resources = append(resources, nodes[index].ToProto())
+	}
+	scopeBody, err := compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	bodies[constants.ComplianceBundleScopeFilename] = scopeBody
+	verifier := &bundleVerifier{
+		request:                  BundleVerificationRequest{Bundle: &compliancev1.ComplianceReportBundle{Analysis: &compliancev1.ComplianceAnalysis{EvidenceResources: resources}}, EvidenceTrust: trust},
+		report:                   &compliancev1.ComplianceVerificationReport{},
+		bodies:                   bodies,
+		replayedNodesByAdmission: make(map[string][]evidence.EvidenceNode),
+		operationalAdmissions:    make(map[string]struct{}),
+	}
+
+	verifier.verifyOperationalSources(context.Background())
+
+	assert.Empty(t, verifier.report.GetFailures())
+	assert.Len(t, verifier.replayedNodesByAdmission[admission.GetAdmissionId()], len(nodes))
+	_, routed := verifier.operationalAdmissions[admission.GetAdmissionId()]
+	assert.True(t, routed)
+
+	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+	sourceArtifacts := make([]SourceArtifact, 0, len(bodies)-1)
+	for bundlePath, body := range bodies {
+		if bundlePath == constants.ComplianceBundleScopeFilename {
+			continue
+		}
+		sourceArtifacts = append(sourceArtifacts, SourceArtifact{BundlePath: bundlePath, Body: body, MediaType: constants.MediaTypeJSON})
+	}
+	sort.Slice(sourceArtifacts, func(i, j int) bool { return sourceArtifacts[i].BundlePath < sourceArtifacts[j].BundlePath })
+	reportIdentity := bundleSigningIdentityFixture(t)
+	assembly, err := GenerateSignedComplianceBundle(context.Background(), SignedBundleGenerationRequest{
+		Generation:      GenerationRequest{Scope: scope, Sources: []GenerationSource{{AdmissionID: admission.GetAdmissionId(), Importer: importer}}, Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks},
+		Profile:         ProfileRestricted,
+		ReportID:        "operational-report-1",
+		GeneratedAt:     assessmentAsOf.Add(time.Minute),
+		SigningIdentity: reportIdentity,
+		SourceArtifacts: sourceArtifacts,
+	})
+	require.NoError(t, err)
+	bundleBodies := make(map[string][]byte, len(assembly.ArtifactBodies))
+	for _, artifact := range assembly.ArtifactBodies {
+		bundleBodies[artifact.BundlePath] = artifact.Body
+	}
+	reportPublicKey := reportIdentity.privateKey.Public().(ed25519.PublicKey)
+	reportPolicy := &compliancev1.ComplianceReportTrustPolicy{PolicyId: "policy-1", PolicyVersion: "1.0.0", TrustedKeys: []*compliancev1.ComplianceReportTrustedKey{{Metadata: proto.Clone(reportIdentity.metadata).(*compliancev1.ComplianceReportSigningKeyMetadata), PublicKey: hex.EncodeToString(reportPublicKey), AssessmentId: "assessment-1", AssessorIdentity: "assessor-1", AssessedAt: timestamppb.New(assessmentAsOf), AllowedScopeRefs: []string{scope.GetScopeId()}}}}
+
+	verification, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: assembly.Bundle, Reader: &bundleArtifactReaderStub{bodies: bundleBodies}, TrustPolicy: reportPolicy, EvidenceTrust: trust, VerifiedAt: assessmentAsOf.Add(2 * time.Minute)})
+
+	require.NoError(t, err)
+	assert.True(t, verification.GetValid(), verification.GetFailures())
 }
 
 func demoReplaySourceFixture(t *testing.T, runID string, generatedAt time.Time) []SourceArtifact {

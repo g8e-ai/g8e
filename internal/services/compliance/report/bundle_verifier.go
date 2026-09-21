@@ -76,6 +76,7 @@ func VerifyComplianceReportBundle(ctx context.Context, request BundleVerificatio
 		report:                   report,
 		bodies:                   make(map[string][]byte, len(request.Bundle.GetArtifacts())),
 		replayedNodesByAdmission: make(map[string][]evidence.EvidenceNode),
+		operationalAdmissions:    make(map[string]struct{}),
 	}
 	verifier.verify(ctx)
 	if err := ctx.Err(); err != nil {
@@ -98,6 +99,7 @@ type bundleVerifier struct {
 	report                   *compliancev1.ComplianceVerificationReport
 	bodies                   map[string][]byte
 	replayedNodesByAdmission map[string][]evidence.EvidenceNode
+	operationalAdmissions    map[string]struct{}
 }
 
 func (v *bundleVerifier) verify(ctx context.Context) {
@@ -636,6 +638,7 @@ func (v *bundleVerifier) verifySourceVerificationReports(ctx context.Context) {
 	v.verifyEvidenceArtifactRoutes()
 	v.verifyDemoSourceVerificationReports(ctx)
 	v.verifyEvalSourceVerificationReports(ctx)
+	v.verifyOperationalSources(ctx)
 	v.verifyKSIHistorySources(ctx)
 	v.verifyCommitmentSources(ctx)
 	v.verifyAttestationSources(ctx)
@@ -1012,6 +1015,102 @@ func (v *bundleVerifier) replayBuildConfigSource(ctx context.Context, inventory 
 	}
 }
 
+func (v *bundleVerifier) verifyOperationalSources(ctx context.Context) {
+	scope := &compliancev1.AssessmentScope{}
+	if !v.decodeCanonicalSource(constants.ComplianceBundleScopeFilename, scope) {
+		return
+	}
+	admissions := make(map[string]*compliancev1.AssessmentSourceAdmission, len(scope.GetSourceAdmissions()))
+	for _, admission := range scope.GetSourceAdmissions() {
+		admissions[admission.GetAdmissionId()] = admission
+	}
+	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname) + "/"
+	for bundlePath, body := range v.bodies {
+		if !strings.HasPrefix(bundlePath, prefix) || path.Base(bundlePath) != constants.ComplianceOperationalInventoryFilename {
+			continue
+		}
+		parts := strings.Split(bundlePath, "/")
+		if len(parts) != 4 || parts[0] != constants.ComplianceBundleSourcesDirname || parts[1] != constants.ComplianceOperationalExportDirname || parts[2] == "" {
+			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "operational source inventory path is unsupported")
+			continue
+		}
+		admissionID := parts[2]
+		admission := admissions[admissionID]
+		if admission == nil {
+			v.fail(constants.ErrEvidenceScopeMismatch, bundlePath, "operational source inventory has no protected source admission")
+			continue
+		}
+		if _, duplicate := v.operationalAdmissions[admissionID]; duplicate {
+			v.fail(constants.ErrEvidenceDuplicateID, bundlePath, "operational source admission has multiple inventories")
+			continue
+		}
+		v.operationalAdmissions[admissionID] = struct{}{}
+		inventory := &evidence.OperationalSourceInventory{}
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(inventory); err != nil {
+			v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, err.Error())
+			continue
+		}
+		sourceRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, admissionID)
+		expectedPaths := map[string]struct{}{bundlePath: {}}
+		validInventory := true
+		for _, artifact := range inventory.Artifacts {
+			if !evidence.ValidRelativePath(artifact.RelativePath) {
+				v.fail(constants.ErrPathValidation, bundlePath, "operational source inventory contains an invalid artifact path")
+				validInventory = false
+				continue
+			}
+			expectedPaths[path.Join(sourceRoot, artifact.RelativePath)] = struct{}{}
+		}
+		for protectedPath := range v.bodies {
+			if strings.HasPrefix(protectedPath, sourceRoot+"/") {
+				if _, expected := expectedPaths[protectedPath]; !expected {
+					v.fail(constants.ErrUnexpectedEvidenceArtifact, protectedPath, "operational source contains an artifact absent from its inventory")
+					validInventory = false
+				}
+			}
+		}
+		for expectedPath := range expectedPaths {
+			if _, present := v.bodies[expectedPath]; !present {
+				v.fail(constants.ErrBundleArtifactMissing, expectedPath, "operational inventory artifact is absent from the protected bundle")
+				validInventory = false
+			}
+		}
+		if !validInventory {
+			continue
+		}
+		if v.request.EvidenceTrust == nil {
+			v.fail(constants.ErrEvidenceTrustNotAssessed, bundlePath, "operational source requires explicit external assessed evidence trust")
+			continue
+		}
+		assessmentAsOf, err := v.protectedAssessmentTime()
+		if err != nil {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
+			continue
+		}
+		importer := evidence.NewOperationalExportImporter(&bundledSourceArtifactReader{bodies: v.bodies}, v.request.EvidenceTrust, bundlePath, sourceRoot, scope.GetScopeId(), admission, assessmentAsOf, func() time.Time { return assessmentAsOf })
+		nodes, err := importer.Import(ctx)
+		if err != nil {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
+			continue
+		}
+		expectedCount := 0
+		for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+			if resource.GetSourceAdmissionId() == admissionID {
+				expectedCount++
+			}
+		}
+		if len(nodes) != expectedCount {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, "replayed operational inventory does not match the protected analysis evidence count")
+			continue
+		}
+		if err := v.retainReplayedNodes(nodes); err != nil {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
+		}
+	}
+}
+
 type commitmentSourceInventory struct {
 	path     string
 	body     []byte
@@ -1022,6 +1121,9 @@ func (v *bundleVerifier) verifyCommitmentSources(ctx context.Context) {
 	inventories := make(map[string]*commitmentSourceInventory)
 	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
 		if resource == nil || resource.GetArtifactType() != string(evidence.ArtifactTypeCommitment) {
+			continue
+		}
+		if _, operational := v.operationalAdmissions[resource.GetSourceAdmissionId()]; operational {
 			continue
 		}
 		bundlePath := resource.GetBundlePath()

@@ -35,6 +35,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -188,6 +189,55 @@ func TestBuildStandaloneReportSources_ProtectsReplayableLedgerAndBuildConfigurat
 	assert.Equal(t, commitsBody, artifacts[0].Body)
 	assert.Equal(t, stateBody, artifacts[1].Body)
 	assert.Equal(t, buildBody, artifacts[2].Body)
+}
+
+func TestBuildOperationalReportSources_BindsProtectedAdmissionAndBundlePaths(t *testing.T) {
+	assessmentAsOf := time.UnixMilli(1_700_000_100_000).UTC()
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	signerKeyID := hex.EncodeToString(publicKey)
+	receipt := &operatorv1.ActionReceipt{TransactionId: "transaction-1", TransactionHash: "hash-1", SignerKeyId: signerKeyID, ExecutedAtUnixMs: assessmentAsOf.Add(-time.Minute).UnixMilli()}
+	payload, err := governance.CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+	receipt.Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
+	receiptBody, err := compliancev1.MarshalCanonical(receipt)
+	require.NoError(t, err)
+	sourceDir := t.TempDir()
+	_, err = evidence.ExportOperationalEvidence(context.Background(), &storage.OperationalEvidenceSnapshot{Receipts: []storage.OperationalReceiptSource{{TransactionID: receipt.GetTransactionId(), ExecutedAt: time.UnixMilli(receipt.GetExecutedAtUnixMs()), Body: receiptBody}}}, evidence.OperationalExportRequest{
+		ScopeID:              "scope-1",
+		AdmissionID:          "source-1",
+		SourceKind:           "operator-audit",
+		SourceVersion:        "1.0.0",
+		SourceScopeID:        "operator-scope-1",
+		OwnerRuntimeBoundary: "operator-1",
+		AcquisitionBoundary:  "operator-local-export",
+		RunID:                "run-1",
+		VerifierID:           "operational-export",
+		VerifierVersion:      "1.0.0",
+		WindowStart:          assessmentAsOf.Add(-time.Hour),
+		WindowEnd:            assessmentAsOf,
+		MaxRows:              10,
+		OutputDir:            sourceDir,
+	})
+	require.NoError(t, err)
+	admission := &compliancev1.AssessmentSourceAdmission{AdmissionId: "source-1", SourceKind: "operator-audit", SourceVersion: "1.0.0", SourceScopeId: "operator-scope-1", OwnerRuntimeBoundary: "operator-1", AcquisitionBoundary: "operator-local-export", RunId: "run-1", VerifierRef: &compliancev1.VersionedReference{Id: "operational-export", Version: "1.0.0"}}
+	scope := &compliancev1.AssessmentScope{ScopeId: "scope-1", SourceAdmissions: []*compliancev1.AssessmentSourceAdmission{admission}}
+	trust := &assessedEvidenceTrust{keys: map[string]ed25519.PublicKey{signerKeyID: publicKey}}
+
+	sources, artifacts, err := buildOperationalReportSources(context.Background(), []string{sourceDir}, scope, trust, assessmentAsOf)
+
+	require.NoError(t, err)
+	require.Len(t, sources, 1)
+	assert.Equal(t, "source-1", sources[0].AdmissionID)
+	require.Len(t, artifacts, 2)
+	for _, artifact := range artifacts {
+		assert.True(t, strings.HasPrefix(artifact.BundlePath, path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1")))
+	}
+	nodes, err := sources[0].Importer.Import(context.Background())
+	require.NoError(t, err)
+	require.Len(t, nodes, 1)
+	assert.Equal(t, evidence.VerificationStatusVerified, nodes[0].VerificationStatus)
+	assert.True(t, strings.HasPrefix(nodes[0].BundlePath, path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1")))
 }
 
 type standaloneAttestationRecord struct {

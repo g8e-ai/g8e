@@ -28,8 +28,16 @@ const operationalExportSchemaVersion = "operational-evidence-export@1.0.0"
 
 type OperationalExportRequest struct {
 	ScopeID              string
+	AdmissionID          string
+	SourceKind           string
+	SourceVersion        string
+	SourceScopeID        string
 	OwnerRuntimeBoundary string
 	AcquisitionBoundary  string
+	RunID                string
+	SnapshotID           string
+	VerifierID           string
+	VerifierVersion      string
 	WindowStart          time.Time
 	WindowEnd            time.Time
 	MaxRows              int
@@ -38,11 +46,17 @@ type OperationalExportRequest struct {
 
 type OperationalSourceInventory struct {
 	SchemaVersion        string                      `json:"schema_version"`
+	ScopeID              string                      `json:"scope_id"`
+	AdmissionID          string                      `json:"admission_id"`
 	SourceKind           string                      `json:"source_kind"`
 	SourceVersion        string                      `json:"source_version"`
-	ScopeID              string                      `json:"scope_id"`
+	SourceScopeID        string                      `json:"source_scope_id"`
 	OwnerRuntimeBoundary string                      `json:"owner_runtime_boundary"`
 	AcquisitionBoundary  string                      `json:"acquisition_boundary"`
+	RunID                string                      `json:"run_id,omitempty"`
+	SnapshotID           string                      `json:"snapshot_id,omitempty"`
+	VerifierID           string                      `json:"verifier_id"`
+	VerifierVersion      string                      `json:"verifier_version"`
 	WindowStartUTC       string                      `json:"window_start_utc"`
 	WindowEndUTC         string                      `json:"window_end_utc"`
 	ReceiptCount         int                         `json:"receipt_count"`
@@ -65,7 +79,7 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if snapshot == nil || request.ScopeID == "" || request.OwnerRuntimeBoundary == "" || request.AcquisitionBoundary == "" || request.WindowStart.IsZero() || request.WindowEnd.IsZero() || request.WindowEnd.Before(request.WindowStart) || request.MaxRows <= 0 || request.OutputDir == "" {
+	if snapshot == nil || request.ScopeID == "" || request.AdmissionID == "" || request.SourceKind == "" || request.SourceVersion == "" || request.SourceScopeID == "" || request.OwnerRuntimeBoundary == "" || request.AcquisitionBoundary == "" || request.RunID == "" && request.SnapshotID == "" || request.VerifierID == "" || request.VerifierVersion == "" || request.WindowStart.IsZero() || request.WindowEnd.IsZero() || request.WindowEnd.Before(request.WindowStart) || request.MaxRows <= 0 || request.OutputDir == "" {
 		return nil, fmt.Errorf("%w: operational export request is incomplete", constants.ErrValidationFailed)
 	}
 	if err := ctx.Err(); err != nil {
@@ -79,11 +93,17 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 	}
 	inventory := &OperationalSourceInventory{
 		SchemaVersion:        operationalExportSchemaVersion,
-		SourceKind:           "operator-audit",
-		SourceVersion:        "1.0.0",
 		ScopeID:              request.ScopeID,
+		AdmissionID:          request.AdmissionID,
+		SourceKind:           request.SourceKind,
+		SourceVersion:        request.SourceVersion,
+		SourceScopeID:        request.SourceScopeID,
 		OwnerRuntimeBoundary: request.OwnerRuntimeBoundary,
 		AcquisitionBoundary:  request.AcquisitionBoundary,
+		RunID:                request.RunID,
+		SnapshotID:           request.SnapshotID,
+		VerifierID:           request.VerifierID,
+		VerifierVersion:      request.VerifierVersion,
 		WindowStartUTC:       request.WindowStart.UTC().Format(time.RFC3339Nano),
 		WindowEndUTC:         request.WindowEnd.UTC().Format(time.RFC3339Nano),
 		ReceiptCount:         len(snapshot.Receipts),
