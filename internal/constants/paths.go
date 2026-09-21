@@ -686,7 +686,7 @@ const (
 	DemoRunVerificationCheck                      = "demo_run"
 	EvalRunVerificationCheck                      = "eval_evidence_graph"
 	AssertionGraderID                             = "assertion_assessment"
-	AssertionGraderVersion                        = "1.0.0"
+	AssertionGraderVersion                        = "2.1.0"
 	FrameworkGraderID                             = "framework_assessment"
 	FrameworkGraderVersion                        = "1.0.0"
 	ReceiptEvidenceVerifierID                     = "g8e-receipt-evidence-importer"

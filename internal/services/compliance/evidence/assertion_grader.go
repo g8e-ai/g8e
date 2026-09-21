@@ -37,13 +37,20 @@ const (
 	failureEvidenceLevel   = "reproduced checks do not meet the minimum evidence level"
 )
 
+type AssertionApplicability struct {
+	Components    []string
+	ActionClasses []string
+	Arms          []string
+}
+
 type AssertionGradingRequest struct {
-	ScopeID     string
-	WindowStart time.Time
-	WindowEnd   time.Time
-	EvaluatedAt time.Time
-	Assertions  *compliancev1.ControlAssertionCatalog
-	Graph       *EvidenceGraph
+	ScopeID       string
+	WindowStart   time.Time
+	WindowEnd     time.Time
+	EvaluatedAt   time.Time
+	Applicability *AssertionApplicability
+	Assertions    *compliancev1.ControlAssertionCatalog
+	Graph         *EvidenceGraph
 }
 
 type assertionEvidence struct {
@@ -103,6 +110,11 @@ func validateAssertionGradingRequest(request AssertionGradingRequest) error {
 	if request.ScopeID == "" || request.Graph == nil || request.Assertions == nil || request.WindowStart.IsZero() || request.WindowEnd.IsZero() || request.EvaluatedAt.IsZero() || request.WindowEnd.Before(request.WindowStart) || request.EvaluatedAt.Before(request.WindowStart) || request.EvaluatedAt.After(request.WindowEnd) {
 		return fmt.Errorf("%w: assertion grading request is incomplete", constants.ErrInvalidEvidenceGraph)
 	}
+	if request.Applicability != nil {
+		if err := validateAssertionApplicability(request.Applicability); err != nil {
+			return err
+		}
+	}
 	if !request.Graph.Valid() {
 		return fmt.Errorf("%w: assertion grading requires a valid evidence graph", constants.ErrInvalidEvidenceGraph)
 	}
@@ -112,14 +124,42 @@ func validateAssertionGradingRequest(request AssertionGradingRequest) error {
 	return nil
 }
 
+func validateAssertionApplicability(applicability *AssertionApplicability) error {
+	selections := [][]string{applicability.Components, applicability.ActionClasses, applicability.Arms}
+	for _, selection := range selections {
+		if len(selection) == 0 {
+			return fmt.Errorf("%w: assertion applicability selection is incomplete", constants.ErrInvalidEvidenceGraph)
+		}
+		seen := make(map[string]struct{}, len(selection))
+		for _, value := range selection {
+			if value == "" {
+				return fmt.Errorf("%w: assertion applicability selection contains an empty value", constants.ErrInvalidEvidenceGraph)
+			}
+			if _, exists := seen[value]; exists {
+				return fmt.Errorf("%w: assertion applicability selection contains duplicate value %s", constants.ErrInvalidEvidenceGraph, value)
+			}
+			seen[value] = struct{}{}
+		}
+	}
+	return nil
+}
+
 func gradeControlAssertion(request AssertionGradingRequest, assertion *compliancev1.ControlAssertionDefinition) (*compliancev1.ControlAssertionAssessment, error) {
-	candidates := collectAssertionEvidence(request, assertion)
-	missing, stale, graderFailed, evidenceLevel := evaluateAssertionRequirements(assertion, candidates)
-	status, freshness, failure := assertionOutcome(assertion.GetMissingEvidencePolicy(), missing, stale, graderFailed)
-	if status == statusSatisfied && !evidenceLevelMeets(assertion.GetMinimumEvidenceLevel(), evidenceLevel) {
-		status = "unverifiable"
-		freshness = freshnessIncomplete
-		failure = failureEvidenceLevel
+	candidates := assertionEvidence{evidenceRef: make(map[string]struct{}), metricRef: make(map[string]struct{})}
+	status := "not_applicable"
+	freshness := freshnessNotApplicable
+	failure := ""
+	evidenceLevel := "L0"
+	if request.Applicability == nil || assertionApplies(assertion, request.Applicability) {
+		candidates = collectAssertionEvidence(request, assertion)
+		missing, stale, graderFailed, achievedLevel := evaluateAssertionRequirements(assertion, candidates)
+		status, freshness, failure = assertionOutcome(assertion.GetMissingEvidencePolicy(), missing, stale, graderFailed)
+		evidenceLevel = achievedLevel
+		if status == statusSatisfied && !evidenceLevelMeets(assertion.GetMinimumEvidenceLevel(), evidenceLevel) {
+			status = "unverifiable"
+			freshness = freshnessIncomplete
+			failure = failureEvidenceLevel
+		}
 	}
 	assessment := &compliancev1.ControlAssertionAssessment{
 		AssessmentId:    assertionAssessmentID(request.ScopeID, assertion),
@@ -240,21 +280,30 @@ func requirementMatches(nodes []*EvidenceNode, matcher func(*EvidenceNode) (bool
 }
 
 func coherentRequirementSelection(requirements [][]assertionRequirementMatch) ([]assertionRequirementMatch, bool) {
-	var firstPassing []assertionRequirementMatch
+	for requirementIndex, matches := range requirements {
+		for _, match := range matches {
+			if match.passed {
+				continue
+			}
+			if selected, complete := selectCoherentRequirements(requirements, requirementIndex, &match); complete {
+				return selected, true
+			}
+		}
+	}
+	return selectCoherentRequirements(requirements, -1, nil)
+}
+
+func selectCoherentRequirements(requirements [][]assertionRequirementMatch, forcedIndex int, forced *assertionRequirementMatch) ([]assertionRequirementMatch, bool) {
 	var search func(int, []assertionRequirementMatch) ([]assertionRequirementMatch, bool)
 	search = func(index int, selected []assertionRequirementMatch) ([]assertionRequirementMatch, bool) {
 		if index == len(requirements) {
-			for _, match := range selected {
-				if !match.passed {
-					return append([]assertionRequirementMatch(nil), selected...), true
-				}
-			}
-			if firstPassing == nil {
-				firstPassing = append([]assertionRequirementMatch(nil), selected...)
-			}
-			return nil, false
+			return append([]assertionRequirementMatch(nil), selected...), true
 		}
-		for _, candidate := range requirements[index] {
+		matches := requirements[index]
+		if index == forcedIndex {
+			matches = []assertionRequirementMatch{*forced}
+		}
+		for _, candidate := range matches {
 			compatible := true
 			for _, existing := range selected {
 				if !sameAssertionSubject(existing.node, candidate.node) {
@@ -271,10 +320,7 @@ func coherentRequirementSelection(requirements [][]assertionRequirementMatch) ([
 		}
 		return nil, false
 	}
-	if result, found := search(0, nil); found {
-		return result, true
-	}
-	return firstPassing, firstPassing != nil
+	return search(0, nil)
 }
 
 func sameAssertionSubject(left, right *EvidenceNode) bool {
@@ -287,7 +333,21 @@ func sameAssertionSubject(left, right *EvidenceNode) bool {
 			return false
 		}
 	}
+	if isMetricNode(left) && isObservationNode(right) {
+		return Contains(left.References, right.ArtifactID)
+	}
+	if isObservationNode(left) && isMetricNode(right) {
+		return Contains(right.References, left.ArtifactID)
+	}
 	return true
+}
+
+func isMetricNode(node *EvidenceNode) bool {
+	return node.ArtifactType == ArtifactTypeEvalMetric || node.ArtifactType == ArtifactTypeDemoMetric
+}
+
+func isObservationNode(node *EvidenceNode) bool {
+	return node.ArtifactType == ArtifactTypeStateObservation || node.ArtifactType == ArtifactTypeEvalObservation
 }
 
 func addRequirementReferences(candidates assertionEvidence, matches []assertionRequirementMatch) {
@@ -301,17 +361,18 @@ func addRequirementReferences(candidates assertionEvidence, matches []assertionR
 
 func achievedEvidenceLevel(matches []assertionRequirementMatch) string {
 	level := "L0"
-	deterministic := false
-	independent := false
 	for _, match := range matches {
 		if evidenceLevelIndexOrdered(match.strength) > evidenceLevelIndexOrdered(level) {
 			level = match.strength
 		}
-		deterministic = deterministic || match.strength == "L2"
-		independent = independent || match.node.ArtifactType == ArtifactTypeStateObservation || match.node.ArtifactType == ArtifactTypeEvalObservation
-	}
-	if deterministic && independent {
-		return "L3"
+		if !isObservationNode(match.node) {
+			continue
+		}
+		for _, deterministic := range matches {
+			if deterministic.strength == "L2" && sameAssertionSubject(match.node, deterministic.node) {
+				return "L3"
+			}
+		}
 	}
 	return level
 }
@@ -324,9 +385,6 @@ func assertionOutcome(missingPolicy string, missing, stale, graderFailed bool) (
 			freshness = freshnessStale
 			failure = failureStaleEvidence
 		}
-		if missingPolicy == "not_applicable" {
-			return "not_applicable", freshnessNotApplicable, failure
-		}
 		return missingPolicy, freshness, failure
 	}
 	if graderFailed {
@@ -335,38 +393,23 @@ func assertionOutcome(missingPolicy string, missing, stale, graderFailed bool) (
 	return statusSatisfied, freshnessFresh, ""
 }
 
-func matchingNodes(nodes []*EvidenceNode, matches func(*EvidenceNode) bool) []*EvidenceNode {
-	result := make([]*EvidenceNode, 0)
-	for _, node := range nodes {
-		if matches(node) {
-			result = append(result, node)
-		}
-	}
-	return result
+func assertionApplies(assertion *compliancev1.ControlAssertionDefinition, applicability *AssertionApplicability) bool {
+	return stringSetsIntersect(assertion.GetComponentScope(), applicability.Components) &&
+		stringSetsIntersect(assertion.GetApplicableActionClasses(), applicability.ActionClasses) &&
+		stringSetsIntersect(assertion.GetApplicableArms(), applicability.Arms)
 }
 
-func matchingGraderNodes(nodes []*EvidenceNode, required *compliancev1.VersionedReference) ([]*EvidenceNode, bool) {
-	graderNodes := make([]*EvidenceNode, 0)
-	key := versionedReferenceKey(required.GetId(), required.GetVersion())
-	for _, node := range nodes {
-		if node.ProducerIdentity == key && (node.ArtifactType == ArtifactTypeEvalMetric || node.ArtifactType == ArtifactTypeDemoMetric) {
-			graderNodes = append(graderNodes, node)
+func stringSetsIntersect(left, right []string) bool {
+	values := make(map[string]struct{}, len(left))
+	for _, value := range left {
+		values[value] = struct{}{}
+	}
+	for _, value := range right {
+		if _, exists := values[value]; exists {
+			return true
 		}
 	}
-	if len(graderNodes) > 0 {
-		nodes = graderNodes
-	}
-	result := make([]*EvidenceNode, 0)
-	passed := true
-	for _, node := range nodes {
-		matches, nodePassed := nodeMatchesGrader(node, required)
-		if !matches {
-			continue
-		}
-		result = append(result, node)
-		passed = passed && nodePassed
-	}
-	return result, passed
+	return false
 }
 
 func nodeMatchesEvidenceType(node *EvidenceNode, required string) bool {
@@ -384,8 +427,9 @@ func nodeMatchesEvidenceType(node *EvidenceNode, required string) bool {
 		return node.ArtifactType == ArtifactTypeEvalObservation
 	case "metric", "eval_metric":
 		return node.ArtifactType == ArtifactTypeEvalMetric || node.ArtifactType == ArtifactTypeDemoMetric
+	default:
+		return false
 	}
-	return strings.Contains(normalizeEvidenceIdentity(node.SchemaRef), normalized)
 }
 
 func nodeMatchesVerifier(node *EvidenceNode, required *compliancev1.VersionedReference) bool {
@@ -420,8 +464,7 @@ func nodeMatchesGrader(node *EvidenceNode, required *compliancev1.VersionedRefer
 	if required == nil {
 		return false, false
 	}
-	key := versionedReferenceKey(required.GetId(), required.GetVersion())
-	if node.ProducerIdentity == key && (node.ArtifactType == ArtifactTypeEvalMetric || node.ArtifactType == ArtifactTypeDemoMetric) {
+	if node.ArtifactType == ArtifactTypeEvalMetric || node.ArtifactType == ArtifactTypeDemoMetric {
 		return metricNodePassed(node, required)
 	}
 	switch required.GetId() {
@@ -447,10 +490,20 @@ func metricNodePassed(node *EvidenceNode, required *compliancev1.VersionedRefere
 	if err := json.Unmarshal(node.CanonicalBytes, &metric); err != nil {
 		return false, false
 	}
-	if metric.GraderRef != nil && (metric.GraderRef.GetId() != required.GetId() || metric.GraderRef.GetVersion() != required.GetVersion()) {
-		return false, false
+	identityMatched := false
+	if metric.GraderRef != nil {
+		if metric.GraderRef.GetId() != required.GetId() || metric.GraderRef.GetVersion() != required.GetVersion() {
+			return false, false
+		}
+		identityMatched = true
 	}
-	if metric.MetricID != "" && (metric.MetricID != required.GetId() || metric.MetricVersion != required.GetVersion()) {
+	if metric.MetricID != "" {
+		if metric.MetricID != required.GetId() || metric.MetricVersion != required.GetVersion() {
+			return false, false
+		}
+		identityMatched = true
+	}
+	if !identityMatched {
 		return false, false
 	}
 	if metric.VerificationStatus != "" && metric.VerificationStatus != string(VerificationStatusVerified) {
@@ -463,20 +516,6 @@ func metricNodePassed(node *EvidenceNode, required *compliancev1.VersionedRefere
 		return true, *metric.Passed
 	}
 	return true, metric.Value != nil && *metric.Value == 1
-}
-
-func addEvidenceReferences(target map[string]struct{}, nodes []*EvidenceNode) {
-	for _, node := range nodes {
-		target[node.ArtifactID] = struct{}{}
-	}
-}
-
-func addMetricReferences(target map[string]struct{}, nodes []*EvidenceNode) {
-	for _, node := range nodes {
-		if node.ArtifactType == ArtifactTypeEvalMetric || node.ArtifactType == ArtifactTypeDemoMetric {
-			target[node.ArtifactID] = struct{}{}
-		}
-	}
 }
 
 func sortedKeys(values map[string]struct{}) []string {

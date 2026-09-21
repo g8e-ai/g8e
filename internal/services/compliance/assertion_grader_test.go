@@ -167,6 +167,29 @@ func TestGradeControlAssertions_DoesNotTreatVerifiedReceiptAsPolicyOutcome(t *te
 	assert.Equal(t, "L2", assessment.GetEvidenceLevel())
 }
 
+func TestGradeControlAssertions_DerivesDemonstratedLevelFromBoundIndependentObservation(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	assertions := assertionGraderCatalog("unverifiable")
+	assertions.Assertions[0].RequiredEvidenceTypes = []string{"action_receipt", "state_observation"}
+	assertions.Assertions[0].MinimumEvidenceLevel = "L3"
+	graph := evidence.NewEvidenceGraph(0, nil)
+	receipt := assertionGraderNode(evidence.ArtifactTypeActionReceipt, "gateway", []byte(`{"receipt":"verified"}`), now.Add(-time.Hour))
+	receipt.ScenarioID = "scenario-1"
+	receipt.TransactionID = "transaction-1"
+	observation := assertionGraderNode(evidence.ArtifactTypeStateObservation, "collector", []byte(`{"effect":"absent"}`), now.Add(-time.Hour))
+	observation.ScenarioID = "scenario-1"
+	metric := assertionGraderNode(evidence.ArtifactTypeEvalMetric, "evaluation-verifier", []byte(`{"metric_id":"policy_outcome","metric_version":"1.0.0","value":1,"eligible":true,"verification_status":"verified"}`), now.Add(-time.Hour))
+	metric.ScenarioID = "scenario-1"
+	metric.References = []string{observation.ArtifactID}
+	require.NoError(t, graph.AddNode(receipt))
+	require.NoError(t, graph.AddNode(observation))
+	require.NoError(t, graph.AddNode(metric))
+
+	assessment := gradeAssertionTestGraph(t, graph, assertions, now)
+	assert.Equal(t, "satisfied", assessment.GetStatus())
+	assert.Equal(t, "L3", assessment.GetEvidenceLevel())
+}
+
 func TestGradeControlAssertions_DoesNotCombineRequirementsAcrossSubjects(t *testing.T) {
 	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
 	tests := []struct {
@@ -271,22 +294,64 @@ func TestGradeControlAssertions_ReportsStaleRequiredEvidence(t *testing.T) {
 func TestGradeControlAssertions_AppliesMissingEvidencePolicy(t *testing.T) {
 	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
 	tests := []struct {
-		policy    string
-		status    string
-		freshness string
+		policy string
+		status string
 	}{
-		{policy: "unverifiable", status: "unverifiable", freshness: "incomplete"},
-		{policy: "customer_attestation_required", status: "customer_attestation_required", freshness: "incomplete"},
-		{policy: "not_applicable", status: "not_applicable", freshness: "not_applicable"},
+		{policy: "unverifiable", status: "unverifiable"},
+		{policy: "customer_attestation_required", status: "customer_attestation_required"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.policy, func(t *testing.T) {
 			assessment := gradeAssertionTestGraph(t, evidence.NewEvidenceGraph(0, nil), assertionGraderCatalog(tt.policy), now)
 			assert.Equal(t, tt.status, assessment.GetStatus())
-			assert.Equal(t, tt.freshness, assessment.GetFreshnessStatus())
+			assert.Equal(t, "incomplete", assessment.GetFreshnessStatus())
 			assert.Equal(t, "L0", assessment.GetEvidenceLevel())
 		})
 	}
+}
+
+func TestGradeControlAssertions_NotApplicableOnlyForExplicitlyExcludedPopulation(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	assessments, err := evidence.GradeControlAssertions(context.Background(), evidence.AssertionGradingRequest{
+		ScopeID:     "scope-1",
+		WindowStart: now.Add(-24 * time.Hour),
+		WindowEnd:   now,
+		EvaluatedAt: now,
+		Applicability: &evidence.AssertionApplicability{
+			Components:    []string{"operator"},
+			ActionClasses: []string{"governed_read"},
+			Arms:          []string{"baseline"},
+		},
+		Assertions: assertionGraderCatalog("unverifiable"),
+		Graph:      evidence.NewEvidenceGraph(0, nil),
+	})
+	require.NoError(t, err)
+	require.Len(t, assessments, 1)
+	assert.Equal(t, "not_applicable", assessments[0].GetStatus())
+	assert.Equal(t, "not_applicable", assessments[0].GetFreshnessStatus())
+	assert.Equal(t, "L0", assessments[0].GetEvidenceLevel())
+	assert.Empty(t, assessments[0].GetFailureReason())
+}
+
+func TestGradeControlAssertions_MatchingPopulationWithoutEvidenceIsUnverifiable(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	assessments, err := evidence.GradeControlAssertions(context.Background(), evidence.AssertionGradingRequest{
+		ScopeID:     "scope-1",
+		WindowStart: now.Add(-24 * time.Hour),
+		WindowEnd:   now,
+		EvaluatedAt: now,
+		Applicability: &evidence.AssertionApplicability{
+			Components:    []string{"gateway"},
+			ActionClasses: []string{"governed_mutation"},
+			Arms:          []string{"governed"},
+		},
+		Assertions: assertionGraderCatalog("unverifiable"),
+		Graph:      evidence.NewEvidenceGraph(0, nil),
+	})
+	require.NoError(t, err)
+	require.Len(t, assessments, 1)
+	assert.Equal(t, "unverifiable", assessments[0].GetStatus())
+	assert.Equal(t, "incomplete", assessments[0].GetFreshnessStatus())
 }
 
 func TestGradeControlAssertions_AppliesAssertionValidationCycle(t *testing.T) {
@@ -313,6 +378,12 @@ func TestGradeControlAssertions_RejectsIncompleteRequests(t *testing.T) {
 		{name: "missing scope", mutate: func(request *evidence.AssertionGradingRequest) { request.ScopeID = "" }},
 		{name: "missing graph", mutate: func(request *evidence.AssertionGradingRequest) { request.Graph = nil }},
 		{name: "missing catalog", mutate: func(request *evidence.AssertionGradingRequest) { request.Assertions = nil }},
+		{name: "incomplete applicability", mutate: func(request *evidence.AssertionGradingRequest) {
+			request.Applicability = &evidence.AssertionApplicability{}
+		}},
+		{name: "duplicate applicability value", mutate: func(request *evidence.AssertionGradingRequest) {
+			request.Applicability = &evidence.AssertionApplicability{Components: []string{"gateway", "gateway"}, ActionClasses: []string{"governed_mutation"}, Arms: []string{"governed"}}
+		}},
 		{name: "inverted window", mutate: func(request *evidence.AssertionGradingRequest) { request.WindowStart = now.Add(time.Hour) }},
 		{name: "evaluation outside window", mutate: func(request *evidence.AssertionGradingRequest) { request.EvaluatedAt = now.Add(time.Hour) }},
 	}
