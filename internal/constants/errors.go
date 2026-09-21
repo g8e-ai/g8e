@@ -555,6 +555,7 @@ var (
 	ErrPlatformEnrollmentPersistenceFailed    = errors.New("platform enrollment persistence failed")
 	ErrPlatformEnrollmentIssuanceFailed       = errors.New("platform enrollment issuance failed")
 	ErrPlatformEnrollmentReservedIdentity     = errors.New("platform identity requires owner-approved enrollment")
+	ErrPlatformEnrollmentRevoked              = errors.New("platform enrollment has been revoked")
 
 	ErrCLIRotationFailed            = errors.New("CLI rotation failed")
 	ErrCLIRotationCSRRequired       = errors.New("cli_csr_pem is required for rotation")
@@ -973,6 +974,8 @@ var (
 	ErrRegistrationWebSessionIDRequired            = errors.New("web_session_id is required")
 	ErrRegistrationOperatorIDsRequired             = errors.New("operator_ids required")
 	ErrRegistrationOperatorNoActiveSession         = errors.New("operator has no active session")
+	ErrOperatorStopEmbedded                        = errors.New("embedded operator cannot be stopped remotely")
+	ErrOperatorStopNotRemote                       = errors.New("only remote operators can be stopped")
 	ErrRegistrationFailedToMarshalSessionIDs       = errors.New("failed to marshal session IDs")
 	ErrRegistrationFailedToSetKVBinding            = errors.New("failed to set KV binding")
 	ErrRegistrationFailedToGetBoundSessions        = errors.New("failed to get bound sessions document")

@@ -272,6 +272,7 @@ should be populated per instance.
 | certificate_serial | [string](#string) |  |  |
 | certificate_fingerprint | [string](#string) |  |  |
 | owner_user_id | [string](#string) |  |  |
+| reason | [string](#string) |  |  |
 
 
 

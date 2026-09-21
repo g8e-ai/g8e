@@ -62,6 +62,33 @@ func samplePendingResponse() models.PlatformEnrollmentPendingResponse {
 	}
 }
 
+func TestRevokePlatformEnrollmentCmdWithConfig_PostsRequestID(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	responseBody, err := json.Marshal(models.PlatformEnrollmentRevokeResponse{
+		RequestID:     "req-operator-001",
+		ComponentKind: models.PlatformComponentOperator,
+		State:         models.PlatformEnrollmentStateRevoked,
+	})
+	require.NoError(t, err)
+	mockClient := &mockAPIClient{postResp: responseBody}
+
+	cmd := revokePlatformEnrollmentCmdWithConfig(configLoaderFor(cfg), mockClientFactory(mockClient), fileSvcFactoryFor(nil))
+	cmd.Flags().Set("yes", "true")
+	cmd.Flags().Set("reason", "host retired")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err = cmd.RunE(cmd, []string{"req-operator-001"})
+	require.NoError(t, err)
+	require.Len(t, mockClient.postCalls, 1)
+	assert.Equal(t, constants.APIPaths.AuthPlatformEnrollmentRevoke, mockClient.postCalls[0].path)
+	request := mockClient.postCalls[0].body.(models.PlatformEnrollmentRevokeRequest)
+	assert.Equal(t, "req-operator-001", request.RequestID)
+	assert.Equal(t, "host retired", request.Reason)
+	assert.Contains(t, buf.String(), "revoked")
+}
+
 // --- enroll approve command tests ---
 
 // TestApprovePlatformEnrollmentCmd_ApproveWithYes verifies that --yes skips the

@@ -383,6 +383,84 @@ func TestPlatformEnrollmentService_EnsembleIssuanceProducesDualSANAndOwnershipPo
 	assert.Equal(t, models.PlatformEnrollmentStateCompleted, stored.State)
 }
 
+func TestPlatformEnrollmentService_RevokeAppDisablesPolicyAndCertificate(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	csr, key := generateAppCSRAndKey(t)
+	requestID, token, approved := createAndApproveRequest(t, env,
+		models.PlatformComponentDashboard, "dashboard-revoke", "dashboard.local", csr, "", "")
+	resp, err := env.enrollSvc.Complete(context.Background(), token, models.PlatformEnrollmentProofs{
+		App: signCompletionTranscript(t, approved, key),
+	})
+	require.NoError(t, err)
+
+	revoked, err := env.enrollSvc.Revoke(context.Background(), env.ownerID, models.PlatformEnrollmentRevokeRequest{
+		RequestID: requestID,
+		Reason:    "retired",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, models.PlatformEnrollmentStateRevoked, revoked.State)
+
+	policy, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ed")
+	require.NoError(t, err)
+	assert.Nil(t, policy)
+	block, _ := pem.Decode([]byte(resp.App.AppCert))
+	require.NotNil(t, block)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+	assert.ErrorIs(t, env.pki.VerifyCertificate(cert), constants.ErrPKICertificateRevoked)
+	stored := loadStoredRequest(t, env, requestID)
+	assert.Equal(t, models.PlatformEnrollmentStateRevoked, stored.State)
+	assert.Equal(t, env.ownerID, stored.RevokedByUserID)
+	assert.Equal(t, "retired", stored.RevocationReason)
+}
+
+func TestPlatformEnrollmentService_RevokeOperatorDisablesBothCertificatesAndSessions(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+	operatorCSR, operatorKey, cliCSR, cliKey := generateOperatorCSRsAndKeys(t)
+	requestID, token, approved := createAndApproveRequest(t, env,
+		models.PlatformComponentOperator, "operator-revoke", "operator.local", "", operatorCSR, cliCSR)
+	resp, err := env.enrollSvc.Complete(context.Background(), token, models.PlatformEnrollmentProofs{
+		Operator: signCompletionTranscript(t, approved, operatorKey),
+		CLI:      signCompletionTranscript(t, approved, cliKey),
+	})
+	require.NoError(t, err)
+
+	_, err = env.enrollSvc.Revoke(context.Background(), env.ownerID, models.PlatformEnrollmentRevokeRequest{RequestID: requestID})
+	require.NoError(t, err)
+
+	for _, certPEM := range []string{resp.Operator.OperatorCert, resp.Operator.CLICert} {
+		block, _ := pem.Decode([]byte(certPEM))
+		require.NotNil(t, block)
+		cert, parseErr := x509.ParseCertificate(block.Bytes)
+		require.NoError(t, parseErr)
+		assert.ErrorIs(t, env.pki.VerifyCertificate(cert), constants.ErrPKICertificateRevoked)
+	}
+	opDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), resp.Operator.OperatorID)
+	require.NoError(t, err)
+	require.NotNil(t, opDoc)
+	opBytes, err := json.Marshal(opDoc.Data)
+	require.NoError(t, err)
+	var op models.OperatorDocumentGo
+	require.NoError(t, json.Unmarshal(opBytes, &op))
+	assert.Equal(t, constants.OperatorStatusTerminated, op.Status)
+
+	cliDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), resp.Operator.CLISessionID)
+	require.NoError(t, err)
+	cliBytes, err := json.Marshal(cliDoc.Data)
+	require.NoError(t, err)
+	var cli models.CLISession
+	require.NoError(t, json.Unmarshal(cliBytes, &cli))
+	assert.False(t, cli.IsActive)
+
+	opSessionDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), resp.Operator.OperatorSessionID)
+	require.NoError(t, err)
+	opSessionBytes, err := json.Marshal(opSessionDoc.Data)
+	require.NoError(t, err)
+	var opSession models.OperatorSession
+	require.NoError(t, json.Unmarshal(opSessionBytes, &opSession))
+	assert.False(t, opSession.IsActive)
+}
+
 // ============================================================================
 // Operator issuance tests
 // ============================================================================

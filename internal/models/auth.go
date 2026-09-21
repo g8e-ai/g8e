@@ -169,6 +169,18 @@ type TerminateOperatorResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
+type StopOperatorRequest struct {
+	OperatorSessionID string `json:"operator_session_id"`
+	Reason            string `json:"reason,omitempty"`
+}
+
+type StopOperatorResponse struct {
+	Success           bool   `json:"success"`
+	OperatorID        string `json:"operator_id"`
+	OperatorSessionID string `json:"operator_session_id"`
+	TransactionID     string `json:"transaction_id,omitempty"`
+}
+
 // BindOperatorsRequest is the inbound body for /api/operators/bind
 type BindOperatorsRequest struct {
 	OperatorIDs  []string `json:"operator_ids"`

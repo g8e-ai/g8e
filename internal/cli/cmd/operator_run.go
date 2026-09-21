@@ -123,6 +123,83 @@ authenticated user and be active.`,
 	return cmd
 }
 
+func operatorStopCmd() *cobra.Command {
+	return operatorStopCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
+}
+
+func operatorStopCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	clientFactory apiClientFactory,
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+) *cobra.Command {
+	var reason string
+	cmd := &cobra.Command{
+		Use:   "stop <operator-session-id>",
+		Short: "Stop a remote operator through its governed shutdown channel",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			sessionID := strings.TrimSpace(args[0])
+			if sessionID == "" {
+				return constants.ErrGatewayOperatorSessionIDRequired
+			}
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			creds, err := auth.LoadCredentials(fileSvc, cfg)
+			if err != nil || creds == nil {
+				return fmt.Errorf("%w: Please run './g8e auth enroll user' first", constants.ErrNotAuthenticated)
+			}
+			client, err := clientFactory(fileSvc, cfg)
+			if err != nil {
+				return fmt.Errorf("operator stop: create API client: %w", err)
+			}
+			operators, err := listUserOperators(client, creds.UserID)
+			if err != nil {
+				return fmt.Errorf("operator stop: %w", err)
+			}
+			var target *models.OperatorDocumentGo
+			for i := range operators {
+				if operators[i].OperatorSessionID == sessionID {
+					target = &operators[i]
+					break
+				}
+			}
+			if target == nil {
+				return fmt.Errorf("operator stop: no operator found with session id %s for the authenticated user", sessionID)
+			}
+			if target.OperatorType == constants.OperatorTypeEmbedded {
+				return constants.ErrOperatorStopEmbedded
+			}
+			if target.OperatorType != constants.OperatorTypeRemote {
+				return constants.ErrOperatorStopNotRemote
+			}
+			body, err := client.Post(constants.APIPaths.OperatorsStop, models.StopOperatorRequest{
+				OperatorSessionID: sessionID,
+				Reason:            strings.TrimSpace(reason),
+			})
+			if err != nil {
+				return fmt.Errorf("operator stop: request shutdown: %w", err)
+			}
+			var response models.StopOperatorResponse
+			if err := json.Unmarshal(body, &response); err != nil {
+				return fmt.Errorf("operator stop: parse response: %w", err)
+			}
+			if output.JSONEnabled(cmd) {
+				return output.WriteJSON(cmd.OutOrStdout(), response)
+			}
+			cmd.Printf("Stop requested for operator session %s (operator %s).\n", response.OperatorSessionID, response.OperatorID)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&reason, "reason", "", "Reason recorded with the shutdown request")
+	return cmd
+}
+
 func dedupeOperatorSessionIDs(args []string) []string {
 	seen := make(map[string]struct{}, len(args))
 	ordered := make([]string, 0, len(args))

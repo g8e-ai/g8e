@@ -143,6 +143,35 @@ func (s *RegistrationService) UpdateOperatorRuntimeConfig(operatorID string, run
 	return nil
 }
 
+func (s *RegistrationService) MarkOperatorStopped(operatorID, userID, reason string) error {
+	if operatorID == "" {
+		return constants.ErrRegistrationOperatorIDRequired
+	}
+	doc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
+	if err != nil || doc == nil {
+		return fmt.Errorf("%w: %w", constants.ErrRegistrationOperatorNotFound, err)
+	}
+	op, err := s.toOperatorDoc(doc)
+	if err != nil {
+		return err
+	}
+	if op.UserID != userID {
+		return constants.ErrRegistrationOperatorNotBelongToUser
+	}
+	update, err := json.Marshal(map[string]any{
+		"status":      string(constants.OperatorStatusStopped),
+		"updated_at":  time.Now().UTC(),
+		"stop_reason": strings.TrimSpace(reason),
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
+	}
+	if _, err := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, update); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
+	}
+	return nil
+}
+
 func (s *RegistrationService) TerminateOperator(operatorID, userID, reason string) error {
 	if operatorID == "" {
 		return constants.ErrRegistrationOperatorIDRequired

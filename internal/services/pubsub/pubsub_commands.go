@@ -874,6 +874,8 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 		return rs.platformEnrollment.HandlePersistPolicy(ctx, pubsubMsg)
 	case constants.EventPlatformEnrollmentCreateSessionRequested:
 		return rs.platformEnrollment.HandleCreateSession(ctx, pubsubMsg)
+	case constants.EventPlatformEnrollmentRevokeRequested:
+		return rs.platformEnrollment.HandleRevoke(ctx, pubsubMsg)
 	}
 
 	handler, ok := rs.handlers[eventType]

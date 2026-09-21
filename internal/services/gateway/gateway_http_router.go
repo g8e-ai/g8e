@@ -71,6 +71,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, h.platformEnrollmentController.handlePlatformEnrollmentComplete)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentPending, h.platformEnrollmentController.handlePlatformEnrollmentPending)
 	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentDecision, h.platformEnrollmentController.handlePlatformEnrollmentDecision)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRevoke, h.platformEnrollmentController.handlePlatformEnrollmentRevoke)
 
 	// CLI rotation — mTLS-protected; the caller's identity is derived from
 	// the verified CLI certificate. NOT registered on buildHTTPRouter
@@ -148,6 +149,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// mTLS-only routes (merged from buildRouter)
 	mux.HandleFunc(constants.APIPaths.DataSettings, h.dataController.handleDataSettings)
 	mux.HandleFunc(constants.APIPaths.Operators, h.operatorController.handleListOperators)
+	mux.HandleFunc(constants.APIPaths.OperatorsStop, h.operatorController.handleStopOperator)
 	mux.HandleFunc(constants.APIPaths.OperatorsValidate, h.operatorController.handleValidateOperatorSession)
 	mux.Handle(constants.APIPaths.OperatorsByID, http.HandlerFunc(h.operatorController.handleTerminateOperator))
 	mux.HandleFunc(constants.APIPaths.OperatorsBind, h.operatorController.handleBindOperators)

@@ -778,6 +778,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Logger:    logger,
 			Reg:       reg,
 			Auth:      auth,
+			Dispatch:  ls.dispatchSvc,
 			Responder: ls.responder,
 		},
 		DispatchControllerDeps: DispatchControllerDeps{

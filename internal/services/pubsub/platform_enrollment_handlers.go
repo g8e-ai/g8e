@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -483,6 +484,97 @@ func (h *PlatformEnrollmentHandler) HandlePersistPolicy(ctx context.Context, msg
 		"target_document_id", targetDocumentID)
 	return fmt.Sprintf("platform enrollment persist_policy request_id=%s policy_id=%s document=%s",
 		requestID, policyID, targetDocumentID), nil
+}
+
+func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	_ = ctx
+	payload, err := h.decodePayload(msg)
+	if err != nil {
+		return "", err
+	}
+	requestID := payload.GetRequestId()
+	if requestID == "" {
+		return "", constants.ErrPlatformEnrollmentRequestIDRequired
+	}
+	req, err := loadPlatformEnrollmentRequest(context.Background(), h.deps, requestID)
+	if err != nil {
+		return "", err
+	}
+	if req == nil {
+		return "", constants.ErrPlatformEnrollmentRequestNotFound
+	}
+	if req.State != models.PlatformEnrollmentStateCompleted {
+		return "", constants.ErrPlatformEnrollmentInvalidState
+	}
+	reason := strings.TrimSpace(payload.GetReason())
+	if reason == "" {
+		reason = string(constants.PlatformEnrollmentIntentRevoke)
+	}
+	if req.CertificateSerial != "" {
+		if err := h.deps.PKI.RevokeCertificate(req.CertificateSerial, reason); err != nil {
+			return "", fmt.Errorf("platform enrollment: revoke certificate: %w", err)
+		}
+	}
+	switch req.ComponentKind {
+	case models.PlatformComponentDashboard, models.PlatformComponentEnsemble:
+		if payload.GetTargetDocumentId() == "" {
+			return "", constants.ErrPlatformEnrollmentInvalidPayload
+		}
+		if err := h.deps.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), payload.GetTargetDocumentId()); err != nil {
+			return "", fmt.Errorf("platform enrollment: revoke app policy: %w", err)
+		}
+	case models.PlatformComponentOperator:
+		if req.Issued == nil || req.Issued.Operator == nil {
+			return "", constants.ErrPlatformEnrollmentInvalidPayload
+		}
+		operatorSerial := serialFromPEM(req.Issued.Operator.OperatorCert)
+		if operatorSerial == "" {
+			return "", constants.ErrPlatformEnrollmentInvalidPayload
+		}
+		if err := h.deps.PKI.RevokeCertificate(operatorSerial, reason); err != nil {
+			return "", fmt.Errorf("platform enrollment: revoke operator certificate: %w", err)
+		}
+		if err := h.deps.CLISessions.DeactivateCLISession(req.CLISessionID); err != nil && !errors.Is(err, constants.ErrCLISessionAlreadyDeactivated) {
+			return "", fmt.Errorf("platform enrollment: deactivate CLI session: %w", err)
+		}
+		if err := h.deps.OperatorSessions.DeactivateOperatorSession(req.OperatorSessionID); err != nil {
+			return "", fmt.Errorf("platform enrollment: deactivate operator session: %w", err)
+		}
+		update, err := json.Marshal(map[string]any{
+			"status":             string(constants.OperatorStatusTerminated),
+			"updated_at":         time.Now().UTC(),
+			"termination_reason": reason,
+		})
+		if err != nil {
+			return "", fmt.Errorf("platform enrollment: marshal operator revocation: %w", err)
+		}
+		if _, err := h.deps.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID, update); err != nil {
+			return "", fmt.Errorf("platform enrollment: terminate operator: %w", err)
+		}
+	default:
+		return "", constants.ErrPlatformEnrollmentInvalidComponent
+	}
+	now := time.Now().UTC()
+	applied, err := h.deps.DocStore.DocConditionalUpdate(
+		platformEnrollmentCollection(), requestID,
+		map[string]interface{}{
+			"state":                  string(models.PlatformEnrollmentStateRevoked),
+			"revoked_at":             now,
+			"revoked_by_user_id":     payload.GetActorUserId(),
+			"revocation_reason":      reason,
+			"revocation_envelope_id": msg.ID,
+			"revocation_receipt_id":  msg.ID,
+			"last_transition_at":     now,
+		},
+		"state", string(models.PlatformEnrollmentStateCompleted),
+	)
+	if err != nil {
+		return "", fmt.Errorf("platform enrollment: mark revoked: %w", err)
+	}
+	if !applied {
+		return "", constants.ErrPlatformEnrollmentInvalidState
+	}
+	return fmt.Sprintf("platform enrollment revoke request_id=%s component=%s", requestID, req.ComponentKind), nil
 }
 
 // HandleCreateSession delegates to CLISessionService and

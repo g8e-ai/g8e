@@ -207,7 +207,8 @@ func unmarshalPayload(eventType constants.EventType, payload []byte) (proto.Mess
 		constants.EventPlatformEnrollmentDecideRequested,
 		constants.EventPlatformEnrollmentIssueRequested,
 		constants.EventPlatformEnrollmentPersistPolicyRequested,
-		constants.EventPlatformEnrollmentCreateSessionRequested:
+		constants.EventPlatformEnrollmentCreateSessionRequested,
+		constants.EventPlatformEnrollmentRevokeRequested:
 		m = &commonv1.PlatformEnrollmentGovernancePayload{}
 	default:
 		return nil, fmt.Errorf("unknown event type for unmarshaling: %s", eventType)

@@ -169,6 +169,7 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// user ID from the verified session or certificate.
 	r.addExact(constants.APIPaths.AuthPlatformEnrollmentPending, RouteAuthDual)
 	r.addExact(constants.APIPaths.AuthPlatformEnrollmentDecision, RouteAuthDual)
+	r.addExact(constants.APIPaths.AuthPlatformEnrollmentRevoke, RouteAuthDual)
 
 	// --- RouteAuthMTLS: mTLS-protected sub-paths under WebSession prefixes ---
 	// These exact paths must be checked before the WebSession prefix matches.

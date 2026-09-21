@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -396,6 +397,62 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 	}, nil
 }
 
+func (s *PlatformEnrollmentService) Revoke(ctx context.Context, actorUserID string, req models.PlatformEnrollmentRevokeRequest) (*models.PlatformEnrollmentRevokeResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	user, err := s.userSvc.GetByID(actorUserID)
+	if err != nil {
+		return nil, fmt.Errorf("platform enrollment: authorize revocation: %w", err)
+	}
+	if user == nil || !user.IsActive() {
+		return nil, constants.ErrPlatformEnrollmentInvalidDecision
+	}
+	isFirst, err := s.userSvc.IsFirstUser(actorUserID)
+	if err != nil {
+		return nil, fmt.Errorf("platform enrollment: authorize revocation: %w", err)
+	}
+	if !isFirst {
+		return nil, constants.ErrPlatformEnrollmentInvalidDecision
+	}
+	existing, err := s.loadByID(req.RequestID)
+	if err != nil {
+		return nil, err
+	}
+	if existing == nil {
+		return nil, constants.ErrPlatformEnrollmentRequestNotFound
+	}
+	if existing.State == models.PlatformEnrollmentStateRevoked {
+		return &models.PlatformEnrollmentRevokeResponse{RequestID: existing.ID, ComponentKind: existing.ComponentKind, State: existing.State}, nil
+	}
+	if existing.State != models.PlatformEnrollmentStateCompleted {
+		return nil, constants.ErrPlatformEnrollmentInvalidState
+	}
+	targetDocumentID := ""
+	if existing.ComponentKind == models.PlatformComponentDashboard || existing.ComponentKind == models.PlatformComponentEnsemble {
+		targetDocumentID = protocol.NewWorkloadIdentity().AppSPIFFEID(existing.ComponentName)
+	}
+	if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionRevoke, constants.PlatformEnrollmentIntentRevoke, &commonv1.PlatformEnrollmentGovernancePayload{
+		Action:           string(constants.PlatformEnrollmentActionRevoke),
+		Intent:           string(constants.PlatformEnrollmentIntentRevoke),
+		RequestId:        existing.ID,
+		ComponentKind:    payloadComponentKind(existing.ComponentKind),
+		ActorUserId:      actorUserID,
+		TargetDocumentId: targetDocumentID,
+		Reason:           strings.TrimSpace(req.Reason),
+	}); err != nil {
+		return nil, fmt.Errorf("platform enrollment: revoke envelope: %w", err)
+	}
+	updated, err := s.loadByID(existing.ID)
+	if err != nil {
+		return nil, err
+	}
+	if updated == nil || updated.State != models.PlatformEnrollmentStateRevoked {
+		return nil, constants.ErrPlatformEnrollmentInvalidState
+	}
+	return &models.PlatformEnrollmentRevokeResponse{RequestID: updated.ID, ComponentKind: updated.ComponentKind, State: updated.State}, nil
+}
+
 // ListPending returns owner-visible metadata for all pending, non-expired
 // platform enrollment requests. The response never includes token hashes,
 // CSR PEM, certificates, or raw tokens. The caller must be authenticated as
@@ -491,6 +548,9 @@ func (s *PlatformEnrollmentService) Complete(ctx context.Context, token string, 
 
 	case models.PlatformEnrollmentStateExpired:
 		return nil, constants.ErrPlatformEnrollmentRequestExpired
+
+	case models.PlatformEnrollmentStateRevoked:
+		return nil, constants.ErrPlatformEnrollmentRevoked
 
 	default:
 		return nil, constants.ErrPlatformEnrollmentInvalidState
@@ -955,6 +1015,8 @@ func (s *PlatformEnrollmentService) terminalError(state models.PlatformEnrollmen
 		return constants.ErrPlatformEnrollmentRequestDenied
 	case models.PlatformEnrollmentStateExpired:
 		return constants.ErrPlatformEnrollmentRequestExpired
+	case models.PlatformEnrollmentStateRevoked:
+		return constants.ErrPlatformEnrollmentRevoked
 	default:
 		return constants.ErrPlatformEnrollmentInvalidState
 	}

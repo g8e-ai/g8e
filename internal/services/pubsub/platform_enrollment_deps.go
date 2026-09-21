@@ -27,6 +27,8 @@ type PlatformEnrollmentDocStore interface {
 	DocSet(collection, id string, data json.RawMessage) error
 	DocGet(collection, id string) (*models.Document, error)
 	DocConditionalUpdate(collection, id string, setFields map[string]interface{}, conditionField string, conditionValue interface{}) (bool, error)
+	DocUpdate(collection, id string, data json.RawMessage) (*models.Document, error)
+	DocDelete(collection, id string) error
 }
 
 // PlatformEnrollmentPKI is the PKI subset required by the platform
@@ -38,6 +40,7 @@ type PlatformEnrollmentPKI interface {
 	SignPlatformAppCSR(csrPEM, appName, userID string) (certPEM, chainPEM string, err error)
 	SignCSR(csrPEM string, leafType string, organizationID, operatorID, userID, sessionID, gatewayID string) (certPEM, chainPEM string, err error)
 	GatewayTrustBundle() ([]byte, error)
+	RevokeCertificate(serial string, reason string) error
 }
 
 // PlatformEnrollmentCLISessions is the CLI-session subset required by the
@@ -45,6 +48,7 @@ type PlatformEnrollmentPKI interface {
 // gateway.CLISessionService.
 type PlatformEnrollmentCLISessions interface {
 	PersistCLISession(cliSessionID, operatorSessionID, userID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error
+	DeactivateCLISession(sessionID string) error
 }
 
 // PlatformEnrollmentOperatorSessions is the operator-session subset
@@ -52,6 +56,7 @@ type PlatformEnrollmentCLISessions interface {
 // gateway.OperatorSessionService.
 type PlatformEnrollmentOperatorSessions interface {
 	PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod string) error
+	DeactivateOperatorSession(operatorSessionID string) error
 }
 
 // PlatformEnrollmentDeps bundles the gateway-side dependencies required

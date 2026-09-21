@@ -14,10 +14,13 @@ import (
 	"net/http"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // OperatorController handles Operator lifecycle endpoints.
@@ -26,6 +29,7 @@ type OperatorController struct {
 	logger    *slog.Logger
 	reg       *RegistrationService
 	auth      *AuthService
+	dispatch  *DispatchService
 	responder *response.Writer
 }
 
@@ -35,6 +39,7 @@ type OperatorControllerDeps struct {
 	Logger    *slog.Logger
 	Reg       *RegistrationService
 	Auth      *AuthService
+	Dispatch  *DispatchService
 	Responder *response.Writer
 }
 
@@ -44,6 +49,7 @@ func newOperatorController(d OperatorControllerDeps) *OperatorController {
 		logger:    d.Logger,
 		reg:       d.Reg,
 		auth:      d.Auth,
+		dispatch:  d.Dispatch,
 		responder: d.Responder,
 	}
 }
@@ -111,6 +117,65 @@ func (c *OperatorController) handleListOperators(w http.ResponseWriter, r *http.
 		return
 	}
 	c.responder.JSON(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: operators})
+}
+
+func (c *OperatorController) handleStopOperator(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+	var req models.StopOperatorRequest
+	if err := json.Unmarshal(body, &req); err != nil || strings.TrimSpace(req.OperatorSessionID) == "" {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrGatewayOperatorSessionIDRequired.Error())
+		return
+	}
+	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+	op, err := c.auth.ValidateOperatorSession(req.OperatorSessionID)
+	if err != nil {
+		c.responder.Error(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	if op.UserID != userID {
+		c.responder.Error(w, http.StatusForbidden, constants.ErrRegistrationOperatorNotBelongToUser.Error())
+		return
+	}
+	if op.OperatorType == constants.OperatorTypeEmbedded {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrOperatorStopEmbedded.Error())
+		return
+	}
+	if op.OperatorType != constants.OperatorTypeRemote {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrOperatorStopNotRemote.Error())
+		return
+	}
+	payload, err := proto.Marshal(&operatorv1.ShutdownRequested{Reason: strings.TrimSpace(req.Reason)})
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrRequestMarshalFailed.Error())
+		return
+	}
+	result, err := c.dispatch.Dispatch(r.Context(), DispatchRequest{
+		TargetOperatorSessionID: req.OperatorSessionID,
+		ActionType:              string(constants.ActionTypeShutdown),
+		Payload:                 payload,
+		TargetResource:          op.ID,
+		RequestorUserID:         userID,
+	})
+	if err != nil {
+		c.logger.Warn("gateway: stop operator dispatch failed", "operator_id", op.ID, "operator_session_id", op.OperatorSessionID, "error", err)
+		c.responder.Error(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if err := c.reg.MarkOperatorStopped(op.ID, userID, req.Reason); err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, models.StopOperatorResponse{
+		Success: true, OperatorID: op.ID, OperatorSessionID: op.OperatorSessionID, TransactionID: result.TransactionID,
+	})
 }
 
 // POST /api/v1/operators/{id}/terminate
