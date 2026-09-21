@@ -293,7 +293,9 @@ func TestDispatchService_ShutdownPublishesReceiptThenAcknowledgementBeforeCancel
 	}()
 
 	cmdChannel := pubsub.CmdChannel(operatorID, sessionID)
-	require.Eventually(t, func() bool { return infra.Pubsub.ChannelSubscriberCount(cmdChannel) > 0 || handlerCount(infra.Pubsub, cmdChannel) > 0 }, time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool {
+		return infra.Pubsub.ChannelSubscriberCount(cmdChannel) > 0 || handlerCount(infra.Pubsub, cmdChannel) > 0
+	}, time.Second, 10*time.Millisecond)
 	payload, err := proto.Marshal(&operatorv1.ShutdownRequested{Reason: "planned maintenance"})
 	require.NoError(t, err)
 	dispatch := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
@@ -309,7 +311,7 @@ func TestDispatchService_ShutdownPublishesReceiptThenAcknowledgementBeforeCancel
 	assert.Equal(t, "planned maintenance", <-shutdownObserved)
 	require.Eventually(t, func() bool { return handlerCount(infra.Pubsub, cmdChannel) == 0 }, time.Second, 10*time.Millisecond)
 	orderMu.Lock()
-	assert.Equal(t, []string{"receipt", "result", "shutdown"}, order)
+	assert.Equal(t, []string{"receipt", "receipt", "result", "shutdown"}, order)
 	orderMu.Unlock()
 }
 

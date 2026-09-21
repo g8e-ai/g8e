@@ -239,6 +239,24 @@ Expect **two** remote Operators (data + inference) plus one embedded Gateway ope
 
 Session IDs change on every volume wipe. Rediscover them after any `docker compose down -v` or `./g8e docker clean`.
 
+### Stop or revoke an enrolled workload
+
+Use the Operator session ID from `./g8e operator list` for a reversible process stop:
+
+```bash
+./g8e operator stop <operator-session-id> --reason "planned maintenance"
+```
+
+The command targets one active remote Operator owned by the authenticated user. It waits for the Operator's governed shutdown acknowledgement before the Gateway records `stopped`; the embedded Gateway Operator is never a valid target. The workload retains its certificate-backed enrollment and can start again later with its existing credentials.
+
+Use the completed platform enrollment request ID for permanent identity revocation:
+
+```bash
+./g8e auth enroll revoke <request-id> --reason "host retired" --yes
+```
+
+Operator revocation invalidates the Operator and companion CLI certificates, deactivates their sessions, marks the Operator `terminated`, and disconnects established pub/sub connections. Dashboard or ensemble revocation invalidates the application certificate, removes its application policy, and disconnects established pub/sub connections. The workload must submit a new enrollment request and receive owner approval before it can authenticate again. Repeating the command for the same request is idempotent.
+
 ### Automated alternative
 
 ```bash

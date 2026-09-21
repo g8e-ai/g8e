@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-09-19
-Version: v2.1.9
+Last Updated: 2026-09-21
+Version: v2.1.11
 
 ## Overview
 
@@ -113,8 +113,9 @@ Browser-hosted frontend connection no longer uses a separate `auth enroll gui` c
 | `pending` | List pending platform workload enrollment requests |
 | `approve <request-id>` | Approve a pending request |
 | `deny <request-id>` | Deny a pending request |
+| `revoke <request-id>` | Revoke the identity issued by a completed request |
 
-`pending`, `approve`, and `deny` use the enrolled host CLI identity over mTLS. They accept request IDs only; requester tokens, CSRs, and certificates never pass through these commands. Both `approve` and `deny` support `--yes` for non-interactive automation and `--reason` for an optional bounded decision note. Use `--endpoint` and `--port` when the gateway HTTP and HTTPS ports are remapped.
+`pending`, `approve`, `deny`, and `revoke` use the enrolled host CLI identity over mTLS. They accept request IDs only; requester tokens, CSRs, and certificates never pass through these commands. Decision and revocation commands support `--yes` for non-interactive automation and `--reason` for an optional bounded note. `revoke` requires the active first owner, rejects requests that never completed, and returns success without repeating side effects when the request is already revoked. Use `--endpoint` and `--port` when the gateway HTTP and HTTPS ports are remapped.
 
 Bare `g8e auth enroll` prints help and exits non-zero. Select an explicit subcommand.
 
@@ -158,8 +159,11 @@ The workload enrollment flow is:
 4. The owner approves or denies the request. CLI approval uses `g8e auth enroll approve <request-id> --yes`; denial uses `g8e auth enroll deny <request-id> --yes`.
 5. After approval, the workload proves possession of every requested private key and receives its certificate, trust bundle, and session or application policy.
 6. A retry after successful completion returns the same issued identity rather than minting a second one.
+7. The active first owner can revoke the completed request by its request ID. Revocation records the actor, reason, timestamp, governance envelope, and receipt identifiers on the enrollment record.
 
-The operator, dashboard, and ensemble submit independent requests. Their recommended startup order is operational guidance, not an authorization dependency enforced by the gateway.
+For dashboard and ensemble identities, revocation invalidates the workload certificate, removes the application policy, and disconnects active pub/sub WebSockets authenticated as that application. For Operator identities, revocation invalidates the Operator and companion CLI certificates, deactivates both sessions, marks the Operator `terminated`, and disconnects active pub/sub WebSockets authenticated as either identity. New connections fail certificate and session validation immediately. An already-revoked request is idempotent; pending, approved, issuing, denied, and expired requests cannot be revoked as completed identities.
+
+The operator, dashboard, and ensemble submit independent requests. Their recommended startup order is operational guidance, not an authorization dependency enforced by the gateway. Platform enrollment revocation does not cover human CLI enrollment, delegated agent certificates, consensus signers, or gateway-peer identities; those identity classes use separate records and administrative lifecycles.
 
 ## Identity and Session Binding
 

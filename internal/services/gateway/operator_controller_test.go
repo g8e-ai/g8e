@@ -115,13 +115,18 @@ func TestOperatorController_HandleStopOperatorAuthorizationAndDelivery(t *testin
 		sessionID string
 	}{
 		{name: "missing target is rejected", sessionID: "missing-stop-session"},
-		{name: "offline target is rejected", sessionID: "stop-offline-session"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rr := stopOperatorRequest(t, controller, "stop-owner", tc.sessionID, "retired")
 			assert.Equal(t, http.StatusUnauthorized, rr.Code)
 		})
 	}
+
+	t.Run("offline target is rejected", func(t *testing.T) {
+		rr := stopOperatorRequest(t, controller, "stop-owner", "stop-offline-session", "retired")
+		assert.Equal(t, http.StatusConflict, rr.Code)
+		assert.Contains(t, rr.Body.String(), constants.ErrRegistrationOperatorNoActiveSession.Error())
+	})
 
 	t.Run("delivery failure leaves operator active", func(t *testing.T) {
 		rr := stopOperatorRequest(t, controller, "stop-owner", "stop-remote-session", "retired")

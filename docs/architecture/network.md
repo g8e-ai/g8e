@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-09-19
-Version: v2.1.9
+Last Updated: 2026-09-21
+Version: v2.1.11
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -42,7 +42,7 @@ All certificates (root, intermediates, serving, and leaves) use ECDSA P-256 for 
 
 ### Revocation
 
-Certificate revocation is enforced per-request during mTLS verification. A standard X.509 CRL signed by the Operator intermediate CA is served at `/.well-known/g8e/pki/crl` for external consumption.
+Certificate revocation is enforced during every new mTLS request and WebSocket handshake. A standard X.509 CRL signed by the Operator intermediate CA is served at `/.well-known/g8e/pki/crl` for external consumption. Governed platform enrollment revocation also disconnects established pub/sub WebSockets by their authenticated SPIFFE identity, so an Operator or application cannot retain an authenticated channel after its certificate is revoked.
 
 ---
 
@@ -129,8 +129,9 @@ Platform enrollment allows unenrolled workloads (dashboard, ensemble, operator) 
 - `POST /api/v1/auth/platform-enrollments/complete` is public (token-scoped with proof-of-possession), reachable over both plain HTTP and HTTPS.
 - `POST /api/v1/auth/platform-enrollments/pending` is HTTPS-only and requires owner authentication (web session cookie or mTLS CLI) so an existing owner can review pending enrollment requests via the Console SPA or CLI.
 - `POST /api/v1/auth/platform-enrollments/decision` is HTTPS-only and requires owner authentication (web session cookie or mTLS CLI); the controller enforces active-first-user authorization after the middleware stamps the user ID.
+- `POST /api/v1/auth/platform-enrollments/revoke` is HTTPS-only and requires owner authentication (web session cookie or mTLS CLI). It accepts the completed enrollment request ID, applies the governed revocation action, invalidates the issued identity and related sessions or policy, and disconnects active pub/sub channels for the revoked SPIFFE identity.
 
-The request, status, and complete endpoints are reachable over both plain HTTP and HTTPS so an unenrolled workload without a client certificate can initiate enrollment. The pending and decision endpoints are HTTPS-only because they require owner authentication, which is only available over TLS.
+The request, status, and complete endpoints are reachable over both plain HTTP and HTTPS so an unenrolled workload without a client certificate can initiate enrollment. The pending, decision, and revoke endpoints are HTTPS-only because they require owner authentication, which is only available over TLS.
 
 ### Cross-Gateway Enrollment
 
@@ -148,7 +149,7 @@ CLI-initiated passkey enrollment uses two HTTPS-only enrollment-token routes: a 
 
 ### Operator Command Dispatch Routes
 
-The command dispatch and operator session lookup endpoints are HTTPS- and mTLS-only. `POST /api/v1/operators/commands` accepts a typed `OperatorCommandRequest`, routes it through the governance pipeline, and returns a `DispatchResponse`. `GET /api/v1/operators/session/{id}` looks up an operator by session ID.
+The command dispatch and operator session lookup endpoints are HTTPS- and mTLS-only. `POST /api/v1/operators/commands` accepts a typed `OperatorCommandRequest`, routes it through the governance pipeline, and returns a `DispatchResponse`. `POST /api/v1/operators/stop` accepts an owner-scoped remote Operator session ID, dispatches a governed `SHUTDOWN` command to that exact session, waits for its correlated acknowledgement, and records the stopped state. `GET /api/v1/operators/session/{id}` looks up an operator by session ID.
 
 ### CLI Endpoint Override Flags
 

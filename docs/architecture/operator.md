@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-09-19
-Version: v2.1.9
+Last Updated: 2026-09-21
+Version: v2.1.11
 
 The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L2-L3 proofs and L1 validation results attached from the Gateway (PDP), re-verifies the L2 and L3 proofs and re-runs L1 doctrine validation locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -89,6 +89,24 @@ Each CLI session may carry a persisted `operator_session_id` and `operator_id` p
 `g8e operator run <operator-session-id> [operator-session-id...] --cmd "<shell command>"` fans out governed `EXECUTE_BASH` dispatches in parallel. For each target session the CLI posts to `POST /api/v1/operators/commands` with `target_operator_session_id`, the typed `CommandRequested` payload, and the caller's `cli_session_id`. The gateway's dispatch service is the single envelope-construction authority: it screens the payload with L1 Doctrine, applies posture-aware L3 gating for mutations, computes the transaction hash, publishes to the target operator's `cmd:` channel, and blocks until a terminal command result arrives. The CLI prints per-target stdout, stderr, exit code, and transaction ID. Every target must belong to the authenticated user and be `active`.
 
 `g8e operator list` shows operator ID, type, hostname, session ID, and status. `g8e operator show <operator-id-or-session-id>` returns operator metadata plus the latest heartbeat snapshot (system identity, resource metrics, capability flags, and runtime configuration).
+
+### Remote stop and identity revocation
+
+`g8e operator stop <operator-session-id>` performs a reversible process stop for one active remote Operator owned by the authenticated user. The Gateway resolves the exact session, rejects embedded and non-remote Operators, constructs a governed `SHUTDOWN` envelope, and publishes it only to that session's command channel. The Operator persists and publishes its dual execution receipts, publishes a correlated shutdown acknowledgement on its results channel, and then signals process cancellation. The Gateway marks the Operator `stopped` and records `--reason` only after acknowledgement arrives. Missing, inactive, offline, and undeliverable targets do not transition to `stopped`.
+
+`g8e auth enroll revoke <request-id>` permanently invalidates the workload identity issued by a completed platform enrollment. Operator revocation invalidates both the Operator and associated CLI certificates, deactivates both sessions, marks the Operator `terminated`, and disconnects every active pub/sub WebSocket carrying either revoked SPIFFE identity. Dashboard and ensemble revocation invalidates the application certificate, removes its application policy, and disconnects active pub/sub WebSockets for that application identity. Repeating revocation returns the existing `revoked` state without duplicating side effects.
+
+```mermaid
+stateDiagram-v2
+    [*] --> active: enrollment completed and connected
+    active --> stopped: governed SHUTDOWN acknowledged
+    stopped --> active: process starts with valid enrollment
+    active --> terminated: enrollment revoked
+    stopped --> terminated: enrollment revoked
+    terminated --> [*]
+```
+
+A stop retains certificate-backed enrollment and allows a later process start. Revocation is terminal for that enrollment request and requires a new owner-approved enrollment before the workload can authenticate again. The embedded Operator is neither remotely stoppable nor backed by a platform workload enrollment certificate.
 
 This path is distinct from MCP/A2A ingress, direct-envelope submission, and ensemble `CommandIntent` relay. It is the supported automation surface for owner-operated multi-host shell execution from an enrolled CLI.
 

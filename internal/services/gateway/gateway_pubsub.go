@@ -959,7 +959,20 @@ func (b *GatewayWebSocketHandler) DisconnectIdentity(spiffeID string) int {
 // Close disconnects all subscribers.
 func (b *GatewayWebSocketHandler) Close() {
 	b.mu.Lock()
-	seen := b.connections
+	seen := make(map[*wsSubscriber]struct{})
+	for sub := range b.connections {
+		seen[sub] = struct{}{}
+	}
+	for _, subscribers := range b.subscribers {
+		for sub := range subscribers {
+			seen[sub] = struct{}{}
+		}
+	}
+	for _, subscribers := range b.patternSubscribers {
+		for sub := range subscribers {
+			seen[sub] = struct{}{}
+		}
+	}
 	b.connections = make(map[*wsSubscriber]struct{})
 	b.subscribers = make(map[string]map[*wsSubscriber]struct{})
 	b.patternSubscribers = make(map[string]map[*wsSubscriber]struct{})
