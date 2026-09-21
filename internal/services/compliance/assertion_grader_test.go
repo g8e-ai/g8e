@@ -121,6 +121,51 @@ func TestGradeControlAssertions_FailsWhenRequiredGraderReportsFailure(t *testing
 	assert.NotEmpty(t, assessment.GetFailureReason())
 }
 
+func TestGradeControlAssertions_UnverifiableWhenMetricVerificationIsNotVerified(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	graph := assertionGraderGraph(t, now, 1)
+	for _, node := range graph.NodesByScope("scope-1") {
+		if node.ArtifactType == evidence.ArtifactTypeEvalMetric {
+			node.CanonicalBytes = []byte(`{"metric_id":"policy_outcome","metric_version":"1.0.0","value":1,"eligible":true,"verification_status":"unverified"}`)
+			digest := sha256.Sum256(node.CanonicalBytes)
+			node.SHA256 = hex.EncodeToString(digest[:])
+			node.ArtifactID = evidence.ContentAddress(node.ArtifactType, node.CanonicalBytes)
+		}
+	}
+	assessment := gradeAssertionTestGraph(t, graph, assertionGraderCatalog("unverifiable"), now)
+
+	assert.Equal(t, "unverifiable", assessment.GetStatus())
+	assert.Equal(t, "incomplete", assessment.GetFreshnessStatus())
+}
+
+func TestGradeControlAssertions_UnverifiableWhenMetricBodyIsMalformed(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	graph := assertionGraderGraph(t, now, 1)
+	for _, node := range graph.NodesByScope("scope-1") {
+		if node.ArtifactType == evidence.ArtifactTypeEvalMetric {
+			node.CanonicalBytes = []byte(`{"metric_id":`)
+			digest := sha256.Sum256(node.CanonicalBytes)
+			node.SHA256 = hex.EncodeToString(digest[:])
+			node.ArtifactID = evidence.ContentAddress(node.ArtifactType, node.CanonicalBytes)
+		}
+	}
+	assessment := gradeAssertionTestGraph(t, graph, assertionGraderCatalog("unverifiable"), now)
+
+	assert.Equal(t, "unverifiable", assessment.GetStatus())
+	assert.Equal(t, "incomplete", assessment.GetFreshnessStatus())
+}
+
+func TestGradeControlAssertions_MatchesPolicyOutcomeGraderToVerifiedReceipt(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	graph := evidence.NewEvidenceGraph(0, nil)
+	receipt := assertionGraderNode(evidence.ArtifactTypeActionReceipt, "gateway", []byte(`{"receipt":"verified"}`), now.Add(-time.Hour))
+	require.NoError(t, graph.AddNode(receipt))
+	assessment := gradeAssertionTestGraph(t, graph, assertionGraderCatalog("unverifiable"), now)
+
+	assert.Equal(t, "satisfied", assessment.GetStatus())
+	assert.Equal(t, "fresh", assessment.GetFreshnessStatus())
+}
+
 func TestGradeControlAssertions_IgnoresUnverifiedEvidence(t *testing.T) {
 	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
 	graph := assertionGraderGraph(t, now, 1)

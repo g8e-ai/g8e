@@ -79,8 +79,8 @@ service. KSI evaluation requires live audit, ledger, and commitment stores;
 when those are unavailable the report records the gap honestly rather than
 inventing a passing result.
 
-When --fail-closed is set, the command exits nonzero if any KSI is not
-satisfied, KSI evaluation is unavailable, or any demo run is invalid.`,
+When --fail-closed is set, the command exits nonzero if any KSI is non-passing,
+KSI evaluation is unavailable, or any demo run is invalid.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			if ctx == nil {
@@ -143,7 +143,7 @@ satisfied, KSI evaluation is unavailable, or any demo run is invalid.`,
 	cmd.Flags().StringVar(&catalogPath, "catalog", constants.DefaultKSICatalogPath, "Path to KSI catalog JSON file")
 	cmd.Flags().StringSliceVar(&demoRuns, "demo-run", nil, "Demo run ID to verify (repeatable; defaults to all persisted runs)")
 	cmd.Flags().StringVar(&projectRoot, "project-root", "", "Project root directory for demo provenance (defaults to cwd)")
-	cmd.Flags().BoolVar(&failClosed, "fail-closed", false, "Exit nonzero if any KSI is not satisfied or any demo run is invalid")
+	cmd.Flags().BoolVar(&failClosed, "fail-closed", false, "Exit nonzero if any KSI is non-passing or any demo run is invalid")
 	cmd.Flags().StringVar(&scopeID, "scope-id", "", "Assessment scope ID binding every KSI result to the declared context (required)")
 	cmd.Flags().StringVar(&runID, "run-id", "", "Assessment run ID binding every KSI result to the declared context (required)")
 	cmd.Flags().StringSliceVar(&assertionAssessmentIDs, "assertion-assessment-id", nil, "Assertion assessment ID consumed by the KSI evaluation (repeatable, required)")
@@ -266,6 +266,8 @@ func (r *releaseEvidenceReport) FailClosedReason() string {
 			// passing
 		case compliance.KSIStatusNotSatisfied:
 			return fmt.Sprintf("KSI %s is not satisfied", ksi.ID)
+		case compliance.KSIStatusUnverifiable:
+			return fmt.Sprintf("KSI %s is unverifiable", ksi.ID)
 		default:
 			return fmt.Sprintf("KSI %s has non-passing status: %s", ksi.ID, ksi.Status)
 		}
@@ -425,7 +427,7 @@ func renderReleaseEvidenceMarkdown(report *releaseEvidenceReport) string {
 	fmt.Fprintf(&b, "| Metric | Value |\n")
 	fmt.Fprintf(&b, "|--------|-------|\n")
 	ksiStatus := "unavailable"
-	ksiSatisfied, ksiNotSatisfied, ksiNotApplicable := 0, 0, 0
+	ksiSatisfied, ksiUnverifiable, ksiNotSatisfied, ksiNotApplicable := 0, 0, 0, 0
 	ksiTotal := 0
 	if report.KSISet != nil {
 		ksiStatus = "available"
@@ -434,6 +436,8 @@ func renderReleaseEvidenceMarkdown(report *releaseEvidenceReport) string {
 			switch r.Status {
 			case compliance.KSIStatusSatisfied:
 				ksiSatisfied++
+			case compliance.KSIStatusUnverifiable:
+				ksiUnverifiable++
 			case compliance.KSIStatusNotSatisfied:
 				ksiNotSatisfied++
 			case compliance.KSIStatusNotApplicable:
@@ -443,6 +447,7 @@ func renderReleaseEvidenceMarkdown(report *releaseEvidenceReport) string {
 	}
 	fmt.Fprintf(&b, "| KSI evaluation | %s |\n", ksiStatus)
 	fmt.Fprintf(&b, "| KSIs satisfied | %d / %d |\n", ksiSatisfied, ksiTotal)
+	fmt.Fprintf(&b, "| KSIs unverifiable | %d |\n", ksiUnverifiable)
 	fmt.Fprintf(&b, "| KSIs not satisfied | %d |\n", ksiNotSatisfied)
 	fmt.Fprintf(&b, "| KSIs not applicable | %d |\n", ksiNotApplicable)
 	fmt.Fprintf(&b, "| KSI history snapshots | %s |\n", historySnapshotSummary(report.KSIHistory))

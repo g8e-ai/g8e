@@ -364,7 +364,8 @@ func TestComplianceKSICmd_Success_OutputsJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &resultSet))
 	assert.Equal(t, compliance.ClassC, resultSet.Class)
 	assert.NotEmpty(t, resultSet.Results)
-	assert.Equal(t, 2, resultSet.NotSatisfiedCount())
+	assert.Zero(t, resultSet.NotSatisfiedCount())
+	assert.Equal(t, 2, resultSet.UnverifiableCount())
 	assert.Equal(t, "test-scope", resultSet.Binding.ScopeID)
 	assert.Equal(t, "test-run", resultSet.Binding.RunID)
 
@@ -375,7 +376,7 @@ func TestComplianceKSICmd_Success_OutputsJSON(t *testing.T) {
 	assert.Len(t, snapshots, 1)
 	intervals, err := newKSIUnavailableIntervalStore(fileSvc).ListIntervals(context.Background())
 	require.NoError(t, err)
-	assert.Len(t, intervals, resultSet.NotSatisfiedCount())
+	assert.Len(t, intervals, resultSet.UnverifiableCount())
 	for _, interval := range intervals {
 		assert.Equal(t, resultSet.Binding.ScopeID, interval.ScopeID)
 		assert.Equal(t, resultSet.Binding.RunID, interval.RunID)
@@ -729,7 +730,8 @@ func TestEvaluateKSIs_NilContextHandling(t *testing.T) {
 	resultSet := evaluateKSIs(nilCtx, fileSvc, cat, compliance.ClassC, binding)
 	require.NotNil(t, resultSet)
 	assert.Equal(t, compliance.ClassC, resultSet.Class)
-	assert.Equal(t, 2, resultSet.NotSatisfiedCount())
+	assert.Zero(t, resultSet.NotSatisfiedCount())
+	assert.Equal(t, 2, resultSet.UnverifiableCount())
 }
 
 // TestSaveKSIHistorySnapshot_NilResultSetReturnsError asserts error when saving nil result set.

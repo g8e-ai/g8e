@@ -231,6 +231,16 @@ func matchingNodes(nodes []*EvidenceNode, matches func(*EvidenceNode) bool) []*E
 }
 
 func matchingGraderNodes(nodes []*EvidenceNode, required *compliancev1.VersionedReference) ([]*EvidenceNode, bool) {
+	graderNodes := make([]*EvidenceNode, 0)
+	key := versionedReferenceKey(required.GetId(), required.GetVersion())
+	for _, node := range nodes {
+		if node.ProducerIdentity == key && (node.ArtifactType == ArtifactTypeEvalMetric || node.ArtifactType == ArtifactTypeDemoMetric) {
+			graderNodes = append(graderNodes, node)
+		}
+	}
+	if len(graderNodes) > 0 {
+		nodes = graderNodes
+	}
 	result := make([]*EvidenceNode, 0)
 	passed := true
 	for _, node := range nodes {
@@ -302,6 +312,8 @@ func nodeMatchesGrader(node *EvidenceNode, required *compliancev1.VersionedRefer
 		return metricNodePassed(node, required)
 	}
 	switch required.GetId() {
+	case "policy_outcome":
+		return nodeMatchesVerifier(node, &compliancev1.VersionedReference{Id: "receipt_integrity", Version: required.GetVersion()}), true
 	case "receipt_integrity":
 		return nodeMatchesVerifier(node, &compliancev1.VersionedReference{Id: "receipt_integrity", Version: required.GetVersion()}), true
 	case "receipt_persistence":
@@ -324,7 +336,7 @@ func nodeMatchesGrader(node *EvidenceNode, required *compliancev1.VersionedRefer
 func metricNodePassed(node *EvidenceNode, required *compliancev1.VersionedReference) (bool, bool) {
 	metric := metricResult{}
 	if err := json.Unmarshal(node.CanonicalBytes, &metric); err != nil {
-		return true, false
+		return false, false
 	}
 	if metric.GraderRef != nil && (metric.GraderRef.GetId() != required.GetId() || metric.GraderRef.GetVersion() != required.GetVersion()) {
 		return false, false
@@ -333,10 +345,10 @@ func metricNodePassed(node *EvidenceNode, required *compliancev1.VersionedRefere
 		return false, false
 	}
 	if metric.VerificationStatus != "" && metric.VerificationStatus != string(VerificationStatusVerified) {
-		return true, false
+		return false, false
 	}
 	if metric.Eligible != nil && !*metric.Eligible {
-		return true, false
+		return false, false
 	}
 	if metric.Passed != nil {
 		return true, *metric.Passed

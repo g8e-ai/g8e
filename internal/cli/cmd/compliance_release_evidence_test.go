@@ -97,6 +97,7 @@ func TestComplianceReleaseEvidenceCmdWithConfig_RejectsEachMissingEvaluationBind
 func TestReleaseEvidenceReport_OverallPassing(t *testing.T) {
 	satisfied := compliance.KSIResult{ID: "KSI-CMT-01", Status: compliance.KSIStatusSatisfied, MethodCount: 2}
 	notSatisfied := compliance.KSIResult{ID: "KSI-IAM-05", Status: compliance.KSIStatusNotSatisfied}
+	unverifiable := compliance.KSIResult{ID: "KSI-CED-01", Status: compliance.KSIStatusUnverifiable}
 	notApplicable := compliance.KSIResult{ID: "KSI-TPR-02", Status: compliance.KSIStatusNotApplicable}
 	unknownStatus := compliance.KSIResult{ID: "KSI-UNK-01", Status: "unknown_status"}
 	validDemo := &demoRunSummary{RunID: "run-1", Report: &compliancev1.ComplianceVerificationReport{Valid: true}}
@@ -119,6 +120,12 @@ func TestReleaseEvidenceReport_OverallPassing(t *testing.T) {
 			report:   &releaseEvidenceReport{KSISet: &compliance.KSIResultSet{Results: []compliance.KSIResult{satisfied, notSatisfied}}},
 			passing:  false,
 			reasonRe: "KSI KSI-IAM-05 is not satisfied",
+		},
+		{
+			name:     "ksi unverifiable",
+			report:   &releaseEvidenceReport{KSISet: &compliance.KSIResultSet{Results: []compliance.KSIResult{satisfied, unverifiable}}},
+			passing:  false,
+			reasonRe: "KSI KSI-CED-01 is unverifiable",
 		},
 		{
 			name:     "ksi unknown status",
@@ -209,6 +216,29 @@ func TestRenderReleaseEvidenceMarkdown_KSIUnavailableAndDemoRun(t *testing.T) {
 
 // TestRenderReleaseEvidenceMarkdown_KSISatisfied verifies the markdown renderer
 // renders the KSI evaluation table when KSIs are available.
+func TestRenderReleaseEvidenceMarkdown_DistinguishesUnverifiableFromNotSatisfied(t *testing.T) {
+	report := &releaseEvidenceReport{
+		ReleaseVersion: "v2.1.11",
+		GeneratedAt:    time.Unix(1_700_000_000, 0).UTC(),
+		CertClass:      "C",
+		CatalogPath:    constants.DefaultKSICatalogPath,
+		KSISet: &compliance.KSIResultSet{
+			Class:         compliance.ClassC,
+			EvaluatedAtMs: 1_700_000_000_000,
+			Results: []compliance.KSIResult{
+				{ID: "KSI-CED-01", Status: compliance.KSIStatusUnverifiable},
+				{ID: "KSI-CMT-01", Status: compliance.KSIStatusNotSatisfied},
+			},
+		},
+	}
+
+	md := renderReleaseEvidenceMarkdown(report)
+	assert.Contains(t, md, "| KSIs unverifiable | 1 |")
+	assert.Contains(t, md, "| KSIs not satisfied | 1 |")
+	assert.Contains(t, md, "| KSI-CED-01 | unverifiable |")
+	assert.Contains(t, md, "| KSI-CMT-01 | not_satisfied |")
+}
+
 func TestRenderReleaseEvidenceMarkdown_KSISatisfied(t *testing.T) {
 	report := &releaseEvidenceReport{
 		ReleaseVersion: "v2.1.3",
@@ -277,6 +307,23 @@ func TestRenderReleaseEvidenceCSV_Rows(t *testing.T) {
 
 // TestRenderReleaseEvidenceCSV_KSIUnavailable verifies the CSV records a KSI
 // unavailable row when KSI evaluation could not run.
+func TestRenderReleaseEvidenceCSV_EmitsUnverifiableStatus(t *testing.T) {
+	report := &releaseEvidenceReport{
+		GeneratedAt: time.Unix(1_700_000_000, 0).UTC(),
+		KSISet: &compliance.KSIResultSet{
+			EvaluatedAtMs: 1_700_000_000_000,
+			Results:       []compliance.KSIResult{{ID: "KSI-CED-01", Status: compliance.KSIStatusUnverifiable}},
+		},
+	}
+
+	csvBytes, err := renderReleaseEvidenceCSV(report)
+	require.NoError(t, err)
+	records, err := csv.NewReader(strings.NewReader(string(csvBytes))).ReadAll()
+	require.NoError(t, err)
+	require.Len(t, records, 2)
+	assert.Equal(t, "unverifiable", records[1][2])
+}
+
 func TestRenderReleaseEvidenceCSV_KSIUnavailable(t *testing.T) {
 	report := &releaseEvidenceReport{
 		ReleaseVersion: "v2.1.3",
@@ -430,7 +477,7 @@ func TestComplianceReleaseEvidenceCmdWithConfig_GeneratesReportWithDemoRun(t *te
 	require.Len(t, records, 4)
 	assert.Equal(t, "evidence_type", records[0][0])
 	assert.Equal(t, "ksi", records[1][0])
-	assert.Equal(t, "not_satisfied", records[1][2])
+	assert.Equal(t, "unverifiable", records[1][2])
 	assert.Equal(t, "ksi", records[2][0])
 	assert.Equal(t, "demo-run", records[3][0])
 	assert.Equal(t, runID, records[3][1])

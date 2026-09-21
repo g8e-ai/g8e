@@ -127,7 +127,7 @@ func (e *KSIEvaluator) RegisterMethods(ksiID string, methods ...KSIMethod) error
 
 // RegisterDefaultMethods registers g8e's built-in automated methods for all
 // KSIs that g8e can evaluate. KSIs without automatable methods are left
-// unregistered and will fail-closed during Evaluate if the class requires
+// unregistered and will be unverifiable during Evaluate if the class requires
 // automated methods.
 func (e *KSIEvaluator) RegisterDefaultMethods(deps EvaluatorDeps) error {
 	if e.catalog == nil {
@@ -154,13 +154,13 @@ func (e *KSIEvaluator) MethodCount(ksiID string) int {
 //
 //  1. Runs all registered methods, collecting evidence.
 //  2. A KSI is satisfied only if ALL methods return true.
-//  3. Fails-closed (not_satisfied) if the method count is below the class
+//  3. Marks the result unverifiable if the method count is below the class
 //     minimum (Class C: >=2, Class B: >=1).
-//  4. Fails-closed if any method returns an error.
+//  4. Marks the result not_satisfied if an executed method returns an error.
 //  5. Marks not_applicable if the KSI has no applicable classes for the
 //     target class (should not occur if KSIsForClass is used).
 //  6. Checks staleness: a KSI whose LastValidatedUnixMs exceeds its validation
-//     cycle is marked not_satisfied regardless of method results.
+//     cycle is marked unverifiable regardless of method results.
 //  7. Stamps every result and evidence reference with the binding scope, run,
 //     and evidence window so consumers can prove no result was produced from
 //     evidence outside the declared assessment context.
@@ -299,6 +299,16 @@ func (r *KSIResultSet) NotSatisfiedCount() int {
 	return count
 }
 
+func (r *KSIResultSet) UnverifiableCount() int {
+	count := 0
+	for _, res := range r.Results {
+		if res.Status == KSIStatusUnverifiable {
+			count++
+		}
+	}
+	return count
+}
+
 // Validate checks that the result set is internally consistent: all KSI IDs
 // reference KSIs in the catalog, the result set is non-empty for a non-trivial
 // class, the result-set binding is populated, every result binding matches the
@@ -381,7 +391,7 @@ func validSHA256(value string) bool {
 // DefaultMethods returns g8e's built-in automated KSIMethod closures for
 // KSIs that g8e can evaluate from its audit store, ledger, and commitment
 // ledger. KSIs not automatable by g8e (e.g. training-related CED KSIs) are
-// omitted and will fail-closed during evaluation if the class requires
+// omitted and will be unverifiable during evaluation if the class requires
 // automated methods.
 func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 	methods := make(map[string][]KSIMethod)

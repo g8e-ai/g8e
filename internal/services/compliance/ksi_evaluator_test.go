@@ -387,7 +387,7 @@ func TestKSIEvaluator_Evaluate_AllSatisfied(t *testing.T) {
 }
 
 // TestKSIEvaluator_Evaluate_InsufficientMethods_FailClosed verifies that KSIs
-// with fewer than the minimum required methods for Class C are marked not_satisfied.
+// with fewer than the minimum required methods for Class C are unverifiable.
 func TestKSIEvaluator_Evaluate_InsufficientMethods_FailClosed(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
@@ -399,12 +399,12 @@ func TestKSIEvaluator_Evaluate_InsufficientMethods_FailClosed(t *testing.T) {
 	// KSI-CED-01 has 0 methods (not automatable by g8e), should fail-closed
 	for _, res := range result.Results {
 		if res.ID == "KSI-CED-01" {
-			assert.Equal(t, KSIStatusNotSatisfied, res.Status,
-				"KSI-CED-01 should fail-closed with 0 methods for Class C")
+			assert.Equal(t, KSIStatusUnverifiable, res.Status,
+				"KSI-CED-01 should be unverifiable with 0 methods for Class C")
 			assert.Equal(t, 0, res.MethodCount)
 		}
 	}
-	assert.True(t, result.HasFailures(), "Result set should have failures due to KSI-CED-01")
+	assert.False(t, result.HasFailures(), "Unverifiable KSIs are not measured control failures")
 }
 
 // TestKSIEvaluator_Evaluate_StaleKSI_FailClosed verifies that a stale KSI
@@ -428,8 +428,8 @@ func TestKSIEvaluator_Evaluate_StaleKSI_FailClosed(t *testing.T) {
 
 	for _, res := range result.Results {
 		if res.ID == "KSI-CMT-01" {
-			assert.Equal(t, KSIStatusNotSatisfied, res.Status,
-				"Stale KSI-CMT-01 should be not_satisfied despite having methods")
+			assert.Equal(t, KSIStatusUnverifiable, res.Status,
+				"Stale KSI-CMT-01 should be unverifiable despite having methods")
 			assert.Equal(t, KSIOutcomeStaleEvidence, res.Outcome)
 		}
 	}
@@ -481,8 +481,8 @@ func TestKSIEvaluator_Evaluate_MethodReturnsFalse_FailClosed(t *testing.T) {
 
 	for _, res := range result.Results {
 		if res.ID == "KSI-CMT-01" {
-			assert.Equal(t, KSIStatusNotSatisfied, res.Status,
-				"KSI with a false method result should be not_satisfied")
+			assert.Equal(t, KSIStatusUnverifiable, res.Status,
+				"KSI with invalid evidence should be unverifiable")
 		}
 	}
 }
@@ -492,6 +492,7 @@ func TestKSIEvaluator_Evaluate_SeparatesDetailedOutcomes(t *testing.T) {
 		name        string
 		configure   func(*KSICatalog, *KSIEvaluator)
 		wantOutcome KSIOutcome
+		wantStatus  KSIStatus
 	}{
 		{
 			name: "method execution failure",
@@ -502,6 +503,7 @@ func TestKSIEvaluator_Evaluate_SeparatesDetailedOutcomes(t *testing.T) {
 				require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
 			},
 			wantOutcome: KSIOutcomeMethodFailure,
+			wantStatus:  KSIStatusNotSatisfied,
 		},
 		{
 			name: "invalid evidence",
@@ -512,6 +514,7 @@ func TestKSIEvaluator_Evaluate_SeparatesDetailedOutcomes(t *testing.T) {
 				require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
 			},
 			wantOutcome: KSIOutcomeInvalidEvidence,
+			wantStatus:  KSIStatusUnverifiable,
 		},
 		{
 			name: "stale evidence",
@@ -523,11 +526,13 @@ func TestKSIEvaluator_Evaluate_SeparatesDetailedOutcomes(t *testing.T) {
 				require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
 			},
 			wantOutcome: KSIOutcomeStaleEvidence,
+			wantStatus:  KSIStatusUnverifiable,
 		},
 		{
 			name:        "unsupported automation",
 			configure:   func(_ *KSICatalog, _ *KSIEvaluator) {},
 			wantOutcome: KSIOutcomeUnsupportedAutomation,
+			wantStatus:  KSIStatusUnverifiable,
 		},
 		{
 			name: "customer attestation required",
@@ -539,6 +544,7 @@ func TestKSIEvaluator_Evaluate_SeparatesDetailedOutcomes(t *testing.T) {
 				require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
 			},
 			wantOutcome: KSIOutcomeCustomerAttestationRequired,
+			wantStatus:  KSIStatusUnverifiable,
 		},
 	}
 
@@ -551,7 +557,7 @@ func TestKSIEvaluator_Evaluate_SeparatesDetailedOutcomes(t *testing.T) {
 			resultSet, err := evaluator.Evaluate(context.Background(), ClassB, testBinding(t))
 			require.NoError(t, err)
 			result := findKSIResult(t, resultSet, "KSI-CMT-01")
-			assert.Equal(t, KSIStatusNotSatisfied, result.Status)
+			assert.Equal(t, tt.wantStatus, result.Status)
 			assert.Equal(t, tt.wantOutcome, result.Outcome)
 		})
 	}
@@ -580,8 +586,8 @@ func TestKSIEvaluator_Evaluate_NilDeps_FailClosed(t *testing.T) {
 
 	for _, res := range result.Results {
 		if res.MethodCount >= 2 {
-			assert.Equal(t, KSIStatusNotSatisfied, res.Status,
-				"KSI %s should fail-closed with nil deps", res.ID)
+			assert.Equal(t, KSIStatusUnverifiable, res.Status,
+				"KSI %s should be unverifiable with nil deps", res.ID)
 		}
 	}
 }
@@ -604,11 +610,11 @@ func TestKSIEvaluator_Evaluate_EmptyStores_FailClosed(t *testing.T) {
 
 	for _, res := range result.Results {
 		if res.MethodCount >= 2 {
-			assert.Equal(t, KSIStatusNotSatisfied, res.Status,
-				"KSI %s should be not_satisfied with empty stores", res.ID)
+			assert.Equal(t, KSIStatusUnverifiable, res.Status,
+				"KSI %s should be unverifiable with empty stores", res.ID)
 		}
 	}
-	assert.True(t, result.HasFailures())
+	assert.False(t, result.HasFailures())
 }
 
 // TestKSIEvaluator_Evaluate_ClassB_LowerThreshold verifies that Class B
@@ -902,7 +908,7 @@ func TestKSIEvaluatorEvaluateFailsClosedOnEvidenceOutsideAssertionAssessmentScop
 	require.NoError(t, err)
 	result := findKSIResult(t, resultSet, "KSI-CMT-01")
 	assert.Equal(t, KSIOutcomeInvalidEvidence, result.Outcome)
-	assert.Equal(t, KSIStatusNotSatisfied, result.Status)
+	assert.Equal(t, KSIStatusUnverifiable, result.Status)
 }
 
 // TestDefaultMethods_CommitmentChainIntact verifies that the commitment chain
@@ -1025,7 +1031,7 @@ func TestKSIEvaluator_Evaluate_FullIntegration(t *testing.T) {
 }
 
 // TestKSIEvaluator_Evaluate_NoMethodsRegistered verifies that evaluating
-// without registering any methods produces all not_satisfied results for
+// without registering any methods produces all unverifiable results for
 // Class C (fail-closed on method count).
 func TestKSIEvaluator_Evaluate_NoMethodsRegistered(t *testing.T) {
 	catalog := testCatalog()
@@ -1035,12 +1041,13 @@ func TestKSIEvaluator_Evaluate_NoMethodsRegistered(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
-		assert.Equal(t, KSIStatusNotSatisfied, res.Status,
-			"KSI %s should be not_satisfied with 0 methods for Class C", res.ID)
+		assert.Equal(t, KSIStatusUnverifiable, res.Status,
+			"KSI %s should be unverifiable with 0 methods for Class C", res.ID)
 		assert.Equal(t, 0, res.MethodCount)
 	}
-	assert.Equal(t, 4, result.NotSatisfiedCount())
-	assert.Equal(t, 0, result.SatisfiedCount())
+	assert.Zero(t, result.NotSatisfiedCount())
+	assert.Equal(t, 4, result.UnverifiableCount())
+	assert.Zero(t, result.SatisfiedCount())
 }
 
 // TestKSIEvaluator_Evaluate_StorageError_FailClosed verifies that storage
@@ -1049,23 +1056,21 @@ func TestKSIEvaluator_Evaluate_StorageError_FailClosed(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
 
+	storageErr := fmt.Errorf("database unavailable")
 	deps := EvaluatorDeps{
-		Audit: &mockAuditReader{
-			receiptsErr: fmt.Errorf("database unavailable"),
-		},
-		Ledger:      &mockLedgerReader{merkleRoot: "abc123", commits: []storage.LedgerCommit{{CommitHash: "c1"}}},
-		Commitments: &mockCommitmentReader{commitments: []*storage.CommitmentRow{{Hash: "h1"}}},
+		Audit:       &mockAuditReader{eventsErr: storageErr},
+		Ledger:      &mockLedgerReader{merkleRootErr: storageErr, commitsErr: storageErr},
+		Commitments: &mockCommitmentReader{commitmentsErr: storageErr},
 	}
 	require.NoError(t, eval.RegisterDefaultMethods(deps))
 
 	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
-	// KSIs that depend on audit store should be not_satisfied due to error
 	for _, res := range result.Results {
-		if res.ID == "KSI-CMT-01" || res.ID == "KSI-MLA-03" || res.ID == "KSI-IAM-05" {
+		if res.ID == "KSI-CMT-01" || res.ID == "KSI-MLA-07" || res.ID == "KSI-SVC-05" {
 			assert.Equal(t, KSIStatusNotSatisfied, res.Status,
-				"KSI %s should be not_satisfied due to audit store error", res.ID)
+				"KSI %s should be not_satisfied after an executed method error", res.ID)
 		}
 	}
 }

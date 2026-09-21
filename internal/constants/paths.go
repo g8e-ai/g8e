@@ -693,6 +693,7 @@ const (
 	ReceiptEvidenceVerifierVersion                = "1.0.0"
 	ActionReceiptReferencePrefix                  = "action-receipt"
 	ReceiptPersistenceReferencePrefix             = "receipt-persistence"
+	DeterministicStagesReferencePrefix            = "deterministic-stages"
 	AuditRecordReferencePrefix                    = "audit-record"
 	AuditRecordsDirname                           = "audit-records"
 	CommitmentReferencePrefix                     = "commitment"
@@ -749,6 +750,7 @@ const (
 	EvalEncryptedEvidenceVersion                  = 1
 	EvalEncryptedEvidenceNonceBytes               = 12
 	MediaTypeJSON                                 = "application/json"
+	MediaTypeOctetStream                          = "application/octet-stream"
 	MediaTypeOSCALJSON                            = "application/oscal+json"
 	MediaTypeMarkdown                             = "text/markdown; charset=utf-8"
 	MediaTypeHTML                                 = "text/html; charset=utf-8"
