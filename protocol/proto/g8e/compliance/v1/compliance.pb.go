@@ -29,6 +29,55 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type AssessmentWitnessPolicy int32
+
+const (
+	AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_UNSPECIFIED AssessmentWitnessPolicy = 0
+	AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_INTERIM     AssessmentWitnessPolicy = 1
+	AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT      AssessmentWitnessPolicy = 2
+)
+
+// Enum value maps for AssessmentWitnessPolicy.
+var (
+	AssessmentWitnessPolicy_name = map[int32]string{
+		0: "ASSESSMENT_WITNESS_POLICY_UNSPECIFIED",
+		1: "ASSESSMENT_WITNESS_POLICY_INTERIM",
+		2: "ASSESSMENT_WITNESS_POLICY_STRICT",
+	}
+	AssessmentWitnessPolicy_value = map[string]int32{
+		"ASSESSMENT_WITNESS_POLICY_UNSPECIFIED": 0,
+		"ASSESSMENT_WITNESS_POLICY_INTERIM":     1,
+		"ASSESSMENT_WITNESS_POLICY_STRICT":      2,
+	}
+)
+
+func (x AssessmentWitnessPolicy) Enum() *AssessmentWitnessPolicy {
+	p := new(AssessmentWitnessPolicy)
+	*p = x
+	return p
+}
+
+func (x AssessmentWitnessPolicy) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AssessmentWitnessPolicy) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_compliance_v1_compliance_proto_enumTypes[0].Descriptor()
+}
+
+func (AssessmentWitnessPolicy) Type() protoreflect.EnumType {
+	return &file_g8e_compliance_v1_compliance_proto_enumTypes[0]
+}
+
+func (x AssessmentWitnessPolicy) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AssessmentWitnessPolicy.Descriptor instead.
+func (AssessmentWitnessPolicy) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{0}
+}
+
 type VerificationCheckStatus int32
 
 const (
@@ -62,11 +111,11 @@ func (x VerificationCheckStatus) String() string {
 }
 
 func (VerificationCheckStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_compliance_v1_compliance_proto_enumTypes[0].Descriptor()
+	return file_g8e_compliance_v1_compliance_proto_enumTypes[1].Descriptor()
 }
 
 func (VerificationCheckStatus) Type() protoreflect.EnumType {
-	return &file_g8e_compliance_v1_compliance_proto_enumTypes[0]
+	return &file_g8e_compliance_v1_compliance_proto_enumTypes[1]
 }
 
 func (x VerificationCheckStatus) Number() protoreflect.EnumNumber {
@@ -75,7 +124,7 @@ func (x VerificationCheckStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use VerificationCheckStatus.Descriptor instead.
 func (VerificationCheckStatus) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{0}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{1}
 }
 
 type VersionedReference struct {
@@ -959,20 +1008,22 @@ func (x *ComponentInventoryEntry) GetDigest() string {
 }
 
 type AssessmentSourceAdmission struct {
-	state                    protoimpl.MessageState `protogen:"open.v1"`
-	AdmissionId              string                 `protobuf:"bytes,1,opt,name=admission_id,json=admissionId,proto3" json:"admission_id,omitempty"`
-	SourceKind               string                 `protobuf:"bytes,2,opt,name=source_kind,json=sourceKind,proto3" json:"source_kind,omitempty"`
-	SourceVersion            string                 `protobuf:"bytes,3,opt,name=source_version,json=sourceVersion,proto3" json:"source_version,omitempty"`
-	SourceScopeId            string                 `protobuf:"bytes,4,opt,name=source_scope_id,json=sourceScopeId,proto3" json:"source_scope_id,omitempty"`
-	OwnerRuntimeBoundary     string                 `protobuf:"bytes,5,opt,name=owner_runtime_boundary,json=ownerRuntimeBoundary,proto3" json:"owner_runtime_boundary,omitempty"`
-	AcquisitionBoundary      string                 `protobuf:"bytes,6,opt,name=acquisition_boundary,json=acquisitionBoundary,proto3" json:"acquisition_boundary,omitempty"`
-	RunId                    string                 `protobuf:"bytes,7,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
-	SnapshotId               string                 `protobuf:"bytes,8,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"`
-	ArtifactIds              []string               `protobuf:"bytes,9,rep,name=artifact_ids,json=artifactIds,proto3" json:"artifact_ids,omitempty"`
-	VerifierRef              *VersionedReference    `protobuf:"bytes,10,opt,name=verifier_ref,json=verifierRef,proto3" json:"verifier_ref,omitempty"`
-	DisclosureClassification string                 `protobuf:"bytes,11,opt,name=disclosure_classification,json=disclosureClassification,proto3" json:"disclosure_classification,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	state                     protoimpl.MessageState  `protogen:"open.v1"`
+	AdmissionId               string                  `protobuf:"bytes,1,opt,name=admission_id,json=admissionId,proto3" json:"admission_id,omitempty"`
+	SourceKind                string                  `protobuf:"bytes,2,opt,name=source_kind,json=sourceKind,proto3" json:"source_kind,omitempty"`
+	SourceVersion             string                  `protobuf:"bytes,3,opt,name=source_version,json=sourceVersion,proto3" json:"source_version,omitempty"`
+	SourceScopeId             string                  `protobuf:"bytes,4,opt,name=source_scope_id,json=sourceScopeId,proto3" json:"source_scope_id,omitempty"`
+	OwnerRuntimeBoundary      string                  `protobuf:"bytes,5,opt,name=owner_runtime_boundary,json=ownerRuntimeBoundary,proto3" json:"owner_runtime_boundary,omitempty"`
+	AcquisitionBoundary       string                  `protobuf:"bytes,6,opt,name=acquisition_boundary,json=acquisitionBoundary,proto3" json:"acquisition_boundary,omitempty"`
+	RunId                     string                  `protobuf:"bytes,7,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	SnapshotId                string                  `protobuf:"bytes,8,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"`
+	ArtifactIds               []string                `protobuf:"bytes,9,rep,name=artifact_ids,json=artifactIds,proto3" json:"artifact_ids,omitempty"`
+	VerifierRef               *VersionedReference     `protobuf:"bytes,10,opt,name=verifier_ref,json=verifierRef,proto3" json:"verifier_ref,omitempty"`
+	DisclosureClassification  string                  `protobuf:"bytes,11,opt,name=disclosure_classification,json=disclosureClassification,proto3" json:"disclosure_classification,omitempty"`
+	ProviderObservationPolicy AssessmentWitnessPolicy `protobuf:"varint,12,opt,name=provider_observation_policy,json=providerObservationPolicy,proto3,enum=g8e.compliance.v1.AssessmentWitnessPolicy" json:"provider_observation_policy,omitempty"`
+	ModelProvenancePolicy     AssessmentWitnessPolicy `protobuf:"varint,13,opt,name=model_provenance_policy,json=modelProvenancePolicy,proto3,enum=g8e.compliance.v1.AssessmentWitnessPolicy" json:"model_provenance_policy,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *AssessmentSourceAdmission) Reset() {
@@ -1080,6 +1131,20 @@ func (x *AssessmentSourceAdmission) GetDisclosureClassification() string {
 		return x.DisclosureClassification
 	}
 	return ""
+}
+
+func (x *AssessmentSourceAdmission) GetProviderObservationPolicy() AssessmentWitnessPolicy {
+	if x != nil {
+		return x.ProviderObservationPolicy
+	}
+	return AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_UNSPECIFIED
+}
+
+func (x *AssessmentSourceAdmission) GetModelProvenancePolicy() AssessmentWitnessPolicy {
+	if x != nil {
+		return x.ModelProvenancePolicy
+	}
+	return AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_UNSPECIFIED
 }
 
 type AssessmentApplicabilitySelection struct {
@@ -5391,7 +5456,7 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\fcomponent_id\x18\x01 \x01(\tR\vcomponentId\x12%\n" +
 	"\x0ecomponent_type\x18\x02 \x01(\tR\rcomponentType\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\tR\aversion\x12\x16\n" +
-	"\x06digest\x18\x04 \x01(\tR\x06digest\"\xf9\x03\n" +
+	"\x06digest\x18\x04 \x01(\tR\x06digest\"\xc9\x05\n" +
 	"\x19AssessmentSourceAdmission\x12!\n" +
 	"\fadmission_id\x18\x01 \x01(\tR\vadmissionId\x12\x1f\n" +
 	"\vsource_kind\x18\x02 \x01(\tR\n" +
@@ -5406,7 +5471,9 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\fartifact_ids\x18\t \x03(\tR\vartifactIds\x12H\n" +
 	"\fverifier_ref\x18\n" +
 	" \x01(\v2%.g8e.compliance.v1.VersionedReferenceR\vverifierRef\x12;\n" +
-	"\x19disclosure_classification\x18\v \x01(\tR\x18disclosureClassification\"}\n" +
+	"\x19disclosure_classification\x18\v \x01(\tR\x18disclosureClassification\x12j\n" +
+	"\x1bprovider_observation_policy\x18\f \x01(\x0e2*.g8e.compliance.v1.AssessmentWitnessPolicyR\x19providerObservationPolicy\x12b\n" +
+	"\x17model_provenance_policy\x18\r \x01(\x0e2*.g8e.compliance.v1.AssessmentWitnessPolicyR\x15modelProvenancePolicy\"}\n" +
 	" AssessmentApplicabilitySelection\x12\x1e\n" +
 	"\n" +
 	"components\x18\x01 \x03(\tR\n" +
@@ -5859,7 +5926,11 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"catalog_id\x18\x01 \x01(\tR\tcatalogId\x12'\n" +
 	"\x0fcatalog_version\x18\x02 \x01(\tR\x0ecatalogVersion\x12\x16\n" +
 	"\x06sha256\x18\x03 \x01(\tR\x06sha256\x12K\n" +
-	"\vdefinitions\x18\x04 \x03(\v2).g8e.compliance.v1.DemoScenarioDefinitionR\vdefinitions*\x90\x01\n" +
+	"\vdefinitions\x18\x04 \x03(\v2).g8e.compliance.v1.DemoScenarioDefinitionR\vdefinitions*\x91\x01\n" +
+	"\x17AssessmentWitnessPolicy\x12)\n" +
+	"%ASSESSMENT_WITNESS_POLICY_UNSPECIFIED\x10\x00\x12%\n" +
+	"!ASSESSMENT_WITNESS_POLICY_INTERIM\x10\x01\x12$\n" +
+	" ASSESSMENT_WITNESS_POLICY_STRICT\x10\x02*\x90\x01\n" +
 	"\x17VerificationCheckStatus\x12)\n" +
 	"%VERIFICATION_CHECK_STATUS_UNSPECIFIED\x10\x00\x12$\n" +
 	" VERIFICATION_CHECK_STATUS_PASSED\x10\x01\x12$\n" +
@@ -5877,167 +5948,170 @@ func file_g8e_compliance_v1_compliance_proto_rawDescGZIP() []byte {
 	return file_g8e_compliance_v1_compliance_proto_rawDescData
 }
 
-var file_g8e_compliance_v1_compliance_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_g8e_compliance_v1_compliance_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_g8e_compliance_v1_compliance_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
 var file_g8e_compliance_v1_compliance_proto_goTypes = []any{
-	(VerificationCheckStatus)(0),               // 0: g8e.compliance.v1.VerificationCheckStatus
-	(*VersionedReference)(nil),                 // 1: g8e.compliance.v1.VersionedReference
-	(*NamedDigest)(nil),                        // 2: g8e.compliance.v1.NamedDigest
-	(*ControlAssertionDefinition)(nil),         // 3: g8e.compliance.v1.ControlAssertionDefinition
-	(*ControlAssertionCatalog)(nil),            // 4: g8e.compliance.v1.ControlAssertionCatalog
-	(*FrameworkControlDefinition)(nil),         // 5: g8e.compliance.v1.FrameworkControlDefinition
-	(*FrameworkDefinition)(nil),                // 6: g8e.compliance.v1.FrameworkDefinition
-	(*FrameworkCatalog)(nil),                   // 7: g8e.compliance.v1.FrameworkCatalog
-	(*ControlCrosswalk)(nil),                   // 8: g8e.compliance.v1.ControlCrosswalk
-	(*ControlCrosswalkCatalog)(nil),            // 9: g8e.compliance.v1.ControlCrosswalkCatalog
-	(*ComponentInventoryEntry)(nil),            // 10: g8e.compliance.v1.ComponentInventoryEntry
-	(*AssessmentSourceAdmission)(nil),          // 11: g8e.compliance.v1.AssessmentSourceAdmission
-	(*AssessmentApplicabilitySelection)(nil),   // 12: g8e.compliance.v1.AssessmentApplicabilitySelection
-	(*AssessmentSubjectSelection)(nil),         // 13: g8e.compliance.v1.AssessmentSubjectSelection
-	(*AssessmentPopulationSelection)(nil),      // 14: g8e.compliance.v1.AssessmentPopulationSelection
-	(*AssessmentCoverage)(nil),                 // 15: g8e.compliance.v1.AssessmentCoverage
-	(*AssessmentDiagnostic)(nil),               // 16: g8e.compliance.v1.AssessmentDiagnostic
-	(*AssessmentScope)(nil),                    // 17: g8e.compliance.v1.AssessmentScope
-	(*EvidenceEncryptionMetadata)(nil),         // 18: g8e.compliance.v1.EvidenceEncryptionMetadata
-	(*ComplianceEvidenceReference)(nil),        // 19: g8e.compliance.v1.ComplianceEvidenceReference
-	(*ControlAssertionAssessment)(nil),         // 20: g8e.compliance.v1.ControlAssertionAssessment
-	(*FrameworkControlAssessment)(nil),         // 21: g8e.compliance.v1.FrameworkControlAssessment
-	(*ChecksumEntry)(nil),                      // 22: g8e.compliance.v1.ChecksumEntry
-	(*ReportSignature)(nil),                    // 23: g8e.compliance.v1.ReportSignature
-	(*ComplianceReportSigningKeyMetadata)(nil), // 24: g8e.compliance.v1.ComplianceReportSigningKeyMetadata
-	(*ComplianceReportTrustedKey)(nil),         // 25: g8e.compliance.v1.ComplianceReportTrustedKey
-	(*ComplianceReportTrustPolicy)(nil),        // 26: g8e.compliance.v1.ComplianceReportTrustPolicy
-	(*ComplianceEvidenceTrustedKey)(nil),       // 27: g8e.compliance.v1.ComplianceEvidenceTrustedKey
-	(*ComplianceEvidenceTrustPolicy)(nil),      // 28: g8e.compliance.v1.ComplianceEvidenceTrustPolicy
-	(*ComplianceReportManifest)(nil),           // 29: g8e.compliance.v1.ComplianceReportManifest
-	(*BundleArtifact)(nil),                     // 30: g8e.compliance.v1.BundleArtifact
-	(*RenderedFormatEntry)(nil),                // 31: g8e.compliance.v1.RenderedFormatEntry
-	(*ComplianceReportBundle)(nil),             // 32: g8e.compliance.v1.ComplianceReportBundle
-	(*VerificationFailure)(nil),                // 33: g8e.compliance.v1.VerificationFailure
-	(*VerificationCheckResult)(nil),            // 34: g8e.compliance.v1.VerificationCheckResult
-	(*ComplianceVerificationReport)(nil),       // 35: g8e.compliance.v1.ComplianceVerificationReport
-	(*OSCALValidatorIdentity)(nil),             // 36: g8e.compliance.v1.OSCALValidatorIdentity
-	(*OSCALValidationFailure)(nil),             // 37: g8e.compliance.v1.OSCALValidationFailure
-	(*OSCALValidationResult)(nil),              // 38: g8e.compliance.v1.OSCALValidationResult
-	(*EvidenceWindowCompleteness)(nil),         // 39: g8e.compliance.v1.EvidenceWindowCompleteness
-	(*ComplianceGap)(nil),                      // 40: g8e.compliance.v1.ComplianceGap
-	(*EvidenceLink)(nil),                       // 41: g8e.compliance.v1.EvidenceLink
-	(*ComplianceFinding)(nil),                  // 42: g8e.compliance.v1.ComplianceFinding
-	(*ComplianceRemediation)(nil),              // 43: g8e.compliance.v1.ComplianceRemediation
-	(*ControlSection)(nil),                     // 44: g8e.compliance.v1.ControlSection
-	(*ComplianceAnalysis)(nil),                 // 45: g8e.compliance.v1.ComplianceAnalysis
-	(*FrameworkProfile)(nil),                   // 46: g8e.compliance.v1.FrameworkProfile
-	(*FrameworkControlReference)(nil),          // 47: g8e.compliance.v1.FrameworkControlReference
-	(*DemoManifest)(nil),                       // 48: g8e.compliance.v1.DemoManifest
-	(*DemoScenarioDefinition)(nil),             // 49: g8e.compliance.v1.DemoScenarioDefinition
-	(*DemoStepResult)(nil),                     // 50: g8e.compliance.v1.DemoStepResult
-	(*DemoScenarioResult)(nil),                 // 51: g8e.compliance.v1.DemoScenarioResult
-	(*DemoMetricEvidence)(nil),                 // 52: g8e.compliance.v1.DemoMetricEvidence
-	(*DemoScenarioCatalog)(nil),                // 53: g8e.compliance.v1.DemoScenarioCatalog
-	(*timestamppb.Timestamp)(nil),              // 54: google.protobuf.Timestamp
+	(AssessmentWitnessPolicy)(0),               // 0: g8e.compliance.v1.AssessmentWitnessPolicy
+	(VerificationCheckStatus)(0),               // 1: g8e.compliance.v1.VerificationCheckStatus
+	(*VersionedReference)(nil),                 // 2: g8e.compliance.v1.VersionedReference
+	(*NamedDigest)(nil),                        // 3: g8e.compliance.v1.NamedDigest
+	(*ControlAssertionDefinition)(nil),         // 4: g8e.compliance.v1.ControlAssertionDefinition
+	(*ControlAssertionCatalog)(nil),            // 5: g8e.compliance.v1.ControlAssertionCatalog
+	(*FrameworkControlDefinition)(nil),         // 6: g8e.compliance.v1.FrameworkControlDefinition
+	(*FrameworkDefinition)(nil),                // 7: g8e.compliance.v1.FrameworkDefinition
+	(*FrameworkCatalog)(nil),                   // 8: g8e.compliance.v1.FrameworkCatalog
+	(*ControlCrosswalk)(nil),                   // 9: g8e.compliance.v1.ControlCrosswalk
+	(*ControlCrosswalkCatalog)(nil),            // 10: g8e.compliance.v1.ControlCrosswalkCatalog
+	(*ComponentInventoryEntry)(nil),            // 11: g8e.compliance.v1.ComponentInventoryEntry
+	(*AssessmentSourceAdmission)(nil),          // 12: g8e.compliance.v1.AssessmentSourceAdmission
+	(*AssessmentApplicabilitySelection)(nil),   // 13: g8e.compliance.v1.AssessmentApplicabilitySelection
+	(*AssessmentSubjectSelection)(nil),         // 14: g8e.compliance.v1.AssessmentSubjectSelection
+	(*AssessmentPopulationSelection)(nil),      // 15: g8e.compliance.v1.AssessmentPopulationSelection
+	(*AssessmentCoverage)(nil),                 // 16: g8e.compliance.v1.AssessmentCoverage
+	(*AssessmentDiagnostic)(nil),               // 17: g8e.compliance.v1.AssessmentDiagnostic
+	(*AssessmentScope)(nil),                    // 18: g8e.compliance.v1.AssessmentScope
+	(*EvidenceEncryptionMetadata)(nil),         // 19: g8e.compliance.v1.EvidenceEncryptionMetadata
+	(*ComplianceEvidenceReference)(nil),        // 20: g8e.compliance.v1.ComplianceEvidenceReference
+	(*ControlAssertionAssessment)(nil),         // 21: g8e.compliance.v1.ControlAssertionAssessment
+	(*FrameworkControlAssessment)(nil),         // 22: g8e.compliance.v1.FrameworkControlAssessment
+	(*ChecksumEntry)(nil),                      // 23: g8e.compliance.v1.ChecksumEntry
+	(*ReportSignature)(nil),                    // 24: g8e.compliance.v1.ReportSignature
+	(*ComplianceReportSigningKeyMetadata)(nil), // 25: g8e.compliance.v1.ComplianceReportSigningKeyMetadata
+	(*ComplianceReportTrustedKey)(nil),         // 26: g8e.compliance.v1.ComplianceReportTrustedKey
+	(*ComplianceReportTrustPolicy)(nil),        // 27: g8e.compliance.v1.ComplianceReportTrustPolicy
+	(*ComplianceEvidenceTrustedKey)(nil),       // 28: g8e.compliance.v1.ComplianceEvidenceTrustedKey
+	(*ComplianceEvidenceTrustPolicy)(nil),      // 29: g8e.compliance.v1.ComplianceEvidenceTrustPolicy
+	(*ComplianceReportManifest)(nil),           // 30: g8e.compliance.v1.ComplianceReportManifest
+	(*BundleArtifact)(nil),                     // 31: g8e.compliance.v1.BundleArtifact
+	(*RenderedFormatEntry)(nil),                // 32: g8e.compliance.v1.RenderedFormatEntry
+	(*ComplianceReportBundle)(nil),             // 33: g8e.compliance.v1.ComplianceReportBundle
+	(*VerificationFailure)(nil),                // 34: g8e.compliance.v1.VerificationFailure
+	(*VerificationCheckResult)(nil),            // 35: g8e.compliance.v1.VerificationCheckResult
+	(*ComplianceVerificationReport)(nil),       // 36: g8e.compliance.v1.ComplianceVerificationReport
+	(*OSCALValidatorIdentity)(nil),             // 37: g8e.compliance.v1.OSCALValidatorIdentity
+	(*OSCALValidationFailure)(nil),             // 38: g8e.compliance.v1.OSCALValidationFailure
+	(*OSCALValidationResult)(nil),              // 39: g8e.compliance.v1.OSCALValidationResult
+	(*EvidenceWindowCompleteness)(nil),         // 40: g8e.compliance.v1.EvidenceWindowCompleteness
+	(*ComplianceGap)(nil),                      // 41: g8e.compliance.v1.ComplianceGap
+	(*EvidenceLink)(nil),                       // 42: g8e.compliance.v1.EvidenceLink
+	(*ComplianceFinding)(nil),                  // 43: g8e.compliance.v1.ComplianceFinding
+	(*ComplianceRemediation)(nil),              // 44: g8e.compliance.v1.ComplianceRemediation
+	(*ControlSection)(nil),                     // 45: g8e.compliance.v1.ControlSection
+	(*ComplianceAnalysis)(nil),                 // 46: g8e.compliance.v1.ComplianceAnalysis
+	(*FrameworkProfile)(nil),                   // 47: g8e.compliance.v1.FrameworkProfile
+	(*FrameworkControlReference)(nil),          // 48: g8e.compliance.v1.FrameworkControlReference
+	(*DemoManifest)(nil),                       // 49: g8e.compliance.v1.DemoManifest
+	(*DemoScenarioDefinition)(nil),             // 50: g8e.compliance.v1.DemoScenarioDefinition
+	(*DemoStepResult)(nil),                     // 51: g8e.compliance.v1.DemoStepResult
+	(*DemoScenarioResult)(nil),                 // 52: g8e.compliance.v1.DemoScenarioResult
+	(*DemoMetricEvidence)(nil),                 // 53: g8e.compliance.v1.DemoMetricEvidence
+	(*DemoScenarioCatalog)(nil),                // 54: g8e.compliance.v1.DemoScenarioCatalog
+	(*timestamppb.Timestamp)(nil),              // 55: google.protobuf.Timestamp
 }
 var file_g8e_compliance_v1_compliance_proto_depIdxs = []int32{
-	1,  // 0: g8e.compliance.v1.ControlAssertionDefinition.required_grader_refs:type_name -> g8e.compliance.v1.VersionedReference
-	1,  // 1: g8e.compliance.v1.ControlAssertionDefinition.required_verifier_refs:type_name -> g8e.compliance.v1.VersionedReference
-	3,  // 2: g8e.compliance.v1.ControlAssertionCatalog.assertions:type_name -> g8e.compliance.v1.ControlAssertionDefinition
-	5,  // 3: g8e.compliance.v1.FrameworkDefinition.controls:type_name -> g8e.compliance.v1.FrameworkControlDefinition
-	6,  // 4: g8e.compliance.v1.FrameworkCatalog.frameworks:type_name -> g8e.compliance.v1.FrameworkDefinition
-	1,  // 5: g8e.compliance.v1.ControlCrosswalk.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	1,  // 6: g8e.compliance.v1.ControlCrosswalk.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
-	54, // 7: g8e.compliance.v1.ControlCrosswalk.reviewed_at:type_name -> google.protobuf.Timestamp
-	8,  // 8: g8e.compliance.v1.ControlCrosswalkCatalog.mappings:type_name -> g8e.compliance.v1.ControlCrosswalk
-	1,  // 9: g8e.compliance.v1.AssessmentSourceAdmission.verifier_ref:type_name -> g8e.compliance.v1.VersionedReference
-	13, // 10: g8e.compliance.v1.AssessmentPopulationSelection.subjects:type_name -> g8e.compliance.v1.AssessmentSubjectSelection
-	13, // 11: g8e.compliance.v1.AssessmentCoverage.unavailable_subjects:type_name -> g8e.compliance.v1.AssessmentSubjectSelection
-	13, // 12: g8e.compliance.v1.AssessmentDiagnostic.subject:type_name -> g8e.compliance.v1.AssessmentSubjectSelection
-	2,  // 13: g8e.compliance.v1.AssessmentScope.image_digests:type_name -> g8e.compliance.v1.NamedDigest
-	10, // 14: g8e.compliance.v1.AssessmentScope.component_inventory:type_name -> g8e.compliance.v1.ComponentInventoryEntry
-	2,  // 15: g8e.compliance.v1.AssessmentScope.configuration_hashes:type_name -> g8e.compliance.v1.NamedDigest
-	2,  // 16: g8e.compliance.v1.AssessmentScope.doctrine_bundle_hashes:type_name -> g8e.compliance.v1.NamedDigest
-	2,  // 17: g8e.compliance.v1.AssessmentScope.consensus_policy_hashes:type_name -> g8e.compliance.v1.NamedDigest
-	54, // 18: g8e.compliance.v1.AssessmentScope.assessment_window_start:type_name -> google.protobuf.Timestamp
-	54, // 19: g8e.compliance.v1.AssessmentScope.assessment_window_end:type_name -> google.protobuf.Timestamp
-	11, // 20: g8e.compliance.v1.AssessmentScope.source_admissions:type_name -> g8e.compliance.v1.AssessmentSourceAdmission
-	12, // 21: g8e.compliance.v1.AssessmentScope.applicability:type_name -> g8e.compliance.v1.AssessmentApplicabilitySelection
-	14, // 22: g8e.compliance.v1.AssessmentScope.selected_population:type_name -> g8e.compliance.v1.AssessmentPopulationSelection
-	54, // 23: g8e.compliance.v1.AssessmentScope.assessment_as_of:type_name -> google.protobuf.Timestamp
-	54, // 24: g8e.compliance.v1.ComplianceEvidenceReference.produced_at:type_name -> google.protobuf.Timestamp
-	54, // 25: g8e.compliance.v1.ComplianceEvidenceReference.verified_at:type_name -> google.protobuf.Timestamp
-	18, // 26: g8e.compliance.v1.ComplianceEvidenceReference.encryption:type_name -> g8e.compliance.v1.EvidenceEncryptionMetadata
-	1,  // 27: g8e.compliance.v1.ControlAssertionAssessment.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
-	54, // 28: g8e.compliance.v1.ControlAssertionAssessment.evaluated_at:type_name -> google.protobuf.Timestamp
-	1,  // 29: g8e.compliance.v1.ControlAssertionAssessment.verifier_ref:type_name -> g8e.compliance.v1.VersionedReference
-	15, // 30: g8e.compliance.v1.ControlAssertionAssessment.coverage:type_name -> g8e.compliance.v1.AssessmentCoverage
-	16, // 31: g8e.compliance.v1.ControlAssertionAssessment.diagnostics:type_name -> g8e.compliance.v1.AssessmentDiagnostic
-	1,  // 32: g8e.compliance.v1.FrameworkControlAssessment.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	54, // 33: g8e.compliance.v1.ComplianceReportSigningKeyMetadata.created_at:type_name -> google.protobuf.Timestamp
-	54, // 34: g8e.compliance.v1.ComplianceReportSigningKeyMetadata.expires_at:type_name -> google.protobuf.Timestamp
-	24, // 35: g8e.compliance.v1.ComplianceReportTrustedKey.metadata:type_name -> g8e.compliance.v1.ComplianceReportSigningKeyMetadata
-	54, // 36: g8e.compliance.v1.ComplianceReportTrustedKey.assessed_at:type_name -> google.protobuf.Timestamp
-	54, // 37: g8e.compliance.v1.ComplianceReportTrustedKey.revoked_at:type_name -> google.protobuf.Timestamp
-	25, // 38: g8e.compliance.v1.ComplianceReportTrustPolicy.trusted_keys:type_name -> g8e.compliance.v1.ComplianceReportTrustedKey
-	54, // 39: g8e.compliance.v1.ComplianceEvidenceTrustedKey.assessed_at:type_name -> google.protobuf.Timestamp
-	54, // 40: g8e.compliance.v1.ComplianceEvidenceTrustedKey.valid_from:type_name -> google.protobuf.Timestamp
-	54, // 41: g8e.compliance.v1.ComplianceEvidenceTrustedKey.valid_until:type_name -> google.protobuf.Timestamp
-	54, // 42: g8e.compliance.v1.ComplianceEvidenceTrustedKey.revoked_at:type_name -> google.protobuf.Timestamp
-	27, // 43: g8e.compliance.v1.ComplianceEvidenceTrustPolicy.trusted_keys:type_name -> g8e.compliance.v1.ComplianceEvidenceTrustedKey
-	54, // 44: g8e.compliance.v1.ComplianceReportManifest.generated_at:type_name -> google.protobuf.Timestamp
-	1,  // 45: g8e.compliance.v1.ComplianceReportManifest.framework_refs:type_name -> g8e.compliance.v1.VersionedReference
-	23, // 46: g8e.compliance.v1.ComplianceReportManifest.signature:type_name -> g8e.compliance.v1.ReportSignature
-	18, // 47: g8e.compliance.v1.BundleArtifact.encryption:type_name -> g8e.compliance.v1.EvidenceEncryptionMetadata
-	29, // 48: g8e.compliance.v1.ComplianceReportBundle.manifest:type_name -> g8e.compliance.v1.ComplianceReportManifest
-	30, // 49: g8e.compliance.v1.ComplianceReportBundle.artifacts:type_name -> g8e.compliance.v1.BundleArtifact
-	45, // 50: g8e.compliance.v1.ComplianceReportBundle.analysis:type_name -> g8e.compliance.v1.ComplianceAnalysis
-	46, // 51: g8e.compliance.v1.ComplianceReportBundle.profiles:type_name -> g8e.compliance.v1.FrameworkProfile
-	31, // 52: g8e.compliance.v1.ComplianceReportBundle.rendered_formats:type_name -> g8e.compliance.v1.RenderedFormatEntry
-	23, // 53: g8e.compliance.v1.ComplianceReportBundle.checksum_root_signature:type_name -> g8e.compliance.v1.ReportSignature
-	0,  // 54: g8e.compliance.v1.VerificationCheckResult.status:type_name -> g8e.compliance.v1.VerificationCheckStatus
-	33, // 55: g8e.compliance.v1.VerificationCheckResult.failures:type_name -> g8e.compliance.v1.VerificationFailure
-	54, // 56: g8e.compliance.v1.ComplianceVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
-	33, // 57: g8e.compliance.v1.ComplianceVerificationReport.failures:type_name -> g8e.compliance.v1.VerificationFailure
-	34, // 58: g8e.compliance.v1.ComplianceVerificationReport.checks:type_name -> g8e.compliance.v1.VerificationCheckResult
-	36, // 59: g8e.compliance.v1.OSCALValidationResult.validator:type_name -> g8e.compliance.v1.OSCALValidatorIdentity
-	37, // 60: g8e.compliance.v1.OSCALValidationResult.structural_failures:type_name -> g8e.compliance.v1.OSCALValidationFailure
-	37, // 61: g8e.compliance.v1.OSCALValidationResult.semantic_failures:type_name -> g8e.compliance.v1.OSCALValidationFailure
-	47, // 62: g8e.compliance.v1.ControlSection.control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	54, // 63: g8e.compliance.v1.ComplianceAnalysis.generated_at:type_name -> google.protobuf.Timestamp
-	39, // 64: g8e.compliance.v1.ComplianceAnalysis.evidence_window_completeness:type_name -> g8e.compliance.v1.EvidenceWindowCompleteness
-	20, // 65: g8e.compliance.v1.ComplianceAnalysis.assertion_assessments:type_name -> g8e.compliance.v1.ControlAssertionAssessment
-	21, // 66: g8e.compliance.v1.ComplianceAnalysis.framework_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
-	40, // 67: g8e.compliance.v1.ComplianceAnalysis.gaps:type_name -> g8e.compliance.v1.ComplianceGap
-	41, // 68: g8e.compliance.v1.ComplianceAnalysis.evidence_links:type_name -> g8e.compliance.v1.EvidenceLink
-	42, // 69: g8e.compliance.v1.ComplianceAnalysis.findings:type_name -> g8e.compliance.v1.ComplianceFinding
-	43, // 70: g8e.compliance.v1.ComplianceAnalysis.remediation:type_name -> g8e.compliance.v1.ComplianceRemediation
-	44, // 71: g8e.compliance.v1.ComplianceAnalysis.sections:type_name -> g8e.compliance.v1.ControlSection
-	19, // 72: g8e.compliance.v1.ComplianceAnalysis.evidence_resources:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	16, // 73: g8e.compliance.v1.ComplianceAnalysis.diagnostics:type_name -> g8e.compliance.v1.AssessmentDiagnostic
-	1,  // 74: g8e.compliance.v1.FrameworkProfile.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	54, // 75: g8e.compliance.v1.FrameworkProfile.generated_at:type_name -> google.protobuf.Timestamp
-	21, // 76: g8e.compliance.v1.FrameworkProfile.control_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
-	1,  // 77: g8e.compliance.v1.FrameworkControlReference.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	54, // 78: g8e.compliance.v1.DemoManifest.generated_at:type_name -> google.protobuf.Timestamp
-	1,  // 79: g8e.compliance.v1.DemoManifest.scenario_definition_refs:type_name -> g8e.compliance.v1.VersionedReference
-	2,  // 80: g8e.compliance.v1.DemoManifest.provenance_hashes:type_name -> g8e.compliance.v1.NamedDigest
-	47, // 81: g8e.compliance.v1.DemoManifest.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	1,  // 82: g8e.compliance.v1.DemoScenarioDefinition.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
-	47, // 83: g8e.compliance.v1.DemoScenarioDefinition.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	54, // 84: g8e.compliance.v1.DemoStepResult.started_at:type_name -> google.protobuf.Timestamp
-	54, // 85: g8e.compliance.v1.DemoStepResult.completed_at:type_name -> google.protobuf.Timestamp
-	1,  // 86: g8e.compliance.v1.DemoScenarioResult.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
-	54, // 87: g8e.compliance.v1.DemoScenarioResult.started_at:type_name -> google.protobuf.Timestamp
-	54, // 88: g8e.compliance.v1.DemoScenarioResult.completed_at:type_name -> google.protobuf.Timestamp
-	1,  // 89: g8e.compliance.v1.DemoScenarioResult.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
-	47, // 90: g8e.compliance.v1.DemoScenarioResult.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	50, // 91: g8e.compliance.v1.DemoScenarioResult.step_results:type_name -> g8e.compliance.v1.DemoStepResult
-	1,  // 92: g8e.compliance.v1.DemoMetricEvidence.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
-	54, // 93: g8e.compliance.v1.DemoMetricEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
-	1,  // 94: g8e.compliance.v1.DemoMetricEvidence.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
-	49, // 95: g8e.compliance.v1.DemoScenarioCatalog.definitions:type_name -> g8e.compliance.v1.DemoScenarioDefinition
-	96, // [96:96] is the sub-list for method output_type
-	96, // [96:96] is the sub-list for method input_type
-	96, // [96:96] is the sub-list for extension type_name
-	96, // [96:96] is the sub-list for extension extendee
-	0,  // [0:96] is the sub-list for field type_name
+	2,  // 0: g8e.compliance.v1.ControlAssertionDefinition.required_grader_refs:type_name -> g8e.compliance.v1.VersionedReference
+	2,  // 1: g8e.compliance.v1.ControlAssertionDefinition.required_verifier_refs:type_name -> g8e.compliance.v1.VersionedReference
+	4,  // 2: g8e.compliance.v1.ControlAssertionCatalog.assertions:type_name -> g8e.compliance.v1.ControlAssertionDefinition
+	6,  // 3: g8e.compliance.v1.FrameworkDefinition.controls:type_name -> g8e.compliance.v1.FrameworkControlDefinition
+	7,  // 4: g8e.compliance.v1.FrameworkCatalog.frameworks:type_name -> g8e.compliance.v1.FrameworkDefinition
+	2,  // 5: g8e.compliance.v1.ControlCrosswalk.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
+	2,  // 6: g8e.compliance.v1.ControlCrosswalk.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
+	55, // 7: g8e.compliance.v1.ControlCrosswalk.reviewed_at:type_name -> google.protobuf.Timestamp
+	9,  // 8: g8e.compliance.v1.ControlCrosswalkCatalog.mappings:type_name -> g8e.compliance.v1.ControlCrosswalk
+	2,  // 9: g8e.compliance.v1.AssessmentSourceAdmission.verifier_ref:type_name -> g8e.compliance.v1.VersionedReference
+	0,  // 10: g8e.compliance.v1.AssessmentSourceAdmission.provider_observation_policy:type_name -> g8e.compliance.v1.AssessmentWitnessPolicy
+	0,  // 11: g8e.compliance.v1.AssessmentSourceAdmission.model_provenance_policy:type_name -> g8e.compliance.v1.AssessmentWitnessPolicy
+	14, // 12: g8e.compliance.v1.AssessmentPopulationSelection.subjects:type_name -> g8e.compliance.v1.AssessmentSubjectSelection
+	14, // 13: g8e.compliance.v1.AssessmentCoverage.unavailable_subjects:type_name -> g8e.compliance.v1.AssessmentSubjectSelection
+	14, // 14: g8e.compliance.v1.AssessmentDiagnostic.subject:type_name -> g8e.compliance.v1.AssessmentSubjectSelection
+	3,  // 15: g8e.compliance.v1.AssessmentScope.image_digests:type_name -> g8e.compliance.v1.NamedDigest
+	11, // 16: g8e.compliance.v1.AssessmentScope.component_inventory:type_name -> g8e.compliance.v1.ComponentInventoryEntry
+	3,  // 17: g8e.compliance.v1.AssessmentScope.configuration_hashes:type_name -> g8e.compliance.v1.NamedDigest
+	3,  // 18: g8e.compliance.v1.AssessmentScope.doctrine_bundle_hashes:type_name -> g8e.compliance.v1.NamedDigest
+	3,  // 19: g8e.compliance.v1.AssessmentScope.consensus_policy_hashes:type_name -> g8e.compliance.v1.NamedDigest
+	55, // 20: g8e.compliance.v1.AssessmentScope.assessment_window_start:type_name -> google.protobuf.Timestamp
+	55, // 21: g8e.compliance.v1.AssessmentScope.assessment_window_end:type_name -> google.protobuf.Timestamp
+	12, // 22: g8e.compliance.v1.AssessmentScope.source_admissions:type_name -> g8e.compliance.v1.AssessmentSourceAdmission
+	13, // 23: g8e.compliance.v1.AssessmentScope.applicability:type_name -> g8e.compliance.v1.AssessmentApplicabilitySelection
+	15, // 24: g8e.compliance.v1.AssessmentScope.selected_population:type_name -> g8e.compliance.v1.AssessmentPopulationSelection
+	55, // 25: g8e.compliance.v1.AssessmentScope.assessment_as_of:type_name -> google.protobuf.Timestamp
+	55, // 26: g8e.compliance.v1.ComplianceEvidenceReference.produced_at:type_name -> google.protobuf.Timestamp
+	55, // 27: g8e.compliance.v1.ComplianceEvidenceReference.verified_at:type_name -> google.protobuf.Timestamp
+	19, // 28: g8e.compliance.v1.ComplianceEvidenceReference.encryption:type_name -> g8e.compliance.v1.EvidenceEncryptionMetadata
+	2,  // 29: g8e.compliance.v1.ControlAssertionAssessment.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
+	55, // 30: g8e.compliance.v1.ControlAssertionAssessment.evaluated_at:type_name -> google.protobuf.Timestamp
+	2,  // 31: g8e.compliance.v1.ControlAssertionAssessment.verifier_ref:type_name -> g8e.compliance.v1.VersionedReference
+	16, // 32: g8e.compliance.v1.ControlAssertionAssessment.coverage:type_name -> g8e.compliance.v1.AssessmentCoverage
+	17, // 33: g8e.compliance.v1.ControlAssertionAssessment.diagnostics:type_name -> g8e.compliance.v1.AssessmentDiagnostic
+	2,  // 34: g8e.compliance.v1.FrameworkControlAssessment.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
+	55, // 35: g8e.compliance.v1.ComplianceReportSigningKeyMetadata.created_at:type_name -> google.protobuf.Timestamp
+	55, // 36: g8e.compliance.v1.ComplianceReportSigningKeyMetadata.expires_at:type_name -> google.protobuf.Timestamp
+	25, // 37: g8e.compliance.v1.ComplianceReportTrustedKey.metadata:type_name -> g8e.compliance.v1.ComplianceReportSigningKeyMetadata
+	55, // 38: g8e.compliance.v1.ComplianceReportTrustedKey.assessed_at:type_name -> google.protobuf.Timestamp
+	55, // 39: g8e.compliance.v1.ComplianceReportTrustedKey.revoked_at:type_name -> google.protobuf.Timestamp
+	26, // 40: g8e.compliance.v1.ComplianceReportTrustPolicy.trusted_keys:type_name -> g8e.compliance.v1.ComplianceReportTrustedKey
+	55, // 41: g8e.compliance.v1.ComplianceEvidenceTrustedKey.assessed_at:type_name -> google.protobuf.Timestamp
+	55, // 42: g8e.compliance.v1.ComplianceEvidenceTrustedKey.valid_from:type_name -> google.protobuf.Timestamp
+	55, // 43: g8e.compliance.v1.ComplianceEvidenceTrustedKey.valid_until:type_name -> google.protobuf.Timestamp
+	55, // 44: g8e.compliance.v1.ComplianceEvidenceTrustedKey.revoked_at:type_name -> google.protobuf.Timestamp
+	28, // 45: g8e.compliance.v1.ComplianceEvidenceTrustPolicy.trusted_keys:type_name -> g8e.compliance.v1.ComplianceEvidenceTrustedKey
+	55, // 46: g8e.compliance.v1.ComplianceReportManifest.generated_at:type_name -> google.protobuf.Timestamp
+	2,  // 47: g8e.compliance.v1.ComplianceReportManifest.framework_refs:type_name -> g8e.compliance.v1.VersionedReference
+	24, // 48: g8e.compliance.v1.ComplianceReportManifest.signature:type_name -> g8e.compliance.v1.ReportSignature
+	19, // 49: g8e.compliance.v1.BundleArtifact.encryption:type_name -> g8e.compliance.v1.EvidenceEncryptionMetadata
+	30, // 50: g8e.compliance.v1.ComplianceReportBundle.manifest:type_name -> g8e.compliance.v1.ComplianceReportManifest
+	31, // 51: g8e.compliance.v1.ComplianceReportBundle.artifacts:type_name -> g8e.compliance.v1.BundleArtifact
+	46, // 52: g8e.compliance.v1.ComplianceReportBundle.analysis:type_name -> g8e.compliance.v1.ComplianceAnalysis
+	47, // 53: g8e.compliance.v1.ComplianceReportBundle.profiles:type_name -> g8e.compliance.v1.FrameworkProfile
+	32, // 54: g8e.compliance.v1.ComplianceReportBundle.rendered_formats:type_name -> g8e.compliance.v1.RenderedFormatEntry
+	24, // 55: g8e.compliance.v1.ComplianceReportBundle.checksum_root_signature:type_name -> g8e.compliance.v1.ReportSignature
+	1,  // 56: g8e.compliance.v1.VerificationCheckResult.status:type_name -> g8e.compliance.v1.VerificationCheckStatus
+	34, // 57: g8e.compliance.v1.VerificationCheckResult.failures:type_name -> g8e.compliance.v1.VerificationFailure
+	55, // 58: g8e.compliance.v1.ComplianceVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
+	34, // 59: g8e.compliance.v1.ComplianceVerificationReport.failures:type_name -> g8e.compliance.v1.VerificationFailure
+	35, // 60: g8e.compliance.v1.ComplianceVerificationReport.checks:type_name -> g8e.compliance.v1.VerificationCheckResult
+	37, // 61: g8e.compliance.v1.OSCALValidationResult.validator:type_name -> g8e.compliance.v1.OSCALValidatorIdentity
+	38, // 62: g8e.compliance.v1.OSCALValidationResult.structural_failures:type_name -> g8e.compliance.v1.OSCALValidationFailure
+	38, // 63: g8e.compliance.v1.OSCALValidationResult.semantic_failures:type_name -> g8e.compliance.v1.OSCALValidationFailure
+	48, // 64: g8e.compliance.v1.ControlSection.control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	55, // 65: g8e.compliance.v1.ComplianceAnalysis.generated_at:type_name -> google.protobuf.Timestamp
+	40, // 66: g8e.compliance.v1.ComplianceAnalysis.evidence_window_completeness:type_name -> g8e.compliance.v1.EvidenceWindowCompleteness
+	21, // 67: g8e.compliance.v1.ComplianceAnalysis.assertion_assessments:type_name -> g8e.compliance.v1.ControlAssertionAssessment
+	22, // 68: g8e.compliance.v1.ComplianceAnalysis.framework_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
+	41, // 69: g8e.compliance.v1.ComplianceAnalysis.gaps:type_name -> g8e.compliance.v1.ComplianceGap
+	42, // 70: g8e.compliance.v1.ComplianceAnalysis.evidence_links:type_name -> g8e.compliance.v1.EvidenceLink
+	43, // 71: g8e.compliance.v1.ComplianceAnalysis.findings:type_name -> g8e.compliance.v1.ComplianceFinding
+	44, // 72: g8e.compliance.v1.ComplianceAnalysis.remediation:type_name -> g8e.compliance.v1.ComplianceRemediation
+	45, // 73: g8e.compliance.v1.ComplianceAnalysis.sections:type_name -> g8e.compliance.v1.ControlSection
+	20, // 74: g8e.compliance.v1.ComplianceAnalysis.evidence_resources:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	17, // 75: g8e.compliance.v1.ComplianceAnalysis.diagnostics:type_name -> g8e.compliance.v1.AssessmentDiagnostic
+	2,  // 76: g8e.compliance.v1.FrameworkProfile.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
+	55, // 77: g8e.compliance.v1.FrameworkProfile.generated_at:type_name -> google.protobuf.Timestamp
+	22, // 78: g8e.compliance.v1.FrameworkProfile.control_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
+	2,  // 79: g8e.compliance.v1.FrameworkControlReference.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
+	55, // 80: g8e.compliance.v1.DemoManifest.generated_at:type_name -> google.protobuf.Timestamp
+	2,  // 81: g8e.compliance.v1.DemoManifest.scenario_definition_refs:type_name -> g8e.compliance.v1.VersionedReference
+	3,  // 82: g8e.compliance.v1.DemoManifest.provenance_hashes:type_name -> g8e.compliance.v1.NamedDigest
+	48, // 83: g8e.compliance.v1.DemoManifest.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	2,  // 84: g8e.compliance.v1.DemoScenarioDefinition.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
+	48, // 85: g8e.compliance.v1.DemoScenarioDefinition.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	55, // 86: g8e.compliance.v1.DemoStepResult.started_at:type_name -> google.protobuf.Timestamp
+	55, // 87: g8e.compliance.v1.DemoStepResult.completed_at:type_name -> google.protobuf.Timestamp
+	2,  // 88: g8e.compliance.v1.DemoScenarioResult.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	55, // 89: g8e.compliance.v1.DemoScenarioResult.started_at:type_name -> google.protobuf.Timestamp
+	55, // 90: g8e.compliance.v1.DemoScenarioResult.completed_at:type_name -> google.protobuf.Timestamp
+	2,  // 91: g8e.compliance.v1.DemoScenarioResult.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
+	48, // 92: g8e.compliance.v1.DemoScenarioResult.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	51, // 93: g8e.compliance.v1.DemoScenarioResult.step_results:type_name -> g8e.compliance.v1.DemoStepResult
+	2,  // 94: g8e.compliance.v1.DemoMetricEvidence.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	55, // 95: g8e.compliance.v1.DemoMetricEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
+	2,  // 96: g8e.compliance.v1.DemoMetricEvidence.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
+	50, // 97: g8e.compliance.v1.DemoScenarioCatalog.definitions:type_name -> g8e.compliance.v1.DemoScenarioDefinition
+	98, // [98:98] is the sub-list for method output_type
+	98, // [98:98] is the sub-list for method input_type
+	98, // [98:98] is the sub-list for extension type_name
+	98, // [98:98] is the sub-list for extension extendee
+	0,  // [0:98] is the sub-list for field type_name
 }
 
 func init() { file_g8e_compliance_v1_compliance_proto_init() }
@@ -6050,7 +6124,7 @@ func file_g8e_compliance_v1_compliance_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_compliance_v1_compliance_proto_rawDesc), len(file_g8e_compliance_v1_compliance_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      2,
 			NumMessages:   53,
 			NumExtensions: 0,
 			NumServices:   0,

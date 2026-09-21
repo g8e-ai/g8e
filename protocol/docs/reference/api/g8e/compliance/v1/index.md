@@ -58,6 +58,7 @@
     - [VerificationFailure](#g8e-compliance-v1-VerificationFailure)
     - [VersionedReference](#g8e-compliance-v1-VersionedReference)
   
+    - [AssessmentWitnessPolicy](#g8e-compliance-v1-AssessmentWitnessPolicy)
     - [VerificationCheckStatus](#g8e-compliance-v1-VerificationCheckStatus)
   
 - [Scalar Value Types](#scalar-value-types)
@@ -197,6 +198,8 @@
 | artifact_ids | [string](#string) | repeated |  |
 | verifier_ref | [VersionedReference](#g8e-compliance-v1-VersionedReference) |  |  |
 | disclosure_classification | [string](#string) |  |  |
+| provider_observation_policy | [AssessmentWitnessPolicy](#g8e-compliance-v1-AssessmentWitnessPolicy) |  |  |
+| model_provenance_policy | [AssessmentWitnessPolicy](#g8e-compliance-v1-AssessmentWitnessPolicy) |  |  |
 
 
 
@@ -1227,6 +1230,19 @@
 
 
  
+
+
+<a name="g8e-compliance-v1-AssessmentWitnessPolicy"></a>
+
+### AssessmentWitnessPolicy
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| ASSESSMENT_WITNESS_POLICY_UNSPECIFIED | 0 |  |
+| ASSESSMENT_WITNESS_POLICY_INTERIM | 1 |  |
+| ASSESSMENT_WITNESS_POLICY_STRICT | 2 |  |
+
 
 
 <a name="g8e-compliance-v1-VerificationCheckStatus"></a>

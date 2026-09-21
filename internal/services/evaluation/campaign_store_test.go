@@ -200,6 +200,9 @@ func TestCampaignImporterPreservesBoundIncompletePopulation(t *testing.T) {
 	assert.Zero(t, report.GetVerifiedAssignmentCount())
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, report.GetStatus())
 	assert.Len(t, report.GetVerifiedPopulationDigest(), 64)
+	require.NotEmpty(t, nodes[0].Diagnostics)
+	assert.Equal(t, "campaign_population_incomplete", nodes[0].Diagnostics[0].GetCode())
+	assert.Equal(t, req.RunID, nodes[0].Diagnostics[0].GetSubject().GetRunId())
 }
 
 func TestCampaignImporterRejectsTamperedPersistedScenarioBody(t *testing.T) {

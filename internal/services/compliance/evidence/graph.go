@@ -144,6 +144,7 @@ type EvidenceNode struct {
 	Encryption         *EncryptionMetadata
 	CanonicalBytes     []byte
 	References         []string
+	Diagnostics        []*compliancev1.AssessmentDiagnostic
 }
 
 // EvidenceImporter is the read-only source-specific adapter interface. Every

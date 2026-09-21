@@ -97,6 +97,25 @@ func TestValidateAssessmentScopeRejectsMalformedAndDuplicateBindings(t *testing.
 	}
 }
 
+func TestValidateAssessmentScopeRequiresCampaignWitnessPolicies(t *testing.T) {
+	scope := validScope()
+	admission := scope.SourceAdmissions[0]
+	admission.SourceKind = constants.EvaluationSourceKindCampaign
+	admission.VerifierRef = &compliancev1.VersionedReference{Id: constants.CampaignVerifierID, Version: constants.CampaignVerifierVersion}
+
+	err := catalog.ValidateAssessmentScope(scope)
+	require.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
+	assert.Contains(t, err.Error(), "witness policies")
+
+	admission.ProviderObservationPolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	admission.ModelProvenancePolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_INTERIM
+	require.NoError(t, catalog.ValidateAssessmentScope(scope))
+
+	admission.ProviderObservationPolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_UNSPECIFIED
+	err = catalog.ValidateAssessmentScope(scope)
+	require.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
+}
+
 func TestValidateAssertionAssessmentEnforcesReferencesStatusAndFreshness(t *testing.T) {
 	valid := func() *compliancev1.ControlAssertionAssessment {
 		return &compliancev1.ControlAssertionAssessment{

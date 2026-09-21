@@ -15,6 +15,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -78,5 +79,34 @@ func (i *CampaignImporter) Import(ctx context.Context) ([]complianceevidence.Evi
 		VerifiedAt:         verifiedAt,
 		BundlePath:         constants.CampaignVerificationFilename,
 		CanonicalBytes:     body,
+		Diagnostics:        campaignVerificationDiagnostics(result.Report),
 	}}, nil
+}
+
+func campaignVerificationDiagnostics(report *evalv1.EvaluationVerificationReport) []*compliancev1.AssessmentDiagnostic {
+	if report == nil {
+		return nil
+	}
+	result := make([]*compliancev1.AssessmentDiagnostic, 0, len(report.GetFailureReasons())+1)
+	subject := &compliancev1.AssessmentSubjectSelection{RunId: report.GetRunId()}
+	if report.GetExpectedAssignmentCount() > report.GetVerifiedAssignmentCount() {
+		result = append(result, &compliancev1.AssessmentDiagnostic{
+			Code:     "campaign_population_incomplete",
+			Severity: "warning",
+			Subject:  subject,
+			Message:  fmt.Sprintf("campaign verification covered %d of %d expected assignments", report.GetVerifiedAssignmentCount(), report.GetExpectedAssignmentCount()),
+		})
+	}
+	for _, reason := range report.GetFailureReasons() {
+		if reason == "" {
+			continue
+		}
+		result = append(result, &compliancev1.AssessmentDiagnostic{
+			Code:     "campaign_verification_failure",
+			Severity: "error",
+			Subject:  subject,
+			Message:  reason,
+		})
+	}
+	return result
 }

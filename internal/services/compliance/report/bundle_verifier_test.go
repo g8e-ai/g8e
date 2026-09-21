@@ -37,6 +37,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -93,6 +94,67 @@ func (r *bundleArtifactReaderStub) ListFiles(context.Context) ([]string, error) 
 	}
 	sort.Strings(paths)
 	return paths, nil
+}
+
+func TestCampaignWitnessPoliciesMatchAdmissionRejectsSubstitution(t *testing.T) {
+	admission := &compliancev1.AssessmentSourceAdmission{
+		AdmissionId:               "campaign-source",
+		ProviderObservationPolicy: compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT,
+		ModelProvenancePolicy:     compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_INTERIM,
+	}
+	manifest := &evalv1.CampaignComplianceSourceInventory{
+		ProviderObservationPolicy: evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT,
+		ModelProvenancePolicy:     evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM,
+	}
+	assert.True(t, campaignWitnessPoliciesMatchAdmission(manifest, admission))
+
+	manifest.ModelProvenancePolicy = evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT
+	assert.False(t, campaignWitnessPoliciesMatchAdmission(manifest, admission))
+}
+
+func TestValidateCampaignSourceInventoryRejectsUnverifiableArtifactLists(t *testing.T) {
+	admission := &compliancev1.AssessmentSourceAdmission{
+		AdmissionId:               "campaign-source",
+		RunId:                     "run-1",
+		SourceKind:                constants.EvaluationSourceKindCampaign,
+		ProviderObservationPolicy: compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_INTERIM,
+		ModelProvenancePolicy:     compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT,
+	}
+	validDigest := strings.Repeat("a", sha256.Size*2)
+	base := &evalv1.CampaignComplianceSourceInventory{
+		SchemaVersion:             constants.CampaignSourceInventoryVersion,
+		AdmissionId:               admission.GetAdmissionId(),
+		RunId:                     admission.GetRunId(),
+		ProviderObservationPolicy: evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM,
+		ModelProvenancePolicy:     evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT,
+		Artifacts:                 []*evalv1.CampaignComplianceSourceArtifact{{RuntimePath: "data/eval/runs/run-1/run.json", Sha256: validDigest, MediaType: constants.MediaTypeJSON}},
+	}
+	tests := []struct {
+		name   string
+		mutate func(*evalv1.CampaignComplianceSourceInventory)
+	}{
+		{name: "duplicate runtime path", mutate: func(inventory *evalv1.CampaignComplianceSourceInventory) {
+			inventory.Artifacts = append(inventory.Artifacts, proto.Clone(inventory.Artifacts[0]).(*evalv1.CampaignComplianceSourceArtifact))
+		}},
+		{name: "invalid runtime path", mutate: func(inventory *evalv1.CampaignComplianceSourceInventory) {
+			inventory.Artifacts[0].RuntimePath = "../outside.json"
+		}},
+		{name: "invalid digest", mutate: func(inventory *evalv1.CampaignComplianceSourceInventory) {
+			inventory.Artifacts[0].Sha256 = "not-a-digest"
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			inventory := proto.Clone(base).(*evalv1.CampaignComplianceSourceInventory)
+			test.mutate(inventory)
+			require.Error(t, validateCampaignSourceInventory(inventory, admission))
+		})
+	}
+
+	evalInventory := &evalSourceInventory{campaignInventory: base, runtimeArtifactPaths: map[string]struct{}{"data/eval/runs/run-1/run.json": {}}}
+	assert.True(t, campaignRuntimePathsMatchInventory(evalInventory))
+	delete(evalInventory.runtimeArtifactPaths, "data/eval/runs/run-1/run.json")
+	assert.False(t, campaignRuntimePathsMatchInventory(evalInventory))
 }
 
 func TestBundleVerifier_VerifyOperationalSourcesReplaysProtectedInventory(t *testing.T) {

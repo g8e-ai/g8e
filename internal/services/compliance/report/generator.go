@@ -214,6 +214,17 @@ func (i admittedEvidenceImporter) Import(ctx context.Context) ([]evidence.Eviden
 		if !sharedDefinition {
 			node.SourceAdmissionID = i.admission.GetAdmissionId()
 		}
+		for _, diagnostic := range node.Diagnostics {
+			if diagnostic == nil {
+				continue
+			}
+			if diagnostic.GetSourceAdmissionId() != "" && diagnostic.GetSourceAdmissionId() != i.admission.GetAdmissionId() {
+				return nil, fmt.Errorf("%w: source admission %s imported diagnostic for %s", constants.ErrEvidenceScopeMismatch, i.admission.GetAdmissionId(), diagnostic.GetSourceAdmissionId())
+			}
+			if diagnostic.GetSourceAdmissionId() == "" {
+				diagnostic.SourceAdmissionId = i.admission.GetAdmissionId()
+			}
+		}
 		observedArtifacts[node.ArtifactID] = struct{}{}
 	}
 	for artifactID := range selectedArtifacts {

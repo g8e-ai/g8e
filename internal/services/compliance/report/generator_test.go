@@ -103,9 +103,11 @@ func TestGenerateComplianceAnalysis_OrchestratesVerifiedEvidenceThroughCanonical
 	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
 	require.NoError(t, err)
 
+	node := validGenerationNode("scope-1", windowStart, windowEnd)
+	node.Diagnostics = []*compliancev1.AssessmentDiagnostic{{Code: "campaign_population_incomplete", Severity: "warning", Subject: &compliancev1.AssessmentSubjectSelection{RunId: "run-1"}, Message: "selected campaign population is incomplete"}}
 	result, err := GenerateComplianceAnalysis(context.Background(), GenerationRequest{
 		Scope:      validGenerationScope(windowStart, windowEnd),
-		Sources:    []GenerationSource{{AdmissionID: "source-1", Importer: generationImporter{nodes: []evidence.EvidenceNode{validGenerationNode("scope-1", windowStart, windowEnd)}}}},
+		Sources:    []GenerationSource{{AdmissionID: "source-1", Importer: generationImporter{nodes: []evidence.EvidenceNode{node}}}},
 		Assertions: assertions,
 		Frameworks: frameworks,
 		Crosswalks: crosswalks,
@@ -121,6 +123,9 @@ func TestGenerateComplianceAnalysis_OrchestratesVerifiedEvidenceThroughCanonical
 	assert.NotEmpty(t, result.Analysis.GetFrameworkAssessments())
 	assert.True(t, result.Analysis.GetEvidenceGraphValid())
 	assert.Len(t, result.Analysis.GetAssessmentScopeSha256(), 64)
+	require.Len(t, result.Analysis.GetDiagnostics(), 1)
+	assert.Equal(t, "campaign_population_incomplete", result.Analysis.GetDiagnostics()[0].GetCode())
+	assert.Equal(t, "source-1", result.Analysis.GetDiagnostics()[0].GetSourceAdmissionId())
 	require.Len(t, result.Analysis.GetEvidenceResources(), 1)
 	assert.Equal(t, "source-1", result.Analysis.GetEvidenceResources()[0].GetSourceAdmissionId())
 	require.Len(t, result.Profiles, len(frameworks.GetFrameworks()))

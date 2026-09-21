@@ -10,11 +10,20 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class AssessmentWitnessPolicy(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ASSESSMENT_WITNESS_POLICY_UNSPECIFIED: _ClassVar[AssessmentWitnessPolicy]
+    ASSESSMENT_WITNESS_POLICY_INTERIM: _ClassVar[AssessmentWitnessPolicy]
+    ASSESSMENT_WITNESS_POLICY_STRICT: _ClassVar[AssessmentWitnessPolicy]
+
 class VerificationCheckStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     VERIFICATION_CHECK_STATUS_UNSPECIFIED: _ClassVar[VerificationCheckStatus]
     VERIFICATION_CHECK_STATUS_PASSED: _ClassVar[VerificationCheckStatus]
     VERIFICATION_CHECK_STATUS_FAILED: _ClassVar[VerificationCheckStatus]
+ASSESSMENT_WITNESS_POLICY_UNSPECIFIED: AssessmentWitnessPolicy
+ASSESSMENT_WITNESS_POLICY_INTERIM: AssessmentWitnessPolicy
+ASSESSMENT_WITNESS_POLICY_STRICT: AssessmentWitnessPolicy
 VERIFICATION_CHECK_STATUS_UNSPECIFIED: VerificationCheckStatus
 VERIFICATION_CHECK_STATUS_PASSED: VerificationCheckStatus
 VERIFICATION_CHECK_STATUS_FAILED: VerificationCheckStatus
@@ -190,7 +199,7 @@ class ComponentInventoryEntry(_message.Message):
     def __init__(self, component_id: _Optional[str] = ..., component_type: _Optional[str] = ..., version: _Optional[str] = ..., digest: _Optional[str] = ...) -> None: ...
 
 class AssessmentSourceAdmission(_message.Message):
-    __slots__ = ("admission_id", "source_kind", "source_version", "source_scope_id", "owner_runtime_boundary", "acquisition_boundary", "run_id", "snapshot_id", "artifact_ids", "verifier_ref", "disclosure_classification")
+    __slots__ = ("admission_id", "source_kind", "source_version", "source_scope_id", "owner_runtime_boundary", "acquisition_boundary", "run_id", "snapshot_id", "artifact_ids", "verifier_ref", "disclosure_classification", "provider_observation_policy", "model_provenance_policy")
     ADMISSION_ID_FIELD_NUMBER: _ClassVar[int]
     SOURCE_KIND_FIELD_NUMBER: _ClassVar[int]
     SOURCE_VERSION_FIELD_NUMBER: _ClassVar[int]
@@ -202,6 +211,8 @@ class AssessmentSourceAdmission(_message.Message):
     ARTIFACT_IDS_FIELD_NUMBER: _ClassVar[int]
     VERIFIER_REF_FIELD_NUMBER: _ClassVar[int]
     DISCLOSURE_CLASSIFICATION_FIELD_NUMBER: _ClassVar[int]
+    PROVIDER_OBSERVATION_POLICY_FIELD_NUMBER: _ClassVar[int]
+    MODEL_PROVENANCE_POLICY_FIELD_NUMBER: _ClassVar[int]
     admission_id: str
     source_kind: str
     source_version: str
@@ -213,7 +224,9 @@ class AssessmentSourceAdmission(_message.Message):
     artifact_ids: _containers.RepeatedScalarFieldContainer[str]
     verifier_ref: VersionedReference
     disclosure_classification: str
-    def __init__(self, admission_id: _Optional[str] = ..., source_kind: _Optional[str] = ..., source_version: _Optional[str] = ..., source_scope_id: _Optional[str] = ..., owner_runtime_boundary: _Optional[str] = ..., acquisition_boundary: _Optional[str] = ..., run_id: _Optional[str] = ..., snapshot_id: _Optional[str] = ..., artifact_ids: _Optional[_Iterable[str]] = ..., verifier_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., disclosure_classification: _Optional[str] = ...) -> None: ...
+    provider_observation_policy: AssessmentWitnessPolicy
+    model_provenance_policy: AssessmentWitnessPolicy
+    def __init__(self, admission_id: _Optional[str] = ..., source_kind: _Optional[str] = ..., source_version: _Optional[str] = ..., source_scope_id: _Optional[str] = ..., owner_runtime_boundary: _Optional[str] = ..., acquisition_boundary: _Optional[str] = ..., run_id: _Optional[str] = ..., snapshot_id: _Optional[str] = ..., artifact_ids: _Optional[_Iterable[str]] = ..., verifier_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., disclosure_classification: _Optional[str] = ..., provider_observation_policy: _Optional[_Union[AssessmentWitnessPolicy, str]] = ..., model_provenance_policy: _Optional[_Union[AssessmentWitnessPolicy, str]] = ...) -> None: ...
 
 class AssessmentApplicabilitySelection(_message.Message):
     __slots__ = ("components", "action_classes", "arms")

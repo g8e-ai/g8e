@@ -295,6 +295,9 @@ func validateAssessmentSelections(scope *compliancev1.AssessmentScope) error {
 		if admission == nil || admission.AdmissionId == "" || admission.SourceKind == "" || admission.SourceVersion == "" || admission.SourceScopeId == "" || admission.OwnerRuntimeBoundary == "" || admission.AcquisitionBoundary == "" || admission.RunId == "" && admission.SnapshotId == "" || admission.VerifierRef == nil || admission.VerifierRef.Id == "" || admission.VerifierRef.Version == "" || admission.DisclosureClassification != constants.ComplianceBundleProfilePublic && admission.DisclosureClassification != constants.ComplianceBundleProfileRestricted {
 			return fmt.Errorf("%w: source admission is incomplete", constants.ErrInvalidEvidenceGraph)
 		}
+		if err := validateAssessmentWitnessPolicies(admission); err != nil {
+			return err
+		}
 		if _, exists := admissions[admission.AdmissionId]; exists {
 			return fmt.Errorf("%w: duplicate source admission %s", constants.ErrInvalidEvidenceGraph, admission.AdmissionId)
 		}
@@ -317,6 +320,23 @@ func validateAssessmentSelections(scope *compliancev1.AssessmentScope) error {
 			return fmt.Errorf("%w: duplicate selected subject", constants.ErrInvalidEvidenceGraph)
 		}
 		seenSubjects[key] = struct{}{}
+	}
+	return nil
+}
+
+func validateAssessmentWitnessPolicies(admission *compliancev1.AssessmentSourceAdmission) error {
+	isCampaign := admission.GetSourceKind() == constants.EvaluationSourceKindCampaign
+	validPolicy := func(policy compliancev1.AssessmentWitnessPolicy) bool {
+		return policy == compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_INTERIM || policy == compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	}
+	if isCampaign {
+		if !validPolicy(admission.GetProviderObservationPolicy()) || !validPolicy(admission.GetModelProvenancePolicy()) {
+			return fmt.Errorf("%w: campaign source admission requires explicit provider-observation and model-provenance witness policies", constants.ErrInvalidEvidenceGraph)
+		}
+		return nil
+	}
+	if admission.GetProviderObservationPolicy() != compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_UNSPECIFIED || admission.GetModelProvenancePolicy() != compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_UNSPECIFIED {
+		return fmt.Errorf("%w: non-campaign source admission cannot declare campaign witness policies", constants.ErrInvalidEvidenceGraph)
 	}
 	return nil
 }

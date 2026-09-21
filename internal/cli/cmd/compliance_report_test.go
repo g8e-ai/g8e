@@ -573,6 +573,62 @@ func TestComplianceReportGenerateCmdWithConfig_RejectsIncompleteCampaignSource(t
 	assert.Contains(t, err.Error(), "campaign")
 }
 
+func TestComplianceReportGenerateCmdWithConfig_CampaignSourceVerifiesOffline(t *testing.T) {
+	fileSvc, _ := newCmdTestEnv(t)
+	req := evaluationTestCampaignInitRequest(t)
+	controller := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+	_, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(context.Background(), req.RunID)
+	require.NoError(t, err)
+	assessmentAsOf := time.Now().UTC()
+	scopeID := constants.EvalScopePrefix + req.CampaignID
+	identity, policy, _ := complianceReportSigningFixtureForTest(t, scopeID)
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
+		return identity, nil
+	}, func() time.Time { return assessmentAsOf })
+	configureComplianceReportGenerateCommand(t, cmd)
+	scopePath := writeComplianceAssessmentScopeForTest(t, scopeID, []string{req.RunID}, assessmentAsOf)
+	scopeBody, err := os.ReadFile(scopePath)
+	require.NoError(t, err)
+	scope := &compliancev1.AssessmentScope{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(scopeBody, scope))
+	scope.SourceAdmissions[0].SourceKind = constants.EvaluationSourceKindCampaign
+	scope.SourceAdmissions[0].VerifierRef = &compliancev1.VersionedReference{Id: constants.CampaignVerifierID, Version: constants.CampaignVerifierVersion}
+	scope.SourceAdmissions[0].ProviderObservationPolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	scope.SourceAdmissions[0].ModelProvenancePolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	scopeBody, err = compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(scopePath, scopeBody, constants.PermFilePrivate))
+	require.NoError(t, cmd.Flags().Set("scope", scopePath))
+	require.NoError(t, cmd.Flags().Set("eval-run", req.RunID))
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	require.NoError(t, cmd.RunE(cmd, nil))
+	descriptorPath, err := fileSvc.Rel(strings.TrimSpace(output.String()))
+	require.NoError(t, err)
+	descriptorBody, err := fileSvc.ReadFile(context.Background(), descriptorPath)
+	require.NoError(t, err)
+	bundle := &compliancev1.ComplianceReportBundle{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(descriptorBody, bundle))
+	inventoryPath := path.Join(path.Dir(descriptorPath), constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, scope.SourceAdmissions[0].AdmissionId, constants.CampaignSourceInventoryFilename)
+	inventoryBody, err := fileSvc.ReadFile(context.Background(), inventoryPath)
+	require.NoError(t, err)
+	inventory := &evalv1.CampaignComplianceSourceInventory{}
+	require.NoError(t, evalv1.UnmarshalCanonical(inventoryBody, inventory))
+	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT, inventory.GetProviderObservationPolicy())
+	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT, inventory.GetModelProvenancePolicy())
+	trustBody, err := compliancev1.MarshalCanonical(policy)
+	require.NoError(t, err)
+	trustPath := filepath.Join(t.TempDir(), constants.ComplianceReportTrustPolicyTestFilename)
+	require.NoError(t, os.WriteFile(trustPath, trustBody, constants.PermFilePublic))
+	verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return assessmentAsOf.Add(time.Minute) })
+	require.NoError(t, verifyCmd.Flags().Set("trust-policy", trustPath))
+	var verificationOutput bytes.Buffer
+	verifyCmd.SetOut(&verificationOutput)
+	require.NoError(t, verifyCmd.RunE(verifyCmd, []string{strings.TrimSpace(output.String())}), verificationOutput.String())
+}
+
 func TestComplianceReportGenerateCmdWithConfig_RejectsInvalidProtectedAssessmentWindow(t *testing.T) {
 	fileSvc, _ := newCmdTestEnv(t)
 	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)

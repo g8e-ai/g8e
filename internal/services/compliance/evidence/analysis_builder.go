@@ -94,7 +94,7 @@ func BuildComplianceAnalysis(ctx context.Context, request AnalysisRequest) (*com
 	remediation := buildRemediation(findings)
 	sections := buildSections(request)
 	graphFailures := buildGraphFailureMessages(request.Graph)
-	diagnostics := buildAssessmentDiagnostics(request.AssertionAssessments)
+	diagnostics := buildAnalysisDiagnostics(request.AssertionAssessments, request.Graph, request.ScopeID)
 
 	analysis := &compliancev1.ComplianceAnalysis{
 		AnalysisSchemaVersion:      constants.AnalysisSchemaVersion,
@@ -498,19 +498,32 @@ func buildGraphFailureMessages(graph *EvidenceGraph) []string {
 	return messages
 }
 
-func buildAssessmentDiagnostics(assessments []*compliancev1.ControlAssertionAssessment) []*compliancev1.AssessmentDiagnostic {
+func buildAnalysisDiagnostics(assessments []*compliancev1.ControlAssertionAssessment, graph *EvidenceGraph, scopeID string) []*compliancev1.AssessmentDiagnostic {
 	result := make([]*compliancev1.AssessmentDiagnostic, 0)
 	for _, assessment := range assessments {
 		for _, diagnostic := range assessment.GetDiagnostics() {
-			result = append(result, proto.Clone(diagnostic).(*compliancev1.AssessmentDiagnostic))
+			if diagnostic != nil {
+				result = append(result, proto.Clone(diagnostic).(*compliancev1.AssessmentDiagnostic))
+			}
+		}
+	}
+	for _, node := range graph.NodesByScope(scopeID) {
+		for _, diagnostic := range node.Diagnostics {
+			if diagnostic != nil {
+				result = append(result, proto.Clone(diagnostic).(*compliancev1.AssessmentDiagnostic))
+			}
 		}
 	}
 	sort.Slice(result, func(i, j int) bool {
-		left := result[i].GetSourceAdmissionId() + "\x00" + result[i].GetSubject().GetRunId() + "\x00" + result[i].GetSubject().GetAttemptId() + "\x00" + result[i].GetSubject().GetScenarioId() + "\x00" + result[i].GetSubject().GetTransactionId() + "\x00" + result[i].GetCode()
-		right := result[j].GetSourceAdmissionId() + "\x00" + result[j].GetSubject().GetRunId() + "\x00" + result[j].GetSubject().GetAttemptId() + "\x00" + result[j].GetSubject().GetScenarioId() + "\x00" + result[j].GetSubject().GetTransactionId() + "\x00" + result[j].GetCode()
+		left := diagnosticSortKey(result[i])
+		right := diagnosticSortKey(result[j])
 		return left < right
 	})
 	return result
+}
+
+func diagnosticSortKey(diagnostic *compliancev1.AssessmentDiagnostic) string {
+	return diagnostic.GetSourceAdmissionId() + "\x00" + diagnostic.GetSubject().GetRunId() + "\x00" + diagnostic.GetSubject().GetAttemptId() + "\x00" + diagnostic.GetSubject().GetScenarioId() + "\x00" + diagnostic.GetSubject().GetTransactionId() + "\x00" + diagnostic.GetCode() + "\x00" + diagnostic.GetMessage()
 }
 
 func sortedAssertionAssessments(assessments []*compliancev1.ControlAssertionAssessment) []*compliancev1.ControlAssertionAssessment {

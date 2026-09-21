@@ -640,6 +640,55 @@ func buildEvaluationReportSources(ctx context.Context, fileSvc fs.RuntimeFileSer
 	return sources, artifacts, nil
 }
 
+func campaignVerificationPolicyForAdmission(admission *compliancev1.AssessmentSourceAdmission, assessmentAsOf time.Time) (evaluation.CampaignVerificationPolicy, error) {
+	if admission == nil || admission.GetSourceKind() != constants.EvaluationSourceKindCampaign {
+		return evaluation.CampaignVerificationPolicy{}, fmt.Errorf("%w: campaign source admission is required", constants.ErrEvidenceScopeMismatch)
+	}
+	providerPolicy, err := campaignProviderObservationPolicy(admission.GetProviderObservationPolicy())
+	if err != nil {
+		return evaluation.CampaignVerificationPolicy{}, err
+	}
+	provenancePolicy, err := campaignModelProvenancePolicy(admission.GetModelProvenancePolicy())
+	if err != nil {
+		return evaluation.CampaignVerificationPolicy{}, err
+	}
+	return evaluation.CampaignVerificationPolicy{
+		VerifierReleaseVersion: constants.EvaluationSourceVersion,
+		ProviderObservation:    providerPolicy,
+		ModelProvenance:        provenancePolicy,
+		AssessmentTime:         func() time.Time { return assessmentAsOf },
+	}, nil
+}
+
+func campaignProviderObservationPolicy(policy compliancev1.AssessmentWitnessPolicy) (evaluation.ProviderObservationPolicy, error) {
+	switch policy {
+	case compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_INTERIM:
+		return evaluation.ProviderObservationPolicyInterim, nil
+	case compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT:
+		return evaluation.ProviderObservationPolicyStrict, nil
+	default:
+		return evaluation.ProviderObservationPolicyInterim, fmt.Errorf("%w: unsupported campaign provider-observation witness policy %s", constants.ErrUnsupportedVerifier, policy)
+	}
+}
+
+func campaignModelProvenancePolicy(policy compliancev1.AssessmentWitnessPolicy) (evaluation.ModelProvenancePolicy, error) {
+	switch policy {
+	case compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_INTERIM:
+		return evaluation.ModelProvenancePolicyInterim, nil
+	case compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT:
+		return evaluation.ModelProvenancePolicyStrict, nil
+	default:
+		return evaluation.ModelProvenancePolicyInterim, fmt.Errorf("%w: unsupported campaign model-provenance witness policy %s", constants.ErrUnsupportedVerifier, policy)
+	}
+}
+
+func campaignWitnessPolicyProto(policy compliancev1.AssessmentWitnessPolicy) evalv1.EvaluationWitnessPolicy {
+	if policy == compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT {
+		return evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT
+	}
+	return evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM
+}
+
 func buildCampaignReportSource(ctx context.Context, fileSvc fs.RuntimeFileService, admission *compliancev1.AssessmentSourceAdmission, assessmentAsOf time.Time) (compliancereport.GenerationSource, []compliancereport.SourceArtifact, error) {
 	runID := admission.GetRunId()
 	store := evaluation.NewStore(fileSvc)
@@ -714,8 +763,11 @@ func buildCampaignReportSource(ctx context.Context, fileSvc fs.RuntimeFileServic
 		bodies[filepath.FromSlash(runtimePath)] = append([]byte(nil), body...)
 		artifacts = append(artifacts, compliancereport.SourceArtifact{BundlePath: path.Join(runtimeBundleRoot, runtimePath), Body: body, MediaType: constants.MediaTypeJSON})
 	}
-	policy := evaluation.CampaignVerificationPolicy{VerifierReleaseVersion: constants.EvaluationSourceVersion, ProviderObservation: evaluation.ProviderObservationPolicyInterim, ModelProvenance: evaluation.ModelProvenancePolicyInterim, AssessmentTime: func() time.Time { return assessmentAsOf }}
-	inventory := &evalv1.CampaignComplianceSourceInventory{SchemaVersion: constants.CampaignSourceInventoryVersion, AdmissionId: admission.GetAdmissionId(), RunId: runID, CampaignId: campaignID, ProviderObservationPolicy: evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM, ModelProvenancePolicy: evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM}
+	policy, err := campaignVerificationPolicyForAdmission(admission, assessmentAsOf)
+	if err != nil {
+		return compliancereport.GenerationSource{}, nil, err
+	}
+	inventory := &evalv1.CampaignComplianceSourceInventory{SchemaVersion: constants.CampaignSourceInventoryVersion, AdmissionId: admission.GetAdmissionId(), RunId: runID, CampaignId: campaignID, ProviderObservationPolicy: campaignWitnessPolicyProto(admission.GetProviderObservationPolicy()), ModelProvenancePolicy: campaignWitnessPolicyProto(admission.GetModelProvenancePolicy())}
 	runtimePaths := make([]string, 0, len(bodies))
 	for runtimePath := range bodies {
 		runtimePaths = append(runtimePaths, filepath.ToSlash(runtimePath))

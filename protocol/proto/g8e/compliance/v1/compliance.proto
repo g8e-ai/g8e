@@ -108,6 +108,12 @@ message ComponentInventoryEntry {
   string digest = 4;
 }
 
+enum AssessmentWitnessPolicy {
+  ASSESSMENT_WITNESS_POLICY_UNSPECIFIED = 0;
+  ASSESSMENT_WITNESS_POLICY_INTERIM = 1;
+  ASSESSMENT_WITNESS_POLICY_STRICT = 2;
+}
+
 message AssessmentSourceAdmission {
   string admission_id = 1;
   string source_kind = 2;
@@ -120,6 +126,8 @@ message AssessmentSourceAdmission {
   repeated string artifact_ids = 9;
   VersionedReference verifier_ref = 10;
   string disclosure_classification = 11;
+  AssessmentWitnessPolicy provider_observation_policy = 12;
+  AssessmentWitnessPolicy model_provenance_policy = 13;
 }
 
 message AssessmentApplicabilitySelection {
