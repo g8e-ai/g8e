@@ -296,6 +296,22 @@ func (v *bundleVerifier) verifySignatures() {
 
 func (v *bundleVerifier) verifyCanonicalReportSources() {
 	manifest := v.request.Bundle.GetManifest()
+	scope := &compliancev1.AssessmentScope{}
+	if v.decodeCanonicalSource(constants.ComplianceBundleScopeFilename, scope) {
+		if err := catalog.ValidateAssessmentScope(scope); err != nil {
+			v.fail(err, constants.ComplianceBundleScopeFilename, err.Error())
+		} else {
+			if scope.GetScopeId() != manifest.GetScopeRef() {
+				v.fail(constants.ErrEvidenceScopeMismatch, constants.ComplianceBundleScopeFilename, "protected assessment scope does not match the manifest scope")
+			}
+			scopeBody := v.bodies[constants.ComplianceBundleScopeFilename]
+			digest := sha256.Sum256(scopeBody)
+			if v.request.Bundle.GetAnalysis().GetAssessmentScopeSha256() != hex.EncodeToString(digest[:]) {
+				v.fail(constants.ErrChecksumMismatch, constants.ComplianceBundleAnalysisPath, "analysis assessment-scope digest does not match the protected scope")
+			}
+			v.verifySourceAdmissionBindings(scope)
+		}
+	}
 	assertionPath := manifest.GetAssertionCatalogRef()
 	assertions := &compliancev1.ControlAssertionCatalog{}
 	if !v.decodeCanonicalSource(assertionPath, assertions) {
@@ -334,6 +350,36 @@ func (v *bundleVerifier) verifyCanonicalReportSources() {
 	v.verifyCanonicalSourceProjection(path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleControlAssessmentsFilename), controlAssessments, err)
 	evidenceIndex, err := marshalCanonicalMessages(v.request.Bundle.GetAnalysis().GetEvidenceResources())
 	v.verifyCanonicalSourceProjection(manifest.GetEvidenceIndexRef(), evidenceIndex, err)
+}
+
+func (v *bundleVerifier) verifySourceAdmissionBindings(scope *compliancev1.AssessmentScope) {
+	admissions := make(map[string]*compliancev1.AssessmentSourceAdmission, len(scope.GetSourceAdmissions()))
+	for _, admission := range scope.GetSourceAdmissions() {
+		admissions[admission.GetAdmissionId()] = admission
+	}
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		admission := admissions[resource.GetSourceAdmissionId()]
+		if admission == nil {
+			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "analysis evidence resource does not bind a protected source admission")
+			continue
+		}
+		if admission.GetRunId() != "" && admission.GetRunId() != resource.GetRunId() {
+			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "analysis evidence resource run does not match its protected source admission")
+		}
+		if len(admission.GetArtifactIds()) == 0 {
+			continue
+		}
+		selected := false
+		for _, artifactID := range admission.GetArtifactIds() {
+			if artifactID == resource.GetArtifactId() {
+				selected = true
+				break
+			}
+		}
+		if !selected {
+			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "analysis evidence resource is not selected by its protected source admission")
+		}
+	}
 }
 
 func (v *bundleVerifier) decodeCanonicalSource(bundlePath string, message proto.Message) bool {

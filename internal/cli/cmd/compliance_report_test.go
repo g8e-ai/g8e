@@ -16,11 +16,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -44,14 +44,14 @@ func complianceReportSigningFixtureForTest(t *testing.T, scopeID string) (*compl
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	digest := sha256.Sum256(publicKey)
-	createdAt := time.Unix(1_699_999_900, 0).UTC()
+	createdAt := time.Now().UTC().Add(-time.Hour)
 	metadata := &compliancev1.ComplianceReportSigningKeyMetadata{
 		KeyId:           "report-key-1",
 		Algorithm:       constants.ComplianceReportSignatureAlgorithm,
 		Purpose:         constants.ComplianceReportSigningPurpose,
 		PublicKeySha256: hex.EncodeToString(digest[:]),
 		CreatedAt:       timestamppb.New(createdAt),
-		ExpiresAt:       timestamppb.New(createdAt.Add(time.Hour)),
+		ExpiresAt:       timestamppb.New(createdAt.Add(24 * time.Hour)),
 	}
 	identity, err := compliancereport.NewComplianceReportSigningIdentity(metadata, privateKey)
 	require.NoError(t, err)
@@ -83,6 +83,50 @@ func complianceReportSigningIdentityLoaderForTest(t *testing.T) complianceReport
 	}
 }
 
+func writeComplianceAssessmentScopeForTest(t *testing.T, scopeID string, runIDs []string, assessmentAsOf time.Time) string {
+	t.Helper()
+	admissions := make([]*compliancev1.AssessmentSourceAdmission, 0, len(runIDs))
+	for index, runID := range runIDs {
+		admissions = append(admissions, &compliancev1.AssessmentSourceAdmission{
+			AdmissionId:              fmt.Sprintf("source-%d", index+1),
+			SourceKind:               "native-evaluation",
+			SourceVersion:            "1.0.0",
+			SourceScopeId:            scopeID,
+			OwnerRuntimeBoundary:     "evaluation-owner",
+			AcquisitionBoundary:      "owner-local-run",
+			RunId:                    runID,
+			VerifierRef:              &compliancev1.VersionedReference{Id: constants.EvalRunVerifierID, Version: constants.EvalRunVerifierVersion},
+			DisclosureClassification: constants.ComplianceBundleProfileRestricted,
+		})
+	}
+	scope := &compliancev1.AssessmentScope{
+		ScopeId:               scopeID,
+		OrganizationId:        "org-1",
+		DeploymentId:          "deployment-1",
+		ProductVersion:        "2.1.12",
+		BuildIdentity:         "build-1",
+		SourceRevision:        "revision-1",
+		ComponentInventory:    []*compliancev1.ComponentInventoryEntry{{ComponentId: "operator-1", ComponentType: "operator", Version: "2.1.12", Digest: strings.Repeat("a", 64)}},
+		NetworkTopologyHash:   strings.Repeat("b", 64),
+		ConfigurationHashes:   []*compliancev1.NamedDigest{{Name: "operator-1", Sha256: strings.Repeat("c", 64)}},
+		DoctrineBundleHashes:  []*compliancev1.NamedDigest{{Name: "doctrine", Sha256: strings.Repeat("d", 64)}},
+		TrustAnchorIds:        []string{"root-1"},
+		CryptographicMode:     "standard",
+		AssessmentWindowStart: timestamppb.New(assessmentAsOf.Add(-time.Hour)),
+		AssessmentWindowEnd:   timestamppb.New(assessmentAsOf),
+		ActivePosture:         constants.PostureDoctrine,
+		SourceAdmissions:      admissions,
+		Applicability:         &compliancev1.AssessmentApplicabilitySelection{Components: []string{"operator"}, ActionClasses: []string{"governed_mutation"}, Arms: []string{"governed"}},
+		SelectedPopulation:    &compliancev1.AssessmentPopulationSelection{},
+		AssessmentAsOf:        timestamppb.New(assessmentAsOf),
+	}
+	body, err := compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	scopePath := filepath.Join(t.TempDir(), constants.ComplianceBundleScopeFilename)
+	require.NoError(t, os.WriteFile(scopePath, body, constants.PermFilePrivate))
+	return scopePath
+}
+
 func configureComplianceReportGenerateCommand(t *testing.T, cmd *cobra.Command) {
 	t.Helper()
 	require.NoError(t, cmd.Flags().Set("report-id", "report-1"))
@@ -95,11 +139,9 @@ func runComplianceReportGenerateCommand(t *testing.T, evalRuns []string) ([]byte
 	fileSvc, _ := newCmdTestEnv(t)
 	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t))
 	configureComplianceReportGenerateCommand(t, cmd)
-	windowStart := time.Unix(1_699_999_999, 0).UTC()
-	windowEnd := time.Unix(1_700_000_100, 0).UTC()
-	require.NoError(t, cmd.Flags().Set("scope-id", evidence.EvalScopeID("evidence-graph-suite")))
-	require.NoError(t, cmd.Flags().Set("window-start-unix-ms", strconv.FormatInt(windowStart.UnixMilli(), 10)))
-	require.NoError(t, cmd.Flags().Set("window-end-unix-ms", strconv.FormatInt(windowEnd.UnixMilli(), 10)))
+	assessmentAsOf := time.Unix(1_700_000_100, 0).UTC()
+	scopePath := writeComplianceAssessmentScopeForTest(t, evidence.EvalScopeID("evidence-graph-suite"), evalRuns, assessmentAsOf)
+	require.NoError(t, cmd.Flags().Set("scope", scopePath))
 	for _, runID := range evalRuns {
 		require.NoError(t, cmd.Flags().Set("eval-run", runID))
 	}
@@ -260,10 +302,11 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	reportPublicKey, reportPrivateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	reportKeyDigest := sha256.Sum256(reportPublicKey)
-	reportMetadata := &compliancev1.ComplianceReportSigningKeyMetadata{KeyId: "complete-report-key-1", Algorithm: constants.ComplianceReportSignatureAlgorithm, Purpose: constants.ComplianceReportSigningPurpose, PublicKeySha256: hex.EncodeToString(reportKeyDigest[:]), CreatedAt: timestamppb.New(verifiedAt.Add(-time.Hour)), ExpiresAt: timestamppb.New(verifiedAt.Add(time.Hour))}
+	reportGeneratedAt := time.Now().UTC()
+	reportMetadata := &compliancev1.ComplianceReportSigningKeyMetadata{KeyId: "complete-report-key-1", Algorithm: constants.ComplianceReportSignatureAlgorithm, Purpose: constants.ComplianceReportSigningPurpose, PublicKeySha256: hex.EncodeToString(reportKeyDigest[:]), CreatedAt: timestamppb.New(reportGeneratedAt.Add(-time.Hour)), ExpiresAt: timestamppb.New(reportGeneratedAt.Add(time.Hour))}
 	reportIdentity, err := compliancereport.NewComplianceReportSigningIdentity(reportMetadata, reportPrivateKey)
 	require.NoError(t, err)
-	reportPolicy := &compliancev1.ComplianceReportTrustPolicy{PolicyId: "complete-report-policy-1", PolicyVersion: "1.0.0", TrustedKeys: []*compliancev1.ComplianceReportTrustedKey{{Metadata: reportMetadata, PublicKey: hex.EncodeToString(reportPublicKey), AssessmentId: "report-assessment-1", AssessorIdentity: "assessor-1", AssessedAt: timestamppb.New(verifiedAt.Add(-time.Hour)), AllowedScopeRefs: []string{scopeID}}}}
+	reportPolicy := &compliancev1.ComplianceReportTrustPolicy{PolicyId: "complete-report-policy-1", PolicyVersion: "1.0.0", TrustedKeys: []*compliancev1.ComplianceReportTrustedKey{{Metadata: reportMetadata, PublicKey: hex.EncodeToString(reportPublicKey), AssessmentId: "report-assessment-1", AssessorIdentity: "assessor-1", AssessedAt: timestamppb.New(reportGeneratedAt.Add(-time.Hour)), AllowedScopeRefs: []string{scopeID}}}}
 	publicKeyDigest := sha256.Sum256(publicKey)
 	evidencePolicy := &compliancev1.ComplianceEvidenceTrustPolicy{
 		PolicyId:      "evidence-policy-1",
@@ -288,9 +331,8 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 		return reportIdentity, nil
 	})
 	configureComplianceReportGenerateCommand(t, generateCmd)
-	require.NoError(t, generateCmd.Flags().Set("scope-id", scopeID))
-	require.NoError(t, generateCmd.Flags().Set("window-start-unix-ms", strconv.FormatInt(time.UnixMilli(1_699_999_000_000).UnixMilli(), 10)))
-	require.NoError(t, generateCmd.Flags().Set("window-end-unix-ms", strconv.FormatInt(verifiedAt.UnixMilli(), 10)))
+	scopePath := writeComplianceAssessmentScopeForTest(t, scopeID, []string{"ksi-run-1", "commitment-run-1", "attestation-run-1", "audit-run-1", "ledger-run-1", "build-run-1"}, verifiedAt)
+	require.NoError(t, generateCmd.Flags().Set("scope", scopePath))
 	for name, value := range map[string]string{
 		"evidence-trust": evidencePolicyPath, "ksi-run-id": "ksi-run-1", "ksi-history": ksiHistoryPath, "ksi-results": ksiResultsPath,
 		"commitment-run-id": "commitment-run-1", "commitment": commitmentPath, "attestation-run-id": "attestation-run-1", "attestations": attestationPath,
@@ -308,7 +350,7 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	require.NoError(t, err)
 	reportPolicyPath := filepath.Join(root, constants.ComplianceReportTrustPolicyTestFilename)
 	require.NoError(t, os.WriteFile(reportPolicyPath, reportPolicyBody, constants.PermFileReadOnly))
-	verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return verifiedAt })
+	verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return reportGeneratedAt.Add(time.Minute) })
 	require.NoError(t, verifyCmd.Flags().Set("trust-policy", reportPolicyPath))
 	require.NoError(t, verifyCmd.Flags().Set("evidence-trust", evidencePolicyPath))
 	var verified bytes.Buffer
@@ -344,11 +386,9 @@ func TestComplianceReportGenerateCmdWithConfig_PersistedDemoSourceMutationsFailI
 				return identity, nil
 			})
 			configureComplianceReportGenerateCommand(t, cmd)
-			windowStart := time.Unix(1_699_999_999, 0).UTC()
-			windowEnd := time.Unix(1_700_000_100, 0).UTC()
-			require.NoError(t, cmd.Flags().Set("scope-id", scopeID))
-			require.NoError(t, cmd.Flags().Set("window-start-unix-ms", strconv.FormatInt(windowStart.UnixMilli(), 10)))
-			require.NoError(t, cmd.Flags().Set("window-end-unix-ms", strconv.FormatInt(windowEnd.UnixMilli(), 10)))
+			assessmentAsOf := time.Unix(1_700_000_100, 0).UTC()
+			scopePath := writeComplianceAssessmentScopeForTest(t, scopeID, []string{runID}, assessmentAsOf)
+			require.NoError(t, cmd.Flags().Set("scope", scopePath))
 			require.NoError(t, cmd.Flags().Set("demo-run", runID))
 			var output bytes.Buffer
 			cmd.SetOut(&output)
@@ -358,7 +398,8 @@ func TestComplianceReportGenerateCmdWithConfig_PersistedDemoSourceMutationsFailI
 			require.NoError(t, err)
 			trustPath := filepath.Join(t.TempDir(), constants.ComplianceReportTrustPolicyTestFilename)
 			require.NoError(t, os.WriteFile(trustPath, trustBody, constants.PermFilePublic))
-			verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return windowEnd })
+			verificationTime := time.Now().UTC().Add(time.Minute)
+			verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return verificationTime })
 			require.NoError(t, verifyCmd.Flags().Set("trust-policy", trustPath))
 			verifyCmd.SetOut(io.Discard)
 			require.NoError(t, verifyCmd.RunE(verifyCmd, []string{descriptorAbsolutePath}))
@@ -379,7 +420,7 @@ func TestComplianceReportGenerateCmdWithConfig_PersistedDemoSourceMutationsFailI
 				Bundle:      bundle,
 				Reader:      &complianceBundleRootReader{root: root},
 				TrustPolicy: policy,
-				VerifiedAt:  windowEnd,
+				VerifiedAt:  verificationTime,
 			})
 
 			require.NoError(t, err)
@@ -422,9 +463,8 @@ func TestComplianceReportGenerateCmdWithConfig_RejectsUnsupportedProfile(t *test
 	fileSvc, _ := newCmdTestEnv(t)
 	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t))
 	configureComplianceReportGenerateCommand(t, cmd)
-	require.NoError(t, cmd.Flags().Set("scope-id", "scope-1"))
-	require.NoError(t, cmd.Flags().Set("window-start-unix-ms", "1700000000000"))
-	require.NoError(t, cmd.Flags().Set("window-end-unix-ms", "1700000001000"))
+	scopePath := writeComplianceAssessmentScopeForTest(t, "scope-1", []string{"run-1"}, time.Unix(1_700_000_001, 0).UTC())
+	require.NoError(t, cmd.Flags().Set("scope", scopePath))
 	require.NoError(t, cmd.Flags().Set("eval-run", "run-1"))
 	require.NoError(t, cmd.Flags().Set("profile", "confidential"))
 
@@ -449,17 +489,25 @@ func TestComplianceReportGenerateCmdWithConfig_FailsClosedOnImporterFailure(t *t
 	assert.Empty(t, body)
 }
 
-func TestComplianceReportGenerateCmdWithConfig_RejectsInvalidEvidenceWindow(t *testing.T) {
+func TestComplianceReportGenerateCmdWithConfig_RejectsInvalidProtectedAssessmentWindow(t *testing.T) {
 	fileSvc, _ := newCmdTestEnv(t)
 	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t))
-	require.NoError(t, cmd.Flags().Set("scope-id", "scope-1"))
-	require.NoError(t, cmd.Flags().Set("window-start-unix-ms", "1700000001000"))
-	require.NoError(t, cmd.Flags().Set("window-end-unix-ms", "1700000000000"))
+	configureComplianceReportGenerateCommand(t, cmd)
+	scopePath := writeComplianceAssessmentScopeForTest(t, "scope-1", []string{"run-1"}, time.Unix(1_700_000_001, 0).UTC())
+	scopeBody, err := os.ReadFile(scopePath)
+	require.NoError(t, err)
+	scope := &compliancev1.AssessmentScope{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(scopeBody, scope))
+	scope.AssessmentWindowStart = scope.AssessmentWindowEnd
+	scopeBody, err = compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(scopePath, scopeBody, constants.PermFileReadOnly))
+	require.NoError(t, cmd.Flags().Set("scope", scopePath))
 	require.NoError(t, cmd.Flags().Set("eval-run", "run-1"))
 
-	err := cmd.RunE(cmd, nil)
+	err = cmd.RunE(cmd, nil)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
 }
 
 func TestComplianceReportVerifyCmdWithConfig_PrintsTypedValidReport(t *testing.T) {

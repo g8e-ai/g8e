@@ -408,6 +408,21 @@ func readComplianceReportInputFile(inputPath string) ([]byte, error) {
 	return body, nil
 }
 
+func loadComplianceAssessmentScope(scopePath string) (*compliancev1.AssessmentScope, error) {
+	body, err := readComplianceReportInputFile(scopePath)
+	if err != nil {
+		return nil, fmt.Errorf("compliance report: read assessment scope: %w", err)
+	}
+	scope := &compliancev1.AssessmentScope{}
+	if err := compliancev1.UnmarshalCanonical(body, scope); err != nil {
+		return nil, fmt.Errorf("%w: decode canonical assessment scope: %w", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if err := catalog.ValidateAssessmentScope(scope); err != nil {
+		return nil, fmt.Errorf("compliance report: validate assessment scope: %w", err)
+	}
+	return scope, nil
+}
+
 func pathWithinRoot(root, candidate string) bool {
 	relative, err := filepath.Rel(root, candidate)
 	if err != nil {
@@ -909,15 +924,19 @@ func complianceReportGenerateCmdWithConfig(
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
+			scope, err := loadComplianceAssessmentScope(scopePath)
+			if err != nil {
+				return err
+			}
 			identity, err := signingIdentityLoader(ctx, signingMetadata, signingPrivateKey)
 			if err != nil {
 				return err
 			}
-			windowStart := time.UnixMilli(windowStartMilli).UTC()
-			windowEnd := time.UnixMilli(windowEndMilli).UTC()
+			scopeID := scope.GetScopeId()
+			assessmentAsOf := scope.GetAssessmentAsOf().AsTime()
 			var evidenceTrust evidence.AssessedSignerSource
 			if evidenceTrustPath != "" {
-				evidenceTrust, err = loadAssessedEvidenceTrust(evidenceTrustPath, scopeID, windowEnd)
+				evidenceTrust, err = loadAssessedEvidenceTrust(evidenceTrustPath, scopeID, assessmentAsOf)
 				if err != nil {
 					return err
 				}
@@ -929,7 +948,7 @@ func complianceReportGenerateCmdWithConfig(
 			}
 			standaloneImporters, standaloneSourceArtifacts, err := buildStandaloneReportSources(ctx, standaloneReportSourceInput{
 				scopeID:              scopeID,
-				verifiedAt:           windowEnd,
+				verifiedAt:           assessmentAsOf,
 				evidenceTrust:        evidenceTrust,
 				ksiRunID:             ksiRunID,
 				ksiHistory:           ksiHistory,
@@ -960,30 +979,35 @@ func complianceReportGenerateCmdWithConfig(
 			if err != nil {
 				return fmt.Errorf("compliance report: load canonical catalogs: %w", err)
 			}
-			sourceArtifacts, err := buildDemoVerificationArtifacts(ctx, fileSvc, source, demoRuns, windowEnd)
+			sourceArtifacts, err := buildDemoVerificationArtifacts(ctx, fileSvc, source, demoRuns, assessmentAsOf)
 			if err != nil {
 				return err
 			}
-			evalSourceArtifacts, err := buildEvalVerificationArtifacts(ctx, fileSvc, evalRuns, windowEnd)
+			evalSourceArtifacts, err := buildEvalVerificationArtifacts(ctx, fileSvc, evalRuns, assessmentAsOf)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrReportVerificationFailed, err)
 			}
 			sourceArtifacts = append(sourceArtifacts, evalSourceArtifacts...)
 			sourceArtifacts = append(sourceArtifacts, standaloneSourceArtifacts...)
 			sort.Slice(sourceArtifacts, func(i, j int) bool { return sourceArtifacts[i].BundlePath < sourceArtifacts[j].BundlePath })
+			if len(importers) != len(scope.GetSourceAdmissions()) {
+				return fmt.Errorf("%w: selected source count does not match protected source admissions", constants.ErrValidationFailed)
+			}
+			generationSources := make([]compliancereport.GenerationSource, 0, len(importers))
+			for index, importer := range importers {
+				generationSources = append(generationSources, compliancereport.GenerationSource{AdmissionID: scope.GetSourceAdmissions()[index].GetAdmissionId(), Importer: importer})
+			}
 			result, err := compliancereport.GenerateSignedComplianceBundle(ctx, compliancereport.SignedBundleGenerationRequest{
 				Generation: compliancereport.GenerationRequest{
-					ScopeID:     scopeID,
-					WindowStart: windowStart,
-					WindowEnd:   windowEnd,
-					EvaluatedAt: windowEnd,
-					Importers:   importers,
-					Assertions:  assertions,
-					Frameworks:  frameworks,
-					Crosswalks:  crosswalks,
+					Scope:      scope,
+					Sources:    generationSources,
+					Assertions: assertions,
+					Frameworks: frameworks,
+					Crosswalks: crosswalks,
 				},
 				Profile:         profile,
 				ReportID:        reportID,
+				GeneratedAt:     time.Now().UTC(),
 				SigningIdentity: identity,
 				SourceArtifacts: sourceArtifacts,
 			})
@@ -1001,11 +1025,9 @@ func complianceReportGenerateCmdWithConfig(
 		},
 	}
 
-	cmd.Flags().StringVar(&scopeID, "scope-id", "", "Assessment scope ID")
+	cmd.Flags().StringVar(&scopePath, "scope", "", "Path to canonical protected assessment scope")
 	cmd.Flags().StringSliceVar(&demoRuns, "demo-run", nil, "Demo evidence run ID (repeatable)")
 	cmd.Flags().StringSliceVar(&evalRuns, "eval-run", nil, "Eval bundle run ID (repeatable)")
-	cmd.Flags().Int64Var(&windowStartMilli, "window-start-unix-ms", 0, "Evidence window start as Unix milliseconds")
-	cmd.Flags().Int64Var(&windowEndMilli, "window-end-unix-ms", 0, "Evidence window end as Unix milliseconds")
 	cmd.Flags().StringVar(&reportID, "report-id", "", "Immutable report bundle ID")
 	cmd.Flags().StringVar(&bundleProfile, "profile", string(compliancereport.ProfilePublic), "Bundle profile: public or restricted")
 	cmd.Flags().StringVar(&signingMetadata, "signing-metadata", "", "Path to canonical compliance report signing-key metadata")

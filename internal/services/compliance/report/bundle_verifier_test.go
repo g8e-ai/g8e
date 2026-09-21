@@ -184,7 +184,13 @@ func signedBundleVerificationFixture(t *testing.T) (*compliancev1.ComplianceRepo
 func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*BundleAssemblyRequest)) (*compliancev1.ComplianceReportBundle, *bundleArtifactReaderStub, *compliancev1.ComplianceReportTrustPolicy, time.Time) {
 	t.Helper()
 	request, _ := bundleAssemblyFixture(t)
+	scope := validGenerationScope(request.GeneratedAt.Add(-time.Hour), request.GeneratedAt)
+	scope.SourceAdmissions[0].RunId = "demo-run-1"
 	request.Analysis = rendererTestAnalysis()
+	scopeBody, err := compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	scopeDigest := sha256.Sum256(scopeBody)
+	request.Analysis.AssessmentScopeSha256 = hex.EncodeToString(scopeDigest[:])
 	request.Analysis.EvidenceResources = []*compliancev1.ComplianceEvidenceReference{{
 		ArtifactId:         string(evidence.ArtifactTypeDemoManifest) + ":sha256:" + strings.Repeat("a", 64),
 		ArtifactType:       string(evidence.ArtifactTypeDemoManifest),
@@ -194,6 +200,7 @@ func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*Bundl
 		ProducerIdentity:   "demo-run-1",
 		ProducedAt:         timestamppb.New(request.GeneratedAt),
 		ScopeId:            request.ScopeRef,
+		SourceAdmissionId:  "source-1",
 		RunId:              "demo-run-1",
 		VerificationStatus: string(evidence.VerificationStatusVerified),
 		VerifierId:         constants.DemoRunVerifierID,
@@ -209,7 +216,7 @@ func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*Bundl
 	request.AssessmentRefs = append(request.AssessmentRefs, controlAssessmentRef)
 	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
 	require.NoError(t, err)
-	request.SourceArtifacts, err = canonicalReportSourceArtifacts(GenerationRequest{Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks}, &GenerationResult{Analysis: request.Analysis})
+	request.SourceArtifacts, err = canonicalReportSourceArtifacts(GenerationRequest{Scope: scope, Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks}, &GenerationResult{Analysis: request.Analysis})
 	require.NoError(t, err)
 	sourceReportBody, err := compliancev1.MarshalCanonical(&compliancev1.ComplianceVerificationReport{
 		ReportId:        "demo-run-1",
