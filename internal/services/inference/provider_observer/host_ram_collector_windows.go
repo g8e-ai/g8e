@@ -35,22 +35,22 @@ func (c *WindowsHostRAMCollector) Collect(_ context.Context, observedAt time.Tim
 	}
 	return &evalv1.ProviderBoundaryHardwareSample{
 		ObservedAtUnixNanos: uint64(observedAt.UTC().UnixNano()),
-		HostRamAvailability:   evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
-		HostRamUsedBytes:      usedBytes,
-		HostRamTotalBytes:     totalBytes,
+		HostRamAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+		HostRamUsedBytes:    usedBytes,
+		HostRamTotalBytes:   totalBytes,
 	}, nil
 }
 
 type windowsMemoryStatusEx struct {
-	length                uint32
-	memoryLoad            uint32
-	totalPhys             uint64
-	availPhys             uint64
-	totalPageFile         uint64
-	availPageFile         uint64
-	totalVirtual          uint64
-	availVirtual          uint64
-	availExtendedVirtual  uint64
+	length               uint32
+	memoryLoad           uint32
+	totalPhys            uint64
+	availPhys            uint64
+	totalPageFile        uint64
+	availPageFile        uint64
+	totalVirtual         uint64
+	availVirtual         uint64
+	availExtendedVirtual uint64
 }
 
 func readWindowsMemoryStatus() (totalBytes, usedBytes uint64, ok bool) {

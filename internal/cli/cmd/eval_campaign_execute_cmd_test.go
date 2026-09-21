@@ -139,6 +139,8 @@ func TestCampaignEvalExecute_JSONOutput(t *testing.T) {
 	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))
 	assert.Equal(t, runID, payload["run_id"])
 	assert.Equal(t, float64(1), payload["executed"])
+	assert.Contains(t, payload, "remaining")
+	assert.NotEmpty(t, payload["results"])
 }
 
 func prepareUnscheduledCampaignRun(t *testing.T, root string, deps nativeEvalDeps) string {

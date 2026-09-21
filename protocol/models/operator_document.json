@@ -155,7 +155,6 @@
         "inference_enabled":         { "type": "boolean", "description": "True when Operator started with --inference-enabled, marking it as an Inference Node (g8ellama). The User Gateway's inference dispatch service resolves the Inference Node by this field." },
         "inference_ollama_endpoint": { "type": "string",  "description": "Approved remote Ollama provider URL configured when the Inference Node started with --inference-ollama-endpoint." },
         "provider_boundary_observer_enabled": { "type": "boolean", "description": "True when the Operator started with --provider-boundary-observer-enabled." },
-        "provider_boundary_observer_ollama_enabled": { "type": "boolean", "description": "True when the provider-boundary Observer Operator started with --ollama, opting in to remote Ollama service lifecycle commands on the provider host." },
         "platform": { "type": "string", "description": "Operator host GOOS recorded at startup (for example linux or windows)." }
       }
     },

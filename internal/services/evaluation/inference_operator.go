@@ -84,7 +84,7 @@ func inferenceOperatorOllamaEndpoint(op models.OperatorDocumentGo) string {
 }
 
 // ResolveInferenceOllamaEndpoint selects the Ollama provider URL for campaign
-// provider-idle gating. Resolution order: explicit flag override, process
+// model maintenance and residency checking. Resolution order: explicit flag override, process
 // environment, active inference operator runtime_config, then loopback default.
 func ResolveInferenceOllamaEndpoint(flag string, operators []models.OperatorDocumentGo, inferenceSessionID string) (string, error) {
 	if endpoint := strings.TrimSpace(flag); endpoint != "" {

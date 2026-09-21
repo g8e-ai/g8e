@@ -43,6 +43,7 @@ type campaignExecuteOptions struct {
 	OllamaEndpoint     string
 	NoAutoRefresh      bool
 	JSONOutput         bool
+	ResultOutput       func(*evalv1.EvaluationAssignmentResult)
 }
 
 func resolveCampaignOperatorSessions(
@@ -300,6 +301,9 @@ func runCampaignExecute(cmd *cobra.Command, deps nativeEvalDeps, opts campaignEx
 			break
 		}
 		executed++
+		if opts.ResultOutput != nil {
+			opts.ResultOutput(result)
+		}
 		if !opts.JSONOutput {
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Executed %s: %s\n", result.GetAssignmentId(), result.GetLifecycleStatus().String())
 		}
