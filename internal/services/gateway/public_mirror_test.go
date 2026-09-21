@@ -12,6 +12,7 @@ package gateway
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -698,6 +699,23 @@ func TestMirror_Snapshot_ReturnsHighWater(t *testing.T) {
 	assert.Equal(t, 1, snap.BatchCount)
 }
 
+func TestMirror_Snapshot_ReturnsRetainedCheckpoint(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	first := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(1, map[string]any{"v": "1"})}, constants.PublicFeedZeroHashHex)
+	_, ingestResp := env.sendIngest(first)
+	require.True(t, ingestResp.Accepted)
+	second := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(2, map[string]any{"v": "2"})}, first.ContentHash)
+	_, ingestResp = env.sendIngest(second)
+	require.True(t, ingestResp.Accepted)
+
+	var snap models.PublicFeedSnapshot
+	status := env.getJSON("/snapshot?source="+env.sourceID+"&sequence=1", &snap)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, int64(1), snap.HighWaterSequence)
+	assert.Equal(t, first.ContentHash, snap.FeedChainHash)
+	assert.Equal(t, 1, snap.BatchCount)
+}
+
 // ---------------------------------------------------------------------------
 // Cursor pagination tests
 // ---------------------------------------------------------------------------
@@ -757,7 +775,30 @@ func TestMirror_History_BoundedPageSize(t *testing.T) {
 	var page models.PublicFeedCursorPage
 	status := env.getJSON("/history?source="+env.sourceID+"&limit=1000", &page)
 	assert.Equal(t, http.StatusOK, status)
-	assert.LessOrEqual(t, page.Limit, 100)
+	assert.Equal(t, 500, page.Limit)
+}
+
+func TestMirror_History_CompressesGzipResponse(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	records := []models.PublicFeedRecord{env.makeRecord(1, map[string]any{"kind": "catalog_snapshot", "title": strings.Repeat("evaluation ", 100)})}
+	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
+	_, ingestResp := env.sendIngest(batch)
+	require.True(t, ingestResp.Accepted)
+
+	req, err := http.NewRequest(http.MethodGet, env.server.URL+"/history?source="+env.sourceID, nil)
+	require.NoError(t, err)
+	req.Header.Set("Accept-Encoding", "gzip")
+	resp, err := env.client.Do(req)
+	require.NoError(t, err)
+	t.Cleanup(func() { resp.Body.Close() })
+	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
+
+	reader, err := gzip.NewReader(resp.Body)
+	require.NoError(t, err)
+	t.Cleanup(func() { reader.Close() })
+	var page models.PublicFeedCursorPage
+	require.NoError(t, json.NewDecoder(reader).Decode(&page))
+	require.Len(t, page.Items, 1)
 }
 
 func TestMirror_History_FiltersByRecordKindBeforePagination(t *testing.T) {

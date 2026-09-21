@@ -137,7 +137,7 @@ func configureComplianceReportGenerateCommand(t *testing.T, cmd *cobra.Command) 
 func runComplianceReportGenerateCommand(t *testing.T, evalRuns []string) ([]byte, error) {
 	t.Helper()
 	fileSvc, _ := newCmdTestEnv(t)
-	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t))
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
 	configureComplianceReportGenerateCommand(t, cmd)
 	assessmentAsOf := time.Unix(1_700_000_100, 0).UTC()
 	scopePath := writeComplianceAssessmentScopeForTest(t, evidence.EvalScopeID("evidence-graph-suite"), evalRuns, assessmentAsOf)
@@ -218,8 +218,8 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	keyID := hex.EncodeToString(publicKey)
 	trust := &assessedEvidenceTrust{keys: map[string]ed25519.PublicKey{keyID: publicKey}}
 
-	binding := compliance.EvaluationBinding{ScopeID: scopeID, RunID: "ksi-run-1", WindowStartUnixMs: 1_699_999_000_000, WindowEndUnixMs: 1_700_001_000_000, EvaluatorID: constants.KSIEvaluatorID, EvaluatorVersion: constants.KSIEvaluatorVersion, MethodDefinitionID: constants.KSIMethodDefinitionVersion, AssertionAssessments: compliance.AssertionAssessmentScope{AssessmentIDs: []string{"assessment-1"}, AttemptIDs: []string{"attempt-1"}, ScenarioIDs: []string{"scenario-1"}, ActionIDs: []string{"action-1"}}}
-	ksi := compliance.KSIResultSet{Class: compliance.ClassC, EvaluatedAtMs: 1_700_000_000_000, Binding: binding, Results: []compliance.KSIResult{{ID: "KSI-CMT-01", Status: compliance.KSIStatusSatisfied, Outcome: compliance.KSIOutcomeSatisfied, LastValidatedUnixMs: 1_699_999_999_000, MethodCount: 1, Binding: binding}}}
+	binding := compliance.EvaluationBinding{ScopeID: scopeID, RunID: "ksi-run-1", WindowStartUnixMs: verifiedAt.Add(-time.Hour).UnixMilli(), WindowEndUnixMs: verifiedAt.UnixMilli(), EvaluatorID: constants.KSIEvaluatorID, EvaluatorVersion: constants.KSIEvaluatorVersion, MethodDefinitionID: constants.KSIMethodDefinitionVersion, AssertionAssessments: compliance.AssertionAssessmentScope{AssessmentIDs: []string{"assessment-1"}, AttemptIDs: []string{"attempt-1"}, ScenarioIDs: []string{"scenario-1"}, ActionIDs: []string{"action-1"}}}
+	ksi := compliance.KSIResultSet{Class: compliance.ClassC, EvaluatedAtMs: verifiedAt.UnixMilli(), Binding: binding, Results: []compliance.KSIResult{{ID: "KSI-CMT-01", Status: compliance.KSIStatusSatisfied, Outcome: compliance.KSIOutcomeSatisfied, LastValidatedUnixMs: verifiedAt.Add(-time.Second).UnixMilli(), MethodCount: 1, Binding: binding}}}
 	ksiResultsBody, err := json.Marshal(ksi)
 	require.NoError(t, err)
 	ksiHistoryBody := append(append([]byte(nil), ksiResultsBody...), '\n')
@@ -228,7 +228,7 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	require.NoError(t, os.WriteFile(ksiHistoryPath, ksiHistoryBody, constants.PermFileReadOnly))
 	require.NoError(t, os.WriteFile(ksiResultsPath, ksiResultsBody, constants.PermFileReadOnly))
 
-	commitment := &operatorv1.CommitmentAttestation{TransactionId: "transaction-1", TransactionHash: strings.Repeat("1", 64), PriorCommitmentHash: strings.Repeat("2", 64), StateRootAtCommit: strings.Repeat("3", 64), L2SignatureDigest: strings.Repeat("4", 64), WardenIntentSignatureDigest: strings.Repeat("5", 64), HumanSignatureDigest: strings.Repeat("6", 64), ActionType: "FILE_EDIT", TargetResource: constants.DemosTargetDataDir, CommittedAtUnixMs: 1_700_000_000_000, AuditorKeyId: keyID}
+	commitment := &operatorv1.CommitmentAttestation{TransactionId: "transaction-1", TransactionHash: strings.Repeat("1", 64), PriorCommitmentHash: strings.Repeat("2", 64), StateRootAtCommit: strings.Repeat("3", 64), L2SignatureDigest: strings.Repeat("4", 64), WardenIntentSignatureDigest: strings.Repeat("5", 64), HumanSignatureDigest: strings.Repeat("6", 64), ActionType: "FILE_EDIT", TargetResource: constants.DemosTargetDataDir, CommittedAtUnixMs: verifiedAt.Add(-time.Second).UnixMilli(), AuditorKeyId: keyID}
 	commitmentPayload, err := governance.CanonicalizeCommitmentAttestation(commitment)
 	require.NoError(t, err)
 	commitmentDigest := sha256.Sum256(commitmentPayload)
@@ -329,7 +329,7 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	require.NoError(t, os.WriteFile(evidencePolicyPath, evidencePolicyBody, constants.PermFileReadOnly))
 	generateCmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
 		return reportIdentity, nil
-	})
+	}, func() time.Time { return reportGeneratedAt })
 	configureComplianceReportGenerateCommand(t, generateCmd)
 	scopePath := writeComplianceAssessmentScopeForTest(t, scopeID, []string{"ksi-run-1", "commitment-run-1", "attestation-run-1", "audit-run-1", "ledger-run-1", "build-run-1"}, verifiedAt)
 	require.NoError(t, generateCmd.Flags().Set("scope", scopePath))
@@ -355,7 +355,7 @@ func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testin
 	require.NoError(t, verifyCmd.Flags().Set("evidence-trust", evidencePolicyPath))
 	var verified bytes.Buffer
 	verifyCmd.SetOut(&verified)
-	require.NoError(t, verifyCmd.RunE(verifyCmd, []string{descriptorPath}))
+	require.NoError(t, verifyCmd.RunE(verifyCmd, []string{descriptorPath}), verified.String())
 	verificationReport := &compliancev1.ComplianceVerificationReport{}
 	require.NoError(t, compliancev1.UnmarshalCanonical(bytes.TrimSpace(verified.Bytes()), verificationReport))
 	assert.True(t, verificationReport.GetValid(), verificationReport.GetFailures())
@@ -384,7 +384,7 @@ func TestComplianceReportGenerateCmdWithConfig_PersistedDemoSourceMutationsFailI
 				return evidence.NewDemoDirectoryProvenanceSource(projectRoot)
 			}, func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
 				return identity, nil
-			})
+			}, time.Now)
 			configureComplianceReportGenerateCommand(t, cmd)
 			assessmentAsOf := time.Unix(1_700_000_100, 0).UTC()
 			scopePath := writeComplianceAssessmentScopeForTest(t, scopeID, []string{runID}, assessmentAsOf)
@@ -461,7 +461,7 @@ func TestBuildDemoVerificationArtifacts_EmbedsValidExistingVerifierResult(t *tes
 
 func TestComplianceReportGenerateCmdWithConfig_RejectsUnsupportedProfile(t *testing.T) {
 	fileSvc, _ := newCmdTestEnv(t)
-	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t))
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
 	configureComplianceReportGenerateCommand(t, cmd)
 	scopePath := writeComplianceAssessmentScopeForTest(t, "scope-1", []string{"run-1"}, time.Unix(1_700_000_001, 0).UTC())
 	require.NoError(t, cmd.Flags().Set("scope", scopePath))
@@ -491,7 +491,7 @@ func TestComplianceReportGenerateCmdWithConfig_FailsClosedOnImporterFailure(t *t
 
 func TestComplianceReportGenerateCmdWithConfig_RejectsInvalidProtectedAssessmentWindow(t *testing.T) {
 	fileSvc, _ := newCmdTestEnv(t)
-	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t))
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
 	configureComplianceReportGenerateCommand(t, cmd)
 	scopePath := writeComplianceAssessmentScopeForTest(t, "scope-1", []string{"run-1"}, time.Unix(1_700_000_001, 0).UTC())
 	scopeBody, err := os.ReadFile(scopePath)

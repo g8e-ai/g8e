@@ -621,7 +621,9 @@ func TestAssembleBundle_RejectsDuplicateBundlePaths(t *testing.T) {
 
 func TestAssembleBundle_IncludesManifestReferencedSourceArtifacts(t *testing.T) {
 	request, _ := bundleAssemblyFixture(t)
+	scopeBody := sourceArtifactBody(t, request.SourceArtifacts, constants.ComplianceBundleScopeFilename)
 	request.SourceArtifacts = []SourceArtifact{
+		{BundlePath: constants.ComplianceBundleScopeFilename, Body: scopeBody, MediaType: constants.MediaTypeJSON},
 		{BundlePath: request.AssertionCatalogRef, Body: []byte(`{"catalog_id":"assertions"}`), MediaType: constants.MediaTypeJSON},
 		{BundlePath: request.CrosswalkRefs[0], Body: []byte(`{"catalog_id":"crosswalks"}`), MediaType: constants.MediaTypeJSON},
 		{BundlePath: request.AssessmentRefs[0], Body: []byte(`{"assessment_id":"assessment-1"}`), MediaType: constants.MediaTypeJSON},

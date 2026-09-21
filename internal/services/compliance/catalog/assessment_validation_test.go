@@ -409,7 +409,7 @@ func TestValidateReportSignatureEnforcesRequiredFieldsAlgorithmAndDigest(t *test
 
 func TestValidateVerificationReportEnforcesIntegrityResultConsistency(t *testing.T) {
 	valid := func() *compliancev1.ComplianceVerificationReport {
-		return &compliancev1.ComplianceVerificationReport{ReportId: "report-1", Valid: true, VerifiedAt: timestamppb.Now(), VerifierId: "compliance_bundle", VerifierVersion: "1.0.0", ReproducedChecksumRoot: validSHA256}
+		return &compliancev1.ComplianceVerificationReport{ReportId: "report-1", Valid: true, VerifiedAt: timestamppb.Now(), VerifierId: constants.ComplianceBundleVerifierID, VerifierVersion: constants.ComplianceBundleVerifierVersion, ReproducedChecksumRoot: validSHA256}
 	}
 	tests := []struct {
 		name   string
@@ -428,7 +428,7 @@ func TestValidateVerificationReportEnforcesIntegrityResultConsistency(t *testing
 			return r
 		}, want: constants.ErrReportVerificationFailed},
 		{name: "unsupported verifier", mutate: func(r *compliancev1.ComplianceVerificationReport) *compliancev1.ComplianceVerificationReport {
-			r.VerifierVersion = "2.0.0"
+			r.VerifierVersion = "unsupported"
 			return r
 		}, want: constants.ErrUnsupportedVerifier},
 		{name: "malformed checksum root", mutate: func(r *compliancev1.ComplianceVerificationReport) *compliancev1.ComplianceVerificationReport {

@@ -705,6 +705,7 @@ func TestComplianceReportGenerateCmdWithConfig_FileSvcFactoryError(t *testing.T)
 		func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
 			panic("signing identity should not be loaded when fileSvcFactory fails")
 		},
+		time.Now,
 	)
 	require.NoError(t, cmd.Flags().Set("scope", constants.ComplianceBundleScopeFilename))
 	require.NoError(t, cmd.Flags().Set("demo-run", "any-run"))

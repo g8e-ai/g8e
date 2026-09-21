@@ -45,7 +45,7 @@ func complianceReportCmd() *cobra.Command {
 		Short: "Generate and verify canonical compliance reports",
 	}
 	cmd.AddCommand(
-		complianceReportGenerateCmdWithConfig(newFileSvc, defaultProvenanceSourceFactory, loadComplianceReportSigningIdentity),
+		complianceReportGenerateCmdWithConfig(newFileSvc, defaultProvenanceSourceFactory, loadComplianceReportSigningIdentity, time.Now),
 		complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, time.Now),
 	)
 	return cmd
@@ -278,7 +278,11 @@ func loadComplianceReportBundleInput(ctx context.Context, bundlePath, trustPolic
 		if err := compliancev1.UnmarshalCanonical(evidenceTrustBody, policy); err != nil {
 			return complianceReportBundleInput{}, fmt.Errorf("%w: decode canonical evidence trust policy: %w", constants.ErrEvidenceTrustNotAssessed, err)
 		}
-		evidenceTrust, err = newAssessedEvidenceTrust(policy, bundle.GetManifest().GetScopeRef(), bundle.GetManifest().GetGeneratedAt())
+		assessmentAsOf, err := loadProtectedAssessmentTime(ctx, bundleRoot)
+		if err != nil {
+			return complianceReportBundleInput{}, err
+		}
+		evidenceTrust, err = newAssessedEvidenceTrust(policy, bundle.GetManifest().GetScopeRef(), timestamppb.New(assessmentAsOf))
 		if err != nil {
 			return complianceReportBundleInput{}, err
 		}
@@ -302,6 +306,29 @@ func loadComplianceReportBundleInput(ctx context.Context, bundlePath, trustPolic
 		evidenceTrust: evidenceTrust,
 		close:         root.Close,
 	}, nil
+}
+
+func loadProtectedAssessmentTime(ctx context.Context, bundleRoot string) (time.Time, error) {
+	root, err := os.OpenRoot(bundleRoot)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%w: open bundle root: %w", constants.ErrReportVerificationFailed, err)
+	}
+	body, readErr := (&complianceBundleRootReader{root: root}).ReadFile(ctx, constants.ComplianceBundleScopeFilename)
+	closeErr := root.Close()
+	if readErr != nil {
+		return time.Time{}, fmt.Errorf("%w: read protected assessment scope: %w", constants.ErrReportVerificationFailed, readErr)
+	}
+	if closeErr != nil {
+		return time.Time{}, fmt.Errorf("%w: close bundle root: %w", constants.ErrReportVerificationFailed, closeErr)
+	}
+	scope := &compliancev1.AssessmentScope{}
+	if err := compliancev1.UnmarshalCanonical(body, scope); err != nil {
+		return time.Time{}, fmt.Errorf("%w: decode protected assessment scope: %w", constants.ErrReportVerificationFailed, err)
+	}
+	if err := catalog.ValidateAssessmentScope(scope); err != nil {
+		return time.Time{}, fmt.Errorf("%w: validate protected assessment scope: %w", constants.ErrReportVerificationFailed, err)
+	}
+	return scope.GetAssessmentAsOf().AsTime(), nil
 }
 
 type assessedEvidenceTrust struct {
@@ -865,6 +892,7 @@ func complianceReportGenerateCmdWithConfig(
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 	provenanceSourceFactory func(string) evidence.ProvenanceSource,
 	signingIdentityLoader complianceReportSigningIdentityLoader,
+	nowFunc func() time.Time,
 ) *cobra.Command {
 	var (
 		projectRoot          string
@@ -1007,7 +1035,7 @@ func complianceReportGenerateCmdWithConfig(
 				},
 				Profile:         profile,
 				ReportID:        reportID,
-				GeneratedAt:     time.Now().UTC(),
+				GeneratedAt:     nowFunc().UTC(),
 				SigningIdentity: identity,
 				SourceArtifacts: sourceArtifacts,
 			})

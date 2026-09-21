@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -335,7 +336,7 @@ func NewPublicMirrorServer(logger *slog.Logger, store PublicMirrorStore) (*Publi
 		maxSSEReplayRecords:     constants.PublicFeedSSEReplayMaxRecords,
 		maxRetainedBatches:      constants.PublicFeedMirrorRetainedBatches,
 		defaultPageSize:         20,
-		maxPageSize:             100,
+		maxPageSize:             500,
 		now:                     time.Now,
 		freshnessDelayed:        time.Duration(constants.PublicFeedFreshnessDelayedSeconds) * time.Second,
 		freshnessStale:          time.Duration(constants.PublicFeedFreshnessStaleSeconds) * time.Second,
@@ -788,12 +789,37 @@ func (m *PublicMirrorServer) publicReadMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/bootstrap", m.handleBootstrap)
 	mux.HandleFunc("/snapshot", m.handleSnapshot)
-	mux.HandleFunc("/history", m.handleHistory)
+	mux.Handle("/history", m.withGzip(http.HandlerFunc(m.handleHistory)))
 	mux.HandleFunc("/stream", m.handleStream)
 	mux.HandleFunc("/proof-catalog", m.handleProofCatalog)
 	mux.HandleFunc("/proof-manifest", m.handleProofManifest)
 	mux.HandleFunc("/proofs/", m.handleProofDownload)
 	return mux
+}
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	writer *gzip.Writer
+}
+
+func (w gzipResponseWriter) Write(body []byte) (int, error) {
+	return w.writer.Write(body)
+}
+
+func (m *PublicMirrorServer) withGzip(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Accept-Encoding")
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		writer := gzip.NewWriter(w)
+		next.ServeHTTP(gzipResponseWriter{ResponseWriter: w, writer: writer}, r)
+		if err := writer.Close(); err != nil {
+			m.logger.Error("mirror: close gzip response", "error", err)
+		}
+	})
 }
 
 func publicMirrorAnonymousReadPath(requestPath string) bool {
@@ -1230,6 +1256,31 @@ func (m *PublicMirrorServer) handleSnapshot(w http.ResponseWriter, r *http.Reque
 			Freshness:         models.CampaignFreshnessSourceOffline,
 		}
 		m.writeJSON(w, http.StatusOK, resp)
+		return
+	}
+
+	if sequenceText := r.URL.Query().Get("sequence"); sequenceText != "" {
+		sequence, err := strconv.ParseInt(sequenceText, 10, 64)
+		if err != nil || sequence <= 0 {
+			http.Error(w, constants.ErrPublicFeedSnapshotNotFound.Error(), http.StatusNotFound)
+			return
+		}
+		for index, batch := range state.Batches {
+			if batch.LastSequence != sequence {
+				continue
+			}
+			m.writeJSON(w, http.StatusOK, models.PublicFeedSnapshot{
+				ProtocolVersion:   constants.PublicFeedProtocolVersion,
+				SourceID:          sourceID,
+				HighWaterSequence: batch.LastSequence,
+				FeedChainHash:     batch.ContentHash,
+				BatchCount:        state.BatchCount - len(state.Batches) + index + 1,
+				GeneratedAt:       time.Now().UTC(),
+				Freshness:         m.sourceFreshness(state),
+			})
+			return
+		}
+		http.Error(w, constants.ErrPublicFeedSnapshotNotFound.Error(), http.StatusNotFound)
 		return
 	}
 

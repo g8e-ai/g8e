@@ -23,16 +23,20 @@ function liveEvent(partial: Partial<LiveEvent> & Pick<LiveEvent, 'event_id' | 'k
 }
 
 describe('LiveEventStream', () => {
-  it('shows a reconcile placeholder while history replay is in progress', () => {
+  it('renders bootstrap events while history replay is in progress', () => {
     render(
       <MemoryRouter>
-        <LiveEventStream events={[]} connection="live" streamConnection="connecting" isReconciling />
+        <LiveEventStream
+          events={[liveEvent({ event_id: 'evt-bootstrap', kind: 'assignment_started' })]}
+          connection="live"
+          streamConnection="connecting"
+          isReconciling
+        />
       </MemoryRouter>,
     );
 
-    expect(screen.getByTestId('reconcile-placeholder')).toBeInTheDocument();
-    expect(screen.getByText('Loading feed history…')).toBeInTheDocument();
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByText('Syncing feed history…')).toBeInTheDocument();
+    expect(screen.getByRole('table')).toBeInTheDocument();
   });
 
   it('shows only the 100 most recent events', () => {

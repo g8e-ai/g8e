@@ -130,6 +130,43 @@ func TestGenerateComplianceAnalysis_OrchestratesVerifiedEvidenceThroughCanonical
 	}
 }
 
+func TestGenerateComplianceAnalysis_UsesProtectedPopulationForCoverageAndDiagnostics(t *testing.T) {
+	windowStart := time.Unix(1_700_000_000, 0).UTC()
+	windowEnd := windowStart.Add(time.Hour)
+	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+	scope := validGenerationScope(windowStart, windowEnd)
+	scope.SelectedPopulation.Subjects = []*compliancev1.AssessmentSubjectSelection{{SourceAdmissionId: "source-1", RunId: "run-1", ScenarioId: "selected-scenario"}}
+
+	result, err := GenerateComplianceAnalysis(context.Background(), GenerationRequest{
+		Scope:      scope,
+		Sources:    []GenerationSource{{AdmissionID: "source-1", Importer: generationImporter{nodes: []evidence.EvidenceNode{validGenerationNode("scope-1", windowStart, windowEnd)}}}},
+		Assertions: assertions,
+		Frameworks: frameworks,
+		Crosswalks: crosswalks,
+	})
+
+	require.NoError(t, err)
+	diagnosticCount := 0
+	for _, assessment := range result.Analysis.GetAssertionAssessments() {
+		if assessment.GetCoverage() == nil {
+			continue
+		}
+		assert.Equal(t, int32(1), assessment.GetCoverage().GetSelectedSubjectCount())
+		assert.Equal(t, int32(1), assessment.GetCoverage().GetUnavailableSubjectCount())
+		require.Len(t, assessment.GetCoverage().GetUnavailableSubjects(), 1)
+		assert.Equal(t, "source-1", assessment.GetCoverage().GetUnavailableSubjects()[0].GetSourceAdmissionId())
+		assert.Equal(t, "selected-scenario", assessment.GetCoverage().GetUnavailableSubjects()[0].GetScenarioId())
+		diagnosticCount += len(assessment.GetDiagnostics())
+	}
+	require.Positive(t, diagnosticCount)
+	assert.Len(t, result.Analysis.GetDiagnostics(), diagnosticCount)
+	for _, diagnostic := range result.Analysis.GetDiagnostics() {
+		assert.Equal(t, "source-1", diagnostic.GetSourceAdmissionId())
+		assert.Equal(t, "selected-scenario", diagnostic.GetSubject().GetScenarioId())
+	}
+}
+
 func TestGenerateComplianceAnalysis_RejectsMissingImporters(t *testing.T) {
 	windowStart := time.Unix(1_700_000_000, 0).UTC()
 	windowEnd := windowStart.Add(time.Hour)

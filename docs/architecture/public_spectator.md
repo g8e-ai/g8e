@@ -171,7 +171,7 @@ Every exported batch is a signed, append-only record bound to the following fiel
 | Signing key ID | Identifier of the signing key used to produce the signature. |
 | Signature | Ed25519 signature over the content hash. |
 
-A snapshot binds its high-water sequence (the last accepted sequence) and the feed-chain hash (the hash of the last accepted batch). A public client reconciles against the snapshot to establish a consistent cursor.
+A snapshot binds its high-water sequence (the last accepted sequence) and the feed-chain hash (the hash of the last accepted batch). A public client reconciles against the snapshot to establish a consistent cursor. The snapshot read accepts an optional retained batch-end sequence so a returning browser can validate that its cached snapshot remains on the retained chain before resuming from the cached cursor.
 
 ### Key rotation and revocation
 
@@ -252,7 +252,7 @@ A projection or proof accidentally includes a prohibited field. Mitigation: the 
 | Surface | Limit | Default |
 | --- | --- | --- |
 | Bootstrap response | One bounded snapshot per request | Fixed size, no pagination |
-| Cursor-paginated cycles/runs/evals | Page size 1-100 | Default 20 |
+| Cursor-paginated cycles/runs/evals | Page size 1-500 | Default 20 |
 | SSE live stream | Globally bounded concurrent connections with one bounded queue per connection | 1,000 connections; 100-event in-memory buffer per connection |
 | Proof download | One download per request, byte-counted | Maximum artifact size enforced |
 | Anonymous read rate | Requests per minute per client IP | Configured by mirror operator; Cloudflare's connecting IP is accepted only from the loopback tunnel connector |
@@ -276,7 +276,7 @@ The publisher never silently deletes reports, encrypted evidence, indexes, or pr
 
 ### Cache policy
 
-Proof downloads are served with `Cache-Control: immutable` because they are content-addressed. Bootstrap and paginated reads are served with short cache durations because they reflect live state. SSE streams are never cached. The mirror may use a CDN for proof artifacts only; live projections and SSE streams bypass the CDN to preserve freshness.
+Proof downloads are served with `Cache-Control: immutable` because they are content-addressed. Bootstrap and paginated reads are served with short cache durations because they reflect live state. History responses use negotiated gzip compression. SSE streams are never cached. The mirror may use a CDN for proof artifacts only; live projections and SSE streams bypass the CDN to preserve freshness. The Evaluation Explorer persists accepted public records and their sealed snapshot in browser IndexedDB. On reload it resumes from that cursor only after the mirror confirms the cached source, protocol, sequence, and feed-chain checkpoint; an incompatible or pruned checkpoint is discarded and replay starts from retained history.
 
 ### Stale and offline semantics
 

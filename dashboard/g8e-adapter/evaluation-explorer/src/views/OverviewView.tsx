@@ -192,15 +192,15 @@ function SystemOverviewPanel({
         <DatasetSelector activeId={activeDatasetId} />
         {catalog ? <p className="panel-note">{catalog.title}</p> : null}
 
-        {isReconciling ? (
-          <ReconcilePlaceholder label="Loading feed history…" />
-        ) : catalog ? (
+        {catalog ? (
           <div className="usage-list" aria-label="Dataset coverage">
             <CoverageBar label="Models evaluated" done={catalog.evaluated_count} total={catalog.model_count} />
             <CoverageBar label="Suites verified" done={catalog.verifier_passed_count} total={catalog.suite_count} />
             <CoverageBar label="Runs completed" done={completedRuns} total={evaluations.length} />
             <CoverageBar label="Assignments done" done={assignmentDone} total={assignmentTotal} />
           </div>
+        ) : isReconciling ? (
+          <ReconcilePlaceholder label="Loading feed history…" />
         ) : null}
       </div>
 
@@ -213,9 +213,7 @@ function SystemOverviewPanel({
             </Link>
           ) : null}
         </div>
-        {isReconciling ? (
-          <ReconcilePlaceholder label="Loading current task…" />
-        ) : currentRun && latestEvent ? (
+        {currentRun && latestEvent ? (
           <>
             <p className="task-title">{currentSuite?.display_name ?? currentRun.suite_id}</p>
             <p className="task-sub">
@@ -234,6 +232,8 @@ function SystemOverviewPanel({
               ) : null}
             </div>
           </>
+        ) : isReconciling ? (
+          <ReconcilePlaceholder label="Loading current task…" />
         ) : (
           <p className="panel-empty">No evaluation has been observed yet.</p>
         )}

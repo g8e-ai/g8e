@@ -94,6 +94,7 @@ func BuildComplianceAnalysis(ctx context.Context, request AnalysisRequest) (*com
 	remediation := buildRemediation(findings)
 	sections := buildSections(request)
 	graphFailures := buildGraphFailureMessages(request.Graph)
+	diagnostics := buildAssessmentDiagnostics(request.AssertionAssessments)
 
 	analysis := &compliancev1.ComplianceAnalysis{
 		AnalysisSchemaVersion:      constants.AnalysisSchemaVersion,
@@ -114,6 +115,7 @@ func BuildComplianceAnalysis(ctx context.Context, request AnalysisRequest) (*com
 		EvidenceGraphValid:         request.Graph.Valid(),
 		EvidenceResources:          buildEvidenceResources(request),
 		AssessmentScopeSha256:      request.AssessmentScopeSHA256,
+		Diagnostics:                diagnostics,
 	}
 	analysisID, err := analysisContentAddress(analysis)
 	if err != nil {
@@ -494,6 +496,21 @@ func buildGraphFailureMessages(graph *EvidenceGraph) []string {
 	}
 	sort.Strings(messages)
 	return messages
+}
+
+func buildAssessmentDiagnostics(assessments []*compliancev1.ControlAssertionAssessment) []*compliancev1.AssessmentDiagnostic {
+	result := make([]*compliancev1.AssessmentDiagnostic, 0)
+	for _, assessment := range assessments {
+		for _, diagnostic := range assessment.GetDiagnostics() {
+			result = append(result, proto.Clone(diagnostic).(*compliancev1.AssessmentDiagnostic))
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		left := result[i].GetSourceAdmissionId() + "\x00" + result[i].GetSubject().GetRunId() + "\x00" + result[i].GetSubject().GetAttemptId() + "\x00" + result[i].GetSubject().GetScenarioId() + "\x00" + result[i].GetSubject().GetTransactionId() + "\x00" + result[i].GetCode()
+		right := result[j].GetSourceAdmissionId() + "\x00" + result[j].GetSubject().GetRunId() + "\x00" + result[j].GetSubject().GetAttemptId() + "\x00" + result[j].GetSubject().GetScenarioId() + "\x00" + result[j].GetSubject().GetTransactionId() + "\x00" + result[j].GetCode()
+		return left < right
+	})
+	return result
 }
 
 func sortedAssertionAssessments(assessments []*compliancev1.ControlAssertionAssessment) []*compliancev1.ControlAssertionAssessment {

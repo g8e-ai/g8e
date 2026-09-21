@@ -286,6 +286,10 @@ func ValidateAssessmentScope(scope *compliancev1.AssessmentScope) error {
 			return fmt.Errorf("%w: applicability %s: %v", constants.ErrInvalidEvidenceGraph, name, err)
 		}
 	}
+	return validateAssessmentSelections(scope)
+}
+
+func validateAssessmentSelections(scope *compliancev1.AssessmentScope) error {
 	admissions := make(map[string]*compliancev1.AssessmentSourceAdmission, len(scope.SourceAdmissions))
 	for _, admission := range scope.SourceAdmissions {
 		if admission == nil || admission.AdmissionId == "" || admission.SourceKind == "" || admission.SourceVersion == "" || admission.SourceScopeId == "" || admission.OwnerRuntimeBoundary == "" || admission.AcquisitionBoundary == "" || admission.RunId == "" && admission.SnapshotId == "" || admission.VerifierRef == nil || admission.VerifierRef.Id == "" || admission.VerifierRef.Version == "" || admission.DisclosureClassification != constants.ComplianceBundleProfilePublic && admission.DisclosureClassification != constants.ComplianceBundleProfileRestricted {

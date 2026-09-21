@@ -109,14 +109,17 @@ export function LiveEventStream({
           </select>
         </div>
       </div>
-      {isReconciling ? (
-        <ReconcilePlaceholder label="Loading feed history…" />
-      ) : visible.length === 0 ? (
-        <EmptyState
-          hasRecords={events.length > 0}
-          hasFilters={modelFilter !== 'all' || kindFilter !== 'all'}
-          connection={connection}
-        />
+      {isReconciling ? <p className="panel-note">Syncing feed history…</p> : null}
+      {visible.length === 0 ? (
+        isReconciling ? (
+          <ReconcilePlaceholder label="Loading feed history…" />
+        ) : (
+          <EmptyState
+            hasRecords={events.length > 0}
+            hasFilters={modelFilter !== 'all' || kindFilter !== 'all'}
+            connection={connection}
+          />
+        )
       ) : (
         <div className="stream-scroll" ref={scrollRef}>
           <table className="stream-table">
