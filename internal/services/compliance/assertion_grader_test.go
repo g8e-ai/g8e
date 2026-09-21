@@ -368,6 +368,83 @@ func TestGradeControlAssertions_AppliesAssertionValidationCycle(t *testing.T) {
 	assert.Equal(t, "stale", assessments[0].GetFreshnessStatus())
 }
 
+func assertionPopulationGraph(t *testing.T, now time.Time, values map[string]*int) *evidence.EvidenceGraph {
+	t.Helper()
+	graph := evidence.NewEvidenceGraph(0, nil)
+	for scenarioID, value := range values {
+		receipt := assertionGraderNode(evidence.ArtifactTypeActionReceipt, "gateway", []byte(`{"receipt":"`+scenarioID+`"}`), now.Add(-time.Hour))
+		receipt.ScenarioID = scenarioID
+		require.NoError(t, graph.AddNode(receipt))
+		if value == nil {
+			continue
+		}
+		metric := assertionGraderNode(evidence.ArtifactTypeEvalMetric, "evaluation-verifier", []byte(`{"metric_id":"policy_outcome","metric_version":"1.0.0","value":`+strconv.Itoa(*value)+`,"eligible":true,"verification_status":"verified","subject":"`+scenarioID+`"}`), now.Add(-time.Hour))
+		metric.ScenarioID = scenarioID
+		require.NoError(t, graph.AddNode(metric))
+	}
+	return graph
+}
+
+func gradeAssertionPopulation(t *testing.T, graph *evidence.EvidenceGraph, subjects []evidence.AssertionSubject, now time.Time) *compliancev1.ControlAssertionAssessment {
+	t.Helper()
+	assessments, err := evidence.GradeControlAssertions(context.Background(), evidence.AssertionGradingRequest{
+		ScopeID:     "scope-1",
+		WindowStart: now.Add(-24 * time.Hour),
+		WindowEnd:   now,
+		EvaluatedAt: now,
+		Population:  &evidence.AssertionPopulation{Subjects: subjects},
+		Assertions:  assertionGraderCatalog("unverifiable"),
+		Graph:       graph,
+	})
+	require.NoError(t, err)
+	require.Len(t, assessments, 1)
+	return assessments[0]
+}
+
+func TestGradeControlAssertions_SelectedPopulationRequiresEverySubjectToPass(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	passed := 1
+	assessment := gradeAssertionPopulation(t, assertionPopulationGraph(t, now, map[string]*int{"scenario-1": &passed, "scenario-2": nil}), []evidence.AssertionSubject{{RunID: "run-1", ScenarioID: "scenario-1"}, {RunID: "run-1", ScenarioID: "scenario-2"}}, now)
+
+	assert.Equal(t, "unverifiable", assessment.GetStatus())
+	assert.Equal(t, "incomplete", assessment.GetFreshnessStatus())
+	assert.Len(t, assessment.GetEvidenceRefs(), 3)
+	assert.Contains(t, assessment.GetLimitations(), "selected population: 2; assessed: 1; unavailable: 1")
+}
+
+func TestGradeControlAssertions_KnownPopulationFailurePrecedesUnavailableSubjects(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	failed := 0
+	assessment := gradeAssertionPopulation(t, assertionPopulationGraph(t, now, map[string]*int{"scenario-1": &failed, "scenario-2": nil}), []evidence.AssertionSubject{{RunID: "run-1", ScenarioID: "scenario-1"}, {RunID: "run-1", ScenarioID: "scenario-2"}}, now)
+
+	assert.Equal(t, "not_satisfied", assessment.GetStatus())
+	assert.Equal(t, "fresh", assessment.GetFreshnessStatus())
+	assert.Len(t, assessment.GetEvidenceRefs(), 3)
+	assert.Contains(t, assessment.GetLimitations(), "selected population: 2; assessed: 1; unavailable: 1")
+}
+
+func TestGradeControlAssertions_IgnoresSubjectsOutsideSelectedPopulation(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	passed := 1
+	failed := 0
+	assessment := gradeAssertionPopulation(t, assertionPopulationGraph(t, now, map[string]*int{"scenario-1": &passed, "scenario-2": &failed}), []evidence.AssertionSubject{{RunID: "run-1", ScenarioID: "scenario-1"}}, now)
+
+	assert.Equal(t, "satisfied", assessment.GetStatus())
+	assert.Len(t, assessment.GetEvidenceRefs(), 2)
+	assert.Contains(t, assessment.GetLimitations(), "selected population: 1; assessed: 1; unavailable: 0")
+}
+
+func TestGradeControlAssertions_EmptySelectedPopulationCannotPass(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	passed := 1
+	assessment := gradeAssertionPopulation(t, assertionPopulationGraph(t, now, map[string]*int{"scenario-1": &passed}), []evidence.AssertionSubject{}, now)
+
+	assert.Equal(t, "unverifiable", assessment.GetStatus())
+	assert.Equal(t, "incomplete", assessment.GetFreshnessStatus())
+	assert.Empty(t, assessment.GetEvidenceRefs())
+	assert.Contains(t, assessment.GetLimitations(), "selected population: 0; assessed: 0; unavailable: 0")
+}
+
 func TestGradeControlAssertions_RejectsIncompleteRequests(t *testing.T) {
 	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
 	valid := evidence.AssertionGradingRequest{ScopeID: "scope-1", WindowStart: now.Add(-time.Hour), WindowEnd: now, EvaluatedAt: now, Assertions: assertionGraderCatalog("unverifiable"), Graph: evidence.NewEvidenceGraph(0, nil)}
@@ -383,6 +460,13 @@ func TestGradeControlAssertions_RejectsIncompleteRequests(t *testing.T) {
 		}},
 		{name: "duplicate applicability value", mutate: func(request *evidence.AssertionGradingRequest) {
 			request.Applicability = &evidence.AssertionApplicability{Components: []string{"gateway", "gateway"}, ActionClasses: []string{"governed_mutation"}, Arms: []string{"governed"}}
+		}},
+		{name: "incomplete selected subject", mutate: func(request *evidence.AssertionGradingRequest) {
+			request.Population = &evidence.AssertionPopulation{Subjects: []evidence.AssertionSubject{{RunID: "run-1"}}}
+		}},
+		{name: "duplicate selected subject", mutate: func(request *evidence.AssertionGradingRequest) {
+			subject := evidence.AssertionSubject{RunID: "run-1", ScenarioID: "scenario-1"}
+			request.Population = &evidence.AssertionPopulation{Subjects: []evidence.AssertionSubject{subject, subject}}
 		}},
 		{name: "inverted window", mutate: func(request *evidence.AssertionGradingRequest) { request.WindowStart = now.Add(time.Hour) }},
 		{name: "evaluation outside window", mutate: func(request *evidence.AssertionGradingRequest) { request.EvaluatedAt = now.Add(time.Hour) }},

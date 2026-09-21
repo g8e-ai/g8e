@@ -599,8 +599,8 @@ func TestBuildComplianceAnalysis_CanonicalVectorIsPinned(t *testing.T) {
 	canonical, err := compliancev1.MarshalCanonical(analysis)
 	require.NoError(t, err)
 	digest := sha256.Sum256(canonical)
-	assert.Equal(t, "compliance-analysis:sha256:d1df8858104f69166ff38b171c16fdd6c2d9514be9eabf7b2386dfef6dfae090", analysis.GetAnalysisId())
-	assert.Equal(t, "4abafc60538297b31f46cbad283c56528d71e143f4cf06a1dacd6f0f2302a93a", hex.EncodeToString(digest[:]))
+	assert.Equal(t, "compliance-analysis:sha256:6778405082262bc68803dd7a280d2733a326a0de009b0f8fa24baeaf4736e00d", analysis.GetAnalysisId())
+	assert.Equal(t, "eeed4e6bae6ebfb6115be032d71a40e7f128c15225298cbc8871b405afb21a51", hex.EncodeToString(digest[:]))
 }
 
 func TestBuildComplianceAnalysis_CanonicalBytesIgnoreInputOrdering(t *testing.T) {

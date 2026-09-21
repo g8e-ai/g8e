@@ -43,12 +43,24 @@ type AssertionApplicability struct {
 	Arms          []string
 }
 
+type AssertionSubject struct {
+	RunID         string
+	AttemptID     string
+	ScenarioID    string
+	TransactionID string
+}
+
+type AssertionPopulation struct {
+	Subjects []AssertionSubject
+}
+
 type AssertionGradingRequest struct {
 	ScopeID       string
 	WindowStart   time.Time
 	WindowEnd     time.Time
 	EvaluatedAt   time.Time
 	Applicability *AssertionApplicability
+	Population    *AssertionPopulation
 	Assertions    *compliancev1.ControlAssertionCatalog
 	Graph         *EvidenceGraph
 }
@@ -115,6 +127,11 @@ func validateAssertionGradingRequest(request AssertionGradingRequest) error {
 			return err
 		}
 	}
+	if request.Population != nil {
+		if err := validateAssertionPopulation(request.Population); err != nil {
+			return err
+		}
+	}
 	if !request.Graph.Valid() {
 		return fmt.Errorf("%w: assertion grading requires a valid evidence graph", constants.ErrInvalidEvidenceGraph)
 	}
@@ -144,15 +161,39 @@ func validateAssertionApplicability(applicability *AssertionApplicability) error
 	return nil
 }
 
+func validateAssertionPopulation(population *AssertionPopulation) error {
+	seen := make(map[string]struct{}, len(population.Subjects))
+	for _, subject := range population.Subjects {
+		if subject.RunID == "" || subject.AttemptID == "" && subject.ScenarioID == "" && subject.TransactionID == "" {
+			return fmt.Errorf("%w: selected assertion subject is incomplete", constants.ErrInvalidEvidenceGraph)
+		}
+		key := strings.Join([]string{subject.RunID, subject.AttemptID, subject.ScenarioID, subject.TransactionID}, "\x00")
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("%w: duplicate selected assertion subject", constants.ErrInvalidEvidenceGraph)
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
+}
+
 func gradeControlAssertion(request AssertionGradingRequest, assertion *compliancev1.ControlAssertionDefinition) (*compliancev1.ControlAssertionAssessment, error) {
 	candidates := assertionEvidence{evidenceRef: make(map[string]struct{}), metricRef: make(map[string]struct{})}
 	status := "not_applicable"
 	freshness := freshnessNotApplicable
 	failure := ""
 	evidenceLevel := "L0"
+	limitations := []string{}
 	if request.Applicability == nil || assertionApplies(assertion, request.Applicability) {
 		candidates = collectAssertionEvidence(request, assertion)
-		missing, stale, graderFailed, achievedLevel := evaluateAssertionRequirements(assertion, candidates)
+		var missing, stale, graderFailed bool
+		var achievedLevel string
+		if request.Population == nil {
+			missing, stale, graderFailed, achievedLevel = evaluateAssertionRequirements(assertion, candidates)
+		} else {
+			var assessed, unavailable int
+			missing, stale, graderFailed, achievedLevel, assessed, unavailable = evaluateAssertionPopulation(assertion, candidates, request.Population)
+			limitations = append(limitations, fmt.Sprintf("selected population: %d; assessed: %d; unavailable: %d", len(request.Population.Subjects), assessed, unavailable))
+		}
 		status, freshness, failure = assertionOutcome(assertion.GetMissingEvidencePolicy(), missing, stale, graderFailed)
 		evidenceLevel = achievedLevel
 		if status == statusSatisfied && !evidenceLevelMeets(assertion.GetMinimumEvidenceLevel(), evidenceLevel) {
@@ -173,7 +214,7 @@ func gradeControlAssertion(request AssertionGradingRequest, assertion *complianc
 		MetricRefs:      sortedKeys(candidates.metricRef),
 		FreshnessStatus: freshness,
 		FailureReason:   failure,
-		Limitations:     []string{},
+		Limitations:     limitations,
 	}
 	if status == statusNotSatisfied && failure == "" {
 		assessment.FailureReason = failureGraderFailed
@@ -227,6 +268,68 @@ func evaluateAssertionRequirements(assertion *compliancev1.ControlAssertionDefin
 	}
 	addRequirementReferences(candidates, selected)
 	return !fresh.complete, stale, fresh.graderFailed, achievedEvidenceLevel(fresh.available)
+}
+
+func evaluateAssertionPopulation(assertion *compliancev1.ControlAssertionDefinition, candidates assertionEvidence, population *AssertionPopulation) (bool, bool, bool, string, int, int) {
+	if len(population.Subjects) == 0 {
+		return true, false, false, "L0", 0, 0
+	}
+	assessed := 0
+	unavailable := 0
+	stale := false
+	failedLevel := "L0"
+	availableLevel := "L0"
+	passingLevel := ""
+	graderFailed := false
+	for _, subject := range population.Subjects {
+		subjectCandidates := assertionEvidence{
+			fresh:       filterAssertionNodes(candidates.fresh, subject),
+			stale:       filterAssertionNodes(candidates.stale, subject),
+			evidenceRef: candidates.evidenceRef,
+			metricRef:   candidates.metricRef,
+		}
+		missing, subjectStale, subjectFailed, level := evaluateAssertionRequirements(assertion, subjectCandidates)
+		availableLevel = higherEvidenceLevel(availableLevel, level)
+		if missing {
+			unavailable++
+			stale = stale || subjectStale
+			continue
+		}
+		assessed++
+		if subjectFailed {
+			graderFailed = true
+			failedLevel = higherEvidenceLevel(failedLevel, level)
+			continue
+		}
+		if passingLevel == "" || evidenceLevelIndexOrdered(level) < evidenceLevelIndexOrdered(passingLevel) {
+			passingLevel = level
+		}
+	}
+	if graderFailed {
+		return false, false, true, failedLevel, assessed, unavailable
+	}
+	if unavailable > 0 {
+		return true, stale, false, availableLevel, assessed, unavailable
+	}
+	return false, false, false, passingLevel, assessed, unavailable
+}
+
+func filterAssertionNodes(nodes []*EvidenceNode, subject AssertionSubject) []*EvidenceNode {
+	result := make([]*EvidenceNode, 0)
+	for _, node := range nodes {
+		if node.RunID != subject.RunID || subject.AttemptID != "" && node.AttemptID != subject.AttemptID || subject.ScenarioID != "" && node.ScenarioID != subject.ScenarioID || subject.TransactionID != "" && node.TransactionID != subject.TransactionID {
+			continue
+		}
+		result = append(result, node)
+	}
+	return result
+}
+
+func higherEvidenceLevel(left, right string) string {
+	if evidenceLevelIndexOrdered(right) > evidenceLevelIndexOrdered(left) {
+		return right
+	}
+	return left
 }
 
 func matchAssertionRequirements(assertion *compliancev1.ControlAssertionDefinition, nodes []*EvidenceNode) assertionRequirementResult {
