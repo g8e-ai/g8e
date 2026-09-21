@@ -241,7 +241,7 @@ func (g *EvidenceGraph) AddNode(node EvidenceNode) error {
 		}
 		if !sameScopeBinding(existing, &node) {
 			err := fmt.Errorf("%w: %s", constants.ErrEvidenceScopeMismatch, node.ArtifactID)
-			g.recordFailure(err, node.ArtifactID, "duplicate artifact ID with conflicting scope binding")
+			g.recordFailure(err, node.ArtifactID, "duplicate artifact ID with conflicting authoritative binding")
 			return err
 		}
 		return nil
@@ -306,24 +306,57 @@ func (g *EvidenceGraph) DetectCycles() {
 // share the same scope ID. Nodes within the same attempt must share the same
 // run ID.
 func (g *EvidenceGraph) ValidateScopeBinding() {
-	runScopes := make(map[string]string)
-	attemptRuns := make(map[string]string)
+	runScopes := make(map[occurrenceRunKey]string)
+	attemptRuns := make(map[occurrenceAttemptKey]string)
+	transactions := make(map[occurrenceTransactionKey]transactionBinding)
 	for _, node := range g.nodes {
 		if node.RunID != "" {
-			if existing, ok := runScopes[node.RunID]; ok && existing != node.ScopeID {
-				g.recordFailure(constants.ErrEvidenceScopeMismatch, node.ArtifactID, fmt.Sprintf("run %s has conflicting scopes %s vs %s", node.RunID, existing, node.ScopeID))
+			key := occurrenceRunKey{sourceAdmissionID: node.SourceAdmissionID, runID: node.RunID}
+			if existing, ok := runScopes[key]; ok && existing != node.ScopeID {
+				g.recordFailure(constants.ErrEvidenceScopeMismatch, node.ArtifactID, fmt.Sprintf("source %s run %s has conflicting scopes %s vs %s", node.SourceAdmissionID, node.RunID, existing, node.ScopeID))
 			} else if !ok {
-				runScopes[node.RunID] = node.ScopeID
+				runScopes[key] = node.ScopeID
 			}
 		}
 		if node.AttemptID != "" {
-			if existing, ok := attemptRuns[node.AttemptID]; ok && existing != node.RunID {
-				g.recordFailure(constants.ErrEvidenceScopeMismatch, node.ArtifactID, fmt.Sprintf("attempt %s has conflicting runs %s vs %s", node.AttemptID, existing, node.RunID))
+			key := occurrenceAttemptKey{sourceAdmissionID: node.SourceAdmissionID, attemptID: node.AttemptID}
+			if existing, ok := attemptRuns[key]; ok && existing != node.RunID {
+				g.recordFailure(constants.ErrEvidenceScopeMismatch, node.ArtifactID, fmt.Sprintf("source %s attempt %s has conflicting runs %s vs %s", node.SourceAdmissionID, node.AttemptID, existing, node.RunID))
 			} else if !ok {
-				attemptRuns[node.AttemptID] = node.RunID
+				attemptRuns[key] = node.RunID
+			}
+		}
+		if node.TransactionID != "" {
+			key := occurrenceTransactionKey{sourceAdmissionID: node.SourceAdmissionID, transactionID: node.TransactionID}
+			binding := transactionBinding{runID: node.RunID, attemptID: node.AttemptID, scenarioID: node.ScenarioID}
+			if existing, ok := transactions[key]; ok {
+				if conflictingOccurrenceValue(existing.runID, binding.runID) || conflictingOccurrenceValue(existing.attemptID, binding.attemptID) || conflictingOccurrenceValue(existing.scenarioID, binding.scenarioID) {
+					g.recordFailure(constants.ErrEvidenceScopeMismatch, node.ArtifactID, fmt.Sprintf("source %s transaction %s has conflicting occurrence binding", node.SourceAdmissionID, node.TransactionID))
+				} else {
+					transactions[key] = mergeTransactionBinding(existing, binding)
+				}
+			} else {
+				transactions[key] = binding
 			}
 		}
 	}
+}
+
+func conflictingOccurrenceValue(existing, current string) bool {
+	return existing != "" && current != "" && existing != current
+}
+
+func mergeTransactionBinding(existing, current transactionBinding) transactionBinding {
+	if existing.runID == "" {
+		existing.runID = current.runID
+	}
+	if existing.attemptID == "" {
+		existing.attemptID = current.attemptID
+	}
+	if existing.scenarioID == "" {
+		existing.scenarioID = current.scenarioID
+	}
+	return existing
 }
 
 // ValidateFreshness checks that every node's produced-at timestamp falls
@@ -513,8 +546,30 @@ func (g *EvidenceGraph) recordFreshnessFailure(code error, subject, reason strin
 	g.freshnessFailures = append(g.freshnessFailures, GraphFailure{Code: code, Subject: subject, Reason: reason})
 }
 
-// sameScopeBinding checks whether two nodes share the same scope, run,
-// attempt, scenario, and transaction binding.
+type occurrenceRunKey struct {
+	sourceAdmissionID string
+	runID             string
+}
+
+type occurrenceAttemptKey struct {
+	sourceAdmissionID string
+	attemptID         string
+}
+
+type occurrenceTransactionKey struct {
+	sourceAdmissionID string
+	transactionID     string
+}
+
+type transactionBinding struct {
+	runID      string
+	attemptID  string
+	scenarioID string
+}
+
+// sameScopeBinding checks whether two nodes share the same authoritative
+// scope, run, attempt, scenario, and transaction binding. Source admissions are
+// acquisition identities, so an exact mirrored artifact remains one graph node.
 func sameScopeBinding(a, b *EvidenceNode) bool {
 	return a.ScopeID == b.ScopeID && a.RunID == b.RunID && a.AttemptID == b.AttemptID && a.ScenarioID == b.ScenarioID && a.TransactionID == b.TransactionID
 }

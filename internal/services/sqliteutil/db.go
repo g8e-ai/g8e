@@ -126,6 +126,31 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 	}, nil
 }
 
+// OpenReadOnlyDB opens an existing SQLite database without creating or
+// modifying the database file. SQLite's read-only mode observes the current
+// WAL state while preventing schema, migration, pruning, and write side effects.
+func OpenReadOnlyDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
+	if cfg.Path == "" {
+		return nil, fmt.Errorf("sqliteutil: read-only database path is required")
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	dsn := fmt.Sprintf("file:%s?mode=ro&_query_only=true&_busy_timeout=%d&_mutex=full", cfg.Path, cfg.BusyTimeoutMs)
+	sqlDB, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("sqliteutil: open read-only database %s: %w", cfg.Path, err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+	sqlDB.SetConnMaxLifetime(0)
+	if err := sqlDB.Ping(); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("sqliteutil: ping read-only database %s: %w", cfg.Path, err)
+	}
+	return &DB{DB: sqlDB, logger: logger, path: cfg.Path, config: cfg}, nil
+}
+
 // GetPath returns the filesystem path to the database file.
 func (db *DB) GetPath() string {
 	return db.path

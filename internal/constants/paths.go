@@ -534,6 +534,7 @@ const (
 	TestPathRepoRootFromCompliancePackage = "../../.."
 	TestDataDirname                       = "testdata"
 	TestEvaluationTargetFilename          = "evaluation-target.txt"
+	TestReadOnlyDatabaseFilename          = "read-only.db"
 
 	// Source-tree protocol path constants for contract tests in
 	// internal/constants and internal/models. These resolve canonical
@@ -656,6 +657,11 @@ const (
 	ComplianceBundleChecksumsFilename            = "checksums.json"
 	ComplianceBundlePublicKeysFilename           = "public-keys.json"
 	ComplianceBundleSignaturesFilename           = "signatures.json"
+	ComplianceOperationalExportDirname           = "operational"
+	ComplianceOperationalInventoryFilename       = "inventory.json"
+	ComplianceOperationalReceiptsDirname         = "receipts"
+	ComplianceOperationalPersistenceDirname      = "persistence"
+	ComplianceOperationalCommitmentsDirname      = "commitments"
 )
 
 // Release evidence output filename suffixes. The per-release compliance
@@ -790,6 +796,7 @@ const (
 	ComplianceBundleProfileRestricted             = "restricted"
 	ComplianceBundleMaxArtifacts                  = 8192
 	ComplianceBundleMaxArtifactBytes              = 64 << 20
+	ComplianceOperationalExportDefaultMaxRows     = 4096
 	ComplianceEvidenceTrustMaxKeys                = 4096
 	ComplianceBundleMaxDirectoryDepth             = 32
 	ComplianceBundleMaxEnumeratedEntries          = ComplianceBundleMaxArtifacts * 2

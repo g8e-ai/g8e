@@ -42,7 +42,14 @@ type ReceiptImporter struct {
 }
 
 func NewReceiptImporter(reader ArtifactReader, trust AssessedSignerSource, binding ReceiptImportBinding) *ReceiptImporter {
-	return &ReceiptImporter{reader: reader, trust: trust, binding: binding, nowFunc: time.Now}
+	return NewReceiptImporterAt(reader, trust, binding, time.Now)
+}
+
+func NewReceiptImporterAt(reader ArtifactReader, trust AssessedSignerSource, binding ReceiptImportBinding, nowFunc func() time.Time) *ReceiptImporter {
+	if nowFunc == nil {
+		nowFunc = time.Now
+	}
+	return &ReceiptImporter{reader: reader, trust: trust, binding: binding, nowFunc: nowFunc}
 }
 
 func (i *ReceiptImporter) SourceID() string {
@@ -95,7 +102,14 @@ type PersistenceImporter struct {
 }
 
 func NewPersistenceImporter(reader ArtifactReader, trust AssessedSignerSource, binding PersistenceImportBinding) *PersistenceImporter {
-	return &PersistenceImporter{reader: reader, trust: trust, binding: binding, nowFunc: time.Now}
+	return NewPersistenceImporterAt(reader, trust, binding, time.Now)
+}
+
+func NewPersistenceImporterAt(reader ArtifactReader, trust AssessedSignerSource, binding PersistenceImportBinding, nowFunc func() time.Time) *PersistenceImporter {
+	if nowFunc == nil {
+		nowFunc = time.Now
+	}
+	return &PersistenceImporter{reader: reader, trust: trust, binding: binding, nowFunc: nowFunc}
 }
 
 func (i *PersistenceImporter) SourceID() string {

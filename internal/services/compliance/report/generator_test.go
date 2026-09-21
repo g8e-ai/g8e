@@ -207,6 +207,30 @@ func TestGenerateComplianceAnalysis_RejectsEvidenceFromAnotherScope(t *testing.T
 	assert.Nil(t, result.Analysis)
 }
 
+func TestGenerateComplianceAnalysis_RejectsImporterWithConflictingSourceAdmission(t *testing.T) {
+	windowStart := time.Unix(1_700_000_000, 0).UTC()
+	windowEnd := windowStart.Add(time.Hour)
+	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+	node := validGenerationNode("scope-1", windowStart, windowEnd)
+	node.SourceAdmissionID = "source-2"
+
+	result, err := GenerateComplianceAnalysis(context.Background(), GenerationRequest{
+		Scope:      validGenerationScope(windowStart, windowEnd),
+		Sources:    []GenerationSource{{AdmissionID: "source-1", Importer: generationImporter{nodes: []evidence.EvidenceNode{node}}}},
+		Assertions: assertions,
+		Frameworks: frameworks,
+		Crosswalks: crosswalks,
+	})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrReportVerificationFailed)
+	require.NotNil(t, result)
+	assert.Nil(t, result.Analysis)
+	require.Len(t, result.GraphReport.ImporterErrors, 1)
+	assert.Contains(t, result.GraphReport.ImporterErrors[0].Error, constants.ErrEvidenceScopeMismatch.Error())
+}
+
 func TestGenerateComplianceAnalysis_RejectsImporterFailureBeforeGrading(t *testing.T) {
 	windowStart := time.Unix(1_700_000_000, 0).UTC()
 	windowEnd := windowStart.Add(time.Hour)

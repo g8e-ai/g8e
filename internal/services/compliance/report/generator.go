@@ -200,6 +200,9 @@ func (i admittedEvidenceImporter) Import(ctx context.Context) ([]evidence.Eviden
 	for index := range nodes {
 		node := &nodes[index]
 		sharedDefinition := node.ArtifactType == evidence.ArtifactTypeDemoDefinition
+		if node.SourceAdmissionID != "" && node.SourceAdmissionID != i.admission.GetAdmissionId() {
+			return nil, fmt.Errorf("%w: source admission %s imported artifact %s already bound to %s", constants.ErrEvidenceScopeMismatch, i.admission.GetAdmissionId(), node.ArtifactID, node.SourceAdmissionID)
+		}
 		if !sharedDefinition && i.admission.GetRunId() != "" && node.RunID != i.admission.GetRunId() {
 			return nil, fmt.Errorf("%w: source admission %s selected run %s but imported %s", constants.ErrEvidenceScopeMismatch, i.admission.GetAdmissionId(), i.admission.GetRunId(), node.RunID)
 		}

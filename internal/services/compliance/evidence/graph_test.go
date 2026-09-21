@@ -210,6 +210,19 @@ func TestEvidenceGraph_AddNode_RejectsDuplicateWithConflictingScope(t *testing.T
 	assert.True(t, errors.Is(err, constants.ErrEvidenceScopeMismatch))
 }
 
+func TestEvidenceGraph_AddNode_DeduplicatesMirroredArtifactAcrossSourceAdmissions(t *testing.T) {
+	g := NewEvidenceGraph(0, nil)
+	body := []byte(`{"id":"mirrored"}`)
+	node1 := validNode(ArtifactTypeActionReceipt, "scope-1", body)
+	node1.SourceAdmissionID = "operator-local"
+	require.NoError(t, g.AddNode(node1))
+	node2 := node1
+	node2.SourceAdmissionID = "gateway-mirror"
+	require.NoError(t, g.AddNode(node2))
+	assert.Equal(t, 1, g.NodeCount())
+	assert.True(t, g.Valid())
+}
+
 func TestEvidenceGraph_ResolveReferences_DetectsUnresolved(t *testing.T) {
 	g := NewEvidenceGraph(0, nil)
 	node := validNode(ArtifactTypeDemoResult, "scope-1", []byte(`{}`))
@@ -285,9 +298,57 @@ func TestEvidenceGraph_ValidateScopeBinding_DetectsRunScopeConflict(t *testing.T
 	g := NewEvidenceGraph(0, nil)
 	node1 := validNode(ArtifactTypeDemoManifest, "scope-1", []byte(`{"1":1}`))
 	node1.RunID = "run-x"
+	node1.SourceAdmissionID = "source-1"
 	require.NoError(t, g.AddNode(node1))
 	node2 := validNode(ArtifactTypeDemoResult, "scope-2", []byte(`{"2":1}`))
 	node2.RunID = "run-x"
+	node2.SourceAdmissionID = "source-1"
+	require.NoError(t, g.AddNode(node2))
+	g.ValidateScopeBinding()
+	assert.False(t, g.Valid())
+}
+
+func TestEvidenceGraph_ValidateScopeBinding_AllowsRunIdentityToRepeatAcrossSources(t *testing.T) {
+	g := NewEvidenceGraph(0, nil)
+	node1 := validNode(ArtifactTypeDemoManifest, "scope-1", []byte(`{"1":1}`))
+	node1.RunID = "run-x"
+	node1.SourceAdmissionID = "source-1"
+	require.NoError(t, g.AddNode(node1))
+	node2 := validNode(ArtifactTypeDemoResult, "scope-2", []byte(`{"2":1}`))
+	node2.RunID = "run-x"
+	node2.SourceAdmissionID = "source-2"
+	require.NoError(t, g.AddNode(node2))
+	g.ValidateScopeBinding()
+	assert.True(t, g.Valid())
+}
+
+func TestEvidenceGraph_ValidateScopeBinding_AllowsAttemptIdentityToRepeatAcrossSources(t *testing.T) {
+	g := NewEvidenceGraph(0, nil)
+	node1 := validNode(ArtifactTypeDemoManifest, "scope-1", []byte(`{"1":1}`))
+	node1.RunID = "run-1"
+	node1.AttemptID = "attempt-1"
+	node1.SourceAdmissionID = "source-1"
+	require.NoError(t, g.AddNode(node1))
+	node2 := validNode(ArtifactTypeDemoResult, "scope-2", []byte(`{"2":1}`))
+	node2.RunID = "run-2"
+	node2.AttemptID = "attempt-1"
+	node2.SourceAdmissionID = "source-2"
+	require.NoError(t, g.AddNode(node2))
+	g.ValidateScopeBinding()
+	assert.True(t, g.Valid())
+}
+
+func TestEvidenceGraph_ValidateScopeBinding_DetectsTransactionRunConflictWithinSource(t *testing.T) {
+	g := NewEvidenceGraph(0, nil)
+	node1 := validNode(ArtifactTypeActionReceipt, "scope-1", []byte(`{"1":1}`))
+	node1.SourceAdmissionID = "source-1"
+	node1.RunID = "run-1"
+	node1.TransactionID = "transaction-1"
+	require.NoError(t, g.AddNode(node1))
+	node2 := validNode(ArtifactTypeProtocolChain, "scope-1", []byte(`{"2":1}`))
+	node2.SourceAdmissionID = "source-1"
+	node2.RunID = "run-2"
+	node2.TransactionID = "transaction-1"
 	require.NoError(t, g.AddNode(node2))
 	g.ValidateScopeBinding()
 	assert.False(t, g.Valid())
