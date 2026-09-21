@@ -144,7 +144,7 @@ wheels = [
 
 [[package]]
 name = "g8e"
-version = "2.1.10"
+version = "2.1.11"
 source = { editable = "." }
 dependencies = [
     { name = "protobuf" },

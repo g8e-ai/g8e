@@ -1,6 +1,6 @@
 # g8e Release Process
 
-Last Updated: 2026-09-20
+Last Updated: 2026-09-21
 
 The primary purpose of a release is to inventory every change since the last release and ensure that all affected documentation accurately reflects the current state of the code. Version bumps and CHANGELOG entries follow this documentation reconciliation; they do not replace it.
 
@@ -26,7 +26,7 @@ Release work is split between the **agent** (PR prep) and the **release owner** 
 1. Receive the release owner's complete change inventory and inspect the current working tree as the source of truth for current behavior
 2. Map every change to the full documentation catalog, then audit each affected document end to end against its owning current code, configuration, schema, generator, test, or scope-bound evidence
 3. Update every inaccurate or incomplete affected document and all related current-state cross-links, record the audit, and write `docs/release_notes/vX.Y.x/vX.Y.Z.md`; defer document metadata until the release version is set
-4. Generate compliance evidence: run `g8e compliance release-evidence` with the release version, output directory, assessment binding, and evidence-window flags (see [Compliance Evidence Generation](#compliance-evidence-generation))
+4. Generate the compliance evidence artifacts as part of agent prep: establish or use the release assessment binding, run `g8e compliance release-evidence` with the release version, output directory, assessment binding, and evidence-window flags, and retain the generated Markdown and CSV in `docs/release_notes/vX.Y.x/` (see [Compliance Evidence Generation](#compliance-evidence-generation)). The agent owns this generation step; do not defer it to the release owner or leave placeholder release notes.
 5. Set `VERSION` to `vX.Y.Z`, finalize metadata for every edited document, add the `CHANGELOG.md` row, and sync the Python package files (`protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock`) to `X.Y.Z` (no `v` prefix). Then run `make proto` to regenerate the downstream `ensemble/uv.lock` file, which depends on `g8e` through the in-tree protocol package, so CI's version sync and locked-environment checks pass on the PR
 6. Run the read-only [Verification](#verification) checks (all steps should pass, including step 4)
 7. Stop. The agent does NOT commit, push, open the PR, or run `make release`. Hand the prepared working tree back to the release owner.
@@ -310,7 +310,7 @@ Flags:
 
 ### When to run it
 
-Run compliance evidence generation after release notes and before version files (see the [Standard Checklist Template](#standard-checklist-template) agent-prep order). The command needs the release version string, which is determined during the change inventory, and writes into the release notes directory, which is created with the release notes.
+The **agent runs compliance evidence generation during PR prep**, after writing the release notes and before finalizing version-bearing files (see the [Standard Checklist Template](#standard-checklist-template) agent-prep order). The command needs the release version string, which is determined during the change inventory, and writes into the release notes directory, which is created with the release notes. The agent establishes or consumes the release assessment scope, run, assertion-assessment set, and inclusive evidence window for that release; the release owner reviews the generated artifacts but does not generate them as a substitute for agent prep.
 
 The command reads runtime evidence from the `.g8e/` tree of the deployment it runs against. For release prep, run it against a deployment with current demo evidence persisted (e.g. after `./g8e demos scenarios run` has produced evidence-grade demo runs). If no demo evidence is persisted, the report records "No demo runs persisted" — this is an honest gap, not a failure.
 

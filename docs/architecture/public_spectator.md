@@ -6,7 +6,7 @@ parent: Architecture
 # Public Spectator Architecture and Threat Model
 
 Last Updated: 2026-09-20
-Version: v2.1.10
+Version: v2.1.11
 
 ## Purpose
 
@@ -310,7 +310,7 @@ The public spectator architecture extends the existing observe and SSE infrastru
 - The remaining observe producer endpoints (`POST /api/v1/observe/producer/*`) remain mTLS-authenticated and ensemble-only. The CLI-local public publisher consumes only reviewed public-safe records, signs durable batches, and exports them through the private mirror listener; it does not expose a producer route to browsers.
 - The checked-in evaluation explorer in `dashboard/g8e-adapter/evaluation-explorer/` is connected to Go-native evaluation output. A minimal public-safe projector reads canonical native and campaign records from persisted runs under `.g8e/data/eval/runs/<run-id>/` and emits only the public-safe typed records required by the explorer contract. Enriched campaign assignment records use the `1.1.0` campaign result envelope and combine canonical protobuf JSON with named extensions for scenario context, grades, activity, resources, verification metadata, and evidence bindings. Historical `1.0.0` assignment result envelopes remain readable.
 - Public assignment activity is grouped by model, tool decision, tool call, policy decision, and governed action families. Each family carries availability semantics so observed empty, unavailable capture, and scenario-not-applicable remain distinguishable. Resource summaries preserve explicit zero and expose bounded latency, token, cache, and retry observations only when their source capture supports them.
-- A passing, run-applicable campaign verification publishes report-scoped `exploratory_verified` model-summary revisions for eligible variant/role aggregates and can backfill existing runs through verified catch-up. The browser displays the stored quality state; it does not infer verification from assignment records or promote a partial model row itself.
+- A passing, run-applicable campaign verification publishes report-scoped `exploratory_verified` model-summary revisions for eligible variant/role aggregates and can backfill existing runs through verified catch-up. Catch-up probes the gateway-owned dataset and clears stale host publication idempotency only when the canonical dataset is missing, allowing mirror-volume recovery without manual state edits. The browser displays the stored quality state; it does not infer verification from assignment records or promote a partial model row itself.
 - The projected records pass disclosure and contract validation, enter the real `g8e public` publisher, advance its durable high-water sequence, reach the local mirror, appear under the exact run ID in anonymous mirror history, and are delivered over the real SSE stream. Native evaluation verification is owned by `g8e eval boundary verify`, and campaign verification is owned by `g8e eval campaign verify`; mirror availability is not verification evidence.
 - The public-safe projection omits all principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, execution identifier, and evidence body fields.
 

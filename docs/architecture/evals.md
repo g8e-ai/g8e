@@ -6,7 +6,7 @@ parent: Architecture
 # Evaluations
 
 Last Updated: 2026-09-20
-Version: v2.1.10
+Version: v2.1.11
 
 ## Scope
 
@@ -398,7 +398,7 @@ Campaign assignment results use the enriched campaign projection envelope (`1.1.
 
 Assignment activity preserves the distinction between an observed empty list, unavailable source capture, and scenario-not-applicable. Resource metrics preserve an observed zero and identify unavailable token, retry, or latency values explicitly. Reported tool and policy outcomes are application evidence, not independent protocol authorization or schema-validation claims. Evidence bindings identify approved content-addressed artifacts only; a binding does not prove that the artifact is publicly accessible or individually verified.
 
-A passing campaign verification report is applicable only when its run, campaign, catalog, model registry, completed population, and verified population match the persisted evidence. When applicable, publication emits report-scoped `exploratory_verified` model-summary revisions for each eligible dataset/variant/role aggregate and republishes verified assignment results. Existing runs can be backfilled through verified catch-up even when the run-level verification summary idempotency key already exists; distinct report-scoped model keys prevent that summary from suppressing model revisions. Failed or inapplicable verification never promotes model quality.
+A passing campaign verification report is applicable only when its run, campaign, catalog, model registry, completed population, and verified population match the persisted evidence. When applicable, publication emits report-scoped `exploratory_verified` model-summary revisions for each eligible dataset/variant/role aggregate and republishes verified assignment results. Existing runs can be backfilled through verified catch-up even when the run-level verification summary idempotency key already exists; distinct report-scoped model keys prevent that summary from suppressing model revisions. The catch-up path probes the gateway-owned mirror and resets stale host publication idempotency when the canonical dataset is absent, so a wiped mirror can be restored without editing host state. Failed or inapplicable verification never promotes model quality.
 
 ### Public assignment result and quality vocabulary
 

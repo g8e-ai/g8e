@@ -6,7 +6,7 @@ parent: Guides
 # Public Spectator Operations Guide
 
 Last Updated: 2026-09-20
-Version: v2.1.10
+Version: v2.1.11
 
 This guide covers the gateway-owned anonymous public mirror and evaluation explorer. It is separate from the passkey-authenticated owner-local observe frontend connected with `./g8e gw connect <origin>`; see [Generator-Neutral Builder Guide](./build_observe_frontend.md) and [Build a g8e-Compatible Frontend](./build_frontend.md#generator-neutral-observe-frontend).
 
@@ -30,7 +30,7 @@ For an existing run, use verified catch-up after the report is persisted so assi
 ./g8e eval campaign publish --run-id <run-id>
 ```
 
-Use `--force` only when the mirror was wiped or is known to be missing records. It resets publication idempotency state and republishes the run; it does not recreate missing inference evidence or make an inapplicable verification report valid. Do not run catch-up concurrently with `execute --publish`.
+The publication coordinator probes the gateway-owned dataset during catch-up. If the dataset is absent while host publication idempotency still lists records, it clears that stale state and republishes the canonical run without requiring manual JSON edits. Use `--force` only when the mirror was wiped or is known to be missing records and the normal drift-aware path is not sufficient; it resets publication idempotency state and republishes the run. Neither path recreates missing inference evidence or makes an inapplicable verification report valid. Do not run catch-up concurrently with `execute --publish`.
 
 The mirror is a visibility and publication boundary, not a Policy Decision Point or Policy Execution Point. It does not authorize a governed mutation, and its availability is not execution evidence. The Operator whose L4/L5 boundary produced an underlying governed result retains authoritative local execution evidence.
 

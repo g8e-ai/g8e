@@ -1,7 +1,7 @@
 # Unified Docker Stack Guide
 
 Last Updated: 2026-09-20  
-Version: v2.1.10
+Version: v2.1.11
 
 This guide explains how to run the g8e platform from the repository root as one Docker Compose stack: Gateway, Data Operator, Inference Operator, ensemble (g8ee), and dashboard (g8ed). It also documents the evaluation campaign topology used for governed model scoring, the remote Ollama provider boundary, the provider-boundary **Observer Operator** (GPU/RAM witness), and the storage-side **Provenance Operator** (model weight attestation) that enroll from the provider host.
 
@@ -541,15 +541,13 @@ Or one run:
 
 `docker init` attempts `--queue` restore automatically when the queue and run artifacts exist. Queue entries whose `verified_run_id` directory is missing are reported as host-absent and must be re-executed — mirror restore cannot recreate inference evidence.
 
-If host `public-projection-state.json` under `.g8e/data/eval/runs/<run-id>/` still lists `published_idempotency_keys`, a plain `campaign publish` exports zero new records while the explorer mirror stays empty.
-
-Republish without editing JSON:
+A plain catch-up publish now probes the gateway-owned dataset. When the dataset is absent while host `public-projection-state.json` under `.g8e/data/eval/runs/<run-id>/` still lists `published_idempotency_keys`, it clears that stale state and republishes the canonical lifecycle, result, and aggregate projections without editing JSON manually.
 
 ```bash
-./g8e eval campaign publish --run-id <run-id> --force
+./g8e eval campaign publish --run-id <run-id>
 ```
 
-`--force` clears host idempotency keys and republishes all lifecycle, result, and aggregate projections to the gateway-owned mirror. Use only when the gateway mirror was wiped or is known to be missing records for that run.
+Use `--force` only when the mirror was wiped or is known to be missing records and the drift-aware path is not sufficient. It clears host idempotency keys and republishes the run; mirror restore cannot recreate missing inference evidence or make an inapplicable verification report valid.
 
 ### Browser TLS or WebAuthn failures
 
