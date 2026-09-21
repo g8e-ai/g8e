@@ -8,6 +8,7 @@
 package report
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -27,6 +28,7 @@ const (
 	FormatOSCAL    Format = "oscal"
 	FormatMarkdown Format = "markdown"
 	FormatHTML     Format = "html"
+	FormatCSV      Format = "csv"
 	FormatCLI      Format = "cli"
 )
 
@@ -42,7 +44,7 @@ type statusCount struct {
 }
 
 func SupportedFormats() []Format {
-	return []Format{FormatJSON, FormatOSCAL, FormatMarkdown, FormatHTML, FormatCLI}
+	return []Format{FormatJSON, FormatOSCAL, FormatMarkdown, FormatHTML, FormatCSV, FormatCLI}
 }
 
 func ParseFormat(value string) (Format, error) {
@@ -79,6 +81,9 @@ func RenderComplianceAnalysis(analysis *compliancev1.ComplianceAnalysis, format 
 	case FormatHTML:
 		body = []byte(renderHTML(analysis))
 		mediaType = constants.MediaTypeHTML
+	case FormatCSV:
+		body, err = renderCSV(analysis)
+		mediaType = constants.MediaTypeCSV
 	case FormatCLI:
 		body = []byte(renderCLI(analysis))
 		mediaType = constants.MediaTypeText
@@ -106,25 +111,173 @@ func renderMarkdown(analysis *compliancev1.ComplianceAnalysis) string {
 	var body strings.Builder
 	window := analysis.GetEvidenceWindowCompleteness()
 	fmt.Fprintln(&body, "# g8e Compliance Report")
-	fmt.Fprintf(&body, "\n- Analysis: `%s`\n", markdownValue(analysis.GetAnalysisId()))
-	fmt.Fprintf(&body, "- Scope: `%s`\n", markdownValue(analysis.GetScopeRef()))
-	fmt.Fprintf(&body, "- Generated: `%s`\n", analysis.GetGeneratedAt().AsTime().UTC().Format(time.RFC3339))
-	fmt.Fprintf(&body, "- Generator: `%s@%s`\n", markdownValue(analysis.GetGeneratorIdentity()), markdownValue(analysis.GetGeneratorVersion()))
-	fmt.Fprintf(&body, "- Evidence graph: `%t`\n", analysis.GetEvidenceGraphValid())
+	fmt.Fprintf(&body, "\n## Assessment Boundary\n\n- Analysis: `%s`\n- Scope: `%s`\n- Scope digest: `%s`\n- Generated: `%s`\n- Generator: `%s@%s`\n- Evidence graph: `%t`\n", markdownValue(analysis.GetAnalysisId()), markdownValue(analysis.GetScopeRef()), markdownValue(analysis.GetAssessmentScopeSha256()), analysis.GetGeneratedAt().AsTime().UTC().Format(time.RFC3339), markdownValue(analysis.GetGeneratorIdentity()), markdownValue(analysis.GetGeneratorVersion()), analysis.GetEvidenceGraphValid())
 	fmt.Fprintf(&body, "\n## Evidence Window\n\nStatus: `%s`; evidence: %d expected, %d actual; window: `%s` to `%s`.\n", markdownValue(window.GetCompletenessStatus()), window.GetExpectedEvidenceCount(), window.GetActualEvidenceCount(), markdownValue(window.GetWindowStartRef()), markdownValue(window.GetWindowEndRef()))
-	fmt.Fprintln(&body, "\n## Assertion Assessments\n\n| Assertion | Version | Status | Evidence level | Freshness |\n| --- | --- | --- | --- | --- |")
+	fmt.Fprintln(&body, "\n## Assertion Assessments\n\n| Assertion | Version | Status | Evidence level | Freshness | Coverage | Evidence references |\n| --- | --- | --- | --- | --- | --- | --- |")
 	for _, assessment := range sortedAssertionAssessments(analysis) {
-		fmt.Fprintf(&body, "| %s | %s | %s | %s | %s |\n", markdownValue(assessment.GetAssertionRef().GetId()), markdownValue(assessment.GetAssertionRef().GetVersion()), markdownValue(assessment.GetStatus()), markdownValue(assessment.GetEvidenceLevel()), markdownValue(assessment.GetFreshnessStatus()))
+		fmt.Fprintf(&body, "| %s | %s | %s | %s | %s | %s | %s |\n", markdownValue(assessment.GetAssertionRef().GetId()), markdownValue(assessment.GetAssertionRef().GetVersion()), markdownValue(assessment.GetStatus()), markdownValue(assessment.GetEvidenceLevel()), markdownValue(assessment.GetFreshnessStatus()), markdownValue(coverageSummary(assessment.GetCoverage())), markdownValue(strings.Join(sortedStrings(append(append([]string(nil), assessment.GetEvidenceRefs()...), assessment.GetMetricRefs()...)), ", ")))
 	}
 	fmt.Fprintln(&body, "\n## Framework Controls\n\n| Framework | Control | Status | Responsibility | Evidence level |\n| --- | --- | --- | --- | --- |")
 	for _, assessment := range sortedFrameworkAssessments(analysis) {
 		fmt.Fprintf(&body, "| %s | %s | %s | %s | %s |\n", markdownValue(assessment.GetFrameworkRef().GetId()), markdownValue(assessment.GetControlId()), markdownValue(assessment.GetStatus()), markdownValue(assessment.GetResponsibility()), markdownValue(assessment.GetEvidenceLevel()))
 	}
+	renderMarkdownEvidence(&body, analysis)
+	renderMarkdownDiagnostics(&body, analysis)
 	renderMarkdownList(&body, "Gaps", gapDescriptions(analysis))
 	renderMarkdownList(&body, "Findings", findingDescriptions(analysis))
 	renderMarkdownList(&body, "Remediation", remediationDescriptions(analysis))
 	renderMarkdownList(&body, "Limitations", analysis.GetLimitations())
 	return body.String()
+}
+
+func renderMarkdownEvidence(body *strings.Builder, analysis *compliancev1.ComplianceAnalysis) {
+	fmt.Fprintln(body, "\n## Evidence Inventory\n\n| Artifact | Type | Source admission | Run | Scenario | Verification | Bundle path |\n| --- | --- | --- | --- | --- | --- | --- |")
+	for _, resource := range sortedEvidenceResources(analysis) {
+		fmt.Fprintf(body, "| %s | %s | %s | %s | %s | %s | %s |\n", markdownValue(resource.GetArtifactId()), markdownValue(resource.GetArtifactType()), markdownValue(resource.GetSourceAdmissionId()), markdownValue(resource.GetRunId()), markdownValue(resource.GetScenarioId()), markdownValue(resource.GetVerificationStatus()), markdownValue(resource.GetBundlePath()))
+	}
+	fmt.Fprint(body, "\n### Evidence Links\n\n")
+	for _, link := range sortedEvidenceLinks(analysis) {
+		fmt.Fprintf(body, "- `%s` %s `%s`\n", markdownValue(link.GetSourceRef()), markdownValue(link.GetLinkType()), markdownValue(link.GetTargetRef()))
+	}
+}
+
+func renderMarkdownDiagnostics(body *strings.Builder, analysis *compliancev1.ComplianceAnalysis) {
+	renderMarkdownList(body, "Diagnostics", diagnosticDescriptions(analysis))
+}
+
+func renderCSV(analysis *compliancev1.ComplianceAnalysis) ([]byte, error) {
+	var body strings.Builder
+	writer := csv.NewWriter(&body)
+	header := []string{"record_type", "identifier", "reference", "status", "evidence_level", "freshness", "selected_subjects", "assessed_subjects", "failed_subjects", "unavailable_subjects", "evidence_refs", "metric_refs", "source_admission_id", "run_id", "attempt_id", "scenario_id", "transaction_id", "verification_status", "verifier", "bundle_path", "diagnostic_code", "diagnostic_severity", "diagnostic_message"}
+	if err := writer.Write(header); err != nil {
+		return nil, fmt.Errorf("compliance report: write CSV header: %w", err)
+	}
+	analysisRow := make([]string, len(header))
+	analysisRow[0] = "analysis"
+	analysisRow[1] = analysis.GetAnalysisId()
+	analysisRow[2] = analysis.GetScopeRef()
+	analysisRow[3] = fmt.Sprintf("graph_valid=%t", analysis.GetEvidenceGraphValid())
+	analysisRow[19] = analysis.GetAssessmentScopeSha256()
+	if err := writer.Write(analysisRow); err != nil {
+		return nil, fmt.Errorf("compliance report: write CSV analysis row: %w", err)
+	}
+	write := func(row []string) error {
+		if err := writer.Write(row); err != nil {
+			return fmt.Errorf("compliance report: write CSV row: %w", err)
+		}
+		return nil
+	}
+	for _, assessment := range sortedAssertionAssessments(analysis) {
+		coverage := assessment.GetCoverage()
+		if err := write([]string{"assertion", assessment.GetAssessmentId(), versionedReferenceValue(assessment.GetAssertionRef()), assessment.GetStatus(), assessment.GetEvidenceLevel(), assessment.GetFreshnessStatus(), int32String(coverage.GetSelectedSubjectCount()), int32String(coverage.GetAssessedSubjectCount()), int32String(coverage.GetFailedSubjectCount()), int32String(coverage.GetUnavailableSubjectCount()), strings.Join(sortedStrings(assessment.GetEvidenceRefs()), ";"), strings.Join(sortedStrings(assessment.GetMetricRefs()), ";"), "", "", "", "", "", "", versionedReferenceValue(assessment.GetVerifierRef()), coverageSummary(coverage), "", "", ""}); err != nil {
+			return nil, err
+		}
+	}
+	for _, assessment := range sortedFrameworkAssessments(analysis) {
+		if err := write([]string{"framework_control", assessment.GetAssessmentId(), versionedReferenceValue(assessment.GetFrameworkRef()) + "/" + assessment.GetControlId(), assessment.GetStatus(), assessment.GetEvidenceLevel(), "", "", "", "", "", strings.Join(sortedStrings(assessment.GetFindings()), ";"), strings.Join(sortedStrings(assessment.GetAssertionAssessmentRefs()), ";"), "", "", "", "", "", "", "", "", "", "", ""}); err != nil {
+			return nil, err
+		}
+	}
+	for _, resource := range sortedEvidenceResources(analysis) {
+		if err := write([]string{"evidence", resource.GetArtifactId(), resource.GetArtifactType(), "", "", "", "", "", "", "", "", "", resource.GetSourceAdmissionId(), resource.GetRunId(), resource.GetAttemptId(), resource.GetScenarioId(), resource.GetTransactionId(), resource.GetVerificationStatus(), versionedReferenceValue(&compliancev1.VersionedReference{Id: resource.GetVerifierId(), Version: resource.GetVerifierVersion()}), resource.GetBundlePath(), "", "", ""}); err != nil {
+			return nil, err
+		}
+	}
+	for _, link := range sortedEvidenceLinks(analysis) {
+		if err := write([]string{"evidence_link", link.GetSourceRef(), link.GetTargetRef(), "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", link.GetLinkType(), "", "", "", ""}); err != nil {
+			return nil, err
+		}
+	}
+	for _, diagnostic := range sortedDiagnostics(analysis.GetDiagnostics()) {
+		subject := diagnostic.GetSubject()
+		if err := write([]string{"diagnostic", diagnostic.GetSourceAdmissionId(), "", "", "", "", "", "", "", "", "", "", diagnostic.GetSourceAdmissionId(), subject.GetRunId(), subject.GetAttemptId(), subject.GetScenarioId(), subject.GetTransactionId(), "", "", "", diagnostic.GetCode(), diagnostic.GetSeverity(), diagnostic.GetMessage()}); err != nil {
+			return nil, err
+		}
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return nil, fmt.Errorf("compliance report: flush CSV: %w", err)
+	}
+	return []byte(body.String()), nil
+}
+
+func coverageSummary(coverage *compliancev1.AssessmentCoverage) string {
+	if coverage == nil {
+		return "not recorded"
+	}
+	return fmt.Sprintf("%d selected, %d assessed, %d failed, %d unavailable", coverage.GetSelectedSubjectCount(), coverage.GetAssessedSubjectCount(), coverage.GetFailedSubjectCount(), coverage.GetUnavailableSubjectCount())
+}
+
+func int32String(value int32) string {
+	return fmt.Sprintf("%d", value)
+}
+
+func versionedReferenceValue(reference *compliancev1.VersionedReference) string {
+	if reference == nil {
+		return ""
+	}
+	if reference.GetVersion() == "" {
+		return reference.GetId()
+	}
+	return reference.GetId() + "@" + reference.GetVersion()
+}
+
+func sortedStrings(values []string) []string {
+	result := append([]string(nil), values...)
+	sort.Strings(result)
+	return result
+}
+
+func sortedEvidenceResources(analysis *compliancev1.ComplianceAnalysis) []*compliancev1.ComplianceEvidenceReference {
+	resources := append([]*compliancev1.ComplianceEvidenceReference(nil), analysis.GetEvidenceResources()...)
+	sort.Slice(resources, func(i, j int) bool { return resources[i].GetArtifactId() < resources[j].GetArtifactId() })
+	return resources
+}
+
+func sortedEvidenceLinks(analysis *compliancev1.ComplianceAnalysis) []*compliancev1.EvidenceLink {
+	links := append([]*compliancev1.EvidenceLink(nil), analysis.GetEvidenceLinks()...)
+	sort.Slice(links, func(i, j int) bool {
+		if links[i].GetSourceRef() != links[j].GetSourceRef() {
+			return links[i].GetSourceRef() < links[j].GetSourceRef()
+		}
+		return links[i].GetTargetRef() < links[j].GetTargetRef()
+	})
+	return links
+}
+
+func sortedDiagnostics(diagnostics []*compliancev1.AssessmentDiagnostic) []*compliancev1.AssessmentDiagnostic {
+	result := append([]*compliancev1.AssessmentDiagnostic(nil), diagnostics...)
+	sort.Slice(result, func(i, j int) bool {
+		left := result[i].GetCode() + result[i].GetSourceAdmissionId() + result[i].GetMessage()
+		right := result[j].GetCode() + result[j].GetSourceAdmissionId() + result[j].GetMessage()
+		return left < right
+	})
+	return result
+}
+
+func evidenceLinkDescriptions(analysis *compliancev1.ComplianceAnalysis) []string {
+	values := make([]string, 0, len(analysis.GetEvidenceLinks()))
+	for _, link := range sortedEvidenceLinks(analysis) {
+		values = append(values, fmt.Sprintf("%s %s %s", link.GetSourceRef(), link.GetLinkType(), link.GetTargetRef()))
+	}
+	return values
+}
+
+func diagnosticDescriptions(analysis *compliancev1.ComplianceAnalysis) []string {
+	values := make([]string, 0, len(analysis.GetDiagnostics()))
+	for _, diagnostic := range sortedDiagnostics(analysis.GetDiagnostics()) {
+		subject := diagnostic.GetSubject()
+		values = append(values, fmt.Sprintf("%s [%s] source=%s subject=%s: %s", diagnostic.GetCode(), diagnostic.GetSeverity(), diagnostic.GetSourceAdmissionId(), subjectSelectionValue(subject), diagnostic.GetMessage()))
+	}
+	return values
+}
+
+func subjectSelectionValue(subject *compliancev1.AssessmentSubjectSelection) string {
+	if subject == nil {
+		return ""
+	}
+	values := []string{subject.GetRunId(), subject.GetAttemptId(), subject.GetScenarioId(), subject.GetTransactionId()}
+	return strings.Join(sortedStrings(values), "/")
 }
 
 func renderMarkdownList(body *strings.Builder, title string, values []string) {
@@ -151,15 +304,22 @@ func renderHTML(analysis *compliancev1.ComplianceAnalysis) string {
 	htmlDefinition(&body, "Evidence graph", fmt.Sprint(analysis.GetEvidenceGraphValid()))
 	body.WriteString("</dl>\n<h2>Evidence Window</h2>\n<p>")
 	fmt.Fprintf(&body, "Status: %s; evidence: %d expected, %d actual; window: %s to %s.", html.EscapeString(window.GetCompletenessStatus()), window.GetExpectedEvidenceCount(), window.GetActualEvidenceCount(), html.EscapeString(window.GetWindowStartRef()), html.EscapeString(window.GetWindowEndRef()))
-	body.WriteString("</p>\n<h2>Assertion Assessments</h2>\n<table><thead><tr><th>Assertion</th><th>Version</th><th>Status</th><th>Evidence level</th><th>Freshness</th></tr></thead><tbody>\n")
+	body.WriteString("</p>\n<h2>Assertion Assessments</h2>\n<table><thead><tr><th>Assertion</th><th>Version</th><th>Status</th><th>Evidence level</th><th>Freshness</th><th>Coverage</th><th>Evidence references</th></tr></thead><tbody>\n")
 	for _, assessment := range sortedAssertionAssessments(analysis) {
-		fmt.Fprintf(&body, "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", html.EscapeString(assessment.GetAssertionRef().GetId()), html.EscapeString(assessment.GetAssertionRef().GetVersion()), html.EscapeString(assessment.GetStatus()), html.EscapeString(assessment.GetEvidenceLevel()), html.EscapeString(assessment.GetFreshnessStatus()))
+		refs := append(append([]string(nil), assessment.GetEvidenceRefs()...), assessment.GetMetricRefs()...)
+		fmt.Fprintf(&body, "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", html.EscapeString(assessment.GetAssertionRef().GetId()), html.EscapeString(assessment.GetAssertionRef().GetVersion()), html.EscapeString(assessment.GetStatus()), html.EscapeString(assessment.GetEvidenceLevel()), html.EscapeString(assessment.GetFreshnessStatus()), html.EscapeString(coverageSummary(assessment.GetCoverage())), html.EscapeString(strings.Join(sortedStrings(refs), ", ")))
 	}
 	body.WriteString("</tbody></table>\n<h2>Framework Controls</h2>\n<table><thead><tr><th>Framework</th><th>Control</th><th>Status</th><th>Responsibility</th><th>Evidence level</th></tr></thead><tbody>\n")
 	for _, assessment := range sortedFrameworkAssessments(analysis) {
 		fmt.Fprintf(&body, "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", html.EscapeString(assessment.GetFrameworkRef().GetId()), html.EscapeString(assessment.GetControlId()), html.EscapeString(assessment.GetStatus()), html.EscapeString(assessment.GetResponsibility()), html.EscapeString(assessment.GetEvidenceLevel()))
 	}
+	body.WriteString("</tbody></table>\n<h2>Evidence Inventory</h2>\n<table><thead><tr><th>Artifact</th><th>Type</th><th>Source admission</th><th>Run</th><th>Scenario</th><th>Verification</th><th>Bundle path</th></tr></thead><tbody>\n")
+	for _, resource := range sortedEvidenceResources(analysis) {
+		fmt.Fprintf(&body, "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", html.EscapeString(resource.GetArtifactId()), html.EscapeString(resource.GetArtifactType()), html.EscapeString(resource.GetSourceAdmissionId()), html.EscapeString(resource.GetRunId()), html.EscapeString(resource.GetScenarioId()), html.EscapeString(resource.GetVerificationStatus()), html.EscapeString(resource.GetBundlePath()))
+	}
 	body.WriteString("</tbody></table>\n")
+	renderHTMLList(&body, "Evidence Links", evidenceLinkDescriptions(analysis))
+	renderHTMLList(&body, "Diagnostics", diagnosticDescriptions(analysis))
 	renderHTMLList(&body, "Gaps", gapDescriptions(analysis))
 	renderHTMLList(&body, "Findings", findingDescriptions(analysis))
 	renderHTMLList(&body, "Remediation", remediationDescriptions(analysis))
@@ -193,8 +353,19 @@ func renderCLI(analysis *compliancev1.ComplianceAnalysis) string {
 	fmt.Fprintf(&body, "Generated: %s\n", analysis.GetGeneratedAt().AsTime().UTC().Format(time.RFC3339))
 	fmt.Fprintf(&body, "Evidence graph: valid=%t\n", analysis.GetEvidenceGraphValid())
 	fmt.Fprintf(&body, "Evidence window: %s (%d/%d)\n", window.GetCompletenessStatus(), window.GetActualEvidenceCount(), window.GetExpectedEvidenceCount())
+	fmt.Fprintf(&body, "Scope digest: %s\n", analysis.GetAssessmentScopeSha256())
 	fmt.Fprintf(&body, "Assertion assessments: %d%s\n", len(analysis.GetAssertionAssessments()), formatStatusCounts(assertionStatusCounts(analysis)))
+	for _, assessment := range sortedAssertionAssessments(analysis) {
+		fmt.Fprintf(&body, "Assertion %s: status=%s evidence=%s freshness=%s coverage=%s refs=%s\n", assessment.GetAssessmentId(), assessment.GetStatus(), assessment.GetEvidenceLevel(), assessment.GetFreshnessStatus(), coverageSummary(assessment.GetCoverage()), strings.Join(sortedStrings(append(append([]string(nil), assessment.GetEvidenceRefs()...), assessment.GetMetricRefs()...)), ","))
+	}
 	fmt.Fprintf(&body, "Framework controls: %d%s\n", len(analysis.GetFrameworkAssessments()), formatStatusCounts(frameworkStatusCounts(analysis)))
+	fmt.Fprintf(&body, "Evidence resources: %d\nDiagnostics: %d\n", len(analysis.GetEvidenceResources()), len(analysis.GetDiagnostics()))
+	for _, link := range sortedEvidenceLinks(analysis) {
+		fmt.Fprintf(&body, "Evidence link: %s %s %s\n", link.GetSourceRef(), link.GetLinkType(), link.GetTargetRef())
+	}
+	for _, diagnostic := range sortedDiagnostics(analysis.GetDiagnostics()) {
+		fmt.Fprintf(&body, "Diagnostic %s [%s]: %s\n", diagnostic.GetCode(), diagnostic.GetSeverity(), diagnostic.GetMessage())
+	}
 	fmt.Fprintf(&body, "Gaps: %d\nFindings: %d\nRemediation: %d\nLimitations: %d\n", len(analysis.GetGaps()), len(analysis.GetFindings()), len(analysis.GetRemediation()), len(analysis.GetLimitations()))
 	return body.String()
 }

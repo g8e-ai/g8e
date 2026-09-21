@@ -882,7 +882,7 @@ func TestDemoRunImporter_Import_ImportsAndLinksManifestScenarioDefinitions(t *te
 	assert.Equal(t, "g8e.compliance.v1.DemoScenarioDefinition", definitionNode.SchemaRef)
 	assert.Equal(t, fix.demoID, definitionNode.ProducerIdentity)
 	assert.Equal(t, fix.scopeID, definitionNode.ScopeID)
-	assert.Equal(t, fix.runID, definitionNode.RunID)
+	assert.Empty(t, definitionNode.RunID)
 	assert.Equal(t, "scenario-1", definitionNode.ScenarioID)
 	assert.Equal(t, VerificationStatusVerified, definitionNode.VerificationStatus)
 	assert.Equal(t, constants.ComplianceBundleDemoDefinitionsFilename+"#1", definitionNode.BundlePath)

@@ -111,6 +111,7 @@ func renderAllFormats(analysis *compliancev1.ComplianceAnalysis) ([]RenderedForm
 		FormatOSCAL:    constants.ComplianceBundleOSCALPath,
 		FormatMarkdown: constants.ComplianceBundleMarkdownPath,
 		FormatHTML:     constants.ComplianceBundleHTMLPath,
+		FormatCSV:      constants.ComplianceBundleCSVPath,
 		FormatCLI:      constants.ComplianceBundleCLIPath,
 	}
 	formats := make([]RenderedFormat, 0, len(SupportedFormats()))
@@ -198,7 +199,8 @@ func (i admittedEvidenceImporter) Import(ctx context.Context) ([]evidence.Eviden
 	observedArtifacts := make(map[string]struct{}, len(nodes))
 	for index := range nodes {
 		node := &nodes[index]
-		if i.admission.GetRunId() != "" && node.RunID != i.admission.GetRunId() {
+		sharedDefinition := node.ArtifactType == evidence.ArtifactTypeDemoDefinition
+		if !sharedDefinition && i.admission.GetRunId() != "" && node.RunID != i.admission.GetRunId() {
 			return nil, fmt.Errorf("%w: source admission %s selected run %s but imported %s", constants.ErrEvidenceScopeMismatch, i.admission.GetAdmissionId(), i.admission.GetRunId(), node.RunID)
 		}
 		if len(selectedArtifacts) > 0 {
@@ -206,7 +208,9 @@ func (i admittedEvidenceImporter) Import(ctx context.Context) ([]evidence.Eviden
 				return nil, fmt.Errorf("%w: source admission %s imported unselected artifact %s", constants.ErrEvidenceScopeMismatch, i.admission.GetAdmissionId(), node.ArtifactID)
 			}
 		}
-		node.SourceAdmissionID = i.admission.GetAdmissionId()
+		if !sharedDefinition {
+			node.SourceAdmissionID = i.admission.GetAdmissionId()
+		}
 		observedArtifacts[node.ArtifactID] = struct{}{}
 	}
 	for artifactID := range selectedArtifacts {

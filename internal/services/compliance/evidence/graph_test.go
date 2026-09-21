@@ -307,7 +307,7 @@ func TestEvidenceGraph_ValidateScopeBinding_DetectsAttemptRunConflict(t *testing
 	assert.False(t, g.Valid())
 }
 
-func TestEvidenceGraph_ValidateScopeBinding_DetectsScenarioRunConflict(t *testing.T) {
+func TestEvidenceGraph_ValidateScopeBinding_AllowsScenarioIDToRepeatAcrossRuns(t *testing.T) {
 	g := NewEvidenceGraph(0, nil)
 	node1 := validNode(ArtifactTypeDemoManifest, "scope-1", []byte(`{"1":1}`))
 	node1.RunID = "run-1"
@@ -318,7 +318,7 @@ func TestEvidenceGraph_ValidateScopeBinding_DetectsScenarioRunConflict(t *testin
 	node2.ScenarioID = "scen-1"
 	require.NoError(t, g.AddNode(node2))
 	g.ValidateScopeBinding()
-	assert.False(t, g.Valid())
+	assert.True(t, g.Valid())
 }
 
 func TestEvidenceGraph_ValidateScopeBinding_PassesForConsistentBindings(t *testing.T) {
@@ -340,7 +340,8 @@ func TestEvidenceGraph_ValidateFreshness_DetectsMissingTimestamp(t *testing.T) {
 	node.ProducedAt = time.Time{}
 	require.NoError(t, g.AddNode(node))
 	g.ValidateFreshness(time.Time{}, time.Time{})
-	assert.False(t, g.Valid())
+	assert.True(t, g.Valid())
+	assert.NotEmpty(t, g.FreshnessFailures())
 }
 
 func TestEvidenceGraph_ValidateFreshness_DetectsBeforeWindowStart(t *testing.T) {
@@ -349,7 +350,8 @@ func TestEvidenceGraph_ValidateFreshness_DetectsBeforeWindowStart(t *testing.T) 
 	node.ProducedAt = time.Unix(1_000_000_000, 0).UTC()
 	require.NoError(t, g.AddNode(node))
 	g.ValidateFreshness(time.Unix(2_000_000_000, 0).UTC(), time.Time{})
-	assert.False(t, g.Valid())
+	assert.True(t, g.Valid())
+	assert.NotEmpty(t, g.FreshnessFailures())
 }
 
 func TestEvidenceGraph_ValidateFreshness_DetectsAfterWindowEnd(t *testing.T) {
@@ -358,7 +360,8 @@ func TestEvidenceGraph_ValidateFreshness_DetectsAfterWindowEnd(t *testing.T) {
 	node.ProducedAt = time.Unix(3_000_000_000, 0).UTC()
 	require.NoError(t, g.AddNode(node))
 	g.ValidateFreshness(time.Time{}, time.Unix(2_000_000_000, 0).UTC())
-	assert.False(t, g.Valid())
+	assert.True(t, g.Valid())
+	assert.NotEmpty(t, g.FreshnessFailures())
 }
 
 func TestEvidenceGraph_ValidateFreshness_PassesWithinWindow(t *testing.T) {

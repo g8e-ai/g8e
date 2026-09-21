@@ -75,6 +75,7 @@ func TestRenderComplianceAnalysis_RendersEveryViewFromCanonicalAnalysis(t *testi
 		{name: "canonical JSON", format: FormatJSON, mediaType: constants.MediaTypeJSON, contains: []string{analysis.GetAnalysisId(), analysis.GetScopeRef(), "assertion_assessments"}},
 		{name: "OSCAL", format: FormatOSCAL, mediaType: constants.MediaTypeOSCALJSON, contains: []string{analysis.GetAnalysisId(), analysis.GetScopeRef(), "framework-1 control-1 Finding"}},
 		{name: "Markdown", format: FormatMarkdown, mediaType: constants.MediaTypeMarkdown, contains: []string{analysis.GetAnalysisId(), analysis.GetScopeRef(), "| framework-1 | control-1 | satisfied |"}},
+		{name: "CSV", format: FormatCSV, mediaType: constants.MediaTypeCSV, contains: []string{"record_type,identifier", analysis.GetAnalysisId(), "framework_control"}},
 		{name: "HTML", format: FormatHTML, mediaType: constants.MediaTypeHTML, contains: []string{analysis.GetAnalysisId(), analysis.GetScopeRef(), "<td>control-1</td>"}},
 		{name: "CLI", format: FormatCLI, mediaType: constants.MediaTypeText, contains: []string{analysis.GetAnalysisId(), analysis.GetScopeRef(), "satisfied=1"}},
 	}
@@ -93,6 +94,33 @@ func TestRenderComplianceAnalysis_RendersEveryViewFromCanonicalAnalysis(t *testi
 				assert.Contains(t, string(first.Body), expected)
 			}
 		})
+	}
+}
+
+func TestRenderComplianceAnalysis_ProjectionIncludesCoverageDiagnosticsAndEvidenceLinks(t *testing.T) {
+	analysis := rendererTestAnalysis()
+	artifactID := "action-receipt:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	analysis.AssertionAssessments[0].EvidenceRefs = []string{artifactID}
+	analysis.AssertionAssessments[0].Coverage = &compliancev1.AssessmentCoverage{
+		SelectedSubjectCount:    2,
+		AssessedSubjectCount:    1,
+		FailedSubjectCount:      1,
+		UnavailableSubjectCount: 1,
+		UnavailableSubjects:     []*compliancev1.AssessmentSubjectSelection{{SourceAdmissionId: "source-1", RunId: "run-1", ScenarioId: "scenario-2"}},
+	}
+	analysis.AssertionAssessments[0].Diagnostics = []*compliancev1.AssessmentDiagnostic{{Code: "missing_observation", Severity: "warning", SourceAdmissionId: "source-1", Subject: &compliancev1.AssessmentSubjectSelection{RunId: "run-1", ScenarioId: "scenario-2"}, Message: "independent observation was not captured"}}
+	analysis.Diagnostics = append(analysis.Diagnostics, analysis.AssertionAssessments[0].Diagnostics...)
+	analysis.EvidenceResources = []*compliancev1.ComplianceEvidenceReference{{
+		ArtifactId: artifactID, ArtifactType: "action-receipt", Sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MediaType: constants.MediaTypeJSON, SchemaRef: "g8e.operator.v1.ActionReceipt", ProducerIdentity: "operator-1", ScopeId: "scope-1", RunId: "run-1", ScenarioId: "scenario-1", SourceAdmissionId: "source-1", VerificationStatus: "verified", VerifierId: "receipt-verifier", VerifierVersion: "1.0.0", BundlePath: "sources/operator-1/receipt.json",
+	}}
+
+	for _, format := range []Format{FormatCSV, FormatMarkdown, FormatHTML, FormatCLI, FormatOSCAL} {
+		rendered, err := RenderComplianceAnalysis(analysis, format)
+		require.NoError(t, err)
+		body := string(rendered.Body)
+		assert.Contains(t, body, artifactID)
+		assert.Contains(t, body, "missing_observation")
+		assert.Contains(t, body, "2 selected, 1 assessed, 1 failed, 1 unavailable")
 	}
 }
 
@@ -158,10 +186,11 @@ func TestRenderComplianceAnalysis_GoldenVectors(t *testing.T) {
 		expectedSHA256 string
 	}{
 		{format: FormatJSON, expectedSHA256: "9f71eaab3df307e70d12108b0400807b01fb1df813d2cff7ea7573fa3104ac93"},
-		{format: FormatOSCAL, expectedSHA256: "e6452f033cf7c29b951b803f4114d8e53bff365bb3aefed862876f9cb8d76f5c"},
-		{format: FormatMarkdown, expectedSHA256: "d9c9a0195677a4bef269f56670fcf77f90cdc114ad6b1992bd1cb254fe6265d5"},
-		{format: FormatHTML, expectedSHA256: "2ad80e6c4c4ef18913ba925bd3f3598ce109dc42b25fe583fea337c9728f135f"},
-		{format: FormatCLI, expectedSHA256: "ddb408d7bbde738afd7b09add4af91b1a137a8dfcd3061c1023bc8cd33669e84"},
+		{format: FormatOSCAL, expectedSHA256: "cb9ac5cef6519b7940385f9d416e7c85e4f963c82ae16480733d85749897c8aa"},
+		{format: FormatMarkdown, expectedSHA256: "88d59561c7f44f1f1642267a95320d4a0bf0c18290f3bde0fb9ae0890d300a5b"},
+		{format: FormatHTML, expectedSHA256: "f84706e409b2e7ffcdf2314fa424e322740dcc2d5a0cbdf02b45ad269554e1d2"},
+		{format: FormatCSV, expectedSHA256: "f2fb840b8ed213583b398518b66397dd70dc2cf0adb7b9d7e5d1d02c5c7fd5f5"},
+		{format: FormatCLI, expectedSHA256: "828c8e51abe2bafc4d2b92f72bf41950de9beaf373ae59a53b37426fea469a26"},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.format), func(t *testing.T) {

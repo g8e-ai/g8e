@@ -365,6 +365,13 @@ func (v *bundleVerifier) verifySourceAdmissionBindings(scope *compliancev1.Asses
 		admissions[admission.GetAdmissionId()] = admission
 	}
 	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource.GetSourceAdmissionId() == "" {
+			if evidence.ArtifactType(resource.GetArtifactType()) == evidence.ArtifactTypeDemoDefinition {
+				continue
+			}
+			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "analysis evidence resource does not bind a protected source admission")
+			continue
+		}
 		admission := admissions[resource.GetSourceAdmissionId()]
 		if admission == nil {
 			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "analysis evidence resource does not bind a protected source admission")
@@ -545,9 +552,12 @@ func (v *bundleVerifier) verifyDecisionReplay(ctx context.Context) {
 		v.fail(constants.ErrInvalidEvidenceGraph, constants.ComplianceBundleAnalysisPath, "protected analysis has no exact importer replay")
 		return
 	}
+	sharedNodes := append([]evidence.EvidenceNode(nil), v.replayedNodesByAdmission[""]...)
 	sources := make([]GenerationSource, 0, len(scope.GetSourceAdmissions()))
 	for _, admission := range scope.GetSourceAdmissions() {
-		sources = append(sources, GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: protectedDecisionImporter{admissionID: admission.GetAdmissionId(), nodes: v.replayedNodesByAdmission[admission.GetAdmissionId()]}})
+		nodes := append([]evidence.EvidenceNode(nil), v.replayedNodesByAdmission[admission.GetAdmissionId()]...)
+		nodes = append(nodes, sharedNodes...)
+		sources = append(sources, GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: protectedDecisionImporter{admissionID: admission.GetAdmissionId(), nodes: nodes}})
 	}
 	replayed, err := GenerateComplianceAnalysis(ctx, GenerationRequest{Scope: scope, Sources: sources, Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks})
 	if err != nil {

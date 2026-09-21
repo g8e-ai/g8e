@@ -276,7 +276,7 @@ func finalizeProtectedScopeFixture(t *testing.T, request *BundleAssemblyRequest)
 	}
 	changed := false
 	for _, resource := range request.Analysis.GetEvidenceResources() {
-		if resource.GetSourceAdmissionId() != "" {
+		if resource.GetSourceAdmissionId() != "" || resource.GetArtifactType() == string(evidence.ArtifactTypeDemoDefinition) {
 			continue
 		}
 		admission := admissionsByRun[resource.GetRunId()]
@@ -317,9 +317,12 @@ func finalizeProtectedScopeFixture(t *testing.T, request *BundleAssemblyRequest)
 		sort.Strings(node.References)
 		nodesByAdmission[resource.GetSourceAdmissionId()] = append(nodesByAdmission[resource.GetSourceAdmissionId()], node)
 	}
+	sharedNodes := append([]evidence.EvidenceNode(nil), nodesByAdmission[""]...)
 	sources := make([]GenerationSource, 0, len(scope.GetSourceAdmissions()))
 	for _, admission := range scope.GetSourceAdmissions() {
-		sources = append(sources, GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: protectedDecisionImporter{admissionID: admission.GetAdmissionId(), nodes: nodesByAdmission[admission.GetAdmissionId()]}})
+		nodes := append([]evidence.EvidenceNode(nil), nodesByAdmission[admission.GetAdmissionId()]...)
+		nodes = append(nodes, sharedNodes...)
+		sources = append(sources, GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: protectedDecisionImporter{admissionID: admission.GetAdmissionId(), nodes: nodes}})
 	}
 	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
 	require.NoError(t, err)

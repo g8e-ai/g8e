@@ -177,7 +177,6 @@ func (i *DemoRunImporter) loadManifest(ctx context.Context) (*compliancev1.DemoM
 
 func (i *DemoRunImporter) loadDefinitions(ctx context.Context, manifest *compliancev1.DemoManifest) ([]EvidenceNode, map[string]string, error) {
 	scopeID := manifest.GetScopeId()
-	runID := manifest.GetRunId()
 	artifacts, err := i.source.Definitions(ctx, manifest.GetDemoId())
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: load scenario definitions: %w", constants.ErrEvidenceImporterFailed, err)
@@ -211,7 +210,6 @@ func (i *DemoRunImporter) loadDefinitions(ctx context.Context, manifest *complia
 			ProducerIdentity:   manifest.GetDemoId(),
 			ProducedAt:         manifest.GetGeneratedAt().AsTime(),
 			ScopeID:            scopeID,
-			RunID:              runID,
 			ScenarioID:         definition.GetScenarioId(),
 			VerificationStatus: VerificationStatusVerified,
 			VerifierID:         constants.DemoRunVerifierID,
