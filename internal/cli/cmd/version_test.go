@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/buildinfo"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
@@ -164,6 +165,22 @@ func TestRunVersion_JSONPrefersStampedRevisionOverVCS(t *testing.T) {
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
 	assert.Equal(t, "stamped-revision", out["source_revision"])
+}
+
+func TestEffectiveSourceRevision_FallsBackForUnstampedValues(t *testing.T) {
+	vcs := buildinfo.VCSStamp{Revision: "vcs-revision", Present: true}
+	for _, value := range []string{"", string(constants.SystemHealthUnknown), constants.BuildMetadataUnavailable} {
+		t.Run(value, func(t *testing.T) {
+			assert.Equal(t, "vcs-revision", effectiveSourceRevision(serve.VersionInfo{SourceRevision: value}, vcs))
+		})
+	}
+}
+
+func TestEffectiveBuildID_FallsBackToSourceTreeHash(t *testing.T) {
+	hash := "a" + strings.Repeat("1", 63)
+	vi := serve.VersionInfo{BuildID: constants.BuildMetadataUnavailable, SourceTreeStateHash: hash}
+
+	assert.Equal(t, hash, effectiveBuildID(vi))
 }
 
 func TestRunVersion_JSONFIPSIncludesModuleBlock(t *testing.T) {

@@ -19,17 +19,17 @@ TMPDIR ?= /tmp
 # BUILD VARIABLES
 # =============================================================================
 VERSION := $(shell cat VERSION | tr -d '\n')
-BUILD_ID ?= unavailable
 BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 BIN_DIR := bin
 MAIN_PKG := ./cmd/g8e
 
 # Source provenance stamps use explicit non-Git values and an explicit source
 # manifest. Callers may override all three values with reviewed candidate data.
-SOURCE_REVISION ?= unavailable
 PROVENANCE_SOURCE_PATHS := cmd internal protocol ensemble scripts test vendor Makefile VERSION go.mod go.sum buf.gen.yaml Dockerfile docker-compose.yml
 PROVENANCE_EXCLUDES := .git,.env,.g8e*,.local.dev,.venv,node_modules,__pycache__,*.egg-info,.pytest_cache,.ruff_cache,.mypy_cache,bin,build,dist,site,coverage,reports,test-results,auditor-out,*.out,*.test
 SOURCE_TREE_HASH ?= $(shell go run ./internal/tools/treehash -mode manifest -base . -exclude '$(PROVENANCE_EXCLUDES)' $(wildcard $(PROVENANCE_SOURCE_PATHS)) 2>/dev/null || echo "unknown")
+BUILD_ID ?= $(SOURCE_TREE_HASH)
+SOURCE_REVISION ?= unknown
 LDFLAGS = -X main.version=$(VERSION) -X main.buildID=$(BUILD_ID) -X main.buildTime=$(BUILD_TIME) -X main.sourceRevision=$(SOURCE_REVISION) -X main.sourceTreeHash=$(SOURCE_TREE_HASH)
 HOST_OS := $(shell go env GOOS)
 HOST_ARCH := $(shell go env GOARCH)

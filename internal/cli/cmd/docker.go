@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/buildinfo"
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
@@ -816,43 +817,20 @@ func platformEnrollmentApprovalRank(req models.PlatformEnrollmentPendingRequest)
 
 const dockerInitApprovalSlotCount = 4
 
-func dockerInitApprovalSlotName(slot int) string {
-	switch slot {
-	case 1:
-		return "data operator"
-	case 2:
-		return "dashboard"
-	case 3:
-		return "ensemble"
-	case 4:
-		return "inference operator"
-	default:
-		return "workload"
-	}
-}
-
-// nextDockerInitApprovalSlot returns the lowest approval slot (1-4) that has
-// not yet been approved.
-func nextDockerInitApprovalSlot(approvedSlots map[int]struct{}) int {
-	for slot := 1; slot <= dockerInitApprovalSlotCount; slot++ {
-		if _, ok := approvedSlots[slot]; !ok {
-			return slot
-		}
-	}
-	return 0
-}
-
-// selectDockerInitApprovalCandidate returns the pending request for the next
-// slot in the documented order. Lower-ranked workloads must be approved before
-// later ones, even if a later workload submits its request first.
-func selectDockerInitApprovalCandidate(pending []models.PlatformEnrollmentPendingRequest, nextSlot int) *models.PlatformEnrollmentPendingRequest {
+// selectDockerInitApprovalCandidate returns the lowest-ranked pending request in
+// the documented order. Workloads with reusable credentials submit no request
+// and therefore do not block later pending workloads.
+func selectDockerInitApprovalCandidate(pending []models.PlatformEnrollmentPendingRequest) *models.PlatformEnrollmentPendingRequest {
+	var candidate *models.PlatformEnrollmentPendingRequest
+	candidateRank := dockerInitApprovalSlotCount + 1
 	for i := range pending {
-		req := pending[i]
-		if platformEnrollmentApprovalRank(req) == nextSlot {
-			return &req
+		rank := platformEnrollmentApprovalRank(pending[i])
+		if rank < candidateRank {
+			candidate = &pending[i]
+			candidateRank = rank
 		}
 	}
-	return nil
+	return candidate
 }
 
 // runDockerInitApprovals auto-approves pending platform enrollment requests in
@@ -862,25 +840,18 @@ func runDockerInitApprovals(cmd *cobra.Command, client apiClient) error {
 		maxRounds    = 90
 		pollInterval = 2 * time.Second
 	)
-	approvedSlots := make(map[int]struct{})
 	for round := 0; round < maxRounds; round++ {
 		pending, err := fetchPendingPlatformEnrollments(client)
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrDockerInitApprovalFailed, err)
 		}
 
-		nextSlot := nextDockerInitApprovalSlot(approvedSlots)
-		if nextSlot == 0 {
-			if err := waitForDockerEnsembleHealthy(cmd); err == nil {
-				cmd.Println("All platform enrollment requests approved.")
+		next := selectDockerInitApprovalCandidate(pending)
+		if next == nil {
+			if dockerEnsembleHealthy() {
+				cmd.Println("Full-stack platform enrollment requests complete.")
 				return nil
 			}
-			time.Sleep(pollInterval)
-			continue
-		}
-
-		next := selectDockerInitApprovalCandidate(pending, nextSlot)
-		if next == nil {
 			time.Sleep(pollInterval)
 			continue
 		}
@@ -894,39 +865,24 @@ func runDockerInitApprovals(cmd *cobra.Command, client apiClient) error {
 		if err != nil {
 			return fmt.Errorf("%w: approve %s (%s): %w", constants.ErrDockerInitApprovalFailed, next.ComponentKind, next.RequestID, err)
 		}
-		approvedSlots[nextSlot] = struct{}{}
 		cmd.Printf("Approved %s enrollment request %s (%s).\n", next.ComponentKind, next.RequestID, resp.State)
 		time.Sleep(pollInterval)
 	}
 
-	nextSlot := nextDockerInitApprovalSlot(approvedSlots)
-	if nextSlot > 0 {
-		return fmt.Errorf(
-			"%w: timed out waiting for %s enrollment request; check 'g8e docker logs' or rerun with --clean",
-			constants.ErrDockerInitApprovalFailed,
-			dockerInitApprovalSlotName(nextSlot),
-		)
-	}
-	return fmt.Errorf("%w: timed out waiting for platform enrollment approvals to complete", constants.ErrDockerInitApprovalFailed)
+	return fmt.Errorf("%w: timed out waiting for pending enrollment requests and workload readiness; check 'g8e docker logs' or rerun with --clean", constants.ErrDockerInitApprovalFailed)
 }
 
 // waitForDockerEnsembleHealthy polls the ensemble HTTP health endpoint until it
 // responds 200 or the timeout elapses.
 func waitForDockerEnsembleHealthy(cmd *cobra.Command) error {
-	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", constants.EnsembleDefaultPort)
-	plainClient := &http.Client{Timeout: 2 * time.Second} //nolint:gosec
 	const (
 		maxAttempts  = 60
 		pollInterval = 3 * time.Second
 	)
 	for i := 0; i < maxAttempts; i++ {
-		resp, err := plainClient.Get(healthURL) //nolint:noctx
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				cmd.Println("Ensemble is healthy.")
-				return nil
-			}
+		if dockerEnsembleHealthy() {
+			cmd.Println("Ensemble is healthy.")
+			return nil
 		}
 		if i == maxAttempts-1 {
 			return fmt.Errorf("%w: ensemble did not become healthy after %v",
@@ -935,6 +891,19 @@ func waitForDockerEnsembleHealthy(cmd *cobra.Command) error {
 		time.Sleep(pollInterval)
 	}
 	return nil
+}
+
+func dockerEnsembleHealthy() bool {
+	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", constants.EnsembleDefaultPort)
+	plainClient := &http.Client{Timeout: 2 * time.Second} //nolint:gosec
+	resp, err := plainClient.Get(healthURL)               //nolint:noctx
+	if err != nil {
+		return false
+	}
+	if err := resp.Body.Close(); err != nil {
+		return false
+	}
+	return resp.StatusCode == http.StatusOK
 }
 
 // findPendingRequestByComponent returns the first pending request matching the
@@ -995,12 +964,12 @@ func dockerBuildArgs(vi serve.VersionInfo, noCache bool) ([]string, error) {
 	if !isHex64(vi.SourceTreeStateHash) {
 		return nil, constants.ErrSourceTreeHashInvalid
 	}
-	buildID := strings.TrimSpace(vi.BuildID)
+	buildID := effectiveBuildID(vi)
 	if buildID == "" {
 		buildID = string(constants.SystemHealthUnknown)
 	}
-	sourceRevision := strings.TrimSpace(vi.SourceRevision)
-	if sourceRevision == "" {
+	sourceRevision := effectiveSourceRevision(vi, buildinfo.ReadVCSStamp())
+	if isUnstampedMetadata(sourceRevision) {
 		sourceRevision = string(constants.SystemHealthUnknown)
 	}
 	args := []string{

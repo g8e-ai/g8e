@@ -11,6 +11,7 @@ import (
 	"crypto/fips140"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -84,12 +85,33 @@ type versionJSON struct {
 	FIPS140             *fipsStatusJSON `json:"fips140,omitempty"`
 }
 
+func isUnstampedMetadata(value string) bool {
+	switch strings.TrimSpace(value) {
+	case "", string(constants.SystemHealthUnknown), constants.BuildMetadataUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// effectiveBuildID prefers the explicit build identity and falls back to the
+// source-tree state hash for local builds without release metadata.
+func effectiveBuildID(vi serve.VersionInfo) string {
+	if buildID := strings.TrimSpace(vi.BuildID); !isUnstampedMetadata(buildID) {
+		return buildID
+	}
+	if isHex64(vi.SourceTreeStateHash) {
+		return vi.SourceTreeStateHash
+	}
+	return ""
+}
+
 // effectiveSourceRevision prefers the ldflags stamp and falls back to the
 // toolchain-embedded VCS revision so a plain `go build` still carries a
 // source identity.
 func effectiveSourceRevision(vi serve.VersionInfo, vcs buildinfo.VCSStamp) string {
-	if vi.SourceRevision != "" && vi.SourceRevision != string(constants.SystemHealthUnknown) {
-		return vi.SourceRevision
+	if sourceRevision := strings.TrimSpace(vi.SourceRevision); !isUnstampedMetadata(sourceRevision) {
+		return sourceRevision
 	}
 	return vcs.Revision
 }
@@ -101,8 +123,8 @@ func runVersion(w io.Writer, vi serve.VersionInfo, fips bool, asJSON bool) error
 	}
 
 	fmt.Fprintf(w, "g8e version %s\n", vi.Version)
-	if vi.BuildID != "" {
-		fmt.Fprintf(w, "build id:    %s\n", vi.BuildID)
+	if buildID := effectiveBuildID(vi); buildID != "" {
+		fmt.Fprintf(w, "build id:    %s\n", buildID)
 	}
 	if vi.BuildTime != "" {
 		fmt.Fprintf(w, "build time:  %s\n", vi.BuildTime)
@@ -110,7 +132,7 @@ func runVersion(w io.Writer, vi serve.VersionInfo, fips bool, asJSON bool) error
 	if vi.Platform != "" {
 		fmt.Fprintf(w, "platform:    %s\n", vi.Platform)
 	}
-	if rev := effectiveSourceRevision(vi, vcs); rev != "" && rev != string(constants.SystemHealthUnknown) {
+	if rev := effectiveSourceRevision(vi, vcs); !isUnstampedMetadata(rev) {
 		fmt.Fprintf(w, "source rev:  %s\n", rev)
 	}
 	if isHex64(vi.SourceTreeStateHash) {
@@ -161,11 +183,11 @@ func runVersion(w io.Writer, vi serve.VersionInfo, fips bool, asJSON bool) error
 func writeVersionJSON(w io.Writer, vi serve.VersionInfo, vcs buildinfo.VCSStamp, fips bool) error {
 	out := versionJSON{
 		Version:   vi.Version,
-		BuildID:   vi.BuildID,
+		BuildID:   effectiveBuildID(vi),
 		BuildTime: vi.BuildTime,
 		Platform:  vi.Platform,
 	}
-	if rev := effectiveSourceRevision(vi, vcs); rev != "" && rev != string(constants.SystemHealthUnknown) {
+	if rev := effectiveSourceRevision(vi, vcs); !isUnstampedMetadata(rev) {
 		out.SourceRevision = rev
 	}
 	if isHex64(vi.SourceTreeStateHash) {

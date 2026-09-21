@@ -28,11 +28,13 @@ var assessmentStatuses = []string{"satisfied", "not_satisfied", "not_applicable"
 var evidenceLevels = []string{"L0", "L1", "L2", "L3", "L4", "L5"}
 var validationCycles = []string{"7d", "90d"}
 var missingEvidencePolicies = []string{"unverifiable", "customer_attestation_required"}
+var assertionEvidenceTypes = []string{"action_receipt", "attestation", "build_attestation", "commitment", "config_attestation", "deterministic_stage", "final_persistence_attestation", "identity_attestation", "metric", "runtime_attestation", "state_observation"}
+var assertionPassingRules = []string{"all_required", "threshold"}
 var verificationStatuses = []string{"verified", "invalid", "unverifiable", "unsupported"}
 var freshnessStatuses = []string{"fresh", "stale", "incomplete", "not_applicable"}
 var signatureAlgorithms = []string{"ed25519"}
-var supportedGraders = []string{"protocol_chain@1.0.0", "policy_outcome@1.0.0", "receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "commitment_chain@1.0.0", "independent_state@1.0.0", "secret_detection_precision_recall@1.0.0", "model_boundary_raw_secret_rate@1.0.0", "exact_local_rehydration@1.0.0", "authenticated_operation@1.0.0", "fips_mode@1.0.0"}
-var supportedVerifiers = []string{"receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "deterministic_stage_chain@1.0.0", "commitment_chain@1.0.0", "state_observation@1.0.0", "eval_metric@1.0.0", "identity_attestation@1.0.0", "notary_proof@1.0.0", "build_provenance@1.0.0", "runtime_fips@1.0.0", constants.ComplianceBundleVerifierID + "@" + constants.ComplianceBundleVerifierVersion, constants.AssertionGraderID + "@" + constants.AssertionGraderVersion, constants.FrameworkGraderID + "@" + constants.FrameworkGraderVersion}
+var supportedGraders = []string{"protocol_chain@1.0.0", "policy_outcome@1.0.0", "receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "commitment_attestation@1.0.0", "commitment_chain@1.0.0", "independent_state@1.0.0", "secret_detection_precision_recall@1.0.0", "model_boundary_raw_secret_rate@1.0.0", "exact_local_rehydration@1.0.0", "authenticated_operation@1.0.0", "fips_mode@1.0.0"}
+var supportedVerifiers = []string{"receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "deterministic_stage_chain@1.0.0", "commitment_attestation@1.0.0", "commitment_chain@1.0.0", "state_observation@1.0.0", "eval_metric@1.0.0", "identity_attestation@1.0.0", "notary_proof@1.0.0", "build_provenance@1.0.0", "runtime_fips@1.0.0", constants.ComplianceBundleVerifierID + "@" + constants.ComplianceBundleVerifierVersion, constants.AssertionGraderID + "@" + constants.AssertionGraderVersion, constants.FrameworkGraderID + "@" + constants.FrameworkGraderVersion}
 
 func ValidateAssertionCatalog(catalog *compliancev1.ControlAssertionCatalog) error {
 	if catalog == nil || catalog.CatalogId == "" || catalog.CatalogVersion == "" || len(catalog.Assertions) == 0 {
@@ -54,7 +56,7 @@ func ValidateAssertionCatalog(catalog *compliancev1.ControlAssertionCatalog) err
 		if !contains(responsibilities, assertion.Responsibility) || !contains(evidenceLevels, assertion.MinimumEvidenceLevel) || !contains(validationCycles, assertion.ValidationCycle) || !contains(missingEvidencePolicies, assertion.MissingEvidencePolicy) {
 			return fmt.Errorf("%w: assertion %s has invalid semantics", constants.ErrInvalidEvidenceGraph, key)
 		}
-		if len(assertion.ComponentScope) == 0 || len(assertion.ApplicableActionClasses) == 0 || len(assertion.ApplicableArms) == 0 || len(assertion.RequiredEvidenceTypes) == 0 || len(assertion.RequiredGraderRefs) == 0 || len(assertion.RequiredVerifierRefs) == 0 || assertion.PassingRule == "" {
+		if len(assertion.ComponentScope) == 0 || len(assertion.ApplicableActionClasses) == 0 || len(assertion.ApplicableArms) == 0 || len(assertion.RequiredEvidenceTypes) == 0 || len(assertion.RequiredGraderRefs) == 0 || len(assertion.RequiredVerifierRefs) == 0 || !contains(assertionPassingRules, assertion.PassingRule) {
 			return fmt.Errorf("%w: assertion %s has incomplete evaluation requirements", constants.ErrInvalidEvidenceGraph, key)
 		}
 		stringLists := []struct {
@@ -70,6 +72,11 @@ func ValidateAssertionCatalog(catalog *compliancev1.ControlAssertionCatalog) err
 		for _, list := range stringLists {
 			if err := validateUniqueStrings(list.values); err != nil {
 				return fmt.Errorf("%w: assertion %s %s: %v", constants.ErrInvalidEvidenceGraph, key, list.label, err)
+			}
+		}
+		for _, evidenceType := range assertion.RequiredEvidenceTypes {
+			if !contains(assertionEvidenceTypes, evidenceType) {
+				return fmt.Errorf("%w: assertion %s has unsupported evidence type %s", constants.ErrInvalidEvidenceGraph, key, evidenceType)
 			}
 		}
 		if err := validateVersionedReferences(assertion.RequiredGraderRefs); err != nil {

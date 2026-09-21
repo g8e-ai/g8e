@@ -219,6 +219,20 @@ func TestGradeControlAssertions_DoesNotCombineRequirementsAcrossSubjects(t *test
 	}
 }
 
+func TestGradeControlAssertions_DoesNotTreatObservationAsIndependentStateMeasurement(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	assertions := assertionGraderCatalog("unverifiable")
+	assertions.Assertions[0].RequiredEvidenceTypes = []string{"state_observation"}
+	assertions.Assertions[0].RequiredGraderRefs = []*compliancev1.VersionedReference{{Id: "independent_state", Version: "1.0.0"}}
+	assertions.Assertions[0].RequiredVerifierRefs = []*compliancev1.VersionedReference{{Id: "state_observation", Version: "1.0.0"}}
+	graph := evidence.NewEvidenceGraph(0, nil)
+	observation := assertionGraderNode(evidence.ArtifactTypeStateObservation, "collector", []byte(`{"effect":"present"}`), now.Add(-time.Hour))
+	require.NoError(t, graph.AddNode(observation))
+
+	assessment := gradeAssertionTestGraph(t, graph, assertions, now)
+	assert.Equal(t, "unverifiable", assessment.GetStatus())
+}
+
 func TestGradeControlAssertions_DoesNotTreatReceiptAsNotaryProof(t *testing.T) {
 	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
 	assertions := assertionGraderCatalog("unverifiable")

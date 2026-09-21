@@ -323,7 +323,7 @@ func TestDockerTeardownProfiles(t *testing.T) {
 func TestDockerBuildArgs_IncludesSourceProvenance(t *testing.T) {
 	vi := serve.VersionInfo{
 		BuildID:             "abc123",
-		SourceRevision:      "unavailable",
+		SourceRevision:      "revision-123",
 		SourceTreeStateHash: "a" + strings.Repeat("1", 63),
 	}
 	tests := []struct {
@@ -331,8 +331,8 @@ func TestDockerBuildArgs_IncludesSourceProvenance(t *testing.T) {
 		noCache  bool
 		expected []string
 	}{
-		{name: "cached build", expected: []string{"build", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=unavailable", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash}},
-		{name: "uncached build", noCache: true, expected: []string{"build", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=unavailable", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash, "--no-cache"}},
+		{name: "cached build", expected: []string{"build", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=revision-123", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash}},
+		{name: "uncached build", noCache: true, expected: []string{"build", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=revision-123", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash, "--no-cache"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -341,6 +341,18 @@ func TestDockerBuildArgs_IncludesSourceProvenance(t *testing.T) {
 			assert.Equal(t, tt.expected, args)
 		})
 	}
+}
+
+func TestDockerBuildArgs_UsesSourceTreeHashForUnstampedBuildID(t *testing.T) {
+	hash := "a" + strings.Repeat("1", 63)
+	args, err := dockerBuildArgs(serve.VersionInfo{
+		BuildID:             constants.BuildMetadataUnavailable,
+		SourceRevision:      "revision-123",
+		SourceTreeStateHash: hash,
+	}, false)
+
+	require.NoError(t, err)
+	assert.Contains(t, args, "BUILD_ID="+hash)
 }
 
 func TestDockerBuildArgs_RejectsUnstampedSourceHash(t *testing.T) {

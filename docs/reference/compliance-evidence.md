@@ -1,8 +1,8 @@
 # Proof-Backed Compliance Evidence
 
-**Document Version:** 2.1.8
-**Last Updated:** 2026-09-18
-**Platform:** g8e v2.1.8
+**Document Version:** 2.1.12
+**Last Updated:** 2026-09-21
+**Platform:** g8e v2.1.12
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -66,21 +66,21 @@ The assertion catalog (`protocol/constants/compliance/assertion-catalog.json`) d
 |--------------|-------|------------------------|
 | `G8E-GOV-ALLOW-001` | Governed allow outcome | L3 |
 | `G8E-GOV-BLOCK-001` | Governed block outcome | L3 |
-| `G8E-AU-RECEIPT-001` | Receipt integrity | L3 |
-| `G8E-AU-PERSIST-001` | Receipt persistence | L3 |
-| `G8E-AU-CHAIN-001` | Protocol chain integrity | L3 |
-| `G8E-AU-COMMIT-001` | Commitment integrity | L3 |
+| `G8E-AU-RECEIPT-001` | Receipt integrity | L2 |
+| `G8E-AU-PERSIST-001` | Receipt persistence | L2 |
+| `G8E-AU-CHAIN-001` | Protocol chain integrity | L2 |
+| `G8E-AU-COMMIT-001` | Commitment integrity | L2 |
 | `G8E-CM-STATE-001` | Independently observed state | L3 |
-| `G8E-DLP-DETECT-001` | Sensitive-data detection | L3 |
-| `G8E-DLP-BOUNDARY-001` | Model-boundary leakage | L3 |
-| `G8E-DLP-REHYDRATE-001` | Local rehydration | L3 |
+| `G8E-DLP-DETECT-001` | Sensitive-data detection | L2 |
+| `G8E-DLP-BOUNDARY-001` | Model-boundary leakage | L2 |
+| `G8E-DLP-REHYDRATE-001` | Local rehydration | L2 |
 | `G8E-IA-MTLS-001` | Workload mTLS | L3 |
-| `G8E-IA-NOTARY-001` | Notary authorization | L3 |
-| `G8E-CRYPTO-FIPS-001` | Declared cryptographic mode | L3 |
+| `G8E-IA-NOTARY-001` | Notary authorization | L2 |
+| `G8E-CRYPTO-FIPS-001` | Declared cryptographic mode | L2 |
 
-Catalog identity: `g8e-control-assertions` v1.0.0, SHA-256 `bee48afa18a8c54983c8178718600c4f6b64d9c3f9007e65d6d4b1fabbaff1dd`.
+Catalog identity: `g8e-control-assertions` v2.0.0, SHA-256 `00d19e31296c93cb4695d3ecc828fe5cc9591af0bbc4798d44a2ce3ce4f53b8b`.
 
-The assertion families cover identity and workload authentication, access enforcement and least privilege, governed allow and block outcomes, exact rejection-layer attribution, receipt integrity and durable persistence, deterministic protocol-chain integrity, commitment and ledger integrity, configuration and file-state correctness, audit evidence preservation, replay and nonce and signer and state-root protections, sensitive-data detection and transformation, model-boundary leakage, local rehydration and token lifecycle, transport protection and cryptographic mode, and availability and recovery and fail-closed dependency behavior.
+The assertion families cover identity and workload authentication, access enforcement and least privilege, governed allow and block outcomes, exact rejection-layer attribution, receipt integrity and durable persistence, deterministic protocol-chain integrity, signed commitment-attestation integrity, configuration and file-state correctness, audit evidence preservation, replay and nonce and signer and state-root protections, sensitive-data detection and transformation, model-boundary leakage, local rehydration and token lifecycle, transport protection and cryptographic mode, and availability and recovery and fail-closed dependency behavior.
 
 ---
 
@@ -97,7 +97,7 @@ A result never receives a higher level merely because lower-level evidence exist
 | L4 | Continuously evidenced | Fresh historical evidence satisfies the control's declared validation cycle across the assessment window. |
 | L5 | Externally attested | An independent assessor or authority accepts the evidence for the declared scope. |
 
-Every assertion in the current catalog declares a minimum evidence level of L3, meaning a satisfied result requires a real-stack demonstration with verified receipts and independently observed terminal state. L4 and L5 are not yet produced by the pipeline; they require historical evidence collection and external attestation respectively.
+The catalog assigns L2 to deterministic integrity and specialized measurement contracts and L3 to behavioral claims that require subject-bound independent observation. Evidence strength is derived from reproduced checks rather than copied from the catalog minimum: typed evidence reaches at most L1, a registered deterministic verifier or grader reaches L2, and an independent observation bound to a deterministic check reaches L3. L4 and L5 are not produced by the pipeline; they require historical effectiveness evidence and external attestation respectively.
 
 ---
 
@@ -105,7 +105,7 @@ Every assertion in the current catalog declares a minimum evidence level of L3, 
 
 The canonical crosswalk (`protocol/constants/compliance/fedramp-nist-crosswalk.json`) maps framework controls to atomic assertions. The initial crosswalk targets FedRAMP 20x (CR26-2026-06-24) and NIST SP 800-53 (rev5), the two frameworks for which the repository already has a 31-KSI catalog, Class A-D method requirements, validation cycles, a KSI evaluator, history, OSCAL export, typed doctrine linkages, and a real-stack demo.
 
-Crosswalk identity: SHA-256 `d73eb7fa35d2f3bbd88510a000df6c35daf354f148d4f986feb6a7751e2ba2cd`.
+Crosswalk identity: SHA-256 `f29489b373b64afae0bd1242e9f9dfd521b60a0d2f0c0172ccec3bf23ccd5208`.
 
 The crosswalk contains 60 conservative `supporting` mappings. Every one of the 13 reviewed assertions has at least one mapping. The framework catalog (`protocol/constants/compliance/framework-catalog.json`) marks 34 controls as mapped and 97 as unsupported across the two frameworks:
 
@@ -123,7 +123,7 @@ Each framework control carries typed `support_status` and `support_rationale` fi
 
 The demo scenario catalog (`protocol/constants/compliance/demo-scenario-catalog.json`) defines 14 evidence-grade scenarios across four demo environments. Each definition carries a stable scenario ID and version, display number, purpose, risk category, expected action classes, expected allow or block outcome, expected rejection layer where applicable, initial-state fixture reference, terminal-state assertions, required receipts and deterministic stages, assertion references, framework-control references, required evidence level, timeout, and failure policy.
 
-Catalog identity: `g8e-demo-scenarios` v1.1.0, SHA-256 `aa81ad66b05868580f35b2124f6cda77106a7fccf361a36d0bb8b24c9ffc4120`.
+Catalog identity: `g8e-demo-scenarios` v1.1.0, SHA-256 `e6c4e699014bc87946a3b28c3303b3acc5593aeba39ff31ecc7e1f73a1f59fc1`.
 
 | Scenario ID | Demo | Display | Expected outcome |
 |-------------|------|---------|------------------|
@@ -187,7 +187,7 @@ Independent `g8e compliance demo-run verify` verification reports `valid: true` 
 - All four DHS scenarios (`dhs-ingest`, `dhs-disconnected-operations`, `dhs-cue`, `dhs-destruction-block` + `dhs-destruction-purge` under one run ID)
 - All four healthcare scenarios (`healthcare-success`, `healthcare-gold-card`, `healthcare-sla-breach`, `healthcare-phi-blocked`), including the two metric-bearing gold-card and SLA runs
 
-This demonstrates L3 evidence (real-stack scenario with verified receipts and independently observed terminal state) for the 13 atomic assertions exercised by those scenarios. It does not demonstrate L4 (continuous effectiveness over an assessment window) or L5 (external attestation), both of which require infrastructure not yet built.
+These runs provide real-stack source evidence with verified receipts and independently observed terminal state for the scenarios they exercise. Assertion satisfaction remains a separate catalog-driven decision: each selected subject must meet the exact evidence, verifier, grader, trust, freshness, and minimum-level contract, and specialized mTLS, notary, FIPS, and independent-state claims remain unavailable when their dedicated proof is absent. The runs do not demonstrate L4 continuous effectiveness or L5 external attestation.
 
 ---
 
@@ -243,7 +243,7 @@ The compliance CLI exposes evaluation, evidence-graph verification, demo verific
 
 | Catalog | Location | Identity |
 |---------|----------|----------|
-| Assertion catalog | `protocol/constants/compliance/assertion-catalog.json` | `g8e-control-assertions` v1.0.0 |
+| Assertion catalog | `protocol/constants/compliance/assertion-catalog.json` | `g8e-control-assertions` v2.0.0 |
 | Framework catalog | `protocol/constants/compliance/framework-catalog.json` | FedRAMP 20x CR26-2026-06-24, NIST SP 800-53 rev5 |
 | Crosswalk | `protocol/constants/compliance/fedramp-nist-crosswalk.json` | 60 supporting mappings |
 | Demo scenario catalog | `protocol/constants/compliance/demo-scenario-catalog.json` | `g8e-demo-scenarios` v1.1.0 |

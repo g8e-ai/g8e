@@ -524,6 +524,8 @@ func nodeMatchesEvidenceType(node *EvidenceNode, required string) bool {
 	switch normalized {
 	case "action_receipt":
 		return node.ArtifactType == ArtifactTypeEvalReceipt
+	case "final_persistence_attestation":
+		return node.ArtifactType == ArtifactTypeReceiptPersistence
 	case "deterministic_stage":
 		return node.ArtifactType == ArtifactTypeEvalStage || node.ArtifactType == ArtifactTypeProtocolChain
 	case "state_observation":
@@ -546,7 +548,7 @@ func nodeMatchesVerifier(node *EvidenceNode, required *compliancev1.VersionedRef
 		return node.ArtifactType == ArtifactTypeReceiptPersistence
 	case "deterministic_stage_chain":
 		return node.ArtifactType == ArtifactTypeProtocolChain || node.ArtifactType == ArtifactTypeEvalStage
-	case "commitment_chain":
+	case "commitment_attestation", "commitment_chain":
 		return node.ArtifactType == ArtifactTypeCommitment
 	case "state_observation":
 		return node.ArtifactType == ArtifactTypeStateObservation || node.ArtifactType == ArtifactTypeEvalObservation
@@ -575,12 +577,8 @@ func nodeMatchesGrader(node *EvidenceNode, required *compliancev1.VersionedRefer
 		return nodeMatchesVerifier(node, &compliancev1.VersionedReference{Id: "receipt_integrity", Version: required.GetVersion()}), true
 	case "receipt_persistence":
 		return nodeMatchesVerifier(node, &compliancev1.VersionedReference{Id: "receipt_persistence", Version: required.GetVersion()}), true
-	case "commitment_chain":
-		return nodeMatchesVerifier(node, &compliancev1.VersionedReference{Id: "commitment_chain", Version: required.GetVersion()}), true
-	case "independent_state":
-		return nodeMatchesVerifier(node, &compliancev1.VersionedReference{Id: "state_observation", Version: required.GetVersion()}), true
-	case "authenticated_operation":
-		return nodeMatchesVerifier(node, &compliancev1.VersionedReference{Id: "identity_attestation", Version: required.GetVersion()}), true
+	case "commitment_attestation", "commitment_chain":
+		return nodeMatchesVerifier(node, &compliancev1.VersionedReference{Id: required.GetId(), Version: required.GetVersion()}), true
 	case "protocol_chain":
 		return node.ArtifactType == ArtifactTypeProtocolChain, true
 	default:

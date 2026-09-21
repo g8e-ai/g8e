@@ -1,8 +1,8 @@
 # Compliance Alignment
 
-**Document Version:** 2.1.9
-**Last Updated:** 2026-09-19
-**Platform:** g8e v2.1.9
+**Document Version:** 2.1.12
+**Last Updated:** 2026-09-21
+**Platform:** g8e v2.1.12
 **Maintained by:** Lateralus Labs, LLC.
 
 ## Purpose and claim boundary
@@ -37,7 +37,7 @@ The proof-backed reporting path separates collection, verification, grading, ana
 
 1. Read-only importers decode persisted demo, eval, receipt, persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed attestation evidence.
 2. The evidence graph validates canonical digests, content addresses, references, prohibited cycles, assessed trust, encryption metadata, freshness, and scope, run, attempt, scenario, transaction, and evidence-window binding.
-3. `assertion_assessment@1.0.0` evaluates atomic assertions only from verified, scope-bound evidence.
+3. `assertion_assessment@2.2.0` evaluates each selected subject independently from verified, scope-bound evidence, enforces compatible run, attempt, scenario, and transaction bindings, derives achieved evidence strength from reproduced checks, and preserves known negative measurements when other selected subjects are unavailable.
 4. `framework_assessment@1.0.0` projects assertion assessments through the reviewed crosswalk without changing the underlying assertion outcomes.
 5. `BuildComplianceAnalysis` creates the canonical cross-framework analysis, including evidence-window completeness, gaps, evidence links, limitations, findings, remediation, evidence resources, and explicit responsibility and outcome sections.
 6. `BuildFrameworkProfiles` projects the canonical control assessments into one deterministic profile per catalog framework without re-grading or changing their outcomes.
@@ -53,7 +53,7 @@ Generated assertion and control assessments use typed outcomes rather than prose
 | --- | --- |
 | `satisfied` | Verified eligible evidence satisfies the complete declared rule for the assessed scope and window |
 | `not_satisfied` | Verified evidence measures a failure of the declared rule |
-| `not_applicable` | The typed applicability or missing-evidence policy excludes the assertion or control from satisfaction |
+| `not_applicable` | An explicit typed applicability selection excludes the assertion for the assessed component, action class, or arm |
 | `unverifiable` | Required evidence is missing, stale, malformed, unsupported, ambiguous, untrusted, or otherwise cannot support a result |
 | `customer_attestation_required` | Platform evidence cannot satisfy the customer- or assessor-operated requirement |
 
