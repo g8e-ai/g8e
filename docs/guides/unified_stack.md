@@ -407,7 +407,7 @@ G8E_OLLAMA_ENDPOINT=http://192.168.1.2:11434 \
 
 - `--daemon` runs the full matrix in one process.
 - Consecutive assignments keep the provider daemon running; no reset or stable-body `/api/ps` wait occurs between cells.
-- After the queue is exhausted, the controller reads typed `/api/ps` residency and dispatches validated `ollama stop <served-tag>` commands through the exact Inference Operator, then confirms the campaign-owned tags are absent.
+- After the queue is exhausted, the controller reads typed `/api/ps` residency and dispatches the image-baked `/g8e operator model release <served-tag>` command through the exact Inference Operator. The governed command uses the existing `OllamaBackend` HTTP client and the Operator's approved endpoint to issue `/api/generate` with `keep_alive: 0`, then the controller confirms the campaign-owned tags are absent. No external Ollama CLI is required.
 - **Never** run `g8e eval campaign publish` concurrently with `execute --publish`.
 
 ### Phase D — Monitor

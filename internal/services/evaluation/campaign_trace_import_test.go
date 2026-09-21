@@ -214,6 +214,27 @@ func TestImportAssignmentResultFromTrace_RejectsUnknownPolicyOutcome(t *testing.
 	assert.Contains(t, err.Error(), "unknown outcome")
 }
 
+func TestDurationSecondsToNanosChecked_RoundsProviderTelemetryFloats(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		seconds float64
+		want    uint64
+	}{
+		{name: "load duration", seconds: 0.0068479, want: 6_847_900},
+		{name: "generation duration", seconds: 0.956517, want: 956_517_000},
+		{name: "total duration", seconds: 1.043945, want: 1_043_945_000},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := durationSecondsToNanosChecked(tt.seconds)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func completedHomogeneousTrace(role string) map[string]any {
 	trace := map[string]any{
 		"schema_version":    "1",

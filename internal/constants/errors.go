@@ -1428,11 +1428,11 @@ var (
 	ErrPublicFeedKeyRotationPending   = errors.New("public-feed: signing key rotation requires recovery")
 
 	// Inference backend errors (g8ellama). The Go backend is an HTTP client
-	// to Ollama; it does not load or shut down models, so no load/shutdown
-	// error constants are defined.
+	// to Ollama and uses provider API requests for generation and model release.
 	ErrInferenceBackendUnavailable        = errors.New("inference: backend unavailable")
 	ErrInferenceModelNotFound             = errors.New("inference: model not found in backend store")
 	ErrInferenceGenerateFailed            = errors.New("inference: generation failed")
+	ErrInferenceModelReleaseFailed        = errors.New("inference: model release failed")
 	ErrInferenceBackendTimeout            = errors.New("inference: backend request timed out")
 	ErrInferenceModelRefInvalid           = errors.New("inference: model reference invalid")
 	ErrInferenceBackendNotRegistered      = errors.New("inference: backend not registered")

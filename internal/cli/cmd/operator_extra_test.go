@@ -9,6 +9,9 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,6 +22,30 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestOperatorModelReleaseCmd_UsesEmbeddedOllamaClient(t *testing.T) {
+	var request struct {
+		Model     string          `json:"model"`
+		KeepAlive json.RawMessage `json:"keep_alive"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/api/generate", r.URL.Path)
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"model":       request.Model,
+			"done":        true,
+			"done_reason": "unload",
+		}))
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("OLLAMA_HOST", server.URL)
+
+	cmd := operatorModelReleaseCmd()
+	cmd.SetArgs([]string{"qwen3:0.6b"})
+	require.NoError(t, cmd.ExecuteContext(t.Context()))
+	assert.Equal(t, "qwen3:0.6b", request.Model)
+	assert.JSONEq(t, "0", string(request.KeepAlive))
+}
 
 func TestOperatorCpCmdExecution(t *testing.T) {
 	t.Run("cp copies binary to directory", func(t *testing.T) {

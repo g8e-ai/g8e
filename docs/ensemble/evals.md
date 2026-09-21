@@ -26,7 +26,7 @@ Model evaluation campaigns score real models through the same `POST /api/v1/chat
 3. Route tool intents through the enrolled Data Operator.
 4. Trigger provider-boundary BEGIN/FINALIZE observation on the enrolled Observer Operator (provider host) for GPU/RAM witness telemetry.
 5. Trigger model provenance BEGIN/FINALIZE attestation on the enrolled Provenance Operator (model storage site) when provenance is enabled, binding `served_model_tag` and `expected_model_digest` to each `provider_attempt_id`.
-6. Keep provider daemon ownership with Ollama. At completed model boundaries, the campaign controller reads typed `/api/ps` residency and dispatches validated `ollama stop <served-tag>` commands through the exact Inference Operator; the Observer remains a read-only telemetry witness.
+6. Keep provider daemon ownership with Ollama. At completed model boundaries, the campaign controller reads typed `/api/ps` residency and dispatches the image-baked `/g8e operator model release <served-tag>` command through the exact Inference Operator. The governed command uses the existing `OllamaBackend` HTTP client to request `keep_alive: 0`; the Observer remains a read-only telemetry witness.
 
 g8ee's `ChatPipelineService` handles triage, model selection, tool loops, Tribunal command generation, and governed relay to the bound Operators. Campaign scoring depends on this production path rather than a separate eval-only shortcut.
 

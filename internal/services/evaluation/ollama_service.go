@@ -96,7 +96,7 @@ func ReleaseOllamaModels(ctx context.Context, dispatcher OllamaModelCommandDispa
 		return fmt.Errorf("evaluation: release Ollama models: %w", constants.ErrMissingRequiredField)
 	}
 	for index, modelTag := range modelTags {
-		command, err := operatorcapability.OllamaStopCommand(modelTag)
+		command, err := operatorcapability.OllamaReleaseCommand(modelTag)
 		if err != nil {
 			return fmt.Errorf("evaluation: release Ollama models: %w", err)
 		}

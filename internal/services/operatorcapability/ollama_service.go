@@ -15,9 +15,9 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-// OllamaStopCommand returns the fixed model-unload command for a validated
-// served model tag.
-func OllamaStopCommand(modelTag string) (string, error) {
+// OllamaReleaseCommand returns the fixed embedded-client model-release command
+// for a validated served model tag.
+func OllamaReleaseCommand(modelTag string) (string, error) {
 	if modelTag == "" || strings.HasPrefix(modelTag, "-") {
 		return "", fmt.Errorf("%w: %q", constants.ErrInferenceModelTagInvalid, modelTag)
 	}
@@ -30,7 +30,7 @@ func OllamaStopCommand(modelTag string) (string, error) {
 		}
 		return "", fmt.Errorf("%w: %q", constants.ErrInferenceModelTagInvalid, modelTag)
 	}
-	return "ollama stop " + modelTag, nil
+	return constants.ContainerBinaryPath + " operator model release " + modelTag, nil
 }
 
 // ValidateWitnessCommand rejects generic command execution on read-only witness

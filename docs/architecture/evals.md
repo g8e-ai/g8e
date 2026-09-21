@@ -267,7 +267,7 @@ What the Observer does:
 3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
 4. Gateway ingests windows for `g8e eval campaign verify --require-provider-observation`.
 
-The Observer has no Ollama management capability. Ollama owns its daemon and runner processes. Consecutive scored assignments keep the daemon resident; after a completed queue, the controller reads typed `/api/ps` residency and dispatches validated `ollama stop <served-tag>` commands through the exact Inference Operator, then confirms the campaign-owned tags are absent. The Observer continues to provide only independent BEGIN/FINALIZE telemetry.
+The Observer has no Ollama management capability. Ollama owns its daemon and runner processes. Consecutive scored assignments keep the daemon resident; after a completed queue, the controller reads typed `/api/ps` residency and dispatches the image-baked `/g8e operator model release <served-tag>` command through the exact Inference Operator. That governed command uses the existing `OllamaBackend` HTTP client to send an empty `/api/generate` request with `keep_alive: 0` to the Operator's approved endpoint, after which the controller confirms the campaign-owned tags are absent. No external Ollama CLI is installed or required. The Observer continues to provide only independent BEGIN/FINALIZE telemetry.
 
 **Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
 

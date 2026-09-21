@@ -38,8 +38,8 @@ func TestReleaseOllamaModels_TargetsExactInferenceSession(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, dispatcher.requests, 2)
 	assert.Equal(t, "inference-session", dispatcher.requests[0].TargetOperatorSessionID)
-	assert.Equal(t, "ollama stop qwen3:0.6b", dispatcher.requests[0].Command)
-	assert.Equal(t, "ollama stop registry.example/team/gemma3:4b", dispatcher.requests[1].Command)
+	assert.Equal(t, "/g8e operator model release qwen3:0.6b", dispatcher.requests[0].Command)
+	assert.Equal(t, "/g8e operator model release registry.example/team/gemma3:4b", dispatcher.requests[1].Command)
 	assert.Equal(t, "http://provider.example:11434", dispatcher.requests[0].Environment["OLLAMA_HOST"])
 }
 

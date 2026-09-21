@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	"github.com/spf13/cobra"
 )
 
@@ -47,9 +48,38 @@ func operatorCmd() *cobra.Command {
 		operatorScpCmd(),
 		operatorDeployCmd(),
 		operatorStreamCmd(),
+		operatorModelCmd(),
 	)
 
 	return cmd
+}
+
+func operatorModelCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "model", Hidden: true}
+	cmd.AddCommand(operatorModelReleaseCmd())
+	return cmd
+}
+
+func operatorModelReleaseCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "release <model>",
+		Hidden: true,
+		Args:   cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			endpoint := strings.TrimSpace(os.Getenv("OLLAMA_HOST"))
+			if endpoint == "" {
+				return fmt.Errorf("operator: release model: %w", constants.ErrInferenceEndpointInvalid)
+			}
+			backend, err := inference.NewOllamaBackend(endpoint, slog.Default())
+			if err != nil {
+				return fmt.Errorf("operator: release model: %w", err)
+			}
+			if err := backend.ReleaseModel(cmd.Context(), args[0]); err != nil {
+				return fmt.Errorf("operator: release model: %w", err)
+			}
+			return nil
+		},
+	}
 }
 
 func operatorListCmd() *cobra.Command {

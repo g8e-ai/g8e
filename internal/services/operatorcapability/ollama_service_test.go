@@ -17,7 +17,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
-func TestOllamaStopCommand_ValidatesServedModelTag(t *testing.T) {
+func TestOllamaReleaseCommand_ValidatesServedModelTag(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name string
@@ -25,7 +25,7 @@ func TestOllamaStopCommand_ValidatesServedModelTag(t *testing.T) {
 		want string
 		ok   bool
 	}{
-		{name: "namespaced tag", tag: "registry.example/team/qwen3:0.6b", want: "ollama stop registry.example/team/qwen3:0.6b", ok: true},
+		{name: "namespaced tag", tag: "registry.example/team/qwen3:0.6b", want: "/g8e operator model release registry.example/team/qwen3:0.6b", ok: true},
 		{name: "empty tag", tag: "", ok: false},
 		{name: "option-like tag", tag: "--all", ok: false},
 		{name: "shell metacharacter", tag: "qwen3:0.6b;whoami", ok: false},
@@ -33,7 +33,7 @@ func TestOllamaStopCommand_ValidatesServedModelTag(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			command, err := OllamaStopCommand(tt.tag)
+			command, err := OllamaReleaseCommand(tt.tag)
 			if tt.ok {
 				require.NoError(t, err)
 				assert.Equal(t, tt.want, command)

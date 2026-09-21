@@ -58,7 +58,7 @@ func TestDispatchOllamaModelCommand_TargetsInferenceAndCarriesEnvironment(t *tes
 	}
 	request := evaluation.OllamaModelCommandDispatchRequest{
 		TargetOperatorSessionID: "inference-session",
-		Command:                 "ollama stop qwen3:0.6b",
+		Command:                 "/g8e operator model release qwen3:0.6b",
 		Environment:             modelCommandEnvironment("http://provider.example:11434"),
 		TimeoutSeconds:          30,
 		ExecutionID:             "exec-1",

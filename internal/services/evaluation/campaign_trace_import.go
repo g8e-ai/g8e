@@ -526,8 +526,8 @@ func durationSecondsToNanosChecked(raw any) (uint64, error) {
 	if !ok || math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds < 0 {
 		return 0, fmt.Errorf("must be a finite nonnegative number")
 	}
-	converted := seconds * 1_000_000_000
-	if converted > float64(^uint64(0)) || math.Trunc(converted) != converted {
+	converted := math.Round(seconds * 1_000_000_000)
+	if converted >= float64(^uint64(0)) {
 		return 0, fmt.Errorf("is outside uint64 nanosecond range")
 	}
 	return uint64(converted), nil
