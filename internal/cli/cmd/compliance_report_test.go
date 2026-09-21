@@ -35,7 +35,11 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
+	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -627,6 +631,271 @@ func TestComplianceReportGenerateCmdWithConfig_CampaignSourceVerifiesOffline(t *
 	var verificationOutput bytes.Buffer
 	verifyCmd.SetOut(&verificationOutput)
 	require.NoError(t, verifyCmd.RunE(verifyCmd, []string{strings.TrimSpace(output.String())}), verificationOutput.String())
+}
+
+type campaignComplianceWitnessExecutor struct {
+	store *evaluation.Store
+	now   time.Time
+}
+
+func (e *campaignComplianceWitnessExecutor) ExecuteAssignment(ctx context.Context, req evaluation.AssignmentExecutionRequest) (*evalv1.EvaluationAssignmentResult, error) {
+	role := "primary"
+	trace := map[string]any{
+		"schema_version":    "1",
+		"chat_execution_id": "exec-1",
+		"status":            "completed",
+		"completed_at":      e.now.Format(time.RFC3339),
+		"role_outcome":      "invoked",
+		"evaluation_context": map[string]any{
+			"campaign_id":                req.Assignment.GetCampaignId(),
+			"run_id":                     req.Assignment.GetRunId(),
+			"assignment_id":              req.Assignment.GetAssignmentId(),
+			"evaluation_attempt_id":      req.AttemptID,
+			"scenario_id":                req.Assignment.GetScenarioId(),
+			"model_registry_digest":      req.Binding.ModelRegistryDigest,
+			"target_operator_session_id": req.Binding.InferenceOperatorSessionID,
+			"evaluation_lane":            "model_role",
+			"designated_model_role":      role,
+		},
+		"controlled_role_assignment": map[string]any{"designated_model_role": role},
+		"model_calls": []any{map[string]any{
+			"agent_role":              "sage",
+			"model_role":              role,
+			"provider":                "G8EProvider",
+			"governed_transaction_id": "tx-1",
+			"governed_result_digest":  strings.Repeat("a", sha256.Size*2),
+			"provider_attempt_id":     req.AttemptID,
+			"normalized_request_hash": strings.Repeat("b", sha256.Size*2),
+			"output_hash":             strings.Repeat("c", sha256.Size*2),
+		}},
+	}
+	digest, err := evaluation.ComputeChatProbeTraceDigest(trace)
+	if err != nil {
+		return nil, err
+	}
+	trace["trace_digest"] = digest
+	traceBody, err := json.Marshal(trace)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.store.SaveAssignmentTrace(ctx, req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), traceBody); err != nil {
+		return nil, err
+	}
+	evidenceRef, err := evaluation.BuildAssignmentTraceEvidenceReference(req.Assignment.GetRunId(), req.Assignment.GetAssignmentId(), req.AttemptID, trace, e.now)
+	if err != nil {
+		return nil, err
+	}
+	return evaluation.ImportAssignmentResultFromTrace(req, trace, evidenceRef, e.now, func(prefix string) string { return prefix + "-1" })
+}
+
+type campaignComplianceBundleFixture struct {
+	fileSvc      fs.RuntimeFileService
+	bundle       *compliancev1.ComplianceReportBundle
+	bundleDir    string
+	policy       *compliancev1.ComplianceReportTrustPolicy
+	verifiedAt   time.Time
+	admissionID  string
+	attemptID    string
+	verification *evalv1.EvaluationVerificationReport
+}
+
+func generateCampaignComplianceBundleFixture(t *testing.T, includeWitnesses bool) campaignComplianceBundleFixture {
+	t.Helper()
+	ctx := context.Background()
+	fileSvc, _ := newCmdTestEnv(t)
+	store := evaluation.NewStore(fileSvc)
+	executedAt := time.Unix(1_700_000_000, 0).UTC()
+	executor := &campaignComplianceWitnessExecutor{store: store, now: executedAt}
+	controller := evaluation.NewCampaignController(store, executor, func() time.Time { return executedAt }, func(prefix string) string { return prefix + "-1" })
+	req := evaluationTestCampaignInitRequest(t)
+	catalog := req.Catalog
+	truncated := &evalv1.EvaluationScenarioCatalog{SchemaVersion: catalog.GetSchemaVersion(), CatalogRef: catalog.GetCatalogRef(), Scenarios: catalog.GetScenarios()[:1]}
+	catalogDigest, err := evaluation.ComputeScenarioCatalogDigest(truncated)
+	require.NoError(t, err)
+	truncated.CatalogDigest = catalogDigest
+	req.Catalog = truncated
+	_, err = controller.InitializeCampaign(ctx, req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(ctx, req.RunID)
+	require.NoError(t, err)
+	result, executed, err := controller.ExecuteNextAssignment(ctx, req.RunID, evaluation.CampaignExecutionBinding{
+		InferenceOperatorSessionID: req.InferenceOperatorSessionID,
+		DataOperatorID:             "data-operator",
+		DataOperatorSessionID:      req.DataOperatorSessionID,
+		ModelRegistryDigest:        req.Inventory.RegistryDigest,
+		ModelRegistry:              evaluation.InferenceVariantsFromEvalRegistry(req.Inventory.Variants),
+	}, req.ScenarioArtifacts)
+	require.NoError(t, err)
+	require.True(t, executed)
+	require.Len(t, result.GetModelInferences(), 1)
+	attemptID := result.GetModelInferences()[0].GetProviderAttemptId()
+	require.NotEmpty(t, attemptID)
+	if includeWitnesses {
+		persistCampaignComplianceWitnesses(t, fileSvc, result.GetModelInferences()[0], executedAt)
+	}
+	assessmentAsOf := time.Now().UTC()
+	scopeID := constants.EvalScopePrefix + req.CampaignID
+	identity, policy, _ := complianceReportSigningFixtureForTest(t, scopeID)
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
+		return identity, nil
+	}, func() time.Time { return assessmentAsOf })
+	configureComplianceReportGenerateCommand(t, cmd)
+	scopePath := writeComplianceAssessmentScopeForTest(t, scopeID, []string{req.RunID}, assessmentAsOf)
+	scopeBody, err := os.ReadFile(scopePath)
+	require.NoError(t, err)
+	scope := &compliancev1.AssessmentScope{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(scopeBody, scope))
+	admission := scope.SourceAdmissions[0]
+	admission.SourceKind = constants.EvaluationSourceKindCampaign
+	admission.VerifierRef = &compliancev1.VersionedReference{Id: constants.CampaignVerifierID, Version: constants.CampaignVerifierVersion}
+	admission.ProviderObservationPolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	admission.ModelProvenancePolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	scopeBody, err = compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(scopePath, scopeBody, constants.PermFilePrivate))
+	require.NoError(t, cmd.Flags().Set("scope", scopePath))
+	require.NoError(t, cmd.Flags().Set("eval-run", req.RunID))
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	require.NoError(t, cmd.RunE(cmd, nil))
+	descriptor := strings.TrimSpace(output.String())
+	descriptorPath, err := fileSvc.Rel(descriptor)
+	require.NoError(t, err)
+	descriptorBody, err := fileSvc.ReadFile(ctx, descriptorPath)
+	require.NoError(t, err)
+	bundle := &compliancev1.ComplianceReportBundle{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(descriptorBody, bundle))
+	bundleDir := path.Dir(descriptorPath)
+	verificationPath := path.Join(bundleDir, constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, admission.GetAdmissionId(), constants.ComplianceBundleSourceVerificationFilename)
+	verificationBody, err := fileSvc.ReadFile(ctx, verificationPath)
+	require.NoError(t, err)
+	verification := &evalv1.EvaluationVerificationReport{}
+	require.NoError(t, evalv1.UnmarshalCanonical(verificationBody, verification))
+	return campaignComplianceBundleFixture{fileSvc: fileSvc, bundle: bundle, bundleDir: bundleDir, policy: policy, verifiedAt: assessmentAsOf.Add(time.Minute), admissionID: admission.GetAdmissionId(), attemptID: attemptID, verification: verification}
+}
+
+func persistCampaignComplianceWitnesses(t *testing.T, fileSvc fs.RuntimeFileService, inferenceRecord *evalv1.ModelInferenceRecord, observedAt time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	attemptID := inferenceRecord.GetProviderAttemptId()
+	attemptStore, err := inference.NewAttemptStore(fileSvc)
+	require.NoError(t, err)
+	startedAt := observedAt.UnixMilli()
+	completedAt := observedAt.Add(time.Second).UnixMilli()
+	require.NoError(t, attemptStore.Begin(ctx, &operatorv1.InferenceProviderAttemptRecord{
+		ProviderAttemptId: attemptID,
+		TransactionId:     "tx-1",
+		Status:            operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED,
+		StartedAtUnixMs:   startedAt,
+		CompletedAtUnixMs: completedAt,
+		ResultDigest:      strings.Repeat("a", sha256.Size*2),
+	}))
+	observation := &evalv1.ProviderBoundaryObservationWindow{
+		SchemaVersion:              provider_observer.SchemaVersion,
+		ProviderAttemptId:          attemptID,
+		ObserverId:                 "observer-1",
+		ObserverClockSource:        provider_observer.DefaultObserverClockSource,
+		WindowStartedAtUnixNanos:   uint64(observedAt.UnixNano()),
+		WindowCompletedAtUnixNanos: uint64(observedAt.Add(time.Second).UnixNano()),
+		AttemptStartedAtUnixMs:     startedAt,
+		AttemptCompletedAtUnixMs:   completedAt,
+		Samples: []*evalv1.ProviderBoundaryHardwareSample{{
+			ObservedAtUnixNanos:        uint64(observedAt.Add(time.Millisecond).UnixNano()),
+			GpuUtilizationAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+			GpuUtilizationPercent:      10,
+			HostRamAvailability:        evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+			HostRamUsedBytes:           1024,
+		}},
+	}
+	observationDigest, err := provider_observer.ComputeObservationDigest(observation)
+	require.NoError(t, err)
+	observation.ObservationDigest = observationDigest
+	observationStore, err := provider_observer.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, observationStore.Save(ctx, observation))
+	modelDigest := inferenceRecord.GetModelVariant().GetModelDigest()
+	provenance := &evalv1.ModelProvenanceAttestationWindow{
+		SchemaVersion:              model_provenance.SchemaVersion,
+		ProviderAttemptId:          attemptID,
+		ProvenanceOperatorId:       "provenance-1",
+		ServedModelTag:             inferenceRecord.GetModelVariant().GetServedModelTag(),
+		ExpectedModelDigest:        modelDigest,
+		ObservedModelDigest:        modelDigest,
+		ManifestDigest:             strings.Repeat("d", sha256.Size*2),
+		ManifestVerificationStatus: evalv1.ModelManifestVerificationStatus_MODEL_MANIFEST_VERIFICATION_STATUS_UNSIGNED,
+		AttestedAtUnixMs:           completedAt,
+		DigestMatch:                true,
+	}
+	provenanceDigest, err := model_provenance.ComputeAttestationDigest(provenance)
+	require.NoError(t, err)
+	provenance.AttestationDigest = provenanceDigest
+	provenanceStore, err := model_provenance.NewWindowStore(fileSvc)
+	require.NoError(t, err)
+	require.NoError(t, provenanceStore.Save(ctx, provenance))
+}
+
+func verifyCampaignComplianceBundleFixture(t *testing.T, fixture campaignComplianceBundleFixture) *compliancev1.ComplianceVerificationReport {
+	t.Helper()
+	root, err := os.OpenRoot(fixture.fileSvc.Resolve(fixture.bundleDir))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, root.Close()) })
+	report, err := compliancereport.VerifyComplianceReportBundle(context.Background(), compliancereport.BundleVerificationRequest{
+		Bundle: fixture.bundle, Reader: &complianceBundleRootReader{root: root}, TrustPolicy: fixture.policy, VerifiedAt: fixture.verifiedAt,
+	})
+	require.NoError(t, err)
+	return report
+}
+
+func TestComplianceReportGenerateCmdWithConfig_StrictCampaignMissingWitnessesRemainFailedOffline(t *testing.T) {
+	fixture := generateCampaignComplianceBundleFixture(t, false)
+
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, fixture.verification.GetStatus())
+	assert.Contains(t, strings.Join(fixture.verification.GetFailureReasons(), "\n"), "missing provider-boundary observation window")
+	assert.Contains(t, strings.Join(fixture.verification.GetFailureReasons(), "\n"), "missing model provenance attestation window")
+	assert.True(t, verifyCampaignComplianceBundleFixture(t, fixture).GetValid())
+}
+
+func TestComplianceReportGenerateCmdWithConfig_CampaignWitnessMutationsFailOfflineReplay(t *testing.T) {
+	tests := []struct {
+		name        string
+		runtimePath func(string) string
+		remove      bool
+	}{
+		{name: "tampered provider attempt", runtimePath: func(attemptID string) string {
+			return path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname, attemptID+constants.FileExtJSON)
+		}},
+		{name: "missing provider attempt", runtimePath: func(attemptID string) string {
+			return path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname, attemptID+constants.FileExtJSON)
+		}, remove: true},
+		{name: "tampered provider observation", runtimePath: func(attemptID string) string {
+			return path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceProviderObserverDirname, constants.InferenceProviderObserverWindowsDirname, attemptID+constants.FileExtJSON)
+		}},
+		{name: "missing provider observation", runtimePath: func(attemptID string) string {
+			return path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceProviderObserverDirname, constants.InferenceProviderObserverWindowsDirname, attemptID+constants.FileExtJSON)
+		}, remove: true},
+		{name: "tampered model provenance", runtimePath: func(attemptID string) string {
+			return path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceModelProvenanceDirname, constants.InferenceModelProvenanceWindowsDirname, attemptID+constants.FileExtJSON)
+		}},
+		{name: "missing model provenance", runtimePath: func(attemptID string) string {
+			return path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceModelProvenanceDirname, constants.InferenceModelProvenanceWindowsDirname, attemptID+constants.FileExtJSON)
+		}, remove: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := generateCampaignComplianceBundleFixture(t, true)
+			assert.True(t, verifyCampaignComplianceBundleFixture(t, fixture).GetValid())
+			sourcePath := path.Join(fixture.bundleDir, constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, fixture.admissionID, constants.ComplianceBundleSourceRuntimeDirname, test.runtimePath(fixture.attemptID))
+			if test.remove {
+				require.NoError(t, fixture.fileSvc.Remove(context.Background(), sourcePath))
+			} else {
+				require.NoError(t, fixture.fileSvc.WriteFile(context.Background(), sourcePath, []byte(`{}`), constants.PermFilePrivate))
+			}
+
+			report := verifyCampaignComplianceBundleFixture(t, fixture)
+			assert.False(t, report.GetValid())
+			assert.NotEmpty(t, report.GetFailures())
+		})
+	}
 }
 
 func TestComplianceReportGenerateCmdWithConfig_RejectsInvalidProtectedAssessmentWindow(t *testing.T) {
