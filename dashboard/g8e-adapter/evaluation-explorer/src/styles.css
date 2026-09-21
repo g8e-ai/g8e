@@ -962,6 +962,25 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   border-color: var(--accent-dim);
   text-decoration: none;
 }
+.sys-platform-email-label {
+  align-self: center;
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.sys-platform-links a.sys-platform-email {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-weight: 500;
+}
+.sys-platform-links a.sys-platform-email:hover {
+  border: 0;
+  background: none;
+  text-decoration: underline;
+}
 .sys-campaign {
   margin-top: 14px;
   padding-bottom: 4px;

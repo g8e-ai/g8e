@@ -10,6 +10,8 @@ package evaluation
 import (
 	"context"
 	"fmt"
+
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 // CampaignMirrorProbe reports whether one explorer dataset is present in the
@@ -107,8 +109,12 @@ func (r *CampaignMirrorReconciler) ReconcileRun(ctx context.Context, runID strin
 
 func (r *CampaignMirrorReconciler) restoreRun(ctx context.Context, runID string) (int, error) {
 	report, err := r.store.LoadCampaignVerification(ctx, runID)
-	if err != nil {
+	if err != nil || legacyCampaignVerificationReport(report) {
 		return r.publication.PublishRunCatchUp(ctx, runID)
 	}
 	return r.publication.PublishRunCatchUpWithVerification(ctx, runID, report)
+}
+
+func legacyCampaignVerificationReport(report *evalv1.EvaluationVerificationReport) bool {
+	return report != nil && report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS && report.GetVerifiedPopulationDigest() == ""
 }

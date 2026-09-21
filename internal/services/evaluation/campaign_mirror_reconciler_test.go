@@ -114,6 +114,20 @@ func TestCampaignMirrorReconcilerRestoresMissingVerifiedRuns(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{run.GetRunId()}, result.RestoredRunIDs)
 	assert.Greater(t, len(exporter.records), 0)
+
+	legacyReport := &evalv1.EvaluationVerificationReport{
+		SchemaVersion: CampaignSchemaVersion,
+		ReportId:      run.GetRunId(),
+		RunId:         run.GetRunId(),
+		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_300, 0).UTC()),
+	}
+	require.NoError(t, store.SaveCampaignVerification(context.Background(), run.GetRunId(), legacyReport))
+	exporter.records = nil
+	result, err = reconciler.ReconcileVerifiedQueue(context.Background(), queue)
+	require.NoError(t, err)
+	assert.Equal(t, []string{run.GetRunId()}, result.RestoredRunIDs)
+	assert.Greater(t, len(exporter.records), 0)
 }
 
 func TestCampaignMirrorReconciler_ReconcileRunRestoresMissingDataset(t *testing.T) {

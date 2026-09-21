@@ -177,7 +177,8 @@ export function liveEventProgressCounts(
   const { completed: terminal, total } = campaignProgressCounts(progress);
   if (eventKind === 'assignment_started') {
     // A running assignment is the next unit of work after finished terminals.
-    return { completed: terminal + 1, total: total > 0 ? total : terminal + 1 };
+    const eventTotal = total > 0 ? total : terminal + 1;
+    return { completed: Math.min(terminal + 1, eventTotal), total: eventTotal };
   }
   return { completed: terminal, total };
 }

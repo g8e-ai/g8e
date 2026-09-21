@@ -230,7 +230,7 @@ describe('adaptCampaignProjectionEnvelope', () => {
     expect(started).toMatchObject({ completed: 2, total: 4 });
   });
 
-  it('bumps live-event progress when a later model starts after earlier terminals', () => {
+  it('caps live-event progress when a later model starts after the matrix is complete', () => {
     const context = createCampaignAdaptContext();
     const runId = 'run-multi-model';
     const datasetId = campaignDatasetId(runId);
@@ -295,11 +295,11 @@ describe('adaptCampaignProjectionEnvelope', () => {
     expect(started).toMatchObject({
       dataset_id: datasetId,
       variant_id: 'gemma3:4b',
-      completed: 2,
+      completed: 1,
       total: 1,
     });
     expect(liveEventProgressCounts(context.runTotals.get(runId)!, 'assignment_started')).toEqual({
-      completed: 2,
+      completed: 1,
       total: 1,
     });
   });
