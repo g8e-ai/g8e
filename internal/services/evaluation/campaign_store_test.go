@@ -19,7 +19,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -250,4 +252,69 @@ func TestStoreListCampaigns_ReturnsEmptyWhenNoCampaignsExist(t *testing.T) {
 	campaigns, err := store.ListCampaigns(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, campaigns)
+}
+
+func TestStoreListRunInventory_ClassifiesEveryPersistedCandidate(t *testing.T) {
+	ctx := context.Background()
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	require.NoError(t, store.SaveReport(ctx, &evalv1.EvaluationReport{
+		SchemaVersion: RegistryVersion,
+		Run: &evalv1.EvaluationRun{
+			SchemaVersion: RegistryVersion,
+			RunId:         "native-run",
+			SuiteRef:      &compliancev1.VersionedReference{Id: CoreExecutionBoundarySuiteID, Version: CoreExecutionBoundarySuiteVersion},
+		},
+	}))
+	require.NoError(t, store.SaveRun(ctx, &evalv1.EvaluationRun{
+		SchemaVersion: CampaignSchemaVersion,
+		RunId:         "campaign-run",
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: "campaign-1",
+		},
+	}))
+	require.NoError(t, store.SaveReport(ctx, &evalv1.EvaluationReport{
+		SchemaVersion: RegistryVersion,
+		Run: &evalv1.EvaluationRun{
+			SchemaVersion: RegistryVersion,
+			RunId:         "unsupported-run",
+			SuiteRef:      &compliancev1.VersionedReference{Id: "unsupported-suite", Version: "1.0.0"},
+		},
+	}))
+	require.NoError(t, files.WriteFile(ctx, filepath.Join(evaluationRunDir("incomplete-run"), constants.EvaluationVerificationFilename), []byte("{}"), constants.PermFileReadOnly))
+	require.NoError(t, files.WriteFile(ctx, runStatePath("malformed-run"), []byte("{}"), constants.PermFileReadOnly))
+	require.NoError(t, store.SaveReport(ctx, &evalv1.EvaluationReport{
+		SchemaVersion: RegistryVersion,
+		Run: &evalv1.EvaluationRun{
+			SchemaVersion: RegistryVersion,
+			RunId:         "ambiguous-run",
+			SuiteRef:      &compliancev1.VersionedReference{Id: CoreExecutionBoundarySuiteID, Version: CoreExecutionBoundarySuiteVersion},
+		},
+	}))
+	require.NoError(t, store.SaveRun(ctx, &evalv1.EvaluationRun{
+		SchemaVersion: CampaignSchemaVersion,
+		RunId:         "ambiguous-run",
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: "campaign-1",
+		},
+	}))
+
+	inventory, err := store.ListRunInventory(ctx)
+	require.NoError(t, err)
+	require.Len(t, inventory, 6)
+	assert.Equal(t, []RunInventoryEntry{
+		{RunID: "ambiguous-run", Kind: RunKindMalformed, Reason: "native and campaign markers are both present"},
+		{RunID: "campaign-run", Kind: RunKindCampaign},
+		{RunID: "incomplete-run", Kind: RunKindIncomplete, Reason: "native and campaign markers are both missing"},
+		{RunID: "malformed-run", Kind: RunKindMalformed, Reason: "campaign run record is malformed"},
+		{RunID: "native-run", Kind: RunKindNative},
+		{RunID: "unsupported-run", Kind: RunKindUnsupported, Reason: "native evaluation suite or schema is unsupported"},
+	}, inventory)
+}
+
+func TestStoreInspectRun_ReturnsExplicitIncompleteDispositionForMissingSelection(t *testing.T) {
+	store := NewStore(newCampaignMemoryFileService())
+	entry, err := store.InspectRun(context.Background(), "missing-run")
+	require.NoError(t, err)
+	assert.Equal(t, RunInventoryEntry{RunID: "missing-run", Kind: RunKindIncomplete, Reason: "native and campaign markers are both missing"}, entry)
 }

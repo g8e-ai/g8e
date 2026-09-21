@@ -358,6 +358,103 @@ func evaluationRunsRootDir() string {
 	return filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname)
 }
 
+type RunKind string
+
+const (
+	RunKindNative      RunKind = "native"
+	RunKindCampaign    RunKind = "campaign"
+	RunKindIncomplete  RunKind = "incomplete"
+	RunKindUnsupported RunKind = "unsupported"
+	RunKindMalformed   RunKind = "malformed"
+)
+
+type RunInventoryEntry struct {
+	RunID  string
+	Kind   RunKind
+	Reason string
+}
+
+func (s *Store) InspectRun(ctx context.Context, runID string) (RunInventoryEntry, error) {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
+		return RunInventoryEntry{}, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
+	}
+	entry := RunInventoryEntry{RunID: runID}
+	nativeMarker, err := s.files.FileExists(ctx, filepath.Join(evaluationRunDir(runID), constants.EvaluationReportFilename))
+	if err != nil {
+		return RunInventoryEntry{}, fmt.Errorf("evaluation: inspect native run marker: %w", err)
+	}
+	campaignMarker, err := s.files.FileExists(ctx, runStatePath(runID))
+	if err != nil {
+		return RunInventoryEntry{}, fmt.Errorf("evaluation: inspect campaign run marker: %w", err)
+	}
+	if nativeMarker && campaignMarker {
+		entry.Kind = RunKindMalformed
+		entry.Reason = "native and campaign markers are both present"
+		return entry, nil
+	}
+	if !nativeMarker && !campaignMarker {
+		entry.Kind = RunKindIncomplete
+		entry.Reason = "native and campaign markers are both missing"
+		return entry, nil
+	}
+	if nativeMarker {
+		report, loadErr := s.LoadReport(ctx, runID)
+		if loadErr != nil {
+			entry.Kind = RunKindMalformed
+			entry.Reason = "native evaluation report is malformed"
+			return entry, nil
+		}
+		run := report.GetRun()
+		if report.GetSchemaVersion() != RegistryVersion || run == nil || run.GetSchemaVersion() != RegistryVersion || run.GetSuiteRef().GetId() != CoreExecutionBoundarySuiteID || run.GetSuiteRef().GetVersion() != CoreExecutionBoundarySuiteVersion {
+			entry.Kind = RunKindUnsupported
+			entry.Reason = "native evaluation suite or schema is unsupported"
+			return entry, nil
+		}
+		entry.Kind = RunKindNative
+		return entry, nil
+	}
+	run, loadErr := s.LoadRun(ctx, runID)
+	if loadErr != nil || run.GetCampaignBinding() == nil || run.GetCampaignBinding().GetCampaignId() == "" {
+		entry.Kind = RunKindMalformed
+		entry.Reason = "campaign run record is malformed"
+		return entry, nil
+	}
+	if run.GetSchemaVersion() != CampaignSchemaVersion {
+		entry.Kind = RunKindUnsupported
+		entry.Reason = "campaign run schema is unsupported"
+		return entry, nil
+	}
+	entry.Kind = RunKindCampaign
+	return entry, nil
+}
+
+func (s *Store) ListRunInventory(ctx context.Context) ([]RunInventoryEntry, error) {
+	if s == nil || s.files == nil {
+		return nil, fmt.Errorf("%w: file service is required", constants.ErrEvidenceArtifactMalformed)
+	}
+	entries, err := s.files.ReadDir(ctx, evaluationRunsRootDir())
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, constants.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("evaluation: list run inventory: %w", err)
+	}
+	inventory := make([]RunInventoryEntry, 0, len(entries))
+	for _, candidate := range entries {
+		if !candidate.IsDir() || !complianceevidence.ValidPathElement(candidate.Name()) {
+			inventory = append(inventory, RunInventoryEntry{RunID: candidate.Name(), Kind: RunKindMalformed, Reason: "run inventory entry is not a valid directory"})
+			continue
+		}
+		entry, inspectErr := s.InspectRun(ctx, candidate.Name())
+		if inspectErr != nil {
+			return nil, inspectErr
+		}
+		inventory = append(inventory, entry)
+	}
+	sort.Slice(inventory, func(left, right int) bool { return inventory[left].RunID < inventory[right].RunID })
+	return inventory, nil
+}
+
 // CampaignListEntry summarizes one persisted campaign.
 type CampaignListEntry struct {
 	CampaignID             string
