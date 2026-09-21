@@ -404,7 +404,7 @@ func gradeToolSelection(req ScenarioGradingRequest) *evalv1.DeterministicGrade {
 
 func gradePolicyExpectation(req ScenarioGradingRequest) *evalv1.DeterministicGrade {
 	expected := strings.TrimSpace(req.ScenarioGold.PolicyExpectation.ExpectedOutcome)
-	if expected == "" {
+	if expected == "" || expected == "not_applicable" {
 		return nil
 	}
 	switch expected {

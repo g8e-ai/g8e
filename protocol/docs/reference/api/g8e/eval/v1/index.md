@@ -24,6 +24,8 @@
     - [EvaluationValue](#g8e-eval-v1-EvaluationValue)
     - [EvaluationVerdict](#g8e-eval-v1-EvaluationVerdict)
     - [EvaluationVerificationReport](#g8e-eval-v1-EvaluationVerificationReport)
+    - [EvaluationVerifiedPopulation](#g8e-eval-v1-EvaluationVerifiedPopulation)
+    - [EvaluationVerifiedPopulationEntry](#g8e-eval-v1-EvaluationVerifiedPopulationEntry)
     - [GovernedActionBinding](#g8e-eval-v1-GovernedActionBinding)
     - [GraderModelCallRecord](#g8e-eval-v1-GraderModelCallRecord)
     - [HandoffRecord](#g8e-eval-v1-HandoffRecord)
@@ -38,15 +40,33 @@
     - [ModelProvenanceObservationCompleted](#g8e-eval-v1-ModelProvenanceObservationCompleted)
     - [ModelVariant](#g8e-eval-v1-ModelVariant)
     - [ModelWeightAttestation](#g8e-eval-v1-ModelWeightAttestation)
+    - [PolicyDecisionRecord](#g8e-eval-v1-PolicyDecisionRecord)
     - [ProviderBoundaryHardwareSample](#g8e-eval-v1-ProviderBoundaryHardwareSample)
     - [ProviderBoundaryObservationCommand](#g8e-eval-v1-ProviderBoundaryObservationCommand)
     - [ProviderBoundaryObservationCompleted](#g8e-eval-v1-ProviderBoundaryObservationCompleted)
     - [ProviderBoundaryObservationWindow](#g8e-eval-v1-ProviderBoundaryObservationWindow)
+    - [PublicAssignmentActivitySummary](#g8e-eval-v1-PublicAssignmentActivitySummary)
     - [PublicAssignmentLifecycleRecord](#g8e-eval-v1-PublicAssignmentLifecycleRecord)
     - [PublicAssignmentResultProjection](#g8e-eval-v1-PublicAssignmentResultProjection)
     - [PublicCampaignIdentity](#g8e-eval-v1-PublicCampaignIdentity)
+    - [PublicEvidenceBinding](#g8e-eval-v1-PublicEvidenceBinding)
+    - [PublicGovernedActionActivity](#g8e-eval-v1-PublicGovernedActionActivity)
+    - [PublicGovernedActionActivityRecord](#g8e-eval-v1-PublicGovernedActionActivityRecord)
+    - [PublicModelActivity](#g8e-eval-v1-PublicModelActivity)
+    - [PublicModelActivityRecord](#g8e-eval-v1-PublicModelActivityRecord)
     - [PublicModelCallSummary](#g8e-eval-v1-PublicModelCallSummary)
     - [PublicModelVariantIdentity](#g8e-eval-v1-PublicModelVariantIdentity)
+    - [PublicPolicyDecisionActivity](#g8e-eval-v1-PublicPolicyDecisionActivity)
+    - [PublicPolicyDecisionActivityRecord](#g8e-eval-v1-PublicPolicyDecisionActivityRecord)
+    - [PublicScenarioCriterion](#g8e-eval-v1-PublicScenarioCriterion)
+    - [PublicScenarioSummary](#g8e-eval-v1-PublicScenarioSummary)
+    - [PublicSemanticGradeSummary](#g8e-eval-v1-PublicSemanticGradeSummary)
+    - [PublicToolCallActivity](#g8e-eval-v1-PublicToolCallActivity)
+    - [PublicToolCallActivityRecord](#g8e-eval-v1-PublicToolCallActivityRecord)
+    - [PublicToolDecisionActivity](#g8e-eval-v1-PublicToolDecisionActivity)
+    - [PublicToolDecisionActivityRecord](#g8e-eval-v1-PublicToolDecisionActivityRecord)
+    - [PublicToolScoreDimensionRequirement](#g8e-eval-v1-PublicToolScoreDimensionRequirement)
+    - [PublicVerificationMetadata](#g8e-eval-v1-PublicVerificationMetadata)
     - [RecoveryRecord](#g8e-eval-v1-RecoveryRecord)
     - [RoleAssignment](#g8e-eval-v1-RoleAssignment)
     - [SemanticGrade](#g8e-eval-v1-SemanticGrade)
@@ -65,6 +85,7 @@
     - [EvaluationMetricUnit](#g8e-eval-v1-EvaluationMetricUnit)
     - [EvaluationMissingDataPolicy](#g8e-eval-v1-EvaluationMissingDataPolicy)
     - [EvaluationObservationSource](#g8e-eval-v1-EvaluationObservationSource)
+    - [EvaluationPolicyDecisionOutcome](#g8e-eval-v1-EvaluationPolicyDecisionOutcome)
     - [EvaluationRuntimeComponent](#g8e-eval-v1-EvaluationRuntimeComponent)
     - [EvaluationScenarioCategory](#g8e-eval-v1-EvaluationScenarioCategory)
     - [EvaluationUsageAvailability](#g8e-eval-v1-EvaluationUsageAvailability)
@@ -77,6 +98,14 @@
     - [ProviderBoundaryObservationAttemptStatus](#g8e-eval-v1-ProviderBoundaryObservationAttemptStatus)
     - [ProviderBoundaryObservationPhase](#g8e-eval-v1-ProviderBoundaryObservationPhase)
     - [ProviderHardwareMetricAvailability](#g8e-eval-v1-ProviderHardwareMetricAvailability)
+    - [PublicActivityAvailability](#g8e-eval-v1-PublicActivityAvailability)
+    - [PublicEvidenceSource](#g8e-eval-v1-PublicEvidenceSource)
+    - [PublicFinishState](#g8e-eval-v1-PublicFinishState)
+    - [PublicGradeExplanationCode](#g8e-eval-v1-PublicGradeExplanationCode)
+    - [PublicReceiptStatus](#g8e-eval-v1-PublicReceiptStatus)
+    - [PublicToolScoreDimension](#g8e-eval-v1-PublicToolScoreDimension)
+    - [PublicUnavailableReason](#g8e-eval-v1-PublicUnavailableReason)
+    - [PublicVerificationProvenance](#g8e-eval-v1-PublicVerificationProvenance)
   
 - [Scalar Value Types](#scalar-value-types)
 
@@ -225,6 +254,12 @@ EvaluationAssignmentResult is the private terminal result for one assignment.
 | grader_calls | [GraderModelCallRecord](#g8e-eval-v1-GraderModelCallRecord) | repeated |  |
 | evidence_refs | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) | repeated |  |
 | completed_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| policy_decisions | [PolicyDecisionRecord](#g8e-eval-v1-PolicyDecisionRecord) | repeated |  |
+| tool_decisions_captured | [bool](#bool) |  |  |
+| tool_calls_captured | [bool](#bool) |  |  |
+| governed_actions_captured | [bool](#bool) |  |  |
+| policy_decisions_captured | [bool](#bool) |  |  |
+| scored_inference_span_nanos | [uint64](#uint64) | optional |  |
 
 
 
@@ -463,6 +498,8 @@ EvaluationScenarioDefinition describes one frozen typed scenario.
 | input_fixture_ref | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) |  |  |
 | required_concepts | [string](#string) | repeated |  |
 | gold_criteria_ref | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) |  |  |
+| public_criteria | [PublicScenarioCriterion](#g8e-eval-v1-PublicScenarioCriterion) | repeated |  |
+| public_tool_score_dimensions | [PublicToolScoreDimensionRequirement](#g8e-eval-v1-PublicToolScoreDimensionRequirement) | repeated |  |
 
 
 
@@ -548,6 +585,63 @@ EvaluationVerificationReport independently verifies one run or assignment.
 | failure_reasons | [string](#string) | repeated |  |
 | report_digest_ref | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) |  |  |
 | verified_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| verifier_release_version | [string](#string) |  |  |
+| verifier_contract_version | [string](#string) |  |  |
+| verified_population_digest | [string](#string) |  |  |
+| verified_assignment_count | [uint32](#uint32) |  |  |
+| expected_assignment_count | [uint32](#uint32) |  |  |
+| campaign_digest | [string](#string) |  |  |
+| catalog_digest | [string](#string) |  |  |
+| model_registry_digest | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-EvaluationVerifiedPopulation"></a>
+
+### EvaluationVerifiedPopulation
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| schema_version | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| campaign_id | [string](#string) |  |  |
+| campaign_digest | [string](#string) |  |  |
+| catalog_ref | [g8e.compliance.v1.VersionedReference](#g8e-compliance-v1-VersionedReference) |  |  |
+| catalog_digest | [string](#string) |  |  |
+| model_registry_digest | [string](#string) |  |  |
+| lane | [EvaluationLane](#g8e-eval-v1-EvaluationLane) |  |  |
+| expected_assignment_count | [uint32](#uint32) |  |  |
+| entries | [EvaluationVerifiedPopulationEntry](#g8e-eval-v1-EvaluationVerifiedPopulationEntry) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-EvaluationVerifiedPopulationEntry"></a>
+
+### EvaluationVerifiedPopulationEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| assignment_id | [string](#string) |  |  |
+| deterministic_identity | [string](#string) |  |  |
+| scenario_id | [string](#string) |  |  |
+| scenario_version | [string](#string) |  |  |
+| repetition | [uint32](#uint32) |  |  |
+| lifecycle_status | [EvaluationAssignmentLifecycleStatus](#g8e-eval-v1-EvaluationAssignmentLifecycleStatus) |  |  |
+| result_digest | [string](#string) |  |  |
+| trace_digest | [string](#string) |  |  |
+| variant_id | [string](#string) |  |  |
+| designated_role | [ModelCampaignRole](#g8e-eval-v1-ModelCampaignRole) |  |  |
+| stack_id | [string](#string) |  |  |
 
 
 
@@ -737,7 +831,7 @@ ModelInferenceRecord captures one governed scored inference call.
 | total_duration_nanos | [uint64](#uint64) |  |  |
 | load_duration_nanos | [uint64](#uint64) |  |  |
 | load_state | [EvaluationLoadState](#g8e-eval-v1-EvaluationLoadState) |  |  |
-| retry_count | [uint32](#uint32) |  |  |
+| retry_count | [uint32](#uint32) | optional |  |
 | finish_reason | [string](#string) |  |  |
 | privacy_attested | [bool](#bool) |  |  |
 | governed_receipt_ref | [g8e.compliance.v1.ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) |  |  |
@@ -862,6 +956,25 @@ by the storage-side Provenance Operator at the model file site.
 
 
 
+<a name="g8e-eval-v1-PolicyDecisionRecord"></a>
+
+### PolicyDecisionRecord
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| decision_id | [string](#string) |  |  |
+| assignment_id | [string](#string) |  |  |
+| tool_name | [string](#string) |  |  |
+| outcome | [EvaluationPolicyDecisionOutcome](#g8e-eval-v1-EvaluationPolicyDecisionOutcome) |  |  |
+| detail | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="g8e-eval-v1-ProviderBoundaryHardwareSample"></a>
 
 ### ProviderBoundaryHardwareSample
@@ -957,6 +1070,25 @@ to one governed inference provider attempt.
 
 
 
+<a name="g8e-eval-v1-PublicAssignmentActivitySummary"></a>
+
+### PublicAssignmentActivitySummary
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| model_activity | [PublicModelActivity](#g8e-eval-v1-PublicModelActivity) |  |  |
+| tool_decisions | [PublicToolDecisionActivity](#g8e-eval-v1-PublicToolDecisionActivity) |  |  |
+| tool_calls | [PublicToolCallActivity](#g8e-eval-v1-PublicToolCallActivity) |  |  |
+| policy_decisions | [PublicPolicyDecisionActivity](#g8e-eval-v1-PublicPolicyDecisionActivity) |  |  |
+| governed_actions | [PublicGovernedActionActivity](#g8e-eval-v1-PublicGovernedActionActivity) |  |  |
+
+
+
+
+
+
 <a name="g8e-eval-v1-PublicAssignmentLifecycleRecord"></a>
 
 ### PublicAssignmentLifecycleRecord
@@ -1004,6 +1136,11 @@ to one governed inference provider attempt.
 | verification_status | [string](#string) |  |  |
 | unavailable_metric_reasons | [string](#string) | repeated |  |
 | completed_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| scenario_summary | [PublicScenarioSummary](#g8e-eval-v1-PublicScenarioSummary) |  |  |
+| semantic_grade_summaries | [PublicSemanticGradeSummary](#g8e-eval-v1-PublicSemanticGradeSummary) | repeated |  |
+| activity_summary | [PublicAssignmentActivitySummary](#g8e-eval-v1-PublicAssignmentActivitySummary) |  |  |
+| evidence_bindings | [PublicEvidenceBinding](#g8e-eval-v1-PublicEvidenceBinding) | repeated |  |
+| verification_metadata | [PublicVerificationMetadata](#g8e-eval-v1-PublicVerificationMetadata) |  |  |
 
 
 
@@ -1025,6 +1162,102 @@ to one governed inference provider attempt.
 | catalog_digest | [string](#string) |  |  |
 | model_registry_digest | [string](#string) |  |  |
 | lane | [EvaluationLane](#g8e-eval-v1-EvaluationLane) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicEvidenceBinding"></a>
+
+### PublicEvidenceBinding
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| sha256 | [string](#string) |  |  |
+| schema_ref | [string](#string) |  |  |
+| kind | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicGovernedActionActivity"></a>
+
+### PublicGovernedActionActivity
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| availability | [PublicActivityAvailability](#g8e-eval-v1-PublicActivityAvailability) |  |  |
+| unavailable_reason | [PublicUnavailableReason](#g8e-eval-v1-PublicUnavailableReason) |  |  |
+| records | [PublicGovernedActionActivityRecord](#g8e-eval-v1-PublicGovernedActionActivityRecord) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicGovernedActionActivityRecord"></a>
+
+### PublicGovernedActionActivityRecord
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| action_label | [string](#string) |  |  |
+| reported_policy_outcome | [EvaluationPolicyDecisionOutcome](#g8e-eval-v1-EvaluationPolicyDecisionOutcome) |  |  |
+| receipt_status | [PublicReceiptStatus](#g8e-eval-v1-PublicReceiptStatus) |  |  |
+| evidence_source | [PublicEvidenceSource](#g8e-eval-v1-PublicEvidenceSource) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicModelActivity"></a>
+
+### PublicModelActivity
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| availability | [PublicActivityAvailability](#g8e-eval-v1-PublicActivityAvailability) |  |  |
+| unavailable_reason | [PublicUnavailableReason](#g8e-eval-v1-PublicUnavailableReason) |  |  |
+| records | [PublicModelActivityRecord](#g8e-eval-v1-PublicModelActivityRecord) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicModelActivityRecord"></a>
+
+### PublicModelActivityRecord
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| model_role | [ModelCampaignRole](#g8e-eval-v1-ModelCampaignRole) |  |  |
+| agent_persona | [string](#string) |  |  |
+| variant_id | [string](#string) |  |  |
+| usage_availability | [EvaluationUsageAvailability](#g8e-eval-v1-EvaluationUsageAvailability) |  |  |
+| input_tokens | [uint64](#uint64) |  |  |
+| output_tokens | [uint64](#uint64) |  |  |
+| thinking_tokens | [uint64](#uint64) |  |  |
+| cache_tokens | [uint64](#uint64) |  |  |
+| total_duration_nanos | [uint64](#uint64) |  |  |
+| generation_duration_nanos | [uint64](#uint64) |  |  |
+| retry_count | [uint32](#uint32) | optional |  |
+| finish_state | [PublicFinishState](#g8e-eval-v1-PublicFinishState) |  |  |
+| load_state | [EvaluationLoadState](#g8e-eval-v1-EvaluationLoadState) |  |  |
 
 
 
@@ -1072,6 +1305,211 @@ to one governed inference provider attempt.
 | model_digest | [string](#string) |  |  |
 | model_family | [string](#string) |  |  |
 | quantization | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicPolicyDecisionActivity"></a>
+
+### PublicPolicyDecisionActivity
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| availability | [PublicActivityAvailability](#g8e-eval-v1-PublicActivityAvailability) |  |  |
+| unavailable_reason | [PublicUnavailableReason](#g8e-eval-v1-PublicUnavailableReason) |  |  |
+| records | [PublicPolicyDecisionActivityRecord](#g8e-eval-v1-PublicPolicyDecisionActivityRecord) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicPolicyDecisionActivityRecord"></a>
+
+### PublicPolicyDecisionActivityRecord
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| tool_label | [string](#string) |  |  |
+| outcome | [EvaluationPolicyDecisionOutcome](#g8e-eval-v1-EvaluationPolicyDecisionOutcome) |  |  |
+| evidence_source | [PublicEvidenceSource](#g8e-eval-v1-PublicEvidenceSource) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicScenarioCriterion"></a>
+
+### PublicScenarioCriterion
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| criterion_id | [string](#string) |  |  |
+| public_label | [string](#string) |  |  |
+| public_description | [string](#string) |  |  |
+| grading_method | [EvaluationGradingMethod](#g8e-eval-v1-EvaluationGradingMethod) |  |  |
+| required | [bool](#bool) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicScenarioSummary"></a>
+
+### PublicScenarioSummary
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| scenario_id | [string](#string) |  |  |
+| scenario_version | [string](#string) |  |  |
+| category | [EvaluationScenarioCategory](#g8e-eval-v1-EvaluationScenarioCategory) |  |  |
+| public_description | [string](#string) |  |  |
+| grading_method | [EvaluationGradingMethod](#g8e-eval-v1-EvaluationGradingMethod) |  |  |
+| allowed_tools | [string](#string) | repeated |  |
+| expected_tools | [string](#string) | repeated |  |
+| forbidden_tools | [string](#string) | repeated |  |
+| criteria | [PublicScenarioCriterion](#g8e-eval-v1-PublicScenarioCriterion) | repeated |  |
+| tool_score_dimensions | [PublicToolScoreDimensionRequirement](#g8e-eval-v1-PublicToolScoreDimensionRequirement) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicSemanticGradeSummary"></a>
+
+### PublicSemanticGradeSummary
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| criterion_id | [string](#string) |  |  |
+| status | [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus) |  |  |
+| grading_method | [EvaluationGradingMethod](#g8e-eval-v1-EvaluationGradingMethod) |  |  |
+| judge_variant_id | [string](#string) |  |  |
+| explanation_code | [PublicGradeExplanationCode](#g8e-eval-v1-PublicGradeExplanationCode) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicToolCallActivity"></a>
+
+### PublicToolCallActivity
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| availability | [PublicActivityAvailability](#g8e-eval-v1-PublicActivityAvailability) |  |  |
+| unavailable_reason | [PublicUnavailableReason](#g8e-eval-v1-PublicUnavailableReason) |  |  |
+| records | [PublicToolCallActivityRecord](#g8e-eval-v1-PublicToolCallActivityRecord) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicToolCallActivityRecord"></a>
+
+### PublicToolCallActivityRecord
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| tool_label | [string](#string) |  |  |
+| execution_outcome | [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus) |  |  |
+| semantic_outcome | [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus) |  |  |
+| evidence_source | [PublicEvidenceSource](#g8e-eval-v1-PublicEvidenceSource) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicToolDecisionActivity"></a>
+
+### PublicToolDecisionActivity
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| availability | [PublicActivityAvailability](#g8e-eval-v1-PublicActivityAvailability) |  |  |
+| unavailable_reason | [PublicUnavailableReason](#g8e-eval-v1-PublicUnavailableReason) |  |  |
+| records | [PublicToolDecisionActivityRecord](#g8e-eval-v1-PublicToolDecisionActivityRecord) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicToolDecisionActivityRecord"></a>
+
+### PublicToolDecisionActivityRecord
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| tool_label | [string](#string) |  |  |
+| recognized | [bool](#bool) |  |  |
+| selected | [bool](#bool) |  |  |
+| permission_compliant | [bool](#bool) |  |  |
+| unnecessary | [bool](#bool) |  |  |
+| outcome | [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus) |  |  |
+| evidence_source | [PublicEvidenceSource](#g8e-eval-v1-PublicEvidenceSource) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicToolScoreDimensionRequirement"></a>
+
+### PublicToolScoreDimensionRequirement
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| dimension | [PublicToolScoreDimension](#g8e-eval-v1-PublicToolScoreDimension) |  |  |
+| required | [bool](#bool) |  |  |
+
+
+
+
+
+
+<a name="g8e-eval-v1-PublicVerificationMetadata"></a>
+
+### PublicVerificationMetadata
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| provenance | [PublicVerificationProvenance](#g8e-eval-v1-PublicVerificationProvenance) |  |  |
+| verifier_state | [EvaluationVerdictStatus](#g8e-eval-v1-EvaluationVerdictStatus) |  |  |
+| verifier_release_version | [string](#string) |  |  |
+| verifier_contract_version | [string](#string) |  |  |
+| report_digest | [string](#string) |  |  |
+| population_digest | [string](#string) |  |  |
 
 
 
@@ -1361,6 +1799,20 @@ RoleAssignment binds one designated responsibility to one frozen variant.
 
 
 
+<a name="g8e-eval-v1-EvaluationPolicyDecisionOutcome"></a>
+
+### EvaluationPolicyDecisionOutcome
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| EVALUATION_POLICY_DECISION_OUTCOME_UNSPECIFIED | 0 |  |
+| EVALUATION_POLICY_DECISION_OUTCOME_ALLOW | 1 |  |
+| EVALUATION_POLICY_DECISION_OUTCOME_DENY | 2 |  |
+| EVALUATION_POLICY_DECISION_OUTCOME_REFUSED | 3 |  |
+
+
+
 <a name="g8e-eval-v1-EvaluationRuntimeComponent"></a>
 
 ### EvaluationRuntimeComponent
@@ -1538,6 +1990,130 @@ governed provider attempt on the remote observer operator.
 | PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNSPECIFIED | 0 |  |
 | PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED | 1 |  |
 | PROVIDER_HARDWARE_METRIC_AVAILABILITY_UNAVAILABLE | 2 |  |
+
+
+
+<a name="g8e-eval-v1-PublicActivityAvailability"></a>
+
+### PublicActivityAvailability
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PUBLIC_ACTIVITY_AVAILABILITY_UNSPECIFIED | 0 |  |
+| PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED | 1 |  |
+| PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE | 2 |  |
+| PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE | 3 |  |
+
+
+
+<a name="g8e-eval-v1-PublicEvidenceSource"></a>
+
+### PublicEvidenceSource
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PUBLIC_EVIDENCE_SOURCE_UNSPECIFIED | 0 |  |
+| PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED | 1 |  |
+| PUBLIC_EVIDENCE_SOURCE_BOUND_PUBLIC_PROOF | 2 |  |
+
+
+
+<a name="g8e-eval-v1-PublicFinishState"></a>
+
+### PublicFinishState
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PUBLIC_FINISH_STATE_UNSPECIFIED | 0 |  |
+| PUBLIC_FINISH_STATE_STOP | 1 |  |
+| PUBLIC_FINISH_STATE_LENGTH | 2 |  |
+| PUBLIC_FINISH_STATE_TOOL_CALL | 3 |  |
+| PUBLIC_FINISH_STATE_ERROR | 4 |  |
+| PUBLIC_FINISH_STATE_UNAVAILABLE | 5 |  |
+
+
+
+<a name="g8e-eval-v1-PublicGradeExplanationCode"></a>
+
+### PublicGradeExplanationCode
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PUBLIC_GRADE_EXPLANATION_CODE_UNSPECIFIED | 0 |  |
+| PUBLIC_GRADE_EXPLANATION_CODE_CRITERION_PASSED | 1 |  |
+| PUBLIC_GRADE_EXPLANATION_CODE_CRITERION_FAILED | 2 |  |
+| PUBLIC_GRADE_EXPLANATION_CODE_EVIDENCE_UNAVAILABLE | 3 |  |
+| PUBLIC_GRADE_EXPLANATION_CODE_UNSUPPORTED | 4 |  |
+| PUBLIC_GRADE_EXPLANATION_CODE_INVALID_EVIDENCE | 5 |  |
+| PUBLIC_GRADE_EXPLANATION_CODE_GRADER_UNAVAILABLE | 6 |  |
+
+
+
+<a name="g8e-eval-v1-PublicReceiptStatus"></a>
+
+### PublicReceiptStatus
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PUBLIC_RECEIPT_STATUS_UNSPECIFIED | 0 |  |
+| PUBLIC_RECEIPT_STATUS_UNAVAILABLE | 1 |  |
+| PUBLIC_RECEIPT_STATUS_REPORTED | 2 |  |
+
+
+
+<a name="g8e-eval-v1-PublicToolScoreDimension"></a>
+
+### PublicToolScoreDimension
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PUBLIC_TOOL_SCORE_DIMENSION_UNSPECIFIED | 0 |  |
+| PUBLIC_TOOL_SCORE_DIMENSION_TOOL_RECOGNITION | 1 |  |
+| PUBLIC_TOOL_SCORE_DIMENSION_TOOL_SELECTION | 2 |  |
+| PUBLIC_TOOL_SCORE_DIMENSION_ARGUMENT_SCHEMA | 3 |  |
+| PUBLIC_TOOL_SCORE_DIMENSION_ARGUMENT_SEMANTICS | 4 |  |
+| PUBLIC_TOOL_SCORE_DIMENSION_PERMISSION_COMPLIANCE | 5 |  |
+| PUBLIC_TOOL_SCORE_DIMENSION_RESULT_INTERPRETATION | 6 |  |
+| PUBLIC_TOOL_SCORE_DIMENSION_FOLLOW_UP_DECISION | 7 |  |
+| PUBLIC_TOOL_SCORE_DIMENSION_UNNECESSARY_TOOL_CALLS | 8 |  |
+| PUBLIC_TOOL_SCORE_DIMENSION_LOOPING | 9 |  |
+| PUBLIC_TOOL_SCORE_DIMENSION_RECOVERY | 10 |  |
+
+
+
+<a name="g8e-eval-v1-PublicUnavailableReason"></a>
+
+### PublicUnavailableReason
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED | 0 |  |
+| PUBLIC_UNAVAILABLE_REASON_HISTORICAL_NOT_CAPTURED | 1 |  |
+| PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED | 2 |  |
+| PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE | 3 |  |
+| PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE | 4 |  |
+| PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE | 5 |  |
+| PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS | 6 |  |
+
+
+
+<a name="g8e-eval-v1-PublicVerificationProvenance"></a>
+
+### PublicVerificationProvenance
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PUBLIC_VERIFICATION_PROVENANCE_UNSPECIFIED | 0 |  |
+| PUBLIC_VERIFICATION_PROVENANCE_BOUND | 1 |  |
+| PUBLIC_VERIFICATION_PROVENANCE_LEGACY_UNBOUND | 2 |  |
 
 
  

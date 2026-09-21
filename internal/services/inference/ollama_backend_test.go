@@ -26,6 +26,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestOllamaBackend_ReleaseModelUsesGenerateKeepAliveZero(t *testing.T) {
+	t.Parallel()
+	var request struct {
+		Model     string          `json:"model"`
+		KeepAlive json.RawMessage `json:"keep_alive"`
+		Stream    bool            `json:"stream"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Equal(t, "/api/generate", r.URL.Path)
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"model":       request.Model,
+			"done":        true,
+			"done_reason": "unload",
+		}))
+	}))
+	defer server.Close()
+
+	backend, err := NewOllamaBackend(server.URL, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, backend.ReleaseModel(context.Background(), "qwen3:0.6b"))
+	assert.Equal(t, "qwen3:0.6b", request.Model)
+	assert.JSONEq(t, "0", string(request.KeepAlive))
+	assert.False(t, request.Stream)
+}
+
 func TestOllamaBackend_GenerateConstructsCorrectChatRequest(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()

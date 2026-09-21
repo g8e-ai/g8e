@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -81,6 +82,8 @@ func (v *CampaignAssignmentVerifier) Verify(ctx context.Context, req CampaignAss
 		failures = append(failures, "imported assignment trace is required for verification")
 	} else if err := validateImportedTraceDigest(req.Trace); err != nil {
 		failures = append(failures, "trace digest validation failed: "+err.Error())
+	} else if err := verifyImportedEvidence(req.Assignment, req.Result, req.Trace); err != nil {
+		failures = append(failures, "imported evidence does not match trace: "+err.Error())
 	}
 	designatedRole, err := designatedRoleFromAssignment(req.Assignment)
 	if err != nil {
@@ -128,6 +131,71 @@ func finalizeCampaignVerificationReport(report *evalv1.EvaluationVerificationRep
 func validateImportedTraceDigest(trace map[string]any) error {
 	if err := validateTraceDigest(trace); err != nil {
 		return err
+	}
+	return nil
+}
+
+func verifyImportedEvidence(assignment *evalv1.EvaluationAssignment, result *evalv1.EvaluationAssignmentResult, trace map[string]any) error {
+	candidate := homogeneousCandidateVariant(assignment)
+	attemptID := ""
+	if len(result.GetModelInferences()) > 0 {
+		attemptID = result.GetModelInferences()[0].GetEvaluationAttemptId()
+	}
+	if attemptID == "" {
+		if contextValues, ok := trace["evaluation_context"].(map[string]any); ok {
+			attemptID, _ = contextValues["evaluation_attempt_id"].(string)
+		}
+	}
+	expectedInferences, expectedSpan, err := modelInferenceRecordsFromTrace(assignment, attemptID, candidate, trace, func(prefix string) string { return prefix })
+	if err != nil {
+		return err
+	}
+	if len(expectedInferences) != len(result.GetModelInferences()) {
+		return fmt.Errorf("model inference count mismatch")
+	}
+	for index, expected := range expectedInferences {
+		actual := result.GetModelInferences()[index]
+		expected.InferenceRecordId = actual.GetInferenceRecordId()
+		if !proto.Equal(expected, actual) {
+			return fmt.Errorf("model inference %d mismatch", index)
+		}
+	}
+	actualSpan := result.GetScoredInferenceSpanNanos()
+	if (expectedSpan == nil) != (result.ScoredInferenceSpanNanos == nil) || expectedSpan != nil && *expectedSpan != actualSpan {
+		return fmt.Errorf("scored inference span mismatch")
+	}
+	expectedPolicy, err := policyDecisionRecordsFromTrace(assignment, trace)
+	if err != nil {
+		return err
+	}
+	if len(expectedPolicy) != len(result.GetPolicyDecisions()) {
+		return fmt.Errorf("policy decision records mismatch")
+	}
+	for index, expected := range expectedPolicy {
+		if !proto.Equal(expected, result.GetPolicyDecisions()[index]) {
+			return fmt.Errorf("policy decision record %d mismatch", index)
+		}
+	}
+	for field, expected := range map[string]bool{
+		"tool decisions":   traceFieldCaptured(trace, "tool_decisions"),
+		"tool calls":       traceFieldCaptured(trace, "tool_calls"),
+		"governed actions": traceFieldCaptured(trace, "governed_actions"),
+		"policy decisions": traceFieldCaptured(trace, "policy_decisions"),
+	} {
+		var actual bool
+		switch field {
+		case "tool decisions":
+			actual = result.GetToolDecisionsCaptured()
+		case "tool calls":
+			actual = result.GetToolCallsCaptured()
+		case "governed actions":
+			actual = result.GetGovernedActionsCaptured()
+		case "policy decisions":
+			actual = result.GetPolicyDecisionsCaptured()
+		}
+		if actual != expected {
+			return fmt.Errorf("%s capture presence mismatch", field)
+		}
 	}
 	return nil
 }

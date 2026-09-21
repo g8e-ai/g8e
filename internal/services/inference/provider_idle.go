@@ -9,8 +9,7 @@ package inference
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,33 +20,34 @@ import (
 )
 
 const (
-	defaultProviderIdlePollInterval       = 2 * time.Second
-	defaultProviderSettleDuration         = 5 * time.Second
-	maxConsecutiveProviderIdleFetchErrors = 5
+	defaultProviderResidencyPollInterval = 2 * time.Second
+	maxProviderResidencyResponseBytes    = 1 << 20
 )
 
-// ProviderIdleOptions configures polling against the remote Ollama provider
-// before the campaign controller submits the next scored assignment.
-type ProviderIdleOptions struct {
-	Endpoint       string
-	PollInterval   time.Duration
-	SettleDuration time.Duration
-	HTTPClient     *http.Client
+// ProviderResidencyModel is one model currently resident in the provider.
+type ProviderResidencyModel struct {
+	Name string `json:"name"`
 }
 
-// WaitForProviderIdle blocks until the remote provider appears quiescent.
-// It polls Ollama /api/ps and requires the response body to remain unchanged
-// for SettleDuration so model load/unload or in-flight generation can finish
-// before the next assignment starts.
-func WaitForProviderIdle(ctx context.Context, opts ProviderIdleOptions) error {
+// ProviderResidency is the typed Ollama /api/ps response used for residency
+// postconditions. It does not claim that a provider is idle or that no request
+// can start between samples.
+type ProviderResidency struct {
+	Models []ProviderResidencyModel `json:"models"`
+}
+
+// ProviderResidencyOptions configures typed polling against the remote
+// provider.
+type ProviderResidencyOptions struct {
+	Endpoint     string
+	PollInterval time.Duration
+	HTTPClient   *http.Client
+}
+
+// ReadProviderResidency reads and validates one bounded typed /api/ps response.
+func ReadProviderResidency(ctx context.Context, opts ProviderResidencyOptions) (ProviderResidency, error) {
 	if opts.Endpoint == "" {
-		return fmt.Errorf("inference: wait for provider idle: %w", constants.ErrInferenceEndpointInvalid)
-	}
-	if opts.PollInterval <= 0 {
-		opts.PollInterval = defaultProviderIdlePollInterval
-	}
-	if opts.SettleDuration <= 0 {
-		opts.SettleDuration = defaultProviderSettleDuration
+		return ProviderResidency{}, fmt.Errorf("inference: read provider residency: %w", constants.ErrInferenceEndpointInvalid)
 	}
 	client := opts.HTTPClient
 	if client == nil {
@@ -55,42 +55,74 @@ func WaitForProviderIdle(ctx context.Context, opts ProviderIdleOptions) error {
 	}
 	psURL, err := providerPSURL(opts.Endpoint)
 	if err != nil {
-		return fmt.Errorf("inference: wait for provider idle: %w", err)
+		return ProviderResidency{}, fmt.Errorf("inference: read provider residency: %w", err)
 	}
-
-	var (
-		lastDigest        string
-		stableAt          time.Time
-		consecutiveErrors int
-	)
-	for {
-		digest, err := fetchProviderPSDigest(ctx, client, psURL)
-		if err != nil {
-			consecutiveErrors++
-			if consecutiveErrors >= maxConsecutiveProviderIdleFetchErrors {
-				return fmt.Errorf("inference: wait for provider idle: provider unreachable at %s: %w", opts.Endpoint, err)
-			}
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("inference: wait for provider idle: %w", ctx.Err())
-			case <-time.After(opts.PollInterval):
-				continue
-			}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, psURL, nil)
+	if err != nil {
+		return ProviderResidency{}, fmt.Errorf("inference: read provider residency: %w", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ProviderResidency{}, fmt.Errorf("inference: read provider residency: %w: %w", constants.ErrInferenceBackendUnavailable, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ProviderResidency{}, fmt.Errorf("inference: read provider residency: %w: status %d", constants.ErrInferenceBackendUnavailable, resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxProviderResidencyResponseBytes+1))
+	if err != nil {
+		return ProviderResidency{}, fmt.Errorf("inference: read provider residency: %w: %w", constants.ErrInferenceProviderResponseInvalid, err)
+	}
+	if len(body) > maxProviderResidencyResponseBytes {
+		return ProviderResidency{}, fmt.Errorf("inference: read provider residency: %w: response exceeds %d bytes", constants.ErrInferenceProviderResponseInvalid, maxProviderResidencyResponseBytes)
+	}
+	var residency ProviderResidency
+	if err := json.Unmarshal(body, &residency); err != nil {
+		return ProviderResidency{}, fmt.Errorf("inference: read provider residency: %w: %w", constants.ErrInferenceProviderResponseInvalid, err)
+	}
+	for _, model := range residency.Models {
+		if model.Name == "" {
+			return ProviderResidency{}, fmt.Errorf("inference: read provider residency: %w: model name is required", constants.ErrInferenceProviderResponseInvalid)
 		}
-		consecutiveErrors = 0
-		now := time.Now()
-		if digest != lastDigest {
-			lastDigest = digest
-			stableAt = now
-		} else if !stableAt.IsZero() && now.Sub(stableAt) >= opts.SettleDuration {
+	}
+	return residency, nil
+}
+
+// WaitForProviderModelsAbsent waits for every named model to be absent from a
+// typed provider residency response. Stable non-empty responses never satisfy
+// this postcondition.
+func WaitForProviderModelsAbsent(ctx context.Context, opts ProviderResidencyOptions, modelTags []string) error {
+	if len(modelTags) == 0 {
+		return nil
+	}
+	if opts.PollInterval <= 0 {
+		opts.PollInterval = defaultProviderResidencyPollInterval
+	}
+	for {
+		residency, err := ReadProviderResidency(ctx, opts)
+		if err != nil {
+			return fmt.Errorf("inference: wait for provider models absent: %w", err)
+		}
+		if providerModelsAbsent(residency, modelTags) {
 			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("inference: wait for provider idle: %w", ctx.Err())
+			return fmt.Errorf("inference: wait for provider models absent: %w", ctx.Err())
 		case <-time.After(opts.PollInterval):
 		}
 	}
+}
+
+func providerModelsAbsent(residency ProviderResidency, modelTags []string) bool {
+	for _, resident := range residency.Models {
+		for _, wanted := range modelTags {
+			if resident.Name == wanted {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func providerPSURL(endpoint string) (string, error) {
@@ -109,27 +141,6 @@ func providerPSURL(endpoint string) (string, error) {
 	base.RawQuery = ""
 	base.Fragment = ""
 	return base.String(), nil
-}
-
-func fetchProviderPSDigest(ctx context.Context, client *http.Client, psURL string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, psURL, nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrInferenceBackendUnavailable, err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrInferenceProviderResponseInvalid, err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("%w: status %d", constants.ErrInferenceBackendUnavailable, resp.StatusCode)
-	}
-	sum := sha256.Sum256(body)
-	return hex.EncodeToString(sum[:]), nil
 }
 
 func stringsTrimRightSlash(path string) string {

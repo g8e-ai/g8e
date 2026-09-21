@@ -33,6 +33,12 @@
       "EVALUATION_LOAD_STATE_UNSPECIFIED",
       "EVALUATION_LOAD_STATE_WARM"
     ],
+    "EvaluationPolicyDecisionOutcome": [
+      "EVALUATION_POLICY_DECISION_OUTCOME_ALLOW",
+      "EVALUATION_POLICY_DECISION_OUTCOME_DENY",
+      "EVALUATION_POLICY_DECISION_OUTCOME_REFUSED",
+      "EVALUATION_POLICY_DECISION_OUTCOME_UNSPECIFIED"
+    ],
     "EvaluationScenarioCategory": [
       "EVALUATION_SCENARIO_CATEGORY_FINAL_RESPONSE",
       "EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE",
@@ -63,6 +69,66 @@
       "MODEL_CAPABILITY_KIND_THINKING",
       "MODEL_CAPABILITY_KIND_TOOL_CALLING",
       "MODEL_CAPABILITY_KIND_UNSPECIFIED"
+    ],
+    "PublicActivityAvailability": [
+      "PUBLIC_ACTIVITY_AVAILABILITY_NOT_APPLICABLE",
+      "PUBLIC_ACTIVITY_AVAILABILITY_OBSERVED",
+      "PUBLIC_ACTIVITY_AVAILABILITY_UNAVAILABLE",
+      "PUBLIC_ACTIVITY_AVAILABILITY_UNSPECIFIED"
+    ],
+    "PublicEvidenceSource": [
+      "PUBLIC_EVIDENCE_SOURCE_APPLICATION_REPORTED",
+      "PUBLIC_EVIDENCE_SOURCE_BOUND_PUBLIC_PROOF",
+      "PUBLIC_EVIDENCE_SOURCE_UNSPECIFIED"
+    ],
+    "PublicFinishState": [
+      "PUBLIC_FINISH_STATE_ERROR",
+      "PUBLIC_FINISH_STATE_LENGTH",
+      "PUBLIC_FINISH_STATE_STOP",
+      "PUBLIC_FINISH_STATE_TOOL_CALL",
+      "PUBLIC_FINISH_STATE_UNAVAILABLE",
+      "PUBLIC_FINISH_STATE_UNSPECIFIED"
+    ],
+    "PublicGradeExplanationCode": [
+      "PUBLIC_GRADE_EXPLANATION_CODE_CRITERION_FAILED",
+      "PUBLIC_GRADE_EXPLANATION_CODE_CRITERION_PASSED",
+      "PUBLIC_GRADE_EXPLANATION_CODE_EVIDENCE_UNAVAILABLE",
+      "PUBLIC_GRADE_EXPLANATION_CODE_GRADER_UNAVAILABLE",
+      "PUBLIC_GRADE_EXPLANATION_CODE_INVALID_EVIDENCE",
+      "PUBLIC_GRADE_EXPLANATION_CODE_UNSPECIFIED",
+      "PUBLIC_GRADE_EXPLANATION_CODE_UNSUPPORTED"
+    ],
+    "PublicReceiptStatus": [
+      "PUBLIC_RECEIPT_STATUS_REPORTED",
+      "PUBLIC_RECEIPT_STATUS_UNAVAILABLE",
+      "PUBLIC_RECEIPT_STATUS_UNSPECIFIED"
+    ],
+    "PublicToolScoreDimension": [
+      "PUBLIC_TOOL_SCORE_DIMENSION_ARGUMENT_SCHEMA",
+      "PUBLIC_TOOL_SCORE_DIMENSION_ARGUMENT_SEMANTICS",
+      "PUBLIC_TOOL_SCORE_DIMENSION_FOLLOW_UP_DECISION",
+      "PUBLIC_TOOL_SCORE_DIMENSION_LOOPING",
+      "PUBLIC_TOOL_SCORE_DIMENSION_PERMISSION_COMPLIANCE",
+      "PUBLIC_TOOL_SCORE_DIMENSION_RECOVERY",
+      "PUBLIC_TOOL_SCORE_DIMENSION_RESULT_INTERPRETATION",
+      "PUBLIC_TOOL_SCORE_DIMENSION_TOOL_RECOGNITION",
+      "PUBLIC_TOOL_SCORE_DIMENSION_TOOL_SELECTION",
+      "PUBLIC_TOOL_SCORE_DIMENSION_UNNECESSARY_TOOL_CALLS",
+      "PUBLIC_TOOL_SCORE_DIMENSION_UNSPECIFIED"
+    ],
+    "PublicUnavailableReason": [
+      "PUBLIC_UNAVAILABLE_REASON_HISTORICAL_NOT_CAPTURED",
+      "PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE",
+      "PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS",
+      "PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE",
+      "PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED",
+      "PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE",
+      "PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED"
+    ],
+    "PublicVerificationProvenance": [
+      "PUBLIC_VERIFICATION_PROVENANCE_BOUND",
+      "PUBLIC_VERIFICATION_PROVENANCE_LEGACY_UNBOUND",
+      "PUBLIC_VERIFICATION_PROVENANCE_UNSPECIFIED"
     ]
   },
   "messages": {
@@ -130,18 +196,24 @@
         "escalations",
         "evidence_refs",
         "governed_actions",
+        "governed_actions_captured",
         "grader_calls",
         "handoffs",
         "lane",
         "lifecycle_status",
         "model_inferences",
+        "policy_decisions",
+        "policy_decisions_captured",
         "recoveries",
         "result_digest",
         "run_id",
         "schema_version",
+        "scored_inference_span_nanos",
         "semantic_grades",
         "tool_calls",
-        "tool_decisions"
+        "tool_calls_captured",
+        "tool_decisions",
+        "tool_decisions_captured"
       ]
     },
     "EvaluationCampaignSpec": {
@@ -178,7 +250,9 @@
         "gold_criteria_ref",
         "grading_method",
         "input_fixture_ref",
+        "public_criteria",
         "public_description",
+        "public_tool_score_dimensions",
         "required_concepts",
         "scenario_id",
         "scenario_version"
@@ -188,14 +262,53 @@
       "visibility": "private",
       "fields": [
         "assignment_id",
+        "campaign_digest",
+        "catalog_digest",
+        "expected_assignment_count",
         "failure_count",
         "failure_reasons",
+        "model_registry_digest",
         "report_digest_ref",
         "report_id",
         "run_id",
         "schema_version",
         "status",
-        "verified_at"
+        "verified_assignment_count",
+        "verified_at",
+        "verified_population_digest",
+        "verifier_contract_version",
+        "verifier_release_version"
+      ]
+    },
+    "EvaluationVerifiedPopulation": {
+      "visibility": "private",
+      "fields": [
+        "campaign_digest",
+        "campaign_id",
+        "catalog_digest",
+        "catalog_ref",
+        "entries",
+        "expected_assignment_count",
+        "lane",
+        "model_registry_digest",
+        "run_id",
+        "schema_version"
+      ]
+    },
+    "EvaluationVerifiedPopulationEntry": {
+      "visibility": "private",
+      "fields": [
+        "assignment_id",
+        "designated_role",
+        "deterministic_identity",
+        "lifecycle_status",
+        "repetition",
+        "result_digest",
+        "scenario_id",
+        "scenario_version",
+        "stack_id",
+        "trace_digest",
+        "variant_id"
       ]
     },
     "GovernedActionBinding": {
@@ -325,6 +438,26 @@
         "variant_id"
       ]
     },
+    "PolicyDecisionRecord": {
+      "visibility": "private",
+      "fields": [
+        "assignment_id",
+        "decision_id",
+        "detail",
+        "outcome",
+        "tool_name"
+      ]
+    },
+    "PublicAssignmentActivitySummary": {
+      "visibility": "public",
+      "fields": [
+        "governed_actions",
+        "model_activity",
+        "policy_decisions",
+        "tool_calls",
+        "tool_decisions"
+      ]
+    },
     "PublicAssignmentLifecycleRecord": {
       "visibility": "public",
       "fields": [
@@ -344,19 +477,24 @@
     "PublicAssignmentResultProjection": {
       "visibility": "public",
       "fields": [
+        "activity_summary",
         "assignment_id",
         "completed_at",
         "decomposed_scores",
         "designated_role",
+        "evidence_bindings",
         "lane",
         "lifecycle_status",
         "result_digest",
         "run_id",
         "scenario_category",
         "scenario_id",
+        "scenario_summary",
+        "semantic_grade_summaries",
         "summary_status",
         "unavailable_metric_reasons",
         "variant_id",
+        "verification_metadata",
         "verification_status"
       ],
       "prohibited_fields": [
@@ -383,6 +521,57 @@
         "catalog_version",
         "lane",
         "model_registry_digest"
+      ]
+    },
+    "PublicEvidenceBinding": {
+      "visibility": "public",
+      "fields": [
+        "kind",
+        "schema_ref",
+        "sha256"
+      ]
+    },
+    "PublicGovernedActionActivity": {
+      "visibility": "public",
+      "fields": [
+        "availability",
+        "records",
+        "unavailable_reason"
+      ]
+    },
+    "PublicGovernedActionActivityRecord": {
+      "visibility": "public",
+      "fields": [
+        "action_label",
+        "evidence_source",
+        "receipt_status",
+        "reported_policy_outcome"
+      ]
+    },
+    "PublicModelActivity": {
+      "visibility": "public",
+      "fields": [
+        "availability",
+        "records",
+        "unavailable_reason"
+      ]
+    },
+    "PublicModelActivityRecord": {
+      "visibility": "public",
+      "fields": [
+        "agent_persona",
+        "cache_tokens",
+        "finish_state",
+        "generation_duration_nanos",
+        "input_tokens",
+        "load_state",
+        "model_role",
+        "output_tokens",
+        "retry_count",
+        "thinking_tokens",
+        "total_duration_nanos",
+        "usage_availability",
+        "variant_id"
       ]
     },
     "PublicModelCallSummary": {
@@ -412,6 +601,112 @@
         "quantization",
         "served_model_tag",
         "variant_id"
+      ]
+    },
+    "PublicPolicyDecisionActivity": {
+      "visibility": "public",
+      "fields": [
+        "availability",
+        "records",
+        "unavailable_reason"
+      ]
+    },
+    "PublicPolicyDecisionActivityRecord": {
+      "visibility": "public",
+      "fields": [
+        "evidence_source",
+        "outcome",
+        "tool_label"
+      ]
+    },
+    "PublicScenarioCriterion": {
+      "visibility": "public",
+      "fields": [
+        "criterion_id",
+        "grading_method",
+        "public_description",
+        "public_label",
+        "required"
+      ]
+    },
+    "PublicScenarioSummary": {
+      "visibility": "public",
+      "fields": [
+        "allowed_tools",
+        "category",
+        "criteria",
+        "expected_tools",
+        "forbidden_tools",
+        "grading_method",
+        "public_description",
+        "scenario_id",
+        "scenario_version",
+        "tool_score_dimensions"
+      ]
+    },
+    "PublicSemanticGradeSummary": {
+      "visibility": "public",
+      "fields": [
+        "criterion_id",
+        "explanation_code",
+        "grading_method",
+        "judge_variant_id",
+        "status"
+      ]
+    },
+    "PublicToolCallActivity": {
+      "visibility": "public",
+      "fields": [
+        "availability",
+        "records",
+        "unavailable_reason"
+      ]
+    },
+    "PublicToolCallActivityRecord": {
+      "visibility": "public",
+      "fields": [
+        "evidence_source",
+        "execution_outcome",
+        "semantic_outcome",
+        "tool_label"
+      ]
+    },
+    "PublicToolDecisionActivity": {
+      "visibility": "public",
+      "fields": [
+        "availability",
+        "records",
+        "unavailable_reason"
+      ]
+    },
+    "PublicToolDecisionActivityRecord": {
+      "visibility": "public",
+      "fields": [
+        "evidence_source",
+        "outcome",
+        "permission_compliant",
+        "recognized",
+        "selected",
+        "tool_label",
+        "unnecessary"
+      ]
+    },
+    "PublicToolScoreDimensionRequirement": {
+      "visibility": "public",
+      "fields": [
+        "dimension",
+        "required"
+      ]
+    },
+    "PublicVerificationMetadata": {
+      "visibility": "public",
+      "fields": [
+        "population_digest",
+        "provenance",
+        "report_digest",
+        "verifier_contract_version",
+        "verifier_release_version",
+        "verifier_state"
       ]
     },
     "RecoveryRecord": {
@@ -484,6 +779,18 @@
     {
       "message_type": "PublicAssignmentResultProjection",
       "vector_path": "vectors/eval/public_assignment_result.json"
+    },
+    {
+      "message_type": "EvaluationAssignmentResult",
+      "vector_path": "vectors/eval/model_assignment_result_enriched.json"
+    },
+    {
+      "message_type": "PublicAssignmentResultProjection",
+      "vector_path": "vectors/eval/public_assignment_result_enriched.json"
+    },
+    {
+      "message_type": "EvaluationVerificationReport",
+      "vector_path": "vectors/eval/run_verification_bound.json"
     }
   ]
 }

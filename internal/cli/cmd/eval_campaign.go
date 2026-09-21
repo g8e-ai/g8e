@@ -10,6 +10,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -21,8 +22,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
-	"github.com/g8e-ai/g8e/v2/internal/services/inference"
-	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -404,9 +403,6 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	var noAutoRefresh bool
 	var publish bool
 	var daemon bool
-	var waitForProviderIdle bool
-	var providerIdlePoll time.Duration
-	var providerSettle time.Duration
 	cmd := &cobra.Command{
 		Use:   "execute [run-id]",
 		Short: "Execute one or more queued campaign assignments through production POST /api/v1/chat",
@@ -417,215 +413,48 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if daemon {
-				limit = ^uint32(0)
-			} else if limit == 0 {
-				limit = 1
-			}
-			cfg, fileSvc, authContext, err := chatEvalEnvironment(cmd, chatEvalDeps{
-				configLoader:         deps.configLoader,
-				fileSvcFactory:       deps.fileSvcFactory,
-				authLoader:           deps.authLoader,
-				clientFactory:        deps.clientFactory,
-				refreshClientFactory: defaultRefreshClientFactory,
-				now:                  deps.now,
-				newID:                deps.newID,
-			})
-			if err != nil {
-				return err
-			}
-			store := evaluation.NewStore(fileSvc)
-			summary, err := evaluation.NewCampaignController(store, nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() }).RunSummary(cmd.Context(), runID)
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign execute: %w", err)
-			}
-			binding := summary.Run.GetCampaignBinding()
-			if binding == nil {
-				return fmt.Errorf("evaluation: campaign execute: missing campaign binding")
-			}
-			if inferenceSessionID == "" {
-				inferenceSessionID = binding.GetInferenceOperatorSessionId()
-			}
-			if dataSessionID == "" {
-				dataSessionID = binding.GetDataOperatorSessionId()
-			}
-			operators, err := chatEvalListOperators(cmd, chatEvalDeps{
-				configLoader:   deps.configLoader,
-				fileSvcFactory: deps.fileSvcFactory,
-				authLoader:     deps.authLoader,
-				clientFactory:  deps.clientFactory,
-				now:            deps.now,
-				newID:          deps.newID,
-			}, cfg, authContext)
-			if err != nil {
-				return err
-			}
-			if !noAutoRefresh {
-				authContext, err = chatEvalEnsureOperatorBinding(cmd, chatEvalDeps{
-					configLoader:         deps.configLoader,
-					fileSvcFactory:       deps.fileSvcFactory,
-					authLoader:           deps.authLoader,
-					clientFactory:        deps.clientFactory,
-					refreshClientFactory: defaultRefreshClientFactory,
-					now:                  deps.now,
-					newID:                deps.newID,
-				}, cfg, fileSvc, authContext, operators, dataSessionID)
-				if err != nil {
-					return fmt.Errorf("evaluation: campaign execute: %w", err)
-				}
-			}
-			selected, err := evaluation.SelectInferenceOperator(operators, inferenceSessionID)
-			if err != nil {
-				return err
-			}
-			dataOperator, err := chatEvalResolveDataOperator(operators, authContext, dataSessionID)
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign execute: %w", err)
-			}
-			spec, err := store.LoadCampaignSpec(cmd.Context(), binding.GetCampaignId())
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign execute: %w", err)
-			}
-			_, artifacts, err := evaluation.LoadScenarioCatalog()
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign execute: %w", err)
-			}
-			ensembleClient, err := chatEvalEnsembleClient(cfg, authContext, resolveChatEvalEnsembleURL(ensembleURL), chatEvalDeps{
-				configLoader:   deps.configLoader,
-				fileSvcFactory: deps.fileSvcFactory,
-				authLoader:     deps.authLoader,
-				clientFactory:  deps.clientFactory,
-				now:            deps.now,
-				newID:          deps.newID,
-			})
-			if err != nil {
-				return err
-			}
-			persona := harnessclient.Persona{
-				ID:                "g8e-campaign-controller",
-				UserAgent:         "g8e-eval-campaign",
-				UserID:            authContext.UserID,
-				CLISessionID:      authContext.CLISessionID,
-				OperatorID:        dataOperator.OperatorID,
-				OperatorSessionID: dataOperator.OperatorSessionID,
-			}
-			executor := evaluation.NewCampaignChatExecutor(
-				ensembleClient,
-				persona,
-				dataOperator.OperatorID,
-				dataOperator.OperatorSessionID,
-				store,
-				func(ctx context.Context, fetch func(context.Context) (map[string]any, error)) (map[string]any, error) {
-					return chatEvalWaitForTrace(ctx, fetch, newChatAcceptReporter(cmd.OutOrStdout(), output.JSONEnabled(cmd)))
+			results := make([]map[string]any, 0)
+			executed, err := runCampaignExecute(cmd, deps, campaignExecuteOptions{
+				RunID:              runID,
+				Publish:            publish,
+				Daemon:             daemon,
+				Limit:              limit,
+				InferenceSessionID: inferenceSessionID,
+				DataSessionID:      dataSessionID,
+				EnsembleURL:        ensembleURL,
+				OllamaEndpoint:     ollamaEndpoint,
+				NoAutoRefresh:      noAutoRefresh,
+				JSONOutput:         output.JSONEnabled(cmd),
+				ResultOutput: func(result *evalv1.EvaluationAssignmentResult) {
+					if output.JSONEnabled(cmd) && !daemon {
+						results = append(results, map[string]any{
+							"assignment_id": result.GetAssignmentId(),
+							"status":        result.GetLifecycleStatus().String(),
+							"result_digest": result.GetResultDigest(),
+						})
+					}
 				},
-				deps.now,
-				func(prefix string) string { return prefix + "-" + deps.newID() },
-			)
-			controller := evaluation.NewCampaignController(store, executor, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() })
-			var publication *evaluation.CampaignPublicationCoordinator
-			if publish {
-				publication, err = newCampaignPublicationCoordinator(cmd, fileSvc)
-				if err != nil {
-					return fmt.Errorf("evaluation: campaign execute: %w", err)
-				}
-				controller = controller.WithPublication(publication)
-			}
-			executionBinding := evaluation.CampaignExecutionBinding{
-				InferenceOperatorSessionID: selected.OperatorSessionID,
-				DataOperatorID:             dataOperator.OperatorID,
-				DataOperatorSessionID:      dataOperator.OperatorSessionID,
-				ModelRegistryDigest:        spec.GetModelRegistryDigest(),
-				ModelRegistry:              evaluation.InferenceVariantsFromEvalRegistry(spec.GetModelRegistry()),
-			}
-			resultsCap := limit
-			if daemon {
-				resultsCap = 1
-			}
-			results := make([]map[string]any, 0, resultsCap)
-			executed := 0
-			resolvedOllamaEndpoint, err := resolveCampaignOllamaEndpoint(ollamaEndpoint, operators, selected.OperatorSessionID)
+			})
 			if err != nil {
 				return err
-			}
-			if err := preflightProviderObservationDelivery(fileSvc, cfg); err != nil {
-				return fmt.Errorf("evaluation: campaign execute: %w", err)
-			}
-			modelBindings, err := evaluation.CampaignModelBindingsFromSpec(spec)
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign execute: %w", err)
-			}
-			if err := preflightCampaignModelProvenance(fileSvc, cfg, modelBindings); err != nil {
-				return fmt.Errorf("evaluation: campaign execute: %w", err)
-			}
-			iterations := int(limit)
-			if daemon {
-				iterations = 1<<31 - 1
-			}
-			for i := 0; i < iterations; i++ {
-				restartCtx, restartCancel := context.WithTimeout(cmd.Context(), 10*time.Minute)
-				_, err := restartOllamaViaObserverIfEnabled(restartCtx, operators, runID, dataOperator, cfg, authContext, chatEvalDeps{
-					configLoader:   deps.configLoader,
-					fileSvcFactory: deps.fileSvcFactory,
-					authLoader:     deps.authLoader,
-					clientFactory:  deps.clientFactory,
-					now:            deps.now,
-					newID:          deps.newID,
-				}, func(prefix string) string { return prefix + "-" + deps.newID() }, cmd.OutOrStdout(), cmd.ErrOrStderr())
-				restartCancel()
-				if err != nil {
-					return fmt.Errorf("evaluation: campaign execute: %w", err)
-				}
-				if waitForProviderIdle {
-					idleCtx, idleCancel := context.WithTimeout(cmd.Context(), 15*time.Minute)
-					err := inference.WaitForProviderIdle(idleCtx, inference.ProviderIdleOptions{
-						Endpoint:       resolvedOllamaEndpoint,
-						PollInterval:   providerIdlePoll,
-						SettleDuration: providerSettle,
-					})
-					idleCancel()
-					if err != nil {
-						return fmt.Errorf("evaluation: campaign execute: %w", err)
-					}
-					if !output.JSONEnabled(cmd) {
-						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Provider idle at %s\n", resolvedOllamaEndpoint)
-					}
-				}
-				ctx, cancel := context.WithTimeout(cmd.Context(), 8*time.Minute)
-				result, ok, err := controller.ExecuteNextAssignment(ctx, runID, executionBinding, artifacts)
-				cancel()
-				if err != nil {
-					return fmt.Errorf("evaluation: campaign execute: %w", err)
-				}
-				if !ok {
-					if publication != nil {
-						completionCount, publishErr := publication.PublishRunCompletion(cmd.Context(), runID, deps.now().UTC())
-						if publishErr != nil {
-							return fmt.Errorf("evaluation: campaign execute: %w", publishErr)
-						}
-						if completionCount > 0 && !output.JSONEnabled(cmd) {
-							_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d completion projection record(s) for run %s\n", completionCount, runID)
-						}
-					}
-					break
-				}
-				executed++
-				if output.JSONEnabled(cmd) && !daemon {
-					entry := map[string]any{
-						"assignment_id": result.GetAssignmentId(),
-						"status":        result.GetLifecycleStatus().String(),
-						"result_digest": result.GetResultDigest(),
-					}
-					results = append(results, entry)
-				}
-				if !output.JSONEnabled(cmd) {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Executed %s: %s\n", result.GetAssignmentId(), result.GetLifecycleStatus().String())
-				}
 			}
 			if output.JSONEnabled(cmd) {
+				_, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+				if err != nil {
+					return err
+				}
+				finalSummary, err := evaluation.NewCampaignController(evaluation.NewStore(fileSvc), nil, deps.now, func(prefix string) string { return prefix + "-" + deps.newID() }).RunSummary(cmd.Context(), runID)
+				if err != nil {
+					return fmt.Errorf("evaluation: campaign execute: %w", err)
+				}
+				remaining := int64(finalSummary.ExpectedAssignment) - int64(finalSummary.TerminalCount)
+				if remaining < 0 {
+					remaining = 0
+				}
 				payload, err := json.MarshalIndent(map[string]any{
 					"run_id":    runID,
 					"executed":  executed,
-					"remaining": int64(summary.ExpectedAssignment) - int64(summary.TerminalCount) - int64(executed),
+					"remaining": remaining,
 					"results":   results,
 				}, "", "  ")
 				if err != nil {
@@ -636,6 +465,7 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Executed %d assignment(s) for run %s\n", executed, runID)
 			return err
+
 		},
 	}
 	cmd.Flags().StringVar(&runID, "run-id", "", "Campaign run ID")
@@ -643,11 +473,8 @@ func campaignEvalExecuteCmd(deps nativeEvalDeps) *cobra.Command {
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Exact inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Exact data Operator session ID")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
-	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for provider-idle gating (default: active inference operator runtime_config, then G8E_OLLAMA_ENDPOINT, then loopback)")
+	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for model maintenance")
 	cmd.Flags().BoolVar(&daemon, "daemon", false, "Run continuously until the queued matrix is exhausted")
-	cmd.Flags().BoolVar(&waitForProviderIdle, "wait-for-provider-idle", true, "Wait for Ollama to become idle before each assignment")
-	cmd.Flags().DurationVar(&providerIdlePoll, "provider-idle-poll", 2*time.Second, "Poll interval while waiting for Ollama idle")
-	cmd.Flags().DurationVar(&providerSettle, "provider-settle", 5*time.Second, "Required stable /api/ps window before starting the next assignment")
 	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
 	cmd.Flags().BoolVar(&publish, "publish", false, "Publish assignment lifecycle and terminal result projections to the public mirror")
 	return cmd
@@ -674,12 +501,17 @@ func campaignEvalPublishCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign publish: %w", err)
 			}
+			store := evaluation.NewStore(fileSvc)
+			report, reportErr := store.LoadCampaignVerification(cmd.Context(), runID)
+			if reportErr != nil && !errors.Is(reportErr, constants.ErrNotFound) {
+				return fmt.Errorf("evaluation: campaign publish: load verification report: %w", reportErr)
+			}
 			if force {
 				if err := publication.ResetPublicationIdempotency(cmd.Context(), runID); err != nil {
 					return fmt.Errorf("evaluation: campaign publish: %w", err)
 				}
 			}
-			count, err := publication.PublishRunCatchUp(cmd.Context(), runID)
+			count, err := publication.PublishRunCatchUpWithVerification(cmd.Context(), runID, report)
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign publish: %w", err)
 			}

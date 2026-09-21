@@ -106,9 +106,6 @@ type LoadOptions struct {
 	// read-only provider-boundary hardware observer.
 	ProviderBoundaryObserverEnabled bool
 	ProviderBoundaryObserverID      string
-	// ProviderBoundaryObserverOllamaEnabled opts the observer into remote
-	// Ollama service lifecycle commands on the provider host.
-	ProviderBoundaryObserverOllamaEnabled bool
 
 	// ProvenanceOperatorEnabled marks the operator as the storage-side model
 	// provenance attestor at the model file site.
@@ -236,9 +233,6 @@ type InferenceConfig struct {
 type ProviderBoundaryObserverConfig struct {
 	Enabled    bool
 	ObserverID string
-	// OllamaEnabled opts the observer into remote Ollama service lifecycle
-	// Ollama CLI commands (stop/serve/ps) on the provider host.
-	OllamaEnabled bool
 }
 
 // ProvenanceOperatorConfig holds configuration for the storage-side model
@@ -754,9 +748,8 @@ func newProviderBoundaryObserverConfig(opts LoadOptions) ProviderBoundaryObserve
 		observerID = "g8e-provider-boundary-observer"
 	}
 	return ProviderBoundaryObserverConfig{
-		Enabled:       opts.ProviderBoundaryObserverEnabled,
-		ObserverID:    observerID,
-		OllamaEnabled: opts.ProviderBoundaryObserverOllamaEnabled,
+		Enabled:    opts.ProviderBoundaryObserverEnabled,
+		ObserverID: observerID,
 	}
 }
 

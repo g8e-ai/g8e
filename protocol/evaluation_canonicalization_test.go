@@ -40,6 +40,15 @@ var modelAssignmentResultVectorJSON []byte
 //go:embed vectors/eval/public_assignment_result.json
 var publicAssignmentResultVectorJSON []byte
 
+//go:embed vectors/eval/model_assignment_result_enriched.json
+var enrichedModelAssignmentResultVectorJSON []byte
+
+//go:embed vectors/eval/public_assignment_result_enriched.json
+var enrichedPublicAssignmentResultVectorJSON []byte
+
+//go:embed vectors/eval/run_verification_bound.json
+var boundVerificationReportVectorJSON []byte
+
 //go:embed vectors/eval/chat_probe_trace.json
 var chatProbeTraceVectorJSON []byte
 
@@ -107,6 +116,46 @@ func TestEvaluationAssignmentResultCanonicalizationMatchesCrossLanguageVector(t 
 	assert.Equal(t, encoded, canonical)
 	assert.Equal(t, evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE, result.GetLane())
 	assert.Len(t, result.GetModelInferences(), 1)
+}
+
+func TestEnrichedEvaluationAssignmentResultCanonicalizationPreservesPresence(t *testing.T) {
+	var vector evaluationCanonicalizationVector
+	require.NoError(t, json.Unmarshal(enrichedModelAssignmentResultVectorJSON, &vector))
+	result := &evalv1.EvaluationAssignmentResult{}
+	require.NoError(t, evalv1.UnmarshalCanonical([]byte(vector.CanonicalJSON), result))
+	canonical, err := evalv1.MarshalCanonical(result)
+	require.NoError(t, err)
+	assert.Equal(t, []byte(vector.CanonicalJSON), canonical)
+	assert.NotNil(t, result.GetModelInferences()[0].RetryCount)
+	assert.Equal(t, uint32(0), result.GetModelInferences()[0].GetRetryCount())
+	assert.Equal(t, uint64(500000000), result.GetScoredInferenceSpanNanos())
+	assert.Len(t, result.GetPolicyDecisions(), 1)
+}
+
+func TestEnrichedPublicAssignmentResultCanonicalizationIncludesApprovedFamilies(t *testing.T) {
+	var vector evaluationCanonicalizationVector
+	require.NoError(t, json.Unmarshal(enrichedPublicAssignmentResultVectorJSON, &vector))
+	projection := &evalv1.PublicAssignmentResultProjection{}
+	require.NoError(t, evalv1.UnmarshalCanonical([]byte(vector.CanonicalJSON), projection))
+	canonical, err := evalv1.MarshalCanonical(projection)
+	require.NoError(t, err)
+	assert.Equal(t, []byte(vector.CanonicalJSON), canonical)
+	assert.Equal(t, "tool-selection-1", projection.GetScenarioSummary().GetScenarioId())
+	assert.Len(t, projection.GetActivitySummary().GetModelActivity().GetRecords(), 1)
+	assert.Equal(t, evalv1.PublicVerificationProvenance_PUBLIC_VERIFICATION_PROVENANCE_BOUND, projection.GetVerificationMetadata().GetProvenance())
+}
+
+func TestBoundEvaluationVerificationReportCanonicalizationIncludesPopulationBinding(t *testing.T) {
+	var vector evaluationCanonicalizationVector
+	require.NoError(t, json.Unmarshal(boundVerificationReportVectorJSON, &vector))
+	report := &evalv1.EvaluationVerificationReport{}
+	require.NoError(t, evalv1.UnmarshalCanonical([]byte(vector.CanonicalJSON), report))
+	canonical, err := evalv1.MarshalCanonical(report)
+	require.NoError(t, err)
+	assert.Equal(t, []byte(vector.CanonicalJSON), canonical)
+	assert.Equal(t, "2.0.0", report.GetVerifierContractVersion())
+	assert.Equal(t, uint32(25), report.GetVerifiedAssignmentCount())
+	assert.Equal(t, report.GetExpectedAssignmentCount(), report.GetVerifiedAssignmentCount())
 }
 
 func TestChatProbeTraceDigestMatchesCrossLanguageVector(t *testing.T) {

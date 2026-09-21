@@ -25,7 +25,7 @@ Remote operators enroll through `g8e operator start` with capability flags store
 | Flag | CLI flag | Role |
 | --- | --- | --- |
 | **Inference Operator** | `--inference-enabled` | Governed L4/L5 inference PEP; sole scored path to the approved Ollama provider on the campaign host |
-| **Observer Operator** | `--provider-boundary-observer-enabled`; optional `--ollama` | Read-only GPU and system RAM sampling at the provider execution boundary; optional governed Ollama service restart when `--ollama` is set |
+| **Observer Operator** | `--provider-boundary-observer-enabled` | Read-only GPU and system RAM sampling at the provider execution boundary; no provider lifecycle or generic command authority |
 | **Provenance Operator** | `--provenance-operator-enabled`; `--model-storage-root <path>` | Storage-side SHA-256 attestation of model manifests and weight blobs |
 
 Production witness enrollment on the provider or storage host uses observer and/or provenance flags only; do not pass `--inference-enabled` on those hosts. See [Evaluations](./evals.md) and [Model Provenance](./model-provenance.md).

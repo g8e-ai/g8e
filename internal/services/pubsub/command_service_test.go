@@ -32,6 +32,10 @@ func TestPayloadToExecutionRequest(t *testing.T) {
 			Intent:         "list files",
 			VaultMode:      "raw",
 			TimeoutSeconds: 30,
+			Environment: map[string]string{
+				"OLLAMA_HOST": "http://inference.example:11434",
+			},
+			WorkingDirectory: "/var/lib/g8e",
 		}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
@@ -54,6 +58,9 @@ func TestPayloadToExecutionRequest(t *testing.T) {
 		assert.Equal(t, "list files", execReq.Intent)
 		assert.Equal(t, "raw", execReq.VaultMode)
 		assert.Equal(t, 30, execReq.TimeoutSeconds)
+		assert.Equal(t, map[string]string{"OLLAMA_HOST": "http://inference.example:11434"}, execReq.Environment)
+		require.NotNil(t, execReq.WorkingDirectory)
+		assert.Equal(t, "/var/lib/g8e", *execReq.WorkingDirectory)
 	})
 
 	t.Run("rejects invalid protobuf", func(t *testing.T) {

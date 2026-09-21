@@ -5,7 +5,7 @@
 // Static copy for first-time visitors; live methodology data for metrics,
 // datasets, suites, and active limitations.
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { useStoreState } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
 import { EmptyState, QualityBadge, StatTile } from '../components/shared';
@@ -366,7 +366,7 @@ const DOC_NAV = [
   { id: 'reference', label: 'Reference' },
 ] as const;
 
-function scrollToSection(id: string, event: React.MouseEvent<HTMLAnchorElement>) {
+function scrollToSection(id: string, event: MouseEvent<HTMLAnchorElement>) {
   event.preventDefault();
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 }

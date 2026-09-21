@@ -21,6 +21,7 @@ import {
   EvaluationAssignmentResultSchema,
   EvaluationCampaignSpecSchema,
   EvaluationReportSchema,
+  EvaluationVerificationReportSchema,
   PublicAssignmentResultProjectionSchema,
 } from '../src/gen/g8e/eval/v1/eval_pb.ts';
 
@@ -91,7 +92,7 @@ describe('evaluation model campaign descriptor stays in sync with generated prot
   it('descriptor metadata matches the eval package', () => {
     assert.equal(descriptor.schema_version, '1.0.0');
     assert.equal(descriptor.protobuf_package, 'g8e.eval.v1');
-    assert.equal(descriptor.canonical_vectors.length, 4);
+    assert.equal(descriptor.canonical_vectors.length, 7);
   });
 
   for (const [enumName, values] of Object.entries(descriptor.enums)) {
@@ -151,6 +152,32 @@ describe('evaluation canonical vectors round-trip through TypeScript', () => {
       assert: (message: ReturnType<typeof create<typeof PublicAssignmentResultProjectionSchema>>) => {
         assert.equal(message.assignmentId, 'assign-1');
         assert.equal(message.verificationStatus, 'verified');
+      },
+    },
+    {
+      filename: 'model_assignment_result_enriched.json',
+      schema: EvaluationAssignmentResultSchema,
+      assert: (message: ReturnType<typeof create<typeof EvaluationAssignmentResultSchema>>) => {
+        assert.equal(message.assignmentId, 'assign-enriched');
+        assert.equal(message.modelInferences[0]?.retryCount, 0);
+        assert.equal(message.scoredInferenceSpanNanos, 500000000n);
+      },
+    },
+    {
+      filename: 'public_assignment_result_enriched.json',
+      schema: PublicAssignmentResultProjectionSchema,
+      assert: (message: ReturnType<typeof create<typeof PublicAssignmentResultProjectionSchema>>) => {
+        assert.equal(message.assignmentId, 'assign-enriched');
+        assert.equal(message.scenarioSummary?.scenarioId, 'tool-selection-1');
+        assert.equal(message.activitySummary?.modelActivity?.records.length, 1);
+      },
+    },
+    {
+      filename: 'run_verification_bound.json',
+      schema: EvaluationVerificationReportSchema,
+      assert: (message: ReturnType<typeof create<typeof EvaluationVerificationReportSchema>>) => {
+        assert.equal(message.verifierContractVersion, '2.0.0');
+        assert.equal(message.verifiedAssignmentCount, 25);
       },
     },
   ] as const;

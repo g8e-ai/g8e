@@ -49,7 +49,7 @@ func TestEvaluationModelCampaignDescriptorMatchesProtobuf(t *testing.T) {
 	assert.Equal(t, "g8e.eval.v1", descriptor.ProtobufPackage)
 	require.NotEmpty(t, descriptor.Enums)
 	require.NotEmpty(t, descriptor.Messages)
-	require.Len(t, descriptor.CanonicalVectors, 4)
+	require.Len(t, descriptor.CanonicalVectors, 7)
 
 	for enumName, values := range descriptor.Enums {
 		t.Run("enum/"+enumName, func(t *testing.T) {
@@ -141,11 +141,12 @@ func messageFieldNames(descriptor protoreflect.MessageDescriptor) ([]string, []s
 }
 
 func isPublicModelCampaignMessage(name string) bool {
-	return name == "PublicCampaignIdentity" ||
-		name == "PublicModelVariantIdentity" ||
-		name == "PublicAssignmentLifecycleRecord" ||
-		name == "PublicModelCallSummary" ||
-		name == "PublicAssignmentResultProjection"
+	switch name {
+	case "PublicCampaignIdentity", "PublicModelVariantIdentity", "PublicAssignmentLifecycleRecord", "PublicModelCallSummary", "PublicScenarioCriterion", "PublicToolScoreDimensionRequirement", "PublicScenarioSummary", "PublicSemanticGradeSummary", "PublicModelActivityRecord", "PublicToolDecisionActivityRecord", "PublicToolCallActivityRecord", "PublicPolicyDecisionActivityRecord", "PublicGovernedActionActivityRecord", "PublicModelActivity", "PublicToolDecisionActivity", "PublicToolCallActivity", "PublicPolicyDecisionActivity", "PublicGovernedActionActivity", "PublicAssignmentActivitySummary", "PublicEvidenceBinding", "PublicVerificationMetadata", "PublicAssignmentResultProjection":
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeStringSlice(values []string) []string {

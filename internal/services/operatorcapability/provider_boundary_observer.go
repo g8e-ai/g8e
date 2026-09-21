@@ -21,7 +21,6 @@ type ProviderBoundaryObserverStatus struct {
 	OperatorSessionID string
 	Status            string
 	ObserverEnabled   bool
-	OllamaEnabled     bool
 	Platform          string
 }
 
@@ -44,7 +43,6 @@ func ActiveProviderBoundaryObservers(operators []models.OperatorDocumentGo) []Pr
 			OperatorSessionID: op.OperatorSessionID,
 			Status:            string(op.Status),
 			ObserverEnabled:   true,
-			OllamaEnabled:     ProviderBoundaryObserverOllamaEnabled(op.RuntimeConfig),
 			Platform:          op.RuntimeConfig.Platform,
 		})
 	}

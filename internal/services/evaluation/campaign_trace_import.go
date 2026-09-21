@@ -9,6 +9,7 @@ package evaluation
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -67,22 +68,36 @@ func ImportAssignmentResultFromTrace(req AssignmentExecutionRequest, trace map[s
 	if err != nil {
 		return nil, err
 	}
+	modelInferences, scoredSpan, err := modelInferenceRecordsFromTrace(req.Assignment, req.AttemptID, candidate, trace, newID)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: import assignment result from trace: model telemetry: %w", err)
+	}
+	policyDecisions, err := policyDecisionRecordsFromTrace(req.Assignment, trace)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: import assignment result from trace: policy telemetry: %w", err)
+	}
 	result := &evalv1.EvaluationAssignmentResult{
-		SchemaVersion:       CampaignSchemaVersion,
-		AssignmentId:        req.Assignment.GetAssignmentId(),
-		RunId:               req.Assignment.GetRunId(),
-		CampaignId:          req.Assignment.GetCampaignId(),
-		Lane:                req.Assignment.GetLane(),
-		LifecycleStatus:     lifecycle,
-		ModelInferences:     modelInferenceRecordsFromTrace(req.Assignment, req.AttemptID, candidate, trace, newID),
-		ToolDecisions:       toolDecisionRecordsFromTrace(req.Assignment, trace, newID),
-		ToolCalls:           toolCallRecordsFromTrace(req.Assignment, trace, newID),
-		GovernedActions:     governedActionBindingsFromTrace(req.Assignment, trace, newID),
-		DeterministicGrades: grading.DeterministicGrades,
-		SemanticGrades:      mergeSemanticGrades(grading.SemanticGrades, semanticGradesFromTrace(req.Assignment.GetAssignmentId(), trace)),
-		GraderCalls:         graderCallRecordsFromTrace(req.Assignment, trace, newID),
-		DecomposedScores:    grading.DecomposedScores,
-		CompletedAt:         timestamppb.New(now),
+		SchemaVersion:            CampaignSchemaVersion,
+		AssignmentId:             req.Assignment.GetAssignmentId(),
+		RunId:                    req.Assignment.GetRunId(),
+		CampaignId:               req.Assignment.GetCampaignId(),
+		Lane:                     req.Assignment.GetLane(),
+		LifecycleStatus:          lifecycle,
+		ModelInferences:          modelInferences,
+		ToolDecisions:            toolDecisionRecordsFromTrace(req.Assignment, trace, newID),
+		ToolCalls:                toolCallRecordsFromTrace(req.Assignment, trace, newID),
+		GovernedActions:          governedActionBindingsFromTrace(req.Assignment, trace, newID),
+		DeterministicGrades:      grading.DeterministicGrades,
+		SemanticGrades:           mergeSemanticGrades(grading.SemanticGrades, semanticGradesFromTrace(req.Assignment.GetAssignmentId(), trace)),
+		GraderCalls:              graderCallRecordsFromTrace(req.Assignment, trace, newID),
+		DecomposedScores:         grading.DecomposedScores,
+		PolicyDecisions:          policyDecisions,
+		ToolDecisionsCaptured:    traceFieldCaptured(trace, "tool_decisions"),
+		ToolCallsCaptured:        traceFieldCaptured(trace, "tool_calls"),
+		GovernedActionsCaptured:  traceFieldCaptured(trace, "governed_actions"),
+		PolicyDecisionsCaptured:  traceFieldCaptured(trace, "policy_decisions"),
+		ScoredInferenceSpanNanos: scoredSpan,
+		CompletedAt:              timestamppb.New(now),
 	}
 	if traceEvidence != nil {
 		result.EvidenceRefs = []*compliancev1.ComplianceEvidenceReference{traceEvidence}
@@ -303,13 +318,18 @@ func boolValue(raw any) bool {
 	return ok && value
 }
 
-func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, attemptID string, candidate *evalv1.ModelVariant, trace map[string]any, newID func(string) string) []*evalv1.ModelInferenceRecord {
-	modelCalls, _ := trace["model_calls"].([]any)
+func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, attemptID string, candidate *evalv1.ModelVariant, trace map[string]any, newID func(string) string) ([]*evalv1.ModelInferenceRecord, *uint64, error) {
+	modelCalls, ok := trace["model_calls"].([]any)
+	if !ok {
+		return nil, nil, fmt.Errorf("model_calls must be an array")
+	}
 	records := make([]*evalv1.ModelInferenceRecord, 0, len(modelCalls))
+	var monotonicStarts []uint64
+	var monotonicEnds []uint64
 	for _, rawCall := range modelCalls {
 		call, ok := rawCall.(map[string]any)
 		if !ok {
-			continue
+			return nil, nil, fmt.Errorf("model call must be an object")
 		}
 		provider, _ := call["provider"].(string)
 		if !strings.EqualFold(provider, "G8EProvider") {
@@ -332,35 +352,154 @@ func modelInferenceRecordsFromTrace(assignment *evalv1.EvaluationAssignment, att
 			CallSite:            stringValue(call["call_site"]),
 			ModelVariant:        candidate,
 			InputHash:           stringValue(call["normalized_request_hash"]),
-			OutputHash:          stringValue(call["output_hash"]),
+			OutputHash:          stringValue(call["governed_output_hash"]),
 			ResultDigest:        stringValue(call["governed_result_digest"]),
 			PrivacyAttested:     true,
+			UsageAvailability:   evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE,
+			FinishReason:        stringValue(call["finish_reason"]),
 		}
-		if loadDuration := durationSecondsToNanos(call["load_duration_seconds"]); loadDuration > 0 {
-			record.LoadDurationNanos = loadDuration
-		}
-		if generationDuration := durationSecondsToNanos(call["generation_duration_seconds"]); generationDuration > 0 {
-			record.GenerationDurationNanos = generationDuration
-		}
-		if totalDuration := durationSecondsToNanos(call["total_duration_seconds"]); totalDuration > 0 {
-			record.TotalDurationNanos = totalDuration
-		}
-		if ttft := durationSecondsToNanos(call["time_to_first_token_seconds"]); ttft > 0 {
-			if monotonicStart := floatSeconds(call["monotonic_start"]); monotonicStart > 0 {
-				record.RequestStartedAtUnixNanos = uint64(monotonicStart * 1_000_000_000)
-				record.FirstTokenAtUnixNanos = record.RequestStartedAtUnixNanos + ttft
+		if reported, present := call["usage_reported"]; present {
+			value, ok := reported.(bool)
+			if !ok {
+				return nil, nil, fmt.Errorf("usage_reported must be a boolean")
+			}
+			if value {
+				record.UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED
+				counters := []struct {
+					name string
+					dest *uint32
+				}{
+					{"input_tokens", &record.PromptTokens}, {"output_tokens", &record.CompletionTokens},
+					{"thinking_tokens", &record.ThinkingTokens}, {"cache_tokens", &record.CacheTokens},
+				}
+				for _, counter := range counters {
+					value, present := call[counter.name]
+					if !present {
+						return nil, nil, fmt.Errorf("usage_reported call missing %s", counter.name)
+					}
+					converted, err := uint32Value(value)
+					if err != nil {
+						return nil, nil, fmt.Errorf("%s: %w", counter.name, err)
+					}
+					*counter.dest = converted
+				}
+			} else {
+				record.UsageAvailability = evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_UNAVAILABLE
 			}
 		}
-		if transactionID, _ := call["governed_transaction_id"].(string); transactionID != "" {
+		if retry, present := call["retry_count"]; present {
+			converted, err := uint32Value(retry)
+			if err != nil {
+				return nil, nil, fmt.Errorf("retry_count: %w", err)
+			}
+			if converted > 1000 {
+				return nil, nil, fmt.Errorf("retry_count exceeds 1000")
+			}
+			record.RetryCount = &converted
+		}
+		for _, duration := range []struct {
+			name string
+			dest *uint64
+		}{{"load_duration_seconds", &record.LoadDurationNanos}, {"generation_duration_seconds", &record.GenerationDurationNanos}, {"total_duration_seconds", &record.TotalDurationNanos}} {
+			if raw, present := call[duration.name]; present && raw != nil {
+				converted, err := durationSecondsToNanosChecked(raw)
+				if err != nil {
+					return nil, nil, fmt.Errorf("%s: %w", duration.name, err)
+				}
+				*duration.dest = converted
+			}
+		}
+		if transactionID := stringValue(call["governed_transaction_id"]); transactionID != "" {
 			record.GovernedReceiptRef = &compliancev1.ComplianceEvidenceReference{
 				ArtifactId:   transactionID,
 				ArtifactType: string(complianceevidence.ArtifactTypeEvalReceipt),
 				SchemaRef:    "g8e.operator.v1.ActionReceipt",
 			}
 		}
+		if start, end, complete, err := monotonicCallBounds(call); err != nil {
+			return nil, nil, err
+		} else if complete {
+			monotonicStarts = append(monotonicStarts, start)
+			monotonicEnds = append(monotonicEnds, end)
+		}
 		records = append(records, record)
 	}
-	return records
+	var span *uint64
+	if len(records) > 0 && len(monotonicStarts) == len(records) {
+		minStart, maxEnd := monotonicStarts[0], monotonicEnds[0]
+		for index := 1; index < len(monotonicStarts); index++ {
+			if monotonicStarts[index] < minStart {
+				minStart = monotonicStarts[index]
+			}
+			if monotonicEnds[index] > maxEnd {
+				maxEnd = monotonicEnds[index]
+			}
+		}
+		if maxEnd < minStart {
+			return nil, nil, fmt.Errorf("scored inference monotonic span is negative")
+		}
+		value := maxEnd - minStart
+		span = &value
+	}
+	return records, span, nil
+}
+
+func policyDecisionRecordsFromTrace(assignment *evalv1.EvaluationAssignment, trace map[string]any) ([]*evalv1.PolicyDecisionRecord, error) {
+	raw, present := trace["policy_decisions"]
+	if !present {
+		return nil, nil
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("policy_decisions must be an array")
+	}
+	records := make([]*evalv1.PolicyDecisionRecord, 0, len(items))
+	for _, item := range items {
+		decision, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("policy decision must be an object")
+		}
+		decisionID, ok := decision["decision_id"].(string)
+		if !ok || decisionID == "" {
+			return nil, fmt.Errorf("policy decision requires decision_id")
+		}
+		toolName, ok := decision["tool_name"].(string)
+		if !ok {
+			return nil, fmt.Errorf("policy decision tool_name must be a string")
+		}
+		outcome, ok := policyDecisionOutcome(decision["outcome"])
+		if !ok {
+			return nil, fmt.Errorf("policy decision has unknown outcome")
+		}
+		detail, ok := decision["detail"].(string)
+		if !ok {
+			return nil, fmt.Errorf("policy decision detail must be a string")
+		}
+		records = append(records, &evalv1.PolicyDecisionRecord{DecisionId: decisionID, AssignmentId: assignment.GetAssignmentId(), ToolName: toolName, Outcome: outcome, Detail: detail})
+	}
+	return records, nil
+}
+
+func policyDecisionOutcome(raw any) (evalv1.EvaluationPolicyDecisionOutcome, bool) {
+	value, ok := raw.(string)
+	if !ok {
+		return evalv1.EvaluationPolicyDecisionOutcome_EVALUATION_POLICY_DECISION_OUTCOME_UNSPECIFIED, false
+	}
+	switch value {
+	case "allow":
+		return evalv1.EvaluationPolicyDecisionOutcome_EVALUATION_POLICY_DECISION_OUTCOME_ALLOW, true
+	case "deny":
+		return evalv1.EvaluationPolicyDecisionOutcome_EVALUATION_POLICY_DECISION_OUTCOME_DENY, true
+	case "refused":
+		return evalv1.EvaluationPolicyDecisionOutcome_EVALUATION_POLICY_DECISION_OUTCOME_REFUSED, true
+	default:
+		return evalv1.EvaluationPolicyDecisionOutcome_EVALUATION_POLICY_DECISION_OUTCOME_UNSPECIFIED, false
+	}
+}
+
+func traceFieldCaptured(trace map[string]any, field string) bool {
+	_, present := trace[field]
+	return present
 }
 
 func parseModelCampaignRole(raw any) evalv1.ModelCampaignRole {
@@ -382,27 +521,72 @@ func stringValue(raw any) string {
 	return value
 }
 
-func floatSeconds(raw any) float64 {
+func durationSecondsToNanosChecked(raw any) (uint64, error) {
+	seconds, ok := numericFloat(raw)
+	if !ok || math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds < 0 {
+		return 0, fmt.Errorf("must be a finite nonnegative number")
+	}
+	converted := math.Round(seconds * 1_000_000_000)
+	if converted >= float64(^uint64(0)) {
+		return 0, fmt.Errorf("is outside uint64 nanosecond range")
+	}
+	return uint64(converted), nil
+}
+
+func uint32Value(raw any) (uint32, error) {
+	value, ok := numericFloat(raw)
+	if !ok || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > float64(^uint32(0)) || math.Trunc(value) != value {
+		return 0, fmt.Errorf("must be a finite nonnegative integer")
+	}
+	return uint32(value), nil
+}
+
+func numericFloat(raw any) (float64, bool) {
 	switch value := raw.(type) {
 	case float64:
-		return value
+		return value, true
 	case float32:
-		return float64(value)
+		return float64(value), true
 	case int:
-		return float64(value)
+		return float64(value), true
 	case int64:
-		return float64(value)
+		return float64(value), true
+	case uint64:
+		return float64(value), true
+	case uint32:
+		return float64(value), true
+	case int32:
+		return float64(value), true
+	case int16:
+		return float64(value), true
+	case uint:
+		return float64(value), true
 	default:
-		return 0
+		return 0, false
 	}
 }
 
-func durationSecondsToNanos(raw any) uint64 {
-	seconds := floatSeconds(raw)
-	if seconds <= 0 {
-		return 0
+func monotonicCallBounds(call map[string]any) (uint64, uint64, bool, error) {
+	rawStart, startPresent := call["monotonic_start"]
+	rawEnd, endPresent := call["monotonic_end"]
+	if !startPresent && !endPresent {
+		return 0, 0, false, nil
 	}
-	return uint64(seconds * 1_000_000_000)
+	if !startPresent || !endPresent {
+		return 0, 0, false, nil
+	}
+	start, err := durationSecondsToNanosChecked(rawStart)
+	if err != nil {
+		return 0, 0, false, fmt.Errorf("monotonic_start: %w", err)
+	}
+	end, err := durationSecondsToNanosChecked(rawEnd)
+	if err != nil {
+		return 0, 0, false, fmt.Errorf("monotonic_end: %w", err)
+	}
+	if end < start {
+		return 0, 0, false, fmt.Errorf("monotonic_end precedes monotonic_start")
+	}
+	return start, end, true, nil
 }
 
 // BuildAssignmentTraceEvidenceReference returns a content-addressed evidence

@@ -17,7 +17,7 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-func validateOllamaServiceDispatch(op *models.OperatorDocumentGo, actionType string, payload []byte) error {
+func validateWitnessCommandDispatch(op *models.OperatorDocumentGo, actionType string, payload []byte) error {
 	if op == nil || actionType != string(constants.ActionTypeExecuteBash) {
 		return nil
 	}
@@ -29,5 +29,5 @@ func validateOllamaServiceDispatch(op *models.OperatorDocumentGo, actionType str
 	if !ok || cmdReq == nil {
 		return nil
 	}
-	return operatorcapability.ValidateOllamaServiceCommand(op.RuntimeConfig, cmdReq.GetCommand())
+	return operatorcapability.ValidateWitnessCommand(op.RuntimeConfig, cmdReq.GetCommand())
 }

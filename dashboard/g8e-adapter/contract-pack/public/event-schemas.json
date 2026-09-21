@@ -1,4 +1,37 @@
 {
+  "assignment_record_schemas": {
+    "enriched_fields": [
+      "scenario_summary",
+      "semantic_grade_summaries",
+      "activity_summary",
+      "evidence_bindings",
+      "verification_metadata",
+      "benchmark_observations",
+      "resource_summary"
+    ],
+    "envelope_versions": [
+      "1.0.0",
+      "1.1.0"
+    ],
+    "limits": {
+      "max_activity_records": 128,
+      "max_evidence_bindings": 32,
+      "max_record_bytes": 262144,
+      "max_text_bytes": 512
+    },
+    "message_types": [
+      "PublicAssignmentLifecycleRecord",
+      "PublicAssignmentResultProjection"
+    ],
+    "prohibited_claims": [
+      "raw_prompt",
+      "model_output",
+      "private_evidence",
+      "receipt_internals",
+      "protocol_authorization",
+      "individual_verification"
+    ]
+  },
   "event_types": {
     "error": {
       "payload_model": "public_stream_sentinel"

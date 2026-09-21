@@ -5,7 +5,7 @@ const projectRoot = new URL('../', import.meta.url);
 const distRoot = new URL('dist/', projectRoot);
 const expectedRuntime = '{\n  "schema_version": "1.0.0",\n  "mirror_origin": "https://opendevops.ai"\n}\n';
 const allowedRootFiles = new Set(['_headers', 'index.html', 'runtime.json']);
-const allowedAssetExtensions = new Set(['.css', '.js']);
+const allowedAssetExtensions = new Set(['.css', '.js', '.json']);
 const prohibited = [
   /http:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):(?:8080|8081|8082|8443)\b/i,
   /spiffe:\/\//i,

@@ -40,6 +40,7 @@ import {
   adaptCampaignProjectionEnvelope,
   campaignProgressCounts,
   campaignRunIdFromDatasetId,
+  cloneCampaignAdaptContext,
   createCampaignAdaptContext,
   isCampaignProjectionEnvelope,
   recordCampaignMatrixTotal,
@@ -338,8 +339,11 @@ export class EvalStore {
         payload.model_role_mapping = {};
       }
       if (isCampaignProjectionEnvelope(payload)) {
-        const adapted = adaptCampaignProjectionEnvelope(payload, this.campaignContext);
-        for (const decoded of adapted) {
+        const candidateContext = cloneCampaignAdaptContext(this.campaignContext);
+        const adapted = adaptCampaignProjectionEnvelope(payload, candidateContext);
+        const validated = adapted.map((decoded) => decodeViewRecord(decoded.kind, decoded));
+        this.campaignContext = candidateContext;
+        for (const decoded of validated) {
           this.indexRecord(state, decoded, record.sequence);
         }
         return;

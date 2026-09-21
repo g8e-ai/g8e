@@ -26,6 +26,8 @@ import type {
   MetricValue,
   ModelRole,
   ModelSummary,
+  PublicGradeExplanationCode,
+  PublicSemanticGradeSummary,
   QualityState,
   SuiteSummary,
   TerminalStatus,
@@ -339,6 +341,21 @@ export function assignmentMetricEntries(
       return byOrder !== 0 ? byOrder : left.localeCompare(right);
     })
     .map(([key, metric]) => ({ key, label: assignmentMetricLabel(key), metric }));
+}
+
+export function publicGradeExplanationLabel(code: PublicGradeExplanationCode): string {
+  switch (code) {
+    case 'criterion_passed': return 'Criterion passed';
+    case 'criterion_failed': return 'Criterion failed';
+    case 'evidence_unavailable': return 'Evidence unavailable';
+    case 'unsupported': return 'Unsupported';
+    case 'invalid_evidence': return 'Invalid evidence';
+    case 'grader_unavailable': return 'Grader unavailable';
+  }
+}
+
+export function publicGradeSummaries(assignment: AssignmentResult): PublicSemanticGradeSummary[] {
+  return [...(assignment.semantic_grade_summaries ?? [])].sort((left, right) => left.criterion_id.localeCompare(right.criterion_id));
 }
 
 /** Formatter for one assignment-level scoring metric card. */
@@ -666,6 +683,12 @@ export function readWorkingSelection(catalog: CatalogSnapshot | undefined): Work
 
 /** Other repetitions of the same task for the same variant within the run —
  *  the repeatability context for an assignment detail page. */
+export const SCENARIO_NOT_APPLICABLE_REASON = 'tool use not required by this scenario';
+
+export function isScenarioNotApplicableMetric(metric: MetricValue): boolean {
+  return metric.value === undefined && metric.unavailable_reason === SCENARIO_NOT_APPLICABLE_REASON;
+}
+
 export function siblingRepetitions(
   assignment: AssignmentResult,
   assignments: AssignmentResult[],
@@ -677,9 +700,10 @@ export function siblingRepetitions(
         a.run_id === assignment.run_id &&
         a.task_id === assignment.task_id &&
         a.variant_id === assignment.variant_id &&
+        a.role === assignment.role &&
         a.dataset_id === assignment.dataset_id,
     )
-    .sort((a, b) => a.repetition - b.repetition);
+    .sort((a, b) => a.repetition - b.repetition || a.assignment_id.localeCompare(b.assignment_id));
 }
 
 /** Sum of observed provider retries for a variant — used by the model

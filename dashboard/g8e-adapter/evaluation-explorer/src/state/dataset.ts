@@ -91,7 +91,8 @@ function defaultDatasetId(
   const verifiedLive = Array.from(evaluations)
     .filter((summary) => summary.dataset_id.startsWith('ds-live-') && summary.quality_state === 'verified_public')
     .sort((a, b) => (b.observed_at ?? '').localeCompare(a.observed_at ?? ''));
-  if (verifiedLive.length > 0) return verifiedLive[0].dataset_id;
+  const newestVerifiedLive = verifiedLive[0];
+  if (newestVerifiedLive) return newestVerifiedLive.dataset_id;
 
   const verifiedSnapshot = options.find((o) => o.available && o.kind === 'verified_public_snapshot');
   if (verifiedSnapshot) return verifiedSnapshot.id;

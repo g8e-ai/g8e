@@ -2,11 +2,11 @@
   "files": [
     {
       "path": "disclosure-matrix.json",
-      "sha256": "b86b4b1fbddf8b40589142fedfbf5de95d6de8cf6356e73507c04e22b9c375bd"
+      "sha256": "fa9489fe8cb8bfd3f80d79babebdb71bf57667cbddbdc3af7250482bd473a7be"
     },
     {
       "path": "event-schemas.json",
-      "sha256": "1e23b01756ead0d711c9d2146db0da5c6e329d936d939cd487613910481fd158"
+      "sha256": "1d1a8c5f2a0ad2be51a661664a9ebbae77fbbcdf811127eda718942a86fdefcb"
     },
     {
       "path": "fixtures/active.json",
@@ -34,7 +34,7 @@
     },
     {
       "path": "models.ts",
-      "sha256": "4e0eee77766c42110c71a7463e3dc39eab8a6408a48bfc902d5d5cbab70f2b0b"
+      "sha256": "81e5d1c120aef881ec3bf5f16e36c5d5c7c4d83d59dab3ac778b29ca86751cae"
     },
     {
       "path": "offline-verifier.md",

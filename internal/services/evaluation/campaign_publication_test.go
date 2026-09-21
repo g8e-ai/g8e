@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -178,7 +180,8 @@ func TestCampaignPublicationCoordinatorPublishRunVerification(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
 	exporter := &recordingCampaignFeedExporter{}
-	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	publicationState := NewMemoryCampaignPublicationStateStore()
+	coordinator := NewCampaignPublicationCoordinator(store, files, publicationState, exporter, nil)
 	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" }).WithPublication(coordinator)
 	req := testCampaignInitRequest(t)
 	catalog := req.Catalog
@@ -195,21 +198,53 @@ func TestCampaignPublicationCoordinatorPublishRunVerification(t *testing.T) {
 	require.NoError(t, err)
 	_, err = controller.ScheduleHomogeneousRun(context.Background(), run.GetRunId())
 	require.NoError(t, err)
-	_, _, err = controller.ExecuteNextAssignment(context.Background(), run.GetRunId(), CampaignExecutionBinding{
-		InferenceOperatorSessionID: "inf-session",
-		DataOperatorID:             "data-op",
-		DataOperatorSessionID:      "data-session",
-		ModelRegistryDigest:        req.Inventory.RegistryDigest,
-		ModelRegistry:              InferenceVariantsFromEvalRegistry(req.Inventory.Variants),
-	}, req.ScenarioArtifacts)
-	require.NoError(t, err)
-	report := &evalv1.EvaluationVerificationReport{
-		SchemaVersion: CampaignSchemaVersion,
-		ReportId:      run.GetRunId(),
-		RunId:         run.GetRunId(),
-		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
-		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+	for i := 0; i < 3; i++ {
+		_, _, err = controller.ExecuteNextAssignment(context.Background(), run.GetRunId(), CampaignExecutionBinding{
+			InferenceOperatorSessionID: "inf-session",
+			DataOperatorID:             "data-op",
+			DataOperatorSessionID:      "data-session",
+			ModelRegistryDigest:        req.Inventory.RegistryDigest,
+			ModelRegistry:              InferenceVariantsFromEvalRegistry(req.Inventory.Variants),
+		}, req.ScenarioArtifacts)
+		require.NoError(t, err)
 	}
+	report := &evalv1.EvaluationVerificationReport{
+		SchemaVersion:           "2.0.0",
+		ReportId:                run.GetRunId(),
+		RunId:                   run.GetRunId(),
+		Status:                  evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		VerifiedAt:              timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+		VerifierReleaseVersion:  "test-release",
+		VerifierContractVersion: "2.0.0",
+		ReportDigestRef:         &compliancev1.ComplianceEvidenceReference{Sha256: strings.Repeat("a", 64)},
+	}
+	assignments, err := store.ListAssignments(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	results := make(map[string]*evalv1.EvaluationAssignmentResult, len(assignments))
+	for _, assignment := range assignments {
+		exists, existsErr := store.AssignmentResultExists(context.Background(), run.GetRunId(), assignment.GetAssignmentId())
+		require.NoError(t, existsErr)
+		if !exists {
+			continue
+		}
+		result, loadErr := store.LoadAssignmentResult(context.Background(), run.GetRunId(), assignment.GetAssignmentId())
+		require.NoError(t, loadErr)
+		results[assignment.GetAssignmentId()] = result
+	}
+	spec, err := store.LoadCampaignSpec(context.Background(), run.GetCampaignBinding().GetCampaignId())
+	require.NoError(t, err)
+	catalog, err = store.LoadScenarioCatalog(context.Background(), run.GetCampaignBinding().GetCampaignId())
+	require.NoError(t, err)
+	applicability, err := BuildRunVerificationApplicability(run, spec, catalog, assignments, results, report)
+	require.NoError(t, err)
+	populationDigest, err := digestProto(applicability.Population)
+	require.NoError(t, err)
+	report.VerifiedPopulationDigest = populationDigest
+	report.ExpectedAssignmentCount = applicability.ExpectedAssignmentCount
+	report.VerifiedAssignmentCount = applicability.VerifiedAssignmentCount
+	report.CampaignDigest = spec.GetCampaignDigest()
+	report.CatalogDigest = spec.GetCatalogDigest()
+	report.ModelRegistryDigest = spec.GetModelRegistryDigest()
 	before := len(exporter.records)
 	count, err := coordinator.PublishRunVerification(context.Background(), run.GetRunId(), report)
 	require.NoError(t, err)
@@ -227,6 +262,45 @@ func TestCampaignPublicationCoordinatorPublishRunVerification(t *testing.T) {
 	}
 	require.NotNil(t, summary)
 	assert.Equal(t, "passed", summary["verifier_state"])
+
+	modelSummaries := make([]map[string]any, 0)
+	for _, record := range exporter.records[len(exporter.records)-count:] {
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal([]byte(record.RecordBytes), &payload))
+		if payload["kind"] == "model_summary" {
+			modelSummaries = append(modelSummaries, payload)
+		}
+	}
+	require.Len(t, modelSummaries, 3)
+	roles := make(map[string]struct{}, len(modelSummaries))
+	for _, modelSummary := range modelSummaries {
+		assert.Equal(t, "exploratory_verified", modelSummary["quality_state"])
+		assert.Equal(t, CampaignDatasetID(run.GetRunId()), modelSummary["dataset_id"])
+		assert.NotEmpty(t, modelSummary["variant_id"])
+		role, ok := modelSummary["role"].(string)
+		require.True(t, ok)
+		roles[role] = struct{}{}
+	}
+	assert.Equal(t, map[string]struct{}{"assistant": {}, "lite": {}, "primary": {}}, roles)
+
+	state, err := publicationState.Load(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	filteredKeys := make([]string, 0, len(state.PublishedIdempotency))
+	for _, key := range state.PublishedIdempotency {
+		if !strings.Contains(key, ":verification:model:") {
+			filteredKeys = append(filteredKeys, key)
+		}
+	}
+	filteredKeys = append(filteredKeys, RunVerificationIdempotencyKey(run.GetRunId()))
+	state.PublishedIdempotency = filteredKeys
+	require.NoError(t, publicationState.Save(context.Background(), state))
+
+	backfillCount, err := coordinator.PublishRunVerification(context.Background(), run.GetRunId(), report)
+	require.NoError(t, err)
+	assert.Equal(t, 3, backfillCount)
+	retryCount, err := coordinator.PublishRunVerification(context.Background(), run.GetRunId(), report)
+	require.NoError(t, err)
+	assert.Equal(t, 0, retryCount)
 }
 
 func TestCampaignPublicationCoordinatorForceRepublish(t *testing.T) {
@@ -301,6 +375,10 @@ func TestCampaignPublicationCoordinatorPublishAssignmentResultUsesRemoteObservat
 	ctx := context.Background()
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
+	req := testCampaignInitRequest(t)
+	controller := NewCampaignController(store, nil, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+	run, err := controller.InitializeCampaign(ctx, req)
+	require.NoError(t, err)
 	exporter := &recordingCampaignFeedExporter{}
 	attempt := &operatorv1.InferenceProviderAttemptRecord{
 		ProviderAttemptId: "attempt-remote",
@@ -335,14 +413,16 @@ func TestCampaignPublicationCoordinatorPublishAssignmentResultUsesRemoteObservat
 	})
 	assignment := &evalv1.EvaluationAssignment{
 		AssignmentId:    "assign-1",
-		RunId:           "run-1",
-		ScenarioId:      "instruction-exact-format",
+		RunId:           run.GetRunId(),
+		CampaignId:      run.GetCampaignBinding().GetCampaignId(),
+		ScenarioId:      req.Catalog.GetScenarios()[0].GetScenarioId(),
+		ScenarioRef:     &compliancev1.VersionedReference{Id: req.Catalog.GetScenarios()[0].GetScenarioId(), Version: req.Catalog.GetScenarios()[0].GetScenarioVersion()},
 		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
 		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
 	}
 	result := &evalv1.EvaluationAssignmentResult{
 		AssignmentId: "assign-1",
-		RunId:        "run-1",
+		RunId:        run.GetRunId(),
 		ModelInferences: []*evalv1.ModelInferenceRecord{{
 			InferenceRecordId: "inference-1",
 			ProviderAttemptId: "attempt-remote",

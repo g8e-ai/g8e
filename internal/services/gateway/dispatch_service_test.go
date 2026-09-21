@@ -10,6 +10,7 @@ package gateway
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -613,6 +614,40 @@ func TestDispatchController_HandleDispatch_ValidationFails(t *testing.T) {
 	ctrl.HandleDispatch(rr, req)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestDispatchController_HandleDispatch_WitnessCommandRejectedAsUnprocessableEntity(t *testing.T) {
+	observer := &models.OperatorDocumentGo{
+		ID:                "observer-op",
+		OperatorSessionID: "observer-session",
+		RuntimeConfig:     &models.RuntimeConfig{ProviderBoundaryObserverEnabled: true},
+	}
+	dispatchSvc, _ := newTestDispatchService(t, "root-abc", observer)
+	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	ctrl := newDispatchController(DispatchControllerDeps{
+		DispatchSvc: dispatchSvc,
+		Responder:   response.NewWriter(logger),
+		Logger:      logger,
+	})
+
+	payload, err := proto.Marshal(&operatorv1.CommandRequested{
+		Command:     "ollama stop qwen3:0.6b",
+		ExecutionId: "exec-1",
+	})
+	require.NoError(t, err)
+	body, err := json.Marshal(OperatorCommandRequest{
+		TargetOperatorSessionID: observer.OperatorSessionID,
+		ActionType:              string(constants.ActionTypeExecuteBash),
+		Payload:                 payload,
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.OperatorsCommands, bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	ctrl.HandleDispatch(rr, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, rr.Code)
+	assert.Contains(t, rr.Body.String(), constants.ErrWitnessCommandNotCapable.Error())
 }
 
 func TestOperatorCommandResultHelpers(t *testing.T) {

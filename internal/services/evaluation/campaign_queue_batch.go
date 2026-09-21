@@ -16,10 +16,9 @@ import (
 
 // CampaignWitnessStatus summarizes enrolled witness operators for scored campaigns.
 type CampaignWitnessStatus struct {
-	ActiveObserverCount       int  `json:"active_observer_count"`
-	ActiveProvenanceCount     int  `json:"active_provenance_count"`
-	ActiveObserverOllamaCount int  `json:"active_observer_ollama_count"`
-	Ready                     bool `json:"ready"`
+	ActiveObserverCount   int  `json:"active_observer_count"`
+	ActiveProvenanceCount int  `json:"active_provenance_count"`
+	Ready                 bool `json:"ready"`
 }
 
 // CampaignWitnessStatusFromOperators counts active observer and provenance sessions.
@@ -34,9 +33,6 @@ func CampaignWitnessStatusFromOperators(operators []models.OperatorDocumentGo) C
 		}
 		if op.RuntimeConfig.ProviderBoundaryObserverEnabled {
 			status.ActiveObserverCount++
-			if op.RuntimeConfig.ProviderBoundaryObserverOllamaEnabled {
-				status.ActiveObserverOllamaCount++
-			}
 		}
 		if op.RuntimeConfig.ProvenanceOperatorEnabled {
 			status.ActiveProvenanceCount++

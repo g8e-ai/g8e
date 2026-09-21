@@ -180,6 +180,57 @@ type ollamaTagModel struct {
 	Digest string `json:"digest"`
 }
 
+type ollamaModelReleaseRequest struct {
+	Model     string          `json:"model"`
+	KeepAlive json.RawMessage `json:"keep_alive"`
+	Stream    bool            `json:"stream"`
+}
+
+type ollamaModelReleaseResponse struct {
+	Model      string `json:"model"`
+	Done       bool   `json:"done"`
+	DoneReason string `json:"done_reason"`
+}
+
+func (b *OllamaBackend) ReleaseModel(ctx context.Context, model string) error {
+	if model == "" {
+		return fmt.Errorf("ollama_backend: release model: %w", constants.ErrInferenceModelTagInvalid)
+	}
+	body, err := json.Marshal(ollamaModelReleaseRequest{
+		Model:     model,
+		KeepAlive: json.RawMessage("0"),
+		Stream:    false,
+	})
+	if err != nil {
+		return fmt.Errorf("ollama_backend: release model: marshal request: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, b.apiURL("api", "generate"), bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("ollama_backend: release model: build request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := b.client.Do(httpReq)
+	if err != nil {
+		return transportError("release model", ctx, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBodyBytes))
+		if resp.StatusCode == http.StatusNotFound {
+			return fmt.Errorf("ollama_backend: release model: %w: model %q", constants.ErrInferenceModelNotFound, model)
+		}
+		return fmt.Errorf("ollama_backend: release model: %w: status %d", constants.ErrInferenceModelReleaseFailed, resp.StatusCode)
+	}
+	var releaseResp ollamaModelReleaseResponse
+	if err := b.decodeResponse("release model", resp.Body, &releaseResp); err != nil {
+		return err
+	}
+	if releaseResp.Model != model || !releaseResp.Done || releaseResp.DoneReason != "unload" {
+		return fmt.Errorf("ollama_backend: release model: %w", constants.ErrInferenceProviderResponseInvalid)
+	}
+	return nil
+}
+
 // Generate sends a generation request to Ollama's /api/chat endpoint and
 // returns the generated text, usage metadata, and finish reason.
 func (b *OllamaBackend) Generate(ctx context.Context, req models.GenerateRequest) (*models.GenerateResponse, error) {

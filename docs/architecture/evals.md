@@ -5,8 +5,8 @@ parent: Architecture
 
 # Evaluations
 
-Last Updated: 2026-09-20
-Version: v2.1.10
+Last Updated: 2026-09-21
+Version: v2.1.11
 
 ## Scope
 
@@ -218,7 +218,7 @@ Evaluation model campaigns score real models through the production g8ee `POST /
 | --- | --- | --- | --- |
 | **Data Operator** | `inference_enabled=false` | Campaign host (Docker) | Governed tool/filesystem/process boundary for model-originated host actions |
 | **Inference Operator** | `inference_enabled=true` | Campaign host (Docker) | Governed L4/L5 inference PEP; sole scored path to the approved Ollama provider |
-| **Observer Operator** | `provider_boundary_observer_enabled=true`; optional `provider_boundary_observer_ollama_enabled=true` (`--ollama`) | Provider host (where Ollama/GPU runs) | Read-only GPU and system RAM sampling at the provider execution boundary; optional governed Ollama service restart when `--ollama` is set |
+| **Observer Operator** | `provider_boundary_observer_enabled=true` | Provider host (where Ollama/GPU runs) | Read-only GPU and system RAM sampling at the provider execution boundary; no provider lifecycle or generic command authority |
 | **Provenance Operator** | `provenance_operator_enabled=true` | Model storage site (where weight blobs live) | Independent SHA-256 attestation of model manifests and weight blobs |
 
 Scored inference never calls Ollama directly from g8ee or the campaign CLI. The Gateway routes inference envelopes to the exact Inference Operator session, tool intents to the exact Data Operator session, `ProviderBoundaryObservationCommand` (BEGIN/FINALIZE) to the exact Observer Operator session, and `ModelProvenanceObservationCommand` (BEGIN/FINALIZE) to the exact Provenance Operator session when provenance is enabled.
@@ -227,7 +227,7 @@ See [Model Provenance](model-provenance.md) for the zero-trust weight attestatio
 
 ### Why witness operators are separate from the Inference Operator
 
-The Inference Operator, Observer Operator, and Provenance Operator all use the same `g8e operator` binary but enroll as **different remote sessions** with different capability flags. Production witness enrollment on the provider host uses `--provider-boundary-observer-enabled` and/or `--provenance-operator-enabled` only; do **not** pass `--inference-enabled` on the provider host. The separate Observer **`--ollama`** flag opts that session into remote Ollama **service** lifecycle commands; it is recorded in `runtime_config` at bootstrap and enforced by the gateway and operator (commands are rejected without it).
+The Inference Operator, Observer Operator, and Provenance Operator all use the same `g8e operator` binary but enroll as **different remote sessions** with different capability flags. Production witness enrollment on the provider host uses `--provider-boundary-observer-enabled` and/or `--provenance-operator-enabled` only; do **not** pass `--inference-enabled` on the provider host. Witness sessions have no generic command or provider-lifecycle authority; the Gateway and outbound Operator reject command execution on those boundaries.
 
 **1. Provider-host placement.** The Inference Operator runs on the campaign host and calls the remote Ollama HTTP API. GPU VRAM, utilization, temperature, power, clocks, and host RAM must be sampled on the machine where inference actually runs. Model weight blobs must be hashed at the storage site where Ollama keeps content-addressed blobs (for example `~/.ollama/models`). A Linux Docker container on the campaign host cannot authoritatively witness either signal.
 
@@ -251,7 +251,7 @@ g8e uses three distinct “witness” concepts for evaluations:
 | Name | Where it runs | Purpose |
 | --- | --- | --- |
 | **`g8e-eval-observer`** | Campaign host Compose (`evaluation` profile) | Networkless target-state reader for the native `core-execution-boundary@1.0.0` suite only |
-| **Observer Operator** | Provider host (`g8e operator start --provider-boundary-observer-enabled [--ollama]`) | Enrolled remote Operator for provider-boundary GPU/RAM telemetry during scored model campaigns |
+| **Observer Operator** | Provider host (`g8e operator start --provider-boundary-observer-enabled`) | Enrolled read-only remote Operator for provider-boundary GPU/RAM telemetry during scored model campaigns |
 | **Provenance Operator** | Model storage site (`g8e operator start --provenance-operator-enabled --model-storage-root <path>`) | Enrolled remote Operator for storage-side model weight hashing and digest attestation during scored model campaigns |
 
 The Compose `g8e-eval-observer` service is **not** the provider-boundary Observer Operator and does not satisfy hardware-efficiency requirements for model campaigns. The Provenance Operator is **not** an observer — it attests model files, not GPU state.
@@ -267,7 +267,7 @@ What the Observer does:
 3. Observer publishes `ProviderBoundaryObservationCompleted` on its results channel.
 4. Gateway ingests windows for `g8e eval campaign verify --require-provider-observation`.
 
-**Optional Ollama provider reset (`--ollama`):** When the provider-host owner starts the Observer with `--ollama`, `g8e eval campaign execute` dispatches governed `EXECUTE_BASH` commands to that exact session before each assignment. Unix hosts receive `ollama stop`, `sleep 5`, a `systemctl restart ollama` command with a process/`ollama serve` fallback, `sleep 8`, and `ollama ps`; Windows hosts receive `ollama stop`, `timeout /t 5`, `taskkill /IM ollama.exe /F`, `timeout /t 3`, `start /B ollama serve`, `timeout /t 8`, and `ollama ps`. The Gateway reads `provider_boundary_observer_ollama_enabled` from the operator's stored runtime config and rejects Ollama service lifecycle commands when the flag is false. The default sequence does not dispatch foreground `ollama serve` directly. This is an explicit opt-in on the provider host; the campaign host never manages Ollama without it.
+The Observer has no Ollama management capability. Ollama owns its daemon and runner processes. Consecutive scored assignments keep the daemon resident; after a completed queue, the controller reads typed `/api/ps` residency and dispatches the image-baked `/g8e operator model release <served-tag>` command through the exact Inference Operator. That governed command uses the existing `OllamaBackend` HTTP client to send an empty `/api/generate` request with `keep_alive: 0` to the Operator's approved endpoint, after which the controller confirms the campaign-owned tags are absent. No external Ollama CLI is installed or required. The Observer continues to provide only independent BEGIN/FINALIZE telemetry.
 
 **Timing rule:** Assignments that reached a terminal state before the Observer Operator was enrolled and pub/sub-connected will fail `--require-provider-observation`. Enroll the observer before `execute`, or accept that early assignments lack hardware windows.
 
@@ -394,6 +394,22 @@ Native verification is owned by `g8e eval boundary verify`. Campaign verificatio
 
 The checked-in evaluation explorer reads canonical native and campaign projections from persisted runs. A public-safe projector omits principal, Operator, session, credential, endpoint, path, raw target, envelope, receipt, audit, and evidence body fields before records enter the signed public feed. Native verification remains on the owner path; mirror availability is not verification evidence. See [Public Spectator Architecture](./public_spectator.md).
 
+Campaign assignment results use the enriched campaign projection envelope (`1.1.0`) for new records while historical result envelopes (`1.0.0`) remain readable. The enriched assignment record combines canonical protobuf JSON with named public extensions: scenario context, deterministic and semantic grade summaries, typed activity families, bounded resource metrics, verification metadata, and lowercase SHA-256 evidence bindings. Scenario descriptions and criterion labels come from the exact persisted campaign/catalog bindings; private prompts, gold answers, trace text, execution identifiers, receipt bodies, and artifact locations do not cross the boundary.
+
+Assignment activity preserves the distinction between an observed empty list, unavailable source capture, and scenario-not-applicable. Resource metrics preserve an observed zero and identify unavailable token, retry, or latency values explicitly. Reported tool and policy outcomes are application evidence, not independent protocol authorization or schema-validation claims. Evidence bindings identify approved content-addressed artifacts only; a binding does not prove that the artifact is publicly accessible or individually verified.
+
+A passing campaign verification report is applicable only when its run, campaign, catalog, model registry, completed population, and verified population match the persisted evidence. When applicable, publication emits report-scoped `exploratory_verified` model-summary revisions for each eligible dataset/variant/role aggregate and republishes verified assignment results. Existing runs can be backfilled through verified catch-up even when the run-level verification summary idempotency key already exists; distinct report-scoped model keys prevent that summary from suppressing model revisions. The catch-up path probes the gateway-owned mirror and resets stale host publication idempotency when the canonical dataset is absent, so a wiped mirror can be restored without editing host state. Failed or inapplicable verification never promotes model quality.
+
+### Public assignment result and quality vocabulary
+
+New terminal assignment results use campaign projection envelope `1.1.0` with `message_type: "PublicAssignmentResultProjection"`. The envelope keeps canonical protobuf JSON in `record` and adds named public extensions for `scenario_summary`, `semantic_grade_summaries`, `activity_summary`, `benchmark_observations`, `resource_summary`, `verification_metadata`, and `evidence_bindings`. Lifecycle envelopes remain `1.0.0`, and readers continue to accept historical assignment-result envelopes from `1.0.0` without enriching or rewriting them.
+
+The public assignment projection contains approved scenario identity and description, closed criterion and grade metadata, grouped model/tool/policy/governed-action activity, bounded scored-inference resource observations, verification disposition, and approved lowercase SHA-256 content bindings. It does not contain prompts, outputs, reasoning, private grade detail, call or transaction identifiers, receipt bodies, provider identities, filesystem paths, or private artifact locations. Reported application tool and policy outcomes do not prove protocol authorization, schema validity, or prevented disclosure.
+
+Activity families distinguish `observed` with an empty record list, `unavailable` with a typed reason, and `not_applicable` for a scenario that does not define that family. The closed public unavailable-reason vocabulary is `historical_not_captured`, `source_not_captured`, `source_unavailable`, `scenario_not_applicable`, `incomplete_contributor_evidence`, and `no_scored_calls`. Resource metrics preserve observed zero and use the same vocabulary when a contributing value is unavailable; no scored calls are unavailable rather than zero. The latency value is the validated elapsed span across the scored inference population, not a lifecycle duration or a sum of call durations.
+
+Model quality verification is run-scoped and bucket-scoped. An applicable passing report publishes `quality_state: exploratory_verified` only for the exact run-derived dataset and eligible `(variant_id, role)` aggregate covered by the verified population. Other datasets, roles, incomplete populations, failed reports, and mismatched bindings remain at their existing quality state, normally `exploratory_partial` or `unavailable`. `exploratory_verified` means that the named run evidence passed the verifier's scope; it does not mean universal model quality, complete optional telemetry, or `verified_public`. The browser and exports consume the stored revision and never infer or promote quality from an assignment row, run ID, or another dataset.
+
 ---
 
 ## Implementation
@@ -405,7 +421,7 @@ Platform evaluation logic lives in `internal/services/evaluation/`:
 - Campaign controller, publication coordinator, provider-boundary observation integration, and model provenance verification
 - Canonical evidence storage and fail-closed verification
 
-Provider-boundary sampling runs in the Observer Operator through `internal/services/operatorcapability/provider_boundary_observer.go` and `internal/services/inference/provider_observer/`. Storage-side model weight attestation runs in the Provenance Operator through `internal/services/operatorcapability/provenance_operator.go` and `internal/services/inference/model_provenance/`. Optional Ollama service restart between campaign assignments is implemented in `internal/services/evaluation/ollama_service.go` and gated by `provider_boundary_observer_ollama_enabled`. Protocol contracts are defined under `protocol/proto/g8e/eval/v1/`.
+Provider-boundary sampling runs in the Observer Operator through `internal/services/operatorcapability/provider_boundary_observer.go` and `internal/services/inference/provider_observer/`. Storage-side model weight attestation runs in the Provenance Operator through `internal/services/operatorcapability/provenance_operator.go` and `internal/services/inference/model_provenance/`. Campaign-owned model release uses typed residency reads and governed model commands through the exact Inference Operator in `internal/services/evaluation/ollama_service.go`. Protocol contracts are defined under `protocol/proto/g8e/eval/v1/`.
 
 ---
 

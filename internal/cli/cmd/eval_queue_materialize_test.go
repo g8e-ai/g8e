@@ -434,8 +434,8 @@ func TestPreflightCampaignQueueRun_SucceedsWhenWitnessesReady(t *testing.T) {
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
 	require.NoError(t, preflightCampaignQueueRun(cmd, deps, cfg, 0, health.URL, mirror.URL))
-	assert.Contains(t, stderr.String(), "no active observer with --ollama")
-	assert.Contains(t, stdout.String(), "Preflight ok")
+	assert.Empty(t, stderr.String())
+	assert.Contains(t, stdout.String(), "Preflight ok (observer=1 provenance=1)")
 }
 
 func TestPreflightCampaignQueueRun_RejectsMissingWitnesses(t *testing.T) {

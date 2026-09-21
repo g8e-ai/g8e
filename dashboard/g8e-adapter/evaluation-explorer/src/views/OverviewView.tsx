@@ -12,6 +12,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   G8E_REPO_URL,
   PLATFORM_CONTACT_CALENDLY,
+  PLATFORM_CONTACT_EMAIL,
   PLATFORM_FLOW_STEPS,
   PLATFORM_LEDE,
   PLATFORM_OVERVIEW_PORTFOLIO_NOTE,
@@ -168,7 +169,7 @@ function SystemOverviewPanel({
               target="_blank"
               rel="noopener noreferrer"
             >
-              Hire Me
+              Book a Time
             </a>
             <a
               className="sys-platform-cta-run"
@@ -178,7 +179,10 @@ function SystemOverviewPanel({
             >
               Run this yourself
             </a>
-            <Link to="/methodology#architecture">Architecture &amp; host specs</Link>
+            <span className="sys-platform-email-label">Email:</span>
+            <a className="sys-platform-email" href={`mailto:${PLATFORM_CONTACT_EMAIL}`}>
+              {PLATFORM_CONTACT_EMAIL}
+            </a>
           </div>
         </div>
       </div>

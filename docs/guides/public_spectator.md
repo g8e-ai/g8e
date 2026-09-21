@@ -5,8 +5,8 @@ parent: Guides
 
 # Public Spectator Operations Guide
 
-Last Updated: 2026-09-18
-Version: v2.1.9
+Last Updated: 2026-09-20
+Version: v2.1.11
 
 This guide covers the gateway-owned anonymous public mirror and evaluation explorer. It is separate from the passkey-authenticated owner-local observe frontend connected with `./g8e gw connect <origin>`; see [Generator-Neutral Builder Guide](./build_observe_frontend.md) and [Build a g8e-Compatible Frontend](./build_frontend.md#generator-neutral-observe-frontend).
 
@@ -21,6 +21,16 @@ The gateway-owned public spectator runs inside the Gateway process when started 
 Durable feed, mirror, signing keys, and outbox state live in the gateway volume (`g8e-gateway-data`). Docker stacks do **not** bind-mount host `.g8e/public-feed` or `.g8e/public-mirror`.
 
 Campaign publication from the host CLI uses owner mTLS and `POST /api/v1/public-feed/batches`. Host `g8e public init` is not required for Docker or evaluation campaigns.
+
+Campaign publication emits public-safe assignment records with the enriched `1.1.0` result envelope. Assignment Details can show approved scenario context, typed grades, grouped activity, bounded resource observations, verification metadata, and content bindings. The source run and catalog bindings must match; unavailable capture remains unavailable, and public evidence bindings are references rather than proof of public accessibility. A passing campaign verification report also publishes report-scoped `exploratory_verified` model-summary revisions for eligible variant/role aggregates. The browser reads these stored revisions and does not promote model quality locally.
+
+For an existing run, use verified catch-up after the report is persisted so assignment and model-summary revisions are restored together:
+
+```bash
+./g8e eval campaign publish --run-id <run-id>
+```
+
+The publication coordinator probes the gateway-owned dataset during catch-up. If the dataset is absent while host publication idempotency still lists records, it clears that stale state and republishes the canonical run without requiring manual JSON edits. Use `--force` only when the mirror was wiped or is known to be missing records and the normal drift-aware path is not sufficient; it resets publication idempotency state and republishes the run. Neither path recreates missing inference evidence or makes an inapplicable verification report valid. Do not run catch-up concurrently with `execute --publish`.
 
 The mirror is a visibility and publication boundary, not a Policy Decision Point or Policy Execution Point. It does not authorize a governed mutation, and its availability is not execution evidence. The Operator whose L4/L5 boundary produced an underlying governed result retains authoritative local execution evidence.
 

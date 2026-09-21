@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import descriptor from '../src/contract/descriptor.json';
 import {
+  ACTIVITY_AVAILABILITIES,
   DATASET_KINDS,
   ENVIRONMENT_SOURCES,
   ESCALATION_DISPOSITIONS,
@@ -23,6 +24,17 @@ import {
   NATIVE_POSTURES,
   NATIVE_RESULT_STATUSES,
   NATIVE_SCENARIO_STATUSES,
+  PUBLIC_ACTIVITY_EVIDENCE_SOURCES,
+  PUBLIC_EVIDENCE_KINDS,
+  PUBLIC_FINISH_STATES,
+  PUBLIC_GRADE_EXPLANATION_CODES,
+  PUBLIC_LOAD_STATES,
+  PUBLIC_RECEIPT_STATUSES,
+  PUBLIC_SEMANTIC_OUTCOMES,
+  PUBLIC_TOOL_EXECUTION_OUTCOMES,
+  PUBLIC_TOOL_OUTCOMES,
+  PUBLIC_USAGE_AVAILABILITIES,
+  PUBLIC_UNAVAILABLE_REASONS,
   QUALITY_STATES,
   REPEATABILITY_CLASSES,
   SCENARIO_CATEGORIES,
@@ -35,6 +47,7 @@ import {
 } from '../src/contract/types';
 
 type EnumName =
+  | 'ActivityAvailability'
   | 'QualityState'
   | 'DatasetKind'
   | 'ModelRole'
@@ -56,9 +69,22 @@ type EnumName =
   | 'SnapshotKind'
   | 'LiveEventKind'
   | 'FeedRecordType'
-  | 'FreshnessState';
+  | 'FreshnessState'
+  | 'PublicUnavailableReason'
+  | 'PublicGradeExplanationCode'
+  | 'PublicFinishState'
+  | 'PublicLoadState'
+  | 'PublicEvidenceKind'
+  | 'PublicActivityEvidenceSource'
+  | 'PublicToolOutcome'
+  | 'PublicUsageAvailability'
+  | 'PublicToolExecutionOutcome'
+  | 'PublicSemanticOutcome'
+  | 'PublicReportedPolicyOutcome'
+  | 'PublicReceiptStatus';
 
 const tsEnums: Record<EnumName, readonly string[]> = {
+  ActivityAvailability: ACTIVITY_AVAILABILITIES,
   QualityState: QUALITY_STATES,
   DatasetKind: DATASET_KINDS,
   ModelRole: MODEL_ROLES,
@@ -81,11 +107,23 @@ const tsEnums: Record<EnumName, readonly string[]> = {
   LiveEventKind: LIVE_EVENT_KINDS,
   FeedRecordType: FEED_RECORD_TYPES,
   FreshnessState: FRESHNESS_STATES,
+  PublicUnavailableReason: PUBLIC_UNAVAILABLE_REASONS,
+  PublicGradeExplanationCode: PUBLIC_GRADE_EXPLANATION_CODES,
+  PublicFinishState: PUBLIC_FINISH_STATES,
+  PublicLoadState: PUBLIC_LOAD_STATES,
+  PublicEvidenceKind: PUBLIC_EVIDENCE_KINDS,
+  PublicActivityEvidenceSource: PUBLIC_ACTIVITY_EVIDENCE_SOURCES,
+  PublicToolOutcome: PUBLIC_TOOL_OUTCOMES,
+  PublicUsageAvailability: PUBLIC_USAGE_AVAILABILITIES,
+  PublicToolExecutionOutcome: PUBLIC_TOOL_EXECUTION_OUTCOMES,
+  PublicSemanticOutcome: PUBLIC_SEMANTIC_OUTCOMES,
+  PublicReportedPolicyOutcome: PUBLIC_TOOL_OUTCOMES,
+  PublicReceiptStatus: PUBLIC_RECEIPT_STATUSES,
 };
 
 describe('descriptor.json stays in sync with types.ts', () => {
   it('exposes the frozen schema version', () => {
-    expect(descriptor.schema_version).toBe('1.3.0');
+    expect(descriptor.schema_version).toBe('1.4.0');
   });
 
   for (const [name, tsValues] of Object.entries(tsEnums) as Array<[EnumName, readonly string[]]>) {

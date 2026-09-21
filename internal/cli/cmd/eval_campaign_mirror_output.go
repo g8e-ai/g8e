@@ -79,7 +79,7 @@ func writeHostAbsentMirrorNote(w io.Writer, runIDs []string) {
 	_, _ = fmt.Fprintln(w, "Mirror restore cannot recreate them from the queue. Do not run mirror restore again for these runs.")
 	_, _ = fmt.Fprintln(w, "To republish them, run a new init campaign for each model:")
 	_, _ = fmt.Fprintln(w, "  ./g8e eval campaign start --queue <variant_id> --prepare-only --publish")
-	_, _ = fmt.Fprintln(w, "  ./g8e eval campaign execute --publish --daemon --provider-settle 8s")
+	_, _ = fmt.Fprintln(w, "  ./g8e eval campaign execute --publish --daemon")
 	_, _ = fmt.Fprintln(w, "  ./g8e eval campaign verify --require-provider-observation")
 	_, _ = fmt.Fprintf(w, "Skipped run IDs: %s\n", formatRunIDList(runIDs))
 }

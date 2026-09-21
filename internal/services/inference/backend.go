@@ -8,11 +8,9 @@
 // Package inference owns the backend abstraction, the Ollama HTTP client
 // backend, and the governed execution handler for local LLM inference
 // (g8ellama). Ollama owns process lifecycle, VRAM management, model
-// eviction, and multi-model residency; the Go backend is an HTTP client to
-// Ollama's /api/chat endpoint. The Backend interface has no
-// LoadModel/Unload methods because Ollama routes by model name in the API
-// call, so role routing is a config-and-payload concern, not a
-// backend-interface concern.
+// eviction, and multi-model residency; the Go backend uses Ollama's HTTP API
+// for scored chat and explicit campaign-boundary model release. Role routing
+// remains a config-and-payload concern.
 package inference
 
 import (
@@ -25,7 +23,8 @@ import (
 // generation requests to a local inference daemon (e.g., Ollama) and return
 // the generated text, usage metadata, and finish reason. The interface is
 // intentionally minimal: Ollama owns model loading, residency, and
-// eviction, so the Go backend has no LoadModel/Unload methods.
+// eviction. Campaign-boundary release is an Ollama-specific client operation
+// and is not part of the scored Backend contract.
 type Backend interface {
 	// Generate sends a generation request to the backend and returns the
 	// generated text, usage metadata, and finish reason. The request

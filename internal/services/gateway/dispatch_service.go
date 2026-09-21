@@ -296,7 +296,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	operatorID := op.ID
 	operatorSessionID := op.OperatorSessionID
 
-	if err := validateOllamaServiceDispatch(op, req.ActionType, req.Payload); err != nil {
+	if err := validateWitnessCommandDispatch(op, req.ActionType, req.Payload); err != nil {
 		return nil, err
 	}
 
@@ -775,7 +775,7 @@ func (c *DispatchController) HandleDispatch(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		c.logger.Error("dispatch: command dispatch failed", "error", err)
 		status := http.StatusInternalServerError
-		if errors.Is(err, constants.ErrProviderBoundaryObserverOllamaNotCapable) {
+		if errors.Is(err, constants.ErrWitnessCommandNotCapable) {
 			status = http.StatusUnprocessableEntity
 		}
 		c.responder.Error(w, status, err.Error())
