@@ -10,6 +10,7 @@ package evidence
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -27,6 +28,142 @@ import (
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
+
+type operationalCommitmentSigner struct {
+	publicKey  ed25519.PublicKey
+	privateKey ed25519.PrivateKey
+	keyID      string
+}
+
+func newOperationalCommitmentSigner(t *testing.T) *operationalCommitmentSigner {
+	t.Helper()
+	publicKey, privateKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	return &operationalCommitmentSigner{publicKey: publicKey, privateKey: privateKey, keyID: hex.EncodeToString(publicKey)}
+}
+
+func (s *operationalCommitmentSigner) commitment(t *testing.T, transactionID, priorHash string, committedAt time.Time) *operatorv1.CommitmentAttestation {
+	t.Helper()
+	attestation := &operatorv1.CommitmentAttestation{
+		TransactionId:               transactionID,
+		TransactionHash:             transactionID + "-hash",
+		PriorCommitmentHash:         priorHash,
+		StateRootAtCommit:           "state-" + transactionID,
+		WardenIntentSignatureDigest: "warden-" + transactionID,
+		ActionType:                  "FILE_EDIT",
+		TargetResource:              "/tmp/" + transactionID,
+		CommittedAtUnixMs:           committedAt.UnixMilli(),
+		AuditorKeyId:                s.keyID,
+	}
+	payload, err := governance.CanonicalizeCommitmentAttestation(attestation)
+	require.NoError(t, err)
+	digest := sha256.Sum256(payload)
+	attestation.Hash = hex.EncodeToString(digest[:])
+	attestation.Signature = hex.EncodeToString(ed25519.Sign(s.privateKey, payload))
+	return attestation
+}
+
+func canonicalOperationalCommitment(t *testing.T, attestation *operatorv1.CommitmentAttestation) []byte {
+	t.Helper()
+	body, err := compliancev1.MarshalCanonical(attestation)
+	require.NoError(t, err)
+	return body
+}
+
+func operationalExportRequestForTest(outputDir string, at time.Time) OperationalExportRequest {
+	return OperationalExportRequest{
+		ScopeID:              "scope-1",
+		AdmissionID:          "source-1",
+		SourceKind:           "operator-audit",
+		SourceVersion:        "1.0.0",
+		SourceScopeID:        "operator-scope-1",
+		OwnerRuntimeBoundary: "operator-1",
+		AcquisitionBoundary:  "operator-local-export",
+		RunID:                "run-1",
+		VerifierID:           "operational-export",
+		VerifierVersion:      "1.0.0",
+		WindowStart:          at.Add(-time.Minute),
+		WindowEnd:            at.Add(time.Minute),
+		MaxRows:              10,
+		OutputDir:            outputDir,
+	}
+}
+
+func operationalAdmissionForTest() *compliancev1.AssessmentSourceAdmission {
+	return &compliancev1.AssessmentSourceAdmission{
+		AdmissionId:          "source-1",
+		SourceKind:           "operator-audit",
+		SourceVersion:        "1.0.0",
+		SourceScopeId:        "operator-scope-1",
+		OwnerRuntimeBoundary: "operator-1",
+		AcquisitionBoundary:  "operator-local-export",
+		RunId:                "run-1",
+		VerifierRef:          &compliancev1.VersionedReference{Id: "operational-export", Version: "1.0.0"},
+	}
+}
+
+func operationalExportFiles(t *testing.T, outputDir string, inventory *OperationalSourceInventory, admissionID string) map[string][]byte {
+	t.Helper()
+	sourceRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, admissionID)
+	inventoryBody, err := os.ReadFile(filepath.Join(outputDir, constants.ComplianceOperationalInventoryFilename))
+	require.NoError(t, err)
+	files := map[string][]byte{path.Join(sourceRoot, constants.ComplianceOperationalInventoryFilename): inventoryBody}
+	for _, artifact := range inventory.Artifacts {
+		body, err := os.ReadFile(filepath.Join(outputDir, artifact.RelativePath))
+		require.NoError(t, err)
+		files[path.Join(sourceRoot, artifact.RelativePath)] = body
+	}
+	return files
+}
+
+func newOperationalTrust(signer *operationalCommitmentSigner) *assessedSignerStub {
+	return &assessedSignerStub{keys: map[string]ed25519.PublicKey{signer.keyID: signer.publicKey}}
+}
+
+func TestOperationalExportImporter_RejectsBrokenCommitmentSegment(t *testing.T) {
+	executedAt := time.UnixMilli(1_700_000_001_000).UTC()
+	signer := newOperationalCommitmentSigner(t)
+	first := signer.commitment(t, "tx-1", "", executedAt)
+	second := signer.commitment(t, "tx-2", "wrong-prior", executedAt.Add(time.Second))
+	outputDir := t.TempDir()
+	inventory, err := ExportOperationalEvidence(context.Background(), &storage.OperationalEvidenceSnapshot{
+		Commitments: []storage.OperationalCommitmentSource{
+			{Sequence: 10, TransactionID: first.GetTransactionId(), CommittedAt: executedAt, Body: canonicalOperationalCommitment(t, first)},
+			{Sequence: 11, TransactionID: second.GetTransactionId(), CommittedAt: executedAt.Add(time.Second), Body: canonicalOperationalCommitment(t, second)},
+		},
+	}, operationalExportRequestForTest(outputDir, executedAt))
+	require.NoError(t, err)
+	assert.Equal(t, int64(10), inventory.CommitmentFirstSequence)
+	assert.Equal(t, int64(11), inventory.CommitmentLastSequence)
+
+	files := operationalExportFiles(t, outputDir, inventory, "source-1")
+	admission := operationalAdmissionForTest()
+	importer := NewOperationalExportImporter(&memoryArtifactReader{files: files}, newOperationalTrust(signer), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1", constants.ComplianceOperationalInventoryFilename), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1"), "scope-1", admission, executedAt.Add(time.Minute), func() time.Time { return executedAt.Add(time.Minute) })
+	_, err = importer.Import(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
+}
+
+func TestOperationalExportImporter_AcceptsBoundedCommitmentSegmentWithoutWholeLedgerClaim(t *testing.T) {
+	executedAt := time.UnixMilli(1_700_000_001_000).UTC()
+	signer := newOperationalCommitmentSigner(t)
+	commitment := signer.commitment(t, "tx-1", "external-prior", executedAt)
+	body := canonicalOperationalCommitment(t, commitment)
+	outputDir := t.TempDir()
+	inventory, err := ExportOperationalEvidence(context.Background(), &storage.OperationalEvidenceSnapshot{
+		Commitments: []storage.OperationalCommitmentSource{{Sequence: 10, TransactionID: commitment.GetTransactionId(), CommittedAt: executedAt, Body: body}},
+	}, operationalExportRequestForTest(outputDir, executedAt))
+	require.NoError(t, err)
+	assert.Equal(t, "external-prior", inventory.CommitmentBoundaryPriorHash)
+	assert.Equal(t, commitment.GetHash(), inventory.CommitmentHeadHash)
+	files := operationalExportFiles(t, outputDir, inventory, "source-1")
+	admission := operationalAdmissionForTest()
+	importer := NewOperationalExportImporter(&memoryArtifactReader{files: files}, newOperationalTrust(signer), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1", constants.ComplianceOperationalInventoryFilename), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1"), "scope-1", admission, executedAt.Add(time.Minute), func() time.Time { return executedAt.Add(time.Minute) })
+	nodes, err := importer.Import(context.Background())
+	require.NoError(t, err)
+	require.Len(t, nodes, 1)
+	assert.Equal(t, VerificationStatusVerified, nodes[0].VerificationStatus)
+}
 
 func TestOperationalExportImporter_ReplaysExportedReceiptAndPersistenceBodies(t *testing.T) {
 	executedAt := time.UnixMilli(1_700_000_001_000).UTC()

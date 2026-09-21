@@ -45,25 +45,30 @@ type OperationalExportRequest struct {
 }
 
 type OperationalSourceInventory struct {
-	SchemaVersion        string                      `json:"schema_version"`
-	ScopeID              string                      `json:"scope_id"`
-	AdmissionID          string                      `json:"admission_id"`
-	SourceKind           string                      `json:"source_kind"`
-	SourceVersion        string                      `json:"source_version"`
-	SourceScopeID        string                      `json:"source_scope_id"`
-	OwnerRuntimeBoundary string                      `json:"owner_runtime_boundary"`
-	AcquisitionBoundary  string                      `json:"acquisition_boundary"`
-	RunID                string                      `json:"run_id,omitempty"`
-	SnapshotID           string                      `json:"snapshot_id,omitempty"`
-	VerifierID           string                      `json:"verifier_id"`
-	VerifierVersion      string                      `json:"verifier_version"`
-	WindowStartUTC       string                      `json:"window_start_utc"`
-	WindowEndUTC         string                      `json:"window_end_utc"`
-	ReceiptCount         int                         `json:"receipt_count"`
-	CommitmentCount      int                         `json:"commitment_count"`
-	PersistenceCount     int                         `json:"persistence_count"`
-	Limitations          []string                    `json:"limitations,omitempty"`
-	Artifacts            []OperationalExportArtifact `json:"artifacts"`
+	SchemaVersion                string                      `json:"schema_version"`
+	ScopeID                      string                      `json:"scope_id"`
+	AdmissionID                  string                      `json:"admission_id"`
+	SourceKind                   string                      `json:"source_kind"`
+	SourceVersion                string                      `json:"source_version"`
+	SourceScopeID                string                      `json:"source_scope_id"`
+	OwnerRuntimeBoundary         string                      `json:"owner_runtime_boundary"`
+	AcquisitionBoundary          string                      `json:"acquisition_boundary"`
+	RunID                        string                      `json:"run_id,omitempty"`
+	SnapshotID                   string                      `json:"snapshot_id,omitempty"`
+	VerifierID                   string                      `json:"verifier_id"`
+	VerifierVersion              string                      `json:"verifier_version"`
+	WindowStartUTC               string                      `json:"window_start_utc"`
+	WindowEndUTC                 string                      `json:"window_end_utc"`
+	ReceiptCount                 int                         `json:"receipt_count"`
+	CommitmentCount              int                         `json:"commitment_count"`
+	PersistenceCount             int                         `json:"persistence_count"`
+	CommitmentFirstSequence      int64                       `json:"commitment_first_sequence,omitempty"`
+	CommitmentLastSequence       int64                       `json:"commitment_last_sequence,omitempty"`
+	CommitmentBoundaryPriorHash  string                      `json:"commitment_boundary_prior_hash,omitempty"`
+	CommitmentHeadHash           string                      `json:"commitment_head_hash,omitempty"`
+	CommitmentSequenceContiguous bool                        `json:"commitment_sequence_contiguous,omitempty"`
+	Limitations                  []string                    `json:"limitations,omitempty"`
+	Artifacts                    []OperationalExportArtifact `json:"artifacts"`
 }
 
 type OperationalExportArtifact struct {
@@ -71,6 +76,7 @@ type OperationalExportArtifact struct {
 	ArtifactID    string `json:"artifact_id"`
 	SHA256        string `json:"sha256"`
 	TransactionID string `json:"transaction_id,omitempty"`
+	Sequence      int64  `json:"sequence,omitempty"`
 	ProducedAtUTC string `json:"produced_at_utc"`
 	RelativePath  string `json:"relative_path"`
 }
@@ -114,7 +120,7 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		_, artifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalReceiptsDirname, ArtifactTypeActionReceipt, receipt.TransactionID, receipt.ExecutedAt, receipt.Body)
+		_, artifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalReceiptsDirname, ArtifactTypeActionReceipt, receipt.TransactionID, 0, receipt.ExecutedAt, receipt.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -137,24 +143,48 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 		if err != nil {
 			return nil, fmt.Errorf("operational export: canonicalize persistence attestation %s: %w", receipt.TransactionID, err)
 		}
-		_, persistenceArtifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalPersistenceDirname, ArtifactTypeReceiptPersistence, receipt.TransactionID, time.UnixMilli(attestation.GetPersistedAtUnixMs()), body)
+		_, persistenceArtifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalPersistenceDirname, ArtifactTypeReceiptPersistence, receipt.TransactionID, 0, time.UnixMilli(attestation.GetPersistedAtUnixMs()), body)
 		if err != nil {
 			return nil, err
 		}
 		inventory.PersistenceCount++
 		inventory.Artifacts = append(inventory.Artifacts, persistenceArtifact)
 	}
-	for _, commitment := range snapshot.Commitments {
+	commitments := append([]storage.OperationalCommitmentSource(nil), snapshot.Commitments...)
+	sort.Slice(commitments, func(left, right int) bool { return commitments[left].Sequence < commitments[right].Sequence })
+	if len(commitments) > 0 {
+		inventory.CommitmentFirstSequence = commitments[0].Sequence
+		inventory.CommitmentLastSequence = commitments[len(commitments)-1].Sequence
+		inventory.CommitmentSequenceContiguous = true
+		for index, commitment := range commitments {
+			if commitment.Sequence <= 0 || index > 0 && commitment.Sequence != commitments[index-1].Sequence+1 {
+				inventory.CommitmentSequenceContiguous = false
+			}
+		}
+	}
+	for index, commitment := range commitments {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		_, artifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalCommitmentsDirname, ArtifactTypeCommitment, commitment.TransactionID, commitment.CommittedAt, commitment.Body)
+		_, artifact, err := writeOperationalArtifact(request.OutputDir, constants.ComplianceOperationalCommitmentsDirname, ArtifactTypeCommitment, commitment.TransactionID, commitment.Sequence, commitment.CommittedAt, commitment.Body)
 		if err != nil {
 			return nil, err
 		}
 		inventory.Artifacts = append(inventory.Artifacts, artifact)
 		if len(commitment.Body) == 0 {
 			inventory.Limitations = append(inventory.Limitations, fmt.Sprintf("commitment %s has no canonical body", commitment.TransactionID))
+			continue
+		}
+		attestation := &operatorv1.CommitmentAttestation{}
+		if err := compliancev1.UnmarshalCanonical(commitment.Body, attestation); err != nil {
+			inventory.Limitations = append(inventory.Limitations, fmt.Sprintf("commitment %s could not establish segment bounds: %v", commitment.TransactionID, err))
+			continue
+		}
+		if index == 0 {
+			inventory.CommitmentBoundaryPriorHash = attestation.GetPriorCommitmentHash()
+		}
+		if index == len(commitments)-1 {
+			inventory.CommitmentHeadHash = attestation.GetHash()
 		}
 	}
 	sort.Slice(inventory.Artifacts, func(i, j int) bool { return inventory.Artifacts[i].RelativePath < inventory.Artifacts[j].RelativePath })
@@ -170,7 +200,7 @@ func ExportOperationalEvidence(ctx context.Context, snapshot *storage.Operationa
 	return inventory, nil
 }
 
-func writeOperationalArtifact(outputDir, directory string, artifactType ArtifactType, transactionID string, producedAt time.Time, body []byte) (string, OperationalExportArtifact, error) {
+func writeOperationalArtifact(outputDir, directory string, artifactType ArtifactType, transactionID string, sequence int64, producedAt time.Time, body []byte) (string, OperationalExportArtifact, error) {
 	digest := sha256.Sum256(body)
 	digestHex := hex.EncodeToString(digest[:])
 	relativePath := filepath.Join(directory, digestHex+constants.FileExtJSON)
@@ -186,6 +216,7 @@ func writeOperationalArtifact(outputDir, directory string, artifactType Artifact
 		ArtifactID:    ContentAddress(artifactType, body),
 		SHA256:        digestHex,
 		TransactionID: transactionID,
+		Sequence:      sequence,
 		ProducedAtUTC: producedAt.UTC().Format(time.RFC3339Nano),
 		RelativePath:  relativePath,
 	}, nil

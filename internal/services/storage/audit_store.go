@@ -18,8 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
-
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/pathutil"
@@ -27,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -678,7 +677,7 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 	receiptJSON := []byte(nil)
 	if record.ActionReceipt != nil {
 		var err error
-		receiptJSON, err = protojson.Marshal(record.ActionReceipt)
+		receiptJSON, err = compliancev1.MarshalCanonical(record.ActionReceipt)
 		if err != nil {
 			return fmt.Errorf("%w: marshal canonical receipt: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
 		}
@@ -739,7 +738,7 @@ func parseStoredActionReceipt(receiptJSON sql.NullString) (*operatorv1.ActionRec
 		return nil, nil
 	}
 	receipt := &operatorv1.ActionReceipt{}
-	if err := protojson.Unmarshal([]byte(receiptJSON.String), receipt); err != nil {
+	if err := compliancev1.UnmarshalCanonical([]byte(receiptJSON.String), receipt); err != nil {
 		return nil, err
 	}
 	return receipt, nil

@@ -97,6 +97,8 @@ func (i *OperationalExportImporter) Import(ctx context.Context) ([]EvidenceNode,
 
 	receiptEntries := entriesByType[ArtifactTypeActionReceipt]
 	receiptBindings := make(map[string]ReceiptImportBinding, len(receiptEntries))
+	receiptsByTransaction := make(map[string]*operatorv1.ActionReceipt, len(receiptEntries))
+	receiptNodesByTransaction := make(map[string]EvidenceNode, len(receiptEntries))
 	for _, entry := range receiptEntries {
 		entryPath := i.sourceArtifactPath(entry.RelativePath)
 		body, err := i.reader.ReadFile(ctx, entryPath)
@@ -132,6 +134,8 @@ func (i *OperationalExportImporter) Import(ctx context.Context) ([]EvidenceNode,
 		if err := compliancev1.UnmarshalCanonical(body, receipt); err != nil {
 			return nil, fmt.Errorf("%w: decode operational receipt for protocol chain: %w", constants.ErrEvidenceArtifactMalformed, err)
 		}
+		receiptsByTransaction[entry.TransactionID] = receipt
+		receiptNodesByTransaction[entry.TransactionID] = imported[0]
 		chainNode, err := operationalProtocolChainNode(receipt, imported[0])
 		if err != nil {
 			return nil, err
@@ -163,14 +167,100 @@ func (i *OperationalExportImporter) Import(ctx context.Context) ([]EvidenceNode,
 		}
 		nodes = append(nodes, imported...)
 	}
-	for _, entry := range entriesByType[ArtifactTypeCommitment] {
-		imported, err := NewCommitmentImporter(i.reader, i.trust, CommitmentImportBinding{Reference: entry.ArtifactID, Path: i.sourceArtifactPath(entry.RelativePath), ScopeID: i.scopeID, RunID: i.admission.GetRunId(), TransactionID: entry.TransactionID}, i.verifiedAt).Import(ctx)
+	commitmentEntries := append([]OperationalExportArtifact(nil), entriesByType[ArtifactTypeCommitment]...)
+	sort.Slice(commitmentEntries, func(left, right int) bool {
+		return commitmentEntries[left].Sequence < commitmentEntries[right].Sequence
+	})
+	commitmentRecords := make([]operationalCommitmentRecord, 0, len(commitmentEntries))
+	for _, entry := range commitmentEntries {
+		if entry.Sequence <= 0 {
+			return nil, fmt.Errorf("%w: operational commitment sequence is missing", constants.ErrEvidenceArtifactMalformed)
+		}
+		entryPath := i.sourceArtifactPath(entry.RelativePath)
+		imported, err := NewCommitmentImporter(i.reader, i.trust, CommitmentImportBinding{Reference: entry.ArtifactID, Path: entryPath, ScopeID: i.scopeID, RunID: i.admission.GetRunId(), TransactionID: entry.TransactionID}, i.verifiedAt).Import(ctx)
 		if err != nil {
 			return nil, err
 		}
-		nodes = append(nodes, imported...)
+		if len(imported) != 1 {
+			return nil, fmt.Errorf("%w: operational commitment importer returned %d nodes", constants.ErrInvalidEvidenceGraph, len(imported))
+		}
+		attestation := &operatorv1.CommitmentAttestation{}
+		body, err := i.reader.ReadFile(ctx, entryPath)
+		if err != nil {
+			return nil, fmt.Errorf("%w: read operational commitment for segment: %w", constants.ErrEvidenceImporterFailed, err)
+		}
+		if err := compliancev1.UnmarshalCanonical(body, attestation); err != nil {
+			return nil, fmt.Errorf("%w: decode operational commitment for segment: %w", constants.ErrEvidenceArtifactMalformed, err)
+		}
+		nodes = append(nodes, imported[0])
+		commitmentRecords = append(commitmentRecords, operationalCommitmentRecord{sequence: entry.Sequence, nodeID: imported[0].ArtifactID, attestation: attestation})
+	}
+	if err := validateOperationalCommitmentSegment(inventory, commitmentRecords); err != nil {
+		return nil, err
+	}
+	for _, record := range commitmentRecords {
+		receipt := receiptsByTransaction[record.attestation.GetTransactionId()]
+		if receipt == nil {
+			continue
+		}
+		receiptNode := receiptNodesByTransaction[record.attestation.GetTransactionId()]
+		receiptReference, err := validateOperationalCommitmentReceiptLink(record.attestation, receipt, receiptNode.ArtifactID)
+		if err != nil {
+			return nil, err
+		}
+		if receiptReference != "" {
+			for index := range nodes {
+				if nodes[index].ArtifactID == record.nodeID {
+					nodes[index].References = append(nodes[index].References, receiptReference)
+					break
+				}
+			}
+		}
 	}
 	return nodes, nil
+}
+
+type operationalCommitmentRecord struct {
+	sequence    int64
+	nodeID      string
+	attestation *operatorv1.CommitmentAttestation
+}
+
+func validateOperationalCommitmentSegment(inventory *OperationalSourceInventory, records []operationalCommitmentRecord) error {
+	if len(records) == 0 {
+		return nil
+	}
+	if inventory.CommitmentFirstSequence != records[0].sequence || inventory.CommitmentLastSequence != records[len(records)-1].sequence || inventory.CommitmentBoundaryPriorHash != records[0].attestation.GetPriorCommitmentHash() || inventory.CommitmentHeadHash != records[len(records)-1].attestation.GetHash() {
+		return fmt.Errorf("%w: operational commitment segment bounds do not match its attestations", constants.ErrEvidenceScopeMismatch)
+	}
+	if !inventory.CommitmentSequenceContiguous {
+		return nil
+	}
+	if records[len(records)-1].sequence-records[0].sequence+1 != int64(len(records)) {
+		return fmt.Errorf("%w: operational commitment segment sequence has a gap", constants.ErrInvalidEvidenceGraph)
+	}
+	for index := 1; index < len(records); index++ {
+		if records[index].sequence != records[index-1].sequence+1 || records[index].attestation.GetPriorCommitmentHash() != records[index-1].attestation.GetHash() {
+			return fmt.Errorf("%w: operational commitment segment predecessor link is invalid", constants.ErrInvalidEvidenceGraph)
+		}
+	}
+	return nil
+}
+
+func validateOperationalCommitmentReceiptLink(attestation *operatorv1.CommitmentAttestation, receipt *operatorv1.ActionReceipt, receiptReference string) (string, error) {
+	if attestation.GetTransactionHash() != receipt.GetTransactionHash() {
+		return "", fmt.Errorf("%w: commitment %s transaction hash does not match retained receipt", constants.ErrEvidenceScopeMismatch, attestation.GetTransactionId())
+	}
+	for _, stage := range receipt.GetDeterministicStageEvidence() {
+		if stage.GetKind() != operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND {
+			continue
+		}
+		if stage.GetTransactionId() != attestation.GetTransactionId() || stage.GetTransactionHash() != attestation.GetTransactionHash() || stage.GetCommitmentHash() != attestation.GetHash() || stage.GetPriorCommitmentHash() != attestation.GetPriorCommitmentHash() || stage.GetSignerKeyId() != attestation.GetAuditorKeyId() || stage.GetL2SignatureDigest() != attestation.GetL2SignatureDigest() || stage.GetL3SignatureDigest() != attestation.GetHumanSignatureDigest() {
+			return "", fmt.Errorf("%w: commitment %s does not match its retained commitment stage", constants.ErrEvidenceScopeMismatch, attestation.GetTransactionId())
+		}
+		return receiptReference, nil
+	}
+	return "", nil
 }
 
 func (i *OperationalExportImporter) inventoryMatchesAdmission(inventory *OperationalSourceInventory) bool {
@@ -214,7 +304,7 @@ func operationalProtocolChainNode(receipt *operatorv1.ActionReceipt, receiptNode
 		return nil, fmt.Errorf("%w: operational deterministic stage digest does not match reference", constants.ErrChecksumMismatch)
 	}
 	return &EvidenceNode{
-		ArtifactID:         chain.ContentReference,
+		ArtifactID:         ContentAddress(ArtifactTypeProtocolChain, canonical),
 		ArtifactType:       ArtifactTypeProtocolChain,
 		SHA256:             digest,
 		MediaType:          constants.MediaTypeOctetStream,
@@ -228,6 +318,7 @@ func operationalProtocolChainNode(receipt *operatorv1.ActionReceipt, receiptNode
 		VerifierID:         receiptNode.VerifierID,
 		VerifierVersion:    receiptNode.VerifierVersion,
 		VerifiedAt:         receiptNode.VerifiedAt,
+		BundlePath:         receiptNode.BundlePath,
 		CanonicalBytes:     canonical,
 		References:         []string{receiptNode.ArtifactID},
 	}, nil
