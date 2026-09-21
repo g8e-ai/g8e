@@ -20,11 +20,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
@@ -44,7 +46,7 @@ func TestCampaignEvalExecute_RejectsPreflightWhenGatewayUnhealthy(t *testing.T) 
 	command := evalCmdWithConfig(deps)
 	command.SetArgs([]string{
 		"campaign", "execute", "--project-root", root,
-		"--no-auto-refresh", "--wait-for-provider-idle=false",
+		"--no-auto-refresh",
 		active.RunID,
 	})
 	err := command.Execute()
@@ -84,7 +86,7 @@ func TestCampaignEvalExecute_ExecutesOneAssignmentViaCLI(t *testing.T) {
 	command.SetArgs([]string{
 		"campaign", "execute", "--project-root", root,
 		"--ensemble-url", ensemble.URL,
-		"--no-auto-refresh", "--wait-for-provider-idle=false",
+		"--no-auto-refresh",
 		"--inference-session", "infer-session",
 		"--data-session", "data-session",
 		runID,
@@ -126,7 +128,7 @@ func TestCampaignEvalExecute_JSONOutput(t *testing.T) {
 	rootCmd.SetArgs([]string{
 		"eval", "campaign", "execute", "--project-root", root,
 		"--ensemble-url", ensemble.URL,
-		"--no-auto-refresh", "--wait-for-provider-idle=false",
+		"--no-auto-refresh",
 		"--inference-session", "infer-session",
 		"--data-session", "data-session",
 		runID,
@@ -137,6 +139,8 @@ func TestCampaignEvalExecute_JSONOutput(t *testing.T) {
 	require.NoError(t, json.Unmarshal(output.Bytes(), &payload))
 	assert.Equal(t, runID, payload["run_id"])
 	assert.Equal(t, float64(1), payload["executed"])
+	assert.Contains(t, payload, "remaining")
+	assert.NotEmpty(t, payload["results"])
 }
 
 func prepareUnscheduledCampaignRun(t *testing.T, root string, deps nativeEvalDeps) string {
@@ -294,7 +298,7 @@ func TestCampaignEvalExecute_WithPublishFlag(t *testing.T) {
 	command.SetArgs([]string{
 		"campaign", "execute", "--project-root", root,
 		"--ensemble-url", ensemble.URL,
-		"--no-auto-refresh", "--wait-for-provider-idle=false",
+		"--no-auto-refresh",
 		"--inference-session", "infer-session",
 		"--data-session", "data-session",
 		"--publish",
@@ -352,6 +356,60 @@ func TestCampaignEvalPublish_PublishesScheduledRun(t *testing.T) {
 	command.SetArgs([]string{"campaign", "publish", "--project-root", root, runID})
 	require.NoError(t, command.Execute())
 	assert.Contains(t, output.String(), "Published")
+}
+
+func TestCampaignEvalPublish_PreservesUnverifiedStatusForFailedReport(t *testing.T) {
+	withGatewayHealthCheck(t, true)
+	root, deps, _, cleanup := setupCampaignPublishGatewayEnv(t)
+	defer cleanup()
+
+	runID := prepareUnscheduledCampaignRun(t, root, deps)
+	command := evalCmdWithConfig(deps)
+	command.SetArgs([]string{"campaign", "schedule", "--project-root", root, runID})
+	require.NoError(t, command.Execute())
+
+	fileSvc, err := deps.fileSvcFactory(root, nil)
+	require.NoError(t, err)
+	store := evaluation.NewStore(fileSvc)
+	require.NoError(t, store.SaveCampaignVerification(context.Background(), runID, &evalv1.EvaluationVerificationReport{
+		SchemaVersion: evaluation.CampaignSchemaVersion,
+		ReportId:      runID,
+		RunId:         runID,
+		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
+		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+	}))
+
+	command = evalCmdWithConfig(deps)
+	command.SetArgs([]string{"campaign", "publish", "--project-root", root, runID})
+	require.NoError(t, command.Execute())
+}
+
+func TestCampaignEvalPublish_RejectsPersistedPassingReportThatDoesNotApply(t *testing.T) {
+	withGatewayHealthCheck(t, true)
+	root, deps, _, cleanup := setupCampaignPublishGatewayEnv(t)
+	defer cleanup()
+
+	runID := prepareUnscheduledCampaignRun(t, root, deps)
+	command := evalCmdWithConfig(deps)
+	command.SetArgs([]string{"campaign", "schedule", "--project-root", root, runID})
+	require.NoError(t, command.Execute())
+
+	fileSvc, err := deps.fileSvcFactory(root, nil)
+	require.NoError(t, err)
+	store := evaluation.NewStore(fileSvc)
+	require.NoError(t, store.SaveCampaignVerification(context.Background(), runID, &evalv1.EvaluationVerificationReport{
+		SchemaVersion: evaluation.CampaignSchemaVersion,
+		ReportId:      runID,
+		RunId:         runID,
+		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+	}))
+
+	command = evalCmdWithConfig(deps)
+	command.SetArgs([]string{"campaign", "publish", "--project-root", root, runID})
+	err = command.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
 }
 
 func TestCampaignEvalStacksGenerate_RequiresCampaignID(t *testing.T) {

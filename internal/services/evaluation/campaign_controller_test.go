@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -111,6 +112,28 @@ func TestCampaignControllerInitializeScheduleAndResume(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	assert.NotEqual(t, first.GetAssignmentId(), resumed.GetAssignmentId())
+}
+
+func TestCampaignControllerResumeNextAssignmentFailsOnUnresolvedRunningAssignment(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+	req := testCampaignInitRequest(t)
+	_, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(context.Background(), req.RunID)
+	require.NoError(t, err)
+
+	assignments, err := store.ListAssignments(context.Background(), req.RunID)
+	require.NoError(t, err)
+	require.NotEmpty(t, assignments)
+	assignments[0].LifecycleStatus = evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING
+	require.NoError(t, store.SaveAssignment(context.Background(), assignments[0]))
+
+	resumed, ok, err := controller.ResumeNextAssignment(context.Background(), req.RunID)
+	assert.ErrorIs(t, err, constants.ErrEvaluationAssignmentUnresolved)
+	assert.False(t, ok)
+	assert.Nil(t, resumed)
 }
 
 func TestCampaignControllerRunSummaryCountsAssignments(t *testing.T) {

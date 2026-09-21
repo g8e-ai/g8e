@@ -77,7 +77,7 @@ func BuildAssignmentResultProjection(assignment *evalv1.EvaluationAssignment, re
 		return nil, fmt.Errorf("evaluation: build assignment result projection: %w", constants.ErrMissingRequiredField)
 	}
 	if assignment.GetAssignmentId() != result.GetAssignmentId() || assignment.GetRunId() != result.GetRunId() {
-		return nil, fmt.Errorf("evaluation: build assignment result projection: assignment/result binding mismatch")
+		return nil, fmt.Errorf("evaluation: build assignment result projection: %w", constants.ErrEvidenceScopeMismatch)
 	}
 	if verificationStatus == "" {
 		verificationStatus = "unverified"
@@ -126,16 +126,16 @@ func AssignmentVerifiedResultIdempotencyKey(runID, assignmentID string) string {
 // MarshalCampaignProjectionEnvelope canonicalizes one typed projection record
 // into a public-feed payload envelope.
 func MarshalCampaignProjectionEnvelope(messageType, idempotencyKey string, record proto.Message) ([]byte, error) {
-	return marshalCampaignProjectionEnvelope(messageType, idempotencyKey, record, nil)
+	return marshalCampaignProjectionEnvelope(messageType, idempotencyKey, record)
 }
 
 // MarshalAssignmentResultProjectionEnvelope canonicalizes one terminal assignment
-// projection and merges disclosure-safe benchmark observations when present.
-func MarshalAssignmentResultProjectionEnvelope(idempotencyKey string, projection *evalv1.PublicAssignmentResultProjection, benchmark *PublicBenchmarkObservations) ([]byte, error) {
-	return marshalCampaignProjectionEnvelope(publicMessageTypeAssignmentResult, idempotencyKey, projection, benchmark)
+// record and validates its typed disclosure-safe extensions.
+func MarshalAssignmentResultProjectionEnvelope(idempotencyKey string, record *PublicAssignmentRecord) ([]byte, error) {
+	return marshalPublicAssignmentEnvelope(idempotencyKey, record)
 }
 
-func marshalCampaignProjectionEnvelope(messageType, idempotencyKey string, record proto.Message, benchmark *PublicBenchmarkObservations) ([]byte, error) {
+func marshalCampaignProjectionEnvelope(messageType, idempotencyKey string, record proto.Message) ([]byte, error) {
 	if messageType == "" || idempotencyKey == "" || record == nil {
 		return nil, fmt.Errorf("evaluation: marshal campaign projection envelope: %w", constants.ErrMissingRequiredField)
 	}
@@ -144,22 +144,6 @@ func marshalCampaignProjectionEnvelope(messageType, idempotencyKey string, recor
 		return nil, err
 	}
 	recordBody := json.RawMessage(canonical)
-	if benchmark != nil {
-		recordMap := map[string]json.RawMessage{}
-		if err := json.Unmarshal(canonical, &recordMap); err != nil {
-			return nil, fmt.Errorf("evaluation: marshal campaign projection envelope: %w", err)
-		}
-		benchmarkBody, err := json.Marshal(benchmark)
-		if err != nil {
-			return nil, fmt.Errorf("evaluation: marshal campaign projection envelope: %w", err)
-		}
-		recordMap["benchmark_observations"] = benchmarkBody
-		merged, err := json.Marshal(recordMap)
-		if err != nil {
-			return nil, fmt.Errorf("evaluation: marshal campaign projection envelope: %w", err)
-		}
-		recordBody = merged
-	}
 	envelope := CampaignProjectionEnvelope{
 		SchemaVersion:  campaignProjectionEnvelopeSchemaVersion,
 		MessageType:    messageType,

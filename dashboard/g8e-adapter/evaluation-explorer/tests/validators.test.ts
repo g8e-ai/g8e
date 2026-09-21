@@ -6,6 +6,7 @@ import {
   ValidationError,
   isCatalogSnapshot,
   isModelSummary,
+  isSuiteSummary,
   isFeedSnapshot,
   isFeedBootstrap,
   decodeViewRecord,
@@ -13,8 +14,10 @@ import {
 } from '../src/contract/validators';
 import {
   fixtureAssignmentResults,
+  fixtureEnrichedAssignmentResult,
   fixtureCatalogExploratory,
   fixtureModelSummaries,
+  fixtureSuiteSummaries,
   fixtureLiveEvents,
 } from '../src/fixtures/fixtures';
 
@@ -42,6 +45,7 @@ describe('isCatalogSnapshot', () => {
     const bad = { ...fixtureCatalogExploratory, model_count: -1 };
     expect(() => isCatalogSnapshot(bad)).toThrow(ValidationError);
   });
+
 });
 
 describe('isModelSummary', () => {
@@ -58,9 +62,42 @@ describe('isModelSummary', () => {
     expect(() => isModelSummary(unevaluated)).not.toThrow();
   });
 
+  it('rejects an unknown field', () => {
+    const bad = { ...fixtureModelSummaries[0], private_field: 'leak' };
+    expect(() => isModelSummary(bad)).toThrow(ValidationError);
+  });
+
   it('rejects an invalid role', () => {
     const bad = { ...fixtureModelSummaries[0], role: 'super' };
     expect(() => isModelSummary(bad)).toThrow(ValidationError);
+  });
+});
+
+describe('snapshot and event guards fail closed on unknown fields', () => {
+  it('rejects an unknown suite field', () => {
+    const bad = { ...fixtureSuiteSummaries[0], private_field: 'leak' };
+    expect(() => isSuiteSummary(bad)).toThrow(ValidationError);
+  });
+
+  it('rejects an unknown methodology field', () => {
+    const bad = {
+      schema_version: '1.2.0',
+      kind: 'methodology_snapshot',
+      dataset_id: 'dataset-1',
+      quality_state: 'exploratory_partial',
+      observed_at: '2026-09-14T08:00:00Z',
+      metric_definitions: [],
+      suite_definitions: [],
+      limitations: [],
+      private_field: 'leak',
+    };
+    expect(() => decodeViewRecord('methodology_snapshot', bad)).toThrow(ValidationError);
+  });
+
+  it('rejects an unknown live event field', () => {
+    const event = fixtureLiveEvents[0]!;
+    const bad = { ...event, private_field: 'leak' };
+    expect(() => decodeViewRecord(event.kind, bad)).toThrow(ValidationError);
   });
 });
 
@@ -234,6 +271,56 @@ describe('benchmark observation contract', () => {
       },
     };
     expect(() => decodeViewRecord('assignment_result', bad)).toThrow(ValidationError);
+  });
+});
+
+describe('schema 1.4 assignment contract', () => {
+  it('accepts the enriched assignment fixture with observed zero and unavailable metrics', () => {
+    expect(() => decodeViewRecord('assignment_result', fixtureEnrichedAssignmentResult)).not.toThrow();
+  });
+
+  it('rejects a metric with both a value and unavailable reason', () => {
+    const bad = {
+      ...fixtureAssignmentResults[0],
+      metric_values: { pass: { value: 1, unavailable_reason: 'not applicable' } },
+    };
+    expect(() => decodeViewRecord('assignment_result', bad)).toThrow(ValidationError);
+  });
+
+  it('rejects a conflicting scenario alias', () => {
+    expect(() =>
+      decodeViewRecord('assignment_result', { ...fixtureEnrichedAssignmentResult, scenario_id: 'different-scenario' }),
+    ).toThrow(ValidationError);
+  });
+
+  it('rejects an unknown nested activity field', () => {
+    const bad = {
+      ...fixtureEnrichedAssignmentResult,
+      activity_summary: {
+        ...fixtureEnrichedAssignmentResult.activity_summary!,
+        model_activity: {
+          ...fixtureEnrichedAssignmentResult.activity_summary!.model_activity,
+          records: [{ ...fixtureEnrichedAssignmentResult.activity_summary!.model_activity.records[0]!, private_inference_id: 'secret' }],
+        },
+      },
+    };
+    expect(() => decodeViewRecord('assignment_result', bad)).toThrow(ValidationError);
+  });
+
+  it('rejects an unavailable activity family without a closed reason', () => {
+    const bad = {
+      ...fixtureEnrichedAssignmentResult,
+      activity_summary: {
+        ...fixtureEnrichedAssignmentResult.activity_summary!,
+        tool_calls: { availability: 'unavailable', unavailable_reason: 'because', records: [] },
+      },
+    };
+    expect(() => decodeViewRecord('assignment_result', bad)).toThrow(ValidationError);
+  });
+
+  it('continues to accept historical assignment records without scenario_id', () => {
+    const historical = { ...fixtureAssignmentResults[0]!, schema_version: '1.3.0', scenario_id: undefined };
+    expect(() => decodeViewRecord('assignment_result', historical)).not.toThrow();
   });
 });
 

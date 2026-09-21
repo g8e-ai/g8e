@@ -1,0 +1,4 @@
+{
+  "message_type": "EvaluationVerificationReport",
+  "canonical_json": "{\"schema_version\":\"2.0.0\",\"report_id\":\"report-bound\",\"run_id\":\"run-enriched\",\"status\":\"EVALUATION_VERDICT_STATUS_PASS\",\"report_digest_ref\":{\"artifact_id\":\"report-bound\",\"artifact_type\":\"evaluation-verification-report\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"verified_at\":\"2026-09-16T14:00:00Z\",\"verifier_release_version\":\"v2.1.10\",\"verifier_contract_version\":\"2.0.0\",\"verified_population_digest\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"verified_assignment_count\":25,\"expected_assignment_count\":25,\"campaign_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"catalog_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"model_registry_digest\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}"
+}

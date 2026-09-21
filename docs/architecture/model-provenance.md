@@ -24,7 +24,7 @@ Model evaluation campaigns use **four** distinct remote operator sessions when p
 | --- | --- | --- | --- |
 | **Data Operator** | default | Campaign host | Governed tool/filesystem boundary |
 | **Inference Operator** | `inference_enabled=true` | Campaign host | Governed path to Ollama |
-| **Observer Operator** | `provider_boundary_observer_enabled=true`; optional `provider_boundary_observer_ollama_enabled=true` (`--ollama`) | Provider host (GPU/Ollama runtime) | Read-only GPU/RAM witness telemetry; optional governed Ollama service restart on the provider host |
+| **Observer Operator** | `provider_boundary_observer_enabled=true` | Provider host (GPU/Ollama runtime) | Read-only GPU/RAM witness telemetry; no provider lifecycle or generic command authority |
 | **Provenance Operator** | `provenance_operator_enabled=true` | Model storage site (blob store) | Independent model weight hashing and digest attestation |
 
 The Observer and Provenance Operator may run on the same physical host (for example a Windows Ollama box where `~/.ollama/models` is local), but they are enrolled as separate governed operator sessions with separate capability flags.

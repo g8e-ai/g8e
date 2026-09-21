@@ -93,6 +93,20 @@ func RunVerificationIdempotencyKey(runID string) string {
 	return runID + ":verification:summary:v2"
 }
 
+// BoundVerificationSummaryIdempotencyKey returns the report-scoped key for a
+// newly bound verification summary revision.
+func BoundVerificationSummaryIdempotencyKey(runID, reportDigest string) string {
+	return fmt.Sprintf("%s:verification:summary:%s", runID, reportDigest)
+}
+
+// VerifiedModelSummaryIdempotencyKey returns the deterministic publication key
+// for one report-scoped variant-role revision. It is distinct from both
+// aggregate revisions and the historical run-level verification summary so a
+// later bound report can supersede an earlier report without suppressing it.
+func VerifiedModelSummaryIdempotencyKey(runID, variantID, role, reportDigest string) string {
+	return fmt.Sprintf("%s:verification:model:%s:%s:%s", runID, variantID, role, reportDigest)
+}
+
 // VerifierStateFromVerificationReport maps a persisted campaign verification
 // report to the explorer verifier_state enum.
 func VerifierStateFromVerificationReport(report *evalv1.EvaluationVerificationReport) string {
@@ -423,7 +437,7 @@ func buildCompletedMethodologySnapshotRecord(datasetID, observedAt string) map[s
 }
 
 // BuildRunVerificationViewRecords materializes the post-verify evaluation_summary
-// revision for one campaign run.
+// revision and eligible verified model-summary revisions for one campaign run.
 func BuildRunVerificationViewRecords(run *evalv1.EvaluationRun, state *runAggregateState, report *evalv1.EvaluationVerificationReport, observedAt time.Time) ([]CampaignViewRecord, error) {
 	if run == nil || state == nil || report == nil || report.GetRunId() != run.GetRunId() {
 		return nil, fmt.Errorf("evaluation: build run verification view records: %w", constants.ErrMissingRequiredField)
@@ -437,10 +451,158 @@ func BuildRunVerificationViewRecords(run *evalv1.EvaluationRun, state *runAggreg
 	if err != nil {
 		return nil, err
 	}
-	return []CampaignViewRecord{{
-		IdempotencyKey: RunVerificationIdempotencyKey(run.GetRunId()),
+	summaryKey := RunVerificationIdempotencyKey(run.GetRunId())
+	if verifiedModelSummariesEligible(state, report, run) {
+		summaryKey = BoundVerificationSummaryIdempotencyKey(run.GetRunId(), report.GetReportDigestRef().GetSha256())
+	}
+	records := []CampaignViewRecord{{
+		IdempotencyKey: summaryKey,
 		Body:           summaryBody,
-	}}, nil
+	}}
+	if !verifiedModelSummariesEligible(state, report, run) {
+		return records, nil
+	}
+	return appendVerifiedModelSummaryRecords(records, run.GetRunId(), datasetID, observed, state, report, nil)
+}
+
+func appendVerifiedModelSummaryRecords(records []CampaignViewRecord, runID, datasetID, observed string, state *runAggregateState, report *evalv1.EvaluationVerificationReport, eligibleBuckets []VerifiedModelSummaryBucket) ([]CampaignViewRecord, error) {
+	keys := make([]string, 0, len(state.VariantRoles))
+	allowed := make(map[string]struct{}, len(eligibleBuckets))
+	for _, bucket := range eligibleBuckets {
+		role := strings.ToLower(strings.TrimPrefix(bucket.Role.String(), "MODEL_CAMPAIGN_ROLE_"))
+		allowed[bucket.VariantID+":"+role] = struct{}{}
+	}
+	for key := range state.VariantRoles {
+		if len(eligibleBuckets) > 0 {
+			if _, ok := allowed[key]; !ok {
+				continue
+			}
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	reportDigest := report.GetReportDigestRef().GetSha256()
+	for _, key := range keys {
+		bucket := state.VariantRoles[key]
+		if bucket == nil || bucket.Scheduled == 0 || bucket.Terminal < bucket.Scheduled {
+			continue
+		}
+		modelRecord := buildCompletedModelSummaryRecord(datasetID, observed, bucket)
+		if report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
+			modelRecord["quality_state"] = "exploratory_verified"
+		}
+		modelBody, err := marshalCanonicalViewRecord(modelRecord)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, CampaignViewRecord{
+			IdempotencyKey: VerifiedModelSummaryIdempotencyKey(runID, bucket.VariantID, bucket.Role, reportDigest),
+			Body:           modelBody,
+		})
+	}
+	return records, nil
+}
+
+// BuildRunVerificationApplicability binds a report to the exact completed
+// assignment population used by the aggregate projector.
+func BuildRunVerificationApplicability(run *evalv1.EvaluationRun, spec *evalv1.EvaluationCampaignSpec, catalog *evalv1.EvaluationScenarioCatalog, assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult, report *evalv1.EvaluationVerificationReport) (*RunVerificationApplicability, error) {
+	if run == nil || spec == nil || catalog == nil || report == nil || report.GetRunId() != run.GetRunId() {
+		return nil, fmt.Errorf("evaluation: build run verification applicability: %w", constants.ErrMissingRequiredField)
+	}
+	applicability := &RunVerificationApplicability{RunID: run.GetRunId(), CampaignID: spec.GetCampaignId(), ExpectedAssignmentCount: uint32(len(assignments))}
+	population := &evalv1.EvaluationVerifiedPopulation{SchemaVersion: "1.0.0", RunId: run.GetRunId(), CampaignId: spec.GetCampaignId(), CampaignDigest: spec.GetCampaignDigest(), CatalogRef: spec.GetCatalogRef(), CatalogDigest: spec.GetCatalogDigest(), ModelRegistryDigest: spec.GetModelRegistryDigest(), Lane: run.GetLane(), ExpectedAssignmentCount: uint32(len(assignments))}
+	buckets := make(map[string]*VerifiedModelSummaryBucket)
+	for _, assignment := range assignments {
+		if assignment == nil || !isTerminalAssignmentLifecycle(assignment.GetLifecycleStatus()) {
+			continue
+		}
+		result := results[assignment.GetAssignmentId()]
+		if result == nil || result.GetResultDigest() == "" || assignment.GetDeterministicIdentity() == "" {
+			continue
+		}
+		entry := &evalv1.EvaluationVerifiedPopulationEntry{AssignmentId: assignment.GetAssignmentId(), DeterministicIdentity: assignment.GetDeterministicIdentity(), ScenarioId: assignment.GetScenarioId(), Repetition: assignment.GetRepetition(), LifecycleStatus: assignment.GetLifecycleStatus(), ResultDigest: result.GetResultDigest()}
+		if ref := assignment.GetScenarioRef(); ref != nil {
+			entry.ScenarioVersion = ref.GetVersion()
+		}
+		if homogeneous, ok := assignment.GetTarget().(*evalv1.EvaluationAssignment_Homogeneous); ok && homogeneous.Homogeneous != nil && homogeneous.Homogeneous.GetCandidateVariant() != nil {
+			entry.VariantId = homogeneous.Homogeneous.GetCandidateVariant().GetVariantId()
+			entry.DesignatedRole = homogeneous.Homogeneous.GetDesignatedRole()
+			key := entry.GetVariantId() + ":" + strings.ToLower(strings.TrimPrefix(entry.GetDesignatedRole().String(), "MODEL_CAMPAIGN_ROLE_"))
+			bucket := buckets[key]
+			if bucket == nil {
+				bucket = &VerifiedModelSummaryBucket{VariantID: entry.GetVariantId(), Role: entry.GetDesignatedRole()}
+				buckets[key] = bucket
+			}
+			bucket.AssignmentIDs = append(bucket.AssignmentIDs, entry.GetAssignmentId())
+		}
+		population.Entries = append(population.Entries, entry)
+	}
+	sort.Slice(population.Entries, func(i, j int) bool {
+		return population.Entries[i].GetDeterministicIdentity() < population.Entries[j].GetDeterministicIdentity()
+	})
+	populationDigest, err := digestProto(population)
+	if err != nil {
+		return nil, err
+	}
+	applicability.VerifiedAssignmentCount = uint32(len(population.Entries))
+	applicability.Population = population
+	applicability.EligibleModelBuckets = make([]VerifiedModelSummaryBucket, 0, len(buckets))
+	for _, bucket := range buckets {
+		applicability.EligibleModelBuckets = append(applicability.EligibleModelBuckets, *bucket)
+	}
+	sort.Slice(applicability.EligibleModelBuckets, func(i, j int) bool {
+		left := applicability.EligibleModelBuckets[i]
+		right := applicability.EligibleModelBuckets[j]
+		return left.VariantID+left.Role.String() < right.VariantID+right.Role.String()
+	})
+	applicability.Applicable = report.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSPECIFIED && report.GetVerifiedPopulationDigest() == populationDigest && report.GetExpectedAssignmentCount() == applicability.ExpectedAssignmentCount && report.GetVerifiedAssignmentCount() == applicability.VerifiedAssignmentCount && report.GetCampaignDigest() == population.GetCampaignDigest() && report.GetCatalogDigest() == population.GetCatalogDigest() && report.GetModelRegistryDigest() == population.GetModelRegistryDigest()
+	if !applicability.Applicable {
+		applicability.UnavailableReason = evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE
+	}
+	return applicability, nil
+}
+
+// BuildVerifiedModelSummaryViewRecords projects report-scoped model revisions
+// from the shared verified population inputs used by publication and export.
+func BuildVerifiedModelSummaryViewRecords(input VerifiedModelSummaryProjectionInput) ([]CampaignViewRecord, error) {
+	if input.Run == nil || input.Report == nil || input.Applicability == nil || !input.Applicability.Applicable {
+		return nil, fmt.Errorf("evaluation: build verified model summary records: %w", constants.ErrEvidenceScopeMismatch)
+	}
+	if !verifiedModelSummariesEligibleFromApplicability(input.Run, input.Report, input.Applicability) {
+		return nil, fmt.Errorf("evaluation: build verified model summary records: %w", constants.ErrStaleEvidence)
+	}
+	state, err := CollectRunAggregateState(input.Assignments, input.Results)
+	if err != nil {
+		return nil, err
+	}
+	return appendVerifiedModelSummaryRecords(nil, input.Run.GetRunId(), CampaignDatasetID(input.Run.GetRunId()), input.Report.GetVerifiedAt().AsTime().UTC().Format(time.RFC3339Nano), state, input.Report, input.Applicability.EligibleModelBuckets)
+}
+
+func verifiedModelSummariesEligibleFromApplicability(run *evalv1.EvaluationRun, report *evalv1.EvaluationVerificationReport, applicability *RunVerificationApplicability) bool {
+	return applicability != nil && applicability.RunID == run.GetRunId() && applicability.ExpectedAssignmentCount == report.GetExpectedAssignmentCount() && applicability.VerifiedAssignmentCount == report.GetVerifiedAssignmentCount() && verifiedModelSummariesEligible(&runAggregateState{Scheduled: applicability.ExpectedAssignmentCount, Terminal: applicability.VerifiedAssignmentCount}, report, run)
+}
+
+func verifiedModelSummariesEligible(state *runAggregateState, report *evalv1.EvaluationVerificationReport, run *evalv1.EvaluationRun) bool {
+	if report == nil || run == nil || report.GetRunId() != run.GetRunId() {
+		return false
+	}
+	binding := run.GetCampaignBinding()
+	return binding != nil &&
+		report.GetSchemaVersion() == "2.0.0" &&
+		report.GetVerifierContractVersion() == "2.0.0" &&
+		report.GetVerifierReleaseVersion() != "" &&
+		report.GetReportDigestRef() != nil &&
+		publicSHA256Pattern.MatchString(report.GetReportDigestRef().GetSha256()) &&
+		publicSHA256Pattern.MatchString(report.GetVerifiedPopulationDigest()) &&
+		report.GetVerifiedAt() != nil &&
+		report.GetCampaignDigest() == binding.GetCampaignDigest() &&
+		report.GetCatalogDigest() == binding.GetCatalogDigest() &&
+		report.GetModelRegistryDigest() == binding.GetModelRegistryDigest() &&
+		state != nil &&
+		state.Scheduled > 0 &&
+		state.Terminal >= state.Scheduled &&
+		report.GetExpectedAssignmentCount() == state.Scheduled &&
+		report.GetVerifiedAssignmentCount() == state.Terminal
 }
 
 func buildLiveEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observedAt string, state *runAggregateState) map[string]any {

@@ -108,7 +108,7 @@ func TestBuildPublicGradeSummaries_FromDeterministicGrades(t *testing.T) {
 	require.Len(t, summaries, 1)
 	assert.Equal(t, "tool-selection", summaries[0].CriterionID)
 	assert.Equal(t, "fail", summaries[0].Status)
-	assert.Equal(t, "expected tool selection evidence is missing", summaries[0].Detail)
+	assert.Empty(t, summaries[0].Detail)
 }
 
 func TestBuildToolScorecardObservations_FailingToolSelection(t *testing.T) {
@@ -122,7 +122,7 @@ func TestBuildToolScorecardObservations_FailingToolSelection(t *testing.T) {
 	})
 	require.NotNil(t, scorecard["tool_selection"])
 	assert.Equal(t, 0.0, *scorecard["tool_selection"].Value)
-	assert.Equal(t, "not required by this scenario", scorecard["tool_recognition"].UnavailableReason)
+	assert.Equal(t, "scenario_not_applicable", scorecard["tool_recognition"].UnavailableReason)
 }
 
 func TestBuildPublicBenchmarkObservations_AllUnavailableGPUMetrics(t *testing.T) {
@@ -172,13 +172,13 @@ func TestBuildPublicBenchmarkObservations_AllUnavailableGPUMetrics(t *testing.T)
 	})
 	require.NoError(t, err)
 	require.NotNil(t, benchmark.GPU)
-	assert.Equal(t, "provider gpu collector unavailable: vram_before_bytes", benchmark.GPU.VRAMBeforeBytes.UnavailableReason)
-	assert.Equal(t, "provider gpu collector unavailable: vram_peak_bytes", benchmark.GPU.VRAMPeakBytes.UnavailableReason)
-	assert.Equal(t, "provider gpu collector unavailable: system_ram_peak_bytes", benchmark.GPU.SystemRAMPeakBytes.UnavailableReason)
-	assert.Equal(t, "provider gpu collector unavailable: utilization_percent", benchmark.GPU.UtilizationPercent.UnavailableReason)
-	assert.Equal(t, "provider gpu collector unavailable: temperature_celsius", benchmark.GPU.TemperatureCelsius.UnavailableReason)
-	assert.Equal(t, "provider gpu collector unavailable: power_watts", benchmark.GPU.PowerWatts.UnavailableReason)
-	assert.Equal(t, "provider gpu collector unavailable: clock_mhz", benchmark.GPU.ClockMHz.UnavailableReason)
+	assert.Equal(t, "source_unavailable", benchmark.GPU.VRAMBeforeBytes.UnavailableReason)
+	assert.Equal(t, "source_unavailable", benchmark.GPU.VRAMPeakBytes.UnavailableReason)
+	assert.Equal(t, "source_unavailable", benchmark.GPU.SystemRAMPeakBytes.UnavailableReason)
+	assert.Equal(t, "source_unavailable", benchmark.GPU.UtilizationPercent.UnavailableReason)
+	assert.Equal(t, "source_unavailable", benchmark.GPU.TemperatureCelsius.UnavailableReason)
+	assert.Equal(t, "source_unavailable", benchmark.GPU.PowerWatts.UnavailableReason)
+	assert.Equal(t, "source_unavailable", benchmark.GPU.ClockMHz.UnavailableReason)
 }
 
 func TestMarshalAssignmentResultProjectionEnvelope_IncludesToolScorecard(t *testing.T) {
@@ -186,17 +186,17 @@ func TestMarshalAssignmentResultProjectionEnvelope_IncludesToolScorecard(t *test
 	projection := &evalv1.PublicAssignmentResultProjection{
 		AssignmentId: "assign-1",
 		RunId:        "run-1",
+		ScenarioId:   "scenario-1",
 	}
-	body, err := MarshalAssignmentResultProjectionEnvelope("run-1:assign-1:result", projection, &PublicBenchmarkObservations{
+	body, err := MarshalAssignmentResultProjectionEnvelope("run-1:assign-1:result", &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: &PublicBenchmarkObservations{
 		GradeSummaries: []PublicGradeSummary{{
 			CriterionID: "tool-selection",
 			Status:      "fail",
-			Detail:      "expected tool selection evidence is missing",
 		}},
 		ToolScorecard: map[string]*PublicMetricValue{
 			"tool_selection": publicMetricValue(0),
 		},
-	})
+	}}})
 	require.NoError(t, err)
 	envelope := CampaignProjectionEnvelope{}
 	require.NoError(t, json.Unmarshal(body, &envelope))
@@ -228,7 +228,7 @@ func TestCampaignProviderObservationReader_VerifyAssignmentProviderObservations_
 	}
 	failures, unavailable := reader.VerifyAssignmentProviderObservations(ctx, result, ProviderObservationPolicyInterim)
 	assert.Empty(t, failures)
-	assert.Equal(t, []string{"provider_boundary_observation_missing:attempt-missing"}, unavailable)
+	assert.Equal(t, []string{"source_not_captured"}, unavailable)
 }
 
 type stubProviderObservationRemote struct {
@@ -302,7 +302,7 @@ func TestCampaignProviderObservationReader_VerifyAssignmentProviderObservations_
 	}
 	failures, unavailable := reader.VerifyAssignmentProviderObservations(ctx, result, ProviderObservationPolicyStrict)
 	assert.NotEmpty(t, failures)
-	assert.Equal(t, []string{"provider_boundary_observation_missing:attempt-missing"}, unavailable)
+	assert.Equal(t, []string{"source_not_captured"}, unavailable)
 }
 
 func TestMarshalAssignmentResultProjectionEnvelope_IncludesBenchmarkObservations(t *testing.T) {
@@ -310,13 +310,14 @@ func TestMarshalAssignmentResultProjectionEnvelope_IncludesBenchmarkObservations
 	projection := &evalv1.PublicAssignmentResultProjection{
 		AssignmentId: "assign-1",
 		RunId:        "run-1",
+		ScenarioId:   "scenario-1",
 	}
-	body, err := MarshalAssignmentResultProjectionEnvelope("run-1:assign-1:result", projection, &PublicBenchmarkObservations{
+	body, err := MarshalAssignmentResultProjectionEnvelope("run-1:assign-1:result", &PublicAssignmentRecord{Projection: projection, Extensions: PublicAssignmentRecordExtensions{BenchmarkObservations: &PublicBenchmarkObservations{
 		GPU: &PublicGPUObservation{
 			VRAMPeakBytes: publicMetricValue(4096),
 		},
-		UnavailableReasons: []string{"provider_boundary_observation_missing:attempt-1"},
-	})
+		UnavailableReasons: []string{"source_not_captured"},
+	}}})
 	require.NoError(t, err)
 	envelope := CampaignProjectionEnvelope{}
 	require.NoError(t, json.Unmarshal(body, &envelope))
@@ -344,6 +345,16 @@ func TestCampaignRunVerifier_WithReaders(t *testing.T) {
 	require.NotNil(t, verifier)
 	assert.Equal(t, ProviderObservationPolicyInterim, verifier.providerObservationPolicy)
 	assert.Equal(t, ModelProvenancePolicyInterim, verifier.modelProvenancePolicy)
+}
+
+func TestBuildPublicBenchmarkObservations_UnconfiguredObserverKeepsResultTelemetry(t *testing.T) {
+	t.Parallel()
+	result := &evalv1.EvaluationAssignmentResult{ModelInferences: []*evalv1.ModelInferenceRecord{{LoadDurationNanos: 1_000_000, GenerationDurationNanos: 2_000_000, TotalDurationNanos: 3_000_000}}}
+	benchmark, err := (*CampaignProviderObservationReader)(nil).BuildPublicBenchmarkObservations(context.Background(), result)
+	require.NoError(t, err)
+	require.NotNil(t, benchmark.Timing)
+	assert.Equal(t, 1.0, *benchmark.Timing.ModelLoadMS.Value)
+	assert.Contains(t, benchmark.UnavailableReasons, "source_not_captured")
 }
 
 func writeProviderAttemptRecord(ctx context.Context, fileSvc fs.RuntimeFileService, record *operatorv1.InferenceProviderAttemptRecord) error {

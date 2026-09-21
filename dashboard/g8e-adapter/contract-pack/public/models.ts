@@ -225,3 +225,58 @@ export function isPublicProofCatalogSummary(value: unknown): value is PublicProo
   return true;
 }
 
+
+export type PublicAssignmentEnvelopeVersion = '1.0.0' | '1.1.0';
+export type PublicAssignmentMessageType = 'PublicAssignmentLifecycleRecord' | 'PublicAssignmentResultProjection';
+export interface PublicAssignmentRecord {
+  assignment_id: string;
+  run_id: string;
+  scenario_id: string;
+  scenario_category?: string;
+  lane?: string;
+  designated_role?: string;
+  variant_id?: string;
+  lifecycle_status?: string;
+  summary_status?: string;
+  decomposed_scores?: unknown[];
+  result_digest?: string;
+  verification_status?: string;
+  unavailable_metric_reasons?: string[];
+  completed_at?: string;
+  scenario_summary?: Record<string, unknown>;
+  semantic_grade_summaries?: Record<string, unknown>[];
+  activity_summary?: Record<string, unknown>;
+  evidence_bindings?: Record<string, unknown>[];
+  verification_metadata?: Record<string, unknown>;
+  benchmark_observations?: Record<string, unknown>;
+  resource_summary?: Record<string, unknown>;
+}
+export interface PublicAssignmentProjectionEnvelope {
+  schema_version: PublicAssignmentEnvelopeVersion;
+  message_type: PublicAssignmentMessageType;
+  idempotency_key: string;
+  record: PublicAssignmentRecord;
+}
+const PUBLIC_ASSIGNMENT_ENVELOPE_KEYS = ['schema_version', 'message_type', 'idempotency_key', 'record'] as const;
+const PUBLIC_ASSIGNMENT_RECORD_KEYS = ['assignment_id', 'run_id', 'scenario_id', 'scenario_category', 'lane', 'designated_role', 'variant_id', 'lifecycle_status', 'summary_status', 'decomposed_scores', 'result_digest', 'verification_status', 'unavailable_metric_reasons', 'completed_at', 'scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'verification_metadata', 'benchmark_observations', 'resource_summary'] as const;
+function hasOnlyPublicAssignmentKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).every((key) => keys.includes(key));
+}
+export function isPublicAssignmentProjectionEnvelope(value: unknown): value is PublicAssignmentProjectionEnvelope {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const envelope = value as Record<string, unknown>;
+  if (!hasOnlyPublicAssignmentKeys(envelope, PUBLIC_ASSIGNMENT_ENVELOPE_KEYS)) return false;
+  if (envelope.schema_version !== '1.0.0' && envelope.schema_version !== '1.1.0') return false;
+  if (envelope.message_type !== 'PublicAssignmentLifecycleRecord' && envelope.message_type !== 'PublicAssignmentResultProjection') return false;
+  if (typeof envelope.idempotency_key !== 'string' || typeof envelope.record !== 'object' || envelope.record === null || Array.isArray(envelope.record)) return false;
+  const record = envelope.record as Record<string, unknown>;
+  if (!hasOnlyPublicAssignmentKeys(record, PUBLIC_ASSIGNMENT_RECORD_KEYS)) return false;
+  if (typeof record.assignment_id !== 'string' || typeof record.run_id !== 'string' || typeof record.scenario_id !== 'string') return false;
+  if (record.result_digest !== undefined && !/^[0-9a-f]{64}$/.test(record.result_digest as string)) return false;
+  if (record.evidence_bindings !== undefined && (!Array.isArray(record.evidence_bindings) || record.evidence_bindings.some((binding) => typeof binding !== 'object' || binding === null || Array.isArray(binding)))) return false;
+  if (record.semantic_grade_summaries !== undefined && (!Array.isArray(record.semantic_grade_summaries) || record.semantic_grade_summaries.some((summary) => typeof summary !== 'object' || summary === null || Array.isArray(summary)))) return false;
+  if (record.unavailable_metric_reasons !== undefined && (!Array.isArray(record.unavailable_metric_reasons) || record.unavailable_metric_reasons.some((reason) => typeof reason !== 'string'))) return false;
+  return true;
+}
+
+

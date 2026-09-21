@@ -12,7 +12,9 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
+	stdfs "io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -28,7 +30,7 @@ import (
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-const campaignExportSchemaVersion = "1.0.0"
+const campaignExportSchemaVersion = "1.1.0"
 
 // CampaignExportFile describes one artifact written by ExportRun.
 type CampaignExportFile struct {
@@ -55,6 +57,166 @@ type CampaignExportAssignmentRecord struct {
 	RecordType            string                                   `json:"record_type"`
 	Projection            *evalv1.PublicAssignmentResultProjection `json:"projection"`
 	BenchmarkObservations *PublicBenchmarkObservations             `json:"benchmark_observations,omitempty"`
+	ResourceSummary       *PublicResourceSummary                   `json:"resource_summary,omitempty"`
+}
+
+type exportResourceMetric struct {
+	Value             *float64 `json:"value,omitempty"`
+	UnavailableReason string   `json:"unavailable_reason,omitempty"`
+}
+
+type exportResourceSummary struct {
+	LatencyMS      *exportResourceMetric `json:"latency_ms,omitempty"`
+	InputTokens    *exportResourceMetric `json:"input_tokens,omitempty"`
+	OutputTokens   *exportResourceMetric `json:"output_tokens,omitempty"`
+	ThinkingTokens *exportResourceMetric `json:"thinking_tokens,omitempty"`
+	CacheTokens    *exportResourceMetric `json:"cache_tokens,omitempty"`
+	Retries        *exportResourceMetric `json:"retries,omitempty"`
+}
+
+// MarshalJSON keeps the export wrapper named while encoding its protobuf
+// projection with the same canonical protojson used by publication.
+func (record CampaignExportAssignmentRecord) MarshalJSON() ([]byte, error) {
+	projection, err := evalv1.MarshalCanonical(record.Projection)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: marshal assignment export projection: %w", err)
+	}
+	type exportRecord struct {
+		SchemaVersion         string                       `json:"schema_version"`
+		RecordType            string                       `json:"record_type"`
+		Projection            json.RawMessage              `json:"projection"`
+		BenchmarkObservations *PublicBenchmarkObservations `json:"benchmark_observations,omitempty"`
+		ResourceSummary       json.RawMessage              `json:"resource_summary,omitempty"`
+	}
+	resource, err := marshalExportResourceSummary(record.ResourceSummary)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(exportRecord{
+		SchemaVersion:         record.SchemaVersion,
+		RecordType:            record.RecordType,
+		Projection:            projection,
+		BenchmarkObservations: record.BenchmarkObservations,
+		ResourceSummary:       resource,
+	})
+}
+
+func (record *CampaignExportAssignmentRecord) UnmarshalJSON(body []byte) error {
+	var raw struct {
+		SchemaVersion         string                       `json:"schema_version"`
+		RecordType            string                       `json:"record_type"`
+		Projection            json.RawMessage              `json:"projection"`
+		BenchmarkObservations *PublicBenchmarkObservations `json:"benchmark_observations,omitempty"`
+		ResourceSummary       json.RawMessage              `json:"resource_summary,omitempty"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return err
+	}
+	projection := &evalv1.PublicAssignmentResultProjection{}
+	if err := evalv1.UnmarshalCanonical(raw.Projection, projection); err != nil {
+		return fmt.Errorf("evaluation: unmarshal assignment export projection: %w", err)
+	}
+	resource, err := unmarshalExportResourceSummary(raw.ResourceSummary)
+	if err != nil {
+		return err
+	}
+	record.SchemaVersion = raw.SchemaVersion
+	record.RecordType = raw.RecordType
+	record.Projection = projection
+	record.BenchmarkObservations = raw.BenchmarkObservations
+	record.ResourceSummary = resource
+	return nil
+}
+
+func marshalExportResourceSummary(summary *PublicResourceSummary) (json.RawMessage, error) {
+	if summary == nil {
+		return nil, nil
+	}
+	encode := func(metric PublicResourceMetric) *exportResourceMetric {
+		if metric.Value == nil && metric.UnavailableReason == evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED {
+			return nil
+		}
+		return &exportResourceMetric{Value: metric.Value, UnavailableReason: publicUnavailableReasonString(metric.UnavailableReason)}
+	}
+	body, err := json.Marshal(exportResourceSummary{
+		LatencyMS: encode(summary.LatencyMS), InputTokens: encode(summary.InputTokens), OutputTokens: encode(summary.OutputTokens),
+		ThinkingTokens: encode(summary.ThinkingTokens), CacheTokens: encode(summary.CacheTokens), Retries: encode(summary.Retries),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: marshal assignment export resources: %w", err)
+	}
+	return body, nil
+}
+
+func unmarshalExportResourceSummary(body json.RawMessage) (*PublicResourceSummary, error) {
+	if len(body) == 0 || string(body) == "null" {
+		return nil, nil
+	}
+	var raw exportResourceSummary
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, fmt.Errorf("evaluation: unmarshal assignment export resources: %w", err)
+	}
+	decode := func(metric *exportResourceMetric) (PublicResourceMetric, error) {
+		if metric == nil {
+			return PublicResourceMetric{}, nil
+		}
+		if metric.UnavailableReason == "" {
+			return PublicResourceMetric{Value: metric.Value}, nil
+		}
+		reason, ok := publicUnavailableReason(metric.UnavailableReason)
+		if !ok {
+			return PublicResourceMetric{}, fmt.Errorf("evaluation: unmarshal assignment export resources: unknown unavailable reason %q", metric.UnavailableReason)
+		}
+		return PublicResourceMetric{UnavailableReason: reason}, nil
+	}
+	latency, err := decode(raw.LatencyMS)
+	if err != nil {
+		return nil, err
+	}
+	input, err := decode(raw.InputTokens)
+	if err != nil {
+		return nil, err
+	}
+	output, err := decode(raw.OutputTokens)
+	if err != nil {
+		return nil, err
+	}
+	thinking, err := decode(raw.ThinkingTokens)
+	if err != nil {
+		return nil, err
+	}
+	cache, err := decode(raw.CacheTokens)
+	if err != nil {
+		return nil, err
+	}
+	retries, err := decode(raw.Retries)
+	if err != nil {
+		return nil, err
+	}
+	return &PublicResourceSummary{LatencyMS: latency, InputTokens: input, OutputTokens: output, ThinkingTokens: thinking, CacheTokens: cache, Retries: retries}, nil
+}
+
+func publicUnavailableReasonString(reason evalv1.PublicUnavailableReason) string {
+	if reason == evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED {
+		return ""
+	}
+	return strings.ToLower(strings.TrimPrefix(reason.String(), "PUBLIC_UNAVAILABLE_REASON_"))
+}
+
+func publicUnavailableReason(value string) (evalv1.PublicUnavailableReason, bool) {
+	for _, reason := range []evalv1.PublicUnavailableReason{
+		evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_HISTORICAL_NOT_CAPTURED,
+		evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_NOT_CAPTURED,
+		evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE,
+		evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SCENARIO_NOT_APPLICABLE,
+		evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE,
+		evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS,
+	} {
+		if publicUnavailableReasonString(reason) == value {
+			return reason, true
+		}
+	}
+	return evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED, false
 }
 
 // CampaignExporter materializes disclosure-safe JSONL, CSV, and SQLite exports
@@ -122,31 +284,29 @@ func (e *CampaignExporter) ExportRun(
 			return nil, err
 		}
 		results[assignment.GetAssignmentId()] = result
+	}
+
+	verificationReport, err := store.LoadCampaignVerification(ctx, runID)
+	if err != nil && !errors.Is(err, constants.ErrNotFound) && !errors.Is(err, stdfs.ErrNotExist) {
+		return nil, fmt.Errorf("evaluation: load campaign verification for export: %w", err)
+	}
+	applicability, err := BuildRunVerificationApplicability(run, spec, catalog, assignments, results, verificationReport)
+	if err != nil && verificationReport != nil {
+		return nil, fmt.Errorf("evaluation: resolve export verification applicability: %w", err)
+	}
+	verified := verificationReport != nil && verificationReport.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS && applicability != nil && applicability.Applicable
+	for _, assignment := range assignments {
+		result := results[assignment.GetAssignmentId()]
+		if result == nil {
+			continue
+		}
 		category, err := ScenarioCategoryForAssignment(catalog, assignment)
 		if err != nil {
 			return nil, err
 		}
-		projection, err := BuildAssignmentResultProjection(
-			assignment,
-			result,
-			category,
-			DerivePublicSummaryStatus(result),
-			"unverified",
-		)
+		record, err := e.buildAssignmentExportRecord(ctx, store, run, catalog, assignment, result, category, observationReader, verified, verificationReport)
 		if err != nil {
 			return nil, err
-		}
-		benchmark, err := observationReader.BuildPublicBenchmarkObservations(ctx, result)
-		if err != nil {
-			return nil, err
-		}
-		record := CampaignExportAssignmentRecord{
-			SchemaVersion: campaignExportSchemaVersion,
-			RecordType:    publicMessageTypeAssignmentResult,
-			Projection:    projection,
-		}
-		if benchmark != nil && (benchmark.Timing != nil || benchmark.GPU != nil || len(benchmark.UnavailableReasons) > 0) {
-			record.BenchmarkObservations = benchmark
 		}
 		assignmentRecords = append(assignmentRecords, record)
 	}
@@ -158,6 +318,16 @@ func (e *CampaignExporter) ExportRun(
 	aggregateRecords, err := BuildRunAggregateViewRecords(run, aggregateState, exportedAt)
 	if err != nil {
 		return nil, err
+	}
+	if verified {
+		verifiedRecords, projectionErr := BuildVerifiedModelSummaryViewRecords(VerifiedModelSummaryProjectionInput{
+			Run: run, Spec: spec, Catalog: catalog, Assignments: assignments, Results: results,
+			Report: verificationReport, Applicability: applicability,
+		})
+		if projectionErr != nil {
+			return nil, fmt.Errorf("evaluation: project verified model summaries for export: %w", projectionErr)
+		}
+		aggregateRecords = replaceModelSummaryRecords(aggregateRecords, verifiedRecords)
 	}
 	populationReport, err := NewCampaignPopulationAccountant(e.now).AccountRun(ctx, store, runID, catalog)
 	if err != nil {
@@ -266,6 +436,99 @@ func (e *CampaignExporter) ExportRun(
 	return report, nil
 }
 
+func (e *CampaignExporter) buildAssignmentExportRecord(
+	ctx context.Context,
+	store *Store,
+	run *evalv1.EvaluationRun,
+	catalog *evalv1.EvaluationScenarioCatalog,
+	assignment *evalv1.EvaluationAssignment,
+	result *evalv1.EvaluationAssignmentResult,
+	category evalv1.EvaluationScenarioCategory,
+	observationReader *CampaignProviderObservationReader,
+	verified bool,
+	report *evalv1.EvaluationVerificationReport,
+) (CampaignExportAssignmentRecord, error) {
+	verificationStatus := "unverified"
+	if verified {
+		verificationStatus = "verified"
+	}
+	record := CampaignExportAssignmentRecord{SchemaVersion: campaignExportSchemaVersion, RecordType: publicMessageTypeAssignmentResult}
+	generatedCatalog, artifacts, catalogErr := LoadScenarioCatalog()
+	if catalogErr == nil && generatedCatalog.GetCatalogDigest() == catalog.GetCatalogDigest() {
+		scenario, resolveErr := ResolvePublicScenarioContext(ctx, store, run, catalog, assignment, artifacts)
+		if resolveErr == nil {
+			composed, composeErr := BuildPublicAssignmentProjection(ctx, PublicAssignmentBuildInput{
+				Assignment: assignment, Result: result, ScenarioContext: scenario,
+				ObservationReader: observationReader, VerificationStatus: verificationStatus,
+				VerificationMetadata: exportVerificationMetadata(report, verified),
+			})
+			if composeErr != nil {
+				return CampaignExportAssignmentRecord{}, composeErr
+			}
+			record.Projection = composed.Projection
+			record.BenchmarkObservations = composed.Extensions.BenchmarkObservations
+			record.ResourceSummary = composed.Extensions.ResourceSummary
+			return record, nil
+		}
+		if !errors.Is(resolveErr, constants.ErrEvidenceArtifactMalformed) {
+			return CampaignExportAssignmentRecord{}, resolveErr
+		}
+	}
+
+	benchmark, err := observationReader.BuildPublicBenchmarkObservations(ctx, result)
+	if err != nil {
+		return CampaignExportAssignmentRecord{}, err
+	}
+	projection, err := BuildAssignmentResultProjection(assignment, result, category, DerivePublicSummaryStatus(result), verificationStatus)
+	if err != nil {
+		return CampaignExportAssignmentRecord{}, err
+	}
+	projection.VerificationMetadata = exportVerificationMetadata(report, verified)
+	record.Projection = projection
+	record.BenchmarkObservations = benchmark
+	record.ResourceSummary, err = BuildPublicResourceSummary(result)
+	if err != nil {
+		return CampaignExportAssignmentRecord{}, err
+	}
+	return record, nil
+}
+
+func exportVerificationMetadata(report *evalv1.EvaluationVerificationReport, verified bool) *evalv1.PublicVerificationMetadata {
+	if report == nil {
+		return nil
+	}
+	metadata := &evalv1.PublicVerificationMetadata{
+		Provenance:              evalv1.PublicVerificationProvenance_PUBLIC_VERIFICATION_PROVENANCE_LEGACY_UNBOUND,
+		VerifierState:           evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL,
+		VerifierReleaseVersion:  report.GetVerifierReleaseVersion(),
+		VerifierContractVersion: report.GetVerifierContractVersion(),
+		PopulationDigest:        report.GetVerifiedPopulationDigest(),
+	}
+	if report.GetReportDigestRef() != nil {
+		metadata.ReportDigest = report.GetReportDigestRef().GetSha256()
+	}
+	if verified {
+		metadata.Provenance = evalv1.PublicVerificationProvenance_PUBLIC_VERIFICATION_PROVENANCE_BOUND
+		metadata.VerifierState = evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS
+	}
+	return metadata
+}
+
+func replaceModelSummaryRecords(base, verified []CampaignViewRecord) []CampaignViewRecord {
+	result := make([]CampaignViewRecord, 0, len(base)+len(verified))
+	for _, record := range base {
+		var envelope struct {
+			Kind string `json:"kind"`
+		}
+		if err := json.Unmarshal(record.Body, &envelope); err == nil && envelope.Kind == "model_summary" {
+			continue
+		}
+		result = append(result, record)
+	}
+	result = append(result, verified...)
+	return result
+}
+
 func writeExportFile(ctx context.Context, fileSvc fs.RuntimeFileService, outputDir, name string, body []byte, report *CampaignExportReport) error {
 	path := filepath.Join(outputDir, name)
 	if err := fileSvc.WriteFile(ctx, path, body, constants.PermFileReadOnly); err != nil {
@@ -324,7 +587,8 @@ func marshalJSONL(records []CampaignExportAssignmentRecord) ([]byte, error) {
 		}
 		lines = append(lines, body)
 	}
-	return bytes.Join(lines, []byte("\n")), nil
+	body := bytes.Join(lines, []byte("\n"))
+	return append(body, '\n'), nil
 }
 
 func buildCampaignRunSummaryExport(
@@ -376,7 +640,7 @@ func buildCampaignExportSchemaDocument() map[string]any {
 			},
 			"assignments.jsonl": map[string]string{
 				"format":      "jsonl",
-				"description": "One PublicAssignmentResultProjection per terminal assignment with optional benchmark_observations.",
+				"description": "One named export wrapper per terminal assignment containing canonical protobuf JSON under projection plus approved benchmark_observations and resource_summary extensions.",
 			},
 			"model_summaries.jsonl": map[string]string{
 				"format":      "jsonl",
@@ -426,6 +690,10 @@ func buildAssignmentResultsCSV(records []CampaignExportAssignmentRecord) ([]byte
 		"whole_task_ms",
 		"vram_peak_bytes",
 		"system_ram_peak_bytes",
+		"latency_ms",
+		"input_tokens",
+		"output_tokens",
+		"retries",
 	}
 	if err := writer.Write(header); err != nil {
 		return nil, err
@@ -455,6 +723,10 @@ func buildAssignmentResultsCSV(records []CampaignExportAssignmentRecord) ([]byte
 			formatMetricValue(record.BenchmarkObservations, metricWholeTaskMS),
 			formatMetricValue(record.BenchmarkObservations, metricVRAMPeakBytes),
 			formatMetricValue(record.BenchmarkObservations, metricSystemRAMPeakBytes),
+			formatResourceMetric(record.ResourceSummary, func(summary *PublicResourceSummary) PublicResourceMetric { return summary.LatencyMS }),
+			formatResourceMetric(record.ResourceSummary, func(summary *PublicResourceSummary) PublicResourceMetric { return summary.InputTokens }),
+			formatResourceMetric(record.ResourceSummary, func(summary *PublicResourceSummary) PublicResourceMetric { return summary.OutputTokens }),
+			formatResourceMetric(record.ResourceSummary, func(summary *PublicResourceSummary) PublicResourceMetric { return summary.Retries }),
 		}
 		if err := writer.Write(row); err != nil {
 			return nil, err
@@ -508,6 +780,17 @@ func formatPublicMetric(value *PublicMetricValue) string {
 		return ""
 	}
 	return fmt.Sprintf("%.3f", *value.Value)
+}
+
+func formatResourceMetric(summary *PublicResourceSummary, selectMetric func(*PublicResourceSummary) PublicResourceMetric) string {
+	if summary == nil {
+		return ""
+	}
+	metric := selectMetric(summary)
+	if metric.Value == nil {
+		return ""
+	}
+	return fmt.Sprintf("%.3f", *metric.Value)
 }
 
 func buildModelSummariesCSV(state *runAggregateState) ([]byte, error) {

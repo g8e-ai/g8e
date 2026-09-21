@@ -18,44 +18,59 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWaitForProviderIdle_WaitsForStablePSResponse(t *testing.T) {
+func TestWaitForProviderModelsAbsent_WaitsForNamedModelToDisappear(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/api/ps", r.URL.Path)
-		if calls.Add(1) <= 2 {
-			_, _ = w.Write([]byte(`{"models":[{"name":"qwen3:4b"}]}`))
+		if calls.Add(1) == 1 {
+			_, _ = w.Write([]byte(`{"models":[{"name":"qwen3:0.6b"}]}`))
 			return
 		}
 		_, _ = w.Write([]byte(`{"models":[]}`))
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	err := WaitForProviderIdle(ctx, ProviderIdleOptions{
-		Endpoint:       server.URL,
-		PollInterval:   25 * time.Millisecond,
-		SettleDuration: 75 * time.Millisecond,
-	})
+	err := WaitForProviderModelsAbsent(ctx, ProviderResidencyOptions{
+		Endpoint:     server.URL,
+		PollInterval: time.Millisecond,
+	}, []string{"qwen3:0.6b"})
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, calls.Load(), int32(3))
+	require.Equal(t, int32(2), calls.Load())
 }
 
-func TestWaitForProviderIdle_RejectsInvalidEndpoint(t *testing.T) {
+func TestReadProviderResidency_RejectsMalformedResponse(t *testing.T) {
 	t.Parallel()
-	err := WaitForProviderIdle(context.Background(), ProviderIdleOptions{Endpoint: "ftp://bad"})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"models":[`))
+	}))
+	t.Cleanup(server.Close)
+
+	_, err := ReadProviderResidency(context.Background(), ProviderResidencyOptions{Endpoint: server.URL})
 	require.Error(t, err)
 }
 
-func TestWaitForProviderIdle_FailsFastWhenProviderUnreachable(t *testing.T) {
+func TestWaitForProviderModelsAbsent_DoesNotTreatStableResidentModelAsAbsent(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"models":[{"name":"qwen3:0.6b"}]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	err := WaitForProviderIdle(ctx, ProviderIdleOptions{
-		Endpoint:     "http://127.0.0.1:1",
-		PollInterval: 10 * time.Millisecond,
-	})
+	err := WaitForProviderModelsAbsent(ctx, ProviderResidencyOptions{
+		Endpoint:     server.URL,
+		PollInterval: time.Millisecond,
+	}, []string{"qwen3:0.6b"})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "provider unreachable")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestReadProviderResidency_RejectsInvalidEndpoint(t *testing.T) {
+	t.Parallel()
+	_, err := ReadProviderResidency(context.Background(), ProviderResidencyOptions{Endpoint: "ftp://bad"})
+	require.Error(t, err)
 }

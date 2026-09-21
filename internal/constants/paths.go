@@ -293,6 +293,7 @@ const (
 // Container paths for Docker exec commands in demo environments.
 // These are paths inside the g8e Docker containers, not local filesystem paths.
 const (
+	ContainerBinaryPath               = "/g8e"
 	ContainerRootG8E                  = "/root/.g8e"
 	ContainerPKIDir                   = ContainerRootG8E + "/" + PkiDirname
 	ContainerOperatorCert             = ContainerPKIDir + "/" + PkiFileOperatorCert

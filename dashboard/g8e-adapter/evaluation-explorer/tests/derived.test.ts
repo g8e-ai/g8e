@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { describe, expect, it } from 'vitest';
-import type { CatalogSnapshot, EvaluationSummary, LiveEvent, ModelSummary } from '../src/contract/types';
+import type { AssignmentResult, CatalogSnapshot, EvaluationSummary, LiveEvent, ModelSummary } from '../src/contract/types';
 import {
   assignmentMetricEntries,
   assignmentMetricFormatter,
@@ -10,6 +10,7 @@ import {
   roleLabel,
   roleLeaderRows,
   restampStreamProgress,
+  siblingRepetitions,
   streamProgressLabel,
   upsertLiveEvent,
   visibleStreamEvents,
@@ -44,6 +45,45 @@ describe('assignmentMetricFormatter', () => {
     expect(assignmentMetricFormatter('deterministic_pass_rate')(1)).toBe('100.0%');
   });
 });
+
+describe('siblingRepetitions', () => {
+  it('isolates siblings by dataset, run, scenario, variant, and role with deterministic ordering', () => {
+    const assignment = assignmentResult({ assignment_id: 'current', repetition: 1, role: 'primary' });
+    const siblings = siblingRepetitions(assignment, [
+      assignment,
+      assignmentResult({ assignment_id: 'rep-2', repetition: 2, role: 'primary' }),
+      assignmentResult({ assignment_id: 'rep-3', repetition: 3, role: 'primary' }),
+      assignmentResult({ assignment_id: 'rep-2-alpha', repetition: 2, role: 'primary' }),
+      assignmentResult({ assignment_id: 'wrong-role', repetition: 2, role: 'assistant' }),
+      assignmentResult({ assignment_id: 'wrong-task', repetition: 2, task_id: 'other-scenario' }),
+      assignmentResult({ assignment_id: 'wrong-dataset', repetition: 2, dataset_id: 'ds-other' }),
+      assignmentResult({ assignment_id: 'wrong-run', repetition: 2, run_id: 'run-other' }),
+      assignmentResult({ assignment_id: 'wrong-variant', repetition: 2, variant_id: 'other-model' }),
+    ]);
+
+    expect(siblings.map((item) => item.assignment_id)).toEqual(['rep-2', 'rep-2-alpha', 'rep-3']);
+  });
+});
+
+function assignmentResult(partial: Partial<AssignmentResult> = {}): AssignmentResult {
+  return {
+    schema_version: '1.3.0',
+    kind: 'assignment_result',
+    dataset_id: 'ds-assignment-test',
+    quality_state: 'exploratory_partial',
+    observed_at: '2026-09-17T00:00:00Z',
+    assignment_id: 'assignment-1',
+    run_id: 'run-assignment-test',
+    task_id: 'scenario-1',
+    variant_id: 'model-1',
+    role: 'primary',
+    repetition: 1,
+    terminal_status: 'completed',
+    metric_values: { pass: { value: 1 } },
+    stage_summary: [],
+    ...partial,
+  };
+}
 
 function modelSummary(partial: Partial<ModelSummary> & Pick<ModelSummary, 'variant_id' | 'role'>): ModelSummary {
   return {

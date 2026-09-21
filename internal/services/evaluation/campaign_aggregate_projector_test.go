@@ -10,6 +10,7 @@ package evaluation
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -203,24 +205,151 @@ func TestBuildRunVerificationViewRecords(t *testing.T) {
 		RunId:     "run-1",
 		StartedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
 		CampaignBinding: &evalv1.ModelCampaignBinding{
-			CampaignId: "eval-smoke-mini",
+			CampaignId:          "eval-smoke-mini",
+			CampaignDigest:      "campaign-digest",
+			CatalogDigest:       "catalog-digest",
+			ModelRegistryDigest: "model-registry-digest",
 		},
 	}
 	report := &evalv1.EvaluationVerificationReport{
-		SchemaVersion: CampaignSchemaVersion,
-		ReportId:      "run-1",
-		RunId:         "run-1",
-		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
-		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+		SchemaVersion:            "2.0.0",
+		ReportId:                 "run-1",
+		RunId:                    "run-1",
+		Status:                   evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		ReportDigestRef:          &compliancev1.ComplianceEvidenceReference{Sha256: strings.Repeat("a", 64)},
+		VerifiedAt:               timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+		VerifierReleaseVersion:   "v2.1.10",
+		VerifierContractVersion:  "2.0.0",
+		VerifiedPopulationDigest: strings.Repeat("b", 64),
+		CampaignDigest:           "campaign-digest",
+		CatalogDigest:            "catalog-digest",
+		ModelRegistryDigest:      "model-registry-digest",
+		VerifiedAssignmentCount:  1,
+		ExpectedAssignmentCount:  1,
 	}
 	records, err := BuildRunVerificationViewRecords(run, state, report, time.Unix(1_700_000_200, 0).UTC())
 	require.NoError(t, err)
-	require.Len(t, records, 1)
+	require.Len(t, records, 2)
 
 	summary := map[string]any{}
 	require.NoError(t, json.Unmarshal(records[0].Body, &summary))
 	assert.Equal(t, "passed", summary["verifier_state"])
 	assert.Equal(t, "exploratory_verified", summary["quality_state"])
+
+	model := map[string]any{}
+	require.NoError(t, json.Unmarshal(records[1].Body, &model))
+	assert.Equal(t, "model_summary", model["kind"])
+	assert.Equal(t, "exploratory_verified", model["quality_state"])
+	assert.Equal(t, "qwen3-4b", model["variant_id"])
+	assert.Equal(t, "primary", model["role"])
+	assert.Equal(t, float64(1), model["evaluation_coverage"])
+	assert.Equal(t, float64(1), model["pass_rate"].(map[string]any)["denominator"])
+}
+
+func TestBuildRunVerificationViewRecordsEligibility(t *testing.T) {
+	tests := []struct {
+		name          string
+		reportStatus  evalv1.EvaluationVerdictStatus
+		expected      uint32
+		verified      uint32
+		terminal      uint32
+		wantModelRows int
+	}{
+		{name: "failed report", reportStatus: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, expected: 1, verified: 1, terminal: 1},
+		{name: "mismatched population", reportStatus: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, expected: 2, verified: 1, terminal: 1},
+		{name: "incomplete aggregate", reportStatus: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, expected: 2, verified: 1, terminal: 1},
+		{name: "uncovered report", reportStatus: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, expected: 2, verified: 1, terminal: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state := &runAggregateState{
+				Scheduled: tt.expected,
+				Terminal:  tt.terminal,
+				VariantRoles: map[string]*variantRoleAggregate{
+					"qwen3-4b:primary": {VariantID: "qwen3-4b", Role: "primary", Scheduled: 1, Terminal: 1, Passed: 1, Outcomes: map[string]uint32{"completed": 1}},
+				},
+			}
+			run := &evalv1.EvaluationRun{RunId: "run-eligibility"}
+			report := &evalv1.EvaluationVerificationReport{
+				RunId:                   run.GetRunId(),
+				Status:                  tt.reportStatus,
+				ExpectedAssignmentCount: tt.expected,
+				VerifiedAssignmentCount: tt.verified,
+			}
+			records, err := BuildRunVerificationViewRecords(run, state, report, time.Unix(1_700_000_200, 0).UTC())
+			require.NoError(t, err)
+			assert.Len(t, records, 1+tt.wantModelRows)
+		})
+	}
+}
+
+func TestBuildRunVerificationViewRecordsEmitsEveryEligibleVariantRole(t *testing.T) {
+	run := &evalv1.EvaluationRun{
+		RunId: "run-multi-model",
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignDigest:      "campaign-digest",
+			CatalogDigest:       "catalog-digest",
+			ModelRegistryDigest: "model-registry-digest",
+		},
+	}
+	state := &runAggregateState{
+		Scheduled: 2,
+		Terminal:  2,
+		VariantRoles: map[string]*variantRoleAggregate{
+			"model-a:primary":   {VariantID: "model-a", Role: "primary", Scheduled: 1, Terminal: 1, Passed: 1, Outcomes: map[string]uint32{"completed": 1}},
+			"model-b:assistant": {VariantID: "model-b", Role: "assistant", Scheduled: 1, Terminal: 1, Failed: 1, Outcomes: map[string]uint32{"model_failed": 1}},
+		},
+	}
+	report := &evalv1.EvaluationVerificationReport{
+		SchemaVersion:            "2.0.0",
+		RunId:                    run.GetRunId(),
+		Status:                   evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		ReportDigestRef:          &compliancev1.ComplianceEvidenceReference{Sha256: strings.Repeat("a", 64)},
+		VerifiedAt:               timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+		VerifierReleaseVersion:   "v2.1.10",
+		VerifierContractVersion:  "2.0.0",
+		VerifiedPopulationDigest: strings.Repeat("b", 64),
+		CampaignDigest:           "campaign-digest",
+		CatalogDigest:            "catalog-digest",
+		ModelRegistryDigest:      "model-registry-digest",
+		ExpectedAssignmentCount:  2,
+		VerifiedAssignmentCount:  2,
+	}
+	records, err := BuildRunVerificationViewRecords(run, state, report, time.Unix(1_700_000_200, 0).UTC())
+	require.NoError(t, err)
+	require.Len(t, records, 3)
+	firstModel := map[string]any{}
+	secondModel := map[string]any{}
+	require.NoError(t, json.Unmarshal(records[1].Body, &firstModel))
+	require.NoError(t, json.Unmarshal(records[2].Body, &secondModel))
+	assert.Equal(t, "exploratory_verified", firstModel["quality_state"])
+	assert.Equal(t, "exploratory_verified", secondModel["quality_state"])
+	assert.Equal(t, float64(0), secondModel["pass_rate"].(map[string]any)["estimate"])
+	assert.NotEqual(t, firstModel["variant_id"], secondModel["variant_id"])
+}
+
+func TestBuildRunVerificationViewRecordsBoundFailurePublishesPartialModelRevisions(t *testing.T) {
+	run := &evalv1.EvaluationRun{RunId: "run-failed", CampaignBinding: &evalv1.ModelCampaignBinding{CampaignDigest: "campaign", CatalogDigest: "catalog", ModelRegistryDigest: "registry"}}
+	state := &runAggregateState{Scheduled: 1, Terminal: 1, VariantRoles: map[string]*variantRoleAggregate{"model-a:primary": {VariantID: "model-a", Role: "primary", Scheduled: 1, Terminal: 1, Failed: 1, Outcomes: map[string]uint32{"model_failed": 1}}}}
+	report := &evalv1.EvaluationVerificationReport{SchemaVersion: "2.0.0", RunId: run.GetRunId(), Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, ReportDigestRef: &compliancev1.ComplianceEvidenceReference{Sha256: strings.Repeat("c", 64)}, VerifiedAt: timestamppb.New(time.Unix(1_700_000_200, 0).UTC()), VerifierReleaseVersion: "v2.1.10", VerifierContractVersion: "2.0.0", VerifiedPopulationDigest: strings.Repeat("d", 64), CampaignDigest: "campaign", CatalogDigest: "catalog", ModelRegistryDigest: "registry", ExpectedAssignmentCount: 1, VerifiedAssignmentCount: 1}
+	records, err := BuildRunVerificationViewRecords(run, state, report, time.Unix(1_700_000_200, 0).UTC())
+	require.NoError(t, err)
+	require.Len(t, records, 2)
+	model := map[string]any{}
+	require.NoError(t, json.Unmarshal(records[1].Body, &model))
+	assert.Equal(t, "exploratory_partial", model["quality_state"])
+}
+
+func TestBoundVerificationRevisionKeysAreReportScoped(t *testing.T) {
+	assert.NotEqual(t, BoundVerificationSummaryIdempotencyKey("run-1", "a"), BoundVerificationSummaryIdempotencyKey("run-1", "b"))
+	assert.NotEqual(t, VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "a"), VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "b"))
+}
+
+func TestVerifiedModelSummaryIdempotencyKeyIsDistinctAndScoped(t *testing.T) {
+	assert.NotEqual(t, RunVerificationIdempotencyKey("run-1"), VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "a"))
+	assert.NotEqual(t, VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "a"), VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "assistant", "a"))
+	assert.NotEqual(t, VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "a"), VerifiedModelSummaryIdempotencyKey("run-2", "model-1", "primary", "a"))
+	assert.NotEqual(t, VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "a"), VerifiedModelSummaryIdempotencyKey("run-1", "model-1", "primary", "b"))
 }
 
 func TestFormatCampaignVerifierFailureSummary(t *testing.T) {

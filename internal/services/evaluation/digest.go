@@ -224,6 +224,15 @@ func ValidateAssignmentResultDigest(result *evalv1.EvaluationAssignmentResult) e
 	return nil
 }
 
+// ComputeVerifiedPopulationDigest computes the canonical deterministic digest
+// for an evaluation verified population.
+func ComputeVerifiedPopulationDigest(population *evalv1.EvaluationVerifiedPopulation) (string, error) {
+	if population == nil {
+		return "", fmt.Errorf("evaluation: compute verified population digest: %w", constants.ErrMissingRequiredField)
+	}
+	return digestProto(population)
+}
+
 func digestProto(message proto.Message) (string, error) {
 	data, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
 	if err != nil {

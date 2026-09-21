@@ -66,17 +66,6 @@ func TestReconcileVerifiedCampaignMirrorQueue_LoadsQueueAndRestores(t *testing.T
 	}, req.ScenarioArtifacts)
 	require.NoError(t, err)
 
-	report := &evalv1.EvaluationVerificationReport{
-		SchemaVersion: evaluation.CampaignSchemaVersion,
-		ReportId:      run.GetRunId(),
-		RunId:         run.GetRunId(),
-		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
-		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
-	}
-	require.NoError(t, store.SaveCampaignVerification(context.Background(), run.GetRunId(), report))
-	_, err = coordinator.PublishRunCatchUpWithVerification(context.Background(), run.GetRunId(), report)
-	require.NoError(t, err)
-
 	queue := &evaluation.CampaignQueue{
 		Models: []evaluation.CampaignQueueModel{{
 			VariantID:     "gemma4-e4b",
@@ -175,17 +164,6 @@ func TestCampaignEvalMirrorRestoreQueue_ViaCLI(t *testing.T) {
 	}, req.ScenarioArtifacts)
 	require.NoError(t, err)
 
-	report := &evalv1.EvaluationVerificationReport{
-		SchemaVersion: evaluation.CampaignSchemaVersion,
-		ReportId:      run.GetRunId(),
-		RunId:         run.GetRunId(),
-		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
-		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
-	}
-	require.NoError(t, store.SaveCampaignVerification(context.Background(), run.GetRunId(), report))
-	_, err = coordinator.PublishRunCatchUpWithVerification(context.Background(), run.GetRunId(), report)
-	require.NoError(t, err)
-
 	queue := &evaluation.CampaignQueue{
 		Models: []evaluation.CampaignQueueModel{{
 			VariantID:     "qwen3-4b",
@@ -236,17 +214,6 @@ func TestCampaignEvalMirrorRestoreRun_ViaCLI(t *testing.T) {
 		ModelRegistryDigest:        req.Inventory.RegistryDigest,
 		ModelRegistry:              evaluation.InferenceVariantsFromEvalRegistry(req.Inventory.Variants),
 	}, req.ScenarioArtifacts)
-	require.NoError(t, err)
-
-	report := &evalv1.EvaluationVerificationReport{
-		SchemaVersion: evaluation.CampaignSchemaVersion,
-		ReportId:      run.GetRunId(),
-		RunId:         run.GetRunId(),
-		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
-		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
-	}
-	require.NoError(t, store.SaveCampaignVerification(context.Background(), run.GetRunId(), report))
-	_, err = coordinator.PublishRunCatchUpWithVerification(context.Background(), run.GetRunId(), report)
 	require.NoError(t, err)
 
 	command := evalCmdWithConfig(deps)

@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -38,9 +37,6 @@ func campaignEvalStartCmd(deps nativeEvalDeps) *cobra.Command {
 	var requireProviderObservation bool
 	var requireModelProvenance bool
 	var noAutoRefresh bool
-	var waitForProviderIdle bool
-	var providerIdlePoll time.Duration
-	var providerSettle time.Duration
 	var tierA bool
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -77,9 +73,6 @@ Examples:
 				RequireProviderObservation: requireProviderObservation,
 				RequireModelProvenance:     requireModelProvenance,
 				NoAutoRefresh:              noAutoRefresh,
-				WaitForProviderIdle:        waitForProviderIdle,
-				ProviderIdlePoll:           providerIdlePoll,
-				ProviderSettle:             providerSettle,
 				JSONOutput:                 output.JSONEnabled(cmd),
 			}
 			result, err := runCampaignStartFlow(cmd, deps, flowOpts)
@@ -119,7 +112,7 @@ Examples:
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Pin the inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Pin the data Operator session ID")
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
-	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for provider-idle gating (default: active inference operator runtime_config, then G8E_OLLAMA_ENDPOINT, then loopback)")
+	cmd.Flags().StringVar(&ollamaEndpoint, "ollama-endpoint", "", "Approved remote Ollama endpoint for model maintenance (default: active inference operator runtime_config, then G8E_OLLAMA_ENDPOINT, then loopback)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the resolved plan without running")
 	cmd.Flags().BoolVar(&prepareOnly, "prepare-only", false, "Initialize and schedule only; stop before execute")
 	cmd.Flags().BoolVar(&publish, "publish", true, "Publish lifecycle projections to the public mirror during schedule and execute")
@@ -129,9 +122,6 @@ Examples:
 	cmd.Flags().BoolVar(&requireModelProvenance, "require-model-provenance", false, "Fail verify when model provenance attestation windows are missing or digest_match is false")
 	cmd.Flags().BoolVar(&tierA, "tier-a", false, "Tier-A verify preset: require provider observation and model provenance")
 	cmd.Flags().BoolVar(&noAutoRefresh, "no-auto-refresh", false, "Do not refresh stale CLI operator bindings before execution")
-	cmd.Flags().BoolVar(&waitForProviderIdle, "wait-for-provider-idle", true, "Wait for Ollama to become idle before each assignment")
-	cmd.Flags().DurationVar(&providerIdlePoll, "provider-idle-poll", 2*time.Second, "Poll interval while waiting for Ollama idle")
-	cmd.Flags().DurationVar(&providerSettle, "provider-settle", 8*time.Second, "Required stable /api/ps window before starting the next assignment")
 	return cmd
 }
 

@@ -155,6 +155,86 @@ func TestImportAssignmentResultFromTrace_MaterializesToolEvidence(t *testing.T) 
 	require.Len(t, result.GetGovernedActions(), 1)
 }
 
+func TestImportAssignmentResultFromTrace_MapsTelemetryAndPolicyPresence(t *testing.T) {
+	t.Parallel()
+	trace := completedHomogeneousTrace("primary")
+	call := trace["model_calls"].([]any)[0].(map[string]any)
+	call["usage_reported"] = true
+	call["input_tokens"] = float64(0)
+	call["output_tokens"] = float64(12)
+	call["thinking_tokens"] = float64(0)
+	call["cache_tokens"] = float64(3)
+	call["retry_count"] = float64(0)
+	call["finish_reason"] = "stop"
+	call["governed_output_hash"] = "d" + repeatHex('d', 63)
+	call["monotonic_start"] = 10.25
+	call["monotonic_end"] = 11.5
+	trace["policy_decisions"] = []any{map[string]any{
+		"decision_id": "policy-1",
+		"tool_name":   "",
+		"outcome":     "deny",
+		"detail":      "application-reported refusal",
+	}}
+	digest, err := ComputeChatProbeTraceDigest(trace)
+	require.NoError(t, err)
+	trace["trace_digest"] = digest
+
+	result, err := ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest("primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix + "-1" })
+	require.NoError(t, err)
+	inference := result.GetModelInferences()[0]
+	assert.Equal(t, evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED, inference.GetUsageAvailability())
+	assert.Equal(t, uint32(0), inference.GetPromptTokens())
+	assert.Equal(t, uint32(12), inference.GetCompletionTokens())
+	assert.Equal(t, uint32(0), inference.GetThinkingTokens())
+	assert.Equal(t, uint32(3), inference.GetCacheTokens())
+	require.NotNil(t, inference.RetryCount)
+	assert.Equal(t, uint32(0), inference.GetRetryCount())
+	assert.Equal(t, "d"+repeatHex('d', 63), inference.GetOutputHash())
+	assert.Equal(t, uint64(1_250_000_000), result.GetScoredInferenceSpanNanos())
+	assert.True(t, result.GetPolicyDecisionsCaptured())
+	require.Len(t, result.GetPolicyDecisions(), 1)
+	assert.Equal(t, evalv1.EvaluationPolicyDecisionOutcome_EVALUATION_POLICY_DECISION_OUTCOME_DENY, result.GetPolicyDecisions()[0].GetOutcome())
+	assert.Empty(t, result.GetPolicyDecisions()[0].GetToolName())
+}
+
+func TestImportAssignmentResultFromTrace_RejectsUnknownPolicyOutcome(t *testing.T) {
+	t.Parallel()
+	trace := completedHomogeneousTrace("primary")
+	trace["policy_decisions"] = []any{map[string]any{
+		"decision_id": "policy-1",
+		"tool_name":   "read_file",
+		"outcome":     "maybe",
+		"detail":      "bad",
+	}}
+	digest, err := ComputeChatProbeTraceDigest(trace)
+	require.NoError(t, err)
+	trace["trace_digest"] = digest
+	_, err = ImportAssignmentResultFromTrace(homogeneousAssignmentExecutionRequest("primary"), trace, nil, time.Unix(1_700_000_000, 0).UTC(), func(prefix string) string { return prefix })
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown outcome")
+}
+
+func TestDurationSecondsToNanosChecked_RoundsProviderTelemetryFloats(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		seconds float64
+		want    uint64
+	}{
+		{name: "load duration", seconds: 0.0068479, want: 6_847_900},
+		{name: "generation duration", seconds: 0.956517, want: 956_517_000},
+		{name: "total duration", seconds: 1.043945, want: 1_043_945_000},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := durationSecondsToNanosChecked(tt.seconds)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func completedHomogeneousTrace(role string) map[string]any {
 	trace := map[string]any{
 		"schema_version":    "1",

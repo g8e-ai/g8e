@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/publicdisclosure"
 )
 
 type PublicMirrorSourceState struct {
@@ -589,6 +590,11 @@ func (m *PublicMirrorServer) validateBatch(batch models.PublicFeedBatch) (models
 		}
 		if err := checkProhibitedFields(r.RecordBytes); err != nil {
 			return models.PublicFeedIngestRejectionSignatureInvalid, err
+		}
+		if r.RecordType == models.PublicFeedRecordTypeProjection {
+			if err := publicdisclosure.ValidateAssignmentRecord("", []byte(r.RecordBytes)); err != nil {
+				return models.PublicFeedIngestRejectionSignatureInvalid, fmt.Errorf("public mirror: validate assignment record: %w", err)
+			}
 		}
 	}
 	if _, err := validatePublicKeyRevocations(batch, storeState); err != nil {

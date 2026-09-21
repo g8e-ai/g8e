@@ -36,8 +36,7 @@ func TestCampaignWitnessStatusFromOperators(t *testing.T) {
 		{
 			Status: constants.OperatorStatusActive,
 			RuntimeConfig: &models.RuntimeConfig{
-				ProviderBoundaryObserverEnabled:       true,
-				ProviderBoundaryObserverOllamaEnabled: true,
+				ProviderBoundaryObserverEnabled: true,
 			},
 		},
 		{
@@ -50,7 +49,6 @@ func TestCampaignWitnessStatusFromOperators(t *testing.T) {
 	assert.True(t, status.Ready)
 	assert.Equal(t, 1, status.ActiveObserverCount)
 	assert.Equal(t, 1, status.ActiveProvenanceCount)
-	assert.Equal(t, 1, status.ActiveObserverOllamaCount)
 }
 
 func TestTierAVerifyNotes(t *testing.T) {

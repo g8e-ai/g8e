@@ -376,7 +376,8 @@ embed-explorer:
 build: embed-explorer
 	@echo "Building g8e Operator for current platform..."
 	@mkdir -p $(BIN_DIR)
-	@NODE_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
+	@set -e; \
+	NODE_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
 	if [ "$(HOST_OS)" = "windows" ]; then \
 		NODE_BINARY=$$NODE_BINARY.exe; \
 		ROOT_COPY=g8e.exe; \

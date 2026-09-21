@@ -21,6 +21,7 @@ import {
   type TerminalStatus,
   type VerifierState,
 } from '../contract/types';
+import { decodeCampaignProjectionEnvelope } from '../contract/campaign-wire';
 
 export const CAMPAIGN_SOURCE_REVISION = 'g8e-eval-campaign';
 
@@ -29,6 +30,19 @@ export interface CampaignProjectionEnvelope {
   message_type: string;
   idempotency_key: string;
   record: Record<string, unknown>;
+}
+
+export function isCampaignProjectionEnvelope(value: unknown): value is CampaignProjectionEnvelope {
+  try {
+    decodeCampaignProjectionEnvelope(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validateCampaignEnvelope(value: unknown): CampaignProjectionEnvelope {
+  return decodeCampaignProjectionEnvelope(value) as unknown as CampaignProjectionEnvelope;
 }
 
 export interface CampaignAdaptContext {
@@ -67,6 +81,15 @@ export function createCampaignAdaptContext(): CampaignAdaptContext {
     runTotals: new Map(),
     scheduledAssignments: new Map(),
     terminalAssignments: new Map(),
+  };
+}
+
+export function cloneCampaignAdaptContext(context: CampaignAdaptContext): CampaignAdaptContext {
+  return {
+    assignmentMeta: new Map(Array.from(context.assignmentMeta, ([key, value]) => [key, { ...value }])),
+    runTotals: new Map(Array.from(context.runTotals, ([key, value]) => [key, { ...value }])),
+    scheduledAssignments: new Map(Array.from(context.scheduledAssignments, ([key, value]) => [key, new Set(value)])),
+    terminalAssignments: new Map(Array.from(context.terminalAssignments, ([key, value]) => [key, new Set(value)])),
   };
 }
 
@@ -154,21 +177,10 @@ export function liveEventProgressCounts(
   const { completed: terminal, total } = campaignProgressCounts(progress);
   if (eventKind === 'assignment_started') {
     // A running assignment is the next unit of work after finished terminals.
-    return { completed: terminal + 1, total };
+    const eventTotal = total > 0 ? total : terminal + 1;
+    return { completed: Math.min(terminal + 1, eventTotal), total: eventTotal };
   }
   return { completed: terminal, total };
-}
-
-export function isCampaignProjectionEnvelope(value: unknown): value is CampaignProjectionEnvelope {
-  if (typeof value !== 'object' || value === null) return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.schema_version === 'string' &&
-    typeof candidate.message_type === 'string' &&
-    typeof candidate.idempotency_key === 'string' &&
-    typeof candidate.record === 'object' &&
-    candidate.record !== null
-  );
 }
 
 export function campaignDatasetId(runId: string): string {
@@ -176,16 +188,18 @@ export function campaignDatasetId(runId: string): string {
 }
 
 export function adaptCampaignProjectionEnvelope(
-  envelope: CampaignProjectionEnvelope,
+  envelope: unknown,
   context: CampaignAdaptContext,
 ): Array<SnapshotRecord | LiveEvent> {
-  switch (envelope.message_type) {
+  const validatedEnvelope = validateCampaignEnvelope(envelope);
+  const adaptedEnvelope = validatedEnvelope;
+  switch (adaptedEnvelope.message_type) {
     case 'PublicAssignmentLifecycleRecord':
-      return adaptLifecycleRecord(envelope, context);
+      return adaptLifecycleRecord(adaptedEnvelope, context);
     case 'PublicAssignmentResultProjection':
-      return adaptResultProjection(envelope, context);
+      return adaptResultProjection(adaptedEnvelope, context);
     default:
-      throw new Error(`unsupported campaign projection message_type ${envelope.message_type}`);
+      throw new Error(`unsupported campaign projection message_type ${adaptedEnvelope.message_type}`);
   }
 }
 
@@ -283,12 +297,18 @@ function adaptResultProjection(
     scenario_category: meta?.scenarioCategory ?? mapScenarioCategory(optionalString(record.scenario_category)),
     evaluation_unit: meta?.evaluationUnit ?? mapEvaluationUnit(optionalString(record.lane)),
     stack_id: meta?.stackId ?? optionalString(record.stack_id),
+    scenario_summary: mapScenarioSummary(record.scenario_summary),
+    semantic_grade_summaries: mapSemanticGradeSummaries(record.semantic_grade_summaries),
+    activity_summary: mapActivitySummary(record.activity_summary),
+    evidence_bindings: mapEvidenceBindings(record.evidence_bindings),
     terminal_status: terminalStatus,
     metric_values: mapDecomposedScores(record.decomposed_scores),
     missingness_reason: unavailableMetricReason(record.unavailable_metric_reasons),
     benchmark_observations: mapBenchmarkObservations(record.benchmark_observations),
     stage_summary: [],
+    resource_summary: mapResourceSummary(record.resource_summary),
     verification_disposition: mapVerificationDisposition(optionalString(record.verification_status)),
+    verification_metadata: mapVerificationMetadata(record.verification_metadata),
   };
 
   const records: Array<SnapshotRecord | LiveEvent> = [assignment];
@@ -342,6 +362,183 @@ function buildStageLabel(
   if (scenarioId) parts.push(scenarioId);
   return parts.join(' · ');
 }
+
+function mapScenarioSummary(value: unknown): AssignmentResult['scenario_summary'] {
+  if (!isRecord(value)) return undefined;
+  return {
+    scenario_id: requiredString(value, 'scenario_id'),
+    scenario_version: requiredString(value, 'scenario_version'),
+    category: mapScenarioCategory(requiredString(value, 'category')) ?? 'instruction_adherence',
+    public_description: requiredString(value, 'public_description'),
+    grading_method: mapGradingMethod(requiredString(value, 'grading_method')),
+    allowed_tools: stringArray(value.allowed_tools),
+    expected_tools: stringArray(value.expected_tools),
+    forbidden_tools: stringArray(value.forbidden_tools),
+    criteria: Array.isArray(value.criteria) ? value.criteria.map(mapScenarioCriterion) : [],
+    tool_score_dimensions: Array.isArray(value.tool_score_dimensions)
+      ? value.tool_score_dimensions.map(mapToolScoreDimension)
+      : [],
+  };
+}
+
+function mapScenarioCriterion(value: unknown): NonNullable<AssignmentResult['scenario_summary']>['criteria'][number] {
+  const criterion = asRecord(value);
+  return {
+    criterion_id: requiredString(criterion, 'criterion_id'),
+    public_label: requiredString(criterion, 'public_label'),
+    public_description: requiredString(criterion, 'public_description'),
+    grading_method: mapGradingMethod(requiredString(criterion, 'grading_method')),
+    required: criterion.required === true,
+  };
+}
+
+function mapToolScoreDimension(value: unknown): NonNullable<AssignmentResult['scenario_summary']>['tool_score_dimensions'][number] {
+  const dimension = asRecord(value);
+  return {
+    dimension: mapToolScoreDimensionName(requiredString(dimension, 'dimension')),
+    required: dimension.required === true,
+  };
+}
+
+function mapSemanticGradeSummaries(value: unknown): AssignmentResult['semantic_grade_summaries'] {
+  if (!Array.isArray(value)) return undefined;
+  return value.map((entry) => {
+    const grade = asRecord(entry);
+    return {
+      criterion_id: requiredString(grade, 'criterion_id'),
+      status: mapNativeResultStatus(requiredString(grade, 'status')),
+      grading_method: mapGradingMethod(requiredString(grade, 'grading_method')),
+      judge_variant_id: optionalString(grade.judge_variant_id),
+      explanation_code: mapExplanationCode(requiredString(grade, 'explanation_code')),
+    };
+  });
+}
+
+function mapActivitySummary(value: unknown): AssignmentResult['activity_summary'] {
+  if (!isRecord(value)) return undefined;
+  return {
+    model_activity: mapActivityFamily(value.model_activity, mapModelActivityRecord),
+    tool_decisions: mapActivityFamily(value.tool_decisions, mapToolDecisionRecord),
+    tool_calls: mapActivityFamily(value.tool_calls, mapToolCallRecord),
+    policy_decisions: mapActivityFamily(value.policy_decisions, mapPolicyDecisionRecord),
+    governed_actions: mapActivityFamily(value.governed_actions, mapGovernedActionRecord),
+  };
+}
+
+function mapActivityFamily<T>(value: unknown, mapper: (value: unknown) => T): { availability: 'observed' | 'unavailable' | 'not_applicable'; unavailable_reason?: NonNullable<AssignmentResult['activity_summary']>['model_activity']['unavailable_reason']; records: T[] } {
+  const family = asRecord(value);
+  const availability = mapAvailability(requiredString(family, 'availability'));
+  return {
+    availability,
+    unavailable_reason: availability === 'observed' ? undefined : mapUnavailableReason(requiredString(family, 'unavailable_reason')),
+    records: Array.isArray(family.records) ? family.records.map(mapper) : [],
+  };
+}
+
+function mapModelActivityRecord(value: unknown): NonNullable<NonNullable<AssignmentResult['activity_summary']>['model_activity']['records']>[number] {
+  const record = asRecord(value);
+  return {
+    model_role: mapModelRole(requiredString(record, 'model_role')) ?? 'primary',
+    agent_persona: optionalString(record.agent_persona),
+    variant_id: requiredString(record, 'variant_id'),
+    usage_availability: mapUsageAvailability(requiredString(record, 'usage_availability')),
+    input_tokens: mapWireMetric(record.input_tokens, true),
+    output_tokens: mapWireMetric(record.output_tokens, true),
+    thinking_tokens: mapWireMetric(record.thinking_tokens, true),
+    cache_tokens: mapWireMetric(record.cache_tokens, true),
+    total_duration_nanos: mapWireMetric(record.total_duration_nanos, true),
+    generation_duration_nanos: mapWireMetric(record.generation_duration_nanos, true),
+    retry_count: mapWireMetric(record.retry_count),
+    finish_state: mapFinishState(requiredString(record, 'finish_state')),
+    load_state: mapLoadState(requiredString(record, 'load_state')),
+  };
+}
+
+function mapToolDecisionRecord(value: unknown): NonNullable<NonNullable<AssignmentResult['activity_summary']>['tool_decisions']['records']>[number] {
+  const record = asRecord(value);
+  return { tool_label: requiredString(record, 'tool_label'), recognized: record.recognized === true, selected: record.selected === true, permission_compliant: record.permission_compliant === true, unnecessary: record.unnecessary === true, outcome: mapSemanticOutcome(requiredString(record, 'outcome')), evidence_source: 'application_reported' };
+}
+
+function mapToolCallRecord(value: unknown): NonNullable<NonNullable<AssignmentResult['activity_summary']>['tool_calls']['records']>[number] {
+  const record = asRecord(value);
+  return { tool_label: requiredString(record, 'tool_label'), execution_outcome: mapExecutionOutcome(requiredString(record, 'execution_outcome')), semantic_outcome: mapSemanticOutcome(requiredString(record, 'semantic_outcome')), evidence_source: 'application_reported' };
+}
+
+function mapPolicyDecisionRecord(value: unknown): NonNullable<NonNullable<AssignmentResult['activity_summary']>['policy_decisions']['records']>[number] {
+  const record = asRecord(value);
+  return { tool_label: requiredString(record, 'tool_label'), outcome: mapToolOutcome(requiredString(record, 'outcome')), evidence_source: 'application_reported' };
+}
+
+function mapGovernedActionRecord(value: unknown): NonNullable<NonNullable<AssignmentResult['activity_summary']>['governed_actions']['records']>[number] {
+  const record = asRecord(value);
+  return { action_label: 'governed action', reported_policy_outcome: mapReportedPolicyOutcome(requiredString(record, 'reported_policy_outcome')), receipt_status: mapReceiptStatus(requiredString(record, 'receipt_status')), evidence_source: mapEvidenceSource(requiredString(record, 'evidence_source')) };
+}
+
+function mapEvidenceBindings(value: unknown): AssignmentResult['evidence_bindings'] {
+  if (!Array.isArray(value)) return undefined;
+  return value.map((entry) => {
+    const binding = asRecord(entry);
+    return { sha256: requiredString(binding, 'sha256'), schema_ref: requiredString(binding, 'schema_ref'), kind: requiredString(binding, 'kind') as NonNullable<AssignmentResult['evidence_bindings']>[number]['kind'] };
+  });
+}
+
+function mapResourceSummary(value: unknown): AssignmentResult['resource_summary'] {
+  if (!isRecord(value)) return undefined;
+  const result: NonNullable<AssignmentResult['resource_summary']> = {};
+  for (const [key, metric] of Object.entries(value)) {
+    if (['latency_ms', 'input_tokens', 'output_tokens', 'thinking_tokens', 'cache_tokens', 'retries'].includes(key)) {
+      result[key as keyof typeof result] = mapWireMetric(metric);
+    }
+  }
+  return result;
+}
+
+function mapVerificationMetadata(value: unknown): AssignmentResult['verification_metadata'] {
+  if (!isRecord(value)) return undefined;
+  return {
+    provenance: requiredString(value, 'provenance') === 'PUBLIC_VERIFICATION_PROVENANCE_BOUND' ? 'bound' : 'legacy_unbound',
+    verifier_state: mapVerificationState(requiredString(value, 'verifier_state')),
+    verifier_release_version: optionalString(value.verifier_release_version),
+    verifier_contract_version: optionalString(value.verifier_contract_version),
+    report_digest: optionalString(value.report_digest),
+    population_digest: optionalString(value.population_digest),
+  };
+}
+
+function mapWireMetric(value: unknown, decimalString = false): MetricValue<number> | undefined {
+  if (value === undefined) return undefined;
+  if (decimalString && typeof value === 'string') return { value: Number(value) };
+  if (typeof value === 'number' && Number.isFinite(value)) return { value };
+  if (isRecord(value) && typeof value.value === 'number' && Number.isFinite(value.value)) return { value: value.value };
+  if (isRecord(value) && typeof value.unavailable_reason === 'string') return { unavailable_reason: mapUnavailableReason(value.unavailable_reason) };
+  return undefined;
+}
+
+function mapGradingMethod(value: string): 'deterministic' | 'semantic_judge' { return value.endsWith('SEMANTIC_JUDGE') ? 'semantic_judge' : 'deterministic'; }
+function mapNativeResultStatus(value: string): 'pass' | 'fail' | 'unavailable' | 'unsupported' | 'invalid_evidence' { return normalizeEnumToken(value).replace('VERDICT_STATUS_', '').toLowerCase() as ReturnType<typeof mapNativeResultStatus>; }
+function mapExplanationCode(value: string): NonNullable<AssignmentResult['semantic_grade_summaries']>[number]['explanation_code'] { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^GRADE_EXPLANATION_CODE_/, '').toLowerCase() as NonNullable<AssignmentResult['semantic_grade_summaries']>[number]['explanation_code']; }
+function mapToolScoreDimensionName(value: string): NonNullable<AssignmentResult['scenario_summary']>['tool_score_dimensions'][number]['dimension'] { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^TOOL_SCORE_DIMENSION_/, '').toLowerCase() as NonNullable<AssignmentResult['scenario_summary']>['tool_score_dimensions'][number]['dimension']; }
+function mapAvailability(value: string): 'observed' | 'unavailable' | 'not_applicable' { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^ACTIVITY_AVAILABILITY_/, '').toLowerCase() as ReturnType<typeof mapAvailability>; }
+function mapUnavailableReason(value: string): NonNullable<AssignmentResult['activity_summary']>['model_activity']['unavailable_reason'] { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^UNAVAILABLE_REASON_/, '').toLowerCase() as NonNullable<AssignmentResult['activity_summary']>['model_activity']['unavailable_reason']; }
+function mapUsageAvailability(value: string): 'reported' | 'unavailable' { return normalizeEnumToken(value).replace(/^EVALUATION_/, '').replace(/^USAGE_AVAILABILITY_/, '').toLowerCase() as ReturnType<typeof mapUsageAvailability>; }
+function mapFinishState(value: string): NonNullable<NonNullable<AssignmentResult['activity_summary']>['model_activity']['records']>[number]['finish_state'] { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^FINISH_STATE_/, '').toLowerCase() as ReturnType<typeof mapFinishState>; }
+function mapLoadState(value: string): NonNullable<NonNullable<AssignmentResult['activity_summary']>['model_activity']['records']>[number]['load_state'] { return normalizeEnumToken(value).replace(/^EVALUATION_/, '').replace(/^LOAD_STATE_/, '').toLowerCase() as ReturnType<typeof mapLoadState>; }
+function mapSemanticOutcome(value: string): NonNullable<NonNullable<AssignmentResult['activity_summary']>['tool_decisions']['records']>[number]['outcome'] { return mapNativeResultStatus(value); }
+function mapExecutionOutcome(value: string): NonNullable<NonNullable<AssignmentResult['activity_summary']>['tool_calls']['records']>[number]['execution_outcome'] { return mapNativeResultStatus(value); }
+function mapToolOutcome(value: string): 'allow' | 'deny' | 'refused' { return normalizeEnumToken(value).replace(/^EVALUATION_/, '').replace(/^POLICY_DECISION_OUTCOME_/, '').toLowerCase() as ReturnType<typeof mapToolOutcome>; }
+function mapReportedPolicyOutcome(value: string): 'allow' | 'deny' | 'refused' { return mapToolOutcome(value); }
+function mapReceiptStatus(value: string): 'unavailable' | 'reported' { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^RECEIPT_STATUS_/, '').toLowerCase() as ReturnType<typeof mapReceiptStatus>; }
+function mapEvidenceSource(value: string): 'application_reported' | 'bound_public_proof' { return normalizeEnumToken(value).replace(/^PUBLIC_/, '').replace(/^EVIDENCE_SOURCE_/, '').toLowerCase() as ReturnType<typeof mapEvidenceSource>; }
+function mapVerificationState(value: string): VerifierState {
+  const status = mapNativeResultStatus(value);
+  if (status === 'pass') return 'passed';
+  if (status === 'fail' || status === 'invalid_evidence') return 'failed';
+  return 'not_applicable';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
+function asRecord(value: unknown): Record<string, unknown> { if (!isRecord(value)) throw new Error('campaign projection expected object'); return value; }
+function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []; }
 
 function mapBenchmarkObservations(value: unknown): BenchmarkObservations | undefined {
   if (typeof value !== 'object' || value === null) return undefined;

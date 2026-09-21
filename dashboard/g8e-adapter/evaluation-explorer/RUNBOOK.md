@@ -6,7 +6,7 @@ Run commands from `/home/bob/g8e` unless a section changes directory. Docker Eng
 
 On the **provider host** (where Ollama runs), enroll two separate witness operator sessions when running full campaigns:
 
-1. **Observer Operator** — `--provider-boundary-observer-enabled` (and optional `--ollama` for remote Ollama service restart between assignments).
+1. **Observer Operator** — `--provider-boundary-observer-enabled` for provider-boundary resource observation.
 2. **Provenance Operator** — `--provenance-operator-enabled` with `--model-storage-root` pointing at the Ollama models directory (for example `~/.ollama/models`).
 
 See [Unified Docker Stack Guide](../../../docs/guides/unified_stack.md#provider-boundary-observer-operator-windows-ollama-host) and [Storage-side Provenance Operator](../../../docs/guides/unified_stack.md#storage-side-provenance-operator).

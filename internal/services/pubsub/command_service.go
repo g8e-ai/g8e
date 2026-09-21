@@ -94,11 +94,11 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 	cs.logger.Info("Parsed command payload via Protobuf (CommandRequested)")
 
 	command := protoCmd.Command
-	if err := operatorcapability.ValidateOllamaServiceCommand(&models.RuntimeConfig{
-		ProviderBoundaryObserverEnabled:       cs.config.ProviderBoundaryObserver.Enabled,
-		ProviderBoundaryObserverOllamaEnabled: cs.config.ProviderBoundaryObserver.OllamaEnabled,
+	if err := operatorcapability.ValidateWitnessCommand(&models.RuntimeConfig{
+		ProviderBoundaryObserverEnabled: cs.config.ProviderBoundaryObserver.Enabled,
+		ProvenanceOperatorEnabled:       cs.config.ProvenanceOperator.Enabled,
 	}, command); err != nil {
-		cs.logger.Error("Ollama service command rejected", "command", command, string(constants.ConnectionStateError), err)
+		cs.logger.Error("Witness command rejected", "command", command, string(constants.ConnectionStateError), err)
 		return
 	}
 	justification := protoCmd.Justification
@@ -399,7 +399,7 @@ func payloadToExecutionRequest(msg *PubSubCommandMessage) (*models.ExecutionRequ
 		timeoutSeconds = int(protoCmd.TimeoutSeconds)
 	}
 
-	return &models.ExecutionRequestPayload{
+	request := &models.ExecutionRequestPayload{
 		ExecutionID:     executionID,
 		CaseID:          msg.CaseID,
 		TaskID:          msg.TaskID,
@@ -407,8 +407,14 @@ func payloadToExecutionRequest(msg *PubSubCommandMessage) (*models.ExecutionRequ
 		Command:         protoCmd.Command,
 		TimeoutSeconds:  timeoutSeconds,
 		RequestedBy:     "g8e-system",
+		Environment:     protoCmd.GetEnvironment(),
 		Justification:   protoCmd.Justification,
 		Intent:          protoCmd.Intent,
 		VaultMode:       protoCmd.VaultMode,
-	}, nil
+	}
+	if protoCmd.GetWorkingDirectory() != "" {
+		workingDirectory := protoCmd.GetWorkingDirectory()
+		request.WorkingDirectory = &workingDirectory
+	}
+	return request, nil
 }

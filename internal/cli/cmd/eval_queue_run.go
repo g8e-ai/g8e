@@ -60,7 +60,6 @@ func rolloutEvalRunCmd(deps nativeEvalDeps) *cobra.Command {
 	var ensembleURL string
 	var inferenceSessionID string
 	var dataSessionID string
-	var providerSettle time.Duration
 	var waitForWitnesses time.Duration
 	var logDir string
 	var ensembleHealthURL string
@@ -141,8 +140,6 @@ Examples:
 					Verify:                     verify,
 					RequireProviderObservation: requireProviderObservation,
 					RequireModelProvenance:     requireModelProvenance,
-					WaitForProviderIdle:        true,
-					ProviderSettle:             providerSettle,
 				})
 				closeErr := logFile.Close()
 				if runErr != nil {
@@ -191,7 +188,6 @@ Examples:
 	cmd.Flags().StringVar(&ensembleURL, "ensemble-url", "", "g8ee HTTP surface (default: http://localhost:8000)")
 	cmd.Flags().StringVar(&inferenceSessionID, "inference-session", "", "Pin the inference Operator session ID")
 	cmd.Flags().StringVar(&dataSessionID, "data-session", "", "Pin the data Operator session ID")
-	cmd.Flags().DurationVar(&providerSettle, "provider-settle", 8*time.Second, "Required stable /api/ps window before each assignment")
 	cmd.Flags().DurationVar(&waitForWitnesses, "wait-for-witnesses", 0, "Poll up to this duration for active observer and provenance operators")
 	cmd.Flags().StringVar(&logDir, "log-dir", "", "Directory for per-model logs (default: .g8e/eval/logs/queue-run-TIMESTAMP)")
 	cmd.Flags().StringVar(&ensembleHealthURL, "ensemble-health-url", "http://127.0.0.1:8000/health", "Preflight g8ee health URL")
@@ -271,11 +267,8 @@ func preflightCampaignQueueRun(
 			return err
 		}
 		if status.Ready {
-			if status.ActiveObserverOllamaCount < 1 {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: no active observer with --ollama; governed Ollama reset between assignments will be skipped\n")
-			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Preflight ok (observer=%d provenance=%d observer_ollama=%d)\n",
-				status.ActiveObserverCount, status.ActiveProvenanceCount, status.ActiveObserverOllamaCount)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Preflight ok (observer=%d provenance=%d)\n",
+				status.ActiveObserverCount, status.ActiveProvenanceCount)
 			return nil
 		}
 		if waitForWitnesses <= 0 || !deps.now().Before(deadline) {

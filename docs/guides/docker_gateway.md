@@ -200,7 +200,7 @@ Docker evaluation runs the Gateway in a container while the campaign controller 
 
 **Campaign verify.** Provider observation windows ingested by the gateway are not visible on the host filesystem. Verify uses the gateway read API when local evidence is missing. Assignments that completed before the Observer Operator enrolled fail `--require-provider-observation` honestly; re-run or accept partial coverage. Model provenance attestation windows follow the same gateway-ingest pattern when the Provenance Operator is enrolled.
 
-**Observer Operator.** Enroll on the provider host with platform enrollment (`g8e operator start --provider-boundary-observer-enabled [--ollama]` → `g8e auth enroll approve`). The gateway fans out `ProviderBoundaryObservationCommand` BEGIN/FINALIZE over pub/sub; do not bind-mount inference state for verify. Add `--ollama` only when the provider-host owner wants the campaign pipeline to restart the local Ollama service between assignments.
+**Observer Operator.** Enroll on the provider host with platform enrollment (`g8e operator start --provider-boundary-observer-enabled` → `g8e auth enroll approve`). The gateway fans out `ProviderBoundaryObservationCommand` BEGIN/FINALIZE over pub/sub; do not bind-mount inference state for verify. The Observer is a read-only telemetry witness and does not manage Ollama or receive generic command execution.
 
 **Provenance Operator.** Enroll as a **separate** session at the model storage site (`g8e operator start --provenance-operator-enabled --model-storage-root <ollama-models-dir>` → `g8e auth enroll approve`). The gateway fans out `ModelProvenanceObservationCommand` BEGIN/FINALIZE in parallel with provider-boundary observation. See [Model Provenance](../architecture/model-provenance.md).
 

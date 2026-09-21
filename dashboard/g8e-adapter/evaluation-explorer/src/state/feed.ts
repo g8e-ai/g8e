@@ -49,7 +49,10 @@ export function normalizeHistoryItem(item: unknown): ProjectionRecord {
 /** Normalize a /bootstrap recent_projections item ({...payload, sequence}). */
 export function normalizeRecentProjection(item: unknown): ProjectionRecord {
   if (!isObject(item)) throw new Error('invalid public bootstrap record');
-  const { sequence, ...payload } = item;
+  const payload = { ...item };
+  const sequence = payload.sequence;
+  delete payload.sequence;
+  delete payload.record_type;
   const record: ProjectionRecord = {
     sequence: Number(sequence),
     record_type: 'projection',

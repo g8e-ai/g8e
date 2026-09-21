@@ -9,7 +9,13 @@
     "environment_class",
     "publication_status",
     "relative_evidence_link",
-    "public_feed_metadata"
+    "public_feed_metadata",
+    "assignment_scenario_context",
+    "assignment_grade_summaries",
+    "assignment_activity_observations",
+    "assignment_resource_summary",
+    "assignment_public_evidence_binding",
+    "assignment_verification_metadata"
   ],
   "default": "prohibited",
   "prohibited_fields": [

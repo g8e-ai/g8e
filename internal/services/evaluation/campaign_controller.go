@@ -341,8 +341,9 @@ func (c *CampaignController) RunSummary(ctx context.Context, runID string) (*Cam
 	return summary, nil
 }
 
-// ResumeNextAssignment returns the next queued or interrupted assignment that
-// lacks a terminal persisted result. Completed assignments are never re-selected.
+// ResumeNextAssignment returns the next queued assignment that lacks a
+// terminal persisted result. An unresolved running assignment fails closed;
+// completed assignments are never re-selected.
 func (c *CampaignController) ResumeNextAssignment(ctx context.Context, runID string) (*evalv1.EvaluationAssignment, bool, error) {
 	if c == nil || c.store == nil {
 		return nil, false, fmt.Errorf("evaluation: resume next assignment: %w", constants.ErrMissingRequiredField)
@@ -360,9 +361,10 @@ func (c *CampaignController) ResumeNextAssignment(ctx context.Context, runID str
 			continue
 		}
 		switch assignment.GetLifecycleStatus() {
-		case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED,
-			evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING:
+		case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED:
 			return assignment, true, nil
+		case evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_RUNNING:
+			return nil, false, fmt.Errorf("evaluation: resume next assignment %s: %w", assignment.GetAssignmentId(), constants.ErrEvaluationAssignmentUnresolved)
 		}
 	}
 	return nil, false, nil

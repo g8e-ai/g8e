@@ -21,62 +21,61 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-func TestDispatchOllamaServiceCommand_RejectsMissingFields(t *testing.T) {
-	dispatcher := &harnessOllamaServiceDispatcher{client: &harnessclient.Client{}}
-	_, err := dispatcher.DispatchOllamaServiceCommand(context.Background(), evaluation.OllamaServiceDispatchRequest{})
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
+func TestDispatchOllamaModelCommand_RejectsMissingFields(t *testing.T) {
+	dispatcher := &harnessOllamaModelCommandDispatcher{client: &harnessclient.Client{}}
+	_, err := dispatcher.DispatchOllamaModelCommand(context.Background(), evaluation.OllamaModelCommandDispatchRequest{})
+	require.ErrorIs(t, err, constants.ErrMissingRequiredField)
 }
 
-func TestDispatchOllamaServiceCommand_ReturnsCommandResult(t *testing.T) {
+func TestDispatchOllamaModelCommand_TargetsInferenceAndCarriesEnvironment(t *testing.T) {
+	var received harnessclient.DispatchCommandRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodPost, r.Method)
-		require.Equal(t, constants.APIPaths.OperatorsCommands, r.URL.Path)
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&received))
 		w.Header().Set("Content-Type", "application/json")
-		commandResult := &operatorv1.CommandResult{ReturnCode: 0}
-		payload, err := proto.Marshal(commandResult)
+		commandResult, err := proto.Marshal(&operatorv1.CommandResult{Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED})
 		require.NoError(t, err)
-		response := harnessclient.DispatchCommandResponse{
+		require.NoError(t, json.NewEncoder(w).Encode(harnessclient.DispatchCommandResponse{
 			Success:       true,
-			ResultPayload: payload,
-		}
-		require.NoError(t, json.NewEncoder(w).Encode(response))
+			ResultPayload: commandResult,
+		}))
 	}))
 	t.Cleanup(server.Close)
 
 	client, err := harnessclient.New(harnessconfig.Config{MTLSBaseURL: server.URL})
 	require.NoError(t, err)
-	dispatcher := &harnessOllamaServiceDispatcher{
+	dispatcher := &harnessOllamaModelCommandDispatcher{
 		client: client,
 		persona: harnessclient.Persona{
-			ID:                "g8e-campaign-ollama-service",
-			UserAgent:         "g8e-eval-campaign",
-			UserID:            "user-1",
-			CLISessionID:      "cli-1",
-			OperatorID:        "data-op",
-			OperatorSessionID: "data-session",
+			UserID:       "user-1",
+			CLISessionID: "cli-1",
 		},
 	}
-
-	result, err := dispatcher.DispatchOllamaServiceCommand(context.Background(), evaluation.OllamaServiceDispatchRequest{
-		ObserverSessionID: "observer-session",
-		Command:           "restart",
-		ExecutionID:       "exec-1",
-	})
+	request := evaluation.OllamaModelCommandDispatchRequest{
+		TargetOperatorSessionID: "inference-session",
+		Command:                 "/g8e operator model release qwen3:0.6b",
+		Environment:             modelCommandEnvironment("http://provider.example:11434"),
+		TimeoutSeconds:          30,
+		ExecutionID:             "exec-1",
+	}
+	result, err := dispatcher.DispatchOllamaModelCommand(context.Background(), request)
 	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.True(t, result.Success)
-	assert.NotEmpty(t, result.ResponseBody)
+	require.True(t, result.Success)
+	assert.Equal(t, "inference-session", received.TargetOperatorSessionID)
+	assert.Equal(t, string(constants.ActionTypeExecuteBash), received.ActionType)
+	var command operatorv1.CommandRequested
+	require.NoError(t, proto.Unmarshal(received.Payload, &command))
+	assert.Equal(t, request.Command, command.GetCommand())
+	assert.Equal(t, request.Environment, command.GetEnvironment())
+	assert.Equal(t, request.TimeoutSeconds, command.GetTimeoutSeconds())
 }
 
-func TestNewHarnessOllamaServiceDispatcher_BuildsPersona(t *testing.T) {
+func TestNewHarnessOllamaModelCommandDispatcher_BuildsPersona(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -91,53 +90,7 @@ func TestNewHarnessOllamaServiceDispatcher_BuildsPersona(t *testing.T) {
 		},
 	}
 
-	dispatcher, err := newHarnessOllamaServiceDispatcher(cfg, authContext, dataOperator, deps)
+	dispatcher, err := newHarnessOllamaModelCommandDispatcher(cfg, authContext, dataOperator, deps)
 	require.NoError(t, err)
-	require.NotNil(t, dispatcher)
 	assert.Equal(t, "data-op", dispatcher.persona.OperatorID)
-}
-
-func TestRestartOllamaViaObserverIfEnabled_SkipsWhenNoObserver(t *testing.T) {
-	outcome, err := restartOllamaViaObserverIfEnabled(
-		context.Background(),
-		campaignOrchestrateOperators(),
-		"run-1",
-		&evaluation.DataOperatorStatus{OperatorID: "data-op", OperatorSessionID: "data-session"},
-		&config.Config{},
-		&auth.ClientAuthContext{UserID: "user-1", CLISessionID: "cli-1"},
-		chatEvalDeps{},
-		func(prefix string) string { return prefix + "-1" },
-		nil,
-		nil,
-	)
-	require.NoError(t, err)
-	assert.False(t, outcome.Performed)
-}
-
-func TestRestartOllamaViaObserverIfEnabled_SkipsWhenDisabled(t *testing.T) {
-	operators := []models.OperatorDocumentGo{
-		{
-			ID:                "observer-op",
-			OperatorSessionID: "observer-session",
-			Status:            constants.OperatorStatusActive,
-			OperatorType:      constants.OperatorTypeRemote,
-			RuntimeConfig: &models.RuntimeConfig{
-				ProviderBoundaryObserverEnabled: true,
-			},
-		},
-	}
-	outcome, err := restartOllamaViaObserverIfEnabled(
-		context.Background(),
-		operators,
-		"run-1",
-		&evaluation.DataOperatorStatus{OperatorID: "data-op", OperatorSessionID: "data-session"},
-		&config.Config{},
-		&auth.ClientAuthContext{UserID: "user-1", CLISessionID: "cli-1"},
-		chatEvalDeps{},
-		func(prefix string) string { return prefix + "-1" },
-		nil,
-		nil,
-	)
-	require.NoError(t, err)
-	assert.False(t, outcome.Performed)
 }
