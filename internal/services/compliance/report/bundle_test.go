@@ -85,6 +85,7 @@ func bundleAssemblyFixture(t *testing.T) (BundleAssemblyRequest, *compliancev1.F
 		AssessmentRefs:      []string{assessmentRef},
 		EvidenceIndexRef:    evidenceIndexRef,
 		SourceArtifacts: []SourceArtifact{
+			{BundlePath: constants.ComplianceBundleScopeFilename, Body: []byte(`{"scope_id":"scope-1"}`), MediaType: constants.MediaTypeJSON},
 			{BundlePath: assertionCatalogRef, Body: []byte(`{"catalog_id":"assertions"}`), MediaType: constants.MediaTypeJSON},
 			{BundlePath: crosswalkRef, Body: []byte(`{"catalog_id":"crosswalks"}`), MediaType: constants.MediaTypeJSON},
 			{BundlePath: assessmentRef, Body: []byte(`{"assessment_id":"assessment-1"}`), MediaType: constants.MediaTypeJSON},

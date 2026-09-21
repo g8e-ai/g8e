@@ -853,11 +853,9 @@ func complianceReportGenerateCmdWithConfig(
 ) *cobra.Command {
 	var (
 		projectRoot          string
-		scopeID              string
+		scopePath            string
 		demoRuns             []string
 		evalRuns             []string
-		windowStartMilli     int64
-		windowEndMilli       int64
 		reportID             string
 		bundleProfile        string
 		signingMetadata      string
@@ -890,14 +888,11 @@ func complianceReportGenerateCmdWithConfig(
 		Short: "Generate canonical analysis from persisted evidence",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if scopeID == "" {
-				return fmt.Errorf("%w: --scope-id is required", constants.ErrValidationFailed)
+			if scopePath == "" {
+				return fmt.Errorf("%w: --scope is required", constants.ErrValidationFailed)
 			}
 			if len(demoRuns) == 0 && len(evalRuns) == 0 && ksiRunID == "" && ksiHistory == "" && ksiResults == "" && commitmentRunID == "" && commitment == "" && attestationRunID == "" && attestations == "" && auditRunID == "" && len(auditRecords) == 0 && ledgerRunID == "" && ledgerCommits == "" && ledgerState == "" && buildRunID == "" && buildConfig == "" {
 				return fmt.Errorf("%w: at least one demo, eval, or standalone platform source is required", constants.ErrValidationFailed)
-			}
-			if windowStartMilli <= 0 || windowEndMilli <= 0 || windowEndMilli < windowStartMilli {
-				return fmt.Errorf("%w: a valid evidence window is required", constants.ErrValidationFailed)
 			}
 			if reportID == "" || signingMetadata == "" || signingPrivateKey == "" {
 				return fmt.Errorf("%w: --report-id, --signing-metadata, and --signing-private-key are required", constants.ErrValidationFailed)

@@ -244,13 +244,17 @@ func FindDemoScenarioDefinition(catalog *compliancev1.DemoScenarioCatalog, id, v
 }
 
 func ValidateAssessmentScope(scope *compliancev1.AssessmentScope) error {
-	if scope == nil || scope.ScopeId == "" || scope.OrganizationId == "" || scope.DeploymentId == "" || scope.ProductVersion == "" || scope.BuildIdentity == "" || scope.SourceRevision == "" || scope.NetworkTopologyHash == "" || scope.CryptographicMode == "" || len(scope.ImageDigests) == 0 || len(scope.ComponentInventory) == 0 || len(scope.ConfigurationHashes) == 0 || len(scope.DoctrineBundleHashes) == 0 || len(scope.ConsensusPolicyHashes) == 0 || len(scope.TrustAnchorIds) == 0 {
+	if scope == nil || scope.ScopeId == "" || scope.OrganizationId == "" || scope.DeploymentId == "" || scope.ProductVersion == "" || scope.BuildIdentity == "" || scope.SourceRevision == "" || scope.NetworkTopologyHash == "" || scope.CryptographicMode == "" || len(scope.ComponentInventory) == 0 || len(scope.ConfigurationHashes) == 0 || len(scope.DoctrineBundleHashes) == 0 || len(scope.TrustAnchorIds) == 0 || scope.Applicability == nil || scope.SelectedPopulation == nil || len(scope.SourceAdmissions) == 0 {
 		return fmt.Errorf("%w: assessment scope is incomplete", constants.ErrInvalidEvidenceGraph)
+	}
+	postureRequirements, postureValid := constants.GetGovernancePostureRequirements(scope.ActivePosture)
+	if !postureValid || postureRequirements.RequiresL2 && len(scope.ConsensusPolicyHashes) == 0 {
+		return fmt.Errorf("%w: assessment posture is invalid or missing required consensus policy", constants.ErrInvalidEvidenceGraph)
 	}
 	if err := validateSHA256(scope.NetworkTopologyHash); err != nil {
 		return err
 	}
-	if scope.AssessmentWindowStart == nil || scope.AssessmentWindowEnd == nil || scope.AssessmentWindowStart.CheckValid() != nil || scope.AssessmentWindowEnd.CheckValid() != nil || !scope.AssessmentWindowStart.AsTime().Before(scope.AssessmentWindowEnd.AsTime()) {
+	if scope.AssessmentWindowStart == nil || scope.AssessmentWindowEnd == nil || scope.AssessmentAsOf == nil || scope.AssessmentWindowStart.CheckValid() != nil || scope.AssessmentWindowEnd.CheckValid() != nil || scope.AssessmentAsOf.CheckValid() != nil || !scope.AssessmentWindowStart.AsTime().Before(scope.AssessmentWindowEnd.AsTime()) || scope.AssessmentAsOf.AsTime().Before(scope.AssessmentWindowStart.AsTime()) || scope.AssessmentAsOf.AsTime().After(scope.AssessmentWindowEnd.AsTime()) {
 		return fmt.Errorf("%w: assessment window is invalid", constants.ErrInvalidEvidenceGraph)
 	}
 	for _, digests := range [][]*compliancev1.NamedDigest{scope.ImageDigests, scope.ConfigurationHashes, scope.DoctrineBundleHashes, scope.ConsensusPolicyHashes} {
@@ -273,6 +277,42 @@ func ValidateAssessmentScope(scope *compliancev1.AssessmentScope) error {
 	}
 	if err := validateUniqueStrings(scope.TrustAnchorIds); err != nil {
 		return fmt.Errorf("%w: trust anchors: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	for name, values := range map[string][]string{"components": scope.Applicability.Components, "action classes": scope.Applicability.ActionClasses, "arms": scope.Applicability.Arms} {
+		if len(values) == 0 {
+			return fmt.Errorf("%w: applicability %s are missing", constants.ErrInvalidEvidenceGraph, name)
+		}
+		if err := validateUniqueStrings(values); err != nil {
+			return fmt.Errorf("%w: applicability %s: %v", constants.ErrInvalidEvidenceGraph, name, err)
+		}
+	}
+	admissions := make(map[string]*compliancev1.AssessmentSourceAdmission, len(scope.SourceAdmissions))
+	for _, admission := range scope.SourceAdmissions {
+		if admission == nil || admission.AdmissionId == "" || admission.SourceKind == "" || admission.SourceVersion == "" || admission.SourceScopeId == "" || admission.OwnerRuntimeBoundary == "" || admission.AcquisitionBoundary == "" || admission.RunId == "" && admission.SnapshotId == "" || admission.VerifierRef == nil || admission.VerifierRef.Id == "" || admission.VerifierRef.Version == "" || admission.DisclosureClassification != constants.ComplianceBundleProfilePublic && admission.DisclosureClassification != constants.ComplianceBundleProfileRestricted {
+			return fmt.Errorf("%w: source admission is incomplete", constants.ErrInvalidEvidenceGraph)
+		}
+		if _, exists := admissions[admission.AdmissionId]; exists {
+			return fmt.Errorf("%w: duplicate source admission %s", constants.ErrInvalidEvidenceGraph, admission.AdmissionId)
+		}
+		if err := validateUniqueStrings(admission.ArtifactIds); err != nil {
+			return fmt.Errorf("%w: source admission %s artifacts: %v", constants.ErrInvalidEvidenceGraph, admission.AdmissionId, err)
+		}
+		admissions[admission.AdmissionId] = admission
+	}
+	seenSubjects := make(map[string]struct{}, len(scope.SelectedPopulation.Subjects))
+	for _, subject := range scope.SelectedPopulation.Subjects {
+		if subject == nil || subject.SourceAdmissionId == "" || subject.RunId == "" || subject.AttemptId == "" && subject.ScenarioId == "" && subject.TransactionId == "" {
+			return fmt.Errorf("%w: selected subject is incomplete", constants.ErrInvalidEvidenceGraph)
+		}
+		admission := admissions[subject.SourceAdmissionId]
+		if admission == nil || admission.RunId != "" && admission.RunId != subject.RunId {
+			return fmt.Errorf("%w: selected subject is outside its source admission", constants.ErrEvidenceScopeMismatch)
+		}
+		key := subject.SourceAdmissionId + "\x00" + subject.RunId + "\x00" + subject.AttemptId + "\x00" + subject.ScenarioId + "\x00" + subject.TransactionId
+		if _, exists := seenSubjects[key]; exists {
+			return fmt.Errorf("%w: duplicate selected subject", constants.ErrInvalidEvidenceGraph)
+		}
+		seenSubjects[key] = struct{}{}
 	}
 	return nil
 }

@@ -421,18 +421,8 @@ func toolScorecardMetricFromGrade(grade *evalv1.DeterministicGrade) *PublicMetri
 	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 		evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL:
 		return publicMetricValue(grade.GetScore())
-	case evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNAVAILABLE:
-		detail := grade.GetDetail()
-		if detail == "" {
-			detail = "criterion unavailable"
-		}
-		return &PublicMetricValue{UnavailableReason: detail}
 	default:
-		detail := grade.GetDetail()
-		if detail == "" {
-			detail = publicVerdictStatus(grade.GetStatus())
-		}
-		return &PublicMetricValue{UnavailableReason: detail}
+		return &PublicMetricValue{UnavailableReason: "source_unavailable"}
 	}
 }
 

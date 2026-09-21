@@ -44,10 +44,11 @@ type AssertionApplicability struct {
 }
 
 type AssertionSubject struct {
-	RunID         string
-	AttemptID     string
-	ScenarioID    string
-	TransactionID string
+	SourceAdmissionID string
+	RunID             string
+	AttemptID         string
+	ScenarioID        string
+	TransactionID     string
 }
 
 type AssertionPopulation struct {
@@ -167,7 +168,7 @@ func validateAssertionPopulation(population *AssertionPopulation) error {
 		if subject.RunID == "" || subject.AttemptID == "" && subject.ScenarioID == "" && subject.TransactionID == "" {
 			return fmt.Errorf("%w: selected assertion subject is incomplete", constants.ErrInvalidEvidenceGraph)
 		}
-		key := strings.Join([]string{subject.RunID, subject.AttemptID, subject.ScenarioID, subject.TransactionID}, "\x00")
+		key := strings.Join([]string{subject.SourceAdmissionID, subject.RunID, subject.AttemptID, subject.ScenarioID, subject.TransactionID}, "\x00")
 		if _, exists := seen[key]; exists {
 			return fmt.Errorf("%w: duplicate selected assertion subject", constants.ErrInvalidEvidenceGraph)
 		}
@@ -183,6 +184,7 @@ func gradeControlAssertion(request AssertionGradingRequest, assertion *complianc
 	failure := ""
 	evidenceLevel := "L0"
 	limitations := []string{}
+	var coverage *compliancev1.AssessmentCoverage
 	if request.Applicability == nil || assertionApplies(assertion, request.Applicability) {
 		candidates = collectAssertionEvidence(request, assertion)
 		var missing, stale, graderFailed bool
@@ -190,8 +192,14 @@ func gradeControlAssertion(request AssertionGradingRequest, assertion *complianc
 		if request.Population == nil {
 			missing, stale, graderFailed, achievedLevel = evaluateAssertionRequirements(assertion, candidates)
 		} else {
-			var assessed, unavailable int
-			missing, stale, graderFailed, achievedLevel, assessed, unavailable = evaluateAssertionPopulation(assertion, candidates, request.Population)
+			var assessed, failed, unavailable int
+			missing, stale, graderFailed, achievedLevel, assessed, failed, unavailable = evaluateAssertionPopulation(assertion, candidates, request.Population)
+			coverage = &compliancev1.AssessmentCoverage{
+				SelectedSubjectCount:    int32(len(request.Population.Subjects)),
+				AssessedSubjectCount:    int32(assessed),
+				FailedSubjectCount:      int32(failed),
+				UnavailableSubjectCount: int32(unavailable),
+			}
 			limitations = append(limitations, fmt.Sprintf("selected population: %d; assessed: %d; unavailable: %d", len(request.Population.Subjects), assessed, unavailable))
 		}
 		status, freshness, failure = assertionOutcome(assertion.GetMissingEvidencePolicy(), missing, stale, graderFailed)
@@ -215,6 +223,7 @@ func gradeControlAssertion(request AssertionGradingRequest, assertion *complianc
 		FreshnessStatus: freshness,
 		FailureReason:   failure,
 		Limitations:     limitations,
+		Coverage:        coverage,
 	}
 	if status == statusNotSatisfied && failure == "" {
 		assessment.FailureReason = failureGraderFailed
@@ -270,11 +279,12 @@ func evaluateAssertionRequirements(assertion *compliancev1.ControlAssertionDefin
 	return !fresh.complete, stale, fresh.graderFailed, achievedEvidenceLevel(fresh.available)
 }
 
-func evaluateAssertionPopulation(assertion *compliancev1.ControlAssertionDefinition, candidates assertionEvidence, population *AssertionPopulation) (bool, bool, bool, string, int, int) {
+func evaluateAssertionPopulation(assertion *compliancev1.ControlAssertionDefinition, candidates assertionEvidence, population *AssertionPopulation) (bool, bool, bool, string, int, int, int) {
 	if len(population.Subjects) == 0 {
-		return true, false, false, "L0", 0, 0
+		return true, false, false, "L0", 0, 0, 0
 	}
 	assessed := 0
+	failed := 0
 	unavailable := 0
 	stale := false
 	failedLevel := "L0"
@@ -298,6 +308,7 @@ func evaluateAssertionPopulation(assertion *compliancev1.ControlAssertionDefinit
 		assessed++
 		if subjectFailed {
 			graderFailed = true
+			failed++
 			failedLevel = higherEvidenceLevel(failedLevel, level)
 			continue
 		}
@@ -306,18 +317,18 @@ func evaluateAssertionPopulation(assertion *compliancev1.ControlAssertionDefinit
 		}
 	}
 	if graderFailed {
-		return false, false, true, failedLevel, assessed, unavailable
+		return false, false, true, failedLevel, assessed, failed, unavailable
 	}
 	if unavailable > 0 {
-		return true, stale, false, availableLevel, assessed, unavailable
+		return true, stale, false, availableLevel, assessed, failed, unavailable
 	}
-	return false, false, false, passingLevel, assessed, unavailable
+	return false, false, false, passingLevel, assessed, failed, unavailable
 }
 
 func filterAssertionNodes(nodes []*EvidenceNode, subject AssertionSubject) []*EvidenceNode {
 	result := make([]*EvidenceNode, 0)
 	for _, node := range nodes {
-		if node.RunID != subject.RunID || subject.AttemptID != "" && node.AttemptID != subject.AttemptID || subject.ScenarioID != "" && node.ScenarioID != subject.ScenarioID || subject.TransactionID != "" && node.TransactionID != subject.TransactionID {
+		if subject.SourceAdmissionID != "" && node.SourceAdmissionID != subject.SourceAdmissionID || node.RunID != subject.RunID || subject.AttemptID != "" && node.AttemptID != subject.AttemptID || subject.ScenarioID != "" && node.ScenarioID != subject.ScenarioID || subject.TransactionID != "" && node.TransactionID != subject.TransactionID {
 			continue
 		}
 		result = append(result, node)

@@ -51,10 +51,12 @@ func campaignEvalMirrorRestoreCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("evaluation: campaign mirror restore: %w", err)
 			}
+			mirrorProbe := newHTTPCampaignMirrorProbe(cmd.Context())
+			publication.WithMirrorProbe(mirrorProbe)
 			reconciler := evaluation.NewCampaignMirrorReconciler(
 				publication,
 				evaluation.NewStore(fileSvc),
-				newHTTPCampaignMirrorProbe(cmd.Context()),
+				mirrorProbe,
 			)
 			if queue {
 				result, err := reconcileVerifiedCampaignMirrorQueue(cmd.Context(), cfg.ProjectRoot, reconciler)
@@ -116,10 +118,12 @@ func reconcileVerifiedCampaignMirrorFromDockerInit(ctx context.Context, fileSvc 
 	if err != nil {
 		return nil, err
 	}
+	mirrorProbe := newHTTPCampaignMirrorProbe(ctx)
+	publication.WithMirrorProbe(mirrorProbe)
 	reconciler := evaluation.NewCampaignMirrorReconciler(
 		publication,
 		evaluation.NewStore(fileSvc),
-		newHTTPCampaignMirrorProbe(ctx),
+		mirrorProbe,
 	)
 	return reconcileVerifiedCampaignMirrorQueue(ctx, cfg.ProjectRoot, reconciler)
 }

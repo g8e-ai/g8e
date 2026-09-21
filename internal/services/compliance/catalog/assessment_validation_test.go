@@ -33,12 +33,35 @@ func validScope() *compliancev1.AssessmentScope {
 		CryptographicMode:     "standard",
 		AssessmentWindowStart: timestamppb.New(time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC)),
 		AssessmentWindowEnd:   timestamppb.New(time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)),
+		AssessmentAsOf:        timestamppb.New(time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)),
 		ImageDigests:          []*compliancev1.NamedDigest{{Name: "gateway", Sha256: validSHA256}},
 		ComponentInventory:    []*compliancev1.ComponentInventoryEntry{{ComponentId: "gateway", ComponentType: "service", Version: "2.1.3", Digest: validSHA256}},
 		ConfigurationHashes:   []*compliancev1.NamedDigest{{Name: "gateway", Sha256: validSHA256}},
 		DoctrineBundleHashes:  []*compliancev1.NamedDigest{{Name: "fedramp", Sha256: validSHA256}},
 		ConsensusPolicyHashes: []*compliancev1.NamedDigest{{Name: "default", Sha256: validSHA256}},
 		TrustAnchorIds:        []string{"root-1"},
+		ActivePosture:         constants.PostureDoctrine,
+		SourceAdmissions: []*compliancev1.AssessmentSourceAdmission{{
+			AdmissionId:              "source-1",
+			SourceKind:               "native-evaluation",
+			SourceVersion:            "1.0.0",
+			SourceScopeId:            "source-scope-1",
+			OwnerRuntimeBoundary:     "operator-1",
+			AcquisitionBoundary:      "operator-local-export",
+			RunId:                    "run-1",
+			VerifierRef:              &compliancev1.VersionedReference{Id: "native-evaluation-verifier", Version: "1.0.0"},
+			DisclosureClassification: constants.ComplianceBundleProfileRestricted,
+		}},
+		Applicability: &compliancev1.AssessmentApplicabilitySelection{
+			Components:    []string{"operator"},
+			ActionClasses: []string{"governed_mutation"},
+			Arms:          []string{"governed"},
+		},
+		SelectedPopulation: &compliancev1.AssessmentPopulationSelection{Subjects: []*compliancev1.AssessmentSubjectSelection{{
+			SourceAdmissionId: "source-1",
+			RunId:             "run-1",
+			TransactionId:     "transaction-1",
+		}}},
 	}
 }
 

@@ -1406,6 +1406,7 @@ var (
 	ErrPublicFeedListenAddress        = errors.New("public-feed: mirror listen address must be unique and loopback-only")
 	ErrPublicFeedMaxRetriesExceeded   = errors.New("public-feed: max retry attempts exceeded")
 	ErrPublicFeedSnapshotNotFound     = errors.New("public-feed: snapshot not found")
+	ErrPublicFeedHistoryIncomplete    = errors.New("public-feed: retained history scan is incomplete")
 	ErrPublicFeedProofNotFound        = errors.New("public-feed: proof not found")
 	ErrPublicFeedProofNotVerified     = errors.New("public-feed: proof verification report is not ok")
 	ErrPublicFeedProofOversized       = errors.New("public-feed: proof artifact exceeds max bytes")

@@ -10,15 +10,18 @@ package report
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 type generationImporter struct {
@@ -34,6 +37,44 @@ func (generationImporter) SourceID() string {
 	return "generation-test"
 }
 
+func validGenerationScope(windowStart, windowEnd time.Time) *compliancev1.AssessmentScope {
+	return &compliancev1.AssessmentScope{
+		ScopeId:               "scope-1",
+		OrganizationId:        "org-1",
+		DeploymentId:          "deployment-1",
+		ProductVersion:        "2.1.12",
+		BuildIdentity:         "build-1",
+		SourceRevision:        "revision-1",
+		ComponentInventory:    []*compliancev1.ComponentInventoryEntry{{ComponentId: "operator-1", ComponentType: "operator", Version: "2.1.12", Digest: strings.Repeat("a", 64)}},
+		NetworkTopologyHash:   strings.Repeat("b", 64),
+		ConfigurationHashes:   []*compliancev1.NamedDigest{{Name: "operator-1", Sha256: strings.Repeat("c", 64)}},
+		DoctrineBundleHashes:  []*compliancev1.NamedDigest{{Name: "doctrine", Sha256: strings.Repeat("d", 64)}},
+		TrustAnchorIds:        []string{"root-1"},
+		CryptographicMode:     "standard",
+		AssessmentWindowStart: timestamppb.New(windowStart),
+		AssessmentWindowEnd:   timestamppb.New(windowEnd),
+		ActivePosture:         constants.PostureDoctrine,
+		SourceAdmissions: []*compliancev1.AssessmentSourceAdmission{{
+			AdmissionId:              "source-1",
+			SourceKind:               "native-evaluation",
+			SourceVersion:            "1.0.0",
+			SourceScopeId:            "source-scope-1",
+			OwnerRuntimeBoundary:     "operator-1",
+			AcquisitionBoundary:      "operator-local-export",
+			RunId:                    "run-1",
+			VerifierRef:              &compliancev1.VersionedReference{Id: "generation-test-verifier", Version: "1.0.0"},
+			DisclosureClassification: constants.ComplianceBundleProfileRestricted,
+		}},
+		Applicability: &compliancev1.AssessmentApplicabilitySelection{
+			Components:    []string{"operator"},
+			ActionClasses: []string{"governed_mutation"},
+			Arms:          []string{"governed"},
+		},
+		SelectedPopulation: &compliancev1.AssessmentPopulationSelection{},
+		AssessmentAsOf:     timestamppb.New(windowEnd),
+	}
+}
+
 func validGenerationNode(scopeID string, producedAt, verifiedAt time.Time) evidence.EvidenceNode {
 	body := []byte(`{"schema_version":"1.0.0"}`)
 	artifactID := evidence.ContentAddress(evidence.ArtifactTypeDemoManifest, body)
@@ -46,6 +87,7 @@ func validGenerationNode(scopeID string, producedAt, verifiedAt time.Time) evide
 		ProducerIdentity:   "generation-test@1.0.0",
 		ProducedAt:         producedAt,
 		ScopeID:            scopeID,
+		RunID:              "run-1",
 		VerificationStatus: evidence.VerificationStatusVerified,
 		VerifierID:         "generation-test-verifier",
 		VerifierVersion:    "1.0.0",
@@ -62,14 +104,11 @@ func TestGenerateComplianceAnalysis_OrchestratesVerifiedEvidenceThroughCanonical
 	require.NoError(t, err)
 
 	result, err := GenerateComplianceAnalysis(context.Background(), GenerationRequest{
-		ScopeID:     "scope-1",
-		WindowStart: windowStart,
-		WindowEnd:   windowEnd,
-		EvaluatedAt: windowEnd,
-		Importers:   []evidence.EvidenceImporter{generationImporter{nodes: []evidence.EvidenceNode{validGenerationNode("scope-1", windowStart, windowEnd)}}},
-		Assertions:  assertions,
-		Frameworks:  frameworks,
-		Crosswalks:  crosswalks,
+		Scope:      validGenerationScope(windowStart, windowEnd),
+		Sources:    []GenerationSource{{AdmissionID: "source-1", Importer: generationImporter{nodes: []evidence.EvidenceNode{validGenerationNode("scope-1", windowStart, windowEnd)}}}},
+		Assertions: assertions,
+		Frameworks: frameworks,
+		Crosswalks: crosswalks,
 	})
 
 	require.NoError(t, err)
@@ -81,6 +120,9 @@ func TestGenerateComplianceAnalysis_OrchestratesVerifiedEvidenceThroughCanonical
 	assert.Len(t, result.Analysis.GetAssertionAssessments(), len(assertions.GetAssertions()))
 	assert.NotEmpty(t, result.Analysis.GetFrameworkAssessments())
 	assert.True(t, result.Analysis.GetEvidenceGraphValid())
+	assert.Len(t, result.Analysis.GetAssessmentScopeSha256(), 64)
+	require.Len(t, result.Analysis.GetEvidenceResources(), 1)
+	assert.Equal(t, "source-1", result.Analysis.GetEvidenceResources()[0].GetSourceAdmissionId())
 	require.Len(t, result.Profiles, len(frameworks.GetFrameworks()))
 	for _, profile := range result.Profiles {
 		assert.Equal(t, result.Analysis.GetAnalysisId(), profile.GetAnalysisRef())
@@ -95,13 +137,10 @@ func TestGenerateComplianceAnalysis_RejectsMissingImporters(t *testing.T) {
 	require.NoError(t, err)
 
 	result, err := GenerateComplianceAnalysis(context.Background(), GenerationRequest{
-		ScopeID:     "scope-1",
-		WindowStart: windowStart,
-		WindowEnd:   windowEnd,
-		EvaluatedAt: windowEnd,
-		Assertions:  assertions,
-		Frameworks:  frameworks,
-		Crosswalks:  crosswalks,
+		Scope:      validGenerationScope(windowStart, windowEnd),
+		Assertions: assertions,
+		Frameworks: frameworks,
+		Crosswalks: crosswalks,
 	})
 
 	require.Error(t, err)
@@ -114,16 +153,15 @@ func TestGenerateComplianceAnalysis_RejectsEvidenceFromAnotherScope(t *testing.T
 	windowEnd := windowStart.Add(time.Hour)
 	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
 	require.NoError(t, err)
+	scope := validGenerationScope(windowStart, windowEnd)
+	scope.ScopeId = "scope-2"
 
 	result, err := GenerateComplianceAnalysis(context.Background(), GenerationRequest{
-		ScopeID:     "scope-2",
-		WindowStart: windowStart,
-		WindowEnd:   windowEnd,
-		EvaluatedAt: windowEnd,
-		Importers:   []evidence.EvidenceImporter{generationImporter{nodes: []evidence.EvidenceNode{validGenerationNode("scope-1", windowStart, windowEnd)}}},
-		Assertions:  assertions,
-		Frameworks:  frameworks,
-		Crosswalks:  crosswalks,
+		Scope:      scope,
+		Sources:    []GenerationSource{{AdmissionID: "source-1", Importer: generationImporter{nodes: []evidence.EvidenceNode{validGenerationNode("scope-1", windowStart, windowEnd)}}}},
+		Assertions: assertions,
+		Frameworks: frameworks,
+		Crosswalks: crosswalks,
 	})
 
 	require.Error(t, err)
@@ -140,14 +178,11 @@ func TestGenerateComplianceAnalysis_RejectsImporterFailureBeforeGrading(t *testi
 	importErr := errors.New("import failed")
 
 	result, err := GenerateComplianceAnalysis(context.Background(), GenerationRequest{
-		ScopeID:     "scope-1",
-		WindowStart: windowStart,
-		WindowEnd:   windowEnd,
-		EvaluatedAt: windowEnd,
-		Importers:   []evidence.EvidenceImporter{generationImporter{err: importErr}},
-		Assertions:  assertions,
-		Frameworks:  frameworks,
-		Crosswalks:  crosswalks,
+		Scope:      validGenerationScope(windowStart, windowEnd),
+		Sources:    []GenerationSource{{AdmissionID: "source-1", Importer: generationImporter{err: importErr}}},
+		Assertions: assertions,
+		Frameworks: frameworks,
+		Crosswalks: crosswalks,
 	})
 
 	require.Error(t, err)

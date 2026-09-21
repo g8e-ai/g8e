@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -298,8 +299,10 @@ func TestPublishJSONLViaGateway_ExportsRecords(t *testing.T) {
 func TestFetchPublicMirrorHistory_ReturnsCursorPage(t *testing.T) {
 	historyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "source-1", r.URL.Query().Get("source"))
 		assert.Equal(t, "cursor-1", r.URL.Query().Get("cursor"))
 		assert.Equal(t, "25", r.URL.Query().Get("limit"))
+		assert.Equal(t, "catalog_snapshot", r.URL.Query().Get("kind"))
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedCursorPage{
 			Items: []map[string]any{
@@ -315,7 +318,7 @@ func TestFetchPublicMirrorHistory_ReturnsCursorPage(t *testing.T) {
 	publicMirrorHistoryURL = historyServer.URL
 	t.Cleanup(func() { publicMirrorHistoryURL = originalHistory })
 
-	page, err := fetchPublicMirrorHistory(context.Background(), nil, "cursor-1", 25)
+	page, err := fetchPublicMirrorHistory(context.Background(), nil, "source-1", "cursor-1", 25)
 	require.NoError(t, err)
 	assert.True(t, page.HasMore)
 	assert.Equal(t, "cursor-2", page.Cursor)
@@ -353,4 +356,74 @@ func TestHTTPCampaignMirrorProbe_DatasetPresentFromHistory(t *testing.T) {
 	present, err := probe.DatasetPresent(context.Background(), "eval-run-history")
 	require.NoError(t, err)
 	assert.True(t, present)
+}
+
+func TestHTTPCampaignMirrorProbe_IndexesMirrorOnceForMultipleDatasets(t *testing.T) {
+	var bootstrapRequests atomic.Int32
+	var historyRequests atomic.Int32
+	bootstrapServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bootstrapRequests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedBootstrap{
+			Snapshot: models.PublicFeedSnapshot{HighWaterSequence: 2},
+			RecentProjections: []map[string]any{
+				{"kind": "catalog_snapshot", "dataset_id": "eval-run-recent"},
+			},
+		}))
+	}))
+	historyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		historyRequests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedCursorPage{
+			Items: []map[string]any{
+				{"kind": "catalog_snapshot", "dataset_id": "eval-run-history"},
+			},
+		}))
+	}))
+	t.Cleanup(bootstrapServer.Close)
+	t.Cleanup(historyServer.Close)
+
+	originalBootstrap := publicMirrorBootstrapURL
+	originalHistory := publicMirrorHistoryURL
+	publicMirrorBootstrapURL = bootstrapServer.URL
+	publicMirrorHistoryURL = historyServer.URL
+	t.Cleanup(func() {
+		publicMirrorBootstrapURL = originalBootstrap
+		publicMirrorHistoryURL = originalHistory
+	})
+
+	probe := newHTTPCampaignMirrorProbe(context.Background())
+	for datasetID, expected := range map[string]bool{
+		"eval-run-recent":  true,
+		"eval-run-history": true,
+		"eval-run-missing": false,
+	} {
+		present, err := probe.DatasetPresent(context.Background(), datasetID)
+		require.NoError(t, err)
+		assert.Equal(t, expected, present)
+	}
+	assert.Equal(t, int32(1), bootstrapRequests.Load())
+	assert.Equal(t, int32(1), historyRequests.Load())
+}
+
+func TestFetchPublicMirrorBootstrap_RetriesRateLimit(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			w.Header().Set("Retry-After", "0")
+			http.Error(w, constants.ErrPublicFeedRateLimited.Error(), http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicFeedBootstrap{}))
+	}))
+	t.Cleanup(server.Close)
+
+	originalBootstrap := publicMirrorBootstrapURL
+	publicMirrorBootstrapURL = server.URL
+	t.Cleanup(func() { publicMirrorBootstrapURL = originalBootstrap })
+
+	_, err := fetchPublicMirrorBootstrap(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), requests.Load())
 }

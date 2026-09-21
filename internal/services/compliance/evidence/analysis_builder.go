@@ -58,16 +58,17 @@ const (
 // GradeControlAssertions and GradeFrameworkControls respectively; the
 // builder aggregates them rather than re-grading.
 type AnalysisRequest struct {
-	ScopeID              string
-	WindowStart          time.Time
-	WindowEnd            time.Time
-	EvaluatedAt          time.Time
-	Graph                *EvidenceGraph
-	Assertions           *compliancev1.ControlAssertionCatalog
-	Frameworks           *compliancev1.FrameworkCatalog
-	Crosswalks           *compliancev1.ControlCrosswalkCatalog
-	AssertionAssessments []*compliancev1.ControlAssertionAssessment
-	FrameworkAssessments []*compliancev1.FrameworkControlAssessment
+	ScopeID               string
+	AssessmentScopeSHA256 string
+	WindowStart           time.Time
+	WindowEnd             time.Time
+	EvaluatedAt           time.Time
+	Graph                 *EvidenceGraph
+	Assertions            *compliancev1.ControlAssertionCatalog
+	Frameworks            *compliancev1.FrameworkCatalog
+	Crosswalks            *compliancev1.ControlCrosswalkCatalog
+	AssertionAssessments  []*compliancev1.ControlAssertionAssessment
+	FrameworkAssessments  []*compliancev1.FrameworkControlAssessment
 }
 
 // BuildComplianceAnalysis aggregates verified evidence, assertion
@@ -112,6 +113,7 @@ func BuildComplianceAnalysis(ctx context.Context, request AnalysisRequest) (*com
 		EvidenceGraphFailures:      graphFailures,
 		EvidenceGraphValid:         request.Graph.Valid(),
 		EvidenceResources:          buildEvidenceResources(request),
+		AssessmentScopeSha256:      request.AssessmentScopeSHA256,
 	}
 	analysisID, err := analysisContentAddress(analysis)
 	if err != nil {

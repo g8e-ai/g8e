@@ -760,6 +760,34 @@ func TestMirror_History_BoundedPageSize(t *testing.T) {
 	assert.LessOrEqual(t, page.Limit, 100)
 }
 
+func TestMirror_History_FiltersByRecordKindBeforePagination(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	records := []models.PublicFeedRecord{
+		env.makeRecord(1, map[string]any{"kind": "assignment_result", "dataset_id": "eval-run-1"}),
+		env.makeRecord(2, map[string]any{"kind": "catalog_snapshot", "dataset_id": "eval-run-1"}),
+		env.makeRecord(3, map[string]any{"kind": "assignment_result", "dataset_id": "eval-run-2"}),
+		env.makeRecord(4, map[string]any{"kind": "catalog_snapshot", "dataset_id": "eval-run-2"}),
+	}
+	batch := env.buildBatch(records, constants.PublicFeedZeroHashHex)
+	_, resp := env.sendIngest(batch)
+	require.True(t, resp.Accepted)
+
+	var first models.PublicFeedCursorPage
+	status := env.getJSON("/history?source="+env.sourceID+"&kind=catalog_snapshot&limit=1", &first)
+	assert.Equal(t, http.StatusOK, status)
+	require.Len(t, first.Items, 1)
+	assert.Equal(t, "eval-run-1", first.Items[0]["dataset_id"])
+	assert.True(t, first.HasMore)
+	assert.Equal(t, "2", first.Cursor)
+
+	var second models.PublicFeedCursorPage
+	status = env.getJSON("/history?source="+env.sourceID+"&kind=catalog_snapshot&cursor="+first.Cursor+"&limit=1", &second)
+	assert.Equal(t, http.StatusOK, status)
+	require.Len(t, second.Items, 1)
+	assert.Equal(t, "eval-run-2", second.Items[0]["dataset_id"])
+	assert.False(t, second.HasMore)
+}
+
 // ---------------------------------------------------------------------------
 // CORS tests
 // ---------------------------------------------------------------------------

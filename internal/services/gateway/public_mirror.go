@@ -1255,6 +1255,7 @@ func (m *PublicMirrorServer) handleHistory(w http.ResponseWriter, r *http.Reques
 	sourceID := r.URL.Query().Get("source")
 	cursorStr := r.URL.Query().Get("cursor")
 	limitStr := r.URL.Query().Get("limit")
+	recordKind := r.URL.Query().Get("kind")
 
 	limit := m.defaultPageSize
 	if limitStr != "" {
@@ -1295,35 +1296,31 @@ func (m *PublicMirrorServer) handleHistory(w http.ResponseWriter, r *http.Reques
 
 	var items []map[string]any
 	var lastSeq int64
-	count := 0
+	hasMore := false
 	for _, rec := range state.Records {
 		if rec.Sequence <= cursor {
 			continue
-		}
-		if count >= limit {
-			break
 		}
 		var item map[string]any
 		if err := json.Unmarshal([]byte(rec.RecordBytes), &item); err != nil {
 			continue
 		}
+		if recordKind != "" && item["kind"] != recordKind {
+			continue
+		}
+		if len(items) >= limit {
+			hasMore = true
+			break
+		}
 		item["sequence"] = rec.Sequence
 		item["record_type"] = rec.RecordType
 		items = append(items, item)
 		lastSeq = rec.Sequence
-		count++
 	}
 
-	hasMore := false
 	nextCursor := ""
-	if count == limit {
-		for _, rec := range state.Records {
-			if rec.Sequence > lastSeq {
-				hasMore = true
-				nextCursor = strconv.FormatInt(lastSeq, 10)
-				break
-			}
-		}
+	if hasMore {
+		nextCursor = strconv.FormatInt(lastSeq, 10)
 	}
 
 	if items == nil {

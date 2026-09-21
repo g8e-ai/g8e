@@ -131,6 +131,7 @@ type EvidenceNode struct {
 	ProducerIdentity   string
 	ProducedAt         time.Time
 	ScopeID            string
+	SourceAdmissionID  string
 	RunID              string
 	AttemptID          string
 	ScenarioID         string
@@ -451,6 +452,7 @@ func (n *EvidenceNode) ToProto() *compliancev1.ComplianceEvidenceReference {
 		SchemaRef:          n.SchemaRef,
 		ProducerIdentity:   n.ProducerIdentity,
 		ScopeId:            n.ScopeID,
+		SourceAdmissionId:  n.SourceAdmissionID,
 		RunId:              n.RunID,
 		AttemptId:          n.AttemptID,
 		ScenarioId:         n.ScenarioID,
