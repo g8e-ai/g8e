@@ -41,7 +41,7 @@ The workload certificate is separate from browser authentication. The current st
 The unified container deployment starts the dashboard only after the Gateway health check succeeds and platform owner bootstrap is available. Startup proceeds as follows:
 
 1. The container waits for the Gateway's plain-HTTP health surface.
-2. The dashboard loads its existing workload identity, resumes a pending enrollment request, or submits a new request and persists the resumable state.
+2. The dashboard loads its existing workload identity, resumes an unexpired pending enrollment request, or replaces missing or expired state with a new request and persists it.
 3. An owner approves a new request through the Gateway console while the dashboard remains unavailable.
 4. The dashboard stores the issued certificate, private key, and trust bundle in its persistent runtime volume, then removes the pending enrollment state.
 5. The static host begins listening and publishes the browser-facing Gateway origin to the browser application.

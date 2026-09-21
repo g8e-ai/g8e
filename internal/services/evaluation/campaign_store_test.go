@@ -201,8 +201,54 @@ func TestCampaignImporterPreservesBoundIncompletePopulation(t *testing.T) {
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, report.GetStatus())
 	assert.Len(t, report.GetVerifiedPopulationDigest(), 64)
 	require.NotEmpty(t, nodes[0].Diagnostics)
-	assert.Equal(t, "campaign_population_incomplete", nodes[0].Diagnostics[0].GetCode())
-	assert.Equal(t, req.RunID, nodes[0].Diagnostics[0].GetSubject().GetRunId())
+	assert.Contains(t, diagnosticCodes(nodes[0].Diagnostics), "campaign_population_incomplete")
+	assert.Contains(t, diagnosticCodes(nodes[0].Diagnostics), "campaign_native_assertion_unmapped")
+	for _, diagnostic := range nodes[0].Diagnostics {
+		assert.Equal(t, req.RunID, diagnostic.GetSubject().GetRunId())
+	}
+}
+
+func diagnosticCodes(diagnostics []*compliancev1.AssessmentDiagnostic) []string {
+	codes := make([]string, 0, len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		if diagnostic != nil {
+			codes = append(codes, diagnostic.GetCode())
+		}
+	}
+	return codes
+}
+
+func TestReviewedCampaignAssertionMappingsExcludeApplicationEvidence(t *testing.T) {
+	mappings := reviewedCampaignAssertionMappings()
+	require.NotEmpty(t, mappings)
+
+	byEvidence := make(map[string]campaignAssertionMapping, len(mappings))
+	for _, mapping := range mappings {
+		require.NotEmpty(t, mapping.EvidenceKind)
+		assert.NotEmpty(t, mapping.ClaimLimit)
+		assert.NotEmpty(t, mapping.RequiredEvidenceTypes)
+		byEvidence[mapping.EvidenceKind] = mapping
+	}
+
+	for _, evidenceKind := range []string{"campaign_verification", "deterministic_grade", "semantic_grade", "application_policy_outcome"} {
+		mapping, ok := byEvidence[evidenceKind]
+		require.True(t, ok, evidenceKind)
+		assert.Empty(t, mapping.NativeAssertionRefs, evidenceKind)
+	}
+
+	governedActionMapping, ok := byEvidence["governed_action_binding"]
+	require.True(t, ok)
+	assertionRefs := make([]string, 0, len(governedActionMapping.NativeAssertionRefs))
+	for _, reference := range governedActionMapping.NativeAssertionRefs {
+		assertionRefs = append(assertionRefs, reference.GetId()+"@"+reference.GetVersion())
+	}
+	assert.ElementsMatch(t, []string{
+		"G8E-AU-PERSIST-001@2.0.0",
+		"G8E-AU-RECEIPT-001@2.0.0",
+		"G8E-CM-STATE-001@2.0.0",
+		"G8E-GOV-ALLOW-001@2.0.0",
+		"G8E-GOV-BLOCK-001@2.0.0",
+	}, assertionRefs)
 }
 
 func TestCampaignImporterRejectsTamperedPersistedScenarioBody(t *testing.T) {

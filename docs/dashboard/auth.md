@@ -31,12 +31,12 @@ The dashboard resolves its workload identity before Express begins listening:
 
 1. It checks for an installed certificate and private key under `G8E_RUNTIME_DIR`.
 2. It reuses the certificate when it can parse the certificate, find a URI subject alternative name, and confirm that more than seven days remain before expiry.
-3. Otherwise, it resumes a persisted enrollment request or creates a P-256 key and certificate signing request.
+3. Otherwise, it resumes an unexpired persisted enrollment request or creates a P-256 key and certificate signing request when no resumable request exists.
 4. It submits the request through the Gateway's plain-HTTP bootstrap surface and waits for owner approval. If the Gateway has no owner yet, submission retries for up to 30 minutes while bootstrap completes.
 5. After approval, it proves possession of the generated private key, receives the issued credential, and installs the certificate, key, and returned trust bundle.
-6. Express starts only after identity loading or enrollment succeeds. Unexpected identity-read failures, denied or expired requests, and enrollment failures stop startup.
+6. Express starts only after identity loading or enrollment succeeds. Unexpected identity-read failures, denied requests, and enrollment failures stop startup.
 
-The approval page is provided by the Gateway console because the dashboard is not available while its own enrollment is pending. Pending state survives process restarts so the dashboard can continue the same request without generating a new key. A denied or expired pending request remains on disk and requires operator intervention before a new request can be created.
+The approval page is provided by the Gateway console because the dashboard is not available while its own enrollment is pending. Unexpired pending state survives process restarts so the dashboard can continue the same request and instance identity without generating a new key. When persisted state has expired, the dashboard replaces it with a new request. A denied request remains on disk and requires operator intervention before a new request can be created.
 
 The runtime files are:
 
