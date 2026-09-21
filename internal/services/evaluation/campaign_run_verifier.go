@@ -24,11 +24,8 @@ import (
 )
 
 const (
-	campaignRunVerificationFilename      = "campaign-verification.json"
-	campaignVerificationSchemaVersion    = "2.0.0"
-	campaignVerifierContractVersion      = "2.0.0"
-	campaignVerificationArtifactType     = "campaign-verification-report"
-	campaignVerificationVerifierIdentity = "g8e-campaign-verifier"
+	campaignVerificationSchemaVersion = "2.0.0"
+	campaignVerificationArtifactType  = "campaign-verification-report"
 )
 
 // CampaignRunVerifier independently verifies all persisted terminal assignment
@@ -169,8 +166,8 @@ func (v *CampaignRunVerifier) VerifyRun(ctx context.Context, store *Store, runID
 	return finalizeCampaignVerificationReport(report, failures), nil
 }
 
-func bindCampaignVerificationReport(report *evalv1.EvaluationVerificationReport, run *evalv1.EvaluationRun, spec *evalv1.EvaluationCampaignSpec, catalog *evalv1.EvaluationScenarioCatalog, assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult, verifierReleaseVersion string) (*evalv1.EvaluationVerificationReport, *RunVerificationApplicability, error) {
-	if report == nil || run == nil || spec == nil || catalog == nil || verifierReleaseVersion == "" || report.GetRunId() != run.GetRunId() {
+func bindCampaignVerificationReport(report *evalv1.EvaluationVerificationReport, run *evalv1.EvaluationRun, spec *evalv1.EvaluationCampaignSpec, catalog *evalv1.EvaluationScenarioCatalog, assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult, policy CampaignVerificationPolicy) (*evalv1.EvaluationVerificationReport, *RunVerificationApplicability, error) {
+	if report == nil || run == nil || spec == nil || catalog == nil || policy.VerifierReleaseVersion == "" || report.GetRunId() != run.GetRunId() {
 		return nil, nil, fmt.Errorf("evaluation: bind campaign verification report: %w", constants.ErrMissingRequiredField)
 	}
 	binding := run.GetCampaignBinding()
@@ -187,8 +184,10 @@ func bindCampaignVerificationReport(report *evalv1.EvaluationVerificationReport,
 		return nil, nil, err
 	}
 	bound.SchemaVersion = campaignVerificationSchemaVersion
-	bound.VerifierReleaseVersion = verifierReleaseVersion
-	bound.VerifierContractVersion = campaignVerifierContractVersion
+	bound.VerifierReleaseVersion = policy.VerifierReleaseVersion
+	bound.VerifierContractVersion = constants.CampaignVerifierVersion
+	bound.ProviderObservationPolicy = providerObservationPolicyProto(policy.ProviderObservation)
+	bound.ModelProvenancePolicy = modelProvenancePolicyProto(policy.ModelProvenance)
 	bound.VerifiedPopulationDigest = populationDigest
 	bound.ExpectedAssignmentCount = population.ExpectedAssignmentCount
 	bound.VerifiedAssignmentCount = population.VerifiedAssignmentCount
@@ -206,11 +205,11 @@ func bindCampaignVerificationReport(report *evalv1.EvaluationVerificationReport,
 		Sha256:             reportDigest,
 		MediaType:          constants.MediaTypeJSON,
 		SchemaRef:          "g8e.eval.v1.EvaluationVerificationReport",
-		ProducerIdentity:   campaignVerificationVerifierIdentity,
+		ProducerIdentity:   constants.CampaignVerifierID,
 		RunId:              run.GetRunId(),
 		VerificationStatus: string(complianceevidence.VerificationStatusVerified),
-		VerifierId:         campaignVerificationVerifierIdentity,
-		VerifierVersion:    campaignVerifierContractVersion,
+		VerifierId:         constants.CampaignVerifierID,
+		VerifierVersion:    constants.CampaignVerifierVersion,
 		ProducedAt:         bound.GetVerifiedAt(),
 		VerifiedAt:         bound.GetVerifiedAt(),
 	}
@@ -224,11 +223,25 @@ func bindCampaignVerificationReport(report *evalv1.EvaluationVerificationReport,
 	return bound, applicability, nil
 }
 
-type campaignRunVerificationPolicy struct {
+type CampaignVerificationPolicy struct {
 	VerifierReleaseVersion string
 	ProviderObservation    ProviderObservationPolicy
 	ModelProvenance        ModelProvenancePolicy
 	AssessmentTime         func() time.Time
+}
+
+func providerObservationPolicyProto(policy ProviderObservationPolicy) evalv1.EvaluationWitnessPolicy {
+	if policy == ProviderObservationPolicyStrict {
+		return evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT
+	}
+	return evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM
+}
+
+func modelProvenancePolicyProto(policy ModelProvenancePolicy) evalv1.EvaluationWitnessPolicy {
+	if policy == ModelProvenancePolicyStrict {
+		return evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT
+	}
+	return evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM
 }
 
 type campaignRunVerificationResult struct {
@@ -238,7 +251,7 @@ type campaignRunVerificationResult struct {
 	Applicability *RunVerificationApplicability
 }
 
-func verifyCampaignRunReadOnly(ctx context.Context, store *Store, runID string, artifacts map[string]ScenarioArtifacts, policy campaignRunVerificationPolicy) (*campaignRunVerificationResult, error) {
+func verifyCampaignRunReadOnly(ctx context.Context, store *Store, runID string, policy CampaignVerificationPolicy) (*campaignRunVerificationResult, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -258,7 +271,8 @@ func verifyCampaignRunReadOnly(ctx context.Context, store *Store, runID string, 
 	if err != nil {
 		return nil, err
 	}
-	if err := ValidateScenarioCatalog(catalog, artifacts); err != nil {
+	artifacts, err := store.LoadScenarioArtifacts(ctx, campaignID, catalog)
+	if err != nil {
 		return nil, fmt.Errorf("evaluation: verify campaign frozen scenario inputs: %w", err)
 	}
 	observationReader, err := NewCampaignProviderObservationReader(store.files)
@@ -288,7 +302,7 @@ func verifyCampaignRunReadOnly(ctx context.Context, store *Store, runID string, 
 	if err != nil {
 		return nil, err
 	}
-	bound, applicability, err := bindCampaignVerificationReport(report, run, spec, catalog, assignments, results, policy.VerifierReleaseVersion)
+	bound, applicability, err := bindCampaignVerificationReport(report, run, spec, catalog, assignments, results, policy)
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +347,7 @@ func (s *Store) LoadCampaignVerification(ctx context.Context, runID string) (*ev
 	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(runID) {
 		return nil, fmt.Errorf("%w: file service and run ID are required", constants.ErrEvidenceArtifactMalformed)
 	}
-	path := filepath.Join(evaluationRunDir(runID), campaignRunVerificationFilename)
+	path := filepath.Join(evaluationRunDir(runID), constants.CampaignVerificationFilename)
 	body, err := s.files.ReadFile(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: read campaign verification report: %w", err)
@@ -357,7 +371,7 @@ func (s *Store) SaveCampaignVerification(ctx context.Context, runID string, repo
 	if err != nil {
 		return fmt.Errorf("%w: canonicalize campaign verification report: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}
-	path := filepath.Join(evaluationRunDir(runID), campaignRunVerificationFilename)
+	path := filepath.Join(evaluationRunDir(runID), constants.CampaignVerificationFilename)
 	if err := s.files.MkdirAll(ctx, filepath.Dir(path), constants.PermDirStandard); err != nil {
 		return fmt.Errorf("%w: create campaign verification directory: %w", constants.ErrEvaluationReportPersistFailed, err)
 	}

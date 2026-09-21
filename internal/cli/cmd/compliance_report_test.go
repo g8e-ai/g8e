@@ -541,7 +541,7 @@ func TestComplianceReportGenerateCmdWithConfig_FailsClosedOnImporterFailure(t *t
 	assert.Empty(t, body)
 }
 
-func TestComplianceReportGenerateCmdWithConfig_RejectsCampaignRunThroughExplicitDispatch(t *testing.T) {
+func TestComplianceReportGenerateCmdWithConfig_RejectsIncompleteCampaignSource(t *testing.T) {
 	fileSvc, _ := newCmdTestEnv(t)
 	runID := "campaign-run"
 	require.NoError(t, evaluation.NewStore(fileSvc).SaveRun(context.Background(), &evalv1.EvaluationRun{
@@ -560,7 +560,7 @@ func TestComplianceReportGenerateCmdWithConfig_RejectsCampaignRunThroughExplicit
 	require.NoError(t, compliancev1.UnmarshalCanonical(scopeBody, scope))
 	scope.SourceAdmissions[0].SourceKind = constants.EvaluationSourceKindCampaign
 	scope.SourceAdmissions[0].SourceVersion = constants.EvaluationSourceVersion
-	scope.SourceAdmissions[0].VerifierRef = &compliancev1.VersionedReference{Id: "g8e-campaign-evaluation-verifier", Version: constants.EvaluationSourceVersion}
+	scope.SourceAdmissions[0].VerifierRef = &compliancev1.VersionedReference{Id: constants.CampaignVerifierID, Version: constants.CampaignVerifierVersion}
 	scopeBody, err = compliancev1.MarshalCanonical(scope)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(scopePath, scopeBody, constants.PermFileReadOnly))
@@ -569,7 +569,7 @@ func TestComplianceReportGenerateCmdWithConfig_RejectsCampaignRunThroughExplicit
 
 	err = cmd.RunE(cmd, nil)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrUnsupportedVerifier)
+	assert.NotErrorIs(t, err, constants.ErrUnsupportedVerifier)
 	assert.Contains(t, err.Error(), "campaign")
 }
 

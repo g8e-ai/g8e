@@ -36,6 +36,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -587,10 +588,16 @@ func buildEvaluationReportSources(ctx context.Context, fileSvc fs.RuntimeFileSer
 		}
 		switch inventory.Kind {
 		case evaluation.RunKindCampaign:
-			if admission.GetSourceKind() != constants.EvaluationSourceKindCampaign || admission.GetSourceVersion() != constants.EvaluationSourceVersion {
+			if admission.GetSourceKind() != constants.EvaluationSourceKindCampaign || admission.GetSourceVersion() != constants.EvaluationSourceVersion || admission.GetVerifierRef().GetId() != constants.CampaignVerifierID || admission.GetVerifierRef().GetVersion() != constants.CampaignVerifierVersion {
 				return nil, nil, fmt.Errorf("%w: campaign eval run %s does not match protected source admission %s", constants.ErrEvidenceScopeMismatch, runID, admission.GetAdmissionId())
 			}
-			return nil, nil, fmt.Errorf("%w: campaign eval run %s requires the composed compliance campaign importer", constants.ErrUnsupportedVerifier, runID)
+			campaignSource, campaignArtifacts, err := buildCampaignReportSource(ctx, fileSvc, admission, verifiedAt)
+			if err != nil {
+				return nil, nil, err
+			}
+			sources = append(sources, campaignSource)
+			artifacts = append(artifacts, campaignArtifacts...)
+			continue
 		case evaluation.RunKindIncomplete:
 			return nil, nil, fmt.Errorf("%w: eval run %s is incomplete: %s", constants.ErrEvalRunVerificationFailed, runID, inventory.Reason)
 		case evaluation.RunKindUnsupported:
@@ -631,6 +638,109 @@ func buildEvaluationReportSources(ctx context.Context, fileSvc fs.RuntimeFileSer
 	}
 	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].BundlePath < artifacts[j].BundlePath })
 	return sources, artifacts, nil
+}
+
+func buildCampaignReportSource(ctx context.Context, fileSvc fs.RuntimeFileService, admission *compliancev1.AssessmentSourceAdmission, assessmentAsOf time.Time) (compliancereport.GenerationSource, []compliancereport.SourceArtifact, error) {
+	runID := admission.GetRunId()
+	store := evaluation.NewStore(fileSvc)
+	run, err := store.LoadRun(ctx, runID)
+	if err != nil {
+		return compliancereport.GenerationSource{}, nil, err
+	}
+	campaignID := run.GetCampaignBinding().GetCampaignId()
+	bundleRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, admission.GetAdmissionId())
+	runtimeBundleRoot := path.Join(bundleRoot, constants.ComplianceBundleSourceRuntimeDirname)
+	roots := []string{
+		path.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname, runID),
+		path.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationCampaignsDirname, campaignID),
+	}
+	artifacts := make([]compliancereport.SourceArtifact, 0)
+	bodies := make(map[string][]byte)
+	for _, root := range roots {
+		captured, captureErr := collectRuntimeSourceArtifacts(ctx, fileSvc, constants.PathCurrentDir, root, bundleRoot, false)
+		if captureErr != nil {
+			return compliancereport.GenerationSource{}, nil, fmt.Errorf("%w: capture campaign source %s: %w", constants.ErrEvalRunVerificationFailed, runID, captureErr)
+		}
+		for _, artifact := range captured {
+			runtimePath := strings.TrimPrefix(artifact.BundlePath, runtimeBundleRoot+"/")
+			bodies[filepath.FromSlash(runtimePath)] = append([]byte(nil), artifact.Body...)
+		}
+		artifacts = append(artifacts, captured...)
+	}
+	assignments, err := store.ListAssignments(ctx, runID)
+	if err != nil {
+		return compliancereport.GenerationSource{}, nil, err
+	}
+	attemptIDs := make(map[string]struct{})
+	for _, assignment := range assignments {
+		exists, existsErr := store.AssignmentResultExists(ctx, runID, assignment.GetAssignmentId())
+		if existsErr != nil {
+			return compliancereport.GenerationSource{}, nil, existsErr
+		}
+		if !exists {
+			continue
+		}
+		result, loadErr := store.LoadAssignmentResult(ctx, runID, assignment.GetAssignmentId())
+		if loadErr != nil {
+			return compliancereport.GenerationSource{}, nil, loadErr
+		}
+		for _, inferenceRecord := range result.GetModelInferences() {
+			if inferenceRecord.GetProviderAttemptId() != "" {
+				attemptIDs[inferenceRecord.GetProviderAttemptId()] = struct{}{}
+			}
+		}
+	}
+	attemptPaths := make([]string, 0, len(attemptIDs)*3)
+	for attemptID := range attemptIDs {
+		attemptPaths = append(attemptPaths,
+			path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceAttemptsDirname, attemptID+constants.FileExtJSON),
+			path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceProviderObserverDirname, constants.InferenceProviderObserverWindowsDirname, attemptID+constants.FileExtJSON),
+			path.Join(constants.DataDirname, constants.InferenceDirname, constants.InferenceModelProvenanceDirname, constants.InferenceModelProvenanceWindowsDirname, attemptID+constants.FileExtJSON),
+		)
+	}
+	sort.Strings(attemptPaths)
+	for _, runtimePath := range attemptPaths {
+		exists, existsErr := fileSvc.FileExists(ctx, filepath.FromSlash(runtimePath))
+		if existsErr != nil {
+			return compliancereport.GenerationSource{}, nil, existsErr
+		}
+		if !exists {
+			continue
+		}
+		body, readErr := fileSvc.ReadFile(ctx, filepath.FromSlash(runtimePath))
+		if readErr != nil {
+			return compliancereport.GenerationSource{}, nil, readErr
+		}
+		bodies[filepath.FromSlash(runtimePath)] = append([]byte(nil), body...)
+		artifacts = append(artifacts, compliancereport.SourceArtifact{BundlePath: path.Join(runtimeBundleRoot, runtimePath), Body: body, MediaType: constants.MediaTypeJSON})
+	}
+	policy := evaluation.CampaignVerificationPolicy{VerifierReleaseVersion: constants.EvaluationSourceVersion, ProviderObservation: evaluation.ProviderObservationPolicyInterim, ModelProvenance: evaluation.ModelProvenancePolicyInterim, AssessmentTime: func() time.Time { return assessmentAsOf }}
+	inventory := &evalv1.CampaignComplianceSourceInventory{SchemaVersion: constants.CampaignSourceInventoryVersion, AdmissionId: admission.GetAdmissionId(), RunId: runID, CampaignId: campaignID, ProviderObservationPolicy: evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM, ModelProvenancePolicy: evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM}
+	runtimePaths := make([]string, 0, len(bodies))
+	for runtimePath := range bodies {
+		runtimePaths = append(runtimePaths, filepath.ToSlash(runtimePath))
+	}
+	sort.Strings(runtimePaths)
+	for _, runtimePath := range runtimePaths {
+		digest := sha256.Sum256(bodies[filepath.FromSlash(runtimePath)])
+		inventory.Artifacts = append(inventory.Artifacts, &evalv1.CampaignComplianceSourceArtifact{RuntimePath: runtimePath, Sha256: hex.EncodeToString(digest[:]), MediaType: constants.MediaTypeJSON})
+	}
+	inventoryBody, err := evalv1.MarshalCanonical(inventory)
+	if err != nil {
+		return compliancereport.GenerationSource{}, nil, err
+	}
+	artifacts = append(artifacts, compliancereport.SourceArtifact{BundlePath: path.Join(bundleRoot, constants.CampaignSourceInventoryFilename), Body: inventoryBody, MediaType: constants.MediaTypeJSON})
+	reader := &explicitSourceReader{bodies: bodies}
+	importer := evaluation.NewCampaignImporter(reader, runID, policy)
+	nodes, err := importer.Import(ctx)
+	if err != nil {
+		return compliancereport.GenerationSource{}, nil, err
+	}
+	if len(nodes) != 1 {
+		return compliancereport.GenerationSource{}, nil, fmt.Errorf("%w: campaign importer returned an invalid manifest population", constants.ErrInvalidEvidenceGraph)
+	}
+	artifacts = append(artifacts, compliancereport.SourceArtifact{BundlePath: path.Join(bundleRoot, constants.ComplianceBundleSourceVerificationFilename), Body: nodes[0].CanonicalBytes, MediaType: constants.MediaTypeJSON})
+	return compliancereport.GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: importer}, artifacts, nil
 }
 
 func selectedEvaluationAdmission(scope *compliancev1.AssessmentScope, runID string) (*compliancev1.AssessmentSourceAdmission, error) {
@@ -728,12 +838,94 @@ func (r *explicitSourceReader) ReadFile(ctx context.Context, sourcePath string) 
 	return append([]byte(nil), body...), nil
 }
 
-func (r *explicitSourceReader) ReadDir(ctx context.Context, _ string) ([]os.DirEntry, error) {
+func (r *explicitSourceReader) ReadDir(ctx context.Context, sourcePath string) ([]os.DirEntry, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return nil, constants.ErrUnexpectedEvidenceArtifact
+	prefix := strings.TrimSuffix(sourcePath, string(filepath.Separator)) + string(filepath.Separator)
+	entries := make(map[string]bool)
+	for candidate := range r.bodies {
+		if !strings.HasPrefix(candidate, prefix) {
+			continue
+		}
+		remainder := strings.TrimPrefix(candidate, prefix)
+		parts := strings.SplitN(remainder, string(filepath.Separator), 2)
+		if parts[0] != "" {
+			entries[parts[0]] = len(parts) == 2
+		}
+	}
+	if len(entries) == 0 {
+		return nil, constants.ErrNotFound
+	}
+	names := make([]string, 0, len(entries))
+	for name := range entries {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	result := make([]os.DirEntry, 0, len(names))
+	for _, name := range names {
+		result = append(result, explicitSourceDirEntry{name: name, directory: entries[name]})
+	}
+	return result, nil
 }
+
+type explicitSourceDirEntry struct {
+	name      string
+	directory bool
+}
+
+func (e explicitSourceDirEntry) Name() string      { return e.name }
+func (e explicitSourceDirEntry) IsDir() bool       { return e.directory }
+func (e explicitSourceDirEntry) Type() os.FileMode { return 0 }
+func (e explicitSourceDirEntry) Info() (os.FileInfo, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) FileExists(ctx context.Context, sourcePath string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	_, exists := r.bodies[sourcePath]
+	return exists, nil
+}
+func (r *explicitSourceReader) MkdirAll(context.Context, string, os.FileMode) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) CreateRuntimeTree(context.Context) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) Stat(context.Context, string) (os.FileInfo, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) Lstat(context.Context, string) (os.FileInfo, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) WriteFile(context.Context, string, []byte, os.FileMode) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) OpenForAppend(context.Context, string, os.FileMode) (*os.File, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) OpenForRead(context.Context, string) (*os.File, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) Remove(context.Context, string) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) RemoveAll(context.Context, string) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) Rename(context.Context, string, string) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) EnforceDirPermissions(context.Context, string, os.FileMode) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) EnforceFilePermissions(context.Context, string, os.FileMode) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *explicitSourceReader) Resolve(sourcePath string) string             { return sourcePath }
+func (r *explicitSourceReader) Rel(sourcePath string) (string, error)        { return sourcePath, nil }
+func (r *explicitSourceReader) RelFromAbs(sourcePath string) (string, error) { return sourcePath, nil }
 
 type standaloneReportSourceInput struct {
 	scopeID              string

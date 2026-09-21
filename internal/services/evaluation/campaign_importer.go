@@ -21,17 +21,16 @@ import (
 // CampaignImporter loads persisted model-campaign artifacts into the evidence
 // graph without invoking inference or mutation.
 type CampaignImporter struct {
-	reader    fs.RuntimeFileService
-	runID     string
-	artifacts map[string]ScenarioArtifacts
-	now       func() time.Time
+	reader fs.RuntimeFileService
+	runID  string
+	policy CampaignVerificationPolicy
 }
 
-func NewCampaignImporter(reader fs.RuntimeFileService, runID string, artifacts map[string]ScenarioArtifacts, now func() time.Time) *CampaignImporter {
-	if now == nil {
-		now = time.Now
+func NewCampaignImporter(reader fs.RuntimeFileService, runID string, policy CampaignVerificationPolicy) *CampaignImporter {
+	if policy.AssessmentTime == nil {
+		policy.AssessmentTime = time.Now
 	}
-	return &CampaignImporter{reader: reader, runID: runID, artifacts: artifacts, now: now}
+	return &CampaignImporter{reader: reader, runID: runID, policy: policy}
 }
 
 func (i *CampaignImporter) SourceID() string {
@@ -46,15 +45,10 @@ func (i *CampaignImporter) RunID() string {
 }
 
 func (i *CampaignImporter) Import(ctx context.Context) ([]complianceevidence.EvidenceNode, error) {
-	if i == nil || i.reader == nil || !complianceevidence.ValidPathElement(i.runID) || len(i.artifacts) == 0 || i.now == nil {
+	if i == nil || i.reader == nil || !complianceevidence.ValidPathElement(i.runID) || i.policy.VerifierReleaseVersion == "" || i.policy.AssessmentTime == nil {
 		return nil, fmt.Errorf("%w: campaign importer is incomplete", constants.ErrInvalidEvidenceGraph)
 	}
-	result, err := verifyCampaignRunReadOnly(ctx, NewStore(i.reader), i.runID, i.artifacts, campaignRunVerificationPolicy{
-		VerifierReleaseVersion: constants.EvaluationSourceVersion,
-		ProviderObservation:    ProviderObservationPolicyInterim,
-		ModelProvenance:        ModelProvenancePolicyInterim,
-		AssessmentTime:         i.now,
-	})
+	result, err := verifyCampaignRunReadOnly(ctx, NewStore(i.reader), i.runID, i.policy)
 	if err != nil {
 		return nil, err
 	}
@@ -74,15 +68,15 @@ func (i *CampaignImporter) Import(ctx context.Context) ([]complianceevidence.Evi
 		SHA256:             digest,
 		MediaType:          constants.MediaTypeJSON,
 		SchemaRef:          "g8e.eval.v1.EvaluationVerificationReport",
-		ProducerIdentity:   campaignVerificationVerifierIdentity,
+		ProducerIdentity:   constants.CampaignVerifierID,
 		ProducedAt:         verifiedAt,
 		ScopeID:            constants.EvalScopePrefix + result.Run.GetCampaignBinding().GetCampaignId(),
 		RunID:              i.runID,
 		VerificationStatus: complianceevidence.VerificationStatusVerified,
-		VerifierID:         campaignVerificationVerifierIdentity,
-		VerifierVersion:    campaignVerifierContractVersion,
+		VerifierID:         constants.CampaignVerifierID,
+		VerifierVersion:    constants.CampaignVerifierVersion,
 		VerifiedAt:         verifiedAt,
-		BundlePath:         campaignRunVerificationFilename,
+		BundlePath:         constants.CampaignVerificationFilename,
 		CanonicalBytes:     body,
 	}}, nil
 }

@@ -19,6 +19,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -112,6 +113,123 @@ func (s *Store) LoadScenarioCatalog(ctx context.Context, campaignID string) (*ev
 		return nil, fmt.Errorf("%w: %v", constants.ErrEvidenceArtifactMalformed, err)
 	}
 	return catalog, nil
+}
+
+func (s *Store) SaveScenarioArtifacts(ctx context.Context, campaignID string, catalog *evalv1.EvaluationScenarioCatalog, artifacts map[string]ScenarioArtifacts) error {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(campaignID) || catalog == nil {
+		return fmt.Errorf("%w: frozen scenario artifacts and campaign ID are required", constants.ErrEvaluationReportPersistFailed)
+	}
+	if err := validateFrozenScenarioArtifacts(catalog, artifacts); err != nil {
+		return fmt.Errorf("%w: validate frozen scenario artifacts: %w", constants.ErrEvaluationReportPersistFailed, err)
+	}
+	scenarioIDs := make([]string, 0, len(catalog.GetScenarios()))
+	for _, scenario := range catalog.GetScenarios() {
+		scenarioIDs = append(scenarioIDs, scenario.GetScenarioId())
+	}
+	sort.Strings(scenarioIDs)
+	for _, scenarioID := range scenarioIDs {
+		pair := artifacts[scenarioID]
+		for _, artifact := range []ScenarioArtifactPair{pair.Input, pair.Gold} {
+			if err := validateFrozenScenarioArtifact(artifact.Reference, artifact.Body); err != nil {
+				return fmt.Errorf("%w: scenario %s: %w", constants.ErrEvaluationReportPersistFailed, scenarioID, err)
+			}
+			artifactPath, err := scenarioArtifactPath(campaignID, artifact.Reference)
+			if err != nil {
+				return fmt.Errorf("%w: scenario %s: %w", constants.ErrEvaluationReportPersistFailed, scenarioID, err)
+			}
+			if err := s.files.WriteFile(ctx, artifactPath, artifact.Body, constants.PermFileReadOnly); err != nil {
+				return fmt.Errorf("%w: write frozen scenario artifact: %w", constants.ErrEvaluationReportPersistFailed, err)
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Store) LoadScenarioArtifacts(ctx context.Context, campaignID string, catalog *evalv1.EvaluationScenarioCatalog) (map[string]ScenarioArtifacts, error) {
+	if s == nil || s.files == nil || !complianceevidence.ValidPathElement(campaignID) || catalog == nil {
+		return nil, fmt.Errorf("%w: frozen scenario artifacts and campaign ID are required", constants.ErrEvidenceArtifactMalformed)
+	}
+	artifacts := make(map[string]ScenarioArtifacts, len(catalog.GetScenarios()))
+	for _, scenario := range catalog.GetScenarios() {
+		if scenario == nil || !complianceevidence.ValidPathElement(scenario.GetScenarioId()) {
+			return nil, fmt.Errorf("%w: frozen scenario identity is invalid", constants.ErrEvidenceArtifactMalformed)
+		}
+		input, err := s.loadScenarioArtifact(ctx, campaignID, scenario.GetInputFixtureRef())
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: load scenario %s input: %w", scenario.GetScenarioId(), err)
+		}
+		gold, err := s.loadScenarioArtifact(ctx, campaignID, scenario.GetGoldCriteriaRef())
+		if err != nil {
+			return nil, fmt.Errorf("evaluation: load scenario %s gold: %w", scenario.GetScenarioId(), err)
+		}
+		artifacts[scenario.GetScenarioId()] = ScenarioArtifacts{Input: input, Gold: gold}
+	}
+	if err := validateFrozenScenarioArtifacts(catalog, artifacts); err != nil {
+		return nil, fmt.Errorf("%w: validate frozen scenario artifacts: %w", constants.ErrEvidenceArtifactMalformed, err)
+	}
+	return artifacts, nil
+}
+
+func validateFrozenScenarioArtifacts(catalog *evalv1.EvaluationScenarioCatalog, artifacts map[string]ScenarioArtifacts) error {
+	if catalog == nil || len(catalog.GetScenarios()) == 0 {
+		return fmt.Errorf("%w: frozen scenario artifact population does not match the catalog", constants.ErrEvidenceArtifactMalformed)
+	}
+	seen := make(map[string]struct{}, len(catalog.GetScenarios()))
+	for _, scenario := range catalog.GetScenarios() {
+		if scenario == nil || !complianceevidence.ValidPathElement(scenario.GetScenarioId()) {
+			return fmt.Errorf("%w: frozen scenario identity is invalid", constants.ErrEvidenceArtifactMalformed)
+		}
+		if _, exists := seen[scenario.GetScenarioId()]; exists {
+			return fmt.Errorf("%w: duplicate frozen scenario identity", constants.ErrEvidenceArtifactMalformed)
+		}
+		seen[scenario.GetScenarioId()] = struct{}{}
+		pair, exists := artifacts[scenario.GetScenarioId()]
+		if !exists {
+			return fmt.Errorf("%w: frozen scenario artifacts are missing", constants.ErrEvidenceArtifactMalformed)
+		}
+		if err := validateScenarioArtifactBinding(scenario.GetInputFixtureRef(), pair.Input); err != nil {
+			return fmt.Errorf("%w: scenario %s input binding: %w", constants.ErrEvidenceArtifactMalformed, scenario.GetScenarioId(), err)
+		}
+		if err := validateScenarioArtifactBinding(scenario.GetGoldCriteriaRef(), pair.Gold); err != nil {
+			return fmt.Errorf("%w: scenario %s gold binding: %w", constants.ErrEvidenceArtifactMalformed, scenario.GetScenarioId(), err)
+		}
+		if err := validateFrozenScenarioArtifact(pair.Input.Reference, pair.Input.Body); err != nil {
+			return err
+		}
+		if err := validateFrozenScenarioArtifact(pair.Gold.Reference, pair.Gold.Body); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) loadScenarioArtifact(ctx context.Context, campaignID string, reference *compliancev1.ComplianceEvidenceReference) (ScenarioArtifactPair, error) {
+	artifactPath, err := scenarioArtifactPath(campaignID, reference)
+	if err != nil {
+		return ScenarioArtifactPair{}, err
+	}
+	body, err := s.files.ReadFile(ctx, artifactPath)
+	if err != nil {
+		return ScenarioArtifactPair{}, err
+	}
+	if err := validateFrozenScenarioArtifact(reference, body); err != nil {
+		return ScenarioArtifactPair{}, err
+	}
+	return ScenarioArtifactPair{Body: body, Reference: reference}, nil
+}
+
+func validateFrozenScenarioArtifact(reference *compliancev1.ComplianceEvidenceReference, body []byte) error {
+	if reference == nil || len(body) == 0 {
+		return fmt.Errorf("%w: frozen scenario artifact is incomplete", constants.ErrEvidenceArtifactMalformed)
+	}
+	artifactType, digest, ok := complianceevidence.ParseContentAddress(reference.GetArtifactId())
+	if !ok || reference.GetArtifactType() != string(artifactType) || reference.GetSha256() != digest || complianceevidence.ContentAddress(artifactType, body) != reference.GetArtifactId() {
+		return fmt.Errorf("%w: frozen scenario artifact binding is invalid", constants.ErrEvidenceArtifactMalformed)
+	}
+	if err := complianceevidence.ValidateCanonicalJSON(body); err != nil {
+		return fmt.Errorf("%w: frozen scenario artifact is not canonical: %v", constants.ErrEvidenceArtifactMalformed, err)
+	}
+	return nil
 }
 
 // SaveRun persists one canonical model-campaign run record.
@@ -657,6 +775,17 @@ func heterogeneousStackSetPath(campaignID string) string {
 
 func scenarioCatalogPath(campaignID string) string {
 	return filepath.Join(campaignDir(campaignID), constants.EvaluationScenarioCatalogFilename)
+}
+
+func scenarioArtifactPath(campaignID string, reference *compliancev1.ComplianceEvidenceReference) (string, error) {
+	if reference == nil {
+		return "", fmt.Errorf("%w: frozen scenario artifact reference is missing", constants.ErrEvidenceArtifactMalformed)
+	}
+	_, digest, ok := complianceevidence.ParseContentAddress(reference.GetArtifactId())
+	if !ok || digest != reference.GetSha256() {
+		return "", fmt.Errorf("%w: frozen scenario artifact reference is invalid", constants.ErrEvidenceArtifactMalformed)
+	}
+	return filepath.Join(campaignDir(campaignID), constants.EvaluationScenarioArtifactsDirname, digest+constants.FileExtJSON), nil
 }
 
 func assignmentPath(runID, assignmentID string) string {

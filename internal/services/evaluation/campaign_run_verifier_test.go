@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
@@ -39,18 +40,24 @@ func TestCampaignVerificationBinding_BindsExactVerifiedPopulation(t *testing.T) 
 	results := map[string]*evalv1.EvaluationAssignmentResult{"assignment-1": {AssignmentId: "assignment-1", RunId: "run-1", CampaignId: "campaign-1", ResultDigest: "result-digest"}}
 	report := &evalv1.EvaluationVerificationReport{SchemaVersion: CampaignSchemaVersion, ReportId: "run-1", RunId: "run-1", Status: evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS, VerifiedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC())}
 
-	bound, applicability, err := bindCampaignVerificationReport(report, run, spec, catalog, assignments, results, "v2.1.12")
+	bound, applicability, err := bindCampaignVerificationReport(report, run, spec, catalog, assignments, results, CampaignVerificationPolicy{
+		VerifierReleaseVersion: "v2.1.12",
+		ProviderObservation:    ProviderObservationPolicyStrict,
+		ModelProvenance:        ModelProvenancePolicyInterim,
+	})
 
 	require.NoError(t, err)
 	assert.True(t, applicability.Applicable)
 	assert.Equal(t, campaignVerificationSchemaVersion, bound.GetSchemaVersion())
-	assert.Equal(t, campaignVerifierContractVersion, bound.GetVerifierContractVersion())
+	assert.Equal(t, constants.CampaignVerifierVersion, bound.GetVerifierContractVersion())
 	assert.Equal(t, "v2.1.12", bound.GetVerifierReleaseVersion())
 	assert.Equal(t, uint32(1), bound.GetExpectedAssignmentCount())
 	assert.Equal(t, uint32(1), bound.GetVerifiedAssignmentCount())
 	assert.Equal(t, applicability.Population.GetCampaignDigest(), bound.GetCampaignDigest())
 	assert.Equal(t, applicability.Population.GetCatalogDigest(), bound.GetCatalogDigest())
 	assert.Equal(t, applicability.Population.GetModelRegistryDigest(), bound.GetModelRegistryDigest())
+	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT, bound.GetProviderObservationPolicy())
+	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM, bound.GetModelProvenancePolicy())
 	assert.Equal(t, mustPopulationDigest(t, applicability.Population), bound.GetVerifiedPopulationDigest())
 	require.NotNil(t, bound.GetReportDigestRef())
 	assert.Len(t, bound.GetReportDigestRef().GetSha256(), 64)
@@ -74,7 +81,7 @@ func TestVerifyCampaignRunReadOnly_BindsIncompletePopulationWithoutPersistingVer
 	count, err := controller.ScheduleHomogeneousRun(context.Background(), req.RunID)
 	require.NoError(t, err)
 
-	result, err := verifyCampaignRunReadOnly(context.Background(), store, req.RunID, req.ScenarioArtifacts, campaignRunVerificationPolicy{
+	result, err := verifyCampaignRunReadOnly(context.Background(), store, req.RunID, CampaignVerificationPolicy{
 		VerifierReleaseVersion: "v2.1.12",
 		ProviderObservation:    ProviderObservationPolicyInterim,
 		ModelProvenance:        ModelProvenancePolicyInterim,

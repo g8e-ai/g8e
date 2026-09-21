@@ -186,7 +186,7 @@ func TestCampaignImporterPreservesBoundIncompletePopulation(t *testing.T) {
 	count, err := controller.ScheduleHomogeneousRun(context.Background(), req.RunID)
 	require.NoError(t, err)
 
-	importer := NewCampaignImporter(files, req.RunID, req.ScenarioArtifacts, func() time.Time { return time.Unix(1_700_000_100, 0).UTC() })
+	importer := NewCampaignImporter(files, req.RunID, CampaignVerificationPolicy{VerifierReleaseVersion: constants.EvaluationSourceVersion, ProviderObservation: ProviderObservationPolicyInterim, ModelProvenance: ModelProvenancePolicyInterim, AssessmentTime: func() time.Time { return time.Unix(1_700_000_100, 0).UTC() }})
 	nodes, err := importer.Import(context.Background())
 
 	require.NoError(t, err)
@@ -200,6 +200,27 @@ func TestCampaignImporterPreservesBoundIncompletePopulation(t *testing.T) {
 	assert.Zero(t, report.GetVerifiedAssignmentCount())
 	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, report.GetStatus())
 	assert.Len(t, report.GetVerifiedPopulationDigest(), 64)
+}
+
+func TestCampaignImporterRejectsTamperedPersistedScenarioBody(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	controller := NewCampaignController(store, nil, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+	req := testCampaignInitRequest(t)
+	_, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(context.Background(), req.RunID)
+	require.NoError(t, err)
+
+	reference := req.Catalog.GetScenarios()[0].GetInputFixtureRef()
+	artifactPath, err := scenarioArtifactPath(req.CampaignID, reference)
+	require.NoError(t, err)
+	require.NoError(t, files.WriteFile(context.Background(), artifactPath, []byte("{}"), constants.PermFileReadOnly))
+
+	importer := NewCampaignImporter(files, req.RunID, CampaignVerificationPolicy{VerifierReleaseVersion: constants.EvaluationSourceVersion, ProviderObservation: ProviderObservationPolicyInterim, ModelProvenance: ModelProvenancePolicyInterim, AssessmentTime: func() time.Time { return time.Unix(1_700_000_100, 0).UTC() }})
+	_, err = importer.Import(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvidenceArtifactMalformed)
 }
 
 func TestStoreListCampaigns_ReturnsPersistedCampaignsWithRuns(t *testing.T) {

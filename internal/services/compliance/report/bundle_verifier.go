@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 type BundleArtifactReader interface {
@@ -735,21 +736,42 @@ func (v *bundleVerifier) verifyDemoSourceVerificationReports(ctx context.Context
 }
 
 type evalSourceInventory struct {
+	admission          *compliancev1.AssessmentSourceAdmission
 	verificationReport *compliancev1.ComplianceVerificationReport
+	campaignReport     *evalv1.EvaluationVerificationReport
+	campaignInventory  *evalv1.CampaignComplianceSourceInventory
 	report             bool
 	evidence           bool
+	runtimeArtifacts   int
 }
 
 func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context) {
-	expectedRuns := make(map[string]struct{})
+	scope := &compliancev1.AssessmentScope{}
+	if !v.decodeCanonicalSource(constants.ComplianceBundleScopeFilename, scope) {
+		prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname) + "/"
+		for bundlePath := range v.bodies {
+			if strings.HasPrefix(bundlePath, prefix) {
+				v.fail(constants.ErrUnresolvedReference, bundlePath, "eval source artifact does not bind a protected admission")
+			}
+		}
+		return
+	}
+	evalAdmissions := make(map[string]struct{})
 	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
-		if resource != nil && resource.GetArtifactType() == string(evidence.ArtifactTypeEvalManifest) && resource.GetRunId() != "" {
-			expectedRuns[resource.GetRunId()] = struct{}{}
+		if resource.GetArtifactType() == string(evidence.ArtifactTypeEvalManifest) && resource.GetVerifierId() != constants.DemoRunVerifierID {
+			evalAdmissions[resource.GetSourceAdmissionId()] = struct{}{}
 		}
 	}
-	inventories := make(map[string]*evalSourceInventory, len(expectedRuns))
-	for runID := range expectedRuns {
-		inventories[runID] = &evalSourceInventory{}
+	inventories := make(map[string]*evalSourceInventory)
+	for _, admission := range scope.GetSourceAdmissions() {
+		_, hasEvalManifest := evalAdmissions[admission.GetAdmissionId()]
+		if hasEvalManifest && (admission.GetSourceKind() == constants.EvaluationSourceKindNative || admission.GetSourceKind() == constants.EvaluationSourceKindCampaign) {
+			key := admission.GetRunId()
+			if admission.GetSourceKind() == constants.EvaluationSourceKindCampaign {
+				key = admission.GetAdmissionId()
+			}
+			inventories[key] = &evalSourceInventory{admission: admission}
+		}
 	}
 	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname) + "/"
 	for bundlePath, body := range v.bodies {
@@ -757,57 +779,65 @@ func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context
 			continue
 		}
 		parts := strings.Split(bundlePath, "/")
-		if len(parts) < 4 || parts[0] != constants.ComplianceBundleSourcesDirname || parts[1] != constants.ComplianceBundleSourceEvalsDirname || parts[2] == "" {
+		if len(parts) < 4 || parts[2] == "" {
 			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval source path is unsupported")
 			continue
 		}
-		runID := parts[2]
-		inventory, expected := inventories[runID]
-		if !expected {
-			v.fail(constants.ErrUnresolvedReference, bundlePath, "eval source artifact does not bind an analysis evidence run")
+		inventory := inventories[parts[2]]
+		if inventory == nil {
+			v.fail(constants.ErrUnresolvedReference, bundlePath, "eval source artifact does not bind a protected admission")
 			continue
 		}
+		campaign := inventory.admission.GetSourceKind() == constants.EvaluationSourceKindCampaign
 		switch parts[3] {
 		case constants.ComplianceBundleSourceVerificationFilename:
-			if len(parts) != 4 {
-				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval source verification path is unsupported")
+			if campaign {
+				report := &evalv1.EvaluationVerificationReport{}
+				if err := evalv1.UnmarshalCanonical(body, report); err != nil || report.GetRunId() != inventory.admission.GetRunId() || report.GetVerifierContractVersion() != constants.CampaignVerifierVersion {
+					v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "campaign verification report is invalid")
+				} else {
+					inventory.campaignReport = report
+				}
+			} else {
+				inventory.verificationReport = v.verifySourceVerificationReport(bundlePath, body, inventory.admission.GetRunId(), constants.EvalRunVerifierID, constants.EvalRunVerifierVersion, constants.ErrEvalRunVerificationFailed, "eval")
+			}
+		case constants.CampaignSourceInventoryFilename:
+			if !campaign {
+				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "native eval source cannot carry a campaign inventory")
 				continue
 			}
-			inventory.verificationReport = v.verifySourceVerificationReport(bundlePath, body, runID, constants.EvalRunVerifierID, constants.EvalRunVerifierVersion, constants.ErrEvalRunVerificationFailed, "eval")
+			manifest := &evalv1.CampaignComplianceSourceInventory{}
+			if err := evalv1.UnmarshalCanonical(body, manifest); err != nil || manifest.GetAdmissionId() != inventory.admission.GetAdmissionId() || manifest.GetRunId() != inventory.admission.GetRunId() {
+				v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, "campaign source inventory is invalid")
+			} else {
+				inventory.campaignInventory = manifest
+			}
 		case constants.ComplianceBundleSourceRuntimeDirname:
-			if len(parts) < 5 {
-				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval runtime source path is incomplete")
-				continue
-			}
-			if len(parts) == 5 && parts[4] == constants.EvaluationReportFilename {
+			inventory.runtimeArtifacts++
+			if !campaign && len(parts) == 5 && parts[4] == constants.EvaluationReportFilename {
 				inventory.report = true
-				continue
 			}
-			if len(parts) == 5 && parts[4] == constants.EvaluationVerificationFilename {
-				continue
-			}
-			if len(parts) == 6 && parts[4] == constants.EvaluationEvidenceDirname {
+			if !campaign && len(parts) == 6 && parts[4] == constants.EvaluationEvidenceDirname {
 				inventory.evidence = true
-				continue
 			}
-			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval runtime source path is unsupported")
 		default:
 			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval source path is unsupported")
 		}
 	}
-	for runID, inventory := range inventories {
-		if inventory.verificationReport == nil {
-			bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
-			v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "eval evidence run lacks a valid independent source verification report")
+	for key, inventory := range inventories {
+		if inventory.admission.GetSourceKind() == constants.EvaluationSourceKindCampaign {
+			if inventory.campaignReport == nil || inventory.campaignInventory == nil || inventory.runtimeArtifacts != len(inventory.campaignInventory.GetArtifacts()) {
+				v.fail(constants.ErrEvalRunVerificationFailed, key, "campaign source inventory is incomplete")
+				continue
+			}
+			v.replayCampaignSourceVerification(ctx, key, inventory)
+			continue
 		}
-		complete := inventory.report && inventory.evidence
-		if !complete {
-			bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID)
-			v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "eval evidence run lacks a complete protected runtime source inventory")
+		if inventory.verificationReport == nil || !inventory.report || !inventory.evidence {
+			v.fail(constants.ErrEvalRunVerificationFailed, key, "eval evidence run lacks a complete protected runtime source inventory")
+			continue
 		}
-		if complete && inventory.verificationReport != nil {
-			v.replayEvalSourceVerification(ctx, runID, inventory.verificationReport)
-		}
+		v.replayEvalSourceVerification(ctx, inventory.admission.GetRunId(), inventory.verificationReport)
 	}
 }
 
@@ -1587,6 +1617,64 @@ func (v *bundleVerifier) verifySourceVerificationReport(bundlePath string, body 
 	return nil
 }
 
+func (v *bundleVerifier) replayCampaignSourceVerification(ctx context.Context, admissionID string, inventory *evalSourceInventory) {
+	bundleRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, admissionID)
+	for _, artifact := range inventory.campaignInventory.GetArtifacts() {
+		if !evidence.ValidRelativePath(artifact.GetRuntimePath()) {
+			v.fail(constants.ErrPathValidation, artifact.GetRuntimePath(), "campaign runtime path is invalid")
+			return
+		}
+		body, exists := v.bodies[path.Join(bundleRoot, constants.ComplianceBundleSourceRuntimeDirname, artifact.GetRuntimePath())]
+		if !exists {
+			v.fail(constants.ErrBundleArtifactMissing, artifact.GetRuntimePath(), "campaign runtime artifact is missing")
+			return
+		}
+		digest := sha256.Sum256(body)
+		if hex.EncodeToString(digest[:]) != artifact.GetSha256() {
+			v.fail(constants.ErrChecksumMismatch, artifact.GetRuntimePath(), "campaign runtime artifact digest does not match inventory")
+			return
+		}
+	}
+	assessmentAsOf, err := v.protectedAssessmentTime()
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, admissionID, err.Error())
+		return
+	}
+	reader := &bundledRuntimeArtifactReader{bodies: v.bodies, runID: admissionID, sourceDir: constants.ComplianceBundleSourceEvalsDirname, runtimeRoot: constants.PathCurrentDir}
+	policy := evaluation.CampaignVerificationPolicy{
+		VerifierReleaseVersion: inventory.campaignReport.GetVerifierReleaseVersion(),
+		ProviderObservation:    campaignProviderPolicy(inventory.campaignInventory.GetProviderObservationPolicy()),
+		ModelProvenance:        campaignProvenancePolicy(inventory.campaignInventory.GetModelProvenancePolicy()),
+		AssessmentTime:         func() time.Time { return assessmentAsOf },
+	}
+	nodes, err := evaluation.NewCampaignImporter(reader, inventory.admission.GetRunId(), policy).Import(ctx)
+	if err != nil {
+		v.fail(constants.ErrEvalRunVerificationFailed, admissionID, err.Error())
+		return
+	}
+	if len(nodes) != 1 || !bytes.Equal(nodes[0].CanonicalBytes, v.bodies[path.Join(bundleRoot, constants.ComplianceBundleSourceVerificationFilename)]) {
+		v.fail(constants.ErrEvalRunVerificationFailed, admissionID, "campaign verification does not reproduce from protected source bytes")
+		return
+	}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, admissionID, err.Error())
+	}
+}
+
+func campaignProviderPolicy(policy evalv1.EvaluationWitnessPolicy) evaluation.ProviderObservationPolicy {
+	if policy == evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT {
+		return evaluation.ProviderObservationPolicyStrict
+	}
+	return evaluation.ProviderObservationPolicyInterim
+}
+
+func campaignProvenancePolicy(policy evalv1.EvaluationWitnessPolicy) evaluation.ModelProvenancePolicy {
+	if policy == evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT {
+		return evaluation.ModelProvenancePolicyStrict
+	}
+	return evaluation.ModelProvenancePolicyInterim
+}
+
 func (v *bundleVerifier) replayEvalSourceVerification(ctx context.Context, runID string, expected *compliancev1.ComplianceVerificationReport) {
 	runtimeRoot := filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname, runID)
 	reader := &bundledRuntimeArtifactReader{bodies: v.bodies, runID: runID, sourceDir: constants.ComplianceBundleSourceEvalsDirname, runtimeRoot: runtimeRoot}
@@ -1698,6 +1786,60 @@ func (r *bundledRuntimeArtifactReader) ReadDir(ctx context.Context, sourcePath s
 		result = append(result, bundledRuntimeDirEntry{name: name, directory: entries[name]})
 	}
 	return result, nil
+}
+
+func (r *bundledRuntimeArtifactReader) FileExists(ctx context.Context, sourcePath string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	bundlePath, ok := r.bundlePath(sourcePath)
+	if !ok {
+		return false, constants.ErrUnexpectedEvidenceArtifact
+	}
+	_, exists := r.bodies[bundlePath]
+	return exists, nil
+}
+
+func (r *bundledRuntimeArtifactReader) MkdirAll(context.Context, string, os.FileMode) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) CreateRuntimeTree(context.Context) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) Stat(context.Context, string) (os.FileInfo, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) Lstat(context.Context, string) (os.FileInfo, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) WriteFile(context.Context, string, []byte, os.FileMode) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) OpenForAppend(context.Context, string, os.FileMode) (*os.File, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) OpenForRead(context.Context, string) (*os.File, error) {
+	return nil, constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) Remove(context.Context, string) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) RemoveAll(context.Context, string) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) Rename(context.Context, string, string) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) EnforceDirPermissions(context.Context, string, os.FileMode) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) EnforceFilePermissions(context.Context, string, os.FileMode) error {
+	return constants.ErrReadOnlyEvidenceSource
+}
+func (r *bundledRuntimeArtifactReader) Resolve(sourcePath string) string      { return sourcePath }
+func (r *bundledRuntimeArtifactReader) Rel(sourcePath string) (string, error) { return sourcePath, nil }
+func (r *bundledRuntimeArtifactReader) RelFromAbs(sourcePath string) (string, error) {
+	return sourcePath, nil
 }
 
 func (r *bundledRuntimeArtifactReader) bundlePath(sourcePath string) (string, bool) {
