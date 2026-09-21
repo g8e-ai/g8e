@@ -393,6 +393,12 @@ func TestPlatformEnrollmentService_RevokeAppDisablesPolicyAndCertificate(t *test
 	})
 	require.NoError(t, err)
 
+	appSub := &wsSubscriber{buf: newDropOldestBuf(1), done: make(chan struct{}), identitySPIFFEID: "spiffe://g8e.local/app/g8ed"}
+	env.svc.pubsub.mu.Lock()
+	env.svc.pubsub.connections[appSub] = struct{}{}
+	env.svc.pubsub.mu.Unlock()
+	env.svc.pubsub.subscribe("app-revocation-test", appSub)
+
 	revoked, err := env.enrollSvc.Revoke(context.Background(), env.ownerID, models.PlatformEnrollmentRevokeRequest{
 		RequestID: requestID,
 		Reason:    "retired",
@@ -412,6 +418,8 @@ func TestPlatformEnrollmentService_RevokeAppDisablesPolicyAndCertificate(t *test
 	assert.Equal(t, models.PlatformEnrollmentStateRevoked, stored.State)
 	assert.Equal(t, env.ownerID, stored.RevokedByUserID)
 	assert.Equal(t, "retired", stored.RevocationReason)
+	assert.True(t, appSub.isDone())
+	assert.Equal(t, 0, env.svc.pubsub.ChannelSubscriberCount("app-revocation-test"))
 }
 
 func TestPlatformEnrollmentService_RevokeOperatorDisablesBothCertificatesAndSessions(t *testing.T) {
@@ -425,8 +433,19 @@ func TestPlatformEnrollmentService_RevokeOperatorDisablesBothCertificatesAndSess
 	})
 	require.NoError(t, err)
 
+	operatorSub := &wsSubscriber{buf: newDropOldestBuf(1), done: make(chan struct{}), identitySPIFFEID: extractURISANsFromCert(t, resp.Operator.OperatorCert)[0]}
+	cliSub := &wsSubscriber{buf: newDropOldestBuf(1), done: make(chan struct{}), identitySPIFFEID: extractURISANsFromCert(t, resp.Operator.CLICert)[0]}
+	env.svc.pubsub.mu.Lock()
+	env.svc.pubsub.connections[operatorSub] = struct{}{}
+	env.svc.pubsub.connections[cliSub] = struct{}{}
+	env.svc.pubsub.mu.Unlock()
+	env.svc.pubsub.subscribe("operator-revocation-test", operatorSub)
+	env.svc.pubsub.subscribe("cli-revocation-test", cliSub)
+
 	_, err = env.enrollSvc.Revoke(context.Background(), env.ownerID, models.PlatformEnrollmentRevokeRequest{RequestID: requestID})
 	require.NoError(t, err)
+	assert.True(t, operatorSub.isDone())
+	assert.True(t, cliSub.isDone())
 
 	for _, certPEM := range []string{resp.Operator.OperatorCert, resp.Operator.CLICert} {
 		block, _ := pem.Decode([]byte(certPEM))

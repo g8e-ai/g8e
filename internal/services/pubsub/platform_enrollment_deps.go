@@ -59,6 +59,10 @@ type PlatformEnrollmentOperatorSessions interface {
 	DeactivateOperatorSession(operatorSessionID string) error
 }
 
+type PlatformEnrollmentConnections interface {
+	DisconnectIdentity(spiffeID string) int
+}
+
 // PlatformEnrollmentDeps bundles the gateway-side dependencies required
 // by the five platform enrollment handlers registered in buildHandlers.
 // All fields are required in gateway mode; the pubsub service fails
@@ -72,6 +76,7 @@ type PlatformEnrollmentDeps struct {
 	PKI              PlatformEnrollmentPKI
 	CLISessions      PlatformEnrollmentCLISessions
 	OperatorSessions PlatformEnrollmentOperatorSessions
+	Connections      PlatformEnrollmentConnections
 	Posture          string
 }
 

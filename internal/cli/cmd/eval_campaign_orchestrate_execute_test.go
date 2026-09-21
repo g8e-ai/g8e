@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -279,6 +280,18 @@ func TestVerifyCampaignRun_PersistsVerificationReport(t *testing.T) {
 	loaded, err := store.LoadCampaignVerification(context.Background(), runID)
 	require.NoError(t, err)
 	assert.Equal(t, report.GetStatus(), loaded.GetStatus())
+	assert.Equal(t, constants.CampaignVerifierVersion, loaded.GetVerifierContractVersion())
+	assert.Equal(t, constants.EvaluationSourceVersion, loaded.GetVerifierReleaseVersion())
+	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM, loaded.GetProviderObservationPolicy())
+	assert.Equal(t, evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_INTERIM, loaded.GetModelProvenancePolicy())
+	assert.Equal(t, uint32(75), loaded.GetExpectedAssignmentCount())
+	assert.Equal(t, uint32(1), loaded.GetVerifiedAssignmentCount())
+	assert.NotEmpty(t, loaded.GetVerifiedPopulationDigest())
+	assert.Equal(t, spec.GetCampaignDigest(), loaded.GetCampaignDigest())
+	assert.Equal(t, spec.GetCatalogDigest(), loaded.GetCatalogDigest())
+	assert.Equal(t, spec.GetModelRegistryDigest(), loaded.GetModelRegistryDigest())
+	require.NotNil(t, loaded.GetReportDigestRef())
+	assert.Len(t, loaded.GetReportDigestRef().GetSha256(), 64)
 }
 
 func TestVerifyCampaignRun_RejectsMissingRun(t *testing.T) {

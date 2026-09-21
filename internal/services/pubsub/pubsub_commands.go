@@ -386,7 +386,6 @@ func (rs *OperatorPubSubService) buildHandlers() {
 		constants.Event.Operator.FetchHistory.Requested:     rs.history.HandleFetchHistoryRequest,
 		constants.Event.Operator.FetchFileHistory.Requested: rs.history.HandleFetchFileHistoryRequest,
 		constants.Event.Operator.RestoreFile.Requested:      rs.history.HandleRestoreFileRequest,
-		constants.Event.Operator.ShutdownRequested:          func(ctx context.Context, msg *PubSubCommandMessage) { rs.handleShutdownRequest(msg) },
 		constants.Event.Operator.Eval.AnswerRequested:       rs.handleEvalAnswerRequest,
 		constants.Event.Operator.Audit.UserMsg:              func(ctx context.Context, msg *PubSubCommandMessage) { _ = rs.audit.HandleUserMsgRequest(ctx, msg) },
 		constants.Event.Operator.Audit.AIMsg:                func(ctx context.Context, msg *PubSubCommandMessage) { _ = rs.audit.HandleAIMsgRequest(ctx, msg) },
@@ -727,6 +726,9 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 	if envelope.ActionType == string(constants.ActionTypeInference) {
 		rs.publishInferenceCompletion(ctx, envelope, cmdMsg.InferenceResult, receipt)
 	}
+	if execErr == nil && envelope.ActionType == string(constants.ActionTypeShutdown) {
+		execErr = rs.completeShutdown(ctx, cmdMsg)
+	}
 	return receipt, execErr
 }
 
@@ -818,6 +820,12 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 				"receipt_status", receipt.Status.String())
 			return
 		}
+		if env.ActionType == string(constants.ActionTypeShutdown) {
+			if err := rs.completeShutdown(rs.ctx, cmdMsg); err != nil {
+				rs.logger.Error("Shutdown acknowledgement failed", string(constants.ConnectionStateError), err, "message_id", env.Id)
+				return
+			}
+		}
 		rs.logger.Info("Actuator execution succeeded",
 			"message_id", env.Id,
 			"receipt_status", receipt.Status.String())
@@ -876,6 +884,8 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 		return rs.platformEnrollment.HandleCreateSession(ctx, pubsubMsg)
 	case constants.EventPlatformEnrollmentRevokeRequested:
 		return rs.platformEnrollment.HandleRevoke(ctx, pubsubMsg)
+	case constants.Event.Operator.ShutdownRequested:
+		return rs.handleShutdownRequest(pubsubMsg)
 	}
 
 	handler, ok := rs.handlers[eventType]
@@ -1090,27 +1100,51 @@ func (rs *OperatorPubSubService) handleDocumentDeleteSync(ctx context.Context, m
 	return fmt.Sprintf("document deleted: %s/%s", req.Collection, req.DocumentId), nil
 }
 
-func (rs *OperatorPubSubService) handleShutdownRequest(msg *PubSubCommandMessage) {
+func (rs *OperatorPubSubService) handleShutdownRequest(msg *PubSubCommandMessage) (string, error) {
 	rs.logger.Info("Shutdown command received")
 
 	req, err := unmarshalPayload(msg.EventType, msg.Payload)
 	if err != nil {
-		rs.logger.Error("Failed to unmarshal shutdown request", string(constants.ConnectionStateError), err)
-		return
+		return "", err
 	}
 
 	shutdownReq, ok := req.(*operatorv1.ShutdownRequested)
 	if !ok {
-		rs.logger.Error("Invalid payload type for shutdown request", "got", fmt.Sprintf("%T", req))
-		return
+		return "", fmt.Errorf("invalid payload type %T: %w", req, constants.ErrTxPayloadActionMismatch)
 	}
 
 	reason := shutdownReq.Reason
 	if reason == "" {
 		reason = "No reason provided"
 	}
-	rs.logger.Info("Shutting down Operator", "reason", reason)
-	rs.ShutdownChan <- reason
+	return reason, nil
+}
+
+func (rs *OperatorPubSubService) completeShutdown(ctx context.Context, msg *PubSubCommandMessage) error {
+	if rs.results == nil {
+		return constants.ErrPubSubResultsPublisher
+	}
+	req, err := unmarshalPayload(msg.EventType, msg.Payload)
+	if err != nil {
+		return err
+	}
+	shutdownReq, ok := req.(*operatorv1.ShutdownRequested)
+	if !ok {
+		return fmt.Errorf("invalid payload type %T: %w", req, constants.ErrTxPayloadActionMismatch)
+	}
+	if err := rs.results.PublishShutdownAcknowledgement(ctx, shutdownReq, msg); err != nil {
+		return fmt.Errorf("pubsub: publish shutdown acknowledgement: %w", err)
+	}
+	reason := shutdownReq.Reason
+	if reason == "" {
+		reason = "No reason provided"
+	}
+	select {
+	case rs.ShutdownChan <- reason:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("pubsub: signal shutdown: %w", ctx.Err())
+	}
 }
 
 func (rs *OperatorPubSubService) handleEvalAnswerRequest(ctx context.Context, msg *PubSubCommandMessage) {

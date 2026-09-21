@@ -425,11 +425,11 @@ func verifyCampaignRun(
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
 	}
-	policy := evaluation.ProviderObservationPolicyInterim
+	providerPolicy := evaluation.ProviderObservationPolicyInterim
 	if requireProviderObservation {
-		policy = evaluation.ProviderObservationPolicyStrict
+		providerPolicy = evaluation.ProviderObservationPolicyStrict
 	}
-	verifier = verifier.WithProviderObservationReader(observationReader, policy)
+	verifier = verifier.WithProviderObservationReader(observationReader, providerPolicy)
 	provenanceReader, err := newCampaignModelProvenanceReader(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
@@ -440,6 +440,14 @@ func verifyCampaignRun(
 	}
 	verifier = verifier.WithModelProvenanceReader(provenanceReader, provenancePolicy)
 	report, err := verifier.VerifyRun(cmd.Context(), store, runID, catalog, artifacts)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
+	}
+	report, _, err = evaluation.BindStoredCampaignVerificationReport(cmd.Context(), store, report, evaluation.CampaignVerificationPolicy{
+		VerifierReleaseVersion: constants.EvaluationSourceVersion,
+		ProviderObservation:    providerPolicy,
+		ModelProvenance:        provenancePolicy,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
 	}

@@ -230,6 +230,40 @@ type CampaignVerificationPolicy struct {
 	AssessmentTime         func() time.Time
 }
 
+func BindStoredCampaignVerificationReport(ctx context.Context, store *Store, report *evalv1.EvaluationVerificationReport, policy CampaignVerificationPolicy) (*evalv1.EvaluationVerificationReport, *RunVerificationApplicability, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if store == nil || store.files == nil || report == nil || !complianceevidence.ValidPathElement(report.GetRunId()) || policy.VerifierReleaseVersion == "" {
+		return nil, nil, fmt.Errorf("evaluation: bind stored campaign verification report: %w", constants.ErrMissingRequiredField)
+	}
+	run, err := store.LoadRun(ctx, report.GetRunId())
+	if err != nil {
+		return nil, nil, err
+	}
+	binding := run.GetCampaignBinding()
+	if binding == nil || binding.GetCampaignId() == "" {
+		return nil, nil, fmt.Errorf("evaluation: bind stored campaign verification report: %w", constants.ErrMissingRequiredField)
+	}
+	spec, err := store.LoadCampaignSpec(ctx, binding.GetCampaignId())
+	if err != nil {
+		return nil, nil, err
+	}
+	catalog, err := store.LoadScenarioCatalog(ctx, binding.GetCampaignId())
+	if err != nil {
+		return nil, nil, err
+	}
+	assignments, err := store.ListAssignments(ctx, report.GetRunId())
+	if err != nil {
+		return nil, nil, err
+	}
+	results, err := loadCampaignAssignmentResults(ctx, store, report.GetRunId(), assignments)
+	if err != nil {
+		return nil, nil, err
+	}
+	return bindCampaignVerificationReport(report, run, spec, catalog, assignments, results, policy)
+}
+
 func providerObservationPolicyProto(policy ProviderObservationPolicy) evalv1.EvaluationWitnessPolicy {
 	if policy == ProviderObservationPolicyStrict {
 		return evalv1.EvaluationWitnessPolicy_EVALUATION_WITNESS_POLICY_STRICT

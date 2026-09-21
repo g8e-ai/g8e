@@ -332,6 +332,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 			PKI:              pki,
 			CLISessions:      cliSessionSvc,
 			OperatorSessions: operatorSessionSvc,
+			Connections:      wsHandler,
 			Posture:          string(cfg.Gateway.Posture),
 		}
 		govCore := pubsub.GovernanceCoreDeps{
@@ -1089,6 +1090,7 @@ func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GatewayModeDeps {
 		PKI:              ls.pki,
 		CLISessions:      ls.cliSessionSvc,
 		OperatorSessions: ls.operatorSessionSvc,
+		Connections:      ls.pubsub,
 		Posture:          string(ls.cfg.Gateway.Posture),
 	}
 

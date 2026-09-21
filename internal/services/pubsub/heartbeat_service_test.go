@@ -74,6 +74,10 @@ func (m *mockResultsPublisher) PublishFsGrepResult(ctx context.Context, result p
 	return nil
 }
 
+func (m *mockResultsPublisher) PublishShutdownAcknowledgement(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
+	return nil
+}
+
 func (m *mockResultsPublisher) PublishInferenceCompletion(ctx context.Context, env *commonv1.GovernanceEnvelope, completion *operatorv1.InferenceCompletion) error {
 	m.inferenceCompletions = append(m.inferenceCompletions, completion)
 	return m.inferenceCompletionErr

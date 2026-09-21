@@ -131,6 +131,7 @@ type OperatorDocumentGo struct {
 	UpdatedAt            time.Time                `json:"updated_at"`
 	StartedAt            *time.Time               `json:"started_at,omitempty"`
 	ClaimedAt            *time.Time               `json:"claimed_at,omitempty"`
+	StopReason           string                   `json:"stop_reason,omitempty"`
 	LatestHeartbeat      json.RawMessage          `json:"latest_heartbeat_snapshot,omitempty"`
 	RuntimeConfig        *RuntimeConfig           `json:"runtime_config,omitempty"`
 	ConsumedByOperatorID string                   `json:"consumed_by_operator_id,omitempty"`

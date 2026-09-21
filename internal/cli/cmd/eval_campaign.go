@@ -588,67 +588,9 @@ func campaignEvalVerifyCmd(deps nativeEvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
+			report, err := verifyCampaignRun(cmd, deps, runID, requireProviderObservation, requireModelProvenance, output.JSONEnabled(cmd))
 			if err != nil {
 				return err
-			}
-			store := evaluation.NewStore(fileSvc)
-			run, err := store.LoadRun(cmd.Context(), runID)
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign verify: %w", err)
-			}
-			catalog, err := store.LoadScenarioCatalog(cmd.Context(), run.GetCampaignBinding().GetCampaignId())
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign verify: %w", err)
-			}
-			_, artifacts, err := evaluation.LoadScenarioCatalog()
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign verify: %w", err)
-			}
-			verifier := evaluation.NewCampaignRunVerifier(deps.now)
-			observationReader, err := newCampaignProviderObservationReader(fileSvc, cfg)
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign verify: %w", err)
-			}
-			policy := evaluation.ProviderObservationPolicyInterim
-			if requireProviderObservation {
-				policy = evaluation.ProviderObservationPolicyStrict
-			}
-			verifier = verifier.WithProviderObservationReader(observationReader, policy)
-			provenanceReader, err := newCampaignModelProvenanceReader(fileSvc, cfg)
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign verify: %w", err)
-			}
-			provenancePolicy := evaluation.ModelProvenancePolicyInterim
-			if requireModelProvenance {
-				provenancePolicy = evaluation.ModelProvenancePolicyStrict
-			}
-			verifier = verifier.WithModelProvenanceReader(provenanceReader, provenancePolicy)
-			report, err := verifier.VerifyRun(cmd.Context(), store, runID, catalog, artifacts)
-			if err != nil {
-				return fmt.Errorf("evaluation: campaign verify: %w", err)
-			}
-			if err := store.SaveCampaignVerification(cmd.Context(), runID, report); err != nil {
-				return fmt.Errorf("evaluation: campaign verify: %w", err)
-			}
-			publication, pubErr := newCampaignPublicationCoordinator(cmd, fileSvc)
-			if pubErr != nil {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication unavailable: %v\n", pubErr)
-			} else {
-				completionCount, pubErr := publication.PublishRunCompletion(cmd.Context(), runID, deps.now().UTC())
-				if pubErr != nil {
-					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify completion publication: %v\n", pubErr)
-				} else if completionCount > 0 && !output.JSONEnabled(cmd) {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d completion projection record(s) to public mirror\n", completionCount)
-				}
-				if report.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS {
-					published, pubErr := publication.PublishRunVerification(cmd.Context(), runID, report)
-					if pubErr != nil {
-						_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication: %v\n", pubErr)
-					} else if published > 0 && !output.JSONEnabled(cmd) {
-						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Published %d verification projection record(s) to public mirror\n", published)
-					}
-				}
 			}
 			if output.JSONEnabled(cmd) {
 				payload, err := json.MarshalIndent(map[string]any{

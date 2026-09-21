@@ -144,6 +144,10 @@ func (c *OperatorController) handleStopOperator(w http.ResponseWriter, r *http.R
 		c.responder.Error(w, http.StatusForbidden, constants.ErrRegistrationOperatorNotBelongToUser.Error())
 		return
 	}
+	if op.Status != constants.OperatorStatusActive {
+		c.responder.Error(w, http.StatusConflict, constants.ErrRegistrationOperatorNoActiveSession.Error())
+		return
+	}
 	if op.OperatorType == constants.OperatorTypeEmbedded {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrOperatorStopEmbedded.Error())
 		return

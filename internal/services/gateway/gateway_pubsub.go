@@ -34,6 +34,7 @@ type GatewayWebSocketHandler struct {
 	logger *slog.Logger
 
 	mu          sync.RWMutex
+	connections map[*wsSubscriber]struct{}
 	subscribers map[string]map[*wsSubscriber]struct{}
 	// patternSubscribers maps a glob pattern (e.g. "heartbeat:*") to the
 	// subscribers registered via PSUBSCRIBE. Fan-out in Publish matches the
@@ -208,6 +209,7 @@ func (s *wsSubscriber) shutdown() {
 func NewGatewayWebSocketHandler(logger *slog.Logger) *GatewayWebSocketHandler {
 	return &GatewayWebSocketHandler{
 		logger:             logger,
+		connections:        make(map[*wsSubscriber]struct{}),
 		subscribers:        make(map[string]map[*wsSubscriber]struct{}),
 		patternSubscribers: make(map[string]map[*wsSubscriber]struct{}),
 		handlers:           make(map[string]map[int64]func(string, []byte)),
@@ -421,6 +423,9 @@ func (b *GatewayWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http
 			operatorID:       operatorID,
 		},
 	}
+	b.mu.Lock()
+	b.connections[handler.sub] = struct{}{}
+	b.mu.Unlock()
 	handler.run()
 }
 
@@ -873,6 +878,7 @@ func (b *GatewayWebSocketHandler) removeSub(sub *wsSubscriber) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	delete(b.connections, sub)
 	for ch, subs := range b.subscribers {
 		delete(subs, sub)
 		if len(subs) == 0 {
@@ -920,22 +926,41 @@ func (b *GatewayWebSocketHandler) trySend(sub *wsSubscriber, msg []byte) bool {
 	return true
 }
 
+func (b *GatewayWebSocketHandler) DisconnectIdentity(spiffeID string) int {
+	b.mu.Lock()
+	matches := make([]*wsSubscriber, 0)
+	for sub := range b.connections {
+		if sub.identitySPIFFEID == spiffeID {
+			matches = append(matches, sub)
+			delete(b.connections, sub)
+		}
+	}
+	for _, sub := range matches {
+		for channel, subscribers := range b.subscribers {
+			delete(subscribers, sub)
+			if len(subscribers) == 0 {
+				delete(b.subscribers, channel)
+			}
+		}
+		for pattern, subscribers := range b.patternSubscribers {
+			delete(subscribers, sub)
+			if len(subscribers) == 0 {
+				delete(b.patternSubscribers, pattern)
+			}
+		}
+	}
+	b.mu.Unlock()
+	for _, sub := range matches {
+		sub.shutdown()
+	}
+	return len(matches)
+}
+
 // Close disconnects all subscribers.
 func (b *GatewayWebSocketHandler) Close() {
 	b.mu.Lock()
-	// Collect unique subscribers under the lock, then shutdown outside the
-	// lock. shutdown() is idempotent via sync.Once.
-	seen := make(map[*wsSubscriber]struct{})
-	for _, subs := range b.subscribers {
-		for sub := range subs {
-			seen[sub] = struct{}{}
-		}
-	}
-	for _, subs := range b.patternSubscribers {
-		for sub := range subs {
-			seen[sub] = struct{}{}
-		}
-	}
+	seen := b.connections
+	b.connections = make(map[*wsSubscriber]struct{})
 	b.subscribers = make(map[string]map[*wsSubscriber]struct{})
 	b.patternSubscribers = make(map[string]map[*wsSubscriber]struct{})
 	b.mu.Unlock()

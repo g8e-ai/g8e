@@ -816,61 +816,36 @@ func TestOperatorPubSubService_handleDocumentDeleteSync(t *testing.T) {
 func TestOperatorPubSubService_handleShutdownRequest(t *testing.T) {
 	f := newPubsubFixture(t)
 
-	t.Run("rejects unmarshal error", func(t *testing.T) {
-		t.Parallel()
-		msg := &PubSubCommandMessage{
+	t.Run("rejects malformed payload", func(t *testing.T) {
+		_, err := f.Svc.handleShutdownRequest(&PubSubCommandMessage{
 			EventType: constants.Event.Operator.ShutdownRequested,
 			ID:        "msg-1",
-			Payload:   []byte("invalid json"),
-		}
-		f.Svc.handleShutdownRequest(msg)
-		// Should log error and return without panic
+			Payload:   []byte("invalid protobuf"),
+		})
+		require.Error(t, err)
 	})
 
-	t.Run("rejects invalid payload type", func(t *testing.T) {
-		t.Parallel()
-		req := &operatorv1.FsListRequested{Path: "."}
-		payload, _ := proto.Marshal(req)
-		msg := &PubSubCommandMessage{
-			EventType: constants.Event.Operator.ShutdownRequested,
-			ID:        "msg-1",
-			Payload:   payload,
-		}
-		f.Svc.handleShutdownRequest(msg)
-		// Should log error and return without panic
-	})
-
-	t.Run("handles shutdown with reason", func(t *testing.T) {
-		t.Parallel()
-		req := &operatorv1.ShutdownRequested{Reason: "test shutdown"}
-		payload, _ := proto.Marshal(req)
-		msg := &PubSubCommandMessage{
-			EventType: constants.Event.Operator.ShutdownRequested,
-			ID:        "msg-1",
-			Payload:   payload,
-		}
-		// Drain channel in goroutine to prevent blocking
-		go func() {
-			<-f.Svc.ShutdownChan
-		}()
-		f.Svc.handleShutdownRequest(msg)
-	})
-
-	t.Run("handles shutdown without reason", func(t *testing.T) {
-		t.Parallel()
-		req := &operatorv1.ShutdownRequested{Reason: ""}
-		payload, _ := proto.Marshal(req)
-		msg := &PubSubCommandMessage{
-			EventType: constants.Event.Operator.ShutdownRequested,
-			ID:        "msg-1",
-			Payload:   payload,
-		}
-		// Drain channel in goroutine to prevent blocking
-		go func() {
-			<-f.Svc.ShutdownChan
-		}()
-		f.Svc.handleShutdownRequest(msg)
-	})
+	for _, tc := range []struct {
+		name   string
+		reason string
+		want   string
+	}{
+		{name: "returns supplied reason", reason: "test shutdown", want: "test shutdown"},
+		{name: "defaults empty reason", want: "No reason provided"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, err := proto.Marshal(&operatorv1.ShutdownRequested{Reason: tc.reason})
+			require.NoError(t, err)
+			summary, err := f.Svc.handleShutdownRequest(&PubSubCommandMessage{
+				EventType: constants.Event.Operator.ShutdownRequested,
+				ID:        "msg-1",
+				Payload:   payload,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, summary)
+			assert.Empty(t, f.Svc.ShutdownChan)
+		})
+	}
 }
 
 func TestOperatorPubSubService_handleEvalAnswerRequestSync(t *testing.T) {

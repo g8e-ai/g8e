@@ -425,7 +425,15 @@ func (s *PlatformEnrollmentService) Revoke(ctx context.Context, actorUserID stri
 	if existing.State == models.PlatformEnrollmentStateRevoked {
 		return &models.PlatformEnrollmentRevokeResponse{RequestID: existing.ID, ComponentKind: existing.ComponentKind, State: existing.State}, nil
 	}
-	if existing.State != models.PlatformEnrollmentStateCompleted {
+	switch existing.State {
+	case models.PlatformEnrollmentStatePending, models.PlatformEnrollmentStateApproved, models.PlatformEnrollmentStateIssuing:
+		return nil, constants.ErrPlatformEnrollmentNotApproved
+	case models.PlatformEnrollmentStateDenied:
+		return nil, constants.ErrPlatformEnrollmentRequestDenied
+	case models.PlatformEnrollmentStateExpired:
+		return nil, constants.ErrPlatformEnrollmentRequestExpired
+	case models.PlatformEnrollmentStateCompleted:
+	default:
 		return nil, constants.ErrPlatformEnrollmentInvalidState
 	}
 	targetDocumentID := ""

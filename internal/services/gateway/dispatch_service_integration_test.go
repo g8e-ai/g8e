@@ -227,6 +227,98 @@ func TestDispatchController_HandleDispatch_RoundTrip(t *testing.T) {
 // dispatching to an unregistered operator session fails closed with a 500
 // error (the dispatch service wraps the auth error) and does not publish to
 // any cmd channel.
+func TestDispatchService_ShutdownPublishesReceiptThenAcknowledgementBeforeCancellation(t *testing.T) {
+	infra := setupTestInfrastructure(t, false)
+	_, _, userID := seedOperatorForDispatch(t, infra)
+	operatorID := "shutdown-lifecycle-operator"
+	sessionID := "shutdown-lifecycle-session"
+	seedInferenceOperator(t, infra, userID, operatorID, sessionID, false)
+
+	remoteCfg := *infra.Cfg
+	remoteCfg.OperatorID = operatorID
+	remoteCfg.OperatorSessionId = sessionID
+	remoteCfg.HeartbeatInterval = 0
+	publicKey, privateKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	keyID := hex.EncodeToString(publicKey)
+	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{ID: keyID, PublicKey: keyID, AddedAt: time.Now().UTC(), Enabled: true}))
+	client := pubsub.NewInProcessPubSubClient(infra.Pubsub)
+	results, err := pubsub.NewPubSubResultsService(&remoteCfg, infra.Logger, client)
+	require.NoError(t, err)
+	scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), infra.Logger, nil)
+	require.NoError(t, err)
+	operatorSvc, err := pubsub.NewOperatorPubSubService(pubsub.CommandServiceConfig{
+		Config:             &remoteCfg,
+		Logger:             infra.Logger,
+		PubSubClient:       client,
+		ResultsService:     results,
+		ActuatorSigningKey: privateKey,
+		ActuatorKeyID:      keyID,
+		AuditorSigningKey:  privateKey,
+		AuditorKeyID:       keyID,
+		Scrubbing:          scrubbingSvc,
+		AuditStore:         infra.AuditStore,
+	}, pubsub.OutboundModeDeps{GovernanceCoreDeps: pubsub.GovernanceCoreDeps{
+		ReplayStore:       infra.ReplayStore,
+		StateRootProvider: infra.StateRootSvc,
+		TransactionAudit:  infra.AuditStore,
+		SignerStore:       infra.SignerStore,
+		Doctrine:          govsvc.NewL1Doctrine(),
+	}})
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	require.NoError(t, operatorSvc.Start(ctx))
+	t.Cleanup(func() {
+		cancel()
+		require.NoError(t, operatorSvc.Stop())
+	})
+
+	var orderMu sync.Mutex
+	order := make([]string, 0, 3)
+	record := func(step string) {
+		orderMu.Lock()
+		order = append(order, step)
+		orderMu.Unlock()
+	}
+	unregisterReceipt := infra.Pubsub.RegisterHandler(pubsub.ReceiptsChannel(operatorID, sessionID), func(_ string, _ []byte) { record("receipt") })
+	unregisterResult := infra.Pubsub.RegisterHandler(pubsub.ResultsChannel(operatorID, sessionID), func(_ string, _ []byte) { record("result") })
+	t.Cleanup(unregisterReceipt)
+	t.Cleanup(unregisterResult)
+	shutdownObserved := make(chan string, 1)
+	go func() {
+		reason := <-operatorSvc.ShutdownChan
+		record("shutdown")
+		shutdownObserved <- reason
+		cancel()
+	}()
+
+	cmdChannel := pubsub.CmdChannel(operatorID, sessionID)
+	require.Eventually(t, func() bool { return infra.Pubsub.ChannelSubscriberCount(cmdChannel) > 0 || handlerCount(infra.Pubsub, cmdChannel) > 0 }, time.Second, 10*time.Millisecond)
+	payload, err := proto.Marshal(&operatorv1.ShutdownRequested{Reason: "planned maintenance"})
+	require.NoError(t, err)
+	dispatch := NewDispatchService(infra.Logger, infra.Pubsub, infra.StateRootSvc, infra.Auth, string(config.PostureDoctrine), govsvc.NewL1Doctrine(), nil, infra.SignerStore)
+	result, err := dispatch.Dispatch(context.Background(), DispatchRequest{
+		TargetOperatorSessionID: sessionID,
+		ActionType:              string(constants.ActionTypeShutdown),
+		Payload:                 payload,
+		TargetResource:          operatorID,
+		RequestorUserID:         userID,
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, result.TransactionID)
+	assert.Equal(t, "planned maintenance", <-shutdownObserved)
+	require.Eventually(t, func() bool { return handlerCount(infra.Pubsub, cmdChannel) == 0 }, time.Second, 10*time.Millisecond)
+	orderMu.Lock()
+	assert.Equal(t, []string{"receipt", "result", "shutdown"}, order)
+	orderMu.Unlock()
+}
+
+func handlerCount(broker *GatewayWebSocketHandler, channel string) int {
+	broker.handlersMu.RLock()
+	defer broker.handlersMu.RUnlock()
+	return len(broker.handlers[channel])
+}
+
 func TestDispatchController_HandleDispatch_UnknownSession(t *testing.T) {
 	h, _, infra := setupTestHTTPHandler(t)
 

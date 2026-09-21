@@ -506,6 +506,9 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 	if req.State != models.PlatformEnrollmentStateCompleted {
 		return "", constants.ErrPlatformEnrollmentInvalidState
 	}
+	if h.deps.Connections == nil {
+		return "", constants.ErrPlatformEnrollmentDepsRequired
+	}
 	reason := strings.TrimSpace(payload.GetReason())
 	if reason == "" {
 		reason = string(constants.PlatformEnrollmentIntentRevoke)
@@ -523,6 +526,7 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		if err := h.deps.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), payload.GetTargetDocumentId()); err != nil {
 			return "", fmt.Errorf("platform enrollment: revoke app policy: %w", err)
 		}
+		h.deps.Connections.DisconnectIdentity(payload.GetTargetDocumentId())
 	case models.PlatformComponentOperator:
 		if req.Issued == nil || req.Issued.Operator == nil {
 			return "", constants.ErrPlatformEnrollmentInvalidPayload
@@ -533,6 +537,14 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		}
 		if err := h.deps.PKI.RevokeCertificate(operatorSerial, reason); err != nil {
 			return "", fmt.Errorf("platform enrollment: revoke operator certificate: %w", err)
+		}
+		operatorSPIFFEID, err := spiffeIDFromCertificate(req.Issued.Operator.OperatorCert)
+		if err != nil {
+			return "", err
+		}
+		cliSPIFFEID, err := spiffeIDFromCertificate(req.Issued.Operator.CLICert)
+		if err != nil {
+			return "", err
 		}
 		if err := h.deps.CLISessions.DeactivateCLISession(req.CLISessionID); err != nil && !errors.Is(err, constants.ErrCLISessionAlreadyDeactivated) {
 			return "", fmt.Errorf("platform enrollment: deactivate CLI session: %w", err)
@@ -551,6 +563,8 @@ func (h *PlatformEnrollmentHandler) HandleRevoke(ctx context.Context, msg *PubSu
 		if _, err := h.deps.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID, update); err != nil {
 			return "", fmt.Errorf("platform enrollment: terminate operator: %w", err)
 		}
+		h.deps.Connections.DisconnectIdentity(operatorSPIFFEID)
+		h.deps.Connections.DisconnectIdentity(cliSPIFFEID)
 	default:
 		return "", constants.ErrPlatformEnrollmentInvalidComponent
 	}
@@ -687,6 +701,18 @@ func serialFromPEM(certPEM string) string {
 		return ""
 	}
 	return cert.SerialNumber.String()
+}
+
+func spiffeIDFromCertificate(certPEM string) (string, error) {
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil {
+		return "", constants.ErrPlatformEnrollmentInvalidPayload
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil || len(cert.URIs) == 0 {
+		return "", constants.ErrPlatformEnrollmentInvalidPayload
+	}
+	return cert.URIs[0].String(), nil
 }
 
 // expiryFromPEM extracts the NotAfter timestamp from the PEM-encoded
