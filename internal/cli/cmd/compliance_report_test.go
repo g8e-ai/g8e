@@ -34,9 +34,11 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -90,8 +92,8 @@ func writeComplianceAssessmentScopeForTest(t *testing.T, scopeID string, runIDs 
 	for index, runID := range runIDs {
 		admissions = append(admissions, &compliancev1.AssessmentSourceAdmission{
 			AdmissionId:              fmt.Sprintf("source-%d", index+1),
-			SourceKind:               "native-evaluation",
-			SourceVersion:            "1.0.0",
+			SourceKind:               constants.EvaluationSourceKindNative,
+			SourceVersion:            constants.EvaluationSourceVersion,
 			SourceScopeId:            scopeID,
 			OwnerRuntimeBoundary:     "evaluation-owner",
 			AcquisitionBoundary:      "owner-local-run",
@@ -537,6 +539,38 @@ func TestComplianceReportGenerateCmdWithConfig_FailsClosedOnImporterFailure(t *t
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrReportVerificationFailed)
 	assert.Empty(t, body)
+}
+
+func TestComplianceReportGenerateCmdWithConfig_RejectsCampaignRunThroughExplicitDispatch(t *testing.T) {
+	fileSvc, _ := newCmdTestEnv(t)
+	runID := "campaign-run"
+	require.NoError(t, evaluation.NewStore(fileSvc).SaveRun(context.Background(), &evalv1.EvaluationRun{
+		SchemaVersion: evaluation.CampaignSchemaVersion,
+		RunId:         runID,
+		CampaignBinding: &evalv1.ModelCampaignBinding{
+			CampaignId: "campaign-1",
+		},
+	}))
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
+	configureComplianceReportGenerateCommand(t, cmd)
+	scopePath := writeComplianceAssessmentScopeForTest(t, "scope-1", []string{runID}, time.Unix(1_700_000_001, 0).UTC())
+	scopeBody, err := os.ReadFile(scopePath)
+	require.NoError(t, err)
+	scope := &compliancev1.AssessmentScope{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(scopeBody, scope))
+	scope.SourceAdmissions[0].SourceKind = constants.EvaluationSourceKindCampaign
+	scope.SourceAdmissions[0].SourceVersion = constants.EvaluationSourceVersion
+	scope.SourceAdmissions[0].VerifierRef = &compliancev1.VersionedReference{Id: "g8e-campaign-evaluation-verifier", Version: constants.EvaluationSourceVersion}
+	scopeBody, err = compliancev1.MarshalCanonical(scope)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(scopePath, scopeBody, constants.PermFileReadOnly))
+	require.NoError(t, cmd.Flags().Set("scope", scopePath))
+	require.NoError(t, cmd.Flags().Set("eval-run", runID))
+
+	err = cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrUnsupportedVerifier)
+	assert.Contains(t, err.Error(), "campaign")
 }
 
 func TestComplianceReportGenerateCmdWithConfig_RejectsInvalidProtectedAssessmentWindow(t *testing.T) {

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -175,32 +176,30 @@ func TestStoreSaveAndLoadAssignmentResult(t *testing.T) {
 	assert.Equal(t, digest, loaded.GetResultDigest())
 }
 
-func TestCampaignImporterLoadsAssignmentResultEvidence(t *testing.T) {
+func TestCampaignImporterPreservesBoundIncompletePopulation(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
-	result := &evalv1.EvaluationAssignmentResult{
-		SchemaVersion:   CampaignSchemaVersion,
-		AssignmentId:    "assign-1",
-		RunId:           "run-1",
-		CampaignId:      "phase1a-smoke",
-		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
-		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_COMPLETED,
-		CompletedAt:     timestamppb.Now(),
-	}
-	digest, err := ComputeAssignmentResultDigest(result)
+	controller := NewCampaignController(store, nil, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+	req := testCampaignInitRequest(t)
+	_, err := controller.InitializeCampaign(context.Background(), req)
 	require.NoError(t, err)
-	result.ResultDigest = digest
-	require.NoError(t, store.SaveAssignmentResult(context.Background(), result))
+	count, err := controller.ScheduleHomogeneousRun(context.Background(), req.RunID)
+	require.NoError(t, err)
 
-	importer := NewCampaignImporter(files, "run-1")
-	node, err := importer.ImportAssignmentResult(context.Background(), "assign-1")
+	importer := NewCampaignImporter(files, req.RunID, req.ScenarioArtifacts, func() time.Time { return time.Unix(1_700_000_100, 0).UTC() })
+	nodes, err := importer.Import(context.Background())
+
 	require.NoError(t, err)
-	assert.Equal(t, "run-1", node.RunID)
-	assert.Equal(t, "g8e.eval.v1.EvaluationAssignmentResult", node.SchemaRef)
-	_, contentDigest, ok := complianceevidence.ParseContentAddress(node.ArtifactID)
-	require.True(t, ok)
-	assert.Equal(t, contentDigest, node.SHA256)
-	assert.NotEqual(t, digest, node.SHA256)
+	require.Len(t, nodes, 1)
+	assert.Equal(t, constants.EvaluationSourceKindCampaign, importer.SourceID())
+	assert.Equal(t, req.RunID, importer.RunID())
+	assert.Equal(t, complianceevidence.ArtifactTypeEvalManifest, nodes[0].ArtifactType)
+	report := &evalv1.EvaluationVerificationReport{}
+	require.NoError(t, evalv1.UnmarshalCanonical(nodes[0].CanonicalBytes, report))
+	assert.Equal(t, uint32(count), report.GetExpectedAssignmentCount())
+	assert.Zero(t, report.GetVerifiedAssignmentCount())
+	assert.Equal(t, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL, report.GetStatus())
+	assert.Len(t, report.GetVerifiedPopulationDigest(), 64)
 }
 
 func TestStoreListCampaigns_ReturnsPersistedCampaignsWithRuns(t *testing.T) {

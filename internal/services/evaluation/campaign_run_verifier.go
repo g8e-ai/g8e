@@ -14,14 +14,22 @@ import (
 	"path/filepath"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	complianceevidence "github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
-const campaignRunVerificationFilename = "campaign-verification.json"
+const (
+	campaignRunVerificationFilename      = "campaign-verification.json"
+	campaignVerificationSchemaVersion    = "2.0.0"
+	campaignVerifierContractVersion      = "2.0.0"
+	campaignVerificationArtifactType     = "campaign-verification-report"
+	campaignVerificationVerifierIdentity = "g8e-campaign-verifier"
+)
 
 // CampaignRunVerifier independently verifies all persisted terminal assignment
 // results for one campaign run.
@@ -159,6 +167,154 @@ func (v *CampaignRunVerifier) VerifyRun(ctx context.Context, store *Store, runID
 		failures = append(failures, "no terminal assignments with persisted results were available for verification")
 	}
 	return finalizeCampaignVerificationReport(report, failures), nil
+}
+
+func bindCampaignVerificationReport(report *evalv1.EvaluationVerificationReport, run *evalv1.EvaluationRun, spec *evalv1.EvaluationCampaignSpec, catalog *evalv1.EvaluationScenarioCatalog, assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult, verifierReleaseVersion string) (*evalv1.EvaluationVerificationReport, *RunVerificationApplicability, error) {
+	if report == nil || run == nil || spec == nil || catalog == nil || verifierReleaseVersion == "" || report.GetRunId() != run.GetRunId() {
+		return nil, nil, fmt.Errorf("evaluation: bind campaign verification report: %w", constants.ErrMissingRequiredField)
+	}
+	binding := run.GetCampaignBinding()
+	if binding == nil || binding.GetCampaignId() != spec.GetCampaignId() || binding.GetCampaignDigest() != spec.GetCampaignDigest() || binding.GetCatalogDigest() != spec.GetCatalogDigest() || binding.GetModelRegistryDigest() != spec.GetModelRegistryDigest() || !sameReference(binding.GetCatalogRef(), spec.GetCatalogRef()) || spec.GetCatalogDigest() != catalog.GetCatalogDigest() || !sameReference(spec.GetCatalogRef(), catalog.GetCatalogRef()) {
+		return nil, nil, fmt.Errorf("evaluation: bind campaign verification report: %w", constants.ErrEvidenceScopeMismatch)
+	}
+	bound := proto.Clone(report).(*evalv1.EvaluationVerificationReport)
+	population, err := BuildRunVerificationApplicability(run, spec, catalog, assignments, results, bound)
+	if err != nil {
+		return nil, nil, err
+	}
+	populationDigest, err := ComputeVerifiedPopulationDigest(population.Population)
+	if err != nil {
+		return nil, nil, err
+	}
+	bound.SchemaVersion = campaignVerificationSchemaVersion
+	bound.VerifierReleaseVersion = verifierReleaseVersion
+	bound.VerifierContractVersion = campaignVerifierContractVersion
+	bound.VerifiedPopulationDigest = populationDigest
+	bound.ExpectedAssignmentCount = population.ExpectedAssignmentCount
+	bound.VerifiedAssignmentCount = population.VerifiedAssignmentCount
+	bound.CampaignDigest = spec.GetCampaignDigest()
+	bound.CatalogDigest = spec.GetCatalogDigest()
+	bound.ModelRegistryDigest = spec.GetModelRegistryDigest()
+	bound.ReportDigestRef = nil
+	reportDigest, err := digestProto(bound)
+	if err != nil {
+		return nil, nil, fmt.Errorf("evaluation: bind campaign verification report digest: %w", err)
+	}
+	bound.ReportDigestRef = &compliancev1.ComplianceEvidenceReference{
+		ArtifactId:         fmt.Sprintf("%s:sha256:%s", campaignVerificationArtifactType, reportDigest),
+		ArtifactType:       campaignVerificationArtifactType,
+		Sha256:             reportDigest,
+		MediaType:          constants.MediaTypeJSON,
+		SchemaRef:          "g8e.eval.v1.EvaluationVerificationReport",
+		ProducerIdentity:   campaignVerificationVerifierIdentity,
+		RunId:              run.GetRunId(),
+		VerificationStatus: string(complianceevidence.VerificationStatusVerified),
+		VerifierId:         campaignVerificationVerifierIdentity,
+		VerifierVersion:    campaignVerifierContractVersion,
+		ProducedAt:         bound.GetVerifiedAt(),
+		VerifiedAt:         bound.GetVerifiedAt(),
+	}
+	applicability, err := BuildRunVerificationApplicability(run, spec, catalog, assignments, results, bound)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !applicability.Applicable {
+		return nil, nil, fmt.Errorf("evaluation: bind campaign verification report: %w", constants.ErrEvidenceScopeMismatch)
+	}
+	return bound, applicability, nil
+}
+
+type campaignRunVerificationPolicy struct {
+	VerifierReleaseVersion string
+	ProviderObservation    ProviderObservationPolicy
+	ModelProvenance        ModelProvenancePolicy
+	AssessmentTime         func() time.Time
+}
+
+type campaignRunVerificationResult struct {
+	Run           *evalv1.EvaluationRun
+	Report        *evalv1.EvaluationVerificationReport
+	Population    *CampaignPopulationReport
+	Applicability *RunVerificationApplicability
+}
+
+func verifyCampaignRunReadOnly(ctx context.Context, store *Store, runID string, artifacts map[string]ScenarioArtifacts, policy campaignRunVerificationPolicy) (*campaignRunVerificationResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if store == nil || store.files == nil || !complianceevidence.ValidPathElement(runID) || policy.VerifierReleaseVersion == "" || policy.AssessmentTime == nil {
+		return nil, fmt.Errorf("evaluation: verify campaign run read-only: %w", constants.ErrMissingRequiredField)
+	}
+	run, err := store.LoadRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	campaignID := run.GetCampaignBinding().GetCampaignId()
+	spec, err := store.LoadCampaignSpec(ctx, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	catalog, err := store.LoadScenarioCatalog(ctx, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateScenarioCatalog(catalog, artifacts); err != nil {
+		return nil, fmt.Errorf("evaluation: verify campaign frozen scenario inputs: %w", err)
+	}
+	observationReader, err := NewCampaignProviderObservationReader(store.files)
+	if err != nil {
+		return nil, err
+	}
+	provenanceReader, err := NewCampaignModelProvenanceReader(store.files)
+	if err != nil {
+		return nil, err
+	}
+	verifier := NewCampaignRunVerifier(policy.AssessmentTime).
+		WithProviderObservationReader(observationReader, policy.ProviderObservation).
+		WithModelProvenanceReader(provenanceReader, policy.ModelProvenance)
+	report, err := verifier.VerifyRun(ctx, store, runID, catalog, artifacts)
+	if err != nil {
+		return nil, err
+	}
+	population, err := NewCampaignPopulationAccountant(policy.AssessmentTime).AccountRun(ctx, store, runID, catalog)
+	if err != nil {
+		return nil, err
+	}
+	assignments, err := store.ListAssignments(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	results, err := loadCampaignAssignmentResults(ctx, store, runID, assignments)
+	if err != nil {
+		return nil, err
+	}
+	bound, applicability, err := bindCampaignVerificationReport(report, run, spec, catalog, assignments, results, policy.VerifierReleaseVersion)
+	if err != nil {
+		return nil, err
+	}
+	return &campaignRunVerificationResult{Run: run, Report: bound, Population: population, Applicability: applicability}, nil
+}
+
+func loadCampaignAssignmentResults(ctx context.Context, store *Store, runID string, assignments []*evalv1.EvaluationAssignment) (map[string]*evalv1.EvaluationAssignmentResult, error) {
+	results := make(map[string]*evalv1.EvaluationAssignmentResult)
+	for _, assignment := range assignments {
+		if assignment == nil {
+			continue
+		}
+		exists, err := store.AssignmentResultExists(ctx, runID, assignment.GetAssignmentId())
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			continue
+		}
+		result, err := store.LoadAssignmentResult(ctx, runID, assignment.GetAssignmentId())
+		if err != nil {
+			return nil, err
+		}
+		results[assignment.GetAssignmentId()] = result
+	}
+	return results, nil
 }
 
 func isTerminalAssignmentLifecycle(status evalv1.EvaluationAssignmentLifecycleStatus) bool {

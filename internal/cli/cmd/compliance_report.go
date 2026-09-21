@@ -564,35 +564,90 @@ func buildDemoRawSourceArtifacts(ctx context.Context, reader evidence.ArtifactRe
 	return artifacts, nil
 }
 
-func buildEvalVerificationArtifacts(ctx context.Context, reader evidence.ArtifactReader, runIDs []string, verifiedAt time.Time) ([]compliancereport.SourceArtifact, error) {
+func buildEvaluationReportSources(ctx context.Context, fileSvc fs.RuntimeFileService, scope *compliancev1.AssessmentScope, runIDs []string, verifiedAt time.Time) ([]compliancereport.GenerationSource, []compliancereport.SourceArtifact, error) {
+	sources := make([]compliancereport.GenerationSource, 0, len(runIDs))
 	artifacts := make([]compliancereport.SourceArtifact, 0, len(runIDs))
+	store := evaluation.NewStore(fileSvc)
+	selected := make(map[string]struct{}, len(runIDs))
 	for _, runID := range runIDs {
+		if !evidence.ValidPathElement(runID) {
+			return nil, nil, fmt.Errorf("%w: invalid eval run ID %q", constants.ErrPathValidation, runID)
+		}
+		if _, exists := selected[runID]; exists {
+			return nil, nil, fmt.Errorf("%w: duplicate eval run %s", constants.ErrValidationFailed, runID)
+		}
+		selected[runID] = struct{}{}
+		admission, err := selectedEvaluationAdmission(scope, runID)
+		if err != nil {
+			return nil, nil, err
+		}
+		inventory, err := store.InspectRun(ctx, runID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: inspect eval run %s: %w", constants.ErrEvalRunVerificationFailed, runID, err)
+		}
+		switch inventory.Kind {
+		case evaluation.RunKindCampaign:
+			if admission.GetSourceKind() != constants.EvaluationSourceKindCampaign || admission.GetSourceVersion() != constants.EvaluationSourceVersion {
+				return nil, nil, fmt.Errorf("%w: campaign eval run %s does not match protected source admission %s", constants.ErrEvidenceScopeMismatch, runID, admission.GetAdmissionId())
+			}
+			return nil, nil, fmt.Errorf("%w: campaign eval run %s requires the composed compliance campaign importer", constants.ErrUnsupportedVerifier, runID)
+		case evaluation.RunKindIncomplete:
+			return nil, nil, fmt.Errorf("%w: eval run %s is incomplete: %s", constants.ErrEvalRunVerificationFailed, runID, inventory.Reason)
+		case evaluation.RunKindUnsupported:
+			return nil, nil, fmt.Errorf("%w: eval run %s is unsupported: %s", constants.ErrUnsupportedVerifier, runID, inventory.Reason)
+		case evaluation.RunKindMalformed:
+			return nil, nil, fmt.Errorf("%w: eval run %s is malformed: %s", constants.ErrEvidenceArtifactMalformed, runID, inventory.Reason)
+		case evaluation.RunKindNative:
+		default:
+			return nil, nil, fmt.Errorf("%w: eval run %s has unknown inventory disposition %q", constants.ErrUnsupportedVerifier, runID, inventory.Kind)
+		}
+		if admission.GetSourceKind() != constants.EvaluationSourceKindNative || admission.GetSourceVersion() != constants.EvaluationSourceVersion || admission.GetVerifierRef().GetId() != constants.EvalRunVerifierID || admission.GetVerifierRef().GetVersion() != constants.EvalRunVerifierVersion {
+			return nil, nil, fmt.Errorf("%w: native eval run %s does not match protected source admission %s", constants.ErrEvidenceScopeMismatch, runID, admission.GetAdmissionId())
+		}
 		runtimeRoot := path.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname, runID)
 		bundleRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID)
-		report, err := evaluation.NewVerifier(reader, evaluation.NewRegistry(), func() time.Time { return verifiedAt }).Verify(ctx, runID)
+		report, err := evaluation.NewVerifier(fileSvc, evaluation.NewRegistry(), func() time.Time { return verifiedAt }).Verify(ctx, runID)
 		if err != nil {
-			return nil, fmt.Errorf("%w: verify eval run %s: %w", constants.ErrEvalRunVerificationFailed, runID, err)
+			return nil, nil, fmt.Errorf("%w: verify eval run %s: %w", constants.ErrEvalRunVerificationFailed, runID, err)
 		}
 		if !report.GetValid() {
-			return nil, fmt.Errorf("%w: eval run %s has %d verification failures", constants.ErrEvalRunVerificationFailed, runID, len(report.GetFailures()))
+			return nil, nil, fmt.Errorf("%w: eval run %s has %d verification failures", constants.ErrEvalRunVerificationFailed, runID, len(report.GetFailures()))
 		}
-		rawArtifacts, err := collectRuntimeSourceArtifacts(ctx, reader, runtimeRoot, runtimeRoot, bundleRoot, true)
+		rawArtifacts, err := collectRuntimeSourceArtifacts(ctx, fileSvc, runtimeRoot, runtimeRoot, bundleRoot, true)
 		if err != nil {
-			return nil, fmt.Errorf("%w: collect eval runtime %s: %w", constants.ErrEvalRunVerificationFailed, runID, err)
+			return nil, nil, fmt.Errorf("%w: collect eval runtime %s: %w", constants.ErrEvalRunVerificationFailed, runID, err)
 		}
 		artifacts = append(artifacts, rawArtifacts...)
 		body, err := compliancev1.MarshalCanonical(report)
 		if err != nil {
-			return nil, fmt.Errorf("%w: canonicalize eval verification report %s: %w", constants.ErrEvalRunVerificationFailed, runID, err)
+			return nil, nil, fmt.Errorf("%w: canonicalize eval verification report %s: %w", constants.ErrEvalRunVerificationFailed, runID, err)
 		}
 		artifacts = append(artifacts, compliancereport.SourceArtifact{
 			BundlePath: path.Join(bundleRoot, constants.ComplianceBundleSourceVerificationFilename),
 			Body:       body,
 			MediaType:  constants.MediaTypeJSON,
 		})
+		sources = append(sources, compliancereport.GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: evaluation.NewEvidenceImporter(fileSvc, runID, func() time.Time { return verifiedAt })})
 	}
 	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].BundlePath < artifacts[j].BundlePath })
-	return artifacts, nil
+	return sources, artifacts, nil
+}
+
+func selectedEvaluationAdmission(scope *compliancev1.AssessmentScope, runID string) (*compliancev1.AssessmentSourceAdmission, error) {
+	var selected *compliancev1.AssessmentSourceAdmission
+	for _, admission := range scope.GetSourceAdmissions() {
+		if admission.GetRunId() != runID {
+			continue
+		}
+		if selected != nil {
+			return nil, fmt.Errorf("%w: eval run %s matches multiple protected source admissions", constants.ErrValidationFailed, runID)
+		}
+		selected = admission
+	}
+	if selected == nil {
+		return nil, fmt.Errorf("%w: eval run %s has no protected source admission", constants.ErrEvidenceScopeMismatch, runID)
+	}
+	return selected, nil
 }
 
 func collectRuntimeSourceArtifacts(ctx context.Context, reader evidence.ArtifactReader, runtimeRoot, currentPath, bundleRoot string, allowEmpty bool) ([]compliancereport.SourceArtifact, error) {
@@ -1038,9 +1093,13 @@ func complianceReportGenerateCmdWithConfig(
 				return err
 			}
 			source := provenanceSourceFactory(projectRoot)
-			importers, err := buildEvidenceGraphImporters(ctx, fileSvc, source, demoRuns, evalRuns, func() time.Time { return assessmentAsOf })
+			importers, err := buildEvidenceGraphImporters(ctx, fileSvc, source, demoRuns, nil, func() time.Time { return assessmentAsOf })
 			if err != nil {
 				return err
+			}
+			evaluationSources, evalSourceArtifacts, err := buildEvaluationReportSources(ctx, fileSvc, scope, evalRuns, assessmentAsOf)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrReportVerificationFailed, err)
 			}
 			standaloneImporters, standaloneSourceArtifacts, err := buildStandaloneReportSources(ctx, standaloneReportSourceInput{
 				scopeID:              scopeID,
@@ -1079,25 +1138,24 @@ func complianceReportGenerateCmdWithConfig(
 			if err != nil {
 				return err
 			}
-			evalSourceArtifacts, err := buildEvalVerificationArtifacts(ctx, fileSvc, evalRuns, assessmentAsOf)
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrReportVerificationFailed, err)
-			}
 			sourceArtifacts = append(sourceArtifacts, evalSourceArtifacts...)
 			sourceArtifacts = append(sourceArtifacts, operationalSourceArtifacts...)
 			sourceArtifacts = append(sourceArtifacts, standaloneSourceArtifacts...)
 			sort.Slice(sourceArtifacts, func(i, j int) bool { return sourceArtifacts[i].BundlePath < sourceArtifacts[j].BundlePath })
-			if len(importers)+len(operationalGenerationSources) != len(scope.GetSourceAdmissions()) {
+			if len(importers)+len(evaluationSources)+len(operationalGenerationSources) != len(scope.GetSourceAdmissions()) {
 				return fmt.Errorf("%w: selected source count does not match protected source admissions", constants.ErrValidationFailed)
 			}
-			operationalByAdmission := make(map[string]compliancereport.GenerationSource, len(operationalGenerationSources))
-			for _, source := range operationalGenerationSources {
-				operationalByAdmission[source.AdmissionID] = source
+			explicitSourcesByAdmission := make(map[string]compliancereport.GenerationSource, len(operationalGenerationSources)+len(evaluationSources))
+			for _, source := range append(operationalGenerationSources, evaluationSources...) {
+				if _, exists := explicitSourcesByAdmission[source.AdmissionID]; exists {
+					return fmt.Errorf("%w: duplicate selected source admission %s", constants.ErrValidationFailed, source.AdmissionID)
+				}
+				explicitSourcesByAdmission[source.AdmissionID] = source
 			}
 			generationSources := make([]compliancereport.GenerationSource, 0, len(scope.GetSourceAdmissions()))
 			importerIndex := 0
 			for _, admission := range scope.GetSourceAdmissions() {
-				if source, exists := operationalByAdmission[admission.GetAdmissionId()]; exists {
+				if source, exists := explicitSourcesByAdmission[admission.GetAdmissionId()]; exists {
 					generationSources = append(generationSources, source)
 					continue
 				}

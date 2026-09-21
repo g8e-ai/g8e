@@ -21,55 +21,68 @@ import (
 // CampaignImporter loads persisted model-campaign artifacts into the evidence
 // graph without invoking inference or mutation.
 type CampaignImporter struct {
-	reader fs.RuntimeFileService
-	runID  string
-	now    func() time.Time
+	reader    fs.RuntimeFileService
+	runID     string
+	artifacts map[string]ScenarioArtifacts
+	now       func() time.Time
 }
 
-func NewCampaignImporter(reader fs.RuntimeFileService, runID string) *CampaignImporter {
-	return &CampaignImporter{reader: reader, runID: runID, now: time.Now}
+func NewCampaignImporter(reader fs.RuntimeFileService, runID string, artifacts map[string]ScenarioArtifacts, now func() time.Time) *CampaignImporter {
+	if now == nil {
+		now = time.Now
+	}
+	return &CampaignImporter{reader: reader, runID: runID, artifacts: artifacts, now: now}
 }
 
-// ImportAssignmentResult reads one terminal assignment result and returns a
-// verified evidence node for downstream compliance import.
-func (i *CampaignImporter) ImportAssignmentResult(ctx context.Context, assignmentID string) (complianceevidence.EvidenceNode, error) {
-	if i == nil || i.reader == nil || !complianceevidence.ValidPathElement(i.runID) || !complianceevidence.ValidPathElement(assignmentID) || i.now == nil {
-		return complianceevidence.EvidenceNode{}, fmt.Errorf("%w: campaign importer is incomplete", constants.ErrInvalidEvidenceGraph)
+func (i *CampaignImporter) SourceID() string {
+	return constants.EvaluationSourceKindCampaign
+}
+
+func (i *CampaignImporter) RunID() string {
+	if i == nil {
+		return ""
 	}
-	store := NewStore(i.reader)
-	result, err := store.LoadAssignmentResult(ctx, i.runID, assignmentID)
+	return i.runID
+}
+
+func (i *CampaignImporter) Import(ctx context.Context) ([]complianceevidence.EvidenceNode, error) {
+	if i == nil || i.reader == nil || !complianceevidence.ValidPathElement(i.runID) || len(i.artifacts) == 0 || i.now == nil {
+		return nil, fmt.Errorf("%w: campaign importer is incomplete", constants.ErrInvalidEvidenceGraph)
+	}
+	result, err := verifyCampaignRunReadOnly(ctx, NewStore(i.reader), i.runID, i.artifacts, campaignRunVerificationPolicy{
+		VerifierReleaseVersion: constants.EvaluationSourceVersion,
+		ProviderObservation:    ProviderObservationPolicyInterim,
+		ModelProvenance:        ModelProvenancePolicyInterim,
+		AssessmentTime:         i.now,
+	})
 	if err != nil {
-		return complianceevidence.EvidenceNode{}, err
+		return nil, err
 	}
-	body, err := evalv1.MarshalCanonical(result)
+	body, err := evalv1.MarshalCanonical(result.Report)
 	if err != nil {
-		return complianceevidence.EvidenceNode{}, fmt.Errorf("%w: canonical assignment result: %v", constants.ErrEvidenceArtifactMalformed, err)
+		return nil, fmt.Errorf("%w: canonical campaign verification report: %v", constants.ErrEvidenceArtifactMalformed, err)
 	}
-	artifactID := complianceevidence.ContentAddress(complianceevidence.ArtifactTypeEvalAttempt, body)
+	artifactID := complianceevidence.ContentAddress(complianceevidence.ArtifactTypeEvalManifest, body)
 	_, digest, ok := complianceevidence.ParseContentAddress(artifactID)
 	if !ok {
-		return complianceevidence.EvidenceNode{}, fmt.Errorf("%w: assignment result content address is invalid", constants.ErrEvidenceArtifactMalformed)
+		return nil, fmt.Errorf("%w: campaign verification report content address is invalid", constants.ErrEvidenceArtifactMalformed)
 	}
-	producedAt := i.now().UTC()
-	if result.GetCompletedAt() != nil && result.GetCompletedAt().IsValid() {
-		producedAt = result.GetCompletedAt().AsTime().UTC()
-	}
-	return complianceevidence.EvidenceNode{
+	verifiedAt := result.Report.GetVerifiedAt().AsTime().UTC()
+	return []complianceevidence.EvidenceNode{{
 		ArtifactID:         artifactID,
-		ArtifactType:       complianceevidence.ArtifactTypeEvalAttempt,
+		ArtifactType:       complianceevidence.ArtifactTypeEvalManifest,
 		SHA256:             digest,
 		MediaType:          constants.MediaTypeJSON,
-		SchemaRef:          "g8e.eval.v1.EvaluationAssignmentResult",
-		ProducerIdentity:   GraderID,
-		ProducedAt:         producedAt,
-		ScopeID:            constants.EvalScopePrefix + result.GetCampaignId(),
-		RunID:              result.GetRunId(),
-		AttemptID:          result.GetAssignmentId(),
+		SchemaRef:          "g8e.eval.v1.EvaluationVerificationReport",
+		ProducerIdentity:   campaignVerificationVerifierIdentity,
+		ProducedAt:         verifiedAt,
+		ScopeID:            constants.EvalScopePrefix + result.Run.GetCampaignBinding().GetCampaignId(),
+		RunID:              i.runID,
 		VerificationStatus: complianceevidence.VerificationStatusVerified,
-		VerifierID:         constants.EvalRunVerifierID,
-		VerifierVersion:    constants.EvalRunVerifierVersion,
-		VerifiedAt:         producedAt,
-		BundlePath:         assignmentResultPath(result.GetRunId(), result.GetAssignmentId()),
+		VerifierID:         campaignVerificationVerifierIdentity,
+		VerifierVersion:    campaignVerifierContractVersion,
+		VerifiedAt:         verifiedAt,
+		BundlePath:         campaignRunVerificationFilename,
 		CanonicalBytes:     body,
-	}, nil
+	}}, nil
 }
