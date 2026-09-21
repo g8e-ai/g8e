@@ -586,6 +586,25 @@ func TestComplianceReportGenerateCmdWithConfig_CampaignSourceVerifiesOffline(t *
 	_, err = controller.ScheduleHomogeneousRun(context.Background(), req.RunID)
 	require.NoError(t, err)
 	assessmentAsOf := time.Now().UTC()
+	require.NoError(t, evaluation.NewStore(fileSvc).SaveReport(context.Background(), &evalv1.EvaluationReport{
+		SchemaVersion: evaluation.RegistryVersion,
+		Run: &evalv1.EvaluationRun{
+			SchemaVersion: evaluation.RegistryVersion,
+			RunId:         "unsupported-candidate",
+			SuiteRef:      &compliancev1.VersionedReference{Id: "unsupported-suite", Version: "1.0.0"},
+		},
+	}))
+	require.NoError(t, evaluation.NewStore(fileSvc).SaveReport(context.Background(), &evalv1.EvaluationReport{
+		SchemaVersion: evaluation.RegistryVersion,
+		Run: &evalv1.EvaluationRun{
+			SchemaVersion: evaluation.RegistryVersion,
+			RunId:         "outside-window-candidate",
+			SuiteRef:      &compliancev1.VersionedReference{Id: evaluation.CoreExecutionBoundarySuiteID, Version: evaluation.CoreExecutionBoundarySuiteVersion},
+			StartedAt:     timestamppb.New(time.Unix(1_600_000_000, 0).UTC()),
+			CompletedAt:   timestamppb.New(time.Unix(1_600_000_100, 0).UTC()),
+		},
+	}))
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), path.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname, "incomplete-candidate"), constants.PermDirStandard))
 	scopeID := constants.EvalScopePrefix + req.CampaignID
 	identity, policy, _ := complianceReportSigningFixtureForTest(t, scopeID)
 	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
@@ -606,6 +625,7 @@ func TestComplianceReportGenerateCmdWithConfig_CampaignSourceVerifiesOffline(t *
 	require.NoError(t, os.WriteFile(scopePath, scopeBody, constants.PermFilePrivate))
 	require.NoError(t, cmd.Flags().Set("scope", scopePath))
 	require.NoError(t, cmd.Flags().Set("eval-run", req.RunID))
+	require.NoError(t, cmd.Flags().Set("discover-eval-runs", "true"))
 	var output bytes.Buffer
 	cmd.SetOut(&output)
 	require.NoError(t, cmd.RunE(cmd, nil))
@@ -615,6 +635,24 @@ func TestComplianceReportGenerateCmdWithConfig_CampaignSourceVerifiesOffline(t *
 	require.NoError(t, err)
 	bundle := &compliancev1.ComplianceReportBundle{}
 	require.NoError(t, compliancev1.UnmarshalCanonical(descriptorBody, bundle))
+	selectionDiagnostics := make(map[string]*compliancev1.AssessmentDiagnostic)
+	for _, diagnostic := range bundle.GetAnalysis().GetDiagnostics() {
+		if strings.HasPrefix(diagnostic.GetCode(), "evaluation_candidate_") {
+			selectionDiagnostics[diagnostic.GetSubject().GetRunId()] = diagnostic
+		}
+	}
+	require.Contains(t, selectionDiagnostics, req.RunID)
+	assert.Equal(t, scope.SourceAdmissions[0].GetAdmissionId(), selectionDiagnostics[req.RunID].GetSourceAdmissionId())
+	require.Contains(t, selectionDiagnostics, "unsupported-candidate")
+	assert.Equal(t, "evaluation_candidate_unsupported", selectionDiagnostics["unsupported-candidate"].GetCode())
+	assert.Equal(t, "warning", selectionDiagnostics["unsupported-candidate"].GetSeverity())
+	assert.Equal(t, "evaluation candidate is unsupported: native evaluation suite or schema is unsupported", selectionDiagnostics["unsupported-candidate"].GetMessage())
+	require.Contains(t, selectionDiagnostics, "incomplete-candidate")
+	assert.Equal(t, "evaluation_candidate_incomplete", selectionDiagnostics["incomplete-candidate"].GetCode())
+	assert.Equal(t, "warning", selectionDiagnostics["incomplete-candidate"].GetSeverity())
+	require.Contains(t, selectionDiagnostics, "outside-window-candidate")
+	assert.Equal(t, "evaluation_candidate_outside_window", selectionDiagnostics["outside-window-candidate"].GetCode())
+	assert.Equal(t, "info", selectionDiagnostics["outside-window-candidate"].GetSeverity())
 	inventoryPath := path.Join(path.Dir(descriptorPath), constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, scope.SourceAdmissions[0].AdmissionId, constants.CampaignSourceInventoryFilename)
 	inventoryBody, err := fileSvc.ReadFile(context.Background(), inventoryPath)
 	require.NoError(t, err)

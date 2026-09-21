@@ -12,6 +12,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
@@ -32,11 +33,12 @@ type GenerationSource struct {
 }
 
 type GenerationRequest struct {
-	Scope      *compliancev1.AssessmentScope
-	Sources    []GenerationSource
-	Assertions *compliancev1.ControlAssertionCatalog
-	Frameworks *compliancev1.FrameworkCatalog
-	Crosswalks *compliancev1.ControlCrosswalkCatalog
+	Scope       *compliancev1.AssessmentScope
+	Sources     []GenerationSource
+	Assertions  *compliancev1.ControlAssertionCatalog
+	Frameworks  *compliancev1.FrameworkCatalog
+	Crosswalks  *compliancev1.ControlCrosswalkCatalog
+	Diagnostics []*compliancev1.AssessmentDiagnostic
 }
 
 type GenerationResult struct {
@@ -180,6 +182,33 @@ func marshalCanonicalMessages[T proto.Message](messages []T) ([]byte, error) {
 	}
 	body.WriteByte(']')
 	return body.Bytes(), nil
+}
+
+func MarshalAssessmentDiagnostics(diagnostics []*compliancev1.AssessmentDiagnostic) ([]byte, error) {
+	return marshalCanonicalMessages(diagnostics)
+}
+
+func UnmarshalAssessmentDiagnostics(body []byte) ([]*compliancev1.AssessmentDiagnostic, error) {
+	var records []json.RawMessage
+	if err := json.Unmarshal(body, &records); err != nil {
+		return nil, fmt.Errorf("%w: decode assessment diagnostics: %v", constants.ErrEvidenceArtifactMalformed, err)
+	}
+	diagnostics := make([]*compliancev1.AssessmentDiagnostic, 0, len(records))
+	for _, record := range records {
+		diagnostic := &compliancev1.AssessmentDiagnostic{}
+		if err := compliancev1.UnmarshalCanonical(record, diagnostic); err != nil {
+			return nil, fmt.Errorf("%w: decode canonical assessment diagnostic: %v", constants.ErrEvidenceArtifactMalformed, err)
+		}
+		diagnostics = append(diagnostics, diagnostic)
+	}
+	canonical, err := MarshalAssessmentDiagnostics(diagnostics)
+	if err != nil {
+		return nil, fmt.Errorf("%w: canonicalize assessment diagnostics: %v", constants.ErrEvidenceArtifactMalformed, err)
+	}
+	if !bytes.Equal(canonical, body) {
+		return nil, fmt.Errorf("%w: assessment diagnostics are not canonical", constants.ErrEvidenceArtifactMalformed)
+	}
+	return diagnostics, nil
 }
 
 type admittedEvidenceImporter struct {
@@ -343,6 +372,7 @@ func GenerateComplianceAnalysis(ctx context.Context, request GenerationRequest) 
 		Crosswalks:            request.Crosswalks,
 		AssertionAssessments:  assertionAssessments,
 		FrameworkAssessments:  frameworkAssessments,
+		Diagnostics:           request.Diagnostics,
 	})
 	if err != nil {
 		return result, fmt.Errorf("compliance report: build analysis: %w", err)

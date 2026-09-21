@@ -759,6 +759,7 @@ const (
 	CampaignVerificationFilename                  = "campaign-verification.json"
 	CampaignSourceInventoryFilename               = "campaign-source-inventory.json"
 	CampaignSourceInventoryVersion                = "1.0.0"
+	EvaluationSelectionDiagnosticsFilename        = "evaluation-selection-diagnostics.json"
 	EvalScopePrefix                               = "eval:"
 	EvalRestrictedEvidenceScope                   = "restricted_evaluation_evidence"
 	EvalEvidenceEncryptionAES256GCM               = "aes-256-gcm"

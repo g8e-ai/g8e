@@ -795,6 +795,103 @@ func buildCampaignReportSource(ctx context.Context, fileSvc fs.RuntimeFileServic
 	return compliancereport.GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: importer}, artifacts, nil
 }
 
+func buildEvaluationSelectionDiagnostics(ctx context.Context, store *evaluation.Store, scope *compliancev1.AssessmentScope, selectedRunIDs []string) ([]*compliancev1.AssessmentDiagnostic, *compliancereport.SourceArtifact, error) {
+	inventory, err := store.ListRunInventory(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: list eval run inventory: %w", constants.ErrEvalRunVerificationFailed, err)
+	}
+	selected := make(map[string]*compliancev1.AssessmentSourceAdmission, len(selectedRunIDs))
+	for _, runID := range selectedRunIDs {
+		admission, selectionErr := selectedEvaluationAdmission(scope, runID)
+		if selectionErr != nil {
+			return nil, nil, selectionErr
+		}
+		selected[runID] = admission
+	}
+	diagnostics := make([]*compliancev1.AssessmentDiagnostic, 0, len(inventory))
+	for _, candidate := range inventory {
+		code := "evaluation_candidate_" + string(candidate.Kind)
+		severity := "info"
+		message := "evaluation candidate is " + string(candidate.Kind)
+		if selected[candidate.RunID] == nil && (candidate.Kind == evaluation.RunKindNative || candidate.Kind == evaluation.RunKindCampaign) {
+			inWindow, timeKnown, windowErr := evaluationCandidateInWindow(ctx, store, candidate, scope.GetAssessmentWindowStart().AsTime(), scope.GetAssessmentWindowEnd().AsTime())
+			if windowErr != nil {
+				return nil, nil, windowErr
+			}
+			if timeKnown && !inWindow {
+				code = "evaluation_candidate_outside_window"
+				message = "evaluation candidate is outside the protected assessment window"
+			}
+		}
+		if candidate.Reason != "" {
+			message += ": " + candidate.Reason
+		}
+		if candidate.Kind == evaluation.RunKindIncomplete || candidate.Kind == evaluation.RunKindUnsupported {
+			severity = "warning"
+		}
+		if candidate.Kind == evaluation.RunKindMalformed {
+			severity = "error"
+		}
+		diagnostic := &compliancev1.AssessmentDiagnostic{
+			Code:     code,
+			Severity: severity,
+			Subject:  &compliancev1.AssessmentSubjectSelection{RunId: candidate.RunID},
+			Message:  message,
+		}
+		if admission := selected[candidate.RunID]; admission != nil {
+			diagnostic.SourceAdmissionId = admission.GetAdmissionId()
+		}
+		diagnostics = append(diagnostics, diagnostic)
+	}
+	body, err := compliancereport.MarshalAssessmentDiagnostics(diagnostics)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: canonicalize eval selection diagnostics: %w", constants.ErrEvalRunVerificationFailed, err)
+	}
+	artifact := &compliancereport.SourceArtifact{
+		BundlePath: path.Join(constants.ComplianceBundleSourcesDirname, constants.EvaluationSelectionDiagnosticsFilename),
+		Body:       body,
+		MediaType:  constants.MediaTypeJSON,
+	}
+	return diagnostics, artifact, nil
+}
+
+func evaluationCandidateInWindow(ctx context.Context, store *evaluation.Store, candidate evaluation.RunInventoryEntry, windowStart, windowEnd time.Time) (bool, bool, error) {
+	var run *evalv1.EvaluationRun
+	switch candidate.Kind {
+	case evaluation.RunKindNative:
+		report, err := store.LoadReport(ctx, candidate.RunID)
+		if err != nil {
+			return false, false, fmt.Errorf("%w: load native eval candidate %s: %w", constants.ErrEvalRunVerificationFailed, candidate.RunID, err)
+		}
+		run = report.GetRun()
+	case evaluation.RunKindCampaign:
+		loaded, err := store.LoadRun(ctx, candidate.RunID)
+		if err != nil {
+			return false, false, fmt.Errorf("%w: load campaign eval candidate %s: %w", constants.ErrEvalRunVerificationFailed, candidate.RunID, err)
+		}
+		run = loaded
+	default:
+		return false, false, nil
+	}
+	if run.GetStartedAt() == nil && run.GetCompletedAt() == nil {
+		return false, false, nil
+	}
+	var startedAt, completedAt time.Time
+	if run.GetStartedAt() != nil {
+		startedAt = run.GetStartedAt().AsTime()
+	}
+	if run.GetCompletedAt() != nil {
+		completedAt = run.GetCompletedAt().AsTime()
+	}
+	if startedAt.IsZero() {
+		startedAt = completedAt
+	}
+	if completedAt.IsZero() {
+		completedAt = startedAt
+	}
+	return !completedAt.Before(windowStart) && !startedAt.After(windowEnd), true, nil
+}
+
 func selectedEvaluationAdmission(scope *compliancev1.AssessmentScope, runID string) (*compliancev1.AssessmentSourceAdmission, error) {
 	var selected *compliancev1.AssessmentSourceAdmission
 	for _, admission := range scope.GetSourceAdmissions() {
@@ -1261,6 +1358,7 @@ func complianceReportGenerateCmdWithConfig(
 		scopePath            string
 		demoRuns             []string
 		evalRuns             []string
+		discoverEvalRuns     bool
 		operationalSources   []string
 		reportID             string
 		bundleProfile        string
@@ -1345,6 +1443,15 @@ func complianceReportGenerateCmdWithConfig(
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrReportVerificationFailed, err)
 			}
+			var evaluationDiagnostics []*compliancev1.AssessmentDiagnostic
+			if discoverEvalRuns {
+				diagnostics, artifact, diagnosticsErr := buildEvaluationSelectionDiagnostics(ctx, evaluation.NewStore(fileSvc), scope, evalRuns)
+				if diagnosticsErr != nil {
+					return diagnosticsErr
+				}
+				evaluationDiagnostics = diagnostics
+				evalSourceArtifacts = append(evalSourceArtifacts, *artifact)
+			}
 			standaloneImporters, standaloneSourceArtifacts, err := buildStandaloneReportSources(ctx, standaloneReportSourceInput{
 				scopeID:              scopeID,
 				verifiedAt:           assessmentAsOf,
@@ -1411,11 +1518,12 @@ func complianceReportGenerateCmdWithConfig(
 			}
 			result, err := compliancereport.GenerateSignedComplianceBundle(ctx, compliancereport.SignedBundleGenerationRequest{
 				Generation: compliancereport.GenerationRequest{
-					Scope:      scope,
-					Sources:    generationSources,
-					Assertions: assertions,
-					Frameworks: frameworks,
-					Crosswalks: crosswalks,
+					Scope:       scope,
+					Sources:     generationSources,
+					Assertions:  assertions,
+					Frameworks:  frameworks,
+					Crosswalks:  crosswalks,
+					Diagnostics: evaluationDiagnostics,
 				},
 				Profile:         profile,
 				ReportID:        reportID,
@@ -1440,6 +1548,7 @@ func complianceReportGenerateCmdWithConfig(
 	cmd.Flags().StringVar(&scopePath, "scope", "", "Path to canonical protected assessment scope")
 	cmd.Flags().StringSliceVar(&demoRuns, "demo-run", nil, "Demo evidence run ID (repeatable)")
 	cmd.Flags().StringSliceVar(&evalRuns, "eval-run", nil, "Eval bundle run ID (repeatable)")
+	cmd.Flags().BoolVar(&discoverEvalRuns, "discover-eval-runs", false, "Freeze all local eval run candidate dispositions into report diagnostics")
 	cmd.Flags().StringSliceVar(&operationalSources, "source", nil, "Operational evidence source package directory (repeatable)")
 	cmd.Flags().StringVar(&reportID, "report-id", "", "Immutable report bundle ID")
 	cmd.Flags().StringVar(&bundleProfile, "profile", string(compliancereport.ProfilePublic), "Bundle profile: public or restricted")

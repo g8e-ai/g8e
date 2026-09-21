@@ -69,6 +69,7 @@ type AnalysisRequest struct {
 	Crosswalks            *compliancev1.ControlCrosswalkCatalog
 	AssertionAssessments  []*compliancev1.ControlAssertionAssessment
 	FrameworkAssessments  []*compliancev1.FrameworkControlAssessment
+	Diagnostics           []*compliancev1.AssessmentDiagnostic
 }
 
 // BuildComplianceAnalysis aggregates verified evidence, assertion
@@ -94,7 +95,7 @@ func BuildComplianceAnalysis(ctx context.Context, request AnalysisRequest) (*com
 	remediation := buildRemediation(findings)
 	sections := buildSections(request)
 	graphFailures := buildGraphFailureMessages(request.Graph)
-	diagnostics := buildAnalysisDiagnostics(request.AssertionAssessments, request.Graph, request.ScopeID)
+	diagnostics := buildAnalysisDiagnostics(request.AssertionAssessments, request.Graph, request.ScopeID, request.Diagnostics)
 
 	analysis := &compliancev1.ComplianceAnalysis{
 		AnalysisSchemaVersion:      constants.AnalysisSchemaVersion,
@@ -498,8 +499,13 @@ func buildGraphFailureMessages(graph *EvidenceGraph) []string {
 	return messages
 }
 
-func buildAnalysisDiagnostics(assessments []*compliancev1.ControlAssertionAssessment, graph *EvidenceGraph, scopeID string) []*compliancev1.AssessmentDiagnostic {
-	result := make([]*compliancev1.AssessmentDiagnostic, 0)
+func buildAnalysisDiagnostics(assessments []*compliancev1.ControlAssertionAssessment, graph *EvidenceGraph, scopeID string, diagnostics []*compliancev1.AssessmentDiagnostic) []*compliancev1.AssessmentDiagnostic {
+	result := make([]*compliancev1.AssessmentDiagnostic, 0, len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		if diagnostic != nil {
+			result = append(result, proto.Clone(diagnostic).(*compliancev1.AssessmentDiagnostic))
+		}
+	}
 	for _, assessment := range assessments {
 		for _, diagnostic := range assessment.GetDiagnostics() {
 			if diagnostic != nil {

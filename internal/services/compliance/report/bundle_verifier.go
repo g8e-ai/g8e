@@ -101,6 +101,7 @@ type bundleVerifier struct {
 	bodies                   map[string][]byte
 	replayedNodesByAdmission map[string][]evidence.EvidenceNode
 	operationalAdmissions    map[string]struct{}
+	evaluationDiagnostics    []*compliancev1.AssessmentDiagnostic
 }
 
 func (v *bundleVerifier) verify(ctx context.Context) {
@@ -562,7 +563,7 @@ func (v *bundleVerifier) verifyDecisionReplay(ctx context.Context) {
 		nodes = append(nodes, sharedNodes...)
 		sources = append(sources, GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: protectedDecisionImporter{admissionID: admission.GetAdmissionId(), nodes: nodes}})
 	}
-	replayed, err := GenerateComplianceAnalysis(ctx, GenerationRequest{Scope: scope, Sources: sources, Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks})
+	replayed, err := GenerateComplianceAnalysis(ctx, GenerationRequest{Scope: scope, Sources: sources, Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks, Diagnostics: v.evaluationDiagnostics})
 	if err != nil {
 		v.fail(constants.ErrReportVerificationFailed, constants.ComplianceBundleAnalysisPath, fmt.Sprintf("replay canonical compliance analysis: %v", err))
 		return
@@ -637,6 +638,7 @@ type demoSourceInventory struct {
 
 func (v *bundleVerifier) verifySourceVerificationReports(ctx context.Context) {
 	v.verifyEvidenceArtifactRoutes()
+	v.verifyEvaluationSelectionDiagnostics()
 	v.verifyDemoSourceVerificationReports(ctx)
 	v.verifyEvalSourceVerificationReports(ctx)
 	v.verifyOperationalSources(ctx)
@@ -744,6 +746,72 @@ type evalSourceInventory struct {
 	evidence             bool
 	runtimeArtifacts     int
 	runtimeArtifactPaths map[string]struct{}
+}
+
+func (v *bundleVerifier) verifyEvaluationSelectionDiagnostics() {
+	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.EvaluationSelectionDiagnosticsFilename)
+	body, exists := v.bodies[bundlePath]
+	if !exists {
+		return
+	}
+	diagnostics, err := UnmarshalAssessmentDiagnostics(body)
+	if err != nil {
+		v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, err.Error())
+		return
+	}
+	scope := &compliancev1.AssessmentScope{}
+	if !v.decodeCanonicalSource(constants.ComplianceBundleScopeFilename, scope) {
+		return
+	}
+	admissions := make(map[string]*compliancev1.AssessmentSourceAdmission, len(scope.GetSourceAdmissions()))
+	selectedEvalAdmissions := make(map[string]string)
+	for _, admission := range scope.GetSourceAdmissions() {
+		admissions[admission.GetAdmissionId()] = admission
+		if admission.GetSourceKind() == constants.EvaluationSourceKindNative {
+			selectedEvalAdmissions[admission.GetAdmissionId()] = "evaluation_candidate_native"
+		}
+		if admission.GetSourceKind() == constants.EvaluationSourceKindCampaign {
+			selectedEvalAdmissions[admission.GetAdmissionId()] = "evaluation_candidate_campaign"
+		}
+	}
+	expectedSeverity := map[string]string{
+		"evaluation_candidate_native":         "info",
+		"evaluation_candidate_campaign":       "info",
+		"evaluation_candidate_incomplete":     "warning",
+		"evaluation_candidate_unsupported":    "warning",
+		"evaluation_candidate_malformed":      "error",
+		"evaluation_candidate_outside_window": "info",
+	}
+	seen := make(map[string]struct{}, len(diagnostics))
+	seenAdmissions := make(map[string]struct{}, len(selectedEvalAdmissions))
+	for _, diagnostic := range diagnostics {
+		runID := diagnostic.GetSubject().GetRunId()
+		severity, supported := expectedSeverity[diagnostic.GetCode()]
+		if diagnostic == nil || !supported || diagnostic.GetSeverity() != severity || runID == "" || diagnostic.GetMessage() == "" {
+			v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, "evaluation selection diagnostic is incomplete or unsupported")
+			return
+		}
+		if _, exists := seen[runID]; exists {
+			v.fail(constants.ErrEvidenceDuplicateID, bundlePath, "evaluation selection diagnostic repeats a run candidate")
+			return
+		}
+		seen[runID] = struct{}{}
+		if diagnostic.GetSourceAdmissionId() != "" {
+			admission := admissions[diagnostic.GetSourceAdmissionId()]
+			if admission == nil || admission.GetRunId() != runID || selectedEvalAdmissions[admission.GetAdmissionId()] != diagnostic.GetCode() {
+				v.fail(constants.ErrEvidenceScopeMismatch, bundlePath, "evaluation selection diagnostic does not match its protected admission")
+				return
+			}
+			seenAdmissions[admission.GetAdmissionId()] = struct{}{}
+		}
+	}
+	for admissionID := range selectedEvalAdmissions {
+		if _, exists := seenAdmissions[admissionID]; !exists {
+			v.fail(constants.ErrEvidenceScopeMismatch, bundlePath, "evaluation selection diagnostics omit a protected eval admission")
+			return
+		}
+	}
+	v.evaluationDiagnostics = diagnostics
 }
 
 func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context) {
