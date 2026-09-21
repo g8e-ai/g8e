@@ -90,7 +90,7 @@ the graph is invalid or any importer fails.`,
 
 			source := provenanceSourceFactory(projectRoot)
 
-			importers, err := buildEvidenceGraphImporters(ctx, fileSvc, source, demoRuns, evalRuns)
+			importers, err := buildEvidenceGraphImporters(ctx, fileSvc, source, demoRuns, evalRuns, time.Now)
 			if err != nil {
 				return err
 			}
@@ -126,6 +126,7 @@ func buildEvidenceGraphImporters(
 	source evidence.ProvenanceSource,
 	demoRuns []string,
 	evalRuns []string,
+	nowFunc func() time.Time,
 ) ([]evidence.EvidenceImporter, error) {
 	importers := make([]evidence.EvidenceImporter, 0, len(demoRuns)+len(evalRuns))
 
@@ -133,14 +134,14 @@ func buildEvidenceGraphImporters(
 		if !evidence.ValidPathElement(runID) {
 			return nil, fmt.Errorf("%w: invalid demo run ID %q", constants.ErrPathValidation, runID)
 		}
-		importers = append(importers, evidence.NewDemoRunImporter(fileSvc, runID, source))
+		importers = append(importers, evidence.NewDemoRunImporterAt(fileSvc, runID, source, nowFunc))
 	}
 
 	for _, runID := range evalRuns {
 		if !evidence.ValidPathElement(runID) {
 			return nil, fmt.Errorf("%w: invalid eval run ID %q", constants.ErrPathValidation, runID)
 		}
-		importers = append(importers, evaluation.NewEvidenceImporter(fileSvc, runID, time.Now))
+		importers = append(importers, evaluation.NewEvidenceImporter(fileSvc, runID, nowFunc))
 	}
 
 	return importers, nil

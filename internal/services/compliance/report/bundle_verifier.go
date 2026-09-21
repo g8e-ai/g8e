@@ -71,7 +71,12 @@ func VerifyComplianceReportBundle(ctx context.Context, request BundleVerificatio
 		VerifierId:      constants.ComplianceBundleVerifierID,
 		VerifierVersion: constants.ComplianceBundleVerifierVersion,
 	}
-	verifier := bundleVerifier{request: request, report: report, bodies: make(map[string][]byte, len(request.Bundle.GetArtifacts()))}
+	verifier := bundleVerifier{
+		request:                  request,
+		report:                   report,
+		bodies:                   make(map[string][]byte, len(request.Bundle.GetArtifacts())),
+		replayedNodesByAdmission: make(map[string][]evidence.EvidenceNode),
+	}
 	verifier.verify(ctx)
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -89,9 +94,10 @@ func VerifyComplianceReportBundle(ctx context.Context, request BundleVerificatio
 }
 
 type bundleVerifier struct {
-	request BundleVerificationRequest
-	report  *compliancev1.ComplianceVerificationReport
-	bodies  map[string][]byte
+	request                  BundleVerificationRequest
+	report                   *compliancev1.ComplianceVerificationReport
+	bodies                   map[string][]byte
+	replayedNodesByAdmission map[string][]evidence.EvidenceNode
 }
 
 func (v *bundleVerifier) verify(ctx context.Context) {
@@ -476,6 +482,35 @@ func (i protectedDecisionImporter) SourceID() string {
 	return i.admissionID
 }
 
+func (v *bundleVerifier) retainReplayedNodes(nodes []evidence.EvidenceNode) error {
+	pending := make(map[string][]evidence.EvidenceNode)
+	for index := range nodes {
+		node := nodes[index]
+		resource := v.analysisResource(node.ArtifactID)
+		if resource == nil {
+			return fmt.Errorf("%w: replayed evidence %s is absent from the protected analysis", constants.ErrInvalidEvidenceGraph, node.ArtifactID)
+		}
+		if !replayedNodeMatches(resource, &node) {
+			return fmt.Errorf("%w: replayed evidence %s does not match the protected analysis", constants.ErrInvalidEvidenceGraph, node.ArtifactID)
+		}
+		node.SourceAdmissionID = resource.GetSourceAdmissionId()
+		pending[node.SourceAdmissionID] = append(pending[node.SourceAdmissionID], node)
+	}
+	for admissionID, admissionNodes := range pending {
+		v.replayedNodesByAdmission[admissionID] = append(v.replayedNodesByAdmission[admissionID], admissionNodes...)
+	}
+	return nil
+}
+
+func (v *bundleVerifier) analysisResource(artifactID string) *compliancev1.ComplianceEvidenceReference {
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource != nil && resource.GetArtifactId() == artifactID {
+			return resource
+		}
+	}
+	return nil
+}
+
 func (v *bundleVerifier) verifyDecisionReplay(ctx context.Context) {
 	if len(v.report.GetFailures()) > 0 {
 		return
@@ -501,25 +536,18 @@ func (v *bundleVerifier) verifyDecisionReplay(ctx context.Context) {
 	if !v.decodeCanonicalSource(crosswalkRefs[0], crosswalks) {
 		return
 	}
-	nodesByAdmission := make(map[string][]evidence.EvidenceNode, len(scope.GetSourceAdmissions()))
 	for _, admission := range scope.GetSourceAdmissions() {
-		nodesByAdmission[admission.GetAdmissionId()] = nil
+		if _, exists := v.replayedNodesByAdmission[admission.GetAdmissionId()]; !exists {
+			v.fail(constants.ErrInvalidEvidenceGraph, admission.GetAdmissionId(), "protected source admission has no exact importer replay")
+		}
 	}
-	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
-		node, err := v.decisionReplayNode(resource)
-		if err != nil {
-			v.fail(err, resource.GetArtifactId(), err.Error())
-			return
-		}
-		if _, exists := nodesByAdmission[resource.GetSourceAdmissionId()]; !exists {
-			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "decision replay evidence is outside the protected source admissions")
-			return
-		}
-		nodesByAdmission[resource.GetSourceAdmissionId()] = append(nodesByAdmission[resource.GetSourceAdmissionId()], node)
+	if len(v.replayedNodesByAdmission) == 0 && len(v.request.Bundle.GetAnalysis().GetEvidenceResources()) > 0 {
+		v.fail(constants.ErrInvalidEvidenceGraph, constants.ComplianceBundleAnalysisPath, "protected analysis has no exact importer replay")
+		return
 	}
 	sources := make([]GenerationSource, 0, len(scope.GetSourceAdmissions()))
 	for _, admission := range scope.GetSourceAdmissions() {
-		sources = append(sources, GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: protectedDecisionImporter{admissionID: admission.GetAdmissionId(), nodes: nodesByAdmission[admission.GetAdmissionId()]}})
+		sources = append(sources, GenerationSource{AdmissionID: admission.GetAdmissionId(), Importer: protectedDecisionImporter{admissionID: admission.GetAdmissionId(), nodes: v.replayedNodesByAdmission[admission.GetAdmissionId()]}})
 	}
 	replayed, err := GenerateComplianceAnalysis(ctx, GenerationRequest{Scope: scope, Sources: sources, Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks})
 	if err != nil {
@@ -542,50 +570,6 @@ func (v *bundleVerifier) verifyDecisionReplay(ctx context.Context) {
 			v.fail(constants.ErrRendererMismatch, path.Join(constants.ComplianceBundleProfilesDirname, profile.GetProfileId()+constants.FileExtJSON), "framework profile does not reproduce from protected analysis")
 		}
 	}
-}
-
-func (v *bundleVerifier) decisionReplayNode(resource *compliancev1.ComplianceEvidenceReference) (evidence.EvidenceNode, error) {
-	if resource == nil || resource.GetProducedAt() == nil || resource.GetProducedAt().CheckValid() != nil || resource.GetVerifiedAt() != nil && resource.GetVerifiedAt().CheckValid() != nil {
-		return evidence.EvidenceNode{}, fmt.Errorf("%w: decision replay evidence reference is incomplete", constants.ErrInvalidEvidenceGraph)
-	}
-	node := evidence.EvidenceNode{
-		ArtifactID:         resource.GetArtifactId(),
-		ArtifactType:       evidence.ArtifactType(resource.GetArtifactType()),
-		SHA256:             resource.GetSha256(),
-		MediaType:          resource.GetMediaType(),
-		SchemaRef:          resource.GetSchemaRef(),
-		ProducerIdentity:   resource.GetProducerIdentity(),
-		ProducedAt:         resource.GetProducedAt().AsTime(),
-		ScopeID:            resource.GetScopeId(),
-		SourceAdmissionID:  resource.GetSourceAdmissionId(),
-		RunID:              resource.GetRunId(),
-		AttemptID:          resource.GetAttemptId(),
-		ScenarioID:         resource.GetScenarioId(),
-		TransactionID:      resource.GetTransactionId(),
-		VerificationStatus: evidence.VerificationStatus(resource.GetVerificationStatus()),
-		VerifierID:         resource.GetVerifierId(),
-		VerifierVersion:    resource.GetVerifierVersion(),
-		BundlePath:         resource.GetBundlePath(),
-	}
-	if resource.GetVerifiedAt() != nil {
-		node.VerifiedAt = resource.GetVerifiedAt().AsTime()
-	}
-	if resource.GetEncryption() != nil {
-		node.Encryption = &evidence.EncryptionMetadata{
-			Algorithm:                   resource.GetEncryption().GetAlgorithm(),
-			KeyID:                       resource.GetEncryption().GetKeyId(),
-			AuthorizationScope:          resource.GetEncryption().GetAuthorizationScope(),
-			PlaintextSHA256:             resource.GetEncryption().GetPlaintextSha256(),
-			AuthenticatedMetadataSHA256: resource.GetEncryption().GetAuthenticatedMetadataSha256(),
-		}
-	}
-	if body, exists := v.bodies[resource.GetBundlePath()]; exists {
-		digest := sha256.Sum256(body)
-		if hex.EncodeToString(digest[:]) == resource.GetSha256() {
-			node.CanonicalBytes = append([]byte(nil), body...)
-		}
-	}
-	return node, nil
 }
 
 type evidenceVerificationRoute string
@@ -922,11 +906,8 @@ func (v *bundleVerifier) replayLedgerSource(ctx context.Context, inventory *ledg
 		v.fail(constants.ErrInvalidEvidenceGraph, inventory.commitsPath, "replayed ledger inventory does not match the protected analysis evidence count")
 		return
 	}
-	for index := range nodes {
-		resource := inventory.resources[nodes[index].ArtifactID]
-		if resource == nil || !replayedNodeMatches(resource, &nodes[index]) {
-			v.fail(constants.ErrInvalidEvidenceGraph, nodes[index].BundlePath, "replayed ledger evidence does not match the protected analysis evidence")
-		}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.commitsPath, err.Error())
 	}
 }
 
@@ -1016,11 +997,8 @@ func (v *bundleVerifier) replayBuildConfigSource(ctx context.Context, inventory 
 		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed build and configuration inventory does not match the protected analysis evidence count")
 		return
 	}
-	for index := range nodes {
-		resource := inventory.resources[nodes[index].ArtifactID]
-		if resource == nil || !replayedNodeMatches(resource, &nodes[index]) {
-			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed build or configuration evidence does not match the protected analysis evidence")
-		}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
 	}
 }
 
@@ -1119,8 +1097,8 @@ func (v *bundleVerifier) replayCommitmentSource(ctx context.Context, inventory *
 		v.fail(constants.ErrEvidenceTrustNotAssessed, inventory.path, "commitment signer is not present in external assessed evidence trust")
 		return
 	}
-	if !replayedNodeMatches(resource, &nodes[0]) {
-		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed commitment does not match the protected analysis evidence")
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
 	}
 }
 
@@ -1219,19 +1197,13 @@ func (v *bundleVerifier) replayAttestationSource(ctx context.Context, inventory 
 		return
 	}
 	for index := range nodes {
-		node := &nodes[index]
-		resource := inventory.resources[node.ArtifactID]
-		if resource == nil {
-			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed attestation is absent from the protected analysis evidence")
-			continue
-		}
-		if node.VerificationStatus == evidence.VerificationStatusUnverified {
+		if nodes[index].VerificationStatus == evidence.VerificationStatusUnverified {
 			v.fail(constants.ErrEvidenceTrustNotAssessed, inventory.path, "attestation signer is not present in external assessed evidence trust")
-			continue
+			return
 		}
-		if !replayedNodeMatches(resource, node) {
-			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed attestation does not match the protected analysis evidence")
-		}
+	}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
 	}
 }
 
@@ -1311,8 +1283,8 @@ func (v *bundleVerifier) replayAuditRecordSource(ctx context.Context, inventory 
 		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed audit record does not produce exactly one evidence resource")
 		return
 	}
-	if !replayedNodeMatches(resource, &nodes[0]) {
-		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed audit record does not match the protected analysis evidence")
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
 	}
 }
 
@@ -1434,12 +1406,8 @@ func (v *bundleVerifier) replayKSIHistorySource(ctx context.Context, inventory *
 		v.fail(constants.ErrInvalidEvidenceGraph, inventory.historyPath, "replayed KSI history does not match the analysis evidence inventory")
 		return
 	}
-	for index := range nodes {
-		resource := inventory.resources[nodes[index].ArtifactID]
-		if resource == nil || !replayedNodeMatches(resource, &nodes[index]) {
-			v.fail(constants.ErrInvalidEvidenceGraph, inventory.historyPath, "replayed KSI history does not match the protected analysis evidence")
-			return
-		}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.historyPath, err.Error())
 	}
 }
 
@@ -1510,8 +1478,13 @@ func (v *bundleVerifier) verifySourceVerificationReport(bundlePath string, body 
 func (v *bundleVerifier) replayEvalSourceVerification(ctx context.Context, runID string, expected *compliancev1.ComplianceVerificationReport) {
 	runtimeRoot := filepath.Join(constants.DataDirname, constants.EvaluationDirname, constants.EvaluationRunsDirname, runID)
 	reader := &bundledRuntimeArtifactReader{bodies: v.bodies, runID: runID, sourceDir: constants.ComplianceBundleSourceEvalsDirname, runtimeRoot: runtimeRoot}
-	replayed, err := evaluation.NewVerifier(reader, evaluation.NewRegistry(), func() time.Time { return expected.GetVerifiedAt().AsTime() }).Verify(ctx, runID)
+	assessmentAsOf, err := v.protectedAssessmentTime()
 	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
+		return
+	}
+	replayed, err := evaluation.NewVerifier(reader, evaluation.NewRegistry(), func() time.Time { return assessmentAsOf }).Verify(ctx, runID)
 	if err != nil {
 		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, err.Error())
 		return
@@ -1519,14 +1492,28 @@ func (v *bundleVerifier) replayEvalSourceVerification(ctx context.Context, runID
 	matches, matchErr := evidence.CanonicalProtosEqual(expected, replayed)
 	if matchErr != nil || !replayed.GetValid() || !matches {
 		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "replayed eval verification does not match the protected source verification report")
+		return
+	}
+	nodes, err := evaluation.NewEvidenceImporter(reader, runID, func() time.Time { return assessmentAsOf }).Import(ctx)
+	if err != nil {
+		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, fmt.Sprintf("replay eval evidence importer: %v", err))
+		return
+	}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
 	}
 }
 
 func (v *bundleVerifier) replayDemoSourceVerification(ctx context.Context, runID string, expected *compliancev1.ComplianceVerificationReport) {
 	runtimeRoot := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, runID)
 	reader := &bundledRuntimeArtifactReader{bodies: v.bodies, runID: runID, sourceDir: constants.ComplianceBundleSourceDemosDirname, runtimeRoot: runtimeRoot}
-	replayed, err := evidence.VerifyDemoRun(ctx, reader, runID, &bundledDemoProvenanceSource{bodies: v.bodies, runID: runID}, expected.GetVerifiedAt().AsTime())
+	assessmentAsOf, err := v.protectedAssessmentTime()
 	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
+		return
+	}
+	replayed, err := evidence.VerifyDemoRun(ctx, reader, runID, &bundledDemoProvenanceSource{bodies: v.bodies, runID: runID}, assessmentAsOf)
 	if err != nil {
 		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, err.Error())
 		return
@@ -1534,6 +1521,15 @@ func (v *bundleVerifier) replayDemoSourceVerification(ctx context.Context, runID
 	matches, matchErr := evidence.CanonicalProtosEqual(expected, replayed)
 	if matchErr != nil || !replayed.GetValid() || !matches {
 		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, "replayed demo verification does not match the protected source verification report")
+		return
+	}
+	nodes, err := evidence.NewDemoRunImporterAt(reader, runID, &bundledDemoProvenanceSource{bodies: v.bodies, runID: runID}, func() time.Time { return assessmentAsOf }).Import(ctx)
+	if err != nil {
+		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, fmt.Sprintf("replay demo evidence importer: %v", err))
+		return
+	}
+	if err := v.retainReplayedNodes(nodes); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, err.Error())
 	}
 }
 

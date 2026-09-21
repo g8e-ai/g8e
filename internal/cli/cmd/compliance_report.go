@@ -970,7 +970,7 @@ func complianceReportGenerateCmdWithConfig(
 				}
 			}
 			source := provenanceSourceFactory(projectRoot)
-			importers, err := buildEvidenceGraphImporters(ctx, fileSvc, source, demoRuns, evalRuns)
+			importers, err := buildEvidenceGraphImporters(ctx, fileSvc, source, demoRuns, evalRuns, func() time.Time { return assessmentAsOf })
 			if err != nil {
 				return err
 			}

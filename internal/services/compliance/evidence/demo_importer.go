@@ -45,11 +45,18 @@ type DemoRunImporter struct {
 // provides access to the runtime tree; the source provides provenance
 // artifacts for manifest verification.
 func NewDemoRunImporter(reader ArtifactReader, runID string, source ProvenanceSource) *DemoRunImporter {
+	return NewDemoRunImporterAt(reader, runID, source, time.Now)
+}
+
+func NewDemoRunImporterAt(reader ArtifactReader, runID string, source ProvenanceSource, nowFunc func() time.Time) *DemoRunImporter {
+	if nowFunc == nil {
+		nowFunc = time.Now
+	}
 	return &DemoRunImporter{
 		reader:  reader,
 		runID:   runID,
 		source:  source,
-		nowFunc: time.Now,
+		nowFunc: nowFunc,
 	}
 }
 
