@@ -233,10 +233,7 @@ func validateOperationalCommitmentSegment(inventory *OperationalSourceInventory,
 	if inventory.CommitmentFirstSequence != records[0].sequence || inventory.CommitmentLastSequence != records[len(records)-1].sequence || inventory.CommitmentBoundaryPriorHash != records[0].attestation.GetPriorCommitmentHash() || inventory.CommitmentHeadHash != records[len(records)-1].attestation.GetHash() {
 		return fmt.Errorf("%w: operational commitment segment bounds do not match its attestations", constants.ErrEvidenceScopeMismatch)
 	}
-	if !inventory.CommitmentSequenceContiguous {
-		return nil
-	}
-	if records[len(records)-1].sequence-records[0].sequence+1 != int64(len(records)) {
+	if !inventory.CommitmentSequenceContiguous || records[len(records)-1].sequence-records[0].sequence+1 != int64(len(records)) {
 		return fmt.Errorf("%w: operational commitment segment sequence has a gap", constants.ErrInvalidEvidenceGraph)
 	}
 	for index := 1; index < len(records); index++ {

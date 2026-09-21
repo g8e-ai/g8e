@@ -173,8 +173,8 @@ func TestOperationalOperatorEvidence_GeneratesNativeAssuranceAndVerifiesOffline(
 	importer := evidence.NewOperationalExportImporter(&bundledSourceArtifactReader{bodies: sourceBodies}, trust, path.Join(sourceRoot, constants.ComplianceOperationalInventoryFilename), sourceRoot, scope.GetScopeId(), admission, assessmentAsOf, func() time.Time { return assessmentAsOf })
 	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
 	require.NoError(t, err)
-	identity := bundleSigningIdentityFixture(t)
 	generatedAt := assessmentAsOf.Add(time.Second)
+	identity := bundleSigningIdentityAtFixture(t, generatedAt)
 	generation := GenerationRequest{
 		Scope:      scope,
 		Sources:    []GenerationSource{{AdmissionID: admission.GetAdmissionId(), Importer: importer}},

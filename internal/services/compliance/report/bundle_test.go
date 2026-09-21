@@ -97,17 +97,21 @@ func bundleAssemblyFixture(t *testing.T) (BundleAssemblyRequest, *compliancev1.F
 
 func bundleSigningIdentityFixture(t *testing.T) *ComplianceReportSigningIdentity {
 	t.Helper()
+	return bundleSigningIdentityAtFixture(t, time.Unix(1_700_000_000, 0).UTC())
+}
+
+func bundleSigningIdentityAtFixture(t *testing.T, signedAt time.Time) *ComplianceReportSigningIdentity {
+	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	publicKeyDigest := sha256.Sum256(publicKey)
-	createdAt := time.Unix(1_700_000_000, 0).UTC()
 	metadata := &compliancev1.ComplianceReportSigningKeyMetadata{
 		KeyId:           "report-key-1",
 		Algorithm:       constants.ComplianceReportSignatureAlgorithm,
 		Purpose:         constants.ComplianceReportSigningPurpose,
 		PublicKeySha256: hex.EncodeToString(publicKeyDigest[:]),
-		CreatedAt:       timestamppb.New(createdAt),
-		ExpiresAt:       timestamppb.New(createdAt.Add(24 * time.Hour)),
+		CreatedAt:       timestamppb.New(signedAt.Add(-time.Hour)),
+		ExpiresAt:       timestamppb.New(signedAt.Add(time.Hour)),
 	}
 	identity, err := NewComplianceReportSigningIdentity(metadata, privateKey)
 	require.NoError(t, err)

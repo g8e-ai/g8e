@@ -165,6 +165,88 @@ func TestOperationalExportImporter_AcceptsBoundedCommitmentSegmentWithoutWholeLe
 	assert.Equal(t, VerificationStatusVerified, nodes[0].VerificationStatus)
 }
 
+func TestOperationalExportImporter_RejectsCommitmentSegmentSequenceGap(t *testing.T) {
+	executedAt := time.UnixMilli(1_700_000_001_000).UTC()
+	signer := newOperationalCommitmentSigner(t)
+	first := signer.commitment(t, "tx-1", "external-prior", executedAt)
+	second := signer.commitment(t, "tx-2", first.GetHash(), executedAt.Add(time.Second))
+	outputDir := t.TempDir()
+	inventory, err := ExportOperationalEvidence(context.Background(), &storage.OperationalEvidenceSnapshot{
+		Commitments: []storage.OperationalCommitmentSource{
+			{Sequence: 10, TransactionID: first.GetTransactionId(), CommittedAt: executedAt, Body: canonicalOperationalCommitment(t, first)},
+			{Sequence: 12, TransactionID: second.GetTransactionId(), CommittedAt: executedAt.Add(time.Second), Body: canonicalOperationalCommitment(t, second)},
+		},
+	}, operationalExportRequestForTest(outputDir, executedAt))
+	require.NoError(t, err)
+	assert.False(t, inventory.CommitmentSequenceContiguous)
+
+	files := operationalExportFiles(t, outputDir, inventory, "source-1")
+	admission := operationalAdmissionForTest()
+	importer := NewOperationalExportImporter(&memoryArtifactReader{files: files}, newOperationalTrust(signer), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1", constants.ComplianceOperationalInventoryFilename), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1"), "scope-1", admission, executedAt.Add(time.Minute), func() time.Time { return executedAt.Add(time.Minute) })
+	_, err = importer.Import(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
+}
+
+func TestOperationalExportImporter_RejectsRetainedReceiptAndStageSubstitutions(t *testing.T) {
+	executedAt := time.UnixMilli(1_700_000_001_000).UTC()
+	tests := []struct {
+		name   string
+		mutate func(*operatorv1.ActionReceipt)
+	}{
+		{name: "receipt transaction hash", mutate: func(receipt *operatorv1.ActionReceipt) {
+			receipt.TransactionHash = "substituted-transaction-hash"
+			for _, stage := range receipt.DeterministicStageEvidence {
+				stage.TransactionHash = receipt.TransactionHash
+			}
+		}},
+		{name: "commitment stage signer", mutate: func(receipt *operatorv1.ActionReceipt) {
+			for _, stage := range receipt.DeterministicStageEvidence {
+				if stage.GetKind() == operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND {
+					stage.SignerKeyId = "substituted-auditor"
+				}
+			}
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			signer := newOperationalCommitmentSigner(t)
+			commitment := signer.commitment(t, "tx-1", "external-prior", executedAt)
+			receipt := newEvalVerifiedChainReceipt(signer.keyID)
+			receipt.TransactionHash = commitment.GetTransactionHash()
+			for _, stage := range receipt.DeterministicStageEvidence {
+				stage.TransactionHash = receipt.GetTransactionHash()
+				stage.ActionType = commitment.GetActionType()
+				if stage.GetKind() == operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND {
+					stage.CommitmentHash = commitment.GetHash()
+					stage.PriorCommitmentHash = commitment.GetPriorCommitmentHash()
+					stage.SignerKeyId = commitment.GetAuditorKeyId()
+					stage.L2SignatureDigest = commitment.GetL2SignatureDigest()
+					stage.L3SignatureDigest = commitment.GetHumanSignatureDigest()
+				}
+			}
+			test.mutate(receipt)
+			receiptPayload, err := governance.CanonicalizeActionReceipt(receipt)
+			require.NoError(t, err)
+			receipt.Signature = hex.EncodeToString(ed25519.Sign(signer.privateKey, receiptPayload))
+			receiptBody, err := compliancev1.MarshalCanonical(receipt)
+			require.NoError(t, err)
+			outputDir := t.TempDir()
+			inventory, err := ExportOperationalEvidence(context.Background(), &storage.OperationalEvidenceSnapshot{
+				Receipts:    []storage.OperationalReceiptSource{{TransactionID: receipt.GetTransactionId(), ExecutedAt: executedAt, Body: receiptBody}},
+				Commitments: []storage.OperationalCommitmentSource{{Sequence: 10, TransactionID: commitment.GetTransactionId(), CommittedAt: executedAt, Body: canonicalOperationalCommitment(t, commitment)}},
+			}, operationalExportRequestForTest(outputDir, executedAt))
+			require.NoError(t, err)
+			files := operationalExportFiles(t, outputDir, inventory, "source-1")
+			admission := operationalAdmissionForTest()
+			importer := NewOperationalExportImporter(&memoryArtifactReader{files: files}, newOperationalTrust(signer), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1", constants.ComplianceOperationalInventoryFilename), path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceOperationalExportDirname, "source-1"), "scope-1", admission, executedAt.Add(time.Minute), func() time.Time { return executedAt.Add(time.Minute) })
+			_, err = importer.Import(context.Background())
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
+		})
+	}
+}
+
 func TestOperationalExportImporter_ReplaysExportedReceiptAndPersistenceBodies(t *testing.T) {
 	executedAt := time.UnixMilli(1_700_000_001_000).UTC()
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
