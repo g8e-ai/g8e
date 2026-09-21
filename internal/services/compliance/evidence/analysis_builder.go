@@ -169,13 +169,12 @@ func indexAnalysisAssertions(assertions *compliancev1.ControlAssertionCatalog) m
 
 func buildEvidenceWindowCompleteness(request AnalysisRequest) *compliancev1.EvidenceWindowCompleteness {
 	expected := int32(len(request.AssertionAssessments))
-	satisfied := int32(0)
+	assessed := int32(0)
 	missing := make([]string, 0)
 	stale := make([]string, 0)
 	for _, assessment := range request.AssertionAssessments {
-		switch assessment.GetStatus() {
-		case statusSatisfied:
-			satisfied++
+		if assessment.GetFreshnessStatus() == freshnessFresh {
+			assessed++
 		}
 		switch assessment.GetFreshnessStatus() {
 		case freshnessIncomplete:
@@ -187,15 +186,15 @@ func buildEvidenceWindowCompleteness(request AnalysisRequest) *compliancev1.Evid
 	sort.Strings(missing)
 	sort.Strings(stale)
 	status := completenessStatusEmpty
-	if satisfied > 0 && satisfied == expected {
+	if assessed > 0 && assessed == expected {
 		status = completenessStatusComplete
-	} else if satisfied > 0 {
+	} else if assessed > 0 {
 		status = completenessStatusPartial
 	}
 	return &compliancev1.EvidenceWindowCompleteness{
 		ScopeId:               request.ScopeID,
 		ExpectedEvidenceCount: expected,
-		ActualEvidenceCount:   satisfied,
+		ActualEvidenceCount:   assessed,
 		MissingEvidenceRefs:   missing,
 		StaleEvidenceRefs:     stale,
 		CompletenessStatus:    status,

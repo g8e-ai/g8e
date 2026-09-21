@@ -42,7 +42,7 @@ func assertionGraderCatalog(missingPolicy string) *compliancev1.ControlAssertion
 			RequiredEvidenceTypes:   []string{"action_receipt"},
 			RequiredGraderRefs:      []*compliancev1.VersionedReference{{Id: "policy_outcome", Version: "1.0.0"}},
 			RequiredVerifierRefs:    []*compliancev1.VersionedReference{{Id: "receipt_integrity", Version: "1.0.0"}},
-			MinimumEvidenceLevel:    "L3",
+			MinimumEvidenceLevel:    "L2",
 			ValidationCycle:         "7d",
 			MissingEvidencePolicy:   missingPolicy,
 			PassingRule:             "all_required",
@@ -103,7 +103,7 @@ func TestGradeControlAssertions_SatisfiesAllRequiredVerifiedEvidence(t *testing.
 
 	assert.Equal(t, "satisfied", assessment.GetStatus())
 	assert.Equal(t, "fresh", assessment.GetFreshnessStatus())
-	assert.Equal(t, "L3", assessment.GetEvidenceLevel())
+	assert.Equal(t, "L2", assessment.GetEvidenceLevel())
 	assert.Empty(t, assessment.GetFailureReason())
 	assert.Len(t, assessment.GetEvidenceRefs(), 2)
 	assert.Len(t, assessment.GetMetricRefs(), 1)
@@ -155,15 +155,73 @@ func TestGradeControlAssertions_UnverifiableWhenMetricBodyIsMalformed(t *testing
 	assert.Equal(t, "incomplete", assessment.GetFreshnessStatus())
 }
 
-func TestGradeControlAssertions_MatchesPolicyOutcomeGraderToVerifiedReceipt(t *testing.T) {
+func TestGradeControlAssertions_DoesNotTreatVerifiedReceiptAsPolicyOutcome(t *testing.T) {
 	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
 	graph := evidence.NewEvidenceGraph(0, nil)
 	receipt := assertionGraderNode(evidence.ArtifactTypeActionReceipt, "gateway", []byte(`{"receipt":"verified"}`), now.Add(-time.Hour))
 	require.NoError(t, graph.AddNode(receipt))
 	assessment := gradeAssertionTestGraph(t, graph, assertionGraderCatalog("unverifiable"), now)
 
-	assert.Equal(t, "satisfied", assessment.GetStatus())
-	assert.Equal(t, "fresh", assessment.GetFreshnessStatus())
+	assert.Equal(t, "unverifiable", assessment.GetStatus())
+	assert.Equal(t, "incomplete", assessment.GetFreshnessStatus())
+	assert.Equal(t, "L2", assessment.GetEvidenceLevel())
+}
+
+func TestGradeControlAssertions_DoesNotCombineRequirementsAcrossSubjects(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name          string
+		mutateReceipt func(*evidence.EvidenceNode)
+		mutateMetric  func(*evidence.EvidenceNode)
+	}{
+		{name: "different runs", mutateReceipt: func(node *evidence.EvidenceNode) { node.RunID = "run-2" }, mutateMetric: func(*evidence.EvidenceNode) {}},
+		{name: "different attempts", mutateReceipt: func(node *evidence.EvidenceNode) { node.AttemptID = "attempt-1" }, mutateMetric: func(node *evidence.EvidenceNode) { node.AttemptID = "attempt-2" }},
+		{name: "different scenarios", mutateReceipt: func(node *evidence.EvidenceNode) { node.ScenarioID = "scenario-1" }, mutateMetric: func(node *evidence.EvidenceNode) { node.ScenarioID = "scenario-2" }},
+		{name: "different transactions", mutateReceipt: func(node *evidence.EvidenceNode) { node.TransactionID = "transaction-1" }, mutateMetric: func(node *evidence.EvidenceNode) { node.TransactionID = "transaction-2" }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			graph := evidence.NewEvidenceGraph(0, nil)
+			receipt := assertionGraderNode(evidence.ArtifactTypeActionReceipt, "gateway", []byte(`{"receipt":"verified"}`), now.Add(-time.Hour))
+			metric := assertionGraderNode(evidence.ArtifactTypeEvalMetric, "policy_outcome@1.0.0", []byte(`{"metric_id":"policy_outcome","metric_version":"1.0.0","value":1,"eligible":true,"verification_status":"verified"}`), now.Add(-time.Hour))
+			tt.mutateReceipt(&receipt)
+			tt.mutateMetric(&metric)
+			require.NoError(t, graph.AddNode(receipt))
+			require.NoError(t, graph.AddNode(metric))
+
+			assessment := gradeAssertionTestGraph(t, graph, assertionGraderCatalog("unverifiable"), now)
+			assert.Equal(t, "unverifiable", assessment.GetStatus())
+			assert.Equal(t, "incomplete", assessment.GetFreshnessStatus())
+		})
+	}
+}
+
+func TestGradeControlAssertions_DoesNotTreatReceiptAsNotaryProof(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	assertions := assertionGraderCatalog("unverifiable")
+	assertions.Assertions[0].RequiredVerifierRefs = []*compliancev1.VersionedReference{{Id: "notary_proof", Version: "1.0.0"}}
+	graph := evidence.NewEvidenceGraph(0, nil)
+	receipt := assertionGraderNode(evidence.ArtifactTypeActionReceipt, "gateway", []byte(`{"receipt":"verified"}`), now.Add(-time.Hour))
+	metric := assertionGraderNode(evidence.ArtifactTypeEvalMetric, "policy_outcome@1.0.0", []byte(`{"metric_id":"policy_outcome","metric_version":"1.0.0","value":1,"eligible":true,"verification_status":"verified"}`), now.Add(-time.Hour))
+	require.NoError(t, graph.AddNode(receipt))
+	require.NoError(t, graph.AddNode(metric))
+
+	assessment := gradeAssertionTestGraph(t, graph, assertions, now)
+	assert.Equal(t, "unverifiable", assessment.GetStatus())
+}
+
+func TestGradeControlAssertions_DoesNotTreatConfigArtifactAsFIPSOperation(t *testing.T) {
+	now := time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)
+	assertions := assertionGraderCatalog("unverifiable")
+	assertions.Assertions[0].RequiredEvidenceTypes = []string{"config_attestation"}
+	assertions.Assertions[0].RequiredGraderRefs = []*compliancev1.VersionedReference{{Id: "fips_mode", Version: "1.0.0"}}
+	assertions.Assertions[0].RequiredVerifierRefs = []*compliancev1.VersionedReference{{Id: "runtime_fips", Version: "1.0.0"}}
+	graph := evidence.NewEvidenceGraph(0, nil)
+	config := assertionGraderNode(evidence.ArtifactTypeConfigAttestation, "gateway", []byte(`{"cryptographic_mode":"fips"}`), now.Add(-time.Hour))
+	require.NoError(t, graph.AddNode(config))
+
+	assessment := gradeAssertionTestGraph(t, graph, assertions, now)
+	assert.Equal(t, "unverifiable", assessment.GetStatus())
 }
 
 func TestGradeControlAssertions_IgnoresUnverifiedEvidence(t *testing.T) {
