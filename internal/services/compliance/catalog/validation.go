@@ -243,16 +243,66 @@ func FindDemoScenarioDefinition(catalog *compliancev1.DemoScenarioCatalog, id, v
 	return nil
 }
 
+func validateUnavailableAssessmentContext(records []*compliancev1.UnavailableAssessmentContext) (map[compliancev1.AssessmentContextKind]string, error) {
+	unavailable := make(map[compliancev1.AssessmentContextKind]string, len(records))
+	for _, record := range records {
+		if record == nil || strings.TrimSpace(record.GetReason()) == "" {
+			return nil, fmt.Errorf("%w: unavailable assessment context is incomplete", constants.ErrInvalidEvidenceGraph)
+		}
+		switch record.GetKind() {
+		case compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY,
+			compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION,
+			compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY,
+			compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY,
+			compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_CONFIGURATION,
+			compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES,
+			compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS:
+		default:
+			return nil, fmt.Errorf("%w: unavailable assessment context kind is unsupported", constants.ErrInvalidEvidenceGraph)
+		}
+		if _, exists := unavailable[record.GetKind()]; exists {
+			return nil, fmt.Errorf("%w: unavailable assessment context kind is duplicated", constants.ErrInvalidEvidenceGraph)
+		}
+		unavailable[record.GetKind()] = record.GetReason()
+	}
+	return unavailable, nil
+}
+
 func ValidateAssessmentScope(scope *compliancev1.AssessmentScope) error {
-	if scope == nil || scope.ScopeId == "" || scope.OrganizationId == "" || scope.DeploymentId == "" || scope.ProductVersion == "" || scope.BuildIdentity == "" || scope.SourceRevision == "" || scope.NetworkTopologyHash == "" || scope.CryptographicMode == "" || len(scope.ComponentInventory) == 0 || len(scope.ConfigurationHashes) == 0 || len(scope.DoctrineBundleHashes) == 0 || len(scope.TrustAnchorIds) == 0 || scope.Applicability == nil || scope.SelectedPopulation == nil || len(scope.SourceAdmissions) == 0 {
+	if scope == nil || scope.ScopeId == "" || scope.OrganizationId == "" || scope.DeploymentId == "" || scope.ProductVersion == "" || scope.CryptographicMode == "" || scope.Applicability == nil || scope.SelectedPopulation == nil || len(scope.SourceAdmissions) == 0 {
 		return fmt.Errorf("%w: assessment scope is incomplete", constants.ErrInvalidEvidenceGraph)
+	}
+	unavailable, err := validateUnavailableAssessmentContext(scope.GetUnavailableContext())
+	if err != nil {
+		return err
+	}
+	contextRequirements := []struct {
+		kind      compliancev1.AssessmentContextKind
+		name      string
+		available bool
+	}{
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY, name: "build identity", available: scope.GetBuildIdentity() != ""},
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION, name: "source revision", available: scope.GetSourceRevision() != ""},
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY, name: "component inventory", available: len(scope.GetComponentInventory()) > 0},
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY, name: "network topology", available: scope.GetNetworkTopologyHash() != ""},
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_CONFIGURATION, name: "configuration", available: len(scope.GetConfigurationHashes()) > 0},
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES, name: "doctrine bundles", available: len(scope.GetDoctrineBundleHashes()) > 0},
+		{kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS, name: "trust anchors", available: len(scope.GetTrustAnchorIds()) > 0},
+	}
+	for _, requirement := range contextRequirements {
+		_, declaredUnavailable := unavailable[requirement.kind]
+		if requirement.available == declaredUnavailable {
+			return fmt.Errorf("%w: assessment %s context must be available or explicitly unavailable", constants.ErrInvalidEvidenceGraph, requirement.name)
+		}
 	}
 	postureRequirements, postureValid := constants.GetGovernancePostureRequirements(scope.ActivePosture)
 	if !postureValid || postureRequirements.RequiresL2 && len(scope.ConsensusPolicyHashes) == 0 {
 		return fmt.Errorf("%w: assessment posture is invalid or missing required consensus policy", constants.ErrInvalidEvidenceGraph)
 	}
-	if err := validateSHA256(scope.NetworkTopologyHash); err != nil {
-		return err
+	if scope.GetNetworkTopologyHash() != "" {
+		if err := validateSHA256(scope.NetworkTopologyHash); err != nil {
+			return err
+		}
 	}
 	if scope.AssessmentWindowStart == nil || scope.AssessmentWindowEnd == nil || scope.AssessmentAsOf == nil || scope.AssessmentWindowStart.CheckValid() != nil || scope.AssessmentWindowEnd.CheckValid() != nil || scope.AssessmentAsOf.CheckValid() != nil || !scope.AssessmentWindowStart.AsTime().Before(scope.AssessmentWindowEnd.AsTime()) || scope.AssessmentAsOf.AsTime().Before(scope.AssessmentWindowStart.AsTime()) || scope.AssessmentAsOf.AsTime().After(scope.AssessmentWindowEnd.AsTime()) {
 		return fmt.Errorf("%w: assessment window is invalid", constants.ErrInvalidEvidenceGraph)

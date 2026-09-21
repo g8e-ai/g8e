@@ -21,6 +21,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference"
 	harnessclient "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -395,6 +396,13 @@ func releaseCampaignModels(
 	return nil
 }
 
+type campaignVerificationPublication interface {
+	PublishRunCompletion(context.Context, string, time.Time) (int, error)
+	PublishRunVerification(context.Context, string, *evalv1.EvaluationVerificationReport) (int, error)
+}
+
+type campaignVerificationPublicationFactory func(*cobra.Command, fs.RuntimeFileService) (campaignVerificationPublication, error)
+
 func verifyCampaignRun(
 	cmd *cobra.Command,
 	deps nativeEvalDeps,
@@ -454,7 +462,13 @@ func verifyCampaignRun(
 	if err := store.SaveCampaignVerification(cmd.Context(), runID, report); err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
 	}
-	publication, pubErr := newCampaignPublicationCoordinator(cmd, fileSvc)
+	publicationFactory := deps.campaignPublicationFactory
+	if publicationFactory == nil {
+		publicationFactory = func(cmd *cobra.Command, fileSvc fs.RuntimeFileService) (campaignVerificationPublication, error) {
+			return newCampaignPublicationCoordinator(cmd, fileSvc)
+		}
+	}
+	publication, pubErr := publicationFactory(cmd, fileSvc)
 	if pubErr != nil {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: campaign verify publication unavailable: %v\n", pubErr)
 	} else {

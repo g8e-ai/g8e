@@ -164,6 +164,22 @@ message AssessmentDiagnostic {
   string message = 5;
 }
 
+enum AssessmentContextKind {
+  ASSESSMENT_CONTEXT_KIND_UNSPECIFIED = 0;
+  ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY = 1;
+  ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION = 2;
+  ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY = 3;
+  ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY = 4;
+  ASSESSMENT_CONTEXT_KIND_CONFIGURATION = 5;
+  ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES = 6;
+  ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS = 7;
+}
+
+message UnavailableAssessmentContext {
+  AssessmentContextKind kind = 1;
+  string reason = 2;
+}
+
 message AssessmentScope {
   string scope_id = 1;
   string organization_id = 2;
@@ -188,6 +204,7 @@ message AssessmentScope {
   AssessmentApplicabilitySelection applicability = 21;
   AssessmentPopulationSelection selected_population = 22;
   google.protobuf.Timestamp assessment_as_of = 23;
+  repeated UnavailableAssessmentContext unavailable_context = 24;
 }
 
 message EvidenceEncryptionMetadata {

@@ -78,6 +78,70 @@ func (AssessmentWitnessPolicy) EnumDescriptor() ([]byte, []int) {
 	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{0}
 }
 
+type AssessmentContextKind int32
+
+const (
+	AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_UNSPECIFIED         AssessmentContextKind = 0
+	AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY      AssessmentContextKind = 1
+	AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION     AssessmentContextKind = 2
+	AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY AssessmentContextKind = 3
+	AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY    AssessmentContextKind = 4
+	AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_CONFIGURATION       AssessmentContextKind = 5
+	AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES    AssessmentContextKind = 6
+	AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS       AssessmentContextKind = 7
+)
+
+// Enum value maps for AssessmentContextKind.
+var (
+	AssessmentContextKind_name = map[int32]string{
+		0: "ASSESSMENT_CONTEXT_KIND_UNSPECIFIED",
+		1: "ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY",
+		2: "ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION",
+		3: "ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY",
+		4: "ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY",
+		5: "ASSESSMENT_CONTEXT_KIND_CONFIGURATION",
+		6: "ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES",
+		7: "ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS",
+	}
+	AssessmentContextKind_value = map[string]int32{
+		"ASSESSMENT_CONTEXT_KIND_UNSPECIFIED":         0,
+		"ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY":      1,
+		"ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION":     2,
+		"ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY": 3,
+		"ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY":    4,
+		"ASSESSMENT_CONTEXT_KIND_CONFIGURATION":       5,
+		"ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES":    6,
+		"ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS":       7,
+	}
+)
+
+func (x AssessmentContextKind) Enum() *AssessmentContextKind {
+	p := new(AssessmentContextKind)
+	*p = x
+	return p
+}
+
+func (x AssessmentContextKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AssessmentContextKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_g8e_compliance_v1_compliance_proto_enumTypes[1].Descriptor()
+}
+
+func (AssessmentContextKind) Type() protoreflect.EnumType {
+	return &file_g8e_compliance_v1_compliance_proto_enumTypes[1]
+}
+
+func (x AssessmentContextKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AssessmentContextKind.Descriptor instead.
+func (AssessmentContextKind) EnumDescriptor() ([]byte, []int) {
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{1}
+}
+
 type VerificationCheckStatus int32
 
 const (
@@ -111,11 +175,11 @@ func (x VerificationCheckStatus) String() string {
 }
 
 func (VerificationCheckStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_g8e_compliance_v1_compliance_proto_enumTypes[1].Descriptor()
+	return file_g8e_compliance_v1_compliance_proto_enumTypes[2].Descriptor()
 }
 
 func (VerificationCheckStatus) Type() protoreflect.EnumType {
-	return &file_g8e_compliance_v1_compliance_proto_enumTypes[1]
+	return &file_g8e_compliance_v1_compliance_proto_enumTypes[2]
 }
 
 func (x VerificationCheckStatus) Number() protoreflect.EnumNumber {
@@ -124,7 +188,7 @@ func (x VerificationCheckStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use VerificationCheckStatus.Descriptor instead.
 func (VerificationCheckStatus) EnumDescriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{1}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{2}
 }
 
 type VersionedReference struct {
@@ -1479,6 +1543,58 @@ func (x *AssessmentDiagnostic) GetMessage() string {
 	return ""
 }
 
+type UnavailableAssessmentContext struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kind          AssessmentContextKind  `protobuf:"varint,1,opt,name=kind,proto3,enum=g8e.compliance.v1.AssessmentContextKind" json:"kind,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnavailableAssessmentContext) Reset() {
+	*x = UnavailableAssessmentContext{}
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnavailableAssessmentContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnavailableAssessmentContext) ProtoMessage() {}
+
+func (x *UnavailableAssessmentContext) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnavailableAssessmentContext.ProtoReflect.Descriptor instead.
+func (*UnavailableAssessmentContext) Descriptor() ([]byte, []int) {
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *UnavailableAssessmentContext) GetKind() AssessmentContextKind {
+	if x != nil {
+		return x.Kind
+	}
+	return AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_UNSPECIFIED
+}
+
+func (x *UnavailableAssessmentContext) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 type AssessmentScope struct {
 	state                    protoimpl.MessageState            `protogen:"open.v1"`
 	ScopeId                  string                            `protobuf:"bytes,1,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty"`
@@ -1504,13 +1620,14 @@ type AssessmentScope struct {
 	Applicability            *AssessmentApplicabilitySelection `protobuf:"bytes,21,opt,name=applicability,proto3" json:"applicability,omitempty"`
 	SelectedPopulation       *AssessmentPopulationSelection    `protobuf:"bytes,22,opt,name=selected_population,json=selectedPopulation,proto3" json:"selected_population,omitempty"`
 	AssessmentAsOf           *timestamppb.Timestamp            `protobuf:"bytes,23,opt,name=assessment_as_of,json=assessmentAsOf,proto3" json:"assessment_as_of,omitempty"`
+	UnavailableContext       []*UnavailableAssessmentContext   `protobuf:"bytes,24,rep,name=unavailable_context,json=unavailableContext,proto3" json:"unavailable_context,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
 
 func (x *AssessmentScope) Reset() {
 	*x = AssessmentScope{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[16]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1522,7 +1639,7 @@ func (x *AssessmentScope) String() string {
 func (*AssessmentScope) ProtoMessage() {}
 
 func (x *AssessmentScope) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[16]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1535,7 +1652,7 @@ func (x *AssessmentScope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssessmentScope.ProtoReflect.Descriptor instead.
 func (*AssessmentScope) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{16}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *AssessmentScope) GetScopeId() string {
@@ -1699,6 +1816,13 @@ func (x *AssessmentScope) GetAssessmentAsOf() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *AssessmentScope) GetUnavailableContext() []*UnavailableAssessmentContext {
+	if x != nil {
+		return x.UnavailableContext
+	}
+	return nil
+}
+
 type EvidenceEncryptionMetadata struct {
 	state                       protoimpl.MessageState `protogen:"open.v1"`
 	Algorithm                   string                 `protobuf:"bytes,1,opt,name=algorithm,proto3" json:"algorithm,omitempty"`
@@ -1712,7 +1836,7 @@ type EvidenceEncryptionMetadata struct {
 
 func (x *EvidenceEncryptionMetadata) Reset() {
 	*x = EvidenceEncryptionMetadata{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[17]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1724,7 +1848,7 @@ func (x *EvidenceEncryptionMetadata) String() string {
 func (*EvidenceEncryptionMetadata) ProtoMessage() {}
 
 func (x *EvidenceEncryptionMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[17]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1737,7 +1861,7 @@ func (x *EvidenceEncryptionMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvidenceEncryptionMetadata.ProtoReflect.Descriptor instead.
 func (*EvidenceEncryptionMetadata) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{17}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *EvidenceEncryptionMetadata) GetAlgorithm() string {
@@ -1802,7 +1926,7 @@ type ComplianceEvidenceReference struct {
 
 func (x *ComplianceEvidenceReference) Reset() {
 	*x = ComplianceEvidenceReference{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[18]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1814,7 +1938,7 @@ func (x *ComplianceEvidenceReference) String() string {
 func (*ComplianceEvidenceReference) ProtoMessage() {}
 
 func (x *ComplianceEvidenceReference) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[18]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1827,7 +1951,7 @@ func (x *ComplianceEvidenceReference) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceEvidenceReference.ProtoReflect.Descriptor instead.
 func (*ComplianceEvidenceReference) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{18}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ComplianceEvidenceReference) GetArtifactId() string {
@@ -1985,7 +2109,7 @@ type ControlAssertionAssessment struct {
 
 func (x *ControlAssertionAssessment) Reset() {
 	*x = ControlAssertionAssessment{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[19]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1997,7 +2121,7 @@ func (x *ControlAssertionAssessment) String() string {
 func (*ControlAssertionAssessment) ProtoMessage() {}
 
 func (x *ControlAssertionAssessment) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[19]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2010,7 +2134,7 @@ func (x *ControlAssertionAssessment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ControlAssertionAssessment.ProtoReflect.Descriptor instead.
 func (*ControlAssertionAssessment) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{19}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ControlAssertionAssessment) GetAssessmentId() string {
@@ -2132,7 +2256,7 @@ type FrameworkControlAssessment struct {
 
 func (x *FrameworkControlAssessment) Reset() {
 	*x = FrameworkControlAssessment{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[20]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2144,7 +2268,7 @@ func (x *FrameworkControlAssessment) String() string {
 func (*FrameworkControlAssessment) ProtoMessage() {}
 
 func (x *FrameworkControlAssessment) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[20]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2157,7 +2281,7 @@ func (x *FrameworkControlAssessment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrameworkControlAssessment.ProtoReflect.Descriptor instead.
 func (*FrameworkControlAssessment) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{20}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *FrameworkControlAssessment) GetAssessmentId() string {
@@ -2261,7 +2385,7 @@ type ChecksumEntry struct {
 
 func (x *ChecksumEntry) Reset() {
 	*x = ChecksumEntry{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[21]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2273,7 +2397,7 @@ func (x *ChecksumEntry) String() string {
 func (*ChecksumEntry) ProtoMessage() {}
 
 func (x *ChecksumEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[21]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2286,7 +2410,7 @@ func (x *ChecksumEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChecksumEntry.ProtoReflect.Descriptor instead.
 func (*ChecksumEntry) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{21}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ChecksumEntry) GetBundlePath() string {
@@ -2315,7 +2439,7 @@ type ReportSignature struct {
 
 func (x *ReportSignature) Reset() {
 	*x = ReportSignature{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[22]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2327,7 +2451,7 @@ func (x *ReportSignature) String() string {
 func (*ReportSignature) ProtoMessage() {}
 
 func (x *ReportSignature) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[22]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2340,7 +2464,7 @@ func (x *ReportSignature) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportSignature.ProtoReflect.Descriptor instead.
 func (*ReportSignature) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{22}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ReportSignature) GetKeyId() string {
@@ -2385,7 +2509,7 @@ type ComplianceReportSigningKeyMetadata struct {
 
 func (x *ComplianceReportSigningKeyMetadata) Reset() {
 	*x = ComplianceReportSigningKeyMetadata{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[23]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2397,7 +2521,7 @@ func (x *ComplianceReportSigningKeyMetadata) String() string {
 func (*ComplianceReportSigningKeyMetadata) ProtoMessage() {}
 
 func (x *ComplianceReportSigningKeyMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[23]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2410,7 +2534,7 @@ func (x *ComplianceReportSigningKeyMetadata) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ComplianceReportSigningKeyMetadata.ProtoReflect.Descriptor instead.
 func (*ComplianceReportSigningKeyMetadata) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{23}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ComplianceReportSigningKeyMetadata) GetKeyId() string {
@@ -2470,7 +2594,7 @@ type ComplianceReportTrustedKey struct {
 
 func (x *ComplianceReportTrustedKey) Reset() {
 	*x = ComplianceReportTrustedKey{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[24]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2482,7 +2606,7 @@ func (x *ComplianceReportTrustedKey) String() string {
 func (*ComplianceReportTrustedKey) ProtoMessage() {}
 
 func (x *ComplianceReportTrustedKey) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[24]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2495,7 +2619,7 @@ func (x *ComplianceReportTrustedKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceReportTrustedKey.ProtoReflect.Descriptor instead.
 func (*ComplianceReportTrustedKey) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{24}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ComplianceReportTrustedKey) GetMetadata() *ComplianceReportSigningKeyMetadata {
@@ -2558,7 +2682,7 @@ type ComplianceReportTrustPolicy struct {
 
 func (x *ComplianceReportTrustPolicy) Reset() {
 	*x = ComplianceReportTrustPolicy{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[25]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2570,7 +2694,7 @@ func (x *ComplianceReportTrustPolicy) String() string {
 func (*ComplianceReportTrustPolicy) ProtoMessage() {}
 
 func (x *ComplianceReportTrustPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[25]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2583,7 +2707,7 @@ func (x *ComplianceReportTrustPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceReportTrustPolicy.ProtoReflect.Descriptor instead.
 func (*ComplianceReportTrustPolicy) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{25}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ComplianceReportTrustPolicy) GetPolicyId() string {
@@ -2625,7 +2749,7 @@ type ComplianceEvidenceTrustedKey struct {
 
 func (x *ComplianceEvidenceTrustedKey) Reset() {
 	*x = ComplianceEvidenceTrustedKey{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[26]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2637,7 +2761,7 @@ func (x *ComplianceEvidenceTrustedKey) String() string {
 func (*ComplianceEvidenceTrustedKey) ProtoMessage() {}
 
 func (x *ComplianceEvidenceTrustedKey) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[26]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2650,7 +2774,7 @@ func (x *ComplianceEvidenceTrustedKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceEvidenceTrustedKey.ProtoReflect.Descriptor instead.
 func (*ComplianceEvidenceTrustedKey) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{26}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ComplianceEvidenceTrustedKey) GetKeyId() string {
@@ -2734,7 +2858,7 @@ type ComplianceEvidenceTrustPolicy struct {
 
 func (x *ComplianceEvidenceTrustPolicy) Reset() {
 	*x = ComplianceEvidenceTrustPolicy{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[27]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2746,7 +2870,7 @@ func (x *ComplianceEvidenceTrustPolicy) String() string {
 func (*ComplianceEvidenceTrustPolicy) ProtoMessage() {}
 
 func (x *ComplianceEvidenceTrustPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[27]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2759,7 +2883,7 @@ func (x *ComplianceEvidenceTrustPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceEvidenceTrustPolicy.ProtoReflect.Descriptor instead.
 func (*ComplianceEvidenceTrustPolicy) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{27}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ComplianceEvidenceTrustPolicy) GetPolicyId() string {
@@ -2806,7 +2930,7 @@ type ComplianceReportManifest struct {
 
 func (x *ComplianceReportManifest) Reset() {
 	*x = ComplianceReportManifest{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[28]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2818,7 +2942,7 @@ func (x *ComplianceReportManifest) String() string {
 func (*ComplianceReportManifest) ProtoMessage() {}
 
 func (x *ComplianceReportManifest) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[28]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2831,7 +2955,7 @@ func (x *ComplianceReportManifest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceReportManifest.ProtoReflect.Descriptor instead.
 func (*ComplianceReportManifest) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{28}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ComplianceReportManifest) GetReportId() string {
@@ -2953,7 +3077,7 @@ type BundleArtifact struct {
 
 func (x *BundleArtifact) Reset() {
 	*x = BundleArtifact{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[29]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2965,7 +3089,7 @@ func (x *BundleArtifact) String() string {
 func (*BundleArtifact) ProtoMessage() {}
 
 func (x *BundleArtifact) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[29]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2978,7 +3102,7 @@ func (x *BundleArtifact) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BundleArtifact.ProtoReflect.Descriptor instead.
 func (*BundleArtifact) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{29}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *BundleArtifact) GetBundlePath() string {
@@ -3034,7 +3158,7 @@ type RenderedFormatEntry struct {
 
 func (x *RenderedFormatEntry) Reset() {
 	*x = RenderedFormatEntry{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[30]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3046,7 +3170,7 @@ func (x *RenderedFormatEntry) String() string {
 func (*RenderedFormatEntry) ProtoMessage() {}
 
 func (x *RenderedFormatEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[30]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3059,7 +3183,7 @@ func (x *RenderedFormatEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenderedFormatEntry.ProtoReflect.Descriptor instead.
 func (*RenderedFormatEntry) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{30}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RenderedFormatEntry) GetFormat() string {
@@ -3098,7 +3222,7 @@ type ComplianceReportBundle struct {
 
 func (x *ComplianceReportBundle) Reset() {
 	*x = ComplianceReportBundle{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[31]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3110,7 +3234,7 @@ func (x *ComplianceReportBundle) String() string {
 func (*ComplianceReportBundle) ProtoMessage() {}
 
 func (x *ComplianceReportBundle) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[31]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3123,7 +3247,7 @@ func (x *ComplianceReportBundle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceReportBundle.ProtoReflect.Descriptor instead.
 func (*ComplianceReportBundle) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{31}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ComplianceReportBundle) GetManifest() *ComplianceReportManifest {
@@ -3186,7 +3310,7 @@ type VerificationFailure struct {
 
 func (x *VerificationFailure) Reset() {
 	*x = VerificationFailure{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[32]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3198,7 +3322,7 @@ func (x *VerificationFailure) String() string {
 func (*VerificationFailure) ProtoMessage() {}
 
 func (x *VerificationFailure) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[32]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3211,7 +3335,7 @@ func (x *VerificationFailure) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerificationFailure.ProtoReflect.Descriptor instead.
 func (*VerificationFailure) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{32}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *VerificationFailure) GetCode() string {
@@ -3249,7 +3373,7 @@ type VerificationCheckResult struct {
 
 func (x *VerificationCheckResult) Reset() {
 	*x = VerificationCheckResult{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[33]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3261,7 +3385,7 @@ func (x *VerificationCheckResult) String() string {
 func (*VerificationCheckResult) ProtoMessage() {}
 
 func (x *VerificationCheckResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[33]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3274,7 +3398,7 @@ func (x *VerificationCheckResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerificationCheckResult.ProtoReflect.Descriptor instead.
 func (*VerificationCheckResult) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{33}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *VerificationCheckResult) GetCheckId() string {
@@ -3335,7 +3459,7 @@ type ComplianceVerificationReport struct {
 
 func (x *ComplianceVerificationReport) Reset() {
 	*x = ComplianceVerificationReport{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[34]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3347,7 +3471,7 @@ func (x *ComplianceVerificationReport) String() string {
 func (*ComplianceVerificationReport) ProtoMessage() {}
 
 func (x *ComplianceVerificationReport) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[34]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3360,7 +3484,7 @@ func (x *ComplianceVerificationReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceVerificationReport.ProtoReflect.Descriptor instead.
 func (*ComplianceVerificationReport) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{34}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ComplianceVerificationReport) GetReportId() string {
@@ -3431,7 +3555,7 @@ type OSCALValidatorIdentity struct {
 
 func (x *OSCALValidatorIdentity) Reset() {
 	*x = OSCALValidatorIdentity{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[35]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3443,7 +3567,7 @@ func (x *OSCALValidatorIdentity) String() string {
 func (*OSCALValidatorIdentity) ProtoMessage() {}
 
 func (x *OSCALValidatorIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[35]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3456,7 +3580,7 @@ func (x *OSCALValidatorIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OSCALValidatorIdentity.ProtoReflect.Descriptor instead.
 func (*OSCALValidatorIdentity) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{35}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *OSCALValidatorIdentity) GetValidatorId() string {
@@ -3500,7 +3624,7 @@ type OSCALValidationFailure struct {
 
 func (x *OSCALValidationFailure) Reset() {
 	*x = OSCALValidationFailure{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[36]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3512,7 +3636,7 @@ func (x *OSCALValidationFailure) String() string {
 func (*OSCALValidationFailure) ProtoMessage() {}
 
 func (x *OSCALValidationFailure) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[36]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3525,7 +3649,7 @@ func (x *OSCALValidationFailure) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OSCALValidationFailure.ProtoReflect.Descriptor instead.
 func (*OSCALValidationFailure) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{36}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *OSCALValidationFailure) GetCode() string {
@@ -3575,7 +3699,7 @@ type OSCALValidationResult struct {
 
 func (x *OSCALValidationResult) Reset() {
 	*x = OSCALValidationResult{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[37]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3587,7 +3711,7 @@ func (x *OSCALValidationResult) String() string {
 func (*OSCALValidationResult) ProtoMessage() {}
 
 func (x *OSCALValidationResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[37]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3600,7 +3724,7 @@ func (x *OSCALValidationResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OSCALValidationResult.ProtoReflect.Descriptor instead.
 func (*OSCALValidationResult) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{37}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *OSCALValidationResult) GetValidator() *OSCALValidatorIdentity {
@@ -3647,7 +3771,7 @@ type EvidenceWindowCompleteness struct {
 
 func (x *EvidenceWindowCompleteness) Reset() {
 	*x = EvidenceWindowCompleteness{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[38]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3659,7 +3783,7 @@ func (x *EvidenceWindowCompleteness) String() string {
 func (*EvidenceWindowCompleteness) ProtoMessage() {}
 
 func (x *EvidenceWindowCompleteness) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[38]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3672,7 +3796,7 @@ func (x *EvidenceWindowCompleteness) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvidenceWindowCompleteness.ProtoReflect.Descriptor instead.
 func (*EvidenceWindowCompleteness) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{38}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *EvidenceWindowCompleteness) GetScopeId() string {
@@ -3746,7 +3870,7 @@ type ComplianceGap struct {
 
 func (x *ComplianceGap) Reset() {
 	*x = ComplianceGap{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[39]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3758,7 +3882,7 @@ func (x *ComplianceGap) String() string {
 func (*ComplianceGap) ProtoMessage() {}
 
 func (x *ComplianceGap) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[39]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3771,7 +3895,7 @@ func (x *ComplianceGap) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceGap.ProtoReflect.Descriptor instead.
 func (*ComplianceGap) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{39}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ComplianceGap) GetGapId() string {
@@ -3834,7 +3958,7 @@ type EvidenceLink struct {
 
 func (x *EvidenceLink) Reset() {
 	*x = EvidenceLink{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[40]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3846,7 +3970,7 @@ func (x *EvidenceLink) String() string {
 func (*EvidenceLink) ProtoMessage() {}
 
 func (x *EvidenceLink) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[40]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3859,7 +3983,7 @@ func (x *EvidenceLink) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvidenceLink.ProtoReflect.Descriptor instead.
 func (*EvidenceLink) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{40}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *EvidenceLink) GetSourceRef() string {
@@ -3897,7 +4021,7 @@ type ComplianceFinding struct {
 
 func (x *ComplianceFinding) Reset() {
 	*x = ComplianceFinding{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[41]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3909,7 +4033,7 @@ func (x *ComplianceFinding) String() string {
 func (*ComplianceFinding) ProtoMessage() {}
 
 func (x *ComplianceFinding) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[41]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3922,7 +4046,7 @@ func (x *ComplianceFinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceFinding.ProtoReflect.Descriptor instead.
 func (*ComplianceFinding) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{41}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ComplianceFinding) GetFindingId() string {
@@ -3980,7 +4104,7 @@ type ComplianceRemediation struct {
 
 func (x *ComplianceRemediation) Reset() {
 	*x = ComplianceRemediation{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[42]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3992,7 +4116,7 @@ func (x *ComplianceRemediation) String() string {
 func (*ComplianceRemediation) ProtoMessage() {}
 
 func (x *ComplianceRemediation) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[42]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4005,7 +4129,7 @@ func (x *ComplianceRemediation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceRemediation.ProtoReflect.Descriptor instead.
 func (*ComplianceRemediation) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{42}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ComplianceRemediation) GetRemediationId() string {
@@ -4058,7 +4182,7 @@ type ControlSection struct {
 
 func (x *ControlSection) Reset() {
 	*x = ControlSection{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[43]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4070,7 +4194,7 @@ func (x *ControlSection) String() string {
 func (*ControlSection) ProtoMessage() {}
 
 func (x *ControlSection) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[43]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4083,7 +4207,7 @@ func (x *ControlSection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ControlSection.ProtoReflect.Descriptor instead.
 func (*ControlSection) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{43}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ControlSection) GetSectionId() string {
@@ -4163,7 +4287,7 @@ type ComplianceAnalysis struct {
 
 func (x *ComplianceAnalysis) Reset() {
 	*x = ComplianceAnalysis{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[44]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4175,7 +4299,7 @@ func (x *ComplianceAnalysis) String() string {
 func (*ComplianceAnalysis) ProtoMessage() {}
 
 func (x *ComplianceAnalysis) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[44]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4188,7 +4312,7 @@ func (x *ComplianceAnalysis) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceAnalysis.ProtoReflect.Descriptor instead.
 func (*ComplianceAnalysis) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{44}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ComplianceAnalysis) GetAnalysisId() string {
@@ -4346,7 +4470,7 @@ type FrameworkProfile struct {
 
 func (x *FrameworkProfile) Reset() {
 	*x = FrameworkProfile{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[45]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4358,7 +4482,7 @@ func (x *FrameworkProfile) String() string {
 func (*FrameworkProfile) ProtoMessage() {}
 
 func (x *FrameworkProfile) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[45]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4371,7 +4495,7 @@ func (x *FrameworkProfile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrameworkProfile.ProtoReflect.Descriptor instead.
 func (*FrameworkProfile) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{45}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *FrameworkProfile) GetProfileId() string {
@@ -4433,7 +4557,7 @@ type FrameworkControlReference struct {
 
 func (x *FrameworkControlReference) Reset() {
 	*x = FrameworkControlReference{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[46]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4445,7 +4569,7 @@ func (x *FrameworkControlReference) String() string {
 func (*FrameworkControlReference) ProtoMessage() {}
 
 func (x *FrameworkControlReference) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[46]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4458,7 +4582,7 @@ func (x *FrameworkControlReference) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrameworkControlReference.ProtoReflect.Descriptor instead.
 func (*FrameworkControlReference) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{46}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *FrameworkControlReference) GetFrameworkRef() *VersionedReference {
@@ -4493,7 +4617,7 @@ type DemoManifest struct {
 
 func (x *DemoManifest) Reset() {
 	*x = DemoManifest{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[47]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4505,7 +4629,7 @@ func (x *DemoManifest) String() string {
 func (*DemoManifest) ProtoMessage() {}
 
 func (x *DemoManifest) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[47]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4518,7 +4642,7 @@ func (x *DemoManifest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DemoManifest.ProtoReflect.Descriptor instead.
 func (*DemoManifest) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{47}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *DemoManifest) GetDemoId() string {
@@ -4619,7 +4743,7 @@ type DemoScenarioDefinition struct {
 
 func (x *DemoScenarioDefinition) Reset() {
 	*x = DemoScenarioDefinition{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[48]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4631,7 +4755,7 @@ func (x *DemoScenarioDefinition) String() string {
 func (*DemoScenarioDefinition) ProtoMessage() {}
 
 func (x *DemoScenarioDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[48]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4644,7 +4768,7 @@ func (x *DemoScenarioDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DemoScenarioDefinition.ProtoReflect.Descriptor instead.
 func (*DemoScenarioDefinition) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{48}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *DemoScenarioDefinition) GetScenarioId() string {
@@ -4805,7 +4929,7 @@ type DemoStepResult struct {
 
 func (x *DemoStepResult) Reset() {
 	*x = DemoStepResult{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[49]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4817,7 +4941,7 @@ func (x *DemoStepResult) String() string {
 func (*DemoStepResult) ProtoMessage() {}
 
 func (x *DemoStepResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[49]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4830,7 +4954,7 @@ func (x *DemoStepResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DemoStepResult.ProtoReflect.Descriptor instead.
 func (*DemoStepResult) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{49}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *DemoStepResult) GetStepId() string {
@@ -4937,7 +5061,7 @@ type DemoScenarioResult struct {
 
 func (x *DemoScenarioResult) Reset() {
 	*x = DemoScenarioResult{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[50]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4949,7 +5073,7 @@ func (x *DemoScenarioResult) String() string {
 func (*DemoScenarioResult) ProtoMessage() {}
 
 func (x *DemoScenarioResult) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[50]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4962,7 +5086,7 @@ func (x *DemoScenarioResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DemoScenarioResult.ProtoReflect.Descriptor instead.
 func (*DemoScenarioResult) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{50}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *DemoScenarioResult) GetResultId() string {
@@ -5169,7 +5293,7 @@ type DemoMetricEvidence struct {
 
 func (x *DemoMetricEvidence) Reset() {
 	*x = DemoMetricEvidence{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[51]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5181,7 +5305,7 @@ func (x *DemoMetricEvidence) String() string {
 func (*DemoMetricEvidence) ProtoMessage() {}
 
 func (x *DemoMetricEvidence) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[51]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5194,7 +5318,7 @@ func (x *DemoMetricEvidence) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DemoMetricEvidence.ProtoReflect.Descriptor instead.
 func (*DemoMetricEvidence) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{51}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *DemoMetricEvidence) GetMetricId() string {
@@ -5307,7 +5431,7 @@ type DemoScenarioCatalog struct {
 
 func (x *DemoScenarioCatalog) Reset() {
 	*x = DemoScenarioCatalog{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[52]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5319,7 +5443,7 @@ func (x *DemoScenarioCatalog) String() string {
 func (*DemoScenarioCatalog) ProtoMessage() {}
 
 func (x *DemoScenarioCatalog) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[52]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5332,7 +5456,7 @@ func (x *DemoScenarioCatalog) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DemoScenarioCatalog.ProtoReflect.Descriptor instead.
 func (*DemoScenarioCatalog) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{52}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *DemoScenarioCatalog) GetCatalogId() string {
@@ -5501,7 +5625,10 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\bseverity\x18\x02 \x01(\tR\bseverity\x12.\n" +
 	"\x13source_admission_id\x18\x03 \x01(\tR\x11sourceAdmissionId\x12G\n" +
 	"\asubject\x18\x04 \x01(\v2-.g8e.compliance.v1.AssessmentSubjectSelectionR\asubject\x12\x18\n" +
-	"\amessage\x18\x05 \x01(\tR\amessage\"\xbb\v\n" +
+	"\amessage\x18\x05 \x01(\tR\amessage\"t\n" +
+	"\x1cUnavailableAssessmentContext\x12<\n" +
+	"\x04kind\x18\x01 \x01(\x0e2(.g8e.compliance.v1.AssessmentContextKindR\x04kind\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\x9d\f\n" +
 	"\x0fAssessmentScope\x12\x19\n" +
 	"\bscope_id\x18\x01 \x01(\tR\ascopeId\x12'\n" +
 	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12#\n" +
@@ -5526,7 +5653,8 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\x11source_admissions\x18\x14 \x03(\v2,.g8e.compliance.v1.AssessmentSourceAdmissionR\x10sourceAdmissions\x12Y\n" +
 	"\rapplicability\x18\x15 \x01(\v23.g8e.compliance.v1.AssessmentApplicabilitySelectionR\rapplicability\x12a\n" +
 	"\x13selected_population\x18\x16 \x01(\v20.g8e.compliance.v1.AssessmentPopulationSelectionR\x12selectedPopulation\x12D\n" +
-	"\x10assessment_as_of\x18\x17 \x01(\v2\x1a.google.protobuf.TimestampR\x0eassessmentAsOf\"\xf1\x01\n" +
+	"\x10assessment_as_of\x18\x17 \x01(\v2\x1a.google.protobuf.TimestampR\x0eassessmentAsOf\x12`\n" +
+	"\x13unavailable_context\x18\x18 \x03(\v2/.g8e.compliance.v1.UnavailableAssessmentContextR\x12unavailableContext\"\xf1\x01\n" +
 	"\x1aEvidenceEncryptionMetadata\x12\x1c\n" +
 	"\talgorithm\x18\x01 \x01(\tR\talgorithm\x12\x15\n" +
 	"\x06key_id\x18\x02 \x01(\tR\x05keyId\x12/\n" +
@@ -5930,7 +6058,16 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\x17AssessmentWitnessPolicy\x12)\n" +
 	"%ASSESSMENT_WITNESS_POLICY_UNSPECIFIED\x10\x00\x12%\n" +
 	"!ASSESSMENT_WITNESS_POLICY_INTERIM\x10\x01\x12$\n" +
-	" ASSESSMENT_WITNESS_POLICY_STRICT\x10\x02*\x90\x01\n" +
+	" ASSESSMENT_WITNESS_POLICY_STRICT\x10\x02*\xfc\x02\n" +
+	"\x15AssessmentContextKind\x12'\n" +
+	"#ASSESSMENT_CONTEXT_KIND_UNSPECIFIED\x10\x00\x12*\n" +
+	"&ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY\x10\x01\x12+\n" +
+	"'ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION\x10\x02\x12/\n" +
+	"+ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY\x10\x03\x12,\n" +
+	"(ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY\x10\x04\x12)\n" +
+	"%ASSESSMENT_CONTEXT_KIND_CONFIGURATION\x10\x05\x12,\n" +
+	"(ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES\x10\x06\x12)\n" +
+	"%ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS\x10\a*\x90\x01\n" +
 	"\x17VerificationCheckStatus\x12)\n" +
 	"%VERIFICATION_CHECK_STATUS_UNSPECIFIED\x10\x00\x12$\n" +
 	" VERIFICATION_CHECK_STATUS_PASSED\x10\x01\x12$\n" +
@@ -5948,170 +6085,174 @@ func file_g8e_compliance_v1_compliance_proto_rawDescGZIP() []byte {
 	return file_g8e_compliance_v1_compliance_proto_rawDescData
 }
 
-var file_g8e_compliance_v1_compliance_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_g8e_compliance_v1_compliance_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
+var file_g8e_compliance_v1_compliance_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_g8e_compliance_v1_compliance_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
 var file_g8e_compliance_v1_compliance_proto_goTypes = []any{
 	(AssessmentWitnessPolicy)(0),               // 0: g8e.compliance.v1.AssessmentWitnessPolicy
-	(VerificationCheckStatus)(0),               // 1: g8e.compliance.v1.VerificationCheckStatus
-	(*VersionedReference)(nil),                 // 2: g8e.compliance.v1.VersionedReference
-	(*NamedDigest)(nil),                        // 3: g8e.compliance.v1.NamedDigest
-	(*ControlAssertionDefinition)(nil),         // 4: g8e.compliance.v1.ControlAssertionDefinition
-	(*ControlAssertionCatalog)(nil),            // 5: g8e.compliance.v1.ControlAssertionCatalog
-	(*FrameworkControlDefinition)(nil),         // 6: g8e.compliance.v1.FrameworkControlDefinition
-	(*FrameworkDefinition)(nil),                // 7: g8e.compliance.v1.FrameworkDefinition
-	(*FrameworkCatalog)(nil),                   // 8: g8e.compliance.v1.FrameworkCatalog
-	(*ControlCrosswalk)(nil),                   // 9: g8e.compliance.v1.ControlCrosswalk
-	(*ControlCrosswalkCatalog)(nil),            // 10: g8e.compliance.v1.ControlCrosswalkCatalog
-	(*ComponentInventoryEntry)(nil),            // 11: g8e.compliance.v1.ComponentInventoryEntry
-	(*AssessmentSourceAdmission)(nil),          // 12: g8e.compliance.v1.AssessmentSourceAdmission
-	(*AssessmentApplicabilitySelection)(nil),   // 13: g8e.compliance.v1.AssessmentApplicabilitySelection
-	(*AssessmentSubjectSelection)(nil),         // 14: g8e.compliance.v1.AssessmentSubjectSelection
-	(*AssessmentPopulationSelection)(nil),      // 15: g8e.compliance.v1.AssessmentPopulationSelection
-	(*AssessmentCoverage)(nil),                 // 16: g8e.compliance.v1.AssessmentCoverage
-	(*AssessmentDiagnostic)(nil),               // 17: g8e.compliance.v1.AssessmentDiagnostic
-	(*AssessmentScope)(nil),                    // 18: g8e.compliance.v1.AssessmentScope
-	(*EvidenceEncryptionMetadata)(nil),         // 19: g8e.compliance.v1.EvidenceEncryptionMetadata
-	(*ComplianceEvidenceReference)(nil),        // 20: g8e.compliance.v1.ComplianceEvidenceReference
-	(*ControlAssertionAssessment)(nil),         // 21: g8e.compliance.v1.ControlAssertionAssessment
-	(*FrameworkControlAssessment)(nil),         // 22: g8e.compliance.v1.FrameworkControlAssessment
-	(*ChecksumEntry)(nil),                      // 23: g8e.compliance.v1.ChecksumEntry
-	(*ReportSignature)(nil),                    // 24: g8e.compliance.v1.ReportSignature
-	(*ComplianceReportSigningKeyMetadata)(nil), // 25: g8e.compliance.v1.ComplianceReportSigningKeyMetadata
-	(*ComplianceReportTrustedKey)(nil),         // 26: g8e.compliance.v1.ComplianceReportTrustedKey
-	(*ComplianceReportTrustPolicy)(nil),        // 27: g8e.compliance.v1.ComplianceReportTrustPolicy
-	(*ComplianceEvidenceTrustedKey)(nil),       // 28: g8e.compliance.v1.ComplianceEvidenceTrustedKey
-	(*ComplianceEvidenceTrustPolicy)(nil),      // 29: g8e.compliance.v1.ComplianceEvidenceTrustPolicy
-	(*ComplianceReportManifest)(nil),           // 30: g8e.compliance.v1.ComplianceReportManifest
-	(*BundleArtifact)(nil),                     // 31: g8e.compliance.v1.BundleArtifact
-	(*RenderedFormatEntry)(nil),                // 32: g8e.compliance.v1.RenderedFormatEntry
-	(*ComplianceReportBundle)(nil),             // 33: g8e.compliance.v1.ComplianceReportBundle
-	(*VerificationFailure)(nil),                // 34: g8e.compliance.v1.VerificationFailure
-	(*VerificationCheckResult)(nil),            // 35: g8e.compliance.v1.VerificationCheckResult
-	(*ComplianceVerificationReport)(nil),       // 36: g8e.compliance.v1.ComplianceVerificationReport
-	(*OSCALValidatorIdentity)(nil),             // 37: g8e.compliance.v1.OSCALValidatorIdentity
-	(*OSCALValidationFailure)(nil),             // 38: g8e.compliance.v1.OSCALValidationFailure
-	(*OSCALValidationResult)(nil),              // 39: g8e.compliance.v1.OSCALValidationResult
-	(*EvidenceWindowCompleteness)(nil),         // 40: g8e.compliance.v1.EvidenceWindowCompleteness
-	(*ComplianceGap)(nil),                      // 41: g8e.compliance.v1.ComplianceGap
-	(*EvidenceLink)(nil),                       // 42: g8e.compliance.v1.EvidenceLink
-	(*ComplianceFinding)(nil),                  // 43: g8e.compliance.v1.ComplianceFinding
-	(*ComplianceRemediation)(nil),              // 44: g8e.compliance.v1.ComplianceRemediation
-	(*ControlSection)(nil),                     // 45: g8e.compliance.v1.ControlSection
-	(*ComplianceAnalysis)(nil),                 // 46: g8e.compliance.v1.ComplianceAnalysis
-	(*FrameworkProfile)(nil),                   // 47: g8e.compliance.v1.FrameworkProfile
-	(*FrameworkControlReference)(nil),          // 48: g8e.compliance.v1.FrameworkControlReference
-	(*DemoManifest)(nil),                       // 49: g8e.compliance.v1.DemoManifest
-	(*DemoScenarioDefinition)(nil),             // 50: g8e.compliance.v1.DemoScenarioDefinition
-	(*DemoStepResult)(nil),                     // 51: g8e.compliance.v1.DemoStepResult
-	(*DemoScenarioResult)(nil),                 // 52: g8e.compliance.v1.DemoScenarioResult
-	(*DemoMetricEvidence)(nil),                 // 53: g8e.compliance.v1.DemoMetricEvidence
-	(*DemoScenarioCatalog)(nil),                // 54: g8e.compliance.v1.DemoScenarioCatalog
-	(*timestamppb.Timestamp)(nil),              // 55: google.protobuf.Timestamp
+	(AssessmentContextKind)(0),                 // 1: g8e.compliance.v1.AssessmentContextKind
+	(VerificationCheckStatus)(0),               // 2: g8e.compliance.v1.VerificationCheckStatus
+	(*VersionedReference)(nil),                 // 3: g8e.compliance.v1.VersionedReference
+	(*NamedDigest)(nil),                        // 4: g8e.compliance.v1.NamedDigest
+	(*ControlAssertionDefinition)(nil),         // 5: g8e.compliance.v1.ControlAssertionDefinition
+	(*ControlAssertionCatalog)(nil),            // 6: g8e.compliance.v1.ControlAssertionCatalog
+	(*FrameworkControlDefinition)(nil),         // 7: g8e.compliance.v1.FrameworkControlDefinition
+	(*FrameworkDefinition)(nil),                // 8: g8e.compliance.v1.FrameworkDefinition
+	(*FrameworkCatalog)(nil),                   // 9: g8e.compliance.v1.FrameworkCatalog
+	(*ControlCrosswalk)(nil),                   // 10: g8e.compliance.v1.ControlCrosswalk
+	(*ControlCrosswalkCatalog)(nil),            // 11: g8e.compliance.v1.ControlCrosswalkCatalog
+	(*ComponentInventoryEntry)(nil),            // 12: g8e.compliance.v1.ComponentInventoryEntry
+	(*AssessmentSourceAdmission)(nil),          // 13: g8e.compliance.v1.AssessmentSourceAdmission
+	(*AssessmentApplicabilitySelection)(nil),   // 14: g8e.compliance.v1.AssessmentApplicabilitySelection
+	(*AssessmentSubjectSelection)(nil),         // 15: g8e.compliance.v1.AssessmentSubjectSelection
+	(*AssessmentPopulationSelection)(nil),      // 16: g8e.compliance.v1.AssessmentPopulationSelection
+	(*AssessmentCoverage)(nil),                 // 17: g8e.compliance.v1.AssessmentCoverage
+	(*AssessmentDiagnostic)(nil),               // 18: g8e.compliance.v1.AssessmentDiagnostic
+	(*UnavailableAssessmentContext)(nil),       // 19: g8e.compliance.v1.UnavailableAssessmentContext
+	(*AssessmentScope)(nil),                    // 20: g8e.compliance.v1.AssessmentScope
+	(*EvidenceEncryptionMetadata)(nil),         // 21: g8e.compliance.v1.EvidenceEncryptionMetadata
+	(*ComplianceEvidenceReference)(nil),        // 22: g8e.compliance.v1.ComplianceEvidenceReference
+	(*ControlAssertionAssessment)(nil),         // 23: g8e.compliance.v1.ControlAssertionAssessment
+	(*FrameworkControlAssessment)(nil),         // 24: g8e.compliance.v1.FrameworkControlAssessment
+	(*ChecksumEntry)(nil),                      // 25: g8e.compliance.v1.ChecksumEntry
+	(*ReportSignature)(nil),                    // 26: g8e.compliance.v1.ReportSignature
+	(*ComplianceReportSigningKeyMetadata)(nil), // 27: g8e.compliance.v1.ComplianceReportSigningKeyMetadata
+	(*ComplianceReportTrustedKey)(nil),         // 28: g8e.compliance.v1.ComplianceReportTrustedKey
+	(*ComplianceReportTrustPolicy)(nil),        // 29: g8e.compliance.v1.ComplianceReportTrustPolicy
+	(*ComplianceEvidenceTrustedKey)(nil),       // 30: g8e.compliance.v1.ComplianceEvidenceTrustedKey
+	(*ComplianceEvidenceTrustPolicy)(nil),      // 31: g8e.compliance.v1.ComplianceEvidenceTrustPolicy
+	(*ComplianceReportManifest)(nil),           // 32: g8e.compliance.v1.ComplianceReportManifest
+	(*BundleArtifact)(nil),                     // 33: g8e.compliance.v1.BundleArtifact
+	(*RenderedFormatEntry)(nil),                // 34: g8e.compliance.v1.RenderedFormatEntry
+	(*ComplianceReportBundle)(nil),             // 35: g8e.compliance.v1.ComplianceReportBundle
+	(*VerificationFailure)(nil),                // 36: g8e.compliance.v1.VerificationFailure
+	(*VerificationCheckResult)(nil),            // 37: g8e.compliance.v1.VerificationCheckResult
+	(*ComplianceVerificationReport)(nil),       // 38: g8e.compliance.v1.ComplianceVerificationReport
+	(*OSCALValidatorIdentity)(nil),             // 39: g8e.compliance.v1.OSCALValidatorIdentity
+	(*OSCALValidationFailure)(nil),             // 40: g8e.compliance.v1.OSCALValidationFailure
+	(*OSCALValidationResult)(nil),              // 41: g8e.compliance.v1.OSCALValidationResult
+	(*EvidenceWindowCompleteness)(nil),         // 42: g8e.compliance.v1.EvidenceWindowCompleteness
+	(*ComplianceGap)(nil),                      // 43: g8e.compliance.v1.ComplianceGap
+	(*EvidenceLink)(nil),                       // 44: g8e.compliance.v1.EvidenceLink
+	(*ComplianceFinding)(nil),                  // 45: g8e.compliance.v1.ComplianceFinding
+	(*ComplianceRemediation)(nil),              // 46: g8e.compliance.v1.ComplianceRemediation
+	(*ControlSection)(nil),                     // 47: g8e.compliance.v1.ControlSection
+	(*ComplianceAnalysis)(nil),                 // 48: g8e.compliance.v1.ComplianceAnalysis
+	(*FrameworkProfile)(nil),                   // 49: g8e.compliance.v1.FrameworkProfile
+	(*FrameworkControlReference)(nil),          // 50: g8e.compliance.v1.FrameworkControlReference
+	(*DemoManifest)(nil),                       // 51: g8e.compliance.v1.DemoManifest
+	(*DemoScenarioDefinition)(nil),             // 52: g8e.compliance.v1.DemoScenarioDefinition
+	(*DemoStepResult)(nil),                     // 53: g8e.compliance.v1.DemoStepResult
+	(*DemoScenarioResult)(nil),                 // 54: g8e.compliance.v1.DemoScenarioResult
+	(*DemoMetricEvidence)(nil),                 // 55: g8e.compliance.v1.DemoMetricEvidence
+	(*DemoScenarioCatalog)(nil),                // 56: g8e.compliance.v1.DemoScenarioCatalog
+	(*timestamppb.Timestamp)(nil),              // 57: google.protobuf.Timestamp
 }
 var file_g8e_compliance_v1_compliance_proto_depIdxs = []int32{
-	2,  // 0: g8e.compliance.v1.ControlAssertionDefinition.required_grader_refs:type_name -> g8e.compliance.v1.VersionedReference
-	2,  // 1: g8e.compliance.v1.ControlAssertionDefinition.required_verifier_refs:type_name -> g8e.compliance.v1.VersionedReference
-	4,  // 2: g8e.compliance.v1.ControlAssertionCatalog.assertions:type_name -> g8e.compliance.v1.ControlAssertionDefinition
-	6,  // 3: g8e.compliance.v1.FrameworkDefinition.controls:type_name -> g8e.compliance.v1.FrameworkControlDefinition
-	7,  // 4: g8e.compliance.v1.FrameworkCatalog.frameworks:type_name -> g8e.compliance.v1.FrameworkDefinition
-	2,  // 5: g8e.compliance.v1.ControlCrosswalk.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	2,  // 6: g8e.compliance.v1.ControlCrosswalk.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
-	55, // 7: g8e.compliance.v1.ControlCrosswalk.reviewed_at:type_name -> google.protobuf.Timestamp
-	9,  // 8: g8e.compliance.v1.ControlCrosswalkCatalog.mappings:type_name -> g8e.compliance.v1.ControlCrosswalk
-	2,  // 9: g8e.compliance.v1.AssessmentSourceAdmission.verifier_ref:type_name -> g8e.compliance.v1.VersionedReference
-	0,  // 10: g8e.compliance.v1.AssessmentSourceAdmission.provider_observation_policy:type_name -> g8e.compliance.v1.AssessmentWitnessPolicy
-	0,  // 11: g8e.compliance.v1.AssessmentSourceAdmission.model_provenance_policy:type_name -> g8e.compliance.v1.AssessmentWitnessPolicy
-	14, // 12: g8e.compliance.v1.AssessmentPopulationSelection.subjects:type_name -> g8e.compliance.v1.AssessmentSubjectSelection
-	14, // 13: g8e.compliance.v1.AssessmentCoverage.unavailable_subjects:type_name -> g8e.compliance.v1.AssessmentSubjectSelection
-	14, // 14: g8e.compliance.v1.AssessmentDiagnostic.subject:type_name -> g8e.compliance.v1.AssessmentSubjectSelection
-	3,  // 15: g8e.compliance.v1.AssessmentScope.image_digests:type_name -> g8e.compliance.v1.NamedDigest
-	11, // 16: g8e.compliance.v1.AssessmentScope.component_inventory:type_name -> g8e.compliance.v1.ComponentInventoryEntry
-	3,  // 17: g8e.compliance.v1.AssessmentScope.configuration_hashes:type_name -> g8e.compliance.v1.NamedDigest
-	3,  // 18: g8e.compliance.v1.AssessmentScope.doctrine_bundle_hashes:type_name -> g8e.compliance.v1.NamedDigest
-	3,  // 19: g8e.compliance.v1.AssessmentScope.consensus_policy_hashes:type_name -> g8e.compliance.v1.NamedDigest
-	55, // 20: g8e.compliance.v1.AssessmentScope.assessment_window_start:type_name -> google.protobuf.Timestamp
-	55, // 21: g8e.compliance.v1.AssessmentScope.assessment_window_end:type_name -> google.protobuf.Timestamp
-	12, // 22: g8e.compliance.v1.AssessmentScope.source_admissions:type_name -> g8e.compliance.v1.AssessmentSourceAdmission
-	13, // 23: g8e.compliance.v1.AssessmentScope.applicability:type_name -> g8e.compliance.v1.AssessmentApplicabilitySelection
-	15, // 24: g8e.compliance.v1.AssessmentScope.selected_population:type_name -> g8e.compliance.v1.AssessmentPopulationSelection
-	55, // 25: g8e.compliance.v1.AssessmentScope.assessment_as_of:type_name -> google.protobuf.Timestamp
-	55, // 26: g8e.compliance.v1.ComplianceEvidenceReference.produced_at:type_name -> google.protobuf.Timestamp
-	55, // 27: g8e.compliance.v1.ComplianceEvidenceReference.verified_at:type_name -> google.protobuf.Timestamp
-	19, // 28: g8e.compliance.v1.ComplianceEvidenceReference.encryption:type_name -> g8e.compliance.v1.EvidenceEncryptionMetadata
-	2,  // 29: g8e.compliance.v1.ControlAssertionAssessment.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
-	55, // 30: g8e.compliance.v1.ControlAssertionAssessment.evaluated_at:type_name -> google.protobuf.Timestamp
-	2,  // 31: g8e.compliance.v1.ControlAssertionAssessment.verifier_ref:type_name -> g8e.compliance.v1.VersionedReference
-	16, // 32: g8e.compliance.v1.ControlAssertionAssessment.coverage:type_name -> g8e.compliance.v1.AssessmentCoverage
-	17, // 33: g8e.compliance.v1.ControlAssertionAssessment.diagnostics:type_name -> g8e.compliance.v1.AssessmentDiagnostic
-	2,  // 34: g8e.compliance.v1.FrameworkControlAssessment.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	55, // 35: g8e.compliance.v1.ComplianceReportSigningKeyMetadata.created_at:type_name -> google.protobuf.Timestamp
-	55, // 36: g8e.compliance.v1.ComplianceReportSigningKeyMetadata.expires_at:type_name -> google.protobuf.Timestamp
-	25, // 37: g8e.compliance.v1.ComplianceReportTrustedKey.metadata:type_name -> g8e.compliance.v1.ComplianceReportSigningKeyMetadata
-	55, // 38: g8e.compliance.v1.ComplianceReportTrustedKey.assessed_at:type_name -> google.protobuf.Timestamp
-	55, // 39: g8e.compliance.v1.ComplianceReportTrustedKey.revoked_at:type_name -> google.protobuf.Timestamp
-	26, // 40: g8e.compliance.v1.ComplianceReportTrustPolicy.trusted_keys:type_name -> g8e.compliance.v1.ComplianceReportTrustedKey
-	55, // 41: g8e.compliance.v1.ComplianceEvidenceTrustedKey.assessed_at:type_name -> google.protobuf.Timestamp
-	55, // 42: g8e.compliance.v1.ComplianceEvidenceTrustedKey.valid_from:type_name -> google.protobuf.Timestamp
-	55, // 43: g8e.compliance.v1.ComplianceEvidenceTrustedKey.valid_until:type_name -> google.protobuf.Timestamp
-	55, // 44: g8e.compliance.v1.ComplianceEvidenceTrustedKey.revoked_at:type_name -> google.protobuf.Timestamp
-	28, // 45: g8e.compliance.v1.ComplianceEvidenceTrustPolicy.trusted_keys:type_name -> g8e.compliance.v1.ComplianceEvidenceTrustedKey
-	55, // 46: g8e.compliance.v1.ComplianceReportManifest.generated_at:type_name -> google.protobuf.Timestamp
-	2,  // 47: g8e.compliance.v1.ComplianceReportManifest.framework_refs:type_name -> g8e.compliance.v1.VersionedReference
-	24, // 48: g8e.compliance.v1.ComplianceReportManifest.signature:type_name -> g8e.compliance.v1.ReportSignature
-	19, // 49: g8e.compliance.v1.BundleArtifact.encryption:type_name -> g8e.compliance.v1.EvidenceEncryptionMetadata
-	30, // 50: g8e.compliance.v1.ComplianceReportBundle.manifest:type_name -> g8e.compliance.v1.ComplianceReportManifest
-	31, // 51: g8e.compliance.v1.ComplianceReportBundle.artifacts:type_name -> g8e.compliance.v1.BundleArtifact
-	46, // 52: g8e.compliance.v1.ComplianceReportBundle.analysis:type_name -> g8e.compliance.v1.ComplianceAnalysis
-	47, // 53: g8e.compliance.v1.ComplianceReportBundle.profiles:type_name -> g8e.compliance.v1.FrameworkProfile
-	32, // 54: g8e.compliance.v1.ComplianceReportBundle.rendered_formats:type_name -> g8e.compliance.v1.RenderedFormatEntry
-	24, // 55: g8e.compliance.v1.ComplianceReportBundle.checksum_root_signature:type_name -> g8e.compliance.v1.ReportSignature
-	1,  // 56: g8e.compliance.v1.VerificationCheckResult.status:type_name -> g8e.compliance.v1.VerificationCheckStatus
-	34, // 57: g8e.compliance.v1.VerificationCheckResult.failures:type_name -> g8e.compliance.v1.VerificationFailure
-	55, // 58: g8e.compliance.v1.ComplianceVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
-	34, // 59: g8e.compliance.v1.ComplianceVerificationReport.failures:type_name -> g8e.compliance.v1.VerificationFailure
-	35, // 60: g8e.compliance.v1.ComplianceVerificationReport.checks:type_name -> g8e.compliance.v1.VerificationCheckResult
-	37, // 61: g8e.compliance.v1.OSCALValidationResult.validator:type_name -> g8e.compliance.v1.OSCALValidatorIdentity
-	38, // 62: g8e.compliance.v1.OSCALValidationResult.structural_failures:type_name -> g8e.compliance.v1.OSCALValidationFailure
-	38, // 63: g8e.compliance.v1.OSCALValidationResult.semantic_failures:type_name -> g8e.compliance.v1.OSCALValidationFailure
-	48, // 64: g8e.compliance.v1.ControlSection.control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	55, // 65: g8e.compliance.v1.ComplianceAnalysis.generated_at:type_name -> google.protobuf.Timestamp
-	40, // 66: g8e.compliance.v1.ComplianceAnalysis.evidence_window_completeness:type_name -> g8e.compliance.v1.EvidenceWindowCompleteness
-	21, // 67: g8e.compliance.v1.ComplianceAnalysis.assertion_assessments:type_name -> g8e.compliance.v1.ControlAssertionAssessment
-	22, // 68: g8e.compliance.v1.ComplianceAnalysis.framework_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
-	41, // 69: g8e.compliance.v1.ComplianceAnalysis.gaps:type_name -> g8e.compliance.v1.ComplianceGap
-	42, // 70: g8e.compliance.v1.ComplianceAnalysis.evidence_links:type_name -> g8e.compliance.v1.EvidenceLink
-	43, // 71: g8e.compliance.v1.ComplianceAnalysis.findings:type_name -> g8e.compliance.v1.ComplianceFinding
-	44, // 72: g8e.compliance.v1.ComplianceAnalysis.remediation:type_name -> g8e.compliance.v1.ComplianceRemediation
-	45, // 73: g8e.compliance.v1.ComplianceAnalysis.sections:type_name -> g8e.compliance.v1.ControlSection
-	20, // 74: g8e.compliance.v1.ComplianceAnalysis.evidence_resources:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	17, // 75: g8e.compliance.v1.ComplianceAnalysis.diagnostics:type_name -> g8e.compliance.v1.AssessmentDiagnostic
-	2,  // 76: g8e.compliance.v1.FrameworkProfile.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	55, // 77: g8e.compliance.v1.FrameworkProfile.generated_at:type_name -> google.protobuf.Timestamp
-	22, // 78: g8e.compliance.v1.FrameworkProfile.control_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
-	2,  // 79: g8e.compliance.v1.FrameworkControlReference.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	55, // 80: g8e.compliance.v1.DemoManifest.generated_at:type_name -> google.protobuf.Timestamp
-	2,  // 81: g8e.compliance.v1.DemoManifest.scenario_definition_refs:type_name -> g8e.compliance.v1.VersionedReference
-	3,  // 82: g8e.compliance.v1.DemoManifest.provenance_hashes:type_name -> g8e.compliance.v1.NamedDigest
-	48, // 83: g8e.compliance.v1.DemoManifest.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	2,  // 84: g8e.compliance.v1.DemoScenarioDefinition.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
-	48, // 85: g8e.compliance.v1.DemoScenarioDefinition.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	55, // 86: g8e.compliance.v1.DemoStepResult.started_at:type_name -> google.protobuf.Timestamp
-	55, // 87: g8e.compliance.v1.DemoStepResult.completed_at:type_name -> google.protobuf.Timestamp
-	2,  // 88: g8e.compliance.v1.DemoScenarioResult.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
-	55, // 89: g8e.compliance.v1.DemoScenarioResult.started_at:type_name -> google.protobuf.Timestamp
-	55, // 90: g8e.compliance.v1.DemoScenarioResult.completed_at:type_name -> google.protobuf.Timestamp
-	2,  // 91: g8e.compliance.v1.DemoScenarioResult.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
-	48, // 92: g8e.compliance.v1.DemoScenarioResult.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	51, // 93: g8e.compliance.v1.DemoScenarioResult.step_results:type_name -> g8e.compliance.v1.DemoStepResult
-	2,  // 94: g8e.compliance.v1.DemoMetricEvidence.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
-	55, // 95: g8e.compliance.v1.DemoMetricEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
-	2,  // 96: g8e.compliance.v1.DemoMetricEvidence.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
-	50, // 97: g8e.compliance.v1.DemoScenarioCatalog.definitions:type_name -> g8e.compliance.v1.DemoScenarioDefinition
-	98, // [98:98] is the sub-list for method output_type
-	98, // [98:98] is the sub-list for method input_type
-	98, // [98:98] is the sub-list for extension type_name
-	98, // [98:98] is the sub-list for extension extendee
-	0,  // [0:98] is the sub-list for field type_name
+	3,   // 0: g8e.compliance.v1.ControlAssertionDefinition.required_grader_refs:type_name -> g8e.compliance.v1.VersionedReference
+	3,   // 1: g8e.compliance.v1.ControlAssertionDefinition.required_verifier_refs:type_name -> g8e.compliance.v1.VersionedReference
+	5,   // 2: g8e.compliance.v1.ControlAssertionCatalog.assertions:type_name -> g8e.compliance.v1.ControlAssertionDefinition
+	7,   // 3: g8e.compliance.v1.FrameworkDefinition.controls:type_name -> g8e.compliance.v1.FrameworkControlDefinition
+	8,   // 4: g8e.compliance.v1.FrameworkCatalog.frameworks:type_name -> g8e.compliance.v1.FrameworkDefinition
+	3,   // 5: g8e.compliance.v1.ControlCrosswalk.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
+	3,   // 6: g8e.compliance.v1.ControlCrosswalk.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
+	57,  // 7: g8e.compliance.v1.ControlCrosswalk.reviewed_at:type_name -> google.protobuf.Timestamp
+	10,  // 8: g8e.compliance.v1.ControlCrosswalkCatalog.mappings:type_name -> g8e.compliance.v1.ControlCrosswalk
+	3,   // 9: g8e.compliance.v1.AssessmentSourceAdmission.verifier_ref:type_name -> g8e.compliance.v1.VersionedReference
+	0,   // 10: g8e.compliance.v1.AssessmentSourceAdmission.provider_observation_policy:type_name -> g8e.compliance.v1.AssessmentWitnessPolicy
+	0,   // 11: g8e.compliance.v1.AssessmentSourceAdmission.model_provenance_policy:type_name -> g8e.compliance.v1.AssessmentWitnessPolicy
+	15,  // 12: g8e.compliance.v1.AssessmentPopulationSelection.subjects:type_name -> g8e.compliance.v1.AssessmentSubjectSelection
+	15,  // 13: g8e.compliance.v1.AssessmentCoverage.unavailable_subjects:type_name -> g8e.compliance.v1.AssessmentSubjectSelection
+	15,  // 14: g8e.compliance.v1.AssessmentDiagnostic.subject:type_name -> g8e.compliance.v1.AssessmentSubjectSelection
+	1,   // 15: g8e.compliance.v1.UnavailableAssessmentContext.kind:type_name -> g8e.compliance.v1.AssessmentContextKind
+	4,   // 16: g8e.compliance.v1.AssessmentScope.image_digests:type_name -> g8e.compliance.v1.NamedDigest
+	12,  // 17: g8e.compliance.v1.AssessmentScope.component_inventory:type_name -> g8e.compliance.v1.ComponentInventoryEntry
+	4,   // 18: g8e.compliance.v1.AssessmentScope.configuration_hashes:type_name -> g8e.compliance.v1.NamedDigest
+	4,   // 19: g8e.compliance.v1.AssessmentScope.doctrine_bundle_hashes:type_name -> g8e.compliance.v1.NamedDigest
+	4,   // 20: g8e.compliance.v1.AssessmentScope.consensus_policy_hashes:type_name -> g8e.compliance.v1.NamedDigest
+	57,  // 21: g8e.compliance.v1.AssessmentScope.assessment_window_start:type_name -> google.protobuf.Timestamp
+	57,  // 22: g8e.compliance.v1.AssessmentScope.assessment_window_end:type_name -> google.protobuf.Timestamp
+	13,  // 23: g8e.compliance.v1.AssessmentScope.source_admissions:type_name -> g8e.compliance.v1.AssessmentSourceAdmission
+	14,  // 24: g8e.compliance.v1.AssessmentScope.applicability:type_name -> g8e.compliance.v1.AssessmentApplicabilitySelection
+	16,  // 25: g8e.compliance.v1.AssessmentScope.selected_population:type_name -> g8e.compliance.v1.AssessmentPopulationSelection
+	57,  // 26: g8e.compliance.v1.AssessmentScope.assessment_as_of:type_name -> google.protobuf.Timestamp
+	19,  // 27: g8e.compliance.v1.AssessmentScope.unavailable_context:type_name -> g8e.compliance.v1.UnavailableAssessmentContext
+	57,  // 28: g8e.compliance.v1.ComplianceEvidenceReference.produced_at:type_name -> google.protobuf.Timestamp
+	57,  // 29: g8e.compliance.v1.ComplianceEvidenceReference.verified_at:type_name -> google.protobuf.Timestamp
+	21,  // 30: g8e.compliance.v1.ComplianceEvidenceReference.encryption:type_name -> g8e.compliance.v1.EvidenceEncryptionMetadata
+	3,   // 31: g8e.compliance.v1.ControlAssertionAssessment.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
+	57,  // 32: g8e.compliance.v1.ControlAssertionAssessment.evaluated_at:type_name -> google.protobuf.Timestamp
+	3,   // 33: g8e.compliance.v1.ControlAssertionAssessment.verifier_ref:type_name -> g8e.compliance.v1.VersionedReference
+	17,  // 34: g8e.compliance.v1.ControlAssertionAssessment.coverage:type_name -> g8e.compliance.v1.AssessmentCoverage
+	18,  // 35: g8e.compliance.v1.ControlAssertionAssessment.diagnostics:type_name -> g8e.compliance.v1.AssessmentDiagnostic
+	3,   // 36: g8e.compliance.v1.FrameworkControlAssessment.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
+	57,  // 37: g8e.compliance.v1.ComplianceReportSigningKeyMetadata.created_at:type_name -> google.protobuf.Timestamp
+	57,  // 38: g8e.compliance.v1.ComplianceReportSigningKeyMetadata.expires_at:type_name -> google.protobuf.Timestamp
+	27,  // 39: g8e.compliance.v1.ComplianceReportTrustedKey.metadata:type_name -> g8e.compliance.v1.ComplianceReportSigningKeyMetadata
+	57,  // 40: g8e.compliance.v1.ComplianceReportTrustedKey.assessed_at:type_name -> google.protobuf.Timestamp
+	57,  // 41: g8e.compliance.v1.ComplianceReportTrustedKey.revoked_at:type_name -> google.protobuf.Timestamp
+	28,  // 42: g8e.compliance.v1.ComplianceReportTrustPolicy.trusted_keys:type_name -> g8e.compliance.v1.ComplianceReportTrustedKey
+	57,  // 43: g8e.compliance.v1.ComplianceEvidenceTrustedKey.assessed_at:type_name -> google.protobuf.Timestamp
+	57,  // 44: g8e.compliance.v1.ComplianceEvidenceTrustedKey.valid_from:type_name -> google.protobuf.Timestamp
+	57,  // 45: g8e.compliance.v1.ComplianceEvidenceTrustedKey.valid_until:type_name -> google.protobuf.Timestamp
+	57,  // 46: g8e.compliance.v1.ComplianceEvidenceTrustedKey.revoked_at:type_name -> google.protobuf.Timestamp
+	30,  // 47: g8e.compliance.v1.ComplianceEvidenceTrustPolicy.trusted_keys:type_name -> g8e.compliance.v1.ComplianceEvidenceTrustedKey
+	57,  // 48: g8e.compliance.v1.ComplianceReportManifest.generated_at:type_name -> google.protobuf.Timestamp
+	3,   // 49: g8e.compliance.v1.ComplianceReportManifest.framework_refs:type_name -> g8e.compliance.v1.VersionedReference
+	26,  // 50: g8e.compliance.v1.ComplianceReportManifest.signature:type_name -> g8e.compliance.v1.ReportSignature
+	21,  // 51: g8e.compliance.v1.BundleArtifact.encryption:type_name -> g8e.compliance.v1.EvidenceEncryptionMetadata
+	32,  // 52: g8e.compliance.v1.ComplianceReportBundle.manifest:type_name -> g8e.compliance.v1.ComplianceReportManifest
+	33,  // 53: g8e.compliance.v1.ComplianceReportBundle.artifacts:type_name -> g8e.compliance.v1.BundleArtifact
+	48,  // 54: g8e.compliance.v1.ComplianceReportBundle.analysis:type_name -> g8e.compliance.v1.ComplianceAnalysis
+	49,  // 55: g8e.compliance.v1.ComplianceReportBundle.profiles:type_name -> g8e.compliance.v1.FrameworkProfile
+	34,  // 56: g8e.compliance.v1.ComplianceReportBundle.rendered_formats:type_name -> g8e.compliance.v1.RenderedFormatEntry
+	26,  // 57: g8e.compliance.v1.ComplianceReportBundle.checksum_root_signature:type_name -> g8e.compliance.v1.ReportSignature
+	2,   // 58: g8e.compliance.v1.VerificationCheckResult.status:type_name -> g8e.compliance.v1.VerificationCheckStatus
+	36,  // 59: g8e.compliance.v1.VerificationCheckResult.failures:type_name -> g8e.compliance.v1.VerificationFailure
+	57,  // 60: g8e.compliance.v1.ComplianceVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
+	36,  // 61: g8e.compliance.v1.ComplianceVerificationReport.failures:type_name -> g8e.compliance.v1.VerificationFailure
+	37,  // 62: g8e.compliance.v1.ComplianceVerificationReport.checks:type_name -> g8e.compliance.v1.VerificationCheckResult
+	39,  // 63: g8e.compliance.v1.OSCALValidationResult.validator:type_name -> g8e.compliance.v1.OSCALValidatorIdentity
+	40,  // 64: g8e.compliance.v1.OSCALValidationResult.structural_failures:type_name -> g8e.compliance.v1.OSCALValidationFailure
+	40,  // 65: g8e.compliance.v1.OSCALValidationResult.semantic_failures:type_name -> g8e.compliance.v1.OSCALValidationFailure
+	50,  // 66: g8e.compliance.v1.ControlSection.control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	57,  // 67: g8e.compliance.v1.ComplianceAnalysis.generated_at:type_name -> google.protobuf.Timestamp
+	42,  // 68: g8e.compliance.v1.ComplianceAnalysis.evidence_window_completeness:type_name -> g8e.compliance.v1.EvidenceWindowCompleteness
+	23,  // 69: g8e.compliance.v1.ComplianceAnalysis.assertion_assessments:type_name -> g8e.compliance.v1.ControlAssertionAssessment
+	24,  // 70: g8e.compliance.v1.ComplianceAnalysis.framework_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
+	43,  // 71: g8e.compliance.v1.ComplianceAnalysis.gaps:type_name -> g8e.compliance.v1.ComplianceGap
+	44,  // 72: g8e.compliance.v1.ComplianceAnalysis.evidence_links:type_name -> g8e.compliance.v1.EvidenceLink
+	45,  // 73: g8e.compliance.v1.ComplianceAnalysis.findings:type_name -> g8e.compliance.v1.ComplianceFinding
+	46,  // 74: g8e.compliance.v1.ComplianceAnalysis.remediation:type_name -> g8e.compliance.v1.ComplianceRemediation
+	47,  // 75: g8e.compliance.v1.ComplianceAnalysis.sections:type_name -> g8e.compliance.v1.ControlSection
+	22,  // 76: g8e.compliance.v1.ComplianceAnalysis.evidence_resources:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	18,  // 77: g8e.compliance.v1.ComplianceAnalysis.diagnostics:type_name -> g8e.compliance.v1.AssessmentDiagnostic
+	3,   // 78: g8e.compliance.v1.FrameworkProfile.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
+	57,  // 79: g8e.compliance.v1.FrameworkProfile.generated_at:type_name -> google.protobuf.Timestamp
+	24,  // 80: g8e.compliance.v1.FrameworkProfile.control_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
+	3,   // 81: g8e.compliance.v1.FrameworkControlReference.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
+	57,  // 82: g8e.compliance.v1.DemoManifest.generated_at:type_name -> google.protobuf.Timestamp
+	3,   // 83: g8e.compliance.v1.DemoManifest.scenario_definition_refs:type_name -> g8e.compliance.v1.VersionedReference
+	4,   // 84: g8e.compliance.v1.DemoManifest.provenance_hashes:type_name -> g8e.compliance.v1.NamedDigest
+	50,  // 85: g8e.compliance.v1.DemoManifest.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	3,   // 86: g8e.compliance.v1.DemoScenarioDefinition.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
+	50,  // 87: g8e.compliance.v1.DemoScenarioDefinition.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	57,  // 88: g8e.compliance.v1.DemoStepResult.started_at:type_name -> google.protobuf.Timestamp
+	57,  // 89: g8e.compliance.v1.DemoStepResult.completed_at:type_name -> google.protobuf.Timestamp
+	3,   // 90: g8e.compliance.v1.DemoScenarioResult.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	57,  // 91: g8e.compliance.v1.DemoScenarioResult.started_at:type_name -> google.protobuf.Timestamp
+	57,  // 92: g8e.compliance.v1.DemoScenarioResult.completed_at:type_name -> google.protobuf.Timestamp
+	3,   // 93: g8e.compliance.v1.DemoScenarioResult.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
+	50,  // 94: g8e.compliance.v1.DemoScenarioResult.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	53,  // 95: g8e.compliance.v1.DemoScenarioResult.step_results:type_name -> g8e.compliance.v1.DemoStepResult
+	3,   // 96: g8e.compliance.v1.DemoMetricEvidence.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	57,  // 97: g8e.compliance.v1.DemoMetricEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
+	3,   // 98: g8e.compliance.v1.DemoMetricEvidence.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
+	52,  // 99: g8e.compliance.v1.DemoScenarioCatalog.definitions:type_name -> g8e.compliance.v1.DemoScenarioDefinition
+	100, // [100:100] is the sub-list for method output_type
+	100, // [100:100] is the sub-list for method input_type
+	100, // [100:100] is the sub-list for extension type_name
+	100, // [100:100] is the sub-list for extension extendee
+	0,   // [0:100] is the sub-list for field type_name
 }
 
 func init() { file_g8e_compliance_v1_compliance_proto_init() }
@@ -6124,8 +6265,8 @@ func file_g8e_compliance_v1_compliance_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_compliance_v1_compliance_proto_rawDesc), len(file_g8e_compliance_v1_compliance_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   53,
+			NumEnums:      3,
+			NumMessages:   54,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

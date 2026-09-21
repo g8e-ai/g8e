@@ -54,10 +54,12 @@
     - [OSCALValidatorIdentity](#g8e-compliance-v1-OSCALValidatorIdentity)
     - [RenderedFormatEntry](#g8e-compliance-v1-RenderedFormatEntry)
     - [ReportSignature](#g8e-compliance-v1-ReportSignature)
+    - [UnavailableAssessmentContext](#g8e-compliance-v1-UnavailableAssessmentContext)
     - [VerificationCheckResult](#g8e-compliance-v1-VerificationCheckResult)
     - [VerificationFailure](#g8e-compliance-v1-VerificationFailure)
     - [VersionedReference](#g8e-compliance-v1-VersionedReference)
   
+    - [AssessmentContextKind](#g8e-compliance-v1-AssessmentContextKind)
     - [AssessmentWitnessPolicy](#g8e-compliance-v1-AssessmentWitnessPolicy)
     - [VerificationCheckStatus](#g8e-compliance-v1-VerificationCheckStatus)
   
@@ -173,6 +175,7 @@
 | applicability | [AssessmentApplicabilitySelection](#g8e-compliance-v1-AssessmentApplicabilitySelection) |  |  |
 | selected_population | [AssessmentPopulationSelection](#g8e-compliance-v1-AssessmentPopulationSelection) |  |  |
 | assessment_as_of | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| unavailable_context | [UnavailableAssessmentContext](#g8e-compliance-v1-UnavailableAssessmentContext) | repeated |  |
 
 
 
@@ -1177,6 +1180,22 @@
 
 
 
+<a name="g8e-compliance-v1-UnavailableAssessmentContext"></a>
+
+### UnavailableAssessmentContext
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| kind | [AssessmentContextKind](#g8e-compliance-v1-AssessmentContextKind) |  |  |
+| reason | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="g8e-compliance-v1-VerificationCheckResult"></a>
 
 ### VerificationCheckResult
@@ -1230,6 +1249,24 @@
 
 
  
+
+
+<a name="g8e-compliance-v1-AssessmentContextKind"></a>
+
+### AssessmentContextKind
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| ASSESSMENT_CONTEXT_KIND_UNSPECIFIED | 0 |  |
+| ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY | 1 |  |
+| ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION | 2 |  |
+| ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY | 3 |  |
+| ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY | 4 |  |
+| ASSESSMENT_CONTEXT_KIND_CONFIGURATION | 5 |  |
+| ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES | 6 |  |
+| ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS | 7 |  |
+
 
 
 <a name="g8e-compliance-v1-AssessmentWitnessPolicy"></a>

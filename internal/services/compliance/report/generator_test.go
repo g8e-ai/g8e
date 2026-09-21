@@ -135,6 +135,39 @@ func TestGenerateComplianceAnalysis_OrchestratesVerifiedEvidenceThroughCanonical
 	}
 }
 
+func TestGenerateComplianceAnalysis_ProjectsExplicitUnavailableAssessmentContext(t *testing.T) {
+	windowStart := time.Unix(1_700_000_000, 0).UTC()
+	windowEnd := windowStart.Add(time.Hour)
+	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+	scope := validGenerationScope(windowStart, windowEnd)
+	scope.BuildIdentity = ""
+	scope.UnavailableContext = []*compliancev1.UnavailableAssessmentContext{{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY, Reason: "build provenance was not captured"}}
+
+	result, err := GenerateComplianceAnalysis(context.Background(), GenerationRequest{
+		Scope:      scope,
+		Sources:    []GenerationSource{{AdmissionID: "source-1", Importer: generationImporter{nodes: []evidence.EvidenceNode{validGenerationNode("scope-1", windowStart, windowEnd)}}}},
+		Assertions: assertions,
+		Frameworks: frameworks,
+		Crosswalks: crosswalks,
+	})
+
+	require.NoError(t, err)
+	assert.Condition(t, func() bool {
+		for _, diagnostic := range result.Analysis.GetDiagnostics() {
+			if diagnostic.GetCode() == "assessment_context_unavailable" && diagnostic.GetSeverity() == "warning" && diagnostic.GetMessage() == "build identity: build provenance was not captured" {
+				return true
+			}
+		}
+		return false
+	})
+	for _, format := range []Format{FormatJSON, FormatCSV, FormatMarkdown, FormatHTML, FormatCLI, FormatOSCAL} {
+		rendered, renderErr := RenderComplianceAnalysis(result.Analysis, format)
+		require.NoError(t, renderErr)
+		assert.Contains(t, string(rendered.Body), "assessment_context_unavailable", string(format))
+	}
+}
+
 func TestGenerateComplianceAnalysis_UsesProtectedPopulationForCoverageAndDiagnostics(t *testing.T) {
 	windowStart := time.Unix(1_700_000_000, 0).UTC()
 	windowEnd := windowStart.Add(time.Hour)

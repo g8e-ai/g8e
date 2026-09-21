@@ -134,6 +134,26 @@ func writeComplianceAssessmentScopeForTest(t *testing.T, scopeID string, runIDs 
 	return scopePath
 }
 
+func markAssessmentContextUnavailable(scope *compliancev1.AssessmentScope) {
+	scope.BuildIdentity = ""
+	scope.SourceRevision = ""
+	scope.ImageDigests = nil
+	scope.ComponentInventory = nil
+	scope.NetworkTopologyHash = ""
+	scope.ConfigurationHashes = nil
+	scope.DoctrineBundleHashes = nil
+	scope.TrustAnchorIds = nil
+	scope.UnavailableContext = []*compliancev1.UnavailableAssessmentContext{
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY, Reason: "build provenance was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION, Reason: "source revision evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY, Reason: "component inventory evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY, Reason: "network topology evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_CONFIGURATION, Reason: "configuration evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES, Reason: "doctrine bundle evidence was not captured"},
+		{Kind: compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS, Reason: "trust-anchor evidence was not captured"},
+	}
+}
+
 func configureComplianceReportGenerateCommand(t *testing.T, cmd *cobra.Command) {
 	t.Helper()
 	require.NoError(t, cmd.Flags().Set("report-id", "report-1"))
@@ -620,6 +640,7 @@ func TestComplianceReportGenerateCmdWithConfig_CampaignSourceVerifiesOffline(t *
 	scope.SourceAdmissions[0].VerifierRef = &compliancev1.VersionedReference{Id: constants.CampaignVerifierID, Version: constants.CampaignVerifierVersion}
 	scope.SourceAdmissions[0].ProviderObservationPolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
 	scope.SourceAdmissions[0].ModelProvenancePolicy = compliancev1.AssessmentWitnessPolicy_ASSESSMENT_WITNESS_POLICY_STRICT
+	markAssessmentContextUnavailable(scope)
 	scopeBody, err = compliancev1.MarshalCanonical(scope)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(scopePath, scopeBody, constants.PermFilePrivate))

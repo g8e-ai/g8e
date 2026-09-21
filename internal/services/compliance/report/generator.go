@@ -293,6 +293,27 @@ func admittedImporters(scope *compliancev1.AssessmentScope, sources []Generation
 	return result, nil
 }
 
+func unavailableAssessmentContextDiagnostics(scope *compliancev1.AssessmentScope) []*compliancev1.AssessmentDiagnostic {
+	labels := map[compliancev1.AssessmentContextKind]string{
+		compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY:      "build identity",
+		compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION:     "source revision",
+		compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY: "component inventory",
+		compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY:    "network topology",
+		compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_CONFIGURATION:       "configuration",
+		compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES:    "doctrine bundles",
+		compliancev1.AssessmentContextKind_ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS:       "trust anchors",
+	}
+	diagnostics := make([]*compliancev1.AssessmentDiagnostic, 0, len(scope.GetUnavailableContext()))
+	for _, record := range scope.GetUnavailableContext() {
+		diagnostics = append(diagnostics, &compliancev1.AssessmentDiagnostic{
+			Code:     "assessment_context_unavailable",
+			Severity: "warning",
+			Message:  labels[record.GetKind()] + ": " + record.GetReason(),
+		})
+	}
+	return diagnostics
+}
+
 func GenerateComplianceAnalysis(ctx context.Context, request GenerationRequest) (*GenerationResult, error) {
 	if err := catalog.ValidateAssessmentScope(request.Scope); err != nil {
 		return nil, fmt.Errorf("compliance report: validate assessment scope: %w", err)
@@ -360,6 +381,8 @@ func GenerateComplianceAnalysis(ctx context.Context, request GenerationRequest) 
 		return result, fmt.Errorf("compliance report: canonicalize assessment scope: %w", err)
 	}
 	scopeDigest := sha256.Sum256(scopeBytes)
+	diagnostics := append([]*compliancev1.AssessmentDiagnostic(nil), request.Diagnostics...)
+	diagnostics = append(diagnostics, unavailableAssessmentContextDiagnostics(request.Scope)...)
 	analysis, err := evidence.BuildComplianceAnalysis(ctx, evidence.AnalysisRequest{
 		ScopeID:               scopeID,
 		AssessmentScopeSHA256: hex.EncodeToString(scopeDigest[:]),
@@ -372,7 +395,7 @@ func GenerateComplianceAnalysis(ctx context.Context, request GenerationRequest) 
 		Crosswalks:            request.Crosswalks,
 		AssertionAssessments:  assertionAssessments,
 		FrameworkAssessments:  frameworkAssessments,
-		Diagnostics:           request.Diagnostics,
+		Diagnostics:           diagnostics,
 	})
 	if err != nil {
 		return result, fmt.Errorf("compliance report: build analysis: %w", err)

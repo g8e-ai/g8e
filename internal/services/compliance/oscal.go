@@ -462,6 +462,9 @@ func oscalAnalysisProps(analysis *compliancev1.ComplianceAnalysis) []OSCALProp {
 	if digest := analysis.GetAssessmentScopeSha256(); digest != "" {
 		props = append(props, OSCALProp{Name: "g8e-assessment-scope-sha256", Value: digest})
 	}
+	for _, diagnostic := range analysis.GetDiagnostics() {
+		props = append(props, OSCALProp{Name: "g8e-diagnostic", Value: diagnostic.GetCode() + ":" + diagnostic.GetSeverity() + ":" + diagnostic.GetMessage()})
+	}
 	for _, assessment := range sortedFrameworkAssessmentsForOSCAL(analysis) {
 		props = append(props,
 			OSCALProp{Name: "g8e-framework-status", Value: frameworkAssessmentValue(assessment)},

@@ -16,6 +16,17 @@ class AssessmentWitnessPolicy(int, metaclass=_enum_type_wrapper.EnumTypeWrapper)
     ASSESSMENT_WITNESS_POLICY_INTERIM: _ClassVar[AssessmentWitnessPolicy]
     ASSESSMENT_WITNESS_POLICY_STRICT: _ClassVar[AssessmentWitnessPolicy]
 
+class AssessmentContextKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ASSESSMENT_CONTEXT_KIND_UNSPECIFIED: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_CONFIGURATION: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES: _ClassVar[AssessmentContextKind]
+    ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS: _ClassVar[AssessmentContextKind]
+
 class VerificationCheckStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     VERIFICATION_CHECK_STATUS_UNSPECIFIED: _ClassVar[VerificationCheckStatus]
@@ -24,6 +35,14 @@ class VerificationCheckStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper)
 ASSESSMENT_WITNESS_POLICY_UNSPECIFIED: AssessmentWitnessPolicy
 ASSESSMENT_WITNESS_POLICY_INTERIM: AssessmentWitnessPolicy
 ASSESSMENT_WITNESS_POLICY_STRICT: AssessmentWitnessPolicy
+ASSESSMENT_CONTEXT_KIND_UNSPECIFIED: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_BUILD_IDENTITY: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_SOURCE_REVISION: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_COMPONENT_INVENTORY: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_NETWORK_TOPOLOGY: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_CONFIGURATION: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_DOCTRINE_BUNDLES: AssessmentContextKind
+ASSESSMENT_CONTEXT_KIND_TRUST_ANCHORS: AssessmentContextKind
 VERIFICATION_CHECK_STATUS_UNSPECIFIED: VerificationCheckStatus
 VERIFICATION_CHECK_STATUS_PASSED: VerificationCheckStatus
 VERIFICATION_CHECK_STATUS_FAILED: VerificationCheckStatus
@@ -286,8 +305,16 @@ class AssessmentDiagnostic(_message.Message):
     message: str
     def __init__(self, code: _Optional[str] = ..., severity: _Optional[str] = ..., source_admission_id: _Optional[str] = ..., subject: _Optional[_Union[AssessmentSubjectSelection, _Mapping]] = ..., message: _Optional[str] = ...) -> None: ...
 
+class UnavailableAssessmentContext(_message.Message):
+    __slots__ = ("kind", "reason")
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    kind: AssessmentContextKind
+    reason: str
+    def __init__(self, kind: _Optional[_Union[AssessmentContextKind, str]] = ..., reason: _Optional[str] = ...) -> None: ...
+
 class AssessmentScope(_message.Message):
-    __slots__ = ("scope_id", "organization_id", "deployment_id", "product_version", "build_identity", "source_revision", "image_digests", "component_inventory", "network_topology_hash", "configuration_hashes", "doctrine_bundle_hashes", "consensus_policy_hashes", "trust_anchor_ids", "cryptographic_mode", "assessment_window_start", "assessment_window_end", "excluded_components", "customer_responsibilities", "active_posture", "source_admissions", "applicability", "selected_population", "assessment_as_of")
+    __slots__ = ("scope_id", "organization_id", "deployment_id", "product_version", "build_identity", "source_revision", "image_digests", "component_inventory", "network_topology_hash", "configuration_hashes", "doctrine_bundle_hashes", "consensus_policy_hashes", "trust_anchor_ids", "cryptographic_mode", "assessment_window_start", "assessment_window_end", "excluded_components", "customer_responsibilities", "active_posture", "source_admissions", "applicability", "selected_population", "assessment_as_of", "unavailable_context")
     SCOPE_ID_FIELD_NUMBER: _ClassVar[int]
     ORGANIZATION_ID_FIELD_NUMBER: _ClassVar[int]
     DEPLOYMENT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -311,6 +338,7 @@ class AssessmentScope(_message.Message):
     APPLICABILITY_FIELD_NUMBER: _ClassVar[int]
     SELECTED_POPULATION_FIELD_NUMBER: _ClassVar[int]
     ASSESSMENT_AS_OF_FIELD_NUMBER: _ClassVar[int]
+    UNAVAILABLE_CONTEXT_FIELD_NUMBER: _ClassVar[int]
     scope_id: str
     organization_id: str
     deployment_id: str
@@ -334,7 +362,8 @@ class AssessmentScope(_message.Message):
     applicability: AssessmentApplicabilitySelection
     selected_population: AssessmentPopulationSelection
     assessment_as_of: _timestamp_pb2.Timestamp
-    def __init__(self, scope_id: _Optional[str] = ..., organization_id: _Optional[str] = ..., deployment_id: _Optional[str] = ..., product_version: _Optional[str] = ..., build_identity: _Optional[str] = ..., source_revision: _Optional[str] = ..., image_digests: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., component_inventory: _Optional[_Iterable[_Union[ComponentInventoryEntry, _Mapping]]] = ..., network_topology_hash: _Optional[str] = ..., configuration_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., doctrine_bundle_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., consensus_policy_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., trust_anchor_ids: _Optional[_Iterable[str]] = ..., cryptographic_mode: _Optional[str] = ..., assessment_window_start: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., assessment_window_end: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., excluded_components: _Optional[_Iterable[str]] = ..., customer_responsibilities: _Optional[_Iterable[str]] = ..., active_posture: _Optional[str] = ..., source_admissions: _Optional[_Iterable[_Union[AssessmentSourceAdmission, _Mapping]]] = ..., applicability: _Optional[_Union[AssessmentApplicabilitySelection, _Mapping]] = ..., selected_population: _Optional[_Union[AssessmentPopulationSelection, _Mapping]] = ..., assessment_as_of: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+    unavailable_context: _containers.RepeatedCompositeFieldContainer[UnavailableAssessmentContext]
+    def __init__(self, scope_id: _Optional[str] = ..., organization_id: _Optional[str] = ..., deployment_id: _Optional[str] = ..., product_version: _Optional[str] = ..., build_identity: _Optional[str] = ..., source_revision: _Optional[str] = ..., image_digests: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., component_inventory: _Optional[_Iterable[_Union[ComponentInventoryEntry, _Mapping]]] = ..., network_topology_hash: _Optional[str] = ..., configuration_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., doctrine_bundle_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., consensus_policy_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., trust_anchor_ids: _Optional[_Iterable[str]] = ..., cryptographic_mode: _Optional[str] = ..., assessment_window_start: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., assessment_window_end: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., excluded_components: _Optional[_Iterable[str]] = ..., customer_responsibilities: _Optional[_Iterable[str]] = ..., active_posture: _Optional[str] = ..., source_admissions: _Optional[_Iterable[_Union[AssessmentSourceAdmission, _Mapping]]] = ..., applicability: _Optional[_Union[AssessmentApplicabilitySelection, _Mapping]] = ..., selected_population: _Optional[_Union[AssessmentPopulationSelection, _Mapping]] = ..., assessment_as_of: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., unavailable_context: _Optional[_Iterable[_Union[UnavailableAssessmentContext, _Mapping]]] = ...) -> None: ...
 
 class EvidenceEncryptionMetadata(_message.Message):
     __slots__ = ("algorithm", "key_id", "authorization_scope", "plaintext_sha256", "authenticated_metadata_sha256")

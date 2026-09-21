@@ -47,18 +47,19 @@ type nativeEvalStore interface {
 }
 
 type nativeEvalDeps struct {
-	configLoader      func(string) (*config.Config, error)
-	fileSvcFactory    func(string, *slog.Logger) (fs.RuntimeFileService, error)
-	createRuntimeTree func(context.Context, fs.RuntimeFileService) error
-	clientFactory     nativeEvalClientFactory
-	authLoader        nativeEvalAuthLoader
-	laneFactory       func(*harnessclient.Client, fs.RuntimeFileService, harnessclient.Persona) evaluation.PlatformLane
-	observerFactory   func(string) evaluation.TargetObserver
-	runnerFactory     func(evaluation.PlatformLane, evaluation.TargetObserver, evaluation.ReportStore, func() time.Time, func(string) string) nativeEvalRunner
-	storeFactory      func(fs.RuntimeFileService) nativeEvalStore
-	verifierFactory   func(fs.RuntimeFileService, func() time.Time) nativeEvalVerifier
-	now               func() time.Time
-	newID             func() string
+	configLoader               func(string) (*config.Config, error)
+	fileSvcFactory             func(string, *slog.Logger) (fs.RuntimeFileService, error)
+	createRuntimeTree          func(context.Context, fs.RuntimeFileService) error
+	clientFactory              nativeEvalClientFactory
+	authLoader                 nativeEvalAuthLoader
+	laneFactory                func(*harnessclient.Client, fs.RuntimeFileService, harnessclient.Persona) evaluation.PlatformLane
+	observerFactory            func(string) evaluation.TargetObserver
+	runnerFactory              func(evaluation.PlatformLane, evaluation.TargetObserver, evaluation.ReportStore, func() time.Time, func(string) string) nativeEvalRunner
+	storeFactory               func(fs.RuntimeFileService) nativeEvalStore
+	verifierFactory            func(fs.RuntimeFileService, func() time.Time) nativeEvalVerifier
+	campaignPublicationFactory campaignVerificationPublicationFactory
+	now                        func() time.Time
+	newID                      func() string
 }
 
 func evalCmd() *cobra.Command {
@@ -78,6 +79,9 @@ func evalCmd() *cobra.Command {
 		storeFactory: func(fileSvc fs.RuntimeFileService) nativeEvalStore { return evaluation.NewStore(fileSvc) },
 		verifierFactory: func(fileSvc fs.RuntimeFileService, now func() time.Time) nativeEvalVerifier {
 			return evaluation.NewVerifier(fileSvc, evaluation.NewRegistry(), now)
+		},
+		campaignPublicationFactory: func(cmd *cobra.Command, fileSvc fs.RuntimeFileService) (campaignVerificationPublication, error) {
+			return newCampaignPublicationCoordinator(cmd, fileSvc)
 		},
 		now:   time.Now,
 		newID: uuid.NewString,

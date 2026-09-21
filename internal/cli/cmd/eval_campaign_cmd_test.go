@@ -14,11 +14,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 func prepareCampaignRunViaStart(t *testing.T, root string, deps nativeEvalDeps) *evaluation.ActiveCampaignRun {
@@ -246,10 +248,14 @@ func TestResolveCampaignOllamaEndpoint_UsesFlag(t *testing.T) {
 	assert.Equal(t, "http://127.0.0.1:11434", endpoint)
 }
 
-func TestCampaignEvalVerify_ViaCLIAfterExecute(t *testing.T) {
+func TestCampaignEvalVerify_ViaCLIPersistsAndPublishesPopulationBoundReport(t *testing.T) {
 	root, deps, cmd, cleanup := setupCampaignOrchestrateEnv(t)
 	defer cleanup()
 	defer enableCampaignWitnessGateway(t, root, deps)()
+	publication := &recordingCampaignVerificationPublication{}
+	deps.campaignPublicationFactory = func(*cobra.Command, fs.RuntimeFileService) (campaignVerificationPublication, error) {
+		return publication, nil
+	}
 
 	lookup := &campaignTraceLookup{root: root, deps: deps}
 	ensemble := newTestEnsembleServer(lookup.resolve)
@@ -260,7 +266,6 @@ func TestCampaignEvalVerify_ViaCLIAfterExecute(t *testing.T) {
 		ModelTag:           "qwen3:4b",
 		EnsembleURL:        ensemble.URL,
 		NoAutoRefresh:      true,
-		Verify:             true,
 		InferenceSessionID: "infer-session",
 		DataSessionID:      "data-session",
 	})
@@ -274,4 +279,14 @@ func TestCampaignEvalVerify_ViaCLIAfterExecute(t *testing.T) {
 	command.SetArgs([]string{"campaign", "verify", "--project-root", root, result.Plan.RunID})
 	require.NoError(t, command.Execute())
 	assert.Contains(t, output.String(), "PASS")
+
+	fileSvc, err := deps.fileSvcFactory(root, nil)
+	require.NoError(t, err)
+	loaded, err := evaluation.NewStore(fileSvc).LoadCampaignVerification(context.Background(), result.Plan.RunID)
+	require.NoError(t, err)
+	assertPopulationBoundCampaignReport(t, loaded, 75, 1)
+	assert.Equal(t, []string{result.Plan.RunID}, publication.completionRunIDs)
+	require.Len(t, publication.reports, 1)
+	assertPopulationBoundCampaignReport(t, publication.reports[0], 75, 1)
+	assert.Equal(t, loaded.GetReportDigestRef().GetSha256(), publication.reports[0].GetReportDigestRef().GetSha256())
 }
