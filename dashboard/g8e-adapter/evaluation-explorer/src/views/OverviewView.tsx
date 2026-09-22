@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom';
 import {
   PLATFORM_CONTACT_EMAIL,
   PLATFORM_LEDE,
+  PLATFORM_OVERVIEW_LEDE,
   PLATFORM_OVERVIEW_PORTFOLIO_NOTE,
 } from '../content/platform';
 import { useDatasetOptions } from '../state/dataset';
@@ -130,6 +131,7 @@ function SystemOverviewPanel({
       </div>
 
       <div className="sys-platform">
+        <p className="sys-platform-lede">{PLATFORM_OVERVIEW_LEDE}</p>
         <h3 className="sys-platform-heading">Need help with AI governance and security?</h3>
         <p className="sys-platform-lede">{PLATFORM_LEDE}</p>
         <div className="sys-platform-cta">

@@ -571,34 +571,14 @@ func TestReconcileVerifiedCampaignMirrorFromDockerInit_RestoresQueue(t *testing.
 		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
 		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
 	}
-	assignments, err := store.ListAssignments(context.Background(), run.GetRunId())
+	boundReport, _, err := evaluation.BindStoredCampaignVerificationReport(context.Background(), store, report, evaluation.CampaignVerificationPolicy{
+		VerifierReleaseVersion: constants.EvaluationSourceVersion,
+		ProviderObservation:    evaluation.ProviderObservationPolicyInterim,
+		ModelProvenance:        evaluation.ModelProvenancePolicyInterim,
+		AssessmentTime:         deps.now,
+	})
 	require.NoError(t, err)
-	results := make(map[string]*evalv1.EvaluationAssignmentResult, len(assignments))
-	for _, assignment := range assignments {
-		exists, existsErr := store.AssignmentResultExists(context.Background(), run.GetRunId(), assignment.GetAssignmentId())
-		require.NoError(t, existsErr)
-		if !exists {
-			continue
-		}
-		result, loadErr := store.LoadAssignmentResult(context.Background(), run.GetRunId(), assignment.GetAssignmentId())
-		require.NoError(t, loadErr)
-		results[assignment.GetAssignmentId()] = result
-	}
-	spec, err := store.LoadCampaignSpec(context.Background(), run.GetCampaignBinding().GetCampaignId())
-	require.NoError(t, err)
-	catalog, err := store.LoadScenarioCatalog(context.Background(), run.GetCampaignBinding().GetCampaignId())
-	require.NoError(t, err)
-	applicability, err := evaluation.BuildRunVerificationApplicability(run, spec, catalog, assignments, results, report)
-	require.NoError(t, err)
-	populationDigest, err := evaluation.ComputeVerifiedPopulationDigest(applicability.Population)
-	require.NoError(t, err)
-	report.VerifiedPopulationDigest = populationDigest
-	report.ExpectedAssignmentCount = applicability.ExpectedAssignmentCount
-	report.VerifiedAssignmentCount = applicability.VerifiedAssignmentCount
-	report.CampaignDigest = spec.GetCampaignDigest()
-	report.CatalogDigest = spec.GetCatalogDigest()
-	report.ModelRegistryDigest = spec.GetModelRegistryDigest()
-	require.NoError(t, store.SaveCampaignVerification(context.Background(), run.GetRunId(), report))
+	require.NoError(t, store.SaveCampaignVerification(context.Background(), run.GetRunId(), boundReport))
 	_, err = coordinator.PublishRunCatchUpWithVerification(context.Background(), run.GetRunId(), report)
 	require.NoError(t, err)
 

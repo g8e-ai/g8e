@@ -27,6 +27,9 @@ export const SPONSORSHIP_USES = [
 
 export const PLATFORM_SOLO_NOTE = 'Solo operator · home-PC hardware · live pipeline';
 
+export const PLATFORM_OVERVIEW_LEDE =
+  'This site is a live deployment of the g8e AI governance suite, not a separate benchmark product. Evaluations run through the governed execution path and publish public-safe results to this Explorer.';
+
 export const PLATFORM_LEDE =
   "I bring 30 years in data protection and systems integration, plus hands-on delivery across zero-trust agent runtimes, multi-agent orchestration, LLM-as-judge evaluations, adversarial red teaming, and CI regression detection. Point me in a direction, I'll take care of it.";
 

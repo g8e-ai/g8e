@@ -358,7 +358,7 @@ func TestCampaignEvalPublish_PublishesScheduledRun(t *testing.T) {
 	assert.Contains(t, output.String(), "Published")
 }
 
-func TestCampaignEvalPublish_PreservesUnverifiedStatusForFailedReport(t *testing.T) {
+func TestCampaignEvalPublish_IgnoresLegacyFailedReport(t *testing.T) {
 	withGatewayHealthCheck(t, true)
 	root, deps, _, cleanup := setupCampaignPublishGatewayEnv(t)
 	defer cleanup()
@@ -398,11 +398,12 @@ func TestCampaignEvalPublish_RejectsPersistedPassingReportThatDoesNotApply(t *te
 	require.NoError(t, err)
 	store := evaluation.NewStore(fileSvc)
 	require.NoError(t, store.SaveCampaignVerification(context.Background(), runID, &evalv1.EvaluationVerificationReport{
-		SchemaVersion: evaluation.CampaignSchemaVersion,
-		ReportId:      runID,
-		RunId:         runID,
-		Status:        evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
-		VerifiedAt:    timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+		SchemaVersion:            constants.CampaignVerifierVersion,
+		ReportId:                 runID,
+		RunId:                    runID,
+		Status:                   evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS,
+		VerifiedAt:               timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+		VerifiedPopulationDigest: strings.Repeat("9", 64),
 	}))
 
 	command = evalCmdWithConfig(deps)

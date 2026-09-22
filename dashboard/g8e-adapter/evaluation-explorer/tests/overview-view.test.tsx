@@ -156,6 +156,7 @@ describe('OverviewView active campaign', () => {
     expect(panel.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology');
     expect(panel.getByRole('heading', { name: 'Need help with AI governance and security?' })).toBeInTheDocument();
     expect(panel.queryByText(/Need an agentic AI security and governance engineer\?/i)).not.toBeInTheDocument();
+    expect(panel.getByText(/live deployment of the g8e AI governance suite/i)).toBeInTheDocument();
     expect(panel.getByText(/30 years in data protection and systems integration/i)).toBeInTheDocument();
     expect(panel.getByText(/LLM-as-judge/i)).toBeInTheDocument();
     expect(panel.getByText(/Point me in a direction, I'll take care of it/i)).toBeInTheDocument();
