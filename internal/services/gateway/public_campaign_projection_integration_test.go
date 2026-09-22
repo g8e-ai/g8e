@@ -44,6 +44,60 @@ func newPublicCampaignFileService(t *testing.T) fs.RuntimeFileService {
 	return fileSvc
 }
 
+type evaluationSummaryTestView struct {
+	SchemaVersion   string `json:"schema_version"`
+	Kind            string `json:"kind"`
+	VerifierState   string `json:"verifier_state"`
+	HeadlineMetrics struct {
+		PassRate struct {
+			Value             float64 `json:"value"`
+			Unit              string  `json:"unit"`
+			ObservedCount     uint32  `json:"observed_count"`
+			EligibleCount     uint32  `json:"eligible_count"`
+			UnavailableCount  uint32  `json:"unavailable_count"`
+			UnavailableReason string  `json:"unavailable_reason"`
+		} `json:"pass_rate"`
+		LatencyP50MS struct {
+			Value             float64 `json:"value"`
+			Unit              string  `json:"unit"`
+			ObservedCount     uint32  `json:"observed_count"`
+			EligibleCount     uint32  `json:"eligible_count"`
+			UnavailableCount  uint32  `json:"unavailable_count"`
+			UnavailableReason string  `json:"unavailable_reason"`
+		} `json:"latency_p50_ms"`
+		OutputThroughputP50 struct {
+			Value             float64 `json:"value"`
+			Unit              string  `json:"unit"`
+			ObservedCount     uint32  `json:"observed_count"`
+			EligibleCount     uint32  `json:"eligible_count"`
+			UnavailableCount  uint32  `json:"unavailable_count"`
+			UnavailableReason string  `json:"unavailable_reason"`
+		} `json:"output_throughput_p50_tokens_per_second"`
+	} `json:"headline_metrics"`
+	VerificationMetadata struct {
+		ReportDigest     string `json:"report_digest"`
+		PopulationDigest string `json:"population_digest"`
+	} `json:"verification_metadata"`
+}
+
+func evaluationSummaryFromRecords(t *testing.T, records []evaluation.CampaignViewRecord) evaluationSummaryTestView {
+	t.Helper()
+	for _, record := range records {
+		var header struct {
+			Kind string `json:"kind"`
+		}
+		require.NoError(t, json.Unmarshal(record.Body, &header))
+		if header.Kind != "evaluation_summary" {
+			continue
+		}
+		var summary evaluationSummaryTestView
+		require.NoError(t, json.Unmarshal(record.Body, &summary))
+		return summary
+	}
+	t.Fatal("evaluation summary record is missing")
+	return evaluationSummaryTestView{}
+}
+
 func TestCampaignEvaluationSummaryPublishesThroughSignedMirrorReconstruction(t *testing.T) {
 	ctx := context.Background()
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
@@ -153,8 +207,14 @@ func TestCampaignEvaluationSummaryPublishesThroughSignedMirrorReconstruction(t *
 		CatalogDigest:            catalogDigest,
 		ModelRegistryDigest:      registryDigest,
 	}
-	viewRecords, err := evaluation.BuildRunAggregateViewRecords(run, aggregate, report, time.Unix(1_700_000_100, 0).UTC())
+	completionRecords, err := evaluation.BuildRunCompletionViewRecords(run, []*evalv1.EvaluationAssignment{assignment, assignmentWithoutMetrics}, map[string]*evalv1.EvaluationAssignmentResult{
+		assignment.GetAssignmentId():               result,
+		assignmentWithoutMetrics.GetAssignmentId(): resultWithoutMetrics,
+	}, aggregate, nil, time.Unix(1_700_000_100, 0).UTC())
 	require.NoError(t, err)
+	verificationRecords, err := evaluation.BuildRunVerificationViewRecords(run, aggregate, report, time.Unix(1_700_000_200, 0).UTC())
+	require.NoError(t, err)
+	viewRecords := append(completionRecords, verificationRecords...)
 	feedRecords := make([]models.PublicFeedRecord, len(viewRecords))
 	for index, record := range viewRecords {
 		digest := sha256.Sum256(record.Body)
@@ -175,48 +235,17 @@ func TestCampaignEvaluationSummaryPublishesThroughSignedMirrorReconstruction(t *
 	assert.Equal(t, int64(len(viewRecords)), bootstrap.Snapshot.HighWaterSequence)
 
 	var history struct {
-		Items []struct {
-			SchemaVersion   string `json:"schema_version"`
-			Kind            string `json:"kind"`
-			VerifierState   string `json:"verifier_state"`
-			HeadlineMetrics struct {
-				PassRate struct {
-					Value             float64 `json:"value"`
-					Unit              string  `json:"unit"`
-					ObservedCount     uint32  `json:"observed_count"`
-					EligibleCount     uint32  `json:"eligible_count"`
-					UnavailableCount  uint32  `json:"unavailable_count"`
-					UnavailableReason string  `json:"unavailable_reason"`
-				} `json:"pass_rate"`
-				LatencyP50MS struct {
-					Value             float64 `json:"value"`
-					Unit              string  `json:"unit"`
-					ObservedCount     uint32  `json:"observed_count"`
-					EligibleCount     uint32  `json:"eligible_count"`
-					UnavailableCount  uint32  `json:"unavailable_count"`
-					UnavailableReason string  `json:"unavailable_reason"`
-				} `json:"latency_p50_ms"`
-				OutputThroughputP50 struct {
-					Value             float64 `json:"value"`
-					Unit              string  `json:"unit"`
-					ObservedCount     uint32  `json:"observed_count"`
-					EligibleCount     uint32  `json:"eligible_count"`
-					UnavailableCount  uint32  `json:"unavailable_count"`
-					UnavailableReason string  `json:"unavailable_reason"`
-				} `json:"output_throughput_p50_tokens_per_second"`
-			} `json:"headline_metrics"`
-			VerificationMetadata struct {
-				ReportDigest     string `json:"report_digest"`
-				PopulationDigest string `json:"population_digest"`
-			} `json:"verification_metadata"`
-		} `json:"items"`
+		Items []evaluationSummaryTestView `json:"items"`
 	}
 	response, err = server.Client().Get(server.URL + "/history?source=" + exportConfig.SourceID + "&kind=evaluation_summary&limit=10")
 	require.NoError(t, err)
 	require.NoError(t, json.NewDecoder(response.Body).Decode(&history))
 	require.NoError(t, response.Body.Close())
-	require.Len(t, history.Items, 1)
-	summary := history.Items[0]
+	require.Len(t, history.Items, 2)
+	assert.Equal(t, evaluationSummaryFromRecords(t, completionRecords), history.Items[0])
+	assert.Equal(t, evaluationSummaryFromRecords(t, verificationRecords), history.Items[1])
+	assert.Equal(t, "not_run", history.Items[0].VerifierState)
+	summary := history.Items[1]
 	assert.Equal(t, "1.5.0", summary.SchemaVersion)
 	assert.Equal(t, "evaluation_summary", summary.Kind)
 	assert.Equal(t, "passed", summary.VerifierState)

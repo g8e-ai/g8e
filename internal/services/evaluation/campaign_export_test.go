@@ -234,6 +234,23 @@ func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
 	report.ModelRegistryDigest = spec.GetModelRegistryDigest()
 	require.NoError(t, store.SaveCampaignVerification(context.Background(), req.RunID, report))
 
+	aggregateState, err := CollectRunAggregateState(assignments, results)
+	require.NoError(t, err)
+	expectedAggregateRecords, err := BuildRunAggregateViewRecords(run, aggregateState, report, time.Unix(1_700_000_300, 0).UTC())
+	require.NoError(t, err)
+	var expectedEvaluationSummaryBody []byte
+	for _, record := range expectedAggregateRecords {
+		var header struct {
+			Kind string `json:"kind"`
+		}
+		require.NoError(t, json.Unmarshal(record.Body, &header))
+		if header.Kind == "evaluation_summary" {
+			expectedEvaluationSummaryBody = record.Body
+			break
+		}
+	}
+	require.NotEmpty(t, expectedEvaluationSummaryBody)
+
 	outputDir := filepath.Join(t.TempDir(), "export-verified")
 	exporter := NewCampaignExporter(func() time.Time { return time.Unix(1_700_000_300, 0).UTC() })
 	exportReport, err := exporter.ExportRun(context.Background(), store, files, req.RunID, outputDir)
@@ -269,6 +286,7 @@ func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
 		} `json:"verification_metadata"`
 	}
 	require.NoError(t, json.Unmarshal(evaluationSummaryJSON, &evaluationSummary))
+	assert.JSONEq(t, string(expectedEvaluationSummaryBody), string(evaluationSummaryJSON))
 	assert.Equal(t, "1.5.0", evaluationSummary.SchemaVersion)
 	assert.Equal(t, "evaluation_summary", evaluationSummary.Kind)
 	assert.Equal(t, "passed", evaluationSummary.VerifierState)

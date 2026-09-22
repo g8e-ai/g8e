@@ -451,6 +451,16 @@ describe('EvalStore', () => {
       record_type: 'projection',
       record_bytes: JSON.stringify({
         ...base,
+        verifier_state: 'not_run',
+        quality_state: 'exploratory_partial',
+      }),
+    });
+    store.acceptProjection({
+      sequence: 2,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        ...base,
+        observed_at: '2026-09-17T12:01:00Z',
         verifier_state: 'passed',
         verification_metadata: {
           provenance: 'bound',
@@ -464,11 +474,11 @@ describe('EvalStore', () => {
       }),
     });
     store.acceptProjection({
-      sequence: 2,
+      sequence: 3,
       record_type: 'projection',
       record_bytes: JSON.stringify({
         ...base,
-        observed_at: '2026-09-17T12:01:00Z',
+        observed_at: '2026-09-17T12:02:00Z',
         quality_state: 'live_in_progress',
         verifier_state: 'not_run',
         headline_metrics: {
