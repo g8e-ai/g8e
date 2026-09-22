@@ -50,7 +50,6 @@ function capitalize(value: string): string {
 
 function campaignStatusLabel(run: EvaluationSummary | undefined): string {
   if (!run) return 'Awaiting data';
-  if (run.lifecycle_state === 'running') return 'Live';
   if (run.lifecycle_state === 'completed') return 'Complete';
   return capitalize(run.lifecycle_state);
 }
@@ -209,10 +208,18 @@ function SystemOverviewPanel({
       <div className="sys-campaign">
         <div className="campaign-section-head">
           <h3 className="sys-section-title">Active campaign</h3>
-          <span className={`campaign-status status-${currentRun?.lifecycle_state ?? 'neutral'}`}>
-            <span className="status-dot" aria-hidden="true" />
-            {campaignStatusLabel(currentRun)}
-          </span>
+          {currentRun?.lifecycle_state === 'running' ? (
+            <StreamStatusIndicator
+              streamConnection={streamConnection}
+              feedConnection={connection}
+              className="campaign-status"
+            />
+          ) : (
+            <span className={`campaign-status status-${currentRun?.lifecycle_state ?? 'neutral'}`}>
+              <span className="status-dot" aria-hidden="true" />
+              {campaignStatusLabel(currentRun)}
+            </span>
+          )}
         </div>
 
         {catalog ? (

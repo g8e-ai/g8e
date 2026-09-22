@@ -53,10 +53,12 @@ export function StreamStatusIndicator({
   streamConnection,
   feedConnection,
   detail,
+  className,
 }: {
   streamConnection: StreamConnectionState;
   feedConnection: FeedConnectionState;
   detail?: 'short' | 'long';
+  className?: string;
 }) {
   const { label, tone, description } = classifyStreamConnection(streamConnection, feedConnection);
   const text =
@@ -66,7 +68,10 @@ export function StreamStatusIndicator({
         : description
       : label;
   return (
-    <span className={`stream-state status-${tone === 'ok' ? 'ok' : tone}`} data-testid="stream-status">
+    <span
+      className={`stream-state status-${tone === 'ok' ? 'ok' : tone}${className ? ` ${className}` : ''}`}
+      data-testid="stream-status"
+    >
       <span className="status-dot" aria-hidden="true" />
       {text}
     </span>

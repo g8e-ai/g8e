@@ -139,7 +139,7 @@ export const G8E_CAMPAIGN_OPERATORS = [
   {
     role: 'Gateway (g8eg)',
     wire: 'PDP',
-    detail: 'Admits envelopes, enforces L1–L3, routes inference and tool work to bound Operator sessions, coordinates provider-boundary observation.',
+    detail: 'Admits envelopes, enforces L1–L3, routes inference and tool work to bound Operator sessions, coordinates provider-boundary observation and model provenance attestation.',
   },
   {
     role: 'Data Operator',
@@ -155,5 +155,10 @@ export const G8E_CAMPAIGN_OPERATORS = [
     role: 'Observer Operator',
     wire: 'g8eo',
     detail: 'Read-only provider-boundary witness on the GPU host — binds hardware samples to inference attempts without mutation authority.',
+  },
+  {
+    role: 'Provenance Operator',
+    wire: 'g8eo',
+    detail: 'Independent storage-side model weight attestor — hashes manifests and blobs at the model storage site and binds digest evidence to inference attempts.',
   },
 ] as const;

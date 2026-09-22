@@ -594,7 +594,7 @@ export function MethodologyView() {
             </DocsCard>
             <DocsCard
               title="Campaign operator topology"
-              lede="One Gateway coordinates three enrolled remote Operator sessions — each an outbound-only g8e binary with its own evidence chain."
+              lede="One Gateway coordinates four enrolled remote Operator sessions — each remote session is an outbound-only g8e binary with its own evidence chain."
             >
               <ul className="docs-operator-list">
                 {G8E_CAMPAIGN_OPERATORS.map((operator) => (

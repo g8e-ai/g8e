@@ -2,10 +2,10 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 // Evaluation detail view. Per the plan: status, quality, suite, execution
-// arm, model-role mapping, start/end/elapsed, assignment progress, live
-// timeline while active, terminal outcome counts, metric cards with
-// denominators, per-model results, task/assignment table, verification
-// summary, resource summary, and public-safe methodology links.
+// arm, model-role mapping, start/end/elapsed, assignment progress, a link to
+// the live page, terminal outcome counts, metric cards with denominators,
+// per-model results, task/assignment table, verification summary, resource
+// summary, and public-safe methodology links.
 
 import { useMemo, useState } from 'react';
 import { type CellContext, type ColumnDef } from '@tanstack/react-table';
@@ -13,7 +13,6 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
 import { recordKey, useStoreState } from '../state/store';
 import { DataTable } from '../components/DataTable';
-import { LiveEventStream } from '../components/LiveEventStream';
 import { RunFailuresSection } from '../components/RunFailuresSection';
 import {
   DetailRow,
@@ -55,12 +54,7 @@ export function EvaluationDetailView() {
         )
       : [],
   );
-  const events = useStoreState((state) =>
-    runId ? state.events.filter((e) => e.run_id === runId && e.dataset_id === activeDatasetId) : [],
-  );
   const connection = useStoreState((state) => state.connection);
-  const streamConnection = useStoreState((state) => state.streamConnection);
-  const isReconciling = useStoreState((state) => state.pendingSnapshot !== null);
   const [assignmentSearch, setAssignmentSearch] = useState('');
 
   const filteredAssignments = useMemo(() => {
@@ -109,8 +103,6 @@ export function EvaluationDetailView() {
 
   if (!runId) return <ErrorState message="No run selected." />;
   if (!run) return <EmptyState hasRecords={false} hasFilters={false} connection={connection} />;
-
-  const isActive = run.lifecycle_state === 'running' || run.lifecycle_state === 'queued';
 
   return (
     <div className="evaluation-detail">
@@ -180,17 +172,11 @@ export function EvaluationDetailView() {
         {run.native_result ? <p>{run.native_result.summary}</p> : <OutcomeCounts outcomes={run.terminal_outcomes} />}
       </section>
 
-      {isActive ? (
-        <LiveEventStream
-          events={events}
-          connection={connection}
-          streamConnection={streamConnection}
-          isReconciling={isReconciling}
-          title="Live timeline"
-          id="run-live-stream"
-          className="run-timeline"
-        />
-      ) : null}
+      <div className="run-live-action">
+        <Link to="/" className="campaign-primary-action">
+          Watch it Live
+        </Link>
+      </div>
 
       <section className="run-metrics">
         <h2>Headline metrics</h2>

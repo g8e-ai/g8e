@@ -111,6 +111,8 @@ const events: LiveEvent[] = [
 describe('OverviewView active campaign', () => {
   beforeEach(() => {
     evalStore.loadFixtures([catalog, archivedCatalog, suite, evaluation] as SnapshotRecord[], events);
+    evalStore.setConnection('live');
+    evalStore.setStreamConnection('connected');
   });
 
   it('prioritizes campaign progress, scope, verification, and latest activity', () => {
@@ -125,7 +127,11 @@ describe('OverviewView active campaign', () => {
     expect(panel.queryByText('Archived campaign')).not.toBeInTheDocument();
     expect(panel.queryByTestId('dataset-selector')).not.toBeInTheDocument();
     expect(panel.getByText(catalog.description)).toBeInTheDocument();
-    expect(panel.getByText('Live')).toBeInTheDocument();
+    const campaignHeader = panel.getByText('Active campaign').parentElement;
+    expect(campaignHeader).not.toBeNull();
+    const campaignStatus = within(campaignHeader as HTMLElement).getByTestId('stream-status');
+    expect(campaignStatus).toHaveTextContent('Live');
+    expect(campaignStatus).toHaveClass('status-ok');
     expect(panel.getByText('6 of 75 assignments complete')).toBeInTheDocument();
     expect(panel.getByText('8%')).toBeInTheDocument();
     expect(panel.getByText('1 failed')).toBeInTheDocument();
@@ -146,5 +152,23 @@ describe('OverviewView active campaign', () => {
     expect(panel.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology');
     expect(panel.queryByText('Models evaluated')).not.toBeInTheDocument();
     expect(panel.queryByText('Current task')).not.toBeInTheDocument();
+  });
+
+  it('does not report a running campaign as live while SSE is reconnecting', () => {
+    evalStore.setStreamConnection('reconnecting');
+
+    render(
+      <MemoryRouter>
+        <OverviewView />
+      </MemoryRouter>,
+    );
+
+    const panel = within(screen.getByRole('region', { name: 'System overview' }));
+    const campaignHeader = panel.getByText('Active campaign').parentElement;
+    expect(campaignHeader).not.toBeNull();
+    const campaignStatus = within(campaignHeader as HTMLElement).getByTestId('stream-status');
+    expect(campaignStatus).toHaveTextContent('Reconnecting');
+    expect(campaignStatus).toHaveClass('status-warn');
+    expect(campaignStatus).not.toHaveTextContent('Live');
   });
 });

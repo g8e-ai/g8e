@@ -113,7 +113,7 @@ describe('LiveEventStream', () => {
     expect(roleCell).not.toHaveTextContent('gemma2-9b');
   });
 
-  it('renders an active evaluation timeline in the scrollable paginated stream container', () => {
+  it('links active evaluation details to the live page without duplicating the event stream', () => {
     const evaluation: EvaluationSummary = {
       schema_version: '1.3.0',
       kind: 'evaluation_summary',
@@ -152,10 +152,10 @@ describe('LiveEventStream', () => {
       </MemoryRouter>,
     );
 
-    const stream = screen.getByRole('region', { name: 'Live timeline' });
-    expect(stream).toHaveClass('stream-panel');
-    expect(stream.querySelector('.stream-scroll')).not.toBeNull();
-    expect(screen.getByText('Page 1 of 2 (30 events)')).toBeInTheDocument();
-    expect(screen.getAllByRole('row')).toHaveLength(26);
+    const liveLink = screen.getByRole('link', { name: 'Watch it Live' });
+    expect(liveLink).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('region', { name: 'Live timeline' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Page 1 of 2 (30 events)')).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 });
