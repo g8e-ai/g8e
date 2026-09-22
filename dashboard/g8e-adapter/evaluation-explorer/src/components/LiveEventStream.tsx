@@ -36,11 +36,19 @@ function assignmentMetricValues(event: LiveEvent, assignment: AssignmentResult |
   if (values.latency_ms === undefined && resources?.latency_ms) values.latency_ms = resources.latency_ms;
   if (values.input_tokens === undefined && resources?.input_tokens) values.input_tokens = resources.input_tokens;
   if (values.output_tokens === undefined && resources?.output_tokens) values.output_tokens = resources.output_tokens;
+  if (values.thinking_tokens === undefined && resources?.thinking_tokens) values.thinking_tokens = resources.thinking_tokens;
+  if (values.cache_tokens === undefined && resources?.cache_tokens) values.cache_tokens = resources.cache_tokens;
+  if (values.retries === undefined && resources?.retries) values.retries = resources.retries;
   return values;
 }
 
 function displayLabel(value: string | undefined): string | undefined {
   return value?.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function eventStatus(event: LiveEvent): string | undefined {
+  if (event.kind === 'assignment_started' && event.lifecycle_status === 'running') return 'started';
+  return event.lifecycle_status;
 }
 
 type EventParts = {
@@ -54,7 +62,7 @@ function eventParts(event: LiveEvent, assignment: AssignmentResult | undefined):
   const stageParts = event.stage_label?.split(' · ').map((part) => part.trim()) ?? [];
   return {
     kind: displayLabel(event.kind) ?? '—',
-    status: displayLabel(event.lifecycle_status) ?? '—',
+    status: displayLabel(eventStatus(event)) ?? '—',
     category: displayLabel(assignment?.scenario_category) ?? stageParts[1] ?? '—',
     task: assignment?.task_id ?? event.task_id ?? stageParts[2] ?? '—',
   };
@@ -70,7 +78,7 @@ type AssignmentMetricColumn =
   | 'thinking_tokens'
   | 'cache_tokens'
   | 'retries';
-type StreamSortField = keyof EventParts | AssignmentMetricColumn;
+type StreamSortField = 'time' | 'role' | keyof EventParts | AssignmentMetricColumn | 'model' | 'progress';
 type StreamSortDirection = 'asc' | 'desc';
 
 const ASSIGNMENT_METRIC_COLUMNS: Array<{ key: AssignmentMetricColumn; label: string }> = [
@@ -85,6 +93,11 @@ const ASSIGNMENT_METRIC_COLUMNS: Array<{ key: AssignmentMetricColumn; label: str
   { key: 'retries', label: 'Retries' },
 ];
 
+const UNAVAILABLE_LIVE_STREAM_METRICS = new Set<AssignmentMetricColumn>([
+  'thinking_tokens',
+  'cache_tokens',
+]);
+
 function assignmentMetric(event: LiveEvent, assignment: AssignmentResult | undefined, key: AssignmentMetricColumn): MetricValue | undefined {
   return assignmentMetricValues(event, assignment)[key];
 }
@@ -92,8 +105,13 @@ function assignmentMetric(event: LiveEvent, assignment: AssignmentResult | undef
 function streamSortValue(
   event: LiveEvent,
   assignment: AssignmentResult | undefined,
+  model: ReturnType<typeof resolveModelSummary>,
   field: StreamSortField,
-): string {
+): string | number {
+  if (field === 'time') return event.observed_at;
+  if (field === 'role') return (event.role ? roleLabel(event.role) : model ? roleLabel(model.role) : 'Platform').toLowerCase();
+  if (field === 'model') return (model?.served_model_tag ?? event.variant_id ?? event.kind.split('_')[0] ?? '').toLowerCase();
+  if (field === 'progress') return event.total > 0 ? event.completed / event.total : '';
   const parts = eventParts(event, assignment);
   if (field in parts) return parts[field as keyof EventParts].toLowerCase();
   const metric = assignmentMetric(event, assignment, field as AssignmentMetricColumn);
@@ -179,16 +197,29 @@ export function LiveEventStream({
       const rightAssignment = right.assignment_id
         ? assignments.get(recordKey(right.dataset_id, right.assignment_id))
         : undefined;
-      const leftValue = streamSortValue(left, leftAssignment, sortField);
-      const rightValue = streamSortValue(right, rightAssignment, sortField);
-      const comparison = leftValue.localeCompare(rightValue, undefined, { numeric: true });
+      const leftModel = left.variant_id
+        ? resolveModelSummary(models, left.dataset_id, left.variant_id)
+        : undefined;
+      const rightModel = right.variant_id
+        ? resolveModelSummary(models, right.dataset_id, right.variant_id)
+        : undefined;
+      const leftValue = streamSortValue(left, leftAssignment, leftModel, sortField);
+      const rightValue = streamSortValue(right, rightAssignment, rightModel, sortField);
+      const comparison =
+        typeof leftValue === 'number' && typeof rightValue === 'number'
+          ? leftValue - rightValue
+          : typeof leftValue === 'number'
+            ? 1
+            : typeof rightValue === 'number'
+              ? -1
+              : leftValue.localeCompare(rightValue, undefined, { numeric: true });
       return comparison === 0
         ? left.event_id.localeCompare(right.event_id)
         : sortDirection === 'asc'
           ? comparison
           : -comparison;
     });
-  }, [visible, assignments, sortField, sortDirection]);
+  }, [visible, assignments, models, sortField, sortDirection]);
 
   const pageCount = Math.ceil(sortedVisible.length / STREAM_PAGE_SIZE);
   const safePage = Math.min(page, Math.max(0, pageCount - 1));
@@ -268,8 +299,8 @@ export function LiveEventStream({
           <table className="stream-table">
             <thead>
               <tr>
-                <th scope="col">Time</th>
-                <th scope="col">Role</th>
+                <SortHeader label="Time" field="time" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <SortHeader label="Role" field="role" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 <SortHeader label="Event" field="kind" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 <SortHeader label="Status" field="status" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 <SortHeader label="Category" field="category" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
@@ -277,8 +308,8 @@ export function LiveEventStream({
                 {ASSIGNMENT_METRIC_COLUMNS.map(({ key, label }) => (
                   <SortHeader key={key} label={label} field={key} sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                 ))}
-                <th scope="col">Model</th>
-                <th scope="col">Progress</th>
+                <SortHeader label="Model" field="model" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <SortHeader label="Progress" field="progress" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
               </tr>
             </thead>
             <tbody>
@@ -327,9 +358,11 @@ export function LiveEventStream({
                       )}
                     </td>
                     {ASSIGNMENT_METRIC_COLUMNS.map(({ key }) => {
-                      const displayed = event.assignment_id
-                        ? metricDisplay(assignmentMetric(event, assignment, key), assignmentMetricFormatter(key))
-                        : { text: '—', unavailable: true };
+                      const displayed = !event.assignment_id
+                        ? { text: '—', unavailable: true }
+                        : UNAVAILABLE_LIVE_STREAM_METRICS.has(key)
+                          ? { text: 'Unavailable', unavailable: true }
+                          : metricDisplay(assignmentMetric(event, assignment, key), assignmentMetricFormatter(key));
                       return (
                         <td className="stream-metric-cell" key={key}>
                           <span className={displayed.unavailable ? 'stream-metric-value unavailable' : 'stream-metric-value'}>
