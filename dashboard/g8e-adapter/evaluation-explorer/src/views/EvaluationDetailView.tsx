@@ -13,6 +13,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useActiveDatasetId } from '../state/dataset';
 import { recordKey, useStoreState } from '../state/store';
 import { DataTable } from '../components/DataTable';
+import { LiveEventStream } from '../components/LiveEventStream';
 import { RunFailuresSection } from '../components/RunFailuresSection';
 import {
   DetailRow,
@@ -24,7 +25,6 @@ import {
   QualityBadge,
   SectionHeading,
   SafeSourceLink,
-  Timeline,
   UnavailableValue,
   formatTimestamp,
   formatDuration,
@@ -59,6 +59,8 @@ export function EvaluationDetailView() {
     runId ? state.events.filter((e) => e.run_id === runId && e.dataset_id === activeDatasetId) : [],
   );
   const connection = useStoreState((state) => state.connection);
+  const streamConnection = useStoreState((state) => state.streamConnection);
+  const isReconciling = useStoreState((state) => state.pendingSnapshot !== null);
   const [assignmentSearch, setAssignmentSearch] = useState('');
 
   const filteredAssignments = useMemo(() => {
@@ -179,10 +181,15 @@ export function EvaluationDetailView() {
       </section>
 
       {isActive ? (
-        <section className="run-timeline">
-          <h2>Live timeline</h2>
-          <Timeline events={events} />
-        </section>
+        <LiveEventStream
+          events={events}
+          connection={connection}
+          streamConnection={streamConnection}
+          isReconciling={isReconciling}
+          title="Live timeline"
+          id="run-live-stream"
+          className="run-timeline"
+        />
       ) : null}
 
       <section className="run-metrics">

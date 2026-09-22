@@ -41,6 +41,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/dispatch"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/model_provenance"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
+	"github.com/g8e-ai/g8e/v2/internal/services/logging"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
@@ -343,9 +344,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 			SignerStore:       signerStore,
 			Doctrine:          doctrine,
 		}
-		execSvc := execution.NewExecutionService(cfg, logger)
-		fileEditSvc := execution.NewFileEditService(cfg, logger)
-		loopbackClient := pubsub.NewInProcessPubSubClient(wsHandler)
+		embeddedOperatorLogger := logger.With(logging.ComponentKey, logging.ComponentEmbeddedOperator)
+		execSvc := execution.NewExecutionService(cfg, embeddedOperatorLogger)
+		fileEditSvc := execution.NewFileEditService(cfg, embeddedOperatorLogger)
+		loopbackClient := pubsub.NewInProcessPubSubClient(wsHandler, embeddedOperatorLogger)
 
 		govModeDeps := &pubsub.GatewayModeDeps{
 			GovernanceCoreDeps:     govCore,
@@ -360,7 +362,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		cmdSvc, err = pubsub.NewGatewayOperatorPubSubService(pubsub.GatewayCommandServiceConfig{
 			CommandServiceConfig: pubsub.CommandServiceConfig{
 				Config:             cfg,
-				Logger:             logger,
+				Logger:             embeddedOperatorLogger,
 				Execution:          execSvc,
 				FileEdit:           fileEditSvc,
 				PubSubClient:       loopbackClient,

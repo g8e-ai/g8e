@@ -96,6 +96,17 @@ func TestNewLogger_InfoLevelWritesToAllOutputs(t *testing.T) {
 	assert.NotContains(t, stderrOutput.String(), "debug details")
 }
 
+func TestLogger_ComponentAttributeIsStructured(t *testing.T) {
+	var output bytes.Buffer
+	logger, err := NewLogger("info", &output)
+	require.NoError(t, err)
+
+	logger.With(ComponentKey, ComponentEmbeddedOperator).Info("command service ready")
+
+	assert.Contains(t, output.String(), "component:")
+	assert.Contains(t, output.String(), ComponentEmbeddedOperator)
+}
+
 func TestLogHandler_Handle(t *testing.T) {
 	t.Run("formats message with timestamp and level", func(t *testing.T) {
 		var buf bytes.Buffer

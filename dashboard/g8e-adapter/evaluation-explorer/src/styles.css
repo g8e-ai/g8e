@@ -785,6 +785,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   overflow-anchor: none;
   scrollbar-gutter: stable;
 }
+.run-timeline { max-height: min(560px, 70vh); }
 .stream-table thead th {
   position: sticky;
   top: 0;

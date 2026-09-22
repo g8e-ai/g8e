@@ -91,6 +91,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	if err != nil {
 		return fmt.Errorf("gateway: configure logger: %w", err)
 	}
+	logger = logger.With(logging.ComponentKey, logging.ComponentGateway)
 	defer func() {
 		if closeErr := logHandle.Close(); closeErr != nil {
 			logger.Error("gateway: close log handle", "error", closeErr)

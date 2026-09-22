@@ -62,7 +62,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 			Logger:             logger,
 			Execution:          execSvc,
 			FileEdit:           fileSvc,
-			PubSubClient:       NewInProcessPubSubClient(nil),
+			PubSubClient:       NewInProcessPubSubClient(nil, logger),
 			ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
 			ActuatorSigningKey: privKey,
 			ActuatorKeyID:      "test-key",
@@ -200,7 +200,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 			Logger:             logger,
 			Execution:          execSvc,
 			FileEdit:           fileSvc,
-			PubSubClient:       NewInProcessPubSubClient(nil),
+			PubSubClient:       NewInProcessPubSubClient(nil, logger),
 			ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
 			ActuatorSigningKey: privKey,
 			ActuatorKeyID:      "test-key",
@@ -333,7 +333,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 			Logger:             logger,
 			Execution:          execSvc,
 			FileEdit:           fileSvc,
-			PubSubClient:       NewInProcessPubSubClient(nil),
+			PubSubClient:       NewInProcessPubSubClient(nil, logger),
 			ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
 			ActuatorSigningKey: privKey,
 			ActuatorKeyID:      "test-key",

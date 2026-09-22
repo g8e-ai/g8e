@@ -4,9 +4,11 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
-import type { LiveEvent } from '../src/contract/types';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import type { EvaluationSummary, LiveEvent } from '../src/contract/types';
 import { LiveEventStream } from '../src/components/LiveEventStream';
+import { evalStore, recordKey } from '../src/state/store';
+import { EvaluationDetailView } from '../src/views/EvaluationDetailView';
 
 function liveEvent(partial: Partial<LiveEvent> & Pick<LiveEvent, 'event_id' | 'kind'>): LiveEvent {
   return {
@@ -109,5 +111,51 @@ describe('LiveEventStream', () => {
     expect(roleCell).not.toBeNull();
     expect(roleCell).toHaveTextContent('Lite');
     expect(roleCell).not.toHaveTextContent('gemma2-9b');
+  });
+
+  it('renders an active evaluation timeline in the scrollable paginated stream container', () => {
+    const evaluation: EvaluationSummary = {
+      schema_version: '1.3.0',
+      kind: 'evaluation_summary',
+      dataset_id: 'ds-live-a',
+      quality_state: 'live_in_progress',
+      observed_at: '2026-09-17T08:00:00Z',
+      run_id: 'run-a',
+      suite_id: 'suite-a',
+      arm: 'platform',
+      evaluation_unit: 'model',
+      model_role_mapping: {},
+      lifecycle_state: 'running',
+      assignment_total: 30,
+      assignment_completed: 0,
+      assignment_failed: 0,
+      terminal_outcomes: { completed: 0, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+      started_at: '2026-09-17T08:00:00Z',
+      verifier_state: 'not_applicable',
+      headline_metrics: {},
+    };
+    const events = Array.from({ length: 30 }, (_, index) =>
+      liveEvent({
+        event_id: `evt-detail-${index}`,
+        kind: 'stage_updated',
+        observed_at: `2026-09-17T08:${String(index).padStart(2, '0')}:00Z`,
+      }),
+    );
+    evalStore.loadFixtures([], events);
+    evalStore.getState().evaluations.set(recordKey(evaluation.dataset_id, evaluation.run_id), evaluation);
+
+    render(
+      <MemoryRouter initialEntries={['/evaluations/ds-live-a/run-a']}>
+        <Routes>
+          <Route path="/evaluations/:datasetId/:runId" element={<EvaluationDetailView />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const stream = screen.getByRole('region', { name: 'Live timeline' });
+    expect(stream).toHaveClass('stream-panel');
+    expect(stream.querySelector('.stream-scroll')).not.toBeNull();
+    expect(screen.getByText('Page 1 of 2 (30 events)')).toBeInTheDocument();
+    expect(screen.getAllByRole('row')).toHaveLength(26);
   });
 });

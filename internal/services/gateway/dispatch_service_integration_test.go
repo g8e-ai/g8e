@@ -243,7 +243,7 @@ func TestDispatchService_ShutdownPublishesReceiptThenAcknowledgementBeforeCancel
 	require.NoError(t, err)
 	keyID := hex.EncodeToString(publicKey)
 	require.NoError(t, infra.SignerStore.AddTrustedSigner(models.TrustedSigner{ID: keyID, PublicKey: keyID, AddedAt: time.Now().UTC(), Enabled: true}))
-	client := pubsub.NewInProcessPubSubClient(infra.Pubsub)
+	client := pubsub.NewInProcessPubSubClient(infra.Pubsub, infra.Logger)
 	results, err := pubsub.NewPubSubResultsService(&remoteCfg, infra.Logger, client)
 	require.NoError(t, err)
 	scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), infra.Logger, nil)
@@ -511,7 +511,7 @@ func startInferenceOperatorWithResultTampering(t *testing.T, infra *TestInfrastr
 		Enabled:   true,
 	}))
 
-	client := pubsub.NewInProcessPubSubClient(infra.Pubsub)
+	client := pubsub.NewInProcessPubSubClient(infra.Pubsub, infra.Logger)
 	resultsSvc, err := pubsub.NewPubSubResultsService(&remoteCfg, infra.Logger, client)
 	require.NoError(t, err)
 	var resultsPublisher pubsub.ResultsPublisher = resultsSvc
@@ -570,7 +570,7 @@ func startFileEditOperator(t *testing.T, infra *TestInfrastructure, operatorID, 
 		Enabled:   true,
 	}))
 
-	client := pubsub.NewInProcessPubSubClient(infra.Pubsub)
+	client := pubsub.NewInProcessPubSubClient(infra.Pubsub, infra.Logger)
 	resultsSvc, err := pubsub.NewPubSubResultsService(&remoteCfg, infra.Logger, client)
 	require.NoError(t, err)
 	scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), infra.Logger, nil)

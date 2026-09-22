@@ -26,11 +26,17 @@ export function LiveEventStream({
   connection,
   streamConnection,
   isReconciling = false,
+  title = 'Live event stream',
+  id = 'live-stream',
+  className,
 }: {
   events: LiveEvent[];
   connection: FeedConnectionState;
   streamConnection: StreamConnectionState;
   isReconciling?: boolean;
+  title?: string;
+  id?: string;
+  className?: string;
 }) {
   const [modelFilter, setModelFilter] = useState('all');
   const [kindFilter, setKindFilter] = useState('all');
@@ -72,10 +78,10 @@ export function LiveEventStream({
   }, [safePage]);
 
   return (
-    <section className="panel stream-panel" id="live-stream" aria-label="Live event stream">
+    <section className={`panel stream-panel${className ? ` ${className}` : ''}`} id={id} aria-label={title}>
       <div className="panel-head">
         <h2>
-          Live event stream{' '}
+          {title}{' '}
           <StreamStatusIndicator
             streamConnection={streamConnection}
             feedConnection={connection}
