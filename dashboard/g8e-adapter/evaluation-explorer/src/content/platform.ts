@@ -142,14 +142,14 @@ export const G8E_CAMPAIGN_OPERATORS = [
     detail: 'Admits envelopes, enforces L1–L3, routes inference and tool work to bound Operator sessions, coordinates provider-boundary observation and model provenance attestation.',
   },
   {
-    role: 'Data Operator',
-    wire: 'g8eo',
-    detail: 'Governed host boundary for model-originated tools, filesystem, and process actions during scenarios.',
-  },
-  {
     role: 'Inference Operator',
     wire: 'g8eo',
     detail: 'Sole scored path to the approved Ollama provider — L4/L5 inference PEP on the campaign host.',
+  },
+  {
+    role: 'Provenance Operator',
+    wire: 'g8eo',
+    detail: 'Independent storage-side model weight attestor — hashes manifests and blobs at the model storage site and binds digest evidence to inference attempts.',
   },
   {
     role: 'Observer Operator',
@@ -157,8 +157,8 @@ export const G8E_CAMPAIGN_OPERATORS = [
     detail: 'Read-only provider-boundary witness on the GPU host — binds hardware samples to inference attempts without mutation authority.',
   },
   {
-    role: 'Provenance Operator',
+    role: 'Data Operator',
     wire: 'g8eo',
-    detail: 'Independent storage-side model weight attestor — hashes manifests and blobs at the model storage site and binds digest evidence to inference attempts.',
+    detail: 'Governed host boundary for model-originated tools, filesystem, and process actions during scenarios.',
   },
 ] as const;

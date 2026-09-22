@@ -123,7 +123,22 @@ function scenarioLabel(category: (typeof SCENARIO_CATEGORIES)[number]): string {
   return formatEnum(category);
 }
 
-const [campaignGateway, ...campaignRemoteOperators] = G8E_CAMPAIGN_OPERATORS;
+const campaignRemoteOperators = G8E_CAMPAIGN_OPERATORS.slice(1);
+
+function operatorDiagramDetail(role: string): string {
+  switch (role) {
+    case 'Data Operator':
+      return 'host tools · files · processes';
+    case 'Inference Operator':
+      return 'governed path to Ollama';
+    case 'Observer Operator':
+      return 'GPU + RAM witness';
+    case 'Provenance Operator':
+      return 'model-weight attestation';
+    default:
+      return 'outbound-only g8eo session';
+  }
+}
 
 function ArchitectureDiagram() {
   const edgeNodes = [
@@ -134,26 +149,54 @@ function ArchitectureDiagram() {
   ];
 
   return (
-    <div className="docs-architecture" aria-label="g8e architecture from home workstation to browser">
-      <svg className="docs-architecture-svg" viewBox="0 0 900 300" role="img" aria-hidden="true">
+    <div className="docs-architecture" aria-label="g8e architecture from campaign operators to browser">
+      <svg className="docs-architecture-svg" viewBox="0 0 900 480" role="img" aria-hidden="true">
         <defs>
           <marker id="docs-arch-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
             <path d="M0,0 L8,4 L0,8 Z" fill="var(--accent)" />
           </marker>
         </defs>
 
-        <rect x="20" y="16" width="860" height="132" rx="12" fill="none" stroke="var(--border)" strokeWidth="2" strokeDasharray="6 4" />
-        <text x="36" y="38" fill="var(--fg-dim)" fontSize="12" fontWeight="700" letterSpacing="0.4">
+        <g>
+          {edgeNodes.map((node, i) => (
+            <g key={node.id} transform={`translate(${36 + i * 210}, 22)`}>
+              <rect width="156" height="72" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
+              <text x="78" y="30" textAnchor="middle" fill="var(--fg)" fontSize="14" fontWeight="700">
+                {node.label}
+              </text>
+              <text x="78" y="50" textAnchor="middle" fill="var(--fg-dim)" fontSize="11">
+                {node.sub}
+              </text>
+            </g>
+          ))}
+          {[0, 1, 2].map((i) => (
+            <line
+              key={i}
+              x1={192 + i * 210}
+              y1="58"
+              x2={236 + i * 210}
+              y2="58"
+              stroke="var(--accent)"
+              strokeWidth="2"
+              markerEnd="url(#docs-arch-arrow)"
+            />
+          ))}
+        </g>
+
+        <line x1="450" y1="170" x2="450" y2="100" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#docs-arch-arrow)" />
+
+        <rect x="20" y="130" width="860" height="140" rx="12" fill="none" stroke="var(--border)" strokeWidth="2" strokeDasharray="6 4" />
+        <text x="36" y="152" fill="var(--fg-dim)" fontSize="12" fontWeight="700" letterSpacing="0.4">
           HOME WORKSTATION · WINDOWS · DOCKER
         </text>
 
-        <g transform="translate(40, 52)">
+        <g transform="translate(40, 170)">
           <rect width="150" height="78" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
           <text x="75" y="30" textAnchor="middle" fill="var(--fg)" fontSize="15" fontWeight="700">Ollama</text>
           <text x="75" y="50" textAnchor="middle" fill="var(--fg-dim)" fontSize="12">local model inference</text>
         </g>
 
-        <g transform="translate(210, 52)">
+        <g transform="translate(210, 170)">
           <rect width="500" height="78" rx="8" fill="var(--navy)" stroke="var(--accent)" strokeWidth="2" />
           <text x="250" y="28" textAnchor="middle" fill="var(--accent)" fontSize="16" fontWeight="800">g8e unified stack</text>
           <text x="250" y="48" textAnchor="middle" fill="var(--fg)" fontSize="12">
@@ -164,41 +207,47 @@ function ArchitectureDiagram() {
           </text>
         </g>
 
-        <g transform="translate(730, 52)">
+        <g transform="translate(730, 170)">
           <rect width="130" height="78" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
           <text x="65" y="30" textAnchor="middle" fill="var(--fg)" fontSize="15" fontWeight="700">Campaigns</text>
           <text x="65" y="50" textAnchor="middle" fill="var(--fg-dim)" fontSize="12">live + historical</text>
         </g>
 
-        <line x1="450" y1="148" x2="450" y2="178" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#docs-arch-arrow)" />
+        <rect x="20" y="300" width="860" height="156" rx="12" fill="none" stroke="var(--border)" strokeWidth="2" strokeDasharray="6 4" />
+        <text x="36" y="446" fill="var(--fg-dim)" fontSize="12" fontWeight="700" letterSpacing="0.4">
+          CAMPAIGN OPERATOR SESSIONS · OUTBOUND mTLS
+        </text>
+        <line x1="126" y1="290" x2="774" y2="290" stroke="var(--accent)" strokeWidth="2" opacity="0.65" />
+        <line x1="450" y1="290" x2="450" y2="250" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#docs-arch-arrow)" />
 
-        {[0, 1, 2].map((i) => (
-          <line
-            key={i}
-            x1={170 + i * 210}
-            y1="224"
-            x2={230 + i * 210}
-            y2="224"
-            stroke="var(--accent)"
-            strokeWidth="2"
-            markerEnd="url(#docs-arch-arrow)"
-          />
-        ))}
-
-        {edgeNodes.map((node, i) => (
-          <g key={node.id} transform={`translate(${36 + i * 210}, 188)`}>
-            <rect width="156" height="72" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
-            <text x="78" y="30" textAnchor="middle" fill="var(--fg)" fontSize="14" fontWeight="700">
-              {node.label}
-            </text>
-            <text x="78" y="50" textAnchor="middle" fill="var(--fg-dim)" fontSize="11">
-              {node.sub}
-            </text>
-          </g>
-        ))}
+        {campaignRemoteOperators.map((operator, i) => {
+          const x = 24 + i * 216;
+          const center = 126 + i * 216;
+          return (
+            <g key={operator.role}>
+              <line x1={center} y1="336" x2={center} y2="290" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#docs-arch-arrow)" />
+              <g transform={`translate(${x}, 336)`}>
+                <rect width="204" height="96" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
+                <text x="102" y="28" textAnchor="middle" fill="var(--fg)" fontSize="14" fontWeight="700">
+                  {operator.role}
+                </text>
+                <text x="102" y="48" textAnchor="middle" fill="var(--fg-dim)" fontSize="11">
+                  {operator.wire} · remote session
+                </text>
+                <text x="102" y="70" textAnchor="middle" fill="var(--fg-dim)" fontSize="10">
+                  {operatorDiagramDetail(operator.role)}
+                </text>
+              </g>
+            </g>
+          );
+        })}
       </svg>
 
       <ol className="docs-architecture-steps">
+        <li>
+          <strong>Publication → mirror → Explorer</strong>
+          <span>Public-safe campaign evidence travels through the mirror and Cloudflare to this read-only browser.</span>
+        </li>
         <li>
           <strong>Home workstation</strong>
           <span>Windows host running the full g8e Docker stack and Ollama for on-prem model inference.</span>
@@ -208,16 +257,8 @@ function ArchitectureDiagram() {
           <span>Gateway, Operator, Ensemble, and native eval campaigns execute and grade every benchmark locally.</span>
         </li>
         <li>
-          <strong>Publication + mirror</strong>
-          <span>Campaign evidence is projected to public-safe fields and streamed as JSONL plus SSE from the gateway.</span>
-        </li>
-        <li>
-          <strong>Cloudflare tunnel</strong>
-          <span>The gateway public listener is exposed at opendevops.ai — you are reading live results from this PC.</span>
-        </li>
-        <li>
-          <strong>Evaluation Explorer</strong>
-          <span>This read-only browser validates every record against a frozen schema before rendering.</span>
+          <strong>Campaign operators</strong>
+          <span>Data, Inference, Observer, and Provenance sessions connect outbound over mTLS with separate responsibilities.</span>
         </li>
       </ol>
     </div>
@@ -583,67 +624,16 @@ export function MethodologyView() {
             </p>
           </DocsCard>
 
-          <div className="docs-split">
-            <DocsCard
-              title="Measured together — not in isolation"
-              lede="Every model candidate runs through the same total package. Scores reflect the full governed path, not a stripped provider API call."
-            >
-              <ul className="docs-feature-list">
-                {G8E_MEASURED_TOGETHER.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </DocsCard>
-            <DocsCard
-              title="Campaign operator topology"
-              lede="One Gateway coordinates four enrolled remote Operator sessions — each remote session is an outbound-only g8e binary with its own evidence chain."
-            >
-              <div className="docs-operator-topology" role="group" aria-label="Campaign operator topology">
-                <div className="docs-operator-column">
-                  <span className="docs-operator-column-label">Remote Operator sessions</span>
-                  <ul className="docs-operator-list">
-                    {campaignRemoteOperators.map((operator) => (
-                      <li key={operator.role}>
-                        <div className="docs-operator-head">
-                          <strong>{operator.role}</strong>
-                          <code>{operator.wire}</code>
-                        </div>
-                        <span className="docs-operator-detail">{operator.detail}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="docs-operator-connections">
-                  <span className="docs-operator-column-label">Outbound connection</span>
-                  <ul className="docs-operator-link-list" aria-label="Outbound mTLS connections to the Gateway">
-                    {campaignRemoteOperators.map((operator) => (
-                      <li className="docs-operator-link" key={operator.role}>
-                        <span className="sr-only">{operator.role} reaches the Gateway outbound over mTLS.</span>
-                        <strong>OUTBOUND</strong>
-                        <code>mTLS</code>
-                        <span className="docs-operator-link-arrow" aria-hidden="true">→</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="docs-operator-column">
-                  <span className="docs-operator-column-label">Policy Decision Point</span>
-                  <div className="docs-operator-node docs-operator-gateway-node">
-                    <div className="docs-operator-head">
-                      <strong>{campaignGateway.role}</strong>
-                      <code>{campaignGateway.wire}</code>
-                    </div>
-                    <span className="docs-operator-detail">{campaignGateway.detail}</span>
-                  </div>
-                </div>
-              </div>
-              <p className="docs-card-foot">
-                Evidence for each session is written to the working directory where that binary was started — signed
-                receipts, audit vault entries, and campaign artifacts under <code>.g8e/data/</code>. No root
-                privilege required on the evaluation host.
-              </p>
-            </DocsCard>
-          </div>
+          <DocsCard
+            title="Measured together — not in isolation"
+            lede="Every model candidate runs through the same total package. Scores reflect the full governed path, not a stripped provider API call."
+          >
+            <ul className="docs-feature-list">
+              {G8E_MEASURED_TOGETHER.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </DocsCard>
         </DocsSection>
 
         <DocsSection id="architecture" title="Architecture — powered by g8e">

@@ -50,6 +50,10 @@ func testCmd() *cobra.Command {
 }
 
 func testUnitCmd() *cobra.Command {
+	return testUnitCmdWithRunner(realE2ERunner(os.Stdout, os.Stderr))
+}
+
+func testUnitCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unit",
 		Short: "Run Tier 1 (Unit) tests",
@@ -60,21 +64,21 @@ func testUnitCmd() *cobra.Command {
 			// Build the test command based on the Makefile test-unit target
 			// TEST_RACE: -race on non-Windows, empty on Windows
 			// TEST_COUNT: -count=1
-			// TEST_SHORT_TIMEOUT: 60s
+			// TEST_SHORT_TIMEOUT: 180s
 			// TEST_PKGS: all packages excluding cmd/, test/, internal/testutil/, mocks/, proto/
 
-			testRace := ""
+			testArgs := []string{"test", "-p=1", "-tags=!integration", "-count=1", "-timeout", "180s"}
 			if runtime.GOOS != "windows" {
-				testRace = "-race"
+				testArgs = append(testArgs, "-race")
 			}
+			testArgs = append(testArgs, "./internal/...", "./protocol/...")
 
-			testCmd := exec.Command("go", "test", testRace, "-count=1", "-timeout", "60s",
-				"./internal/...", "./protocol/...")
-			testCmd.Stdout = os.Stdout
-			testCmd.Stderr = os.Stderr
-
-			if err := testCmd.Run(); err != nil {
+			code, err := runner(cmd.Context(), "go", testArgs...)
+			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrUnitTestsFailed, err)
+			}
+			if code != 0 {
+				return fmt.Errorf("%w: exit code %d", constants.ErrUnitTestsFailed, code)
 			}
 
 			fmt.Println("Unit tests completed successfully.")

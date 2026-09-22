@@ -201,6 +201,39 @@ func TestTestUnitCmd_StructureAndFlags(t *testing.T) {
 	assert.NotNil(t, cmd.RunE)
 }
 
+func TestTestUnitCmd_UsesMakefileAlignedTimeout(t *testing.T) {
+	var captured []string
+	cmd := testUnitCmdWithRunner(recordingE2ERunner(0, nil, &captured))
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	assert.Contains(t, captured, "-timeout")
+	assert.Contains(t, captured, "180s")
+	assert.Contains(t, captured, "-p=1")
+	assert.Contains(t, captured, "-tags=!integration")
+}
+
+func TestTestUnitCmd_RunnerFailureWrapsUnitError(t *testing.T) {
+	runnerErr := errors.New("child process failed")
+	cmd := testUnitCmdWithRunner(recordingE2ERunner(2, runnerErr, &[]string{}))
+
+	err := cmd.RunE(cmd, nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrUnitTestsFailed)
+	assert.ErrorIs(t, err, runnerErr)
+}
+
+func TestTestUnitCmd_NonzeroExitWrapsUnitError(t *testing.T) {
+	cmd := testUnitCmdWithRunner(recordingE2ERunner(2, nil, &[]string{}))
+
+	err := cmd.RunE(cmd, nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrUnitTestsFailed)
+	assert.Contains(t, err.Error(), "exit code 2")
+}
+
 func TestTestIntegrationCmd_StructureAndFlags(t *testing.T) {
 	cmd := testIntegrationCmd()
 	assert.Equal(t, "integration", cmd.Use)
