@@ -1106,6 +1106,10 @@ function generatePublicRuntimeConfigSchema() {
   });
 }
 
+function publicOpenApiModel(model) {
+  return Object.fromEntries(Object.entries(publicFeedModels[model]).filter(([key]) => !key.startsWith('_')));
+}
+
 function generatePublicOpenApi() {
   const sourceParameter = () => ({ name: 'source', in: 'query', required: false, schema: { type: 'string' } });
   return stableSerialize({
@@ -1123,7 +1127,7 @@ function generatePublicOpenApi() {
     components: {
       schemas: Object.fromEntries(PUBLIC_MODELS.map((model) => [pascalCase(model), { $ref: `#/x-models/${model}` }])),
     },
-    'x-models': Object.fromEntries(PUBLIC_MODELS.map((model) => [model, publicFeedModels[model]])),
+    'x-models': Object.fromEntries(PUBLIC_MODELS.map((model) => [model, publicOpenApiModel(model)])),
   });
 }
 
