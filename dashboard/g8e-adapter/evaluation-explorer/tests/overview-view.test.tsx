@@ -154,6 +154,12 @@ describe('OverviewView active campaign', () => {
       `/evaluations/${datasetId}/${evaluation.run_id}`,
     );
     expect(panel.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology');
+    expect(panel.getByRole('heading', { name: 'Hire Danny for agentic AI security' })).toBeInTheDocument();
+    expect(panel.getByText(/30 years in data protection and systems integration/i)).toBeInTheDocument();
+    expect(panel.getByText(/LLM-as-judge/i)).toBeInTheDocument();
+    expect(panel.getByRole('link', { name: 'Architecture Overview' })).toHaveAttribute('href', '/methodology#architecture');
+    expect(panel.queryByRole('list', { name: 'Platform data flow, outbound only' })).not.toBeInTheDocument();
+    expect(panel.queryByRole('link', { name: 'Book a Call' })).not.toBeInTheDocument();
     expect(panel.queryByText('Models evaluated')).not.toBeInTheDocument();
     expect(panel.queryByText('Current task')).not.toBeInTheDocument();
   });
@@ -184,11 +190,15 @@ describe('OverviewView active campaign', () => {
     const data = within(screen.getByRole('region', { name: 'Public data and APIs' }));
     expect(data.getByText('Public data & APIs')).toBeInTheDocument();
     expect(data.getByText(/public-safe projection/i)).toBeInTheDocument();
-    expect(await data.findByRole('link', { name: /Campaign records/i })).toHaveAttribute(
+    expect(await data.findByRole('link', { name: /Campaign summaries/i })).toHaveAttribute(
       'href',
-      'https://mirror.example/history?cursor=0&limit=500',
+      'https://mirror.example/history?kind=evaluation_summary&cursor=0&limit=500',
     );
-    expect(data.getByRole('link', { name: /Public proof index/i })).toHaveAttribute(
+    expect(data.getByRole('link', { name: /Assignment results/i })).toHaveAttribute(
+      'href',
+      'https://mirror.example/history?kind=assignment_result&cursor=0&limit=500',
+    );
+    expect(data.getByRole('link', { name: /Proofs/i })).toHaveAttribute(
       'href',
       'https://mirror.example/proof-catalog',
     );

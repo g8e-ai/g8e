@@ -15,7 +15,7 @@ import type { CatalogSnapshot, DatasetKind, EvaluationSummary, QualityState } fr
 import { evalStore, useStoreState } from './store';
 
 const PREF_KEYS = {
-  filters: 'opendevops.filters.v2',
+  filters: 'opendevops.filters.v3',
   sort: 'opendevops.sort',
   comparison: 'opendevops.comparison',
 } as const;

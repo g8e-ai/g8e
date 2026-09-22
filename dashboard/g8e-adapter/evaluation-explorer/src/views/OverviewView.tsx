@@ -10,10 +10,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  G8E_REPO_URL,
-  PLATFORM_CONTACT_CALENDLY,
   PLATFORM_CONTACT_EMAIL,
-  PLATFORM_FLOW_STEPS,
   PLATFORM_LEDE,
   PLATFORM_OVERVIEW_PORTFOLIO_NOTE,
 } from '../content/platform';
@@ -82,49 +79,6 @@ function latestAssignmentActivity(events: LiveEvent[]) {
   };
 }
 
-function PlatformFlowStep({ step }: { step: (typeof PLATFORM_FLOW_STEPS)[number] }) {
-  return (
-    <li className={step.id === 'g8e' ? 'sys-platform-step-accent' : undefined}>
-      <div className="sys-platform-flow-content">
-        <strong>{step.label}</strong>
-        <span>{step.detail}</span>
-      </div>
-    </li>
-  );
-}
-
-function PlatformFlowArrow({ direction }: { direction: 'h' | 'hl' | 'v' }) {
-  const arrow = direction === 'h' ? '→' : direction === 'hl' ? '←' : '↓';
-
-  return (
-    <li
-      className={`sys-platform-flow-arrow sys-platform-flow-arrow-${direction}`}
-      aria-hidden="true"
-    >
-      {arrow}
-    </li>
-  );
-}
-
-function PlatformFlow() {
-  const [home, g8e, mirror, page] = PLATFORM_FLOW_STEPS;
-
-  return (
-    <div className="sys-platform-flow-wrap">
-      <p className="sys-platform-flow-heading" aria-hidden="true">Outbound only</p>
-      <ol className="sys-platform-flow sys-platform-flow-grid" aria-label="Platform data flow, outbound only">
-        <PlatformFlowStep step={home} />
-        <PlatformFlowArrow direction="h" />
-        <PlatformFlowStep step={g8e} />
-        <PlatformFlowArrow direction="v" />
-        <PlatformFlowStep step={page} />
-        <PlatformFlowArrow direction="hl" />
-        <PlatformFlowStep step={mirror} />
-      </ol>
-    </div>
-  );
-}
-
 type SystemOverviewPanelProps = {
   catalog: CatalogSnapshot | undefined;
   evaluations: EvaluationSummary[];
@@ -176,27 +130,14 @@ function SystemOverviewPanel({
       </div>
 
       <div className="sys-platform">
+        <h3 className="sys-platform-heading">Hire Danny for agentic AI security</h3>
         <p className="sys-platform-lede">{PLATFORM_LEDE}</p>
-        <PlatformFlow />
         <div className="sys-platform-cta">
           <p className="sys-platform-cta-note">{PLATFORM_OVERVIEW_PORTFOLIO_NOTE}</p>
           <div className="sys-platform-links">
-            <a
-              className="sys-platform-cta-hire"
-              href={PLATFORM_CONTACT_CALENDLY}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Book a Call
-            </a>
-            <a
-              className="sys-platform-cta-run"
-              href={G8E_REPO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Run this yourself
-            </a>
+            <Link className="sys-platform-cta-architecture" to="/methodology#architecture">
+              Architecture Overview
+            </Link>
             <span className="sys-platform-email-label">Email:</span>
             <a className="sys-platform-email" href={`mailto:${PLATFORM_CONTACT_EMAIL}`}>
               {PLATFORM_CONTACT_EMAIL}
@@ -406,7 +347,7 @@ function RecentCampaigns({
   );
 }
 
-/** Anonymous public mirror endpoints as downloadable artifacts. */
+/** Public-safe evaluation datasets, contract, and raw mirror endpoints. */
 function DownloadsPanel() {
   const [origin, setOrigin] = useState<string | null>(null);
 
@@ -481,10 +422,12 @@ function DownloadsPanel() {
         ))}
       </ul>
       <div className="public-api-strip">
-        <span className="public-api-label">Build against the mirror</span>
+        <span className="public-api-label">Raw mirror endpoints</span>
         {origin ? (
           <>
-            <a href={`${origin}/bootstrap`} target="_blank" rel="noopener noreferrer">Synchronization state <code>JSON</code></a>
+            <a href={`${origin}/history?cursor=0&limit=500`} target="_blank" rel="noopener noreferrer">History <code>JSON</code></a>
+            <a href={`${origin}/bootstrap`} target="_blank" rel="noopener noreferrer">Bootstrap <code>JSON</code></a>
+            <a href={`${origin}/proof-catalog`} target="_blank" rel="noopener noreferrer">Proofs <code>JSON</code></a>
             <a href={`${origin}/stream`} target="_blank" rel="noopener noreferrer">Live updates <code>SSE</code></a>
           </>
         ) : (

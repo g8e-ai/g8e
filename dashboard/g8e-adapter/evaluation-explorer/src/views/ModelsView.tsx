@@ -87,7 +87,7 @@ export function ModelsView() {
         return false;
       }
       if (filters.role !== 'all' && m.role !== filters.role) return false;
-      if (evaluatedFilter === 'evaluated' && !m.pass_rate) return false;
+      if (evaluatedFilter === 'evaluated' && (!m.pass_rate || m.evaluation_coverage < 1)) return false;
       if (evaluatedFilter === 'not_evaluated' && m.pass_rate) return false;
       if (filters.quality !== 'all' && m.quality_state !== filters.quality) return false;
       return true;
@@ -214,7 +214,7 @@ export function ModelsView() {
 
   const updateFilter = (patch: Partial<ModelFilters>) => setFilters({ ...filters, ...patch });
 
-  const measuredCount = models.filter((model) => Boolean(model.pass_rate)).length;
+  const measuredCount = models.filter((model) => Boolean(model.pass_rate) && model.evaluation_coverage >= 1).length;
 
   return (
     <div className="models-view">

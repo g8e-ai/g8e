@@ -28,39 +28,10 @@ export const SPONSORSHIP_USES = [
 export const PLATFORM_SOLO_NOTE = 'Solo operator · home-PC hardware · live pipeline';
 
 export const PLATFORM_LEDE =
-  'OpenDevOps.ai is a one-person project running real evaluation campaigns on consumer hardware — open-source SLMs scored through the full g8e agent stack, not isolated API calls. Only signed snapshots leave the host.';
-
-export const PLATFORM_MEASUREMENT_SUMMARY =
-  'Each candidate model is scored in every g8e role — Primary, Assistant, and Lite — across 25 frozen agent scenarios. The goal is per-role metrics (pass rate, tool selection, throughput, escalation) to identify the strongest open models, then compare those picks against single-LLM baselines.';
-
-export const PLATFORM_PORTFOLIO_NOTE =
-  'This explorer is a live portfolio piece — the same pipeline I use for production evals, plus the public mirror UI I built on top. I am available for contract work on governed AI, evaluation infrastructure, and read-only observability surfaces.';
-
-export const PLATFORM_FLOW_STEPS = [
-  {
-    id: 'workstation',
-    label: 'Home PC',
-    detail: 'Docker + Ollama',
-  },
-  {
-    id: 'g8e',
-    label: 'g8e stack',
-    detail: 'g8eg · g8eo · eval',
-  },
-  {
-    id: 'mirror',
-    label: 'Public mirror',
-    detail: 'SSE mirror',
-  },
-  {
-    id: 'browser',
-    label: 'This page',
-    detail: 'Portfolio viewer',
-  },
-] as const;
+  'Need an agentic AI security and governance engineer? I bring 30 years in data protection and systems integration, plus hands-on delivery across zero-trust agent runtimes, multi-agent orchestration, LLM-as-judge evaluations, adversarial red teaming, and CI regression detection.';
 
 export const PLATFORM_OVERVIEW_PORTFOLIO_NOTE =
-  'Live portfolio piece — looking to join a team, available for contracts on governed AI and eval infrastructure.';
+  'Available for roles and select consulting engagements in agentic AI security, governance, evaluation infrastructure, and trustworthy production systems.';
 
 export const WORKSTATION_SPECS = [
   { label: 'CPU', value: 'Intel Core i9-13900K' },

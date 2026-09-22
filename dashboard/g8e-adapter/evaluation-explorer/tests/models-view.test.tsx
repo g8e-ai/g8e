@@ -40,6 +40,7 @@ describe('ModelsView', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by evaluation status' }), { target: { value: 'all' } });
     expect(screen.getByRole('link', { name: 'Gemma 4 12B' }).closest('tr')).toHaveTextContent(
       'Legacy · not current-standard verified',
     );
@@ -57,6 +58,7 @@ describe('ModelsView', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by evaluation status' }), { target: { value: 'all' } });
     expect(screen.getByRole('link', { name: 'Gemma 4 12B' }).closest('tr')).toHaveTextContent('Not fully verified');
   });
 
@@ -67,6 +69,7 @@ describe('ModelsView', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by evaluation status' }), { target: { value: 'all' } });
     const gemma12b = screen.getByRole('link', { name: 'Gemma 4 12B' });
     expect(gemma12b.closest('tr')).toHaveTextContent('Legacy · not current-standard verified');
   });
@@ -78,6 +81,7 @@ describe('ModelsView', () => {
       </MemoryRouter>,
     );
 
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by evaluation status' }), { target: { value: 'all' } });
     expect(screen.queryByTestId('dataset-selector')).not.toBeInTheDocument();
     expect(screen.getAllByTitle(FIXTURE_DATASET_IDS.exploratory).length).toBeGreaterThan(0);
     expect(screen.getAllByTitle(FIXTURE_DATASET_IDS.verified).length).toBeGreaterThan(0);
@@ -88,6 +92,25 @@ describe('ModelsView', () => {
         `/models/${FIXTURE_DATASET_IDS.verified}/gemma4-e4b?role=primary`,
       ]),
     );
+  });
+
+  it('excludes measured models with incomplete evaluation coverage', () => {
+    const source = allFixtureSnapshotRecords.find((record): record is ModelSummary => record.kind === 'model_summary' && Boolean(record.pass_rate));
+    expect(source).toBeDefined();
+    evalStore.loadFixtures([
+      { ...source!, variant_id: 'fully-covered-model', display_name: 'Fully covered model', evaluation_coverage: 1 },
+      { ...source!, variant_id: 'partially-covered-model', display_name: 'Partially covered model', evaluation_coverage: 0.8 },
+    ], []);
+
+    render(
+      <MemoryRouter>
+        <ModelsView />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by evaluation status' }), { target: { value: 'evaluated' } });
+    expect(screen.getByRole('link', { name: 'Fully covered model' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Partially covered model' })).not.toBeInTheDocument();
   });
 
   it('quality filter includes verified exploratory rows without promoting partial rows', () => {
