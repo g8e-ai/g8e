@@ -28,7 +28,7 @@ export const SPONSORSHIP_USES = [
 export const PLATFORM_SOLO_NOTE = 'Solo operator · home-PC hardware · live pipeline';
 
 export const PLATFORM_LEDE =
-  'Need an agentic AI security and governance engineer? I bring 30 years in data protection and systems integration, plus hands-on delivery across zero-trust agent runtimes, multi-agent orchestration, LLM-as-judge evaluations, adversarial red teaming, and CI regression detection.';
+  "I bring 30 years in data protection and systems integration, plus hands-on delivery across zero-trust agent runtimes, multi-agent orchestration, LLM-as-judge evaluations, adversarial red teaming, and CI regression detection. Point me in a direction, I'll take care of it.";
 
 export const PLATFORM_OVERVIEW_PORTFOLIO_NOTE =
   'Available for roles and select consulting engagements in agentic AI security, governance, evaluation infrastructure, and trustworthy production systems.';

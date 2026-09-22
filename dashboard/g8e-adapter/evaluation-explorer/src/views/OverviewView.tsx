@@ -130,7 +130,7 @@ function SystemOverviewPanel({
       </div>
 
       <div className="sys-platform">
-        <h3 className="sys-platform-heading">Hire Danny for agentic AI security</h3>
+        <h3 className="sys-platform-heading">Need help with AI governance and security?</h3>
         <p className="sys-platform-lede">{PLATFORM_LEDE}</p>
         <div className="sys-platform-cta">
           <p className="sys-platform-cta-note">{PLATFORM_OVERVIEW_PORTFOLIO_NOTE}</p>

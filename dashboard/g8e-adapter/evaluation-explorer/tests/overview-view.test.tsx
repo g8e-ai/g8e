@@ -154,9 +154,11 @@ describe('OverviewView active campaign', () => {
       `/evaluations/${datasetId}/${evaluation.run_id}`,
     );
     expect(panel.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology');
-    expect(panel.getByRole('heading', { name: 'Hire Danny for agentic AI security' })).toBeInTheDocument();
+    expect(panel.getByRole('heading', { name: 'Need help with AI governance and security?' })).toBeInTheDocument();
+    expect(panel.queryByText(/Need an agentic AI security and governance engineer\?/i)).not.toBeInTheDocument();
     expect(panel.getByText(/30 years in data protection and systems integration/i)).toBeInTheDocument();
     expect(panel.getByText(/LLM-as-judge/i)).toBeInTheDocument();
+    expect(panel.getByText(/Point me in a direction, I'll take care of it/i)).toBeInTheDocument();
     expect(panel.getByRole('link', { name: 'Architecture Overview' })).toHaveAttribute('href', '/methodology#architecture');
     expect(panel.queryByRole('list', { name: 'Platform data flow, outbound only' })).not.toBeInTheDocument();
     expect(panel.queryByRole('link', { name: 'Book a Call' })).not.toBeInTheDocument();
