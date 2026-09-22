@@ -47,6 +47,10 @@ func (s *publicFailOnceFileSvc) WriteFile(ctx context.Context, relPath string, d
 	return s.RuntimeFileService.WriteFile(ctx, relPath, data, mode)
 }
 
+func validPublicProjectionBytes(campaignID string) string {
+	return fmt.Sprintf(`{"schema_version":"1.3.0","kind":"catalog_snapshot","dataset_id":"%s","quality_state":"live_in_progress","observed_at":"2026-09-21T00:00:00Z"}`, campaignID)
+}
+
 func TestPublicCmd_ExposesProductionSurface(t *testing.T) {
 	cmd := publicCmd()
 	expected := []string{"config", "init", "publish", "push", "repair-outbox", "rotate-key", "source", "status"}
@@ -121,7 +125,7 @@ func TestPublicPublishAndRotateKeyCommands_DeriveDurableSequenceAndAuthenticateM
 
 	input := models.PublicFeedRecordInput{
 		RecordType:  models.PublicFeedRecordTypeProjection,
-		RecordBytes: `{"campaign_id":"campaign-a"}`,
+		RecordBytes: validPublicProjectionBytes("campaign-a"),
 	}
 	inputBytes, err := json.Marshal(input)
 	require.NoError(t, err)
@@ -192,12 +196,14 @@ func TestPublicSourceTransitionCmd_RequiresConfirmationAndArchivesOldSource(t *t
 	activeConfig, err := readPublicExportConfig(context.Background(), fileSvc)
 	require.NoError(t, err)
 	assert.Equal(t, "deployment-new", activeConfig.SourceID)
-	archivedConfigBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedArchiveExportConfigPath)
+	archivedPaths, err := gateway.PublicFeedArchivePathsFor("deployment-old")
+	require.NoError(t, err)
+	archivedConfigBytes, err := fileSvc.ReadFile(context.Background(), archivedPaths.ExportConfig)
 	require.NoError(t, err)
 	var archivedConfig models.PublicExportConfig
 	require.NoError(t, json.Unmarshal(archivedConfigBytes, &archivedConfig))
 	assert.Equal(t, "deployment-old", archivedConfig.SourceID)
-	archivedSnapshot, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedArchiveSnapshotPath)
+	archivedSnapshot, err := fileSvc.ReadFile(context.Background(), archivedPaths.Snapshot)
 	require.NoError(t, err)
 	assert.Equal(t, "old-snapshot", string(archivedSnapshot))
 }
@@ -229,7 +235,7 @@ func TestPublicRotateKeyCmd_PreRegistersNewKeyAndDurablyRevokesOldKey(t *testing
 	setCmd.SetArgs([]string{"--mirror-origin", server.URL})
 	require.NoError(t, setCmd.Execute())
 	inputPath := filepath.Join(cfg.ProjectRoot, constants.TestPublicFeedRecordsFilename)
-	input := models.PublicFeedRecordInput{RecordType: models.PublicFeedRecordTypeProjection, RecordBytes: `{"campaign_id":"campaign-a"}`}
+	input := models.PublicFeedRecordInput{RecordType: models.PublicFeedRecordTypeProjection, RecordBytes: validPublicProjectionBytes("campaign-a")}
 	inputBytes, err := json.Marshal(input)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(inputPath, append(inputBytes, '\n'), constants.PermFilePrivate))
@@ -255,7 +261,7 @@ func TestPublicRotateKeyCmd_PreRegistersNewKeyAndDurablyRevokesOldKey(t *testing
 	setCmd = publicConfigSetCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
 	setCmd.SetArgs([]string{"--mirror-origin", restartedServer.URL})
 	require.NoError(t, setCmd.Execute())
-	input.RecordBytes = `{"campaign_id":"campaign-b"}`
+	input.RecordBytes = validPublicProjectionBytes("campaign-b")
 	inputBytes, err = json.Marshal(input)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(inputPath, append(inputBytes, '\n'), constants.PermFilePrivate))
@@ -267,7 +273,7 @@ func TestPublicRotateKeyCmd_PreRegistersNewKeyAndDurablyRevokesOldKey(t *testing
 	oldConfig.MirrorOrigin = restartedServer.URL
 	oldPublisher := gateway.NewPublicPublisherService(nil, oldFileSvc, slog.Default(), oldConfig, ed25519.PrivateKey(oldPrivateKeyBytes), oldConfig.SigningKeyID)
 	oldPublisher.SetIngestAuthToken(string(tokenBytes))
-	oldRecordBytes := `{"campaign_id":"old-key"}`
+	oldRecordBytes := validPublicProjectionBytes("old-key")
 	oldRecordHash := sha256.Sum256([]byte(oldRecordBytes))
 	err = oldPublisher.ExportBatch(context.Background(), []models.PublicFeedRecord{{
 		Sequence:    1,
@@ -391,7 +397,7 @@ func TestPublicPushCmd_RetriesDurableOutboxAfterCommandRestart(t *testing.T) {
 	require.NoError(t, json.Unmarshal(configBytes, &exportConfig))
 	exportConfig.RetryMaxAttempts = 1
 	require.NoError(t, writePublicExportConfig(context.Background(), fileSvc, exportConfig))
-	input := models.PublicFeedRecordInput{RecordType: models.PublicFeedRecordTypeProjection, RecordBytes: `{"campaign_id":"campaign-a"}`}
+	input := models.PublicFeedRecordInput{RecordType: models.PublicFeedRecordTypeProjection, RecordBytes: validPublicProjectionBytes("campaign-a")}
 	inputBytes, err := json.Marshal(input)
 	require.NoError(t, err)
 	inputPath := filepath.Join(cfg.ProjectRoot, constants.TestPublicFeedRecordsFilename)

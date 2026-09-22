@@ -270,7 +270,7 @@ func TestPublishJSONLViaGateway_ExportsRecords(t *testing.T) {
 	recordsPath := filepath.Join(t.TempDir(), "records.jsonl")
 	recordLine, err := json.Marshal(models.PublicFeedRecordInput{
 		RecordType:  models.PublicFeedRecordTypeProjection,
-		RecordBytes: `{"campaign_id":"campaign-a"}`,
+		RecordBytes: `{"schema_version":"1.3.0","kind":"catalog_snapshot","dataset_id":"campaign-a","quality_state":"live_in_progress","observed_at":"2026-09-21T00:00:00Z"}`,
 	})
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(recordsPath, append(recordLine, '\n'), 0o600))

@@ -75,6 +75,21 @@ func newPublicPublisherTestEnv(t *testing.T) (*PublicPublisherService, *Document
 // dict.
 func makeProjectionRecord(t *testing.T, seq int64, proj map[string]any) models.PublicFeedRecord {
 	t.Helper()
+	if _, ok := proj["schema_version"]; !ok {
+		proj["schema_version"] = "1.3.0"
+	}
+	if _, ok := proj["kind"]; !ok {
+		proj["kind"] = "catalog_snapshot"
+	}
+	if _, ok := proj["dataset_id"]; !ok {
+		proj["dataset_id"] = "test-dataset"
+	}
+	if _, ok := proj["quality_state"]; !ok {
+		proj["quality_state"] = "live_in_progress"
+	}
+	if _, ok := proj["observed_at"]; !ok {
+		proj["observed_at"] = "2026-09-21T00:00:00Z"
+	}
 	recordBytes, err := json.Marshal(proj)
 	require.NoError(t, err)
 	recordHash := sha256.Sum256(recordBytes)
@@ -84,6 +99,10 @@ func makeProjectionRecord(t *testing.T, seq int64, proj map[string]any) models.P
 		RecordHash:  hex.EncodeToString(recordHash[:]),
 		RecordBytes: string(recordBytes),
 	}
+}
+
+func validPublicViewRecordBytes() string {
+	return `{"schema_version":"1.3.0","kind":"catalog_snapshot","dataset_id":"test-dataset","quality_state":"live_in_progress","observed_at":"2026-09-21T00:00:00Z"}`
 }
 
 // TestExportBatch_SignsAndWritesOutbox verifies that ExportBatch builds a
@@ -103,6 +122,22 @@ func TestExportBatch_SendsConfiguredIngestToken(t *testing.T) {
 	require.NoError(t, publisher.ExportBatch(context.Background(), []models.PublicFeedRecord{
 		makeProjectionRecord(t, 1, map[string]any{"campaign_id": "campaign-1"}),
 	}))
+}
+
+func TestBuildBatch_RejectsEventBodyOutsideExplorerContract(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	recordBytes := []byte(`{"kind":"heartbeat"}`)
+	digest := sha256.Sum256(recordBytes)
+
+	_, err := publisher.BuildBatch([]models.PublicFeedRecord{{
+		Sequence:    1,
+		RecordType:  models.PublicFeedRecordTypeEvent,
+		RecordHash:  hex.EncodeToString(digest[:]),
+		RecordBytes: string(recordBytes),
+	}})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrPublicFeedRecordSchemaInvalid)
 }
 
 func TestExportBatch_SignsAndWritesOutbox(t *testing.T) {
@@ -895,7 +930,7 @@ func TestExportBatch_RejectsInvalidRecordType(t *testing.T) {
 	t.Cleanup(mirror.Close)
 	publisher.SetMirrorOrigin(mirror.URL)
 
-	recordBytes := `{"campaign_id":"c1"}`
+	recordBytes := validPublicViewRecordBytes()
 	recordHash := sha256.Sum256([]byte(recordBytes))
 	records := []models.PublicFeedRecord{
 		{
@@ -915,7 +950,7 @@ func TestExportBatch_RejectsInvalidRecordType(t *testing.T) {
 func TestVerifyBatch_SignatureValidation(t *testing.T) {
 	publisher, _, _, pubKeyHex := newPublicPublisherTestEnv(t)
 
-	recordBytes := `{"campaign_id":"c1"}`
+	recordBytes := validPublicViewRecordBytes()
 	recordHash := sha256.Sum256([]byte(recordBytes))
 	records := []models.PublicFeedRecord{
 		{
@@ -949,7 +984,7 @@ func TestVerifyBatch_SignatureValidation(t *testing.T) {
 func TestVerifyBatch_HashChainValidation(t *testing.T) {
 	publisher, _, _, _ := newPublicPublisherTestEnv(t)
 
-	recordBytes := `{"campaign_id":"c1"}`
+	recordBytes := validPublicViewRecordBytes()
 	recordHash := sha256.Sum256([]byte(recordBytes))
 	records := []models.PublicFeedRecord{
 		{

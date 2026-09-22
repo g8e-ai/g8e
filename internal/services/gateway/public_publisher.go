@@ -452,10 +452,8 @@ func (s *PublicPublisherService) BuildBatch(records []models.PublicFeedRecord) (
 		if err := checkProhibitedFields(r.RecordBytes); err != nil {
 			return models.PublicFeedBatch{}, fmt.Errorf("public-feed: build batch: %w", err)
 		}
-		if r.RecordType == models.PublicFeedRecordTypeProjection {
-			if err := publicdisclosure.ValidateAssignmentRecord("", []byte(r.RecordBytes)); err != nil {
-				return models.PublicFeedBatch{}, fmt.Errorf("public-feed: build assignment record: %w", err)
-			}
+		if err := publicdisclosure.ValidatePublicFeedRecord(r.RecordType, []byte(r.RecordBytes)); err != nil {
+			return models.PublicFeedBatch{}, fmt.Errorf("public-feed: build record: %w", err)
 		}
 	}
 

@@ -9,7 +9,7 @@
   },
 
   "public_feed_record": {
-    "_description": "One record in a signed batch. A record is a serialized projection or event payload with its SHA-256 content hash. The record type identifies whether it is a live projection, an event payload, a proof manifest, or a key revocation record.",
+    "_description": "One record in a signed batch. A record is a serialized, disclosure-safe payload with its SHA-256 content hash. `projection` records carry either a canonical campaign projection envelope or a public explorer snapshot record; `event` records carry a public explorer live-event record whose `kind` is in the closed live-event vocabulary; `proof_manifest` and `key_revocation` records carry their corresponding typed models. The transport record type and payload kind are validated together before signing and again at mirror ingest.",
     "sequence": {"type": "integer", "required": true, "description": "Monotonic sequence number assigned by the source"},
     "record_type": {"type": "string", "required": true, "description": "Record type from the closed vocabulary", "enum": ["projection", "event", "proof_manifest", "key_revocation"]},
     "record_hash": {"type": "string", "required": true, "description": "SHA-256 of the canonical record bytes (64-char hex)"},

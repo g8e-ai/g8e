@@ -25,6 +25,19 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
+func testPublicFeedProjectionBytes(t *testing.T) []byte {
+	t.Helper()
+	body, err := json.Marshal(map[string]any{
+		"schema_version": "1.3.0",
+		"kind":           "catalog_snapshot",
+		"dataset_id":     "test-dataset",
+		"quality_state":  "live_in_progress",
+		"observed_at":    "2026-09-21T00:00:00Z",
+	})
+	require.NoError(t, err)
+	return body
+}
+
 func TestPublicFeedControllerHandlePublicFeedBatches_RejectsWhenSpectatorUnavailable(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	controller := newPublicFeedController(PublicFeedControllerDeps{
@@ -74,8 +87,7 @@ func TestPublicFeedControllerHandlePublicFeedBatches_AcceptsBatch(t *testing.T) 
 		Spectator: func() *PublicSpectatorRuntime { return runtime },
 	})
 
-	recordBytes, err := json.Marshal(map[string]any{"campaign_id": "campaign-1"})
-	require.NoError(t, err)
+	recordBytes := testPublicFeedProjectionBytes(t)
 	recordHash := sha256.Sum256(recordBytes)
 	record := models.PublicFeedRecord{
 		Sequence:    1,
@@ -99,6 +111,41 @@ func TestPublicFeedControllerHandlePublicFeedBatches_AcceptsBatch(t *testing.T) 
 	require.NoError(t, runtime.Stop(t.Context()))
 }
 
+func TestPublicFeedControllerHandlePublicFeedBatches_RejectsUnknownEventKind(t *testing.T) {
+	privatePort := mustFreePort(t)
+	publicPort := mustFreePort(t)
+	runtime, err := NewPublicSpectatorRuntime(PublicSpectatorConfig{
+		Enabled:              true,
+		PrivateListenAddress: "127.0.0.1:" + privatePort,
+		PublicListenAddress:  "127.0.0.1:" + publicPort,
+		SourceID:             "test-source",
+	}, newProducerFileSvc(t), testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, runtime.Start(t.Context()))
+
+	recordBytes := []byte(`{"kind":"heartbeat"}`)
+	recordHash := sha256.Sum256(recordBytes)
+	body, err := json.Marshal([]models.PublicFeedRecord{{
+		Sequence:    1,
+		RecordType:  models.PublicFeedRecordTypeEvent,
+		RecordHash:  hex.EncodeToString(recordHash[:]),
+		RecordBytes: string(recordBytes),
+	}})
+	require.NoError(t, err)
+
+	controller := newPublicFeedController(PublicFeedControllerDeps{
+		Logger:    testutil.NewTestLogger(),
+		Responder: response.NewWriter(testutil.NewTestLogger()),
+		Spectator: func() *PublicSpectatorRuntime { return runtime },
+	})
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.PublicFeedBatches, bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	controller.handlePublicFeedBatches(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	require.NoError(t, runtime.Stop(t.Context()))
+}
+
 func TestPublicFeedControllerHandlePublicFeedSnapshot_ReturnsHighWater(t *testing.T) {
 	privatePort := mustFreePort(t)
 	publicPort := mustFreePort(t)
@@ -118,8 +165,7 @@ func TestPublicFeedControllerHandlePublicFeedSnapshot_ReturnsHighWater(t *testin
 		Spectator: func() *PublicSpectatorRuntime { return runtime },
 	})
 
-	recordBytes, err := json.Marshal(map[string]any{"campaign_id": "campaign-1"})
-	require.NoError(t, err)
+	recordBytes := testPublicFeedProjectionBytes(t)
 	recordHash := sha256.Sum256(recordBytes)
 	record := models.PublicFeedRecord{
 		Sequence:    1,

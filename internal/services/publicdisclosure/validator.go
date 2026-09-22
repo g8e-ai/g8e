@@ -12,10 +12,12 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
@@ -357,6 +359,196 @@ func unavailableReason(value string) bool {
 	default:
 		return false
 	}
+}
+
+// ValidatePublicFeedRecord validates the payload schema associated with one
+// public-feed transport record type. The transport enum alone is not enough:
+// browsers dispatch by the payload's closed kind vocabulary as well.
+func ValidatePublicFeedRecord(recordType models.PublicFeedRecordType, recordBytes []byte) error {
+	switch recordType {
+	case models.PublicFeedRecordTypeProjection:
+		fields, err := decodeObject(recordBytes)
+		if err != nil {
+			return publicFeedSchemaError(err.Error())
+		}
+		if _, hasMessageType := fields["message_type"]; hasMessageType {
+			if err := ValidateAssignmentRecord("", recordBytes); err != nil {
+				return fmt.Errorf("public feed projection: %w", err)
+			}
+			return nil
+		}
+		return validateExplorerViewRecord(recordBytes, false)
+	case models.PublicFeedRecordTypeEvent:
+		return validateExplorerViewRecord(recordBytes, true)
+	case models.PublicFeedRecordTypeProofManifest:
+		return validatePublicFeedManifest(recordBytes)
+	case models.PublicFeedRecordTypeKeyRevocation:
+		return validatePublicFeedKeyRevocation(recordBytes)
+	default:
+		return fmt.Errorf("%s: %q", constants.ErrPublicFeedRecordTypeInvalid, recordType)
+	}
+}
+
+func validateExplorerViewRecord(recordBytes []byte, event bool) error {
+	fields, err := decodeObject(recordBytes)
+	if err != nil {
+		return publicFeedSchemaError(err.Error())
+	}
+	if err := validateExplorerEnvelope(fields, event); err != nil {
+		return err
+	}
+	if event {
+		if err := allowed(fields, "schema_version", "kind", "dataset_id", "quality_state", "observed_at", "source_revision_label", "event_id", "run_id", "assignment_id", "task_id", "variant_id", "role", "lifecycle_status", "completed", "total", "stage_label", "metric_delta", "feed_sequence"); err != nil {
+			return publicFeedSchemaError(err.Error())
+		}
+		eventID, eventIDOK := stringField(fields, "event_id")
+		runID, runIDOK := stringField(fields, "run_id")
+		lifecycleStatus, lifecycleOK := stringField(fields, "lifecycle_status")
+		if !eventIDOK || eventID == "" || !runIDOK || runID == "" || !lifecycleOK || !publicFeedLifecycleStatus(lifecycleStatus) {
+			return publicFeedSchemaError("missing or invalid event identity")
+		}
+		completed, err := integerField(fields, "completed")
+		if err != nil {
+			return publicFeedSchemaError(err.Error())
+		}
+		total, err := integerField(fields, "total")
+		if err != nil {
+			return publicFeedSchemaError(err.Error())
+		}
+		if completed < 0 || total < 0 || completed > total {
+			return publicFeedSchemaError("event progress is invalid")
+		}
+		if _, ok := fields["role"]; ok {
+			role, roleOK := stringField(fields, "role")
+			if !roleOK || !publicFeedRole(role) {
+				return publicFeedSchemaError("invalid event role")
+			}
+		}
+		if value, ok := fields["feed_sequence"]; ok {
+			var sequence int64
+			if err := json.Unmarshal(value, &sequence); err != nil || sequence < 0 {
+				return publicFeedSchemaError("invalid event feed_sequence")
+			}
+		}
+		return nil
+	}
+	if _, ok := fields["kind"]; !ok {
+		return publicFeedSchemaError("missing projection kind")
+	}
+	return nil
+}
+
+func validateExplorerEnvelope(fields map[string]json.RawMessage, event bool) error {
+	schemaVersion, ok := stringField(fields, "schema_version")
+	if !ok || !publicFeedViewSchemaVersion(schemaVersion) {
+		return publicFeedSchemaError("unsupported schema_version")
+	}
+	kind, ok := stringField(fields, "kind")
+	if !ok || (event && !publicFeedEventKind(kind)) || (!event && !publicFeedSnapshotKind(kind)) {
+		return publicFeedSchemaError("unsupported kind")
+	}
+	datasetID, datasetPresent := stringField(fields, "dataset_id")
+	qualityState, qualityPresent := stringField(fields, "quality_state")
+	observedAt, observedPresent := stringField(fields, "observed_at")
+	if !datasetPresent || datasetID == "" || !qualityPresent || !publicFeedQualityState(qualityState) || !observedPresent || observedAt == "" {
+		return publicFeedSchemaError("missing or invalid envelope field")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, observedAt); err != nil {
+		return publicFeedSchemaError("observed_at must be RFC3339")
+	}
+	return nil
+}
+
+func validatePublicFeedManifest(recordBytes []byte) error {
+	var manifest models.PublicProofManifest
+	if err := decodeStrict(recordBytes, &manifest); err != nil {
+		return publicFeedSchemaError(err.Error())
+	}
+	if manifest.SchemaVersion == "" || manifest.ProofRootSHA256 == "" || manifest.CampaignID == "" || manifest.CampaignRevision == "" || manifest.VerifiedIndexGenerationHash == "" || manifest.ArtifactCount <= 0 || len(manifest.Artifacts) != manifest.ArtifactCount || manifest.VerifierInstructions == "" || manifest.GeneratedAt.IsZero() || manifest.SigningKeyID == "" || manifest.Signature == "" {
+		return publicFeedSchemaError("incomplete proof manifest")
+	}
+	return nil
+}
+
+func validatePublicFeedKeyRevocation(recordBytes []byte) error {
+	var record models.PublicKeyRevocationRecord
+	if err := decodeStrict(recordBytes, &record); err != nil {
+		return publicFeedSchemaError(err.Error())
+	}
+	if record.SourceID == "" || record.RevokedKeyID == "" || record.RevokedAt.IsZero() || record.NewKeyID == "" || record.RevocationSignature == "" {
+		return publicFeedSchemaError("incomplete key revocation")
+	}
+	return nil
+}
+
+func integerField(fields map[string]json.RawMessage, field string) (int64, error) {
+	value, ok := fields[field]
+	if !ok {
+		return 0, fmt.Errorf("missing event field %s", field)
+	}
+	var result int64
+	if err := json.Unmarshal(value, &result); err != nil {
+		return 0, fmt.Errorf("event field %s must be an integer", field)
+	}
+	return result, nil
+}
+
+func publicFeedViewSchemaVersion(value string) bool {
+	switch value {
+	case "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0":
+		return true
+	default:
+		return false
+	}
+}
+
+func publicFeedSnapshotKind(value string) bool {
+	switch value {
+	case "catalog_snapshot", "model_summary", "suite_summary", "evaluation_summary", "assignment_result", "methodology_snapshot":
+		return true
+	default:
+		return false
+	}
+}
+
+func publicFeedEventKind(value string) bool {
+	switch value {
+	case "evaluation_queued", "evaluation_started", "assignment_started", "stage_updated", "assignment_completed", "assignment_failed", "metric_updated", "evaluation_completed", "evaluation_failed", "evaluation_stopped":
+		return true
+	default:
+		return false
+	}
+}
+
+func publicFeedQualityState(value string) bool {
+	switch value {
+	case "verified_public", "exploratory_verified", "exploratory_partial", "live_in_progress", "terminal_failed", "dead_evidence", "not_evaluated", "unavailable":
+		return true
+	default:
+		return false
+	}
+}
+
+func publicFeedLifecycleStatus(value string) bool {
+	switch value {
+	case "queued", "running", "completed", "failed", "stopped":
+		return true
+	default:
+		return false
+	}
+}
+
+func publicFeedRole(value string) bool {
+	switch value {
+	case "primary", "assistant", "lite":
+		return true
+	default:
+		return false
+	}
+}
+
+func publicFeedSchemaError(detail string) error {
+	return fmt.Errorf("public feed record schema: %s: %w", detail, constants.ErrPublicFeedRecordSchemaInvalid)
 }
 
 func schemaError(detail string) error {

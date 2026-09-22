@@ -5,7 +5,7 @@ parent: Guides
 
 # Public Spectator Operations Guide
 
-Last Updated: 2026-09-20
+Last Updated: 2026-09-21
 Version: v2.1.11
 
 This guide covers the gateway-owned anonymous public mirror and evaluation explorer. It is separate from the passkey-authenticated owner-local observe frontend connected with `./g8e gw connect <origin>`; see [Generator-Neutral Builder Guide](./build_observe_frontend.md) and [Build a g8e-Compatible Frontend](./build_frontend.md#generator-neutral-observe-frontend).
@@ -36,7 +36,7 @@ The mirror is a visibility and publication boundary, not a Policy Decision Point
 
 ## Start a fresh source chain
 
-Use an explicit source transition when the owner archives the current public datasets and starts a new independent publication generation. Stop the Gateway publisher before changing its source state. The transition preserves the mirror store and archives the current publisher configuration, key, token, outbox, snapshot, key-rotation record, and local proof package under `.g8e/public-feed-archive/`. It creates a fresh source identity with a new signing key and ingest token; the first new batch starts at sequence one with the zero predecessor hash. The command fails when the fixed archive already exists and never merges the old and new chains.
+Use an explicit source transition when the owner archives the current public datasets and starts a new independent publication generation. Stop the Gateway publisher before changing its source state. The transition preserves the mirror store and archives the current publisher configuration, key, token, outbox, snapshot, key-rotation record, and local proof package under `.g8e/public-feed-archive/generations/<old-source-id>/`. Each source identity has one immutable local generation, so repeated transitions preserve every prior publisher generation and reject source-ID reuse. The command creates a fresh source identity with a new signing key and ingest token; the first new batch starts at sequence one with the zero predecessor hash and never merges the old and new chains. Existing single-generation archives are migrated into the generation layout without changing their contents.
 
 For the unified Compose deployment, run the transition against the Gateway volume rather than the Docker-host runtime:
 

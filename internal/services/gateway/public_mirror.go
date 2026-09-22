@@ -628,10 +628,8 @@ func (m *PublicMirrorServer) validateBatch(batch models.PublicFeedBatch) (models
 		if err := checkProhibitedFields(r.RecordBytes); err != nil {
 			return models.PublicFeedIngestRejectionSignatureInvalid, err
 		}
-		if r.RecordType == models.PublicFeedRecordTypeProjection {
-			if err := publicdisclosure.ValidateAssignmentRecord("", []byte(r.RecordBytes)); err != nil {
-				return models.PublicFeedIngestRejectionSignatureInvalid, fmt.Errorf("public mirror: validate assignment record: %w", err)
-			}
+		if err := publicdisclosure.ValidatePublicFeedRecord(r.RecordType, []byte(r.RecordBytes)); err != nil {
+			return models.PublicFeedIngestRejectionSignatureInvalid, fmt.Errorf("public mirror: validate record: %w", err)
 		}
 	}
 	if _, err := validatePublicKeyRevocations(batch, storeState); err != nil {

@@ -109,6 +109,21 @@ func (e *mirrorTestEnv) buildBatch(records []models.PublicFeedRecord, prevHash s
 // makeRecord creates a valid public feed record from a projection dict.
 func (e *mirrorTestEnv) makeRecord(seq int64, proj map[string]any) models.PublicFeedRecord {
 	e.t.Helper()
+	if _, ok := proj["schema_version"]; !ok {
+		proj["schema_version"] = "1.3.0"
+	}
+	if _, ok := proj["kind"]; !ok {
+		proj["kind"] = "catalog_snapshot"
+	}
+	if _, ok := proj["dataset_id"]; !ok {
+		proj["dataset_id"] = "test-dataset"
+	}
+	if _, ok := proj["quality_state"]; !ok {
+		proj["quality_state"] = "live_in_progress"
+	}
+	if _, ok := proj["observed_at"]; !ok {
+		proj["observed_at"] = "2026-09-21T00:00:00Z"
+	}
 	recordBytes, err := json.Marshal(proj)
 	require.NoError(e.t, err)
 	recordHash := sha256.Sum256(recordBytes)
@@ -1289,7 +1304,14 @@ func TestMirror_MultiSource_IsolatesSources(t *testing.T) {
 	require.True(t, resp1.Accepted)
 
 	// Ingest to source 2 (independent sequence space).
-	records2Bytes, _ := json.Marshal(map[string]any{"s": "2"})
+	records2Bytes, _ := json.Marshal(map[string]any{
+		"schema_version": "1.3.0",
+		"kind":           "catalog_snapshot",
+		"dataset_id":     "source-2-dataset",
+		"quality_state":  "live_in_progress",
+		"observed_at":    "2026-09-21T00:00:00Z",
+		"source_marker":  "2",
+	})
 	records2Hash := sha256.Sum256(records2Bytes)
 	records2 := []models.PublicFeedRecord{{
 		Sequence:    1,
@@ -1625,11 +1647,22 @@ func TestMirror_FullCycle_IngestThenRead(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestMirror_RecordType_AcceptsEventRecords verifies that the mirror accepts
-// event-type records in addition to projections.
+// canonical explorer live-event records in addition to projections.
 func TestMirror_RecordType_AcceptsEventRecords(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
-	eventBytes, _ := json.Marshal(map[string]any{"event_type": "eval.cycle.started", "cycle_id": "cyc-1"})
+	eventBytes, _ := json.Marshal(map[string]any{
+		"schema_version":   "1.3.0",
+		"kind":             "assignment_started",
+		"dataset_id":       "ds-live-run-1",
+		"quality_state":    "live_in_progress",
+		"observed_at":      "2026-09-21T00:00:00Z",
+		"event_id":         "event-1",
+		"run_id":           "run-1",
+		"lifecycle_status": "running",
+		"completed":        0,
+		"total":            1,
+	})
 	eventHash := sha256.Sum256(eventBytes)
 	records := []models.PublicFeedRecord{{
 		Sequence:    1,
@@ -1642,12 +1675,44 @@ func TestMirror_RecordType_AcceptsEventRecords(t *testing.T) {
 	assert.True(t, resp.Accepted)
 }
 
+func TestMirror_RecordType_RejectsUnknownEventKindWithoutAdvancingSequence(t *testing.T) {
+	env := newMirrorTestEnv(t)
+
+	eventBytes := []byte(`{"kind":"heartbeat"}`)
+	eventHash := sha256.Sum256(eventBytes)
+	batch := env.buildBatch([]models.PublicFeedRecord{{
+		Sequence:    1,
+		RecordType:  models.PublicFeedRecordTypeEvent,
+		RecordHash:  hex.EncodeToString(eventHash[:]),
+		RecordBytes: string(eventBytes),
+	}}, constants.PublicFeedZeroHashHex)
+	_, resp := env.sendIngest(batch)
+
+	assert.False(t, resp.Accepted)
+	var snapshot models.PublicFeedSnapshot
+	env.getJSON("/snapshot?source="+env.sourceID, &snapshot)
+	assert.Zero(t, snapshot.HighWaterSequence)
+}
+
 // TestMirror_RecordType_AcceptsProofManifestRecords verifies that the mirror
 // accepts proof_manifest-type records.
 func TestMirror_RecordType_AcceptsProofManifestRecords(t *testing.T) {
 	env := newMirrorTestEnv(t)
 
-	manifestBytes, _ := json.Marshal(map[string]any{"proof_root": "abc123", "campaign_id": "c1"})
+	manifestBytes, _ := json.Marshal(models.PublicProofManifest{
+		SchemaVersion:               constants.PublicProofManifestSchemaVersion,
+		ProofRootSHA256:             strings.Repeat("a", 64),
+		CampaignID:                  "c1",
+		CampaignRevision:            "rev1",
+		VerifiedIndexGenerationHash: strings.Repeat("b", 64),
+		VerificationOK:              true,
+		ArtifactCount:               1,
+		Artifacts:                   []models.PublicProofCatalogEntry{{ArtifactID: strings.Repeat("c", 64)}},
+		VerifierInstructions:        "verify",
+		GeneratedAt:                 time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC),
+		SigningKeyID:                "key-1",
+		Signature:                   strings.Repeat("d", 128),
+	})
 	manifestHash := sha256.Sum256(manifestBytes)
 	records := []models.PublicFeedRecord{{
 		Sequence:    1,
