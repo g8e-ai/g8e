@@ -447,6 +447,9 @@ func verifyCampaignRun(
 		provenancePolicy = evaluation.ModelProvenancePolicyStrict
 	}
 	verifier = verifier.WithModelProvenanceReader(provenanceReader, provenancePolicy)
+	if err := evaluation.CaptureCampaignRunWitnessEvidence(cmd.Context(), store, runID, observationReader, provenanceReader); err != nil {
+		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
+	}
 	report, err := verifier.VerifyRun(cmd.Context(), store, runID, catalog, artifacts)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)

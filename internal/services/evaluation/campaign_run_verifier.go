@@ -71,6 +71,39 @@ func (v *CampaignRunVerifier) WithModelProvenanceReader(reader *CampaignModelPro
 	return v
 }
 
+func CaptureCampaignRunWitnessEvidence(ctx context.Context, store *Store, runID string, providerReader *CampaignProviderObservationReader, provenanceReader *CampaignModelProvenanceReader) error {
+	if store == nil || runID == "" {
+		return fmt.Errorf("evaluation: capture campaign witness evidence: %w", constants.ErrMissingRequiredField)
+	}
+	assignments, err := store.ListAssignments(ctx, runID)
+	if err != nil {
+		return fmt.Errorf("evaluation: capture campaign witness evidence: list assignments: %w", err)
+	}
+	for _, assignment := range assignments {
+		if assignment == nil {
+			continue
+		}
+		exists, err := store.AssignmentResultExists(ctx, runID, assignment.GetAssignmentId())
+		if err != nil {
+			return fmt.Errorf("evaluation: capture campaign witness evidence: inspect assignment result: %w", err)
+		}
+		if !exists {
+			continue
+		}
+		result, err := store.LoadAssignmentResult(ctx, runID, assignment.GetAssignmentId())
+		if err != nil {
+			return fmt.Errorf("evaluation: capture campaign witness evidence: load assignment result: %w", err)
+		}
+		if err := providerReader.CaptureAssignmentEvidence(ctx, result); err != nil {
+			return err
+		}
+		if err := provenanceReader.CaptureAssignmentEvidence(ctx, result); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // VerifyRun recomputes assignment verification for every terminal assignment
 // with a persisted result and trace in one run.
 func (v *CampaignRunVerifier) VerifyRun(ctx context.Context, store *Store, runID string, catalog *evalv1.EvaluationScenarioCatalog, artifacts map[string]ScenarioArtifacts) (*evalv1.EvaluationVerificationReport, error) {

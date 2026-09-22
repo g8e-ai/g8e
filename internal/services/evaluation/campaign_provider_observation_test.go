@@ -288,6 +288,47 @@ func TestCampaignProviderObservationReaderWithRemote_LoadsGatewayEvidenceOnLocal
 	assert.Empty(t, unavailable)
 }
 
+func TestCampaignProviderObservationReader_CaptureAssignmentEvidencePersistsGatewayEvidence(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	attempt := &operatorv1.InferenceProviderAttemptRecord{
+		ProviderAttemptId: "attempt-captured",
+		TransactionId:     "transaction-captured",
+		Status:            operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_COMPLETED,
+		StartedAtUnixMs:   time.Unix(1_700_000_000, 0).UnixMilli(),
+		CompletedAtUnixMs: time.Unix(1_700_000_010, 0).UnixMilli(),
+	}
+	window := &evalv1.ProviderBoundaryObservationWindow{
+		SchemaVersion:              provider_observer.SchemaVersion,
+		ProviderAttemptId:          attempt.GetProviderAttemptId(),
+		ObserverId:                 "observer-test",
+		ObserverClockSource:        provider_observer.DefaultObserverClockSource,
+		WindowStartedAtUnixNanos:   uint64(time.Unix(1_700_000_000, 0).UnixNano()),
+		WindowCompletedAtUnixNanos: uint64(time.Unix(1_700_000_010, 0).UnixNano()),
+		AttemptStartedAtUnixMs:     attempt.GetStartedAtUnixMs(),
+		AttemptCompletedAtUnixMs:   attempt.GetCompletedAtUnixMs(),
+		Samples: []*evalv1.ProviderBoundaryHardwareSample{{
+			ObservedAtUnixNanos:        uint64(time.Unix(1_700_000_001, 0).UnixNano()),
+			GpuUtilizationAvailability: evalv1.ProviderHardwareMetricAvailability_PROVIDER_HARDWARE_METRIC_AVAILABILITY_REPORTED,
+			GpuUtilizationPercent:      10,
+		}},
+	}
+	digest, err := provider_observer.ComputeObservationDigest(window)
+	require.NoError(t, err)
+	window.ObservationDigest = digest
+	reader, err := NewCampaignProviderObservationReaderWithRemote(fileSvc, &stubProviderObservationRemote{window: window, attempt: attempt})
+	require.NoError(t, err)
+	result := &evalv1.EvaluationAssignmentResult{ModelInferences: []*evalv1.ModelInferenceRecord{{ProviderAttemptId: attempt.GetProviderAttemptId()}}}
+
+	require.NoError(t, reader.CaptureAssignmentEvidence(ctx, result))
+	localReader, err := NewCampaignProviderObservationReader(fileSvc)
+	require.NoError(t, err)
+	failures, unavailable := localReader.VerifyAssignmentProviderObservations(ctx, result, ProviderObservationPolicyStrict)
+	assert.Empty(t, failures)
+	assert.Empty(t, unavailable)
+}
+
 func TestCampaignProviderObservationReader_VerifyAssignmentProviderObservations_StrictMissingWindow(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

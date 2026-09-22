@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -24,6 +25,7 @@ import (
 // AttemptStore persists durable operator-local provider-attempt records.
 type AttemptStore interface {
 	Begin(ctx context.Context, record *operatorv1.InferenceProviderAttemptRecord) error
+	Import(ctx context.Context, record *operatorv1.InferenceProviderAttemptRecord) error
 	Complete(ctx context.Context, providerAttemptID, resultDigest string) error
 	Fail(ctx context.Context, providerAttemptID, failureSummary string) error
 	Get(ctx context.Context, providerAttemptID string) (*operatorv1.InferenceProviderAttemptRecord, error)
@@ -75,6 +77,29 @@ func (s *fileAttemptStore) Begin(ctx context.Context, record *operatorv1.Inferen
 	}
 	if record.GetStatus() == operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED {
 		record.Status = operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS
+	}
+	return s.write(ctx, record)
+}
+
+func (s *fileAttemptStore) Import(ctx context.Context, record *operatorv1.InferenceProviderAttemptRecord) error {
+	if record == nil || record.GetProviderAttemptId() == "" || record.GetStartedAtUnixMs() == 0 || record.GetStatus() == operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_UNSPECIFIED {
+		return fmt.Errorf("inference attempt store: import: %w", constants.ErrMissingRequiredField)
+	}
+	if record.GetStatus() != operatorv1.InferenceProviderAttemptStatus_INFERENCE_PROVIDER_ATTEMPT_STATUS_IN_PROGRESS && record.GetCompletedAtUnixMs() == 0 {
+		return fmt.Errorf("inference attempt store: import: %w", constants.ErrMissingRequiredField)
+	}
+	existing, err := s.Get(ctx, record.GetProviderAttemptId())
+	if err == nil {
+		if proto.Equal(existing, record) {
+			return nil
+		}
+		return constants.ErrInferenceProviderAttemptConflict
+	}
+	if !errors.Is(err, constants.ErrNotFound) {
+		return fmt.Errorf("inference attempt store: import: %w", err)
+	}
+	if err := s.fileSvc.MkdirAll(ctx, s.attemptsDir(), constants.PermDirStandard); err != nil {
+		return fmt.Errorf("inference attempt store: import mkdir: %w", err)
 	}
 	return s.write(ctx, record)
 }

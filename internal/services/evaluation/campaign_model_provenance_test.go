@@ -93,6 +93,34 @@ func TestLocalModelProvenanceReader_LoadRoundTrip(t *testing.T) {
 	assert.Equal(t, window.GetAttestationDigest(), loaded.GetAttestationDigest())
 }
 
+type stubModelProvenanceRemote struct {
+	window *evalv1.ModelProvenanceAttestationWindow
+}
+
+func (s *stubModelProvenanceRemote) Load(_ context.Context, providerAttemptID string) (*evalv1.ModelProvenanceAttestationWindow, error) {
+	if s == nil || s.window == nil || s.window.GetProviderAttemptId() != providerAttemptID {
+		return nil, constants.ErrNotFound
+	}
+	return s.window, nil
+}
+
+func TestCampaignModelProvenanceReader_CaptureAssignmentEvidencePersistsGatewayEvidence(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	fileSvc := storagetest.NewTestFileSvc(t, t.TempDir())
+	window := testModelProvenanceWindow("attempt-captured")
+	reader, err := NewCampaignModelProvenanceReaderWithRemote(fileSvc, &stubModelProvenanceRemote{window: window})
+	require.NoError(t, err)
+	result := &evalv1.EvaluationAssignmentResult{ModelInferences: []*evalv1.ModelInferenceRecord{{ProviderAttemptId: window.GetProviderAttemptId(), ModelVariant: &evalv1.ModelVariant{ModelDigest: window.GetExpectedModelDigest()}}}}
+
+	require.NoError(t, reader.CaptureAssignmentEvidence(ctx, result))
+	localReader, err := NewCampaignModelProvenanceReader(fileSvc)
+	require.NoError(t, err)
+	failures, unavailable := localReader.VerifyAssignmentModelProvenance(ctx, result, ModelProvenancePolicyStrict)
+	assert.Empty(t, failures)
+	assert.Empty(t, unavailable)
+}
+
 func TestCampaignModelProvenanceReader_VerifyAssignmentModelProvenance_StrictMissingWindow(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
