@@ -173,6 +173,8 @@ Every exported batch is a signed, append-only record bound to the following fiel
 
 A snapshot binds its high-water sequence (the last accepted sequence) and the feed-chain hash (the hash of the last accepted batch). A public client reconciles against the snapshot to establish a consistent cursor. The snapshot read accepts an optional retained batch-end sequence so a returning browser can validate that its cached snapshot remains on the retained chain before resuming from the cached cursor.
 
+A source transition never splices, renumbers, or deletes an existing accepted chain. The owner stops the publisher, archives its current configuration, signing key, ingest token, outbox, snapshot, key-rotation record, and local proof package, then creates a distinct source pseudonym with a fresh key, token, empty outbox, zero-hash predecessor, and sequence beginning at one. The mirror retains the archived source under its original source identity and marks the newly registered source as active for anonymous reads that omit an explicit source. Explicit source queries continue to reproduce the archived chain. A source transition does not upgrade, relabel, or republish historical datasets.
+
 ### Key rotation and revocation
 
 Signing keys are owner-only secrets stored in the host g8e runtime tree. They never appear in frontend runtime JSON, logs, events, reports, proofs, or contract packs. Key rotation proceeds as follows:

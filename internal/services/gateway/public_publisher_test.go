@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -223,8 +224,198 @@ func TestExportBatch_RetriesOnMirrorFailure(t *testing.T) {
 	assert.GreaterOrEqual(t, accepted.Load(), int32(2), "must have retried at least once")
 }
 
-// TestExportBatch_IdempotentRetransmit verifies that an unacknowledged outbox
-// tail batch is retransmitted with the same content hash.
+// TestExportBatch_RejectsMirrorTipThatConflictsWithPublisherSnapshot verifies
+// that a different accepted hash at the publisher's next sequence fails closed.
+func TestExportBatch_RejectsMirrorTipThatConflictsWithPublisherSnapshot(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	remoteTipHash := strings.Repeat("a", sha256.Size*2)
+	var firstBatch models.PublicFeedBatch
+	var receivedSequences []int64
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req models.PublicIngestRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		receivedSequences = append(receivedSequences, req.Batch.FirstSequence)
+		if len(receivedSequences) == 1 {
+			firstBatch = req.Batch
+			require.NoError(t, json.NewEncoder(w).Encode(models.PublicIngestResponse{Accepted: true, HighWaterSequence: 1, FeedChainHash: req.Batch.ContentHash}))
+			return
+		}
+		require.Equal(t, int64(2), req.Batch.FirstSequence)
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicIngestResponse{
+			Accepted:          false,
+			SourceID:          req.Batch.SourceID,
+			HighWaterSequence: 2,
+			FeedChainHash:     remoteTipHash,
+			BatchCount:        2,
+			RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+		}))
+	}))
+	t.Cleanup(mirror.Close)
+	publisher.SetMirrorOrigin(mirror.URL)
+
+	require.NoError(t, publisher.ExportBatch(context.Background(), []models.PublicFeedRecord{
+		makeProjectionRecord(t, 1, map[string]any{"campaign_id": "campaign-1"}),
+	}))
+	err := publisher.ExportBatch(context.Background(), []models.PublicFeedRecord{
+		makeProjectionRecord(t, 2, map[string]any{"campaign_id": "campaign-2"}),
+	})
+	require.ErrorIs(t, err, constants.ErrPublicFeedMirrorRejected)
+	assert.Equal(t, []int64{1, 2}, receivedSequences)
+	snapshot, snapshotErr := publisher.GetSnapshot(context.Background())
+	require.NoError(t, snapshotErr)
+	assert.Equal(t, int64(1), snapshot.HighWaterSequence)
+	assert.Equal(t, firstBatch.ContentHash, snapshot.FeedChainHash)
+}
+
+func TestSendToMirror_RejectsUnverifiedMirrorState(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	batch, err := publisher.BuildBatch([]models.PublicFeedRecord{
+		makeProjectionRecord(t, 1, map[string]any{"campaign_id": "campaign-1"}),
+	})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		response models.PublicIngestResponse
+	}{
+		{
+			name: "different source",
+			response: models.PublicIngestResponse{
+				SourceID:          "other-source",
+				HighWaterSequence: batch.LastSequence,
+				FeedChainHash:     batch.ContentHash,
+				BatchCount:        1,
+				RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+			},
+		},
+		{
+			name: "newer mirror tip",
+			response: models.PublicIngestResponse{
+				SourceID:          batch.SourceID,
+				HighWaterSequence: batch.LastSequence + 1,
+				FeedChainHash:     strings.Repeat("a", sha256.Size*2),
+				BatchCount:        2,
+				RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+			},
+		},
+		{
+			name: "equal sequence with different hash",
+			response: models.PublicIngestResponse{
+				SourceID:          batch.SourceID,
+				HighWaterSequence: batch.LastSequence,
+				FeedChainHash:     strings.Repeat("b", sha256.Size*2),
+				BatchCount:        1,
+				RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+			},
+		},
+		{
+			name: "malformed tip hash",
+			response: models.PublicIngestResponse{
+				SourceID:          batch.SourceID,
+				HighWaterSequence: batch.LastSequence + 1,
+				FeedChainHash:     "invalid",
+				BatchCount:        2,
+				RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+			},
+		},
+		{
+			name: "missing batch count",
+			response: models.PublicIngestResponse{
+				SourceID:          batch.SourceID,
+				HighWaterSequence: batch.LastSequence + 1,
+				FeedChainHash:     strings.Repeat("c", sha256.Size*2),
+				RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+			},
+		},
+		{
+			name: "non-duplicate rejection",
+			response: models.PublicIngestResponse{
+				SourceID:          batch.SourceID,
+				HighWaterSequence: batch.LastSequence,
+				FeedChainHash:     batch.ContentHash,
+				BatchCount:        1,
+				RejectionReason:   models.PublicFeedIngestRejectionEquivocation,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				require.NoError(t, json.NewEncoder(w).Encode(tt.response))
+			}))
+			t.Cleanup(mirror.Close)
+			err := publisher.sendToMirror(context.Background(), mirror.URL, "", batch)
+			require.ErrorIs(t, err, constants.ErrPublicFeedMirrorRejected)
+		})
+	}
+}
+
+func TestExportBatch_RecoversWhenMirrorAcceptedBatchBeforeResponseFailure(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	var accepted models.PublicFeedBatch
+	attempts := atomic.Int32{}
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req models.PublicIngestRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		if attempts.Add(1) == 1 {
+			accepted = req.Batch
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		require.Equal(t, accepted.ContentHash, req.Batch.ContentHash)
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicIngestResponse{
+			Accepted:          false,
+			SourceID:          accepted.SourceID,
+			HighWaterSequence: accepted.LastSequence,
+			FeedChainHash:     accepted.ContentHash,
+			RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+		}))
+	}))
+	t.Cleanup(mirror.Close)
+	publisher.SetMirrorOrigin(mirror.URL)
+
+	err := publisher.ExportBatch(context.Background(), []models.PublicFeedRecord{
+		makeProjectionRecord(t, 1, map[string]any{"campaign_id": "campaign-1"}),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), attempts.Load())
+	snapshot, err := publisher.GetSnapshot(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, accepted.LastSequence, snapshot.HighWaterSequence)
+	assert.Equal(t, accepted.ContentHash, snapshot.FeedChainHash)
+}
+
+func TestRetransmitOutbox_AcknowledgesBatchAlreadyAcceptedByMirror(t *testing.T) {
+	publisher, _, _, _ := newPublicPublisherTestEnv(t)
+	records := []models.PublicFeedRecord{makeProjectionRecord(t, 1, map[string]any{"campaign_id": "campaign-1"})}
+	batch, err := publisher.BuildBatch(records)
+	require.NoError(t, err)
+	require.NoError(t, publisher.writeOutboxEntry(context.Background(), batch))
+	require.NoError(t, publisher.updateOutboxStatus(context.Background(), batch.LastSequence, models.PublicFeedOutboxStatusSent, true))
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req models.PublicIngestRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		require.Equal(t, batch.ContentHash, req.Batch.ContentHash)
+		require.NoError(t, json.NewEncoder(w).Encode(models.PublicIngestResponse{
+			Accepted:          false,
+			SourceID:          batch.SourceID,
+			HighWaterSequence: batch.LastSequence,
+			FeedChainHash:     batch.ContentHash,
+			RejectionReason:   models.PublicFeedIngestRejectionDuplicateSequence,
+		}))
+	}))
+	t.Cleanup(mirror.Close)
+	publisher.SetMirrorOrigin(mirror.URL)
+
+	require.NoError(t, publisher.RetransmitOutbox(context.Background()))
+	snapshot, err := publisher.GetSnapshot(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, batch.LastSequence, snapshot.HighWaterSequence)
+	assert.Equal(t, batch.ContentHash, snapshot.FeedChainHash)
+}
+
 func TestExportBatch_IdempotentRetransmit(t *testing.T) {
 	publisher, _, _, _ := newPublicPublisherTestEnv(t)
 

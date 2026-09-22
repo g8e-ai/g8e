@@ -503,6 +503,30 @@ func TestMirror_RestartRejectsCorruptDurableState(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrPublicFeedMirrorStoreCorrupt)
 }
 
+func TestMirror_RegisterSourceKeyMakesNewSourceActiveWithoutRemovingArchivedSource(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	oldBatch := env.buildBatch([]models.PublicFeedRecord{
+		env.makeRecord(1, map[string]any{"dataset_id": "dataset-old"}),
+	}, constants.PublicFeedZeroHashHex)
+	_, response := env.sendIngest(oldBatch)
+	require.True(t, response.Accepted)
+
+	newPublicKey, _, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	require.NoError(t, env.mirror.RegisterSourceKey(context.Background(), "source-new", "key-new", newPublicKey))
+
+	var active models.PublicFeedBootstrap
+	assert.Equal(t, http.StatusOK, env.getJSON("/bootstrap", &active))
+	assert.Equal(t, "source-new", active.Snapshot.SourceID)
+	assert.Zero(t, active.Snapshot.HighWaterSequence)
+
+	var archived models.PublicFeedBootstrap
+	assert.Equal(t, http.StatusOK, env.getJSON("/bootstrap?source="+env.sourceID, &archived))
+	assert.Equal(t, env.sourceID, archived.Snapshot.SourceID)
+	assert.Equal(t, oldBatch.LastSequence, archived.Snapshot.HighWaterSequence)
+	assert.Equal(t, oldBatch.ContentHash, archived.Snapshot.FeedChainHash)
+}
+
 // ---------------------------------------------------------------------------
 // Sequence ordering tests
 // ---------------------------------------------------------------------------
@@ -528,6 +552,8 @@ func TestMirror_Sequence_RejectsOutOfOrder(t *testing.T) {
 	_, resp2 := env.sendIngest(batch2)
 	assert.False(t, resp2.Accepted)
 	assert.Equal(t, models.PublicFeedIngestRejectionDuplicateSequence, resp2.RejectionReason)
+	assert.Equal(t, batch1.LastSequence, resp2.HighWaterSequence)
+	assert.Equal(t, batch1.ContentHash, resp2.FeedChainHash)
 }
 
 // TestMirror_Sequence_RejectsFirstBatchNonZeroPrevHash verifies that the

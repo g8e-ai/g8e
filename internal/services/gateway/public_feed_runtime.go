@@ -203,6 +203,107 @@ func EnsureLocalPublicFeed(ctx context.Context, fileSvc fs.RuntimeFileService, s
 	return exportConfig, nil
 }
 
+type publicFeedArchivePath struct {
+	active  string
+	archive string
+}
+
+func TransitionLocalPublicFeed(ctx context.Context, fileSvc fs.RuntimeFileService, sourceID string) (models.PublicExportConfig, error) {
+	sourceID = strings.TrimSpace(sourceID)
+	if sourceID == "" {
+		return models.PublicExportConfig{}, constants.ErrPublicFeedSourceIDRequired
+	}
+	oldConfig, err := ReadPublicExportConfig(ctx, fileSvc)
+	if err != nil {
+		return models.PublicExportConfig{}, err
+	}
+	if sourceID == oldConfig.SourceID {
+		return models.PublicExportConfig{}, fmt.Errorf("%w: source is unchanged", constants.ErrValidationFailed)
+	}
+	if _, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedSigningKeyPath, ed25519.PrivateKeySize, constants.ErrPublicFeedSigningKeyRequired); err != nil {
+		return models.PublicExportConfig{}, err
+	}
+	if _, err := readPublicSecret(ctx, fileSvc, constants.PublicFeedIngestTokenPath, constants.PublicFeedIngestTokenBytes, constants.ErrPublicFeedIngestTokenRequired); err != nil {
+		return models.PublicExportConfig{}, err
+	}
+	archiveExists, err := fileSvc.FileExists(ctx, constants.PublicFeedArchiveDirname)
+	if err != nil {
+		return models.PublicExportConfig{}, fmt.Errorf("public-feed: inspect archive: %w", err)
+	}
+	if archiveExists {
+		return models.PublicExportConfig{}, constants.ErrPublicFeedArchiveExists
+	}
+
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return models.PublicExportConfig{}, fmt.Errorf("%w: %v", constants.ErrPublicFeedKeyGenFailed, err)
+	}
+	token := make([]byte, constants.PublicFeedIngestTokenBytes)
+	if _, err := rand.Read(token); err != nil {
+		return models.PublicExportConfig{}, fmt.Errorf("public-feed: generate ingest token: %w", err)
+	}
+	keyDigest := sha256.Sum256(publicKey)
+	newConfig := oldConfig
+	newConfig.SourceID = sourceID
+	newConfig.SigningKeyID = hex.EncodeToString(keyDigest[:])
+
+	paths := []publicFeedArchivePath{
+		{active: constants.PublicFeedExportConfigPath, archive: constants.PublicFeedArchiveExportConfigPath},
+		{active: constants.PublicFeedSigningKeyPath, archive: constants.PublicFeedArchiveSigningKeyPath},
+		{active: constants.PublicFeedIngestTokenPath, archive: constants.PublicFeedArchiveIngestTokenPath},
+		{active: constants.PublicFeedOutboxPath, archive: constants.PublicFeedArchiveOutboxPath},
+		{active: constants.PublicFeedSnapshotPath, archive: constants.PublicFeedArchiveSnapshotPath},
+		{active: constants.PublicFeedKeyRotationPath, archive: constants.PublicFeedArchiveKeyRotationPath},
+		{active: constants.PublicProofsDirname, archive: constants.PublicFeedArchiveProofsPath},
+		{active: constants.PublicProofCatalogFilename, archive: constants.PublicFeedArchiveProofCatalogPath},
+		{active: constants.PublicProofManifestFilename, archive: constants.PublicFeedArchiveProofManifestPath},
+	}
+	if err := fileSvc.MkdirAll(ctx, constants.PublicFeedArchiveDirname, constants.PermDirPrivate); err != nil {
+		return models.PublicExportConfig{}, fmt.Errorf("public-feed: create archive: %w", err)
+	}
+	moved := make([]publicFeedArchivePath, 0, len(paths))
+	rollback := func(cause error) error {
+		result := cause
+		for _, relPath := range []string{constants.PublicFeedExportConfigPath, constants.PublicFeedSigningKeyPath, constants.PublicFeedIngestTokenPath} {
+			if removeErr := fileSvc.Remove(ctx, relPath); removeErr != nil {
+				result = errors.Join(result, fmt.Errorf("public-feed: roll back new source path %s: %w", relPath, removeErr))
+			}
+		}
+		for index := len(moved) - 1; index >= 0; index-- {
+			if renameErr := fileSvc.Rename(ctx, moved[index].archive, moved[index].active); renameErr != nil {
+				result = errors.Join(result, fmt.Errorf("public-feed: restore archived path %s: %w", moved[index].active, renameErr))
+			}
+		}
+		if removeErr := fileSvc.RemoveAll(ctx, constants.PublicFeedArchiveDirname); removeErr != nil {
+			result = errors.Join(result, fmt.Errorf("public-feed: remove rolled back archive: %w", removeErr))
+		}
+		return result
+	}
+	for _, path := range paths {
+		exists, existsErr := fileSvc.FileExists(ctx, path.active)
+		if existsErr != nil {
+			return models.PublicExportConfig{}, rollback(fmt.Errorf("public-feed: inspect source path %s: %w", path.active, existsErr))
+		}
+		if !exists {
+			continue
+		}
+		if err := fileSvc.Rename(ctx, path.active, path.archive); err != nil {
+			return models.PublicExportConfig{}, rollback(fmt.Errorf("public-feed: archive path %s: %w", path.active, err))
+		}
+		moved = append(moved, path)
+	}
+	if err := fileSvc.WriteFile(ctx, constants.PublicFeedSigningKeyPath, []byte(hex.EncodeToString(privateKey)), constants.PermFilePrivate); err != nil {
+		return models.PublicExportConfig{}, rollback(fmt.Errorf("public-feed: write new signing key: %w", err))
+	}
+	if err := fileSvc.WriteFile(ctx, constants.PublicFeedIngestTokenPath, []byte(hex.EncodeToString(token)), constants.PermFilePrivate); err != nil {
+		return models.PublicExportConfig{}, rollback(fmt.Errorf("public-feed: write new ingest token: %w", err))
+	}
+	if err := writePublicExportConfig(ctx, fileSvc, newConfig); err != nil {
+		return models.PublicExportConfig{}, rollback(err)
+	}
+	return newConfig, nil
+}
+
 func writePublicExportConfig(ctx context.Context, fileSvc fs.RuntimeFileService, exportConfig models.PublicExportConfig) error {
 	if err := ValidatePublicExportConfig(exportConfig); err != nil {
 		return err

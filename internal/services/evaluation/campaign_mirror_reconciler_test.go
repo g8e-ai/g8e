@@ -30,6 +30,34 @@ func (s *stubCampaignMirrorProbe) DatasetPresent(_ context.Context, datasetID st
 	return s.present[datasetID], nil
 }
 
+type blockingCampaignMirrorProbe struct{}
+
+func (blockingCampaignMirrorProbe) DatasetPresent(ctx context.Context, _ string) (bool, error) {
+	<-ctx.Done()
+	return false, ctx.Err()
+}
+
+func TestCampaignMirrorReconciler_ReconcileVerifiedQueueReportsProgressAndBoundsEachRun(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	reconciler := NewCampaignMirrorReconciler(coordinator, store, blockingCampaignMirrorProbe{})
+	queue := &CampaignQueue{Models: []CampaignQueueModel{{Status: "verified", VerifiedRunID: "run-blocked"}}}
+	var progress []CampaignMirrorReconcileProgress
+
+	result, err := reconciler.ReconcileVerifiedQueue(context.Background(), queue, time.Millisecond, func(update CampaignMirrorReconcileProgress) {
+		progress = append(progress, update)
+	})
+
+	require.NoError(t, err)
+	assert.Contains(t, result.FailedRuns["run-blocked"], context.DeadlineExceeded.Error())
+	require.Len(t, progress, 2)
+	assert.Equal(t, CampaignMirrorReconcileChecking, progress[0].Status)
+	assert.Equal(t, CampaignMirrorReconcileFailed, progress[1].Status)
+	assert.ErrorIs(t, progress[1].Err, context.DeadlineExceeded)
+}
+
 func TestCampaignMirrorReconcilerRestoresMissingVerifiedRuns(t *testing.T) {
 	files := newCampaignMemoryFileService()
 	store := NewStore(files)
@@ -110,7 +138,7 @@ func TestCampaignMirrorReconcilerRestoresMissingVerifiedRuns(t *testing.T) {
 			VerifiedRunID: run.GetRunId(),
 		}},
 	}
-	result, err := reconciler.ReconcileVerifiedQueue(context.Background(), queue)
+	result, err := reconciler.ReconcileVerifiedQueue(context.Background(), queue, time.Minute, nil)
 	require.NoError(t, err)
 	assert.Equal(t, []string{run.GetRunId()}, result.RestoredRunIDs)
 	assert.Greater(t, len(exporter.records), 0)
@@ -124,7 +152,7 @@ func TestCampaignMirrorReconcilerRestoresMissingVerifiedRuns(t *testing.T) {
 	}
 	require.NoError(t, store.SaveCampaignVerification(context.Background(), run.GetRunId(), legacyReport))
 	exporter.records = nil
-	result, err = reconciler.ReconcileVerifiedQueue(context.Background(), queue)
+	result, err = reconciler.ReconcileVerifiedQueue(context.Background(), queue, time.Minute, nil)
 	require.NoError(t, err)
 	assert.Equal(t, []string{run.GetRunId()}, result.RestoredRunIDs)
 	assert.Greater(t, len(exporter.records), 0)

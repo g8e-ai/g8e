@@ -138,8 +138,10 @@ type PublicIngestRequest struct {
 // PublicIngestResponse is the authenticated ingest response from the mirror.
 type PublicIngestResponse struct {
 	Accepted          bool                            `json:"accepted"`
+	SourceID          string                          `json:"source_id,omitempty"`
 	HighWaterSequence int64                           `json:"high_water_sequence,omitempty"`
 	FeedChainHash     string                          `json:"feed_chain_hash,omitempty"`
+	BatchCount        int                             `json:"batch_count,omitempty"`
 	RejectionReason   PublicFeedIngestRejectionReason `json:"rejection_reason,omitempty"`
 }
 

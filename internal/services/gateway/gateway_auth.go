@@ -717,6 +717,9 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 	if len(r.TLS.PeerCertificates) > 0 {
 		wid := protocol.NewWorkloadIdentity()
 		cert := r.TLS.PeerCertificates[0]
+		if isCLISessionRefreshPath(r.URL.Path) {
+			return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
+		}
 
 		cliDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		if err != nil {
@@ -729,7 +732,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			// missing session is the refresh endpoint, where the cert is
 			// the proof of identity and the session may have been lost
 			// (e.g., gateway volume reset). All other paths fail closed.
-			if isCLISessionLifecyclePath(r.URL.Path) {
+			if isCLISessionRefreshPath(r.URL.Path) {
 				return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
 			}
 			s.logger.Warn("gateway: auth: CLI session not found", "cli_session_id", cliSessionID)
@@ -750,13 +753,22 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			return true
 		}
 
-		if !cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(time.Now()) {
+		if !cliSession.IsActive {
+			s.logger.Warn("gateway: auth: CLI session inactive", "cli_session_id", cliSessionID)
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrCLISessionInvalid.Error())
+			return true
+		}
+
+		checkTime := time.Now()
+		if (!cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(checkTime)) ||
+			(!cliSession.AbsoluteExpiresAt.IsZero() && cliSession.AbsoluteExpiresAt.Before(checkTime)) ||
+			(!cliSession.IdleExpiresAt.IsZero() && cliSession.IdleExpiresAt.Before(checkTime)) {
 			// Session expired. The only path that may proceed with an
 			// expired session is the refresh endpoint, where the cert is
 			// the proof of identity and the session expiry is the
 			// condition being recovered from. All other paths fail
 			// closed.
-			if isCLISessionLifecyclePath(r.URL.Path) {
+			if isCLISessionRefreshPath(r.URL.Path) {
 				return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
 			}
 			s.logger.Warn("gateway: auth: CLI session expired", "cli_session_id", cliSessionID)
@@ -850,49 +862,65 @@ func matchesCertificateFingerprint(cert *x509.Certificate, expected string) bool
 	return subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) == 1
 }
 
-func isCLISessionLifecyclePath(path string) bool {
-	return path == constants.APIPaths.AuthCLIRefresh || path == constants.APIPaths.AuthCLIBind || path == constants.APIPaths.AuthCLIUnbind
+func isCLISessionRefreshPath(path string) bool {
+	return path == constants.APIPaths.AuthCLIRefresh
 }
 
-// handleCLIRefreshAuth is the fail-closed auth path for the CLI session
-// refresh and bind endpoints. It is called from handleCLIAuth when the
-// session is expired or missing — the exact condition those endpoints
-// recover from. The cert is the proof of identity: it was already verified
-// by the mTLS handshake (revocation check, chain validation, expiry check)
-// in handleMTLSAuth before handleCLIAuth was called.
+// handleCLIRefreshAuth is the fail-closed auth path for the CLI session refresh endpoint. It runs before persisted CLI session and Operator binding validation because refresh recovers expired, missing, inactive, or stale session state. The cert is the proof of identity: handleMTLSAuth already verified its revocation status, chain, and expiry.
 //
 // Security guarantees:
 //   - The cert is verified (revocation, chain, expiry) by handleMTLSAuth.
 //   - The user ID is extracted from the cert URI SAN, never from the
 //     request body or the expired/missing session record.
 //   - The user is validated as active.
-//   - The cert URI SAN session ID must match the header-provided session
-//     ID, proving the cert was issued for this session.
+//   - The header session either matches the cert URI SAN or carries the same user and certificate fingerprint after a prior session rotation.
 //   - Only the refresh endpoint is reachable through this path; all other
 //     endpoints fail closed on expired/missing sessions.
+func (s *AuthService) cliRefreshSessionMatchesCertificate(cliSessionID, userID string, cert *x509.Certificate) (bool, error) {
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	if err != nil {
+		return false, fmt.Errorf("gateway: auth: load refreshed CLI session: %w", err)
+	}
+	if doc == nil {
+		return false, nil
+	}
+	session, err := decodeCLISession(doc)
+	if err != nil {
+		return false, fmt.Errorf("gateway: auth: decode refreshed CLI session: %w", err)
+	}
+	return session.UserID == userID && matchesCertificateFingerprint(cert, session.CertFingerprint), nil
+}
+
 func (s *AuthService) handleCLIRefreshAuth(w http.ResponseWriter, r *http.Request, cert *x509.Certificate, oldCLISessionID string, wid *protocol.WorkloadIdentity, next http.Handler) bool {
-	// Extract the user ID from the cert URI SAN. The cert URI SAN format
-	// is spiffe://g8e.local/cli/<user_id>/<cli_session_id>. The session ID
-	// in the SAN must match the header-provided session ID.
 	var userID string
 	var certSessionID string
 	for _, uri := range cert.URIs {
 		uriStr := uri.String()
-		if uid, ok := wid.ExtractUserID(uriStr); ok {
-			if sid, sidOk := wid.ExtractCLISessionID(uriStr); sidOk && sid == oldCLISessionID {
-				userID = uid
-				certSessionID = sid
-				break
-			}
+		uid, userOK := wid.ExtractUserID(uriStr)
+		sid, sessionOK := wid.ExtractCLISessionID(uriStr)
+		if userOK && sessionOK && wid.MatchesCLI(uriStr, uid, sid) {
+			userID = uid
+			certSessionID = sid
+			break
 		}
 	}
 	if userID == "" || certSessionID == "" {
-		s.logger.Warn("gateway: auth: CLI refresh: cert URI SAN does not match session ID",
-			"path", r.URL.Path,
-			"cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
-		)
+		s.logger.Warn("gateway: auth: CLI refresh: cert URI SAN is invalid", "path", r.URL.Path)
 		s.responder.Error(w, http.StatusForbidden, constants.ErrMTLSIdentityMismatch.Error())
 		return true
+	}
+	if certSessionID != oldCLISessionID {
+		matches, err := s.cliRefreshSessionMatchesCertificate(oldCLISessionID, userID, cert)
+		if err != nil {
+			s.logger.Error("gateway: auth: CLI refresh: validate rotated session binding", "cli_session_id", oldCLISessionID, string(constants.ConnectionStateError), err)
+			s.responder.Error(w, http.StatusInternalServerError, constants.ErrIdentityValidationFailed.Error())
+			return true
+		}
+		if !matches {
+			s.logger.Warn("gateway: auth: CLI refresh: cert does not match rotated session", "path", r.URL.Path, "cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8))
+			s.responder.Error(w, http.StatusForbidden, constants.ErrMTLSIdentityMismatch.Error())
+			return true
+		}
 	}
 
 	// Validate the user is still active. An expired session does not

@@ -34,6 +34,20 @@ The publication coordinator probes the gateway-owned dataset during catch-up. If
 
 The mirror is a visibility and publication boundary, not a Policy Decision Point or Policy Execution Point. It does not authorize a governed mutation, and its availability is not execution evidence. The Operator whose L4/L5 boundary produced an underlying governed result retains authoritative local execution evidence.
 
+## Start a fresh source chain
+
+Use an explicit source transition when the owner archives the current public datasets and starts a new independent publication generation. Stop the Gateway publisher before changing its source state. The transition preserves the mirror store and archives the current publisher configuration, key, token, outbox, snapshot, key-rotation record, and local proof package under `.g8e/public-feed-archive/`. It creates a fresh source identity with a new signing key and ingest token; the first new batch starts at sequence one with the zero predecessor hash. The command fails when the fixed archive already exists and never merges the old and new chains.
+
+For the unified Compose deployment, run the transition against the Gateway volume rather than the Docker-host runtime:
+
+```bash
+docker compose stop g8e-gateway
+docker compose run --rm --no-deps g8e-gateway public source transition --source-id <new-public-source-pseudonym> --yes
+docker compose up -d g8e-gateway
+```
+
+After restart, the Gateway registers the new source as active. Anonymous bootstrap, snapshot, history, and SSE requests that omit `source` use the new source. The archived source remains available through an explicit `?source=<old-public-source-pseudonym>` query and retains its original signed chain. Do not resume old campaign run IDs or relabel their datasets as part of the transition.
+
 ## Verify listener separation
 
 The private listener accepts authenticated publisher operations. Requests without the ingest token fail authentication. The public listener does not register mutation routes, so the three mutation paths return HTTP 404 even if a caller supplies a token:

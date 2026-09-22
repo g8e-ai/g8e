@@ -265,6 +265,40 @@ func TestHandleCLIAuth_RefreshedSessionValidatesOriginalCertificateFingerprint(t
 // session ID) on a non-refresh endpoint is rejected with 401
 // ErrCLISessionInvalid. Only the refresh endpoint bypasses the missing-
 // session check; all other endpoints fail closed.
+func TestHandleCLIRefreshAuth_RefreshedSessionValidatesOriginalCertificateFingerprint(t *testing.T) {
+	certRaw := []byte("refresh-auth-original-certificate")
+	certHash := sha256.Sum256(certRaw)
+	certFingerprint := hex.EncodeToString(certHash[:])
+	tests := []struct {
+		name              string
+		storedFingerprint string
+		expectedStatus    int
+	}{
+		{name: "matching fingerprint admits refresh", storedFingerprint: certFingerprint, expectedStatus: http.StatusOK},
+		{name: "different fingerprint rejects refresh", storedFingerprint: "different-fingerprint", expectedStatus: http.StatusForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "refresh-auth-rotated-session", false, tt.storedFingerprint)
+			wid := protocol.NewWorkloadIdentity()
+			cliURI, err := wid.CLISPIFFEURL(userID, "refresh-auth-original-session")
+			require.NoError(t, err)
+
+			req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthCLIRefresh, nil)
+			req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
+			req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{{
+				Raw:  certRaw,
+				URIs: []*url.URL{cliURI},
+			}}}
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
+
+			assert.Equal(t, tt.expectedStatus, rr.Code)
+		})
+	}
+}
+
 func TestHandleCLIAuth_MissingSessionOnNonRefreshEndpoint_FailClosed(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
 	auth := infra.Auth
@@ -315,6 +349,99 @@ func TestHandleCLIRefreshAuth_MissingSessionOnRefreshEndpoint_Admitted(t *testin
 	assert.Equal(t, http.StatusOK, rr.Code, "refresh endpoint should admit a missing session with a valid cert, body: %s", rr.Body.String())
 	assert.Equal(t, "admitted", rr.Body.String())
 	assert.Equal(t, user.ID, rr.Header().Get("X-Stamped-User-ID"))
+}
+
+func TestHandleCLIRefreshAuth_StaleOperatorBinding_Admitted(t *testing.T) {
+	auth, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "refresh-auth-stale-operator", false, "cert-fp")
+	operatorDoc, err := auth.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), "refresh-auth-operator")
+	require.NoError(t, err)
+	require.NotNil(t, operatorDoc)
+	var operator models.OperatorDocumentGo
+	data, err := json.Marshal(operatorDoc.Data)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(data, &operator))
+	operator.Status = constants.OperatorStatusTerminated
+	data, err = json.Marshal(operator)
+	require.NoError(t, err)
+	require.NoError(t, auth.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "refresh-auth-operator", data))
+
+	req := cliRefreshMTLSRequest(t, constants.APIPaths.AuthCLIRefresh, cliSessionID, userID)
+	rr := httptest.NewRecorder()
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code, "refresh endpoint should admit a stale operator binding with a valid cert, body: %s", rr.Body.String())
+	assert.Equal(t, "admitted", rr.Body.String())
+}
+
+func TestHandleCLIRefreshAuth_ServerInvalidSessionStates_Admitted(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*models.CLISession)
+	}{
+		{name: "deactivated session", mutate: func(session *models.CLISession) { session.IsActive = false }},
+		{name: "absolute expiry elapsed", mutate: func(session *models.CLISession) { session.AbsoluteExpiresAt = time.Now().Add(-time.Hour) }},
+		{name: "idle expiry elapsed", mutate: func(session *models.CLISession) { session.IdleExpiresAt = time.Now().Add(-time.Hour) }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			auth, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "refresh-auth-server-invalid", false, "cert-fp")
+			doc, err := auth.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+			require.NoError(t, err)
+			require.NotNil(t, doc)
+			var session models.CLISession
+			data, err := json.Marshal(doc.Data)
+			require.NoError(t, err)
+			require.NoError(t, json.Unmarshal(data, &session))
+			tt.mutate(&session)
+			data, err = json.Marshal(session)
+			require.NoError(t, err)
+			require.NoError(t, auth.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, data))
+
+			req := cliRefreshMTLSRequest(t, constants.APIPaths.AuthCLIRefresh, cliSessionID, userID)
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
+
+			assert.Equal(t, http.StatusOK, rr.Code, "refresh endpoint should admit a server-invalid session with a valid cert, body: %s", rr.Body.String())
+			assert.Equal(t, "admitted", rr.Body.String())
+		})
+	}
+}
+
+func TestHandleCLIAuth_ServerInvalidSessionStatesOnNonRefreshEndpoint_FailClosed(t *testing.T) {
+	tests := []struct {
+		name          string
+		mutate        func(*models.CLISession)
+		expectedError error
+	}{
+		{name: "deactivated session", mutate: func(session *models.CLISession) { session.IsActive = false }, expectedError: constants.ErrCLISessionInvalid},
+		{name: "absolute expiry elapsed", mutate: func(session *models.CLISession) { session.AbsoluteExpiresAt = time.Now().Add(-time.Hour) }, expectedError: constants.ErrCLISessionExpired},
+		{name: "idle expiry elapsed", mutate: func(session *models.CLISession) { session.IdleExpiresAt = time.Now().Add(-time.Hour) }, expectedError: constants.ErrCLISessionExpired},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			auth, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "nonrefresh-auth-server-invalid", false, "cert-fp")
+			doc, err := auth.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+			require.NoError(t, err)
+			require.NotNil(t, doc)
+			var session models.CLISession
+			data, err := json.Marshal(doc.Data)
+			require.NoError(t, err)
+			require.NoError(t, json.Unmarshal(data, &session))
+			tt.mutate(&session)
+			data, err = json.Marshal(session)
+			require.NoError(t, err)
+			require.NoError(t, auth.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, data))
+
+			req := cliRefreshMTLSRequest(t, constants.APIPaths.AuditReceipts, cliSessionID, userID)
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
+
+			assert.Equal(t, http.StatusUnauthorized, rr.Code)
+			assert.Contains(t, rr.Body.String(), tt.expectedError.Error())
+		})
+	}
 }
 
 // Suppress unused import warning for testutil when only a subset of helpers

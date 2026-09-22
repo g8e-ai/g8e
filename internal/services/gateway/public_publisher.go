@@ -579,7 +579,10 @@ func (s *PublicPublisherService) ExportBatch(ctx context.Context, records []mode
 	}
 
 	err := s.exportBatchOnce(ctx, records)
-	if err == nil || !isRepairableOutboxError(err) {
+	if err == nil {
+		return nil
+	}
+	if !isRepairableOutboxError(err) {
 		return err
 	}
 	if repairErr := s.RepairOutboxFromSnapshot(ctx); repairErr != nil {
@@ -773,6 +776,12 @@ func (s *PublicPublisherService) sendToMirror(ctx context.Context, origin, inges
 	}
 
 	if !ingestResp.Accepted {
+		if ingestResp.RejectionReason == models.PublicFeedIngestRejectionDuplicateSequence &&
+			ingestResp.SourceID == batch.SourceID &&
+			ingestResp.HighWaterSequence == batch.LastSequence &&
+			ingestResp.FeedChainHash == batch.ContentHash {
+			return nil
+		}
 		return fmt.Errorf("%w: %s", constants.ErrPublicFeedMirrorRejected, ingestResp.RejectionReason)
 	}
 

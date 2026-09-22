@@ -49,7 +49,7 @@ func (s *publicFailOnceFileSvc) WriteFile(ctx context.Context, relPath string, d
 
 func TestPublicCmd_ExposesProductionSurface(t *testing.T) {
 	cmd := publicCmd()
-	expected := []string{"config", "init", "publish", "push", "repair-outbox", "rotate-key", "status"}
+	expected := []string{"config", "init", "publish", "push", "repair-outbox", "rotate-key", "source", "status"}
 	require.Len(t, cmd.Commands(), len(expected))
 	for _, name := range expected {
 		child, _, err := cmd.Find([]string{name})
@@ -168,6 +168,38 @@ func TestPublicPublishAndRotateKeyCommands_DeriveDurableSequenceAndAuthenticateM
 	rotatedKeyBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedSigningKeyPath)
 	require.NoError(t, err)
 	assert.NotEqual(t, keyBytes, rotatedKeyBytes)
+}
+
+func TestPublicSourceTransitionCmd_RequiresConfirmationAndArchivesOldSource(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	initCmd := publicInitCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	initCmd.SetArgs([]string{"--source-id", "deployment-old", "--mirror-origin", "https://mirror.example"})
+	require.NoError(t, initCmd.Execute())
+	require.NoError(t, fileSvc.WriteFile(context.Background(), constants.PublicFeedSnapshotPath, []byte("old-snapshot"), constants.PermFilePrivate))
+
+	transitionCmd := publicSourceTransitionCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	transitionCmd.SetArgs([]string{"--source-id", "deployment-new"})
+	err := transitionCmd.Execute()
+	require.ErrorIs(t, err, constants.ErrPublicFeedSourceTransitionConfirmation)
+
+	var output bytes.Buffer
+	transitionCmd = publicSourceTransitionCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	transitionCmd.SetOut(&output)
+	transitionCmd.SetArgs([]string{"--source-id", "deployment-new", "--yes"})
+	require.NoError(t, transitionCmd.Execute())
+	assert.Contains(t, output.String(), "deployment-new")
+
+	activeConfig, err := readPublicExportConfig(context.Background(), fileSvc)
+	require.NoError(t, err)
+	assert.Equal(t, "deployment-new", activeConfig.SourceID)
+	archivedConfigBytes, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedArchiveExportConfigPath)
+	require.NoError(t, err)
+	var archivedConfig models.PublicExportConfig
+	require.NoError(t, json.Unmarshal(archivedConfigBytes, &archivedConfig))
+	assert.Equal(t, "deployment-old", archivedConfig.SourceID)
+	archivedSnapshot, err := fileSvc.ReadFile(context.Background(), constants.PublicFeedArchiveSnapshotPath)
+	require.NoError(t, err)
+	assert.Equal(t, "old-snapshot", string(archivedSnapshot))
 }
 
 func TestPublicRotateKeyCmd_PreRegistersNewKeyAndDurablyRevokesOldKey(t *testing.T) {

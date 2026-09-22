@@ -81,6 +81,17 @@ func TestPublicConfigSetCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
+func TestPublicSourceTransitionCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := publicSourceTransitionCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	cmd.SetArgs([]string{"--source-id", "deployment-new", "--yes"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
 func TestPublicPublishCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 	cmd := publicPublishCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))

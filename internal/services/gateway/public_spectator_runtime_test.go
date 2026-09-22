@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
@@ -69,6 +70,56 @@ func TestPublicSpectatorRuntime_StartsDedicatedExplorerListener(t *testing.T) {
 	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer stopCancel()
 	require.NoError(t, runtime.Stop(stopCtx))
+}
+
+func TestTransitionLocalPublicFeed_ArchivesPublisherStateAndStartsFreshSource(t *testing.T) {
+	fileSvc := newProducerFileSvc(t)
+	ctx := context.Background()
+	oldConfig, err := EnsureLocalPublicFeed(ctx, fileSvc, "source-old", "http://127.0.0.1:8081")
+	require.NoError(t, err)
+	oldKey, err := fileSvc.ReadFile(ctx, constants.PublicFeedSigningKeyPath)
+	require.NoError(t, err)
+	oldToken, err := fileSvc.ReadFile(ctx, constants.PublicFeedIngestTokenPath)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(ctx, constants.PublicFeedOutboxPath, []byte("old-outbox\n"), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(ctx, constants.PublicFeedSnapshotPath, []byte("old-snapshot\n"), constants.PermFilePrivate))
+
+	newConfig, err := TransitionLocalPublicFeed(ctx, fileSvc, "source-new")
+	require.NoError(t, err)
+	assert.Equal(t, "source-new", newConfig.SourceID)
+	assert.Equal(t, oldConfig.MirrorOrigin, newConfig.MirrorOrigin)
+	assert.NotEqual(t, oldConfig.SigningKeyID, newConfig.SigningKeyID)
+
+	archivedConfigBytes, err := fileSvc.ReadFile(ctx, constants.PublicFeedArchiveExportConfigPath)
+	require.NoError(t, err)
+	var archivedConfig models.PublicExportConfig
+	require.NoError(t, json.Unmarshal(archivedConfigBytes, &archivedConfig))
+	assert.Equal(t, oldConfig, archivedConfig)
+	archivedKey, err := fileSvc.ReadFile(ctx, constants.PublicFeedArchiveSigningKeyPath)
+	require.NoError(t, err)
+	assert.Equal(t, oldKey, archivedKey)
+	archivedToken, err := fileSvc.ReadFile(ctx, constants.PublicFeedArchiveIngestTokenPath)
+	require.NoError(t, err)
+	assert.Equal(t, oldToken, archivedToken)
+	archivedOutbox, err := fileSvc.ReadFile(ctx, constants.PublicFeedArchiveOutboxPath)
+	require.NoError(t, err)
+	assert.Equal(t, "old-outbox\n", string(archivedOutbox))
+	archivedSnapshot, err := fileSvc.ReadFile(ctx, constants.PublicFeedArchiveSnapshotPath)
+	require.NoError(t, err)
+	assert.Equal(t, "old-snapshot\n", string(archivedSnapshot))
+
+	newKey, err := fileSvc.ReadFile(ctx, constants.PublicFeedSigningKeyPath)
+	require.NoError(t, err)
+	assert.NotEqual(t, oldKey, newKey)
+	newToken, err := fileSvc.ReadFile(ctx, constants.PublicFeedIngestTokenPath)
+	require.NoError(t, err)
+	assert.NotEqual(t, oldToken, newToken)
+	outboxExists, err := fileSvc.FileExists(ctx, constants.PublicFeedOutboxPath)
+	require.NoError(t, err)
+	assert.False(t, outboxExists)
+	snapshotExists, err := fileSvc.FileExists(ctx, constants.PublicFeedSnapshotPath)
+	require.NoError(t, err)
+	assert.False(t, snapshotExists)
 }
 
 func TestValidatePublicMirrorListenAddresses_RejectsDuplicate(t *testing.T) {

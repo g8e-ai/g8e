@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,6 +47,7 @@ type PublicMirrorSourceState struct {
 }
 
 type PublicMirrorStoreState struct {
+	ActiveSourceID string                                `json:"active_source_id"`
 	Sources        map[string]*PublicMirrorSourceState   `json:"sources"`
 	KeyRegistry    map[string]ed25519.PublicKey          `json:"key_registry"`
 	RevokedKeys    map[string]time.Time                  `json:"revoked_keys"`
@@ -150,9 +152,42 @@ func normalizePublicMirrorStoreState(state *PublicMirrorStoreState) {
 			source.RetainedPreviousBatchHash = constants.PublicFeedZeroHashHex
 		}
 	}
+	if state.ActiveSourceID == "" && len(state.Sources) == 1 {
+		for sourceID := range state.Sources {
+			state.ActiveSourceID = sourceID
+		}
+	}
+}
+
+func activePublicMirrorSourceID(state PublicMirrorStoreState) string {
+	if state.ActiveSourceID != "" {
+		return state.ActiveSourceID
+	}
+	sourceIDs := make([]string, 0, len(state.Sources))
+	for sourceID := range state.Sources {
+		sourceIDs = append(sourceIDs, sourceID)
+	}
+	sort.Strings(sourceIDs)
+	if len(sourceIDs) == 0 {
+		return ""
+	}
+	return sourceIDs[0]
 }
 
 func validatePublicMirrorStoreState(state PublicMirrorStoreState) error {
+	if state.ActiveSourceID != "" {
+		activeKeyPrefix := state.ActiveSourceID + ":"
+		activeKeyKnown := false
+		for registryID := range state.KeyRegistry {
+			if strings.HasPrefix(registryID, activeKeyPrefix) {
+				activeKeyKnown = true
+				break
+			}
+		}
+		if !activeKeyKnown {
+			return fmt.Errorf("%w: active source key is missing", constants.ErrPublicFeedMirrorStoreCorrupt)
+		}
+	}
 	for keyID, key := range state.KeyRegistry {
 		if keyID == "" || len(key) != ed25519.PublicKeySize {
 			return fmt.Errorf("%w: invalid key registry entry", constants.ErrPublicFeedMirrorStoreCorrupt)
@@ -438,6 +473,7 @@ func (m *PublicMirrorServer) removeSSESubscriber(subscriber *mirrorSSESubscriber
 func (m *PublicMirrorServer) RegisterSourceKey(ctx context.Context, sourceID, keyID string, pubKey ed25519.PublicKey) error {
 	return m.mutateState(ctx, func(state *PublicMirrorStoreState) error {
 		state.KeyRegistry[m.keyRegistryKey(sourceID, keyID)] = append(ed25519.PublicKey(nil), pubKey...)
+		state.ActiveSourceID = sourceID
 		return nil
 	})
 }
@@ -999,6 +1035,14 @@ func (m *PublicMirrorServer) handleIngest(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		m.logger.Warn("mirror: ingest rejected", "source_id", req.Batch.SourceID, "reason", reason, "error", err)
 		resp := models.PublicIngestResponse{Accepted: false, RejectionReason: reason}
+		m.mu.RLock()
+		if state := m.state.Sources[req.Batch.SourceID]; state != nil {
+			resp.SourceID = req.Batch.SourceID
+			resp.HighWaterSequence = state.HighWaterSequence
+			resp.FeedChainHash = state.FeedChainHash
+			resp.BatchCount = state.BatchCount
+		}
+		m.mu.RUnlock()
 		m.writeJSON(w, http.StatusOK, resp)
 		return
 	}
@@ -1016,12 +1060,15 @@ func (m *PublicMirrorServer) handleIngest(w http.ResponseWriter, r *http.Request
 	state := m.state.Sources[req.Batch.SourceID]
 	hw := state.HighWaterSequence
 	fch := state.FeedChainHash
+	batchCount := state.BatchCount
 	m.mu.RUnlock()
 
 	resp := models.PublicIngestResponse{
 		Accepted:          true,
+		SourceID:          req.Batch.SourceID,
 		HighWaterSequence: hw,
 		FeedChainHash:     fch,
+		BatchCount:        batchCount,
 	}
 	m.writeJSON(w, http.StatusOK, resp)
 }
@@ -1167,11 +1214,7 @@ func (m *PublicMirrorServer) handleBootstrap(w http.ResponseWriter, r *http.Requ
 	defer m.mu.RUnlock()
 
 	if sourceID == "" {
-		// Return the first available source.
-		for sid := range m.state.Sources {
-			sourceID = sid
-			break
-		}
+		sourceID = activePublicMirrorSourceID(m.state)
 	}
 
 	state, ok := m.state.Sources[sourceID]
@@ -1238,10 +1281,7 @@ func (m *PublicMirrorServer) handleSnapshot(w http.ResponseWriter, r *http.Reque
 	defer m.mu.RUnlock()
 
 	if sourceID == "" {
-		for sid := range m.state.Sources {
-			sourceID = sid
-			break
-		}
+		sourceID = activePublicMirrorSourceID(m.state)
 	}
 
 	state, ok := m.state.Sources[sourceID]
@@ -1328,10 +1368,7 @@ func (m *PublicMirrorServer) handleHistory(w http.ResponseWriter, r *http.Reques
 	defer m.mu.RUnlock()
 
 	if sourceID == "" {
-		for sid := range m.state.Sources {
-			sourceID = sid
-			break
-		}
+		sourceID = activePublicMirrorSourceID(m.state)
 	}
 
 	state, ok := m.state.Sources[sourceID]
@@ -1424,10 +1461,7 @@ func (m *PublicMirrorServer) handleStream(w http.ResponseWriter, r *http.Request
 
 	m.mu.RLock()
 	if sourceID == "" {
-		for sid := range m.state.Sources {
-			sourceID = sid
-			break
-		}
+		sourceID = activePublicMirrorSourceID(m.state)
 	}
 	state, stateExists := m.state.Sources[sourceID]
 	var replayRecords []models.PublicFeedRecord

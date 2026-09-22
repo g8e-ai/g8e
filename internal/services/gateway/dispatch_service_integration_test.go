@@ -98,6 +98,7 @@ func seedCLISessionForDispatch(t *testing.T, infra *TestInfrastructure, userID s
 		ID:        cliSessionID,
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(1 * time.Hour),
+		IsActive:  true,
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
