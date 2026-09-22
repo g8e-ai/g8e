@@ -123,6 +123,8 @@ function scenarioLabel(category: (typeof SCENARIO_CATEGORIES)[number]): string {
   return formatEnum(category);
 }
 
+const [campaignGateway, ...campaignRemoteOperators] = G8E_CAMPAIGN_OPERATORS;
+
 function ArchitectureDiagram() {
   const edgeNodes = [
     { id: 'publish', label: 'Publication', sub: 'public-safe projection' },
@@ -596,17 +598,45 @@ export function MethodologyView() {
               title="Campaign operator topology"
               lede="One Gateway coordinates four enrolled remote Operator sessions — each remote session is an outbound-only g8e binary with its own evidence chain."
             >
-              <ul className="docs-operator-list">
-                {G8E_CAMPAIGN_OPERATORS.map((operator) => (
-                  <li key={operator.role}>
+              <div className="docs-operator-topology" role="group" aria-label="Campaign operator topology">
+                <div className="docs-operator-column">
+                  <span className="docs-operator-column-label">Remote Operator sessions</span>
+                  <ul className="docs-operator-list">
+                    {campaignRemoteOperators.map((operator) => (
+                      <li key={operator.role}>
+                        <div className="docs-operator-head">
+                          <strong>{operator.role}</strong>
+                          <code>{operator.wire}</code>
+                        </div>
+                        <span className="docs-operator-detail">{operator.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="docs-operator-connections">
+                  <span className="docs-operator-column-label">Outbound connection</span>
+                  <ul className="docs-operator-link-list" aria-label="Outbound mTLS connections to the Gateway">
+                    {campaignRemoteOperators.map((operator) => (
+                      <li className="docs-operator-link" key={operator.role}>
+                        <span className="sr-only">{operator.role} reaches the Gateway outbound over mTLS.</span>
+                        <strong>OUTBOUND</strong>
+                        <code>mTLS</code>
+                        <span className="docs-operator-link-arrow" aria-hidden="true">→</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="docs-operator-column">
+                  <span className="docs-operator-column-label">Policy Decision Point</span>
+                  <div className="docs-operator-node docs-operator-gateway-node">
                     <div className="docs-operator-head">
-                      <strong>{operator.role}</strong>
-                      <code>{operator.wire}</code>
+                      <strong>{campaignGateway.role}</strong>
+                      <code>{campaignGateway.wire}</code>
                     </div>
-                    <span>{operator.detail}</span>
-                  </li>
-                ))}
-              </ul>
+                    <span className="docs-operator-detail">{campaignGateway.detail}</span>
+                  </div>
+                </div>
+              </div>
               <p className="docs-card-foot">
                 Evidence for each session is written to the working directory where that binary was started — signed
                 receipts, audit vault entries, and campaign artifacts under <code>.g8e/data/</code>. No root
