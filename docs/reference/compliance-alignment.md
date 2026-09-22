@@ -41,7 +41,7 @@ The proof-backed reporting path separates collection, verification, grading, ana
 4. `framework_assessment@1.0.0` projects assertion assessments through the reviewed crosswalk without changing the underlying assertion outcomes.
 5. `BuildComplianceAnalysis` creates the canonical cross-framework analysis, including evidence-window completeness, gaps, evidence links, limitations, findings, remediation, evidence resources, and explicit responsibility and outcome sections.
 6. `BuildFrameworkProfiles` projects the canonical control assessments into one deterministic profile per catalog framework without re-grading or changing their outcomes.
-7. The shared renderer emits canonical JSON, OSCAL JSON, Markdown, HTML, and CLI views from the same analysis.
+7. The shared renderer emits canonical JSON, CSV, OSCAL JSON, Markdown, HTML, and CLI views from the same analysis.
 
 Implementation boundaries are in [`internal/services/compliance/evidence/`](../../internal/services/compliance/evidence/), [`internal/services/compliance/report/`](../../internal/services/compliance/report/), and [`internal/services/compliance/oscal.go`](../../internal/services/compliance/oscal.go). The [Proof-Backed Compliance Evidence](./compliance-evidence.md) reference explains evidence levels, persisted evidence, independent verification, and remaining bundle work.
 
