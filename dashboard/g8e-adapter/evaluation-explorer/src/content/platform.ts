@@ -132,7 +132,7 @@ export const G8E_MEASURED_TOGETHER = [
   'Governed inference dispatch to Ollama — never a direct provider API shortcut',
   'Host-bound tool, filesystem, and process execution through the Data Operator boundary',
   'Rubric pass/fail, tool scorecards, escalation disposition, and timing telemetry when observed',
-  'Signed campaign evidence with explicit quality states — live, exploratory, or verified',
+  'Signed campaign evidence with explicit current-standard, run-scoped, incomplete, legacy, live, and failed quality states',
 ] as const;
 
 export const G8E_CAMPAIGN_OPERATORS = [

@@ -11,7 +11,7 @@
 // selectable as soon as its catalog record lands.
 
 import { useCallback, useMemo, useState } from 'react';
-import type { CatalogSnapshot, DatasetKind, EvaluationSummary } from '../contract/types';
+import type { CatalogSnapshot, DatasetKind, EvaluationSummary, QualityState } from '../contract/types';
 import { evalStore, useStoreState } from './store';
 
 const PREF_KEYS = {
@@ -25,13 +25,14 @@ export interface DatasetOption {
   kind: DatasetKind;
   label: string;
   available: boolean;
+  quality?: QualityState;
 }
 
 const KIND_ORDER: DatasetKind[] = ['exploratory_baseline', 'verified_public_snapshot', 'live_run'];
 
 const KIND_LABELS: Record<DatasetKind, string> = {
   exploratory_baseline: 'Exploratory baseline',
-  verified_public_snapshot: 'Verified public snapshot',
+  verified_public_snapshot: 'Legacy public snapshot',
   live_run: 'Live run',
 };
 
@@ -77,6 +78,7 @@ function buildOptions(catalogs: CatalogSnapshot[], liveDatasetIds: string[]): Da
         kind,
         label: index === 0 ? KIND_LABELS[kind] : `${KIND_LABELS[kind]} · ${catalog.dataset_id}`,
         available: true,
+        quality: catalog.quality_state,
       });
     });
   }
@@ -94,7 +96,9 @@ function defaultDatasetId(
   const newestVerifiedLive = verifiedLive[0];
   if (newestVerifiedLive) return newestVerifiedLive.dataset_id;
 
-  const verifiedSnapshot = options.find((o) => o.available && o.kind === 'verified_public_snapshot');
+  const verifiedSnapshot = options.find(
+    (option) => option.available && option.kind === 'verified_public_snapshot' && option.quality === 'verified_public',
+  );
   if (verifiedSnapshot) return verifiedSnapshot.id;
 
   const liveRun = options.find((o) => o.available && o.kind === 'live_run');

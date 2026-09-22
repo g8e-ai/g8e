@@ -245,9 +245,10 @@ export function ModelsView() {
         </select>
         <select aria-label="Filter by quality state" value={filters.quality} onChange={(e) => updateFilter({ quality: e.target.value })}>
           <option value="all">All quality states</option>
-          <option value="exploratory_partial">Exploratory · partial</option>
-          <option value="exploratory_verified">Exploratory · verifier passed</option>
-          <option value="verified_public">Verified public</option>
+          <option value="verified_public">Current-standard verified</option>
+          <option value="exploratory_verified">Run-scoped verification passed</option>
+          <option value="exploratory_partial">Not fully verified</option>
+          <option value="legacy_unverified">Legacy · not current-standard verified</option>
           <option value="not_evaluated">Not evaluated</option>
         </select>
         <span className="result-count">{formatNumber(measuredCount)} measured · {formatNumber(models.length)} total</span>

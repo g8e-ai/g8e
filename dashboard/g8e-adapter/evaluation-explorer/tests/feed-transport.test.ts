@@ -330,7 +330,7 @@ describe('cross-dataset keying', () => {
     expect(explo!.dataset_id).toBe(fixtureModelSummaries[0]!.dataset_id);
     expect(verified!.dataset_id).toBe(fixtureVerifiedModelSummaries[0]!.dataset_id);
     expect(explo!.quality_state).toBe('exploratory_partial');
-    expect(verified!.quality_state).toBe('verified_public');
+    expect(verified!.quality_state).toBe('legacy_unverified');
   });
 
   it('recordKey is dataset-first so identical ids coexist', () => {

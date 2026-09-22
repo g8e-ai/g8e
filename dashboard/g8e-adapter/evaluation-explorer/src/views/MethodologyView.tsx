@@ -49,9 +49,9 @@ const DATASET_KIND_META: Record<
     compare: 'Model-role only · historical',
   },
   verified_public_snapshot: {
-    label: 'Verified public snapshot',
-    defaultQuality: 'verified_public',
-    compare: 'Checksum-bound · publication-eligible',
+    label: 'Legacy public snapshot',
+    defaultQuality: 'unavailable',
+    compare: 'Historical · not current-standard verified',
   },
   live_run: {
     label: 'Live run',
@@ -77,7 +77,7 @@ const ENGINEERING_RULES = [
   ['Dataset mixing', 'Never average or rank across datasets'],
   ['Live values', 'Provisional until terminal + verification'],
   ['Denominator', 'Eligible tasks only — repetitions do not inflate rates'],
-  ['Verification fail', 'Data stays visible under exploratory_partial'],
+  ['Verification incomplete', 'Data stays visible as Not fully verified'],
   ['Inventory models', 'inventory_only flag — not a quality state'],
 ] as const;
 
@@ -85,18 +85,18 @@ const SHIPPED_TODAY = [
   'A public Evaluation Explorer over a signed mirror feed — live campaign progress, historical runs, per-model results, and role-scoped comparison, all reconstructed from bootstrap, paginated history, and SSE.',
   'Model campaign benchmarks that run models through the production g8ee chat path: governed inference dispatch, tool and filesystem boundaries, and the Primary / Assistant / Lite role stack used in real workloads.',
   'A frozen 25-scenario agent benchmark catalog across nine behavior categories, graded on a real host boundary with rubric-based pass/fail, tool scorecards, escalation disposition, and timing telemetry when observed.',
-  'Explicit quality-state labeling on every record — verified, exploratory, live-in-progress, or failed — so you can see what has passed integrity checks and what is still provisional.',
+  'Explicit quality-state labeling on every record distinguishes current-standard verification, run-scoped verification, incomplete verification, legacy evidence, in-progress work, and failures.',
 ] as const;
 
 const BUILDING_TOWARD = [
-  'Checksum-bound verified public snapshots: publication-eligible results when a campaign completes and passes full verification.',
+  'Current-standard public snapshots: publication-eligible results only when a campaign completes and passes the current full verification contract.',
   'Independent provider-boundary observation for GPU and system-efficiency metrics, bound to inference attempts rather than inferred from latency.',
   'Heterogeneous system leaderboards that compare complete role stacks, separate from single-role model swaps.',
   'Broader model catalog coverage as campaigns scale — inventory-only entries today, measured candidates as runs complete.',
 ] as const;
 
 const HOW_TO_INTERPRET = [
-  ['Quality badges are the source of truth', 'Check the quality state on any row before drawing conclusions. verified_public means publication-eligible; exploratory_partial means measured but not yet verified; live_in_progress means still running.'],
+  ['Quality badges are the source of truth', 'Current-standard verified is publication-eligible under the current contract. Run-scoped verification passed is limited to one verifier population. Not fully verified is measured but incomplete. Legacy results have not been verified to current standards.'],
   ['Metrics are scoped on purpose', 'Comparisons stay inside one dataset, one designated role, and one denominator. Model evaluations swap a single role candidate; system evaluations compare complete stacks.'],
   ['Missing telemetry is disclosed', 'When a metric was not observed, the UI shows Unavailable with a reason instead of a zero that would look like a measurement.'],
   ['Confidence intervals describe uncertainty', 'Bootstrap bounds express sampling variance over tasks. Overlapping intervals mean the data cannot separate the candidates — that is a feature, not a bug.'],
@@ -471,8 +471,8 @@ export function MethodologyView() {
             Public benchmarks for models running through OpenDevOps.ai — a live deployment of the{' '}
             <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">g8e</a> AI governance suite.
             Evaluations execute on a home workstation over Docker and Ollama, publish through the gateway
-            mirror, and stream here over Cloudflare. Quality labels tell you exactly which stage each result
-            is in: live, exploratory, or verified.
+            mirror, and stream here over Cloudflare. Quality labels distinguish current-standard verification,
+            run-scoped verification, incomplete verification, legacy evidence, active runs, and failures.
           </p>
         </header>
 
@@ -673,7 +673,7 @@ export function MethodologyView() {
         <DocsSection id="feed" title="Current feed">
           {methodology ? (
             <>
-              <DocsCard title="Datasets" lede="Exploratory, verified, and live runs are labeled and compared separately.">
+              <DocsCard title="Datasets" lede="Current-standard, run-scoped, incomplete, legacy, and live results are labeled and compared separately.">
                 <DatasetTable catalogs={catalogs} />
               </DocsCard>
 

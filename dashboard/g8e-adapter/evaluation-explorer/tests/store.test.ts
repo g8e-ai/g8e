@@ -363,15 +363,15 @@ describe('EvalStore', () => {
     expect(state.assignments.size).toBe(12);
   });
 
-  it('verified dataset renders all record kinds', () => {
+  it('legacy dataset renders all record kinds', () => {
     loadFixtures(store);
-    const models = store.getModels('ds-verified-public-20260914');
+    const models = store.getModels('ds-legacy-public-20260914');
     expect(models.length).toBe(3);
-    const suites = store.getSuites('ds-verified-public-20260914');
+    const suites = store.getSuites('ds-legacy-public-20260914');
     expect(suites.length).toBe(1);
-    const evals = store.getEvaluations('ds-verified-public-20260914');
+    const evals = store.getEvaluations('ds-legacy-public-20260914');
     expect(evals.length).toBe(2);
-    const assignments = store.getAssignments('run-verified-ifeval-1', 'ds-verified-public-20260914');
+    const assignments = store.getAssignments('run-legacy-ifeval-1', 'ds-legacy-public-20260914');
     expect(assignments.length).toBe(5);
   });
 

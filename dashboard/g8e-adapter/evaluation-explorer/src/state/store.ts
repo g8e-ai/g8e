@@ -9,10 +9,11 @@
 //
 // Index keys are composite (dataset_id + record identity): the real corpus
 // publishes the same variant_id in multiple datasets (the registry models
-// appear in both the exploratory baseline and the verified public snapshot),
+// appear in both the exploratory baseline and the legacy public snapshot),
 // so bare-identity keys would let one dataset overwrite another.
 
 import { useRef, useSyncExternalStore } from 'react';
+import { VIEW_SCHEMA_VERSION } from '../contract/types';
 import type {
   AssignmentResult,
   CatalogSnapshot,
@@ -57,6 +58,20 @@ export function recordKey(datasetId: string, id: string): string {
 /** Model summaries are unique per dataset, variant, and designated role. */
 export function modelRecordKey(datasetId: string, variantId: string, role: ModelRole): string {
   return recordKey(datasetId, `${variantId}:${role}`);
+}
+
+function normalizeQualityRecord<T extends SnapshotRecord | LiveEvent>(record: T): T {
+  let qualityState = record.quality_state;
+  if (qualityState === 'verified_public' && record.schema_version !== VIEW_SCHEMA_VERSION) {
+    qualityState = 'legacy_unverified';
+  } else if (
+    record.kind === 'model_summary' &&
+    record.evaluation_coverage < 1 &&
+    (qualityState === 'verified_public' || qualityState === 'exploratory_verified')
+  ) {
+    qualityState = 'exploratory_partial';
+  }
+  return qualityState === record.quality_state ? record : { ...record, quality_state: qualityState };
 }
 
 export function modelComparisonId(model: ModelSummary): string {
@@ -357,6 +372,7 @@ export class EvalStore {
   }
 
   private indexRecord(state: StoreState, record: SnapshotRecord | LiveEvent, feedSequence?: number): void {
+    record = normalizeQualityRecord(record);
     switch (record.kind) {
       case 'catalog_snapshot':
         state.catalogs.set(record.dataset_id, record);

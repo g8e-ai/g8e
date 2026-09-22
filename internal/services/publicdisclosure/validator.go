@@ -495,7 +495,7 @@ func integerField(fields map[string]json.RawMessage, field string) (int64, error
 
 func publicFeedViewSchemaVersion(value string) bool {
 	switch value {
-	case "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0":
+	case "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0":
 		return true
 	default:
 		return false
@@ -522,7 +522,7 @@ func publicFeedEventKind(value string) bool {
 
 func publicFeedQualityState(value string) bool {
 	switch value {
-	case "verified_public", "exploratory_verified", "exploratory_partial", "live_in_progress", "terminal_failed", "dead_evidence", "not_evaluated", "unavailable":
+	case "verified_public", "exploratory_verified", "exploratory_partial", "legacy_unverified", "live_in_progress", "terminal_failed", "dead_evidence", "not_evaluated", "unavailable":
 		return true
 	default:
 		return false

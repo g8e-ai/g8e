@@ -162,10 +162,13 @@ export function EvaluationsView() {
         </select>
         <select aria-label="Filter by quality" value={qualityFilter} onChange={(e) => setFilter('quality', e.target.value)}>
           <option value="all">All quality states</option>
-          <option value="exploratory_partial">Exploratory · partial</option>
-          <option value="exploratory_verified">Exploratory · verifier passed</option>
-          <option value="verified_public">Verified public</option>
-          <option value="live_in_progress">Live · in progress</option>
+          <option value="verified_public">Current-standard verified</option>
+          <option value="exploratory_verified">Run-scoped verification passed</option>
+          <option value="exploratory_partial">Not fully verified</option>
+          <option value="legacy_unverified">Legacy · not current-standard verified</option>
+          <option value="live_in_progress">In progress · unverified</option>
+          <option value="terminal_failed">Failed · unverified</option>
+          <option value="dead_evidence">Evidence invalid</option>
         </select>
       </div>
 

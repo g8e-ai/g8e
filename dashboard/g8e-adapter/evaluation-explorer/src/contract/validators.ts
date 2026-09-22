@@ -740,9 +740,9 @@ export function isAssignmentResult(value: unknown): asserts value is AssignmentR
   assertOptional(value.evaluation_unit, 'assignment_result.evaluation_unit', (v, p) => assertEnum(v, EVALUATION_UNITS, p));
   assertOptional(value.stack_id, 'assignment_result.stack_id', assertString);
   if (value.benchmark_observations !== undefined) assertBenchmarkObservations(value.benchmark_observations, 'assignment_result.benchmark_observations');
-  if (value.schema_version !== '1.4.0') {
+  if (value.schema_version !== '1.4.0' && value.schema_version !== '1.5.0') {
     for (const field of ['scenario_summary', 'semantic_grade_summaries', 'activity_summary', 'evidence_bindings', 'verification_metadata'] as const) {
-      assert(value[field] === undefined, `assignment_result.${field}`, 'field requires schema 1.4.0');
+      assert(value[field] === undefined, `assignment_result.${field}`, 'field requires schema 1.4.0 or later');
     }
   } else {
     if (value.scenario_summary !== undefined) assertPublicScenarioSummary(value.scenario_summary, 'assignment_result.scenario_summary');
