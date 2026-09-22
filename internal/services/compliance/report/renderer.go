@@ -63,18 +63,22 @@ func RenderComplianceAnalysis(analysis *compliancev1.ComplianceAnalysis, format 
 	if _, err := ParseFormat(string(format)); err != nil {
 		return nil, err
 	}
-	oscal, err := compliance.NewOSCALExporter(nil).GenerateAssessmentResults(analysis)
-	if err != nil {
+	if err := compliance.ValidateAnalysis(analysis); err != nil {
 		return nil, fmt.Errorf("compliance report: validate analysis for rendering: %w", err)
 	}
 
 	var body []byte
 	var mediaType string
+	var err error
 	switch format {
 	case FormatJSON:
 		body, err = compliancev1.MarshalCanonical(analysis)
 		mediaType = constants.MediaTypeJSON
 	case FormatOSCAL:
+		oscal, exportErr := compliance.NewOSCALExporter(nil).GenerateAssessmentResults(analysis)
+		if exportErr != nil {
+			return nil, fmt.Errorf("compliance report: render %s: %w", format, exportErr)
+		}
 		body, err = json.MarshalIndent(oscal, "", "  ")
 		mediaType = constants.MediaTypeOSCALJSON
 	case FormatMarkdown:
@@ -92,19 +96,6 @@ func RenderComplianceAnalysis(analysis *compliancev1.ComplianceAnalysis, format 
 	}
 	if err != nil {
 		return nil, fmt.Errorf("compliance report: render %s: %w", format, err)
-	}
-	if format == FormatOSCAL {
-		validator, err := compliance.NewOSCALDocumentValidator()
-		if err != nil {
-			return nil, err
-		}
-		validation, err := validator.ValidateBytes(body)
-		if err != nil {
-			return nil, err
-		}
-		if !validation.GetValid() {
-			return nil, fmt.Errorf("%w: rendered OSCAL has %d structural failures and %d semantic failures", constants.ErrOSCALValidationFailed, len(validation.GetStructuralFailures()), len(validation.GetSemanticFailures()))
-		}
 	}
 	return &RenderedAnalysis{Format: format, MediaType: mediaType, Body: body}, nil
 }

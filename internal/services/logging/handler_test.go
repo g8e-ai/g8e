@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 	"testing"
@@ -78,6 +79,21 @@ func TestNewStdoutLogger(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewLogger_InfoLevelWritesToAllOutputs(t *testing.T) {
+	var fileOutput bytes.Buffer
+	var stderrOutput bytes.Buffer
+	logger, err := NewLogger("info", io.MultiWriter(&fileOutput, &stderrOutput))
+	require.NoError(t, err)
+
+	logger.Info("gateway ready")
+	logger.Debug("debug details")
+
+	assert.Contains(t, fileOutput.String(), "INFO: gateway ready")
+	assert.Contains(t, stderrOutput.String(), "INFO: gateway ready")
+	assert.NotContains(t, fileOutput.String(), "debug details")
+	assert.NotContains(t, stderrOutput.String(), "debug details")
 }
 
 func TestLogHandler_Handle(t *testing.T) {

@@ -65,6 +65,22 @@ func rendererTestAnalysis() *compliancev1.ComplianceAnalysis {
 	}
 }
 
+func rendererTestOSCALInvalidAnalysis() *compliancev1.ComplianceAnalysis {
+	analysis := rendererTestAnalysis()
+	analysis.EvidenceResources = []*compliancev1.ComplianceEvidenceReference{{
+		ArtifactId:         "action-receipt:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ArtifactType:       "action-receipt",
+		Sha256:             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		MediaType:          "invalid/media-type",
+		SchemaRef:          "g8e.operator.v1.ActionReceipt",
+		ProducerIdentity:   "gateway",
+		ScopeId:            analysis.GetScopeRef(),
+		VerificationStatus: "verified",
+		BundlePath:         constants.EvaluationReportFilename,
+	}}
+	return analysis
+}
+
 func TestRenderComplianceAnalysis_RendersEveryViewFromCanonicalAnalysis(t *testing.T) {
 	analysis := rendererTestAnalysis()
 	tests := []struct {
@@ -173,19 +189,23 @@ func TestRenderComplianceAnalysis_TextRenderersEscapeAnalysisContent(t *testing.
 	}
 }
 
+func TestRenderComplianceAnalysis_NonOSCALViewsDoNotRequireOSCALProjection(t *testing.T) {
+	analysis := rendererTestOSCALInvalidAnalysis()
+	_, err := RenderComplianceAnalysis(analysis, FormatOSCAL)
+	require.ErrorIs(t, err, constants.ErrOSCALValidationFailed)
+
+	for _, format := range []Format{FormatJSON, FormatMarkdown, FormatHTML, FormatCSV, FormatCLI} {
+		t.Run(string(format), func(t *testing.T) {
+			rendered, err := RenderComplianceAnalysis(analysis, format)
+
+			require.NoError(t, err)
+			assert.Equal(t, format, rendered.Format)
+		})
+	}
+}
+
 func TestRenderComplianceAnalysis_RejectsInvalidInput(t *testing.T) {
-	invalidOSCALAnalysis := rendererTestAnalysis()
-	invalidOSCALAnalysis.EvidenceResources = []*compliancev1.ComplianceEvidenceReference{{
-		ArtifactId:         "action-receipt:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		ArtifactType:       "action-receipt",
-		Sha256:             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		MediaType:          "invalid/media-type",
-		SchemaRef:          "g8e.operator.v1.ActionReceipt",
-		ProducerIdentity:   "gateway",
-		ScopeId:            invalidOSCALAnalysis.GetScopeRef(),
-		VerificationStatus: "verified",
-		BundlePath:         constants.EvaluationReportFilename,
-	}}
+	invalidOSCALAnalysis := rendererTestOSCALInvalidAnalysis()
 	tests := []struct {
 		name     string
 		analysis *compliancev1.ComplianceAnalysis

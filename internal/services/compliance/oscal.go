@@ -323,7 +323,7 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 // framework control assessments become findings, and every evidence anchor
 // resolves to a typed content-addressed resource in back matter.
 func (e *OSCALExporter) GenerateAssessmentResults(analysis *compliancev1.ComplianceAnalysis) (*OSCALAssessmentResults, error) {
-	if err := validateOSCALAnalysis(analysis); err != nil {
+	if err := ValidateAnalysis(analysis); err != nil {
 		return nil, err
 	}
 
@@ -382,7 +382,7 @@ func (e *OSCALExporter) GenerateAssessmentResults(analysis *compliancev1.Complia
 	return document, nil
 }
 
-func validateOSCALAnalysis(analysis *compliancev1.ComplianceAnalysis) error {
+func ValidateAnalysis(analysis *compliancev1.ComplianceAnalysis) error {
 	if analysis == nil {
 		return fmt.Errorf("%w: nil compliance analysis", constants.ErrValidationFailed)
 	}
