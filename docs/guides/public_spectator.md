@@ -20,6 +20,8 @@ The gateway-owned public spectator runs inside the Gateway process when started 
 
 Durable feed, mirror, signing keys, and outbox state live in the gateway volume (`g8e-gateway-data`). Docker stacks do **not** bind-mount host `.g8e/public-feed` or `.g8e/public-mirror`.
 
+The unified Compose deployment binds host ports 8081, 8082, and 5173 to loopback only. The Gateway listens on the container's `g8e-net` interfaces, and the fixed Docker bridge gateway address `172.28.0.1/32` is the only trusted proxy CIDR for `CF-Connecting-IP`. The Gateway container has a 16,384 soft and hard `nofile` limit and uses `unless-stopped` recovery; restart does not delete mirror state or publisher outbox state.
+
 Campaign publication from the host CLI uses owner mTLS and `POST /api/v1/public-feed/batches`. Host `g8e public init` is not required for Docker or evaluation campaigns.
 
 Campaign publication emits public-safe assignment records with the enriched `1.1.0` result envelope. Assignment Details can show approved scenario context, typed grades, grouped activity, bounded resource observations, verification metadata, and content bindings. The source run and catalog bindings must match; unavailable capture remains unavailable, and public evidence bindings are references rather than proof of public accessibility. A passing campaign verification report also publishes report-scoped `exploratory_verified` model-summary revisions for eligible variant/role aggregates. The browser reads these stored revisions and does not promote model quality locally.
@@ -68,7 +70,7 @@ curl -fsS http://127.0.0.1:8082/proof-catalog
 curl -fsS http://127.0.0.1:8082/proof-manifest
 ```
 
-The history endpoint applies its optional `kind` filter before cursor pagination, so catalog reconciliation reads only `catalog_snapshot` records instead of replaying every assignment projection. A bounded SSE client connects to `/stream`, supplies the source pseudonym and optional `since_id`, and reconciles sequence plus feed-chain state against `/snapshot`. Public clients omit credentials. The mirror permits concurrent browser streams up to its global connection ceiling, so multiple visitors behind the loopback Cloudflare connector do not collapse into one stream. Anonymous request limits use Cloudflare's connecting IP only when the immediate peer is loopback. Freshness is derived from the last accepted batch and transitions honestly through active, delayed, stale, intentionally stopped, safety stopped, and source offline.
+The history endpoint applies its optional `kind` filter before cursor pagination, so catalog reconciliation reads only `catalog_snapshot` records instead of replaying every assignment projection. A bounded SSE client connects to `/stream`, supplies the source pseudonym and optional `since_id`, and reconciles sequence plus feed-chain state against `/snapshot`. Public clients omit credentials. The mirror permits concurrent browser streams up to its global connection ceiling, so multiple visitors behind the Cloudflare connector do not collapse into one stream. Anonymous request limits use `CF-Connecting-IP` only when the immediate socket peer belongs to the explicitly configured trusted-proxy CIDR set and the header contains exactly one valid unicast address. Forwarding headers from every other peer are ignored. Freshness is derived from the last accepted batch and transitions honestly through active, delayed, stale, intentionally stopped, safety stopped, and source offline.
 
 ## Create the Cloudflare tunnel
 

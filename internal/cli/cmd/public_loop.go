@@ -126,7 +126,7 @@ func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error 
 	}
 	ingestToken := hex.EncodeToString(tokenBytes)
 	store := gateway.NewRuntimePublicMirrorStore(fileSvc)
-	mirror, err := gateway.NewPublicMirrorServer(slog.Default(), store)
+	mirror, err := gateway.NewPublicMirrorServer(slog.Default(), store, gateway.PublicMirrorConfig{})
 	if err != nil {
 		return err
 	}
@@ -179,7 +179,7 @@ func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error 
 	if err := publisher.ExportBatch(ctx, []models.PublicFeedRecord{secondRecord}); err == nil {
 		return fmt.Errorf("mirror outage did not retain a retryable batch")
 	}
-	restartedMirror, err := gateway.NewPublicMirrorServer(slog.Default(), store)
+	restartedMirror, err := gateway.NewPublicMirrorServer(slog.Default(), store, gateway.PublicMirrorConfig{})
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error 
 	}
 	restartedPrivateServer.Close()
 	restartedPublicServer.Close()
-	finalMirror, err := gateway.NewPublicMirrorServer(slog.Default(), store)
+	finalMirror, err := gateway.NewPublicMirrorServer(slog.Default(), store, gateway.PublicMirrorConfig{})
 	if err != nil {
 		return err
 	}

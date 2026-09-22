@@ -60,11 +60,12 @@ type GatewayConfig struct {
 	AllowedOrigins      []string              `json:"allowed_origins,omitempty"`
 	DoctrineDir         string                `json:"doctrine_dir,omitempty"`
 
-	PublicSpectatorEnabled     bool   `json:"public_spectator_enabled"`
-	PublicSpectatorPrivateAddr string `json:"public_spectator_private_addr,omitempty"`
-	PublicSpectatorPublicAddr  string `json:"public_spectator_public_addr,omitempty"`
-	EvalExplorerAddr           string `json:"eval_explorer_addr,omitempty"`
-	EvalExplorerRoot           string `json:"eval_explorer_root,omitempty"`
+	PublicSpectatorEnabled           bool     `json:"public_spectator_enabled"`
+	PublicSpectatorPrivateAddr       string   `json:"public_spectator_private_addr,omitempty"`
+	PublicSpectatorPublicAddr        string   `json:"public_spectator_public_addr,omitempty"`
+	EvalExplorerAddr                 string   `json:"eval_explorer_addr,omitempty"`
+	EvalExplorerRoot                 string   `json:"eval_explorer_root,omitempty"`
+	PublicSpectatorTrustedProxyCIDRs []string `json:"public_spectator_trusted_proxy_cidrs,omitempty"`
 }
 
 // RunGateway starts the Operator in gateway mode - the platform's central
@@ -149,6 +150,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	gatewayCfg.Gateway.PublicSpectatorPublicAddr = cfg.PublicSpectatorPublicAddr
 	gatewayCfg.Gateway.EvalExplorerAddr = cfg.EvalExplorerAddr
 	gatewayCfg.Gateway.EvalExplorerRoot = cfg.EvalExplorerRoot
+	gatewayCfg.Gateway.PublicSpectatorTrustedProxyCIDRs = cfg.PublicSpectatorTrustedProxyCIDRs
 	gatewayCfg.Version = vi.Version
 
 	// Git for ledger (embedded go-git)

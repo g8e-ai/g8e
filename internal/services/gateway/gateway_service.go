@@ -530,6 +530,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		if cfg.Gateway.PublicBaseURL != "" {
 			spectatorCfg.PublicBaseURL = cfg.Gateway.PublicBaseURL
 		}
+		spectatorCfg.TrustedProxyCIDRs = cfg.Gateway.PublicSpectatorTrustedProxyCIDRs
 		spectator, err := NewPublicSpectatorRuntime(spectatorCfg, b.fileSvc, logger)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: initialize public spectator: %w", err)

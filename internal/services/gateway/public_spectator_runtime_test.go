@@ -36,11 +36,13 @@ func TestPublicSpectatorRuntime_StartsMirrorListeners(t *testing.T) {
 		PrivateListenAddress:  "127.0.0.1:" + privatePort,
 		PublicListenAddress:   "127.0.0.1:" + publicPort,
 		ExplorerListenAddress: "",
+		TrustedProxyCIDRs:     []string{"172.28.0.1/32"},
 	}, fileSvc, testutil.NewTestLogger())
 	require.NoError(t, err)
 	require.NoError(t, runtime.Start(ctx))
 
 	waitForBootstrap(t, "http://127.0.0.1:"+publicPort+"/bootstrap")
+	require.Len(t, runtime.mirror.trustedProxyNetworks, 1)
 
 	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer stopCancel()

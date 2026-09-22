@@ -54,7 +54,7 @@ type mirrorTestEnv struct {
 func newMirrorTestEnv(t *testing.T) *mirrorTestEnv {
 	t.Helper()
 	fileSvc := newProducerFileSvc(t)
-	mirror, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(fileSvc))
+	mirror, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(fileSvc), PublicMirrorConfig{})
 	require.NoError(t, err)
 	pub, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -275,19 +275,96 @@ func TestMirror_IngestAuth_AcceptsWithValidToken(t *testing.T) {
 	assert.Equal(t, int64(1), ingestResp.HighWaterSequence)
 }
 
-func TestPublicMirrorClientIDUsesCloudflareAddressFromLoopbackConnector(t *testing.T) {
+func TestPublicMirrorClientIDUsesCloudflareAddressFromConfiguredProxy(t *testing.T) {
+	fileSvc := newProducerFileSvc(t)
+	mirror, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(fileSvc), PublicMirrorConfig{
+		TrustedProxyCIDRs: []string{"172.28.0.1/32"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, mirror.SetAnonymousReadRateLimit(1, time.Minute))
+
+	handler := mirror.PublicHandler()
 	request := httptest.NewRequest(http.MethodGet, "/snapshot", nil)
-	request.RemoteAddr = "127.0.0.1:32000"
+	request.RemoteAddr = "172.28.0.1:32000"
 	request.Header.Set("CF-Connecting-IP", "192.0.2.20")
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, request)
+	assert.NotEqual(t, http.StatusTooManyRequests, first.Code)
 
-	assert.Equal(t, "192.0.2.20", publicMirrorClientID(request))
+	request = httptest.NewRequest(http.MethodGet, "/snapshot", nil)
+	request.RemoteAddr = "172.28.0.1:32001"
+	request.Header.Set("CF-Connecting-IP", "192.0.2.21")
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, request)
+	assert.NotEqual(t, http.StatusTooManyRequests, second.Code)
 
-	request.RemoteAddr = "198.51.100.4:32000"
-	assert.Equal(t, "198.51.100.4", publicMirrorClientID(request))
+	request = httptest.NewRequest(http.MethodGet, "/snapshot", nil)
+	request.RemoteAddr = "198.51.100.4:32002"
+	request.Header.Set("CF-Connecting-IP", "192.0.2.22")
+	untrusted := httptest.NewRecorder()
+	handler.ServeHTTP(untrusted, request)
+	assert.NotEqual(t, http.StatusTooManyRequests, untrusted.Code)
 
-	request.RemoteAddr = "127.0.0.1:32000"
-	request.Header.Set("CF-Connecting-IP", "not-an-ip")
-	assert.Equal(t, "127.0.0.1", publicMirrorClientID(request))
+	request = httptest.NewRequest(http.MethodGet, "/snapshot", nil)
+	request.RemoteAddr = "198.51.100.4:32003"
+	request.Header.Set("CF-Connecting-IP", "192.0.2.23")
+	untrusted = httptest.NewRecorder()
+	handler.ServeHTTP(untrusted, request)
+	assert.Equal(t, http.StatusTooManyRequests, untrusted.Code)
+
+	request = httptest.NewRequest(http.MethodGet, "/snapshot", nil)
+	request.RemoteAddr = "172.28.0.1:32004"
+	request.Header.Add("CF-Connecting-IP", "192.0.2.24")
+	request.Header.Add("CF-Connecting-IP", "192.0.2.25")
+	assert.Equal(t, "172.28.0.1", mirror.publicMirrorClientID(request))
+}
+
+func TestNewPublicMirrorServerRejectsInvalidTrustedProxyCIDR(t *testing.T) {
+	fileSvc := newProducerFileSvc(t)
+	_, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(fileSvc), PublicMirrorConfig{
+		TrustedProxyCIDRs: []string{"not-a-cidr"},
+	})
+	assert.ErrorIs(t, err, constants.ErrPublicFeedTrustedProxyConfig)
+}
+
+func TestPublicMirrorClientIDRejectsNonUnicastForwardedAddresses(t *testing.T) {
+	fileSvc := newProducerFileSvc(t)
+	mirror, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(fileSvc), PublicMirrorConfig{
+		TrustedProxyCIDRs: []string{"172.28.0.1/32"},
+	})
+	require.NoError(t, err)
+
+	for _, forwardedAddress := range []string{"127.0.0.1", "::1", "0.0.0.0", "224.0.0.1"} {
+		t.Run(forwardedAddress, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/snapshot", nil)
+			request.RemoteAddr = "172.28.0.1:32000"
+			request.Header.Set("CF-Connecting-IP", forwardedAddress)
+			assert.Equal(t, "172.28.0.1", mirror.publicMirrorClientID(request))
+		})
+	}
+}
+
+func TestMirror_AnonymousReadRateLimitExpiresClientWindowsAndCompactsExpiryQueue(t *testing.T) {
+	env := newMirrorTestEnv(t)
+	require.NoError(t, env.mirror.SetAnonymousReadRateLimit(1, time.Minute))
+	now := time.Now().UTC()
+	env.mirror.now = func() time.Time { return now }
+
+	request := httptest.NewRequest(http.MethodGet, "/snapshot?source="+env.sourceID, nil)
+	request.RemoteAddr = "198.51.100.10:32000"
+	response := httptest.NewRecorder()
+	env.mirror.PublicHandler().ServeHTTP(response, request)
+	assert.NotEqual(t, http.StatusTooManyRequests, response.Code)
+
+	now = now.Add(time.Minute)
+	request = httptest.NewRequest(http.MethodGet, "/snapshot?source="+env.sourceID, nil)
+	request.RemoteAddr = "198.51.100.10:32001"
+	response = httptest.NewRecorder()
+	env.mirror.PublicHandler().ServeHTTP(response, request)
+	assert.NotEqual(t, http.StatusTooManyRequests, response.Code)
+	assert.Len(t, env.mirror.anonymousRateClients, 1)
+	assert.Len(t, env.mirror.anonymousRateExpirations, 1)
+	assert.Zero(t, env.mirror.anonymousRateExpiryHead)
 }
 
 func TestMirror_AnonymousReadRateLimitRejectsAndResetsPerClientWindow(t *testing.T) {
@@ -413,7 +490,7 @@ func TestMirror_RestartRecoversAcceptedStateAndContinuesHashChain(t *testing.T) 
 	_, resp1 := env.sendIngest(batch1)
 	require.True(t, resp1.Accepted)
 
-	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc), PublicMirrorConfig{})
 	require.NoError(t, err)
 	server2 := httptest.NewServer(mirror2.Handler())
 	t.Cleanup(server2.Close)
@@ -472,7 +549,7 @@ func TestMirror_RetentionPrunesOldestHistoryAndRecoversChain(t *testing.T) {
 	assert.Equal(t, int64(2), state.Records[0].Sequence)
 	env.mirror.mu.RUnlock()
 
-	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc), PublicMirrorConfig{})
 	require.NoError(t, err)
 	require.NoError(t, mirror2.SetMaxRetainedBatches(2))
 	batch4 := env.buildBatch([]models.PublicFeedRecord{env.makeRecord(4, map[string]any{"sequence": 4})}, previousHash)
@@ -500,7 +577,7 @@ func TestMirror_RestartRejectsNullDurableSourceState(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, env.fileSvc.WriteFile(ctx, constants.PublicMirrorStatePath, stateBytes, constants.PermFilePrivate))
 
-	_, err = NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	_, err = NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc), PublicMirrorConfig{})
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrPublicFeedMirrorStoreCorrupt)
@@ -513,7 +590,7 @@ func TestMirror_RestartRejectsCorruptDurableState(t *testing.T) {
 	require.True(t, response.Accepted)
 	require.NoError(t, env.fileSvc.WriteFile(context.Background(), constants.PublicMirrorStatePath, []byte("{invalid\n"), constants.PermFilePrivate))
 
-	_, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	_, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc), PublicMirrorConfig{})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrPublicFeedMirrorStoreCorrupt)
 }
@@ -1470,7 +1547,7 @@ func TestMirror_RestartRecoversProofCatalogArtifactAndKeyRevocation(t *testing.T
 	artifactID := proofRequest.Artifacts[0].ArtifactID
 	require.NoError(t, env.mirror.RevokeSourceKey(context.Background(), env.sourceID, env.keyID))
 
-	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+	mirror2, err := NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc), PublicMirrorConfig{})
 	require.NoError(t, err)
 	server2 := httptest.NewServer(mirror2.Handler())
 	t.Cleanup(server2.Close)
@@ -1530,7 +1607,7 @@ func TestMirror_RestartRejectsCorruptDurableProofMetadata(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, env.fileSvc.WriteFile(ctx, constants.PublicMirrorStatePath, stateBytes, constants.PermFilePrivate))
 
-			_, err = NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc))
+			_, err = NewPublicMirrorServer(testutil.NewTestLogger(), NewRuntimePublicMirrorStore(env.fileSvc), PublicMirrorConfig{})
 
 			require.Error(t, err)
 			assert.ErrorIs(t, err, constants.ErrPublicFeedMirrorStoreCorrupt)

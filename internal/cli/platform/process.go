@@ -341,6 +341,9 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	if opts.EvalExplorerRoot != "" {
 		args = append(args, "--eval-explorer-root", opts.EvalExplorerRoot)
 	}
+	for _, cidr := range opts.PublicSpectatorTrustedProxyCIDRs {
+		args = append(args, "--public-spectator-trusted-proxy-cidr", cidr)
+	}
 
 	return args, nil
 }
