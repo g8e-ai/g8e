@@ -88,7 +88,7 @@ describe('LiveEventStream', () => {
     expect(screen.getAllByRole('row')).toHaveLength(6); // header + 5 rows
   });
 
-  it('renders live assignment details and completion metrics in their own column', () => {
+  it('renders each event and assignment detail as its own table column', () => {
     render(
       <MemoryRouter>
         <LiveEventStream
@@ -111,9 +111,13 @@ describe('LiveEventStream', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('columnheader', { name: 'Assignment details' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Event' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Category' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Task' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Pass' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Latency' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'security-policy-block-run' })).toBeInTheDocument();
-    expect(screen.getByText('Pass', { selector: '.stream-metric-label' })).toBeInTheDocument();
     expect(screen.getByText('Pass', { selector: '.stream-metric-value' })).toBeInTheDocument();
     expect(screen.getByText('780 ms')).toBeInTheDocument();
   });
@@ -147,12 +151,12 @@ describe('LiveEventStream', () => {
 
     const rows = () => screen.getAllByRole('row').slice(1).map((row) => row.textContent ?? '');
     await user.click(screen.getByRole('button', { name: 'Sort by Event' }));
-    expect(rows()[0]).toContain('assignment completed');
+    expect(rows()[0]).toContain('Assignment Completed');
     expect(screen.getByRole('columnheader', { name: 'Event' })).toHaveAttribute('aria-sort', 'ascending');
 
-    await user.click(screen.getByRole('button', { name: 'Sort by Assignment details' }));
+    await user.click(screen.getByRole('button', { name: 'Sort by Task' }));
     expect(rows()[0]).toContain('task-alpha');
-    expect(screen.getByRole('columnheader', { name: 'Assignment details' })).toHaveAttribute('aria-sort', 'ascending');
+    expect(screen.getByRole('columnheader', { name: 'Task' })).toHaveAttribute('aria-sort', 'ascending');
   });
 
   it('shows designated role from the event before model summaries exist', () => {
