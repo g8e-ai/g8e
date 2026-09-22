@@ -20,7 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
-func TestComposeTargetObserver_ObservesPresentAndAbsentControlledTargetState(t *testing.T) {
+func TestComposeTargetReader_ObservesPresentAndAbsentControlledTargetState(t *testing.T) {
 	observedAt := time.Date(2026, time.September, 15, 12, 0, 0, 0, time.UTC)
 	target := filepath.Join(constants.EvaluationTargetContainerDir, constants.TestEvaluationTargetFilename)
 	tests := []struct {
@@ -35,15 +35,23 @@ func TestComposeTargetObserver_ObservesPresentAndAbsentControlledTargetState(t *
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			calls := 0
-			observer := newComposeTargetObserver(constants.TestPathRepoRootFromCompliancePackage, func(_ context.Context, dir, name string, args ...string) observerCommandResult {
+			observer := newComposeTargetReader(constants.TestPathRepoRootFromCompliancePackage, func(_ context.Context, dir, name string, args ...string) observerCommandResult {
 				calls++
 				assert.Equal(t, constants.TestPathRepoRootFromCompliancePackage, dir)
 				assert.Equal(t, constants.DockerExecutable, name)
-				assert.Contains(t, args, constants.DockerNativeEvaluationComposeFile)
-				assert.NotContains(t, args, constants.DockerEvaluationProfile)
-				assert.NotContains(t, args, "g8e-eval-observer")
-				assert.Contains(t, args, constants.DockerNativeEvaluationTargetReader)
-				assert.Contains(t, args, constants.EvaluationObserverTargetEnv+"="+constants.TestEvaluationTargetFilename)
+				assert.Equal(t, []string{
+					"compose",
+					"--file",
+					constants.DockerComposeFile,
+					"--file",
+					constants.DockerNativeEvalComposeFile,
+					"run",
+					"--rm",
+					"--no-deps",
+					"-e",
+					constants.EvaluationObserverTargetEnv + "=" + constants.TestEvaluationTargetFilename,
+					constants.DockerNativeTargetReaderService,
+				}, args)
 				return test.result
 			}, func() time.Time { return observedAt })
 
@@ -59,7 +67,7 @@ func TestComposeTargetObserver_ObservesPresentAndAbsentControlledTargetState(t *
 	}
 }
 
-func TestComposeTargetObserver_FailsClosedForInvalidTargetAndCommandFailure(t *testing.T) {
+func TestComposeTargetReader_FailsClosedForInvalidTargetAndCommandFailure(t *testing.T) {
 	errCommand := errors.New("command failed")
 	tests := []struct {
 		name      string
@@ -74,7 +82,7 @@ func TestComposeTargetObserver_FailsClosedForInvalidTargetAndCommandFailure(t *t
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			calls := 0
-			observer := newComposeTargetObserver(constants.TestPathRepoRootFromCompliancePackage, func(context.Context, string, string, ...string) observerCommandResult {
+			observer := newComposeTargetReader(constants.TestPathRepoRootFromCompliancePackage, func(context.Context, string, string, ...string) observerCommandResult {
 				calls++
 				return test.result
 			}, time.Now)

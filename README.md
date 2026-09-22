@@ -81,7 +81,7 @@ The native evaluator proves the remote execution boundary against the real unifi
 ./g8e eval boundary show <run-id>
 ```
 
-The run command selects one exact active remote Operator, submits an allowed typed mutation through the authenticated Gateway ingress, proves exactly one effect through a separate networkless Compose observer, submits the doctrine-prohibited equivalent through the same ingress, and proves rejection without another effect. It persists canonical `report.json`, `verification.json`, and digest-named evidence under `.g8e/data/eval/runs/<run-id>/`.
+The run command selects one exact active remote Operator, submits an allowed typed mutation through the authenticated Gateway ingress, proves exactly one effect through an ephemeral networkless native target reader, submits the doctrine-prohibited equivalent through the same ingress, and proves rejection without another effect. The target reader is an evaluation fixture outside the unified stack, not the remote Observer Operator used by model campaigns. The command persists canonical `report.json`, `verification.json`, and digest-named evidence under `.g8e/data/eval/runs/<run-id>/`.
 
 See [Evaluations](docs/architecture/evals.md) for acceptance invariants, trust boundaries, and JSON output.
 

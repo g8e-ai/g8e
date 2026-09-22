@@ -380,7 +380,7 @@ Run the Go-native suite against the healthy unified stack with one active remote
 ./g8e eval boundary run
 ```
 
-The command submits one allowed typed file mutation through the authenticated Gateway command ingress and the exact remote Operator session, observes the controlled target through the networkless Compose observer, then submits the doctrine-prohibited equivalent and proves rejection without another effect. It persists `report.json`, `verification.json`, and digest-named evidence files under `.g8e/data/eval/runs/<run-id>/`.
+The command submits one allowed typed file mutation through the authenticated Gateway command ingress and the exact remote Operator session, reads the controlled target through the ephemeral networkless native target reader, then submits the doctrine-prohibited equivalent and proves rejection without another effect. The target reader is defined outside the unified stack in `eval/native-boundary-compose.yml`; it is not the remote Observer Operator used by model campaigns. The command persists `report.json`, `verification.json`, and digest-named evidence files under `.g8e/data/eval/runs/<run-id>/`.
 
 Re-run verification and inspect the report in separate read-only invocations:
 

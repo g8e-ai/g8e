@@ -72,7 +72,7 @@ func evalCmd() *cobra.Command {
 		laneFactory: func(client *harnessclient.Client, fileSvc fs.RuntimeFileService, persona harnessclient.Persona) evaluation.PlatformLane {
 			return evaluation.NewCommandLane(client, evaluation.NewStore(fileSvc), persona, 0, 0)
 		},
-		observerFactory: evaluation.NewComposeTargetObserver,
+		observerFactory: evaluation.NewComposeTargetReader,
 		runnerFactory: func(lane evaluation.PlatformLane, observer evaluation.TargetObserver, store evaluation.ReportStore, now func() time.Time, newID func(string) string) nativeEvalRunner {
 			return evaluation.NewRunner(evaluation.NewRegistry(), lane, observer, store, now, newID)
 		},
@@ -300,7 +300,7 @@ func nativeEvalDeployment(cfg *config.Config, authContext *auth.ClientAuthContex
 		DeploymentId:        runID,
 		TopologyRef:         &compliancev1.VersionedReference{Id: evaluation.TopologyID, Version: evaluation.TopologyVersion},
 		ControlledTarget:    target,
-		IndependentObserver: constants.DockerNativeEvaluationTargetReader,
+		IndependentObserver: constants.DockerNativeTargetReaderService,
 		RuntimeBoundaries: []*evalv1.EvaluationRuntimeBoundary{
 			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_EVALUATOR, ProcessIdentity: "host-side g8e eval process", RuntimeNamespace: "Docker host workspace", Endpoint: cfg.OperatorHTTPURL(), AuthenticatedIdentity: authContext.UserID},
 			{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_GATEWAY, ProcessIdentity: constants.DockerGatewayContainer, RuntimeNamespace: "Gateway container", PersistentStore: "Gateway runtime volume", Endpoint: cfg.OperatorHTTPURL(), AuthenticatedIdentity: authContext.CLISessionID},

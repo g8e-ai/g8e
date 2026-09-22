@@ -169,7 +169,7 @@ function SystemOverviewPanel({
               target="_blank"
               rel="noopener noreferrer"
             >
-              Book a Time
+              Book a Call
             </a>
             <a
               className="sys-platform-cta-run"
