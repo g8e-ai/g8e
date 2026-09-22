@@ -734,6 +734,10 @@ export interface RecentCampaignRow {
   observedAt: string;
   qualityState: QualityState;
   lifecycleState?: EvaluationSummary['lifecycle_state'];
+  verifierState?: VerifierState;
+  assignmentTotal: number;
+  assignmentCompleted: number;
+  assignmentFailed: number;
   runId?: string;
 }
 
@@ -778,6 +782,10 @@ export function recentCampaignRows(
       observedAt,
       qualityState: catalog?.quality_state ?? primary?.quality_state ?? 'not_evaluated',
       lifecycleState: primary?.lifecycle_state,
+      verifierState: primary?.verifier_state,
+      assignmentTotal: primary?.assignment_total ?? 0,
+      assignmentCompleted: primary?.assignment_completed ?? 0,
+      assignmentFailed: primary?.assignment_failed ?? 0,
       runId: primary?.run_id,
     });
   }

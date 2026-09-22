@@ -320,34 +320,83 @@ function RecentCampaigns({
     [catalogs, evaluations],
   );
   return (
-    <section className="panel" aria-label="Recent campaigns">
-      <div className="panel-head">
-        <h2>Recent campaigns</h2>
+    <section className="panel campaign-evidence-panel" aria-label="Campaign evidence">
+      <div className="panel-head campaign-evidence-head">
+        <div>
+          <h2>Campaign evidence</h2>
+          <p className="panel-note">Terminal assignment coverage for the latest public datasets.</p>
+        </div>
         <Link to="/evaluations" className="panel-link">
-          View all campaigns →
+          Explore all →
         </Link>
       </div>
+      <ul className="campaign-legend" aria-label="Assignment outcome legend">
+        <li><span className="campaign-legend-swatch campaign-legend-completed" />Completed</li>
+        <li><span className="campaign-legend-swatch campaign-legend-failed" />Failed</li>
+        <li><span className="campaign-legend-swatch campaign-legend-remaining" />Remaining</li>
+      </ul>
       {recent.length === 0 ? (
         <p className="panel-empty">No campaigns recorded yet.</p>
       ) : (
-        <ul className="mini-runs">
+        <ul className="campaign-evidence-list">
           {recent.map((campaign) => {
             const status = campaign.lifecycleState ?? campaign.qualityState;
             const href = campaign.runId
               ? `/evaluations/${campaign.datasetId}/${campaign.runId}`
               : `/?dataset=${campaign.datasetId}`;
+            const terminal = campaign.assignmentCompleted + campaign.assignmentFailed;
+            const total = Math.max(campaign.assignmentTotal, terminal);
+            const completedWidth = total > 0 ? (campaign.assignmentCompleted / total) * 100 : 0;
+            const failedWidth = total > 0 ? (campaign.assignmentFailed / total) * 100 : 0;
+            const verification = campaign.verifierState === 'passed'
+              ? 'Verification passed'
+              : campaign.verifierState === 'failed'
+                ? 'Verification failed'
+                : campaign.lifecycleState === 'running' || campaign.lifecycleState === 'queued'
+                  ? 'Verification pending'
+                  : campaign.verifierState === 'not_applicable'
+                    ? 'Verification not applicable'
+                    : 'Verification not run';
             return (
-              <li key={campaign.datasetId}>
-                <Link to={href} className="mini-run">
-                  <code className="mini-run-id" title={campaign.label}>
+              <li key={campaign.datasetId} className="campaign-evidence-row">
+                <div className="campaign-evidence-title-row">
+                  <Link to={href} className="campaign-evidence-title" title={campaign.label}>
                     {shortCampaignLabel(campaign.label)}
-                  </code>
-                  <span className="mini-run-name">{campaign.detail}</span>
-                  <span className="mini-run-when">
-                    {formatRelativeTime(campaign.observedAt)}
+                  </Link>
+                  <span className="campaign-evidence-time">{formatRelativeTime(campaign.observedAt)}</span>
+                </div>
+                <div className="campaign-evidence-meta">
+                  <span>{campaign.detail}</span>
+                  <span className={`campaign-evidence-state status-${status}`}>
+                    <span className="status-dot" aria-hidden="true" />
+                    {campaign.lifecycleState ? capitalize(campaign.lifecycleState) : capitalize(campaign.qualityState.replaceAll('_', ' '))}
                   </span>
-                  <span className={`status-dot status-${status}`} aria-label={status} />
-                </Link>
+                </div>
+                {campaign.runId && total > 0 ? (
+                  <>
+                    <div
+                      className="campaign-outcome-track"
+                      role="progressbar"
+                      aria-label={`${campaign.label} assignment outcomes`}
+                      aria-valuemin={0}
+                      aria-valuemax={total}
+                      aria-valuenow={terminal}
+                      aria-valuetext={`${campaign.assignmentCompleted} completed, ${campaign.assignmentFailed} failed, ${total - terminal} remaining`}
+                    >
+                      <span className="campaign-outcome-completed" style={{ width: `${completedWidth}%` }} />
+                      <span className="campaign-outcome-failed" style={{ width: `${failedWidth}%` }} />
+                    </div>
+                    <div className="campaign-evidence-foot">
+                      <span>{formatNumber(terminal)} / {formatNumber(total)} terminal</span>
+                      <span className={campaign.verifierState === 'failed' ? 'campaign-verification-failed' : undefined}>{verification}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="campaign-evidence-foot campaign-evidence-foot-unavailable">
+                    <span>Run-level outcomes unavailable</span>
+                    <span>{verification}</span>
+                  </div>
+                )}
               </li>
             );
           })}
@@ -375,43 +424,73 @@ function DownloadsPanel() {
     };
   }, []);
 
-  const items = [
-    { label: 'Feed bootstrap', format: 'JSON', href: origin ? `${origin}/bootstrap` : undefined },
-    { label: 'Feed history', format: 'JSON pages', href: origin ? `${origin}/history` : undefined },
-    { label: 'Proof catalog', format: 'JSON', href: origin ? `${origin}/proof-catalog` : undefined },
-    { label: 'Live event stream', format: 'SSE', href: origin ? `${origin}/stream` : undefined },
-    { label: 'View schema descriptor', format: 'JSON', href: descriptorUrl },
+  const resources = [
+    {
+      label: 'Campaign summaries',
+      eyebrow: 'Analyze runs',
+      description: 'Run identity, lifecycle, terminal outcomes, headline metrics, and verifier disposition.',
+      format: 'JSON · paginated',
+      href: origin ? `${origin}/history?kind=evaluation_summary&cursor=0&limit=500` : undefined,
+    },
+    {
+      label: 'Assignment results',
+      eyebrow: 'Analyze tasks',
+      description: 'Scenario outcomes, closed grades, grouped activity, bounded resources, and evidence bindings.',
+      format: 'JSON · paginated',
+      href: origin ? `${origin}/history?kind=assignment_result&cursor=0&limit=500` : undefined,
+    },
+    {
+      label: 'View schema',
+      eyebrow: 'Integrate',
+      description: 'Versioned record kinds, enums, public field allowlist, and prohibited private fields.',
+      format: 'JSON · v1.5',
+      href: descriptorUrl,
+    },
   ];
 
   return (
-    <section className="panel" id="downloads" aria-label="Download data">
+    <section className="panel public-data-panel" id="downloads" aria-label="Public data and APIs">
       <div className="panel-head">
         <div>
-          <h2>Download data</h2>
-          <p className="panel-note">Everything the mirror publishes is open.</p>
+          <h2>Public data &amp; APIs</h2>
+          <p className="panel-note">Use the same anonymous, public-safe projection that powers this page.</p>
         </div>
       </div>
-      <ul className="dl-list">
-        {items.map((item) => (
-          <li key={item.label} className="dl-item">
-            {item.href ? (
-              <a href={item.href} target="_blank" rel="noopener noreferrer">
-                {item.label}
+      <p className="public-boundary-note">
+        Includes aggregate results, closed grade metadata, bounded resource metrics, verification state, and approved content bindings. Prompts, outputs, identities, paths, and receipt bodies stay private.
+      </p>
+      <ul className="public-resource-grid">
+        {resources.map((resource) => (
+          <li key={resource.label}>
+            {resource.href ? (
+              <a className="public-resource-card" href={resource.href} target="_blank" rel="noopener noreferrer">
+                <span className="public-resource-eyebrow">{resource.eyebrow}</span>
+                <strong>{resource.label}</strong>
+                <span className="public-resource-description">{resource.description}</span>
+                <span className="public-resource-format">{resource.format}<span aria-hidden="true"> ↗</span></span>
               </a>
             ) : (
-              <span>{item.label}</span>
+              <div className="public-resource-card public-resource-disabled">
+                <span className="public-resource-eyebrow">{resource.eyebrow}</span>
+                <strong>{resource.label}</strong>
+                <span className="public-resource-description">Mirror origin unavailable.</span>
+                <span className="public-resource-format">{resource.format}</span>
+              </div>
             )}
-            <span className="dl-format">{item.format}</span>
           </li>
         ))}
       </ul>
-      {origin ? (
-        <a className="dl-browse" href={`${origin}/bootstrap`} target="_blank" rel="noopener noreferrer">
-          Browse the public feed →
-        </a>
-      ) : (
-        <p className="panel-empty">Mirror origin unavailable.</p>
-      )}
+      <div className="public-api-strip">
+        <span className="public-api-label">Build against the mirror</span>
+        {origin ? (
+          <>
+            <a href={`${origin}/bootstrap`} target="_blank" rel="noopener noreferrer">Synchronization state <code>JSON</code></a>
+            <a href={`${origin}/stream`} target="_blank" rel="noopener noreferrer">Live updates <code>SSE</code></a>
+          </>
+        ) : (
+          <span className="public-api-unavailable">Mirror origin unavailable</span>
+        )}
+      </div>
     </section>
   );
 }

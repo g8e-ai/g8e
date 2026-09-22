@@ -13,11 +13,7 @@ import descriptorUrl from '../contract/descriptor.json?url';
 import {
   G8E_ARCHITECTURE_DOCS,
   G8E_CAMPAIGN_OPERATORS,
-  G8E_DIFFERENTIATORS,
-  G8E_DIFFERENTIATORS_LEDE,
-  G8E_MEASURED_TOGETHER,
   G8E_REPO_URL,
-  G8E_STACK_COMPONENTS,
   GITHUB_SPONSORS_URL,
   PLATFORM_SITE_URL,
   SPONSORSHIP_LEDE,
@@ -81,26 +77,73 @@ const ENGINEERING_RULES = [
   ['Inventory models', 'inventory_only flag — not a quality state'],
 ] as const;
 
-const SHIPPED_TODAY = [
-  'A public Evaluation Explorer over a signed mirror feed — live campaign progress, historical runs, per-model results, and role-scoped comparison, all reconstructed from bootstrap, paginated history, and SSE.',
-  'Model campaign benchmarks that run models through the production g8ee chat path: governed inference dispatch, tool and filesystem boundaries, and the Primary / Assistant / Lite role stack used in real workloads.',
-  'A frozen 25-scenario agent benchmark catalog across nine behavior categories, graded on a real host boundary with rubric-based pass/fail, tool scorecards, escalation disposition, and timing telemetry when observed.',
-  'Explicit quality-state labeling on every record distinguishes current-standard verification, run-scoped verification, incomplete verification, legacy evidence, in-progress work, and failures.',
+const EVALUATION_PROGRAMS = [
+  {
+    name: 'Execution boundary',
+    id: 'core-execution-boundary@1.0.0',
+    purpose: 'Proves that one governed mutation succeeds and its doctrine-prohibited equivalent fails closed through the same Gateway and remote Operator path.',
+    path: 'Gateway ingress → L1–L3 admission → remote Operator L4/L5 → networkless target reader',
+    excludes: 'No g8ee, model provider, campaign scheduler, or synthetic simulator',
+  },
+  {
+    name: 'Model campaign',
+    id: 'north-star-25@1.0.0',
+    purpose: 'Scores real models through production chat, governed inference, host tools, provider telemetry, and storage-side model provenance.',
+    path: 'g8ee chat → Gateway → bound Inference / Data Operators + independent witnesses',
+    excludes: 'No direct Ollama calls from the campaign CLI or g8ee',
+  },
 ] as const;
 
-const BUILDING_TOWARD = [
-  'Current-standard public snapshots: publication-eligible results only when a campaign completes and passes the current full verification contract.',
-  'Independent provider-boundary observation for GPU and system-efficiency metrics, bound to inference attempts rather than inferred from latency.',
-  'Heterogeneous system leaderboards that compare complete role stacks, separate from single-role model swaps.',
-  'Broader model catalog coverage as campaigns scale — inventory-only entries today, measured candidates as runs complete.',
+const EXECUTION_STAGES = [
+  {
+    label: 'Freeze',
+    system: 'Campaign controller',
+    detail: 'Binds the scenario catalog, model registry, role, repetitions, and exact Operator sessions before work starts.',
+    output: 'Campaign + assignment identity',
+  },
+  {
+    label: 'Admit',
+    system: 'Gateway · PDP',
+    detail: 'Authenticates ingress, constructs or verifies the GovernanceEnvelope, and applies posture-required L1–L3 policy.',
+    output: 'State-bound envelope',
+  },
+  {
+    label: 'Execute',
+    system: 'Operator · PEP',
+    detail: 'The exact bound Operator independently re-runs L1–L4, then performs L5 against its own runtime boundary.',
+    output: 'Signed local receipt',
+  },
+  {
+    label: 'Witness',
+    system: 'Observer + Provenance',
+    detail: 'Separate sessions bind GPU/RAM samples and model-weight hashes to the provider attempt without executor self-report.',
+    output: 'Observation windows',
+  },
+  {
+    label: 'Verify',
+    system: 'Offline verifier',
+    detail: 'Recomputes digests, signatures, bindings, populations, verdicts, and metrics without executing another mutation.',
+    output: 'report.json + verification.json',
+  },
+  {
+    label: 'Project',
+    system: 'Public mirror',
+    detail: 'Emits an allowlisted, public-safe projection. Private prompts, outputs, identities, paths, and receipt bodies stay owner-local.',
+    output: 'Bootstrap + history + SSE',
+  },
 ] as const;
 
-const HOW_TO_INTERPRET = [
-  ['Quality badges are the source of truth', 'Current-standard verified is publication-eligible under the current contract. Run-scoped verification passed is limited to one verifier population. Not fully verified is measured but incomplete. Legacy results have not been verified to current standards.'],
-  ['Metrics are scoped on purpose', 'Comparisons stay inside one dataset, one designated role, and one denominator. Model evaluations swap a single role candidate; system evaluations compare complete stacks.'],
-  ['Missing telemetry is disclosed', 'When a metric was not observed, the UI shows Unavailable with a reason instead of a zero that would look like a measurement.'],
-  ['Confidence intervals describe uncertainty', 'Bootstrap bounds express sampling variance over tasks. Overlapping intervals mean the data cannot separate the candidates — that is a feature, not a bug.'],
-  ['Reproducibility lives in the report bundle', 'This mirror publishes aggregate results safe for anonymous reading. Signed operator evidence for full reproduction sits behind the evaluation pipeline, not in the browser.'],
+const EVIDENCE_PROPERTIES = [
+  ['Content addressed', 'Declared artifacts resolve by digest. Substitution, omission, contradiction, and undeclared evidence fail verification.'],
+  ['Execution owned', 'The sovereign Operator stores authoritative local execution evidence; the Gateway receipt is a verified, best-effort mirror.'],
+  ['Attempt bound', 'Telemetry and provenance windows bind to provider_attempt_id, not a model label or an inferred wall-clock interval.'],
+  ['Population scoped', 'A passing report applies only to its exact run, campaign, catalog, registry, completed population, and verified population.'],
+] as const;
+
+const PUBLIC_BOUNDARY = [
+  ['Published', 'Scenario identity, closed grade metadata, grouped activity, bounded resource metrics, verification disposition, and approved SHA-256 bindings.'],
+  ['Owner-local', 'Prompts, outputs, reasoning, private grade detail, principals, sessions, endpoints, filesystem paths, envelopes, and receipt bodies.'],
+  ['Not implied', 'A public binding does not make its artifact public. Application-reported tool outcomes do not prove protocol authorization. Mirror availability is not verification evidence.'],
 ] as const;
 
 const SCENARIO_CATEGORY_BLURBS: Record<(typeof SCENARIO_CATEGORIES)[number], string> = {
@@ -150,7 +193,7 @@ function ArchitectureDiagram() {
 
   return (
     <div className="docs-architecture" aria-label="g8e architecture from campaign operators to browser">
-      <svg className="docs-architecture-svg" viewBox="0 0 900 480" role="img" aria-hidden="true">
+      <svg className="docs-architecture-svg" viewBox="0 0 900 540" role="img" aria-hidden="true">
         <defs>
           <marker id="docs-arch-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
             <path d="M0,0 L8,4 L0,8 Z" fill="var(--accent)" />
@@ -185,7 +228,7 @@ function ArchitectureDiagram() {
 
         <line x1="450" y1="170" x2="450" y2="100" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#docs-arch-arrow)" />
 
-        <rect x="20" y="130" width="860" height="140" rx="12" fill="none" stroke="var(--border)" strokeWidth="2" strokeDasharray="6 4" />
+        <rect x="20" y="130" width="860" height="200" rx="12" fill="none" stroke="var(--border)" strokeWidth="2" strokeDasharray="6 4" />
         <text x="36" y="152" fill="var(--fg-dim)" fontSize="12" fontWeight="700" letterSpacing="0.4">
           HOME WORKSTATION · WINDOWS · DOCKER
         </text>
@@ -213,20 +256,38 @@ function ArchitectureDiagram() {
           <text x="65" y="50" textAnchor="middle" fill="var(--fg-dim)" fontSize="12">live + historical</text>
         </g>
 
-        <rect x="20" y="300" width="860" height="156" rx="12" fill="none" stroke="var(--border)" strokeWidth="2" strokeDasharray="6 4" />
-        <text x="36" y="446" fill="var(--fg-dim)" fontSize="12" fontWeight="700" letterSpacing="0.4">
+        <g transform="translate(40, 258)">
+          <rect width="820" height="64" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
+          <text x="12" y="15" fill="var(--fg-dim)" fontSize="10" fontWeight="700" letterSpacing="0.4">EVALUATION HOST</text>
+          <line x1="0" y1="22" x2="820" y2="22" stroke="var(--border)" />
+          <line x1="410" y1="22" x2="410" y2="64" stroke="var(--border)" />
+          <line x1="0" y1="43" x2="820" y2="43" stroke="var(--border)" />
+          {WORKSTATION_SPECS.map((spec, i) => {
+            const x = (i % 2) * 410;
+            const y = i < 2 ? 37 : 58;
+            return (
+              <g key={spec.label}>
+                <text x={x + 12} y={y} fill="var(--fg-dim)" fontSize="9" fontWeight="700">{spec.label}</text>
+                <text x={x + 68} y={y} fill="var(--fg)" fontSize="10">{spec.value}</text>
+              </g>
+            );
+          })}
+        </g>
+
+        <rect x="20" y="360" width="860" height="156" rx="12" fill="none" stroke="var(--border)" strokeWidth="2" strokeDasharray="6 4" />
+        <text x="36" y="506" fill="var(--fg-dim)" fontSize="12" fontWeight="700" letterSpacing="0.4">
           CAMPAIGN OPERATOR SESSIONS · OUTBOUND mTLS
         </text>
-        <line x1="126" y1="290" x2="774" y2="290" stroke="var(--accent)" strokeWidth="2" opacity="0.65" />
-        <line x1="450" y1="290" x2="450" y2="250" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#docs-arch-arrow)" />
+        <line x1="126" y1="350" x2="774" y2="350" stroke="var(--accent)" strokeWidth="2" opacity="0.65" />
+        <line x1="450" y1="350" x2="450" y2="250" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#docs-arch-arrow)" />
 
         {campaignRemoteOperators.map((operator, i) => {
           const x = 24 + i * 216;
           const center = 126 + i * 216;
           return (
             <g key={operator.role}>
-              <line x1={center} y1="336" x2={center} y2="290" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#docs-arch-arrow)" />
-              <g transform={`translate(${x}, 336)`}>
+              <line x1={center} y1="396" x2={center} y2="350" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#docs-arch-arrow)" />
+              <g transform={`translate(${x}, 396)`}>
                 <rect width="204" height="96" rx="8" fill="var(--bg-elev2)" stroke="var(--border)" />
                 <text x="102" y="28" textAnchor="middle" fill="var(--fg)" fontSize="14" fontWeight="700">
                   {operator.role}
@@ -400,13 +461,14 @@ function EnumChipTable({ title, values }: { title: string; values: readonly stri
 
 const DOC_NAV = [
   { id: 'overview', label: 'Overview' },
-  { id: 'support', label: 'Support' },
+  { id: 'programs', label: 'Programs' },
+  { id: 'execution', label: 'Execution path' },
   { id: 'benchmark', label: 'Benchmark' },
-  { id: 'differentiators', label: 'Why g8e' },
-  { id: 'architecture', label: 'Architecture' },
-  { id: 'feed', label: 'Current feed' },
-  { id: 'guarantees', label: 'Guarantees' },
+  { id: 'evidence', label: 'Evidence model' },
+  { id: 'feed', label: 'Live contract' },
+  { id: 'guarantees', label: 'UI invariants' },
   { id: 'reference', label: 'Reference' },
+  { id: 'support', label: 'Support' },
 ] as const;
 
 function scrollToSection(id: string, event: MouseEvent<HTMLAnchorElement>) {
@@ -508,135 +570,7 @@ export function MethodologyView() {
       </aside>
 
       <div className="docs-main">
-        <header className="panel docs-hero">
-          <h1 className="docs-hero-title">Evaluation Explorer</h1>
-          <p className="docs-hero-lede">
-            Public benchmarks for models running through OpenDevOps.ai — a live deployment of the{' '}
-            <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">g8e</a> AI governance suite.
-            Evaluations execute on a home workstation over Docker and Ollama, publish through the gateway
-            mirror, and stream here over Cloudflare. Quality labels distinguish current-standard verification,
-            run-scoped verification, incomplete verification, legacy evidence, active runs, and failures.
-          </p>
-        </header>
-
-        <DocsSection id="overview" title="Overview">
-          <div className="docs-split">
-            <DocsCard title="Shipped today" lede="What you can use in this browser right now.">
-              <ul className="docs-feature-list">
-                {SHIPPED_TODAY.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </DocsCard>
-            <DocsCard
-              title="Building toward"
-              lede="The evaluation program this Explorer surfaces as campaigns mature."
-              variant="roadmap"
-            >
-              <ul className="docs-feature-list">
-                {BUILDING_TOWARD.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </DocsCard>
-          </div>
-          <DocsCard title="How to interpret what you see" lede="Straight answers for careful readers.">
-            <ul className="docs-trust-list">
-              {HOW_TO_INTERPRET.map(([headline, detail]) => (
-                <li key={headline}>
-                  <strong>{headline}</strong>
-                  <span>{detail}</span>
-                </li>
-              ))}
-            </ul>
-          </DocsCard>
-        </DocsSection>
-
-        <DocsSection id="support" title="Support OpenDevOps.ai">
-          <DocsCard variant="sponsor" lede={SPONSORSHIP_LEDE}>
-            <ul className="docs-feature-list">
-              {SPONSORSHIP_USES.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <div className="docs-sponsor-actions">
-              <a
-                className="docs-sponsor-button"
-                href={GITHUB_SPONSORS_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Sponsor on GitHub
-              </a>
-              <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">
-                g8e repository
-              </a>
-            </div>
-          </DocsCard>
-        </DocsSection>
-
-        <DocsSection id="benchmark" title="What we benchmark">
-          <div className="docs-split">
-            <DocsCard
-              title="Scenario catalog"
-              lede={`${scenarioTotal} frozen scenarios across ${SCENARIO_CATEGORIES.length} categories on a real host boundary through the production inference and tool stack.`}
-            >
-              <ScenarioChart />
-            </DocsCard>
-            <DocsCard title="Model roles" lede="Candidates compete per role — not by parameter count.">
-              <ul className="docs-role-cards">
-                {MODEL_ROLES.map((role) => (
-                  <li key={role.wire}>
-                    <strong>{role.name}</strong>
-                    <code>{role.wire}</code>
-                    <span>{role.scope}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="docs-card-foot">
-                Each scenario grades pass/fail against rubric criteria. Escalation disposition, tool
-                scorecards, security events, and timing telemetry publish when observed — otherwise they stay
-                explicitly unavailable.
-              </p>
-            </DocsCard>
-          </div>
-        </DocsSection>
-
-        <DocsSection id="differentiators" title="Why this evaluation is different">
-          <DocsCard lede={G8E_DIFFERENTIATORS_LEDE}>
-            <ul className="docs-trust-list">
-              {G8E_DIFFERENTIATORS.map((item) => (
-                <li key={item.headline}>
-                  <strong>{item.headline}</strong>
-                  <span>{item.detail}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="docs-card-foot">
-              Full platform architecture:{' '}
-              <a href={G8E_ARCHITECTURE_DOCS.overview} target="_blank" rel="noopener noreferrer">overview</a>
-              {' · '}
-              <a href={G8E_ARCHITECTURE_DOCS.governance} target="_blank" rel="noopener noreferrer">governance</a>
-              {' · '}
-              <a href={G8E_ARCHITECTURE_DOCS.operator} target="_blank" rel="noopener noreferrer">operator</a>
-              {' · '}
-              <a href={G8E_ARCHITECTURE_DOCS.evals} target="_blank" rel="noopener noreferrer">evaluations</a>
-            </p>
-          </DocsCard>
-
-          <DocsCard
-            title="Measured together — not in isolation"
-            lede="Every model candidate runs through the same total package. Scores reflect the full governed path, not a stripped provider API call."
-          >
-            <ul className="docs-feature-list">
-              {G8E_MEASURED_TOGETHER.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </DocsCard>
-        </DocsSection>
-
-        <DocsSection id="architecture" title="Architecture — powered by g8e">
+        <div id="architecture">
           <DocsCard
             title="OpenDevOps.ai is a live g8e deployment"
             lede="This site is one working example of the g8e AI governance suite — not a separate benchmark product. Evaluations run on a home workstation, publish through the built-in gateway mirror, and reach your browser over Cloudflare. The results you see are live."
@@ -661,48 +595,184 @@ export function MethodologyView() {
               the evaluation pipeline.
             </p>
           </DocsCard>
+        </div>
 
+        <DocsSection id="overview" title="Evaluation architecture, not a model leaderboard">
+          <div className="docs-overview-callout">
+            <p className="docs-eyebrow">Engineering model</p>
+            <h3>Measure the system that actually executes the work.</h3>
+            <p>
+              g8e evaluates models inside the production control plane: authenticated ingress, policy admission,
+              session-bound execution, independent witness collection, content-addressed evidence, and offline
+              verification. A score is useful only with a precise account of what ran, where it ran, and which
+              claims the evidence supports.
+            </p>
+          </div>
+          <div className="docs-principle-grid">
+            <article>
+              <span className="docs-principle-index">01</span>
+              <strong>Production path</strong>
+              <p>Scored inference traverses g8ee, the Gateway, and the exact Inference Operator. There is no provider API shortcut.</p>
+            </article>
+            <article>
+              <span className="docs-principle-index">02</span>
+              <strong>Sovereign execution</strong>
+              <p>The Operator that can see or mutate a runtime owns L4/L5 execution and the authoritative local receipt.</p>
+            </article>
+            <article>
+              <span className="docs-principle-index">03</span>
+              <strong>Independent witnesses</strong>
+              <p>Provider hardware and model weights are observed by separate least-privilege sessions, not the inference executor.</p>
+            </article>
+            <article>
+              <span className="docs-principle-index">04</span>
+              <strong>Scoped claims</strong>
+              <p>Verification applies to one bound evidence population. Missing telemetry remains missing; it is never inferred or zero-filled.</p>
+            </article>
+          </div>
+          <p className="docs-reading-note">
+            <strong>Read the UI in this order:</strong> dataset → role → quality state → denominator → metric. Never compare values across dataset boundaries or treat a live run as terminal evidence.
+          </p>
+        </DocsSection>
+
+        <DocsSection id="programs" title="Two programs, one evidence model">
+          <div className="docs-program-grid">
+            {EVALUATION_PROGRAMS.map((program, index) => (
+              <article className="panel docs-program-card" key={program.id}>
+                <div className="docs-program-head">
+                  <span>0{index + 1}</span>
+                  <code>{program.id}</code>
+                </div>
+                <h3>{program.name}</h3>
+                <p>{program.purpose}</p>
+                <dl>
+                  <div>
+                    <dt>Execution path</dt>
+                    <dd>{program.path}</dd>
+                  </div>
+                  <div>
+                    <dt>Scope boundary</dt>
+                    <dd>{program.excludes}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+          <p className="docs-section-note">
+            Both programs persist canonical evidence beneath <code>.g8e/data/eval/runs/</code>. Their verifiers recompute the evidence graph without performing another mutation.
+          </p>
+        </DocsSection>
+
+        <DocsSection id="execution" title="From assignment to public projection">
+          <DocsCard lede="The control path and evidence path advance together, but remain separate trust domains.">
+            <ol className="docs-pipeline">
+              {EXECUTION_STAGES.map((stage, index) => (
+                <li key={stage.label}>
+                  <span className="docs-pipeline-number">{String(index + 1).padStart(2, '0')}</span>
+                  <div className="docs-pipeline-copy">
+                    <div className="docs-pipeline-title">
+                      <strong>{stage.label}</strong>
+                      <span>{stage.system}</span>
+                    </div>
+                    <p>{stage.detail}</p>
+                    <code>{stage.output}</code>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </DocsCard>
+          <DocsCard title="Campaign trust boundaries" lede="Each remote session uses the same g8e binary with a distinct capability set and outbound-only mTLS connection.">
+            <div className="docs-operator-grid">
+              {G8E_CAMPAIGN_OPERATORS.map((operator) => (
+                <article key={operator.role} className={operator.wire === 'PDP' ? 'docs-operator-pdp' : undefined}>
+                  <div>
+                    <strong>{operator.role}</strong>
+                    <code>{operator.wire}</code>
+                  </div>
+                  <p>{operator.detail}</p>
+                </article>
+              ))}
+            </div>
+            <p className="docs-card-foot">
+              The Gateway coordinates work but does not collapse execution boundaries. Operators independently verify upstream proofs before a local side effect or witness publication.
+            </p>
+          </DocsCard>
+        </DocsSection>
+
+        <DocsSection id="benchmark" title="Benchmark design">
           <div className="docs-split">
-            <DocsCard title="g8e components in this deployment" lede="Four platform surfaces, one governance boundary on the workstation.">
-              <ul className="docs-stack-list">
-                {G8E_STACK_COMPONENTS.map((component) => (
-                  <li key={component.id}>
-                    <strong>{component.label}</strong>
-                    <span>{component.detail}</span>
-                  </li>
-                ))}
-              </ul>
+            <DocsCard
+              title="Frozen scenario catalog"
+              lede={`${scenarioTotal} scenarios across ${SCENARIO_CATEGORIES.length} behavior categories, executed through the production inference and host-tool path.`}
+            >
+              <ScenarioChart />
             </DocsCard>
-            <DocsCard title="Evaluation host" lede="Hardware running the Docker stack and Ollama today.">
-              <ul className="docs-spec-list">
-                {WORKSTATION_SPECS.map((spec) => (
-                  <li key={spec.label}>
-                    <span className="docs-spec-label">{spec.label}</span>
-                    <span className="docs-spec-value">{spec.value}</span>
+            <DocsCard title="Role-scoped candidates" lede="A candidate replaces one role at a time so the comparison keeps a stable system context.">
+              <ul className="docs-role-cards">
+                {MODEL_ROLES.map((role) => (
+                  <li key={role.wire}>
+                    <div className="docs-role-card-head">
+                      <strong>{role.name}</strong>
+                      <code>{role.wire}</code>
+                    </div>
+                    <span>{role.scope}</span>
                   </li>
                 ))}
               </ul>
               <p className="docs-card-foot">
-                Model campaigns execute against this host boundary through the production g8ee chat path — the same
-                governed inference, tool, and filesystem stack used for real workloads, not a synthetic API shim.
+                Eligible tasks define the denominator; repetitions measure consistency without inflating pass rates. Rubric grades, tool scorecards, escalation disposition, security events, and timing publish only when observed.
               </p>
             </DocsCard>
           </div>
         </DocsSection>
 
-        <DocsSection id="feed" title="Current feed">
+        <DocsSection id="evidence" title="Evidence and verification model">
+          <ul className="docs-evidence-grid">
+            {EVIDENCE_PROPERTIES.map(([headline, detail]) => (
+              <li key={headline}>
+                <strong>{headline}</strong>
+                <span>{detail}</span>
+              </li>
+            ))}
+          </ul>
+          <DocsCard title="The public boundary" lede="The Explorer is a signed spectator projection, not an audit database or execution authority.">
+            <div className="docs-boundary-grid">
+              {PUBLIC_BOUNDARY.map(([headline, detail], index) => (
+                <article key={headline} className={`docs-boundary-${index}`}>
+                  <span>{headline}</span>
+                  <p>{detail}</p>
+                </article>
+              ))}
+            </div>
+            <p className="docs-card-foot">
+              Full architecture:{' '}
+              <a href={G8E_ARCHITECTURE_DOCS.overview} target="_blank" rel="noopener noreferrer">overview</a>
+              {' · '}
+              <a href={G8E_ARCHITECTURE_DOCS.governance} target="_blank" rel="noopener noreferrer">governance</a>
+              {' · '}
+              <a href={G8E_ARCHITECTURE_DOCS.operator} target="_blank" rel="noopener noreferrer">operator</a>
+              {' · '}
+              <a href={G8E_ARCHITECTURE_DOCS.evals} target="_blank" rel="noopener noreferrer">evaluations</a>
+            </p>
+          </DocsCard>
+        </DocsSection>
+
+        <DocsSection id="feed" title="Live methodology contract">
+          <p className="docs-section-intro">
+            This section renders the methodology snapshot currently accepted by the client. It is data, not hand-authored page copy, so the definitions and limitations track the connected mirror.
+          </p>
           {methodology ? (
             <>
-              <DocsCard title="Datasets" lede="Current-standard, run-scoped, incomplete, legacy, and live results are labeled and compared separately.">
+              <DocsCard title="Dataset partitions" lede="Quality and comparison policy are explicit for every partition. The Explorer never averages across them.">
                 <DatasetTable catalogs={catalogs} />
               </DocsCard>
 
-              <DocsCard title="Metric definitions" lede={`Active methodology snapshot · ${methodology.observed_at}`}>
+              <DocsCard title="Metric definitions" lede={`Accepted methodology snapshot · ${methodology.observed_at}`}>
                 <MetricSpecTable metrics={methodology.metric_definitions} />
               </DocsCard>
 
               {methodology.suite_definitions.length > 0 ? (
-                <DocsCard title="Active suites" lede="Suites scheduled in the current feed.">
+                <DocsCard title="Active suite definitions" lede="Suites declared by the current methodology snapshot.">
                   <div className="table-scroll">
                     <table className="docs-table docs-compact-table">
                       <thead>
@@ -729,7 +799,7 @@ export function MethodologyView() {
               ) : null}
 
               {methodology.limitations.length > 0 ? (
-                <DocsCard title="Active limitations" lede="Known gaps in the current feed.">
+                <DocsCard title="Declared limitations" lede="Known gaps travel with the feed and remain visible beside the measurements.">
                   <ul className="docs-limitation-list">
                     {methodology.limitations.map((lim, i) => (
                       <li key={i}>{lim}</li>
@@ -745,59 +815,87 @@ export function MethodologyView() {
           )}
         </DocsSection>
 
-        <DocsSection id="guarantees" title="Rendering guarantees">
-          <DocsCard lede="Rules the UI follows so displayed numbers stay faithful to the feed.">
-            <div className="table-scroll">
-              <table className="docs-table docs-compact-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Rule</th>
-                    <th scope="col">Behavior</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ENGINEERING_RULES.map(([rule, behavior]) => (
-                    <tr key={rule}>
-                      <th scope="row">{rule}</th>
-                      <td>{behavior}</td>
+        <DocsSection id="guarantees" title="Explorer invariants">
+          <div className="docs-split docs-invariant-layout">
+            <DocsCard title="Rendering contract" lede="Client rules that prevent visual convenience from changing the meaning of evidence.">
+              <div className="table-scroll">
+                <table className="docs-table docs-compact-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Invariant</th>
+                      <th scope="col">UI behavior</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </DocsCard>
+                  </thead>
+                  <tbody>
+                    {ENGINEERING_RULES.map(([rule, behavior]) => (
+                      <tr key={rule}>
+                        <th scope="row">{rule}</th>
+                        <td>{behavior}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </DocsCard>
+            <DocsCard title="Quality is evidence scope" lede="A badge describes verification state, not universal model quality.">
+              <ul className="docs-quality-list docs-quality-list-compact">
+                {QUALITY_STATES.map((state) => (
+                  <li key={state}>
+                    <QualityBadge state={state} />
+                    <code>{state}</code>
+                  </li>
+                ))}
+              </ul>
+              <p className="docs-card-foot">
+                <code>exploratory_verified</code> applies only to the exact verified run-derived dataset and eligible variant/role aggregate. It does not imply complete optional telemetry or <code>verified_public</code> status.
+              </p>
+            </DocsCard>
+          </div>
         </DocsSection>
 
-        <DocsSection id="reference" title="Contract reference">
-          <DocsCard lede={`For integrators · schema ${VIEW_SCHEMA_VERSION} · mirror-only · no provider calls from the browser.`}>
+        <DocsSection id="reference" title="Integrator reference">
+          <DocsCard lede={`Frozen public view schema ${VIEW_SCHEMA_VERSION} · anonymous mirror reads only · no Gateway fallback or provider calls from the browser.`}>
             <div className="stat-grid docs-stat-grid">
-              <StatTile label="Schema" value={VIEW_SCHEMA_VERSION} hint="Frozen view contract" />
+              <StatTile label="Schema" value={VIEW_SCHEMA_VERSION} hint="Accepted view contract" />
               <StatTile label="Snapshots" value={SNAPSHOT_KINDS.length} hint="Durable record kinds" />
               <StatTile label="Live events" value={LIVE_EVENT_KINDS.length} hint="SSE lifecycle kinds" />
-              <StatTile label="Feed types" value={FEED_RECORD_TYPES.length} hint="Mirror transport envelope" />
+              <StatTile label="Feed types" value={FEED_RECORD_TYPES.length} hint="Mirror envelopes" />
             </div>
-            <div className="docs-enum-grid">
-              <section className="docs-enum-panel docs-enum-panel-bordered">
-                <h3>Quality states</h3>
-                <ul className="docs-quality-list">
-                  {QUALITY_STATES.map((state) => (
-                    <li key={state}>
-                      <QualityBadge state={state} />
-                      <code>{state}</code>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-
+            <div className="docs-enum-grid docs-enum-grid-reference">
               <section className="docs-enum-panel docs-enum-panel-bordered">
                 <EnumChipTable title="Snapshot kinds" values={SNAPSHOT_KINDS} />
               </section>
-
               <section className="docs-enum-panel docs-enum-panel-bordered">
                 <EnumChipTable title="Live event kinds" values={LIVE_EVENT_KINDS} />
               </section>
             </div>
             <DownloadsStrip />
+          </DocsCard>
+        </DocsSection>
+
+        <DocsSection id="support" title="Run it, inspect it, support it">
+          <DocsCard variant="sponsor" lede={SPONSORSHIP_LEDE}>
+            <ul className="docs-feature-list">
+              {SPONSORSHIP_USES.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <div className="docs-sponsor-actions">
+              <a
+                className="docs-sponsor-button"
+                href={GITHUB_SPONSORS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Sponsor on GitHub
+              </a>
+              <a href={G8E_REPO_URL} target="_blank" rel="noopener noreferrer">
+                Read the source
+              </a>
+              <a href={G8E_ARCHITECTURE_DOCS.evals} target="_blank" rel="noopener noreferrer">
+                Evaluation architecture
+              </a>
+            </div>
           </DocsCard>
         </DocsSection>
       </div>

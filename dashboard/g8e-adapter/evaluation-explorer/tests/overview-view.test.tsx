@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { CatalogSnapshot, EvaluationSummary, LiveEvent, SnapshotRecord, SuiteSummary } from '../src/contract/types';
@@ -115,6 +115,10 @@ describe('OverviewView active campaign', () => {
     evalStore.setStreamConnection('connected');
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('prioritizes campaign progress, scope, verification, and latest activity', () => {
     render(
       <MemoryRouter initialEntries={['/?dataset=ds-verified-archive']}>
@@ -152,6 +156,47 @@ describe('OverviewView active campaign', () => {
     expect(panel.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology');
     expect(panel.queryByText('Models evaluated')).not.toBeInTheDocument();
     expect(panel.queryByText('Current task')).not.toBeInTheDocument();
+  });
+
+  it('presents campaign coverage and public-safe data surfaces for engineers', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ schema_version: '1.0.0', mirror_origin: 'https://mirror.example' }),
+    }));
+
+    render(
+      <MemoryRouter>
+        <OverviewView />
+      </MemoryRouter>,
+    );
+
+    const evidence = within(screen.getByRole('region', { name: 'Campaign evidence' }));
+    expect(evidence.getByText('Campaign evidence')).toBeInTheDocument();
+    expect(evidence.getByText('Completed')).toBeInTheDocument();
+    expect(evidence.getByText('Failed')).toBeInTheDocument();
+    expect(evidence.getByText('Remaining')).toBeInTheDocument();
+    const coverage = evidence.getByRole('progressbar', { name: 'smoke-run assignment outcomes' });
+    expect(coverage).toHaveAttribute('aria-valuenow', '6');
+    expect(coverage).toHaveAttribute('aria-valuemax', '75');
+    expect(evidence.getByText('6 / 75 terminal')).toBeInTheDocument();
+    expect(evidence.getByText('Verification pending')).toBeInTheDocument();
+
+    const data = within(screen.getByRole('region', { name: 'Public data and APIs' }));
+    expect(data.getByText('Public data & APIs')).toBeInTheDocument();
+    expect(data.getByText(/public-safe projection/i)).toBeInTheDocument();
+    expect(await data.findByRole('link', { name: /Campaign records/i })).toHaveAttribute(
+      'href',
+      'https://mirror.example/history?cursor=0&limit=500',
+    );
+    expect(data.getByRole('link', { name: /Public proof index/i })).toHaveAttribute(
+      'href',
+      'https://mirror.example/proof-catalog',
+    );
+    expect(data.getByRole('link', { name: /Live updates/i })).toHaveAttribute(
+      'href',
+      'https://mirror.example/stream',
+    );
+    expect(data.queryByText('Download data')).not.toBeInTheDocument();
   });
 
   it('does not report a running campaign as live while SSE is reconnecting', () => {

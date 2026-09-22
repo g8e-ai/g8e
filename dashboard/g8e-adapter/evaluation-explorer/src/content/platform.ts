@@ -62,29 +62,6 @@ export const PLATFORM_FLOW_STEPS = [
 export const PLATFORM_OVERVIEW_PORTFOLIO_NOTE =
   'Live portfolio piece — looking to join a team, available for contracts on governed AI and eval infrastructure.';
 
-export const G8E_STACK_COMPONENTS = [
-  {
-    id: 'gateway',
-    label: 'g8eg · Gateway',
-    detail: 'Policy admission, routing, public mirror, and the Cloudflare tunnel origin on this workstation.',
-  },
-  {
-    id: 'operator',
-    label: 'g8eo · Operator',
-    detail: 'Host-bound execution boundary — tools, filesystem, and signed evidence on the managed host.',
-  },
-  {
-    id: 'ensemble',
-    label: 'g8ee · Ensemble',
-    detail: 'Production multi-agent chat path that turns evaluation scenarios into governed inference and tool calls.',
-  },
-  {
-    id: 'eval',
-    label: 'g8e eval',
-    detail: 'Native campaign orchestration, rubric grading, and signed report bundles for every run you see here.',
-  },
-] as const;
-
 export const WORKSTATION_SPECS = [
   { label: 'CPU', value: 'Intel Core i9-13900K' },
   { label: 'Memory', value: '64 GB RAM' },
