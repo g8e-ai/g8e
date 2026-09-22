@@ -295,6 +295,13 @@ func (e *CampaignExporter) ExportRun(
 		return nil, fmt.Errorf("evaluation: resolve export verification applicability: %w", err)
 	}
 	verified := verificationReport != nil && verificationReport.GetStatus() == evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS && applicability != nil && applicability.Applicable
+	var boundReport *evalv1.EvaluationVerificationReport
+	if verificationReport != nil && boundVerificationMetadataComplete(verificationReport) {
+		if applicability == nil || !applicability.Applicable {
+			return nil, fmt.Errorf("evaluation: resolve export verification applicability: %w", constants.ErrEvidenceScopeMismatch)
+		}
+		boundReport = verificationReport
+	}
 	for _, assignment := range assignments {
 		result := results[assignment.GetAssignmentId()]
 		if result == nil {
@@ -315,7 +322,7 @@ func (e *CampaignExporter) ExportRun(
 	if err != nil {
 		return nil, err
 	}
-	aggregateRecords, err := BuildRunAggregateViewRecords(run, aggregateState, exportedAt)
+	aggregateRecords, err := BuildRunAggregateViewRecords(run, aggregateState, boundReport, exportedAt)
 	if err != nil {
 		return nil, err
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/inference/provider_observer"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -448,4 +449,189 @@ func TestCampaignPublicationCoordinatorPublishAssignmentResultUsesRemoteObservat
 	peak, ok := gpu["vram_peak_bytes"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, float64(16_000_000_000), peak["value"])
+}
+
+// completedTestCampaign runs one full stubbed campaign: init, schedule, and
+// every assignment executed to a terminal result.
+func completedTestCampaign(t *testing.T, store *Store) *evalv1.EvaluationRun {
+	t.Helper()
+	controller := NewCampaignController(store, &stubCampaignExecutor{}, func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }, func(prefix string) string { return prefix + "-1" })
+	req := testCampaignInitRequest(t)
+	catalog := req.Catalog
+	truncated := &evalv1.EvaluationScenarioCatalog{
+		SchemaVersion: catalog.GetSchemaVersion(),
+		CatalogRef:    catalog.GetCatalogRef(),
+		Scenarios:     catalog.GetScenarios()[:1],
+	}
+	truncatedDigest, err := ComputeScenarioCatalogDigest(truncated)
+	require.NoError(t, err)
+	truncated.CatalogDigest = truncatedDigest
+	req.Catalog = truncated
+	run, err := controller.InitializeCampaign(context.Background(), req)
+	require.NoError(t, err)
+	_, err = controller.ScheduleHomogeneousRun(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+	for {
+		summary, err := controller.RunSummary(context.Background(), run.GetRunId())
+		require.NoError(t, err)
+		if summary.QueuedCount == 0 && summary.RunningCount == 0 {
+			break
+		}
+		_, _, err = controller.ExecuteNextAssignment(context.Background(), run.GetRunId(), CampaignExecutionBinding{
+			InferenceOperatorSessionID: "inf-session",
+			DataOperatorID:             "data-op",
+			DataOperatorSessionID:      "data-session",
+			ModelRegistryDigest:        req.Inventory.RegistryDigest,
+			ModelRegistry:              InferenceVariantsFromEvalRegistry(req.Inventory.Variants),
+		}, req.ScenarioArtifacts)
+		require.NoError(t, err)
+	}
+	return run
+}
+
+// buildBoundTestReport returns a bound verification report for the run with
+// digests computed from the persisted population. Callers persist it through
+// store.SaveCampaignVerification.
+func buildBoundTestReport(t *testing.T, store *Store, run *evalv1.EvaluationRun, status evalv1.EvaluationVerdictStatus) *evalv1.EvaluationVerificationReport {
+	t.Helper()
+	ctx := context.Background()
+	assignments, err := store.ListAssignments(ctx, run.GetRunId())
+	require.NoError(t, err)
+	results := make(map[string]*evalv1.EvaluationAssignmentResult, len(assignments))
+	for _, assignment := range assignments {
+		exists, err := store.AssignmentResultExists(ctx, run.GetRunId(), assignment.GetAssignmentId())
+		require.NoError(t, err)
+		if !exists {
+			continue
+		}
+		result, err := store.LoadAssignmentResult(ctx, run.GetRunId(), assignment.GetAssignmentId())
+		require.NoError(t, err)
+		results[assignment.GetAssignmentId()] = result
+	}
+	spec, err := store.LoadCampaignSpec(ctx, run.GetCampaignBinding().GetCampaignId())
+	require.NoError(t, err)
+	catalog, err := store.LoadScenarioCatalog(ctx, run.GetCampaignBinding().GetCampaignId())
+	require.NoError(t, err)
+	report := &evalv1.EvaluationVerificationReport{
+		SchemaVersion:           "2.0.0",
+		ReportId:                run.GetRunId(),
+		RunId:                   run.GetRunId(),
+		Status:                  status,
+		VerifiedAt:              timestamppb.New(time.Unix(1_700_000_200, 0).UTC()),
+		VerifierReleaseVersion:  "test-release",
+		VerifierContractVersion: "2.0.0",
+		ReportDigestRef:         &compliancev1.ComplianceEvidenceReference{Sha256: strings.Repeat("a", 64)},
+	}
+	applicability, err := BuildRunVerificationApplicability(run, spec, catalog, assignments, results, report)
+	require.NoError(t, err)
+	populationDigest, err := digestProto(applicability.Population)
+	require.NoError(t, err)
+	report.VerifiedPopulationDigest = populationDigest
+	report.ExpectedAssignmentCount = applicability.ExpectedAssignmentCount
+	report.VerifiedAssignmentCount = applicability.VerifiedAssignmentCount
+	report.CampaignDigest = spec.GetCampaignDigest()
+	report.CatalogDigest = spec.GetCatalogDigest()
+	report.ModelRegistryDigest = spec.GetModelRegistryDigest()
+	return report
+}
+
+func bindPersistedVerificationReport(t *testing.T, store *Store, run *evalv1.EvaluationRun, status evalv1.EvaluationVerdictStatus) *evalv1.EvaluationVerificationReport {
+	t.Helper()
+	report := buildBoundTestReport(t, store, run, status)
+	require.NoError(t, store.SaveCampaignVerification(context.Background(), run.GetRunId(), report))
+	return report
+}
+
+func evaluationSummaries(t *testing.T, records []CampaignPublicFeedRecord) []map[string]any {
+	t.Helper()
+	summaries := make([]map[string]any, 0)
+	for _, record := range records {
+		payload := map[string]any{}
+		require.NoError(t, json.Unmarshal([]byte(record.RecordBytes), &payload))
+		if payload["kind"] == "evaluation_summary" {
+			summaries = append(summaries, payload)
+		}
+	}
+	return summaries
+}
+
+// Regression: a published applicable verification result must remain
+// authoritative through later aggregate, completion, and catch-up emissions.
+// Before the fix, later aggregate revisions re-emitted verifier_state
+// not_applicable and erased the published result.
+func TestPublishRunCatchUpPreservesBoundVerificationState(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	run := completedTestCampaign(t, store)
+
+	count, err := coordinator.PublishRunCompletion(context.Background(), run.GetRunId(), time.Unix(1_700_000_100, 0).UTC())
+	require.NoError(t, err)
+	require.Greater(t, count, 0)
+	preVerify := evaluationSummaries(t, exporter.records)
+	require.NotEmpty(t, preVerify)
+	assert.Equal(t, "not_run", preVerify[len(preVerify)-1]["verifier_state"])
+
+	report := bindPersistedVerificationReport(t, store, run, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_PASS)
+	_, err = coordinator.PublishRunVerification(context.Background(), run.GetRunId(), report)
+	require.NoError(t, err)
+
+	require.NoError(t, coordinator.ResetPublicationIdempotency(context.Background(), run.GetRunId()))
+	_, err = coordinator.PublishRunCatchUp(context.Background(), run.GetRunId())
+	require.NoError(t, err)
+
+	summaries := evaluationSummaries(t, exporter.records)
+	require.NotEmpty(t, summaries)
+	latest := summaries[len(summaries)-1]
+	assert.Equal(t, "passed", latest["verifier_state"])
+	metadata, ok := latest["verification_metadata"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "bound", metadata["provenance"])
+	assert.Equal(t, report.GetReportDigestRef().GetSha256(), metadata["report_digest"])
+	assert.Equal(t, report.GetVerifiedPopulationDigest(), metadata["population_digest"])
+}
+
+// Regression: a bound failed report remains visible as failed through
+// catch-up; a persisted report whose population binding no longer matches run
+// evidence fails closed instead of publishing a downgrade.
+func TestPublishRunAggregatesFailClosedOnMismatchedPersistedReport(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	run := completedTestCampaign(t, store)
+
+	report := buildBoundTestReport(t, store, run, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL)
+	report.VerifiedPopulationDigest = strings.Repeat("9", 64)
+	require.NoError(t, store.SaveCampaignVerification(context.Background(), run.GetRunId(), report))
+
+	_, err := coordinator.PublishRunAggregates(context.Background(), run.GetRunId(), time.Unix(1_700_000_300, 0).UTC())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
+
+	_, err = coordinator.PublishRunCompletion(context.Background(), run.GetRunId(), time.Unix(1_700_000_300, 0).UTC())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
+}
+
+func TestPublishRunAggregatesProjectsBoundFailure(t *testing.T) {
+	files := newCampaignMemoryFileService()
+	store := NewStore(files)
+	exporter := &recordingCampaignFeedExporter{}
+	coordinator := NewCampaignPublicationCoordinator(store, files, NewMemoryCampaignPublicationStateStore(), exporter, nil)
+	run := completedTestCampaign(t, store)
+
+	bindPersistedVerificationReport(t, store, run, evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_FAIL)
+	_, err := coordinator.PublishRunAggregates(context.Background(), run.GetRunId(), time.Unix(1_700_000_300, 0).UTC())
+	require.NoError(t, err)
+
+	summaries := evaluationSummaries(t, exporter.records)
+	require.NotEmpty(t, summaries)
+	latest := summaries[len(summaries)-1]
+	assert.Equal(t, "failed", latest["verifier_state"])
+	metadata, ok := latest["verification_metadata"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "bound", metadata["provenance"])
+	assert.Equal(t, "failed", metadata["verifier_state"])
 }

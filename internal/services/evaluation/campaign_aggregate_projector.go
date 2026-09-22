@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	explorerViewSchemaVersion = "1.3.0"
+	explorerViewSchemaVersion = "1.5.0"
 	campaignSourceRevision    = "g8e-eval-campaign"
 	standardSuiteID           = "north-star-25"
 )
@@ -40,6 +40,26 @@ type runAggregateState struct {
 	ModelCount     uint32
 	VariantRoles   map[string]*variantRoleAggregate
 	EvaluatedCount uint32
+	Headline       *runHeadlineMetrics
+}
+
+// runHeadlineMetrics carries the typed run-level metric aggregate for the
+// explorer evaluation_summary headline cards.
+type runHeadlineMetrics struct {
+	PassRate            runMetricValue
+	LatencyP50MS        runMetricValue
+	OutputThroughputP50 runMetricValue
+}
+
+// runMetricValue mirrors the explorer RunMetricValue wire shape: one finite
+// value or one typed unavailable reason plus contributor coverage counts.
+type runMetricValue struct {
+	Value             *float64
+	Unit              string
+	Observed          uint32
+	Eligible          uint32
+	Unavailable       uint32
+	UnavailableReason evalv1.PublicUnavailableReason
 }
 
 type variantRoleAggregate struct {
@@ -193,7 +213,133 @@ func CollectRunAggregateState(assignments []*evalv1.EvaluationAssignment, result
 	}
 	state.ModelCount = uint32(len(scheduledVariants))
 	state.EvaluatedCount = uint32(len(evaluatedVariants))
+	headline, err := collectRunHeadlineMetrics(assignments, results, state)
+	if err != nil {
+		return nil, err
+	}
+	state.Headline = headline
 	return state, nil
+}
+
+const (
+	runMetricUnitRatio           = "ratio"
+	runMetricUnitMilliseconds    = "milliseconds"
+	runMetricUnitTokensPerSecond = "tokens_per_second"
+)
+
+// collectRunHeadlineMetrics derives typed pass-rate, latency p50, and output
+// throughput p50 aggregates from canonical persisted assignment results. Every
+// persisted terminal result containing scored model inference activity is an
+// eligible contributor; a contributor with missing or incomplete evidence
+// increments the unavailable count rather than being silently dropped.
+func collectRunHeadlineMetrics(assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult, state *runAggregateState) (*runHeadlineMetrics, error) {
+	metrics := &runHeadlineMetrics{
+		PassRate:            runMetricValue{Unit: runMetricUnitRatio, Eligible: state.Terminal, Observed: state.Terminal},
+		LatencyP50MS:        runMetricValue{Unit: runMetricUnitMilliseconds},
+		OutputThroughputP50: runMetricValue{Unit: runMetricUnitTokensPerSecond},
+	}
+	if state.Terminal > 0 {
+		value := float64(state.Passed) / float64(state.Terminal)
+		metrics.PassRate.Value = &value
+	} else {
+		metrics.PassRate.UnavailableReason = evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE
+	}
+	latencies := make([]float64, 0, len(results))
+	throughputs := make([]float64, 0, len(results))
+	for _, assignment := range assignments {
+		if assignment == nil || !assignmentLifecycleIsTerminal(assignment.GetLifecycleStatus()) {
+			continue
+		}
+		result := results[assignment.GetAssignmentId()]
+		if result == nil || !assignmentLifecycleIsTerminal(result.GetLifecycleStatus()) {
+			continue
+		}
+		calls := result.GetModelInferences()
+		if len(calls) == 0 {
+			continue
+		}
+		metrics.LatencyP50MS.Eligible++
+		metrics.OutputThroughputP50.Eligible++
+		if result.ScoredInferenceSpanNanos == nil {
+			metrics.LatencyP50MS.Unavailable++
+		} else {
+			span := result.GetScoredInferenceSpanNanos()
+			if span/1_000_000 > maxPublicDurationMS {
+				return nil, fmt.Errorf("evaluation: collect run headline metrics: scored inference span exceeds public bound: %w", constants.ErrEvidenceArtifactMalformed)
+			}
+			latencies = append(latencies, float64(span/1_000_000))
+		}
+		rate, complete, err := scoredAssignmentOutputThroughput(calls)
+		if err != nil {
+			return nil, err
+		}
+		if !complete {
+			metrics.OutputThroughputP50.Unavailable++
+		} else {
+			throughputs = append(throughputs, rate)
+		}
+	}
+	metrics.LatencyP50MS.Observed = uint32(len(latencies))
+	metrics.OutputThroughputP50.Observed = uint32(len(throughputs))
+	if len(latencies) > 0 {
+		value := medianFloat64(latencies)
+		metrics.LatencyP50MS.Value = &value
+	} else {
+		metrics.LatencyP50MS.UnavailableReason = contributorUnavailableReason(metrics.LatencyP50MS.Eligible, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE)
+	}
+	if len(throughputs) > 0 {
+		value := medianFloat64(throughputs)
+		metrics.OutputThroughputP50.Value = &value
+	} else {
+		metrics.OutputThroughputP50.UnavailableReason = contributorUnavailableReason(metrics.OutputThroughputP50.Eligible, evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_INCOMPLETE_CONTRIBUTOR_EVIDENCE)
+	}
+	return metrics, nil
+}
+
+// contributorUnavailableReason selects the run-metric unavailable reason when
+// no eligible contributor produced a value: no scored inference activity at
+// all maps to no_scored_calls, otherwise the contributor-scoped reason applies.
+func contributorUnavailableReason(eligible uint32, reason evalv1.PublicUnavailableReason) evalv1.PublicUnavailableReason {
+	if eligible == 0 {
+		return evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS
+	}
+	return reason
+}
+
+// scoredAssignmentOutputThroughput returns generated output tokens per second
+// for one assignment's scored inference calls. Every contributing call must
+// report usage and a positive generation duration; otherwise the assignment is
+// an incomplete contributor.
+func scoredAssignmentOutputThroughput(calls []*evalv1.ModelInferenceRecord) (float64, bool, error) {
+	var tokens, duration uint64
+	for _, call := range calls {
+		if call == nil {
+			return 0, false, fmt.Errorf("evaluation: collect run headline metrics: nil inference record: %w", constants.ErrEvidenceArtifactMalformed)
+		}
+		if call.GetUsageAvailability() != evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED || call.GetGenerationDurationNanos() == 0 {
+			return 0, false, nil
+		}
+		var err error
+		if tokens, err = addResourceValue(tokens, uint64(call.GetCompletionTokens()), "output tokens"); err != nil {
+			return 0, false, err
+		}
+		if duration, err = addResourceValue(duration, call.GetGenerationDurationNanos(), "generation duration"); err != nil {
+			return 0, false, err
+		}
+	}
+	return float64(tokens) / (float64(duration) / 1_000_000_000), true, nil
+}
+
+// medianFloat64 returns the deterministic median of finite values: the center
+// value for an odd count or the arithmetic mean of the two center values for
+// an even count.
+func medianFloat64(values []float64) float64 {
+	sort.Float64s(values)
+	middle := len(values) / 2
+	if len(values)%2 == 1 {
+		return values[middle]
+	}
+	return (values[middle-1] + values[middle]) / 2
 }
 
 // runAggregateSettled reports whether every scheduled assignment has reached a
@@ -203,8 +349,10 @@ func runAggregateSettled(state *runAggregateState) bool {
 }
 
 // BuildRunAggregateViewRecords materializes live evaluation_summary, catalog,
-// model, and methodology explorer snapshot records for one campaign run.
-func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregateState, observedAt time.Time) ([]CampaignViewRecord, error) {
+// model, and methodology explorer snapshot records for one campaign run. When
+// report is a bound, applicable verification report for the run, the emitted
+// summary carries the verified state; otherwise it reports not_run.
+func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregateState, report *evalv1.EvaluationVerificationReport, observedAt time.Time) ([]CampaignViewRecord, error) {
 	if run == nil || run.GetRunId() == "" || state == nil || state.Scheduled == 0 {
 		return nil, fmt.Errorf("evaluation: build run aggregate view records: %w", constants.ErrMissingRequiredField)
 	}
@@ -217,7 +365,13 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 	settled := runAggregateSettled(state)
 	records := make([]CampaignViewRecord, 0, 3+len(state.VariantRoles))
 
-	summaryBody, err := marshalCanonicalViewRecord(buildLiveEvaluationSummaryRecord(run, datasetID, observed, state))
+	summaryRecord, err := buildEvaluationSummaryRecord(evaluationSummaryInput{
+		Run: run, DatasetID: datasetID, ObservedAt: observed, State: state, Report: report,
+	})
+	if err != nil {
+		return nil, err
+	}
+	summaryBody, err := marshalCanonicalViewRecord(summaryRecord)
 	if err != nil {
 		return nil, err
 	}
@@ -283,8 +437,9 @@ func BuildRunAggregateViewRecords(run *evalv1.EvaluationRun, state *runAggregate
 
 // BuildRunCompletionViewRecords materializes the terminal evaluation_summary
 // plus completion catalog, model, and methodology snapshots for one finished
-// campaign run.
-func BuildRunCompletionViewRecords(run *evalv1.EvaluationRun, assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult, state *runAggregateState, observedAt time.Time) ([]CampaignViewRecord, error) {
+// campaign run. When report is a bound, applicable verification report for the
+// run, the emitted summary carries the verified state; otherwise not_run.
+func BuildRunCompletionViewRecords(run *evalv1.EvaluationRun, assignments []*evalv1.EvaluationAssignment, results map[string]*evalv1.EvaluationAssignmentResult, state *runAggregateState, report *evalv1.EvaluationVerificationReport, observedAt time.Time) ([]CampaignViewRecord, error) {
 	if run == nil || state == nil || !RunAggregateComplete(assignments, results, state) {
 		return nil, fmt.Errorf("evaluation: build run completion view records: %w", constants.ErrMissingRequiredField)
 	}
@@ -296,7 +451,13 @@ func BuildRunCompletionViewRecords(run *evalv1.EvaluationRun, assignments []*eva
 	datasetID := CampaignDatasetID(runID)
 	records := make([]CampaignViewRecord, 0, 2+len(state.VariantRoles))
 
-	summaryBody, err := marshalCanonicalViewRecord(buildEvaluationSummaryRecord(run, datasetID, observed, state, "completed", true))
+	summaryRecord, err := buildEvaluationSummaryRecord(evaluationSummaryInput{
+		Run: run, DatasetID: datasetID, ObservedAt: observed, State: state, Report: report,
+	})
+	if err != nil {
+		return nil, err
+	}
+	summaryBody, err := marshalCanonicalViewRecord(summaryRecord)
 	if err != nil {
 		return nil, err
 	}
@@ -447,7 +608,13 @@ func BuildRunVerificationViewRecords(run *evalv1.EvaluationRun, state *runAggreg
 	}
 	observed := observedAt.UTC().Format(time.RFC3339Nano)
 	datasetID := CampaignDatasetID(run.GetRunId())
-	summaryBody, err := marshalCanonicalViewRecord(buildVerifiedEvaluationSummaryRecord(run, datasetID, observed, state, report))
+	summaryRecord, err := buildEvaluationSummaryRecord(evaluationSummaryInput{
+		Run: run, DatasetID: datasetID, ObservedAt: observed, State: state, Report: report,
+	})
+	if err != nil {
+		return nil, err
+	}
+	summaryBody, err := marshalCanonicalViewRecord(summaryRecord)
 	if err != nil {
 		return nil, err
 	}
@@ -605,77 +772,207 @@ func verifiedModelSummariesEligible(state *runAggregateState, report *evalv1.Eva
 		report.GetVerifiedAssignmentCount() == state.Terminal
 }
 
-func buildLiveEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observedAt string, state *runAggregateState) map[string]any {
-	lifecycle := "running"
-	includeEndedAt := false
-	if runAggregateSettled(state) {
-		lifecycle = "completed"
-		includeEndedAt = true
-	}
-	return buildEvaluationSummaryRecord(run, datasetID, observedAt, state, lifecycle, includeEndedAt)
+// runMetricValueRecord is the explorer RunMetricValue wire shape.
+type runMetricValueRecord struct {
+	Value             *float64 `json:"value,omitempty"`
+	Unit              string   `json:"unit"`
+	ObservedCount     uint32   `json:"observed_count"`
+	EligibleCount     uint32   `json:"eligible_count"`
+	UnavailableCount  uint32   `json:"unavailable_count"`
+	UnavailableReason string   `json:"unavailable_reason,omitempty"`
 }
 
-func buildEvaluationSummaryRecord(
-	run *evalv1.EvaluationRun,
-	datasetID, observedAt string,
-	state *runAggregateState,
-	lifecycleState string,
-	includeEndedAt bool,
-) map[string]any {
-	var startedAtTime time.Time
-	startedAt := ""
-	if run.GetStartedAt() != nil {
-		startedAtTime = run.GetStartedAt().AsTime().UTC()
-		startedAt = startedAtTime.Format(time.RFC3339Nano)
+func (m runMetricValue) record() runMetricValueRecord {
+	record := runMetricValueRecord{
+		Value:            m.Value,
+		Unit:             m.Unit,
+		ObservedCount:    m.Observed,
+		EligibleCount:    m.Eligible,
+		UnavailableCount: m.Unavailable,
 	}
-	observedTime, _ := time.Parse(time.RFC3339Nano, observedAt)
-	if observedTime.IsZero() {
-		if parsed, err := time.Parse(time.RFC3339, observedAt); err == nil {
-			observedTime = parsed.UTC()
-		}
-	}
-	passRate := 0.0
-	if state.Terminal > 0 {
-		passRate = float64(state.Passed) / float64(state.Terminal)
-	}
-	record := map[string]any{
-		"schema_version":        explorerViewSchemaVersion,
-		"kind":                  "evaluation_summary",
-		"dataset_id":            datasetID,
-		"quality_state":         qualityStateForCompletedAggregate(state),
-		"observed_at":           observedAt,
-		"source_revision_label": campaignSourceRevision,
-		"run_id":                run.GetRunId(),
-		"campaign_id":           run.GetCampaignBinding().GetCampaignId(),
-		"suite_id":              standardSuiteID,
-		"arm":                   armForRun(run),
-		"evaluation_unit":       evaluationUnitForRun(run),
-		"model_role_mapping":    buildModelRoleMapping(state),
-		"lifecycle_state":       lifecycleState,
-		"assignment_total":      state.Scheduled,
-		"assignment_completed":  state.Passed,
-		"assignment_failed":     state.Failed,
-		"terminal_outcomes":     aggregateTerminalOutcomes(state),
-		"verifier_state":        "not_applicable",
-		"headline_metrics":      map[string]any{},
-	}
-	if startedAt != "" {
-		record["started_at"] = startedAt
-		if includeEndedAt {
-			record["ended_at"] = observedAt
-		}
-		if !startedAtTime.IsZero() && !observedTime.IsZero() {
-			if elapsed := elapsedSecondsBetween(startedAtTime, observedTime); elapsed != nil {
-				record["elapsed_seconds"] = *elapsed
-			}
-		}
-	}
-	if state.Terminal > 0 {
-		record["headline_metrics"] = map[string]any{
-			"pass_rate": map[string]any{"value": passRate},
-		}
+	if m.UnavailableReason != evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_UNSPECIFIED {
+		record.UnavailableReason = publicUnavailableReasonString(m.UnavailableReason)
 	}
 	return record
+}
+
+// evaluationHeadlineMetricsRecord is the explorer EvaluationHeadlineMetrics
+// wire shape for schema 1.5.0.
+type evaluationHeadlineMetricsRecord struct {
+	PassRate            runMetricValueRecord `json:"pass_rate"`
+	LatencyP50MS        runMetricValueRecord `json:"latency_p50_ms"`
+	OutputThroughputP50 runMetricValueRecord `json:"output_throughput_p50_tokens_per_second"`
+}
+
+// summaryVerificationMetadataRecord is the public-safe verification binding
+// carried by an evaluation_summary that reports a bound verifier result.
+type summaryVerificationMetadataRecord struct {
+	Provenance              string `json:"provenance"`
+	VerifierState           string `json:"verifier_state"`
+	VerifierReleaseVersion  string `json:"verifier_release_version,omitempty"`
+	VerifierContractVersion string `json:"verifier_contract_version,omitempty"`
+	ReportDigest            string `json:"report_digest,omitempty"`
+	PopulationDigest        string `json:"population_digest,omitempty"`
+	VerifiedAt              string `json:"verified_at"`
+}
+
+// evaluationSummaryRecord is the typed explorer evaluation_summary wire shape
+// for schema 1.5.0.
+type evaluationSummaryRecord struct {
+	SchemaVersion          string                           `json:"schema_version"`
+	Kind                   string                           `json:"kind"`
+	DatasetID              string                           `json:"dataset_id"`
+	QualityState           string                           `json:"quality_state"`
+	ObservedAt             string                           `json:"observed_at"`
+	SourceRevisionLabel    string                           `json:"source_revision_label"`
+	RunID                  string                           `json:"run_id"`
+	CampaignID             string                           `json:"campaign_id"`
+	SuiteID                string                           `json:"suite_id"`
+	Arm                    string                           `json:"arm"`
+	EvaluationUnit         string                           `json:"evaluation_unit"`
+	ModelRoleMapping       map[string]string                `json:"model_role_mapping"`
+	LifecycleState         string                           `json:"lifecycle_state"`
+	AssignmentTotal        uint32                           `json:"assignment_total"`
+	AssignmentCompleted    uint32                           `json:"assignment_completed"`
+	AssignmentFailed       uint32                           `json:"assignment_failed"`
+	TerminalOutcomes       map[string]uint32                `json:"terminal_outcomes"`
+	StartedAt              string                           `json:"started_at,omitempty"`
+	EndedAt                string                           `json:"ended_at,omitempty"`
+	ElapsedSeconds         *float64                         `json:"elapsed_seconds,omitempty"`
+	VerifierState          string                           `json:"verifier_state"`
+	VerifierFailureSummary string                           `json:"verifier_failure_summary,omitempty"`
+	VerificationMetadata   *summaryVerificationMetadataRecord `json:"verification_metadata,omitempty"`
+	HeadlineMetrics        evaluationHeadlineMetricsRecord  `json:"headline_metrics"`
+}
+
+// evaluationSummaryInput carries every input the summary builder needs; the
+// builder performs no evidence reads or hidden recomputation. Report is the
+// bound, applicable verification report for the run, or nil.
+type evaluationSummaryInput struct {
+	Run        *evalv1.EvaluationRun
+	DatasetID  string
+	ObservedAt string
+	State      *runAggregateState
+	Report     *evalv1.EvaluationVerificationReport
+}
+
+// buildEvaluationSummaryRecord is the single construction point for live,
+// completion, and verification evaluation_summary revisions. A bound
+// applicable report produces passed or failed state with public verification
+// metadata; without one the summary reports not_run.
+func buildEvaluationSummaryRecord(input evaluationSummaryInput) (*evaluationSummaryRecord, error) {
+	run, state := input.Run, input.State
+	if run == nil || state == nil {
+		return nil, fmt.Errorf("evaluation: build evaluation summary record: %w", constants.ErrMissingRequiredField)
+	}
+	settled := runAggregateSettled(state)
+	record := &evaluationSummaryRecord{
+		SchemaVersion:       explorerViewSchemaVersion,
+		Kind:                "evaluation_summary",
+		DatasetID:           input.DatasetID,
+		QualityState:        qualityStateForCompletedAggregate(state),
+		ObservedAt:          input.ObservedAt,
+		SourceRevisionLabel: campaignSourceRevision,
+		RunID:               run.GetRunId(),
+		CampaignID:          run.GetCampaignBinding().GetCampaignId(),
+		SuiteID:             standardSuiteID,
+		Arm:                 armForRun(run),
+		EvaluationUnit:      evaluationUnitForRun(run),
+		ModelRoleMapping:    buildModelRoleMapping(state),
+		LifecycleState:      "running",
+		AssignmentTotal:     state.Scheduled,
+		AssignmentCompleted: state.Passed,
+		AssignmentFailed:    state.Failed,
+		TerminalOutcomes:    aggregateTerminalOutcomes(state),
+		VerifierState:       "not_run",
+		HeadlineMetrics:     headlineMetricsForState(state),
+	}
+	if settled {
+		record.LifecycleState = "completed"
+		record.EndedAt = input.ObservedAt
+	}
+	if run.GetStartedAt() != nil {
+		startedAtTime := run.GetStartedAt().AsTime().UTC()
+		record.StartedAt = startedAtTime.Format(time.RFC3339Nano)
+		observedTime, _ := time.Parse(time.RFC3339Nano, input.ObservedAt)
+		if observedTime.IsZero() {
+			if parsed, err := time.Parse(time.RFC3339, input.ObservedAt); err == nil {
+				observedTime = parsed.UTC()
+			}
+		}
+		if elapsed := elapsedSecondsBetween(startedAtTime, observedTime); elapsed != nil {
+			record.ElapsedSeconds = elapsed
+		}
+	}
+	if input.Report == nil {
+		return record, nil
+	}
+	return applyBoundVerification(record, state, input.Report)
+}
+
+// applyBoundVerification projects a bound, applicable verification report onto
+// the summary. Malformed bound reports fail closed rather than emitting a
+// downgrade.
+func applyBoundVerification(record *evaluationSummaryRecord, state *runAggregateState, report *evalv1.EvaluationVerificationReport) (*evaluationSummaryRecord, error) {
+	if !boundVerificationMetadataComplete(report) {
+		return nil, fmt.Errorf("evaluation: build evaluation summary record: bound verification report is incomplete: %w", constants.ErrEvidenceArtifactMalformed)
+	}
+	record.VerifierState = VerifierStateFromVerificationReport(report)
+	record.VerificationMetadata = &summaryVerificationMetadataRecord{
+		Provenance:              "bound",
+		VerifierState:           record.VerifierState,
+		VerifierReleaseVersion:  report.GetVerifierReleaseVersion(),
+		VerifierContractVersion: report.GetVerifierContractVersion(),
+		ReportDigest:            report.GetReportDigestRef().GetSha256(),
+		PopulationDigest:        report.GetVerifiedPopulationDigest(),
+		VerifiedAt:              report.GetVerifiedAt().AsTime().UTC().Format(time.RFC3339Nano),
+	}
+	if summary := formatCampaignVerifierFailureSummary(report); summary != "" {
+		record.VerifierFailureSummary = summary
+	}
+	record.QualityState = qualityStateForVerifiedAggregate(state, report)
+	record.ObservedAt = report.GetVerifiedAt().AsTime().UTC().Format(time.RFC3339Nano)
+	return record, nil
+}
+
+// boundVerificationMetadataComplete reports whether a persisted report carries
+// every public-safe field required for a bound verification summary revision.
+func boundVerificationMetadataComplete(report *evalv1.EvaluationVerificationReport) bool {
+	return report != nil &&
+		report.GetStatus() != evalv1.EvaluationVerdictStatus_EVALUATION_VERDICT_STATUS_UNSPECIFIED &&
+		report.GetSchemaVersion() == campaignVerificationSchemaVersion &&
+		report.GetVerifierContractVersion() == constants.CampaignVerifierVersion &&
+		report.GetVerifierReleaseVersion() != "" &&
+		report.GetReportDigestRef() != nil &&
+		publicSHA256Pattern.MatchString(report.GetReportDigestRef().GetSha256()) &&
+		publicSHA256Pattern.MatchString(report.GetVerifiedPopulationDigest()) &&
+		report.GetVerifiedAt() != nil
+}
+
+// headlineMetricsForState renders the collected run metrics; when the state
+// was not produced by CollectRunAggregateState the metric cards report
+// unavailable with zero eligible contributors rather than fabricating values.
+func headlineMetricsForState(state *runAggregateState) evaluationHeadlineMetricsRecord {
+	headline := state.Headline
+	if headline == nil {
+		headline = &runHeadlineMetrics{
+			PassRate:            runMetricValue{Unit: runMetricUnitRatio, Eligible: state.Terminal, Observed: state.Terminal},
+			LatencyP50MS:        runMetricValue{Unit: runMetricUnitMilliseconds, UnavailableReason: evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS},
+			OutputThroughputP50: runMetricValue{Unit: runMetricUnitTokensPerSecond, UnavailableReason: evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_NO_SCORED_CALLS},
+		}
+		if state.Terminal > 0 {
+			value := float64(state.Passed) / float64(state.Terminal)
+			headline.PassRate.Value = &value
+		} else {
+			headline.PassRate.Observed = 0
+			headline.PassRate.UnavailableReason = evalv1.PublicUnavailableReason_PUBLIC_UNAVAILABLE_REASON_SOURCE_UNAVAILABLE
+		}
+	}
+	return evaluationHeadlineMetricsRecord{
+		PassRate:            headline.PassRate.record(),
+		LatencyP50MS:        headline.LatencyP50MS.record(),
+		OutputThroughputP50: headline.OutputThroughputP50.record(),
+	}
 }
 
 func elapsedSecondsBetween(startedAt, observedAt time.Time) *float64 {
@@ -684,19 +981,6 @@ func elapsedSecondsBetween(startedAt, observedAt time.Time) *float64 {
 	}
 	seconds := math.Round(observedAt.Sub(startedAt).Seconds())
 	return &seconds
-}
-
-func buildVerifiedEvaluationSummaryRecord(run *evalv1.EvaluationRun, datasetID, observedAt string, state *runAggregateState, report *evalv1.EvaluationVerificationReport) map[string]any {
-	record := buildEvaluationSummaryRecord(run, datasetID, observedAt, state, "completed", true)
-	record["quality_state"] = qualityStateForVerifiedAggregate(state, report)
-	record["verifier_state"] = VerifierStateFromVerificationReport(report)
-	if summary := formatCampaignVerifierFailureSummary(report); summary != "" {
-		record["verifier_failure_summary"] = summary
-	}
-	if report.GetVerifiedAt() != nil {
-		record["observed_at"] = report.GetVerifiedAt().AsTime().UTC().Format(time.RFC3339Nano)
-	}
-	return record
 }
 
 // buildModelRoleMapping declares one variant per role when the run matrix
@@ -977,7 +1261,7 @@ func deriveExplorerTerminalStatus(result *evalv1.EvaluationAssignmentResult) str
 	}
 }
 
-func marshalCanonicalViewRecord(record map[string]any) ([]byte, error) {
+func marshalCanonicalViewRecord(record any) ([]byte, error) {
 	body, err := json.Marshal(record)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation: marshal campaign view record: %w", err)
