@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
@@ -159,9 +158,7 @@ func InitCampaignQueue(req InitCampaignQueueRequest) (*InitCampaignQueueResult, 
 			return nil, err
 		}
 	}
-	sort.Slice(variants, func(i, j int) bool {
-		return variants[i].GetVariantId() < variants[j].GetVariantId()
-	})
+	SortModelVariantsForRollout(variants)
 
 	inventoryRelDir := req.InventoryRelDir
 	if inventoryRelDir == "" {

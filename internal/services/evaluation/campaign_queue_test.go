@@ -42,6 +42,32 @@ func TestCampaignIDForVariant(t *testing.T) {
 	assert.Equal(t, "eval-init-gemma3-4b", CampaignIDForVariant(&evalv1.ModelVariant{ServedModelTag: "gemma3:4b", VariantId: "gemma3-4b"}))
 }
 
+func TestSortModelVariantsForRollout_PrioritizesCurrentSmallModels(t *testing.T) {
+	variants := []*evalv1.ModelVariant{
+		{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b"},
+		{VariantId: "qwen3-5-9b", ServedModelTag: "qwen3.5:9b"},
+		{VariantId: "granite4-2-8b", ServedModelTag: "granite4.2:8b"},
+		{VariantId: "qwen3-5-0-8b", ServedModelTag: "qwen3.5:0.8b"},
+		{VariantId: "granite4-2-3b", ServedModelTag: "granite4.2:3b"},
+		{VariantId: "gemma3-4b", ServedModelTag: "gemma3:4b"},
+	}
+
+	SortModelVariantsForRollout(variants)
+
+	orderedTags := make([]string, 0, len(variants))
+	for _, variant := range variants {
+		orderedTags = append(orderedTags, variant.GetServedModelTag())
+	}
+	assert.Equal(t, []string{
+		"granite4.2:3b",
+		"granite4.2:8b",
+		"qwen3.5:0.8b",
+		"qwen3.5:9b",
+		"gemma3:4b",
+		"qwen3:4b",
+	}, orderedTags)
+}
+
 func TestResolveCampaignStartPlanFromQueue(t *testing.T) {
 	root := t.TempDir()
 	queue := CampaignQueue{

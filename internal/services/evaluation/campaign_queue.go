@@ -28,11 +28,20 @@ const (
 	DefaultModelInventoryRelPath       = ".g8e/eval/model-inventory.json"
 	DefaultCampaignInventoryRelDirname = ".g8e/eval/inventories"
 
-	// Checked-in genesis program inventory (35 init-campaign models).
+	// Checked-in genesis program inventory.
 	DefaultBaseModelInventoryRelPath    = "eval/base-model-inventory.json"
 	DefaultBaseInitCampaignQueueRelPath = "eval/base-init-campaign-queue.json"
 	DefaultGenesisHomogeneousCampaignID = "eval-genesis-homogeneous"
 )
+
+var priorityModelTags = []string{
+	"granite4.2:3b",
+	"granite4.2:8b",
+	"qwen3.5:0.8b",
+	"qwen3.5:2b",
+	"qwen3.5:4b",
+	"qwen3.5:9b",
+}
 
 // CampaignQueueModel summarizes one init-campaign queue entry.
 type CampaignQueueModel struct {
@@ -211,10 +220,26 @@ func LoadFrozenVariants(path string) ([]*evalv1.ModelVariant, error) {
 		}
 		variants = append(variants, variant)
 	}
-	sort.Slice(variants, func(i, j int) bool {
+	SortModelVariantsForRollout(variants)
+	return variants, nil
+}
+
+func SortModelVariantsForRollout(variants []*evalv1.ModelVariant) {
+	priority := make(map[string]int, len(priorityModelTags))
+	for index, tag := range priorityModelTags {
+		priority[tag] = index
+	}
+	sort.SliceStable(variants, func(i, j int) bool {
+		leftPriority, leftPrioritized := priority[variants[i].GetServedModelTag()]
+		rightPriority, rightPrioritized := priority[variants[j].GetServedModelTag()]
+		if leftPrioritized != rightPrioritized {
+			return leftPrioritized
+		}
+		if leftPrioritized {
+			return leftPriority < rightPriority
+		}
 		return variants[i].GetVariantId() < variants[j].GetVariantId()
 	})
-	return variants, nil
 }
 
 // VariantsByTags returns frozen variants for the requested served model tags.

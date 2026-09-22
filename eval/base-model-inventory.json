@@ -1,9 +1,69 @@
 {
   "campaign_id": "eval-genesis-homogeneous",
-  "homogeneous_cell_count": 2625,
-  "model_count": 35,
-  "model_registry_digest": "21a5bebb0a68e94f3f4a0e437c1851290e6142cd45b669100ec46dc2d97b5b8d",
+  "homogeneous_cell_count": 3075,
+  "model_count": 41,
+  "model_registry_digest": "86edd0c0599f09c04eb4c7b1d38d47540d1c7f7d7802fbd1d88680bea63c1b1d",
   "variants": [
+    {
+      "variantId": "granite4-2-3b",
+      "providerClass": "ollama",
+      "servedModelTag": "granite4.2:3b",
+      "modelDigest": "40577dc168a3a9ad34e9a1234e0c2570be86097fa75a236d4574ae985705d3c4",
+      "modelFamily": "granite",
+      "parameterCount": "3000000000",
+      "quantization": "Q4_K_M",
+      "contextLimit": 131072
+    },
+    {
+      "variantId": "granite4-2-8b",
+      "providerClass": "ollama",
+      "servedModelTag": "granite4.2:8b",
+      "modelDigest": "f586c02fdecdf151b656207c339aa003997345774a41768bac1fd6d2fb85913b",
+      "modelFamily": "granite",
+      "parameterCount": "8000000000",
+      "quantization": "Q4_K_M",
+      "contextLimit": 131072
+    },
+    {
+      "variantId": "qwen3-5-0-8b",
+      "providerClass": "ollama",
+      "servedModelTag": "qwen3.5:0.8b",
+      "modelDigest": "f3817196d142eaf72ce79dfebe53dcb20bd21da87ce13e138a8f8e10a866b3a4",
+      "modelFamily": "qwen35",
+      "parameterCount": "800000000",
+      "quantization": "Q8_0",
+      "contextLimit": 262144
+    },
+    {
+      "variantId": "qwen3-5-2b",
+      "providerClass": "ollama",
+      "servedModelTag": "qwen3.5:2b",
+      "modelDigest": "324d162be6ca5629ae4517c8710434d0bd2d665bc94dbad46e9af8fbf8a2f0df",
+      "modelFamily": "qwen35",
+      "parameterCount": "2000000000",
+      "quantization": "Q8_0",
+      "contextLimit": 262144
+    },
+    {
+      "variantId": "qwen3-5-4b",
+      "providerClass": "ollama",
+      "servedModelTag": "qwen3.5:4b",
+      "modelDigest": "2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd",
+      "modelFamily": "qwen35",
+      "parameterCount": "4000000000",
+      "quantization": "Q4_K_M",
+      "contextLimit": 262144
+    },
+    {
+      "variantId": "qwen3-5-9b",
+      "providerClass": "ollama",
+      "servedModelTag": "qwen3.5:9b",
+      "modelDigest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+      "modelFamily": "qwen35",
+      "parameterCount": "9000000000",
+      "quantization": "Q4_K_M",
+      "contextLimit": 262144
+    },
     {
       "variantId": "deepseek-r1-7b",
       "providerClass": "ollama",
@@ -321,6 +381,30 @@
     }
   ],
   "variants_inference": [
+    {
+      "digest": "40577dc168a3a9ad34e9a1234e0c2570be86097fa75a236d4574ae985705d3c4",
+      "model": "granite4.2:3b"
+    },
+    {
+      "digest": "f586c02fdecdf151b656207c339aa003997345774a41768bac1fd6d2fb85913b",
+      "model": "granite4.2:8b"
+    },
+    {
+      "digest": "f3817196d142eaf72ce79dfebe53dcb20bd21da87ce13e138a8f8e10a866b3a4",
+      "model": "qwen3.5:0.8b"
+    },
+    {
+      "digest": "324d162be6ca5629ae4517c8710434d0bd2d665bc94dbad46e9af8fbf8a2f0df",
+      "model": "qwen3.5:2b"
+    },
+    {
+      "digest": "2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd",
+      "model": "qwen3.5:4b"
+    },
+    {
+      "digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+      "model": "qwen3.5:9b"
+    },
     {
       "digest": "755ced02ce7befdb13b7ca74e1e4d08cddba4986afdb63a480f2c93d3140383f",
       "model": "deepseek-r1:7b"

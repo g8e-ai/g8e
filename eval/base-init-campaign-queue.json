@@ -5,6 +5,54 @@
   "generate_command": "./g8e eval rollout init --from eval/base-model-inventory.json --materialize --merge",
   "models": [
     {
+      "variant_id": "granite4-2-3b",
+      "served_model_tag": "granite4.2:3b",
+      "campaign_id": "eval-init-granite4-2-3b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-granite4-2-3b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "granite4-2-8b",
+      "served_model_tag": "granite4.2:8b",
+      "campaign_id": "eval-init-granite4-2-8b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-granite4-2-8b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-5-0-8b",
+      "served_model_tag": "qwen3.5:0.8b",
+      "campaign_id": "eval-init-qwen3-5-0-8b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-5-0-8b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-5-2b",
+      "served_model_tag": "qwen3.5:2b",
+      "campaign_id": "eval-init-qwen3-5-2b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-5-2b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-5-4b",
+      "served_model_tag": "qwen3.5:4b",
+      "campaign_id": "eval-init-qwen3-5-4b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-5-4b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
+      "variant_id": "qwen3-5-9b",
+      "served_model_tag": "qwen3.5:9b",
+      "campaign_id": "eval-init-qwen3-5-9b",
+      "inventory_file": ".g8e/eval/inventories/eval-init-qwen3-5-9b.json",
+      "homogeneous_cell_count": 75,
+      "status": "pending"
+    },
+    {
       "variant_id": "deepseek-r1-7b",
       "served_model_tag": "deepseek-r1:7b",
       "campaign_id": "eval-init-deepseek-r1-7b",
