@@ -76,7 +76,7 @@ type StreamSortDirection = 'asc' | 'desc';
 const ASSIGNMENT_METRIC_COLUMNS: Array<{ key: AssignmentMetricColumn; label: string }> = [
   { key: 'pass', label: 'Pass' },
   { key: 'task_score', label: 'Task score' },
-  { key: 'deterministic_pass_rate', label: 'Deterministic pass rate' },
+  { key: 'deterministic_pass_rate', label: 'Pass Rate' },
   { key: 'latency_ms', label: 'Latency' },
   { key: 'input_tokens', label: 'Input tokens' },
   { key: 'output_tokens', label: 'Output tokens' },
@@ -307,7 +307,6 @@ export function LiveEventStream({
                     <td className="stream-time">{eventTime(event.observed_at)}</td>
                     <td>
                       <span className={`stream-role status-${event.lifecycle_status}`}>
-                        <span className="status-dot" aria-hidden="true" />
                         {roleLabelText}
                       </span>
                     </td>

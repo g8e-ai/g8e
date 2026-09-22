@@ -311,7 +311,7 @@ export function assignmentPass(assignment: AssignmentResult): number | undefined
 const ASSIGNMENT_METRIC_LABELS: Record<string, string> = {
   pass: 'Pass',
   task_score: 'Task score',
-  deterministic_pass_rate: 'Deterministic pass rate',
+  deterministic_pass_rate: 'Pass Rate',
   latency_ms: 'Latency',
 };
 

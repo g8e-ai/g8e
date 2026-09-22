@@ -116,6 +116,7 @@ describe('LiveEventStream', () => {
     expect(screen.getByRole('columnheader', { name: 'Category' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Task' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Pass' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Pass Rate' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Latency' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'security-policy-block-run' })).toBeInTheDocument();
     expect(screen.getByText('Pass', { selector: '.stream-metric-value' })).toBeInTheDocument();
@@ -182,6 +183,7 @@ describe('LiveEventStream', () => {
     expect(roleCell).not.toBeNull();
     expect(roleCell).toHaveTextContent('Lite');
     expect(roleCell).not.toHaveTextContent('gemma2-9b');
+    expect(roleCell?.querySelector('.status-dot')).not.toBeInTheDocument();
   });
 
   it('links active evaluation details to the live page without duplicating the event stream', () => {
