@@ -80,7 +80,6 @@ function latestAssignmentActivity(events: LiveEvent[]) {
     variantId: lastMatchingEvent(matching, (event) => event.variant_id !== undefined)?.variant_id,
     role: lastMatchingEvent(matching, (event) => event.role !== undefined)?.role,
     stageLabel: lastMatchingEvent(matching, (event) => event.stage_label !== undefined)?.stage_label,
-    observedAt: latest.observed_at,
   };
 }
 
@@ -165,7 +164,6 @@ function SystemOverviewPanel({
   const currentSuite = currentRun ? suites.find((suite) => suite.suite_id === currentRun.suite_id) : undefined;
   const currentRunEvents = currentRun ? events.filter((event) => event.run_id === currentRun.run_id) : [];
   const activity = latestAssignmentActivity(currentRunEvents);
-  const updatedAt = latestEvent?.observed_at ?? catalog?.generated_at;
   const verification = catalog ? verificationLabel(currentRun, catalog) : undefined;
 
   return (
@@ -224,7 +222,6 @@ function SystemOverviewPanel({
                 <h4>{catalog.title}</h4>
                 <p>{catalog.description}</p>
               </div>
-              {updatedAt ? <span className="campaign-updated">Updated {formatRelativeTime(updatedAt)}</span> : null}
             </div>
 
             {currentRun ? (
@@ -280,7 +277,6 @@ function SystemOverviewPanel({
                 <div className="campaign-activity-meta">
                   {activity.stageLabel ? <span>{capitalize(activity.stageLabel.replaceAll('_', ' '))}</span> : null}
                   {activity.role ? <span>{roleLabel(activity.role)} role</span> : null}
-                  <span>{formatRelativeTime(activity.observedAt)}</span>
                 </div>
               </div>
             ) : null}

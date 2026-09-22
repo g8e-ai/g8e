@@ -138,6 +138,7 @@ describe('OverviewView active campaign', () => {
     expect(panel.getByText('tool-selection-04')).toBeInTheDocument();
     expect(panel.getByText('Semantic grading')).toBeInTheDocument();
     expect(panel.getByText('Primary role')).toBeInTheDocument();
+    expect(panel.queryByText('in the future')).not.toBeInTheDocument();
     expect(panel.getByRole('link', { name: 'View Details' })).toHaveAttribute(
       'href',
       `/evaluations/${datasetId}/${evaluation.run_id}`,
