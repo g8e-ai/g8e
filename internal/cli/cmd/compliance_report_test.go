@@ -178,6 +178,14 @@ func runComplianceReportGenerateCommand(t *testing.T, evalRuns []string) ([]byte
 	return bytes.TrimSpace(output.Bytes()), cmd.RunE(cmd, nil)
 }
 
+func TestComplianceReportGenerateCmdWithConfig_DefaultsToRestrictedProfile(t *testing.T) {
+	cmd := complianceReportGenerateCmdWithConfig(failingFileSvcFactory(errFactory), stubProvenanceSourceFactory(nil), complianceReportSigningIdentityLoaderForTest(t), time.Now)
+
+	profile := cmd.Flags().Lookup("profile")
+	require.NotNil(t, profile)
+	assert.Equal(t, string(compliancereport.ProfileRestricted), profile.DefValue)
+}
+
 func TestComplianceReportCmd_ContainsGenerateAndVerifySubcommands(t *testing.T) {
 	cmd := complianceReportCmd()
 	require.Len(t, cmd.Commands(), 2)

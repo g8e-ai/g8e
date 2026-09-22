@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,6 +122,33 @@ func TestRenderComplianceAnalysis_ProjectionIncludesCoverageDiagnosticsAndEviden
 		assert.Contains(t, body, artifactID)
 		assert.Contains(t, body, "missing_observation")
 		assert.Contains(t, body, "2 selected, 1 assessed, 1 failed, 1 unavailable")
+	}
+}
+
+func TestRenderPublicReleaseProjection_ExcludesPrivateAnalysisFields(t *testing.T) {
+	analysis := rendererTestAnalysis()
+	artifactID := "action-receipt:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	analysis.AssertionAssessments[0].EvidenceRefs = []string{artifactID}
+	analysis.EvidenceResources = []*compliancev1.ComplianceEvidenceReference{{
+		ArtifactId: artifactID, ArtifactType: "action-receipt", Sha256: strings.Repeat("a", 64), SourceAdmissionId: "private-admission", RunId: "private-run", AttemptId: "private-attempt", ScenarioId: "private-scenario", TransactionId: "private-transaction", VerificationStatus: "verified", VerifierId: "receipt-verifier", VerifierVersion: "1.0.0", BundlePath: "sources/private/runtime/receipt.json",
+	}}
+	analysis.Diagnostics = []*compliancev1.AssessmentDiagnostic{
+		{Code: "assessment_context_unavailable", Severity: "warning", SourceAdmissionId: "private-admission", Subject: &compliancev1.AssessmentSubjectSelection{RunId: "private-run"}, Message: "private operator path was not captured"},
+		{Code: "private-diagnostic-code", Severity: "private-severity", Message: "private diagnostic message"},
+	}
+	analysis.Limitations = []string{"private deployment limitation"}
+
+	for _, format := range []Format{FormatMarkdown, FormatCSV} {
+		rendered, err := RenderPublicReleaseProjection(analysis, format)
+		require.NoError(t, err)
+		body := string(rendered.Body)
+		assert.Contains(t, body, analysis.GetAnalysisId())
+		assert.Contains(t, body, artifactID)
+		assert.Contains(t, body, "assessment_context_unavailable")
+		assert.Contains(t, body, "assessment_diagnostic")
+		for _, privateValue := range []string{"private-admission", "private-run", "private-attempt", "private-scenario", "private-transaction", "sources/private/runtime/receipt.json", "private operator path was not captured", "private deployment limitation", "private-diagnostic-code", "private-severity", "private diagnostic message"} {
+			assert.NotContains(t, body, privateValue)
+		}
 	}
 }
 

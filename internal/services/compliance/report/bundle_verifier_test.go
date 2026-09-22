@@ -387,7 +387,7 @@ func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*Bundl
 	for _, framework := range frameworks.GetFrameworks() {
 		request.FrameworkRefs = append(request.FrameworkRefs, &compliancev1.VersionedReference{Id: framework.GetFrameworkId(), Version: framework.GetFrameworkVersion()})
 	}
-	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 	require.NoError(t, err)
 	controlAssessmentRef := path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleControlAssessmentsFilename)
 	request.AssessmentRefs = append(request.AssessmentRefs, controlAssessmentRef)
@@ -511,7 +511,7 @@ func finalizeProtectedScopeFixture(t *testing.T, request *BundleAssemblyRequest)
 	for _, artifact := range canonicalArtifacts {
 		replaceSourceArtifactBody(t, request.SourceArtifacts, artifact.BundlePath, artifact.Body)
 	}
-	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 	require.NoError(t, err)
 }
 
@@ -621,7 +621,7 @@ func addKSIHistorySourceFixture(t *testing.T, request *BundleAssemblyRequest) ks
 	evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 	require.NoError(t, err)
 	replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 	require.NoError(t, err)
 	finalizeProtectedScopeFixture(t, request)
 	return paths
@@ -685,7 +685,7 @@ func addCommitmentSourceFixture(t *testing.T, request *BundleAssemblyRequest) co
 	evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 	require.NoError(t, err)
 	replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 	require.NoError(t, err)
 	finalizeProtectedScopeFixture(t, request)
 	return commitmentSourceFixture{bundlePath: bundlePath, privateKey: privateKey, attestation: attestation, trust: &assessedEvidenceSignerStub{keys: map[string]ed25519.PublicKey{keyID: publicKey}}}
@@ -777,7 +777,7 @@ func addAttestationSourceFixture(t *testing.T, request *BundleAssemblyRequest) a
 	evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 	require.NoError(t, err)
 	replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 	require.NoError(t, err)
 	finalizeProtectedScopeFixture(t, request)
 	return attestationSourceFixture{bundlePath: bundlePath, privateKey: privateKey, record: record, trust: &assessedEvidenceSignerStub{keys: map[string]ed25519.PublicKey{keyID: publicKey}}}
@@ -844,7 +844,7 @@ func addAuditSourceFixture(t *testing.T, request *BundleAssemblyRequest) auditSo
 	evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 	require.NoError(t, err)
 	replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 	require.NoError(t, err)
 	finalizeProtectedScopeFixture(t, request)
 	return auditSourceFixture{bundlePath: bundlePath, event: event}
@@ -894,7 +894,7 @@ func TestVerifyComplianceReportBundle_RejectsResignedInventedAssertionAssessment
 		assertionAssessments, err := marshalCanonicalMessages(request.Analysis.GetAssertionAssessments())
 		require.NoError(t, err)
 		replaceSourceArtifactBody(t, request.SourceArtifacts, path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleAssertionAssessmentsFilename), assertionAssessments)
-		request.RenderedFormats, err = renderAllFormats(request.Analysis)
+		request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 		require.NoError(t, err)
 	})
 
@@ -1005,7 +1005,7 @@ func TestVerifyComplianceReportBundle_RejectsCommitmentAnalysisBindingMutations(
 				evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 				require.NoError(t, err)
 				replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-				request.RenderedFormats, err = renderAllFormats(request.Analysis)
+				request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 				require.NoError(t, err)
 			})
 
@@ -1111,7 +1111,7 @@ func TestVerifyComplianceReportBundle_RejectsAttestationAnalysisBindingMutations
 				evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 				require.NoError(t, err)
 				replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-				request.RenderedFormats, err = renderAllFormats(request.Analysis)
+				request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 				require.NoError(t, err)
 			})
 
@@ -1139,7 +1139,7 @@ func TestVerifyComplianceReportBundle_RejectsOrphanedAttestationSource(t *testin
 		evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 		require.NoError(t, err)
 		replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-		request.RenderedFormats, err = renderAllFormats(request.Analysis)
+		request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 		require.NoError(t, err)
 	})
 
@@ -1216,7 +1216,7 @@ func TestVerifyComplianceReportBundle_RejectsAuditRecordAnalysisBindingMutations
 				evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 				require.NoError(t, err)
 				replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-				request.RenderedFormats, err = renderAllFormats(request.Analysis)
+				request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 				require.NoError(t, err)
 			})
 
@@ -1244,7 +1244,7 @@ func TestVerifyComplianceReportBundle_RejectsOrphanedAuditRecordSource(t *testin
 		evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 		require.NoError(t, err)
 		replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
-		request.RenderedFormats, err = renderAllFormats(request.Analysis)
+		request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 		require.NoError(t, err)
 	})
 
@@ -1338,6 +1338,9 @@ func signedRestrictedBundleVerificationFixture(t *testing.T, plaintext []byte) (
 	plaintextDigest := sha256.Sum256(plaintext)
 	return signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
 		request.Profile = ProfileRestricted
+		var err error
+		request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
+		require.NoError(t, err)
 		request.RestrictedArtifacts = []RestrictedArtifact{{
 			BundlePath: constants.ComplianceBundleRestrictedEvidenceTestPath,
 			Body:       []byte(`{"ciphertext":"authenticated"}`),
@@ -2276,7 +2279,7 @@ func refreshBundleAnalysisArtifacts(t *testing.T, request *BundleAssemblyRequest
 	evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
 	require.NoError(t, err)
 	replaceSourceArtifactBody(t, request.SourceArtifacts, path.Join(constants.ComplianceBundleEvidenceDirname, constants.ComplianceBundleEvidenceIndexFilename), evidenceIndex)
-	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis, request.Profile)
 	require.NoError(t, err)
 }
 

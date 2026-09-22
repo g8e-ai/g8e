@@ -26,7 +26,7 @@ Release work is split between the **agent** (PR prep) and the **release owner** 
 1. Receive the release owner's complete change inventory and inspect the current working tree as the source of truth for current behavior
 2. Map every change to the full documentation catalog, then audit each affected document end to end against its owning current code, configuration, schema, generator, test, or scope-bound evidence
 3. Update every inaccurate or incomplete affected document and all related current-state cross-links, record the audit, and write `docs/release_notes/vX.Y.x/vX.Y.Z.md`; defer document metadata until the release version is set
-4. Generate the compliance evidence artifacts as part of agent prep: establish or use the release assessment binding, run `g8e compliance release-evidence` with the release version, output directory, assessment binding, and evidence-window flags, and retain the generated Markdown and CSV in `docs/release_notes/vX.Y.x/` (see [Compliance Evidence Generation](#compliance-evidence-generation)). The agent owns this generation step; do not defer it to the release owner or leave placeholder release notes.
+4. Generate the compliance evidence artifacts as part of agent prep: obtain the release-eligible signed report bundle and external trust policies, run `g8e compliance release-evidence <bundle>` with the output directory and trust flags, and retain the generated Markdown and CSV in `docs/release_notes/vX.Y.x/` (see [Compliance Evidence Generation](#compliance-evidence-generation)). The agent owns this generation step; do not defer it to the release owner or leave placeholder release notes.
 5. Set `VERSION` to `vX.Y.Z`, finalize metadata for every edited document, add the `CHANGELOG.md` row, and sync the Python package files (`protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock`) to `X.Y.Z` (no `v` prefix). Then run `make proto` to regenerate the downstream `ensemble/uv.lock` file, which depends on `g8e` through the in-tree protocol package, so CI's version sync and locked-environment checks pass on the PR
 6. Run the read-only [Verification](#verification) checks (all steps should pass, including step 4)
 7. Stop. The agent does NOT commit, push, open the PR, or run `make release`. Hand the prepared working tree back to the release owner.
@@ -247,17 +247,13 @@ Use the same `## [X.Y.Z] - YYYY-MM-DD` header as the CHANGELOG (no `v` prefix in
 
 ## Compliance Evidence Generation
 
-Every release generates a per-release compliance evidence artifact that captures demonstrated technical control operation at the release boundary. The artifact is produced by `g8e compliance release-evidence` and lives alongside the release notes in `docs/release_notes/vX.Y.x/`.
+Every release generates a per-release compliance evidence projection from a complete signed report bundle. The projection is produced by `g8e compliance release-evidence <bundle>` and lives alongside the release notes in `docs/release_notes/vX.Y.x/`.
 
 ### What it captures
 
-The command runs three currently-available compliance evidence sources and renders them into a single markdown report and a CSV:
+`g8e compliance report generate` produces the signed bundle with canonical native assertions, cross-framework analysis, OSCAL and other deterministic renderers, protected source inventories, and independent offline replay. Its protected `AssessmentScope` binds source admissions, runtime ownership and acquisition boundaries, verifier versions, applicability, selected population, posture, evidence window, assessment-as-of time, and product version. Required contextual evidence is either protected in the scope or represented by an explicit typed unavailable declaration with a reason. An unavailable declaration limits the release claim and never replaces a posture-required policy or native proof.
 
-1. **KSI evaluation** — evaluates class C against the live runtime stores (audit store, git ledger, commitment ledger) under the caller-declared scope, run, assertion-assessment set, and evidence window, then records the per-KSI status, method count, and last-validated timestamp. When the runtime stores are unavailable, the report records the gap honestly rather than inventing a passing result.
-2. **KSI history snapshot inventory** — reads previously persisted KSI evaluation snapshots from `.g8e/data/compliance/ksi-history/` and records the snapshot count and time range. Release-evidence aggregation is read-only and does not persist its current KSI evaluation as a history snapshot.
-3. **Demo-run verification** — runs `g8e compliance demo-run verify <run-id>` for each persisted demo evidence run (or for explicit run IDs passed via `--demo-run`) and records the verification result, failure count, verifier ID and version, reproduced checksum root, and verified-at timestamp.
-
-`g8e compliance report generate` produces signed bundles with canonical cross-framework analysis, OSCAL and other deterministic renderers, protected source inventories, and independent offline replay. It requires one protected `AssessmentScope` supplied with `--scope`; that scope binds source admissions, runtime ownership and acquisition boundaries, verifier versions, applicability, selected population, posture, evidence window, and assessment-as-of time. Required contextual evidence is either protected in the scope or represented by an explicit typed unavailable declaration with a reason. An unavailable declaration limits the release claim and never replaces a posture-required policy or native proof. `g8e compliance report verify` authenticates report signatures through external report trust and separately authenticates represented commitment and customer or assessor attestation signers through external evidence trust. When a release plan requires clean offline acceptance, the acceptance record identifies the exact candidate, bundle checksum root, external trust digests, isolated network-disabled environment, command status, canonical verification-report digest, and rejected mutation classes. The legacy `compliance release-evidence` artifact remains a separate KSI, KSI-history, and demo summary until the canonical verify-and-project release path replaces it; it does not substitute for a signed report bundle and does not claim certification, accreditation, authorization, legal compliance, or recurring operating effectiveness. See the [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md) document for the current bundle contract and remaining limits.
+`g8e compliance release-evidence` first verifies the complete bundle with external report trust and, when represented signed source evidence requires it, external evidence trust. It then projects only the bundle's canonical public Markdown and CSV renderings. It does not access runtime stores, discover evidence, execute workloads, regrade assertions, accept an arbitrary release version, or relabel a restricted bundle as public. The projection is not certification, accreditation, authorization, legal compliance, or recurring operating-effectiveness evidence. See the [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md) document for the bundle contract and claim limits.
 
 ### Output files
 
@@ -265,54 +261,32 @@ Two files are written into the output directory (typically `docs/release_notes/v
 
 | File | Format | Purpose |
 |------|--------|---------|
-| `vX.Y.Z-compliance-evidence.md` | Markdown | Readable report with summary table, KSI evaluation table, KSI history summary, demo-run verification table, and claim boundaries |
-| `vX.Y.Z-compliance-evidence.csv` | CSV | One row per evidence item (KSI results and demo-run verifications) with columns: `evidence_type`, `identifier`, `status`, `valid`, `method_count`, `last_validated`, `failure_count`, `verifier_id`, `verifier_version`, `checksum_root`, `evaluated_at` |
+| `vX.Y.Z-compliance-evidence.md` | Markdown | Public-safe native assertion outcomes, coverage, content-addressed proof references, conservative external alignment, diagnostic counts, and claim boundaries |
+| `vX.Y.Z-compliance-evidence.csv` | CSV | Public-safe rows for the analysis, native assertions, framework controls, proof digests, and diagnostic summaries; source-local identities, runtime paths, free-form diagnostics, and source bodies are excluded |
 
 ### Command
 
 ```bash
-export RELEASE_SCOPE_ID='<assessment-scope-id>'
-export RELEASE_RUN_ID='<assessment-run-id>'
-export ASSERTION_ASSESSMENT_ID='<consumed-assertion-assessment-id>'
-export EVIDENCE_WINDOW_START_UNIX_MS='<inclusive-start-unix-ms>'
-export EVIDENCE_WINDOW_END_UNIX_MS='<inclusive-end-unix-ms>'
-
-g8e compliance release-evidence \
-  --version vX.Y.Z \
-  --out docs/release_notes/vX.Y.x/ \
-  --class C \
-  --scope-id "${RELEASE_SCOPE_ID}" \
-  --run-id "${RELEASE_RUN_ID}" \
-  --assertion-assessment-id "${ASSERTION_ASSESSMENT_ID}" \
-  --evidence-window-start-unix-ms "${EVIDENCE_WINDOW_START_UNIX_MS}" \
-  --evidence-window-end-unix-ms "${EVIDENCE_WINDOW_END_UNIX_MS}"
+g8e compliance release-evidence <verified-public-bundle> \
+  --trust-policy /path/to/report-trust-policy.json \
+  --evidence-trust /path/to/evidence-trust-policy.json \
+  --out docs/release_notes/vX.Y.x/
 ```
 
-The scope ID, run ID, assertion-assessment IDs, and inclusive evidence window are declared by the release assessment and must identify the actual assessment context. Repeat the assertion-assessment, attempt, scenario, and action flags for every identifier admitted into that context. Evidence references carrying an identifier outside these allowlists or a timestamp outside the declared window fail closed.
+The bundle argument must be the complete signed report bundle descriptor. `--trust-policy` is an external assessed report-signing trust policy. `--evidence-trust` is required when the bundle represents signed source evidence and must be a distinct external policy. The command reads the release version from the protected `AssessmentScope`, requires the bundle profile to be public, verifies the bundle offline, and copies the protected canonical Markdown and CSV renderings without regrading or relabeling them. Public bundle generation is explicit: report generation defaults to the `restricted` profile, and `--profile public` succeeds only when every protected source admission is classified public. The public Markdown and CSV use an allowlist that retains assessment identities, outcomes, coverage, content-addressed proof digests, verifier identities, and diagnostic code counts while excluding source-local identities, runtime locations, free-form diagnostics, limitations, and source bodies.
 
 Flags:
 
-- `--version` (required): Release version with `v` prefix (e.g. `v2.1.5`).
-- `--out` (required): Output directory for the markdown report and CSV. Typically `docs/release_notes/vX.Y.x/`.
-- `--scope-id` (required): Assessment scope ID bound to every KSI result.
-- `--run-id` (required): Assessment run ID bound to every KSI result.
-- `--assertion-assessment-id` (required, repeatable): Assertion-assessment ID consumed by the KSI evaluation. At least one is required.
-- `--evidence-window-start-unix-ms` (required): Inclusive start of the declared evidence collection interval in Unix milliseconds.
-- `--evidence-window-end-unix-ms` (required): Inclusive end of the declared evidence collection interval in Unix milliseconds.
-- `--attempt-id`: Attempt ID admitted into the assertion-assessment scope. Repeatable.
-- `--scenario-id`: Scenario ID admitted into the assertion-assessment scope. Repeatable.
-- `--action-id`: Action or transaction ID admitted into the assertion-assessment scope. Repeatable.
-- `--class`: FedRAMP 20x certification class (A, B, C, D). Defaults to `C`.
-- `--catalog`: Path to KSI catalog JSON. Defaults to `docs/reference/ksi-catalog.json`.
-- `--demo-run`: Demo run ID to verify. Repeatable. When omitted, all persisted runs under `.g8e/data/compliance/demo-evidence/` are verified.
-- `--project-root`: Project root for demo provenance verification. Defaults to cwd.
-- `--fail-closed`: Exit nonzero if any KSI is not satisfied, KSI evaluation is unavailable, or any demo run is invalid. Use this in CI gates; do not use it during release prep when the runtime stores may not have live governance data.
+- `<bundle>` (required): Complete signed report bundle descriptor.
+- `--out` (required): Output directory for the release Markdown and CSV. Typically `docs/release_notes/vX.Y.x/`.
+- `--trust-policy` (required): Path to externally assessed compliance report trust policy.
+- `--evidence-trust`: Path to the distinct externally assessed source-evidence trust policy when required by the bundle.
 
 ### When to run it
 
-The **agent runs compliance evidence generation during PR prep**, after writing the release notes and before finalizing version-bearing files (see the [Standard Checklist Template](#standard-checklist-template) agent-prep order). The command needs the release version string, which is determined during the change inventory, and writes into the release notes directory, which is created with the release notes. The agent establishes or consumes the release assessment scope, run, assertion-assessment set, and inclusive evidence window for that release; the release owner reviews the generated artifacts but does not generate them as a substitute for agent prep.
+The **agent runs bundle-backed compliance projection during PR prep**, after writing the release notes and before finalizing version-bearing files (see the [Standard Checklist Template](#standard-checklist-template) agent-prep order). The agent obtains the release-eligible signed bundle and externally assessed trust policies, verifies the bundle, and writes the projection into the release notes directory. The release owner reviews the generated artifacts but does not generate them as a substitute for agent prep.
 
-The command reads runtime evidence from the `.g8e/` tree of the deployment it runs against. For release prep, run it against a deployment with current demo evidence persisted (e.g. after `./g8e demos scenarios run` has produced evidence-grade demo runs). If no demo evidence is persisted, the report records "No demo runs persisted" — this is an honest gap, not a failure.
+The projection never reads the deployment runtime or current source tree. If the bundle is invalid, restricted, missing required trust, or contains an invalid protected product version, projection stops without writing release artifacts.
 
 ### Release notes cross-reference
 
@@ -321,7 +295,7 @@ Add a `### Compliance Evidence` subsection to the release notes file pointing to
 ```markdown
 ### Compliance Evidence
 
-Per-release compliance evidence for vX.Y.Z is in [vX.Y.Z-compliance-evidence.md](vX.Y.Z-compliance-evidence.md) with a machine-readable [CSV](vX.Y.Z-compliance-evidence.csv). The report captures KSI evaluation, KSI history, and demo-run verification at the release boundary.
+Per-release compliance evidence for vX.Y.Z is in [vX.Y.Z-compliance-evidence.md](vX.Y.Z-compliance-evidence.md) with a machine-readable [CSV](vX.Y.Z-compliance-evidence.csv). The projection is derived from the verified public compliance bundle and preserves canonical native assertion statuses, coverage, content-addressed proof references, diagnostic summaries, and claim boundaries without publishing source-local context.
 ```
 
 ---

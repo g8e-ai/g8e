@@ -57,11 +57,14 @@ type SignedBundleGenerationRequest struct {
 }
 
 func GenerateSignedComplianceBundle(ctx context.Context, request SignedBundleGenerationRequest) (*BundleAssemblyResult, error) {
+	if err := validateBundleDisclosureProfile(request.Generation.Scope, request.Profile); err != nil {
+		return nil, err
+	}
 	result, err := GenerateComplianceAnalysis(ctx, request.Generation)
 	if err != nil {
 		return nil, err
 	}
-	renderedFormats, err := renderAllFormats(result.Analysis)
+	renderedFormats, err := renderAllFormats(result.Analysis, request.Profile)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +110,19 @@ func GenerateSignedComplianceBundle(ctx context.Context, request SignedBundleGen
 	return assembly, nil
 }
 
-func renderAllFormats(analysis *compliancev1.ComplianceAnalysis) ([]RenderedFormat, error) {
+func validateBundleDisclosureProfile(scope *compliancev1.AssessmentScope, profile BundleProfile) error {
+	if scope == nil || profile != ProfilePublic {
+		return nil
+	}
+	for _, admission := range scope.GetSourceAdmissions() {
+		if admission.GetDisclosureClassification() != constants.ComplianceBundleProfilePublic {
+			return fmt.Errorf("%w: public bundle cannot include source admission %s classified as %s", constants.ErrBundleProfileUnsupported, admission.GetAdmissionId(), admission.GetDisclosureClassification())
+		}
+	}
+	return nil
+}
+
+func renderAllFormats(analysis *compliancev1.ComplianceAnalysis, profile BundleProfile) ([]RenderedFormat, error) {
 	bundlePaths := map[Format]string{
 		FormatJSON:     constants.ComplianceBundleJSONPath,
 		FormatOSCAL:    constants.ComplianceBundleOSCALPath,
@@ -118,13 +133,20 @@ func renderAllFormats(analysis *compliancev1.ComplianceAnalysis) ([]RenderedForm
 	}
 	formats := make([]RenderedFormat, 0, len(SupportedFormats()))
 	for _, format := range SupportedFormats() {
-		rendered, err := RenderComplianceAnalysis(analysis, format)
+		rendered, err := renderBundleFormat(analysis, format, profile)
 		if err != nil {
 			return nil, fmt.Errorf("compliance report: render protected %s output: %w", format, err)
 		}
 		formats = append(formats, RenderedFormat{Format: format, MediaType: rendered.MediaType, BundlePath: bundlePaths[format], Body: rendered.Body})
 	}
 	return formats, nil
+}
+
+func renderBundleFormat(analysis *compliancev1.ComplianceAnalysis, format Format, profile BundleProfile) (*RenderedAnalysis, error) {
+	if profile == ProfilePublic && (format == FormatMarkdown || format == FormatCSV) {
+		return RenderPublicReleaseProjection(analysis, format)
+	}
+	return RenderComplianceAnalysis(analysis, format)
 }
 
 func canonicalReportSourceArtifacts(request GenerationRequest, result *GenerationResult) ([]SourceArtifact, error) {

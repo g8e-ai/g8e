@@ -1551,7 +1551,7 @@ func complianceReportGenerateCmdWithConfig(
 	cmd.Flags().BoolVar(&discoverEvalRuns, "discover-eval-runs", false, "Freeze all local eval run candidate dispositions into report diagnostics")
 	cmd.Flags().StringSliceVar(&operationalSources, "source", nil, "Operational evidence source package directory (repeatable)")
 	cmd.Flags().StringVar(&reportID, "report-id", "", "Immutable report bundle ID")
-	cmd.Flags().StringVar(&bundleProfile, "profile", string(compliancereport.ProfilePublic), "Bundle profile: public or restricted")
+	cmd.Flags().StringVar(&bundleProfile, "profile", string(compliancereport.ProfileRestricted), "Bundle profile: public or restricted")
 	cmd.Flags().StringVar(&signingMetadata, "signing-metadata", "", "Path to canonical compliance report signing-key metadata")
 	cmd.Flags().StringVar(&signingPrivateKey, "signing-private-key", "", "Path to hex-encoded Ed25519 compliance report private key")
 	cmd.Flags().StringVar(&evidenceTrustPath, "evidence-trust", "", "Path to externally assessed source evidence signer trust policy")

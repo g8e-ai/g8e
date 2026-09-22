@@ -2072,6 +2072,11 @@ func (s *bundledDemoProvenanceSource) Definitions(ctx context.Context, _ string)
 }
 
 func (v *bundleVerifier) verifyRenderedFormats() {
+	profile, err := ParseBundleProfile(v.request.Bundle.GetManifest().GetBundleProfile())
+	if err != nil {
+		v.fail(constants.ErrRendererMismatch, constants.ComplianceBundleManifestPath, err.Error())
+		return
+	}
 	for _, entry := range v.request.Bundle.GetRenderedFormats() {
 		if entry == nil {
 			continue
@@ -2081,7 +2086,7 @@ func (v *bundleVerifier) verifyRenderedFormats() {
 			v.fail(constants.ErrRendererMismatch, entry.GetBundlePath(), err.Error())
 			continue
 		}
-		rendered, err := RenderComplianceAnalysis(v.request.Bundle.GetAnalysis(), format)
+		rendered, err := renderBundleFormat(v.request.Bundle.GetAnalysis(), format, profile)
 		if err != nil {
 			v.fail(constants.ErrRendererMismatch, entry.GetBundlePath(), err.Error())
 			continue

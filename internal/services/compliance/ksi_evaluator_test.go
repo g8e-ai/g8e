@@ -12,7 +12,6 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -185,7 +184,7 @@ func fullDeps(t *testing.T) EvaluatorDeps {
 	commitmentHash := sha256.Sum256(payload)
 	commitment.Hash = hex.EncodeToString(commitmentHash[:])
 	commitment.Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
-	commitmentJSON, err := json.Marshal(commitment)
+	commitmentJSON, err := compliancev1.MarshalCanonical(commitment)
 	require.NoError(t, err)
 	committedAt := time.UnixMilli(commitment.CommittedAtUnixMs).UTC()
 	now := time.Now().UTC()

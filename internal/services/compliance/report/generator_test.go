@@ -135,6 +135,30 @@ func TestGenerateComplianceAnalysis_OrchestratesVerifiedEvidenceThroughCanonical
 	}
 }
 
+func TestGenerateSignedComplianceBundle_PublicProfileRejectsRestrictedSourceAdmission(t *testing.T) {
+	windowStart := time.Unix(1_700_000_000, 0).UTC()
+	windowEnd := windowStart.Add(time.Hour)
+	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+
+	_, err = GenerateSignedComplianceBundle(context.Background(), SignedBundleGenerationRequest{
+		Generation: GenerationRequest{
+			Scope:      validGenerationScope(windowStart, windowEnd),
+			Sources:    []GenerationSource{{AdmissionID: "source-1", Importer: generationImporter{nodes: []evidence.EvidenceNode{validGenerationNode("scope-1", windowStart, windowEnd)}}}},
+			Assertions: assertions,
+			Frameworks: frameworks,
+			Crosswalks: crosswalks,
+		},
+		Profile:         ProfilePublic,
+		ReportID:        "report-1",
+		GeneratedAt:     windowStart,
+		SigningIdentity: bundleSigningIdentityFixture(t),
+	})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrBundleProfileUnsupported)
+}
+
 func TestGenerateComplianceAnalysis_ProjectsExplicitUnavailableAssessmentContext(t *testing.T) {
 	windowStart := time.Unix(1_700_000_000, 0).UTC()
 	windowEnd := windowStart.Add(time.Hour)

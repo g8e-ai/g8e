@@ -12,7 +12,6 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -585,16 +584,16 @@ func newCommitmentsCryptographicallyVerifiedMethod(reader CommitmentEvidenceRead
 			reference.VerifierId = constants.KSIMethodVerifierID
 			reference.VerifierVersion = constants.KSIMethodVerifierVersion
 			evidence = append(evidence, reference)
-			var attestation operatorv1.CommitmentAttestation
-			if json.Unmarshal(row.AttestationJSON, &attestation) != nil {
+			attestation := &operatorv1.CommitmentAttestation{}
+			if compliancev1.UnmarshalCanonical(row.AttestationJSON, attestation) != nil {
 				return false, evidence, nil
 			}
-			canonical, err := governance.CanonicalizeCommitmentAttestation(&attestation)
+			canonical, err := governance.CanonicalizeCommitmentAttestation(attestation)
 			if err != nil {
 				return false, evidence, nil
 			}
 			digest := sha256.Sum256(canonical)
-			if !commitmentRowMatchesAttestation(row, &attestation, hex.EncodeToString(digest[:])) {
+			if !commitmentRowMatchesAttestation(row, attestation, hex.EncodeToString(digest[:])) {
 				return false, evidence, nil
 			}
 			publicKey, err := governance.SignerPublicKey(row.AuditorKeyID)

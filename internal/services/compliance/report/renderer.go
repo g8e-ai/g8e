@@ -8,7 +8,9 @@
 package report
 
 import (
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -105,6 +107,201 @@ func RenderComplianceAnalysis(analysis *compliancev1.ComplianceAnalysis, format 
 		}
 	}
 	return &RenderedAnalysis{Format: format, MediaType: mediaType, Body: body}, nil
+}
+
+func RenderPublicReleaseProjection(analysis *compliancev1.ComplianceAnalysis, format Format) (*RenderedAnalysis, error) {
+	if analysis == nil {
+		return nil, fmt.Errorf("%w: compliance analysis is required", constants.ErrValidationFailed)
+	}
+	var body []byte
+	var mediaType string
+	var err error
+	switch format {
+	case FormatMarkdown:
+		body = []byte(renderPublicMarkdown(analysis))
+		mediaType = constants.MediaTypeMarkdown
+	case FormatCSV:
+		body, err = renderPublicCSV(analysis)
+		mediaType = constants.MediaTypeCSV
+	default:
+		return nil, fmt.Errorf("%w: unsupported public release projection format %q", constants.ErrValidationFailed, format)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("compliance report: render public %s projection: %w", format, err)
+	}
+	return &RenderedAnalysis{Format: format, MediaType: mediaType, Body: body}, nil
+}
+
+func renderPublicMarkdown(analysis *compliancev1.ComplianceAnalysis) string {
+	var body strings.Builder
+	window := analysis.GetEvidenceWindowCompleteness()
+	fmt.Fprintln(&body, "# g8e Evidence-Native Assurance Report")
+	fmt.Fprintf(&body, "\n## Assessment Boundary\n\n- Analysis: `%s`\n- Scope digest: `%s`\n- Generated: `%s`\n- Generator: `%s@%s`\n- Evidence graph: `%t`\n", markdownValue(analysis.GetAnalysisId()), markdownValue(analysis.GetAssessmentScopeSha256()), analysis.GetGeneratedAt().AsTime().UTC().Format(time.RFC3339), markdownValue(analysis.GetGeneratorIdentity()), markdownValue(analysis.GetGeneratorVersion()), analysis.GetEvidenceGraphValid())
+	fmt.Fprintf(&body, "\n## Evidence Window\n\nStatus: `%s`; evidence: %d expected, %d actual; window: `%s` to `%s`.\n", markdownValue(window.GetCompletenessStatus()), window.GetExpectedEvidenceCount(), window.GetActualEvidenceCount(), markdownValue(window.GetWindowStartRef()), markdownValue(window.GetWindowEndRef()))
+	fmt.Fprintln(&body, "\n## g8e-Native Assertions\n\n| Assertion | Version | Status | Evidence level | Freshness | Coverage | Proof digests |\n| --- | --- | --- | --- | --- | --- | --- |")
+	publicRefs := publicEvidenceReferenceSet(analysis)
+	for _, assessment := range sortedAssertionAssessments(analysis) {
+		refs := append(append([]string(nil), assessment.GetEvidenceRefs()...), assessment.GetMetricRefs()...)
+		fmt.Fprintf(&body, "| %s | %s | %s | %s | %s | %s | %s |\n", markdownValue(assessment.GetAssertionRef().GetId()), markdownValue(assessment.GetAssertionRef().GetVersion()), markdownValue(assessment.GetStatus()), markdownValue(assessment.GetEvidenceLevel()), markdownValue(assessment.GetFreshnessStatus()), markdownValue(coverageSummary(assessment.GetCoverage())), markdownValue(strings.Join(filterPublicEvidenceRefs(refs, publicRefs), ", ")))
+	}
+	fmt.Fprintln(&body, "\n## External Alignment\n\n| Framework | Control | Status | Responsibility | Evidence level |\n| --- | --- | --- | --- | --- |")
+	for _, assessment := range sortedFrameworkAssessments(analysis) {
+		fmt.Fprintf(&body, "| %s | %s | %s | %s | %s |\n", markdownValue(assessment.GetFrameworkRef().GetId()), markdownValue(assessment.GetControlId()), markdownValue(assessment.GetStatus()), markdownValue(assessment.GetResponsibility()), markdownValue(assessment.GetEvidenceLevel()))
+	}
+	fmt.Fprintln(&body, "\n## Proof Digest Inventory\n\n| Artifact | Type | Verification | Verifier |\n| --- | --- | --- | --- |")
+	for _, resource := range publicEvidenceResources(analysis) {
+		fmt.Fprintf(&body, "| %s | %s | %s | %s |\n", markdownValue(resource.GetArtifactId()), markdownValue(resource.GetArtifactType()), markdownValue(resource.GetVerificationStatus()), markdownValue(versionedReferenceValue(&compliancev1.VersionedReference{Id: resource.GetVerifierId(), Version: resource.GetVerifierVersion()})))
+	}
+	fmt.Fprintln(&body, "\n## Diagnostic Summary\n\n| Code | Severity | Count |\n| --- | --- | --- |")
+	for _, diagnostic := range publicDiagnosticCounts(analysis) {
+		fmt.Fprintf(&body, "| %s | %s | %d |\n", markdownValue(diagnostic.code), markdownValue(diagnostic.severity), diagnostic.count)
+	}
+	fmt.Fprintln(&body, "\n## Claim Boundaries\n\nThis public projection reports reproduced technical assertions and conservative external alignment. It is not certification, accreditation, authorization, legal compliance, or recurring operating-effectiveness evidence. Source-local identities, runtime locations, free-form diagnostics, and source bodies remain available only in the independently verifiable complete bundle.")
+	return body.String()
+}
+
+func renderPublicCSV(analysis *compliancev1.ComplianceAnalysis) ([]byte, error) {
+	var body strings.Builder
+	writer := csv.NewWriter(&body)
+	header := []string{"record_type", "identifier", "reference", "status", "evidence_level", "freshness", "selected_subjects", "assessed_subjects", "failed_subjects", "unavailable_subjects", "proof_digests", "verification_status", "verifier", "diagnostic_severity", "count"}
+	if err := writer.Write(header); err != nil {
+		return nil, fmt.Errorf("compliance report: write public CSV header: %w", err)
+	}
+	write := func(row []string) error {
+		if err := writer.Write(row); err != nil {
+			return fmt.Errorf("compliance report: write public CSV row: %w", err)
+		}
+		return nil
+	}
+	analysisRow := make([]string, len(header))
+	analysisRow[0] = "analysis"
+	analysisRow[1] = analysis.GetAnalysisId()
+	analysisRow[2] = analysis.GetAssessmentScopeSha256()
+	analysisRow[3] = fmt.Sprintf("graph_valid=%t", analysis.GetEvidenceGraphValid())
+	if err := write(analysisRow); err != nil {
+		return nil, err
+	}
+	publicRefs := publicEvidenceReferenceSet(analysis)
+	for _, assessment := range sortedAssertionAssessments(analysis) {
+		coverage := assessment.GetCoverage()
+		refs := append(append([]string(nil), assessment.GetEvidenceRefs()...), assessment.GetMetricRefs()...)
+		if err := write([]string{"assertion", assessment.GetAssertionRef().GetId(), versionedReferenceValue(assessment.GetAssertionRef()), assessment.GetStatus(), assessment.GetEvidenceLevel(), assessment.GetFreshnessStatus(), int32String(coverage.GetSelectedSubjectCount()), int32String(coverage.GetAssessedSubjectCount()), int32String(coverage.GetFailedSubjectCount()), int32String(coverage.GetUnavailableSubjectCount()), strings.Join(filterPublicEvidenceRefs(refs, publicRefs), ";"), "", versionedReferenceValue(assessment.GetVerifierRef()), "", ""}); err != nil {
+			return nil, err
+		}
+	}
+	for _, assessment := range sortedFrameworkAssessments(analysis) {
+		if err := write([]string{"framework_control", assessment.GetControlId(), versionedReferenceValue(assessment.GetFrameworkRef()), assessment.GetStatus(), assessment.GetEvidenceLevel(), "", "", "", "", "", "", "", "", "", ""}); err != nil {
+			return nil, err
+		}
+	}
+	for _, resource := range publicEvidenceResources(analysis) {
+		if err := write([]string{"evidence_digest", resource.GetArtifactId(), resource.GetArtifactType(), "", "", "", "", "", "", "", "", resource.GetVerificationStatus(), versionedReferenceValue(&compliancev1.VersionedReference{Id: resource.GetVerifierId(), Version: resource.GetVerifierVersion()}), "", ""}); err != nil {
+			return nil, err
+		}
+	}
+	for _, diagnostic := range publicDiagnosticCounts(analysis) {
+		if err := write([]string{"diagnostic_summary", diagnostic.code, "", "", "", "", "", "", "", "", "", "", "", diagnostic.severity, fmt.Sprintf("%d", diagnostic.count)}); err != nil {
+			return nil, err
+		}
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return nil, fmt.Errorf("compliance report: flush public CSV: %w", err)
+	}
+	return []byte(body.String()), nil
+}
+
+type publicDiagnosticCount struct {
+	code     string
+	severity string
+	count    int
+}
+
+func publicDiagnosticCounts(analysis *compliancev1.ComplianceAnalysis) []publicDiagnosticCount {
+	counts := make(map[string]int)
+	for _, diagnostic := range analysis.GetDiagnostics() {
+		key := publicDiagnosticCode(diagnostic.GetCode()) + "\x00" + publicDiagnosticSeverity(diagnostic.GetSeverity())
+		counts[key]++
+	}
+	result := make([]publicDiagnosticCount, 0, len(counts))
+	for key, count := range counts {
+		parts := strings.SplitN(key, "\x00", 2)
+		result = append(result, publicDiagnosticCount{code: parts[0], severity: parts[1], count: count})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].code == result[j].code {
+			return result[i].severity < result[j].severity
+		}
+		return result[i].code < result[j].code
+	})
+	return result
+}
+
+func publicDiagnosticCode(code string) string {
+	switch code {
+	case "assessment_context_unavailable",
+		"required_evidence_missing",
+		"required_evidence_stale",
+		"campaign_native_assertion_unmapped",
+		"campaign_population_incomplete",
+		"campaign_verification_failure",
+		"evaluation_candidate_native",
+		"evaluation_candidate_campaign",
+		"evaluation_candidate_incomplete",
+		"evaluation_candidate_unsupported",
+		"evaluation_candidate_malformed",
+		"evaluation_candidate_outside_window":
+		return code
+	default:
+		return "assessment_diagnostic"
+	}
+}
+
+func publicDiagnosticSeverity(severity string) string {
+	switch severity {
+	case "info", "warning", "error":
+		return severity
+	default:
+		return "unknown"
+	}
+}
+
+func publicEvidenceResources(analysis *compliancev1.ComplianceAnalysis) []*compliancev1.ComplianceEvidenceReference {
+	resources := make([]*compliancev1.ComplianceEvidenceReference, 0, len(analysis.GetEvidenceResources()))
+	for _, resource := range analysis.GetEvidenceResources() {
+		if resource == nil || !isPublicEvidenceDigest(resource.GetArtifactId(), resource.GetSha256()) {
+			continue
+		}
+		resources = append(resources, resource)
+	}
+	sort.Slice(resources, func(i, j int) bool { return resources[i].GetArtifactId() < resources[j].GetArtifactId() })
+	return resources
+}
+
+func publicEvidenceReferenceSet(analysis *compliancev1.ComplianceAnalysis) map[string]struct{} {
+	refs := make(map[string]struct{})
+	for _, resource := range publicEvidenceResources(analysis) {
+		refs[resource.GetArtifactId()] = struct{}{}
+	}
+	return refs
+}
+
+func filterPublicEvidenceRefs(refs []string, allowed map[string]struct{}) []string {
+	result := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		if _, ok := allowed[ref]; ok {
+			result = append(result, ref)
+		}
+	}
+	return sortedStrings(result)
+}
+
+func isPublicEvidenceDigest(artifactID, digest string) bool {
+	if len(digest) != sha256.Size*2 || !strings.HasSuffix(artifactID, ":sha256:"+digest) {
+		return false
+	}
+	_, err := hex.DecodeString(digest)
+	return err == nil
 }
 
 func renderMarkdown(analysis *compliancev1.ComplianceAnalysis) string {
