@@ -30,6 +30,14 @@ const catalog: CatalogSnapshot = {
   generated_at: '2026-09-22T12:05:00Z',
 };
 
+const archivedCatalog: CatalogSnapshot = {
+  ...catalog,
+  dataset_id: 'ds-verified-archive',
+  dataset_kind: 'verified_public_snapshot',
+  quality_state: 'verified_public',
+  title: 'Archived campaign',
+};
+
 const suite: SuiteSummary = {
   schema_version: '1.4.0',
   kind: 'suite_summary',
@@ -102,18 +110,20 @@ const events: LiveEvent[] = [
 
 describe('OverviewView active campaign', () => {
   beforeEach(() => {
-    evalStore.loadFixtures([catalog, suite, evaluation] as SnapshotRecord[], events);
+    evalStore.loadFixtures([catalog, archivedCatalog, suite, evaluation] as SnapshotRecord[], events);
   });
 
   it('prioritizes campaign progress, scope, verification, and latest activity', () => {
     render(
-      <MemoryRouter initialEntries={[`/?dataset=${datasetId}`]}>
+      <MemoryRouter initialEntries={['/?dataset=ds-verified-archive']}>
         <OverviewView />
       </MemoryRouter>,
     );
 
     const panel = within(screen.getByRole('region', { name: 'System overview' }));
     expect(panel.getByText('Live smoke run')).toBeInTheDocument();
+    expect(panel.queryByText('Archived campaign')).not.toBeInTheDocument();
+    expect(panel.queryByTestId('dataset-selector')).not.toBeInTheDocument();
     expect(panel.getByText(catalog.description)).toBeInTheDocument();
     expect(panel.getByText('Live')).toBeInTheDocument();
     expect(panel.getByText('6 of 75 assignments complete')).toBeInTheDocument();

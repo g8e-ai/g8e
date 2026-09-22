@@ -8,7 +8,7 @@
 // nothing on this page is decorative.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   G8E_REPO_URL,
   PLATFORM_CONTACT_CALENDLY,
@@ -17,10 +17,9 @@ import {
   PLATFORM_LEDE,
   PLATFORM_OVERVIEW_PORTFOLIO_NOTE,
 } from '../content/platform';
-import { useActiveDatasetId } from '../state/dataset';
+import { useDatasetOptions } from '../state/dataset';
 import { useStoreState } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
-import { DatasetSelector } from '../components/DatasetSelector';
 import { LiveEventStream } from '../components/LiveEventStream';
 import {
   ReconcilePlaceholder,
@@ -61,10 +60,6 @@ function verificationLabel(run: EvaluationSummary | undefined, catalog: CatalogS
   if (run?.verifier_state === 'passed') return 'Verification passed';
   if (run?.lifecycle_state === 'running' || run?.lifecycle_state === 'queued') return 'Verification pending';
   return 'Verification not applicable';
-}
-
-function pluralized(count: number, singular: string): string {
-  return `${formatNumber(count)} ${count === 1 ? singular : `${singular}s`}`;
 }
 
 function lastMatchingEvent(events: LiveEvent[], predicate: (event: LiveEvent) => boolean): LiveEvent | undefined {
@@ -137,7 +132,6 @@ type SystemOverviewPanelProps = {
   evaluations: EvaluationSummary[];
   suites: SuiteSummary[];
   events: LiveEvent[];
-  activeDatasetId: string;
   connection: FeedConnectionState;
   streamConnection: StreamConnectionState;
   isReconciling: boolean;
@@ -149,7 +143,6 @@ function SystemOverviewPanel({
   evaluations,
   suites,
   events,
-  activeDatasetId,
   connection,
   streamConnection,
   isReconciling,
@@ -223,7 +216,6 @@ function SystemOverviewPanel({
             {campaignStatusLabel(currentRun)}
           </span>
         </div>
-        <DatasetSelector activeId={activeDatasetId} />
 
         {catalog ? (
           <>
@@ -261,7 +253,7 @@ function SystemOverviewPanel({
               </div>
               <div className="campaign-progress-meta">
                 <span>{currentRun?.started_at ? `Started ${formatRelativeTime(currentRun.started_at)}` : 'Start time unavailable'}</span>
-                <span className={assignmentFailed > 0 ? 'campaign-failures' : undefined}>{pluralized(assignmentFailed, 'failed')}</span>
+                <span className={assignmentFailed > 0 ? 'campaign-failures' : undefined}>{formatNumber(assignmentFailed)} failed</span>
               </div>
             </div>
 
@@ -422,9 +414,7 @@ function DownloadsPanel() {
 }
 
 export function OverviewView() {
-  const [params] = useSearchParams();
-  const routeDataset = params.get('dataset') ?? undefined;
-  const activeDatasetId = useActiveDatasetId(routeDataset);
+  const activeDatasetId = useDatasetOptions().find((option) => option.available && option.kind === 'live_run')?.id ?? '';
   const catalog = useStoreState((state) => state.catalogs.get(activeDatasetId));
   const catalogs = useStoreState((state) => Array.from(state.catalogs.values()));
   const evaluations = useStoreState((state) =>
@@ -455,7 +445,6 @@ export function OverviewView() {
           evaluations={evaluations}
           suites={suites}
           events={events}
-          activeDatasetId={activeDatasetId}
           connection={connection}
           streamConnection={streamConnection}
           isReconciling={isReconciling}

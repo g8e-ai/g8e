@@ -999,7 +999,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   border: 1px solid currentColor; border-radius: 999px; font-size: 11px;
   font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
 }
-.campaign-identity { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.campaign-identity { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-top: 12px; }
 .campaign-identity > div { min-width: 0; }
 .campaign-identity h4 { margin: 0; font-size: 16px; line-height: 1.3; }
 .campaign-identity p { margin: 4px 0 0; color: var(--fg-muted); font-size: 12.5px; line-height: 1.45; }
