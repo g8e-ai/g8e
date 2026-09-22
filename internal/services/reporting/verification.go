@@ -12,9 +12,10 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
+
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
@@ -89,7 +90,7 @@ func reportVerification(ctx context.Context, outDir string, auditStore *storage.
 		allSignaturesOK := true
 		for _, c := range commitments {
 			var attestation operatorv1.CommitmentAttestation
-			if err := json.Unmarshal(c.AttestationJSON, &attestation); err != nil {
+			if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(c.AttestationJSON, &attestation); err != nil {
 				addRow("commitment_hash_recompute", "commitment_ledger", c.Hash, verifyResultFail, fmt.Sprintf("invalid attestation JSON: %v", err))
 				allHashesOK = false
 				allSignaturesOK = false

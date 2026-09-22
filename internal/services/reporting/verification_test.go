@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -249,9 +250,9 @@ func TestReportVerification_ModifiedSignedFieldFails(t *testing.T) {
 	rows, err := cl.ListCommitments()
 	require.NoError(t, err)
 	var attestation operatorv1.CommitmentAttestation
-	require.NoError(t, json.Unmarshal(rows[0].AttestationJSON, &attestation))
+	require.NoError(t, protojson.Unmarshal(rows[0].AttestationJSON, &attestation))
 	attestation.TargetResource = "/tampered"
-	payload, err := json.Marshal(&attestation)
+	payload, err := protojson.Marshal(&attestation)
 	require.NoError(t, err)
 	_, err = db.Exec(`UPDATE commitment_ledger SET attestation_json = ? WHERE id = 1`, payload)
 	require.NoError(t, err)
@@ -282,13 +283,13 @@ func TestReportVerification_MalformedAuditorKeyIDFails(t *testing.T) {
 	rows, err := cl.ListCommitments()
 	require.NoError(t, err)
 	var attestation operatorv1.CommitmentAttestation
-	require.NoError(t, json.Unmarshal(rows[0].AttestationJSON, &attestation))
+	require.NoError(t, protojson.Unmarshal(rows[0].AttestationJSON, &attestation))
 	attestation.AuditorKeyId = "not-hex"
 	canonical, err := governance.CanonicalizeCommitmentAttestation(&attestation)
 	require.NoError(t, err)
 	hash := sha256.Sum256(canonical)
 	attestation.Hash = hex.EncodeToString(hash[:])
-	payload, err := json.Marshal(&attestation)
+	payload, err := protojson.Marshal(&attestation)
 	require.NoError(t, err)
 	_, err = db.Exec(`UPDATE commitment_ledger SET hash = ?, auditor_key_id = ?, attestation_json = ? WHERE id = 1`, attestation.Hash, attestation.AuditorKeyId, payload)
 	require.NoError(t, err)
@@ -308,9 +309,9 @@ func TestReportVerification_InvalidAuditorSignatureFails(t *testing.T) {
 	rows, err := cl.ListCommitments()
 	require.NoError(t, err)
 	var attestation operatorv1.CommitmentAttestation
-	require.NoError(t, json.Unmarshal(rows[0].AttestationJSON, &attestation))
+	require.NoError(t, protojson.Unmarshal(rows[0].AttestationJSON, &attestation))
 	attestation.Signature = "00"
-	payload, err := json.Marshal(&attestation)
+	payload, err := protojson.Marshal(&attestation)
 	require.NoError(t, err)
 	_, err = db.Exec(`UPDATE commitment_ledger SET signature = ?, attestation_json = ? WHERE id = 1`, attestation.Signature, payload)
 	require.NoError(t, err)

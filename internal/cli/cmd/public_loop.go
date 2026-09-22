@@ -28,8 +28,10 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/evaluation"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
+	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 )
 
 type publicLoopRunner func(context.Context, string, string) error
@@ -145,7 +147,11 @@ func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error 
 	cfg.RetryMaxAttempts = 1
 	publisher := gateway.NewPublicPublisherService(nil, fileSvc, slog.Default(), cfg, oldPrivate, oldKeyID)
 	publisher.SetIngestAuthToken(ingestToken)
-	if err := publisher.ExportBatch(ctx, []models.PublicFeedRecord{publicLoopRecord(1, "campaign-a")}); err != nil {
+	firstRecord, err := publicLoopRecord(1, "campaign-a")
+	if err != nil {
+		return err
+	}
+	if err := publisher.ExportBatch(ctx, []models.PublicFeedRecord{firstRecord}); err != nil {
 		return err
 	}
 	proofContent := []byte(`{"campaign_id":"campaign-a","verification_status":"passed"}`)
@@ -166,7 +172,11 @@ func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error 
 	}
 	privateServer.Close()
 	publicServer.Close()
-	if err := publisher.ExportBatch(ctx, []models.PublicFeedRecord{publicLoopRecord(2, "campaign-b")}); err == nil {
+	secondRecord, err := publicLoopRecord(2, "campaign-b")
+	if err != nil {
+		return err
+	}
+	if err := publisher.ExportBatch(ctx, []models.PublicFeedRecord{secondRecord}); err == nil {
 		return fmt.Errorf("mirror outage did not retain a retryable batch")
 	}
 	restartedMirror, err := gateway.NewPublicMirrorServer(slog.Default(), store)
@@ -202,7 +212,11 @@ func runPublicLoop(ctx context.Context, candidatePath, outputPath string) error 
 	defer finalPrivateServer.Close()
 	defer finalPublicServer.Close()
 	publisher.SetMirrorOrigin(finalPrivateServer.URL)
-	if err := publisher.ExportBatch(ctx, []models.PublicFeedRecord{publicLoopRecord(4, "campaign-c")}); err != nil {
+	finalRecord, err := publicLoopRecord(4, "campaign-c")
+	if err != nil {
+		return err
+	}
+	if err := publisher.ExportBatch(ctx, []models.PublicFeedRecord{finalRecord}); err != nil {
 		return err
 	}
 	if err := verifyPublicLoopReads(ctx, finalPublicServer, sourceID, manifest.Artifacts[0].ImmutableURL); err != nil {
@@ -356,14 +370,33 @@ func verifyPublicLoopMutationRoutesAbsent(ctx context.Context, server *httptest.
 	return nil
 }
 
-func publicLoopRecord(sequence int64, campaignID string) models.PublicFeedRecord {
-	content := fmt.Sprintf(`{"campaign_id":%q}`, campaignID)
+func publicLoopRecord(sequence int64, campaignID string) (models.PublicFeedRecord, error) {
+	assignment := &evalv1.EvaluationAssignment{
+		AssignmentId:    fmt.Sprintf("%s-assignment-%d", campaignID, sequence),
+		RunId:           campaignID,
+		ScenarioId:      "instruction-exact-format",
+		Lane:            evalv1.EvaluationLane_EVALUATION_LANE_MODEL_ROLE,
+		LifecycleStatus: evalv1.EvaluationAssignmentLifecycleStatus_EVALUATION_ASSIGNMENT_LIFECYCLE_STATUS_QUEUED,
+		Repetition:      1,
+	}
+	projection, err := evaluation.BuildAssignmentLifecycleProjection(assignment, evalv1.EvaluationScenarioCategory_EVALUATION_SCENARIO_CATEGORY_INSTRUCTION_ADHERENCE, time.Unix(sequence, 0).UTC())
+	if err != nil {
+		return models.PublicFeedRecord{}, fmt.Errorf("public loop: build campaign projection: %w", err)
+	}
+	content, err := evaluation.MarshalCampaignProjectionEnvelope(
+		string(projection.ProtoReflect().Descriptor().Name()),
+		evaluation.AssignmentLifecycleIdempotencyKey(assignment.GetRunId(), assignment.GetAssignmentId(), assignment.GetLifecycleStatus()),
+		projection,
+	)
+	if err != nil {
+		return models.PublicFeedRecord{}, fmt.Errorf("public loop: marshal campaign projection: %w", err)
+	}
 	return models.PublicFeedRecord{
 		Sequence:    sequence,
 		RecordType:  models.PublicFeedRecordTypeProjection,
-		RecordHash:  hashBytes([]byte(content)),
-		RecordBytes: content,
-	}
+		RecordHash:  hashBytes(content),
+		RecordBytes: string(content),
+	}, nil
 }
 
 func writePublicLoopEvidence(path string, evidence publicLoopEvidence) error {
