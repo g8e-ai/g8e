@@ -202,11 +202,15 @@ export type RepeatabilityClass = (typeof REPEATABILITY_CLASSES)[number];
 /** Canonical verifier disposition for a suite or run. `not_applicable`
  *  covers ensemble_ungoverned runs where receipt coverage does not apply. */
 export const VERIFIER_STATES = [
+  'not_run',
   'passed',
   'failed',
   'not_applicable',
 ] as const;
 export type VerifierState = (typeof VERIFIER_STATES)[number];
+
+export const RUN_METRIC_UNITS = ['ratio', 'milliseconds', 'tokens_per_second'] as const;
+export type RunMetricUnit = (typeof RUN_METRIC_UNITS)[number];
 
 export const NATIVE_POSTURES = ['doctrine', 'consensus', 'ratify', 'notary'] as const;
 export type NativePosture = (typeof NATIVE_POSTURES)[number];
@@ -450,6 +454,22 @@ export interface NativeEvaluationResult {
   metrics: NativeMetric[];
 }
 
+export interface RunMetricValue {
+  value?: number;
+  unit: RunMetricUnit;
+  observed_count: number;
+  eligible_count: number;
+  unavailable_count: number;
+  unavailable_reason?: PublicUnavailableReason;
+}
+
+export interface EvaluationHeadlineMetrics {
+  pass_rate?: RunMetricValue | MetricValue<number>;
+  latency_p50_ms?: RunMetricValue | MetricValue<number>;
+  output_throughput_p50_tokens_per_second?: RunMetricValue;
+  throughput?: MetricValue<number>;
+}
+
 /** 4. evaluation_summary: per-run identity, lifecycle, and headline metrics. */
 export interface EvaluationSummary extends ViewRecordEnvelope {
   kind: 'evaluation_summary';
@@ -473,7 +493,8 @@ export interface EvaluationSummary extends ViewRecordEnvelope {
   elapsed_seconds?: number;
   verifier_state: VerifierState;
   verifier_failure_summary?: string;
-  headline_metrics: Record<string, MetricValue>;
+  verification_metadata?: PublicVerificationMetadata;
+  headline_metrics: EvaluationHeadlineMetrics;
   evidence_link?: string;
   native_result?: NativeEvaluationResult;
 }
@@ -585,6 +606,7 @@ export interface PublicVerificationMetadata {
   verifier_contract_version?: string;
   report_digest?: string;
   population_digest?: string;
+  verified_at?: string;
 }
 
 /** 5. assignment_result: public assignment identity and safe summaries. */

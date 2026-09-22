@@ -988,9 +988,7 @@ export const fixtureVerifiedEvaluationSummaries: EvaluationSummary[] = [
     suite_id: 'ifeval',
     arm: 'ensemble_ungoverned',
     evaluation_unit: 'model',
-    primary_invocation_share: { unavailable_reason: 'not observed in this dataset' },
-    correlated_failure_rate: { unavailable_reason: 'no comparable correlated-failure observations' },
-    benchmark_unavailable_reasons: ['Stack routing and correlated-failure observations were not captured in this snapshot.'],
+    benchmark_unavailable_reasons: ['Scored-inference resource observations were not captured in this snapshot.'],
     model_role_mapping: {
       primary: 'gemma4-e4b',
       assistant: 'gemma4-e2b',
@@ -1004,8 +1002,12 @@ export const fixtureVerifiedEvaluationSummaries: EvaluationSummary[] = [
     started_at: '2026-09-13T22:00:00Z',
     ended_at: '2026-09-13T22:30:00Z',
     elapsed_seconds: 1800,
-    verifier_state: 'passed',
-    headline_metrics: { pass_rate: { value: 0.8 } },
+    verifier_state: 'not_applicable',
+    headline_metrics: {
+      pass_rate: { value: 0.8, unit: 'ratio', observed_count: 5, eligible_count: 5, unavailable_count: 0 },
+      latency_p50_ms: { unavailable_reason: 'historical_not_captured', unit: 'milliseconds', observed_count: 0, eligible_count: 5, unavailable_count: 5 },
+      output_throughput_p50_tokens_per_second: { unavailable_reason: 'historical_not_captured', unit: 'tokens_per_second', observed_count: 0, eligible_count: 5, unavailable_count: 5 },
+    },
     evidence_link: 'checksum://legacy-ifeval-1',
   },
   {
@@ -1020,9 +1022,7 @@ export const fixtureVerifiedEvaluationSummaries: EvaluationSummary[] = [
     suite_id: 'ifeval',
     arm: 'ensemble_ungoverned',
     evaluation_unit: 'model',
-    primary_invocation_share: { unavailable_reason: 'not observed in this dataset' },
-    correlated_failure_rate: { unavailable_reason: 'no comparable correlated-failure observations' },
-    benchmark_unavailable_reasons: ['Stack routing and correlated-failure observations were not captured in this snapshot.'],
+    benchmark_unavailable_reasons: ['Scored-inference resource observations were not captured in this snapshot.'],
     model_role_mapping: {
       primary: 'gemma4-e4b',
       assistant: 'gemma4-e2b',
@@ -1036,8 +1036,12 @@ export const fixtureVerifiedEvaluationSummaries: EvaluationSummary[] = [
     started_at: '2026-09-13T23:00:00Z',
     ended_at: '2026-09-13T23:30:00Z',
     elapsed_seconds: 1800,
-    verifier_state: 'passed',
-    headline_metrics: { pass_rate: { value: 0.6 } },
+    verifier_state: 'not_applicable',
+    headline_metrics: {
+      pass_rate: { value: 0.6, unit: 'ratio', observed_count: 5, eligible_count: 5, unavailable_count: 0 },
+      latency_p50_ms: { unavailable_reason: 'historical_not_captured', unit: 'milliseconds', observed_count: 0, eligible_count: 5, unavailable_count: 5 },
+      output_throughput_p50_tokens_per_second: { unavailable_reason: 'historical_not_captured', unit: 'tokens_per_second', observed_count: 0, eligible_count: 5, unavailable_count: 5 },
+    },
     evidence_link: 'checksum://legacy-ifeval-2',
   },
 ];

@@ -32,8 +32,15 @@ import {
   formatThroughput,
   formatNumber,
 } from '../components/shared';
-import type { AssignmentResult } from '../contract/types';
+import type { AssignmentResult, VerifierState } from '../contract/types';
 import { campaignTerminalProgress, roleLabel } from './derived';
+
+const verifierStateLabels: Record<VerifierState, string> = {
+  not_run: 'Not yet verified',
+  passed: 'Passed',
+  failed: 'Failed',
+  not_applicable: 'Not applicable',
+};
 
 export function EvaluationDetailView() {
   const { runId: routeRun, datasetId: routeDataset } = useParams();
@@ -104,6 +111,17 @@ export function EvaluationDetailView() {
   if (!runId) return <ErrorState message="No run selected." />;
   if (!run) return <EmptyState hasRecords={false} hasFilters={false} connection={connection} />;
 
+  const headlineLimitations = new Set(run.benchmark_unavailable_reasons ?? []);
+  for (const [label, metric] of [
+    ['Pass rate', run.headline_metrics.pass_rate],
+    ['Latency p50', run.headline_metrics.latency_p50_ms],
+    ['Output throughput p50', run.headline_metrics.output_throughput_p50_tokens_per_second],
+  ] as const) {
+    if (metric && 'unavailable_count' in metric && metric.value !== undefined && metric.unavailable_count > 0) {
+      headlineLimitations.add(`${label}: ${metric.observed_count} of ${metric.eligible_count} eligible assignments contributed evidence.`);
+    }
+  }
+
   return (
     <div className="evaluation-detail">
       <nav className="breadcrumb" aria-label="Breadcrumb">
@@ -136,7 +154,7 @@ export function EvaluationDetailView() {
           <DetailRow label="Started">{run.started_at ? formatTimestamp(run.started_at) : '—'}</DetailRow>
           <DetailRow label="Ended">{run.ended_at ? formatTimestamp(run.ended_at) : '—'}</DetailRow>
           <DetailRow label="Elapsed">{run.elapsed_seconds ? formatDuration(run.elapsed_seconds) : '—'}</DetailRow>
-          <DetailRow label="Verifier state">{run.verifier_state}</DetailRow>
+          <DetailRow label="Verifier state">{verifierStateLabels[run.verifier_state]}</DetailRow>
           {run.native_result ? <DetailRow label="Active posture">{run.native_result.active_posture}</DetailRow> : null}
           {run.native_result ? <DetailRow label="Lane">{run.native_result.lane}</DetailRow> : null}
         </dl>
@@ -183,13 +201,16 @@ export function EvaluationDetailView() {
         <div className="metric-grid">
           <MetricCard label="Pass rate" metric={run.headline_metrics.pass_rate} formatter={formatPercent} />
           {!run.native_result ? <MetricCard label="Latency p50" metric={run.headline_metrics.latency_p50_ms} formatter={formatLatency} /> : null}
-          {!run.native_result ? <MetricCard label="Throughput" metric={run.headline_metrics.throughput} formatter={formatThroughput} /> : null}
-          {!run.native_result ? <MetricCard label="Primary invocation share" metric={run.primary_invocation_share} formatter={formatPercent} /> : null}
-          {!run.native_result ? <MetricCard label="Correlated failure rate" metric={run.correlated_failure_rate} formatter={formatPercent} /> : null}
+          {!run.native_result ? <MetricCard label="Output throughput p50" metric={run.headline_metrics.output_throughput_p50_tokens_per_second ?? run.headline_metrics.throughput} formatter={formatThroughput} /> : null}
+          {!run.native_result && run.evaluation_unit === 'system' ? <MetricCard label="Primary invocation share" metric={run.primary_invocation_share} formatter={formatPercent} /> : null}
+          {!run.native_result && run.evaluation_unit === 'system' ? <MetricCard label="Correlated failure rate" metric={run.correlated_failure_rate} formatter={formatPercent} /> : null}
         </div>
-        {run.benchmark_unavailable_reasons?.length ? (
+        {!run.native_result && run.evaluation_unit === 'model' ? (
+          <p>Heterogeneous routing and correlation metrics appear only for system evaluations.</p>
+        ) : null}
+        {headlineLimitations.size > 0 ? (
           <ul className="catalog-limitations">
-            {run.benchmark_unavailable_reasons.map((reason) => <li key={reason}>{reason}</li>)}
+            {Array.from(headlineLimitations).map((reason) => <li key={reason}>{reason}</li>)}
           </ul>
         ) : null}
       </section>
@@ -197,12 +218,17 @@ export function EvaluationDetailView() {
       <section className="run-verification">
         <h2>Verification summary</h2>
         <dl>
-          <DetailRow label="Verifier state">{run.verifier_state}</DetailRow>
+          <DetailRow label="Verifier state">{verifierStateLabels[run.verifier_state]}</DetailRow>
           {run.native_result ? (
             <DetailRow label="Independent verification">
               {run.native_result.verification_valid ? 'Valid' : 'Invalid'} ({run.native_result.verification_failure_count} failures)
             </DetailRow>
           ) : null}
+          {run.verification_metadata?.verifier_release_version ? <DetailRow label="Verifier release">{run.verification_metadata.verifier_release_version}</DetailRow> : null}
+          {run.verification_metadata?.verifier_contract_version ? <DetailRow label="Verifier contract">{run.verification_metadata.verifier_contract_version}</DetailRow> : null}
+          {run.verification_metadata?.report_digest ? <DetailRow label="Report digest">{run.verification_metadata.report_digest}</DetailRow> : null}
+          {run.verification_metadata?.population_digest ? <DetailRow label="Population digest">{run.verification_metadata.population_digest}</DetailRow> : null}
+          {run.verification_metadata?.verified_at ? <DetailRow label="Verified at">{formatTimestamp(run.verification_metadata.verified_at)}</DetailRow> : null}
           {run.verifier_failure_summary ? <DetailRow label="Failure summary">{run.verifier_failure_summary}</DetailRow> : null}
         </dl>
       </section>

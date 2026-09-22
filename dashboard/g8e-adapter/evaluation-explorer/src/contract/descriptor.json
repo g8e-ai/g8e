@@ -93,9 +93,15 @@
       "insufficient"
     ],
     "VerifierState": [
+      "not_run",
       "passed",
       "failed",
       "not_applicable"
+    ],
+    "RunMetricUnit": [
+      "ratio",
+      "milliseconds",
+      "tokens_per_second"
     ],
     "NativePosture": [
       "doctrine",
