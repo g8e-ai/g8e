@@ -799,7 +799,8 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .stream-panel .stream-scroll {
   flex: 1 1 0;
   min-height: 0;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
   overflow-anchor: none;
   scrollbar-gutter: stable;
 }
@@ -815,6 +816,7 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
   border-radius: 6px; padding: 5px 8px; font-size: var(--overview-meta-size, 12px);
 }
 .stream-state { display: inline-flex; align-items: center; gap: 6px; font-size: var(--overview-meta-size, 12px); font-weight: 600; }
+.stream-table { min-width: 1040px; }
 .stream-table, .lab-table { width: 100%; border-collapse: collapse; font-size: var(--overview-body-size, 13px); }
 .stream-table th, .stream-table td, .lab-table th, .lab-table td {
   text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle;
@@ -831,6 +833,15 @@ section h2 { font-size: 18px; margin: 0 0 12px; }
 .stream-event { text-transform: capitalize; }
 .stream-event-link { color: var(--fg-muted); }
 .stream-event-link:hover { color: var(--accent); }
+.stream-assignment-details { min-width: 190px; max-width: 320px; display: flex; flex-direction: column; gap: 3px; }
+.stream-assignment-id { color: var(--fg); font-family: var(--mono); font-size: var(--overview-meta-size, 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stream-assignment-id:hover { color: var(--accent); }
+.stream-assignment-category { color: var(--fg-dim); font-size: var(--overview-label-size, 11px); text-transform: capitalize; }
+.stream-metrics { display: flex; gap: 6px; flex-wrap: wrap; }
+.stream-metric { display: inline-flex; gap: 3px; font-size: var(--overview-label-size, 11px); white-space: nowrap; }
+.stream-metric-label { color: var(--fg-dim); }
+.stream-metric-value { color: var(--fg); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.stream-metric-value.unavailable, .stream-unavailable { color: var(--fg-dim); }
 .stream-chip {
   display: inline-block; font-family: var(--mono); font-size: var(--overview-label-size, 11px); padding: 2px 8px;
   background: var(--bg-elev2); border: 1px solid var(--border); border-radius: 999px;

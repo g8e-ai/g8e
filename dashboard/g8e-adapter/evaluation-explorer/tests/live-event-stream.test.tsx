@@ -88,6 +88,73 @@ describe('LiveEventStream', () => {
     expect(screen.getAllByRole('row')).toHaveLength(6); // header + 5 rows
   });
 
+  it('renders live assignment details and completion metrics in their own column', () => {
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-complete',
+              kind: 'assignment_completed',
+              assignment_id: 'assignment-1',
+              task_id: 'security-policy-block-run',
+              lifecycle_status: 'completed',
+              metric_delta: {
+                pass: { value: 1 },
+                latency_ms: { value: 780 },
+              },
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('columnheader', { name: 'Assignment details' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'security-policy-block-run' })).toBeInTheDocument();
+    expect(screen.getByText('Pass', { selector: '.stream-metric-label' })).toBeInTheDocument();
+    expect(screen.getByText('Pass', { selector: '.stream-metric-value' })).toBeInTheDocument();
+    expect(screen.getByText('780 ms')).toBeInTheDocument();
+  });
+
+  it('sorts the Event and Assignment details columns independently', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <LiveEventStream
+          events={[
+            liveEvent({
+              event_id: 'evt-zeta',
+              kind: 'assignment_started',
+              assignment_id: 'assignment-zeta',
+              task_id: 'task-zeta',
+              stage_label: 'Zeta stage',
+            }),
+            liveEvent({
+              event_id: 'evt-alpha',
+              kind: 'assignment_completed',
+              assignment_id: 'assignment-alpha',
+              task_id: 'task-alpha',
+              stage_label: 'Alpha stage',
+            }),
+          ]}
+          connection="live"
+          streamConnection="connected"
+        />
+      </MemoryRouter>,
+    );
+
+    const rows = () => screen.getAllByRole('row').slice(1).map((row) => row.textContent ?? '');
+    await user.click(screen.getByRole('button', { name: 'Sort by Event' }));
+    expect(rows()[0]).toContain('assignment completed');
+    expect(screen.getByRole('columnheader', { name: 'Event' })).toHaveAttribute('aria-sort', 'ascending');
+
+    await user.click(screen.getByRole('button', { name: 'Sort by Assignment details' }));
+    expect(rows()[0]).toContain('task-alpha');
+    expect(screen.getByRole('columnheader', { name: 'Assignment details' })).toHaveAttribute('aria-sort', 'ascending');
+  });
+
   it('shows designated role from the event before model summaries exist', () => {
     render(
       <MemoryRouter>

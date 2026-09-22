@@ -385,7 +385,7 @@ func ValidatePublicFeedRecord(recordType models.PublicFeedRecordType, recordByte
 	case models.PublicFeedRecordTypeKeyRevocation:
 		return validatePublicFeedKeyRevocation(recordBytes)
 	default:
-		return fmt.Errorf("%s: %q", constants.ErrPublicFeedRecordTypeInvalid, recordType)
+		return fmt.Errorf("%w: %q", constants.ErrPublicFeedRecordTypeInvalid, recordType)
 	}
 }
 
