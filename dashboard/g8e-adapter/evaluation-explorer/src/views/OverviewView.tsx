@@ -18,12 +18,11 @@ import {
   PLATFORM_OVERVIEW_PORTFOLIO_NOTE,
 } from '../content/platform';
 import { useActiveDatasetId } from '../state/dataset';
-import { recordKey, useStoreState } from '../state/store';
+import { useStoreState } from '../state/store';
 import { loadRuntimeConfig } from '../state/feed';
 import { DatasetSelector } from '../components/DatasetSelector';
 import { LiveEventStream } from '../components/LiveEventStream';
 import {
-  ProgressBar,
   ReconcilePlaceholder,
   StreamStatusIndicator,
   formatNumber,
@@ -33,7 +32,7 @@ import {
   type FeedConnectionState,
   type StreamConnectionState,
 } from '../utils/feed-state';
-import { campaignTerminalProgress, recentCampaignRows } from './derived';
+import { recentCampaignRows, roleLabel } from './derived';
 import descriptorUrl from '../contract/descriptor.json?url';
 import type {
   CatalogSnapshot,
@@ -42,12 +41,52 @@ import type {
   SuiteSummary,
 } from '../contract/types';
 
-function shortRunId(runId: string): string {
-  return runId.length > 14 ? `…${runId.slice(-12)}` : runId;
-}
-
 function shortCampaignLabel(label: string): string {
   return label.length > 22 ? `…${label.slice(-20)}` : label;
+}
+
+function capitalize(value: string): string {
+  return value.length > 0 ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : value;
+}
+
+function campaignStatusLabel(run: EvaluationSummary | undefined): string {
+  if (!run) return 'Awaiting data';
+  if (run.lifecycle_state === 'running') return 'Live';
+  if (run.lifecycle_state === 'completed') return 'Complete';
+  return capitalize(run.lifecycle_state);
+}
+
+function verificationLabel(run: EvaluationSummary | undefined, catalog: CatalogSnapshot): string {
+  if (run?.verifier_state === 'failed' || catalog.verifier_failed_count > 0) return 'Verification failed';
+  if (run?.verifier_state === 'passed') return 'Verification passed';
+  if (run?.lifecycle_state === 'running' || run?.lifecycle_state === 'queued') return 'Verification pending';
+  return 'Verification not applicable';
+}
+
+function pluralized(count: number, singular: string): string {
+  return `${formatNumber(count)} ${count === 1 ? singular : `${singular}s`}`;
+}
+
+function lastMatchingEvent(events: LiveEvent[], predicate: (event: LiveEvent) => boolean): LiveEvent | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event && predicate(event)) return event;
+  }
+  return undefined;
+}
+
+function latestAssignmentActivity(events: LiveEvent[]) {
+  const latest = lastMatchingEvent(events, (event) => event.assignment_id !== undefined);
+  if (!latest?.assignment_id) return undefined;
+  const matching = events.filter((event) => event.assignment_id === latest.assignment_id);
+  return {
+    assignmentId: latest.assignment_id,
+    taskId: lastMatchingEvent(matching, (event) => event.task_id !== undefined)?.task_id,
+    variantId: lastMatchingEvent(matching, (event) => event.variant_id !== undefined)?.variant_id,
+    role: lastMatchingEvent(matching, (event) => event.role !== undefined)?.role,
+    stageLabel: lastMatchingEvent(matching, (event) => event.stage_label !== undefined)?.stage_label,
+    observedAt: latest.observed_at,
+  };
 }
 
 function PlatformFlowStep({ step }: { step: (typeof PLATFORM_FLOW_STEPS)[number] }) {
@@ -93,23 +132,6 @@ function PlatformFlow() {
   );
 }
 
-function CoverageBar({ label, done, total }: { label: string; done: number; total: number }) {
-  const pct = total > 0 ? Math.min(100, (done / total) * 100) : 0;
-  return (
-    <div className="usage-row">
-      <div className="usage-label">
-        <span>{label}</span>
-        <span>
-          {formatNumber(done)} / {formatNumber(total)}
-        </span>
-      </div>
-      <div className="usage-track">
-        <div className="usage-fill" style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
-
 type SystemOverviewPanelProps = {
   catalog: CatalogSnapshot | undefined;
   evaluations: EvaluationSummary[];
@@ -132,20 +154,26 @@ function SystemOverviewPanel({
   streamConnection,
   isReconciling,
 }: SystemOverviewPanelProps) {
-  const completedRuns = evaluations.filter((e) => e.lifecycle_state === 'completed').length;
   const assignmentDone = evaluations.reduce(
-    (sum, e) => sum + e.assignment_completed + e.assignment_failed,
+    (sum, evaluation) => sum + evaluation.assignment_completed + evaluation.assignment_failed,
     0,
   );
-  const assignmentTotal = evaluations.reduce((sum, e) => sum + e.assignment_total, 0);
-
-  const latestEvent = events.length > 0 ? events[events.length - 1] : undefined;
-  const currentRun = useStoreState((state) =>
-    latestEvent ? state.evaluations.get(recordKey(latestEvent.dataset_id, latestEvent.run_id)) : undefined,
-  );
-  const currentSuite = currentRun
-    ? suites.find((s) => s.suite_id === currentRun.suite_id)
+  const assignmentFailed = evaluations.reduce((sum, evaluation) => sum + evaluation.assignment_failed, 0);
+  const assignmentTotal = evaluations.reduce((sum, evaluation) => sum + evaluation.assignment_total, 0);
+  const assignmentPercent = assignmentTotal > 0 ? Math.min(100, Math.round((assignmentDone / assignmentTotal) * 100)) : 0;
+  const latestEvent = events[events.length - 1];
+  const eventRun = latestEvent
+    ? evaluations.find((evaluation) => evaluation.run_id === latestEvent.run_id)
     : undefined;
+  const orderedEvaluations = [...evaluations].sort((a, b) => b.observed_at.localeCompare(a.observed_at));
+  const currentRun = eventRun
+    ?? orderedEvaluations.find((evaluation) => evaluation.lifecycle_state === 'running' || evaluation.lifecycle_state === 'queued')
+    ?? orderedEvaluations[0];
+  const currentSuite = currentRun ? suites.find((suite) => suite.suite_id === currentRun.suite_id) : undefined;
+  const currentRunEvents = currentRun ? events.filter((event) => event.run_id === currentRun.run_id) : [];
+  const activity = latestAssignmentActivity(currentRunEvents);
+  const updatedAt = latestEvent?.observed_at ?? catalog?.generated_at;
+  const verification = catalog ? verificationLabel(currentRun, catalog) : undefined;
 
   return (
     <section className="panel sys-panel" aria-label="System overview">
@@ -188,54 +216,96 @@ function SystemOverviewPanel({
       </div>
 
       <div className="sys-campaign">
-        <h3 className="sys-section-title">Active campaign</h3>
+        <div className="campaign-section-head">
+          <h3 className="sys-section-title">Active campaign</h3>
+          <span className={`campaign-status status-${currentRun?.lifecycle_state ?? 'neutral'}`}>
+            <span className="status-dot" aria-hidden="true" />
+            {campaignStatusLabel(currentRun)}
+          </span>
+        </div>
         <DatasetSelector activeId={activeDatasetId} />
-        {catalog ? <p className="panel-note">{catalog.title}</p> : null}
 
         {catalog ? (
-          <div className="usage-list" aria-label="Dataset coverage">
-            <CoverageBar label="Models evaluated" done={catalog.evaluated_count} total={catalog.model_count} />
-            <CoverageBar label="Suites verified" done={catalog.verifier_passed_count} total={catalog.suite_count} />
-            <CoverageBar label="Runs completed" done={completedRuns} total={evaluations.length} />
-            <CoverageBar label="Assignments done" done={assignmentDone} total={assignmentTotal} />
-          </div>
-        ) : isReconciling ? (
-          <ReconcilePlaceholder label="Loading feed history…" />
-        ) : null}
-      </div>
-
-      <div className="task-card">
-        <div className="panel-head">
-          <h3>Current task</h3>
-          {currentRun ? (
-            <Link to={`/evaluations/${currentRun.dataset_id}/${currentRun.run_id}`} className="panel-link">
-              View run →
-            </Link>
-          ) : null}
-        </div>
-        {currentRun && latestEvent ? (
           <>
-            <p className="task-title">{currentSuite?.display_name ?? currentRun.suite_id}</p>
-            <p className="task-sub">
-              {shortRunId(currentRun.run_id)} · {currentRun.lifecycle_state}
-            </p>
-            <ProgressBar
-              completed={campaignTerminalProgress(currentRun).done}
-              total={campaignTerminalProgress(currentRun).total}
-              label="Assignment progress"
-            />
-            <div className="task-chips">
-              <code className="stream-chip">{currentRun.arm}</code>
-              <code className="stream-chip">{currentRun.suite_id}</code>
-              {currentRun.started_at ? (
-                <span className="task-started">Started {formatRelativeTime(currentRun.started_at)}</span>
+            <div className="campaign-identity">
+              <div>
+                <h4>{catalog.title}</h4>
+                <p>{catalog.description}</p>
+              </div>
+              {updatedAt ? <span className="campaign-updated">Updated {formatRelativeTime(updatedAt)}</span> : null}
+            </div>
+
+            {currentRun ? (
+              <div className="campaign-run-context">
+                <span>{currentSuite?.display_name ?? currentRun.suite_id}</span>
+                <span aria-hidden="true">·</span>
+                <code>{currentRun.arm}</code>
+              </div>
+            ) : null}
+
+            <div className="campaign-progress">
+              <div className="campaign-progress-head">
+                <strong>{formatNumber(assignmentDone)} of {formatNumber(assignmentTotal)} assignments complete</strong>
+                <strong>{assignmentPercent}%</strong>
+              </div>
+              <div
+                className="campaign-progress-track"
+                role="progressbar"
+                aria-label="Campaign assignment progress"
+                aria-valuenow={assignmentDone}
+                aria-valuemin={0}
+                aria-valuemax={assignmentTotal || 1}
+                aria-valuetext={`${assignmentDone} of ${assignmentTotal} assignments complete`}
+              >
+                <div className="campaign-progress-fill" style={{ width: `${assignmentPercent}%` }} />
+              </div>
+              <div className="campaign-progress-meta">
+                <span>{currentRun?.started_at ? `Started ${formatRelativeTime(currentRun.started_at)}` : 'Start time unavailable'}</span>
+                <span className={assignmentFailed > 0 ? 'campaign-failures' : undefined}>{pluralized(assignmentFailed, 'failed')}</span>
+              </div>
+            </div>
+
+            <ul className="campaign-scope" aria-label="Campaign scope and verification">
+              <li><strong>{formatNumber(catalog.model_count)}</strong> {catalog.model_count === 1 ? 'model' : 'models'}</li>
+              <li><strong>{formatNumber(catalog.suite_count)}</strong> {catalog.suite_count === 1 ? 'suite' : 'suites'}</li>
+              <li className={verification === 'Verification failed' ? 'campaign-verification-failed' : undefined}>
+                {verification}
+              </li>
+            </ul>
+
+            {currentRun && activity ? (
+              <div className="campaign-activity" aria-live="polite">
+                <h4>{currentRun.lifecycle_state === 'running' ? 'Now evaluating' : 'Latest activity'}</h4>
+                <div className="campaign-activity-primary">
+                  {activity.variantId ? (
+                    <Link to={`/models/${currentRun.dataset_id}/${activity.variantId}`}>{activity.variantId}</Link>
+                  ) : (
+                    <span>Model unavailable</span>
+                  )}
+                  <span aria-hidden="true">·</span>
+                  <span>{activity.taskId ?? activity.assignmentId}</span>
+                </div>
+                <div className="campaign-activity-meta">
+                  {activity.stageLabel ? <span>{capitalize(activity.stageLabel.replaceAll('_', ' '))}</span> : null}
+                  {activity.role ? <span>{roleLabel(activity.role)} role</span> : null}
+                  <span>{formatRelativeTime(activity.observedAt)}</span>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="campaign-actions">
+              {currentRun ? (
+                <Link to={`/evaluations/${currentRun.dataset_id}/${currentRun.run_id}`} className="campaign-primary-action">
+                  View Details
+                </Link>
               ) : null}
+              <Link to="/methodology" className="campaign-secondary-action">Methodology</Link>
             </div>
           </>
         ) : isReconciling ? (
-          <ReconcilePlaceholder label="Loading current task…" />
+          <ReconcilePlaceholder label="Loading feed history…" />
         ) : (
-          <p className="panel-empty">No evaluation has been observed yet.</p>
+          <p className="panel-empty">No campaign has been observed yet.</p>
         )}
       </div>
     </section>
