@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	evalv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/eval/v1"
 	_ "modernc.org/sqlite"
@@ -66,7 +67,7 @@ func TestCampaignExporter_ExportRunWritesDisclosureSafeBundle(t *testing.T) {
 	assert.Equal(t, req.RunID, report.RunID)
 	assert.Equal(t, uint32(3), report.AssignmentCount)
 	assert.Equal(t, uint32(1), report.TerminalResultCount)
-	assert.Len(t, report.Files, 7)
+	assert.Len(t, report.Files, 8)
 	var assignmentFile CampaignExportFile
 	for _, file := range report.Files {
 		if file.Name == "assignments.jsonl" {
@@ -239,6 +240,48 @@ func TestCampaignExporter_ExportRunWithVerification(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, exportReport)
 	assert.Equal(t, uint32(3), exportReport.TerminalResultCount)
+
+	evaluationSummaryJSON, err := files.ReadFile(context.Background(), filepath.Join(outputDir, constants.CampaignExportEvaluationSummaryFilename))
+	require.NoError(t, err)
+	var evaluationSummary struct {
+		SchemaVersion   string `json:"schema_version"`
+		Kind            string `json:"kind"`
+		VerifierState   string `json:"verifier_state"`
+		HeadlineMetrics struct {
+			PassRate struct {
+				Unit             string `json:"unit"`
+				ObservedCount    uint32 `json:"observed_count"`
+				EligibleCount    uint32 `json:"eligible_count"`
+				UnavailableCount uint32 `json:"unavailable_count"`
+			} `json:"pass_rate"`
+			LatencyP50MS struct {
+				Unit              string `json:"unit"`
+				UnavailableReason string `json:"unavailable_reason"`
+			} `json:"latency_p50_ms"`
+			OutputThroughputP50 struct {
+				Unit              string `json:"unit"`
+				UnavailableReason string `json:"unavailable_reason"`
+			} `json:"output_throughput_p50_tokens_per_second"`
+		} `json:"headline_metrics"`
+		VerificationMetadata struct {
+			ReportDigest     string `json:"report_digest"`
+			PopulationDigest string `json:"population_digest"`
+		} `json:"verification_metadata"`
+	}
+	require.NoError(t, json.Unmarshal(evaluationSummaryJSON, &evaluationSummary))
+	assert.Equal(t, "1.5.0", evaluationSummary.SchemaVersion)
+	assert.Equal(t, "evaluation_summary", evaluationSummary.Kind)
+	assert.Equal(t, "passed", evaluationSummary.VerifierState)
+	assert.Equal(t, "ratio", evaluationSummary.HeadlineMetrics.PassRate.Unit)
+	assert.Equal(t, uint32(3), evaluationSummary.HeadlineMetrics.PassRate.ObservedCount)
+	assert.Equal(t, uint32(3), evaluationSummary.HeadlineMetrics.PassRate.EligibleCount)
+	assert.Equal(t, uint32(0), evaluationSummary.HeadlineMetrics.PassRate.UnavailableCount)
+	assert.Equal(t, "milliseconds", evaluationSummary.HeadlineMetrics.LatencyP50MS.Unit)
+	assert.Equal(t, "no_scored_calls", evaluationSummary.HeadlineMetrics.LatencyP50MS.UnavailableReason)
+	assert.Equal(t, "tokens_per_second", evaluationSummary.HeadlineMetrics.OutputThroughputP50.Unit)
+	assert.Equal(t, "no_scored_calls", evaluationSummary.HeadlineMetrics.OutputThroughputP50.UnavailableReason)
+	assert.Equal(t, report.GetReportDigestRef().GetSha256(), evaluationSummary.VerificationMetadata.ReportDigest)
+	assert.Equal(t, report.GetVerifiedPopulationDigest(), evaluationSummary.VerificationMetadata.PopulationDigest)
 
 	modelSummariesJSONL, err := files.ReadFile(context.Background(), filepath.Join(outputDir, "model_summaries.jsonl"))
 	require.NoError(t, err)

@@ -421,6 +421,121 @@ describe('EvalStore', () => {
     expect(store.getEvaluation(datasetId, runId)?.quality_state).toBe('exploratory_verified');
   });
 
+  it('preserves bound verification through a later unverified aggregate revision', () => {
+    const runId = 'run-verification-replay';
+    const datasetId = `ds-live-${runId}`;
+    const base = {
+      schema_version: '1.5.0',
+      kind: 'evaluation_summary',
+      dataset_id: datasetId,
+      quality_state: 'exploratory_verified',
+      observed_at: '2026-09-17T12:00:00Z',
+      run_id: runId,
+      suite_id: 'north-star-25',
+      arm: 'homogeneous-model-role',
+      evaluation_unit: 'model',
+      model_role_mapping: {},
+      lifecycle_state: 'completed',
+      assignment_total: 2,
+      assignment_completed: 2,
+      assignment_failed: 0,
+      terminal_outcomes: { completed: 2, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+      headline_metrics: {
+        pass_rate: { value: 1, unit: 'ratio', observed_count: 2, eligible_count: 2, unavailable_count: 0 },
+        latency_p50_ms: { value: 200, unit: 'milliseconds', observed_count: 2, eligible_count: 2, unavailable_count: 0 },
+        output_throughput_p50_tokens_per_second: { value: 10, unit: 'tokens_per_second', observed_count: 2, eligible_count: 2, unavailable_count: 0 },
+      },
+    };
+    store.acceptProjection({
+      sequence: 1,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        ...base,
+        verifier_state: 'passed',
+        verification_metadata: {
+          provenance: 'bound',
+          verifier_state: 'passed',
+          verifier_release_version: 'v2.1.12',
+          verifier_contract_version: '2.0.0',
+          report_digest: 'a'.repeat(64),
+          population_digest: 'b'.repeat(64),
+          verified_at: '2026-09-17T12:00:00Z',
+        },
+      }),
+    });
+    store.acceptProjection({
+      sequence: 2,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        ...base,
+        observed_at: '2026-09-17T12:01:00Z',
+        quality_state: 'live_in_progress',
+        verifier_state: 'not_run',
+        headline_metrics: {
+          pass_rate: { value: 0.5, unit: 'ratio', observed_count: 2, eligible_count: 2, unavailable_count: 0 },
+          latency_p50_ms: { value: 200, unit: 'milliseconds', observed_count: 2, eligible_count: 2, unavailable_count: 0 },
+          output_throughput_p50_tokens_per_second: { value: 10, unit: 'tokens_per_second', observed_count: 2, eligible_count: 2, unavailable_count: 0 },
+        },
+      }),
+    });
+
+    const summary = store.getEvaluation(datasetId, runId);
+    expect(summary?.verifier_state).toBe('passed');
+    expect(summary?.quality_state).toBe('exploratory_verified');
+    expect(summary?.verification_metadata?.report_digest).toBe('a'.repeat(64));
+    expect(summary?.headline_metrics.pass_rate?.value).toBe(0.5);
+  });
+
+  it('reconstructs an unavailable-only current metric without inventing a value', () => {
+    const runId = 'run-unavailable-metric';
+    const datasetId = `ds-live-${runId}`;
+    store.acceptProjection({
+      sequence: 1,
+      record_type: 'projection',
+      record_bytes: JSON.stringify({
+        schema_version: '1.5.0',
+        kind: 'evaluation_summary',
+        dataset_id: datasetId,
+        quality_state: 'exploratory_partial',
+        observed_at: '2026-09-17T12:00:00Z',
+        run_id: runId,
+        suite_id: 'north-star-25',
+        arm: 'homogeneous-model-role',
+        evaluation_unit: 'model',
+        model_role_mapping: {},
+        lifecycle_state: 'completed',
+        assignment_total: 2,
+        assignment_completed: 2,
+        assignment_failed: 0,
+        terminal_outcomes: { completed: 2, model_failed: 0, grader_failed: 0, invalid_evidence: 0, stopped: 0 },
+        verifier_state: 'not_run',
+        headline_metrics: {
+          pass_rate: { value: 1, unit: 'ratio', observed_count: 2, eligible_count: 2, unavailable_count: 0 },
+          latency_p50_ms: {
+            unit: 'milliseconds',
+            observed_count: 0,
+            eligible_count: 2,
+            unavailable_count: 2,
+            unavailable_reason: 'no_scored_calls',
+          },
+          output_throughput_p50_tokens_per_second: {
+            unit: 'tokens_per_second',
+            observed_count: 0,
+            eligible_count: 2,
+            unavailable_count: 2,
+            unavailable_reason: 'no_scored_calls',
+          },
+        },
+      }),
+    });
+
+    const summary = store.getEvaluation(datasetId, runId);
+    expect(summary?.headline_metrics.latency_p50_ms?.value).toBeUndefined();
+    expect(summary?.headline_metrics.latency_p50_ms?.unavailable_reason).toBe('no_scored_calls');
+    expect(summary?.headline_metrics.output_throughput_p50_tokens_per_second?.value).toBeUndefined();
+    expect(summary?.headline_metrics.output_throughput_p50_tokens_per_second?.unavailable_reason).toBe('no_scored_calls');
+  });
+
   it('rejects malformed campaign results atomically before indexing or progressing', () => {
     const runId = 'run-atomic-reject';
     const datasetId = `ds-live-${runId}`;

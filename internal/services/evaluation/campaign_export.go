@@ -336,6 +336,28 @@ func (e *CampaignExporter) ExportRun(
 		}
 		aggregateRecords = replaceModelSummaryRecords(aggregateRecords, verifiedRecords)
 	}
+	var evaluationSummaryBody []byte
+	modelSummaryLines := make([][]byte, 0, len(aggregateRecords))
+	for _, record := range aggregateRecords {
+		var header struct {
+			Kind string `json:"kind"`
+		}
+		if err := json.Unmarshal(record.Body, &header); err != nil {
+			return nil, fmt.Errorf("evaluation: classify aggregate export record: %w", err)
+		}
+		switch header.Kind {
+		case "evaluation_summary":
+			if evaluationSummaryBody != nil {
+				return nil, fmt.Errorf("evaluation: classify aggregate export record: duplicate evaluation summary: %w", constants.ErrEvidenceArtifactMalformed)
+			}
+			evaluationSummaryBody = record.Body
+		case "model_summary":
+			modelSummaryLines = append(modelSummaryLines, record.Body)
+		}
+	}
+	if evaluationSummaryBody == nil {
+		return nil, fmt.Errorf("evaluation: classify aggregate export record: missing evaluation summary: %w", constants.ErrEvidenceArtifactMalformed)
+	}
 	populationReport, err := NewCampaignPopulationAccountant(e.now).AccountRun(ctx, store, runID, catalog)
 	if err != nil {
 		return nil, err
@@ -376,6 +398,9 @@ func (e *CampaignExporter) ExportRun(
 	if err := writeExportFile(ctx, fileSvc, outputDir, "run_summary.json", runSummaryBody, report); err != nil {
 		return nil, err
 	}
+	if err := writeExportFile(ctx, fileSvc, outputDir, constants.CampaignExportEvaluationSummaryFilename, evaluationSummaryBody, report); err != nil {
+		return nil, err
+	}
 
 	assignmentsJSONL, err := marshalJSONL(assignmentRecords)
 	if err != nil {
@@ -385,17 +410,6 @@ func (e *CampaignExporter) ExportRun(
 		return nil, err
 	}
 
-	modelSummaryLines := make([][]byte, 0, len(aggregateRecords))
-	for _, record := range aggregateRecords {
-		var body map[string]any
-		if err := json.Unmarshal(record.Body, &body); err != nil {
-			return nil, err
-		}
-		if kind, _ := body["kind"].(string); kind != "model_summary" {
-			continue
-		}
-		modelSummaryLines = append(modelSummaryLines, record.Body)
-	}
 	modelSummariesJSONL := bytes.Join(modelSummaryLines, []byte("\n"))
 	if len(modelSummaryLines) > 0 {
 		modelSummariesJSONL = append(modelSummariesJSONL, '\n')
@@ -644,6 +658,10 @@ func buildCampaignExportSchemaDocument() map[string]any {
 			"run_summary.json": map[string]string{
 				"format":      "json",
 				"description": "Run-level metadata, catalog/registry digests, and aggregate counters.",
+			},
+			constants.CampaignExportEvaluationSummaryFilename: map[string]string{
+				"format":      "json",
+				"description": "Explorer evaluation_summary projection with typed headline metrics and bound verification metadata.",
 			},
 			"assignments.jsonl": map[string]string{
 				"format":      "jsonl",

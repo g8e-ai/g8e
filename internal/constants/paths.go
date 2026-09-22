@@ -758,6 +758,7 @@ const (
 	CampaignVerifierID                            = "g8e-campaign-verifier"
 	CampaignVerifierVersion                       = "2.0.0"
 	CampaignVerificationFilename                  = "campaign-verification.json"
+	CampaignExportEvaluationSummaryFilename       = "evaluation_summary.json"
 	CampaignSourceInventoryFilename               = "campaign-source-inventory.json"
 	CampaignSourceInventoryVersion                = "1.0.0"
 	EvaluationSelectionDiagnosticsFilename        = "evaluation-selection-diagnostics.json"

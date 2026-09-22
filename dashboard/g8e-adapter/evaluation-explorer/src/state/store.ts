@@ -74,6 +74,20 @@ function normalizeQualityRecord<T extends SnapshotRecord | LiveEvent>(record: T)
   return qualityState === record.quality_state ? record : { ...record, quality_state: qualityState };
 }
 
+/** Preserve a bound verification result when a later aggregate revision has no report. */
+function mergeEvaluationSummary(existing: EvaluationSummary, incoming: EvaluationSummary): EvaluationSummary {
+  const incomingIsUnverified = incoming.verifier_state === 'not_run' || incoming.verifier_state === 'not_applicable';
+  const existingIsBound = existing.verifier_state === 'passed' || existing.verifier_state === 'failed';
+  if (!incomingIsUnverified || !existingIsBound) return incoming;
+  return {
+    ...incoming,
+    quality_state: existing.quality_state,
+    verifier_state: existing.verifier_state,
+    verifier_failure_summary: existing.verifier_failure_summary,
+    verification_metadata: existing.verification_metadata,
+  };
+}
+
 export function modelComparisonId(model: ModelSummary): string {
   return modelRecordKey(model.dataset_id, model.variant_id, model.role);
 }
@@ -390,9 +404,12 @@ export class EvalStore {
       case 'suite_summary':
         state.suites.set(recordKey(record.dataset_id, record.suite_id), record);
         break;
-      case 'evaluation_summary':
-        state.evaluations.set(recordKey(record.dataset_id, record.run_id), record);
+      case 'evaluation_summary': {
+        const key = recordKey(record.dataset_id, record.run_id);
+        const existing = state.evaluations.get(key);
+        state.evaluations.set(key, existing ? mergeEvaluationSummary(existing, record) : record);
         break;
+      }
       case 'assignment_result':
         state.assignments.set(recordKey(record.dataset_id, record.assignment_id), record);
         break;
