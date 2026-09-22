@@ -437,10 +437,10 @@ func TestCampaignPublicationCoordinatorPublishRunAggregates(t *testing.T) {
 
 func scoredInferenceCall(tokens uint32, durationNanos uint64) *evalv1.ModelInferenceRecord {
 	return &evalv1.ModelInferenceRecord{
-		InferenceRecordId:        "inference-1",
-		UsageAvailability:        evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
-		CompletionTokens:         tokens,
-		GenerationDurationNanos:  durationNanos,
+		InferenceRecordId:       "inference-1",
+		UsageAvailability:       evalv1.EvaluationUsageAvailability_EVALUATION_USAGE_AVAILABILITY_REPORTED,
+		CompletionTokens:        tokens,
+		GenerationDurationNanos: durationNanos,
 	}
 }
 

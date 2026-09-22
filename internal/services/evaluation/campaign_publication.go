@@ -365,8 +365,11 @@ func (c *CampaignPublicationCoordinator) ResetPublicationIdempotency(ctx context
 // revisions. Aggregate and completion revisions inside the catch-up already
 // project the persisted report, so a verified state cannot regress.
 func (c *CampaignPublicationCoordinator) PublishRunCatchUpWithVerification(ctx context.Context, runID string, report *evalv1.EvaluationVerificationReport) (int, error) {
-	if report != nil && report.GetSchemaVersion() != campaignVerificationSchemaVersion {
+	if report != nil && report.GetSchemaVersion() == CampaignSchemaVersion {
 		report = nil
+	}
+	if report != nil && report.GetSchemaVersion() != campaignVerificationSchemaVersion {
+		return 0, fmt.Errorf("evaluation: publish run catch-up with verification: unsupported report schema: %w", constants.ErrEvidenceArtifactMalformed)
 	}
 	if report != nil && report.GetRunId() != runID {
 		return 0, fmt.Errorf("evaluation: publish run catch-up with verification: report run mismatch: %w", constants.ErrEvidenceScopeMismatch)

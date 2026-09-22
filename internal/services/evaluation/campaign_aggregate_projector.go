@@ -819,30 +819,30 @@ type summaryVerificationMetadataRecord struct {
 // evaluationSummaryRecord is the typed explorer evaluation_summary wire shape
 // for schema 1.5.0.
 type evaluationSummaryRecord struct {
-	SchemaVersion          string                           `json:"schema_version"`
-	Kind                   string                           `json:"kind"`
-	DatasetID              string                           `json:"dataset_id"`
-	QualityState           string                           `json:"quality_state"`
-	ObservedAt             string                           `json:"observed_at"`
-	SourceRevisionLabel    string                           `json:"source_revision_label"`
-	RunID                  string                           `json:"run_id"`
-	CampaignID             string                           `json:"campaign_id"`
-	SuiteID                string                           `json:"suite_id"`
-	Arm                    string                           `json:"arm"`
-	EvaluationUnit         string                           `json:"evaluation_unit"`
-	ModelRoleMapping       map[string]string                `json:"model_role_mapping"`
-	LifecycleState         string                           `json:"lifecycle_state"`
-	AssignmentTotal        uint32                           `json:"assignment_total"`
-	AssignmentCompleted    uint32                           `json:"assignment_completed"`
-	AssignmentFailed       uint32                           `json:"assignment_failed"`
-	TerminalOutcomes       map[string]uint32                `json:"terminal_outcomes"`
-	StartedAt              string                           `json:"started_at,omitempty"`
-	EndedAt                string                           `json:"ended_at,omitempty"`
-	ElapsedSeconds         *float64                         `json:"elapsed_seconds,omitempty"`
-	VerifierState          string                           `json:"verifier_state"`
-	VerifierFailureSummary string                           `json:"verifier_failure_summary,omitempty"`
+	SchemaVersion          string                             `json:"schema_version"`
+	Kind                   string                             `json:"kind"`
+	DatasetID              string                             `json:"dataset_id"`
+	QualityState           string                             `json:"quality_state"`
+	ObservedAt             string                             `json:"observed_at"`
+	SourceRevisionLabel    string                             `json:"source_revision_label"`
+	RunID                  string                             `json:"run_id"`
+	CampaignID             string                             `json:"campaign_id"`
+	SuiteID                string                             `json:"suite_id"`
+	Arm                    string                             `json:"arm"`
+	EvaluationUnit         string                             `json:"evaluation_unit"`
+	ModelRoleMapping       map[string]string                  `json:"model_role_mapping"`
+	LifecycleState         string                             `json:"lifecycle_state"`
+	AssignmentTotal        uint32                             `json:"assignment_total"`
+	AssignmentCompleted    uint32                             `json:"assignment_completed"`
+	AssignmentFailed       uint32                             `json:"assignment_failed"`
+	TerminalOutcomes       map[string]uint32                  `json:"terminal_outcomes"`
+	StartedAt              string                             `json:"started_at,omitempty"`
+	EndedAt                string                             `json:"ended_at,omitempty"`
+	ElapsedSeconds         *float64                           `json:"elapsed_seconds,omitempty"`
+	VerifierState          string                             `json:"verifier_state"`
+	VerifierFailureSummary string                             `json:"verifier_failure_summary,omitempty"`
 	VerificationMetadata   *summaryVerificationMetadataRecord `json:"verification_metadata,omitempty"`
-	HeadlineMetrics        evaluationHeadlineMetricsRecord  `json:"headline_metrics"`
+	HeadlineMetrics        evaluationHeadlineMetricsRecord    `json:"headline_metrics"`
 }
 
 // evaluationSummaryInput carries every input the summary builder needs; the
