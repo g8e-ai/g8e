@@ -39,7 +39,10 @@ func TestComposeTargetObserver_ObservesPresentAndAbsentControlledTargetState(t *
 				calls++
 				assert.Equal(t, constants.TestPathRepoRootFromCompliancePackage, dir)
 				assert.Equal(t, constants.DockerExecutable, name)
-				assert.Contains(t, args, constants.DockerEvaluationObserverService)
+				assert.Contains(t, args, constants.DockerNativeEvaluationComposeFile)
+				assert.NotContains(t, args, constants.DockerEvaluationProfile)
+				assert.NotContains(t, args, "g8e-eval-observer")
+				assert.Contains(t, args, constants.DockerNativeEvaluationTargetReader)
 				assert.Contains(t, args, constants.EvaluationObserverTargetEnv+"="+constants.TestEvaluationTargetFilename)
 				return test.result
 			}, func() time.Time { return observedAt })

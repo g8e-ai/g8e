@@ -206,7 +206,7 @@ Add `--json` to emit canonical protojson. Verification resolves every declared a
 
 The Gateway is the Policy Decision Point and owns ingress authentication, envelope construction, L1-L3 decisions, and coordination state. The selected remote Operator is the Policy Execution Point and owns L4-L5 execution and authoritative local evidence. The Gateway receipt query is a verified mirror of Operator-authored evidence, not an independent read of the Operator database.
 
-The independent observer is a short-lived `g8e-eval-observer` Compose process. It has no network, workload identity, runtime volume, credentials, or writeable target mount. It mounts only the shared controlled fixture volume read-only. The observer runs as the root UID with all Linux capabilities dropped so it can read the root-owned, owner-only fixture created by the Operator while remaining unable to mutate the read-only volume or cross a network boundary.
+The native suite reads terminal fixture state through a short-lived `g8e-native-target-reader` process defined only in `eval/native-boundary-compose.yml`. It is not an Observer Operator and is not a unified-stack service. The evaluator invokes it explicitly with `docker compose run --rm`; it has no network, workload identity, runtime volume, credentials, or writeable target mount. It mounts only the shared controlled fixture volume read-only and runs with all Linux capabilities dropped so it can read the root-owned, owner-only fixture without mutating the volume or crossing a network boundary.
 
 ---
 
@@ -244,17 +244,17 @@ Campaigns without observer coverage remain explicitly incomplete for hardware-ef
 
 **5. Same pattern as tool scenarios.** Governed tool assignments require an independent observer that cannot mutate the target. Provider-boundary observation and model provenance apply the same separation to inference-side hardware telemetry and storage-side weight attestation.
 
-### Observer naming: do not confuse the witness roles
+### Evaluation witness roles
 
-g8e uses three distinct “witness” concepts for evaluations:
+g8e uses distinct witness mechanisms for native boundary tests and model campaigns:
 
 | Name | Where it runs | Purpose |
 | --- | --- | --- |
-| **`g8e-eval-observer`** | Campaign host Compose (`evaluation` profile) | Networkless target-state reader for the native `core-execution-boundary@1.0.0` suite only |
+| **Native target reader** | Ephemeral campaign-host process invoked from `eval/native-boundary-compose.yml` | Networkless target-state read for the native `core-execution-boundary@1.0.0` suite only; not a unified-stack service or Operator |
 | **Observer Operator** | Provider host (`g8e operator start --provider-boundary-observer-enabled`) | Enrolled read-only remote Operator for provider-boundary GPU/RAM telemetry during scored model campaigns |
 | **Provenance Operator** | Model storage site (`g8e operator start --provenance-operator-enabled --model-storage-root <path>`) | Enrolled remote Operator for storage-side model weight hashing and digest attestation during scored model campaigns |
 
-The Compose `g8e-eval-observer` service is **not** the provider-boundary Observer Operator and does not satisfy hardware-efficiency requirements for model campaigns. The Provenance Operator is **not** an observer — it attests model files, not GPU state.
+Only the remote Observer Operator supplies provider-boundary observation for model campaigns. The native target reader cannot satisfy hardware-efficiency requirements, and the Provenance Operator attests model files rather than GPU state.
 
 ### Provider-boundary Observer Operator
 

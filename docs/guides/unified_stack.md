@@ -36,9 +36,8 @@ The root `docker-compose.yml` defines platform services on the `g8e-net` bridge 
 | `g8e-inference-operator` | `evaluation` | none | **Inference Operator** — governed inference to the remote Ollama provider. Requires `G8E_OLLAMA_ENDPOINT`; campaign authority travels on each governed dispatch. |
 | `ensemble` | `bootstrapped` | 8000 | g8ee chat pipeline (`POST /api/v1/chat`). |
 | `dashboard` | `bootstrapped` | 3000 | Legacy dashboard (not the evaluation acceptance UI). |
-| `g8e-eval-observer` | `evaluation` | none | Short-lived networkless target observer for the native execution-boundary suite only. Not the provider-boundary Observer Operator. |
 
-The Gateway and Operator containers use the same Go image. The evaluation acceptance topology requires **both** `bootstrapped` and `evaluation` profiles. The legacy `g8ellama` profile (separate User Gateway) is **not** used for model campaigns.
+The Gateway and Operator containers use the same Go image. The evaluation acceptance topology requires **both** `bootstrapped` and `evaluation` profiles. The Observer Operator is a separately enrolled process on the remote provider host and is never a service in the unified Compose stack. The legacy `g8ellama` profile (separate User Gateway) is **not** used for model campaigns.
 
 ### Evaluation campaign topology
 

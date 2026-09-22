@@ -385,7 +385,7 @@ func (f *verifierFixture) buildReport(t *testing.T) *evalv1.EvaluationReport {
 				DeploymentId:        vRunID,
 				TopologyRef:         versioned(TopologyID, TopologyVersion),
 				ControlledTarget:    vTargetResource,
-				IndependentObserver: constants.DockerEvaluationObserverService,
+				IndependentObserver: constants.DockerNativeEvaluationTargetReader,
 				RuntimeBoundaries: []*evalv1.EvaluationRuntimeBoundary{
 					{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_EVALUATOR, ProcessIdentity: "host-side g8e eval process", RuntimeNamespace: "Docker host workspace", Endpoint: "https://localhost:8443", AuthenticatedIdentity: "user-1"},
 					{Component: evalv1.EvaluationRuntimeComponent_EVALUATION_RUNTIME_COMPONENT_GATEWAY, ProcessIdentity: constants.DockerGatewayContainer, RuntimeNamespace: "Gateway container", PersistentStore: "Gateway runtime volume", Endpoint: "https://localhost:8443", AuthenticatedIdentity: "cli-session-1"},

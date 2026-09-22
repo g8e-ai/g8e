@@ -56,8 +56,8 @@ func (o *composeTargetObserver) Observe(ctx context.Context, targetResource stri
 		return nil, fmt.Errorf("%w: controlled target path and observer dependencies are required", constants.ErrEvaluationObservationUnavailable)
 	}
 	result := o.run(ctx, o.projectDir, constants.DockerExecutable,
-		"compose", "--file", constants.DockerComposeFile, "--profile", constants.DockerEvaluationProfile,
-		"run", "--rm", "--no-deps", "-e", constants.EvaluationObserverTargetEnv+"="+filename, constants.DockerEvaluationObserverService,
+		"compose", "--file", constants.DockerComposeFile, "--file", constants.DockerNativeEvaluationComposeFile,
+		"run", "--rm", "--no-deps", "-e", constants.EvaluationObserverTargetEnv+"="+filename, constants.DockerNativeEvaluationTargetReader,
 	)
 	observedAt := o.now().UTC()
 	if result.exitCode == constants.EvaluationObserverAbsentExitCode {
