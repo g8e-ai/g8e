@@ -95,7 +95,8 @@ TEST_EXCLUDE_PKGS := \
 	/internal/tools/agent_harness/scenarios \
 	/internal/services/gateway/docs \
 	/internal/services/gateway/scripts \
-	/internal/services/storage/storagetest
+	/internal/services/storage/storagetest \
+	/node_modules
 
 # Packages excluded from the coverage profile but NOT from test discovery.
 # These compile and may be tested, but their statements should not affect

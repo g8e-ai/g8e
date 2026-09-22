@@ -201,16 +201,13 @@ func TestTestUnitCmd_StructureAndFlags(t *testing.T) {
 	assert.NotNil(t, cmd.RunE)
 }
 
-func TestTestUnitCmd_UsesMakefileAlignedTimeout(t *testing.T) {
+func TestTestUnitCmd_DelegatesToMakefileTarget(t *testing.T) {
 	var captured []string
 	cmd := testUnitCmdWithRunner(recordingE2ERunner(0, nil, &captured))
 
 	require.NoError(t, cmd.RunE(cmd, nil))
 
-	assert.Contains(t, captured, "-timeout")
-	assert.Contains(t, captured, "180s")
-	assert.Contains(t, captured, "-p=1")
-	assert.Contains(t, captured, "-tags=!integration")
+	assert.Equal(t, []string{"test-unit"}, captured)
 }
 
 func TestTestUnitCmd_RunnerFailureWrapsUnitError(t *testing.T) {

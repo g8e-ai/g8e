@@ -64,7 +64,7 @@ The root Makefile provides these test and quality entry points:
 - `make lint` runs the Go build check, vulnerability scan, doctrine and COSAiS validation, Swagger generation, and `golangci-lint`.
 - `make ci` aggregates the local platform, Ensemble, and Dashboard checks. GitHub Actions also runs protocol Python, conformance, eval, website, smoke, dependency, secret, and license jobs.
 
-The package and file exclusions in the Makefile are the source of truth for Go test discovery and coverage filtering. The CLI unit runner and `make test-unit` do not use identical package selection or timeout flags, so use the same entry point locally that the relevant CI job uses when reproducing a failure.
+The package and file exclusions in the Makefile are the source of truth for Go test discovery and coverage filtering. `./g8e test unit` delegates to `make test-unit`, so the CLI and Makefile use the same Tier 1 package selection and test settings.
 
 ## Runtime files and test paths
 

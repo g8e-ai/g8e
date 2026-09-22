@@ -160,7 +160,7 @@ Use these primary entry points:
 - `make test`, `make test-unit`, `make test-integration`, `make test-docker`, and `make test-coverage`
 - `make ensemble-test`, `make test-external`, and `make dashboard-test`
 
-The CLI and Makefile do not select identical package sets and timeout flags for every suite. Reproduce a CI failure through the same owning entry point. Read the [Testing Guide](tests.md) for exact selection, lifecycle, state, race, coverage, and component-specific behavior.
+The CLI delegates Tier 1 execution to the Makefile, while other suites may still use component-specific package and timeout flags. Reproduce a CI failure through the same owning entry point. Read the [Testing Guide](tests.md) for exact selection, lifecycle, state, race, coverage, and component-specific behavior.
 
 ## Generated Artifacts
 

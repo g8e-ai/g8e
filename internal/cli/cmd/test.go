@@ -61,19 +61,9 @@ func testUnitCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 1 (Unit) tests...")
 
-			// Build the test command based on the Makefile test-unit target
-			// TEST_RACE: -race on non-Windows, empty on Windows
-			// TEST_COUNT: -count=1
-			// TEST_SHORT_TIMEOUT: 180s
-			// TEST_PKGS: all packages excluding cmd/, test/, internal/testutil/, mocks/, proto/
-
-			testArgs := []string{"test", "-p=1", "-tags=!integration", "-count=1", "-timeout", "180s"}
-			if runtime.GOOS != "windows" {
-				testArgs = append(testArgs, "-race")
-			}
-			testArgs = append(testArgs, "./internal/...", "./protocol/...")
-
-			code, err := runner(cmd.Context(), "go", testArgs...)
+			// Delegate to the Makefile so the CLI and repository test target share
+			// package exclusions, race settings, cache settings, and timeouts.
+			code, err := runner(cmd.Context(), "make", "test-unit")
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrUnitTestsFailed, err)
 			}
