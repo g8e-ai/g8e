@@ -440,15 +440,28 @@ func publicRepairOutboxCmdWithConfig(configLoader publicConfigLoader, fileSvcFac
 		Use:   "repair-outbox",
 		Short: "Compact a prefix-pruned public-feed outbox back to the mirror snapshot tip",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := configLoader("")
+			if err != nil {
+				return err
+			}
+			fileSvc, err := fileSvcFactory(cfg.ProjectRoot, slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			ctx := commandContext(cmd)
+			if shouldPublishViaGateway(ctx, fileSvc) {
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), "Gateway-owned public mirror outbox is managed by the Gateway")
+				return err
+			}
 			fileSvc, exportConfig, err := loadPublicCommandRuntime(cmd, configLoader, fileSvcFactory)
 			if err != nil {
 				return err
 			}
-			publisher, err := newPublicPublisherForCommand(commandContext(cmd), fileSvc, exportConfig)
+			publisher, err := newPublicPublisherForCommand(ctx, fileSvc, exportConfig)
 			if err != nil {
 				return err
 			}
-			if err := publisher.RepairOutboxFromSnapshot(commandContext(cmd)); err != nil {
+			if err := publisher.RepairOutboxFromSnapshot(ctx); err != nil {
 				return err
 			}
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Public outbox repaired against snapshot")

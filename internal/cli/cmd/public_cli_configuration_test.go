@@ -62,6 +62,20 @@ func TestPublicCmd_ExposesProductionSurface(t *testing.T) {
 	}
 }
 
+func TestPublicRepairOutboxCmd_UsesGatewayOwnedStateWhenHostConfigIsAbsent(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	original := gatewayHealthCheck
+	gatewayHealthCheck = func() bool { return true }
+	t.Cleanup(func() { gatewayHealthCheck = original })
+
+	var output bytes.Buffer
+	cmd := publicRepairOutboxCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	cmd.SetOut(&output)
+
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, output.String(), "Gateway-owned public mirror outbox is managed by the Gateway")
+}
+
 func TestPublicInitCmd_PersistsPrivateConfigurationAndSecrets(t *testing.T) {
 	fileSvc, cfg := newCmdTestEnv(t)
 	cmd := publicInitCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))

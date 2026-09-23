@@ -106,7 +106,7 @@ The harness emits JSON status, outcome, latency, stream-survival, and optional D
 
 ## Manual record publish (advanced)
 
-`g8e public publish`, `g8e public push`, and `g8e public status` remain available for pushing pre-built JSONL record files through a **configured remote mirror origin**. They do not start a local mirror process. Evaluation campaigns use gateway-mediated publication instead.
+`g8e public publish`, `g8e public push`, `g8e public status`, and `g8e public repair-outbox` remain available for manually managed host publisher state. Publication and retry use a **configured remote mirror origin**; repair compacts the local host outbox and snapshot. These commands do not start a local mirror process. Evaluation campaigns use gateway-mediated publication instead.
 
 ```bash
 ./g8e public publish <public-records.jsonl>
@@ -114,7 +114,7 @@ The harness emits JSON status, outcome, latency, stream-survival, and optional D
 ./g8e public status
 ```
 
-`public publish` durably appends before transmission. `public push` retries ordered outbox and proof delivery without running inference. A failed transmission remains retryable.
+`public publish` durably appends before transmission. `public push` retries ordered outbox and proof delivery without running inference. `public repair-outbox` compacts a host publisher outbox against its local snapshot; when the Gateway owns the public mirror, it reports that the Gateway manages the outbox instead of requiring host export configuration. A failed transmission remains retryable.
 
 ## Related documentation
 
