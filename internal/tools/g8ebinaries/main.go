@@ -28,7 +28,14 @@ func main() {
 	buildTime := flag.String("build-time", "", "RFC3339 build time")
 	revision := flag.String("source-revision", "unknown", "source revision")
 	treeHash := flag.String("source-tree-hash", "unknown", "source tree hash")
+	listTargets := flag.Bool("list-targets", false, "print catalogued target platforms")
 	flag.Parse()
+	if *listTargets {
+		for _, target := range g8ebinaries.Targets() {
+			fmt.Printf("%s/%s ", target.OS, target.Arch)
+		}
+		return
+	}
 	if err := generate(*root, *version, *buildID, *buildTime, *revision, *treeHash); err != nil {
 		fmt.Fprintf(os.Stderr, "g8e-binaries: %v\n", err)
 		os.Exit(1)

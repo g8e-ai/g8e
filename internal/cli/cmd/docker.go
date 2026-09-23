@@ -970,6 +970,14 @@ func dockerBuildArgs(vi serve.VersionInfo, noCache bool) ([]string, error) {
 	if !isHex64(vi.SourceTreeStateHash) {
 		return nil, constants.ErrSourceTreeHashInvalid
 	}
+	version := strings.TrimSpace(vi.Version)
+	if version == "" {
+		version = string(constants.SystemHealthUnknown)
+	}
+	buildTime := strings.TrimSpace(vi.BuildTime)
+	if _, err := time.Parse(time.RFC3339, buildTime); err != nil {
+		buildTime = time.Now().UTC().Format(time.RFC3339)
+	}
 	buildID := effectiveBuildID(vi)
 	if buildID == "" {
 		buildID = string(constants.SystemHealthUnknown)
@@ -980,6 +988,8 @@ func dockerBuildArgs(vi serve.VersionInfo, noCache bool) ([]string, error) {
 	}
 	args := []string{
 		"build",
+		"--build-arg", "VERSION=" + version,
+		"--build-arg", "BUILD_TIME=" + buildTime,
 		"--build-arg", "BUILD_ID=" + buildID,
 		"--build-arg", "SOURCE_REVISION=" + sourceRevision,
 		"--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash,

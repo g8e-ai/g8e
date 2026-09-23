@@ -57,7 +57,7 @@ func TestQueueEvalRunDryRun(t *testing.T) {
 
 func TestQueueEvalInitMaterialize(t *testing.T) {
 	root := t.TempDir()
-	writeTestFrozenInventory(t, root, evaluation.DefaultBaseModelInventoryRelPath,
+	writeTestFrozenInventory(t, root, evaluation.DefaultModelInventoryRelPath,
 		&evalv1.ModelVariant{VariantId: "qwen3-4b", ServedModelTag: "qwen3:4b", ModelDigest: "digest", ProviderClass: "ollama"},
 	)
 

@@ -351,6 +351,13 @@ const (
 	G8eBinariesArchiveRoot          = "/opt/g8e/bin"
 	G8eBinariesStagingPrefix        = ".g8e-binaries-export-"
 	G8eBinariesPreviousSuffix       = ".previous"
+
+	// OCI labels copied from the build provenance embedded in g8e-binaries.json.
+	G8eImageVersionLabel       = "org.opencontainers.image.version"
+	G8eBuildIDLabel            = "io.g8e.build.id"
+	G8eBuildTimeLabel          = "io.g8e.build.time"
+	G8eSourceRevisionLabel     = "io.g8e.source.revision"
+	G8eSourceTreeHashLabel     = "io.g8e.source.tree.hash"
 )
 
 // Deploy script filenames served by the gateway.

@@ -32,10 +32,30 @@ type Publisher struct {
 // NewPublisher creates a publisher for a repository artifact directory.
 func NewPublisher(root string) *Publisher { return &Publisher{root: root} }
 
+// Provenance identifies the image labels that must match an exported manifest.
+type Provenance struct {
+	Version        string
+	BuildID        string
+	BuildTime      string
+	SourceRevision string
+	SourceTreeHash string
+}
+
 // Publish consumes a tar stream and atomically publishes the complete catalog.
 // The existing mirror remains untouched when archive validation or publication
 // fails.
 func (p *Publisher) Publish(reader io.Reader) (Manifest, error) {
+	return p.publish(reader, nil)
+}
+
+// PublishMatching validates image provenance before atomically publishing the
+// complete catalog. The existing mirror remains untouched when validation or
+// publication fails.
+func (p *Publisher) PublishMatching(reader io.Reader, provenance Provenance) (Manifest, error) {
+	return p.publish(reader, &provenance)
+}
+
+func (p *Publisher) publish(reader io.Reader, provenance *Provenance) (Manifest, error) {
 	if strings.TrimSpace(p.root) == "" {
 		return Manifest{}, fmt.Errorf("%w: output root is empty", constants.ErrG8eBinaryExport)
 	}
@@ -53,10 +73,24 @@ func (p *Publisher) Publish(reader io.Reader) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, fmt.Errorf("%w: validate exported artifacts: %w", constants.ErrG8eBinaryExport, err)
 	}
+	if provenance != nil {
+		if err := MatchProvenance(*manifest.manifest, *provenance); err != nil {
+			return Manifest{}, err
+		}
+	}
 	if err := publishDirectory(staging, p.root); err != nil {
 		return Manifest{}, err
 	}
 	return *manifest.manifest, nil
+}
+
+// MatchProvenance verifies that the manifest was produced with the inspected
+// image's OCI provenance labels.
+func MatchProvenance(manifest Manifest, provenance Provenance) error {
+	if manifest.Version != provenance.Version || manifest.BuildID != provenance.BuildID || manifest.BuildTime != provenance.BuildTime || manifest.SourceRevision != provenance.SourceRevision || manifest.SourceTreeHash != provenance.SourceTreeHash {
+		return fmt.Errorf("%w: image labels do not match manifest provenance", constants.ErrG8eBinaryManifest)
+	}
+	return nil
 }
 
 func extractArchive(reader io.Reader, root string) error {

@@ -9,6 +9,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -24,8 +25,17 @@ import (
 
 const defaultDockerGatewayImage = "g8e-gateway"
 
+type dockerImage struct {
+	ID     string            `json:"Id"`
+	Config dockerImageConfig `json:"Config"`
+}
+
+type dockerImageConfig struct {
+	Labels map[string]string `json:"Labels"`
+}
+
 type dockerBinaryRunner interface {
-	InspectImage(context.Context, string) (string, error)
+	InspectImage(context.Context, string) (dockerImage, error)
 	CreateContainer(context.Context, string) (string, error)
 	CopyContainerPath(context.Context, string, string, io.Writer) error
 	RemoveContainer(context.Context, string) error
@@ -33,16 +43,19 @@ type dockerBinaryRunner interface {
 
 type execDockerBinaryRunner struct{}
 
-func (execDockerBinaryRunner) InspectImage(ctx context.Context, image string) (string, error) {
-	output, err := exec.CommandContext(ctx, constants.DockerExecutable, "image", "inspect", "--format={{.Id}}", image).Output()
+func (execDockerBinaryRunner) InspectImage(ctx context.Context, image string) (dockerImage, error) {
+	output, err := exec.CommandContext(ctx, constants.DockerExecutable, "image", "inspect", "--format={{json .}}", image).Output()
 	if err != nil {
-		return "", fmt.Errorf("inspect image %q: %w", image, err)
+		return dockerImage{}, fmt.Errorf("inspect image %q: %w", image, err)
 	}
-	id := strings.TrimSpace(string(output))
-	if id == "" {
-		return "", fmt.Errorf("%w: image %q has no immutable ID", constants.ErrG8eBinaryExport, image)
+	var inspected dockerImage
+	if err := json.Unmarshal(output, &inspected); err != nil {
+		return dockerImage{}, fmt.Errorf("decode image inspection for %q: %w", image, err)
 	}
-	return id, nil
+	if strings.TrimSpace(inspected.ID) == "" {
+		return dockerImage{}, fmt.Errorf("%w: image %q has no immutable ID", constants.ErrG8eBinaryExport, image)
+	}
+	return inspected, nil
 }
 
 func (execDockerBinaryRunner) CreateContainer(ctx context.Context, image string) (string, error) {
@@ -123,11 +136,15 @@ func exportDockerG8eBinaries(ctx context.Context, runner dockerBinaryRunner, ima
 	if strings.TrimSpace(image) == "" || strings.TrimSpace(output) == "" {
 		return fmt.Errorf("%w: image and output are required", constants.ErrG8eBinaryExport)
 	}
-	imageID, err := runner.InspectImage(ctx, image)
+	inspected, err := runner.InspectImage(ctx, image)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrG8eBinaryExport, err)
 	}
-	container, err := runner.CreateContainer(ctx, imageID)
+	provenance, err := imageProvenance(inspected)
+	if err != nil {
+		return err
+	}
+	container, err := runner.CreateContainer(ctx, inspected.ID)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrG8eBinaryExport, err)
 	}
@@ -139,7 +156,7 @@ func exportDockerG8eBinaries(ctx context.Context, runner dockerBinaryRunner, ima
 	}()
 
 	publisher := g8ebinaries.NewPublisher(output)
-	manifest, err := publishDockerArchive(ctx, runner, publisher, container)
+	manifest, err := publishDockerArchive(ctx, runner, publisher, container, provenance)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrG8eBinaryExport, err)
 	}
@@ -149,7 +166,7 @@ func exportDockerG8eBinaries(ctx context.Context, runner dockerBinaryRunner, ima
 	}
 	if err := g8ebinaries.WriteExportRecord(output, g8ebinaries.ExportRecord{
 		ImageReference: image,
-		ImageID:        imageID,
+		ImageID:        inspected.ID,
 		ManifestSHA256: manifestDigest,
 	}); err != nil {
 		return err
@@ -158,14 +175,29 @@ func exportDockerG8eBinaries(ctx context.Context, runner dockerBinaryRunner, ima
 	return nil
 }
 
-func publishDockerArchive(ctx context.Context, runner dockerBinaryRunner, publisher *g8ebinaries.Publisher, container string) (g8ebinaries.Manifest, error) {
+func imageProvenance(image dockerImage) (g8ebinaries.Provenance, error) {
+	labels := image.Config.Labels
+	provenance := g8ebinaries.Provenance{
+		Version:        labels[constants.G8eImageVersionLabel],
+		BuildID:        labels[constants.G8eBuildIDLabel],
+		BuildTime:      labels[constants.G8eBuildTimeLabel],
+		SourceRevision: labels[constants.G8eSourceRevisionLabel],
+		SourceTreeHash: labels[constants.G8eSourceTreeHashLabel],
+	}
+	if provenance.Version == "" || provenance.BuildID == "" || provenance.BuildTime == "" || provenance.SourceRevision == "" || provenance.SourceTreeHash == "" {
+		return g8ebinaries.Provenance{}, fmt.Errorf("%w: image is missing g8e provenance labels", constants.ErrG8eBinaryExport)
+	}
+	return provenance, nil
+}
+
+func publishDockerArchive(ctx context.Context, runner dockerBinaryRunner, publisher *g8ebinaries.Publisher, container string, provenance g8ebinaries.Provenance) (g8ebinaries.Manifest, error) {
 	reader, writer := io.Pipe()
 	copyErr := make(chan error, 1)
 	go func() {
 		copyErr <- runner.CopyContainerPath(ctx, container, constants.G8eBinariesArchiveRoot+"/.", writer)
 		_ = writer.Close()
 	}()
-	manifest, publishErr := publisher.Publish(reader)
+	manifest, publishErr := publisher.PublishMatching(reader, provenance)
 	if publishErr != nil {
 		_ = reader.CloseWithError(publishErr)
 	}

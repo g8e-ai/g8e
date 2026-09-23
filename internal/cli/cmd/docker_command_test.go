@@ -20,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	g8ebinaries "github.com/g8e-ai/g8e/v2/internal/services/g8ebinaries"
 )
 
 func TestDockerCommandSubcommands(t *testing.T) {
@@ -320,8 +321,29 @@ func TestDockerTeardownProfiles(t *testing.T) {
 	}, dockerTeardownProfiles(""))
 }
 
+func TestImageProvenance_RequiresAllLabels(t *testing.T) {
+	_, err := imageProvenance(dockerImage{ID: "sha256:image", Config: dockerImageConfig{Labels: map[string]string{
+		constants.G8eImageVersionLabel: "2.1.12",
+	}}})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryExport)
+}
+
+func TestPublisherMatchProvenance_RejectsMismatchedImageLabels(t *testing.T) {
+	manifest := g8ebinaries.Manifest{Version: "2.1.12", BuildID: "build", BuildTime: "2026-09-23T00:00:00Z", SourceRevision: "revision", SourceTreeHash: strings.Repeat("a", 64)}
+	provenance := g8ebinaries.Provenance{Version: manifest.Version, BuildID: "different", BuildTime: manifest.BuildTime, SourceRevision: manifest.SourceRevision, SourceTreeHash: manifest.SourceTreeHash}
+
+	err := g8ebinaries.MatchProvenance(manifest, provenance)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrG8eBinaryManifest)
+}
+
 func TestDockerBuildArgs_IncludesSourceProvenance(t *testing.T) {
 	vi := serve.VersionInfo{
+		Version:             "v2.1.12",
+		BuildTime:           "2026-09-23T00:00:00Z",
 		BuildID:             "abc123",
 		SourceRevision:      "revision-123",
 		SourceTreeStateHash: "a" + strings.Repeat("1", 63),
@@ -331,8 +353,8 @@ func TestDockerBuildArgs_IncludesSourceProvenance(t *testing.T) {
 		noCache  bool
 		expected []string
 	}{
-		{name: "cached build", expected: []string{"build", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=revision-123", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash}},
-		{name: "uncached build", noCache: true, expected: []string{"build", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=revision-123", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash, "--no-cache"}},
+		{name: "cached build", expected: []string{"build", "--build-arg", "VERSION=v2.1.12", "--build-arg", "BUILD_TIME=2026-09-23T00:00:00Z", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=revision-123", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash}},
+		{name: "uncached build", noCache: true, expected: []string{"build", "--build-arg", "VERSION=v2.1.12", "--build-arg", "BUILD_TIME=2026-09-23T00:00:00Z", "--build-arg", "BUILD_ID=abc123", "--build-arg", "SOURCE_REVISION=revision-123", "--build-arg", "SOURCE_TREE_HASH=" + vi.SourceTreeStateHash, "--no-cache"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

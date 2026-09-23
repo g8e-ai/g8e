@@ -20,6 +20,12 @@ TMPDIR ?= /tmp
 # =============================================================================
 VERSION := $(shell cat VERSION | tr -d '\n')
 BUILD_TIME ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+ifeq ($(strip $(BUILD_TIME)),)
+BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+endif
+ifeq ($(strip $(BUILD_TIME)),unknown)
+BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+endif
 BIN_DIR := bin
 MAIN_PKG := ./cmd/g8e
 
@@ -34,11 +40,11 @@ LDFLAGS = -X main.version=$(VERSION) -X main.buildID=$(BUILD_ID) -X main.buildTi
 HOST_OS := $(shell go env GOOS)
 HOST_ARCH := $(shell go env GOARCH)
 
-# Platform and architecture lists
-PLATFORMS := linux/amd64 linux/arm64 linux/386 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64
-LINUX_ARCHS := amd64 arm64 386
-DARWIN_ARCHS := amd64 arm64
-WINDOWS_ARCHS := amd64 arm64
+# Platform and architecture lists are emitted by the typed g8e-binary catalog.
+PLATFORMS := $(shell go run ./internal/tools/g8ebinaries -list-targets 2>/dev/null)
+LINUX_ARCHS := $(patsubst linux/%,%,$(filter linux/%,$(PLATFORMS)))
+DARWIN_ARCHS := $(patsubst darwin/%,%,$(filter darwin/%,$(PLATFORMS)))
+WINDOWS_ARCHS := $(patsubst windows/%,%,$(filter windows/%,$(PLATFORMS)))
 
 # Build flags
 CGO_ENABLED := 0
@@ -446,6 +452,7 @@ build-all:
 build-darwin:
 	@echo "Building g8e for Darwin..."
 	@mkdir -p $(BIN_DIR)
+	@rm -f $(BIN_DIR)/g8e-binaries.json
 	@for arch in $(DARWIN_ARCHS); do \
 		G8E_BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
 		echo "Building darwin/$$arch -> $$G8E_BINARY..."; \
@@ -458,6 +465,7 @@ build-darwin:
 build-linux:
 	@echo "Building g8e for Linux..."
 	@mkdir -p $(BIN_DIR)
+	@rm -f $(BIN_DIR)/g8e-binaries.json
 	@for arch in $(LINUX_ARCHS); do \
 		G8E_BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
 		echo "Building linux/$$arch -> $$G8E_BINARY..."; \
@@ -470,6 +478,7 @@ build-linux:
 build-windows:
 	@echo "Building g8e for Windows..."
 	@mkdir -p $(BIN_DIR)
+	@rm -f $(BIN_DIR)/g8e-binaries.json
 	@for arch in $(WINDOWS_ARCHS); do \
 		G8E_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
 		echo "Building windows/$$arch -> $$G8E_BINARY..."; \
