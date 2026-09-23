@@ -411,6 +411,18 @@ func verifyCampaignRun(
 	requireModelProvenance bool,
 	jsonOutput bool,
 ) (*evalv1.EvaluationVerificationReport, error) {
+	return verifyCampaignRunWithPublication(cmd, deps, runID, requireProviderObservation, requireModelProvenance, true, jsonOutput)
+}
+
+func verifyCampaignRunWithPublication(
+	cmd *cobra.Command,
+	deps nativeEvalDeps,
+	runID string,
+	requireProviderObservation bool,
+	requireModelProvenance bool,
+	publish bool,
+	jsonOutput bool,
+) (*evalv1.EvaluationVerificationReport, error) {
 	cfg, fileSvc, err := nativeEvalEnvironment(cmd, deps)
 	if err != nil {
 		return nil, err
@@ -464,6 +476,9 @@ func verifyCampaignRun(
 	}
 	if err := store.SaveCampaignVerification(cmd.Context(), runID, report); err != nil {
 		return nil, fmt.Errorf("evaluation: campaign verify: %w", err)
+	}
+	if !publish {
+		return report, nil
 	}
 	publicationFactory := deps.campaignPublicationFactory
 	if publicationFactory == nil {
@@ -596,7 +611,7 @@ func runCampaignStartFlow(cmd *cobra.Command, deps nativeEvalDeps, opts campaign
 	if !opts.Verify {
 		return result, nil
 	}
-	report, err := verifyCampaignRun(cmd, deps, plan.RunID, opts.RequireProviderObservation, opts.RequireModelProvenance, opts.JSONOutput)
+	report, err := verifyCampaignRunWithPublication(cmd, deps, plan.RunID, opts.RequireProviderObservation, opts.RequireModelProvenance, opts.Publish, opts.JSONOutput)
 	if err != nil {
 		return result, err
 	}

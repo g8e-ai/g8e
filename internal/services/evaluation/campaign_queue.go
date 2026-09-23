@@ -38,15 +38,6 @@ const (
 	DefaultGenesisHomogeneousCampaignID = "eval-genesis-homogeneous"
 )
 
-var priorityModelTags = []string{
-	"granite4.2:3b",
-	"granite4.2:8b",
-	"qwen3.5:0.8b",
-	"qwen3.5:2b",
-	"qwen3.5:4b",
-	"qwen3.5:9b",
-}
-
 // CampaignQueueModel summarizes one init-campaign queue entry.
 type CampaignQueueModel struct {
 	VariantID            string `json:"variant_id"`
@@ -231,20 +222,25 @@ func LoadFrozenVariants(path string) ([]*evalv1.ModelVariant, error) {
 }
 
 func SortModelVariantsForRollout(variants []*evalv1.ModelVariant) {
-	priority := make(map[string]int, len(priorityModelTags))
-	for index, tag := range priorityModelTags {
-		priority[tag] = index
-	}
 	sort.SliceStable(variants, func(i, j int) bool {
-		leftPriority, leftPrioritized := priority[variants[i].GetServedModelTag()]
-		rightPriority, rightPrioritized := priority[variants[j].GetServedModelTag()]
-		if leftPrioritized != rightPrioritized {
-			return leftPrioritized
+		left := variants[i]
+		right := variants[j]
+		if left == nil || right == nil {
+			return left != nil
 		}
-		if leftPrioritized {
-			return leftPriority < rightPriority
+		leftParameterCount := left.GetParameterCount()
+		rightParameterCount := right.GetParameterCount()
+		if leftParameterCount == 0 || rightParameterCount == 0 {
+			if leftParameterCount != rightParameterCount {
+				return rightParameterCount == 0
+			}
+		} else if leftParameterCount != rightParameterCount {
+			return leftParameterCount < rightParameterCount
 		}
-		return variants[i].GetVariantId() < variants[j].GetVariantId()
+		if left.GetServedModelTag() != right.GetServedModelTag() {
+			return left.GetServedModelTag() < right.GetServedModelTag()
+		}
+		return left.GetVariantId() < right.GetVariantId()
 	})
 }
 
